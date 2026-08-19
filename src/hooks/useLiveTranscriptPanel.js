@@ -410,10 +410,16 @@ export function useLiveTranscriptPanel({
   }, [isAssistantVoice, isProcessing, isRecording]);
 
   const previousNormalRecordingRef = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const normalRecording = isRecording && !isAssistantVoice;
     if (normalRecording && !previousNormalRecordingRef.current) {
       clearFinalHide();
+    }
+  }, [clearFinalHide, isAssistantVoice, isRecording]);
+
+  useEffect(() => {
+    const normalRecording = isRecording && !isAssistantVoice;
+    if (normalRecording && !previousNormalRecordingRef.current) {
       suppressedRef.current = false;
       setManuallyCollapsed(false);
       resetText();
@@ -424,7 +430,7 @@ export function useLiveTranscriptPanel({
     if (isRecording && isAssistantVoice && mounted) {
       close({ clear: true });
     }
-  }, [isAssistantVoice, isRecording, mounted, clearFinalHide, close, resetText]);
+  }, [isAssistantVoice, isRecording, mounted, close, resetText]);
 
   useEffect(() => {
     if (!isAssistantVoice && (isRecording || isProcessing)) return;
