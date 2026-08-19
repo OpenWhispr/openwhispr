@@ -190,6 +190,21 @@ class DatabaseManager {
         )
       `);
 
+      // Local-only for now: replacement pairs gain sync columns once the cloud
+      // API grows a replacements endpoint (same migration path as custom_dictionary).
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS dictionary_replacements (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          from_text TEXT NOT NULL,
+          to_text TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_dictionary_replacements_from ON dictionary_replacements(lower(from_text))"
+      );
+
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS notes (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1397,6 +1412,61 @@ class DatabaseManager {
     } catch (error) {
       debugLogger.error("Error setting dictionary", { error: error.message }, "database");
       throw error;
+    }
+  }
+
+  getDictionaryReplacements() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare("SELECT from_text, to_text FROM dictionary_replacements ORDER BY id ASC")
+        .all()
+        .map((row) => ({ from: row.from_text, to: row.to_text }));
+    } catch (error) {
+      debugLogger.error(
+        "Error getting dictionary replacements",
+        { error: error.message },
+        "database"
+      );
+      return [];
+    }
+  }
+
+  // Replaces the whole list: rows have no cloud identity to preserve, so a
+  // wipe-and-reinsert stays simpler than the dictionary's diff machinery.
+  setDictionaryReplacements(rules) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!Array.isArray(rules)) throw new Error("rules must be an array");
+
+      const sanitized = [];
+      for (const rule of rules) {
+        if (!rule || typeof rule.from !== "string" || typeof rule.to !== "string") continue;
+        const from = rule.from.trim().replace(/\s+/g, " ");
+        const to = rule.to.trim().replace(/\s+/g, " ");
+        if (!from || !to || from.length > 120 || to.length > 240) continue;
+        sanitized.push({ from, to });
+      }
+
+      const insert = this.db.prepare(
+        "INSERT OR IGNORE INTO dictionary_replacements (from_text, to_text) VALUES (?, ?)"
+      );
+      let count = 0;
+      this.db.transaction(() => {
+        this.db.prepare("DELETE FROM dictionary_replacements").run();
+        for (const rule of sanitized) {
+          count += insert.run(rule.from, rule.to).changes;
+        }
+      })();
+
+      return { success: true, count };
+    } catch (error) {
+      debugLogger.error(
+        "Error setting dictionary replacements",
+        { error: error.message },
+        "database"
+      );
+      return { success: false, error: error.message };
     }
   }
 

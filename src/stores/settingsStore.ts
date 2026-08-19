@@ -47,6 +47,7 @@ import type {
   PrivacySettings,
   ThemeSettings,
   ChatAgentSettings,
+  DictionaryReplacement,
 } from "../hooks/useSettings";
 import type { Snippet } from "../utils/snippets";
 import type { EnterpriseSetupMode } from "../types/enterpriseIdentity";
@@ -289,6 +290,7 @@ const BOOLEAN_SETTINGS = new Set([
 const ARRAY_SETTINGS = new Set([
   "customDictionary",
   "snippets",
+  "dictionaryReplacements",
   "gcalAccounts",
   "mcalAccounts",
   "onboardingUseCases",
@@ -815,6 +817,8 @@ export interface SettingsState
   applyCustomDictionaryFromExternal: (words: string[]) => void;
   setSnippets: (snippets: Snippet[]) => void;
   applySnippetsFromExternal: (snippets: Snippet[]) => void;
+  setDictionaryReplacements: (rules: DictionaryReplacement[]) => void;
+  applyDictionaryReplacementsFromExternal: (rules: DictionaryReplacement[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
@@ -1220,6 +1224,18 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     try {
       const parsed = JSON.parse(readString("snippets", "[]"));
       return Array.isArray(parsed) ? (parsed as Snippet[]) : [];
+    } catch {
+      return [];
+    }
+  })(),
+  dictionaryReplacements: (() => {
+    try {
+      const parsed = JSON.parse(readString("dictionaryReplacements", "[]"));
+      return Array.isArray(parsed)
+        ? (parsed as DictionaryReplacement[]).filter(
+            (rule) => typeof rule?.from === "string" && typeof rule?.to === "string"
+          )
+        : [];
     } catch {
       return [];
     }
@@ -1837,6 +1853,24 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ snippets });
   },
 
+  // Local-only (no cloud sync): SQLite is the source of truth, localStorage the warm cache.
+  setDictionaryReplacements: (rules: DictionaryReplacement[]) => {
+    if (isBrowser) localStorage.setItem("dictionaryReplacements", JSON.stringify(rules));
+    set({ dictionaryReplacements: rules });
+    window.electronAPI?.setDictionaryReplacements?.(rules).catch((err) => {
+      logger.warn(
+        "Failed to save dictionary replacements to SQLite",
+        { error: (err as Error).message },
+        "settings"
+      );
+    });
+  },
+
+  applyDictionaryReplacementsFromExternal: (rules: DictionaryReplacement[]) => {
+    if (isBrowser) localStorage.setItem("dictionaryReplacements", JSON.stringify(rules));
+    set({ dictionaryReplacements: rules });
+  },
+
   setUiLanguage: (language: string) => {
     const normalized = normalizeUiLanguage(language);
     if (isBrowser) localStorage.setItem("uiLanguage", normalized);
@@ -2245,6 +2279,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setCloudTranscriptionMode(settings.cloudTranscriptionMode);
     if (settings.customDictionary !== undefined) s.setCustomDictionary(settings.customDictionary);
     if (settings.snippets !== undefined) s.setSnippets(settings.snippets);
+    if (settings.dictionaryReplacements !== undefined)
+      s.setDictionaryReplacements(settings.dictionaryReplacements);
     if (settings.assemblyAiStreaming !== undefined)
       s.setAssemblyAiStreaming(settings.assemblyAiStreaming);
     if (settings.showTranscriptionPreview !== undefined)
@@ -3157,6 +3193,30 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync snippets on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync dictionary replacements from SQLite <-> localStorage (same policy as snippets).
+    try {
+      if (window.electronAPI.getDictionaryReplacements) {
+        const currentRules = useSettingsStore.getState().dictionaryReplacements;
+        const dbRules = await window.electronAPI.getDictionaryReplacements();
+        if (dbRules.length === 0 && currentRules.length > 0) {
+          await window.electronAPI.setDictionaryReplacements?.(currentRules);
+          const normalizedRules = await window.electronAPI.getDictionaryReplacements();
+          if (isBrowser)
+            localStorage.setItem("dictionaryReplacements", JSON.stringify(normalizedRules));
+          useSettingsStore.setState({ dictionaryReplacements: normalizedRules });
+        } else if (dbRules.length > 0) {
+          if (isBrowser) localStorage.setItem("dictionaryReplacements", JSON.stringify(dbRules));
+          useSettingsStore.setState({ dictionaryReplacements: dbRules });
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync dictionary replacements on startup",
         { error: (err as Error).message },
         "settings"
       );
