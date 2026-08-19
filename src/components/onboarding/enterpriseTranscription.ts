@@ -14,7 +14,7 @@ import {
  * to a mode onboarding never set up: local with no model downloaded, or BYOK
  * providers with no key.
  */
-export type EnterpriseTranscriptionNeed = "none" | "byok" | "local" | "self-hosted";
+export type EnterpriseTranscriptionNeed = "none" | "byok" | "local" | "self-hosted" | "unavailable";
 
 export function getEnterpriseTranscriptionNeed(
   policy: PolicyDecisionSnapshot,
@@ -36,7 +36,7 @@ export function getEnterpriseTranscriptionNeed(
   ) {
     return "self-hosted";
   }
-  // Nothing usable is allowed; leave the route unchanged and let the runtime
-  // policy clamp own the outcome.
-  return "none";
+  // Keep this distinct from "none", which means OpenWhispr cloud is allowed.
+  // Otherwise onboarding would provision a policy-forbidden cloud provider.
+  return "unavailable";
 }

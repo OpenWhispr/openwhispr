@@ -97,6 +97,7 @@
     "errors": {
       "callbackRequired": "Callback function is required for hotkey setup",
       "globeOnlyMac": "The Globe key is only available on macOS.",
+      "fnCombinationUnsupported": "The Globe/Fn key can only be used by itself.",
       "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
@@ -271,6 +272,10 @@
         "titleLineOne": "Choose your",
         "titleLineTwo": "OpenWhispr setup",
         "description": "Pick the option that fits how you work.",
+        "unavailable": {
+          "title": "No setup option is available",
+          "description": "Your workspace policy does not allow a complete transcription and AI setup. Contact your administrator."
+        },
         "cloud": {
           "title": "OpenWhispr Cloud",
           "description": "Get 2,000 free words each week. Your settings stay synced across devices.",

@@ -85,7 +85,7 @@ const ONBOARDING_WINDOW_SIZES = {
 // Control panel window configuration
 const CONTROL_PANEL_CONFIG = {
   width: 1200,
-  height: 910,
+  height: 800,
   // macOS: fully transparent, so nothing paints into the compact onboarding
   // frame's rounded corners. Windows/Linux keep an opaque backing (the renderer
   // paints its own background on top) — see the transparent flag below.

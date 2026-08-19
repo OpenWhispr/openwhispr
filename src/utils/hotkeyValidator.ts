@@ -15,6 +15,7 @@ export type ValidationErrorCode =
   | "DUPLICATE"
   | "RESERVED"
   | "INVALID_GLOBE"
+  | "FN_COMBINATION_UNSUPPORTED"
   | "MODIFIER_ONLY_UNSUPPORTED";
 
 export interface ValidationResult {
@@ -614,14 +615,14 @@ export function validateHotkey(
     return { valid: true };
   }
 
-  // A leading Fn only means anything where the Globe listener runs. Everywhere
-  // else nothing reports the Fn state, and the registration path drops the
-  // prefix — "Fn+A" would silently bind a bare A.
-  if (/^fn\+/i.test(hotkey) && platform !== "darwin") {
+  // Electron cannot represent Fn inside an accelerator. Stripping it would
+  // register the base key globally, so the native listener supports standalone
+  // Globe/Fn only.
+  if (/^fn\+/i.test(hotkey)) {
     return {
       valid: false,
-      error: "The Globe/Fn key is only available on macOS.",
-      errorCode: "INVALID_GLOBE",
+      error: "The Globe/Fn key can only be used by itself.",
+      errorCode: "FN_COMBINATION_UNSUPPORTED",
     };
   }
 

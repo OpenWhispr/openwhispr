@@ -65,13 +65,15 @@ function isMouseButtonHotkey(hotkey) {
 }
 
 function normalizeToAccelerator(hotkey) {
-  let accelerator = hotkey.startsWith("Fn+") ? hotkey.slice(3) : hotkey;
-  accelerator = accelerator
+  return hotkey
     .replace(/\bRight(Command|Cmd)\b/g, "Command")
     .replace(/\bRight(Control|Ctrl)\b/g, "Control")
     .replace(/\bRight(Alt|Option)\b/g, "Alt")
     .replace(/\bRightShift\b/g, "Shift");
-  return accelerator;
+}
+
+function isUnsupportedFnCombination(hotkey) {
+  return /^Fn\+/i.test(hotkey || "");
 }
 
 // Suggested alternative hotkeys when registration fails
@@ -96,37 +98,6 @@ class HotkeyManager extends EventEmitter {
     this.useHyprland = false;
     this.kdeManager = null;
     this.useKDE = false;
-    // Set by main on macOS so an "Fn+X" binding can check whether Fn was
-    // actually held — see _wrapFnGuardedCallback.
-    this.isFnHeld = null;
-  }
-
-  /**
-   * Teach the manager how to read the live Fn/Globe state (macOS). Without it,
-   * "Fn+X" hotkeys keep their pre-existing behaviour of firing on a bare X.
-   */
-  setFnHeldProvider(provider) {
-    this.isFnHeld = typeof provider === "function" ? provider : null;
-  }
-
-  /**
-   * Electron accelerators cannot express Fn, so "Fn+X" is registered as a bare
-   * X and would fire on its own — binding Fn+A turned every A keypress into a
-   * dictation toggle. The prefix survives in the hotkey string, so the guard
-   * drops any firing where Fn is not down.
-   */
-  _wrapFnGuardedCallback(hotkey, callback) {
-    if (!hotkey.startsWith("Fn+")) return callback;
-    return (firedHotkey) => {
-      // Provider looked up at fire time, not wrap time: startup registration
-      // runs before setFnHeldProvider is wired up in initializeDeferredManagers,
-      // and a wrap-time check would leave those hotkeys permanently unguarded.
-      if (this.isFnHeld && !this.isFnHeld()) {
-        debugLogger.log(`[HotkeyManager] Ignoring "${hotkey}" — Fn was not held`);
-        return;
-      }
-      return callback(firedHotkey);
-    };
   }
 
   // Ensure a slot exists and return it (slots always use the list shape).
@@ -459,6 +430,20 @@ class HotkeyManager extends EventEmitter {
         return { success: true, hotkey, accelerator: null };
       }
 
+      // Electron cannot represent Fn as part of an accelerator. Registering
+      // Fn+A as A claims an ordinary typing key globally, so only standalone
+      // Globe/Fn (handled by the native listener above) is supported.
+      if (isUnsupportedFnCombination(hotkey)) {
+        return {
+          success: false,
+          hotkey,
+          error: i18nMain.t("hotkey.errors.fnCombinationUnsupported", {
+            defaultValue: "The Globe/Fn key can only be used by itself.",
+          }),
+          reason: "fn_combination_unsupported",
+        };
+      }
+
       if (isRightSideModifier(hotkey)) {
         debugLogger.log(
           `[HotkeyManager] Right-side modifier "${hotkey}" set - using native listener`
@@ -479,8 +464,7 @@ class HotkeyManager extends EventEmitter {
       }
 
       // Pass the triggering hotkey so shared callbacks act on the one that fired.
-      const guarded = this._wrapFnGuardedCallback(hotkey, callback);
-      const success = globalShortcut.register(accelerator, () => guarded(hotkey));
+      const success = globalShortcut.register(accelerator, () => callback(hotkey));
       debugLogger.log(`[HotkeyManager] Registration result for "${hotkey}": ${success}`);
       if (success) {
         return { success: true, hotkey, accelerator };
@@ -652,8 +636,7 @@ class HotkeyManager extends EventEmitter {
       const prevAccel = previousAccelerators?.[i];
       if (!prevAccel) return;
       try {
-        const guarded = this._wrapFnGuardedCallback(previousHotkey, callback);
-        const restored = globalShortcut.register(prevAccel, () => guarded(previousHotkey));
+        const restored = globalShortcut.register(prevAccel, () => callback(previousHotkey));
         if (restored) {
           debugLogger.log(
             `[HotkeyManager] Restored previous hotkey "${previousHotkey}" after failed registration`

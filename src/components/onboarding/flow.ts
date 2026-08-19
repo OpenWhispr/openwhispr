@@ -150,6 +150,9 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
   if (context.setupMode && context.setupMode !== "cloud") {
     if (context.setupMode === "enterprise") {
       const need = context.enterpriseTranscription ?? "none";
+      // A saved enterprise choice can outlive a workspace-policy change. Keep
+      // the user at setup-choice rather than routing into an impossible setup.
+      if (need === "unavailable") return route;
       // The self-hosted variant renders inside the byok step ("custom"
       // provider form), so both borrow byok-dictation.
       if (need === "byok" || need === "self-hosted") route.push("byok-dictation");

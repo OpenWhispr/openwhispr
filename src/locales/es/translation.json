@@ -97,6 +97,7 @@
     "errors": {
       "callbackRequired": "Se requiere una función callback para configurar el atajo",
       "globeOnlyMac": "La tecla Globe solo está disponible en macOS.",
+      "fnCombinationUnsupported": "La tecla Globe/Fn solo se puede usar por sí sola.",
       "mouseButtonOnlyMac": "Los atajos con botones del ratón solo son compatibles con macOS por ahora.",
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
@@ -271,6 +272,10 @@
         "titleLineOne": "Elige tu configuración",
         "titleLineTwo": "de OpenWhispr",
         "description": "Elige la opción que encaja con tu forma de trabajar.",
+        "unavailable": {
+          "title": "No hay ninguna opción de configuración disponible",
+          "description": "La política de tu espacio de trabajo no permite una configuración completa de transcripción e IA. Ponte en contacto con tu administrador."
+        },
         "cloud": {
           "title": "OpenWhispr Cloud",
           "description": "Consigue 2.000 palabras gratis cada semana. Tus ajustes se mantienen sincronizados entre dispositivos.",

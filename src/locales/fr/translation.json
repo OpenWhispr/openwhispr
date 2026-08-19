@@ -97,6 +97,7 @@
     "errors": {
       "callbackRequired": "Une fonction callback est requise pour configurer le raccourci",
       "globeOnlyMac": "La touche Globe est disponible uniquement sur macOS.",
+      "fnCombinationUnsupported": "La touche Globe/Fn ne peut être utilisée que seule.",
       "mouseButtonOnlyMac": "Les raccourcis avec les boutons de la souris ne sont actuellement pris en charge que sur macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" est déjà enregistré par une autre application.",
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
@@ -271,6 +272,10 @@
         "titleLineOne": "Choisissez votre",
         "titleLineTwo": "configuration OpenWhispr",
         "description": "Choisissez l’option qui correspond à votre façon de travailler.",
+        "unavailable": {
+          "title": "Aucune option de configuration disponible",
+          "description": "La politique de votre espace de travail n’autorise pas une configuration complète de la transcription et de l’IA. Contactez votre administrateur."
+        },
         "cloud": {
           "title": "OpenWhispr Cloud",
           "description": "Bénéficiez de 2 000 mots gratuits par semaine. Vos réglages restent synchronisés entre vos appareils.",

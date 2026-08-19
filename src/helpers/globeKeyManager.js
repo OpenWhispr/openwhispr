@@ -165,10 +165,8 @@ class GlobeKeyManager extends EventEmitter {
         .filter(Boolean)
         .forEach((line) => {
           if (line === "FN_DOWN") {
-            this._fnIsDown = true;
             this.emit("globe-down");
           } else if (line === "FN_UP") {
-            this._fnIsDown = false;
             this.emit("globe-up");
           } else if (line === "FN_INTERRUPTED") {
             this.emit("globe-interrupted");
@@ -227,8 +225,6 @@ class GlobeKeyManager extends EventEmitter {
         return;
       }
       this.process = null;
-      // Same reason as in stop(): no FN_UP is coming from a dead listener.
-      this._fnIsDown = false;
       if (this._restartResetTimer) {
         clearTimeout(this._restartResetTimer);
         this._restartResetTimer = null;
@@ -275,20 +271,8 @@ class GlobeKeyManager extends EventEmitter {
     });
   }
 
-  /**
-   * Whether Fn/Globe is held right now. Electron accelerators cannot express Fn,
-   * so an "Fn+X" hotkey is registered as a bare X — this is what tells the
-   * hotkey callback whether the X that just fired came with Fn held.
-   */
-  isFnDown() {
-    return this._fnIsDown === true;
-  }
-
   stop() {
     this._isStopping = true;
-    // A dead listener will never send FN_UP, so a stop mid-hold would otherwise
-    // leave every Fn+X hotkey armed on its bare key.
-    this._fnIsDown = false;
     if (this._restartResetTimer) {
       clearTimeout(this._restartResetTimer);
       this._restartResetTimer = null;

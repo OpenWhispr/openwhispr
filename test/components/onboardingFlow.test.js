@@ -87,6 +87,10 @@ test("enterprise route borrows a transcription step when policy needs one", asyn
     "enterprise-dictation",
     "enterprise-assistant",
   ]);
+  assert.equal(
+    getOnboardingRoute({ ...base, enterpriseTranscription: "unavailable" }).at(-1),
+    "setup-choice"
+  );
 });
 
 test("enterprise transcription step survives the agent policy filter", async () => {

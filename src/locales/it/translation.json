@@ -97,6 +97,7 @@
     "errors": {
       "callbackRequired": "È necessaria una funzione callback per configurare la scorciatoia",
       "globeOnlyMac": "Il tasto Globe è disponibile solo su macOS.",
+      "fnCombinationUnsupported": "Il tasto Globe/Fn può essere utilizzato solo da solo.",
       "mouseButtonOnlyMac": "Le scorciatoie con i tasti del mouse sono attualmente supportate solo su macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
@@ -271,6 +272,10 @@
         "titleLineOne": "Scegli la tua configurazione",
         "titleLineTwo": "di OpenWhispr",
         "description": "Scegli l’opzione più adatta al tuo modo di lavorare.",
+        "unavailable": {
+          "title": "Nessuna opzione di configurazione disponibile",
+          "description": "I criteri del tuo spazio di lavoro non consentono una configurazione completa della trascrizione e dell’IA. Contatta l’amministratore."
+        },
         "cloud": {
           "title": "OpenWhispr Cloud",
           "description": "Ricevi 2.000 parole gratis ogni settimana. Le tue impostazioni restano sincronizzate tra i dispositivi.",

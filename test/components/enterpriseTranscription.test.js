@@ -86,11 +86,11 @@ test("self-hosted requires the custom provider to be allowed", async () => {
   // The self-hosted form is the "custom" provider variant of the byok step; a
   // policy that allows the mode but not the provider renders it unusable.
   const blocked = managedPolicy({ allowedModes: ["self-hosted"], allowedByokProviders: [] });
-  assert.equal(getEnterpriseTranscriptionNeed(blocked, PROVIDERS), "none");
+  assert.equal(getEnterpriseTranscriptionNeed(blocked, PROVIDERS), "unavailable");
 });
 
-test("nothing usable falls back to none for the runtime clamp to own", async () => {
+test("nothing usable is distinct from OpenWhispr cloud being allowed", async () => {
   const { getEnterpriseTranscriptionNeed } = await load();
   const policy = managedPolicy({ allowedModes: [], allowedByokProviders: [] });
-  assert.equal(getEnterpriseTranscriptionNeed(policy, PROVIDERS), "none");
+  assert.equal(getEnterpriseTranscriptionNeed(policy, PROVIDERS), "unavailable");
 });

@@ -97,6 +97,7 @@
     "errors": {
       "callbackRequired": "ホットキー設定にはコールバック関数が必要です",
       "globeOnlyMac": "Globe キーは macOS でのみ利用できます。",
+      "fnCombinationUnsupported": "Globe/Fn キーは単独でのみ使用できます。",
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
@@ -271,6 +272,10 @@
         "titleLineOne": "OpenWhispr の",
         "titleLineTwo": "セットアップを選択",
         "description": "働き方に合った方法を選んでください。",
+        "unavailable": {
+          "title": "利用できるセットアップ方法がありません",
+          "description": "ワークスペースのポリシーでは、文字起こしと AI の完全なセットアップが許可されていません。管理者にお問い合わせください。"
+        },
         "cloud": {
           "title": "OpenWhispr Cloud",
           "description": "毎週 2,000 語を無料で利用できます。設定はデバイス間で同期されます。",

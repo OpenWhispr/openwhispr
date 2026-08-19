@@ -782,6 +782,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             <SetupChoiceStep
               isSignedIn={isSignedIn}
+              enterpriseTranscription={enterpriseTranscription}
               onSelect={(mode, options) => void handleSetupSelection(mode, options)}
               onRequestAuthentication={() => {
                 setSetupMode("cloud");

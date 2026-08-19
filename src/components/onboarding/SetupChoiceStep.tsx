@@ -1,5 +1,6 @@
 import { Fragment, forwardRef, useRef, useState } from "react";
 import {
+  AlertCircle,
   BanknoteCheck,
   Building2,
   ChevronRight,
@@ -18,11 +19,16 @@ import {
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
-import { isModeAllowedByPolicy } from "../../stores/policyRules";
+import { isEnterpriseProviderAllowed } from "../../stores/policyRules";
 import { useEnterpriseIdentityStore } from "../../stores/enterpriseIdentityStore";
-import { hasEnforcedManagedProvider } from "../../helpers/enterpriseManagedConfig.mjs";
-import { getParakeetModelInfo } from "../../models/ModelRegistry";
+import {
+  getParakeetModelInfo,
+  getTranscriptionProviders,
+  modelRegistry,
+} from "../../models/ModelRegistry";
 import type { OnboardingSetupMode } from "./flow";
+import type { EnterpriseTranscriptionNeed } from "./enterpriseTranscription";
+import { getOnboardingSetupAvailability, hasAvailableOnboardingSetup } from "./setupEligibility";
 import { BrandMark } from "./OnboardingShell";
 import openAIIcon from "../../assets/icons/providers/openai.svg";
 import nvidiaIcon from "../../assets/icons/providers/nvidia.webp";
@@ -41,8 +47,16 @@ const REFERENCE_LOCAL_MODEL_ID = "nemotron-3.5-asr-streaming-0.6b";
 
 interface SetupChoiceStepProps {
   isSignedIn: boolean;
+  enterpriseTranscription: EnterpriseTranscriptionNeed;
   onSelect: (mode: SetupMode, options?: { selfHosted?: boolean }) => void;
   onRequestAuthentication: () => void;
+}
+
+interface MoreSetupOption {
+  id: "byok" | "self-hosted";
+  icon: typeof KeyRound;
+  title: string;
+  description: string;
 }
 
 // Figma "Frame 49"–"Frame 52": row, gap 8, a 14px mark beside 14/140% body.
@@ -110,6 +124,7 @@ const CardAction = forwardRef<
 
 export default function SetupChoiceStep({
   isSignedIn,
+  enterpriseTranscription,
   onSelect,
   onRequestAuthentication,
 }: SetupChoiceStepProps) {
@@ -130,9 +145,31 @@ export default function SetupChoiceStep({
   // its compressed size can send a user into a setup that runs out of disk.
   const minimumLocalSpaceGb = Math.max(2, Math.ceil((localReferenceModel?.sizeMb ?? 0) / 1000));
 
-  const cloudAllowed =
-    isModeAllowedByPolicy(policy, "transcription", "openwhispr") &&
-    isModeAllowedByPolicy(policy, "llm", "openwhispr");
+  const managedEnterpriseAvailable =
+    identityStatus === "ready" &&
+    Boolean(
+      managedConfig?.providers.some(
+        (provider) =>
+          provider.mode !== "disabled" &&
+          (provider.mode === "managed_required" || !provider.allowManualSetup) &&
+          isEnterpriseProviderAllowed(policy, provider.provider)
+      )
+    );
+  const availability = getOnboardingSetupAvailability({
+    policy,
+    enterpriseTranscription,
+    transcriptionProviders: getTranscriptionProviders(),
+    llmProviders: modelRegistry.getCloudProviders(),
+    managedEnterpriseAvailable,
+  });
+  const {
+    cloud: cloudAllowed,
+    local: localAllowed,
+    byok: byokAllowed,
+    selfHosted: selfHostedAllowed,
+    enterprise: enterpriseAllowed,
+  } = availability;
+  const moreOptionsAllowed = byokAllowed || selfHostedAllowed;
 
   const chooseCloud = () => {
     if (isSignedIn) onSelect("cloud");
@@ -160,14 +197,23 @@ export default function SetupChoiceStep({
       )
     : [];
   const WarningPrimaryIcon = pending === "enterprise" ? Building2 : Laptop;
-
-  const localAllowed =
-    isModeAllowedByPolicy(policy, "transcription", "local") &&
-    isModeAllowedByPolicy(policy, "llm", "local");
-  const enterpriseAllowed = isModeAllowedByPolicy(policy, "llm", "enterprise");
-  const byokAllowed =
-    isModeAllowedByPolicy(policy, "transcription", "providers") &&
-    isModeAllowedByPolicy(policy, "llm", "providers");
+  const moreSetupOptions: MoreSetupOption[] = [];
+  if (byokAllowed) {
+    moreSetupOptions.push({
+      id: "byok",
+      icon: KeyRound,
+      title: t("onboarding.rehaul.setupChoice.byok.title"),
+      description: t("onboarding.rehaul.setupChoice.byok.description"),
+    });
+  }
+  if (selfHostedAllowed) {
+    moreSetupOptions.push({
+      id: "self-hosted",
+      icon: Server,
+      title: t("onboarding.rehaul.setupChoice.moreOptions.selfHosted.title"),
+      description: t("onboarding.rehaul.setupChoice.moreOptions.selfHosted.description"),
+    });
+  }
 
   // A managed_required (or manual-setup-disallowed) provider means the IT
   // admin already made this choice — show a single continue card instead of
@@ -175,11 +221,7 @@ export default function SetupChoiceStep({
   // the effect would re-fire when the user comes Back from the enterprise
   // step and trap them in a loop. Any other identity status (idle, loading,
   // error) renders the grid as usual — never block on the managed fetch.
-  if (
-    identityStatus === "ready" &&
-    enterpriseAllowed &&
-    hasEnforcedManagedProvider(managedConfig)
-  ) {
+  if (managedEnterpriseAvailable && enterpriseAllowed && managedConfig) {
     return (
       <div className="mx-auto mt-5 flex w-full flex-col items-center gap-5">
         <div className="onboarding-stagger flex items-start justify-center">
@@ -202,6 +244,25 @@ export default function SetupChoiceStep({
             </CardAction>
           </SetupCard>
         </div>
+      </div>
+    );
+  }
+
+  if (!hasAvailableOnboardingSetup(availability)) {
+    return (
+      <div
+        role="alert"
+        className="mx-auto mt-8 flex w-full max-w-md flex-col items-center rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-6 py-8 text-center"
+      >
+        <span className="flex size-10 items-center justify-center rounded-full bg-[var(--onboarding-surface-secondary)] text-[var(--onboarding-accent)]">
+          <AlertCircle className="size-5" />
+        </span>
+        <h2 className="mt-4 text-base font-semibold text-[var(--onboarding-text-primary)]">
+          {t("onboarding.rehaul.setupChoice.unavailable.title")}
+        </h2>
+        <p className="mt-2 text-sm leading-5 text-[var(--onboarding-text-secondary)]">
+          {t("onboarding.rehaul.setupChoice.unavailable.description")}
+        </p>
       </div>
     );
   }
@@ -389,8 +450,8 @@ export default function SetupChoiceStep({
 
       {/* Frame 25: BYOK and self-hosted are not cards in the spec — they live
           behind this pill, which opens the "Choose your API setup" modal. Hidden
-          entirely when policy disallows BYOK. */}
-      {byokAllowed && (
+          entirely when policy disallows both options. */}
+      {moreOptionsAllowed && (
         <button
           type="button"
           onClick={() => setShowMore(true)}
@@ -443,22 +504,7 @@ export default function SetupChoiceStep({
             {/* Frame 16: pad 20 16, surface-secondary, radius 20. Rows follow the
                 shared rhythm — nothing above the first, divider between. */}
             <div className="rounded-2xl bg-[var(--onboarding-surface-secondary)] px-3.5 py-4">
-              {[
-                {
-                  id: "byok" as const,
-                  icon: KeyRound,
-                  title: t("onboarding.rehaul.setupChoice.byok.title"),
-                  description: t("onboarding.rehaul.setupChoice.byok.description"),
-                },
-                {
-                  id: "self-hosted" as const,
-                  icon: Server,
-                  title: t("onboarding.rehaul.setupChoice.moreOptions.selfHosted.title"),
-                  description: t(
-                    "onboarding.rehaul.setupChoice.moreOptions.selfHosted.description"
-                  ),
-                },
-              ].map((row, index) => (
+              {moreSetupOptions.map((row, index) => (
                 <button
                   key={row.id}
                   type="button"

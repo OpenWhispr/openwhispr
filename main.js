@@ -556,10 +556,6 @@ function initializeDeferredManagers() {
   });
 
   if (process.platform === "darwin") {
-    // Lets hotkeyManager gate "Fn+X" bindings on the real Fn state — the
-    // accelerator it registers is the bare X.
-    hotkeyManager.setFnHeldProvider(() => globeKeyManager.isFnDown());
-
     globeKeyManager.on("error", (error) => {
       if (globeKeyAlertShown) {
         return;

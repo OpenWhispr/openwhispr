@@ -97,14 +97,13 @@ test("modifier-only chords are Windows/Linux only — macOS cannot register them
   assert.equal(validateHotkey("Control+Alt+Space", "darwin").valid, true);
 });
 
-test("an Fn combo is rejected off macOS, where nothing reports the Fn state", async () => {
+test("Fn combinations are rejected because only standalone Globe has a native path", async () => {
   const { validateHotkey } = await load();
 
-  assert.equal(validateHotkey("Fn+A", "darwin").valid, true);
-  for (const platform of ["win32", "linux"]) {
+  for (const platform of ["darwin", "win32", "linux"]) {
     const result = validateHotkey("Fn+A", platform);
     assert.equal(result.valid, false, platform);
-    assert.equal(result.errorCode, "INVALID_GLOBE", platform);
+    assert.equal(result.errorCode, "FN_COMBINATION_UNSUPPORTED", platform);
   }
 });
 

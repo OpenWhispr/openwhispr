@@ -3512,16 +3512,13 @@ class IPCHandlers {
           // may hold several).
           for (const hk of hotkeyManager.getSlotHotkeys("dictation")) {
             if (!hk || usesNativeListener(hk)) continue;
-            const accelerator = hk.startsWith("Fn+") ? hk.slice(3) : hk;
+            const accelerator = hk;
             if (!globalShortcut.isRegistered(accelerator)) {
               debugLogger.log(
                 `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
               );
               const callback = this.windowManager.createHotkeyCallback();
-              // Same Fn guard as the primary registration path: the stripped
-              // accelerator would otherwise fire on its bare key.
-              const guarded = hotkeyManager._wrapFnGuardedCallback(hk, callback);
-              const registered = globalShortcut.register(accelerator, () => guarded(hk));
+              const registered = globalShortcut.register(accelerator, () => callback(hk));
               if (!registered) {
                 debugLogger.warn(
                   `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`

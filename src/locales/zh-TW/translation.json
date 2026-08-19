@@ -97,6 +97,7 @@
     "errors": {
       "callbackRequired": "設定快捷鍵需要回呼函式",
       "globeOnlyMac": "Globe 鍵僅在 macOS 上可用。",
+      "fnCombinationUnsupported": "Globe/Fn 鍵只能單獨使用。",
       "mouseButtonOnlyMac": "滑鼠按鍵快捷鍵目前僅在 macOS 上受支援。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
@@ -271,6 +272,10 @@
         "titleLineOne": "選擇你的",
         "titleLineTwo": "OpenWhispr 設定",
         "description": "選擇最符合你工作方式的方案。",
+        "unavailable": {
+          "title": "沒有可用的設定選項",
+          "description": "你的工作區政策不允許完整設定轉錄與 AI。請聯絡管理員。"
+        },
         "cloud": {
           "title": "OpenWhispr Cloud",
           "description": "每週獲得 2,000 個免費字數。你的設定會在各裝置間保持同步。",

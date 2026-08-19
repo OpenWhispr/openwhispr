@@ -81,6 +81,19 @@ test("Sway XWayland uses notification type only for focusless overlays", () => {
   assert.equal(windowConfig.AGENT_OVERLAY_CONFIG.focusable, true);
 });
 
+test("onboarding sizing does not resize the normal control panel", () => {
+  const windowConfig = loadWindowConfig({ platform: "darwin", environment: {} });
+
+  assert.deepEqual(
+    {
+      width: windowConfig.CONTROL_PANEL_CONFIG.width,
+      height: windowConfig.CONTROL_PANEL_CONFIG.height,
+    },
+    { width: 1200, height: 800 }
+  );
+  assert.deepEqual(windowConfig.ONBOARDING_WINDOW_SIZES.EXPANDED, { width: 1000, height: 740 });
+});
+
 test("the overlay resolver preserves every unaffected platform and session", () => {
   const cases = [
     {

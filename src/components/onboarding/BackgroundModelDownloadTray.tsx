@@ -253,6 +253,20 @@ export default function BackgroundModelDownloadTray() {
 
   const cancelDownload = useCallback(async (download: ActiveDownload) => {
     const key = downloadKey(download.kind, download.id);
+    const pendingKind = download.kind === "llm" ? "assistant" : "dictation";
+
+    // An error row represents a transfer that has already stopped. Its X is a
+    // dismiss action, so no cancellation IPC is needed (and would be refused).
+    if (download.error) {
+      setDownloads((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      forgetPendingLocalModel(pendingKind, download.id);
+      return;
+    }
+
     cancelledKeys.current.add(key);
     // Drop the row on click rather than waiting for the main process: the cancel
     // handlers resolve after the transfer unwinds, and a row that lingers reads as
@@ -262,25 +276,32 @@ export default function BackgroundModelDownloadTray() {
       delete next[key];
       return next;
     });
-    // Otherwise a half-downloaded model stays queued and activatePendingLocalModel
-    // would select it the moment any later download of the same kind completes.
-    forgetPendingLocalModel(download.kind === "llm" ? "assistant" : "dictation", download.id);
-
-    const result =
-      download.kind === "whisper"
-        ? await window.electronAPI?.cancelWhisperDownload?.()
-        : download.kind === "parakeet"
-          ? await window.electronAPI?.cancelParakeetDownload?.()
-          : await window.electronAPI?.modelCancelDownload?.(download.id);
+    let result: { success: boolean } | undefined;
+    try {
+      result =
+        download.kind === "whisper"
+          ? await window.electronAPI?.cancelWhisperDownload?.()
+          : download.kind === "parakeet"
+            ? await window.electronAPI?.cancelParakeetDownload?.()
+            : await window.electronAPI?.modelCancelDownload?.(download.id);
+    } catch {
+      result = { success: false };
+    }
 
     // The main process can refuse: Parakeet returns INSTALLATION_IN_PROGRESS once
     // extraction starts, and modelManagerBridge returns false when the request has
     // already gone. Put the row back rather than leaving the user believing a
     // download that is still running was stopped.
-    if (result?.success === false) {
+    if (result?.success !== true) {
       cancelledKeys.current.delete(key);
       setDownloads((current) => ({ ...current, [key]: download }));
+      return;
     }
+
+    // Only discard the intended selection once the transfer actually stopped.
+    // If cancellation is refused, keeping it lets a finishing installation
+    // activate the exact model the user originally chose.
+    forgetPendingLocalModel(pendingKind, download.id);
   }, []);
 
   const activeDownloads = useMemo(() => Object.values(downloads), [downloads]);

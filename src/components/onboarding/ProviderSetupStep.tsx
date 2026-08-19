@@ -27,6 +27,7 @@ import {
 } from "../../models/ModelRegistry";
 import type { OnboardingStepId } from "./flow";
 import { forgetPendingLocalModel, rememberPendingLocalModel } from "./pendingLocalModels";
+import { isLocalStageDownloadActive } from "./localDownloadState";
 import { adjustBedrockModelForRegion, BEDROCK_REGIONS } from "../../utils/bedrockRegions";
 import {
   useEnterpriseIdentityStore,
@@ -761,8 +762,11 @@ export function LocalModelSetupStep({
     onReadinessChange(false);
   };
 
-  const anyDownloadActive =
-    whisperDownload.isDownloading || parakeetDownload.isDownloading || llmDownload.isDownloading;
+  const anyDownloadActive = isLocalStageDownloadActive(assistant ? "assistant" : "dictation", {
+    whisper: whisperDownload.isDownloading,
+    parakeet: parakeetDownload.isDownloading,
+    llm: llmDownload.isDownloading,
+  });
   // A running download is enough to move on: it lives in the main process, the
   // model is already remembered as pending (downloadModel above), and
   // BackgroundModelDownloadTray keeps the progress on screen and applies the

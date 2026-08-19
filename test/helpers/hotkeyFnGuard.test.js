@@ -32,39 +32,36 @@ test.beforeEach(() => {
   registered.clear();
 });
 
-// Electron accelerators cannot express Fn, so "Fn+A" is registered as a bare
-// "A". Without the guard, every A keypress fired the hotkey.
-test("an Fn+key hotkey registers its bare accelerator", async () => {
+test("an Fn combination is rejected without registering its base key", async () => {
   const manager = new HotkeyManager();
 
   const result = await manager.registerSlot("dictation", "Fn+A", () => {}, { atomic: true });
 
-  assert.equal(result.success, true);
-  assert.deepEqual([...registered.keys()], ["A"]);
+  assert.equal(result.success, false);
+  assert.equal(result.reason, "fn_combination_unsupported");
+  assert.deepEqual([...registered.keys()], []);
 });
 
-test("Fn+key does not fire when Fn is not held", async () => {
+test("rejecting an Fn combination preserves the slot's previous binding", async () => {
   const manager = new HotkeyManager();
   const fired = [];
-  let fnHeld = false;
-  manager.setFnHeldProvider(() => fnHeld);
 
-  await manager.registerSlot("dictation", "Fn+A", (hotkey) => fired.push(hotkey), {
+  await manager.registerSlot("dictation", "Control+Shift+A", (hotkey) => fired.push(hotkey), {
+    atomic: true,
+  });
+  const result = await manager.registerSlot("dictation", "Fn+A", (hotkey) => fired.push(hotkey), {
     atomic: true,
   });
 
-  registered.get("A")();
-  assert.deepEqual(fired, []);
-
-  fnHeld = true;
-  registered.get("A")();
-  assert.deepEqual(fired, ["Fn+A"]);
+  assert.equal(result.success, false);
+  assert.deepEqual([...registered.keys()], ["Control+Shift+A"]);
+  registered.get("Control+Shift+A")();
+  assert.deepEqual(fired, ["Control+Shift+A"]);
 });
 
-test("hotkeys without an Fn prefix are never gated", async () => {
+test("ordinary hotkeys continue to register normally", async () => {
   const manager = new HotkeyManager();
   const fired = [];
-  manager.setFnHeldProvider(() => false);
 
   await manager.registerSlot("dictation", "Control+Shift+A", (hotkey) => fired.push(hotkey), {
     atomic: true,
@@ -72,35 +69,4 @@ test("hotkeys without an Fn prefix are never gated", async () => {
 
   registered.get("Control+Shift+A")();
   assert.deepEqual(fired, ["Control+Shift+A"]);
-});
-
-// Startup registers hotkeys (createMainWindow → initializeHotkey) before
-// initializeDeferredManagers installs the provider, so the guard must consult
-// the provider at fire time — a wrap-time check left every hotkey saved as
-// "Fn+X" firing on the bare X for the whole session.
-test("a provider installed after registration still guards the hotkey", async () => {
-  const manager = new HotkeyManager();
-  const fired = [];
-
-  await manager.registerSlot("dictation", "Fn+A", (hotkey) => fired.push(hotkey), {
-    atomic: true,
-  });
-  manager.setFnHeldProvider(() => false);
-
-  registered.get("A")();
-  assert.deepEqual(fired, []);
-});
-
-// Platforms with no Fn reporting (everything but macOS) never install a
-// provider, and must keep the pre-existing behaviour rather than going dead.
-test("without a provider the guard stays out of the way", async () => {
-  const manager = new HotkeyManager();
-  const fired = [];
-
-  await manager.registerSlot("dictation", "Fn+A", (hotkey) => fired.push(hotkey), {
-    atomic: true,
-  });
-
-  registered.get("A")();
-  assert.deepEqual(fired, ["Fn+A"]);
 });
