@@ -112,6 +112,7 @@ function buildFakeThis() {
       updateTranscriptionStatus: () => {},
       updateTranscriptionAudio: () => {},
       getTranscriptionById: (id) => dbRows.get(id),
+      recordDictionaryUsage: () => ({ success: true, matched: 0 }),
     },
     environmentManager: {
       getOpenAIKey: () => "sk-openai",

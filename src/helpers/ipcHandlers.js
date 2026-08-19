@@ -1212,6 +1212,14 @@ class IPCHandlers {
         setImmediate(() => {
           broadcastToWindows("transcription-added", result.transcription);
         });
+        // Usage follows the raw STT transcript: processed text can be an agent
+        // reply or a translation, which never reflects what was dictated.
+        if ((options?.status ?? "completed") === "completed") {
+          const spokenText = typeof rawText === "string" && rawText.trim() ? rawText : text;
+          setImmediate(() => {
+            this.databaseManager.recordDictionaryUsage(spokenText);
+          });
+        }
       }
       return result;
     });
@@ -1386,6 +1394,10 @@ class IPCHandlers {
 
     ipcMain.handle("db-get-dictionary", async () => {
       return this.databaseManager.getDictionary();
+    });
+
+    ipcMain.handle("db-get-dictionary-entries", async () => {
+      return this.databaseManager.getDictionaryEntries();
     });
 
     ipcMain.handle("db-set-dictionary", async (event, words) => {
@@ -5425,6 +5437,10 @@ class IPCHandlers {
             broadcastToWindows("transcription-updated", updated);
           });
         }
+        // Retry finalizes outside db-save-transcription, so count usage here too.
+        setImmediate(() => {
+          this.databaseManager.recordDictionaryUsage(result.text);
+        });
         return { success: true, transcription: updated };
       } catch (error) {
         debugLogger.error(

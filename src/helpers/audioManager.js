@@ -7,6 +7,7 @@ import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
 import {
   applyChineseScript,
+  getChineseScriptPromptBias,
   mergeWhisperPrompt,
   resolveChineseScriptTarget,
   resolveCleanupLanguage,
@@ -88,6 +89,7 @@ import {
   dictionaryEchoError,
   matchesDictionaryPrompt,
 } from "../utils/dictionaryEchoFilter.js";
+import { budgetDictionaryPrompt, buildDictionaryPrompt } from "./dictionaryPrompt.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import {
   buildSelectionEditSystemPrompt,
@@ -346,6 +348,8 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
   tinfoil: {
     displayName: "Tinfoil",
     ipc: () => window.electronAPI?.proxyTinfoilTranscription,
+    // Tinfoil runs whisper: tail-keeping decoder, most-used goes last.
+    promptOptions: { mostUsedLast: true },
     buildPayload: ({ audioBuffer, language, dictionaryPrompt }) => ({
       audioBuffer,
       language,
@@ -355,6 +359,7 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
   mistral: {
     displayName: "Mistral",
     ipc: () => window.electronAPI?.proxyMistralTranscription,
+    // Mistral biases on the FIRST 100 tokens, so most-used stays first.
     buildPayload: ({ audioBuffer, model, language, dictionaryPrompt }) => {
       const payload = { audioBuffer, model, language };
       const tokens = (dictionaryPrompt || "")
@@ -564,9 +569,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.workletBlobUrl;
   }
 
-  getCustomDictionaryPrompt() {
-    const words = getDictionaryHintWords(getSettings());
-    return words.length > 0 ? words.join(", ") : null;
+  getCustomDictionaryPrompt({ mostUsedLast = false } = {}) {
+    const settings = getSettings();
+    return buildDictionaryPrompt(
+      settings.customDictionary,
+      settings.snippets.map((s) => s.trigger),
+      { mostUsedLast }
+    );
   }
 
   // Script conversion targets whatever the user ends up pasting: the translation
@@ -587,14 +596,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   // Whisper only accepts language "zh"; script (简体/繁體) is applied here. See #975.
   // No transcript exists yet, so only an explicit zh-CN/zh-TW may bias the prompt.
-  getWhisperPrompt(settings = getSettings()) {
-    return mergeWhisperPrompt(
-      this.getCustomDictionaryPrompt(),
-      resolveChineseScriptTarget(
-        this.getEffectiveSttLanguage(settings),
-        settings.chineseScriptPreference
-      )
+  // maxChars caps the merged prompt by trimming the dictionary tail only, so the
+  // script bias always survives a provider cap.
+  getWhisperPrompt(settings = getSettings(), { mostUsedLast = false, maxChars } = {}) {
+    const target = resolveChineseScriptTarget(
+      this.getEffectiveSttLanguage(settings),
+      settings.chineseScriptPreference
     );
+    const dictionaryPrompt = budgetDictionaryPrompt(
+      this.getCustomDictionaryPrompt({ mostUsedLast }),
+      getChineseScriptPromptBias(target),
+      maxChars
+    );
+    return mergeWhisperPrompt(dictionaryPrompt, target);
   }
 
   // Cleanup runs before the translate step, so it still works in the STT language.
@@ -1847,8 +1861,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         options.language = language;
       }
 
-      // Add custom dictionary as initial prompt to help Whisper recognize specific words
-      const dictionaryPrompt = this.getWhisperPrompt();
+      // Add custom dictionary as initial prompt to help Whisper recognize specific
+      // words. whisper.cpp keeps only the last ~224 prompt tokens, so most-used last.
+      const dictionaryPrompt = this.getWhisperPrompt(getSettings(), { mostUsedLast: true });
       if (dictionaryPrompt) {
         options.initialPrompt = dictionaryPrompt;
       }
@@ -3027,7 +3042,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             model,
             language,
             apiSettings,
-            dictionaryPrompt: this.getWhisperPrompt(apiSettings),
+            dictionaryPrompt: this.getWhisperPrompt(apiSettings, proxySpec.promptOptions),
             keyterms: this.getKeyterms()
               .map((t) => t.trim().slice(0, 50))
               .filter(Boolean)
@@ -3095,13 +3110,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // 890 leaves margin for UTF-16 vs codepoint counting drift.
       const isGroqEndpoint = provider === "groq" || endpoint.includes("api.groq.com");
       const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : 900;
-      let dictionaryPrompt = this.getWhisperPrompt(apiSettings);
+      // Whisper-style endpoints keep the final ~224 prompt tokens, so send
+      // most-used last and trim from the head when over the provider cap.
+      let dictionaryPrompt = this.getWhisperPrompt(apiSettings, { mostUsedLast: true });
       if (dictionaryPrompt) {
         if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
           const originalLength = dictionaryPrompt.length;
-          const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
-          const lastComma = truncated.lastIndexOf(",");
-          dictionaryPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
+          // Re-merge from a trimmed dictionary so the script bias survives the cap.
+          dictionaryPrompt = this.getWhisperPrompt(apiSettings, {
+            mostUsedLast: true,
+            maxChars: MAX_PROMPT_CHARS,
+          });
           logger.debug(
             "Custom dictionary prompt truncated",
             {
