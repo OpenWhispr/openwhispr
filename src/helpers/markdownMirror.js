@@ -33,8 +33,22 @@ class MarkdownMirror {
   _buildFrontmatter(note, folderName) {
     const escYaml = (str) => {
       if (!str) return '""';
-      if (/[:#{}[\],&*?|>!%@`]/.test(str) || str.includes('"') || str.includes("'")) {
-        return `"${str.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+      // A control character (newline, carriage return, tab) in a title splits the
+      // mapping onto a bare line and makes the whole frontmatter block unparseable,
+      // so force quoting and escape them like `"` and `\` — keeping the value on
+      // one line and round-tripping back to the original when parsed.
+      if (
+        /[:#{}[\],&*?|>!%@`]/.test(str) ||
+        /[\n\r\t]/.test(str) ||
+        str.includes('"') ||
+        str.includes("'")
+      ) {
+        return `"${str
+          .replace(/\\/g, "\\\\")
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, "\\n")
+          .replace(/\r/g, "\\r")
+          .replace(/\t/g, "\\t")}"`;
       }
       return str;
     };
@@ -122,7 +136,18 @@ class MarkdownMirror {
     try {
       const files = [...this._globNoteFiles(noteId), ...this._globTranscriptFiles(noteId)];
       for (const f of files) {
-        fs.unlinkSync(f);
+        // Isolate each unlink like writeNote/writeTranscript do: a single file we
+        // can't remove (e.g. locked by an external editor) must not orphan the
+        // note's other mirrored files.
+        try {
+          fs.unlinkSync(f);
+        } catch (err) {
+          debugLogger.error(
+            "Failed to delete note file",
+            { noteId, file: f, error: err.message },
+            "note-files"
+          );
+        }
       }
     } catch (err) {
       debugLogger.error("Failed to delete note file", { noteId, error: err.message }, "note-files");

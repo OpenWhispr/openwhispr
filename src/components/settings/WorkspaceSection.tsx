@@ -9,7 +9,7 @@ import { useDialogs } from "../../hooks/useDialogs";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { Label } from "../ui/label";
+import { SettingsPanel, SettingsPanelRow, SettingsRow } from "../ui/SettingsSection";
 import { useToast } from "../ui/useToast";
 import { ConfirmDialog } from "../ui/dialog";
 import CreateWorkspaceDialog from "../CreateWorkspaceDialog";
@@ -191,7 +191,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
             </DropdownMenuContent>
           </DropdownMenu>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {t(`settingsPage.workspace.role.${workspace.role}`)} · {workspace.slug}
+            {t(`settingsPage.workspace.role.${workspace.role}`)}
           </p>
         </div>
       </div>
@@ -231,8 +231,6 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
   );
 }
 
-const SLUG_PATTERN = /^[a-z0-9-]+$/;
-
 function GeneralTab({ workspace }: { workspace: Workspace }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -241,24 +239,21 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
   const refresh = useWorkspaceStore((s) => s.refresh);
   const setActive = useWorkspaceStore((s) => s.setActiveWorkspaceId);
   const [name, setName] = useState(workspace.name);
-  const [slug, setSlug] = useState(workspace.slug);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const isOwner = workspace.role === "owner";
   const canEdit = canManageWorkspace(workspace.role);
-  const dirty = name !== workspace.name || slug !== workspace.slug;
-  const slugInvalid = slug.length > 0 && !SLUG_PATTERN.test(slug);
+  const dirty = name !== workspace.name;
 
   useEffect(() => {
     setName(workspace.name);
-    setSlug(workspace.slug);
-  }, [workspace.id, workspace.name, workspace.slug]);
+  }, [workspace.id, workspace.name]);
 
   async function handleSave() {
     setSaving(true);
     try {
-      await WorkspacesService.update(workspace.id, { name, slug });
+      await WorkspacesService.update(workspace.id, { name });
       await refresh();
       toast({ title: t("settingsPage.workspace.general.saved") });
     } catch (error) {
@@ -327,109 +322,80 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-3 rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="ws-name" className="text-xs font-medium">
-            {t("settingsPage.workspace.general.nameLabel")}
-          </Label>
-          <Input
-            id="ws-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={!canEdit}
-            maxLength={80}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="ws-slug" className="text-xs font-medium">
-            {t("settingsPage.workspace.general.slugLabel")}
-          </Label>
-          <Input
-            id="ws-slug"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            disabled={!canEdit}
-            maxLength={48}
-            aria-invalid={slugInvalid}
-          />
-          {slugInvalid ? (
-            <p className="text-[11px] text-destructive">
-              {t("settingsPage.workspace.general.slugInvalid")}
-            </p>
-          ) : (
-            <p className="text-[11px] text-muted-foreground">
-              {t("settingsPage.workspace.general.slugHint")}
-            </p>
-          )}
-        </div>
-        {canEdit && (
-          <div className="pt-1">
-            <Button
-              onClick={handleSave}
-              size="sm"
-              disabled={!dirty || !name.trim() || !slug || slugInvalid || saving}
-            >
-              {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {saving ? t("common.saving") : t("common.save")}
-            </Button>
-          </div>
-        )}
-      </div>
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow label={t("settingsPage.workspace.general.nameLabel")}>
+            <div className="flex gap-2">
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                aria-label={t("settingsPage.workspace.general.nameLabel")}
+                disabled={!canEdit || saving}
+                maxLength={80}
+                className="h-8 w-56 text-xs"
+              />
+              {canEdit && (
+                <Button size="sm" onClick={handleSave} disabled={!dirty || !name.trim() || saving}>
+                  {saving ? t("common.saving") : t("common.save")}
+                </Button>
+              )}
+            </div>
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
 
       {isOwner ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/3 dark:bg-destructive/6 p-4 space-y-3">
-          <div>
-            <p className="text-xs font-medium text-foreground">
-              {t("settingsPage.workspace.general.dangerTitle")}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {t("settingsPage.workspace.general.dangerDescription")}
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={confirmDelete}
-            disabled={deleting}
-            className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
-          >
-            {deleting ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            {deleting
-              ? t("settingsPage.workspace.general.deleting")
-              : t("settingsPage.workspace.general.delete")}
-          </Button>
-        </div>
+        <SettingsPanel>
+          <SettingsPanelRow>
+            <SettingsRow
+              label={t("settingsPage.workspace.general.dangerTitle")}
+              description={t("settingsPage.workspace.general.dangerDescription")}
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
+              >
+                {deleting ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                {deleting
+                  ? t("settingsPage.workspace.general.deleting")
+                  : t("settingsPage.workspace.general.delete")}
+              </Button>
+            </SettingsRow>
+          </SettingsPanelRow>
+        </SettingsPanel>
       ) : (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/3 dark:bg-destructive/6 p-4 space-y-3">
-          <div>
-            <p className="text-xs font-medium text-foreground">
-              {t("settingsPage.workspace.general.leaveTitle")}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {t("settingsPage.workspace.general.leaveDescription")}
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={confirmLeave}
-            disabled={leaving}
-            className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
-          >
-            {leaving ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <LogOut className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            {leaving
-              ? t("settingsPage.workspace.general.leaving")
-              : t("settingsPage.workspace.general.leave")}
-          </Button>
-        </div>
+        <SettingsPanel>
+          <SettingsPanelRow>
+            <SettingsRow
+              label={t("settingsPage.workspace.general.leaveTitle")}
+              description={t("settingsPage.workspace.general.leaveDescription")}
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={confirmLeave}
+                disabled={leaving}
+                className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
+              >
+                {leaving ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <LogOut className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                {leaving
+                  ? t("settingsPage.workspace.general.leaving")
+                  : t("settingsPage.workspace.general.leave")}
+              </Button>
+            </SettingsRow>
+          </SettingsPanelRow>
+        </SettingsPanel>
       )}
 
       <ConfirmDialog

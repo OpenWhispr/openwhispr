@@ -23,7 +23,6 @@ export interface TinfoilCatalogModel {
 const DESCRIPTION_KEYS: Record<string, string> = {
   "deepseek-v4-pro": "models.descriptions.cloud.tinfoil_deepseek_v4_pro",
   "glm-5-2": "models.descriptions.cloud.tinfoil_glm_5_2",
-  "kimi-k2-6": "models.descriptions.cloud.tinfoil_kimi_k2_6",
   "gemma4-31b": "models.descriptions.cloud.tinfoil_gemma4_31b",
   "gpt-oss-120b": "models.descriptions.cloud.tinfoil_gpt_oss_120b",
   "llama3-3-70b": "models.descriptions.cloud.tinfoil_llama3_3_70b",

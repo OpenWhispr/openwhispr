@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Sprecher erkennen und beschriften",
         "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
+      },
+      "autoEnd": {
+        "title": "Vergessene Aufnahmen automatisch beenden",
+        "description": "Beendet Meeting-Aufnahmen automatisch, wenn das Gespräch beendet scheint – nach einem Countdown, den Sie abbrechen können"
       }
     }
   },
@@ -1386,8 +1390,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "Für automatisches Einfügen installieren Sie",
     "methodReady": "für automatisches Einfügen",
@@ -1403,6 +1409,7 @@
     "waylandClipboardTitle": "Zwischenablage-Modus unter Wayland",
     "windowsReady": "Windows unterstützt automatisches Einfügen direkt. Keine Einrichtung erforderlich!",
     "withoutToolPrefix": "Ohne dieses Tool kopiert OpenWhispr den Text in Ihre Zwischenablage. Sie können ihn dann manuell mit Ctrl+V einfügen.",
+    "wtypeFallbackDescription": "wtype ist die bevorzugte Methode für automatisches Einfügen auf diesem wlroots-Compositor. Eine Alternative ist verfügbar, kann aber weniger zuverlässig sein.",
     "xwaylandAppsOnly": "Automatisches Einfügen funktioniert nur für XWayland-Apps"
   },
   "promptStudio": {
@@ -1481,7 +1488,7 @@
     "sections": {
       "account": {
         "description": "Profil & Anmeldung",
-        "label": "Konto"
+        "label": "Profil"
       },
       "plansBilling": {
         "description": "Tarife, Nutzung & Abrechnung",
@@ -1545,9 +1552,6 @@
       },
       "general": {
         "nameLabel": "Workspace-Name",
-        "slugLabel": "Kurzname",
-        "slugHint": "Wird in URLs verwendet. Nur Kleinbuchstaben, Ziffern und Bindestriche.",
-        "slugInvalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche.",
         "saved": "Workspace aktualisiert",
         "dangerTitle": "Workspace löschen",
         "dangerDescription": "Alle geteilten Notizen, Ordner und Integrationen werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
@@ -1822,7 +1826,7 @@
             "Notizen per öffentlichem Link teilen",
             "Persönlicher API-Zugang",
             "MCP-Integration in all deinen Apps",
-            "Mobile App (iOS demnächst verfügbar)",
+            "Mobile App",
             "E-Mail-Support"
           ],
           "cta": "Jetzt starten",
@@ -1838,9 +1842,8 @@
           "includesPrefix": "Alle Pro-Funktionen +",
           "badge": "Beliebteste Wahl",
           "features": [
-            "Team-Bereiche für gemeinsame Notizen",
-            "Workspace-Rollen & Mitgliederverwaltung",
             "Unbegrenzte Meeting-Aufnahmen",
+            "Workspace-Rollen & Mitgliederverwaltung",
             "Agentenmodus",
             "Chat über Ihre Daten",
             "Prioritäts-Support"
@@ -1889,7 +1892,6 @@
         "signOut": "Abmelden",
         "signingOut": "Abmeldung läuft..."
       },
-      "signedIn": "Angemeldet",
       "title": "Konto",
       "toasts": {
         "approachingLimit": {
@@ -2184,6 +2186,7 @@
         "recheck": "Erneut prüfen",
         "copy": "Kopieren",
         "ydotoolDesc": "Eingabeautomatisierung für Wayland",
+        "wtypeDesc": "Bevorzugte Eingabeautomatisierung für wlroots-Compositoren",
         "ydotooldDesc": "Daemon für ydotool (separates Paket unter Ubuntu/Pop!_OS)",
         "uinputDesc": "Zugriff auf das Kernel-Eingabegerät",
         "uinputRuleFound": "Regel vorhanden, aber nicht aktiv. Ein Neustart sollte das beheben.",
@@ -2201,6 +2204,11 @@
             "step1Desc": "Verwenden Sie den Paketmanager Ihrer Distribution, um ydotool zu installieren.",
             "step2Title": "Installation überprüfen",
             "step2Desc": "Prüfen Sie, ob ydotool in Ihrem PATH verfügbar ist."
+          },
+          "wtype": {
+            "step1Title": "wtype installieren",
+            "step1Desc": "wtype ist die primäre Methode für automatisches Einfügen unter Hyprland, Sway und anderen wlroots-Compositoren.",
+            "step2Title": "Installation überprüfen"
           },
           "ydotoold": {
             "step1Title": "ydotoold installieren",
@@ -2341,7 +2349,7 @@
       "usageAnalytics": "Nutzungsanalysen",
       "usageAnalyticsDescription": "Helfen Sie uns, OpenWhispr zu verbessern, indem Sie anonyme Leistungsdaten teilen. Wir senden niemals Transkriptionsinhalte – nur Timing- und Fehlerdaten.",
       "audioRetention": "Audio-Aufbewahrung",
-      "audioRetentionDescription": "Audioaufnahmen lokal für erneute Transkription und Download speichern. Dateien werden nach Ablauf der Aufbewahrungsfrist automatisch gelöscht.",
+      "audioRetentionDescription": "Diktat-Audio lokal für erneute Transkription und Download speichern. Dateien werden nach Ablauf der Aufbewahrungsfrist automatisch gelöscht. Meeting-Audio wird niemals gespeichert.",
       "audioRetentionDisabled": "Deaktiviert",
       "retentionDays_one": "{{count}} Tag",
       "retentionDays_other": "{{count}} Tage",
@@ -2546,16 +2554,15 @@
         "anthropic_claude_sonnet_4_5": "Vorherige Sonnet-Generation",
         "anthropic_claude_haiku_4_5": "Schnell mit nahezu Frontier-Intelligenz",
         "gemini_gemini_3_5_flash": "Neuestes schnelles, leistungsstarkes Gemini-Modell",
+        "gemini_gemini_3_5_flash_lite": "Schnellstes, kostengünstigstes 3.5-Modell",
         "gemini_gemini_3_1_pro_preview": "Flaggschiff der nächsten Generation für komplexes Reasoning",
+        "gemini_gemini_3_1_flash_lite": "Leistung auf Frontier-Niveau zu geringen Kosten",
         "gemini_gemini_3_flash_preview": "Ultraschnelles Modell der nächsten Generation mit hoher Leistungsfähigkeit",
         "gemini_gemini_2_5_flash_lite": "Niedrigste Latenz und Kosten",
         "gemini_gemma_4_31b_it": "Googles größtes Gemma 4, 31B dicht, 256K Kontext",
         "gemini_gemma_4_26b_a4b_it": "Googles Gemma 4 MoE, 4B aktive Parameter, 256K Kontext",
-        "groq_qwen_qwen3_32b": "Leistungsstarkes Reasoning-Modell, 131K Kontext",
         "groq_openai_gpt_oss_120b": "OpenAIs Open-Source-Flaggschiff, 500 T/s",
         "groq_openai_gpt_oss_20b": "Schnelles Open-Source-Modell, 1000 T/s",
-        "groq_llama_3_3_70b_versatile": "Vielseitiges Modell von Meta, 280 T/s",
-        "groq_llama_3_1_8b_instant": "Ultraschnell 560 T/s, 131K Kontext",
         "groq_compound": "Groqs Compound-System, 450 T/s",
         "groq_compound_mini": "Schnelles Compound-System, 3x niedrigere Latenz",
         "openai_gpt_5_6_sol": "Flaggschiff-GPT-5.6 für komplexes Coding und Forschung",
@@ -2569,7 +2576,6 @@
         "anthropic_claude_opus_4_5": "Früheres Opus-Modell",
         "tinfoil_deepseek_v4_pro": "Privates Long-Context-Reasoning in sicheren Enklaven, 800K Kontext",
         "tinfoil_glm_5_2": "Privates agentisches Engineering-Modell in sicheren Enklaven, 384K Kontext",
-        "tinfoil_kimi_k2_6": "Privates Modell für langfristiges Coding und Multimodalität, 256K Kontext",
         "tinfoil_gemma4_31b": "Privates mehrsprachiges Reasoning-Modell mit Tool-Aufrufen, 256K Kontext",
         "tinfoil_gpt_oss_120b": "Privates Open-Weight-Reasoning-Modell mit Tool-Nutzung, 131K Kontext",
         "tinfoil_llama3_3_70b": "Privates Konversationsmodell mit Tool-Aufrufen, 128K Kontext",
@@ -2659,7 +2665,6 @@
       "description": "Ein Workspace bündelt die Mitglieder und Abrechnung Ihrer Organisation. Darin erstellen Sie Team-Bereiche für gemeinsame Notizen.",
       "nameLabel": "Workspace-Name",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "Neue Workspaces starten im Free-Tarif. Team-Bereiche erfordern einen Workspace-Tarif.",
       "submit": "Workspace erstellen",
       "submitting": "Erstelle…",
       "errorTitle": "Workspace konnte nicht erstellt werden"
@@ -2837,8 +2842,8 @@
       "actions": "Aktionen"
     },
     "spaces": {
-      "privateSpaces": "Private Bereiche",
-      "teamSpaces": "Team-Bereiche",
+      "privateSpaces": "Private Notizen",
+      "teamSpaces": "Teamspaces",
       "personal": "Persönlich",
       "privateTooltip": "Nur du kannst deinen persönlichen Bereich sehen",
       "newSpace": "Neuer Team-Bereich",
@@ -3099,7 +3104,8 @@
       "title": "Besprechungsnotizen",
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "back": "Zurück",
-      "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt."
+      "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt.",
+      "autoEnded": "Die Aufnahme wurde nach dem Ende des Meetings automatisch beendet."
     },
     "meetingPill": {
       "returnToNote": "Zurück zur Aufnahme",
@@ -3224,14 +3230,15 @@
         "identifying": "Sprecher werden identifiziert",
         "notLabeled": "Sprecher nicht beschriftet",
         "finalizing": "Sprecher werden finalisiert…",
-        "justYou": "nur du",
-        "defaultingHint": "standardmäßig 1 weitere Person",
+        "justYou": "Nur du",
+        "assumedHint": "Standard: 2 — bei Bedarf anpassen",
+        "speakersLabel": "Sprecher",
+        "labelToggle": "Sprecher beschriften",
         "toggleAria": "Sprechererkennung für diese Aufnahme umschalten",
         "incAria": "Erwartete Sprecheranzahl erhöhen",
-        "decAria": "Erwartete Sprecheranzahl verringern",
-        "othersInCall_one": "{{count}} weitere Person im Gespräch",
-        "othersInCall_other": "{{count}} weitere Personen im Gespräch"
-      }
+        "decAria": "Erwartete Sprecheranzahl verringern"
+      },
+      "consentNotice": "Hole immer die Zustimmung ein, wenn du andere aufnimmst"
     },
     "overview": {
       "subtitle": {
@@ -3783,6 +3790,15 @@
       "underway": "Es klingt, als wäre dein Meeting schon im Gange. Notizen aufnehmen?"
     },
     "start": "Notizen aufnehmen",
-    "join": "Beitreten & transkribieren"
+    "join": "Beitreten & transkribieren",
+    "autoEnd": {
+      "title": "Das Meeting könnte beendet sein",
+      "body": {
+        "micReleased": "Keine andere App nutzt Ihr Mikrofon. Die Aufnahme stoppt in {{seconds}} s.",
+        "silence": "Kein Ton erkannt. Die Aufnahme stoppt in {{seconds}} s.",
+        "processExit": "Ihre Meeting-App wurde geschlossen. Die Aufnahme stoppt in {{seconds}} s."
+      },
+      "keep": "Aufnahme fortsetzen"
+    }
   }
 }

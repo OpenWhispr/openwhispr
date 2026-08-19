@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "Identifica ed etichetta i partecipanti",
         "description": "Se disattivato, le trascrizioni mostrano \"Tu\" e \"Altri\""
+      },
+      "autoEnd": {
+        "title": "Termina le registrazioni dimenticate",
+        "description": "Interrompe automaticamente le registrazioni delle riunioni quando la chiamata sembra finita, dopo un conto alla rovescia annullabile"
       }
     }
   },
@@ -1298,8 +1302,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "Per l'incollaggio automatico del testo, installa",
     "methodReady": "per l'incollaggio automatico del testo",
@@ -1315,6 +1321,7 @@
     "waylandClipboardTitle": "Modalità appunti su Wayland",
     "windowsReady": "Windows supporta l'incollaggio automatico senza configurazione aggiuntiva!",
     "withoutToolPrefix": "Senza questo strumento, OpenWhispr copierà il testo negli appunti. Potrai poi incollare manualmente con Ctrl+V.",
+    "wtypeFallbackDescription": "wtype è il metodo di incollaggio automatico preferito per questo compositor wlroots. È disponibile un'alternativa, ma potrebbe essere meno affidabile.",
     "xwaylandAppsOnly": "l'incollaggio automatico funziona solo per le app XWayland"
   },
   "promptStudio": {
@@ -1393,7 +1400,7 @@
     "sections": {
       "account": {
         "description": "Profilo e accesso",
-        "label": "Account"
+        "label": "Profilo"
       },
       "plansBilling": {
         "description": "Piani, utilizzo e fatturazione",
@@ -1508,7 +1515,6 @@
         "signOut": "Disconnetti",
         "signingOut": "Disconnessione..."
       },
-      "signedIn": "Accesso effettuato",
       "title": "Account",
       "toasts": {
         "approachingLimit": {
@@ -1556,7 +1562,7 @@
             "Condividi note con link pubblici",
             "Accesso personale all'API",
             "Integrazione MCP in tutte le tue app",
-            "App mobile (iOS in arrivo)",
+            "App mobile",
             "Supporto via e-mail"
           ],
           "cta": "Inizia",
@@ -1572,9 +1578,8 @@
           "includesPrefix": "Tutte le funzionalità Pro +",
           "badge": "Più popolare",
           "features": [
-            "Spazi del team per note condivise",
-            "Ruoli e gestione dei membri dell'area di lavoro",
             "Registrazioni riunioni illimitate",
+            "Ruoli e gestione dei membri dell'area di lavoro",
             "Modalità agente",
             "Chatta con i tuoi dati",
             "Supporto prioritario"
@@ -1898,6 +1903,7 @@
         "recheck": "Ricontrolla",
         "copy": "Copia",
         "ydotoolDesc": "Strumento di automazione input per Wayland",
+        "wtypeDesc": "Strumento di automazione input preferito sui compositor wlroots",
         "ydotooldDesc": "Daemon per ydotool (pacchetto separato su Ubuntu/Pop!_OS)",
         "uinputDesc": "Accesso al dispositivo di input del kernel",
         "uinputRuleFound": "Regola presente ma non attiva. Un riavvio dovrebbe risolvere.",
@@ -1915,6 +1921,11 @@
             "step1Desc": "Usa il gestore pacchetti della tua distribuzione per installare ydotool.",
             "step2Title": "Verifica l'installazione",
             "step2Desc": "Controlla che ydotool sia disponibile nel tuo PATH."
+          },
+          "wtype": {
+            "step1Title": "Installa wtype",
+            "step1Desc": "wtype è il metodo principale di incollaggio automatico su Hyprland, Sway e altri compositor wlroots.",
+            "step2Title": "Verifica l'installazione"
           },
           "ydotoold": {
             "step1Title": "Installa ydotoold",
@@ -2064,7 +2075,7 @@
       "lastSynced": "Ultima sincronizzazione {{time}}",
       "minutesAgo": "{{count}}m fa",
       "audioRetention": "Conservazione audio",
-      "audioRetentionDescription": "Salva le registrazioni audio localmente per la ritrascrizione e il download. I file vengono eliminati automaticamente al termine del periodo di conservazione.",
+      "audioRetentionDescription": "Salva l'audio di dettatura localmente per la ritrascrizione e il download. I file vengono eliminati automaticamente al termine del periodo di conservazione. L'audio delle riunioni non viene mai salvato.",
       "audioRetentionDisabled": "Disattivato",
       "retentionDays_one": "{{count}} giorno",
       "retentionDays_other": "{{count}} giorni",
@@ -2239,9 +2250,6 @@
       },
       "general": {
         "nameLabel": "Nome dell'area di lavoro",
-        "slugLabel": "Nome breve",
-        "slugHint": "Usato negli URL e nei link di invito. Solo lettere minuscole, cifre e trattini.",
-        "slugInvalid": "Solo lettere minuscole, cifre e trattini.",
         "saved": "Area di lavoro aggiornata",
         "dangerTitle": "Elimina area di lavoro",
         "dangerDescription": "Tutte le note, le cartelle e le integrazioni condivise verranno eliminate. Questa operazione non può essere annullata.",
@@ -2454,16 +2462,15 @@
         "anthropic_claude_sonnet_4_5": "Generazione Sonnet precedente",
         "anthropic_claude_haiku_4_5": "Veloce con intelligenza quasi da frontiera",
         "gemini_gemini_3_5_flash": "Ultimo modello Gemini veloce e ad alta capacità",
+        "gemini_gemini_3_5_flash_lite": "Il modello 3.5 più veloce ed economico",
         "gemini_gemini_3_1_pro_preview": "Modello di punta di nuova generazione per ragionamento complesso",
+        "gemini_gemini_3_1_flash_lite": "Prestazioni di punta a basso costo",
         "gemini_gemini_3_flash_preview": "Modello di nuova generazione ultra-veloce e ad alta capacità",
         "gemini_gemini_2_5_flash_lite": "Latenza e costo minimi",
         "gemini_gemma_4_31b_it": "Il più grande Gemma 4 di Google, 31B denso, contesto 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE di Google, 4B parametri attivi, contesto 256K",
-        "groq_qwen_qwen3_32b": "Potente modello di ragionamento, contesto 131K",
         "groq_openai_gpt_oss_120b": "Ammiraglia open source di OpenAI, 500 T/sec",
         "groq_openai_gpt_oss_20b": "Modello open source veloce, 1000 T/sec",
-        "groq_llama_3_3_70b_versatile": "Modello versatile di Meta, 280 T/sec",
-        "groq_llama_3_1_8b_instant": "Ultra-veloce 560 T/sec, contesto 131K",
         "groq_compound": "Sistema compound di Groq, 450 T/sec",
         "groq_compound_mini": "Sistema compound veloce, 3x latenza ridotta",
         "openai_gpt_5_6_sol": "GPT-5.6 di punta per programmazione e ricerca complesse",
@@ -2477,7 +2484,6 @@
         "anthropic_claude_opus_4_5": "Modello Opus meno recente",
         "tinfoil_deepseek_v4_pro": "Ragionamento privato a contesto lungo in enclave sicure, contesto 800K",
         "tinfoil_glm_5_2": "Modello privato di ingegneria agentica in enclave sicure, contesto 384K",
-        "tinfoil_kimi_k2_6": "Modello privato di coding a lungo termine e multimodale, contesto 256K",
         "tinfoil_gemma4_31b": "Modello privato di ragionamento multilingue con chiamata di strumenti, contesto 256K",
         "tinfoil_gpt_oss_120b": "Modello privato di ragionamento open-weight con uso di strumenti, contesto 131K",
         "tinfoil_llama3_3_70b": "Modello privato conversazionale con chiamata di strumenti, contesto 128K",
@@ -2629,8 +2635,8 @@
       "actions": "Azioni"
     },
     "spaces": {
-      "privateSpaces": "Spazi privati",
-      "teamSpaces": "Spazi del team",
+      "privateSpaces": "Note private",
+      "teamSpaces": "Teamspaces",
       "personal": "Personale",
       "privateTooltip": "Solo tu puoi vedere il tuo spazio personale",
       "newSpace": "Nuovo spazio del team",
@@ -2891,7 +2897,8 @@
       "title": "Note delle riunioni",
       "description": "Trascrizioni e riassunti strutturati",
       "back": "Indietro",
-      "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione."
+      "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione.",
+      "autoEnded": "La registrazione si è interrotta automaticamente al termine della riunione."
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
@@ -3016,14 +3023,15 @@
         "identifying": "Identificazione dei partecipanti",
         "notLabeled": "Partecipanti non etichettati",
         "finalizing": "Finalizzazione dei partecipanti…",
-        "justYou": "solo tu",
-        "defaultingHint": "predefinito 1 altra persona",
+        "justYou": "Solo tu",
+        "assumedHint": "si presumono 2 — modifica se sono di più",
+        "speakersLabel": "Partecipanti",
+        "labelToggle": "Etichetta i partecipanti",
         "toggleAria": "Attiva/disattiva l'identificazione dei partecipanti per questa registrazione",
         "incAria": "Aumenta il numero di partecipanti previsti",
-        "decAria": "Diminuisci il numero di partecipanti previsti",
-        "othersInCall_one": "{{count}} altra persona in chiamata",
-        "othersInCall_other": "{{count}} altre persone in chiamata"
-      }
+        "decAria": "Diminuisci il numero di partecipanti previsti"
+      },
+      "consentNotice": "Ottieni sempre il consenso quando registri altre persone"
     },
     "overview": {
       "subtitle": {
@@ -3686,7 +3694,6 @@
       "description": "Un'area di lavoro riunisce membri e fatturazione della tua organizzazione. Crea al suo interno spazi del team per le note condivise.",
       "nameLabel": "Nome dell'area di lavoro",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "Le nuove aree di lavoro partono dal piano Free. Gli spazi del team richiedono un piano dell'area di lavoro.",
       "submit": "Crea area di lavoro",
       "submitting": "Creazione…",
       "errorTitle": "Impossibile creare l'area di lavoro"
@@ -3783,6 +3790,15 @@
       "underway": "Sembra che la tua riunione sia già in corso. Vuoi prendere appunti?"
     },
     "start": "Prendi appunti",
-    "join": "Partecipa e trascrivi"
+    "join": "Partecipa e trascrivi",
+    "autoEnd": {
+      "title": "La riunione potrebbe essere finita",
+      "body": {
+        "micReleased": "Nessun'altra app sta usando il microfono. La registrazione si fermerà tra {{seconds}}s.",
+        "silence": "Nessun audio rilevato. La registrazione si fermerà tra {{seconds}}s.",
+        "processExit": "L'app della riunione è stata chiusa. La registrazione si fermerà tra {{seconds}}s."
+      },
+      "keep": "Continua a registrare"
+    }
   }
 }

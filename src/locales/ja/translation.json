@@ -29,6 +29,10 @@
       "speakerDetection": {
         "title": "話者を識別してラベル付け",
         "description": "オフにすると、文字起こしには「あなた」と「他の人」と表示されます"
+      },
+      "autoEnd": {
+        "title": "停止し忘れた録音を自動終了",
+        "description": "通話が終わったと判断されると、キャンセル可能なカウントダウンの後に会議の録音を自動的に停止します"
       }
     }
   },
@@ -1298,8 +1302,10 @@
     "installCommands": {
       "archLinux": "# Arch Linux",
       "debianUbuntu": "# Debian / Ubuntu",
+      "debianUbuntuPop": "# Debian / Ubuntu / Pop!_OS",
       "debianUbuntuMint": "# Debian / Ubuntu / Mint",
-      "fedoraRhel": "# Fedora / RHEL"
+      "fedoraRhel": "# Fedora / RHEL",
+      "openSuse": "# openSUSE Tumbleweed / Leap"
     },
     "installPrefix": "テキストの自動貼り付けには",
     "methodReady": "で自動貼り付け可能",
@@ -1315,6 +1321,7 @@
     "waylandClipboardTitle": "Wayland でのクリップボードモード",
     "windowsReady": "Windows は自動貼り付けに標準対応しています。設定は不要です！",
     "withoutToolPrefix": "このツールがない場合、OpenWhispr はテキストをクリップボードにコピーします。Ctrl+V で手動で貼り付けてください。",
+    "wtypeFallbackDescription": "この wlroots 系コンポジターでは wtype が推奨される自動貼り付け方法です。代替手段も利用できますが、信頼性が低い場合があります。",
     "xwaylandAppsOnly": "自動貼り付けは XWayland アプリのみで動作します"
   },
   "promptStudio": {
@@ -1393,7 +1400,7 @@
     "sections": {
       "account": {
         "description": "プロフィールとサインイン",
-        "label": "アカウント"
+        "label": "プロフィール"
       },
       "plansBilling": {
         "description": "プラン、使用状況、請求",
@@ -1536,7 +1543,7 @@
             "公開リンクでノートを共有",
             "個人APIアクセス",
             "すべてのアプリでMCP統合",
-            "モバイルアプリ（iOS 近日公開）",
+            "モバイルアプリ",
             "メールサポート"
           ],
           "cta": "始める",
@@ -1552,9 +1559,8 @@
           "includesPrefix": "Pro の全機能 +",
           "badge": "一番人気",
           "features": [
-            "共有ノートのためのチームスペース",
-            "ワークスペースのロールとメンバー管理",
             "無制限の会議録音",
+            "ワークスペースのロールとメンバー管理",
             "エージェントモード",
             "データとチャット",
             "優先サポート"
@@ -1603,7 +1609,6 @@
         "signOut": "サインアウト",
         "signingOut": "サインアウト中..."
       },
-      "signedIn": "サインイン済み",
       "signedOutPlans": {
         "button": "無料アカウントを作成"
       },
@@ -1898,6 +1903,7 @@
         "recheck": "再確認",
         "copy": "コピー",
         "ydotoolDesc": "Wayland 用入力自動化ツール",
+        "wtypeDesc": "wlroots 系コンポジターで推奨される入力自動化ツール",
         "ydotooldDesc": "ydotool デーモン（Ubuntu/Pop!_OS では別パッケージ）",
         "uinputDesc": "カーネル入力デバイスへのアクセス",
         "uinputRuleFound": "ルールは存在しますが未適用です。再起動で解決するはずです。",
@@ -1915,6 +1921,11 @@
             "step1Desc": "お使いのディストリビューションのパッケージマネージャーで ydotool をインストールしてください。",
             "step2Title": "インストールの確認",
             "step2Desc": "ydotool が PATH で利用可能か確認してください。"
+          },
+          "wtype": {
+            "step1Title": "wtype をインストール",
+            "step1Desc": "wtype は Hyprland、Sway などの wlroots 系コンポジターにおける主要な自動貼り付け方法です。",
+            "step2Title": "インストールの確認"
           },
           "ydotoold": {
             "step1Title": "ydotoold をインストール",
@@ -2239,9 +2250,6 @@
       },
       "general": {
         "nameLabel": "ワークスペース名",
-        "slugLabel": "短縮名",
-        "slugHint": "URL や招待リンクに使用されます。小文字の英字、数字、ハイフンのみ使用できます。",
-        "slugInvalid": "小文字の英字、数字、ハイフンのみ使用できます。",
         "saved": "ワークスペースを更新しました",
         "dangerTitle": "ワークスペースを削除",
         "dangerDescription": "共有されているノート、フォルダ、連携がすべて削除されます。この操作は取り消せません。",
@@ -2454,16 +2462,15 @@
         "anthropic_claude_sonnet_4_5": "前世代の Sonnet モデル",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
         "gemini_gemini_3_5_flash": "最新の高速で高性能な Gemini モデル",
+        "gemini_gemini_3_5_flash_lite": "最速かつ最も低コストの 3.5 モデル",
         "gemini_gemini_3_1_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
+        "gemini_gemini_3_1_flash_lite": "フロンティア級の性能を低コストで",
         "gemini_gemini_3_flash_preview": "超高速・高性能の次世代モデル",
         "gemini_gemini_2_5_flash_lite": "最低レイテンシーとコスト",
         "gemini_gemma_4_31b_it": "Google 最大の Gemma 4、31B デンス、256K コンテキスト",
         "gemini_gemma_4_26b_a4b_it": "Google の Gemma 4 MoE、4B アクティブパラメータ、256K コンテキスト",
-        "groq_qwen_qwen3_32b": "強力な推論モデル、131K コンテキスト",
         "groq_openai_gpt_oss_120b": "OpenAI のオープンソースフラッグシップ、500 T/秒",
         "groq_openai_gpt_oss_20b": "高速オープンソースモデル、1000 T/秒",
-        "groq_llama_3_3_70b_versatile": "Meta の汎用モデル、280 T/秒",
-        "groq_llama_3_1_8b_instant": "超高速 560 T/秒、131K コンテキスト",
         "groq_compound": "Groq の Compound システム、450 T/秒",
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
         "openai_gpt_5_6_sol": "複雑なコーディングと研究のためのフラッグシップ GPT-5.6",
@@ -2477,7 +2484,6 @@
         "anthropic_claude_opus_4_5": "旧世代の Opus モデル",
         "tinfoil_deepseek_v4_pro": "セキュアエンクレーブ内のプライベート長文脈推論、800K コンテキスト",
         "tinfoil_glm_5_2": "セキュアエンクレーブ内のプライベート・エージェント型エンジニアリングモデル、384K コンテキスト",
-        "tinfoil_kimi_k2_6": "プライベートな長期コーディング・マルチモーダルモデル、256K コンテキスト",
         "tinfoil_gemma4_31b": "ツール呼び出し対応のプライベート多言語推論モデル、256K コンテキスト",
         "tinfoil_gpt_oss_120b": "ツール使用対応のプライベート・オープンウェイト推論モデル、131K コンテキスト",
         "tinfoil_llama3_3_70b": "ツール呼び出し対応のプライベート会話モデル、128K コンテキスト",
@@ -2557,8 +2563,8 @@
       "actions": "アクション"
     },
     "spaces": {
-      "privateSpaces": "プライベートスペース",
-      "teamSpaces": "チームスペース",
+      "privateSpaces": "プライベートノート",
+      "teamSpaces": "Teamspaces",
       "personal": "個人",
       "privateTooltip": "パーソナルスペースはあなただけが見られます",
       "newSpace": "新しいチームスペース",
@@ -2875,7 +2881,8 @@
       "title": "議事録",
       "description": "文字起こしと構造化されたサマリー",
       "back": "戻る",
-      "restrictedByOrg": "会議の文字起こしは組織によって制限されています。"
+      "restrictedByOrg": "会議の文字起こしは組織によって制限されています。",
+      "autoEnded": "会議の終了後、録音は自動的に停止しました。"
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",
@@ -2939,13 +2946,14 @@
         "notLabeled": "話者ラベルなし",
         "finalizing": "話者を確定中…",
         "justYou": "あなたのみ",
-        "defaultingHint": "他の参加者を1人と想定 — 違う場合は変更してください",
+        "assumedHint": "2人と想定 — 違う場合は変更してください",
+        "speakersLabel": "話者数",
+        "labelToggle": "話者をラベル付け",
         "toggleAria": "この録音の話者識別を切り替える",
         "incAria": "想定する話者数を増やす",
-        "decAria": "想定する話者数を減らす",
-        "othersInCall_one": "他{{count}}人が通話中",
-        "othersInCall_other": "他{{count}}人が通話中"
+        "decAria": "想定する話者数を減らす"
       },
+      "consentNotice": "他の人を録音するときは必ず同意を得てください",
       "createNewPrefix": "作成",
       "emailPlaceholder": "name@example.com",
       "nameOrEmailPlaceholder": "名前またはメールを入力",
@@ -3686,7 +3694,6 @@
       "description": "ワークスペースには組織のメンバーと請求がまとまります。その中に共有ノート用のチームスペースを作成できます。",
       "nameLabel": "ワークスペース名",
       "namePlaceholder": "Acme Corp",
-      "freePlanNote": "新しいワークスペースは Free プランで始まります。チームスペースにはワークスペースのプランが必要です。",
       "submit": "ワークスペースを作成",
       "submitting": "作成中…",
       "errorTitle": "ワークスペースを作成できませんでした"
@@ -3783,6 +3790,15 @@
       "underway": "会議はすでに進行中のようです。メモを取りますか？"
     },
     "start": "メモを取る",
-    "join": "参加して文字起こし"
+    "join": "参加して文字起こし",
+    "autoEnd": {
+      "title": "会議が終了した可能性があります",
+      "body": {
+        "micReleased": "ほかのアプリはマイクを使用していません。録音は{{seconds}}秒後に停止します。",
+        "silence": "音声が検出されません。録音は{{seconds}}秒後に停止します。",
+        "processExit": "会議アプリが終了しました。録音は{{seconds}}秒後に停止します。"
+      },
+      "keep": "録音を続ける"
+    }
   }
 }

@@ -64,11 +64,16 @@ import {
 import { resolveStreamingFallbackTarget } from "./transcriptionFallback";
 import {
   executeTranslationChain,
+  hasTextContent,
   resolveTranslatedText,
   shouldRunTranslateStep,
 } from "./translationChain";
 import { detectAgentName } from "../config/agentDetection";
-import { resolveDictationRouteKind, resolveAgentImageTarget } from "./dictationRouting";
+import {
+  resolveDictationRouteKind,
+  resolveAgentImageTarget,
+  resolveWakeWordLanguage,
+} from "./dictationRouting";
 import {
   resolveDictationAgentInference,
   resolveDictationAgentVisionInference,
@@ -144,7 +149,8 @@ function resolveReasoningRoute(
   agentName,
   voiceAgentRequested,
   translationRequested,
-  screenContext
+  screenContext,
+  detectedLanguage
 ) {
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
   const cleanupReachable =
@@ -160,7 +166,11 @@ function resolveReasoningRoute(
   const kind = resolveDictationRouteKind({
     cleanupReachable,
     agentReachable: agent.reachable,
-    agentInvoked: !!agentName && detectAgentName(text, agentName),
+    // A translation recording never routes to the agent, so skip the scan.
+    agentInvoked:
+      !translationRequested &&
+      !!agentName &&
+      detectAgentName(text, agentName, resolveWakeWordLanguage(settings, detectedLanguage)),
     voiceAgentRequested,
     translationRequested,
     translationReachable: translation.reachable,
@@ -2607,7 +2617,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           processingTime: new Date().toISOString(),
         });
 
-        return result;
+        // A blank reply must not wipe the dictation — keep the transcript (#1616).
+        return hasTextContent(result) ? result : normalizedText;
       } catch (error) {
         if (error.selectionEditFatal) throw error;
         logger.logReasoning("REASONING_FAILED", {
@@ -2847,7 +2858,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         agentName,
         this.voiceAgentRequested,
         this.translationRequested,
-        screenContext
+        screenContext,
+        result.sttLanguage
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
@@ -2861,7 +2873,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             ...route.config,
             requiresAgent: true,
           });
-          if (reasoned) processedText = reasoned;
+          if (hasTextContent(reasoned)) processedText = reasoned;
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(processedText, {
@@ -2889,7 +2901,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           });
 
           // Cloud cleanup can return success with empty text; keep the raw transcription instead of wiping it.
-          if (reasonResult.success && reasonResult.text) {
+          if (reasonResult.success && hasTextContent(reasonResult.text)) {
             processedText = reasonResult.text;
           }
         } else if (route.kind === "cleanup") {
@@ -2901,7 +2913,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               agentName,
               route.config
             );
-            if (reasoned) processedText = reasoned;
+            if (hasTextContent(reasoned)) processedText = reasoned;
           }
         } else if (route.kind === "translation") {
           const chainResult = await this.runTranslationChain({
@@ -4243,7 +4255,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             ...route.config,
             requiresAgent: true,
           });
-          if (reasoned) finalText = reasoned;
+          if (hasTextContent(reasoned)) finalText = reasoned;
           logger.info(
             "Streaming dictation-agent complete",
             { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },
@@ -4275,7 +4287,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             return res;
           });
 
-          if (reasonResult.success && reasonResult.text) {
+          if (reasonResult.success && hasTextContent(reasonResult.text)) {
             finalText = reasonResult.text;
           }
           usedCloudReasoning = true;
@@ -4297,7 +4309,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               agentName,
               route.config
             );
-            if (reasoned) finalText = reasoned;
+            if (hasTextContent(reasoned)) finalText = reasoned;
             logger.info(
               "Streaming BYOK reasoning complete",
               { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },

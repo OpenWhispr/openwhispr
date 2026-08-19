@@ -322,6 +322,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   writeClipboard: (text) => ipcRenderer.invoke("write-clipboard", text),
   checkPasteTools: () => ipcRenderer.invoke("check-paste-tools"),
 
+  // Voice drafts (chat input recordings)
+  saveTempAudio: (buffer) => ipcRenderer.invoke("save-temp-audio", buffer),
+  deleteTempAudio: (tempPath) => ipcRenderer.invoke("delete-temp-audio", tempPath),
+
   // Local Whisper functions (whisper.cpp)
   transcribeLocalWhisper: (audioBlob, options) =>
     ipcRenderer.invoke("transcribe-local-whisper", audioBlob, options),
@@ -767,7 +771,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-start", options),
   meetingTranscriptionSend: (buffer, source) =>
     ipcRenderer.send("meeting-transcription-send", buffer, source),
-  meetingTranscriptionStop: () => ipcRenderer.invoke("meeting-transcription-stop"),
+  meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
+    ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
+  meetingTranscriptionStop: (expectedSessionId) =>
+    ipcRenderer.invoke("meeting-transcription-stop", expectedSessionId),
   meetingTranscriptionCancel: () => ipcRenderer.invoke("meeting-transcription-cancel"),
   onMeetingTranscriptionSegment: registerListener(
     "meeting-transcription-segment",
@@ -1183,6 +1190,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-notification-data",
     (callback) => (_event, data) => callback(data)
   ),
+  onMeetingAutoEndRequested: registerListener(
+    "meeting-auto-end-requested",
+    (callback) => (_event, data) => callback(data)
+  ),
+  meetingAutoEndKeep: (sessionId) => ipcRenderer.invoke("meeting-auto-end-keep", sessionId),
   getMeetingNotificationData: () => ipcRenderer.invoke("get-meeting-notification-data"),
   meetingNotificationReady: () => ipcRenderer.invoke("meeting-notification-ready"),
   meetingNotificationRespond: (detectionId, action) =>

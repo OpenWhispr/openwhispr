@@ -87,7 +87,9 @@ export function suppressThinking(
   } else if (providerKey === "lan") {
     // `lan` always talks to an OpenAI-compat /v1 endpoint: the `reasoning` object
     // disables Ollama thinking; other backends drop it (flat reasoning_effort trips vLLM).
-    requestBody.reasoning = { effort: "none" };
+    // The effort value is the family's — gpt-oss has no off switch, so "none" would
+    // contradict the "low" cleanup pin the same body carries.
+    requestBody.reasoning = { effort: family?.reasoningEffort?.suppressValue ?? "none" };
   } else {
     requestBody.reasoning_effort = family?.reasoningEffort?.suppressValue ?? "none";
   }

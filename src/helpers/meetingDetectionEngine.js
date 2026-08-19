@@ -1,9 +1,12 @@
 const { shell } = require("electron");
 const debugLogger = require("./debugLogger");
 const { getMeetingJoinUrl } = require("./meetingJoinUrl");
+const createMeetingAutoEndController = require("./meetingAutoEndController");
+const { createMeetingAudioActivityMonitor } = require("./meetingAudioActivityMonitor");
 const { broadcastToWindows } = require("./windowBroadcast");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
+const AUTO_END_TICK_MS = 1000;
 
 const PLACEHOLDER_PREFIX = { __detected__: "detected", __manual__: "manual" };
 
@@ -30,7 +33,14 @@ class MeetingDetectionEngine {
     meetingProcessDetector,
     audioActivityDetector,
     windowManager,
-    databaseManager
+    databaseManager,
+    {
+      createAutoEndController = createMeetingAutoEndController,
+      createAudioActivityMonitor = createMeetingAudioActivityMonitor,
+      now = Date.now,
+      setInterval = global.setInterval,
+      clearInterval = global.clearInterval,
+    } = {}
   ) {
     this.reminderScheduler = reminderScheduler;
     this.meetingProcessDetector = meetingProcessDetector;
@@ -38,11 +48,51 @@ class MeetingDetectionEngine {
     this.windowManager = windowManager;
     this.databaseManager = databaseManager;
     this.activeDetections = new Map();
-    this.preferences = { processDetection: true, audioDetection: true };
+    this.preferences = { processDetection: true, audioDetection: true, autoEnd: true };
     this._userRecording = false;
     this._meetingModeActive = false;
     this._notificationQueue = [];
     this._postRecordingCooldown = null;
+    this._recordingSession = null;
+    this._now = now;
+    this._setInterval = setInterval;
+    this._clearInterval = clearInterval;
+    // True only between controller.beginSession and endSession — meeting audio
+    // starts streaming before the session is registered, and chunks fed to the
+    // monitor before the controller exists would leave the two out of sync.
+    this._autoEndActive = false;
+    this._autoEndTicker = null;
+    this._audioActivityMonitor = createAudioActivityMonitor({
+      onActivityChanged: (state) => {
+        const session = this._recordingSession;
+        if (!this._autoEndActive || !session) return;
+        this._autoEndController.handleAudioActivity({ sessionId: session.sessionId, ...state });
+      },
+    });
+    this._autoEndController = createAutoEndController({
+      now,
+      onCountdown: (countdown) => {
+        debugLogger.info("Meeting auto-end countdown started", countdown, "meeting");
+        Promise.resolve(this.windowManager.showMeetingAutoEndCountdown?.(countdown)).catch(
+          (error) => {
+            debugLogger.error(
+              "Failed to show meeting auto-end countdown",
+              { error: error?.message },
+              "meeting"
+            );
+            this.handleAutoEndNotificationUnavailable(countdown.sessionId);
+          }
+        );
+      },
+      onCountdownCanceled: (sessionId) => {
+        debugLogger.info("Meeting auto-end countdown canceled", { sessionId }, "meeting");
+        this.windowManager.dismissMeetingAutoEndCountdown?.(sessionId);
+      },
+      onCountdownExpired: (sessionId) => {
+        this.windowManager.dismissMeetingAutoEndCountdown?.(sessionId);
+      },
+      onStop: (sessionId, reason) => this._requestRecordingStop(sessionId, reason),
+    });
     this._bindListeners();
   }
 
@@ -59,11 +109,250 @@ class MeetingDetectionEngine {
 
     this.meetingProcessDetector.on("meeting-process-ended", (data) => {
       this.activeDetections.delete(`process:${data.processKey}`);
+
+      // The detector removes the ended key before emitting, so an empty list
+      // means the last tracked meeting app is gone.
+      const session = this._recordingSession;
+      if (!this._autoEndActive || !session) return;
+      const remaining = this.meetingProcessDetector.getDetectedProcesses?.() ?? [];
+      if (remaining.length > 0) return;
+      debugLogger.info(
+        "Last tracked meeting app exited during recording",
+        { sessionId: session.sessionId, processKey: data.processKey },
+        "meeting"
+      );
+      this._autoEndController.handleMeetingProcessExit({ sessionId: session.sessionId });
     });
 
     this.audioActivityDetector.on("sustained-audio-detected", (data) => {
       this._handleDetection("audio", "sustained-audio", data);
     });
+
+    this.audioActivityDetector.on("external-mic-state-changed", (state) => {
+      const session = this._recordingSession;
+      if (!this._autoEndActive || !session) return;
+
+      debugLogger.debug(
+        "External mic state for auto-end",
+        { sessionId: session.sessionId, ...state },
+        "meeting"
+      );
+      this._autoEndController.handleExternalMicState({
+        sessionId: session.sessionId,
+        reliable: state.reliable,
+        externalMicActive: state.externalMicActive,
+      });
+    });
+  }
+
+  _requestRecordingStop(sessionId, reason) {
+    const session = this._recordingSession;
+    if (!session || session.sessionId !== sessionId) return;
+
+    debugLogger.info(
+      "Meeting auto-end countdown expired, requesting stop",
+      { sessionId, reason },
+      "meeting"
+    );
+    const ownerWebContents = session.ownerWebContents;
+    if (!ownerWebContents || ownerWebContents.isDestroyed?.()) return;
+    try {
+      ownerWebContents.send("meeting-auto-end-requested", { sessionId, reason });
+    } catch (error) {
+      debugLogger.error(
+        "Failed to request meeting auto-end from recording renderer",
+        { error: error?.message, sessionId },
+        "meeting"
+      );
+    }
+  }
+
+  // Hot path — called for every meeting PCM chunk of both channels.
+  recordMeetingAudioChunk(source, buffer) {
+    if (!this._autoEndActive) return;
+    this._audioActivityMonitor.recordChunk(source, buffer);
+  }
+
+  _isAutoEndWanted() {
+    return (
+      this._recordingSession?.autoEndEligible === true &&
+      this._recordingSession.systemAudioAvailable === true &&
+      this.preferences.autoEnd !== false
+    );
+  }
+
+  _syncAudioActivityDetector() {
+    if (this.preferences.audioDetection || this._isAutoEndWanted()) {
+      return this.audioActivityDetector.start();
+    }
+
+    this.audioActivityDetector.stop();
+    return undefined;
+  }
+
+  // The process-exit fast path needs the detector even when the user has turned
+  // process detection off for meeting prompts.
+  _syncMeetingProcessDetector() {
+    if (this.preferences.processDetection || this._isAutoEndWanted()) {
+      this.meetingProcessDetector.start();
+      return;
+    }
+    this.meetingProcessDetector.stop();
+  }
+
+  _startAutoEndTicker() {
+    if (this._autoEndTicker) return;
+    this._autoEndTicker = this._setInterval(() => {
+      // Monitor first so a fresh activity change reaches the controller before
+      // it evaluates its windows for this second.
+      this._audioActivityMonitor.tick(this._now());
+      this._autoEndController.tick();
+    }, AUTO_END_TICK_MS);
+    this._autoEndTicker?.unref?.();
+  }
+
+  _stopAutoEndTicker() {
+    if (!this._autoEndTicker) return;
+    this._clearInterval(this._autoEndTicker);
+    this._autoEndTicker = null;
+  }
+
+  // Ends the controller session for the tracked recording (if any) and stops
+  // feeding it audio. Safe to call when nothing is active.
+  _deactivateAutoEnd() {
+    const session = this._recordingSession;
+    this._autoEndActive = false;
+    this._stopAutoEndTicker();
+    this._audioActivityMonitor.reset();
+    if (session) this._autoEndController.endSession(session.sessionId);
+  }
+
+  async _activateAutoEnd(sessionId) {
+    await this._syncAudioActivityDetector();
+    if (this._recordingSession?.sessionId !== sessionId || !this._isAutoEndWanted()) return;
+
+    const externalMicState = this.audioActivityDetector.getExternalMicState();
+    debugLogger.info(
+      "Auto-end armed for recording session",
+      { sessionId, ...externalMicState },
+      "meeting"
+    );
+    this._audioActivityMonitor.reset();
+    this._autoEndController.beginSession({
+      sessionId,
+      eligible: true,
+      reliable: externalMicState.reliable,
+      externalMicActive: externalMicState.externalMicActive,
+      ...this._audioActivityMonitor.getState(),
+    });
+    this._autoEndActive = true;
+    this._startAutoEndTicker();
+  }
+
+  async beginRecordingSession({
+    sessionId,
+    autoEndEligible,
+    ownerWebContents,
+    systemAudioAvailable = false,
+  }) {
+    if (this._recordingSession) this._deactivateAutoEnd();
+
+    this._recordingSession = {
+      sessionId,
+      autoEndEligible: autoEndEligible === true,
+      ownerWebContents,
+      systemAudioAvailable: systemAudioAvailable === true,
+    };
+    this._syncMeetingProcessDetector();
+
+    if (!this._isAutoEndWanted()) {
+      this._syncAudioActivityDetector();
+      return;
+    }
+
+    await this._activateAutoEnd(sessionId);
+  }
+
+  async setRecordingSystemAudioAvailable(sessionId, available, ownerWebContents) {
+    const session = this._recordingSession;
+    if (
+      !session ||
+      session.sessionId !== sessionId ||
+      (ownerWebContents && session.ownerWebContents !== ownerWebContents)
+    ) {
+      return false;
+    }
+
+    const autoEndWasWanted = this._isAutoEndWanted();
+    session.systemAudioAvailable = available === true;
+    const autoEndWanted = this._isAutoEndWanted();
+
+    if (autoEndWasWanted && !autoEndWanted) {
+      this._deactivateAutoEnd();
+    } else if (!autoEndWasWanted && autoEndWanted) {
+      await this._activateAutoEnd(sessionId);
+    }
+
+    this._syncMeetingProcessDetector();
+    this._syncAudioActivityDetector();
+    return true;
+  }
+
+  // Returns false only when a *different* session is currently live — the one
+  // case where the caller must not tear down shared capture. With no tracked
+  // session (e.g. after engine stop at quit) teardown must still proceed.
+  endRecordingSession(expectedSessionId) {
+    const session = this._recordingSession;
+    if (!session) return true;
+    if (expectedSessionId != null && session.sessionId !== expectedSessionId) {
+      debugLogger.info(
+        "Recording session end skipped — another session is live",
+        { expectedSessionId, activeSessionId: session.sessionId },
+        "meeting"
+      );
+      return false;
+    }
+
+    this._deactivateAutoEnd();
+    debugLogger.info(
+      "Recording session ended",
+      { sessionId: session.sessionId, autoEndEligible: session.autoEndEligible },
+      "meeting"
+    );
+    this._recordingSession = null;
+    // Meeting mode was entered when the note was created; the recording it led
+    // to is over, so the next call (or the next meeting's reminder) must prompt
+    // again. Only the narrow layout's "Back to notes" button cleared it before,
+    // which in the wide layout meant no prompts for the rest of the app session.
+    if (this._meetingModeActive) this.setMeetingModeActive(false);
+    this._syncAudioActivityDetector();
+    this._syncMeetingProcessDetector();
+    return true;
+  }
+
+  keepRecordingSession(sessionId) {
+    const session = this._recordingSession;
+    if (!this._autoEndActive || !session || session.sessionId !== sessionId) return false;
+
+    const kept = this._autoEndController.keepRecording(sessionId) === true;
+    debugLogger.info(
+      kept ? "Auto-end paused — user kept recording" : "Keep request lost to expired countdown",
+      { sessionId },
+      "meeting"
+    );
+    return kept;
+  }
+
+  handleAutoEndNotificationUnavailable(sessionId) {
+    const suppressed = this._autoEndController.handleCountdownUnavailable(sessionId) === true;
+    if (suppressed) {
+      debugLogger.warn(
+        "Meeting auto-end suppressed because its countdown was unavailable",
+        { sessionId },
+        "meeting"
+      );
+    }
+    return suppressed;
   }
 
   // Calendar reminders enter the same pipeline as mic detections, so they share
@@ -103,7 +392,11 @@ class MeetingDetectionEngine {
       return;
     }
 
-    if (this._userRecording || this._postRecordingCooldown) {
+    // _userRecording is shared with dictation, so a dictation ending mid-meeting
+    // clears it while the recording is still live; the tracked session is the
+    // gate that cannot be reset from outside. A prompt shown then would replace
+    // a visible auto-end countdown card and let the countdown run on unseen.
+    if (this._userRecording || this._postRecordingCooldown || this._recordingSession) {
       debugLogger.info("Detection queued — user is recording", { detectionId, source }, "meeting");
       this._notificationQueue.push({ source, key, data });
       this.activeDetections.set(detectionId, { source, key, data });
@@ -166,6 +459,7 @@ class MeetingDetectionEngine {
     }
 
     this.windowManager.showMeetingNotification({
+      kind: "detection",
       detectionId,
       source,
       key,
@@ -356,6 +650,13 @@ class MeetingDetectionEngine {
       return;
     }
 
+    // A dictation's post-recording cooldown can flush while a meeting recording
+    // is still live; hold the queue for the flush that follows the recording.
+    if (this._recordingSession) {
+      debugLogger.info("Holding queued notifications — recording session live", {}, "meeting");
+      return;
+    }
+
     debugLogger.info(
       "Flushing notification queue",
       { count: this._notificationQueue.length },
@@ -412,19 +713,21 @@ class MeetingDetectionEngine {
 
   setPreferences(prefs) {
     debugLogger.info("Updating detection preferences", prefs, "meeting");
+    const autoEndWasWanted = this._isAutoEndWanted();
     Object.assign(this.preferences, prefs);
+    const autoEndWanted = this._isAutoEndWanted();
 
-    if (this.preferences.processDetection) {
-      this.meetingProcessDetector.start();
-    } else {
-      this.meetingProcessDetector.stop();
+    // Toggling auto-end mid-recording takes effect immediately: off dismisses
+    // any visible countdown (the recording itself continues); on arms a fresh
+    // session from the current mic-ownership state.
+    if (autoEndWasWanted && !autoEndWanted) {
+      this._deactivateAutoEnd();
+    } else if (!autoEndWasWanted && autoEndWanted && this._recordingSession) {
+      void this._activateAutoEnd(this._recordingSession.sessionId);
     }
 
-    if (this.preferences.audioDetection) {
-      this.audioActivityDetector.start();
-    } else {
-      this.audioActivityDetector.stop();
-    }
+    this._syncMeetingProcessDetector();
+    this._syncAudioActivityDetector();
   }
 
   getPreferences() {
@@ -433,12 +736,14 @@ class MeetingDetectionEngine {
 
   start() {
     debugLogger.info("Meeting detection engine started", this.preferences, "meeting");
-    if (this.preferences.processDetection) this.meetingProcessDetector.start();
-    if (this.preferences.audioDetection) this.audioActivityDetector.start();
+    this._syncMeetingProcessDetector();
+    this._syncAudioActivityDetector();
   }
 
   stop() {
     debugLogger.info("Meeting detection engine stopped", {}, "meeting");
+    this._deactivateAutoEnd();
+    this._recordingSession = null;
     this.meetingProcessDetector.stop();
     this.audioActivityDetector.stop();
     this.activeDetections.clear();

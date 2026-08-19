@@ -61,7 +61,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **clipboard.js**: Cross-platform clipboard operations
   - macOS: AppleScript-based paste with accessibility permission check
   - Windows: PowerShell SendKeys with nircmd.exe fallback
-  - Linux: Native XTest binary + compositor-aware fallbacks (xdotool, wtype, ydotool)
+  - Linux: compositor-aware Wayland paste (Hyprland sendshortcut, wlroots wtype, GNOME/KDE portal keysyms) with native uinput/XTest and system-tool fallbacks
 - **database.js**: SQLite operations for transcription history
 - **debugLogger.js**: Debug logging system with file output
 - **devServerManager.js**: Vite dev server integration
@@ -135,11 +135,15 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Linux: Event-driven via `pactl subscribe` (PulseAudio source-output events)
   - All platforms: Graceful fallback to polling if native approach fails
 - **processListCache.js**: Shared singleton process list cache (5s TTL, `ps-list` npm)
+- **meetingEchoLeakDetector.js**: Audio-layer echo analysis for meeting recordings — correlates each mic chunk against the recent system-audio tap (lag search 0–500 ms in 5 ms steps) and classifies it `clean_local` / `suspected_render_bleed` / `double_talk`; drives chunk muting and per-segment suppression flags. PCM-driven tests in `test/helpers/meetingEchoLeakDetector.test.js`
+- **meetingMicGate.js**: Pure RMS/peak chunk stats + the meeting mic gate verdict (`send` / `zero` for streaming, `send` / `skip` for local) with the exported silence and bleed thresholds; `ipcHandlers.js` (`dispatchMeetingAudioBuffer`, `transcribeLocalMeetingChunk`) only applies the verdict. Unit-tested in `test/helpers/meetingMicGate.test.js`
+- **meetingMicHoldback.js**: Pure holdback/retract policy for risky mic finals — pending-final partition, retract window, risky-profile classifier, text-layer duplicate check, racing-retract candidate selection, pending-overlap partition. `ipcHandlers.js` keeps thin adapters over its closure state (`meetingDiarizationSegments`, `meetingPendingMicFinals`, `hasNearbyTranscriptMatch`). Unit-tested in `test/helpers/meetingMicHoldback.test.js`
 - **googleCalendarManager.js**: Google Calendar sync (REST, OAuth via `googleCalendarOAuth.js`)
   - 10s socket timeout on API requests
   - Incremental sync via `syncToken`; full re-sync on 410 prunes stale events (note-linked rows retained)
 - **microsoftCalendarManager.js**: Microsoft Calendar sync via Graph API (OAuth via `microsoftCalendarOAuth.js`)
   - `calendarView/delta` incremental sync over a 14-day window; delta token discarded after 7 days (Graph delta links never roll their window forward)
+  - Delta can return recurring-series occurrences as bare stubs (no subject/attendees/meeting link); they're backfilled from their series master, one `GET /me/events/{id}` per series
   - Full re-sync (410 or expired token) prunes stale events like Google
 - **appleCalendarManager.js**: Apple Calendar (EventKit) via the `macos-calendar-listener` Swift helper — macOS only, snapshot-push over stdout, no tokens ("connected" = `apple_calendars` has rows)
 - **calendarReminderScheduler.js**: Provider-agnostic meeting reminder scheduling over the shared `calendar_events` table (provider-scoped reset keys, so one provider's disconnect doesn't re-fire another's reminders)
@@ -370,9 +374,13 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Previous Sonnet generation
     - Claude Opus 4.5 (`claude-opus-4-5`) - Earlier Opus model
   - **Google Gemini** (Direct API integration):
+    - Gemini 3.5 Flash (`gemini-3.5-flash`) - Latest fast, high-capability Gemini model
+    - Gemini 3.5 Flash Lite (`gemini-3.5-flash-lite`) - Fastest, most cost-effective 3.5 model
     - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Most capable Gemini model
+    - Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`) - Frontier-class performance at low cost (no thinking support, so no `supportsThinking` flag)
     - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
-    - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost
+    - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost (retired for new API keys; kept for existing ones)
+    - Gemma 4 (`gemma-4-31b-it`, `gemma-4-26b-a4b-it`) - Google's open Gemma 4 models served through the Gemini API
   - **Local**: GGUF models via llama.cpp (Qwen, Llama, Mistral, GPT-OSS)
 
 ### 8. Model Registry Architecture
@@ -397,7 +405,7 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 **Local model features:**
 
 - Each model has `hfRepo` for direct HuggingFace download URLs
-- `promptTemplate` defines the chat format (ChatML, Llama, Mistral)
+- Chat formatting comes from the GGUF's embedded template (llama-server runs with `--jinja`); the registry carries no prompt templates
 - Download URLs constructed as: `{baseUrl}/{hfRepo}/resolve/main/{fileName}`
 
 ### 9. API Integrations and Updates
@@ -464,6 +472,11 @@ Enable with `--log-level=debug` or `OPENWHISPR_LOG_LEVEL=debug` (can be set in `
 - FFmpeg path resolution details
 - Audio level analysis
 - Complete reasoning pipeline debugging with stage-by-stage logging
+
+Packaged Windows builds keep logger output off stdout/stderr by default. Launch with
+`--console-logs` to opt into terminal output independently of the configured log level.
+Default INFO entries are not persisted in this mode; enabling debug logging retains them
+in the existing log file without enabling terminal output.
 
 ### 12. Windows Push-to-Talk
 
@@ -669,6 +682,16 @@ When "Share screen context" is enabled (Settings → AI Models → Voice Agent �
 
 **Tests**: `test/helpers/dictationRouting.test.js`, `test/helpers/screenContextCapture.test.js` (run with `node --test`)
 
+### 18. Meeting Transcription: Echo, Duplicate, and Segment Pipeline
+
+Live meeting transcription runs two streams (mic + system-audio tap) and must keep the remote party's voice, as heard through the local speakers, out of the mic transcript. The policy lives in pure, unit-tested seams so it can be tuned without touching the IPC plumbing:
+
+- **Audio layer**: `meetingEchoLeakDetector.js` correlates mic chunks against recent system audio; `meetingMicGate.js` turns chunk RMS/peak (+ a "system speaking" lookback) into a `send` / `zero` / `skip` verdict that `ipcHandlers.js` applies in `dispatchMeetingAudioBuffer` (streaming) and `transcribeLocalMeetingChunk` (local)
+- **Text layer**: `meetingMicHoldback.js` decides whether a mic final is risky (held back), a duplicate of recent system text (dropped), or racing an arriving system final (retracted); the `ipcHandlers.js` adapters (`shouldSkipDuplicateMicSegment`, `hasRiskyMicDuplicateProfile`, `removeRacingMicEntriesFor`, `removePendingMicFinalsFor`) apply the results to closure state and emit `meeting-transcription-segment` events (`partial` / `final` / `retract`)
+- **Renderer**: `src/stores/meetingSegmentReducer.ts` is the pure `(state, event, deps) → reduction` transition for those events (timestamp-sorted insert, retract by exact match, per-source partial slots); `meetingRecordingStore.ts` supplies `mintSegmentId` / `decorateFinal` (speaker identifications, provisional speaker, locks — must not write to the store) and applies the reduction. Tests: `test/stores/meetingSegmentReducer.test.js`, `test/stores/meetingRecordingStoreImports.test.js`
+- **Regression pins**: BYOK `session.update` payload and the disconnect-commit callback (`test/helpers/openaiRealtimeStreaming.test.js`, `tinfoilRealtimeStreaming.test.js`), token-endpoint wire bodies (`test/helpers/realtimeTokenProviders.test.js`). Tests named `characterization: …` pin known oddities on purpose — flip them deliberately when changing policy
+- **Fixtures**: `test/helpers/harness/pcmFixtures.js` — deterministic 24 kHz PCM generators (`makeSine`, `makeSeededNoise`, `mix`, `delayBy`, `toInt16Buffer`, `chunkBuffer`, …) used by the gate and echo-detector tests
+
 ## Development Guidelines
 
 ### Internationalization (i18n) — REQUIRED
@@ -764,8 +787,10 @@ Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`
    - macOS: Check accessibility permissions (required for AppleScript paste)
    - Linux: Native `linux-fast-paste` binary (XTest) is tried first, works for X11 and XWayland apps
      - X11: xdotool fallback if native binary unavailable
-     - GNOME/KDE Wayland: xdotool (XWayland apps) → ydotool (requires ydotoold daemon)
-     - wlroots Wayland (Sway, Hyprland): wtype → xdotool → ydotool
+     - Hyprland Wayland: wtype → sendshortcut → uinput/ydotool
+     - Sway/wlroots Wayland: wtype → uinput/ydotool
+     - GNOME/KDE Wayland: portal keysyms → uinput/ydotool
+     - Physical Wayland fallbacks use Shift+Insert to avoid layout-sensitive KEY_V
    - Windows: PowerShell SendKeys (built-in) or nircmd.exe (bundled)
 
 4. **Build Issues**:
@@ -841,8 +866,10 @@ Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`
   - "Start minimized" is handled app-side by the `startMinimized` setting, not by the desktop entry
 - **Clipboard paste tools** (at least one required for auto-paste):
   - **X11**: `xdotool` (recommended)
-  - **Wayland** (non-GNOME): `wtype` (requires virtual keyboard protocol) or `xdotool` (works via XWayland, recommended for Electron apps)
-  - **GNOME Wayland**: `xdotool` for XWayland apps only (native Wayland apps require manual paste)
+  - **Hyprland Wayland**: `wtype`, then `hyprctl` sendshortcut (avoids the sendshortcut stuck-modifier bug when wtype is installed)
+  - **Sway/wlroots Wayland**: `wtype` (requires the virtual keyboard protocol)
+  - **GNOME/KDE Wayland**: RemoteDesktop portal keysyms, then uinput/ydotool
+  - **Wayland physical fallback**: Shift+Insert avoids layout-sensitive KEY_V; `ydotool` requires the `ydotoold` daemon
   - Terminal detection: Auto-detects terminal emulators and uses Ctrl+Shift+V
   - Fallback: Text copied to clipboard with manual paste instructions
 - **GNOME Wayland global hotkeys**:

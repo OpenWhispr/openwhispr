@@ -34,7 +34,7 @@ const KEYBINDING_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys.custom-k
 // Valid pattern for GNOME shortcut format using X11 keysym names (case-sensitive).
 // Modifiers are case-insensitive (GTK normalizes them), keysyms are exact.
 const VALID_SHORTCUT_PATTERN =
-  /^(<(Control|Alt|Shift|Super)>)*(F([1-9]|1[0-9]|2[0-4])|[a-z0-9]|space|Escape|Tab|BackSpace|grave|Pause|Scroll_Lock|Insert|Delete|Home|End|Page_Up|Page_Down|Up|Down|Left|Right|Return|Print)$/;
+  /^(<(Control|Alt|Shift|Super)>)*(F([1-9]|1[0-9]|2[0-4])|comma|period|slash|plus|minus|equal|semicolon|apostrophe|backslash|bracketleft|bracketright|asciitilde|exclam|at|numbersign|dollar|percent|asciicircum|ampersand|asterisk|parenleft|parenright|underscore|braceleft|braceright|bar|colon|quotedbl|less|greater|question|[a-z0-9]|space|Escape|Tab|BackSpace|grave|Pause|Scroll_Lock|Insert|Delete|Home|End|Page_Up|Page_Down|Up|Down|Left|Right|Return|Print)$/;
 
 // Map Electron key names (lowercased) to X11 keysym names (case-sensitive).
 // Source: X11/keysymdef.h, lookup via XStringToKeysym(3).
@@ -63,6 +63,45 @@ const ELECTRON_TO_GNOME_KEY_MAP = {
   down: "Down",
   left: "Left",
   right: "Right",
+  // Punctuation must be X11 keysyms; a literal "," fails VALID_SHORTCUT_PATTERN.
+  ",": "comma",
+  ".": "period",
+  "/": "slash",
+  "-": "minus",
+  "=": "equal",
+  ";": "semicolon",
+  "'": "apostrophe",
+  "[": "bracketleft",
+  "]": "bracketright",
+  "\\": "backslash",
+  plus: "plus",
+  "+": "plus",
+};
+
+// HotkeyInput stores physical US-QWERTY keys, so Shift must be folded into
+// the keysym GNOME matches rather than retained as a separate modifier.
+const SHIFTED_PUNCTUATION_TO_GNOME_KEY_MAP = {
+  "`": "asciitilde",
+  1: "exclam",
+  2: "at",
+  3: "numbersign",
+  4: "dollar",
+  5: "percent",
+  6: "asciicircum",
+  7: "ampersand",
+  8: "asterisk",
+  9: "parenleft",
+  0: "parenright",
+  "-": "underscore",
+  "=": "plus",
+  "[": "braceleft",
+  "]": "braceright",
+  "\\": "bar",
+  ";": "colon",
+  "'": "quotedbl",
+  ",": "less",
+  ".": "greater",
+  "/": "question",
 };
 
 let dbus = null;
@@ -462,11 +501,16 @@ class GnomeShortcutManager {
     }
 
     const key = parts.pop();
+    const keyLower = key.toLowerCase();
+    const shiftedPunctuationKey = parts.some((mod) => mod.toLowerCase() === "shift")
+      ? SHIFTED_PUNCTUATION_TO_GNOME_KEY_MAP[keyLower]
+      : undefined;
     const modifiers = parts
       .map((mod) => {
         const m = mod.toLowerCase();
         if (m === "commandorcontrol" || m === "control" || m === "ctrl") return "<Control>";
         if (m === "alt") return "<Alt>";
+        if (m === "shift" && shiftedPunctuationKey) return "";
         if (m === "shift") return "<Shift>";
         if (m === "super" || m === "meta") return "<Super>";
         return "";
@@ -474,10 +518,10 @@ class GnomeShortcutManager {
       .filter(Boolean)
       .join("");
 
-    const keyLower = key.toLowerCase();
-
     let gnomeKey;
-    if (key === "`" || keyLower === "backquote") {
+    if (shiftedPunctuationKey) {
+      gnomeKey = shiftedPunctuationKey;
+    } else if (key === "`" || keyLower === "backquote") {
       gnomeKey = "grave";
     } else if (key === " ") {
       gnomeKey = "space";

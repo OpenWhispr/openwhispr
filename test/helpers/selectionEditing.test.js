@@ -27,14 +27,8 @@ test("builds a structured prompt that keeps instruction and selection separate",
   assert.match(systemPrompt, /Output only the complete replacement text/);
   assert.match(systemPrompt, new RegExp(marker));
 
-  assert.equal(
-    extractSelectionEditReplacement(`Improved text${marker}`, marker),
-    "Improved text"
-  );
-  assert.throws(
-    () => extractSelectionEditReplacement("Truncated text", marker),
-    /incomplete/
-  );
+  assert.equal(extractSelectionEditReplacement(`Improved text${marker}`, marker), "Improved text");
+  assert.throws(() => extractSelectionEditReplacement("Truncated text", marker), /incomplete/);
 
   assert.equal(getSelectionCaptureDisposition({ status: "none" }), "standalone");
   assert.equal(
@@ -49,5 +43,28 @@ test("builds a structured prompt that keeps instruction and selection separate",
     "standalone"
   );
   assert.equal(getSelectionCaptureDisposition({ status: "target_changed" }), "changed");
-  assert.equal(getSelectionCaptureDisposition({ status: "unavailable", code: "copy_failed" }), "unavailable");
+  assert.equal(
+    getSelectionCaptureDisposition({ status: "unavailable", code: "copy_failed" }),
+    "unavailable"
+  );
+});
+
+test("extractSelectionEditReplacement supports empty or omitted completionMarker", async () => {
+  const { extractSelectionEditReplacement } = await load();
+
+  assert.equal(
+    extractSelectionEditReplacement("Direct replacement text", ""),
+    "Direct replacement text"
+  );
+  assert.equal(
+    extractSelectionEditReplacement("Direct replacement text", undefined),
+    "Direct replacement text"
+  );
+  assert.equal(
+    extractSelectionEditReplacement("Direct replacement text", null),
+    "Direct replacement text"
+  );
+
+  assert.throws(() => extractSelectionEditReplacement("   ", ""), /empty selection edit/);
+  assert.throws(() => extractSelectionEditReplacement(123, ""), /incomplete/);
 });

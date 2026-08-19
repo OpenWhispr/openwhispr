@@ -22,6 +22,6 @@ test("text edit monitor spawns set windowsHide", () => {
 test("Windows mic-listener spawn sets windowsHide", () => {
   assert.match(
     read("src/helpers/audioActivityDetector.js"),
-    /args: \["--exclude-pid"[^{}]*\{[^{}]*windowsHide: true/
+    /args: \[\][^{}]*options: \{ stdio: \["pipe", "pipe", "pipe"\], windowsHide: true \}/
   );
 });
