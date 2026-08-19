@@ -1704,7 +1704,7 @@
       },
       "examplesTitle": "Exemples",
       "helper": "Choisissez un nom court et naturel à prononcer",
-      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, l'IA exécute votre commande. Si du texte est surligné, ce texte est envoyé au modèle d'assistant vocal configuré et remplacé en toute sécurité par le résultat.",
+      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, la réponse s'ouvre dans le panneau flottant de l'assistant. Si du texte est surligné, ce texte est envoyé à votre modèle d'Assistant vocal configuré et remplacé en toute sécurité par le résultat.",
       "howItWorksTitle": "Comment ça marche",
       "instructionMode": "Instruction",
       "placeholder": "ex. Jarvis, Nova, Atlas...",

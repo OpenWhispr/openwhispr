@@ -359,7 +359,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 - User names their agent during onboarding (step 6/8)
 - Name stored in localStorage and database
 - ReasoningService detects "Hey [AgentName]" patterns
-- AI processes command and removes agent reference from output
+- Standalone wake-word commands stream into the assistant panel (the address is stripped first, `stripAgentAddress`); a highlighted selection is edited in place by the dictation agent
 - Supports multiple AI providers (all models defined in `src/models/modelRegistryData.json`):
   - **OpenAI** (Responses API):
     - GPT-5.5 (`gpt-5.5`) - Latest flagship frontier model, 1M context

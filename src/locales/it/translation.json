@@ -1421,7 +1421,7 @@
       },
       "examplesTitle": "Esempi",
       "helper": "Scegli qualcosa di breve e naturale da dire ad alta voce",
-      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, l'IA esegue il tuo comando. Se c'è del testo evidenziato, quel testo viene inviato al modello di assistente vocale configurato e sostituito in modo sicuro con il risultato.",
+      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, la risposta si apre nel pannello flottante dell'assistente. Se c'è del testo evidenziato, quel testo viene inviato al tuo modello di Assistente vocale configurato e sostituito in sicurezza con il risultato.",
       "howItWorksTitle": "Come funziona",
       "instructionMode": "Istruzione",
       "placeholder": "es. Jarvis, Nova, Atlas...",

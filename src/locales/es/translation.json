@@ -1469,7 +1469,7 @@
       },
       "examplesTitle": "Ejemplos",
       "helper": "Elige algo corto y natural para decir en voz alta",
-      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, la IA ejecuta tu comando. Si hay texto resaltado, ese texto se envía al modelo de asistente de voz configurado y se reemplaza de forma segura con el resultado.",
+      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, la respuesta se abre en el panel flotante del asistente. Si hay texto resaltado, ese texto se envía a tu modelo de Asistente de voz configurado y se reemplaza de forma segura por el resultado.",
       "howItWorksTitle": "Cómo funciona",
       "instructionMode": "Instrucción",
       "placeholder": "p. ej. Jarvis, Nova, Atlas...",

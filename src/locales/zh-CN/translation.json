@@ -1421,7 +1421,7 @@
       },
       "examplesTitle": "示例",
       "helper": "选一个简短、说起来自然的名字",
-      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，AI 会执行你的命令。如果有选中的文本，该文本会发送到你配置的语音助手模型，并安全地替换为结果。",
+      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，回答会在悬浮助手面板中打开。如果有选中的文本，该文本会发送到你配置的语音助手模型，并安全地替换为结果。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",

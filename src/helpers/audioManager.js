@@ -68,7 +68,7 @@ import {
   resolveTranslatedText,
   shouldRunTranslateStep,
 } from "./translationChain";
-import { detectAgentName } from "../config/agentDetection";
+import { detectAgentName, stripAgentAddress } from "../config/agentDetection";
 import {
   resolveDictationRouteKind,
   resolveAgentImageTarget,
@@ -2375,6 +2375,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return extras;
   }
 
+  // Panel-first commands skip the dictation-agent model, so the org policy
+  // guard that protected that model must run here instead.
+  _bankPanelAgentCommand(text, agentName, config, selectedContext, selectedText) {
+    this.assertAgentAllowedByPolicy();
+    const command = this.voiceAgentRequested
+      ? text
+      : stripAgentAddress(text, agentName, resolveWakeWordLanguage(getSettings()));
+    const transcript =
+      selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
+    this._bankAssistantDirective(transcript, config, selectedContext);
+    return text;
+  }
+
   async processAgentCommand(text, model, agentName, config) {
     const assistantSelectionContext = this.consumeAssistantSelectionContext();
     if (assistantSelectionContext) {
@@ -2382,8 +2395,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // target. Keep it on the existing panel-first route and leave the
       // external selection replacement path completely untouched.
       this.selectionCapturePromise = null;
-      this._bankAssistantDirective(text, config, assistantSelectionContext);
-      return text;
+      return this._bankPanelAgentCommand(text, agentName, config, assistantSelectionContext);
     }
 
     let capture;
@@ -2424,11 +2436,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (captureDisposition === "standalone" || selectionWithoutEditor) {
       // The directive's transcript carries the quoted selection when the
       // selection-without-editor fallback routed a highlighted passage here.
-      this._bankAssistantDirective(
-        selectionWithoutEditor ? `${text}\n\n"${capture.text}"` : text,
-        config
+      return this._bankPanelAgentCommand(
+        text,
+        agentName,
+        config,
+        undefined,
+        selectionWithoutEditor ? capture.text : undefined
       );
-      return text;
     }
 
     if (capture?.status !== "selected") {

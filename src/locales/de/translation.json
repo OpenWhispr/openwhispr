@@ -1704,7 +1704,7 @@
       },
       "examplesTitle": "Beispiele",
       "helper": "Wählen Sie etwas Kurzes und Natürliches zum Aussprechen",
-      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, führt die KI Ihren Befehl aus. Ist Text markiert, wird er an Ihr konfiguriertes Sprachassistent-Modell gesendet und sicher durch das Ergebnis ersetzt.",
+      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, öffnet sich die Antwort im schwebenden Assistenten-Panel. Ist Text markiert, wird dieser Text an Ihr konfiguriertes Sprachassistenten-Modell gesendet und sicher durch das Ergebnis ersetzt.",
       "howItWorksTitle": "So funktioniert es",
       "instructionMode": "Anweisung",
       "placeholder": "z. B. Jarvis, Nova, Atlas...",

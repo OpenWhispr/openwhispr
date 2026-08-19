@@ -1400,7 +1400,7 @@
       },
       "examplesTitle": "Exemplos",
       "helper": "Escolha algo curto e natural de se dizer em voz alta",
-      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, a IA executa seu comando. Se houver texto destacado, esse texto é enviado ao modelo de assistente de voz configurado e substituído com segurança pelo resultado.",
+      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, a resposta abre no painel flutuante do assistente. Se houver texto destacado, esse texto é enviado ao seu modelo de Assistente de voz configurado e substituído com segurança pelo resultado.",
       "howItWorksTitle": "Como funciona",
       "instructionMode": "Instrução",
       "placeholder": "ex.: Jarvis, Nova, Atlas...",

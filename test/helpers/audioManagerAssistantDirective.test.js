@@ -27,6 +27,7 @@ function managerWithCapture(createManager, capture) {
     // isProcessing — set it true here to match that real precondition.
     manager: createManager({
       isProcessing: true,
+      pendingAssistantConversation: null,
       consumeSelectionCapture: async () => capture,
       processWithReasoningModel: async (...args) => {
         modelCalls.push(args);
@@ -53,6 +54,40 @@ test("a standalone command banks a panel directive and returns the transcript", 
     screenContext: null,
   });
   assert.equal(modelCalls.length, 0, "the dictation-agent model must not run");
+});
+
+test("a wake-word command is banked without the address", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-assistant-wakeword-",
+    settingsKey: "__assistantWakewordSettings",
+  });
+  const { manager } = managerWithCapture(createManager, null);
+  manager.voiceAgentRequested = false;
+  const result = await manager.processAgentCommand("Hey Aria, draft a reply", "gpt", "Aria", {
+    selectionEditReachable: true,
+  });
+  assert.equal(result, "Hey Aria, draft a reply");
+  assert.equal(manager.pendingAssistantConversation.transcript, "draft a reply");
+});
+
+test("a policy-restricted org never gets a panel command banked", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-assistant-policy-",
+    settingsKey: "__assistantPolicySettings",
+  });
+  const { manager } = managerWithCapture(createManager, null);
+  manager.assertAgentAllowedByPolicy = () => {
+    const error = new Error("AI agent use is restricted by your organization.");
+    error.code = "POLICY_RESTRICTED";
+    throw error;
+  };
+  await assert.rejects(
+    manager.processAgentCommand("Hey Aria, summarize this", "gpt", "Aria", {
+      selectionEditReachable: true,
+    }),
+    /restricted/
+  );
+  assert.equal(manager.pendingAssistantConversation, null);
 });
 
 test("the directive carries the raw screenshot past the attach gate", async (t) => {

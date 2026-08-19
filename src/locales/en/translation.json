@@ -1704,7 +1704,7 @@
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
-      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the AI executes your command. If text is highlighted, that text is sent to your configured Voice Assistant model and safely replaced with the result.",
+      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the answer opens in the floating assistant panel. If text is highlighted, that text is sent to your configured Voice Assistant model and safely replaced with the result.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
