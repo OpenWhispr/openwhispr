@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { HotkeyInput } from "../ui/HotkeyInput";
 import { formatHotkeyLabel } from "../../utils/hotkeys";
 import { formatHotkeyInstruction, getHotkeyKeycaps } from "./hotkeyPresentation";
@@ -64,11 +65,15 @@ export default function ShortcutSetupStep({
   dense = false,
   showCandidateActions = true,
 }: ShortcutSetupStepProps) {
+  const { t } = useTranslation();
   const [candidate, setCandidate] = useState(value);
   const [confirmed, setConfirmed] = useState(Boolean(value));
   const [error, setError] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [captureKey, setCaptureKey] = useState(0);
+  // The capture box hides the input behind its own surface, so the keys being
+  // held have to be echoed here or pressing a bare modifier looks like nothing.
+  const [heldModifiers, setHeldModifiers] = useState("");
 
   const handleChange = async (next: string) => {
     setError(null);
@@ -123,6 +128,7 @@ export default function ShortcutSetupStep({
           variant="capture-overlay"
           validate={validate}
           onValidationError={setError}
+          onHeldModifiersChange={setHeldModifiers}
           disabled={isConfirming}
         />
 
@@ -130,6 +136,13 @@ export default function ShortcutSetupStep({
           <p role="alert" className="max-w-60 text-sm leading-5 text-[var(--onboarding-danger)]">
             {error}
           </p>
+        ) : heldModifiers ? (
+          <div className="pointer-events-none flex flex-col items-center gap-4">
+            <HotkeyChord value={heldModifiers} />
+            <p className="text-sm leading-[1.4] text-[var(--onboarding-text-tertiary)]">
+              {t("onboarding.rehaul.hotkey.holding")}
+            </p>
+          </div>
         ) : candidate ? (
           <HotkeyChord value={candidate} />
         ) : (

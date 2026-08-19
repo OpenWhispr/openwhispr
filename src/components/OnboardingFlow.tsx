@@ -46,7 +46,7 @@ import {
   type OnboardingStepId,
 } from "./onboarding/flow";
 import { useOnboardingSession } from "./onboarding/useOnboardingSession";
-import { hasPendingLocalModels } from "./onboarding/pendingLocalModels";
+import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
@@ -210,9 +210,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         // rather than skipping: the model was remembered when the download
         // started, and BackgroundModelDownloadTray only applies it (and then
         // clears this flag) while the flag is set.
-        if (options.localPending || hasPendingLocalModels())
+        //
+        // Only ever for the local mode. A user can start a local download, walk
+        // Back to the setup choice and finish on Cloud or a provider — carrying
+        // the flag over would let the download land minutes later and flip them
+        // back to local behind their back, so the selections are dropped instead.
+        if (mode === "local" && (options.localPending || hasPendingLocalModels())) {
           localStorage.setItem("localSetupPending", "true");
-        else localStorage.removeItem("localSetupPending");
+        } else {
+          localStorage.removeItem("localSetupPending");
+          clearPendingLocalModels();
+        }
         await window.electronAPI?.saveAllKeysToEnv?.();
         await window.electronAPI?.markBundleMigrated?.();
         clearSession();
@@ -740,29 +748,24 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     currentStepId === "enterprise-dictation" ||
     currentStepId === "enterprise-assistant";
   const localSetup = currentStepId === "local-dictation" || currentStepId === "local-assistant";
+  // The setup pages drive their own forward navigation from inline buttons, and a
+  // gated step withholds Continue until its task is done — either way Back is
+  // alone in the footer row.
+  const showsContinue =
+    hasShellNavigation && !choiceStep && !inlineProviderStep && (!inlineGatedStep || canContinue);
 
   return (
     <>
       <OnboardingShell
         compact={compact}
         stepKey={currentStepId}
-        onBack={
-          hasShellNavigation &&
-          currentStepId !== "languages" &&
-          !choiceStep &&
-          !inlineProviderStep &&
-          session.history.length > 0
-            ? goBack
-            : undefined
-        }
-        onContinue={
-          hasShellNavigation &&
-          !choiceStep &&
-          !inlineProviderStep &&
-          (!inlineGatedStep || canContinue)
-            ? () => void continueFromCurrentStep()
-            : undefined
-        }
+        // History is the only gate: every step the user walked forward through
+        // can be walked back, including the ones that drive their own forward
+        // navigation inline (setup-choice and the provider steps). Suppressing
+        // Back there too left the local/BYOK/enterprise setup as a dead end —
+        // there was no way back to the setup choice once a mode was picked.
+        onBack={hasShellNavigation && session.history.length > 0 ? goBack : undefined}
+        onContinue={showsContinue ? () => void continueFromCurrentStep() : undefined}
         onSkip={localSetup && !inlineProviderStep ? () => void skipLocalSetup() : undefined}
         continueLabel={
           currentStepId === "use-cases"
@@ -775,10 +778,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         continueDisabled={!canContinue}
         continueLoading={isFinishing || isRegistering}
         progress={getOnboardingProgress(currentStepId, route)}
-        // On both step families canContinue means "the thing this step asks for
-        // is done", so the labelled Back collapses to icon-only the moment a
-        // shortcut is confirmed or a demo succeeds.
-        showBackLabel={(hotkeyStep || demoStep) && !canContinue}
+        // A lone pill says nothing, so Back carries its label whenever it is the
+        // only action in the row: the setup pages throughout, and a gated step
+        // until it is satisfied — there the label collapses to icon-only the
+        // moment a shortcut is confirmed or a demo succeeds and Continue appears.
+        showBackLabel={!showsContinue}
       >
         {fatalError && (
           <div

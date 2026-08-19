@@ -1,8 +1,13 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Trash2 } from "lucide-react";
-import { formatHotkeyLabel, isGlobeLikeHotkey } from "../../utils/hotkeys";
-import { getPlatform } from "../../utils/platform";
+import {
+  formatHotkeyLabel,
+  formatHotkeyLabelForPlatform,
+  isGlobeLikeHotkey,
+  sidedModifierToken,
+} from "../../utils/hotkeys";
+import { getPlatform, type Platform } from "../../utils/platform";
 
 const CODE_TO_KEY: Record<string, string> = {
   Backquote: "`",
@@ -140,6 +145,58 @@ const MODIFIER_CODES = new Set([
   "CapsLock",
 ]);
 
+type ModifierKind = "ctrl" | "meta" | "alt" | "shift";
+
+/** Kinds in the order they are shown and joined into a chord. */
+const MODIFIER_KINDS: ModifierKind[] = ["ctrl", "meta", "alt", "shift"];
+
+/** `KeyboardEvent.code` stem for each kind, so the right-side twin is derivable. */
+const MODIFIER_CODE_STEM: Record<ModifierKind, string> = {
+  ctrl: "Control",
+  meta: "Meta",
+  alt: "Alt",
+  shift: "Shift",
+};
+
+/** Token for a modifier whose side is unknown, e.g. one held before capture began. */
+function sidelessModifierToken(kind: ModifierKind, platform: Platform): string {
+  switch (kind) {
+    case "ctrl":
+      return "Control";
+    case "meta":
+      return platform === "darwin" ? "Command" : "Super";
+    case "alt":
+      return "Alt";
+    default:
+      return "Shift";
+  }
+}
+
+function heldModifierToken(
+  kind: ModifierKind,
+  code: string | undefined,
+  platform: Platform
+): string {
+  return (code && sidedModifierToken(code, platform)) || sidelessModifierToken(kind, platform);
+}
+
+/**
+ * Chip label for a held token. "Fn" is spelled out rather than passed through
+ * formatHotkeyLabelForPlatform, which resolves it to the "Globe/Fn" name a
+ * stored hotkey gets — too long for a chip that sits beside "+ key" and reads
+ * as a second key rather than the one the user is holding.
+ */
+function heldModifierLabel(token: string, platform: Platform): string {
+  return token === "Fn" ? "Fn" : formatHotkeyLabelForPlatform(token, platform);
+}
+
+/** Outcome of releasing a modifier-only chord: a hotkey, a reason it cannot be
+    one, or nothing worth reacting to. */
+type ModifierOnlyCapture =
+  | { kind: "hotkey"; hotkey: string }
+  | { kind: "needsRightSide"; held: string; rightSide: string }
+  | null;
+
 export interface HotkeyInputProps {
   value: string;
   onChange: (hotkey: string) => void;
@@ -150,6 +207,10 @@ export interface HotkeyInputProps {
   autoFocus?: boolean;
   validate?: (hotkey: string) => string | null | undefined;
   onValidationError?: (message: string | null) => void;
+  /** Modifiers currently held, as a side-qualified chord ("RightOption",
+      "LeftControl+Shift"), or "" when nothing is held. Lets a caller that hides
+      this input behind its own surface still show what is being pressed. */
+  onHeldModifiersChange?: (chord: string) => void;
 }
 
 function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
@@ -193,10 +254,11 @@ export function HotkeyInput({
   variant = "default",
   validate,
   onValidationError,
+  onHeldModifiersChange,
 }: HotkeyInputProps & HotkeyInputVariant) {
   const { t } = useTranslation();
   const [isCapturing, setIsCapturing] = useState(false);
-  const [activeModifiers, setActiveModifiers] = useState<Set<string>>(new Set());
+  const [activeModifiers, setActiveModifiers] = useState<string[]>([]);
   const [validationWarning, setValidationWarning] = useState<string | null>(null);
   const [isFnHeld, setIsFnHeld] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -204,59 +266,53 @@ export function HotkeyInput({
   const warningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fnHeldRef = useRef(false);
   const fnCapturedKeyRef = useRef(false);
-  const heldModifiersRef = useRef<{
-    ctrl: boolean;
-    meta: boolean;
-    alt: boolean;
-    shift: boolean;
-  }>({ ctrl: false, meta: false, alt: false, shift: false });
-  const modifierCodesRef = useRef<{
-    ctrl?: string;
-    meta?: string;
-    alt?: string;
-    shift?: string;
-  }>({});
+  const heldModifiersRef = useRef<Record<ModifierKind, boolean>>({
+    ctrl: false,
+    meta: false,
+    alt: false,
+    shift: false,
+  });
+  const modifierCodesRef = useRef<Partial<Record<ModifierKind, string>>>({});
   const platform = getPlatform();
   const isMac = platform === "darwin";
-  const isWindows = platform === "win32";
 
   const MODIFIER_HOLD_THRESHOLD_MS = 200;
 
-  const buildModifierOnlyHotkey = useCallback(
+  const resolveModifierOnlyCapture = useCallback(
     (
-      modifiers: { ctrl: boolean; meta: boolean; alt: boolean; shift: boolean },
-      codes: { ctrl?: string; meta?: string; alt?: string; shift?: string }
-    ): string | null => {
-      // Check for right-side single modifier first
-      const rightSidePressed: string[] = [];
-      if (codes.ctrl === "ControlRight") rightSidePressed.push("RightControl");
-      if (codes.meta === "MetaRight") rightSidePressed.push(isMac ? "RightCommand" : "RightSuper");
-      if (codes.alt === "AltRight") rightSidePressed.push(isMac ? "RightOption" : "RightAlt");
-      if (codes.shift === "ShiftRight") rightSidePressed.push("RightShift");
+      modifiers: Record<ModifierKind, boolean>,
+      codes: Partial<Record<ModifierKind, string>>
+    ): ModifierOnlyCapture => {
+      const heldKinds = MODIFIER_KINDS.filter((kind) => modifiers[kind]);
 
-      // If exactly one right-side modifier, allow it as single-key hotkey
-      if (rightSidePressed.length === 1) {
-        const activeCount = [modifiers.ctrl, modifiers.meta, modifiers.alt, modifiers.shift].filter(
-          Boolean
-        ).length;
-        if (activeCount === 1) {
-          return rightSidePressed[0];
+      // A lone modifier is only capturable on the right side: that is the side
+      // the native listeners report on its own, and it leaves the left-side key
+      // free for ordinary chords.
+      if (heldKinds.length === 1) {
+        const kind = heldKinds[0];
+        const token = heldModifierToken(kind, codes[kind], platform);
+        if (token.startsWith("Right")) {
+          return { kind: "hotkey", hotkey: token };
         }
+        const rightSideToken =
+          sidedModifierToken(`${MODIFIER_CODE_STEM[kind]}Right`, platform) ?? token;
+        return {
+          kind: "needsRightSide",
+          held: formatHotkeyLabelForPlatform(token, platform),
+          rightSide: formatHotkeyLabelForPlatform(rightSideToken, platform),
+        };
       }
 
-      // Otherwise require 2+ modifiers (existing logic)
-      const parts: string[] = [];
-      if (modifiers.ctrl) parts.push("Control");
-      if (modifiers.meta) parts.push(isMac ? "Command" : "Super");
-      if (modifiers.alt) parts.push("Alt");
-      if (modifiers.shift) parts.push("Shift");
-
-      if (parts.length >= 2) {
-        return parts.join("+");
+      if (heldKinds.length >= 2) {
+        return {
+          kind: "hotkey",
+          hotkey: heldKinds.map((kind) => sidelessModifierToken(kind, platform)).join("+"),
+        };
       }
+
       return null;
     },
-    [isMac]
+    [platform]
   );
 
   const clearFnHeld = useCallback(() => {
@@ -264,6 +320,23 @@ export function HotkeyInput({
     fnHeldRef.current = false;
     fnCapturedKeyRef.current = false;
   }, []);
+
+  const rejectCapture = useCallback(
+    (message: string) => {
+      if (warningTimeoutRef.current) {
+        clearTimeout(warningTimeoutRef.current);
+      }
+      setValidationWarning(message);
+      onValidationError?.(message);
+      warningTimeoutRef.current = setTimeout(() => setValidationWarning(null), 4000);
+      heldModifiersRef.current = { ctrl: false, meta: false, alt: false, shift: false };
+      modifierCodesRef.current = {};
+      setActiveModifiers([]);
+      keyDownTimeRef.current = 0;
+      clearFnHeld();
+    },
+    [onValidationError, clearFnHeld]
+  );
 
   const finalizeCapture = useCallback(
     (hotkey: string) => {
@@ -275,14 +348,7 @@ export function HotkeyInput({
       if (validate) {
         const errorMsg = validate(hotkey);
         if (errorMsg) {
-          setValidationWarning(errorMsg);
-          onValidationError?.(errorMsg);
-          warningTimeoutRef.current = setTimeout(() => setValidationWarning(null), 4000);
-          heldModifiersRef.current = { ctrl: false, meta: false, alt: false, shift: false };
-          modifierCodesRef.current = {};
-          setActiveModifiers(new Set());
-          keyDownTimeRef.current = 0;
-          clearFnHeld();
+          rejectCapture(errorMsg);
           return;
         }
       }
@@ -291,11 +357,11 @@ export function HotkeyInput({
       onValidationError?.(null);
       onChange(hotkey);
       setIsCapturing(false);
-      setActiveModifiers(new Set());
+      setActiveModifiers([]);
       clearFnHeld();
       containerRef.current?.blur();
     },
-    [validate, onValidationError, onChange, clearFnHeld]
+    [validate, onValidationError, onChange, clearFnHeld, rejectCapture]
   );
 
   const handleKeyDown = useCallback(
@@ -333,18 +399,21 @@ export function HotkeyInput({
         keyDownTimeRef.current = Date.now();
       }
 
-      const mods = new Set<string>();
+      const codes = modifierCodesRef.current;
+      const held: string[] = [];
+      const holdKind = (kind: ModifierKind) =>
+        held.push(heldModifierToken(kind, codes[kind], platform));
       if (isMac) {
-        if (e.metaKey) mods.add("Cmd");
-        if (e.ctrlKey) mods.add("Ctrl");
+        if (e.metaKey) holdKind("meta");
+        if (e.ctrlKey) holdKind("ctrl");
       } else {
-        if (e.ctrlKey) mods.add("Ctrl");
-        if (e.metaKey) mods.add(isWindows ? "Win" : "Super");
+        if (e.ctrlKey) holdKind("ctrl");
+        if (e.metaKey) holdKind("meta");
       }
-      if (e.altKey) mods.add(isMac ? "Option" : "Alt");
-      if (e.shiftKey) mods.add("Shift");
-      if (fnHeldRef.current) mods.add("Fn");
-      setActiveModifiers(mods);
+      if (e.altKey) holdKind("alt");
+      if (e.shiftKey) holdKind("shift");
+      if (fnHeldRef.current) held.push("Fn");
+      setActiveModifiers(held);
 
       // Try to get non-modifier hotkey first
       const hotkey = mapKeyboardEventToHotkey(e.nativeEvent);
@@ -359,7 +428,7 @@ export function HotkeyInput({
       }
       // If no base key, modifiers are held - don't finalize yet
     },
-    [disabled, isMac, isWindows, finalizeCapture, onValidationError]
+    [disabled, isMac, platform, finalizeCapture, onValidationError]
   );
 
   const handleKeyUp = useCallback(
@@ -379,18 +448,28 @@ export function HotkeyInput({
         const holdDuration = Date.now() - keyDownTimeRef.current;
 
         if (holdDuration >= MODIFIER_HOLD_THRESHOLD_MS) {
-          const modifierHotkey = buildModifierOnlyHotkey(
+          const capture = resolveModifierOnlyCapture(
             heldModifiersRef.current,
             modifierCodesRef.current
           );
-          if (modifierHotkey) {
+          if (capture?.kind === "hotkey") {
             attempted = true;
             if (fnHeldRef.current) {
               fnCapturedKeyRef.current = true;
-              finalizeCapture(`Fn+${modifierHotkey}`);
+              finalizeCapture(`Fn+${capture.hotkey}`);
             } else {
-              finalizeCapture(modifierHotkey);
+              finalizeCapture(capture.hotkey);
             }
+          } else if (capture?.kind === "needsRightSide" && !fnHeldRef.current) {
+            // Silently dropping this release is what made a left-side Option or
+            // Control look like the field was ignoring the key entirely.
+            attempted = true;
+            rejectCapture(
+              t("hotkeyInput.singleModifierNeedsRightSide", {
+                key: capture.held,
+                alternative: capture.rightSide,
+              })
+            );
           }
         }
       }
@@ -398,11 +477,11 @@ export function HotkeyInput({
       if (!attempted) {
         heldModifiersRef.current = { ctrl: false, meta: false, alt: false, shift: false };
         modifierCodesRef.current = {};
-        setActiveModifiers(fnHeldRef.current ? new Set(["Fn"]) : new Set());
+        setActiveModifiers(fnHeldRef.current ? ["Fn"] : []);
         keyDownTimeRef.current = 0;
       }
     },
-    [disabled, buildModifierOnlyHotkey, finalizeCapture]
+    [disabled, resolveModifierOnlyCapture, finalizeCapture, rejectCapture, t]
   );
 
   const handleMouseDown = useCallback(
@@ -434,7 +513,7 @@ export function HotkeyInput({
 
   const handleBlur = useCallback(() => {
     setIsCapturing(false);
-    setActiveModifiers(new Set());
+    setActiveModifiers([]);
     setValidationWarning(null);
     clearFnHeld();
     window.electronAPI?.setHotkeyListeningMode?.(false);
@@ -446,6 +525,10 @@ export function HotkeyInput({
     const frame = requestAnimationFrame(() => containerRef.current?.focus({ preventScroll: true }));
     return () => cancelAnimationFrame(frame);
   }, [autoFocus]);
+
+  useEffect(() => {
+    onHeldModifiersChange?.(activeModifiers.join("+"));
+  }, [activeModifiers, onHeldModifiersChange]);
 
   useEffect(() => {
     return () => {
@@ -462,7 +545,7 @@ export function HotkeyInput({
       setIsFnHeld(true);
       fnHeldRef.current = true;
       fnCapturedKeyRef.current = false;
-      setActiveModifiers((prev) => new Set([...prev, "Fn"]));
+      setActiveModifiers((prev) => (prev.includes("Fn") ? prev : [...prev, "Fn"]));
     });
 
     const disposeUp = window.electronAPI?.onGlobeKeyReleased?.(() => {
@@ -565,15 +648,15 @@ export function HotkeyInput({
               <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
               <span className="text-xs font-medium text-primary">{t("hotkeyInput.listening")}</span>
             </div>
-            {activeModifiers.size > 0 ? (
+            {activeModifiers.length > 0 ? (
               <div className="flex flex-col items-center gap-1.5">
                 <div className="flex items-center gap-1.5">
-                  {Array.from(activeModifiers).map((mod) => (
+                  {activeModifiers.map((token) => (
                     <kbd
-                      key={mod}
+                      key={token}
                       className="px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-sm text-xs font-semibold text-primary"
                     >
-                      {mod}
+                      {heldModifierLabel(token, platform)}
                     </kbd>
                   ))}
                   <span className="text-primary/50 text-sm font-medium">+</span>
@@ -677,14 +760,14 @@ export function HotkeyInput({
                   {t("hotkeyInput.recording")}
                 </span>
               </div>
-              {activeModifiers.size > 0 ? (
+              {activeModifiers.length > 0 ? (
                 <div className="flex items-center gap-1">
-                  {Array.from(activeModifiers).map((mod) => (
+                  {activeModifiers.map((token) => (
                     <kbd
-                      key={mod}
+                      key={token}
                       className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-sm text-xs font-semibold text-primary"
                     >
-                      {mod}
+                      {heldModifierLabel(token, platform)}
                     </kbd>
                   ))}
                   <span className="text-primary/40 text-xs">

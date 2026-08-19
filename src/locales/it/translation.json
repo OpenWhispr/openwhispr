@@ -226,7 +226,8 @@
         "capture": "Premi i tasti che vuoi usare",
         "confirm": "Premi di nuovo {{hotkey}} per confermare",
         "chooseAnother": "Scegli un’altra scorciatoia",
-        "inUse": "Questa scorciatoia è già in uso. Scegline un’altra."
+        "inUse": "Questa scorciatoia è già in uso. Scegline un’altra.",
+        "holding": "Continua a tenere premuto o premi un altro tasto"
       },
       "dictationDemo": {
         "title": "Prova la tua prima dettatura",
@@ -309,7 +310,7 @@
             "device": "Funziona sul tuo dispositivo",
             "offline": "Funziona offline dopo la configurazione",
             "models": "Scegli i modelli per dettatura e assistente",
-            "free": "Gratis"
+            "free": "Gratis per sempre"
           }
         },
         "enterprise": {
@@ -1252,7 +1253,8 @@
     "tryShortcutMac": "Prova ⌘⇧K",
     "remove": "Rimuovi scorciatoia",
     "addAnother": "Aggiungi un'altra scorciatoia",
-    "duplicate": "Già aggiunto"
+    "duplicate": "Già aggiunto",
+    "singleModifierNeedsRightSide": "{{key}} da sola non può essere una scorciatoia. Premi {{alternative}} oppure aggiungi un secondo tasto."
   },
   "languageSelector": {
     "noLanguagesFound": "Nessuna lingua trovata",

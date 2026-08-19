@@ -226,7 +226,8 @@
         "capture": "请按下你想使用的按键",
         "confirm": "再按一次 {{hotkey}} 确认",
         "chooseAnother": "选择其他快捷键",
-        "inUse": "该快捷键已被使用。请选择其他快捷键。"
+        "inUse": "该快捷键已被使用。请选择其他快捷键。",
+        "holding": "继续按住，或按下另一个键"
       },
       "dictationDemo": {
         "title": "试试第一次听写",
@@ -309,7 +310,7 @@
             "device": "在你的设备上运行",
             "offline": "设置完成后可离线使用",
             "models": "为听写和助手选择模型",
-            "free": "免费使用"
+            "free": "永久免费使用"
           }
         },
         "enterprise": {
@@ -1252,7 +1253,8 @@
     "tryShortcutMac": "试试 ⌘⇧K",
     "remove": "移除快捷键",
     "addAnother": "添加其他快捷键",
-    "duplicate": "已添加"
+    "duplicate": "已添加",
+    "singleModifierNeedsRightSide": "{{key}} 单独不能作为快捷键。请按 {{alternative}}，或再加一个按键。"
   },
   "languageSelector": {
     "noLanguagesFound": "未找到匹配的语言",
