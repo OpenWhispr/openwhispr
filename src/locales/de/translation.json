@@ -590,6 +590,10 @@
         "title": "Kein Audio erkannt",
         "description": "Die Aufnahme enthielt kein erkennbares Audio. Bitte versuchen Sie es erneut."
       },
+      "pasteLastEmpty": {
+        "title": "Nichts zum Einfügen",
+        "description": "Ihr Transkriptionsverlauf ist leer. Diktieren Sie zuerst etwas."
+      },
       "micDisconnected": {
         "title": "Mikrofon getrennt",
         "description": "Die Aufnahme ist weiterhin aktiv und wird fortgesetzt, sobald ein Mikrofon verfügbar ist.",
@@ -2044,6 +2048,10 @@
       "translationHotkey": {
         "title": "Übersetzungs-Hotkey",
         "description": "Diktiere in beliebiger Sprache — der eingefügte Text kommt übersetzt heraus"
+      },
+      "pasteLastHotkey": {
+        "title": "Hotkey zum Einfügen der letzten Transkription",
+        "description": "Fügt die letzte Transkription erneut an der Cursorposition ein"
       }
     },
     "permissions": {

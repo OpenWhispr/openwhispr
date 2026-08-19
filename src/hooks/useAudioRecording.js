@@ -7,6 +7,7 @@ import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
+import { pasteLastTranscription } from "../helpers/pasteLastTranscription";
 import {
   isAgentAllowed,
   isScreenContextAllowed,
@@ -433,6 +434,37 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
+    // Paste-last hotkey: re-paste the newest history entry through the same
+    // seam dictation output uses, ignoring autoPaste (the press is the ask).
+    const handlePasteLastTranscription = async () => {
+      const { keepTranscriptionInClipboard } = getSettings();
+      const result = await pasteLastTranscription({
+        getTranscriptions: (limit) => window.electronAPI.getTranscriptions(limit),
+        paste: async (text) =>
+          (await audioManagerRef.current?.safePaste(text, {
+            restoreClipboard: !keepTranscriptionInClipboard,
+            allowClipboardFallback: isAccessibilitySkipped(),
+          })) === true,
+      });
+      if (result.status === "empty") {
+        toast({
+          title: t("hooks.audioRecording.pasteLastEmpty.title"),
+          description: t("hooks.audioRecording.pasteLastEmpty.description"),
+          variant: "default",
+        });
+      } else if (result.status === "error") {
+        logger.error(
+          "Paste last transcription failed to read history",
+          { error: result.error?.message },
+          "audio"
+        );
+      }
+    };
+
+    const disposePasteLast = window.electronAPI.onPasteLastTranscription?.(() => {
+      void handlePasteLastTranscription();
+    });
+
     const disposeStart = window.electronAPI.onStartDictation?.(() => {
       handleStart();
       onToggle?.();
@@ -470,6 +502,7 @@ export const useAudioRecording = (toast, options = {}) => {
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
       disposeTranslationToggle?.();
+      disposePasteLast?.();
       disposeStart?.();
       disposePrepare?.();
       disposeCancelPreparation?.();

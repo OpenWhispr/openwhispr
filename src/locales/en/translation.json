@@ -590,6 +590,10 @@
         "title": "No Audio Detected",
         "description": "The recording contained no detectable audio. Please try again."
       },
+      "pasteLastEmpty": {
+        "title": "Nothing to Paste",
+        "description": "Your transcription history is empty. Dictate something first."
+      },
       "micDisconnected": {
         "title": "Microphone disconnected",
         "description": "Recording is still active and will resume when a microphone is available.",
@@ -2044,6 +2048,10 @@
       "translationHotkey": {
         "title": "Translation Hotkey",
         "description": "Dictate in any language — the pasted text comes out translated"
+      },
+      "pasteLastHotkey": {
+        "title": "Paste Last Transcription Hotkey",
+        "description": "Paste your most recent transcription again at the cursor"
       }
     },
     "permissions": {

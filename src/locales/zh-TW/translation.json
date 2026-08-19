@@ -590,6 +590,10 @@
         "title": "未偵測到音訊",
         "description": "錄音中未偵測到聲音。請再試一次。"
       },
+      "pasteLastEmpty": {
+        "title": "沒有可貼上的內容",
+        "description": "轉錄歷史是空的。請先進行聽寫。"
+      },
       "micDisconnected": {
         "title": "麥克風已中斷",
         "description": "錄音仍在進行中，麥克風可用後將自動恢復。",
@@ -1761,6 +1765,10 @@
       "translationHotkey": {
         "title": "翻譯快捷鍵",
         "description": "用任何語言聽寫——貼上的文字會自動翻譯"
+      },
+      "pasteLastHotkey": {
+        "title": "貼上上次轉錄快速鍵",
+        "description": "在游標位置再次貼上最近一次轉錄的文字"
       }
     },
     "permissions": {

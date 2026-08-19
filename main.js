@@ -1095,6 +1095,29 @@ async function startApp() {
     }
   }
 
+  // Set up paste-last hotkey (re-paste the most recent transcription from
+  // history when auto-insertion missed its target)
+  const pasteLastHotkeyCallback = () => {
+    windowManager.sendPasteLastTranscription();
+  };
+  windowManager._pasteLastHotkeyCallback = pasteLastHotkeyCallback;
+
+  const savedPasteLastKey = environmentManager.getPasteLastKey?.() || "";
+  if (savedPasteLastKey) {
+    const result = await hotkeyManager.registerSlot(
+      "pasteLast",
+      savedPasteLastKey,
+      pasteLastHotkeyCallback
+    );
+    if (!result.success) {
+      debugLogger.warn(
+        "Failed to restore paste last transcription hotkey",
+        { hotkey: savedPasteLastKey },
+        "hotkey"
+      );
+    }
+  }
+
   // Set up meeting mode hotkey
   const meetingHotkeyCallback = () => {
     if (hotkeyManager.isInListeningMode()) return;
@@ -1321,6 +1344,7 @@ async function startApp() {
       const translationUsesGlobe = hotkeyManager
         .getSlotHotkeys("translation")
         .some(isGlobeLikeHotkey);
+      const pasteLastUsesGlobe = hotkeyManager.getSlotHotkeys("pasteLast").some(isGlobeLikeHotkey);
       if (agentUsesGlobe) {
         windowManager.toggleAgentOverlay();
       }
@@ -1330,7 +1354,16 @@ async function startApp() {
       if (translationUsesGlobe) {
         windowManager.sendToggleTranslation();
       }
-      if (!agentUsesGlobe && !voiceAgentUsesGlobe && !translationUsesGlobe && !dictationUsesGlobe) {
+      if (pasteLastUsesGlobe) {
+        windowManager.sendPasteLastTranscription();
+      }
+      if (
+        !agentUsesGlobe &&
+        !voiceAgentUsesGlobe &&
+        !translationUsesGlobe &&
+        !pasteLastUsesGlobe &&
+        !dictationUsesGlobe
+      ) {
         debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE", { currentHotkey });
       }
     });
@@ -1408,6 +1441,9 @@ async function startApp() {
       if (hotkeyManager.slotHasHotkey("translation", modifier)) {
         windowManager.sendToggleTranslation();
       }
+      if (hotkeyManager.slotHasHotkey("pasteLast", modifier)) {
+        windowManager.sendPasteLastTranscription();
+      }
 
       if (!hotkeyManager.slotHasHotkey("dictation", modifier)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
@@ -1466,7 +1502,7 @@ async function startApp() {
       }
     });
 
-    const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "agent", "voiceAgent", "translation"];
+    const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "agent", "voiceAgent", "translation", "pasteLast"];
     const syncMacNativeHotkeyConfiguration = () => {
       globeKeyManager.setConfiguration(
         hotkeyManager.getMacNativeListenerConfig(MAC_NATIVE_HOTKEY_SLOTS)
@@ -1491,6 +1527,9 @@ async function startApp() {
       }
       if (hotkeyManager.slotHasHotkey("translation", button)) {
         windowManager.sendToggleTranslation();
+      }
+      if (hotkeyManager.slotHasHotkey("pasteLast", button)) {
+        windowManager.sendPasteLastTranscription();
       }
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
@@ -1623,6 +1662,8 @@ async function startApp() {
         windowManager.sendToggleVoiceAgent();
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
+      } else if (hotkeyManager.slotHasHotkey("pasteLast", key)) {
+        windowManager.sendPasteLastTranscription();
       } else if (hotkeyManager.slotHasHotkey("agent", key)) {
         if (!hotkeyManager.isInListeningMode()) windowManager.toggleAgentOverlay();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {

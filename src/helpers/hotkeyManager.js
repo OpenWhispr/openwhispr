@@ -18,7 +18,7 @@ const DEFAULT_HOTKEY = "Control+Super";
 
 // Slots routed through GNOME native gsettings (not globalShortcut).
 // Temporary slots like "cancel" stay on globalShortcut.
-const GNOME_NATIVE_SLOTS = new Set(["agent", "meeting", "voiceAgent", "translation"]);
+const GNOME_NATIVE_SLOTS = new Set(["agent", "meeting", "voiceAgent", "translation", "pasteLast"]);
 
 // KDE registration failure reasons — reuse existing i18n keys
 const KDE_FAILURE_REASONS = {
@@ -228,6 +228,8 @@ class HotkeyManager extends EventEmitter {
         this.gnomeManager.setVoiceAgentCallback(callback);
       } else if (slotName === "translation") {
         this.gnomeManager.setTranslationCallback(callback);
+      } else if (slotName === "pasteLast") {
+        this.gnomeManager.setPasteLastCallback(callback);
       }
 
       const success = await this.gnomeManager.registerKeybinding(gnomeHotkey, slotName);
