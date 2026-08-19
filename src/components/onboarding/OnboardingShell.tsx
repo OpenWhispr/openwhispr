@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { OnboardingProgressState } from "./flow";
-import { Undo2 } from "lucide-react";
+import { Minus, Undo2, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { useTranslation } from "react-i18next";
+import { getPlatform } from "../../utils/platform";
 // Imported (not referenced by path) so Vite fingerprints it and it resolves
 // under the packaged app's file:// origin. See .onboarding-compact-hero.
 import heroDither from "@/assets/onboarding-hero-dither.webp";
@@ -28,6 +29,50 @@ interface CompactOnboardingFrameProps {
   children: ReactNode;
   showBrandMark?: boolean;
   showLegalNotice?: boolean;
+}
+
+/**
+ * Minimise/close for the frameless window on Windows and Linux — macOS shows
+ * its native traffic lights instead (the window manager keeps them visible
+ * during onboarding). Close hides to the tray; the persisted session resumes
+ * the flow on reopen, so this is never a way to lose progress.
+ *
+ * `onHero` swaps the token-based tint for literal whites: the compact frame's
+ * indigo hero stays indigo in both themes, exactly like its Skip button.
+ */
+function OnboardingWindowControls({ onHero = false }: { onHero?: boolean }) {
+  const { t } = useTranslation();
+  if (getPlatform() === "darwin") return null;
+
+  const buttonClass = `inline-flex size-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 ${
+    onHero
+      ? "text-white hover:bg-white/20 focus-visible:ring-white/70"
+      : "text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary)] focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
+  }`;
+
+  return (
+    <div
+      className="absolute right-3 top-3 z-50 flex items-center gap-1"
+      style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
+    >
+      <button
+        type="button"
+        onClick={() => void window.electronAPI?.windowMinimize?.()}
+        title={t("windowControls.minimize")}
+        className={buttonClass}
+      >
+        <Minus className="size-4" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={() => void window.electronAPI?.windowClose?.()}
+        title={t("windowControls.close")}
+        className={buttonClass}
+      >
+        <X className="size-4" aria-hidden="true" />
+      </button>
+    </div>
+  );
 }
 
 export function OnboardingProgress({ index, total }: { index: number; total: number }) {
@@ -141,6 +186,7 @@ export default function OnboardingShell({
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         aria-hidden="true"
       />
+      <OnboardingWindowControls onHero={compact} />
 
       <div
         // Normally nothing scrolls here: each step sizes itself to the window and

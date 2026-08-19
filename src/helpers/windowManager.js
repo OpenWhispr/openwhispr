@@ -1271,16 +1271,21 @@ class WindowManager {
     dockManager.setControlPanelVisible(true);
   }
 
-  // Onboarding runs in a fixed-size window with no traffic lights so a user
-  // can't resize, minimise or close their way out of setup.
+  // Onboarding runs in a fixed-size window: no resize/zoom, so every step
+  // renders at the bounds it was laid out for, but minimise and close stay
+  // available (close goes to the tray and the flow resumes where it left off).
   _applyOnboardingWindowChrome(win) {
+    // Size stays locked to the canonical compact/expanded bounds, but the user
+    // can always minimise or close: close hides to the tray (the session
+    // persists and resumes), so onboarding is never a window you can't leave.
     win.setResizable(false);
-    win.setMinimizable(false);
+    win.setMinimizable(true);
     win.setMaximizable(false);
-    win.setClosable(false);
+    win.setClosable(true);
     win.setFullScreenable(false);
     if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
-      win.setWindowButtonVisibility(false);
+      // Windows/Linux are frameless; OnboardingShell draws its own controls.
+      win.setWindowButtonVisibility(true);
     }
   }
 
