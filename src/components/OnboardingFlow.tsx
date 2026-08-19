@@ -50,7 +50,7 @@ import {
   type OnboardingStepId,
 } from "./onboarding/flow";
 import { useOnboardingSession } from "./onboarding/useOnboardingSession";
-import { hasPendingLocalModels } from "./onboarding/pendingLocalModels";
+import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
@@ -258,9 +258,20 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         // rather than skipping: the model was remembered when the download
         // started, and BackgroundModelDownloadTray only applies it (and then
         // clears this flag) while the flag is set.
-        if (options.localPending || hasPendingLocalModels())
+        //
+        // Only preserve a pending download when the completed route still uses
+        // local models. Besides the normal local route, this branch can borrow a
+        // local transcription stage for enterprise policy. A user who instead
+        // walks Back and finishes on Cloud/BYOK must not be switched back to a
+        // stale local selection when that download completes later.
+        const routeKeepsLocalModels =
+          mode === "local" || (mode === "enterprise" && enterpriseTranscription === "local");
+        if (routeKeepsLocalModels && (options.localPending || hasPendingLocalModels())) {
           localStorage.setItem("localSetupPending", "true");
-        else localStorage.removeItem("localSetupPending");
+        } else {
+          localStorage.removeItem("localSetupPending");
+          clearPendingLocalModels();
+        }
         await window.electronAPI?.saveAllKeysToEnv?.();
         await window.electronAPI?.markBundleMigrated?.();
         clearSession();
@@ -277,6 +288,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     [
       clearSession,
       dictationHotkey,
+      enterpriseTranscription,
       isFinishing,
       onComplete,
       registerHotkey,
@@ -847,35 +859,27 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     currentStepId === "local-assistant" ||
     currentStepId === "enterprise-dictation" ||
     currentStepId === "enterprise-assistant";
+  // Choice/provider pages own their forward action, while hotkey/demo pages
+  // withhold Continue until their task is complete.
+  const showsContinue =
+    hasShellNavigation && !choiceStep && !inlineProviderStep && (!inlineGatedStep || canContinue);
+  // Keep this branch's demo escape hatch: practice must remain skippable when a
+  // microphone or backend problem prevents completion.
+  const showsSkip = demoStep && !canContinue;
 
   return (
     <>
       <OnboardingShell
         compact={compact}
         stepKey={currentStepId}
-        onBack={
-          // Provider steps keep Back deliberately: their own footers only offer
-          // Proceed, and a user with no working key (or an enterprise policy
-          // error) would otherwise be trapped in a non-closable window.
-          hasShellNavigation &&
-          currentStepId !== "languages" &&
-          !choiceStep &&
-          session.history.length > 0
-            ? goBack
-            : undefined
-        }
-        onContinue={
-          hasShellNavigation &&
-          !choiceStep &&
-          !inlineProviderStep &&
-          (!inlineGatedStep || canContinue)
-            ? () => void continueFromCurrentStep()
-            : undefined
-        }
+        // History is the only Back gate. This preserves the branch's provider
+        // escape path and also lets users return from setup choice/languages.
+        onBack={hasShellNavigation && session.history.length > 0 ? goBack : undefined}
+        onContinue={showsContinue ? () => void continueFromCurrentStep() : undefined}
         // The demos are practice, not configuration — a mic problem or an
         // unreachable transcription backend must never dead-end setup, so they
         // stay skippable until they succeed.
-        onSkip={demoStep && !canContinue ? () => void continueFromCurrentStep() : undefined}
+        onSkip={showsSkip ? () => void continueFromCurrentStep() : undefined}
         continueLabel={
           currentStepId === "use-cases"
             ? t("onboarding.useCase.proceedToSetup")
@@ -885,10 +889,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         continueDisabled={!canContinue}
         continueLoading={isFinishing || isRegistering}
         progress={getOnboardingProgress(currentStepId, route)}
-        // On both step families canContinue means "the thing this step asks for
-        // is done", so the labelled Back collapses to icon-only the moment a
-        // shortcut is confirmed or a demo succeeds.
-        showBackLabel={(hotkeyStep || demoStep) && !canContinue}
+        // Label Back only when it is the sole footer action. Unlike the source
+        // commit, this branch also has demo Skip, so Back stays icon-only there.
+        showBackLabel={!showsContinue && !showsSkip}
       >
         {fatalError && (
           <div

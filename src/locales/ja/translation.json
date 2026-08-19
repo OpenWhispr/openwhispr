@@ -226,7 +226,8 @@
         "capture": "使用したいキーを押してください",
         "confirm": "確定するにはもう一度 {{hotkey}} を押してください",
         "chooseAnother": "別のショートカットを選ぶ",
-        "inUse": "そのショートカットはすでに使用されています。別のものを選んでください。"
+        "inUse": "そのショートカットはすでに使用されています。別のものを選んでください。",
+        "holding": "押したままにするか、別のキーを押してください"
       },
       "dictationDemo": {
         "title": "最初のディクテーションを試す",
@@ -309,7 +310,7 @@
             "device": "デバイス上で動作",
             "offline": "設定後はオフラインで動作",
             "models": "ディクテーションとアシスタント用のモデルを選択",
-            "free": "無料で使える"
+            "free": "ずっと無料で使える"
           }
         },
         "enterprise": {
@@ -1277,7 +1278,8 @@
     "tryShortcutMac": "⌘⇧K をお試しください",
     "remove": "ホットキーを削除",
     "addAnother": "ホットキーをもう1つ追加",
-    "duplicate": "すでに追加されています"
+    "duplicate": "すでに追加されています",
+    "singleModifierNeedsRightSide": "{{key}} だけではショートカットにできません。{{alternative}} を押すか、2つ目のキーを追加してください。"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",

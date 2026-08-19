@@ -226,7 +226,8 @@
         "capture": "Press the keys you want to use",
         "confirm": "Press {{hotkey}} again to confirm",
         "chooseAnother": "Choose another shortcut",
-        "inUse": "That shortcut is already in use. Choose another one."
+        "inUse": "That shortcut is already in use. Choose another one.",
+        "holding": "Keep holding, or press another key"
       },
       "dictationDemo": {
         "title": "Try your first dictation",
@@ -309,7 +310,7 @@
             "device": "Runs on your device",
             "offline": "Works offline after setup",
             "models": "Choose models for dictation and assistant",
-            "free": "Free to use"
+            "free": "Forever free to use"
           }
         },
         "enterprise": {
@@ -1365,7 +1366,8 @@
     "tryShortcutMac": "Try ⌘⇧K",
     "remove": "Remove hotkey",
     "addAnother": "Add another hotkey",
-    "duplicate": "Already added"
+    "duplicate": "Already added",
+    "singleModifierNeedsRightSide": "{{key}} on its own can't be a shortcut. Press {{alternative}} instead, or add a second key."
   },
   "languageSelector": {
     "noLanguagesFound": "No languages found",

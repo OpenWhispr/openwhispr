@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, forwardRef, useRef, useState } from "react";
 import {
   BanknoteCheck,
   Building2,
@@ -84,19 +84,18 @@ function SetupCard({ children }: { children: React.ReactNode }) {
 }
 
 // Figma "Frame 25": pad 8 20, radius 38, 14/140% medium. Brand fill or stroke.
-function CardAction({
-  brand = false,
-  className = "",
-  onClick,
-  children,
-}: {
-  brand?: boolean;
-  className?: string;
-  onClick: () => void;
-  children: string;
-}) {
+const CardAction = forwardRef<
+  HTMLButtonElement,
+  {
+    brand?: boolean;
+    className?: string;
+    onClick: () => void;
+    children: string;
+  }
+>(function CardAction({ brand = false, className = "", onClick, children }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       className={`onboarding-pressable relative z-10 w-full rounded-[38px] px-5 py-2 text-sm font-medium leading-[1.4] ${className} ${
@@ -108,7 +107,7 @@ function CardAction({
       {children}
     </button>
   );
-}
+});
 
 export default function SetupChoiceStep({
   isSignedIn,
@@ -120,6 +119,7 @@ export default function SetupChoiceStep({
   const identityStatus = useEnterpriseIdentityStore((state) => state.status);
   const managedConfig = useEnterpriseIdentityStore((state) => state.config);
   const [pending, setPending] = useState<WarningSetupMode | null>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
   const [showMore, setShowMore] = useState(false);
 
   const localReferenceModel = getParakeetModelInfo(REFERENCE_LOCAL_MODEL_ID);
@@ -127,7 +127,9 @@ export default function SetupChoiceStep({
     /(\d)([A-Za-z])/,
     "$1 $2"
   );
-  const minimumLocalSpaceGb = Math.max(1, Math.ceil((localReferenceModel?.sizeMb ?? 0) / 1000));
+  // The model arrives as an archive and needs room to unpack, so quoting only
+  // its compressed size can send a user into a setup that runs out of disk.
+  const minimumLocalSpaceGb = Math.max(2, Math.ceil((localReferenceModel?.sizeMb ?? 0) / 1000));
 
   const cloudAllowed =
     isModeAllowedByPolicy(policy, "transcription", "openwhispr") &&
@@ -142,6 +144,13 @@ export default function SetupChoiceStep({
     if (!pending) return;
     onSelect(pending);
     setPending(null);
+  };
+
+  // Radix otherwise focuses the first action (the Cloud escape hatch). Keep
+  // Enter aligned with the mode the user just selected by focusing Proceed.
+  const handleWarningAutoFocus = (event: Event) => {
+    event.preventDefault();
+    confirmRef.current?.focus();
   };
 
   const warningSteps = pending
@@ -220,7 +229,7 @@ export default function SetupChoiceStep({
                       height={20}
                       decoding="async"
                       draggable={false}
-                      className="size-5 invert"
+                      className="size-5 invert dark:invert-0"
                     />
                   </span>
                   {/* The tile is its own green field, so it fills the chip and gets
@@ -490,6 +499,7 @@ export default function SetupChoiceStep({
         <DialogContent
           overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
           className="w-[460px] max-w-[460px] gap-8 rounded-[28px] border-0 bg-[var(--onboarding-surface)] px-5 pb-8 pt-6 text-left text-[var(--onboarding-text-primary)] [&>button]:hidden"
+          onOpenAutoFocus={handleWarningAutoFocus}
         >
           {/* Frame 2147258979: 238 tall, radius 20, image crop. The three marks
               are 32 / 55 / 32 on a 14 gap, with the outer two at 72% white so the
@@ -557,15 +567,11 @@ export default function SetupChoiceStep({
               with font-semibold and an outline variant whose border did not
               render against white. */}
           {/* Frame 2147259003: row, gap 10, both actions growing equally. */}
+          {/* The escape hatch is secondary on the left; proceeding with the mode
+              the user selected is primary on the right. */}
           <div className="flex gap-2.5">
-            <CardAction className="flex-1" onClick={confirmPending}>
-              {pending
-                ? t(`onboarding.rehaul.setupChoice.warnings.${pending}.continue`)
-                : t("onboarding.rehaul.setupChoice.continueSetup")}
-            </CardAction>
             {cloudAllowed && (
               <CardAction
-                brand
                 className="flex-1"
                 onClick={() => {
                   setPending(null);
@@ -575,6 +581,11 @@ export default function SetupChoiceStep({
                 {t("onboarding.rehaul.setupChoice.useCloud")}
               </CardAction>
             )}
+            <CardAction ref={confirmRef} brand className="flex-1" onClick={confirmPending}>
+              {pending
+                ? t(`onboarding.rehaul.setupChoice.warnings.${pending}.continue`)
+                : t("onboarding.rehaul.setupChoice.continueSetup")}
+            </CardAction>
           </div>
         </DialogContent>
       </Dialog>

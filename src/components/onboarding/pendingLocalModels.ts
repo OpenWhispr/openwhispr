@@ -56,6 +56,11 @@ export function forgetPendingLocalModel(kind: PendingLocalModelKind, modelId?: s
   writePendingLocalModels(selections);
 }
 
+/** Drops every remembered selection, e.g. when onboarding ends on another mode. */
+export function clearPendingLocalModels() {
+  localStorage.removeItem(PENDING_LOCAL_MODELS_KEY);
+}
+
 export function hasPendingLocalModels() {
   return Object.keys(readPendingLocalModels()).length > 0;
 }

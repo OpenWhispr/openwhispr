@@ -3499,7 +3499,10 @@ class IPCHandlers {
                 `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
               );
               const callback = this.windowManager.createHotkeyCallback();
-              const registered = globalShortcut.register(accelerator, () => callback(hk));
+              // Same Fn guard as the primary registration path: the stripped
+              // accelerator would otherwise fire on its bare key.
+              const guarded = hotkeyManager._wrapFnGuardedCallback(hk, callback);
+              const registered = globalShortcut.register(accelerator, () => guarded(hk));
               if (!registered) {
                 debugLogger.warn(
                   `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`

@@ -226,7 +226,8 @@
         "capture": "Drücken Sie die Tasten, die Sie verwenden möchten",
         "confirm": "Drücken Sie {{hotkey}} erneut zum Bestätigen",
         "chooseAnother": "Anderes Tastenkürzel wählen",
-        "inUse": "Dieses Tastenkürzel wird bereits verwendet. Wähle ein anderes."
+        "inUse": "Dieses Tastenkürzel wird bereits verwendet. Wähle ein anderes.",
+        "holding": "Weiter halten oder eine andere Taste drücken"
       },
       "dictationDemo": {
         "title": "Probieren Sie Ihr erstes Diktat aus",
@@ -309,7 +310,7 @@
             "device": "Läuft auf Ihrem Gerät",
             "offline": "Funktioniert nach der Einrichtung offline",
             "models": "Modelle für Diktat und Assistant wählen",
-            "free": "Kostenlos nutzbar"
+            "free": "Für immer kostenlos"
           }
         },
         "enterprise": {
@@ -1365,7 +1366,8 @@
     "tryShortcutMac": "Versuchen Sie ⌘⇧K",
     "remove": "Hotkey entfernen",
     "addAnother": "Weiteren Hotkey hinzufügen",
-    "duplicate": "Bereits hinzugefügt"
+    "duplicate": "Bereits hinzugefügt",
+    "singleModifierNeedsRightSide": "{{key}} allein kann kein Kürzel sein. Drücke stattdessen {{alternative}} oder füge eine zweite Taste hinzu."
   },
   "languageSelector": {
     "noLanguagesFound": "Keine Sprachen gefunden",

@@ -226,7 +226,8 @@
         "capture": "Appuyez sur les touches que vous souhaitez utiliser",
         "confirm": "Appuyez de nouveau sur {{hotkey}} pour confirmer",
         "chooseAnother": "Choisir un autre raccourci",
-        "inUse": "Ce raccourci est déjà utilisé. Choisissez-en un autre."
+        "inUse": "Ce raccourci est déjà utilisé. Choisissez-en un autre.",
+        "holding": "Maintenez la touche ou appuyez sur une autre"
       },
       "dictationDemo": {
         "title": "Essayez votre première dictée",
@@ -309,7 +310,7 @@
             "device": "Fonctionne sur votre appareil",
             "offline": "Fonctionne hors ligne après la configuration",
             "models": "Choisissez les modèles pour la dictée et l’assistant",
-            "free": "Gratuit"
+            "free": "Gratuit pour toujours"
           }
         },
         "enterprise": {
@@ -1365,7 +1366,8 @@
     "tryShortcutMac": "Essayez ⌘⇧K",
     "remove": "Supprimer le raccourci",
     "addAnother": "Ajouter un autre raccourci",
-    "duplicate": "Déjà ajouté"
+    "duplicate": "Déjà ajouté",
+    "singleModifierNeedsRightSide": "{{key}} seule ne peut pas être un raccourci. Appuyez plutôt sur {{alternative}}, ou ajoutez une deuxième touche."
   },
   "languageSelector": {
     "noLanguagesFound": "Aucune langue trouvée",

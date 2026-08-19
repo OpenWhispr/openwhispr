@@ -172,10 +172,12 @@ export default function CalendarConnectionsStep() {
         </div>
       </section>
 
-      {/* Frame 16 — 498 wide, pad 24 16, #F7F7F7 surface, radius 17. Rows follow
-          the shared list rhythm: no padding above the first, none below the last,
-          hairline dividers between. */}
-      <div className="w-[498px] rounded-[17px] border border-[var(--onboarding-control-border)] bg-[#f7f7f7] px-4 py-6">
+      {/* Frame 16 — 498 wide, pad 24 16, radius 17. The spec's #F7F7F7 comes from
+          the token, not a literal: hardcoded, the card stayed near-white in dark
+          mode while the text tokens flipped light and the provider names vanished.
+          Rows follow the shared list rhythm: no padding above the first, none
+          below the last, hairline dividers between. */}
+      <div className="w-[498px] rounded-[17px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-4 py-6">
         {providers.map((provider, index) => (
           <div
             key={provider.id}
@@ -188,7 +190,7 @@ export default function CalendarConnectionsStep() {
             {/* Frame 2147258981 — 44x44 tile, 1px surface stroke, rx 9.5, with a 24px
                 glyph inset. The stroke lives here rather than in each asset so all
                 three providers match; the 48px sources land exactly 2x at 24px.
-                No fill: the frame has stroke only, so the row's #F7F7F7 reads
+                No fill: the frame has stroke only, so the row's surface reads
                 through. Do not re-add bg-[var(--onboarding-surface)]. */}
             <span className="flex size-11 shrink-0 items-center justify-center rounded-[9.5px] border border-[var(--onboarding-control-border)]">
               <img

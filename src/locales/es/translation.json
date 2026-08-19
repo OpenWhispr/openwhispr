@@ -226,7 +226,8 @@
         "capture": "Pulsa las teclas que quieras usar",
         "confirm": "Pulsa {{hotkey}} otra vez para confirmar",
         "chooseAnother": "Elegir otro atajo",
-        "inUse": "Ese atajo ya está en uso. Elige otro."
+        "inUse": "Ese atajo ya está en uso. Elige otro.",
+        "holding": "Mantén pulsado o pulsa otra tecla"
       },
       "dictationDemo": {
         "title": "Prueba tu primer dictado",
@@ -309,7 +310,7 @@
             "device": "Funciona en tu dispositivo",
             "offline": "Funciona sin conexión tras la configuración",
             "models": "Elige modelos para dictado y asistente",
-            "free": "Gratis"
+            "free": "Gratis para siempre"
           }
         },
         "enterprise": {
@@ -1325,7 +1326,8 @@
     "tryShortcutMac": "Prueba ⌘⇧K",
     "remove": "Eliminar atajo",
     "addAnother": "Añadir otro atajo",
-    "duplicate": "Ya añadido"
+    "duplicate": "Ya añadido",
+    "singleModifierNeedsRightSide": "{{key}} por sí sola no puede ser un atajo. Pulsa {{alternative}} o añade una segunda tecla."
   },
   "languageSelector": {
     "noLanguagesFound": "No se encontraron idiomas",

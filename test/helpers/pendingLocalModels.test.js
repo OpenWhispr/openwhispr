@@ -43,3 +43,19 @@ test("a completion cannot consume a different pending model", async () => {
   pending.forgetPendingLocalModel("dictation", "small");
   assert.equal(pending.hasPendingLocalModels(), false);
 });
+
+test("pending selections can be cleared when onboarding finishes on another mode", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+
+  pending.rememberPendingLocalModel("dictation", { provider: "whisper", modelId: "base" });
+  pending.rememberPendingLocalModel("assistant", {
+    provider: "qwen",
+    modelId: "qwen3.5-4b-q4_k_m",
+  });
+
+  pending.clearPendingLocalModels();
+
+  assert.deepEqual(pending.readPendingLocalModels(), {});
+  assert.equal(pending.hasPendingLocalModels(), false);
+});

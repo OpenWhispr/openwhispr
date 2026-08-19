@@ -329,7 +329,10 @@ body.dark:has(.onboarding-canvas) {
      a near-black surface, so dark takes the same hue a few steps brighter to hold
      the 4.5:1 it has in light. */
   --onboarding-accent: #6f9bf5;
-  --onboarding-accent-foreground: #0a0f1c;
+  /* White, same as light: a filled brand CTA reads as the brand in both themes,
+     and flipping its label to near-black made the dark-mode buttons look like a
+     different component. */
+  --onboarding-accent-foreground: #ffffff;
   --onboarding-accent-hover: color-mix(in srgb, var(--onboarding-accent) 88%, white);
   --onboarding-text-primary: #f5f5f5;
   --onboarding-text-secondary: #a1a1a1;
