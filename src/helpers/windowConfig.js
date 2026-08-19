@@ -177,6 +177,9 @@ const MAIN_WINDOW_CONFIG = {
     nodeIntegration: false,
     contextIsolation: true,
     sandbox: true,
+    // The hotkey shows this window from hidden right as the entrance animation
+    // and resize mask run; a throttled renderer stutters them for seconds.
+    backgroundThrottling: false,
   },
   frame: false,
   alwaysOnTop: true,

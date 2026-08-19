@@ -1,6 +1,12 @@
 import { useEffect } from "react";
 import { calculateWindowAnchorCompensation } from "../utils/mainWindowResizeCoordinator";
 
+// Fractional DPI (Windows 125%/150%) rounds set-vs-reported bounds by up to
+// 2px; the timeout backstops a plan whose bounds never materialize so content
+// can't sit translated indefinitely. Both match the resize coordinator.
+const BOUNDS_TOLERANCE_PX = 2;
+const PLAN_SETTLE_TIMEOUT_MS = 900;
+
 /**
  * Masks the visual jump of anchored native resizes. Electron applies a
  * split setBounds (position + size) across frames; this watches the window
@@ -25,10 +31,10 @@ export function useWindowResizeCompensation() {
       height: window.innerHeight,
     });
     const differsFrom = (left, right) =>
-      Math.abs(left.x - right.x) > 1 ||
-      Math.abs(left.y - right.y) > 1 ||
-      Math.abs(left.width - right.width) > 1 ||
-      Math.abs(left.height - right.height) > 1;
+      Math.abs(left.x - right.x) > BOUNDS_TOLERANCE_PX ||
+      Math.abs(left.y - right.y) > BOUNDS_TOLERANCE_PX ||
+      Math.abs(left.width - right.width) > BOUNDS_TOLERANCE_PX ||
+      Math.abs(left.height - right.height) > BOUNDS_TOLERANCE_PX;
 
     const applyCompensation = (current) => {
       if (!plan) return;
@@ -50,6 +56,11 @@ export function useWindowResizeCompensation() {
     const sample = () => {
       frame = 0;
       if (!plan) return;
+      if (performance.now() - plan.installedAt >= PLAN_SETTLE_TIMEOUT_MS) {
+        plan = null;
+        clearCompensation();
+        return;
+      }
       const current = currentBounds();
       if (!plan.started && differsFrom(current, plan.initial)) plan.started = true;
 
@@ -71,6 +82,13 @@ export function useWindowResizeCompensation() {
     };
 
     const unsubscribe = window.electronAPI?.onMainWindowWillResize?.((resize) => {
+      // A deliberate move invalidates a live plan's target bounds; drop the mask.
+      if (resize?.anchor === "none") {
+        plan = null;
+        cancelAnimationFrame(frame);
+        clearCompensation();
+        return;
+      }
       if (!resize?.bounds || !resize?.anchor) return;
       plan = {
         bounds: resize.bounds,
@@ -78,6 +96,7 @@ export function useWindowResizeCompensation() {
         initial: currentBounds(),
         started: false,
         stableFrames: 0,
+        installedAt: performance.now(),
       };
       cancelAnimationFrame(frame);
       clearCompensation();

@@ -247,6 +247,13 @@ class WindowManager {
     );
   }
 
+  // Deliberate moves are not anchored resizes: the renderer must drop any live
+  // resize mask rather than hold a translation against invalidated bounds.
+  _clearRendererResizeMask() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("main-window-will-resize", { anchor: "none" });
+  }
+
   async _prepareRendererForMainWindowResize(bounds, anchor) {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("main-window-will-resize", { bounds, anchor });
@@ -891,6 +898,7 @@ class WindowManager {
         { width: currentBounds.width, height: currentBounds.height },
         this._panelStartPosition
       );
+      this._clearRendererResizeMask();
       this.mainWindow.setBounds(newPos);
       this._notifyMainWindowHorizontalDirection();
     }
@@ -1167,6 +1175,7 @@ class WindowManager {
       const clamped = WindowPositionUtil.clampToWorkArea(currentBounds, currentDisplay);
       if (clamped.x !== currentBounds.x || clamped.y !== currentBounds.y) {
         const clampedBounds = { ...currentBounds, ...clamped };
+        this._clearRendererResizeMask();
         this.mainWindow.setBounds(clampedBounds);
         this._lastResizeBounds = { ...clampedBounds };
         this._baseBoundsBeforeResize = null;
@@ -1185,6 +1194,7 @@ class WindowManager {
       { from: currentBounds, to: newPos, displayId: activeDisplay.id },
       "window"
     );
+    this._clearRendererResizeMask();
     this.mainWindow.setBounds(newPos);
     // This is an intentional native move, not a drag. Keep resize restoration
     // from treating the old display's bounds as the user's desired base state.

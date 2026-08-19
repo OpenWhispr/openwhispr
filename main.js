@@ -99,6 +99,12 @@ require("dotenv").config({
   override: false,
 });
 
+// Chromium's Windows-only occlusion tracker misclassifies the always-on-top
+// transparent pill as occluded, throttling its renderer and jittering animations.
+if (process.platform === "win32") {
+  app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+}
+
 // Fix transparent window flickering on Linux: --enable-transparent-visuals requires
 // the compositor to set up an ARGB visual before any windows are created.
 // --disable-gpu-compositing prevents GPU compositing conflicts with the compositor.
