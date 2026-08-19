@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { X } from "lucide-react";
 import "./index.css";
 import { useToast } from "./components/ui/useToast";
 import { useHotkey } from "./hooks/useHotkey";
@@ -33,6 +34,9 @@ import {
   resolveVoiceHorizontalDirection,
   resolveVoicePanelCorePresentation,
   resolveVoicePillDock,
+  resolveVoicePillInteraction,
+  isVoicePillActivationKey,
+  shouldActivateVoicePill,
   shouldOfferLiveTranscriptReopen,
 } from "./helpers/voicePillPresentation";
 
@@ -433,7 +437,31 @@ export default function App() {
     assistantPanelMounted: assistant.mounted,
   });
   const assistantFooter = resolveAssistantFooterPresentation(assistant.footerPhase);
-  const pillIsInteractive = !liveTranscript.mounted;
+  const voicePillInteraction = resolveVoicePillInteraction({
+    assistantMounted: assistant.mounted,
+    liveTranscriptMounted: liveTranscript.mounted,
+    isRecording,
+    isProcessing,
+  });
+  const pillIsInteractive = voicePillInteraction.pillInteractive;
+  const activateVoicePill = () => {
+    if (!pillIsInteractive) return;
+    if (canReopenLiveTranscript) {
+      liveTranscript.reopen();
+      return;
+    }
+    if (
+      shouldActivateVoicePill({
+        hasDragged,
+        liveTranscriptMounted: liveTranscript.mounted,
+        isProcessing: micState === "processing",
+        isAgentThinking: voiceActivity.isAgentThinking,
+      })
+    ) {
+      setIsCommandMenuOpen(false);
+      toggleListening({ voiceAgentRequested: assistant.mounted });
+    }
+  };
   // Prefer a currently open mode over a sibling finishing its exit. The core
   // itself never unmounts; only these inner sections change ownership.
   const activeVoicePanel = resolveVoicePanelCorePresentation({
@@ -537,6 +565,7 @@ export default function App() {
               isDragging={isDragging}
               horizontalDirection={voiceHorizontalDirection}
               role={pillIsInteractive ? "button" : "status"}
+              tabIndex={pillIsInteractive ? 0 : undefined}
               aria-label={
                 canReopenLiveTranscript
                   ? t("transcriptionPreview.label")
@@ -547,7 +576,10 @@ export default function App() {
                       : micTooltip
               }
               onMouseDown={(e) => {
-                if (anyPanelMounted) return;
+                if (anyPanelMounted) {
+                  setHasDragged(false);
+                  return;
+                }
                 setIsCommandMenuOpen(false);
                 setDragStartPos({ x: e.clientX, y: e.clientY });
                 setHasDragged(false);
@@ -572,18 +604,13 @@ export default function App() {
                 setDragStartPos(null);
               }}
               onClick={(e) => {
-                if (!pillIsInteractive) return;
-                if (canReopenLiveTranscript) {
-                  liveTranscript.reopen();
-                } else if (
-                  !hasDragged &&
-                  micState !== "processing" &&
-                  !voiceActivity.isAgentThinking
-                ) {
-                  setIsCommandMenuOpen(false);
-                  toggleListening({ voiceAgentRequested: assistant.mounted });
-                }
+                activateVoicePill();
                 e.preventDefault();
+              }}
+              onKeyDown={(event) => {
+                if (event.repeat || !isVoicePillActivationKey(event.key)) return;
+                event.preventDefault();
+                activateVoicePill();
               }}
               onContextMenu={(e) => {
                 if (anyPanelMounted) return;
@@ -595,6 +622,24 @@ export default function App() {
               }}
             />
           </PillTooltip>
+          {voicePillInteraction.cancelVisible && (
+            <button
+              type="button"
+              aria-label={
+                isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
+              }
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (isRecording) cancelRecording();
+                else cancelProcessing();
+              }}
+              className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/55 bg-surface-2 text-muted-foreground shadow-sm transition-colors hover:bg-surface-3 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <X size={13} strokeWidth={2.5} aria-hidden="true" />
+            </button>
+          )}
           {!anyPanelMounted && isCommandMenuOpen && (
             <PillCommandMenu
               buttonRef={buttonRef}
@@ -637,7 +682,6 @@ export default function App() {
       >
         {activeVoicePanelMode === "assistant" && assistant.mounted && (
           <AssistantPanel
-            key={assistant.conversationResetToken}
             pendingCommand={assistant.pendingCommand}
             onCommandConsumed={assistant.handleCommandConsumed}
             initialConversationId={assistant.conversationId}

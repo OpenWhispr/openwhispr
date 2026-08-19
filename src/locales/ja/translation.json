@@ -3063,7 +3063,12 @@
       "selectionHint": "編集するテキストを選択",
       "selectedContext": "選択したテキストを追加",
       "removeSelectedContext": "選択したテキストを削除",
-      "copyToClipboard": "クリップボードにコピー"
+      "copyToClipboard": "クリップボードにコピー",
+      "suggestions": {
+        "summarizeNotes": "最近のノートを要約して",
+        "calendar": "カレンダーの予定を教えて",
+        "draft": "文章の下書きを手伝って"
+      }
     },
     "toolActivity": {
       "verbs": {

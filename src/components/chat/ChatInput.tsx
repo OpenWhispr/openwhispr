@@ -217,7 +217,10 @@ export function ChatInput({
             />
             {isBusy && onCancel ? (
               <button
+                type="button"
                 onClick={onCancel}
+                aria-label={t("common.cancel")}
+                title={t("common.cancel")}
                 className={cn(
                   "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
                   "text-muted-foreground/60 hover:text-foreground hover:bg-foreground/8",

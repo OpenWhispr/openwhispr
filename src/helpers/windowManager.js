@@ -66,6 +66,8 @@ class WindowManager {
     this._activeHorizontalDirection = null;
     this._isDictatingToggle = false;
     this._dictationLifecycleState = DICTATION_LIFECYCLE.IDLE;
+    this._assistantPanelOpen = false;
+    this._assistantPanelBusy = false;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
 
@@ -144,6 +146,9 @@ class WindowManager {
   // assistant panel needs keyboard focus so Escape can dismiss it reliably.
   setAssistantPanelOpen(open) {
     this._assistantPanelOpen = Boolean(open);
+    if (!this._assistantPanelOpen) {
+      this._assistantPanelBusy = false;
+    }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       if (this._assistantPanelOpen) {
         this.mainWindow.setFocusable(true);
@@ -158,6 +163,10 @@ class WindowManager {
       this.enforceMainWindowOnTop();
     }
     this._updateMainContentProtection();
+  }
+
+  setAssistantPanelBusy(busy) {
+    this._assistantPanelBusy = Boolean(busy);
   }
 
   setMainWindowInteractivity(shouldCapture) {
@@ -704,6 +713,7 @@ class WindowManager {
     if (
       shouldBlockDictationWhilePanelOpen({
         assistantPanelOpen: this._assistantPanelOpen,
+        assistantPanelBusy: this._assistantPanelBusy,
         voiceAgentRequested,
       })
     ) {
@@ -771,7 +781,12 @@ class WindowManager {
   }
 
   sendStartDictation() {
-    if (shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: this._assistantPanelOpen })) {
+    if (
+      shouldBlockDictationWhilePanelOpen({
+        assistantPanelOpen: this._assistantPanelOpen,
+        assistantPanelBusy: this._assistantPanelBusy,
+      })
+    ) {
       return;
     }
     if (this.hotkeyManager.isInListeningMode()) {
@@ -804,6 +819,7 @@ class WindowManager {
     if (
       shouldBlockDictationWhilePanelOpen({
         assistantPanelOpen: this._assistantPanelOpen,
+        assistantPanelBusy: this._assistantPanelBusy,
         voiceAgentRequested,
       })
     ) {

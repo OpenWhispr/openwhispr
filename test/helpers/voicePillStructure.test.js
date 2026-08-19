@@ -44,7 +44,7 @@ const renderPill = async (state, expanded, horizontalDirection = "right", overri
   // so assertions target only the rendered DOM structure. Re-run until stable:
   // a removal can splice the surrounding text into a new <style ...> match.
   let stripped = markup;
-  for (let previous = ""; previous !== stripped; ) {
+  for (let previous = ""; previous !== stripped;) {
     previous = stripped;
     stripped = stripped.replace(/<style[^>]*>[\s\S]*?<\/style>/g, "");
   }
@@ -200,6 +200,16 @@ test("the waveform pill keeps the normal compact logo footprint", async () => {
   }
 });
 
+test("an interactive voice pill is keyboard focusable", async () => {
+  const interactive = await renderPill("recording", true, "right", {
+    role: "button",
+    tabIndex: 0,
+  });
+
+  assert.match(interactive, /role="button"/);
+  assert.match(interactive, /tabindex="0"/);
+});
+
 test("the waveform uses foreground contrast, rounded caps, and a pronounced height range", async () => {
   const recording = await renderPill("recording", true);
   const { WAVEFORM_BAR_MIN_PX, WAVEFORM_BAR_MAX_PX, resolveWaveformBarHeight } =
@@ -234,8 +244,7 @@ test("Agent Mode uses the supplied mark, a purple perimeter beam, and a neutral 
     agentMode: true,
   });
   const normalRecording = await renderPill("recording", true);
-  const { AGENT_MODE_PATH } =
-    await import("../../src/components/dictation/voiceIdentityMorph.ts");
+  const { AGENT_MODE_PATH } = await import("../../src/components/dictation/voiceIdentityMorph.ts");
   const styles = readDictationStyles();
 
   assert.match(AGENT_MODE_PATH, /^M6\.14226 /);

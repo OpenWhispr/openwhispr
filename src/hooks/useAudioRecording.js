@@ -657,7 +657,7 @@ export const useAudioRecording = (toast, options = {}) => {
         window.electronAPI?.resumeMediaPlayback?.();
       }
       if (state.isStreaming) {
-        return await audioManagerRef.current.stopStreamingRecording();
+        return await audioManagerRef.current.cancelStreamingRecording();
       }
       return audioManagerRef.current.cancelRecording();
     }

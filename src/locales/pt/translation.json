@@ -3063,7 +3063,12 @@
       "selectionHint": "Selecione o texto para editar com",
       "selectedContext": "Texto selecionado adicionado",
       "removeSelectedContext": "Remover texto selecionado",
-      "copyToClipboard": "Copiar para a área de transferência"
+      "copyToClipboard": "Copiar para a área de transferência",
+      "suggestions": {
+        "summarizeNotes": "Resuma minhas notas recentes",
+        "calendar": "O que está no meu calendário?",
+        "draft": "Ajude-me a redigir algo"
+      }
     },
     "toolActivity": {
       "verbs": {

@@ -829,16 +829,6 @@ a:hover {
   background: transparent;
 }
 
-/* ---- Agent Overlay ---- */
-
-body:has(.agent-overlay-window) {
-  background: transparent;
-}
-
-body:has(.agent-overlay-window) #root {
-  background: transparent;
-}
-
 @keyframes agent-message-in {
   from {
     opacity: 0;

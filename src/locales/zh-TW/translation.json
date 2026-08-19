@@ -3063,7 +3063,12 @@
       "selectionHint": "選取要編輯的文字，然後按",
       "selectedContext": "已加入所選文字",
       "removeSelectedContext": "移除所選文字",
-      "copyToClipboard": "複製到剪貼簿"
+      "copyToClipboard": "複製到剪貼簿",
+      "suggestions": {
+        "summarizeNotes": "摘要我最近的筆記",
+        "calendar": "我的行事曆上有哪些安排？",
+        "draft": "幫我起草一些內容"
+      }
     },
     "toolActivity": {
       "verbs": {

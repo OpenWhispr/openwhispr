@@ -303,6 +303,41 @@ export function shouldOfferLiveTranscriptReopen({
 }
 
 /**
+ * Keeps the shared pill's action semantics scoped to the surface that owns it.
+ * Live Transcript may stop an active recording through the pill and always
+ * exposes a distinct discard action while recording or processing.
+ */
+export function resolveVoicePillInteraction({
+  assistantMounted,
+  liveTranscriptMounted,
+  isRecording,
+  isProcessing,
+}) {
+  if (assistantMounted) {
+    return { pillInteractive: false, cancelVisible: false };
+  }
+
+  return {
+    pillInteractive: !liveTranscriptMounted || Boolean(isRecording),
+    cancelVisible:
+      Boolean(liveTranscriptMounted) && (Boolean(isRecording) || Boolean(isProcessing)),
+  };
+}
+
+export function shouldActivateVoicePill({
+  hasDragged,
+  liveTranscriptMounted,
+  isProcessing,
+  isAgentThinking,
+}) {
+  return Boolean((!hasDragged || liveTranscriptMounted) && !isProcessing && !isAgentThinking);
+}
+
+export function isVoicePillActivationKey(key) {
+  return key === "Enter" || key === " ";
+}
+
+/**
  * A fresh request thinks in the floating logo circle. A follow-up that starts
  * from an open response panel keeps that surface mounted so its footer pill
  * can own the thinking feedback without a close/reopen transition.

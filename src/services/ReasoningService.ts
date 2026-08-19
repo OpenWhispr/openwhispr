@@ -105,6 +105,10 @@ class ReasoningService extends BaseReasoningService {
   private static readonly MAX_TOOL_STEPS = 20;
   private cacheCleanupStop: (() => void) | undefined;
   private streamAbortController: AbortController | null = null;
+  private activeRequestControllers = new Set<AbortController>();
+  private activeCloudStream: { requestId: string; cancel: () => void } | null = null;
+  private cloudOperationGeneration = 0;
+  private requestCancellationGeneration = 0;
 
   private readonly providerContext: ProviderContext;
 
@@ -309,8 +313,13 @@ class ReasoningService extends BaseReasoningService {
       requestBody: JSON.stringify(requestBody).substring(0, 200),
     });
 
+    const requestGeneration = this.requestCancellationGeneration;
     const response = await withRetry(async () => {
+      if (requestGeneration !== this.requestCancellationGeneration) {
+        throw httpError("Request cancelled", 499);
+      }
       const controller = new AbortController();
+      this.activeRequestControllers.add(controller);
       const timeoutId = setTimeout(() => controller.abort(), 30000);
       try {
         const headers: Record<string, string> = {
@@ -370,11 +379,15 @@ class ReasoningService extends BaseReasoningService {
         return jsonResponse;
       } catch (error) {
         if ((error as Error).name === "AbortError") {
+          if (requestGeneration !== this.requestCancellationGeneration) {
+            throw httpError("Request cancelled", 499);
+          }
           throw new Error("Request timed out after 30s");
         }
         throw error;
       } finally {
         clearTimeout(timeoutId);
+        this.activeRequestControllers.delete(controller);
       }
     }, createApiRetryStrategy());
 
@@ -871,8 +884,16 @@ class ReasoningService extends BaseReasoningService {
   }
 
   cancelActiveStream(): void {
+    this.cloudOperationGeneration += 1;
+    this.requestCancellationGeneration += 1;
     this.streamAbortController?.abort();
     this.streamAbortController = null;
+    for (const controller of this.activeRequestControllers) controller.abort();
+    this.activeRequestControllers.clear();
+    if (typeof window !== "undefined") window.electronAPI?.cancelCloudReason?.();
+    const activeCloudStream = this.activeCloudStream;
+    this.activeCloudStream = null;
+    activeCloudStream?.cancel();
   }
 
   private streamFromIPC(
@@ -883,18 +904,21 @@ class ReasoningService extends BaseReasoningService {
       // Press-time screenshot; the server routes to its vision chain when present.
       screenContext?: { data: string; mediaType: string };
     }
-  ): AsyncGenerator<
-    {
-      type: string;
-      text?: string;
-      id?: string;
-      name?: string;
-      arguments?: string;
-      finishReason?: string;
-    },
-    void,
-    unknown
-  > {
+  ): {
+    stream: AsyncGenerator<
+      {
+        type: string;
+        text?: string;
+        id?: string;
+        name?: string;
+        arguments?: string;
+        finishReason?: string;
+      },
+      void,
+      unknown
+    >;
+    wasCancelled: () => boolean;
+  } {
     type StreamEvent = {
       type: string;
       text?: string;
@@ -905,29 +929,51 @@ class ReasoningService extends BaseReasoningService {
     };
     const queue: Array<StreamEvent | { type: "__error"; error: string } | { type: "__end" }> = [];
     let resolve: (() => void) | null = null;
+    let cancelled = false;
+    let closed = false;
+    const requestId = crypto.randomUUID();
+    const electronAPI = window.electronAPI;
 
-    const cleanupChunk = window.electronAPI?.onAgentStreamChunk?.((chunk) => {
-      queue.push(chunk);
+    this.activeCloudStream?.cancel();
+
+    const cleanupChunk = electronAPI?.onAgentStreamChunk?.((payload) => {
+      if (payload.requestId !== requestId || closed || cancelled) return;
+      queue.push(payload.chunk);
       resolve?.();
     });
-    const cleanupError = window.electronAPI?.onAgentStreamError?.((err) => {
-      queue.push({ type: "__error", error: err.error });
+    const cleanupError = electronAPI?.onAgentStreamError?.((payload) => {
+      if (payload.requestId !== requestId || closed || cancelled) return;
+      queue.push({ type: "__error", error: payload.error });
       resolve?.();
     });
-    const cleanupEnd = window.electronAPI?.onAgentStreamEnd?.(() => {
+    const cleanupEnd = electronAPI?.onAgentStreamEnd?.((payload) => {
+      if (payload.requestId !== requestId || closed || cancelled) return;
       queue.push({ type: "__end" });
       resolve?.();
     });
 
     const cleanup = () => {
+      if (closed) return;
+      closed = true;
       cleanupChunk?.();
       cleanupError?.();
       cleanupEnd?.();
+      if (this.activeCloudStream?.requestId === requestId) this.activeCloudStream = null;
     };
 
-    window.electronAPI?.startAgentStream?.(messages, opts);
+    const cancel = () => {
+      if (closed || cancelled) return;
+      cancelled = true;
+      electronAPI?.cancelAgentStream?.(requestId);
+      queue.length = 0;
+      queue.push({ type: "__end" });
+      resolve?.();
+    };
+    this.activeCloudStream = { requestId, cancel };
 
-    const generator = async function* () {
+    electronAPI?.startAgentStream?.(requestId, messages, opts);
+
+    const generator = (async function* () {
       try {
         while (true) {
           if (queue.length === 0) {
@@ -947,9 +993,9 @@ class ReasoningService extends BaseReasoningService {
       } finally {
         cleanup();
       }
-    };
+    })();
 
-    return generator();
+    return { stream: generator, wasCancelled: () => cancelled };
   }
 
   async *processTextStreamingCloud(
@@ -962,13 +1008,17 @@ class ReasoningService extends BaseReasoningService {
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     assertAgentSessionAllowedByPolicy("openwhispr", "openwhispr");
+    const operationGeneration = ++this.cloudOperationGeneration;
+    const operationWasCancelled = (): boolean =>
+      operationGeneration !== this.cloudOperationGeneration;
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
     let currentMessages = [...messages];
 
     for (let step = 0; step < maxSteps; step++) {
+      if (operationWasCancelled()) return;
       // The screenshot rides every step of the tool loop so the model keeps
       // its vision after tool results come back.
-      const stream = this.streamFromIPC(currentMessages, {
+      const ipcStream = this.streamFromIPC(currentMessages, {
         systemPrompt: config.systemPrompt,
         tools: config.tools,
         screenContext: config.screenContext,
@@ -976,7 +1026,7 @@ class ReasoningService extends BaseReasoningService {
 
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
 
-      for await (const ev of stream) {
+      for await (const ev of ipcStream.stream) {
         if (ev.type === "content") {
           yield { type: "content", text: ev.text as string };
         } else if (ev.type === "tool_call") {
@@ -990,12 +1040,15 @@ class ReasoningService extends BaseReasoningService {
         }
       }
 
+      if (ipcStream.wasCancelled() || operationWasCancelled()) return;
+
       if (pendingToolCalls.length === 0 || !config.executeToolCall) {
         yield { type: "done", finishReason: "stop" };
         return;
       }
 
       for (const call of pendingToolCalls) {
+        if (operationWasCancelled()) return;
         let toolResult: ToolExecutionResult;
         try {
           toolResult = await config.executeToolCall(call.name, call.arguments);
@@ -1003,6 +1056,7 @@ class ReasoningService extends BaseReasoningService {
           const errMsg = `Error: ${(error as Error).message}`;
           toolResult = { data: errMsg, displayText: errMsg };
         }
+        if (operationWasCancelled()) return;
         yield {
           type: "tool_result",
           callId: call.id,
@@ -1039,6 +1093,7 @@ class ReasoningService extends BaseReasoningService {
       }
     }
 
+    if (operationWasCancelled()) return;
     yield { type: "done", finishReason: "stop" };
   }
 

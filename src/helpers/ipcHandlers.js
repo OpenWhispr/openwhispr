@@ -63,6 +63,7 @@ const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const AudioStorageManager = require("./audioStorage");
+const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
 const { registerMeetingAutoEndKeepHandler } = require("./meetingAutoEndKeep");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
@@ -562,6 +563,9 @@ class IPCHandlers {
     // requestId -> AbortController for in-flight audio-upload transcriptions,
     // so a cancel can abort the exact job.
     this._uploadTranscriptionControllers = new Map();
+    this._agentStreamRequests = new AgentStreamRequestRegistry();
+    this._cloudReasonRequests = new AgentStreamRequestRegistry();
+    this._cloudTranscriptionRequests = new AgentStreamRequestRegistry();
     // webContents id -> its release listener, for renderers holding the mic open.
     this._micHoldSenders = new Map();
     this.assemblyAiStreaming = null;
@@ -4707,6 +4711,21 @@ class IPCHandlers {
       return { success: true };
     });
 
+    // Busy state is enforced in the main process so a hotkey cannot trigger
+    // native capture side effects before the renderer has a chance to reject it.
+    ipcMain.handle("set-assistant-panel-busy", (event, busy) => {
+      const dictationWindow = this.windowManager?.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return { success: false, error: "Not the dictation window" };
+      }
+      this.windowManager.setAssistantPanelBusy(busy);
+      return { success: true };
+    });
+
     ipcMain.handle("open-calendar-privacy-settings", () => openSystemSettings("calendars"));
 
     ipcMain.handle("show-emoji-panel", () => {
@@ -5108,6 +5127,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
+      const sender = event.sender;
+      const senderId = sender.id;
+      const requestId = crypto.randomUUID();
+      const controller = this._cloudTranscriptionRequests.begin(senderId, requestId);
+      const cancelSenderRequests = () => this._cloudTranscriptionRequests.cancelSender(senderId);
+      sender.once("destroyed", cancelSenderRequests);
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -5138,6 +5163,7 @@ class IPCHandlers {
             apiUrl,
             policyHeaders: withPolicyHeaders(authHeader),
             multipartFields,
+            signal: controller.signal,
           });
           const sum = (field) => responses.reduce((s, r) => s + (r?.[field] || 0), 0);
           return {
@@ -5166,7 +5192,10 @@ class IPCHandlers {
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
         const data = await postMultipart(url, body, boundary, withPolicyHeaders(authHeader), {
-          signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+          ]),
           session: getInlineCloudUploadSession(),
         });
 
@@ -5193,9 +5222,19 @@ class IPCHandlers {
           audioDurationMs: result.audioDurationMs,
         };
       } catch (error) {
+        if (controller.signal.aborted) {
+          return { success: false, error: "Cancelled", code: "TRANSCRIPTION_CANCELLED" };
+        }
         debugLogger.error("Cloud transcription error", { error: error.message }, "cloud-api");
         return toPolicyFailure(error);
+      } finally {
+        sender.removeListener("destroyed", cancelSenderRequests);
+        this._cloudTranscriptionRequests.complete(senderId, requestId, controller);
       }
+    });
+
+    ipcMain.on("cloud-transcribe-cancel", (event) => {
+      this._cloudTranscriptionRequests.cancelSender(event.sender.id);
     });
 
     ipcMain.handle("cloud-health-check", async () => {
@@ -7810,6 +7849,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("cloud-reason", async (event, text, opts = {}) => {
+      const sender = event.sender;
+      const senderId = sender.id;
+      const requestId = crypto.randomUUID();
+      const controller = this._cloudReasonRequests.begin(senderId, requestId);
+      const cancelSenderRequests = () => this._cloudReasonRequests.cancelSender(senderId);
+      sender.once("destroyed", cancelSenderRequests);
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -7830,6 +7875,7 @@ class IPCHandlers {
 
         const response = await proxyFetch(`${apiUrl}/api/reason`, {
           method: "POST",
+          signal: controller.signal,
           headers: withPolicyHeaders({
             "Content-Type": "application/json",
             ...authHeader,
@@ -7897,10 +7943,28 @@ class IPCHandlers {
       } catch (error) {
         debugLogger.error("Cloud reasoning error:", error);
         return toPolicyFailure(error);
+      } finally {
+        sender.removeListener("destroyed", cancelSenderRequests);
+        this._cloudReasonRequests.complete(senderId, requestId, controller);
       }
     });
 
-    ipcMain.on("cloud-agent-stream-start", async (event, messages, opts = {}) => {
+    ipcMain.on("cloud-reason-cancel", (event) => {
+      this._cloudReasonRequests.cancelSender(event.sender.id);
+    });
+
+    ipcMain.on("cloud-agent-stream-start", async (event, requestId, messages, opts = {}) => {
+      if (typeof requestId !== "string" || !requestId.trim()) return;
+
+      const sender = event.sender;
+      const senderId = sender.id;
+      const controller = this._agentStreamRequests.begin(senderId, requestId);
+      const cancelSenderRequests = () => this._agentStreamRequests.cancelSender(senderId);
+      const sendToRenderer = (channel, payload) => {
+        if (!sender.isDestroyed()) sender.send(channel, payload);
+      };
+      sender.once("destroyed", cancelSenderRequests);
+
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -7923,13 +7987,17 @@ class IPCHandlers {
             clientType: "desktop",
             appVersion: app.getVersion(),
           }),
+          signal: controller.signal,
         });
 
         if (!response.ok) {
           const error = await readPolicyResponseError(response, `API error: ${response.status}`);
           if (response.status === 401 && !error.code) error.code = "AUTH_EXPIRED";
           if (response.status === 503 && !error.code) error.code = "SERVER_ERROR";
-          event.sender.send("cloud-agent-stream-error", toPolicyFailure(error));
+          sendToRenderer("cloud-agent-stream-error", {
+            requestId,
+            ...toPolicyFailure(error),
+          });
           return;
         }
 
@@ -7949,7 +8017,10 @@ class IPCHandlers {
             for (const line of lines) {
               if (!line.trim()) continue;
               try {
-                event.sender.send("cloud-agent-stream-chunk", JSON.parse(line));
+                sendToRenderer("cloud-agent-stream-chunk", {
+                  requestId,
+                  chunk: JSON.parse(line),
+                });
               } catch {
                 // skip malformed NDJSON line
               }
@@ -7957,7 +8028,10 @@ class IPCHandlers {
           }
           if (buffer.trim()) {
             try {
-              event.sender.send("cloud-agent-stream-chunk", JSON.parse(buffer));
+              sendToRenderer("cloud-agent-stream-chunk", {
+                requestId,
+                chunk: JSON.parse(buffer),
+              });
             } catch {
               // skip malformed remainder
             }
@@ -7966,11 +8040,26 @@ class IPCHandlers {
           reader.releaseLock();
         }
 
-        event.sender.send("cloud-agent-stream-end");
+        sendToRenderer("cloud-agent-stream-end", { requestId });
       } catch (error) {
+        if (controller.signal.aborted) {
+          sendToRenderer("cloud-agent-stream-end", { requestId });
+          return;
+        }
         debugLogger.error("Cloud agent stream error:", error);
-        event.sender.send("cloud-agent-stream-error", toPolicyFailure(error));
+        sendToRenderer("cloud-agent-stream-error", {
+          requestId,
+          ...toPolicyFailure(error),
+        });
+      } finally {
+        sender.removeListener("destroyed", cancelSenderRequests);
+        this._agentStreamRequests.complete(senderId, requestId, controller);
       }
+    });
+
+    ipcMain.on("cloud-agent-stream-cancel", (event, requestId) => {
+      if (typeof requestId !== "string" || !requestId.trim()) return;
+      this._agentStreamRequests.cancel(event.sender.id, requestId);
     });
 
     ipcMain.handle("agent-open-note", async (_event, noteId) => {

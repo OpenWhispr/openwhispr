@@ -3227,7 +3227,12 @@
       "selectionHint": "Sélectionnez du texte à modifier avec",
       "selectedContext": "Texte sélectionné ajouté",
       "removeSelectedContext": "Supprimer le texte sélectionné",
-      "copyToClipboard": "Copier dans le presse-papiers"
+      "copyToClipboard": "Copier dans le presse-papiers",
+      "suggestions": {
+        "summarizeNotes": "Résumer mes notes récentes",
+        "calendar": "Qu’y a-t-il dans mon calendrier ?",
+        "draft": "Aidez-moi à rédiger quelque chose"
+      }
     },
     "toolActivity": {
       "verbs": {

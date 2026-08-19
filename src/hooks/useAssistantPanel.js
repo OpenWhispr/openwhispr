@@ -3,6 +3,7 @@ import {
   getAssistantFooterTransitionTimeline,
   resolveAssistantThinkingTransition,
 } from "../helpers/voicePillPresentation";
+import { closeAssistantSessionState } from "../helpers/assistantSessionState";
 
 const ASSISTANT_TRANSITION_MS = 320;
 const ASSISTANT_CONTENT_FADE_FALLBACK_MS = 260;
@@ -30,18 +31,17 @@ export function useAssistantPanel({
   const [footerPhase, setFooterPhase] = useState("pill");
   const [pendingCommand, setPendingCommand] = useState(null);
   const [conversationId, setConversationId] = useState(null);
-  const [conversationResetToken, setConversationResetToken] = useState(0);
 
   const openRef = useRef(open);
   const closingRef = useRef(false);
   const contentFadeCompletedRef = useRef(false);
-  const conversationResetPendingRef = useRef(false);
   const closeTimerRef = useRef(null);
   const openFrameRef = useRef(null);
   const footerTimersRef = useRef([]);
   const previousResponseReadyRef = useRef(false);
   const openGenerationRef = useRef(0);
   const commandIdRef = useRef(0);
+  const conversationIdRef = useRef(conversationId);
   const selectionContextRef = useRef(null);
   const hasContentRef = useRef(false);
   const errorDownplayRequestedRef = useRef(false);
@@ -50,16 +50,13 @@ export function useAssistantPanel({
     openRef.current = open;
   }, [open]);
 
+  useLayoutEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
   const clearFooterTimers = useCallback(() => {
     for (const timer of footerTimersRef.current) clearTimeout(timer);
     footerTimersRef.current = [];
-  }, []);
-
-  const prepareFreshConversation = useCallback(() => {
-    if (!conversationResetPendingRef.current) return;
-    conversationResetPendingRef.current = false;
-    hasContentRef.current = false;
-    setConversationResetToken((current) => current + 1);
   }, []);
 
   useEffect(() => {
@@ -87,10 +84,6 @@ export function useAssistantPanel({
   const openPanel = useCallback(async () => {
     setThinking(false);
     if (openRef.current) return;
-    // A closed panel starts a new keyed AssistantPanel instance. Do this only
-    // when the next panel is about to open, never while the old surface is
-    // contracting, so chat teardown cannot disturb the close compositor.
-    prepareFreshConversation();
     const generation = ++openGenerationRef.current;
     openRef.current = true;
     closingRef.current = false;
@@ -113,7 +106,7 @@ export function useAssistantPanel({
         setOpen(true);
       });
     });
-  }, [prepareFreshConversation, requestMainWindowSize]);
+  }, [requestMainWindowSize]);
 
   const beginThinking = useCallback(() => {
     clearTimeout(closeTimerRef.current);
@@ -131,7 +124,6 @@ export function useAssistantPanel({
 
   const handleCommand = useCallback(
     (command) => {
-      prepareFreshConversation();
       commandIdRef.current += 1;
       beginThinking();
       setPendingCommand({
@@ -141,7 +133,7 @@ export function useAssistantPanel({
         selectedContext: command.selectedContext ?? null,
       });
     },
-    [beginThinking, prepareFreshConversation]
+    [beginThinking]
   );
 
   const handleResponseContent = useCallback(() => {
@@ -161,28 +153,32 @@ export function useAssistantPanel({
   const getSelectionContext = useCallback(() => selectionContextRef.current, []);
 
   const ownsNativeWindow = open || (errorDownplayActive && dictationErrorActionCount > 0);
+  const assistantPanelBusy = thinking || busy || pendingCommand !== null;
 
   useEffect(() => {
     window.electronAPI?.setAssistantPanelOpen?.(ownsNativeWindow);
     if (open) onPanelOpened?.();
   }, [ownsNativeWindow, open, onPanelOpened]);
 
+  useEffect(() => {
+    window.electronAPI?.setAssistantPanelBusy?.(assistantPanelBusy);
+  }, [assistantPanelBusy]);
+
   const completeContentFade = useCallback(() => {
     if (!closingRef.current || contentFadeCompletedRef.current) return;
+    const closeState = closeAssistantSessionState({
+      conversationId: conversationIdRef.current,
+    });
     contentFadeCompletedRef.current = true;
     openRef.current = false;
     setOpen(false);
-    setResponseReady(false);
-    setThinking(false);
-    setBusy(false);
-    setPendingCommand(null);
-    // Closing ends the panel session without deleting its saved history. Mark
-    // the next instance as fresh, but leave the current content untouched
-    // until the compositor has finished contracting the surface.
+    setResponseReady(closeState.responseReady);
+    setThinking(closeState.thinking);
+    setBusy(closeState.busy);
+    setPendingCommand(closeState.pendingCommand);
+    setConversationId(closeState.conversationId);
     selectionContextRef.current = null;
     hasContentRef.current = false;
-    conversationResetPendingRef.current = true;
-    setConversationId(null);
     clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => {
       closingRef.current = false;
@@ -275,7 +271,6 @@ export function useAssistantPanel({
     footerPhase,
     pendingCommand,
     conversationId,
-    conversationResetToken,
     openRef,
     setBusy,
     setResponseReady,

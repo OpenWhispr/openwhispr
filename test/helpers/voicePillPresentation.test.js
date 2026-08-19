@@ -151,6 +151,83 @@ test("the idle pill keeps its configured resting dock", async () => {
   );
 });
 
+test("Live Transcript restores stop and cancel interactions without unlocking Assistant", async () => {
+  const { resolveVoicePillInteraction } = await load();
+
+  assert.deepEqual(
+    resolveVoicePillInteraction({
+      assistantMounted: false,
+      liveTranscriptMounted: true,
+      isRecording: true,
+      isProcessing: false,
+    }),
+    { pillInteractive: true, cancelVisible: true }
+  );
+  assert.deepEqual(
+    resolveVoicePillInteraction({
+      assistantMounted: false,
+      liveTranscriptMounted: true,
+      isRecording: false,
+      isProcessing: true,
+    }),
+    { pillInteractive: false, cancelVisible: true }
+  );
+  assert.deepEqual(
+    resolveVoicePillInteraction({
+      assistantMounted: true,
+      liveTranscriptMounted: false,
+      isRecording: false,
+      isProcessing: true,
+    }),
+    { pillInteractive: false, cancelVisible: false }
+  );
+});
+
+test("a mounted Live Transcript can stop after the floating pill was previously dragged", async () => {
+  const { shouldActivateVoicePill } = await load();
+
+  assert.equal(
+    shouldActivateVoicePill({
+      hasDragged: true,
+      liveTranscriptMounted: true,
+      isProcessing: false,
+      isAgentThinking: false,
+    }),
+    true
+  );
+  assert.equal(
+    shouldActivateVoicePill({
+      hasDragged: true,
+      liveTranscriptMounted: false,
+      isProcessing: false,
+      isAgentThinking: false,
+    }),
+    false
+  );
+});
+
+test("the interactive pill recognizes standard keyboard activation keys", async () => {
+  const { isVoicePillActivationKey } = await load();
+
+  assert.equal(isVoicePillActivationKey("Enter"), true);
+  assert.equal(isVoicePillActivationKey(" "), true);
+  assert.equal(isVoicePillActivationKey("Escape"), false);
+});
+
+test("a collapsed completed transcript leaves the normal pill interaction available", async () => {
+  const { resolveVoicePillInteraction } = await load();
+
+  assert.deepEqual(
+    resolveVoicePillInteraction({
+      assistantMounted: false,
+      liveTranscriptMounted: false,
+      isRecording: false,
+      isProcessing: false,
+    }),
+    { pillInteractive: true, cancelVisible: false }
+  );
+});
+
 test("the actual window side overrides a stale edge preference", async () => {
   const { resolveVoicePillDock } = await load();
 

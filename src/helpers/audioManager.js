@@ -480,9 +480,13 @@ class AudioManager {
     this.workletModuleLoaded = false;
     this.workletBlobUrl = null;
     this.streamingStartInProgress = false;
+    this._streamingStartSettlementWaiters = [];
     this.stopRequestedDuringStreamingStart = false;
     this._streamingStopPromise = null;
+    this._streamingStopMode = null;
     this._streamingSessionGeneration = 0;
+    this._streamingCancellationGeneration = 0;
+    this._activeTranscriptionAbortController = null;
     this._activeStreamingSessionId = null;
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
@@ -1720,9 +1724,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   cancelProcessing() {
     if (this.isProcessing) {
+      this._requestStreamingCancellation();
+      // Streaming finalization can be inside a provider or model await that
+      // cannot be aborted. Keep the lifecycle truthfully busy until that await
+      // observes the generation change and exits; advertising idle while the
+      // stop promise still blocks a new recording makes hotkeys appear broken.
+      if (this._streamingStopPromise) return true;
+
       this.isProcessing = false;
-      this.pendingSelectionEdit = null;
-      this.pendingAssistantConversation = null;
       this.onStateChange?.({ isRecording: false, isProcessing: false });
       return true;
     }
@@ -3101,6 +3110,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async processWithOpenAIAPI(audioBlob, metadata = {}) {
     const timings = {};
+    let requestController = null;
     const apiSettings = getSettings();
     const language = getBaseLanguageCode(this.getEffectiveSttLanguage(apiSettings));
     const allowLocalFallback = apiSettings.allowLocalFallback;
@@ -3271,10 +3281,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "transcription"
       );
 
+      requestController = new AbortController();
+      this._activeTranscriptionAbortController = requestController;
       const response = await fetch(endpoint, {
         method: "POST",
         headers,
         body: formData,
+        signal: requestController.signal,
       });
 
       const responseContentType = response.headers.get("content-type") || "";
@@ -3417,6 +3430,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
     } catch (error) {
+      if (error.name === "AbortError") throw error;
       if (error.selectionEditFatal) {
         throw error;
       }
@@ -3460,8 +3474,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw wrapped;
         }
       }
-
       throw error;
+    } finally {
+      if (this._activeTranscriptionAbortController === requestController) {
+        this._activeTranscriptionAbortController = null;
+      }
     }
   }
 
@@ -3889,10 +3906,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  _waitForStreamingStartSettlement() {
+    if (!this.streamingStartInProgress) return Promise.resolve();
+    return new Promise((resolve) => {
+      this._streamingStartSettlementWaiters.push(resolve);
+    });
+  }
+
+  _settleStreamingStart() {
+    this.streamingStartInProgress = false;
+    for (const resolve of this._streamingStartSettlementWaiters.splice(0)) resolve();
+  }
+
   async startStreamingRecording(forceDefaultMic = false) {
     let acquiredStream = null;
     let usedPreparedCapture = false;
     let sessionId = null;
+    let startWasCancelled = () => false;
     this._startInProgress = true;
     try {
       if (!this.isRecordingAllowedByPolicy()) {
@@ -3905,7 +3935,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.streamingStartInProgress = true;
 
       if (this.isRecording || this.isStreaming || this.isProcessing || this._streamingStopPromise) {
-        this.streamingStartInProgress = false;
+        this._settleStreamingStart();
         return false;
       }
 
@@ -3914,6 +3944,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._streamingSessionGeneration = sessionId;
       this._activeStreamingSessionId = sessionId;
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
+      const cancellationGeneration = this._streamingCancellationGeneration;
+      startWasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
 
       const t0 = performance.now();
       const prepared = forceDefaultMic ? null : await this.preparedMicCapture.take();
@@ -4085,6 +4117,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return res;
       });
       const tWs = performance.now();
+      this._settleStreamingStart();
+      if (startWasCancelled()) return false;
 
       if (result.needsFallback) {
         this.isRecording = false;
@@ -4093,7 +4127,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         await this.cleanupStreaming();
         if (ownsSession()) this._activeStreamingSessionId = null;
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
-        this.streamingStartInProgress = false;
         logger.debug(
           "Streaming API not configured, falling back to regular recording",
           {},
@@ -4117,7 +4150,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "streaming"
       );
 
-      this.streamingStartInProgress = false;
       if (this.stopRequestedDuringStreamingStart) {
         this.stopRequestedDuringStreamingStart = false;
         logger.debug("Applying deferred streaming stop requested during startup", {}, "streaming");
@@ -4126,7 +4158,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return true;
     } catch (error) {
       const stopRequested = this.stopRequestedDuringStreamingStart;
-      this.streamingStartInProgress = false;
+      this._settleStreamingStart();
       this.stopRequestedDuringStreamingStart = false;
 
       // A stream the pipeline never took ownership of would leak the device
@@ -4135,6 +4167,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         acquiredStream.getTracks().forEach((track) => track.stop());
         this._markCaptureStreamReleased();
       }
+
+      if (startWasCancelled()) return false;
 
       if (isStaleDeviceError(error) && !forceDefaultMic && !stopRequested) {
         // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
@@ -4238,11 +4272,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const sessionId = this._activeStreamingSessionId;
     const stopPromise = this._finalizeStreamingRecording(sessionId);
     this._streamingStopPromise = stopPromise;
+    this._streamingStopMode = "finalize";
     try {
       return await stopPromise;
     } finally {
       if (this._streamingStopPromise === stopPromise) {
         this._streamingStopPromise = null;
+        this._streamingStopMode = null;
       }
       if (this._activeStreamingSessionId === sessionId) {
         this._activeStreamingSessionId = null;
@@ -4260,6 +4296,83 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  _requestStreamingCancellation() {
+    this._streamingCancellationGeneration += 1;
+    ReasoningService.cancelActiveStream();
+    window.electronAPI?.cancelCloudTranscription?.();
+    this._activeTranscriptionAbortController?.abort();
+    this._activeTranscriptionAbortController = null;
+    this.pendingSelectionEdit = null;
+    this.pendingAssistantConversation = null;
+    this.assistantSelectionContext = null;
+    this.screenContextPromise = null;
+    this.selectionCapturePromise = null;
+  }
+
+  async cancelStreamingRecording() {
+    if (this._streamingStopPromise) {
+      if (this._streamingStopMode === "finalize") {
+        this._requestStreamingCancellation();
+      }
+      return this._streamingStopPromise;
+    }
+    if (!this.isStreaming && !this.streamingStartInProgress) {
+      return false;
+    }
+
+    const sessionId = this._activeStreamingSessionId;
+    const cancelPromise = (async () => {
+      this._requestStreamingCancellation();
+      this.stopRequestedDuringStreamingStart = false;
+      this.recordingStartTime = null;
+      this.isRecording = false;
+      this.isProcessing = true;
+      this.micRecovery.stop();
+      this.cleanupStreamingAudio();
+      this.cleanupStreamingListeners(sessionId);
+      this._streamingFallbackSegments = [];
+      this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
+
+      const providerStop = this._waitForStreamingStartSettlement()
+        .then(() => {
+          // Startup may have attached replacement capture resources after the
+          // first synchronous cleanup. Reclaim them once startup can no longer
+          // mutate the session, then disconnect its provider.
+          this.micRecovery.stop();
+          this.cleanupStreamingAudio();
+          this.cleanupStreamingListeners(sessionId);
+          return this.getStreamingProvider().stop?.();
+        })
+        .catch((error) => {
+          logger.debug(
+            "Streaming disconnect after cancellation failed",
+            { error: error.message },
+            "streaming"
+          );
+        });
+      await Promise.all([providerStop, this.cleanupPreview({ dismiss: true })]);
+      return true;
+    })();
+
+    this._streamingStopPromise = cancelPromise;
+    this._streamingStopMode = "cancel";
+    try {
+      return await cancelPromise;
+    } finally {
+      if (this._streamingStopPromise === cancelPromise) {
+        this._streamingStopPromise = null;
+        this._streamingStopMode = null;
+      }
+      if (this._activeStreamingSessionId === sessionId) {
+        this._activeStreamingSessionId = null;
+      }
+      this.isRecording = false;
+      this.isProcessing = false;
+      this.isStreaming = false;
+      this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
+    }
+  }
+
   async _finalizeStreamingRecording(sessionId) {
     if (
       sessionId !== null &&
@@ -4268,6 +4381,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     ) {
       return false;
     }
+
+    const cancellationGeneration = this._streamingCancellationGeneration;
+    const wasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
+    const abandonFinalization = async () => {
+      this.cleanupStreamingAudio();
+      this.cleanupStreamingListeners(sessionId);
+      this._streamingFallbackSegments = [];
+      try {
+        await this.getStreamingProvider().stop?.();
+      } catch (error) {
+        logger.debug(
+          "Streaming disconnect after cancellation failed",
+          { error: error.message },
+          "streaming"
+        );
+      }
+      return true;
+    };
 
     const durationSeconds = this.recordingStartTime
       ? (Date.now() - this.recordingStartTime) / 1000
@@ -4285,6 +4416,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Let an in-flight mic swap settle so its fallback segment isn't lost and
     // its replacement recorder doesn't outlive this stop.
     if (this._streamingMicSwapPromise) await this._streamingMicSwapPromise;
+    if (wasCancelled()) return abandonFinalization();
 
     const t0 = performance.now();
     let finalText = this.streamingFinalText || "";
@@ -4314,6 +4446,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Stop fallback recorder before stopping media tracks
     let fallbackBlob = null;
     await this.finishStreamingFallbackSegment();
+    if (wasCancelled()) return abandonFinalization();
     try {
       fallbackBlob = await this.mergeRecordedSegments(this._streamingFallbackSegments);
     } catch (error) {
@@ -4324,6 +4457,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
       fallbackBlob = this.getLargestRecordedSegment(this._streamingFallbackSegments);
     }
+    if (wasCancelled()) return abandonFinalization();
     if (fallbackBlob) {
       this.lastAudioBlob = fallbackBlob;
     }
@@ -4341,6 +4475,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // 2. Wait for flushed buffer to travel: port -> main thread -> IPC -> WebSocket -> server.
     //    Then mark streaming done so no further audio is forwarded.
     await new Promise((resolve) => setTimeout(resolve, 120));
+    if (wasCancelled()) return abandonFinalization();
     this.isStreaming = false;
     const tFlush = performance.now();
 
@@ -4353,6 +4488,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     } else {
       await new Promise((resolve) => setTimeout(resolve, 300));
     }
+    if (wasCancelled()) return abandonFinalization();
     const tForceEndpoint = performance.now();
 
     const stopResult = await provider.stop().catch((e) => {
@@ -4378,6 +4514,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     this.cleanupStreamingListeners(sessionId);
+    if (wasCancelled()) return true;
 
     logger.info(
       "Streaming stop timing",
@@ -4410,6 +4547,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
+      if (wasCancelled()) return true;
       const route = resolveReasoningRoute(
         finalText,
         stSettings,
@@ -4524,6 +4662,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           usedCloudReasoning = chainResult.usedCloudReasoning || usedCloudReasoning;
         }
       } catch (reasonError) {
+        if (wasCancelled()) return true;
         if (reasonError.selectionEditFatal) {
           this.pendingSelectionEdit = null;
           this.onError?.({
@@ -4544,6 +4683,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (route.kind === "cleanup") recordCleanupFailure(reasonError.message);
         if (route.kind === "agent") this._notifyAgentReasoningFailed();
       }
+      if (wasCancelled()) return true;
     }
 
     // If streaming produced no text, fall back to batch — routed so BYOK audio
@@ -4570,6 +4710,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             target === "cloud"
               ? await this.processWithOpenWhisprCloud(fallbackBlob, { durationSeconds })
               : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds });
+          if (wasCancelled()) return true;
           if (batchResult?.text) {
             finalText = batchResult.text;
             usedBatchFallback = true;
@@ -4587,6 +4728,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // applied the script; only streamed text still needs it.
       if (!usedBatchFallback) {
         finalText = await this.finalizeChineseScript(finalText, stSettings);
+        if (wasCancelled()) return true;
       }
       const tBeforePaste = performance.now();
       const clientTotalMs = Math.round(tBeforePaste - t0);
@@ -4597,6 +4739,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider: `${this.getStreamingProviderName()}-streaming`,
         model: streamingSttModel || null,
       };
+      if (wasCancelled()) return true;
       this.onTranscriptionComplete?.({
         success: true,
         text: finalText,
@@ -4651,6 +4794,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     this.isProcessing = false;
     this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
+
+    if (wasCancelled()) return true;
 
     if (!finalText) {
       // Match the batch pipeline: settle processing first, then publish the

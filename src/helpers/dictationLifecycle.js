@@ -19,10 +19,16 @@ function isDictationRecording(state) {
 }
 
 // While the assistant panel owns the shared pill window, plain dictation must
-// not start underneath it — only a voice-assistant request may record an
-// in-panel follow-up.
-function shouldBlockDictationWhilePanelOpen({ assistantPanelOpen, voiceAgentRequested = false }) {
-  return Boolean(assistantPanelOpen && !voiceAgentRequested);
+// not start underneath it. An idle assistant may accept a voice follow-up,
+// but no recording may begin while the current request is still busy.
+function shouldBlockDictationWhilePanelOpen({
+  assistantPanelOpen,
+  assistantPanelBusy = false,
+  voiceAgentRequested = false,
+}) {
+  if (assistantPanelBusy) return true;
+  if (!assistantPanelOpen) return false;
+  return !voiceAgentRequested;
 }
 
 module.exports = {

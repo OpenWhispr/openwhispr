@@ -1570,6 +1570,7 @@ declare global {
         surfaceHeight: number
       ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
       setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
+      setAssistantPanelBusy: (busy: boolean) => Promise<{ success: boolean }>;
 
       // App management
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
@@ -1886,6 +1887,7 @@ declare global {
           limitReached?: boolean;
         } & PolicyFailureMetadata
       >;
+      cancelCloudTranscription?: () => void;
       cloudReason?: (
         text: string,
         opts: {
@@ -1911,6 +1913,7 @@ declare global {
         error?: string;
         code?: string;
       }>;
+      cancelCloudReason?: () => void;
       cloudStreamingUsage?: (
         text: string,
         audioDurationSeconds: number,
@@ -2298,26 +2301,32 @@ declare global {
 
       // Agent cloud streaming (event-based)
       startAgentStream?: (
+        requestId: string,
         messages: Array<{ role: string; content: string | Array<unknown> }>,
         opts?: {
           systemPrompt?: string;
           tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+          screenContext?: { data: string; mediaType: string };
         }
       ) => void;
+      cancelAgentStream?: (requestId: string) => void;
       onAgentStreamChunk?: (
-        callback: (chunk: {
-          type: "content" | "tool_call" | "done";
-          text?: string;
-          id?: string;
-          name?: string;
-          arguments?: string;
-          finishReason?: string;
+        callback: (payload: {
+          requestId: string;
+          chunk: {
+            type: "content" | "tool_call" | "done";
+            text?: string;
+            id?: string;
+            name?: string;
+            arguments?: string;
+            finishReason?: string;
+          };
         }) => void
       ) => () => void;
       onAgentStreamError?: (
-        callback: (error: PolicyFailureMetadata & { error: string }) => void
+        callback: (payload: PolicyFailureMetadata & { requestId: string; error: string }) => void
       ) => () => void;
-      onAgentStreamEnd?: (callback: () => void) => () => void;
+      onAgentStreamEnd?: (callback: (payload: { requestId: string }) => void) => () => void;
 
       // Agent cloud tools
       agentOpenNote?: (noteId: number) => Promise<{ success: boolean; error?: string }>;

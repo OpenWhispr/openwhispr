@@ -7,6 +7,7 @@ import { Button } from "../ui/button";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
 import { useChatMessageSender } from "../chat/useChatMessageSender";
+import { ChatInput } from "../chat/ChatInput";
 import { useWindowDrag } from "../../hooks/useWindowDrag";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { formatHotkeyListLabel } from "../../utils/hotkeys";
@@ -27,6 +28,12 @@ import {
   normalizeAgentSelectionContext,
   type AgentSelectionContext,
 } from "../../utils/agentSelectionContext";
+import { AssistantEmptyState } from "./AssistantEmptyState";
+import { useToast } from "../ui/useToast";
+import {
+  resolveAssistantPanelBusy,
+  restoreAssistantConversation,
+} from "../../helpers/assistantSessionState";
 
 export interface AssistantCommand {
   id: number;
@@ -59,7 +66,6 @@ interface AssistantPanelProps {
   onSelectionContextChange: (context: AgentSelectionContext | null) => void;
 }
 
-const BUSY_STATES: AgentState[] = ["thinking", "streaming", "tool-executing"];
 // Updating the selection indicator must not rerender react-markdown: its
 // component map is recreated on render, which remounts the text nodes and
 // collapses the browser's live selection. Streaming content still rerenders
@@ -83,6 +89,7 @@ export function AssistantPanel({
   onSelectionContextChange,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { handleMouseDown, handleMouseUp } = useWindowDrag();
   const voiceAgentKey = useSettingsStore((state) => state.voiceAgentKey);
   const readableVoiceHotkey = formatHotkeyListLabel(voiceAgentKey);
@@ -107,11 +114,13 @@ export function AssistantPanel({
     [persistence]
   );
 
+  const [submissionInFlight, setSubmissionInFlight] = useState(false);
   const sendMessage = useChatMessageSender({
     conversationId: persistence.conversationId,
     persistence,
     streaming,
     createConversation,
+    onSendingChange: setSubmissionInFlight,
   });
 
   useEffect(() => {
@@ -124,16 +133,35 @@ export function AssistantPanel({
   // setMessages would then wipe the just-sent turn from the UI.
   const [historyReady, setHistoryReady] = useState(initialConversationId == null);
   useEffect(() => {
-    if (initialConversationId != null) {
-      persistence.loadConversation(initialConversationId).finally(() => setHistoryReady(true));
-    }
+    if (initialConversationId == null) return undefined;
+
+    let active = true;
+    void restoreAssistantConversation({
+      conversationId: initialConversationId,
+      loadConversation: persistence.loadConversation,
+      onReady: () => setHistoryReady(true),
+      onReset: persistence.handleNewChat,
+      onError: (error: unknown) => {
+        console.error("Failed to restore Assistant conversation", error);
+        toast({ title: t("common.error"), variant: "destructive" });
+      },
+      isActive: () => active,
+    });
+    return () => {
+      active = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Voice commands arrive as pending commands: send each exactly once.
   const consumedCommandIdRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!historyReady || !pendingCommand || consumedCommandIdRef.current === pendingCommand.id) {
+    if (
+      !historyReady ||
+      submissionInFlight ||
+      !pendingCommand ||
+      consumedCommandIdRef.current === pendingCommand.id
+    ) {
       return;
     }
     consumedCommandIdRef.current = pendingCommand.id;
@@ -146,10 +174,21 @@ export function AssistantPanel({
       attachment: pendingCommand.attachment ?? undefined,
       selectedContext: pendingCommand.selectedContext ?? undefined,
     });
-  }, [historyReady, pendingCommand, onCommandConsumed, onSelectionContextChange, sendMessage]);
+  }, [
+    historyReady,
+    submissionInFlight,
+    pendingCommand,
+    onCommandConsumed,
+    onSelectionContextChange,
+    sendMessage,
+  ]);
 
   const isToolExecuting = Boolean(streaming.activeToolName);
-  const isBusy = BUSY_STATES.includes(streaming.agentState) || isToolExecuting;
+  const isBusy = resolveAssistantPanelBusy({
+    agentState: streaming.agentState,
+    activeToolName: streaming.activeToolName,
+    submissionInFlight,
+  });
   const showContentFlourish = thinking || isToolExecuting;
   const [toolVerbIndex, setToolVerbIndex] = useState(0);
   const footerPresentation = resolveAssistantFooterPresentation(footerPhase);
@@ -196,6 +235,24 @@ export function AssistantPanel({
     onSelectionContextChange(null);
     window.getSelection()?.removeAllRanges();
   }, [onSelectionContextChange]);
+
+  const handleTextSubmit = useCallback(
+    (text: string): void => {
+      if (!historyReady) return;
+      const context = selectedContext;
+      if (context) clearSelectedContext();
+      void sendMessage(text, context ? { selectedContext: context } : undefined);
+    },
+    [clearSelectedContext, historyReady, selectedContext, sendMessage]
+  );
+
+  const showEmptyState =
+    historyReady &&
+    messages.length === 0 &&
+    streaming.agentState === "idle" &&
+    !submissionInFlight &&
+    !thinking &&
+    pendingCommand === null;
 
   useEffect(() => {
     if (!open && selectedContext) clearSelectedContext();
@@ -314,15 +371,15 @@ export function AssistantPanel({
         </div>
       </header>
 
-      <div className="relative mx-4 min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/40 bg-surface-1 shadow-inner">
+      <div className="relative mx-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/40 bg-surface-1 shadow-inner">
         <main
           data-panel-scroll-region
-          className="agent-chat-scroll h-full overflow-y-auto px-5 py-4"
-          aria-busy={thinking || isBusy}
+          className="agent-chat-scroll min-h-0 flex-1 overflow-y-auto px-5 py-4"
+          aria-busy={!historyReady || thinking || isBusy}
         >
           <div
             data-panel-size-source
-            className={`assistant-response-content ${
+            className={`assistant-response-content min-h-full ${
               showContentFlourish ? "assistant-response-content-updating" : ""
             }`}
           >
@@ -348,8 +405,27 @@ export function AssistantPanel({
                 <span className="sr-only">{t("agentMode.input.thinking")}</span>
               </div>
             )}
+            {showEmptyState && (
+              <AssistantEmptyState
+                disabled={isBusy || submissionInFlight}
+                onSelectSuggestion={handleTextSubmit}
+              />
+            )}
           </div>
         </main>
+
+        <ChatInput
+          agentState={historyReady && !submissionInFlight ? streaming.agentState : "thinking"}
+          partialTranscript=""
+          onTextSubmit={handleTextSubmit}
+          onCancel={
+            historyReady && (!submissionInFlight || streaming.agentState !== "idle")
+              ? streaming.cancelStream
+              : undefined
+          }
+          autoFocus={historyReady && open && messages.length === 0}
+          className="px-3 pb-3"
+        />
 
         {showContentFlourish && (
           <div

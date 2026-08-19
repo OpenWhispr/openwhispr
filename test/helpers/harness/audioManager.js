@@ -14,11 +14,13 @@ const defaultMockModules = (settingsKey) => ({
   "/stores/settingsStore": `
     export const getSettings = () => globalThis.${settingsKey};
     export const getEffectiveCleanupModel = () => null;
+    export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
     export const isCloudCleanupMode = () => false;
     export const isCloudDictationAgentMode = () => false;
     export const isCloudTranslationMode = () => false;
   `,
-  "/services/ReasoningService": "export default class ReasoningService {};",
+  "/services/ReasoningService":
+    "export default class ReasoningService { static cancelActiveStream() {} }",
   "/services/SyncService.js": "export const syncService = {};",
   "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
   "/utils/permissions": "export const isAccessibilitySkipped = () => false;",

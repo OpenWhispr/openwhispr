@@ -3089,7 +3089,12 @@
       "selectionHint": "Выберите текст для редактирования с помощью",
       "selectedContext": "Выбранный текст добавлен",
       "removeSelectedContext": "Удалить выбранный текст",
-      "copyToClipboard": "Копировать в буфер обмена"
+      "copyToClipboard": "Копировать в буфер обмена",
+      "suggestions": {
+        "summarizeNotes": "Подведи итог моих последних заметок",
+        "calendar": "Что у меня в календаре?",
+        "draft": "Помоги мне составить текст"
+      }
     },
     "toolActivity": {
       "verbs": {

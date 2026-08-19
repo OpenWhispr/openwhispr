@@ -3227,7 +3227,12 @@
       "selectionHint": "Text zum Bearbeiten auswählen mit",
       "selectedContext": "Ausgewählter Text hinzugefügt",
       "removeSelectedContext": "Ausgewählten Text entfernen",
-      "copyToClipboard": "In die Zwischenablage kopieren"
+      "copyToClipboard": "In die Zwischenablage kopieren",
+      "suggestions": {
+        "summarizeNotes": "Meine letzten Notizen zusammenfassen",
+        "calendar": "Was steht in meinem Kalender?",
+        "draft": "Hilf mir, etwas zu entwerfen"
+      }
     },
     "toolActivity": {
       "verbs": {

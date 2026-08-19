@@ -3227,7 +3227,12 @@
       "selectionHint": "Select text to edit with",
       "selectedContext": "Selected text added",
       "removeSelectedContext": "Remove selected text",
-      "copyToClipboard": "Copy to clipboard"
+      "copyToClipboard": "Copy to clipboard",
+      "suggestions": {
+        "summarizeNotes": "Summarize my recent notes",
+        "calendar": "What is on my calendar?",
+        "draft": "Help me draft something"
+      }
     },
     "toolActivity": {
       "verbs": {

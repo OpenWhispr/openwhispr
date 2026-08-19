@@ -384,6 +384,10 @@ class KDEShortcutManager {
     }
   }
 
+  async removeRetiredAgentKeybinding() {
+    await this.unregisterKeybinding("agent");
+  }
+
   close() {
     // Best-effort cleanup on app shutdown. unRegister calls are async D-Bus
     // calls that may not complete before disconnect, but KGlobalAccel will

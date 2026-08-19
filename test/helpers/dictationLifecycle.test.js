@@ -41,6 +41,28 @@ test("the assistant hotkey can still record an in-panel follow-up", () => {
   );
 });
 
+test("the assistant hotkey is blocked while the open panel is busy", () => {
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: true,
+      assistantPanelBusy: true,
+      voiceAgentRequested: true,
+    }),
+    true
+  );
+});
+
+test("the assistant hotkey is blocked while an initial response thinks before the panel opens", () => {
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: false,
+      assistantPanelBusy: true,
+      voiceAgentRequested: true,
+    }),
+    true
+  );
+});
+
 test("regular dictation resumes after the assistant panel closes", () => {
   assert.equal(
     shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: false, voiceAgentRequested: false }),

@@ -662,6 +662,7 @@ class HotkeyManager extends EventEmitter {
       this.kdeManager = new KDEShortcutManager();
       const ok = await this.kdeManager.init();
       if (ok) {
+        await this.kdeManager.removeRetiredAgentKeybinding();
         this.useKDE = true;
         this.hotkeyCallback = callback;
         debugLogger.log("[HotkeyManager] KDE shortcuts initialized via KGlobalAccel D-Bus");

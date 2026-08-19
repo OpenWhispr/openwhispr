@@ -459,6 +459,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   resizeDictationErrorWindowToContent: (surfaceHeight) =>
     ipcRenderer.invoke("resize-dictation-error-window-to-content", surfaceHeight),
   setAssistantPanelOpen: (open) => ipcRenderer.invoke("set-assistant-panel-open", open),
+  setAssistantPanelBusy: (busy) => ipcRenderer.invoke("set-assistant-panel-busy", busy),
 
   // Update functions
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
@@ -663,7 +664,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // OpenWhispr Cloud API
   cloudHealthCheck: () => ipcRenderer.invoke("cloud-health-check"),
   cloudTranscribe: (audioBuffer, opts) => ipcRenderer.invoke("cloud-transcribe", audioBuffer, opts),
+  cancelCloudTranscription: () => ipcRenderer.send("cloud-transcribe-cancel"),
   cloudReason: (text, opts) => ipcRenderer.invoke("cloud-reason", text, opts),
+  cancelCloudReason: () => ipcRenderer.send("cloud-reason-cancel"),
   cloudStreamingUsage: (text, audioDurationSeconds, opts) =>
     ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
@@ -943,17 +946,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
 
   // Agent cloud streaming (event-based for real-time chunks)
-  startAgentStream: (messages, opts) =>
-    ipcRenderer.send("cloud-agent-stream-start", messages, opts),
+  startAgentStream: (requestId, messages, opts) =>
+    ipcRenderer.send("cloud-agent-stream-start", requestId, messages, opts),
+  cancelAgentStream: (requestId) => ipcRenderer.send("cloud-agent-stream-cancel", requestId),
   onAgentStreamChunk: registerListener(
     "cloud-agent-stream-chunk",
-    (callback) => (_event, chunk) => callback(chunk)
+    (callback) => (_event, payload) => callback(payload)
   ),
   onAgentStreamError: registerListener(
     "cloud-agent-stream-error",
-    (callback) => (_event, error) => callback(error)
+    (callback) => (_event, payload) => callback(payload)
   ),
-  onAgentStreamEnd: registerListener("cloud-agent-stream-end", (callback) => () => callback()),
+  onAgentStreamEnd: registerListener(
+    "cloud-agent-stream-end",
+    (callback) => (_event, payload) => callback(payload)
+  ),
 
   // Agent cloud tools
   agentWebSearch: (query, numResults) => ipcRenderer.invoke("agent-web-search", query, numResults),

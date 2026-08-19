@@ -3111,7 +3111,12 @@
       "selectionHint": "Selecciona texto para editarlo con",
       "selectedContext": "Texto seleccionado añadido",
       "removeSelectedContext": "Quitar texto seleccionado",
-      "copyToClipboard": "Copiar al portapapeles"
+      "copyToClipboard": "Copiar al portapapeles",
+      "suggestions": {
+        "summarizeNotes": "Resume mis notas recientes",
+        "calendar": "¿Qué hay en mi calendario?",
+        "draft": "Ayúdame a redactar algo"
+      }
     },
     "toolActivity": {
       "verbs": {
