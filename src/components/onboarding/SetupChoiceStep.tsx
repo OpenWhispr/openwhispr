@@ -19,6 +19,8 @@ import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import { isModeAllowedByPolicy } from "../../stores/policyRules";
+import { useEnterpriseIdentityStore } from "../../stores/enterpriseIdentityStore";
+import { hasEnforcedManagedProvider } from "../../helpers/enterpriseManagedConfig.mjs";
 import { getParakeetModelInfo } from "../../models/ModelRegistry";
 import type { OnboardingSetupMode } from "./flow";
 import { BrandMark } from "./OnboardingShell";
@@ -115,6 +117,8 @@ export default function SetupChoiceStep({
 }: SetupChoiceStepProps) {
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
+  const identityStatus = useEnterpriseIdentityStore((state) => state.status);
+  const managedConfig = useEnterpriseIdentityStore((state) => state.config);
   const [pending, setPending] = useState<WarningSetupMode | null>(null);
   const [showMore, setShowMore] = useState(false);
 
@@ -156,6 +160,43 @@ export default function SetupChoiceStep({
   const byokAllowed =
     isModeAllowedByPolicy(policy, "transcription", "providers") &&
     isModeAllowedByPolicy(policy, "llm", "providers");
+
+  // A managed_required (or manual-setup-disallowed) provider means the IT
+  // admin already made this choice — show a single continue card instead of
+  // the grid. A one-click interstitial rather than an auto-onSelect effect:
+  // the effect would re-fire when the user comes Back from the enterprise
+  // step and trap them in a loop. Any other identity status (idle, loading,
+  // error) renders the grid as usual — never block on the managed fetch.
+  if (
+    identityStatus === "ready" &&
+    enterpriseAllowed &&
+    hasEnforcedManagedProvider(managedConfig)
+  ) {
+    return (
+      <div className="mx-auto mt-8 flex w-full flex-col items-center gap-8">
+        <div className="onboarding-stagger flex items-start justify-center">
+          <SetupCard>
+            <div className="flex flex-col gap-5">
+              <span className="flex size-10 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]">
+                <Building2 className="size-5" />
+              </span>
+              <div className="flex flex-col gap-2">
+                <h2 className="onboarding-card-title text-[var(--onboarding-text-primary)]">
+                  {t("onboarding.rehaul.setupChoice.managed.title")}
+                </h2>
+                <p className="text-base leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                  {t("onboarding.rehaul.setupChoice.managed.description")}
+                </p>
+              </div>
+            </div>
+            <CardAction brand onClick={() => onSelect("enterprise")}>
+              {t("onboarding.rehaul.setupChoice.managed.continue")}
+            </CardAction>
+          </SetupCard>
+        </div>
+      </div>
+    );
+  }
 
   return (
     // Figma "Frame 2147259042": column, gap 32, centred — the card row above the

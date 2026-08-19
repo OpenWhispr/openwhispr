@@ -322,6 +322,11 @@
             "controls": "Manage access with team controls"
           }
         },
+        "managed": {
+          "title": "Your organization manages AI setup",
+          "description": "Your administrator has already configured an enterprise AI provider for this workspace.",
+          "continue": "Continue with enterprise setup"
+        },
         "warnings": {
           "byok": {
             "title": "Your provider handles your data",
@@ -370,6 +375,7 @@
         "progress": "Provider setup progress",
         "dictation": "Dictation",
         "assistant": "Assistant",
+        "intelligence": "Intelligence",
         "title": "Connect your AI provider",
         "description": "Choose a provider, add your credentials, and test the connection.",
         "descriptionLineOne": "Choose a provider and add",
@@ -437,6 +443,7 @@
         "profilePlaceholder": "Add profile name",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
+        "sessionToken": "Session Token (optional)",
         "region": "Region",
         "regionPlaceholder": "Choose a region",
         "model": "Model",
@@ -444,7 +451,14 @@
         "testConnection": "Test Connection",
         "managedTitle": "Your provider is managed by your organization",
         "managedDescription": "OpenWhispr will use the provider and model assigned by your administrator.",
-        "unavailable": "Enterprise setup is unavailable under your workspace policy."
+        "unavailable": "Enterprise setup is unavailable under your workspace policy.",
+        "modelListFallback": "Showing suggested models — the full catalog couldn't be loaded.",
+        "ssoSignIn": "Sign in with company SSO",
+        "ssoHint": "We opened your browser to finish signing in. Come back here when you're done.",
+        "finishInSettings": {
+          "title": "Finish setup in Settings",
+          "description": "Your organization uses {{provider}}. Continue now and add your credentials in Settings → AI Models when you're ready."
+        }
       }
     },
     "steps": {

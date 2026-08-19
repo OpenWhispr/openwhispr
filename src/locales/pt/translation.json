@@ -301,6 +301,11 @@
             "controls": "Gerencie o acesso com controles de equipe"
           }
         },
+        "managed": {
+          "title": "Sua organização gerencia a configuração de IA",
+          "description": "Seu administrador já configurou um provedor de IA corporativo para este espaço de trabalho.",
+          "continue": "Continuar com a configuração corporativa"
+        },
         "warnings": {
           "byok": {
             "title": "Seu provedor cuida dos seus dados",
@@ -349,6 +354,7 @@
         "progress": "Progresso da configuração do provedor",
         "dictation": "Ditado",
         "assistant": "Assistente",
+        "intelligence": "Inteligência",
         "title": "Conecte seu provedor de IA",
         "description": "Escolha um provedor, adicione suas credenciais e teste a conexão.",
         "descriptionLineOne": "Escolha um provedor e adicione",
@@ -416,6 +422,7 @@
         "profilePlaceholder": "Adicione o nome do perfil",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
+        "sessionToken": "Session Token (opcional)",
         "region": "Região",
         "regionPlaceholder": "Escolha uma região",
         "model": "Modelo",
@@ -423,7 +430,14 @@
         "testConnection": "Testar conexão",
         "managedTitle": "Seu provedor é gerenciado pela sua organização",
         "managedDescription": "O OpenWhispr vai usar o provedor e o modelo atribuídos pelo seu administrador.",
-        "unavailable": "A configuração corporativa não está disponível pela política do seu espaço de trabalho."
+        "unavailable": "A configuração corporativa não está disponível pela política do seu espaço de trabalho.",
+        "modelListFallback": "Mostrando modelos sugeridos — não foi possível carregar o catálogo completo.",
+        "ssoSignIn": "Entrar com o SSO da empresa",
+        "ssoHint": "Abrimos seu navegador para concluir o login. Volte aqui quando terminar.",
+        "finishInSettings": {
+          "title": "Conclua a configuração em Configurações",
+          "description": "Sua organização usa {{provider}}. Continue agora e adicione suas credenciais em Configurações → Modelos de IA quando estiver pronto."
+        }
       }
     },
     "steps": {

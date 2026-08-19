@@ -322,6 +322,11 @@
             "controls": "以團隊控管管理存取權"
           }
         },
+        "managed": {
+          "title": "你所屬的組織負責管理 AI 設定",
+          "description": "管理員已為此工作區設定企業 AI 服務商。",
+          "continue": "繼續企業設定"
+        },
         "warnings": {
           "byok": {
             "title": "你的資料由服務商處理",
@@ -370,6 +375,7 @@
         "progress": "服務商設定進度",
         "dictation": "語音輸入",
         "assistant": "助理",
+        "intelligence": "智慧",
         "title": "連接你的 AI 服務商",
         "description": "選擇服務商、新增憑證，然後測試連線。",
         "descriptionLineOne": "選擇服務商並新增",
@@ -437,6 +443,7 @@
         "profilePlaceholder": "新增設定檔名稱",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
+        "sessionToken": "Session Token（選填）",
         "region": "區域",
         "regionPlaceholder": "選擇區域",
         "model": "模型",
@@ -444,7 +451,14 @@
         "testConnection": "測試連線",
         "managedTitle": "你的服務商由所屬組織管理",
         "managedDescription": "OpenWhispr 將使用管理員指定的服務商與模型。",
-        "unavailable": "依你的工作區政策，企業設定無法使用。"
+        "unavailable": "依你的工作區政策，企業設定無法使用。",
+        "modelListFallback": "正在顯示建議模型——無法載入完整目錄。",
+        "ssoSignIn": "使用公司 SSO 登入",
+        "ssoHint": "我們已開啟瀏覽器以完成登入。完成後請回到這裡。",
+        "finishInSettings": {
+          "title": "在「設定」中完成設定",
+          "description": "你所屬的組織使用 {{provider}}。現在可以繼續，準備好後在設定 → AI 模型中新增憑證。"
+        }
       }
     },
     "steps": {

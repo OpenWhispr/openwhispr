@@ -54,6 +54,82 @@ test("setup choice appends the selected two-stage route", async () => {
   );
 });
 
+test("enterprise route borrows a transcription step when policy needs one", async () => {
+  const { getOnboardingRoute } = await load();
+  const base = { authPath: "guest", setupMode: "enterprise", agentAllowed: true };
+
+  // No need (openwhispr transcription allowed, committed in handleSetupSelection):
+  // the route is unchanged — with and without the explicit default.
+  assert.deepEqual(getOnboardingRoute(base).slice(-3), [
+    "setup-choice",
+    "enterprise-dictation",
+    "enterprise-assistant",
+  ]);
+  assert.deepEqual(
+    getOnboardingRoute({ ...base, enterpriseTranscription: "none" }),
+    getOnboardingRoute(base)
+  );
+
+  assert.deepEqual(getOnboardingRoute({ ...base, enterpriseTranscription: "byok" }).slice(-4), [
+    "setup-choice",
+    "byok-dictation",
+    "enterprise-dictation",
+    "enterprise-assistant",
+  ]);
+  // Self-hosted renders inside the byok step, so it borrows the same step id.
+  assert.deepEqual(
+    getOnboardingRoute({ ...base, enterpriseTranscription: "self-hosted" }),
+    getOnboardingRoute({ ...base, enterpriseTranscription: "byok" })
+  );
+  assert.deepEqual(getOnboardingRoute({ ...base, enterpriseTranscription: "local" }).slice(-4), [
+    "setup-choice",
+    "local-dictation",
+    "enterprise-dictation",
+    "enterprise-assistant",
+  ]);
+});
+
+test("enterprise transcription step survives the agent policy filter", async () => {
+  const { getOnboardingRoute } = await load();
+  const route = getOnboardingRoute({
+    authPath: "account",
+    setupMode: "enterprise",
+    agentAllowed: false,
+    enterpriseTranscription: "byok",
+  });
+  // The borrowed dictation step stays; only the assistant steps drop.
+  assert.deepEqual(route.slice(-3), ["setup-choice", "byok-dictation", "enterprise-dictation"]);
+  assert.equal(route.includes("enterprise-assistant"), false);
+});
+
+test("enterprise transcription steps leave the other routes untouched", async () => {
+  const { getOnboardingRoute } = await load();
+  const base = { authPath: "guest", agentAllowed: true };
+  // The field is enterprise-only; byok/local routes ignore it.
+  assert.deepEqual(
+    getOnboardingRoute({ ...base, setupMode: "byok", enterpriseTranscription: "local" }).slice(-2),
+    ["byok-dictation", "byok-assistant"]
+  );
+  assert.deepEqual(
+    getOnboardingRoute({ ...base, setupMode: "local", enterpriseTranscription: "byok" }).slice(-2),
+    ["local-dictation", "local-assistant"]
+  );
+});
+
+test("a session saved on the old enterprise route survives the new step", async () => {
+  const { getOnboardingRoute, reconcileStepWithRoute } = await load();
+  // Sessions persist step ids, not routes: a user who saved enterprise-dictation
+  // before the transcription step existed must resume without a version bump.
+  const route = getOnboardingRoute({
+    authPath: "account",
+    setupMode: "enterprise",
+    agentAllowed: true,
+    enterpriseTranscription: "byok",
+  });
+  assert.equal(reconcileStepWithRoute("enterprise-dictation", route), "enterprise-dictation");
+  assert.equal(reconcileStepWithRoute("byok-dictation", route), "byok-dictation");
+});
+
 test("versioned sessions reject malformed or old data", async () => {
   const { createOnboardingSession, parseOnboardingSession } = await load();
   assert.equal(parseOnboardingSession(null), null);

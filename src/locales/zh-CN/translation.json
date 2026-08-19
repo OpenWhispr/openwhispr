@@ -322,6 +322,11 @@
             "controls": "通过团队管控管理访问权限"
           }
         },
+        "managed": {
+          "title": "你所在的组织负责管理 AI 设置",
+          "description": "管理员已为此工作区配置了企业 AI 服务商。",
+          "continue": "继续企业设置"
+        },
         "warnings": {
           "byok": {
             "title": "你的数据由服务商处理",
@@ -370,6 +375,7 @@
         "progress": "服务商设置进度",
         "dictation": "听写",
         "assistant": "助手",
+        "intelligence": "智能",
         "title": "连接你的 AI 服务商",
         "description": "选择服务商，添加凭据，然后测试连接。",
         "descriptionLineOne": "选择服务商并添加",
@@ -437,6 +443,7 @@
         "profilePlaceholder": "添加配置名称",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
+        "sessionToken": "Session Token（可选）",
         "region": "区域",
         "regionPlaceholder": "选择区域",
         "model": "模型",
@@ -444,7 +451,14 @@
         "testConnection": "测试连接",
         "managedTitle": "你的服务商由所在组织管理",
         "managedDescription": "OpenWhispr 将使用管理员指定的服务商和模型。",
-        "unavailable": "根据你的工作区策略，企业设置不可用。"
+        "unavailable": "根据你的工作区策略，企业设置不可用。",
+        "modelListFallback": "正在显示推荐模型——无法加载完整目录。",
+        "ssoSignIn": "使用公司 SSO 登录",
+        "ssoHint": "我们已打开浏览器以完成登录。完成后请回到这里。",
+        "finishInSettings": {
+          "title": "在设置中完成配置",
+          "description": "你所在的组织使用 {{provider}}。现在可以继续，准备好后在设置 → AI 模型中添加凭据。"
+        }
       }
     },
     "steps": {

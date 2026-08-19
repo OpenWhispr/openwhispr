@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AudioLines, Check, CircleCheck, Download, MousePointer2, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import TestConnectionButton from "../TestConnectionButton";
 import ProviderConnectionTest from "./ProviderConnectionTest";
@@ -28,54 +28,80 @@ import {
 import type { OnboardingStepId } from "./flow";
 import { forgetPendingLocalModel, rememberPendingLocalModel } from "./pendingLocalModels";
 import { adjustBedrockModelForRegion, BEDROCK_REGIONS } from "../../utils/bedrockRegions";
-import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
+import {
+  useEnterpriseIdentityStore,
+  useManagedScopeResolution,
+} from "../../stores/enterpriseIdentityStore";
+import { useAuth } from "../../hooks/useAuth";
+import { signInWithSSO } from "../../lib/auth";
+import logger from "../../utils/logger";
 
-export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
+export function SetupStageStepper({
+  stepId,
+  stepIds,
+}: {
+  stepId: OnboardingStepId;
+  stepIds?: OnboardingStepId[];
+}) {
   const { t } = useTranslation();
-  const assistant = stepId.endsWith("assistant");
-  const local = stepId.startsWith("local");
+  // A one-step route (agent disallowed) keeps the derived pair so the stepper
+  // still reads as progress rather than a lone dot, matching the old visuals.
+  const stages: OnboardingStepId[] =
+    stepIds && stepIds.length >= 2
+      ? stepIds
+      : stepId.endsWith("assistant")
+        ? [stepId.replace("assistant", "dictation") as OnboardingStepId, stepId]
+        : [stepId, stepId.replace("dictation", "assistant") as OnboardingStepId];
+  const activeIndex = Math.max(0, stages.indexOf(stepId));
+
+  const stageIcon = (id: OnboardingStepId) => {
+    if (id.endsWith("assistant")) return <MousePointer2 className="size-3.5" />;
+    if (id === "enterprise-dictation" && stages.length > 2)
+      return <Sparkles className="size-3.5" />;
+    return <AudioLines className="size-3.5" />;
+  };
+  const stageLabel = (id: OnboardingStepId) => {
+    if (id === "local-assistant") return t("onboarding.rehaul.local.agent");
+    if (id.endsWith("assistant")) return t("onboarding.rehaul.provider.assistant");
+    if (id === "enterprise-dictation" && stages.length > 2)
+      return t("onboarding.rehaul.provider.intelligence");
+    return t("onboarding.rehaul.provider.dictation");
+  };
+
   return (
     <div
-      className="relative mx-auto flex w-36 items-start justify-between"
+      className={`relative mx-auto flex items-start justify-between ${
+        stages.length > 2 ? "w-56" : "w-36"
+      }`}
       aria-label={t("onboarding.rehaul.provider.progress")}
     >
       <span className="absolute left-8 right-8 top-3.5 border-t border-dashed border-[var(--onboarding-control-border)]" />
-      <div className="relative z-10 flex w-14 flex-col items-center gap-1.5 text-[var(--onboarding-text-secondary)]">
-        <span
-          className={`flex size-7 items-center justify-center rounded-full ${
-            assistant
-              ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)]"
-              : "bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]"
-          }`}
-        >
-          {assistant ? (
-            local ? (
-              <AudioLines className="size-3.5" />
-            ) : (
-              <CircleCheck className="size-3.5" strokeWidth={2} />
-            )
-          ) : (
-            <AudioLines className="size-3.5" />
-          )}
-        </span>
-        <span className="text-[0.6875rem]">{t("onboarding.rehaul.provider.dictation")}</span>
-      </div>
-      <div className="relative z-10 flex w-14 flex-col items-center gap-1.5 text-[var(--onboarding-text-secondary)]">
-        <span
-          className={`flex size-7 items-center justify-center rounded-full ${
-            assistant
-              ? "bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]"
-              : "border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]"
-          }`}
-        >
-          <MousePointer2 className="size-3.5" />
-        </span>
-        <span className="text-[0.6875rem]">
-          {local && assistant
-            ? t("onboarding.rehaul.local.agent")
-            : t("onboarding.rehaul.provider.assistant")}
-        </span>
-      </div>
+      {stages.map((id, index) => {
+        const state = index < activeIndex ? "done" : index === activeIndex ? "active" : "upcoming";
+        return (
+          <div
+            key={id}
+            className="relative z-10 flex w-14 flex-col items-center gap-1.5 text-[var(--onboarding-text-secondary)]"
+          >
+            <span
+              className={`flex size-7 items-center justify-center rounded-full ${
+                state === "done"
+                  ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)]"
+                  : state === "active"
+                    ? "bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]"
+                    : "border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]"
+              }`}
+            >
+              {state === "done" && id !== "local-dictation" ? (
+                <CircleCheck className="size-3.5" strokeWidth={2} />
+              ) : (
+                stageIcon(id)
+              )}
+            </span>
+            <span className="text-[0.6875rem]">{stageLabel(id)}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -217,11 +243,13 @@ function FieldLabel({ children }: { children: ReactNode }) {
 
 export function ByokProviderStep({
   stepId,
+  stepIds,
   selfHostedRequested = false,
   onConnectionChange,
   onProceed,
 }: {
   stepId: "byok-dictation" | "byok-assistant";
+  stepIds?: OnboardingStepId[];
   /** Set when the user picked "Self-hosted" on setup-choice rather than BYOK. */
   selfHostedRequested?: boolean;
   onConnectionChange: (connected: boolean) => void;
@@ -358,7 +386,7 @@ export function ByokProviderStep({
 
   return (
     <section className={`mt-8 ${SETUP_CARD_CLASS}`}>
-      <SetupStageStepper stepId={stepId} />
+      <SetupStageStepper stepId={stepId} stepIds={stepIds} />
 
       <div className="mt-3 space-y-3">
         {selfHostedAllowed && (
@@ -558,11 +586,13 @@ export function ByokProviderStep({
 
 export function LocalModelSetupStep({
   stepId,
+  stepIds,
   onReadinessChange,
   onProceed,
   onSkip,
 }: {
   stepId: "local-dictation" | "local-assistant";
+  stepIds?: OnboardingStepId[];
   onReadinessChange: (ready: boolean) => void;
   onProceed: () => void;
   onSkip: () => void;
@@ -743,7 +773,7 @@ export function LocalModelSetupStep({
 
   return (
     <section className={`mt-8 ${SETUP_CARD_CLASS}`}>
-      <SetupStageStepper stepId={stepId} />
+      <SetupStageStepper stepId={stepId} stepIds={stepIds} />
 
       <div className="mt-5">
         <FieldLabel>{t("onboarding.rehaul.local.providerLabel")}</FieldLabel>
@@ -887,12 +917,17 @@ export function LocalModelSetupStep({
 
 export function EnterpriseSetupStep({
   stepId,
+  stepIds,
   onConnectionChange,
   onProceed,
+  onRequestAuthentication,
 }: {
   stepId: "enterprise-dictation" | "enterprise-assistant";
+  stepIds?: OnboardingStepId[];
   onConnectionChange: (connected: boolean) => void;
   onProceed: () => void;
+  /** Fallback for the SSO CTA when no signed-in email is available. */
+  onRequestAuthentication?: () => void;
 }) {
   const { t } = useTranslation();
   const store = useSettingsStore();
@@ -903,16 +938,31 @@ export function EnterpriseSetupStep({
   const lockedToManaged =
     managed.kind === "managed" &&
     (managed.mode === "managed_required" || !managed.allowManualSetup);
-  const manualAllowed =
+  const bedrockAllowed =
     LLM_ENTERPRISE_POLICY_PROVIDER_IDS.includes("bedrock") &&
     isEnterpriseProviderAllowed(policy, "bedrock");
+  // Onboarding only carries the Bedrock manual form. A workspace whose policy
+  // allows manual Azure instead hands off to Settings (which has the full
+  // form) rather than dead-ending; Vertex stays disabled there too, so it
+  // keeps the unavailable card.
+  const settingsHandoffProvider =
+    !bedrockAllowed && isEnterpriseProviderAllowed(policy, "azure") ? ("azure" as const) : null;
+  const identityErrorCode = useEnterpriseIdentityStore((state) => state.errorCode);
+  const { user } = useAuth();
+  const [ssoRequested, setSsoRequested] = useState(false);
   const [authMode, setAuthMode] = useState<"sso" | "keys">("sso");
   const [profile, setProfile] = useState("");
   const [accessKeyId, setAccessKeyId] = useState("");
   const [secretAccessKey, setSecretAccessKey] = useState("");
+  const [sessionToken, setSessionToken] = useState("");
   const [region, setRegion] = useState("");
   const [model, setModel] = useState("");
   const [connected, setConnected] = useState(false);
+  const [catalog, setCatalog] = useState<{
+    status: "idle" | "loading" | "loaded" | "error";
+    models?: { value: string; label: string }[];
+  }>({ status: "idle" });
+  const catalogRequestRef = useRef(0);
 
   const models = useMemo(
     () =>
@@ -922,22 +972,59 @@ export function EnterpriseSetupStep({
       })),
     [region]
   );
+  const modelOptions = catalog.status === "loaded" && catalog.models?.length ? catalog.models : models;
+
+  // Load the live model catalog once the credentials could plausibly work
+  // (mirrors EnterpriseProviderConfig in Settings). Failures fall back to the
+  // static registry list silently — the catalog is a nicety, never a gate.
+  useEffect(() => {
+    const requestId = ++catalogRequestRef.current;
+    if (!region || (authMode === "keys" && (!accessKeyId || !secretAccessKey))) return;
+    const timer = window.setTimeout(async () => {
+      setCatalog((current) => (current.status === "loaded" ? current : { status: "loading" }));
+      const result = await window.electronAPI?.listBedrockModels?.({
+        bedrockRegion: region,
+        bedrockProfile: authMode === "sso" ? profile : "",
+        bedrockAccessKeyId: authMode === "keys" ? accessKeyId : "",
+        bedrockSecretAccessKey: authMode === "keys" ? secretAccessKey : "",
+        bedrockSessionToken: authMode === "keys" ? sessionToken : "",
+      });
+      if (requestId !== catalogRequestRef.current) return;
+      if (result?.success && result.models?.length) {
+        setCatalog({
+          status: "loaded",
+          models: result.models.map((item) => ({ value: item.value, label: item.label })),
+        });
+      } else {
+        logger.warn(
+          "Bedrock model catalog unavailable during onboarding",
+          { error: result?.error },
+          "onboarding"
+        );
+        setCatalog({ status: "error" });
+      }
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [accessKeyId, authMode, profile, region, secretAccessKey, sessionToken]);
 
   const resetConnection = useCallback(() => {
     setConnected(false);
     onConnectionChange(false);
   }, [onConnectionChange]);
 
+  const autoReady = lockedToManaged || Boolean(settingsHandoffProvider);
   useEffect(() => {
     setAuthMode("sso");
     setProfile("");
     setAccessKeyId("");
     setSecretAccessKey("");
+    setSessionToken("");
     setRegion("");
     setModel("");
-    setConnected(lockedToManaged);
-    onConnectionChange(lockedToManaged);
-  }, [lockedToManaged, onConnectionChange, stepId]);
+    setCatalog({ status: "idle" });
+    setConnected(autoReady);
+    onConnectionChange(autoReady);
+  }, [autoReady, onConnectionChange, stepId]);
 
   const handleStatusChange = useCallback(
     (success: boolean) => {
@@ -969,10 +1056,10 @@ export function EnterpriseSetupStep({
       bedrockProfile: authMode === "sso" ? profile : "",
       bedrockAccessKeyId: authMode === "keys" ? accessKeyId : "",
       bedrockSecretAccessKey: authMode === "keys" ? secretAccessKey : "",
-      bedrockSessionToken: "",
+      bedrockSessionToken: authMode === "keys" ? sessionToken : "",
       model,
     }),
-    [accessKeyId, authMode, model, profile, region, secretAccessKey]
+    [accessKeyId, authMode, model, profile, region, secretAccessKey, sessionToken]
   );
 
   const commitAndProceed = () => {
@@ -1000,6 +1087,7 @@ export function EnterpriseSetupStep({
     } else {
       store.setBedrockAccessKeyId(accessKeyId);
       store.setBedrockSecretAccessKey(secretAccessKey);
+      store.setBedrockSessionToken(sessionToken);
     }
     if (assistant) {
       store.setChatAgentMode("enterprise");
@@ -1013,26 +1101,75 @@ export function EnterpriseSetupStep({
     onProceed();
   };
 
+  // Policy allows manual Azure but onboarding has no Azure form: commit the
+  // provider choice so the LLM scopes land on "enterprise", and let Settings
+  // collect the credentials. Calls fail visibly until then — the card copy
+  // sets that expectation.
+  const commitSettingsHandoff = () => {
+    if (!settingsHandoffProvider) return;
+    store.setEnterpriseSetupMode("manual");
+    if (assistant) {
+      store.setChatAgentMode("enterprise");
+      store.setChatAgentProvider(settingsHandoffProvider);
+      store.setChatAgentModel("");
+    } else {
+      store.setDictationAgentMode("enterprise");
+      store.setDictationAgentProvider(settingsHandoffProvider);
+      store.setDictationAgentModel("");
+    }
+    onProceed();
+  };
+
+  const handleSsoSignIn = () => {
+    if (user?.email) {
+      void signInWithSSO(user.email);
+      setSsoRequested(true);
+      return;
+    }
+    onRequestAuthentication?.();
+  };
+
   const inputClass =
     "onboarding-provider-input h-[2.125rem] rounded-xl! border px-3 text-xs shadow-none! focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent)_15%,transparent)]";
-  const resetKey = [authMode, profile, accessKeyId, secretAccessKey, region, model].join("|");
+  const resetKey = [authMode, profile, accessKeyId, secretAccessKey, sessionToken, region, model].join(
+    "|"
+  );
 
-  if (managed.kind === "error" || (!manualAllowed && !lockedToManaged)) {
+  if (
+    managed.kind === "error" ||
+    (!bedrockAllowed && !settingsHandoffProvider && !lockedToManaged)
+  ) {
+    // MANAGED_CONFIG_UNAVAILABLE is the fail-closed "sign in with company SSO"
+    // state; SSO_REQUIRED is the explicit service code carried by the identity
+    // store. Both mean a company-SSO session would unblock the step.
+    const showSsoCta =
+      identityErrorCode === "SSO_REQUIRED" ||
+      (managed.kind === "error" && managed.code === "MANAGED_CONFIG_UNAVAILABLE");
     return (
       <section className={`mt-8 ${SETUP_CARD_CLASS}`}>
-        <SetupStageStepper stepId={stepId} />
+        <SetupStageStepper stepId={stepId} stepIds={stepIds} />
         <div className="mt-7 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
           {managed.kind === "error"
             ? managed.message
             : t("onboarding.rehaul.enterprise.unavailable")}
         </div>
+        {showSsoCta &&
+          (ssoRequested ? (
+            <p className="mt-4 text-center text-xs leading-5 text-[var(--onboarding-text-secondary)]">
+              {t("onboarding.rehaul.enterprise.ssoHint")}
+            </p>
+          ) : (
+            <StepPrimaryAction onClick={handleSsoSignIn} className="mt-4 w-full">
+              {t("onboarding.rehaul.enterprise.ssoSignIn")}
+            </StepPrimaryAction>
+          ))}
       </section>
     );
   }
 
   return (
     <section className={`mt-[2.125rem] ${SETUP_CARD_CLASS}`}>
-      <SetupStageStepper stepId={stepId} />
+      <SetupStageStepper stepId={stepId} stepIds={stepIds} />
 
       {lockedToManaged && managed.kind === "managed" ? (
         <div className="mt-7 rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] p-4 text-center">
@@ -1043,6 +1180,20 @@ export function EnterpriseSetupStep({
             {t("onboarding.rehaul.enterprise.managedDescription")}
           </p>
           <StepPrimaryAction onClick={commitAndProceed} className="mt-5 w-full">
+            {t("onboarding.rehaul.provider.proceed")}
+          </StepPrimaryAction>
+        </div>
+      ) : settingsHandoffProvider ? (
+        <div className="mt-7 rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] p-4 text-center">
+          <p className="text-sm font-medium text-[var(--onboarding-text-primary)]">
+            {t("onboarding.rehaul.enterprise.finishInSettings.title")}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-[var(--onboarding-text-secondary)]">
+            {t("onboarding.rehaul.enterprise.finishInSettings.description", {
+              provider: "Azure OpenAI",
+            })}
+          </p>
+          <StepPrimaryAction onClick={commitSettingsHandoff} className="mt-5 w-full">
             {t("onboarding.rehaul.provider.proceed")}
           </StepPrimaryAction>
         </div>
@@ -1095,7 +1246,7 @@ export function EnterpriseSetupStep({
                   value={model}
                   placeholder={t("onboarding.rehaul.enterprise.modelPlaceholder")}
                   onValueChange={chooseModel}
-                  options={models}
+                  options={modelOptions}
                 />
               </>
             ) : (
@@ -1125,6 +1276,19 @@ export function EnterpriseSetupStep({
                     className={inputClass}
                   />
                 </label>
+                <label className="block">
+                  <FieldLabel>{t("onboarding.rehaul.enterprise.sessionToken")}</FieldLabel>
+                  <Input
+                    type="password"
+                    value={sessionToken}
+                    onChange={(event) => {
+                      setSessionToken(event.target.value);
+                      resetConnection();
+                    }}
+                    placeholder={t("onboarding.rehaul.enterprise.profilePlaceholder")}
+                    className={inputClass}
+                  />
+                </label>
                 <div className="grid grid-cols-2 gap-4">
                   <EnterpriseSelectField
                     label={t("onboarding.rehaul.enterprise.region")}
@@ -1138,10 +1302,16 @@ export function EnterpriseSetupStep({
                     value={model}
                     placeholder={t("onboarding.rehaul.enterprise.modelPlaceholder")}
                     onValueChange={chooseModel}
-                    options={models}
+                    options={modelOptions}
                   />
                 </div>
               </>
+            )}
+
+            {catalog.status === "error" && (
+              <p className="text-[0.6875rem] leading-4 text-[var(--onboarding-text-tertiary)]">
+                {t("onboarding.rehaul.enterprise.modelListFallback")}
+              </p>
             )}
 
             <TestConnectionButton

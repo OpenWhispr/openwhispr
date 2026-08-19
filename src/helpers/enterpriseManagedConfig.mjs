@@ -135,6 +135,22 @@ function resolutionError(code, message) {
   return { kind: "error", code, message };
 }
 
+/**
+ * Whether any active provider in the envelope enforces managed access
+ * (managed_required, or active with manual setup disallowed). The unscoped
+ * counterpart of the `enforced` filter below — used for fail-closed decisions
+ * and to steer onboarding's setup-choice straight to enterprise.
+ */
+function hasEnforcedManagedProvider(envelope) {
+  return Boolean(
+    envelope?.providers?.some(
+      (record) =>
+        record.mode !== "disabled" &&
+        (record.mode === "managed_required" || !record.allowManualSetup)
+    )
+  );
+}
+
 function resolveManagedEnterpriseScope(envelope, scope, setupMode = "auto") {
   if (!ENTERPRISE_INFERENCE_SCOPES.includes(scope)) {
     return resolutionError("MANAGED_SCOPE_INVALID", "The requested inference scope is invalid.");
@@ -174,4 +190,5 @@ export {
   ENTERPRISE_PROVIDERS,
   validateManagedEnterpriseEnvelope,
   resolveManagedEnterpriseScope,
+  hasEnforcedManagedProvider,
 };

@@ -322,6 +322,11 @@
             "controls": "Gérez les accès avec des contrôles d’équipe"
           }
         },
+        "managed": {
+          "title": "Votre organisation gère la configuration de l’IA",
+          "description": "Votre administrateur a déjà configuré un fournisseur d’IA entreprise pour cet espace de travail.",
+          "continue": "Continuer avec la configuration entreprise"
+        },
         "warnings": {
           "byok": {
             "title": "Votre fournisseur traite vos données",
@@ -370,6 +375,7 @@
         "progress": "Progression de la configuration du fournisseur",
         "dictation": "Dictée",
         "assistant": "Assistant",
+        "intelligence": "Intelligence",
         "title": "Connectez votre fournisseur d’IA",
         "description": "Choisissez un fournisseur, ajoutez vos identifiants et testez la connexion.",
         "descriptionLineOne": "Choisissez un fournisseur et ajoutez",
@@ -437,6 +443,7 @@
         "profilePlaceholder": "Ajouter un nom de profil",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
+        "sessionToken": "Session Token (facultatif)",
         "region": "Région",
         "regionPlaceholder": "Choisir une région",
         "model": "Modèle",
@@ -444,7 +451,14 @@
         "testConnection": "Tester la connexion",
         "managedTitle": "Votre fournisseur est géré par votre organisation",
         "managedDescription": "OpenWhispr utilisera le fournisseur et le modèle attribués par votre administrateur.",
-        "unavailable": "La configuration entreprise n’est pas disponible selon la politique de votre espace de travail."
+        "unavailable": "La configuration entreprise n’est pas disponible selon la politique de votre espace de travail.",
+        "modelListFallback": "Affichage des modèles suggérés — le catalogue complet n’a pas pu être chargé.",
+        "ssoSignIn": "Se connecter avec le SSO de l’entreprise",
+        "ssoHint": "Nous avons ouvert votre navigateur pour terminer la connexion. Revenez ici une fois terminé.",
+        "finishInSettings": {
+          "title": "Terminez la configuration dans les Réglages",
+          "description": "Votre organisation utilise {{provider}}. Continuez maintenant et ajoutez vos identifiants dans Réglages → Modèles d’IA quand vous serez prêt."
+        }
       }
     },
     "steps": {

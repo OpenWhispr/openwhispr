@@ -322,6 +322,11 @@
             "controls": "Gestiona el acceso con controles de equipo"
           }
         },
+        "managed": {
+          "title": "Tu organización gestiona la configuración de IA",
+          "description": "Tu administrador ya ha configurado un proveedor de IA empresarial para este espacio de trabajo.",
+          "continue": "Continuar con la configuración empresarial"
+        },
         "warnings": {
           "byok": {
             "title": "Tu proveedor gestiona tus datos",
@@ -370,6 +375,7 @@
         "progress": "Progreso de la configuración del proveedor",
         "dictation": "Dictado",
         "assistant": "Asistente",
+        "intelligence": "Inteligencia",
         "title": "Conecta tu proveedor de IA",
         "description": "Elige un proveedor, añade tus credenciales y prueba la conexión.",
         "descriptionLineOne": "Elige un proveedor y añade",
@@ -437,6 +443,7 @@
         "profilePlaceholder": "Añade el nombre del perfil",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
+        "sessionToken": "Session Token (opcional)",
         "region": "Región",
         "regionPlaceholder": "Elige una región",
         "model": "Modelo",
@@ -444,7 +451,14 @@
         "testConnection": "Probar conexión",
         "managedTitle": "Tu proveedor lo gestiona tu organización",
         "managedDescription": "OpenWhispr usará el proveedor y el modelo asignados por tu administrador.",
-        "unavailable": "La configuración empresarial no está disponible según la política de tu espacio de trabajo."
+        "unavailable": "La configuración empresarial no está disponible según la política de tu espacio de trabajo.",
+        "modelListFallback": "Mostrando modelos sugeridos: no se pudo cargar el catálogo completo.",
+        "ssoSignIn": "Inicia sesión con el SSO de tu empresa",
+        "ssoHint": "Abrimos tu navegador para completar el inicio de sesión. Vuelve aquí cuando termines.",
+        "finishInSettings": {
+          "title": "Termina la configuración en Ajustes",
+          "description": "Tu organización usa {{provider}}. Continúa ahora y añade tus credenciales en Ajustes → Modelos de IA cuando estés listo."
+        }
       }
     },
     "steps": {

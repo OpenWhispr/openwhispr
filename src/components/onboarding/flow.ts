@@ -1,3 +1,5 @@
+import type { EnterpriseTranscriptionNeed } from "./enterpriseTranscription";
+
 export const ONBOARDING_SESSION_KEY = "onboardingSessionV2";
 export const LEGACY_ONBOARDING_STEP_KEY = "onboardingCurrentStep";
 export const ONBOARDING_FLOW_VERSION = 2;
@@ -38,6 +40,13 @@ export interface OnboardingRouteContext {
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
   agentAllowed: boolean;
+  /**
+   * Which transcription step the enterprise route needs (see
+   * enterpriseTranscription.ts). Enterprise setup only covers the LLM scopes,
+   * so when policy disallows the OpenWhispr cloud the route borrows the
+   * matching transcription step from the byok/local routes.
+   */
+  enterpriseTranscription?: EnterpriseTranscriptionNeed;
 }
 
 const ACCOUNT_ROUTE: OnboardingStepId[] = [
@@ -141,6 +150,13 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
         ];
 
   if (context.setupMode && context.setupMode !== "cloud") {
+    if (context.setupMode === "enterprise") {
+      const need = context.enterpriseTranscription ?? "none";
+      // The self-hosted variant renders inside the byok step ("custom"
+      // provider form), so both borrow byok-dictation.
+      if (need === "byok" || need === "self-hosted") route.push("byok-dictation");
+      else if (need === "local") route.push("local-dictation");
+    }
     route.push(
       ...SETUP_ROUTES[context.setupMode].filter(
         (stepId) => context.agentAllowed || !stepId.endsWith("assistant")

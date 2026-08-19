@@ -322,6 +322,11 @@
             "controls": "チーム管理機能でアクセスを管理"
           }
         },
+        "managed": {
+          "title": "AI の設定は組織が管理しています",
+          "description": "管理者がこのワークスペース向けにエンタープライズ AI プロバイダーをすでに設定しています。",
+          "continue": "エンタープライズ設定を続行"
+        },
         "warnings": {
           "byok": {
             "title": "データはプロバイダーが取り扱います",
@@ -370,6 +375,7 @@
         "progress": "プロバイダー設定の進行状況",
         "dictation": "ディクテーション",
         "assistant": "アシスタント",
+        "intelligence": "インテリジェンス",
         "title": "AI プロバイダーを接続",
         "description": "プロバイダーを選び、認証情報を追加して、接続をテストします。",
         "descriptionLineOne": "プロバイダーを選んで",
@@ -437,6 +443,7 @@
         "profilePlaceholder": "プロファイル名を追加",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
+        "sessionToken": "Session Token（任意）",
         "region": "リージョン",
         "regionPlaceholder": "リージョンを選択",
         "model": "モデル",
@@ -444,7 +451,14 @@
         "testConnection": "接続をテスト",
         "managedTitle": "プロバイダーは組織によって管理されています",
         "managedDescription": "OpenWhispr は管理者が割り当てたプロバイダーとモデルを使用します。",
-        "unavailable": "ワークスペースのポリシーにより、エンタープライズ設定は利用できません。"
+        "unavailable": "ワークスペースのポリシーにより、エンタープライズ設定は利用できません。",
+        "modelListFallback": "候補のモデルを表示しています。完全なカタログを読み込めませんでした。",
+        "ssoSignIn": "会社の SSO でサインイン",
+        "ssoHint": "サインインを完了するためにブラウザを開きました。完了したらここに戻ってください。",
+        "finishInSettings": {
+          "title": "設定でセットアップを完了",
+          "description": "組織では {{provider}} を使用しています。このまま続行し、準備ができたら設定 → AI モデルで認証情報を追加してください。"
+        }
       }
     },
     "steps": {

@@ -322,6 +322,11 @@
             "controls": "Zugriff über Team-Kontrollen verwalten"
           }
         },
+        "managed": {
+          "title": "Ihre Organisation verwaltet die KI-Einrichtung",
+          "description": "Ihr Administrator hat bereits einen Enterprise-KI-Anbieter für diesen Workspace konfiguriert.",
+          "continue": "Mit der Enterprise-Einrichtung fortfahren"
+        },
         "warnings": {
           "byok": {
             "title": "Ihr Anbieter verarbeitet Ihre Daten",
@@ -370,6 +375,7 @@
         "progress": "Fortschritt der Anbieter-Einrichtung",
         "dictation": "Diktat",
         "assistant": "Assistent",
+        "intelligence": "Intelligenz",
         "title": "KI-Anbieter verbinden",
         "description": "Wählen Sie einen Anbieter, fügen Sie Ihre Zugangsdaten hinzu und testen Sie die Verbindung.",
         "descriptionLineOne": "Wählen Sie einen Anbieter und fügen",
@@ -437,6 +443,7 @@
         "profilePlaceholder": "Profilnamen hinzufügen",
         "accessKeyId": "Access Key ID",
         "secretAccessKey": "Secret Access Key",
+        "sessionToken": "Session Token (optional)",
         "region": "Region",
         "regionPlaceholder": "Region auswählen",
         "model": "Modell",
@@ -444,7 +451,14 @@
         "testConnection": "Verbindung testen",
         "managedTitle": "Ihr Anbieter wird von Ihrer Organisation verwaltet",
         "managedDescription": "OpenWhispr verwendet den Anbieter und das Modell, die Ihr Administrator zugewiesen hat.",
-        "unavailable": "Die Enterprise-Einrichtung ist unter Ihrer Workspace-Richtlinie nicht verfügbar."
+        "unavailable": "Die Enterprise-Einrichtung ist unter Ihrer Workspace-Richtlinie nicht verfügbar.",
+        "modelListFallback": "Vorgeschlagene Modelle werden angezeigt — der vollständige Katalog konnte nicht geladen werden.",
+        "ssoSignIn": "Mit Unternehmens-SSO anmelden",
+        "ssoHint": "Wir haben Ihren Browser geöffnet, um die Anmeldung abzuschließen. Kehren Sie danach hierher zurück.",
+        "finishInSettings": {
+          "title": "Einrichtung in den Einstellungen abschließen",
+          "description": "Ihre Organisation verwendet {{provider}}. Fahren Sie jetzt fort und fügen Sie Ihre Zugangsdaten unter Einstellungen → KI-Modelle hinzu, sobald Sie bereit sind."
+        }
       }
     },
     "steps": {
