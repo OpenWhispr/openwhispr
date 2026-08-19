@@ -194,6 +194,99 @@ test("streaming discard waits for an in-progress provider start before disconnec
   assert.equal(manager.isProcessing, false);
 });
 
+test("cancelling while the streaming microphone opens never enters recording", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const states = [];
+  let resolveMicOpen;
+  let micOpenStarted = false;
+  const micOpen = new Promise((resolve) => {
+    resolveMicOpen = resolve;
+  });
+  const previousAudioWorkletNode = globalThis.AudioWorkletNode;
+  globalThis.AudioWorkletNode = class {
+    constructor() {
+      this.port = { postMessage() {} };
+    }
+
+    disconnect() {}
+  };
+  t.after(() => {
+    if (previousAudioWorkletNode === undefined) delete globalThis.AudioWorkletNode;
+    else globalThis.AudioWorkletNode = previousAudioWorkletNode;
+  });
+
+  const stream = {
+    getAudioTracks: () => [{ getSettings: () => ({}) }],
+    getTracks: () => [{ stop() {} }],
+  };
+  const source = { connect() {}, disconnect() {} };
+  const provider = {
+    onPartial: () => () => {},
+    onFinal: () => () => {},
+    onError: () => () => {},
+    onSessionEnd: () => () => {},
+    start: async () => ({ success: true }),
+    stop: async () => ({ success: true }),
+  };
+  const manager = Object.assign(Object.create(AudioManager.prototype), {
+    isRecording: false,
+    isProcessing: false,
+    isStreaming: false,
+    streamingStartInProgress: false,
+    _streamingStartSettlementWaiters: [],
+    stopRequestedDuringStreamingStart: false,
+    _streamingStopPromise: null,
+    _streamingStopMode: null,
+    _streamingCancellationGeneration: 0,
+    _activeTranscriptionAbortController: null,
+    _streamingSessionGeneration: 0,
+    _activeStreamingSessionId: null,
+    streamingCleanupFns: [],
+    streamingFallbackRecorder: null,
+    streamingFallbackChunks: [],
+    _streamingFallbackSegments: [],
+    streamingTextDebounce: null,
+    preparedMicCapture: { take: async () => null },
+    micRecovery: { stop() {} },
+    isRecordingAllowedByPolicy: () => true,
+    getAudioConstraints: async () => ({}),
+    _acquireCaptureStream: async () => {
+      micOpenStarted = true;
+      return micOpen;
+    },
+    startStreamingFallbackRecorder() {},
+    getOrCreateAudioContext: async () => ({
+      createMediaStreamSource: () => source,
+      createAnalyser: () => ({}),
+      audioWorklet: { addModule: async () => {} },
+    }),
+    getWorkletBlobUrl: () => "",
+    getStreamingProvider: () => provider,
+    getStreamingProviderName: () => "openai",
+    getEffectiveSttLanguage: () => "auto",
+    getKeyterms: () => [],
+    beginMicRecovery: async () => {},
+    cleanupPreview: async () => null,
+    _markCaptureStreamReleased() {},
+    onStateChange: (state) => states.push(state),
+  });
+
+  const start = manager.startStreamingRecording();
+  while (!micOpenStarted) await new Promise((resolve) => setImmediate(resolve));
+  const cancel = manager.cancelStreamingRecording();
+  resolveMicOpen(stream);
+
+  assert.deepEqual(await Promise.all([start, cancel]), [false, true]);
+  assert.equal(manager.isRecording, false);
+  assert.equal(manager.isStreaming, false);
+  assert.equal(manager.streamingStartInProgress, false);
+  assert.equal(
+    states.some((state) => state.isRecording),
+    false,
+    "a cancelled start must not publish a recording state"
+  );
+});
+
 test("cancel overrides a normal streaming stop before it can publish text", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager } = createFinalizingManager(AudioManager);

@@ -4122,6 +4122,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
 
       this.streamingCleanupFns = [partialCleanup, finalCleanup, errorCleanup, sessionEndCleanup];
+      if (startWasCancelled()) {
+        // Cancelled while the mic was opening: never flip to recording.
+        await this.cleanupStreaming();
+        if (ownsSession()) this._activeStreamingSessionId = null;
+        // cancelStreamingRecording may already be awaiting this start's
+        // settlement before it can disconnect the provider.
+        this._settleStreamingStart();
+        this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
+        return false;
+      }
       this.isRecording = true;
       this.recordingStartTime = Date.now();
       this.onStateChange?.({ isRecording: true, isProcessing: false, isStreaming: true });
