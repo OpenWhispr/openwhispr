@@ -403,7 +403,15 @@ class EnvironmentManager {
   }
 
   getVoiceAgentKey() {
-    return this._getKey("VOICE_AGENT_KEY");
+    const key = this._getKey("VOICE_AGENT_KEY");
+    if (key) return key;
+    // The chat-agent window is gone; its hotkey now opens the assistant by voice.
+    const legacy = this._getKey("CHAT_AGENT_KEY");
+    if (legacy) {
+      this.saveVoiceAgentKey(legacy);
+      delete process.env.CHAT_AGENT_KEY;
+    }
+    return legacy;
   }
 
   saveVoiceAgentKey(key) {
