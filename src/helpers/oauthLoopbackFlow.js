@@ -75,6 +75,14 @@ function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
         if (!code || returnedState !== state) {
           res.writeHead(400, { "Content-Type": "text/html" });
           res.end("<html><body><h3>Invalid request.</h3></body></html>");
+          // A real callback with a code but the wrong state is a failed
+          // attempt (stale tab, CSRF). Fail the flow now — the error=
+          // branch already does. A request with no code (favicon / bare
+          // GET) must keep waiting for the provider redirect.
+          if (code) {
+            cleanup();
+            reject(new Error("OAuth state mismatch"));
+          }
           return;
         }
 
