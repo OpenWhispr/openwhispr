@@ -39,7 +39,7 @@ function installBrowserGlobals(t, { initialStorage = {}, window: windowProps = {
 // source served in its place.
 async function createRendererServer(
   t,
-  { cachePrefix = "openwhispr-renderer-test-", mockModules = {} } = {}
+  { cachePrefix = "openwhispr-renderer-test-", mockModules = {}, noExternal = false } = {}
 ) {
   const { createServer } = await import("vite");
   const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), cachePrefix));
@@ -56,6 +56,7 @@ async function createRendererServer(
     appType: "custom",
     logLevel: "silent",
     optimizeDeps: { noDiscovery: true },
+    ssr: noExternal ? { noExternal: true } : undefined,
     plugins: [
       {
         name: "renderer-test-module-mocks",
