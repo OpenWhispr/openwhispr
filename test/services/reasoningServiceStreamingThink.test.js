@@ -334,6 +334,58 @@ test("cancelling during local model setup stops before streaming begins", async 
   assert.equal((await stream.next()).done, true);
 });
 
+test("cancelling tool-ineligible local setup prevents raw streaming", async (t) => {
+  let resolveServer;
+  let serverStarted = false;
+  const serverReady = new Promise((resolve) => {
+    resolveServer = resolve;
+  });
+  const { reasoningService } = await loadReasoningService(
+    t,
+    "openwhispr-tool-ineligible-model-setup-cancel-test-",
+    {
+      window: {
+        electronAPI: {
+          llamaServerStart: () => {
+            serverStarted = true;
+            return serverReady;
+          },
+        },
+      },
+    }
+  );
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    return createOpenAiSseResponse(["late answer"]);
+  };
+
+  const stream = reasoningService.processTextStreamingAI(
+    [{ role: "user", content: "hello" }],
+    "qwen3-1.7b-q4_k_m",
+    "local",
+    { systemPrompt: "Answer the user.", disableThinking: true },
+    undefined
+  );
+  const first = stream.next();
+  for (let i = 0; i < 50 && !serverStarted; i++) await waitForMicrotasks();
+  assert.equal(serverStarted, true, "fixture setup: raw model setup must be pending");
+
+  reasoningService.cancelActiveStream();
+  resolveServer({ success: true, port: 11434 });
+
+  const firstResult = await first;
+  const chunks = firstResult.done ? [] : [firstResult.value];
+  for await (const chunk of stream) chunks.push(chunk);
+
+  assert.deepEqual(chunks, [{ type: "done", finishReason: "stop" }]);
+  assert.equal(fetchCalls, 0);
+});
+
 // Was "does not flush buffered text after error" and asserted the stream
 // silently ended with "". A provider-reported error part must now reject the
 // generator instead; buffered text must still never leak into that rejection.

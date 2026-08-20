@@ -529,6 +529,24 @@ class ReasoningService extends BaseReasoningService {
     provider: string,
     config: ReasoningConfig & { systemPrompt: string }
   ): AsyncGenerator<string, void, unknown> {
+    const abortController = new AbortController();
+    this.streamAbortController = abortController;
+    try {
+      yield* this.processTextStreamingRaw(messages, model, provider, config, abortController);
+    } finally {
+      if (this.streamAbortController === abortController) {
+        this.streamAbortController = null;
+      }
+    }
+  }
+
+  private async *processTextStreamingRaw(
+    messages: Array<{ role: string; content: string }>,
+    model: string,
+    provider: string,
+    config: ReasoningConfig & { systemPrompt: string },
+    abortController: AbortController
+  ): AsyncGenerator<string, void, unknown> {
     const route = resolveChatRoute({
       provider,
       lanUrl: config.lanUrl,
@@ -576,6 +594,8 @@ class ReasoningService extends BaseReasoningService {
       );
     }
 
+    if (abortController.signal.aborted) return;
+
     const requestBody: Record<string, unknown> = {
       model,
       messages,
@@ -606,13 +626,11 @@ class ReasoningService extends BaseReasoningService {
       headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
-    this.streamAbortController = new AbortController();
-    const controller = this.streamAbortController;
     const timeoutSeconds = Math.max(
       resolveLlmRequestTimeoutSeconds(getSettings().llmRequestTimeoutSeconds),
       LLM_STREAMING_TIMEOUT_FLOOR_SECONDS
     );
-    const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+    const timeoutId = setTimeout(() => abortController.abort(), timeoutSeconds * 1000);
 
     let response: Response;
     try {
@@ -622,7 +640,7 @@ class ReasoningService extends BaseReasoningService {
             method: "POST",
             headers,
             body: JSON.stringify(requestBody),
-            signal: controller.signal,
+            signal: abortController.signal,
           }),
         requestBody,
         logParamFallback("AGENT_STREAM_PARAM_FALLBACK")
@@ -701,7 +719,6 @@ class ReasoningService extends BaseReasoningService {
       if (trailing) yield trailing;
     } finally {
       clearTimeout(timeoutId);
-      this.streamAbortController = null;
       reader.releaseLock();
     }
   }
@@ -736,8 +753,8 @@ class ReasoningService extends BaseReasoningService {
             ? "local"
             : "providers";
     assertAgentSessionAllowedByPolicy(provider, mode);
-    // cancelActiveStream() aborts this controller; streamText propagates it
-    // into doStream, cancelling the enterprise IPC proxy's request in main.
+    // Both streaming transports share this owner so cancellation survives
+    // asynchronous server, key, and model setup.
     const abortController = new AbortController();
     this.streamAbortController = abortController;
     const isEnterprise = route.kind === "enterprise";
@@ -746,16 +763,23 @@ class ReasoningService extends BaseReasoningService {
 
     if ((isLocalProvider || isLanChat) && !tools) {
       // Attachments are never routed to local/LAN providers, so content is string-only here.
-      const contentGen = this.processTextStreaming(
-        messages as Array<{ role: string; content: string }>,
-        model,
-        provider,
-        config
-      );
-      for await (const text of contentGen) {
-        yield { type: "content", text };
+      try {
+        const contentGen = this.processTextStreamingRaw(
+          messages as Array<{ role: string; content: string }>,
+          model,
+          provider,
+          config,
+          abortController
+        );
+        for await (const text of contentGen) {
+          yield { type: "content", text };
+        }
+        yield { type: "done", finishReason: "stop" };
+      } finally {
+        if (this.streamAbortController === abortController) {
+          this.streamAbortController = null;
+        }
       }
-      yield { type: "done", finishReason: "stop" };
       return;
     }
 
