@@ -1,5 +1,3 @@
-import type { EnterpriseTranscriptionNeed } from "./enterpriseTranscription";
-
 export const ONBOARDING_SESSION_KEY = "onboardingSessionV2";
 export const LEGACY_ONBOARDING_STEP_KEY = "onboardingCurrentStep";
 export const ONBOARDING_FLOW_VERSION = 2;
@@ -20,12 +18,10 @@ export type OnboardingStepId =
   | "byok-dictation"
   | "byok-assistant"
   | "local-dictation"
-  | "local-assistant"
-  | "enterprise-dictation"
-  | "enterprise-assistant";
+  | "local-assistant";
 
 export type OnboardingAuthPath = "account" | "guest" | null;
-export type OnboardingSetupMode = "cloud" | "byok" | "local" | "enterprise" | null;
+export type OnboardingSetupMode = "cloud" | "byok" | "local" | null;
 
 export interface OnboardingSession {
   version: typeof ONBOARDING_FLOW_VERSION;
@@ -39,13 +35,8 @@ export interface OnboardingRouteContext {
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
   agentAllowed: boolean;
-  /**
-   * Which transcription step the enterprise route needs (see
-   * enterpriseTranscription.ts). Enterprise setup only covers the LLM scopes,
-   * so when policy disallows the OpenWhispr cloud the route borrows the
-   * matching transcription step from the byok/local routes.
-   */
-  enterpriseTranscription?: EnterpriseTranscriptionNeed;
+  /** A confirmed Enterprise workspace is already provisioned outside onboarding. */
+  skipSetupChoice?: boolean;
 }
 
 const ACCOUNT_ROUTE: OnboardingStepId[] = [
@@ -60,7 +51,6 @@ const ACCOUNT_ROUTE: OnboardingStepId[] = [
 const SETUP_ROUTES: Record<Exclude<OnboardingSetupMode, null | "cloud">, OnboardingStepId[]> = {
   byok: ["byok-dictation", "byok-assistant"],
   local: ["local-dictation", "local-assistant"],
-  enterprise: ["enterprise-dictation", "enterprise-assistant"],
 };
 
 // Canonical flow order, independent of any one route. reconcileStepWithRoute uses
@@ -80,8 +70,6 @@ const STEP_ORDER: OnboardingStepId[] = [
   "byok-assistant",
   "local-dictation",
   "local-assistant",
-  "enterprise-dictation",
-  "enterprise-assistant",
 ];
 
 const KNOWN_STEPS = new Set<OnboardingStepId>(STEP_ORDER);
@@ -99,8 +87,11 @@ export const COMPACT_STEPS: ReadonlySet<OnboardingStepId> = new Set<OnboardingSt
 
 const LEGACY_STEP_MAP: OnboardingStepId[] = [
   "auth",
-  "use-cases",
-  "languages",
+  // The old flow put permissions after these two indexes, so a save at 1-2
+  // means the grants were never shown; the new route puts permissions first,
+  // and resuming past it would skip the mic/accessibility prompts entirely.
+  "permissions",
+  "permissions",
   "permissions",
   "dictation-hotkey",
   "assistant-hotkey",
@@ -131,6 +122,8 @@ export function resetOnboardingProgress(storage: OnboardingStorage): void {
 export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingStepId[] {
   if (context.authPath === null) return ["auth"];
 
+  const setupChoice = context.skipSetupChoice ? [] : (["setup-choice"] as OnboardingStepId[]);
+
   const route =
     context.authPath === "guest"
       ? // Guests still need the permission grants and a hotkey they have seen:
@@ -144,20 +137,10 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
             ? (["assistant-hotkey", "assistant-demo"] as OnboardingStepId[])
             : []),
           "notes" as const,
-          "setup-choice" as const,
+          ...setupChoice,
         ];
 
   if (context.setupMode && context.setupMode !== "cloud") {
-    if (context.setupMode === "enterprise") {
-      const need = context.enterpriseTranscription ?? "none";
-      // A saved enterprise choice can outlive a workspace-policy change. Keep
-      // the user at setup-choice rather than routing into an impossible setup.
-      if (need === "unavailable") return route;
-      // The self-hosted variant renders inside the byok step ("custom"
-      // provider form), so both borrow byok-dictation.
-      if (need === "byok" || need === "self-hosted") route.push("byok-dictation");
-      else if (need === "local") route.push("local-dictation");
-    }
     route.push(
       ...SETUP_ROUTES[context.setupMode].filter(
         (stepId) => context.agentAllowed || !stepId.endsWith("assistant")
@@ -192,8 +175,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
       setupMode !== null &&
       setupMode !== "cloud" &&
       setupMode !== "byok" &&
-      setupMode !== "local" &&
-      setupMode !== "enterprise"
+      setupMode !== "local"
     ) {
       return null;
     }
@@ -265,7 +247,7 @@ export interface OnboardingProgressState {
  * The total comes from the route rather than a constant because the route itself
  * is conditional — the assistant pair drops out when the agent is disallowed, and
  * the provider pair only exists once a non-cloud setup mode is picked. Choosing
- * BYOK/local/enterprise on setup-choice therefore appends two steps and the row
+ * BYOK/local on setup-choice therefore appends two steps and the row
  * grows by two dots at that moment, which is the flow honestly getting longer.
  *
  * Returns null when there is nothing worth drawing: a compact step, an off-route
@@ -283,4 +265,33 @@ export function getOnboardingProgress(
   if (index === -1 || counted.length < 2) return null;
 
   return { index, total: counted.length };
+}
+
+/** Enterprise customers keep provider/model selection in Settings, outside onboarding. */
+export function isEnterpriseWorkspaceEntitled(
+  workspace: { plan?: string | null; status?: string | null } | null | undefined
+): boolean {
+  return (
+    workspace?.plan === "enterprise" &&
+    (workspace.status === "active" || workspace.status === "trialing")
+  );
+}
+
+export function shouldSkipOnboardingSetupChoice({
+  isSignedIn,
+  authPath,
+  setupMode,
+  activeWorkspace,
+}: {
+  isSignedIn: boolean;
+  authPath: OnboardingAuthPath;
+  setupMode: OnboardingSetupMode;
+  activeWorkspace: { plan?: string | null; status?: string | null } | null | undefined;
+}): boolean {
+  return (
+    isSignedIn &&
+    authPath === "account" &&
+    (setupMode === null || setupMode === "cloud") &&
+    isEnterpriseWorkspaceEntitled(activeWorkspace)
+  );
 }

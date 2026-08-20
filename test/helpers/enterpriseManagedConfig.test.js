@@ -2,7 +2,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
-  hasEnforcedManagedProvider,
   resolveManagedEnterpriseScope,
   validateManagedEnterpriseEnvelope,
 } = require("../../src/helpers/enterpriseManagedConfig.mjs");
@@ -196,29 +195,4 @@ test("accepts dated Azure versions from previously issued managed envelopes", ()
   assert.ok(validateManagedEnterpriseEnvelope(envelope([azure]), "workspace-a"));
   azure.config.apiVersion = "latest";
   assert.equal(validateManagedEnterpriseEnvelope(envelope([azure]), "workspace-a"), null);
-});
-
-test("hasEnforcedManagedProvider matches the enforced-provider predicate", () => {
-  // Enforced via managed_required.
-  assert.equal(
-    hasEnforcedManagedProvider(envelope([provider({ mode: "managed_required" })])),
-    true
-  );
-  // Enforced via an active provider that disallows manual setup.
-  assert.equal(
-    hasEnforcedManagedProvider(envelope([provider({ allowManualSetup: false })])),
-    true
-  );
-  // managed_default with manual setup allowed is not enforced.
-  assert.equal(hasEnforcedManagedProvider(envelope([provider()])), false);
-  // Disabled records never enforce, even with allowManualSetup false.
-  assert.equal(
-    hasEnforcedManagedProvider(
-      envelope([provider({ mode: "disabled", allowManualSetup: false })])
-    ),
-    false
-  );
-  // Missing config fails open to "not enforced".
-  assert.equal(hasEnforcedManagedProvider(null), false);
-  assert.equal(hasEnforcedManagedProvider(envelope([])), false);
 });

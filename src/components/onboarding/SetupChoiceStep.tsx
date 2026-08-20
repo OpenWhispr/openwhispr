@@ -2,7 +2,6 @@ import { Fragment, forwardRef, useRef, useState } from "react";
 import {
   AlertCircle,
   BanknoteCheck,
-  Building2,
   ChevronRight,
   GalleryVerticalEnd,
   KeyRound,
@@ -10,8 +9,6 @@ import {
   MonitorSmartphone,
   Server,
   ShieldCheck,
-  ShieldUser,
-  Users,
   WandSparkles,
   WifiOff,
   Zap,
@@ -19,27 +16,24 @@ import {
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
-import { isEnterpriseProviderAllowed } from "../../stores/policyRules";
-import { useEnterpriseIdentityStore } from "../../stores/enterpriseIdentityStore";
 import {
   getParakeetModelInfo,
   getTranscriptionProviders,
   modelRegistry,
 } from "../../models/ModelRegistry";
 import type { OnboardingSetupMode } from "./flow";
-import type { EnterpriseTranscriptionNeed } from "./enterpriseTranscription";
 import { getOnboardingSetupAvailability, hasAvailableOnboardingSetup } from "./setupEligibility";
 import { BrandMark } from "./OnboardingShell";
 import openAIIcon from "../../assets/icons/providers/openai.svg";
 import nvidiaIcon from "../../assets/icons/providers/nvidia.webp";
-// Only the Local and Enterprise cards open the warning dialog now — BYOK goes
+// Only the Local card opens the warning dialog now — BYOK goes
 // straight through from the "Choose your API setup" modal.
 import warningBackdrop from "../../assets/onboarding-setup-warning-hero.webp";
 import apiSetupHero from "../../assets/onboarding-api-setup-hero.webp";
 
 type SetupMode = Exclude<OnboardingSetupMode, null>;
 type AdvancedSetupMode = Exclude<SetupMode, "cloud">;
-// Only these two open the warning dialog; BYOK is selected directly from the
+// Local opens the warning dialog; BYOK is selected directly from the
 // more-options modal, so a "byok" pending state is unreachable.
 type WarningSetupMode = Exclude<AdvancedSetupMode, "byok">;
 
@@ -47,7 +41,6 @@ const REFERENCE_LOCAL_MODEL_ID = "nemotron-3.5-asr-streaming-0.6b";
 
 interface SetupChoiceStepProps {
   isSignedIn: boolean;
-  enterpriseTranscription: EnterpriseTranscriptionNeed;
   onSelect: (mode: SetupMode, options?: { selfHosted?: boolean }) => void;
   onRequestAuthentication: () => void;
 }
@@ -124,14 +117,11 @@ const CardAction = forwardRef<
 
 export default function SetupChoiceStep({
   isSignedIn,
-  enterpriseTranscription,
   onSelect,
   onRequestAuthentication,
 }: SetupChoiceStepProps) {
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
-  const identityStatus = useEnterpriseIdentityStore((state) => state.status);
-  const managedConfig = useEnterpriseIdentityStore((state) => state.config);
   const [pending, setPending] = useState<WarningSetupMode | null>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const [showMore, setShowMore] = useState(false);
@@ -145,29 +135,16 @@ export default function SetupChoiceStep({
   // its compressed size can send a user into a setup that runs out of disk.
   const minimumLocalSpaceGb = Math.max(2, Math.ceil((localReferenceModel?.sizeMb ?? 0) / 1000));
 
-  const managedEnterpriseAvailable =
-    identityStatus === "ready" &&
-    Boolean(
-      managedConfig?.providers.some(
-        (provider) =>
-          provider.mode !== "disabled" &&
-          (provider.mode === "managed_required" || !provider.allowManualSetup) &&
-          isEnterpriseProviderAllowed(policy, provider.provider)
-      )
-    );
   const availability = getOnboardingSetupAvailability({
     policy,
-    enterpriseTranscription,
     transcriptionProviders: getTranscriptionProviders(),
     llmProviders: modelRegistry.getCloudProviders(),
-    managedEnterpriseAvailable,
   });
   const {
     cloud: cloudAllowed,
     local: localAllowed,
     byok: byokAllowed,
     selfHosted: selfHostedAllowed,
-    enterprise: enterpriseAllowed,
   } = availability;
   const moreOptionsAllowed = byokAllowed || selfHostedAllowed;
 
@@ -196,7 +173,6 @@ export default function SetupChoiceStep({
         })
       )
     : [];
-  const WarningPrimaryIcon = pending === "enterprise" ? Building2 : Laptop;
   const moreSetupOptions: MoreSetupOption[] = [];
   if (byokAllowed) {
     moreSetupOptions.push({
@@ -213,39 +189,6 @@ export default function SetupChoiceStep({
       title: t("onboarding.rehaul.setupChoice.moreOptions.selfHosted.title"),
       description: t("onboarding.rehaul.setupChoice.moreOptions.selfHosted.description"),
     });
-  }
-
-  // A managed_required (or manual-setup-disallowed) provider means the IT
-  // admin already made this choice — show a single continue card instead of
-  // the grid. A one-click interstitial rather than an auto-onSelect effect:
-  // the effect would re-fire when the user comes Back from the enterprise
-  // step and trap them in a loop. Any other identity status (idle, loading,
-  // error) renders the grid as usual — never block on the managed fetch.
-  if (managedEnterpriseAvailable && enterpriseAllowed && managedConfig) {
-    return (
-      <div className="mx-auto mt-5 flex w-full flex-col items-center gap-5">
-        <div className="onboarding-stagger flex items-start justify-center">
-          <SetupCard>
-            <div className="flex flex-col gap-4">
-              <span className="flex size-9 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]">
-                <Building2 className="size-4" />
-              </span>
-              <div className="flex flex-col gap-2">
-                <h2 className="onboarding-card-title text-[var(--onboarding-text-primary)]">
-                  {t("onboarding.rehaul.setupChoice.managed.title")}
-                </h2>
-                <p className="text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
-                  {t("onboarding.rehaul.setupChoice.managed.description")}
-                </p>
-              </div>
-            </div>
-            <CardAction brand onClick={() => onSelect("enterprise")}>
-              {t("onboarding.rehaul.setupChoice.managed.continue")}
-            </CardAction>
-          </SetupCard>
-        </div>
-      </div>
-    );
   }
 
   if (!hasAvailableOnboardingSetup(availability)) {
@@ -408,44 +351,6 @@ export default function SetupChoiceStep({
             </CardAction>
           </SetupCard>
         )}
-
-        {enterpriseAllowed && (
-          <SetupCard>
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-4">
-                {/* Frame 3: 40px outlined mark, 1.33px surface stroke. */}
-                <span className="flex size-9 items-center justify-center rounded-full border-[1.33px] border-[var(--onboarding-control-border)] text-[var(--onboarding-accent)]">
-                  <Building2 className="size-5" strokeWidth={1.556} />
-                </span>
-              </div>
-
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <h2 className="onboarding-card-title text-[var(--onboarding-text-primary)]">
-                    {t("onboarding.rehaul.setupChoice.enterprise.title")}
-                  </h2>
-                  <p className="text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
-                    {t("onboarding.rehaul.setupChoice.enterprise.description")}
-                  </p>
-                </div>
-                <ul className="flex flex-col gap-2">
-                  <Feature icon={ShieldUser}>
-                    {t("onboarding.rehaul.setupChoice.enterprise.features.credentials")}
-                  </Feature>
-                  <Feature icon={ShieldCheck}>
-                    {t("onboarding.rehaul.setupChoice.enterprise.features.compliance")}
-                  </Feature>
-                  <Feature icon={Users}>
-                    {t("onboarding.rehaul.setupChoice.enterprise.features.controls")}
-                  </Feature>
-                </ul>
-              </div>
-            </div>
-            <CardAction onClick={() => setPending("enterprise")}>
-              {t("onboarding.rehaul.setupChoice.enterprise.setUp")}
-            </CardAction>
-          </SetupCard>
-        )}
       </div>
 
       {/* Frame 25: BYOK and self-hosted are not cards in the spec — they live
@@ -558,7 +463,7 @@ export default function SetupChoiceStep({
                 <KeyRound className="size-4" strokeWidth={1.25} />
               </span>
               <span className="flex size-[55px] items-center justify-center rounded-full border-[1.83px] border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-accent)]">
-                <WarningPrimaryIcon className="size-[22px]" strokeWidth={2.14} />
+                <Laptop className="size-[22px]" strokeWidth={2.14} />
               </span>
               <span className="flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[color-mix(in_srgb,var(--onboarding-surface)_72%,transparent)] text-[var(--onboarding-text-tertiary)]">
                 <Server className="size-4" strokeWidth={1.25} />

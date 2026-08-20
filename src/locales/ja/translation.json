@@ -304,21 +304,6 @@
             "free": "ずっと無料で使える"
           }
         },
-        "enterprise": {
-          "title": "エンタープライズ",
-          "description": "チーム管理機能付きの、組織が管理する AI プロバイダーを使用します。",
-          "setUp": "エンタープライズを設定",
-          "features": {
-            "credentials": "組織の認証情報を使用",
-            "compliance": "SOC 2 Type II、HIPAA、ISO 27001",
-            "controls": "チーム管理機能でアクセスを管理"
-          }
-        },
-        "managed": {
-          "title": "AI の設定は組織が管理しています",
-          "description": "管理者がこのワークスペース向けにエンタープライズ AI プロバイダーをすでに設定しています。",
-          "continue": "エンタープライズ設定を続行"
-        },
         "warnings": {
           "byok": {
             "title": "データはプロバイダーが取り扱います",
@@ -339,16 +324,6 @@
               "2": "モデルを設定またはダウンロードする（約 {{modelSize}}）",
               "3": "インストールと有効化を待つ"
             }
-          },
-          "enterprise": {
-            "title": "組織の認証情報を用意してください",
-            "description": "手動のエンタープライズ設定は、ワークスペースのポリシーが許可している場合のみ利用できます。",
-            "continue": "エンタープライズを設定",
-            "steps": {
-              "1": "SSO でサインインするか、承認済みの認証情報を入力する",
-              "2": "利用できるリージョンとモデルを選ぶ",
-              "3": "有効化する前に管理された接続をテストする"
-            }
           }
         },
         "useCloud": "代わりにクラウドを使う",
@@ -367,7 +342,6 @@
         "progress": "プロバイダー設定の進行状況",
         "dictation": "ディクテーション",
         "assistant": "アシスタント",
-        "intelligence": "インテリジェンス",
         "title": "AI プロバイダーを接続",
         "description": "プロバイダーを選び、認証情報を追加して、接続をテストします。",
         "descriptionLineOne": "プロバイダーを選んで",
@@ -422,37 +396,6 @@
         "downloads": "モデルのダウンロード",
         "downloading": "ダウンロード中… {{progress}}%",
         "installing": "モデルをインストール中…"
-      },
-      "enterprise": {
-        "title": "エンタープライズプロバイダーを接続",
-        "description": "組織の認証情報をディクテーションの知能と Assistant に使用します。",
-        "descriptionLineOne": "組織の認証情報を使って",
-        "descriptionLineTwo": "プロバイダーを接続します。",
-        "ssoProfile": "SSO プロファイル",
-        "accessKeys": "アクセスキー",
-        "profileName": "プロファイル名",
-        "profilePlaceholder": "プロファイル名を追加",
-        "accessKeyIdPlaceholder": "アクセスキーIDを入力",
-        "secretAccessKeyPlaceholder": "シークレットアクセスキーを入力",
-        "sessionTokenPlaceholder": "セッショントークンを入力",
-        "accessKeyId": "Access Key ID",
-        "secretAccessKey": "Secret Access Key",
-        "sessionToken": "Session Token（任意）",
-        "region": "リージョン",
-        "regionPlaceholder": "リージョンを選択",
-        "model": "モデル",
-        "modelPlaceholder": "モデルを選択",
-        "testConnection": "接続をテスト",
-        "managedTitle": "プロバイダーは組織によって管理されています",
-        "managedDescription": "OpenWhispr は管理者が割り当てたプロバイダーとモデルを使用します。",
-        "unavailable": "ワークスペースのポリシーにより、エンタープライズ設定は利用できません。",
-        "modelListFallback": "候補のモデルを表示しています。完全なカタログを読み込めませんでした。",
-        "ssoSignIn": "会社の SSO でサインイン",
-        "ssoHint": "サインインを完了するためにブラウザを開きました。完了したらここに戻ってください。",
-        "finishInSettings": {
-          "title": "設定でセットアップを完了",
-          "description": "組織では {{provider}} を使用しています。このまま続行し、準備ができたら設定 → AI モデルで認証情報を追加してください。"
-        }
       }
     },
     "steps": {

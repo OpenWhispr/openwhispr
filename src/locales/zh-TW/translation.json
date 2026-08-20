@@ -304,21 +304,6 @@
             "free": "永久免費使用"
           }
         },
-        "enterprise": {
-          "title": "企業",
-          "description": "使用由組織管理的 AI 服務商，並具備團隊控管功能。",
-          "setUp": "設定企業版",
-          "features": {
-            "credentials": "使用你所屬組織的憑證",
-            "compliance": "SOC 2 Type II、HIPAA 與 ISO 27001",
-            "controls": "以團隊控管管理存取權"
-          }
-        },
-        "managed": {
-          "title": "你所屬的組織負責管理 AI 設定",
-          "description": "管理員已為此工作區設定企業 AI 服務商。",
-          "continue": "繼續企業設定"
-        },
         "warnings": {
           "byok": {
             "title": "你的資料由服務商處理",
@@ -339,16 +324,6 @@
               "2": "設定或下載模型，約 {{modelSize}}",
               "3": "等待安裝與啟用"
             }
-          },
-          "enterprise": {
-            "title": "請準備好你所屬組織的憑證",
-            "description": "只有在你的工作區政策允許時，才能進行手動企業設定。",
-            "continue": "設定企業版",
-            "steps": {
-              "1": "使用 SSO 登入或輸入已核准的憑證",
-              "2": "選擇可用的區域與模型",
-              "3": "啟用前測試受管連線"
-            }
           }
         },
         "useCloud": "改用雲端",
@@ -367,7 +342,6 @@
         "progress": "服務商設定進度",
         "dictation": "語音輸入",
         "assistant": "助理",
-        "intelligence": "智慧",
         "title": "連接你的 AI 服務商",
         "description": "選擇服務商、新增憑證，然後測試連線。",
         "descriptionLineOne": "選擇服務商並新增",
@@ -422,37 +396,6 @@
         "downloads": "模型下載",
         "downloading": "正在下載… {{progress}}%",
         "installing": "正在安裝模型…"
-      },
-      "enterprise": {
-        "title": "連接你的企業服務商",
-        "description": "使用你所屬組織的憑證，用於語音輸入智慧與 Assistant。",
-        "descriptionLineOne": "使用你所屬組織的憑證",
-        "descriptionLineTwo": "來連接服務商。",
-        "ssoProfile": "SSO 設定檔",
-        "accessKeys": "存取金鑰",
-        "profileName": "設定檔名稱",
-        "profilePlaceholder": "新增設定檔名稱",
-        "accessKeyIdPlaceholder": "輸入存取金鑰 ID",
-        "secretAccessKeyPlaceholder": "輸入秘密存取金鑰",
-        "sessionTokenPlaceholder": "輸入工作階段權杖",
-        "accessKeyId": "Access Key ID",
-        "secretAccessKey": "Secret Access Key",
-        "sessionToken": "Session Token（選填）",
-        "region": "區域",
-        "regionPlaceholder": "選擇區域",
-        "model": "模型",
-        "modelPlaceholder": "選擇模型",
-        "testConnection": "測試連線",
-        "managedTitle": "你的服務商由所屬組織管理",
-        "managedDescription": "OpenWhispr 將使用管理員指定的服務商與模型。",
-        "unavailable": "依你的工作區政策，企業設定無法使用。",
-        "modelListFallback": "正在顯示建議模型——無法載入完整目錄。",
-        "ssoSignIn": "使用公司 SSO 登入",
-        "ssoHint": "我們已開啟瀏覽器以完成登入。完成後請回到這裡。",
-        "finishInSettings": {
-          "title": "在「設定」中完成設定",
-          "description": "你所屬的組織使用 {{provider}}。現在可以繼續，準備好後在設定 → AI 模型中新增憑證。"
-        }
       }
     },
     "steps": {

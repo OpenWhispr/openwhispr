@@ -330,7 +330,7 @@ export function CompactOnboardingFrame({
         <BrandMark className="pointer-events-none absolute left-1/2 top-13 z-10 size-28 -translate-x-1/2 text-white" />
       )}
 
-      {/* The compact BrowserWindow is the authored 480x576 surface. This layer
+      {/* The compact BrowserWindow is the authored 480x624 surface. This layer
           deliberately remains square and full-bleed: Electron owns the actual
           window clipping, so a second CSS radius cannot expose dark seams around
           the top or bottom edges. */}

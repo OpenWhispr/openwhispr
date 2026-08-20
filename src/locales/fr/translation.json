@@ -304,21 +304,6 @@
             "free": "Gratuit pour toujours"
           }
         },
-        "enterprise": {
-          "title": "Entreprise",
-          "description": "Utilisez un fournisseur d’IA géré par votre organisation avec des contrôles d’équipe.",
-          "setUp": "Configurer Entreprise",
-          "features": {
-            "credentials": "Utilisez les identifiants de votre organisation",
-            "compliance": "SOC 2 Type II, HIPAA et ISO 27001",
-            "controls": "Gérez les accès avec des contrôles d’équipe"
-          }
-        },
-        "managed": {
-          "title": "Votre organisation gère la configuration de l’IA",
-          "description": "Votre administrateur a déjà configuré un fournisseur d’IA entreprise pour cet espace de travail.",
-          "continue": "Continuer avec la configuration entreprise"
-        },
         "warnings": {
           "byok": {
             "title": "Votre fournisseur traite vos données",
@@ -339,16 +324,6 @@
               "2": "Configurer ou télécharger un modèle, environ {{modelSize}}",
               "3": "Attendre l’installation et l’activation"
             }
-          },
-          "enterprise": {
-            "title": "Préparez les identifiants de votre organisation",
-            "description": "La configuration entreprise manuelle n’est disponible que si la politique de votre espace de travail l’autorise.",
-            "continue": "Configurer entreprise",
-            "steps": {
-              "1": "Se connecter avec SSO ou saisir des identifiants approuvés",
-              "2": "Choisir une région et un modèle disponibles",
-              "3": "Tester la connexion gérée avant l’activation"
-            }
           }
         },
         "useCloud": "Utiliser Cloud à la place",
@@ -367,7 +342,6 @@
         "progress": "Progression de la configuration du fournisseur",
         "dictation": "Dictée",
         "assistant": "Assistant",
-        "intelligence": "Intelligence",
         "title": "Connectez votre fournisseur d’IA",
         "description": "Choisissez un fournisseur, ajoutez vos identifiants et testez la connexion.",
         "descriptionLineOne": "Choisissez un fournisseur et ajoutez",
@@ -422,37 +396,6 @@
         "downloads": "Téléchargements de modèles",
         "downloading": "Téléchargement… {{progress}}%",
         "installing": "Installation du modèle…"
-      },
-      "enterprise": {
-        "title": "Connectez votre fournisseur entreprise",
-        "description": "Utilisez les identifiants de votre organisation pour l’intelligence de dictée et l’Assistant.",
-        "descriptionLineOne": "Utilisez les identifiants de votre organisation",
-        "descriptionLineTwo": "pour connecter un fournisseur.",
-        "ssoProfile": "Profil SSO",
-        "accessKeys": "Clés d’accès",
-        "profileName": "Nom du profil",
-        "profilePlaceholder": "Ajouter un nom de profil",
-        "accessKeyIdPlaceholder": "Ajoutez l’ID de clé d’accès",
-        "secretAccessKeyPlaceholder": "Ajoutez la clé d’accès secrète",
-        "sessionTokenPlaceholder": "Ajoutez le jeton de session",
-        "accessKeyId": "Access Key ID",
-        "secretAccessKey": "Secret Access Key",
-        "sessionToken": "Session Token (facultatif)",
-        "region": "Région",
-        "regionPlaceholder": "Choisir une région",
-        "model": "Modèle",
-        "modelPlaceholder": "Choisir un modèle",
-        "testConnection": "Tester la connexion",
-        "managedTitle": "Votre fournisseur est géré par votre organisation",
-        "managedDescription": "OpenWhispr utilisera le fournisseur et le modèle attribués par votre administrateur.",
-        "unavailable": "La configuration entreprise n’est pas disponible selon la politique de votre espace de travail.",
-        "modelListFallback": "Affichage des modèles suggérés — le catalogue complet n’a pas pu être chargé.",
-        "ssoSignIn": "Se connecter avec le SSO de l’entreprise",
-        "ssoHint": "Nous avons ouvert votre navigateur pour terminer la connexion. Revenez ici une fois terminé.",
-        "finishInSettings": {
-          "title": "Terminez la configuration dans les Réglages",
-          "description": "Votre organisation utilise {{provider}}. Continuez maintenant et ajoutez vos identifiants dans Réglages → Modèles d’IA quand vous serez prêt."
-        }
       }
     },
     "steps": {

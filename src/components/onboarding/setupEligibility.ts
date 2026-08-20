@@ -1,11 +1,9 @@
 import {
   filterByokProviderOptionsByPolicy,
-  isEnterpriseProviderAllowed,
   isModeAllowedByPolicy,
   isProviderAllowedByPolicy,
   type PolicyDecisionSnapshot,
 } from "../../stores/policyRules.ts";
-import type { EnterpriseTranscriptionNeed } from "./enterpriseTranscription.ts";
 
 interface ProviderOption {
   id: string;
@@ -16,7 +14,6 @@ export interface OnboardingSetupAvailability {
   local: boolean;
   byok: boolean;
   selfHosted: boolean;
-  enterprise: boolean;
 }
 
 /**
@@ -26,16 +23,12 @@ export interface OnboardingSetupAvailability {
  */
 export function getOnboardingSetupAvailability({
   policy,
-  enterpriseTranscription,
   transcriptionProviders,
   llmProviders,
-  managedEnterpriseAvailable,
 }: {
   policy: PolicyDecisionSnapshot;
-  enterpriseTranscription: EnterpriseTranscriptionNeed;
   transcriptionProviders: ProviderOption[];
   llmProviders: ProviderOption[];
-  managedEnterpriseAvailable: boolean;
 }): OnboardingSetupAvailability {
   const cloud =
     isModeAllowedByPolicy(policy, "transcription", "openwhispr") &&
@@ -53,15 +46,8 @@ export function getOnboardingSetupAvailability({
     isModeAllowedByPolicy(policy, "llm", "self-hosted") &&
     isProviderAllowedByPolicy(policy, "transcription", "custom") &&
     isProviderAllowedByPolicy(policy, "llm", "custom");
-  const manualEnterpriseAvailable = ["bedrock", "azure"].some((provider) =>
-    isEnterpriseProviderAllowed(policy, provider)
-  );
-  const enterprise =
-    enterpriseTranscription !== "unavailable" &&
-    isModeAllowedByPolicy(policy, "llm", "enterprise") &&
-    (managedEnterpriseAvailable || manualEnterpriseAvailable);
 
-  return { cloud, local, byok, selfHosted, enterprise };
+  return { cloud, local, byok, selfHosted };
 }
 
 export function hasAvailableOnboardingSetup(availability: OnboardingSetupAvailability): boolean {

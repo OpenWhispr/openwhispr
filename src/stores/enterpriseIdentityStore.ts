@@ -10,10 +10,7 @@ import type {
 } from "../types/enterpriseIdentity";
 import type { InferenceScope } from "../config/inferenceScopes";
 import logger from "../utils/logger";
-import {
-  hasEnforcedManagedProvider,
-  resolveManagedEnterpriseScope,
-} from "../helpers/enterpriseManagedConfig.mjs";
+import { resolveManagedEnterpriseScope } from "../helpers/enterpriseManagedConfig.mjs";
 import { isLlmSelectionAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
 
@@ -24,12 +21,6 @@ interface EnterpriseIdentityState {
   status: "idle" | "loading" | "ready" | "error";
   config: ManagedEnterpriseConfig | null;
   error: string | null;
-  /**
-   * The service error code behind `error` (e.g. SSO_REQUIRED), kept separate
-   * because `error` carries the human-readable message. UI keys recovery CTAs
-   * off this.
-   */
-  errorCode: string | null;
   failClosed: boolean;
   refresh: (
     accountId: string,
@@ -51,7 +42,6 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
   status: "idle",
   config: null,
   error: null,
-  errorCode: null,
   failClosed: false,
 
   refresh: (accountId, workspaceId, authGeneration, forceRefresh = false) => {
@@ -70,7 +60,6 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
       status: sameIdentity && current.config ? "ready" : "loading",
       config: sameIdentity ? current.config : null,
       error: null,
-      errorCode: null,
       failClosed: sameIdentity ? current.failClosed : false,
     });
 
@@ -91,14 +80,13 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
         ) {
           throw Object.assign(
             new Error(result.error || "Managed enterprise AI configuration is unavailable."),
-            { enforcementRequired: result.enforcementRequired, code: result.code }
+            { enforcementRequired: result.enforcementRequired }
           );
         }
         set({
           status: "ready",
           config: result.config ?? null,
           error: null,
-          errorCode: null,
           failClosed: false,
         });
       } catch (error) {
@@ -106,17 +94,22 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
         const message = error instanceof Error ? error.message : String(error);
         const enforcementRequired = (error as { enforcementRequired?: boolean })
           .enforcementRequired;
-        const code = (error as { code?: string }).code;
         logger.warn("Managed enterprise AI configuration unavailable", { error: message }, "auth");
         set({
           status: "error",
           config: null,
           error: message,
-          errorCode: typeof code === "string" ? code : null,
           failClosed:
             typeof enforcementRequired === "boolean"
               ? enforcementRequired
-              : current.failClosed || hasEnforcedManagedProvider(current.config),
+              : current.failClosed ||
+                Boolean(
+                  current.config?.providers.some(
+                    (record) =>
+                      record.mode !== "disabled" &&
+                      (record.mode === "managed_required" || !record.allowManualSetup)
+                  )
+                ),
         });
       } finally {
         if (inFlightKey === key) {
@@ -142,7 +135,6 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
       status: "idle",
       config: null,
       error: null,
-      errorCode: null,
       failClosed: false,
     });
   },
@@ -172,12 +164,18 @@ if (typeof window !== "undefined") {
       status: snapshot.config ? "ready" : "error",
       config: snapshot.config,
       error: snapshot.config ? null : snapshot.code,
-      errorCode: snapshot.config ? null : (snapshot.code ?? null),
       failClosed: snapshot.config
         ? false
         : typeof snapshot.enforcementRequired === "boolean"
           ? snapshot.enforcementRequired
-          : state.failClosed || hasEnforcedManagedProvider(state.config),
+          : state.failClosed ||
+            Boolean(
+              state.config?.providers.some(
+                (record) =>
+                  record.mode !== "disabled" &&
+                  (record.mode === "managed_required" || !record.allowManualSetup)
+              )
+            ),
     });
   });
 }

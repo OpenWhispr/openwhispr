@@ -54,84 +54,42 @@ test("setup choice appends the selected two-stage route", async () => {
   );
 });
 
-test("enterprise route borrows a transcription step when policy needs one", async () => {
-  const { getOnboardingRoute } = await load();
-  const base = { authPath: "guest", setupMode: "enterprise", agentAllowed: true };
-
-  // No need (openwhispr transcription allowed, committed in handleSetupSelection):
-  // the route is unchanged — with and without the explicit default.
-  assert.deepEqual(getOnboardingRoute(base).slice(-3), [
-    "setup-choice",
-    "enterprise-dictation",
-    "enterprise-assistant",
-  ]);
-  assert.deepEqual(
-    getOnboardingRoute({ ...base, enterpriseTranscription: "none" }),
-    getOnboardingRoute(base)
-  );
-
-  assert.deepEqual(getOnboardingRoute({ ...base, enterpriseTranscription: "byok" }).slice(-4), [
-    "setup-choice",
-    "byok-dictation",
-    "enterprise-dictation",
-    "enterprise-assistant",
-  ]);
-  // Self-hosted renders inside the byok step, so it borrows the same step id.
-  assert.deepEqual(
-    getOnboardingRoute({ ...base, enterpriseTranscription: "self-hosted" }),
-    getOnboardingRoute({ ...base, enterpriseTranscription: "byok" })
-  );
-  assert.deepEqual(getOnboardingRoute({ ...base, enterpriseTranscription: "local" }).slice(-4), [
-    "setup-choice",
-    "local-dictation",
-    "enterprise-dictation",
-    "enterprise-assistant",
-  ]);
-  assert.equal(
-    getOnboardingRoute({ ...base, enterpriseTranscription: "unavailable" }).at(-1),
-    "setup-choice"
-  );
-});
-
-test("enterprise transcription step survives the agent policy filter", async () => {
+test("a confirmed enterprise workspace ends the account route at notes", async () => {
   const { getOnboardingRoute } = await load();
   const route = getOnboardingRoute({
     authPath: "account",
-    setupMode: "enterprise",
-    agentAllowed: false,
-    enterpriseTranscription: "byok",
-  });
-  // The borrowed dictation step stays; only the assistant steps drop.
-  assert.deepEqual(route.slice(-3), ["setup-choice", "byok-dictation", "enterprise-dictation"]);
-  assert.equal(route.includes("enterprise-assistant"), false);
-});
-
-test("enterprise transcription steps leave the other routes untouched", async () => {
-  const { getOnboardingRoute } = await load();
-  const base = { authPath: "guest", agentAllowed: true };
-  // The field is enterprise-only; byok/local routes ignore it.
-  assert.deepEqual(
-    getOnboardingRoute({ ...base, setupMode: "byok", enterpriseTranscription: "local" }).slice(-2),
-    ["byok-dictation", "byok-assistant"]
-  );
-  assert.deepEqual(
-    getOnboardingRoute({ ...base, setupMode: "local", enterpriseTranscription: "byok" }).slice(-2),
-    ["local-dictation", "local-assistant"]
-  );
-});
-
-test("a session saved on the old enterprise route survives the new step", async () => {
-  const { getOnboardingRoute, reconcileStepWithRoute } = await load();
-  // Sessions persist step ids, not routes: a user who saved enterprise-dictation
-  // before the transcription step existed must resume without a version bump.
-  const route = getOnboardingRoute({
-    authPath: "account",
-    setupMode: "enterprise",
+    setupMode: null,
     agentAllowed: true,
-    enterpriseTranscription: "byok",
+    skipSetupChoice: true,
   });
-  assert.equal(reconcileStepWithRoute("enterprise-dictation", route), "enterprise-dictation");
-  assert.equal(reconcileStepWithRoute("byok-dictation", route), "byok-dictation");
+  assert.equal(route.at(-1), "notes");
+  assert.equal(route.includes("setup-choice"), false);
+});
+
+test("enterprise workspace entitlement requires a current paid entitlement", async () => {
+  const { isEnterpriseWorkspaceEntitled } = await load();
+  assert.equal(isEnterpriseWorkspaceEntitled({ plan: "enterprise", status: "active" }), true);
+  assert.equal(isEnterpriseWorkspaceEntitled({ plan: "enterprise", status: "trialing" }), true);
+  assert.equal(isEnterpriseWorkspaceEntitled({ plan: "enterprise", status: "past_due" }), false);
+  assert.equal(isEnterpriseWorkspaceEntitled({ plan: "pro", status: "active" }), false);
+  assert.equal(isEnterpriseWorkspaceEntitled(null), false);
+});
+
+test("only a signed-in account with an uncommitted choice skips enterprise setup", async () => {
+  const { shouldSkipOnboardingSetupChoice } = await load();
+  const base = {
+    isSignedIn: true,
+    authPath: "account",
+    setupMode: null,
+    activeWorkspace: { plan: "enterprise", status: "active" },
+  };
+
+  assert.equal(shouldSkipOnboardingSetupChoice(base), true);
+  assert.equal(shouldSkipOnboardingSetupChoice({ ...base, setupMode: "cloud" }), true);
+  assert.equal(shouldSkipOnboardingSetupChoice({ ...base, setupMode: "local" }), false);
+  assert.equal(shouldSkipOnboardingSetupChoice({ ...base, authPath: "guest" }), false);
+  assert.equal(shouldSkipOnboardingSetupChoice({ ...base, isSignedIn: false }), false);
+  assert.equal(shouldSkipOnboardingSetupChoice({ ...base, activeWorkspace: null }), false);
 });
 
 test("versioned sessions reject malformed or old data", async () => {
@@ -170,6 +128,10 @@ test("legacy numeric steps migrate conservatively", async () => {
   const { migrateLegacyOnboardingStep } = await load();
   assert.equal(migrateLegacyOnboardingStep(null), "auth");
   assert.equal(migrateLegacyOnboardingStep("0"), "auth");
+  // Old steps 1-2 predate the old permissions step, so they must resume at
+  // the new flow's permissions step rather than past it.
+  assert.equal(migrateLegacyOnboardingStep("1"), "permissions");
+  assert.equal(migrateLegacyOnboardingStep("2"), "permissions");
   assert.equal(migrateLegacyOnboardingStep("4"), "dictation-hotkey");
   assert.equal(migrateLegacyOnboardingStep("999"), "setup-choice");
 });

@@ -368,9 +368,9 @@ export default function AuthenticationStep({
   if (!AUTH_URL || !authClient) {
     return (
       <CompactOnboardingFrame embedded={embedded}>
-        <div className={`${frameInset("pt-48")} text-center`}>
+        <div className={`${frameInset("pt-44")} text-center`}>
           <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
-          <p className="mt-4 text-base text-muted-foreground">{t("auth.welcomeSubtitle")}</p>
+          <p className="mt-3 text-base text-muted-foreground">{t("auth.welcomeSubtitle")}</p>
           <div className="mt-8 rounded-xl border border-warning/20 bg-warning/5 p-3 text-sm text-warning">
             {t("auth.cloudNotConfigured")}
           </div>
@@ -490,9 +490,9 @@ export default function AuthenticationStep({
   if (authMode !== null) {
     return (
       <CompactOnboardingFrame embedded={embedded}>
-        <div className={`${frameInset("pt-42")} text-center`}>
+        <div className={`${frameInset("pt-38")} text-center`}>
           <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
-          <p className="mt-3 text-base text-[var(--onboarding-text-secondary)]">
+          <p className="mt-2 text-base text-[var(--onboarding-text-secondary)]">
             {t("auth.welcomeSubtitle")}
           </p>
 
@@ -641,9 +641,9 @@ export default function AuthenticationStep({
 
   return (
     <CompactOnboardingFrame embedded={embedded}>
-      <div className={`${frameInset("pt-42")} text-center`}>
+      <div className={`${frameInset("pt-38")} text-center`}>
         <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
-        <p className="mt-3 text-base text-[var(--onboarding-text-secondary)]">
+        <p className="mt-2 text-base text-[var(--onboarding-text-secondary)]">
           {t("auth.welcomeSubtitle")}
         </p>
 

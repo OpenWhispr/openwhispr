@@ -304,21 +304,6 @@
             "free": "Gratis para siempre"
           }
         },
-        "enterprise": {
-          "title": "Empresarial",
-          "description": "Usa un proveedor de IA gestionado por tu organización con controles de equipo.",
-          "setUp": "Configurar Empresarial",
-          "features": {
-            "credentials": "Usa las credenciales de tu organización",
-            "compliance": "SOC 2 Type II, HIPAA e ISO 27001",
-            "controls": "Gestiona el acceso con controles de equipo"
-          }
-        },
-        "managed": {
-          "title": "Tu organización gestiona la configuración de IA",
-          "description": "Tu administrador ya ha configurado un proveedor de IA empresarial para este espacio de trabajo.",
-          "continue": "Continuar con la configuración empresarial"
-        },
         "warnings": {
           "byok": {
             "title": "Tu proveedor gestiona tus datos",
@@ -339,16 +324,6 @@
               "2": "Configura o descarga un modelo, unos {{modelSize}}",
               "3": "Espera a la instalación y la activación"
             }
-          },
-          "enterprise": {
-            "title": "Ten a mano las credenciales de tu organización",
-            "description": "La configuración empresarial manual solo está disponible cuando la política de tu espacio de trabajo lo permite.",
-            "continue": "Configurar empresarial",
-            "steps": {
-              "1": "Inicia sesión con SSO o introduce credenciales aprobadas",
-              "2": "Elige una región y un modelo disponibles",
-              "3": "Prueba la conexión gestionada antes de activarla"
-            }
           }
         },
         "useCloud": "Usar Nube en su lugar",
@@ -367,7 +342,6 @@
         "progress": "Progreso de la configuración del proveedor",
         "dictation": "Dictado",
         "assistant": "Asistente",
-        "intelligence": "Inteligencia",
         "title": "Conecta tu proveedor de IA",
         "description": "Elige un proveedor, añade tus credenciales y prueba la conexión.",
         "descriptionLineOne": "Elige un proveedor y añade",
@@ -422,37 +396,6 @@
         "downloads": "Descargas de modelos",
         "downloading": "Descargando… {{progress}}%",
         "installing": "Instalando el modelo…"
-      },
-      "enterprise": {
-        "title": "Conecta tu proveedor empresarial",
-        "description": "Usa las credenciales de tu organización para la inteligencia de dictado y el Assistant.",
-        "descriptionLineOne": "Usa las credenciales de tu organización",
-        "descriptionLineTwo": "para conectar un proveedor.",
-        "ssoProfile": "Perfil SSO",
-        "accessKeys": "Claves de acceso",
-        "profileName": "Nombre del perfil",
-        "profilePlaceholder": "Añade el nombre del perfil",
-        "accessKeyIdPlaceholder": "Añade el ID de clave de acceso",
-        "secretAccessKeyPlaceholder": "Añade la clave de acceso secreta",
-        "sessionTokenPlaceholder": "Añade el token de sesión",
-        "accessKeyId": "Access Key ID",
-        "secretAccessKey": "Secret Access Key",
-        "sessionToken": "Session Token (opcional)",
-        "region": "Región",
-        "regionPlaceholder": "Elige una región",
-        "model": "Modelo",
-        "modelPlaceholder": "Elige un modelo",
-        "testConnection": "Probar conexión",
-        "managedTitle": "Tu proveedor lo gestiona tu organización",
-        "managedDescription": "OpenWhispr usará el proveedor y el modelo asignados por tu administrador.",
-        "unavailable": "La configuración empresarial no está disponible según la política de tu espacio de trabajo.",
-        "modelListFallback": "Mostrando modelos sugeridos: no se pudo cargar el catálogo completo.",
-        "ssoSignIn": "Inicia sesión con el SSO de tu empresa",
-        "ssoHint": "Abrimos tu navegador para completar el inicio de sesión. Vuelve aquí cuando termines.",
-        "finishInSettings": {
-          "title": "Termina la configuración en Ajustes",
-          "description": "Tu organización usa {{provider}}. Continúa ahora y añade tus credenciales en Ajustes → Modelos de IA cuando estés listo."
-        }
       }
     },
     "steps": {

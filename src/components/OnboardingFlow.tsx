@@ -13,24 +13,19 @@ import AssistantHotkeyPreview from "./onboarding/AssistantHotkeyPreview";
 import DemoStep from "./onboarding/DemoStep";
 import CalendarConnectionsStep from "./onboarding/CalendarConnectionsStep";
 import SetupChoiceStep from "./onboarding/SetupChoiceStep";
-import {
-  ByokProviderStep,
-  EnterpriseSetupStep,
-  LocalModelSetupStep,
-} from "./onboarding/ProviderSetupStep";
+import { ByokProviderStep, LocalModelSetupStep } from "./onboarding/ProviderSetupStep";
 import { AlertDialog } from "./ui/dialog";
 import { useAuth } from "../hooks/useAuth";
+import { signOut } from "../lib/auth";
 import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
+import { useWorkspace } from "../hooks/useWorkspace";
 import { usePolicyStore } from "../stores/policyStore";
-import { usePolicySnapshot } from "../hooks/usePolicy";
 import { isAgentAllowed } from "../stores/policyRules";
-import { getTranscriptionProviders } from "../models/ModelRegistry";
-import { getEnterpriseTranscriptionNeed } from "./onboarding/enterpriseTranscription";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import { formatHotkeyInstruction } from "./onboarding/hotkeyPresentation";
@@ -46,6 +41,7 @@ import {
   getOnboardingProgress,
   getOnboardingRoute,
   reconcileStepWithRoute,
+  shouldSkipOnboardingSetupChoice,
   type OnboardingSetupMode,
   type OnboardingStepId,
 } from "./onboarding/flow";
@@ -55,6 +51,8 @@ import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pen
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
 }
+
+type OnboardingCompletionMode = Exclude<OnboardingSetupMode, null> | "managed";
 
 function DemoHotkeyDescription({ text, hotkey }: { text: string; hotkey: string }) {
   const hotkeyStart = text.indexOf(hotkey);
@@ -113,12 +111,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setPermissionAlert({ title: dialog.title, description: dialog.description })
   );
   const systemAudio = useSystemAudioPermission();
-
-  const policy = usePolicySnapshot();
-  const enterpriseTranscription = useMemo(
-    () => getEnterpriseTranscriptionNeed(policy, getTranscriptionProviders()),
-    [policy]
-  );
+  // This hook also starts the membership fetch for already-authenticated users;
+  // relying on the login transition alone would leave resumed onboarding stuck
+  // waiting for workspace resolution after an app restart.
+  const { active: activeWorkspace, loaded: workspacesLoaded } = useWorkspace();
+  const enterpriseWorkspace = shouldSkipOnboardingSetupChoice({
+    isSignedIn,
+    authPath: session.authPath,
+    setupMode: session.setupMode,
+    activeWorkspace,
+  });
+  const workspaceResolutionPending =
+    isSignedIn && session.authPath === "account" && !workspacesLoaded;
 
   const route = useMemo(
     () =>
@@ -126,17 +130,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         authPath: session.authPath,
         setupMode: session.setupMode,
         agentAllowed,
-        enterpriseTranscription,
+        skipSetupChoice: enterpriseWorkspace,
       }),
-    [agentAllowed, enterpriseTranscription, session.authPath, session.setupMode]
+    [agentAllowed, enterpriseWorkspace, session.authPath, session.setupMode]
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
   const compact = COMPACT_STEPS.has(currentStepId);
-  // The setup steps after setup-choice, for the stage stepper: the enterprise
-  // route can borrow a byok/local transcription step, so the stepper needs the
-  // actual route segment rather than the derived two-step pair.
-  const setupChoiceIndex = route.indexOf("setup-choice");
-  const setupStepIds = setupChoiceIndex >= 0 ? route.slice(setupChoiceIndex + 1) : undefined;
 
   useEffect(() => {
     if (session.currentStepId !== currentStepId) {
@@ -251,7 +250,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   }, [isSignedIn, session.authPath, settings.onboardingUseCaseNote, settings.onboardingUseCases]);
 
   const finalizeOnboarding = useCallback(
-    async (mode: Exclude<OnboardingSetupMode, null>, options: { localPending?: boolean } = {}) => {
+    async (mode: OnboardingCompletionMode, options: { localPending?: boolean } = {}) => {
       if (isFinishing) return;
       setIsFinishing(true);
       setFatalError(null);
@@ -280,12 +279,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         // clears this flag) while the flag is set.
         //
         // Only preserve a pending download when the completed route still uses
-        // local models. Besides the normal local route, this branch can borrow a
-        // local transcription stage for enterprise policy. A user who instead
-        // walks Back and finishes on Cloud/BYOK must not be switched back to a
-        // stale local selection when that download completes later.
-        const routeKeepsLocalModels =
-          mode === "local" || (mode === "enterprise" && enterpriseTranscription === "local");
+        // local models. A user who walks Back and finishes on Cloud/BYOK must not
+        // be switched back to a stale local selection when it completes later.
+        const routeKeepsLocalModels = mode === "local";
         if (routeKeepsLocalModels && (options.localPending || hasPendingLocalModels())) {
           localStorage.setItem("localSetupPending", "true");
         } else {
@@ -308,7 +304,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     [
       clearSession,
       dictationHotkey,
-      enterpriseTranscription,
       isFinishing,
       onComplete,
       registerHotkey,
@@ -318,8 +313,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     ]
   );
 
+  // Sessions saved on the old setup-choice step reconcile back to Notes once an
+  // Enterprise workspace is confirmed. Finish them without writing provider or
+  // model settings, just as if Notes had been their final step originally.
+  useEffect(() => {
+    if (!enterpriseWorkspace || session.currentStepId !== "setup-choice" || isFinishing) {
+      return;
+    }
+    void finalizeOnboarding("managed");
+  }, [enterpriseWorkspace, finalizeOnboarding, isFinishing, session.currentStepId]);
+
   const applyReasoningSelectionToAllScopes = useCallback(
-    (mode: "byok" | "local" | "enterprise") => {
+    (mode: "byok" | "local") => {
       // getState(), not the render-time snapshot: the provider steps write
       // chatAgentProvider/chatAgentModel via switchReasoningProvider and call
       // onProceed() in the same tick, so `settingsStore` here still holds the
@@ -354,38 +359,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         await finalizeOnboarding("cloud");
         return;
       }
-      if (mode === "enterprise" && enterpriseTranscription === "none") {
-        // Enterprise setup covers the LLM scopes only; when policy allows the
-        // OpenWhispr cloud for speech-to-text, commit it explicitly here — the
-        // route has no transcription step, and leaving the defaults in place
-        // shipped installs whose transcription mode was never provisioned.
-        settingsStore.setCloudTranscriptionForAllScopes({
-          useLocalWhisper: false,
-          cloudTranscriptionMode: "openwhispr",
-          cloudTranscriptionProvider: "openwhispr",
-        });
-      }
       const nextRoute = getOnboardingRoute({
         authPath: session.authPath,
         setupMode: mode,
         agentAllowed,
-        enterpriseTranscription,
       });
       const next = getNextOnboardingStep("setup-choice", nextRoute);
       if (next) goTo(next);
     },
-    [
-      agentAllowed,
-      enterpriseTranscription,
-      finalizeOnboarding,
-      goTo,
-      session.authPath,
-      setSetupMode,
-      settingsStore,
-    ]
+    [agentAllowed, finalizeOnboarding, goTo, session.authPath, setSetupMode, settingsStore]
   );
 
   const continueFromCurrentStep = useCallback(async () => {
+    // A banner from an earlier failed attempt must not outlive the retry.
+    setFatalError(null);
+    if (currentStepId === "notes" && workspaceResolutionPending) return;
     if (currentStepId === "permissions") {
       if (getPlatform() === "darwin" && !permissions.accessibilityPermissionGranted) {
         setAccessibilitySkipped(true);
@@ -420,42 +408,23 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         useLocalWhisper: false,
         cloudTranscriptionMode: "byok",
       });
-      // When policy disallows the agent, the byok-assistant step is off-route and
-      // no LLM ever gets configured — turn cleanup off so dictations don't route
-      // to a default provider with no credential behind it. On the enterprise
-      // route this step only provisions transcription; the enterprise steps own
-      // the LLM scopes.
-      if (session.setupMode === "byok" && !route.includes("byok-assistant")) {
+      // When policy disallows the agent, the assistant step is off-route and no
+      // LLM gets configured. Turn cleanup off so dictations do not route to a
+      // default provider with no credential behind it.
+      if (!route.includes("byok-assistant")) {
         settingsStore.updateCleanupSettings({ useCleanupModel: false });
       }
     } else if (currentStepId === "byok-assistant") {
       applyReasoningSelectionToAllScopes("byok");
     } else if (currentStepId === "local-dictation") {
       settingsStore.setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
-      // Same policy-shortened-route case as byok: no local LLM was downloaded, so
-      // cleanup must not silently fall back to a cloud default. Not on the
-      // enterprise route, where the enterprise steps configure the LLM scopes.
-      if (session.setupMode === "local" && !route.includes("local-assistant")) {
+      // Same policy-shortened-route case as BYOK: no local LLM was downloaded,
+      // so cleanup must not silently fall back to a cloud default.
+      if (!route.includes("local-assistant")) {
         settingsStore.updateCleanupSettings({ useCleanupModel: false });
       }
     } else if (currentStepId === "local-assistant") {
       applyReasoningSelectionToAllScopes("local");
-    } else if (currentStepId === "enterprise-dictation") {
-      // With the agent disallowed the enterprise-assistant step never runs, yet
-      // the managed policy still expects the LLM scopes on the enterprise
-      // provider (getManagedScopeResolution rescues managed configs at resolve
-      // time, but manual setups are used as-is) — apply it from here instead.
-      if (!route.includes("enterprise-assistant")) {
-        applyReasoningSelectionToAllScopes("enterprise");
-      }
-    } else if (currentStepId === "enterprise-assistant") {
-      // "enterprise" is not one of TRANSCRIPTION_POLICY_CATALOG.modes, so it
-      // governs the LLM scopes only — speech-to-text was provisioned upstream
-      // (openwhispr commit in handleSetupSelection, or the borrowed
-      // byok/local-dictation step on this route). Without this, cleanup and
-      // note formatting keep their default provider and model with no
-      // credential behind them.
-      applyReasoningSelectionToAllScopes("enterprise");
     }
 
     const next = getNextOnboardingStep(currentStepId, route);
@@ -464,12 +433,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       return;
     }
 
+    if (enterpriseWorkspace) {
+      await finalizeOnboarding("managed");
+      return;
+    }
     if (session.setupMode) await finalizeOnboarding(session.setupMode);
   }, [
     applyReasoningSelectionToAllScopes,
     assistantHotkey,
     currentStepId,
     dictationHotkey,
+    enterpriseWorkspace,
     finalizeOnboarding,
     goTo,
     permissions.accessibilityPermissionGranted,
@@ -482,20 +456,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     syncUseCases,
     t,
     withExtraDictationHotkeys,
+    workspaceResolutionPending,
   ]);
 
   const skipLocalSetup = useCallback(async () => {
-    // On the enterprise route the local-dictation step is a borrowed
-    // transcription stage; skipping a still-running download must continue to
-    // the enterprise steps, not end onboarding. finalizeOnboarding's
-    // hasPendingLocalModels() check re-arms the marker at the end of the route.
-    if (session.setupMode === "enterprise") {
-      localStorage.setItem("localSetupPending", "true");
-      await continueFromCurrentStep();
-      return;
-    }
     await finalizeOnboarding("local", { localPending: true });
-  }, [continueFromCurrentStep, finalizeOnboarding, session.setupMode]);
+  }, [finalizeOnboarding]);
 
   const canContinue = (() => {
     switch (currentStepId) {
@@ -513,12 +479,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return assistantHotkeyConfirmed;
       case "assistant-demo":
         return assistantDemoSuccess;
+      case "notes":
+        return !workspaceResolutionPending;
       case "byok-dictation":
       case "byok-assistant":
       case "local-dictation":
       case "local-assistant":
-      case "enterprise-dictation":
-      case "enterprise-assistant":
         return stageReady;
       default:
         return true;
@@ -538,7 +504,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   setAuthPath("account");
                   goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
                 }}
-                onBack={() => setPendingVerificationEmail(null)}
+                onBack={() => {
+                  // Abandoning verification leaves a live session for the
+                  // wrong email; end it first or the remounted auth step
+                  // auto-completes with that account (signOut never rejects).
+                  void signOut().then(() => setPendingVerificationEmail(null));
+                }}
               />
             ) : (
               <AuthenticationStep
@@ -782,7 +753,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             <SetupChoiceStep
               isSignedIn={isSignedIn}
-              enterpriseTranscription={enterpriseTranscription}
               onSelect={(mode, options) => void handleSetupSelection(mode, options)}
               onRequestAuthentication={() => {
                 setSetupMode("cloud");
@@ -810,11 +780,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             </div>
             <ByokProviderStep
               stepId={currentStepId}
-              stepIds={setupStepIds}
-              selfHostedRequested={
-                selfHostedRequested ||
-                (session.setupMode === "enterprise" && enterpriseTranscription === "self-hosted")
-              }
+              selfHostedRequested={selfHostedRequested}
               onConnectionChange={setStageReady}
               onProceed={() => void continueFromCurrentStep()}
             />
@@ -838,36 +804,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             <LocalModelSetupStep
               stepId={currentStepId}
-              stepIds={setupStepIds}
               onReadinessChange={setStageReady}
               onProceed={() => void continueFromCurrentStep()}
               onSkip={() => void skipLocalSetup()}
-            />
-          </div>
-        );
-
-      case "enterprise-dictation":
-      case "enterprise-assistant":
-        return (
-          <div className="h-full w-full pt-2">
-            <OnboardingStepHeader
-              title={t("onboarding.rehaul.enterprise.title")}
-              description={t("onboarding.rehaul.enterprise.description")}
-              descriptionLines={[
-                t("onboarding.rehaul.enterprise.descriptionLineOne"),
-                t("onboarding.rehaul.enterprise.descriptionLineTwo"),
-              ]}
-              wideTitle
-            />
-            <EnterpriseSetupStep
-              stepId={currentStepId}
-              stepIds={setupStepIds}
-              onConnectionChange={setStageReady}
-              onProceed={() => void continueFromCurrentStep()}
-              onRequestAuthentication={() => {
-                setAuthPath(null);
-                goTo("auth");
-              }}
             />
           </div>
         );
@@ -883,9 +822,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     currentStepId === "byok-dictation" ||
     currentStepId === "byok-assistant" ||
     currentStepId === "local-dictation" ||
-    currentStepId === "local-assistant" ||
-    currentStepId === "enterprise-dictation" ||
-    currentStepId === "enterprise-assistant";
+    currentStepId === "local-assistant";
   // Choice/provider pages own their forward action, while hotkey/demo pages
   // withhold Continue until their task is complete.
   const showsContinue =
@@ -914,7 +851,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }
         skipLabel={t("common.skip")}
         continueDisabled={!canContinue}
-        continueLoading={isFinishing || isRegistering}
+        continueLoading={
+          isFinishing || isRegistering || (currentStepId === "notes" && workspaceResolutionPending)
+        }
         progress={getOnboardingProgress(currentStepId, route)}
         // Label Back only when it is the sole footer action. Unlike the source
         // commit, this branch also has demo Skip, so Back stays icon-only there.

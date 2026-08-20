@@ -30,10 +30,8 @@ function availability(policy, overrides = {}) {
   return load().then(({ getOnboardingSetupAvailability }) =>
     getOnboardingSetupAvailability({
       policy,
-      enterpriseTranscription: "none",
       transcriptionProviders: TRANSCRIPTION_PROVIDERS,
       llmProviders: LLM_PROVIDERS,
-      managedEnterpriseAvailable: false,
       ...overrides,
     })
   );
@@ -73,39 +71,21 @@ test("self-hosted eligibility is independent from hosted provider mode", async (
   assert.equal(result.selfHosted, true);
 });
 
-test("manual enterprise exposes only providers onboarding can configure", async () => {
-  const enterprisePolicy = (provider) =>
-    managedPolicy({
-      transcription: { allowedModes: ["openwhispr"], allowedByokProviders: [] },
-      llm: {
-        allowedModes: ["enterprise"],
-        allowedByokProviders: [],
-        allowedEnterpriseProviders: [provider],
-      },
-    });
-
-  assert.equal((await availability(enterprisePolicy("vertex"))).enterprise, false);
-  assert.equal((await availability(enterprisePolicy("bedrock"))).enterprise, true);
-  assert.equal((await availability(enterprisePolicy("azure"))).enterprise, true);
-});
-
-test("enterprise is blocked when transcription has no policy-compliant setup", async () => {
+test("availability reports no setup when policy permits no onboarding mode", async () => {
   const policy = managedPolicy({
     transcription: { allowedModes: [], allowedByokProviders: [] },
     llm: {
-      allowedModes: ["enterprise"],
+      allowedModes: [],
       allowedByokProviders: [],
-      allowedEnterpriseProviders: ["bedrock"],
+      allowedEnterpriseProviders: [],
     },
   });
 
-  const result = await availability(policy, { enterpriseTranscription: "unavailable" });
-  assert.equal(result.enterprise, false);
+  const result = await availability(policy);
   assert.deepEqual(result, {
     cloud: false,
     local: false,
     byok: false,
     selfHosted: false,
-    enterprise: false,
   });
 });

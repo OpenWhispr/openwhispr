@@ -304,21 +304,6 @@
             "free": "永久免费使用"
           }
         },
-        "enterprise": {
-          "title": "企业",
-          "description": "使用由组织管理的 AI 服务商，并具备团队管控能力。",
-          "setUp": "设置企业版",
-          "features": {
-            "credentials": "使用你所在组织的凭据",
-            "compliance": "SOC 2 Type II、HIPAA 和 ISO 27001",
-            "controls": "通过团队管控管理访问权限"
-          }
-        },
-        "managed": {
-          "title": "你所在的组织负责管理 AI 设置",
-          "description": "管理员已为此工作区配置了企业 AI 服务商。",
-          "continue": "继续企业设置"
-        },
         "warnings": {
           "byok": {
             "title": "你的数据由服务商处理",
@@ -339,16 +324,6 @@
               "2": "配置或下载模型，约 {{modelSize}}",
               "3": "等待安装和启用"
             }
-          },
-          "enterprise": {
-            "title": "请准备好你所在组织的凭据",
-            "description": "只有在你的工作区策略允许时，才能进行手动企业设置。",
-            "continue": "设置企业版",
-            "steps": {
-              "1": "使用 SSO 登录或输入已批准的凭据",
-              "2": "选择可用的区域和模型",
-              "3": "启用前测试托管连接"
-            }
           }
         },
         "useCloud": "改用云端",
@@ -367,7 +342,6 @@
         "progress": "服务商设置进度",
         "dictation": "听写",
         "assistant": "助手",
-        "intelligence": "智能",
         "title": "连接你的 AI 服务商",
         "description": "选择服务商，添加凭据，然后测试连接。",
         "descriptionLineOne": "选择服务商并添加",
@@ -422,37 +396,6 @@
         "downloads": "模型下载",
         "downloading": "正在下载… {{progress}}%",
         "installing": "正在安装模型…"
-      },
-      "enterprise": {
-        "title": "连接你的企业服务商",
-        "description": "使用你所在组织的凭据来支持听写智能和 Assistant。",
-        "descriptionLineOne": "使用你所在组织的凭据",
-        "descriptionLineTwo": "来连接服务商。",
-        "ssoProfile": "SSO 配置",
-        "accessKeys": "访问密钥",
-        "profileName": "配置名称",
-        "profilePlaceholder": "添加配置名称",
-        "accessKeyIdPlaceholder": "输入访问密钥 ID",
-        "secretAccessKeyPlaceholder": "输入秘密访问密钥",
-        "sessionTokenPlaceholder": "输入会话令牌",
-        "accessKeyId": "Access Key ID",
-        "secretAccessKey": "Secret Access Key",
-        "sessionToken": "Session Token（可选）",
-        "region": "区域",
-        "regionPlaceholder": "选择区域",
-        "model": "模型",
-        "modelPlaceholder": "选择模型",
-        "testConnection": "测试连接",
-        "managedTitle": "你的服务商由所在组织管理",
-        "managedDescription": "OpenWhispr 将使用管理员指定的服务商和模型。",
-        "unavailable": "根据你的工作区策略，企业设置不可用。",
-        "modelListFallback": "正在显示推荐模型——无法加载完整目录。",
-        "ssoSignIn": "使用公司 SSO 登录",
-        "ssoHint": "我们已打开浏览器以完成登录。完成后请回到这里。",
-        "finishInSettings": {
-          "title": "在设置中完成配置",
-          "description": "你所在的组织使用 {{provider}}。现在可以继续，准备好后在设置 → AI 模型中添加凭据。"
-        }
       }
     },
     "steps": {

@@ -140,7 +140,7 @@ export default function CompactPermissionsStep({
           document.body
         )}
 
-      <div className="px-6 pt-48 text-center">
+      <div className="px-6 pt-44 text-center">
         {/* text-balance evens the two lines out ("Set up OpenWhispr" / "in 3
             minutes") instead of leaving one word stranded. Preferred over a
             hardcoded <br> because the break point stays correct in all 9
@@ -148,7 +148,7 @@ export default function CompactPermissionsStep({
         <h1 className="onboarding-display-title mx-auto max-w-72 text-balance">
           {t("onboarding.rehaul.permissions.title")}
         </h1>
-        <p className="mt-4 text-base text-[var(--onboarding-text-secondary)]">
+        <p className="mt-3 text-base text-[var(--onboarding-text-secondary)]">
           {t("auth.welcomeSubtitle")}
         </p>
 

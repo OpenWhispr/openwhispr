@@ -304,21 +304,6 @@
             "free": "Gratis per sempre"
           }
         },
-        "enterprise": {
-          "title": "Aziendale",
-          "description": "Usa un provider IA gestito dall’organizzazione con controlli per il team.",
-          "setUp": "Configura Aziendale",
-          "features": {
-            "credentials": "Usa le credenziali della tua organizzazione",
-            "compliance": "SOC 2 Type II, HIPAA e ISO 27001",
-            "controls": "Gestisci gli accessi con i controlli per il team"
-          }
-        },
-        "managed": {
-          "title": "La tua organizzazione gestisce la configurazione dell’IA",
-          "description": "Il tuo amministratore ha già configurato un provider IA aziendale per questo spazio di lavoro.",
-          "continue": "Continua con la configurazione aziendale"
-        },
         "warnings": {
           "byok": {
             "title": "Il tuo provider gestisce i tuoi dati",
@@ -339,16 +324,6 @@
               "2": "Configura o scarica un modello, circa {{modelSize}}",
               "3": "Attendi installazione e attivazione"
             }
-          },
-          "enterprise": {
-            "title": "Tieni pronte le credenziali della tua organizzazione",
-            "description": "La configurazione aziendale manuale è disponibile solo se i criteri del tuo spazio di lavoro la consentono.",
-            "continue": "Configura aziendale",
-            "steps": {
-              "1": "Accedi con SSO o inserisci credenziali approvate",
-              "2": "Scegli una regione e un modello disponibili",
-              "3": "Prova la connessione gestita prima dell’attivazione"
-            }
           }
         },
         "useCloud": "Usa Cloud invece",
@@ -367,7 +342,6 @@
         "progress": "Avanzamento della configurazione del provider",
         "dictation": "Dettatura",
         "assistant": "Assistente",
-        "intelligence": "Intelligenza",
         "title": "Connetti il tuo provider IA",
         "description": "Scegli un provider, aggiungi le credenziali e prova la connessione.",
         "descriptionLineOne": "Scegli un provider e aggiungi",
@@ -422,37 +396,6 @@
         "downloads": "Download dei modelli",
         "downloading": "Download in corso… {{progress}}%",
         "installing": "Installazione del modello…"
-      },
-      "enterprise": {
-        "title": "Connetti il tuo provider aziendale",
-        "description": "Usa le credenziali della tua organizzazione per l’intelligenza di dettatura e l’Assistant.",
-        "descriptionLineOne": "Usa le credenziali della tua organizzazione",
-        "descriptionLineTwo": "per connettere un provider.",
-        "ssoProfile": "Profilo SSO",
-        "accessKeys": "Chiavi di accesso",
-        "profileName": "Nome profilo",
-        "profilePlaceholder": "Aggiungi il nome del profilo",
-        "accessKeyIdPlaceholder": "Aggiungi l’ID della chiave di accesso",
-        "secretAccessKeyPlaceholder": "Aggiungi la chiave di accesso segreta",
-        "sessionTokenPlaceholder": "Aggiungi il token di sessione",
-        "accessKeyId": "Access Key ID",
-        "secretAccessKey": "Secret Access Key",
-        "sessionToken": "Session Token (facoltativo)",
-        "region": "Regione",
-        "regionPlaceholder": "Scegli una regione",
-        "model": "Modello",
-        "modelPlaceholder": "Scegli un modello",
-        "testConnection": "Testa connessione",
-        "managedTitle": "Il tuo provider è gestito dalla tua organizzazione",
-        "managedDescription": "OpenWhispr userà il provider e il modello assegnati dal tuo amministratore.",
-        "unavailable": "La configurazione aziendale non è disponibile con i criteri del tuo spazio di lavoro.",
-        "modelListFallback": "Vengono mostrati i modelli suggeriti: non è stato possibile caricare il catalogo completo.",
-        "ssoSignIn": "Accedi con l’SSO aziendale",
-        "ssoHint": "Abbiamo aperto il browser per completare l’accesso. Torna qui quando hai finito.",
-        "finishInSettings": {
-          "title": "Completa la configurazione nelle Impostazioni",
-          "description": "La tua organizzazione usa {{provider}}. Continua ora e aggiungi le credenziali in Impostazioni → Modelli IA quando sei pronto."
-        }
       }
     },
     "steps": {

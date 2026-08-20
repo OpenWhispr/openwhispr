@@ -304,21 +304,6 @@
             "free": "Forever free to use"
           }
         },
-        "enterprise": {
-          "title": "Enterprise",
-          "description": "Use an organization-managed AI provider with team controls.",
-          "setUp": "Set up Enterprise",
-          "features": {
-            "credentials": "Use your organization’s credentials",
-            "compliance": "SOC 2 Type II, HIPAA, and ISO 27001",
-            "controls": "Manage access with team controls"
-          }
-        },
-        "managed": {
-          "title": "Your organization manages AI setup",
-          "description": "Your administrator has already configured an enterprise AI provider for this workspace.",
-          "continue": "Continue with enterprise setup"
-        },
         "warnings": {
           "byok": {
             "title": "Your provider handles your data",
@@ -339,16 +324,6 @@
               "2": "Configure or download a model, about {{modelSize}}",
               "3": "Wait for installation and activation"
             }
-          },
-          "enterprise": {
-            "title": "Have your organization credentials ready",
-            "description": "Manual enterprise setup is available only when your workspace policy permits it.",
-            "continue": "Set up enterprise",
-            "steps": {
-              "1": "Sign in with SSO or enter approved credentials",
-              "2": "Choose an available region and model",
-              "3": "Test the managed connection before activation"
-            }
           }
         },
         "useCloud": "Use Cloud instead",
@@ -367,7 +342,6 @@
         "progress": "Provider setup progress",
         "dictation": "Dictation",
         "assistant": "Assistant",
-        "intelligence": "Intelligence",
         "title": "Connect your AI provider",
         "description": "Choose a provider, add your credentials, and test the connection.",
         "descriptionLineOne": "Choose a provider and add",
@@ -422,37 +396,6 @@
         "downloads": "Model downloads",
         "downloading": "Downloading… {{progress}}%",
         "installing": "Installing model…"
-      },
-      "enterprise": {
-        "title": "Connect your enterprise provider",
-        "description": "Use your organization’s credentials for dictation intelligence and the Assistant.",
-        "descriptionLineOne": "Use your organization’s credentials",
-        "descriptionLineTwo": "to connect a provider.",
-        "ssoProfile": "SSO Profile",
-        "accessKeys": "Access Keys",
-        "profileName": "Profile Name",
-        "profilePlaceholder": "Add profile name",
-        "accessKeyIdPlaceholder": "Add access key ID",
-        "secretAccessKeyPlaceholder": "Add secret access key",
-        "sessionTokenPlaceholder": "Add session token",
-        "accessKeyId": "Access Key ID",
-        "secretAccessKey": "Secret Access Key",
-        "sessionToken": "Session Token (optional)",
-        "region": "Region",
-        "regionPlaceholder": "Choose a region",
-        "model": "Model",
-        "modelPlaceholder": "Choose a model",
-        "testConnection": "Test Connection",
-        "managedTitle": "Your provider is managed by your organization",
-        "managedDescription": "OpenWhispr will use the provider and model assigned by your administrator.",
-        "unavailable": "Enterprise setup is unavailable under your workspace policy.",
-        "modelListFallback": "Showing suggested models — the full catalog couldn't be loaded.",
-        "ssoSignIn": "Sign in with company SSO",
-        "ssoHint": "We opened your browser to finish signing in. Come back here when you're done.",
-        "finishInSettings": {
-          "title": "Finish setup in Settings",
-          "description": "Your organization uses {{provider}}. Continue now and add your credentials in Settings → AI Models when you're ready."
-        }
       }
     },
     "steps": {

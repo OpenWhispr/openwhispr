@@ -6,20 +6,9 @@ import { CheckCircle, XCircle, Loader2, Copy } from "lucide-react";
 interface TestConnectionButtonProps {
   provider: string;
   getConfig: () => Record<string, unknown>;
-  onStatusChange?: (connected: boolean) => void;
-  variant?: "default" | "inline";
-  disabled?: boolean;
-  resetKey?: string;
 }
 
-export default function TestConnectionButton({
-  provider,
-  getConfig,
-  onStatusChange,
-  variant = "default",
-  disabled = false,
-  resetKey,
-}: TestConnectionButtonProps) {
+export default function TestConnectionButton({ provider, getConfig }: TestConnectionButtonProps) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [errorInfo, setErrorInfo] = useState<{
@@ -31,21 +20,15 @@ export default function TestConnectionButton({
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    requestIdRef.current += 1;
-    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    setStatus("idle");
-    setErrorInfo(null);
-    onStatusChange?.(false);
     return () => {
       requestIdRef.current += 1;
       if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
     };
-  }, [onStatusChange, resetKey]);
+  }, []);
 
   const handleTest = async () => {
     const requestId = ++requestIdRef.current;
     setStatus("testing");
-    onStatusChange?.(false);
     setErrorInfo(null);
     try {
       const result:
@@ -59,13 +42,11 @@ export default function TestConnectionButton({
       if (requestId !== requestIdRef.current) return;
       if (result?.success) {
         setStatus("success");
-        onStatusChange?.(true);
         resetTimerRef.current = setTimeout(() => {
           if (requestId === requestIdRef.current) setStatus("idle");
         }, 8000);
       } else {
         setStatus("error");
-        onStatusChange?.(false);
         setErrorInfo({
           message: result?.error || "Connection failed",
           action: result?.action,
@@ -75,7 +56,6 @@ export default function TestConnectionButton({
     } catch {
       if (requestId !== requestIdRef.current) return;
       setStatus("error");
-      onStatusChange?.(false);
       setErrorInfo({ message: "Connection test failed unexpectedly." });
     }
   };
@@ -84,45 +64,6 @@ export default function TestConnectionButton({
     navigator.clipboard.writeText(text);
   };
 
-  if (variant === "inline") {
-    return (
-      <div className="space-y-2">
-        {/* The inline variant only renders inside the onboarding canvas, so it
-            uses the --onboarding-* tokens (like ProviderConnectionTest) instead
-            of a hardcoded light palette that ignores dark mode. */}
-        <div className="flex h-11 items-center justify-between rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3">
-          <span className="text-xs font-medium text-[var(--onboarding-text-primary)]">
-            {t("onboarding.rehaul.enterprise.testConnection")}
-          </span>
-          <Button
-            type="button"
-            onClick={handleTest}
-            disabled={disabled || status === "testing"}
-            className="h-7 rounded-full border-[var(--onboarding-inverse-surface)]! bg-[var(--onboarding-inverse-surface)] px-3 text-[0.6875rem] font-normal text-[var(--onboarding-inverse-text)] shadow-none! hover:bg-[var(--onboarding-inverse-surface-secondary)] disabled:border-[var(--onboarding-surface-tertiary)]! disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)] disabled:opacity-100!"
-          >
-            {status === "testing" && <Loader2 className="mr-1.5 size-3 animate-spin" />}
-            {status === "success" && <CheckCircle className="mr-1.5 size-3" />}
-            {status === "error" && <XCircle className="mr-1.5 size-3" />}
-            {status === "testing"
-              ? t("reasoning.enterprise.testing", { defaultValue: "Testing..." })
-              : status === "success"
-                ? t("reasoning.enterprise.testSuccess", { defaultValue: "Connected" })
-                : t("onboarding.rehaul.provider.runTest")}
-          </Button>
-        </div>
-
-        {status === "error" && errorInfo && (
-          <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-2.5">
-            <p className="text-xs font-medium text-destructive">{errorInfo.message}</p>
-            {errorInfo.action && (
-              <p className="mt-1 text-xs text-muted-foreground">{errorInfo.action}</p>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-2 pt-2">
       <Button
@@ -130,7 +71,7 @@ export default function TestConnectionButton({
         variant="outline"
         size="sm"
         onClick={handleTest}
-        disabled={disabled || status === "testing"}
+        disabled={status === "testing"}
         className="w-full"
       >
         {status === "testing" && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
