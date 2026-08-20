@@ -287,6 +287,7 @@ export function useChatStreaming({
       }
 
       const ragContext = await buildRAGContext(userText, scope);
+      if (cancelled() || !mountedRef.current) return;
       const combinedContext = [noteContextRef.current, ragContext].filter(Boolean).join("\n\n");
       // The user's dictionary rides on every conversation so replies use their
       // jargon — same suffix the dictation prompts carry.

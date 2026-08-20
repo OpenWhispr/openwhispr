@@ -736,6 +736,10 @@ class ReasoningService extends BaseReasoningService {
             ? "local"
             : "providers";
     assertAgentSessionAllowedByPolicy(provider, mode);
+    // cancelActiveStream() aborts this controller; streamText propagates it
+    // into doStream, cancelling the enterprise IPC proxy's request in main.
+    const abortController = new AbortController();
+    this.streamAbortController = abortController;
     const isEnterprise = route.kind === "enterprise";
     const isLocalProvider = route.kind === "local";
     const isLanChat = route.kind === "self-hosted";
@@ -788,6 +792,11 @@ class ReasoningService extends BaseReasoningService {
           disableThinking: openrouterDisableThinking,
         });
 
+    if (abortController.signal.aborted) {
+      yield { type: "done", finishReason: "stop" };
+      return;
+    }
+
     const apiConfig = detectEndpointDialect(baseURL) ?? getOpenAiApiConfig(model, provider);
     const modelDef = getCloudModel(model);
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
@@ -819,11 +828,6 @@ class ReasoningService extends BaseReasoningService {
     });
 
     const useTemperature = isLocalProvider || isLanChat || apiConfig.supportsTemperature;
-
-    // cancelActiveStream() aborts this controller; streamText propagates it
-    // into doStream, cancelling the enterprise IPC proxy's request in main.
-    const abortController = new AbortController();
-    this.streamAbortController = abortController;
 
     const result = streamText({
       model: aiModel,
@@ -1034,7 +1038,7 @@ class ReasoningService extends BaseReasoningService {
     return { stream: generator, wasCancelled: () => cancelled };
   }
 
-  async *processTextStreamingCloud(
+  processTextStreamingCloud(
     messages: Array<{ role: string; content: string | Array<unknown> }>,
     config: {
       systemPrompt: string;
@@ -1043,8 +1047,22 @@ class ReasoningService extends BaseReasoningService {
       screenContext?: { data: string; mediaType: string };
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
-    assertAgentSessionAllowedByPolicy("openwhispr", "openwhispr");
+    // Capture synchronously so a cancel before the first next() is observed.
     const operationGeneration = ++this.cloudOperationGeneration;
+    return this._processTextStreamingCloud(messages, config, operationGeneration);
+  }
+
+  private async *_processTextStreamingCloud(
+    messages: Array<{ role: string; content: string | Array<unknown> }>,
+    config: {
+      systemPrompt: string;
+      tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+      executeToolCall?: (name: string, args: string) => Promise<ToolExecutionResult>;
+      screenContext?: { data: string; mediaType: string };
+    },
+    operationGeneration: number
+  ): AsyncGenerator<AgentStreamChunk, void, unknown> {
+    assertAgentSessionAllowedByPolicy("openwhispr", "openwhispr");
     const operationWasCancelled = (): boolean =>
       operationGeneration !== this.cloudOperationGeneration;
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;

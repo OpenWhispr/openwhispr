@@ -287,6 +287,53 @@ test("tool-enabled streaming does not flush buffered text after abort", async (t
   assert.equal(await collectAgentText(stream), "");
 });
 
+test("cancelling during local model setup stops before streaming begins", async (t) => {
+  let resolveServer;
+  let serverStarted = false;
+  const serverReady = new Promise((resolve) => {
+    resolveServer = resolve;
+  });
+  const { reasoningService } = await loadReasoningService(
+    t,
+    "openwhispr-model-setup-cancel-test-",
+    {
+      window: {
+        electronAPI: {
+          llamaServerStart: () => {
+            serverStarted = true;
+            return serverReady;
+          },
+        },
+      },
+    }
+  );
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  globalThis.fetch = async () => createOpenAiSseResponse(["late answer"]);
+
+  const stream = reasoningService.processTextStreamingAI(
+    [{ role: "user", content: "hello" }],
+    "qwen3-4b-q4_k_m",
+    "local",
+    { systemPrompt: "Answer the user.", disableThinking: true },
+    {}
+  );
+  const first = stream.next();
+  for (let i = 0; i < 50 && !serverStarted; i++) await waitForMicrotasks();
+  assert.equal(serverStarted, true, "fixture setup: local model setup must be pending");
+
+  reasoningService.cancelActiveStream();
+  resolveServer({ success: true, port: 11434 });
+
+  assert.deepEqual(await first, {
+    value: { type: "done", finishReason: "stop" },
+    done: false,
+  });
+  assert.equal((await stream.next()).done, true);
+});
+
 // Was "does not flush buffered text after error" and asserted the stream
 // silently ended with "". A provider-reported error part must now reject the
 // generator instead; buffered text must still never leak into that rejection.
@@ -504,6 +551,27 @@ test("cancelling a cloud agent stream aborts main and ends the local generator",
   assert.deepEqual(bridge.cancelCalls, [requestId]);
   assert.equal((await pending).done, true);
   assert.deepEqual(bridge.cleanupCounts, { chunk: 1, error: 1, end: 1 });
+});
+
+test("cancelling a cloud stream before its first next prevents the request", async (t) => {
+  const bridge = createAgentStreamBridge();
+  const { reasoningService } = await loadReasoningService(
+    t,
+    "openwhispr-cloud-agent-pre-next-cancel-test-",
+    { window: { electronAPI: bridge.electronAPI } }
+  );
+  const stream = reasoningService.processTextStreamingCloud([{ role: "user", content: "hello" }], {
+    systemPrompt: "Answer the user.",
+  });
+
+  reasoningService.cancelActiveStream();
+  const first = stream.next();
+  await waitForMicrotasks();
+  const startedRequests = bridge.startCalls.length;
+  if (startedRequests > 0) reasoningService.cancelActiveStream();
+
+  assert.equal(startedRequests, 0);
+  assert.equal((await first).done, true);
 });
 
 test("cancelling a cloud agent stream drops chunks already queued locally", async (t) => {

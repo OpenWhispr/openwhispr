@@ -45,8 +45,8 @@ const EMPTY_RESPONSE_TEXT = JSON.parse(
   fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
 ).agentMode.chat.emptyResponse;
 
-async function renderChatStreaming(t) {
-  installBrowserGlobals(t, { window: { electronAPI: {} } });
+async function renderChatStreaming(t, { electronAPI = {} } = {}) {
+  installBrowserGlobals(t, { window: { electronAPI } });
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-cancellation-test-",
   });
@@ -124,6 +124,45 @@ test("a genuine empty completion still shows the empty-response fallback", async
   const [message] = getMessages();
   assert.equal(message.content, EMPTY_RESPONSE_TEXT);
   assert.equal(message.isStreaming, false);
+});
+
+test("cancelling during RAG setup does not start an assistant reply", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  globalThis.fetch = async () => {
+    const finishEvent = `data: ${JSON.stringify(createOpenAiChunk({}, "stop"))}\n\n`;
+    return new Response(`${finishEvent}data: [DONE]\n\n`, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  let resolveSearch;
+  let searchStarted = false;
+  const searchResults = new Promise((resolve) => {
+    resolveSearch = resolve;
+  });
+  const { captured, getMessages } = await renderChatStreaming(t, {
+    electronAPI: {
+      semanticSearchNotes: () => {
+        searchStarted = true;
+        return searchResults;
+      },
+    },
+  });
+
+  const sendPromise = captured.sendToAI("hello", []);
+  const waitForMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+  for (let i = 0; i < 50 && !searchStarted; i++) await waitForMicrotasks();
+  assert.equal(searchStarted, true, "fixture setup: RAG search must be pending before cancelling");
+
+  captured.cancelStream();
+  resolveSearch([]);
+  await sendPromise;
+
+  assert.deepEqual(getMessages(), []);
 });
 
 test("cancelling before any token arrives never shows the empty-response fallback", async (t) => {
