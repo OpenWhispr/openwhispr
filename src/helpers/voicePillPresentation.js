@@ -1,4 +1,4 @@
-import { LIVE_TRANSCRIPT_SURFACE_LIMITS } from "./voiceSurfaceGeometry";
+import { LIVE_TRANSCRIPT_SURFACE_LIMITS } from "./voiceSurfaceGeometry.mjs";
 
 export { LIVE_TRANSCRIPT_SURFACE_LIMITS };
 

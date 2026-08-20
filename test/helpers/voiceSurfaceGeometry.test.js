@@ -50,17 +50,17 @@ test("the main-process assistant window consumes the shared voice-surface geomet
   assert.deepEqual(windowConfig.WINDOW_SIZES.ASSISTANT, { width: 531, height: 656 });
 });
 
-test("the CommonJS geometry contract agrees with the native assistant footprint", async () => {
+test("the main and renderer geometry adapters agree with the native assistant footprint", async () => {
   const geometry = require("../../src/helpers/voiceSurfaceGeometry.js");
   const windowConfig = require(WINDOW_CONFIG_PATH);
-  const rendererImport = await import("../../src/helpers/voiceSurfaceGeometry.js");
+  const rendererGeometry = await import("../../src/helpers/voiceSurfaceGeometry.mjs");
 
   assert.equal(
     windowConfig.WINDOW_SIZES.ASSISTANT.width,
     geometry.ASSISTANT_PANEL_SIZE_LIMITS.ratioWidth + geometry.ASSISTANT_PANEL_SIZE_LIMITS.gutter
   );
-  assert.strictEqual(
-    rendererImport.LIVE_TRANSCRIPT_SURFACE_LIMITS,
+  assert.deepEqual(
+    rendererGeometry.LIVE_TRANSCRIPT_SURFACE_LIMITS,
     geometry.LIVE_TRANSCRIPT_SURFACE_LIMITS
   );
 });
@@ -69,7 +69,7 @@ test("renderer presentation consumes the shared live-transcript geometry", async
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-voice-surface-geometry-test-",
     mockModules: {
-      "/voiceSurfaceGeometry": OVERRIDDEN_VOICE_SURFACE_GEOMETRY,
+      "/voiceSurfaceGeometry.mjs": OVERRIDDEN_VOICE_SURFACE_GEOMETRY,
     },
   });
 
@@ -136,7 +136,7 @@ test("DictationErrorCard reports content height at the shared expected width", a
           return { current: initialValue === null ? globalThis.__dictationErrorCard : initialValue };
         }
       `,
-      "/voiceSurfaceGeometry": OVERRIDDEN_VOICE_SURFACE_GEOMETRY,
+      "/voiceSurfaceGeometry.mjs": OVERRIDDEN_VOICE_SURFACE_GEOMETRY,
     },
   });
   const { DictationErrorCard } = await vite.ssrLoadModule(
