@@ -96,6 +96,7 @@ async function renderAssistantPanel(
     React.createElement(AssistantPanel, {
       pendingCommand: null,
       onCommandConsumed: noop,
+      onCommandDiscarded: noop,
       initialConversationId,
       onConversationIdChange: noop,
       voiceState: "idle",

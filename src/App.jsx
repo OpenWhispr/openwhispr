@@ -705,6 +705,7 @@ export default function App() {
           <AssistantPanel
             pendingCommand={assistant.pendingCommand}
             onCommandConsumed={assistant.handleCommandConsumed}
+            onCommandDiscarded={assistant.handleCommandDiscarded}
             onCommandSettled={assistant.handleCommandSettled}
             initialConversationId={assistant.conversationId}
             onConversationIdChange={assistant.setConversationId}

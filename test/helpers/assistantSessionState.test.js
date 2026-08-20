@@ -36,6 +36,37 @@ test("pre-stream message persistence keeps the Assistant busy", async () => {
   );
 });
 
+test("discarding the current failed Assistant command clears its pending state", async () => {
+  const { discardPendingAssistantCommand } =
+    await import("../../src/helpers/assistantSessionState.js");
+
+  assert.equal(
+    discardPendingAssistantCommand(
+      {
+        id: 7,
+        text: "Follow up",
+        attachment: null,
+        selectedContext: null,
+      },
+      7
+    ),
+    null
+  );
+});
+
+test("a stale Assistant command failure preserves the newer pending command", async () => {
+  const { discardPendingAssistantCommand } =
+    await import("../../src/helpers/assistantSessionState.js");
+  const newerCommand = {
+    id: 8,
+    text: "New question",
+    attachment: null,
+    selectedContext: null,
+  };
+
+  assert.equal(discardPendingAssistantCommand(newerCommand, 7), newerCommand);
+});
+
 test("retained Assistant history stays blocked until a delayed load resolves", async () => {
   const { restoreAssistantConversation } =
     await import("../../src/helpers/assistantSessionState.js");

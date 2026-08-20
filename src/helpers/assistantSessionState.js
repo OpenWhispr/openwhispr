@@ -23,6 +23,10 @@ export function resolveAssistantPanelBusy({ agentState, activeToolName, submissi
   );
 }
 
+export function discardPendingAssistantCommand(pendingCommand, commandId) {
+  return pendingCommand?.id === commandId ? null : pendingCommand;
+}
+
 export async function restoreAssistantConversation({
   conversationId,
   loadConversation,

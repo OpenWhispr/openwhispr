@@ -3,7 +3,10 @@ import {
   getAssistantFooterTransitionTimeline,
   resolveAssistantThinkingTransition,
 } from "../helpers/voicePillPresentation";
-import { closeAssistantSessionState } from "../helpers/assistantSessionState";
+import {
+  closeAssistantSessionState,
+  discardPendingAssistantCommand,
+} from "../helpers/assistantSessionState";
 
 const ASSISTANT_TRANSITION_MS = 320;
 const ASSISTANT_CONTENT_FADE_FALLBACK_MS = 260;
@@ -149,6 +152,10 @@ export function useAssistantPanel({
 
   const handleCommandConsumed = useCallback((id) => {
     setPendingCommand((current) => (current?.id === id ? null : current));
+  }, []);
+
+  const handleCommandDiscarded = useCallback((id) => {
+    setPendingCommand((current) => discardPendingAssistantCommand(current, id));
   }, []);
 
   const mountedRef = useRef(false);
@@ -303,6 +310,7 @@ export function useAssistantPanel({
     handleCommand,
     handleResponseContent,
     handleCommandConsumed,
+    handleCommandDiscarded,
     handleCommandSettled,
     handleSelectionContextChange,
     getSelectionContext,

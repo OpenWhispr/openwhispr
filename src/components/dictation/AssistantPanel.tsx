@@ -49,6 +49,7 @@ interface AssistantPanelProps {
   /** Voice command waiting to be sent into the conversation (consumed on mount and on change). */
   pendingCommand: AssistantCommand | null;
   onCommandConsumed: (id: number) => void;
+  onCommandDiscarded: (id: number) => void;
   onCommandSettled: (id: number) => void;
   /** Conversation to resume when reopening the panel; null starts fresh on first message. */
   initialConversationId: number | null;
@@ -76,6 +77,7 @@ const StableAssistantMarkdown = memo(MarkdownRenderer);
 export function AssistantPanel({
   pendingCommand,
   onCommandConsumed,
+  onCommandDiscarded,
   onCommandSettled,
   initialConversationId,
   onConversationIdChange,
@@ -186,6 +188,7 @@ export function AssistantPanel({
         consumedCommandIdRef.current = null;
       })
       .catch((error: unknown) => {
+        onCommandDiscarded(commandId);
         setMessages((prev) => [
           ...prev,
           {
@@ -202,6 +205,7 @@ export function AssistantPanel({
     submissionInFlight,
     pendingCommand,
     onCommandConsumed,
+    onCommandDiscarded,
     onCommandSettled,
     onSelectionContextChange,
     sendMessage,
