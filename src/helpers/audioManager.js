@@ -3805,6 +3805,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               settings,
               language: settings.preferredLanguage,
               keyterms: this.getKeyterms(),
+              voiceAgentRequested: this.voiceAgentRequested,
             })
           );
           // Throw error to trigger retry if AUTH_EXPIRED
@@ -4148,6 +4149,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             settings: streamingSettings,
             language: this.getEffectiveSttLanguage(streamingSettings),
             keyterms: this.getKeyterms(),
+            voiceAgentRequested: this.voiceAgentRequested,
           })
         );
 

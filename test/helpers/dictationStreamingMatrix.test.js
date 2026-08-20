@@ -156,6 +156,18 @@ test("options: tinfoil-realtime keeps its always-on preview (#1120)", async () =
   });
 });
 
+test("tinfoil realtime does not request the main-side preview for a voice-assistant recording", async () => {
+  const { buildStreamingSessionOptions } = await loadRouting();
+  const options = buildStreamingSessionOptions({
+    providerName: "tinfoil-realtime",
+    settings: { cloudTranscriptionModel: "m", cloudTranscriptionMode: "byok" },
+    language: "en",
+    keyterms: [],
+    voiceAgentRequested: true,
+  });
+  assert.equal(options.preview, undefined);
+});
+
 test("options: corti carries environment and tenant; auto language is omitted", async () => {
   const { buildStreamingSessionOptions } = await loadRouting();
   const options = buildStreamingSessionOptions({

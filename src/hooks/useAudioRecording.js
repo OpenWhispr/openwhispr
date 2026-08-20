@@ -384,6 +384,7 @@ export const useAudioRecording = (toast, options = {}) => {
         setPartialTranscript(text);
         const settings = getSettings();
         if (
+          audioManagerRef.current?.getStreamingProviderName?.() !== "tinfoil-realtime" &&
           shouldShowByokStreamingPreview(
             settings.showTranscriptionPreview,
             settings.cloudTranscriptionMode,
