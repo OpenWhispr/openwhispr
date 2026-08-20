@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import App from "./App.jsx";
 import AuthenticationStep from "./components/AuthenticationStep.tsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
-import TranscriptionPreviewOverlay from "./components/TranscriptionPreviewOverlay.tsx";
 import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
 import WindowControls from "./components/WindowControls.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
@@ -22,7 +21,6 @@ const isOnboardingInProgress = () =>
 
 const ControlPanel = React.lazy(() => import("./components/ControlPanel.tsx"));
 const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow.tsx"));
-const AgentOverlay = React.lazy(() => import("./components/AgentOverlay.tsx"));
 
 export default function AppRouter() {
   useTheme();
@@ -34,10 +32,6 @@ export default function AppRouter() {
 
   if (params.includes("update-notification=true")) {
     return <UpdateNotificationOverlay />;
-  }
-
-  if (params.includes("transcription-preview=true")) {
-    return <TranscriptionPreviewOverlay />;
   }
 
   return <MainApp />;
@@ -59,14 +53,11 @@ function MainApp() {
   const [isLoading, setIsLoading] = useState(true);
   const [postOnboardingSettingsSection, setPostOnboardingSettingsSection] = useState(undefined);
 
-  const isAgentPanel = window.location.search.includes("agent=true");
-  const isControlPanel = !isAgentPanel && isControlPanelWindow();
-  const isDictationPanel = !isControlPanel && !isAgentPanel;
+  const isControlPanel = isControlPanelWindow();
+  const isDictationPanel = !isControlPanel;
 
   useEffect(() => {
-    if (isAgentPanel) {
-      import("./components/AgentOverlay.tsx").catch(() => {});
-    } else if (isControlPanel) {
+    if (isControlPanel) {
       import("./components/ControlPanel.tsx").catch(() => {});
 
       if (!localStorage.getItem("onboardingCompleted")) {
@@ -78,12 +69,12 @@ function MainApp() {
     // the previous account's rows while validation is still running. A failed
     // (guest/offline) resolution also counts as settled: canSync() then no-ops
     // because no validated auth context exists.
-    if (!isAgentPanel && autoSyncReady) {
+    if (autoSyncReady) {
       import("./services/SyncService.js")
         .then(({ syncService }) => syncService.startAutoSync())
         .catch(() => {});
     }
-  }, [autoSyncReady, isAgentPanel, isControlPanel]);
+  }, [autoSyncReady, isControlPanel]);
 
   useEffect(() => {
     if (!authLoaded) return;
@@ -141,7 +132,7 @@ function MainApp() {
   }, [isControlPanel, isLoading, isWaitingForPolicyStart, showOnboarding]);
 
   useEffect(() => {
-    if (isAgentPanel || isLoading || isWaitingForPolicyStart) return;
+    if (isLoading || isWaitingForPolicyStart) return;
 
     const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
     const normalAppVisible = onboardingCompleted && (!isControlPanel || !showOnboarding);
@@ -149,7 +140,7 @@ function MainApp() {
     // actually committed the normal app may release global hotkeys and popup
     // surfaces; fresh installs and onboarding reloads keep them suppressed.
     void window.electronAPI?.setOnboardingActive?.(!normalAppVisible);
-  }, [isAgentPanel, isControlPanel, isLoading, isWaitingForPolicyStart, showOnboarding]);
+  }, [isControlPanel, isLoading, isWaitingForPolicyStart, showOnboarding]);
 
   const handleOnboardingComplete = (options) => {
     if (options?.openSettings) {
@@ -158,17 +149,6 @@ function MainApp() {
     setShowOnboarding(false);
     localStorage.setItem("onboardingCompleted", "true");
   };
-
-  // The agent waits for auth resolution so account policy can fail closed;
-  // guests still render once the signed-out state resolves.
-  if (isAgentPanel) {
-    if (!authLoaded || isWaitingForPolicyStart) return <LoadingFallback />;
-    return (
-      <Suspense fallback={<LoadingFallback />}>
-        <AgentOverlay />
-      </Suspense>
-    );
-  }
 
   // isLoading clears once the onboarding effect has run, which itself waits
   // for authLoaded — and authLoaded terminates even when the session cannot

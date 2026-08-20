@@ -36,7 +36,6 @@ const PERSISTED_KEYS = [
   "LLAMA_GPU_BACKEND",
   "LLAMA_VULKAN_ENABLED",
   "DICTATION_KEY",
-  "CHAT_AGENT_KEY",
   "VOICE_AGENT_KEY",
   "TRANSLATION_KEY",
   "MEETING_KEY",
@@ -403,20 +402,16 @@ class EnvironmentManager {
     return result;
   }
 
-  getAgentKey() {
-    // TODO: drop AGENT_KEY fallback after 2 releases.
-    return this._getKey("CHAT_AGENT_KEY") || this._getKey("AGENT_KEY");
-  }
-
-  saveAgentKey(key) {
-    delete process.env.AGENT_KEY;
-    const result = this._saveKey("CHAT_AGENT_KEY", key);
-    this.saveAllKeysToEnvFile().catch(() => {});
-    return result;
-  }
-
   getVoiceAgentKey() {
-    return this._getKey("VOICE_AGENT_KEY");
+    const key = this._getKey("VOICE_AGENT_KEY");
+    if (key) return key;
+    // The chat-agent window is gone; its hotkey now opens the assistant by voice.
+    const legacy = this._getKey("CHAT_AGENT_KEY");
+    if (legacy) {
+      this.saveVoiceAgentKey(legacy);
+      delete process.env.CHAT_AGENT_KEY;
+    }
+    return legacy;
   }
 
   saveVoiceAgentKey(key) {

@@ -559,7 +559,6 @@ const LLM_SCOPE_KEY_PAIRS: ReadonlyArray<[string, string]> = [
   ["agentModel", "chatAgentModel"],
   ["cloudAgentMode", "chatAgentCloudMode"],
   ["remoteAgentUrl", "chatAgentRemoteUrl"],
-  ["agentKey", "chatAgentKey"],
 ];
 
 function migrateLLMScopeKeys() {
@@ -960,7 +959,6 @@ export interface SettingsState
 
   setChatAgentModel: (value: string) => void;
   setChatAgentProvider: (value: string) => void;
-  setChatAgentKey: (key: string) => Promise<boolean>;
   setChatAgentCloudMode: (value: string) => void;
   setChatAgentMode: (mode: InferenceMode) => void;
   setChatAgentCloudBaseUrl: (value: string) => void;
@@ -1026,7 +1024,7 @@ function createNumberSetter(key: string) {
 // being persisted. Rolls back to the previous key if registration fails.
 // Resolves to false on failure so optimistic UIs (HotkeyListInput) can revert.
 function createRegisteredHotkeySetter(
-  key: "chatAgentKey" | "voiceAgentKey" | "translationKey",
+  key: "voiceAgentKey" | "translationKey",
   label: string,
   getRegisterFn: () =>
     ((hotkey: string) => Promise<{ success: boolean; message: string }>) | undefined,
@@ -1604,7 +1602,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   chatAgentModel: readString("chatAgentModel", "openai/gpt-oss-120b"),
   chatAgentProvider: readString("chatAgentProvider", "groq"),
-  chatAgentKey: readString("chatAgentKey", ""),
   chatAgentCloudMode: readString("chatAgentCloudMode", "openwhispr"),
   chatAgentMode: (() => {
     const v = readString("chatAgentMode", "openwhispr");
@@ -2261,12 +2258,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setChatAgentModel: createStringSetter("chatAgentModel"),
   setChatAgentProvider: createStringSetter("chatAgentProvider"),
-  setChatAgentKey: createRegisteredHotkeySetter(
-    "chatAgentKey",
-    "chat agent hotkey",
-    () => window.electronAPI?.updateAgentHotkey,
-    (key) => window.electronAPI?.saveAgentKey?.(key)
-  ),
   setChatAgentCloudMode: createStringSetter("chatAgentCloudMode"),
   setChatAgentMode: createStringSetter("chatAgentMode") as (mode: InferenceMode) => void,
   setChatAgentCloudBaseUrl: createStringSetter("chatAgentCloudBaseUrl"),
@@ -2445,7 +2436,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.chatAgentModel !== undefined) s.setChatAgentModel(settings.chatAgentModel);
     if (settings.chatAgentProvider !== undefined)
       s.setChatAgentProvider(settings.chatAgentProvider);
-    if (settings.chatAgentKey !== undefined) s.setChatAgentKey(settings.chatAgentKey);
     if (settings.chatAgentCloudMode !== undefined)
       s.setChatAgentCloudMode(settings.chatAgentCloudMode);
   },
@@ -3100,20 +3090,6 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync active dictation key on startup",
-        { error: (err as Error).message },
-        "settings"
-      );
-    }
-
-    // Sync chat agent hotkey from main process
-    try {
-      const envKey = await window.electronAPI.getAgentKey?.();
-      if (envKey && envKey !== state.chatAgentKey) {
-        createStringSetter("chatAgentKey")(envKey);
-      }
-    } catch (err) {
-      logger.warn(
-        "Failed to sync chat agent hotkey on startup",
         { error: (err as Error).message },
         "settings"
       );

@@ -107,7 +107,6 @@ export interface ThemeSettings {
 export interface ChatAgentSettings {
   chatAgentModel: string;
   chatAgentProvider: string;
-  chatAgentKey: string;
   chatAgentCloudMode: string;
   chatAgentMode: InferenceMode;
   chatAgentCloudBaseUrl: string;
