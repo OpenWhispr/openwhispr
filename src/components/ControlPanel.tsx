@@ -1201,6 +1201,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   setSettingsSection(section);
                   setShowSettings(true);
                 }}
+                onOpenIntegrations={() => setActiveView("integrations")}
               />
             )}
             {activeView === "chat" && agentAllowedByPolicy && (

@@ -27,7 +27,13 @@ export function resolveStreamingProviderName({ settings, context, sttConfig }) {
   return sttConfig?.streamingProvider || defaultStreamingProviderName(context);
 }
 
-export function buildStreamingSessionOptions({ providerName, settings, language, keyterms }) {
+export function buildStreamingSessionOptions({
+  providerName,
+  settings,
+  language,
+  keyterms,
+  voiceAgentRequested = false,
+}) {
   const options = {
     provider: providerName,
     sampleRate: 16000,
@@ -38,9 +44,9 @@ export function buildStreamingSessionOptions({ providerName, settings, language,
     environment: settings.cortiEnvironment,
     tenant: settings.cortiTenant,
   };
-  // Tinfoil realtime always shows the live preview window (#1120); OpenAI
-  // realtime deliberately does not — its partials render in the dictation pill.
-  if (providerName === "tinfoil-realtime") {
+  // Tinfoil realtime shows the live preview for normal dictation (#1120), but
+  // assistant voice skips it because the Assistant panel owns that surface.
+  if (providerName === "tinfoil-realtime" && !voiceAgentRequested) {
     options.preview = true;
   }
   return options;

@@ -888,8 +888,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           )}
         </div>
         <Textarea
-          rows={2}
-          placeholder={t("onboarding.voiceAgent.testPlaceholder")}
+          rows={3}
+          defaultValue={t("onboarding.voiceAgent.sampleText")}
           className="text-sm resize-none"
         />
       </div>

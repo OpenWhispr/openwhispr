@@ -58,8 +58,7 @@
   },
   "window": {
     "voiceRecorderTitle": "Voice Recorder",
-    "controlPanelTitle": "Control Panel",
-    "agentChatTitle": "Agent Chat"
+    "controlPanelTitle": "Control Panel"
   },
   "dialog": {
     "openLink": {
@@ -190,7 +189,7 @@
       "useCase": "About you",
       "meeting": "Meetings",
       "finish": "Finish",
-      "voiceAgent": "Voice Agent"
+      "voiceAgent": "Voice Assistant"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Couldn't register that hotkey",
@@ -237,14 +236,14 @@
       "textareaPlaceholder": "Click here and use your hotkey to dictate..."
     },
     "voiceAgent": {
-      "title": "Voice Agent Setup",
-      "description": "Talk to your AI agent with a single keypress",
+      "title": "Voice Assistant Setup",
+      "description": "Talk to your AI assistant with a single keypress",
       "hotkey": "Hotkey",
-      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. If text is highlighted, {{agentName}} edits and replaces that selection; otherwise it types at your cursor. No need to say “Hey {{agentName}}” first.",
+      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. If text is highlighted, {{agentName}} edits and replaces that selection; otherwise the answer opens in a floating panel. No need to say “Hey {{agentName}}” first.",
       "test": "Try it",
-      "testInstruction": "Click below, press {{hotkey}} and say a command",
+      "testInstruction": "Select the sample text below, then press {{hotkey}} and say “make this shorter” — the edit lands right in the text box",
       "testSetHotkey": "Set a hotkey above to try it",
-      "testPlaceholder": "Click here, press your hotkey and say one of the examples...",
+      "sampleText": "The meeting from thursday got moved, so lets sync up early next week to go over the launch plan and divide up the remaining tasks.",
       "examples": [
         "Translate to Italian: “I talk faster than I type”",
         "Write a short email to my boss telling him I want a promotion, his name is Mark",
@@ -588,9 +587,12 @@
         "title": "Fallback Mode",
         "description": "Local Whisper failed. Used OpenAI API instead."
       },
+      "errorActions": {
+        "viewTranscript": "View Transcript"
+      },
       "noAudio": {
-        "title": "No Audio Detected",
-        "description": "The recording contained no detectable audio. Please try again."
+        "title": "We didn’t catch that",
+        "description": "Check your microphone and try again."
       },
       "micDisconnected": {
         "title": "Microphone disconnected",
@@ -611,7 +613,7 @@
         "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
         "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again.",
         "chunkLoss": "A network problem lost too much of the recording. Re-transcribe it from History.",
-        "agentReasoningFailed": "Your voice agent couldn't process the command — the raw transcript was inserted instead.",
+        "agentReasoningFailed": "Your voice assistant couldn't process the command — the raw transcript was inserted instead.",
         "screenContextSkipped": "The screenshot couldn't be sent, so your command ran without screen context.",
         "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text."
       },
@@ -853,20 +855,21 @@
     "tomorrow": "Tomorrow"
   },
   "upcoming": {
-    "title": "Upcoming Meetings",
+    "title": "Coming up",
     "transcriptions": "Transcriptions",
-    "tomorrow": "Tomorrow",
-    "noMoreMeetings": "No more meetings today",
     "now": "Now",
-    "join": "Join",
     "untitledEvent": "Untitled Event",
+    "joinAndTakeNotes": "Join & take notes",
+    "takeNotes": "Take notes",
+    "noEventsToday": "No events today",
+    "noUpcomingEvents": "No upcoming events",
+    "moreCalendarsHint": "Want additional calendars?",
+    "connectHere": "Connect them here",
+    "openMeetingLink": "Open meeting link",
     "systemAudioRequired": "System Audio permission is needed to capture other participants' audio.",
     "openSettings": "Open System Settings",
-    "signInRequired": "Sign in to use meeting recording",
-    "signInDescription": "Create an account or sign in to record and transcribe meetings.",
     "connectCalendar": "Connect your calendar",
-    "connectCalendarDescription": "Link your Google Calendar to see upcoming meetings and automatically record notes.",
-    "notABot": "OpenWhispr records using your system audio — it never joins meetings as a bot.",
+    "connectCalendarDescription": "See your meetings and join them without leaving OpenWhispr.",
     "connectCalendarButton": "Connect Calendar"
   },
   "cleanupPrompt": "Cleanup",
@@ -1200,7 +1203,7 @@
       "translation": "Translation",
       "translationDisabled": "Enable Dictation Translation to test this prompt",
       "noTargetLanguage": "Pick a target language first",
-      "agentDisabled": "Enable the voice agent to test this prompt"
+      "agentDisabled": "Enable the voice assistant to test this prompt"
     },
     "view": {
       "customPrompt": "Custom prompt",
@@ -1702,12 +1705,12 @@
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
-      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the AI executes your command. If text is highlighted, that text is sent to your configured Voice Agent model and safely replaced with the result.",
+      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the answer opens in the floating assistant panel. If text is highlighted, that text is sent to your configured Voice Assistant model and safely replaced with the result.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
       "save": "Save",
-      "title": "Voice Agent",
+      "title": "Voice Assistant",
       "examples": {
         "formalEmail": "Hey {{agentName}}, write a formal email about the budget",
         "professional": "Select text, then say: Hey {{agentName}}, make this more professional",
@@ -1865,8 +1868,8 @@
         "layoutSidePanel": "Side panel"
       },
       "voiceAgentHotkey": {
-        "title": "Voice Agent Hotkey",
-        "description": "Speak a request — highlighted text is edited in place; otherwise your agent types at the cursor"
+        "title": "Voice Assistant Hotkey",
+        "description": "Speak a command and the assistant answers in a floating panel with your notes, calendar, and web tools. Select text first to edit it in place."
       },
       "microphone": {
         "description": "Select which input device to use for dictation",
@@ -2122,7 +2125,7 @@
       "description": "Configure models for cleanup, note formatting, and chat",
       "tabs": {
         "dictationCleanup": "Dictation Cleanup",
-        "dictationAgent": "Voice Agent",
+        "dictationAgent": "Voice Assistant",
         "noteFormatting": "Note Formatting",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Translation"
@@ -2382,8 +2385,11 @@
     "limitReachedDescription": "Upgrade to Pro for unlimited transcriptions.",
     "viewPlans": "View Plans",
     "upgradeTitle": "Upgrade to Pro",
-    "upgradeDescription": "Unlimited transcriptions and premium features.",
-    "learnMore": "Learn more",
+    "upgradeDescription": "Unlimited, more accurate, faster transcription.",
+    "upgradeInstantSetup": "Instant setup",
+    "upgradeZeroRetention": "Zero data retention",
+    "upgradeEnterpriseSecurity": "Enterprise security SOC 2 Type II, HIPAA, ISO27001",
+    "learnMore": "Learn More",
     "integrations": "Integrations",
     "defaultUser": "User",
     "notSignedIn": "Not signed in",
@@ -3148,17 +3154,18 @@
     "commandMenu": {
       "stopListening": "Stop listening",
       "startListening": "Start listening",
-      "hideForNow": "Hide for now"
+      "hideForNow": "Hide for now",
+      "askAssistant": "Ask Assistant"
     }
   },
   "dictationAgent": {
-    "enabled": "Enable voice agent",
+    "enabled": "Enable voice assistant",
     "enabledDescription": "Dictate instructions to your agent. Highlighted text is sent to the configured model and edited in place. Activate by saying \"{{agentName}}\".",
     "screenContext": {
       "title": "Screen Context",
-      "description": "Attach a screenshot of your active screen to voice agent commands.",
+      "description": "Attach a screenshot of your active screen to voice assistant commands.",
       "enable": "Share screen context",
-      "enableDescription": "Captures the display your cursor is on when a voice agent recording starts. Never saved or logged.",
+      "enableDescription": "Captures the display your cursor is on when a voice assistant recording starts. Never saved or logged.",
       "unsupported": "Screen capture isn't available on Linux Wayland.",
       "visionModel": "Separate vision model",
       "visionModelDescription": "Route commands that include a screenshot to a different, vision-capable model.",
@@ -3185,10 +3192,6 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Chat Agent Hotkey",
-      "hotkeyDescription": "Open and close the chat agent overlay",
-      "model": "Agent Model",
-      "modelDescription": "AI model used for agent conversations",
       "systemPrompt": "System Prompt",
       "systemPromptDescription": "Custom instructions for the agent",
       "systemPromptPlaceholder": "Enter custom system prompt...",
@@ -3203,31 +3206,13 @@
         "localDesc": "On-device models. Fully private.",
         "selfHostedDesc": "Your own server on your network.",
         "enterpriseDesc": "Use your organization's cloud account (AWS, Azure, GCP)."
-      },
-      "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
-      "customSetup": "Custom Setup (BYOK)",
-      "customSetupDescription": "Use your own API keys and choose your preferred model"
+      }
     },
     "chat": {
-      "placeholder": "Press {{hotkey}} to speak",
-      "thinking": "Thinking...",
-      "transcribing": "Transcribing...",
-      "listening": "Listening...",
-      "newConversation": "New",
-      "copyToClipboard": "Copy to clipboard",
-      "copied": "Copied!",
-      "emptyState": "Ask me anything",
-      "errorPrefix": "Error"
-    },
-    "titleBar": {
-      "label": "Agent",
-      "newChat": "New conversation",
-      "close": "Close"
+      "errorPrefix": "Error",
+      "emptyResponse": "The model returned no response."
     },
     "input": {
-      "holdToSpeak": "Hold to speak",
-      "toClose": "close",
       "listening": "Listening...",
       "transcribing": "Transcribing...",
       "thinking": "Thinking...",
@@ -3235,6 +3220,14 @@
       "send": "Send"
     },
     "tools": {
+      "search_notesName": "Search notes",
+      "get_noteName": "Get note",
+      "create_noteName": "Create note",
+      "update_noteName": "Update note",
+      "list_foldersName": "List folders",
+      "copy_to_clipboardName": "Copy to clipboard",
+      "web_searchName": "Web search",
+      "get_calendar_eventsName": "Get calendar events",
       "search_notesStatus": "Searching notes...",
       "web_searchStatus": "Searching the web...",
       "copy_to_clipboardStatus": "Copying to clipboard...",
@@ -3243,17 +3236,31 @@
       "create_noteStatus": "Creating note...",
       "update_noteStatus": "Updating note...",
       "copiedToClipboard": "Copied to your clipboard",
-      "foundNotes": "Found {{count}} note",
-      "foundNotes_plural": "Found {{count}} notes",
-      "searchResults": "Found {{count}} result",
-      "searchResults_plural": "Found {{count}} results",
       "openNote": "Open note",
-      "calendarEvents": "Found {{count}} event",
-      "calendarEvents_plural": "Found {{count}} events",
-      "noResults": "No results found",
-      "error": "Tool error",
       "unknownTool": "Unknown tool: {{name}}",
       "invalidArgs": "Invalid tool arguments for {{name}}"
+    }
+  },
+  "assistant": {
+    "panel": {
+      "selectionHint": "Select text to edit with",
+      "selectedContext": "Selected text added",
+      "removeSelectedContext": "Remove selected text",
+      "newConversation": "New conversation",
+      "copyToClipboard": "Copy to clipboard",
+      "suggestions": {
+        "summarizeNotes": "Summarize my recent notes",
+        "calendar": "What is on my calendar?",
+        "draft": "Help me draft something"
+      }
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "Invoking",
+        "calling": "Calling",
+        "using": "Using"
+      },
+      "toolFallback": "Tool"
     }
   },
   "integrations": {
@@ -3487,6 +3494,7 @@
     "ready": "Ready",
     "copy": "Copy",
     "copied": "Copied",
+    "collapse": "Collapse transcript",
     "waitingForInput": "Say something..."
   },
   "transcript": {

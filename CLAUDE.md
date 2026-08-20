@@ -69,7 +69,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **dragManager.js**: Window dragging functionality
 - **environment.js**: Environment variable and OpenAI API management
 - **hotkeyManager.js**: Global hotkey registration and management
-  - Named hotkey slots: `dictation`, `agent` (chat agent overlay), `voiceAgent` (dictation routed straight to the dictation agent), `meeting`
+  - Named hotkey slots: `dictation`, `voiceAgent` (voice assistant — dictation routed to the assistant panel), `translation`, `meeting`
   - Handles platform-specific defaults (GLOBE on macOS, Control+Super on Windows/Linux)
   - Auto-fallback to F8/F9 if default hotkey is unavailable
   - Notifies renderer via IPC when hotkey registration fails
@@ -172,6 +172,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 ### React Hooks (src/hooks/)
 
 - **useAudioRecording.js**: MediaRecorder API wrapper with error handling
+- **useAssistantPanel.js**: Assistant panel lifecycle (open/close choreography, thinking flourish, footer phases, pending voice commands, conversation session boundaries)
+- **useLiveTranscriptPanel.js**: Live transcript panel lifecycle (entrance choreography, buffered text scheduler, measure-then-reveal resize pipeline, preview IPC wiring)
+- **useMainWindowSizeOwner.js**: Single owner of the main window size ladder (panel > menu > toast > pill > base) and the dictation-error pill handoff
+- **useWindowResizeCompensation.js**: Masks split native setBounds frames via CSS-variable counter-translation
+- **useMainProcessNotifications.tsx**: Main-process notifications (hotkey fallback, GPU fallback, learned corrections) as toasts
 - **useClipboard.ts**: Clipboard operations hook
 - **useDialogs.ts**: Electron dialog integration
 - **useHotkey.js**: Hotkey state management
@@ -354,7 +359,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 - User names their agent during onboarding (step 6/8)
 - Name stored in localStorage and database
 - ReasoningService detects "Hey [AgentName]" patterns
-- AI processes command and removes agent reference from output
+- Standalone wake-word commands stream into the assistant panel (the address is stripped first, `stripAgentAddress`); a highlighted selection is edited in place by the dictation agent
 - Supports multiple AI providers (all models defined in `src/models/modelRegistryData.json`):
   - **OpenAI** (Responses API):
     - GPT-5.5 (`gpt-5.5`) - Latest flagship frontier model, 1M context
@@ -640,15 +645,17 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 - Exponential backoff on consecutive failures: 2min → 4min → 8min → cap 30min
 - Reset to normal 2min interval on any successful sync
 
-### 17. Voice Agent Hotkey
+### 17. Voice Assistant Hotkey
 
-A dedicated global hotkey that starts a dictation whose transcript is sent straight to the dictation agent as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. Separate from the chat agent hotkey (`CHAT_AGENT_KEY`), which toggles the agent overlay window.
+A dedicated global hotkey that starts a dictation whose transcript is sent straight to the voice assistant as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. Standalone commands never type at the cursor: the answer streams into a floating assistant panel attached to the dictation pill (there is no separate assistant window). The pill window is content-protected while the panel is open (the panel never appears in screen shares).
 
 **Flow**:
 
-1. Hotkey pressed → `voiceAgent` slot callback in `main.js` → `windowManager.sendToggleVoiceAgent()` → `toggle-voice-agent` IPC to the main window
+1. Hotkey pressed → `voiceAgent` slot callback in `main.js` → `windowManager.sendToggleVoiceAgent()` → `toggle-voice-agent` IPC to the main window → recording capsule appears
 2. `useAudioRecording.js` starts a recording with `audioManager.setVoiceAgentRequested(true)` (any other start resets it to `false`)
-3. On transcription, `resolveReasoningRoute` consults `resolveDictationRouteKind()` (`src/helpers/dictationRouting.js`): a voice agent recording always takes the agent route; if the dictation agent is disabled or has no model, the raw transcript is returned — it never falls back to cleanup
+3. On transcription, `resolveReasoningRoute` consults `resolveDictationRouteKind()` (`src/helpers/dictationRouting.js`): a voice assistant recording always takes the agent route and never falls back to cleanup. The dictation agent's reachability only gates selection edits — a selection with the dictation agent unconfigured routes to the panel with the selected text quoted instead of editing in place
+4. Standalone commands (no text selected) stream into the assistant panel (`src/components/dictation/AssistantPanel.tsx`) through the chat pipeline: chat tools (notes search/create/update, calendar, web search, clipboard), RAG memory, and the custom dictionary injected into the system prompt. Conversations persist in the `agent_conversations` table and are browsable from the ControlPanel chat
+5. Selection edits are unchanged: highlighted text goes through the `dictationAgent` scope and is safely replaced in place — it never opens the panel
 
 **Storage & IPC**:
 
@@ -656,25 +663,27 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 - IPC handlers: `update-voice-agent-hotkey`, `get-voice-agent-key`
 - Hotkey slot: `voiceAgent` (tap-to-toggle; GNOME-native slot via `ToggleVoiceAgent` D-Bus method, KDE via KGlobalAccel, otherwise `globalShortcut`)
 
+**Panel**:
+
+- Esc collapses the panel; a Copy button copies the answer; a follow-up input takes typed questions. Esc while the command is still thinking cancels it; a command whose stream ends without content settles as `agentMode.chat.emptyResponse`
+- Pressing the hotkey again while the panel is open records a follow-up into the same conversation
+
 **UI**:
 
-- Settings → Hotkeys → "Voice Agent Hotkey" (with cross-slot conflict validation)
+- Settings → Hotkeys → "Voice Assistant Hotkey" (with cross-slot conflict validation)
 - Onboarding: optional step right after the dictation hotkey (activation) step
-- Requires the dictation agent to be enabled (Settings → AI Models) for the agent route to apply
+- Panel conversations run on the `chatIntelligence` scope (the chat's brain); in-place selection edits require the dictation agent (Settings → AI Models) and its `dictationAgent`/`dictationAgentVision` scopes
 
 **Screen Context (opt-in)**:
 
-When "Share screen context" is enabled (Settings → AI Models → Voice Agent → Screen Context, store key `voiceAgentScreenContext`, default off), each voice-agent recording start captures the display the cursor is on and attaches it to the agent request as a base64 JPEG (long edge ≤ 1568 px).
+When "Share screen context" is enabled (Settings → AI Models → Voice Assistant → Screen Context, store key `voiceAgentScreenContext`, default off), each voice-assistant recording start captures the display the cursor is on and attaches it to the request as a base64 JPEG (long edge ≤ 1568 px).
 
 - Capture: `src/helpers/screenContextCapture.js` (main process; `screen.getCursorScreenPoint` + `desktopCapturer`). macOS requires the Screen Recording TCC permission (`useScreenRecordingPermission` hook + `PermissionCard` in `DictationAgentSettings`); Windows/Linux X11 need no permission; Linux Wayland is unsupported (capture silently skipped)
 - Encoding: `encodeWithinBudget()` walks a JPEG quality ladder (82 → 70 → 55), then falls back to a 1024 px resize, keeping the payload under `MAX_ENCODED_BYTES` (1.5 MB ≈ 2.05M base64 chars, inside the API's 2.8M cap). Each rung re-encodes the original bitmap, so quality drops never compound. A screen that still won't fit is dropped
-- Trigger: `useAudioRecording.js` calls `audioManager.beginScreenContextCapture()` at voice-agent start (fire-and-forget); `consumeScreenContext()` (3s guard) is awaited when the reasoning route is built. The dictation overlay gets `setContentProtection` while the setting is on so the pill never appears in captures
-- Routing: `resolveAgentImageTarget()` (`src/helpers/dictationRouting.js`) decides attach/drop. An optional vision override (`dictationAgentVision` inference scope, gated by `useDictationAgentVisionModel`, cloud/BYOK modes only) routes screenshot-carrying requests to a dedicated model; otherwise the base model gets the image only when its provider client is image-wired (`supportsImages` on the `InferenceProvider`) and the model has `supportsVision` in `modelRegistryData.json` (cloud mode defers to the server). Dropping the image never fails the dictation
-- Prompt: `appendScreenContextSuffix()` adds the `screenContextSuffix` prompts key only when an image is attached
-- Image-wired clients: `openai` (Responses `input_image` / Chat `image_url`, also `custom`/`openrouter`), `anthropic` (base64 content block via `process-anthropic-reasoning`), `gemini` (`inlineData`), `openwhispr` (forwards `screenContext` + `promptMode: "agent"` to `/api/reason`; the server routes to its `REASONING_VISION_*` model chain)
-- IPC: `capture-screen-context`, `check-screen-recording-access`, `request-screen-recording-access`, `open-screen-recording-settings`, `screen-context-set-enabled`
+- Trigger: `useAudioRecording.js` calls `audioManager.beginScreenContextCapture()` at recording start (fire-and-forget); `consumeScreenContext()` (3s guard) is awaited when the request is built. The dictation overlay gets `setContentProtection` while the setting is on so the pill never appears in captures
+- Routing: the press-time screenshot is re-decided against the model that will actually answer. On BYOK, it attaches only when the chat model's provider client is image-wired (`supportsImages` on the `InferenceProvider`) and the model has `supportsVision` in `modelRegistryData.json`; on OpenWhispr Cloud, attachment is pending API vision routing for the chat path. Dropping the image never fails the command
 - Privacy: screenshots live only in renderer memory for one request — never written to disk, stored in history, or logged (loggers emit `hasScreenContext` booleans only)
-- Failure UX: a rejected screenshot is retried once text-only from `processWithReasoningModel()` (swapping in the pre-built `textOnlySystemPrompt`, so selection-edit instructions and the completion marker survive the retry) and reported via a non-destructive `SCREEN_CONTEXT_SKIPPED` toast, so an image problem never costs the user their command. Only if that retry also fails does the "Agent Unavailable" toast (`AGENT_REASONING_FAILED`) fire and the raw transcript get pasted
+- IPC: `capture-screen-context`, `check-screen-recording-access`, `request-screen-recording-access`, `open-screen-recording-settings`, `screen-context-set-enabled`
 
 **Tests**: `test/helpers/dictationRouting.test.js`, `test/helpers/screenContextCapture.test.js` (run with `node --test`)
 

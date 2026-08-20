@@ -99,13 +99,10 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     return {
       MAIN_WINDOW_CONFIG: {},
       CONTROL_PANEL_CONFIG: {},
-      AGENT_OVERLAY_CONFIG: {},
       NOTIFICATION_WINDOW_CONFIG: { ...detectionSize, acceptFirstMouse: true },
       AUTO_END_NOTIFICATION_WINDOW_SIZE: autoEndSize,
       getMeetingNotificationWindowSize: (data) =>
         data?.kind === "auto-end" ? autoEndSize : detectionSize,
-      TRANSCRIPTION_PREVIEW_CONFIG: {},
-      TRANSCRIPTION_PREVIEW_SIZE_LIMITS: {},
       WINDOW_SIZES: {},
       WindowPositionUtil: {
         getNotificationPosition: (_display, size = detectionSize) => ({
@@ -153,6 +150,74 @@ function installFakeTimers() {
 
 test.beforeEach(() => {
   createdWindows.length = 0;
+});
+
+test("a busy Assistant blocks its voice hotkey before native side effects", () => {
+  const manager = new WindowManager();
+  const rendererChannels = [];
+  let showCount = 0;
+  let prepareCount = 0;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel) => rendererChannels.push(channel) },
+  };
+  manager.hotkeyManager = {
+    isInListeningMode: () => false,
+    unregisterAll: () => undefined,
+  };
+  manager.textEditMonitor = { captureTargetPid: () => Promise.resolve(null) };
+  manager.selectionManager = { captureTarget: () => undefined };
+  manager.showDictationPanel = () => {
+    showCount += 1;
+  };
+  manager.sendPrepareDictation = () => {
+    prepareCount += 1;
+  };
+  // Initial Agent thinking happens before the response panel opens; busy state
+  // must stand on its own during that part of the journey.
+  manager._assistantPanelOpen = false;
+  manager._assistantPanelBusy = true;
+
+  manager._sendDictationToggle("toggle-voice-agent");
+
+  assert.equal(showCount, 0);
+  assert.equal(prepareCount, 0);
+  assert.deepEqual(rendererChannels, []);
+
+  manager._assistantPanelBusy = false;
+  manager._sendDictationToggle("toggle-voice-agent");
+
+  assert.equal(showCount, 1);
+  assert.equal(prepareCount, 1);
+  assert.deepEqual(rendererChannels, ["toggle-voice-agent"]);
+});
+
+test("a busy Assistant blocks direct push-to-talk prepare and start paths", () => {
+  const manager = new WindowManager();
+  const rendererChannels = [];
+  let showCount = 0;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel) => rendererChannels.push(channel) },
+  };
+  manager.hotkeyManager = {
+    isInListeningMode: () => false,
+    unregisterAll: () => undefined,
+  };
+  manager._dictationLifecycleState = "idle";
+  manager._assistantPanelOpen = false;
+  manager._assistantPanelBusy = true;
+  manager.textEditMonitor = { captureTargetPid: () => Promise.resolve(null) };
+  manager.selectionManager = { captureTarget: () => undefined };
+  manager.showDictationPanel = () => {
+    showCount += 1;
+  };
+
+  manager.sendPrepareDictation();
+  manager.sendStartDictation();
+
+  assert.equal(showCount, 0);
+  assert.deepEqual(rendererChannels, []);
 });
 
 test("window creation uses the auto-end dimensions and variant-aware position", async () => {

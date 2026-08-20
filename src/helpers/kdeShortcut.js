@@ -220,11 +220,6 @@ class KDEShortcutManager {
     return slotName ? this.callbacks.get(slotName) : null;
   }
 
-  setAgentCallback(callback) {
-    this.callbacks.set("agent", callback);
-    debugLogger.log("[KDEShortcut] Agent callback set");
-  }
-
   async registerKeybinding(electronHotkey, slotName = "dictation", callback) {
     if (!this.kglobalaccel) return false;
 
@@ -387,6 +382,10 @@ class KDEShortcutManager {
     } catch (err) {
       debugLogger.log(`[KDEShortcut] Unregister failed for "${slotName}":`, err.message);
     }
+  }
+
+  async removeRetiredAgentKeybinding() {
+    await this.unregisterKeybinding("agent");
   }
 
   close() {

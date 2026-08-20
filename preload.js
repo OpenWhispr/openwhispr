@@ -79,6 +79,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
+  dictationLifecycleStateChanged: (state) =>
+    ipcRenderer.send("dictation-lifecycle-state-changed", state),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>
@@ -437,11 +439,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getHyprlandConfigStatus: () => ipcRenderer.invoke("get-hyprland-config-status"),
   startWindowDrag: () => ipcRenderer.invoke("start-window-drag"),
   stopWindowDrag: () => ipcRenderer.invoke("stop-window-drag"),
+  getMainWindowHorizontalDirection: () =>
+    ipcRenderer.invoke("get-main-window-horizontal-direction"),
+  onMainWindowHorizontalDirectionChanged: registerListener(
+    "main-window-horizontal-direction-changed",
+    (callback) => (_event, direction) => callback(direction)
+  ),
+  onMainWindowWillResize: registerListener(
+    "main-window-will-resize",
+    (callback) => (_event, resize) => callback(resize)
+  ),
   setMainWindowInteractivity: (interactive) =>
     ipcRenderer.invoke("set-main-window-interactivity", interactive),
   setNotificationInteractivity: (interactive) =>
     ipcRenderer.invoke("set-notification-interactivity", interactive),
   resizeMainWindow: (sizeKey) => ipcRenderer.invoke("resize-main-window", sizeKey),
+  resizeAssistantWindowToContent: (surfaceHeight) =>
+    ipcRenderer.invoke("resize-assistant-window-to-content", surfaceHeight),
+  resizeDictationErrorWindowToContent: (surfaceHeight) =>
+    ipcRenderer.invoke("resize-dictation-error-window-to-content", surfaceHeight),
+  setAssistantPanelOpen: (open) => ipcRenderer.invoke("set-assistant-panel-open", open),
+  setAssistantPanelBusy: (busy) => ipcRenderer.invoke("set-assistant-panel-busy", busy),
 
   // Update functions
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
@@ -464,7 +482,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onUpdateError: registerListener("update-error"),
 
   // Audio event listeners
-  onNoAudioDetected: registerListener("no-audio-detected"),
   onCancelHotkeyPressed: registerListener("cancel-hotkey-pressed", (cb) => () => cb()),
   registerCancelHotkey: (key) => ipcRenderer.invoke("register-cancel-hotkey", key),
   unregisterCancelHotkey: () => ipcRenderer.invoke("unregister-cancel-hotkey"),
@@ -647,7 +664,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // OpenWhispr Cloud API
   cloudHealthCheck: () => ipcRenderer.invoke("cloud-health-check"),
   cloudTranscribe: (audioBuffer, opts) => ipcRenderer.invoke("cloud-transcribe", audioBuffer, opts),
+  cancelCloudTranscription: () => ipcRenderer.send("cloud-transcribe-cancel"),
   cloudReason: (text, opts) => ipcRenderer.invoke("cloud-reason", text, opts),
+  cancelCloudReason: () => ipcRenderer.send("cloud-reason-cancel"),
   cloudStreamingUsage: (text, audioDurationSeconds, opts) =>
     ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
@@ -898,25 +917,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setAutoStartEnabled: (enabled) => ipcRenderer.invoke("set-auto-start-enabled", enabled),
 
   // Agent mode
-  updateAgentHotkey: (hotkey) => ipcRenderer.invoke("update-agent-hotkey", hotkey),
   updateVoiceAgentHotkey: (hotkey) => ipcRenderer.invoke("update-voice-agent-hotkey", hotkey),
   getVoiceAgentKey: () => ipcRenderer.invoke("get-voice-agent-key"),
   updateTranslationHotkey: (hotkey) => ipcRenderer.invoke("update-translation-hotkey", hotkey),
   getTranslationKey: () => ipcRenderer.invoke("get-translation-key"),
-  getAgentKey: () => ipcRenderer.invoke("get-agent-key"),
-  saveAgentKey: (key) => ipcRenderer.invoke("save-agent-key", key),
-  onAgentStartRecording: registerListener("agent-start-recording", (callback) => () => callback()),
-  onAgentStopRecording: registerListener("agent-stop-recording", (callback) => () => callback()),
-  onAgentToggleRecording: registerListener(
-    "agent-toggle-recording",
-    (callback) => () => callback()
-  ),
-  toggleAgentOverlay: () => ipcRenderer.invoke("toggle-agent-overlay"),
-  hideAgentOverlay: () => ipcRenderer.invoke("hide-agent-overlay"),
-  resizeAgentWindow: (width, height) => ipcRenderer.invoke("resize-agent-window", width, height),
-  getAgentWindowBounds: () => ipcRenderer.invoke("get-agent-window-bounds"),
-  setAgentWindowBounds: (x, y, width, height) =>
-    ipcRenderer.invoke("set-agent-window-bounds", x, y, width, height),
   onPreviewText: registerListener("preview-text", (callback) => (_event, text) => callback(text)),
   onPreviewAppend: registerListener(
     "preview-append",
@@ -934,26 +938,29 @@ contextBridge.exposeInMainWorld("electronAPI", {
   startDictationPreview: (opts) => ipcRenderer.invoke("start-dictation-preview", opts),
   stopDictationPreview: (opts) => ipcRenderer.invoke("stop-dictation-preview", opts),
   dismissDictationPreview: () => ipcRenderer.invoke("dismiss-dictation-preview"),
+  updateDictationPreview: (text) => ipcRenderer.invoke("update-dictation-preview", text),
   completeDictationPreview: (payload) => ipcRenderer.invoke("complete-dictation-preview", payload),
   hideDictationPreview: () => ipcRenderer.invoke("hide-dictation-preview"),
-  resizeTranscriptionPreviewWindow: (width, height) =>
-    ipcRenderer.invoke("resize-transcription-preview-window", width, height),
   sendDictationPreviewAudio: (data) => ipcRenderer.send("dictation-preview-audio", data),
   acquireRecordingLock: (pipeline) => ipcRenderer.invoke("acquire-recording-lock", pipeline),
   releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
 
   // Agent cloud streaming (event-based for real-time chunks)
-  startAgentStream: (messages, opts) =>
-    ipcRenderer.send("cloud-agent-stream-start", messages, opts),
+  startAgentStream: (requestId, messages, opts) =>
+    ipcRenderer.send("cloud-agent-stream-start", requestId, messages, opts),
+  cancelAgentStream: (requestId) => ipcRenderer.send("cloud-agent-stream-cancel", requestId),
   onAgentStreamChunk: registerListener(
     "cloud-agent-stream-chunk",
-    (callback) => (_event, chunk) => callback(chunk)
+    (callback) => (_event, payload) => callback(payload)
   ),
   onAgentStreamError: registerListener(
     "cloud-agent-stream-error",
-    (callback) => (_event, error) => callback(error)
+    (callback) => (_event, payload) => callback(payload)
   ),
-  onAgentStreamEnd: registerListener("cloud-agent-stream-end", (callback) => () => callback()),
+  onAgentStreamEnd: registerListener(
+    "cloud-agent-stream-end",
+    (callback) => (_event, payload) => callback(payload)
+  ),
 
   // Agent cloud tools
   agentWebSearch: (query, numResults) => ipcRenderer.invoke("agent-web-search", query, numResults),

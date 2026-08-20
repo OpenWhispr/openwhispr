@@ -58,8 +58,7 @@
   },
   "window": {
     "voiceRecorderTitle": "Grabadora de voz",
-    "controlPanelTitle": "Panel de control",
-    "agentChatTitle": "Chat del agente"
+    "controlPanelTitle": "Panel de control"
   },
   "dialog": {
     "openLink": {
@@ -190,7 +189,7 @@
       "useCase": "Sobre ti",
       "meeting": "Reuniones",
       "finish": "Listo",
-      "voiceAgent": "Agente de voz"
+      "voiceAgent": "Asistente de voz"
     },
     "hotkey": {
       "couldNotRegisterTitle": "No se pudo registrar ese atajo",
@@ -237,14 +236,14 @@
       "textareaPlaceholder": "Haz clic aquí y usa tu atajo para dictar..."
     },
     "voiceAgent": {
-      "title": "Configuración del agente de voz",
-      "description": "Habla con tu agente de IA con una sola pulsación",
+      "title": "Configuración del asistente de voz",
+      "description": "Habla con tu asistente de IA con una sola pulsación",
       "hotkey": "Atajo",
-      "howItWorks": "Pulsa la tecla y di lo que quieres, por ejemplo «escribe una breve nota de agradecimiento». Si hay texto resaltado, {{agentName}} edita y reemplaza esa selección; si no, escribe el resultado donde esté el cursor. No hace falta decir «Hey {{agentName}}» antes.",
+      "howItWorks": "Pulsa la tecla y di lo que quieres, por ejemplo «escribe una breve nota de agradecimiento». Si hay texto resaltado, {{agentName}} edita y reemplaza esa selección; si no, la respuesta se abre en un panel flotante. No hace falta decir «Hey {{agentName}}» antes.",
       "test": "Pruébalo",
-      "testInstruction": "Haz clic abajo, pulsa {{hotkey}} y di un comando",
+      "testInstruction": "Selecciona el texto de ejemplo de abajo, pulsa {{hotkey}} y di «hazlo más corto»: la edición aparece directamente en el cuadro de texto",
       "testSetHotkey": "Configura un atajo arriba para probarlo",
-      "testPlaceholder": "Haz clic aquí, pulsa tu atajo y di uno de los ejemplos...",
+      "sampleText": "La reunión del jueves se movió, así que sincronicemos a principios de la próxima semana para repasar el plan de lanzamiento y repartir las tareas pendientes.",
       "examples": [
         "Traduce al italiano: «Hablo más rápido de lo que escribo»",
         "Escribe un correo breve a mi jefe diciéndole que quiero un ascenso, se llama Mark",
@@ -588,9 +587,12 @@
         "title": "Modo de respaldo",
         "description": "Whisper local falló. Se usó la API de OpenAI."
       },
+      "errorActions": {
+        "viewTranscript": "Ver transcripción"
+      },
       "noAudio": {
-        "title": "No se detectó audio",
-        "description": "La grabación no contiene audio detectable. Inténtalo de nuevo."
+        "title": "No hemos entendido eso",
+        "description": "Comprueba el micrófono e inténtalo de nuevo."
       },
       "micDisconnected": {
         "title": "Micrófono desconectado",
@@ -611,7 +613,7 @@
         "dailyLimitReached": "Has alcanzado el límite de transcripción de hoy. Inténtalo mañana o mejora tu plan.",
         "providerRateLimited": "Tu proveedor de transcripción limitó la solicitud. Espera un momento e inténtalo de nuevo.",
         "chunkLoss": "Un problema de red hizo que se perdiera demasiada parte de la grabación. Vuelve a transcribirla desde el historial.",
-        "agentReasoningFailed": "Tu agente de voz no pudo procesar el comando; se insertó la transcripción sin procesar.",
+        "agentReasoningFailed": "Tu asistente de voz no pudo procesar el comando; se insertó la transcripción sin procesar.",
         "screenContextSkipped": "No se pudo enviar la captura, así que tu comando se ejecutó sin contexto de pantalla.",
         "customEndpointInvalid": "Tu endpoint de transcripción personalizado no está configurado o su URL no es válida. Actualízalo en Ajustes → Voz a texto."
       },
@@ -1160,7 +1162,7 @@
       "translation": "Traducción",
       "translationDisabled": "Activa la traducción de dictado para probar este prompt",
       "noTargetLanguage": "Elige primero un idioma de destino",
-      "agentDisabled": "Activa el agente de voz para probar este prompt"
+      "agentDisabled": "Activa el asistente de voz para probar este prompt"
     },
     "view": {
       "customPrompt": "Prompt personalizado",
@@ -1467,12 +1469,12 @@
       },
       "examplesTitle": "Ejemplos",
       "helper": "Elige algo corto y natural para decir en voz alta",
-      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, la IA ejecuta tu comando. Si hay texto resaltado, ese texto se envía al modelo de agente de voz configurado y se reemplaza de forma segura con el resultado.",
+      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, la respuesta se abre en el panel flotante del asistente. Si hay texto resaltado, ese texto se envía a tu modelo de Asistente de voz configurado y se reemplaza de forma segura por el resultado.",
       "howItWorksTitle": "Cómo funciona",
       "instructionMode": "Instrucción",
       "placeholder": "p. ej. Jarvis, Nova, Atlas...",
       "save": "Guardar",
-      "title": "Agente de voz",
+      "title": "Asistente de voz",
       "examples": {
         "formalEmail": "Hey {{agentName}}, escribe un correo formal sobre el presupuesto",
         "professional": "Selecciona texto y luego di: Hey {{agentName}}, hazlo más profesional",
@@ -1630,8 +1632,8 @@
         "layoutSidePanel": "Panel lateral"
       },
       "voiceAgentHotkey": {
-        "title": "Atajo del agente de voz",
-        "description": "Di lo que necesitas — el texto resaltado se edita en su lugar; si no, tu agente escribe donde esté el cursor"
+        "title": "Atajo del asistente de voz",
+        "description": "Di un comando y el asistente responde en un panel flotante con tus notas, calendario y herramientas web. Selecciona texto primero para editarlo en su lugar."
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",
@@ -1887,7 +1889,7 @@
       "description": "Configura modelos para limpieza, formato de notas y chat",
       "tabs": {
         "dictationCleanup": "Limpieza de dictado",
-        "dictationAgent": "Voice Agent",
+        "dictationAgent": "Asistente de voz",
         "noteFormatting": "Formato de notas",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Traducción"
@@ -2923,7 +2925,10 @@
     "limitReachedDescription": "Mejora a Pro para transcripciones ilimitadas.",
     "viewPlans": "Ver planes",
     "upgradeTitle": "Mejorar a Pro",
-    "upgradeDescription": "Transcripciones ilimitadas y más.",
+    "upgradeDescription": "Transcripción ilimitada, más precisa y más rápida.",
+    "upgradeInstantSetup": "Configuración instantánea",
+    "upgradeZeroRetention": "Cero retención de datos",
+    "upgradeEnterpriseSecurity": "Seguridad empresarial SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "Más información",
     "integrations": "Integraciones",
     "defaultUser": "Usuario",
@@ -3032,17 +3037,18 @@
     "commandMenu": {
       "stopListening": "Dejar de escuchar",
       "startListening": "Empezar a escuchar",
-      "hideForNow": "Ocultar por ahora"
+      "hideForNow": "Ocultar por ahora",
+      "askAssistant": "Preguntar al asistente"
     }
   },
   "dictationAgent": {
-    "enabled": "Activar agente de voz",
+    "enabled": "Activar asistente de voz",
     "enabledDescription": "Dicta instrucciones a tu agente. El texto resaltado se envía al modelo configurado y se edita en su lugar. Actívalo diciendo \"{{agentName}}\".",
     "screenContext": {
       "title": "Contexto de pantalla",
-      "description": "Adjunta una captura de tu pantalla activa a los comandos del agente de voz.",
+      "description": "Adjunta una captura de tu pantalla activa a los comandos del asistente de voz.",
       "enable": "Compartir contexto de pantalla",
-      "enableDescription": "Captura la pantalla donde está el cursor al iniciar una grabación del agente de voz. Nunca se guarda ni se registra.",
+      "enableDescription": "Captura la pantalla donde está el cursor al iniciar una grabación del asistente de voz. Nunca se guarda ni se registra.",
       "unsupported": "La captura de pantalla no está disponible en Linux Wayland.",
       "visionModel": "Modelo de visión aparte",
       "visionModelDescription": "Envía los comandos que incluyen una captura a otro modelo con capacidad de visión.",
@@ -3069,10 +3075,6 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Atajo del agente de chat",
-      "hotkeyDescription": "Abre y cierra la superposición del agente de chat",
-      "model": "Modelo del Agente",
-      "modelDescription": "Modelo de IA utilizado para conversaciones del agente",
       "systemPrompt": "Prompt del Sistema",
       "systemPromptDescription": "Instrucciones personalizadas para el agente",
       "systemPromptPlaceholder": "Introduce un prompt de sistema personalizado...",
@@ -3087,31 +3089,13 @@
         "selfHostedDesc": "Tu propio servidor en tu red.",
         "enterprise": "Empresarial",
         "enterpriseDesc": "Usa la cuenta en la nube de tu organización (AWS, Azure, GCP)."
-      },
-      "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Resultados fiables. Sin configuración.",
-      "customSetup": "Configuración personalizada (BYOK)",
-      "customSetupDescription": "Usa tus propias claves API y elige tu modelo preferido"
+      }
     },
     "chat": {
-      "placeholder": "Presiona {{hotkey}} para hablar",
-      "thinking": "Pensando...",
-      "transcribing": "Transcribiendo...",
-      "listening": "Escuchando...",
-      "newConversation": "Nuevo",
-      "copyToClipboard": "Copiar al portapapeles",
-      "copied": "¡Copiado!",
-      "emptyState": "Preguntame lo que sea",
-      "errorPrefix": "Error"
-    },
-    "titleBar": {
-      "label": "Agente",
-      "newChat": "Nueva conversación",
-      "close": "Cerrar"
+      "errorPrefix": "Error",
+      "emptyResponse": "El modelo no devolvió ninguna respuesta."
     },
     "input": {
-      "holdToSpeak": "Mantén para hablar",
-      "toClose": "cerrar",
       "listening": "Escuchando...",
       "transcribing": "Transcribiendo...",
       "thinking": "Pensando...",
@@ -3119,6 +3103,14 @@
       "send": "Enviar"
     },
     "tools": {
+      "search_notesName": "Buscar notas",
+      "get_noteName": "Obtener nota",
+      "create_noteName": "Crear nota",
+      "update_noteName": "Actualizar nota",
+      "list_foldersName": "Listar carpetas",
+      "copy_to_clipboardName": "Copiar al portapapeles",
+      "web_searchName": "Buscar en la web",
+      "get_calendar_eventsName": "Obtener eventos del calendario",
       "search_notesStatus": "Buscando notas...",
       "web_searchStatus": "Buscando en la web...",
       "copy_to_clipboardStatus": "Copiando al portapapeles...",
@@ -3127,17 +3119,31 @@
       "create_noteStatus": "Creando nota...",
       "update_noteStatus": "Actualizando nota...",
       "copiedToClipboard": "Copiado al portapapeles",
-      "foundNotes": "{{count}} nota encontrada",
-      "foundNotes_plural": "{{count}} notas encontradas",
-      "searchResults": "{{count}} resultado encontrado",
-      "searchResults_plural": "{{count}} resultados encontrados",
       "openNote": "Abrir nota",
-      "calendarEvents": "{{count}} evento encontrado",
-      "calendarEvents_plural": "{{count}} eventos encontrados",
-      "noResults": "Sin resultados",
-      "error": "Error de herramienta",
       "unknownTool": "Herramienta desconocida: {{name}}",
       "invalidArgs": "Argumentos de herramienta no válidos para {{name}}"
+    }
+  },
+  "assistant": {
+    "panel": {
+      "selectionHint": "Selecciona texto para editarlo con",
+      "selectedContext": "Texto seleccionado añadido",
+      "removeSelectedContext": "Quitar texto seleccionado",
+      "newConversation": "Nueva conversación",
+      "copyToClipboard": "Copiar al portapapeles",
+      "suggestions": {
+        "summarizeNotes": "Resume mis notas recientes",
+        "calendar": "¿Qué hay en mi calendario?",
+        "draft": "Ayúdame a redactar algo"
+      }
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "Invocando",
+        "calling": "Llamando",
+        "using": "Usando"
+      },
+      "toolFallback": "Herramienta"
     }
   },
   "integrations": {
@@ -3277,20 +3283,21 @@
     "tomorrow": "Mañana"
   },
   "upcoming": {
-    "title": "Próximas reuniones",
+    "title": "Próximamente",
     "transcriptions": "Transcripciones",
-    "tomorrow": "Mañana",
-    "noMoreMeetings": "No hay más reuniones hoy",
     "now": "Ahora",
-    "join": "Unirse",
     "untitledEvent": "Evento sin título",
+    "joinAndTakeNotes": "Unirse y tomar notas",
+    "takeNotes": "Tomar notas",
+    "noEventsToday": "Hoy no hay eventos",
+    "noUpcomingEvents": "No hay próximos eventos",
+    "moreCalendarsHint": "¿Quieres añadir más calendarios?",
+    "connectHere": "Conéctalos aquí",
+    "openMeetingLink": "Abrir enlace de la reunión",
     "systemAudioRequired": "Se necesita el permiso de Audio del Sistema para capturar el audio de otros participantes.",
     "openSettings": "Abrir Ajustes del Sistema",
-    "signInRequired": "Inicia sesión para usar la grabación de reuniones",
-    "signInDescription": "Crea una cuenta o inicia sesión para grabar y transcribir reuniones.",
     "connectCalendar": "Conecta tu calendario",
-    "connectCalendarDescription": "Vincula tu Google Calendar para ver próximas reuniones y grabar notas automáticamente.",
-    "notABot": "OpenWhispr graba usando el audio de tu sistema — nunca se une a las reuniones como un bot.",
+    "connectCalendarDescription": "Ve tus reuniones y únete a ellas sin salir de OpenWhispr.",
     "connectCalendarButton": "Conectar calendario"
   },
   "notesView": {
@@ -3411,6 +3418,7 @@
     "ready": "Listo",
     "copy": "Copiar",
     "copied": "Copiado",
+    "collapse": "Contraer transcripción",
     "waitingForInput": "Di algo..."
   },
   "transcript": {

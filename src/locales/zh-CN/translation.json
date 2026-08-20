@@ -58,8 +58,7 @@
   },
   "window": {
     "voiceRecorderTitle": "录音器",
-    "controlPanelTitle": "控制面板",
-    "agentChatTitle": "智能助手聊天"
+    "controlPanelTitle": "控制面板"
   },
   "dialog": {
     "openLink": {
@@ -240,11 +239,11 @@
       "title": "语音助手设置",
       "description": "一键唤起你的 AI 助手",
       "hotkey": "快捷键",
-      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。如果有选中的文本，{{agentName}} 会编辑并替换所选内容；否则会把结果输入到光标所在的位置。无需先说“Hey {{agentName}}”。",
+      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。如果有选中的文本，{{agentName}} 会编辑并替换所选内容；否则回答会在悬浮面板中打开。无需先说“Hey {{agentName}}”。",
       "test": "试一试",
-      "testInstruction": "点击下方，按下 {{hotkey}} 并说出指令",
+      "testInstruction": "选中下方的示例文本，按下 {{hotkey}} 并说“把它改短一点”——编辑结果会直接出现在文本框里",
       "testSetHotkey": "在上方设置快捷键即可试用",
-      "testPlaceholder": "点击这里，按下快捷键并说出其中一个示例...",
+      "sampleText": "周四的会议改期了，我们下周初碰一下，过一遍发布计划，并分配剩下的任务。",
       "examples": [
         "翻译成意大利语:“我说话比打字快”",
         "给我的老板写一封简短的邮件,告诉他我想要升职,他叫 Mark",
@@ -588,9 +587,12 @@
         "title": "回退模式",
         "description": "本地 Whisper 失败，已改用 OpenAI API。"
       },
+      "errorActions": {
+        "viewTranscript": "查看转录"
+      },
       "noAudio": {
-        "title": "未检测到音频",
-        "description": "录音中未检测到音频，请重试。"
+        "title": "我们没听清",
+        "description": "请检查麦克风后重试。"
       },
       "micDisconnected": {
         "title": "麦克风已断开",
@@ -1419,7 +1421,7 @@
       },
       "examplesTitle": "示例",
       "helper": "选一个简短、说起来自然的名字",
-      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，AI 会执行你的命令。如果有选中的文本，该文本会发送到你配置的语音助手模型，并安全地替换为结果。",
+      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，回答会在悬浮助手面板中打开。如果有选中的文本，该文本会发送到你配置的语音助手模型，并安全地替换为结果。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1583,7 +1585,7 @@
       },
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",
-        "description": "说出你的需求——选中的文本会就地编辑，否则助手会把结果输入到光标位置"
+        "description": "说出指令，助手会在悬浮面板中回答，并可使用你的笔记、日历和网页工具。先选中文本即可就地编辑。"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",
@@ -2875,7 +2877,10 @@
     "limitReachedDescription": "升级到 Pro 即可无限转录。",
     "viewPlans": "查看套餐",
     "upgradeTitle": "升级到 Pro",
-    "upgradeDescription": "无限转录、实时转录等更多功能。",
+    "upgradeDescription": "无限量、更准确、更快速的转录。",
+    "upgradeInstantSetup": "即时设置",
+    "upgradeZeroRetention": "零数据保留",
+    "upgradeEnterpriseSecurity": "企业级安全 SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "了解更多",
     "integrations": "集成",
     "defaultUser": "用户",
@@ -2984,7 +2989,8 @@
     "commandMenu": {
       "stopListening": "停止录音",
       "startListening": "开始录音",
-      "hideForNow": "暂时隐藏"
+      "hideForNow": "暂时隐藏",
+      "askAssistant": "询问助手"
     }
   },
   "dictationAgent": {
@@ -3021,10 +3027,6 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "聊天助手快捷键",
-      "hotkeyDescription": "打开或关闭聊天助手窗口",
-      "model": "助手模型",
-      "modelDescription": "用于助手对话的AI模型",
       "systemPrompt": "系统提示词",
       "systemPromptDescription": "助手的自定义指令",
       "systemPromptPlaceholder": "输入自定义系统提示词...",
@@ -3039,31 +3041,13 @@
         "selfHostedDesc": "你自己网络上的服务器。",
         "enterprise": "企业级",
         "enterpriseDesc": "使用你组织的云账号（AWS、Azure、GCP）。"
-      },
-      "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "准确可靠，无需设置。",
-      "customSetup": "自定义配置 (BYOK)",
-      "customSetupDescription": "使用自己的 API 密钥并选择偏好的模型"
+      }
     },
     "chat": {
-      "placeholder": "按 {{hotkey}} 开始说话",
-      "thinking": "思考中...",
-      "transcribing": "转录中...",
-      "listening": "正在聆听...",
-      "newConversation": "新建",
-      "copyToClipboard": "复制到剪贴板",
-      "copied": "已复制！",
-      "emptyState": "随便问我",
-      "errorPrefix": "错误"
-    },
-    "titleBar": {
-      "label": "助手",
-      "newChat": "新对话",
-      "close": "关闭"
+      "errorPrefix": "错误",
+      "emptyResponse": "模型没有返回任何回复。"
     },
     "input": {
-      "holdToSpeak": "按住说话",
-      "toClose": "关闭",
       "listening": "正在聆听...",
       "transcribing": "正在转录...",
       "thinking": "正在思考...",
@@ -3071,6 +3055,14 @@
       "send": "发送"
     },
     "tools": {
+      "search_notesName": "搜索笔记",
+      "get_noteName": "获取笔记",
+      "create_noteName": "创建笔记",
+      "update_noteName": "更新笔记",
+      "list_foldersName": "列出文件夹",
+      "copy_to_clipboardName": "复制到剪贴板",
+      "web_searchName": "网页搜索",
+      "get_calendar_eventsName": "获取日历事件",
       "search_notesStatus": "正在搜索笔记...",
       "web_searchStatus": "正在搜索网页...",
       "copy_to_clipboardStatus": "正在复制到剪贴板...",
@@ -3079,17 +3071,31 @@
       "create_noteStatus": "正在创建笔记...",
       "update_noteStatus": "正在更新笔记...",
       "copiedToClipboard": "已复制到剪贴板",
-      "foundNotes": "找到 {{count}} 条笔记",
-      "foundNotes_plural": "找到 {{count}} 条笔记",
-      "searchResults": "找到 {{count}} 条结果",
-      "searchResults_plural": "找到 {{count}} 条结果",
       "openNote": "打开笔记",
-      "calendarEvents": "找到 {{count}} 个日程",
-      "calendarEvents_plural": "找到 {{count}} 个日程",
-      "noResults": "未找到结果",
-      "error": "工具错误",
       "unknownTool": "未知工具：{{name}}",
       "invalidArgs": "{{name}} 的工具参数无效"
+    }
+  },
+  "assistant": {
+    "panel": {
+      "selectionHint": "选择要编辑的文本，然后按",
+      "selectedContext": "已添加所选文本",
+      "removeSelectedContext": "移除所选文本",
+      "newConversation": "新对话",
+      "copyToClipboard": "复制到剪贴板",
+      "suggestions": {
+        "summarizeNotes": "总结我最近的笔记",
+        "calendar": "我的日历上有什么安排？",
+        "draft": "帮我起草一些内容"
+      }
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "调用中",
+        "calling": "请求中",
+        "using": "使用中"
+      },
+      "toolFallback": "工具"
     }
   },
   "integrations": {
@@ -3229,20 +3235,21 @@
     "tomorrow": "明天"
   },
   "upcoming": {
-    "title": "即将开始的会议",
+    "title": "即将开始",
     "transcriptions": "转录",
-    "tomorrow": "明天",
-    "noMoreMeetings": "今天没有更多会议了",
     "now": "进行中",
-    "join": "加入",
     "untitledEvent": "无标题事件",
+    "joinAndTakeNotes": "加入并记笔记",
+    "takeNotes": "记笔记",
+    "noEventsToday": "今天没有日程",
+    "noUpcomingEvents": "暂无即将开始的日程",
+    "moreCalendarsHint": "想连接更多日历？",
+    "connectHere": "在这里连接",
+    "openMeetingLink": "打开会议链接",
     "systemAudioRequired": "需要系统音频权限来录制其他参与者的音频。",
     "openSettings": "打开系统设置",
-    "signInRequired": "登录以使用会议录制",
-    "signInDescription": "创建账户或登录以录制和转录会议。",
     "connectCalendar": "连接您的日历",
-    "connectCalendarDescription": "关联 Google 日历以查看即将到来的会议并自动记录笔记。",
-    "notABot": "OpenWhispr 通过系统音频录制 — 它不会以机器人身份加入您的会议。",
+    "connectCalendarDescription": "无需离开 OpenWhispr 即可查看并加入您的会议。",
     "connectCalendarButton": "连接日历"
   },
   "notesView": {
@@ -3411,6 +3418,7 @@
     "ready": "就绪",
     "copy": "复制",
     "copied": "已复制",
+    "collapse": "折叠转录",
     "waitingForInput": "说点什么..."
   },
   "transcript": {

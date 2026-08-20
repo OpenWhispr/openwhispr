@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Dictation window feature styles (voice pill, assistant/live-transcript panels). */
+@import "./styles/dictation-panel.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -13,6 +15,8 @@
   --color-muted-foreground: #525252;
   --color-accent: oklch(0.55 0.22 285);
   --color-accent-foreground: #ffffff;
+  /* Agent Mode identity, sourced from the supplied sparkle/leaf mark. */
+  --color-agent-brand: #8787ff;
   --color-destructive: #dc2626;
   --color-destructive-foreground: #ffffff;
   --color-border: #e5e5e5;
@@ -185,6 +189,18 @@
   body:has(.dictation-window) #root,
   body:has(.meeting-notification-window) #root {
     background: transparent;
+  }
+
+  .dictation-window {
+    --window-resize-compensation-x: 0px;
+    --window-resize-compensation-y: 0px;
+    position: fixed;
+    inset: 0;
+    transform: translate3d(
+      var(--window-resize-compensation-x),
+      var(--window-resize-compensation-y),
+      0
+    );
   }
 }
 
@@ -414,6 +430,15 @@ a:hover {
   }
   to {
     width: 0%;
+  }
+}
+
+@keyframes toast-border-progress {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 1;
   }
 }
 
@@ -801,16 +826,6 @@ a:hover {
 }
 
 ::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-/* ---- Agent Overlay ---- */
-
-body:has(.agent-overlay-window) {
-  background: transparent;
-}
-
-body:has(.agent-overlay-window) #root {
   background: transparent;
 }
 

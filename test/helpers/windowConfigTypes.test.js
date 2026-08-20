@@ -39,7 +39,7 @@ function loadWindowConfig({ platform, environment }) {
   }
 }
 
-const OVERLAY_ROLES = ["main", "notification", "transcription-preview", "agent"];
+const OVERLAY_ROLES = ["main", "notification"];
 
 function resolveAllOverlayTypes(platform, session) {
   return Object.fromEntries(
@@ -65,20 +65,14 @@ test("Sway XWayland uses notification type only for focusless overlays", () => {
     {
       main: windowConfig.MAIN_WINDOW_CONFIG.type,
       notification: windowConfig.NOTIFICATION_WINDOW_CONFIG.type,
-      transcriptionPreview: windowConfig.TRANSCRIPTION_PREVIEW_CONFIG.type,
-      agent: windowConfig.AGENT_OVERLAY_CONFIG.type,
     },
     {
       main: "notification",
       notification: "notification",
-      transcriptionPreview: "notification",
-      agent: "toolbar",
     }
   );
   assert.equal(windowConfig.MAIN_WINDOW_CONFIG.focusable, false);
   assert.equal(windowConfig.NOTIFICATION_WINDOW_CONFIG.focusable, false);
-  assert.equal(windowConfig.TRANSCRIPTION_PREVIEW_CONFIG.focusable, false);
-  assert.equal(windowConfig.AGENT_OVERLAY_CONFIG.focusable, true);
 });
 
 test("the overlay resolver preserves every unaffected platform and session", () => {
@@ -90,8 +84,6 @@ test("the overlay resolver preserves every unaffected platform and session", () 
       expected: {
         main: "toolbar",
         notification: "toolbar",
-        "transcription-preview": "toolbar",
-        agent: "toolbar",
       },
     },
     {
@@ -101,8 +93,6 @@ test("the overlay resolver preserves every unaffected platform and session", () 
       expected: {
         main: "toolbar",
         notification: "toolbar",
-        "transcription-preview": "toolbar",
-        agent: "toolbar",
       },
     },
     {
@@ -119,8 +109,6 @@ test("the overlay resolver preserves every unaffected platform and session", () 
       expected: {
         main: "normal",
         notification: "toolbar",
-        "transcription-preview": "toolbar",
-        agent: "toolbar",
       },
     },
     {
@@ -137,8 +125,6 @@ test("the overlay resolver preserves every unaffected platform and session", () 
       expected: {
         main: "normal",
         notification: "toolbar",
-        "transcription-preview": "toolbar",
-        agent: "toolbar",
       },
     },
     {
@@ -155,8 +141,6 @@ test("the overlay resolver preserves every unaffected platform and session", () 
       expected: {
         main: "toolbar",
         notification: "toolbar",
-        "transcription-preview": "toolbar",
-        agent: "toolbar",
       },
     },
     {
@@ -166,8 +150,6 @@ test("the overlay resolver preserves every unaffected platform and session", () 
       expected: {
         main: "normal",
         notification: "normal",
-        "transcription-preview": "normal",
-        agent: "normal",
       },
     },
     {
@@ -177,8 +159,6 @@ test("the overlay resolver preserves every unaffected platform and session", () 
       expected: {
         main: "toolbar",
         notification: "toolbar",
-        "transcription-preview": "toolbar",
-        agent: "toolbar",
       },
     },
     {
@@ -188,8 +168,6 @@ test("the overlay resolver preserves every unaffected platform and session", () 
       expected: {
         main: "panel",
         notification: "panel",
-        "transcription-preview": "panel",
-        agent: "panel",
       },
     },
     {
@@ -199,8 +177,6 @@ test("the overlay resolver preserves every unaffected platform and session", () 
       expected: {
         main: "normal",
         notification: "normal",
-        "transcription-preview": "normal",
-        agent: "normal",
       },
     },
   ];
@@ -227,14 +203,10 @@ test("a stale SWAYSOCK does not change Hyprland window types", () => {
     {
       main: windowConfig.MAIN_WINDOW_CONFIG.type,
       notification: windowConfig.NOTIFICATION_WINDOW_CONFIG.type,
-      transcriptionPreview: windowConfig.TRANSCRIPTION_PREVIEW_CONFIG.type,
-      agent: windowConfig.AGENT_OVERLAY_CONFIG.type,
     },
     {
       main: "toolbar",
       notification: "toolbar",
-      transcriptionPreview: "toolbar",
-      agent: "toolbar",
     }
   );
 });
