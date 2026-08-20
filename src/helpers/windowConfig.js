@@ -1,5 +1,6 @@
 const path = require("path");
 const { getLinuxSessionInfo } = require("./linuxSession");
+const { ASSISTANT_PANEL_SIZE_LIMITS } = require("./voiceSurfaceGeometry");
 
 const FOCUSLESS_OVERLAY_ROLES = new Set(["main", "notification"]);
 
@@ -34,15 +35,6 @@ const OVERLAY_WINDOW_TYPES = {
     platform: process.platform,
     linuxSession,
   }),
-};
-
-const ASSISTANT_PANEL_SIZE_LIMITS = {
-  ratioWidth: 442,
-  ratioHeight: 538,
-  gutter: 24,
-  minSurfaceWidth: 360,
-  minSurfaceHeight: 152,
-  maxSurfaceWidth: 600,
 };
 
 const ASSISTANT_WINDOW_SIZE = {

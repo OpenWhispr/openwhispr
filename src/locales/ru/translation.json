@@ -3078,6 +3078,14 @@
       "send": "Отправить"
     },
     "tools": {
+      "search_notesName": "Поиск заметок",
+      "get_noteName": "Получить заметку",
+      "create_noteName": "Создать заметку",
+      "update_noteName": "Обновить заметку",
+      "list_foldersName": "Список папок",
+      "copy_to_clipboardName": "Копировать в буфер обмена",
+      "web_searchName": "Поиск в интернете",
+      "get_calendar_eventsName": "Получить события календаря",
       "search_notesStatus": "Поиск в заметках...",
       "web_searchStatus": "Поиск в интернете...",
       "copy_to_clipboardStatus": "Копирование в буфер обмена...",

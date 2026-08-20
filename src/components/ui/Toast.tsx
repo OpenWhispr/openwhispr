@@ -13,6 +13,7 @@ import {
   getDictationErrorDuration,
   resolveToastPresentation,
 } from "../../helpers/toastPresentation";
+import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { DictationErrorCard } from "../dictation/DictationErrorCard";
 
 interface ToastState extends ToastProps {
@@ -257,7 +258,7 @@ const Toast: React.FC<
   const pausedAtRef = React.useRef<number | null>(null);
   const remainingDurationRef = React.useRef(duration);
   const timerStartedAtRef = React.useRef(createdAt);
-  const [copied, setCopied] = React.useState(false);
+  const { copied, copy } = useCopyFeedback(description ?? "", { resetMs: 2000 });
   const [timerPaused, setTimerPaused] = React.useState(false);
   const [errorSurfaceReady, setErrorSurfaceReady] = React.useState(false);
   const isDestructive = variant === "destructive";
@@ -310,15 +311,6 @@ const Toast: React.FC<
       onResumeTimer(remaining);
     }
     pausedAtRef.current = null;
-  };
-
-  const handleCopyError = async () => {
-    if (!description) return;
-    try {
-      await navigator.clipboard.writeText(description);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
   };
 
   const message = title || description;
@@ -380,7 +372,7 @@ const Toast: React.FC<
                 <div className="flex items-start justify-between gap-1.5">
                   <span className="select-all wrap-break-word min-w-0">{detail}</span>
                   <button
-                    onClick={handleCopyError}
+                    onClick={() => void copy()}
                     className={cn(
                       "shrink-0 p-0.5 rounded-xs mt-px",
                       "text-white/30 hover:text-white/70",

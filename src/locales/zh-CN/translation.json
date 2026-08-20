@@ -3052,6 +3052,14 @@
       "send": "发送"
     },
     "tools": {
+      "search_notesName": "搜索笔记",
+      "get_noteName": "获取笔记",
+      "create_noteName": "创建笔记",
+      "update_noteName": "更新笔记",
+      "list_foldersName": "列出文件夹",
+      "copy_to_clipboardName": "复制到剪贴板",
+      "web_searchName": "网页搜索",
+      "get_calendar_eventsName": "获取日历事件",
       "search_notesStatus": "正在搜索笔记...",
       "web_searchStatus": "正在搜索网页...",
       "copy_to_clipboardStatus": "正在复制到剪贴板...",

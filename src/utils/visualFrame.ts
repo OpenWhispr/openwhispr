@@ -1,8 +1,9 @@
 type FrameScheduler = (callback: FrameRequestCallback) => number;
 
 // Chromium pauses requestAnimationFrame in hidden/occluded windows (the main
-// window does not disable backgroundThrottling), so an unbounded rAF wait
-// could stall a dictation stop indefinitely while the mic keeps recording.
+// window disables backgroundThrottling, but an occluded or minimised window
+// can still stop painting), so an unbounded rAF wait could stall a dictation
+// stop indefinitely while the mic keeps recording.
 // Each awaited frame races this timeout so the wait always resolves.
 export const VISUAL_FRAME_TIMEOUT_MS = 250;
 

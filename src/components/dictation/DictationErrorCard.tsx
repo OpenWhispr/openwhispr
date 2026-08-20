@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import { RotateCcw, ScrollText } from "lucide-react";
+import { ASSISTANT_PANEL_SIZE_LIMITS } from "../../helpers/voiceSurfaceGeometry";
 import { cn } from "../lib/utils";
 import type { ToastActionConfig } from "../ui/useToast";
 
@@ -17,12 +18,6 @@ interface DictationErrorCardProps {
 const ACTION_ICONS = {
   retry: RotateCcw,
   transcript: ScrollText,
-};
-
-const SHARED_PANEL_SURFACE = {
-  width: 442,
-  height: 538,
-  gutter: 24,
 };
 
 /** Shared one/two-action error surface for the floating dictation window. */
@@ -52,17 +47,18 @@ export function DictationErrorCard({
       // measured once at the width the user will actually see.
       const availableSurfaceWidth = Math.max(
         1,
-        window.screen.availWidth - SHARED_PANEL_SURFACE.gutter
+        window.screen.availWidth - ASSISTANT_PANEL_SIZE_LIMITS.gutter
       );
       const availableSurfaceHeight = Math.max(
         1,
-        window.screen.availHeight - SHARED_PANEL_SURFACE.gutter
+        window.screen.availHeight - ASSISTANT_PANEL_SIZE_LIMITS.gutter
       );
       const expectedWidth = Math.min(
-        SHARED_PANEL_SURFACE.width,
+        ASSISTANT_PANEL_SIZE_LIMITS.ratioWidth,
         availableSurfaceWidth,
         Math.floor(
-          availableSurfaceHeight * (SHARED_PANEL_SURFACE.width / SHARED_PANEL_SURFACE.height)
+          availableSurfaceHeight *
+            (ASSISTANT_PANEL_SIZE_LIMITS.ratioWidth / ASSISTANT_PANEL_SIZE_LIMITS.ratioHeight)
         )
       );
       if (Math.abs(card.getBoundingClientRect().width - expectedWidth) > 1) return;

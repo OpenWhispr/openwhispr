@@ -1,3 +1,7 @@
+import { LIVE_TRANSCRIPT_SURFACE_LIMITS } from "./voiceSurfaceGeometry";
+
+export { LIVE_TRANSCRIPT_SURFACE_LIMITS };
+
 // The pill's two rendered footprints (px). This is a real cross-process
 // contract: WINDOW_SIZES.RECORDING in src/helpers/windowConfig.js sizes the
 // native overlay window around the compact recording pill, so these values
@@ -79,15 +83,6 @@ export const LIVE_TRANSCRIPT_ENTRANCE_TIMING = Object.freeze({
   panelExpansionMs: 320,
   contentRevealDelayMs: 80,
   contentSettleMs: 280,
-});
-
-// Keep the renderer's adaptive shell in lockstep with the native assistant
-// window limits. Live Transcript enters at its smallest useful surface and may
-// then grow with the transcript, while Agent Mode continues to use the full
-// fixed footprint.
-export const LIVE_TRANSCRIPT_SURFACE_LIMITS = Object.freeze({
-  minHeight: 152,
-  maxHeight: 538,
 });
 
 export function getLiveTranscriptEntranceTimeline(timing = LIVE_TRANSCRIPT_ENTRANCE_TIMING) {

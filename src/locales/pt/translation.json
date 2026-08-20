@@ -3052,6 +3052,14 @@
       "send": "Enviar"
     },
     "tools": {
+      "search_notesName": "Pesquisar notas",
+      "get_noteName": "Obter nota",
+      "create_noteName": "Criar nota",
+      "update_noteName": "Atualizar nota",
+      "list_foldersName": "Listar pastas",
+      "copy_to_clipboardName": "Copiar para a área de transferência",
+      "web_searchName": "Pesquisar na web",
+      "get_calendar_eventsName": "Obter eventos do calendário",
       "search_notesStatus": "Pesquisando notas...",
       "web_searchStatus": "Pesquisando na web...",
       "copy_to_clipboardStatus": "Copiando para a área de transferência...",

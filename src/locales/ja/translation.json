@@ -3052,6 +3052,14 @@
       "send": "送信"
     },
     "tools": {
+      "search_notesName": "ノートを検索",
+      "get_noteName": "ノートを取得",
+      "create_noteName": "ノートを作成",
+      "update_noteName": "ノートを更新",
+      "list_foldersName": "フォルダー一覧",
+      "copy_to_clipboardName": "クリップボードにコピー",
+      "web_searchName": "ウェブ検索",
+      "get_calendar_eventsName": "カレンダーの予定を取得",
       "search_notesStatus": "ノートを検索中...",
       "web_searchStatus": "ウェブを検索中...",
       "copy_to_clipboardStatus": "クリップボードにコピー中...",

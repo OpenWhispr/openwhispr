@@ -3216,6 +3216,14 @@
       "send": "Send"
     },
     "tools": {
+      "search_notesName": "Search notes",
+      "get_noteName": "Get note",
+      "create_noteName": "Create note",
+      "update_noteName": "Update note",
+      "list_foldersName": "List folders",
+      "copy_to_clipboardName": "Copy to clipboard",
+      "web_searchName": "Web search",
+      "get_calendar_eventsName": "Get calendar events",
       "search_notesStatus": "Searching notes...",
       "web_searchStatus": "Searching the web...",
       "copy_to_clipboardStatus": "Copying to clipboard...",

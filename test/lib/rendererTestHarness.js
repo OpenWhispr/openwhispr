@@ -44,6 +44,11 @@ async function createRendererServer(
   const { createServer } = await import("vite");
   const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), cachePrefix));
   const suffixes = Object.keys(mockModules);
+  const voiceSurfaceGeometryPath = path.resolve(
+    __dirname,
+    "../../src/helpers/voiceSurfaceGeometry.js"
+  );
+  const voiceSurfaceGeometryModuleId = "\0commonjs:voiceSurfaceGeometry";
   const vite = await createServer({
     root: path.resolve(__dirname, "../../src"),
     cacheDir,
@@ -57,9 +62,22 @@ async function createRendererServer(
         enforce: "pre",
         resolveId(source) {
           const suffix = suffixes.find((candidate) => source.endsWith(candidate));
-          return suffix ? `\0mock:${suffix}` : null;
+          if (suffix) return `\0mock:${suffix}`;
+          if (source.endsWith("/voiceSurfaceGeometry")) {
+            return voiceSurfaceGeometryModuleId;
+          }
+          return null;
         },
         load(id) {
+          if (id === voiceSurfaceGeometryModuleId) {
+            return `
+              import { createRequire } from "node:module";
+              const require = createRequire(import.meta.url);
+              const geometry = require(${JSON.stringify(voiceSurfaceGeometryPath)});
+              export const ASSISTANT_PANEL_SIZE_LIMITS = geometry.ASSISTANT_PANEL_SIZE_LIMITS;
+              export const LIVE_TRANSCRIPT_SURFACE_LIMITS = geometry.LIVE_TRANSCRIPT_SURFACE_LIMITS;
+            `;
+          }
           if (!id.startsWith("\0mock:")) return null;
           return mockModules[id.slice("\0mock:".length)];
         },

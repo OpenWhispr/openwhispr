@@ -15,16 +15,3 @@ export const AGENT_TOOL_ACTIVITY_MIN_VISIBLE_MS = 2400;
 export function getAgentToolActivityRemainingMs(startedAt: number, now = Date.now()): number {
   return Math.max(0, AGENT_TOOL_ACTIVITY_MIN_VISIBLE_MS - (now - startedAt));
 }
-
-/** Humanizes a tool identifier; null when nothing readable remains (callers t() the fallback). */
-export function formatAgentToolName(name: string): string | null {
-  const words = name
-    .trim()
-    .split(/[_\s-]+/)
-    .filter(Boolean)
-    .map((word) => word.toLowerCase());
-
-  if (words.length === 0) return null;
-  words[0] = `${words[0][0].toUpperCase()}${words[0].slice(1)}`;
-  return words.join(" ");
-}

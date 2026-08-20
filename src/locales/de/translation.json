@@ -3216,6 +3216,14 @@
       "send": "Senden"
     },
     "tools": {
+      "search_notesName": "Notizen durchsuchen",
+      "get_noteName": "Notiz abrufen",
+      "create_noteName": "Notiz erstellen",
+      "update_noteName": "Notiz aktualisieren",
+      "list_foldersName": "Ordner auflisten",
+      "copy_to_clipboardName": "In die Zwischenablage kopieren",
+      "web_searchName": "Websuche",
+      "get_calendar_eventsName": "Kalendertermine abrufen",
       "search_notesStatus": "Notizen werden durchsucht...",
       "web_searchStatus": "Websuche...",
       "copy_to_clipboardStatus": "In Zwischenablage kopieren...",

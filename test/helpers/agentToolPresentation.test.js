@@ -5,16 +5,6 @@ const path = require("node:path");
 
 const load = () => import("../../src/helpers/agentToolPresentation.ts");
 
-test("Agent tool labels keep tool identity readable without raw separators", async () => {
-  const { formatAgentToolName } = await load();
-
-  assert.equal(formatAgentToolName("search_notes"), "Search notes");
-  assert.equal(formatAgentToolName("web-search"), "Web search");
-  assert.equal(formatAgentToolName(" get_calendar_events "), "Get calendar events");
-  // Unreadable names yield null so the panel can t() a localized fallback.
-  assert.equal(formatAgentToolName(""), null);
-});
-
 test("Agent tool activity uses a restrained rotating verb set of i18n keys", async () => {
   const {
     AGENT_TOOL_ACTIVITY_MIN_VISIBLE_MS,
@@ -42,10 +32,7 @@ test("Agent tool activity uses a restrained rotating verb set of i18n keys", asy
 test("every exported activity key resolves in the base locale", async () => {
   const { AGENT_TOOL_ACTIVITY_VERB_KEYS, AGENT_TOOL_NAME_FALLBACK_KEY } = await load();
   const translation = JSON.parse(
-    fs.readFileSync(
-      path.resolve(__dirname, "../../src/locales/en/translation.json"),
-      "utf8"
-    )
+    fs.readFileSync(path.resolve(__dirname, "../../src/locales/en/translation.json"), "utf8")
   );
   const resolve = (key) =>
     key.split(".").reduce((node, part) => (node ? node[part] : undefined), translation);

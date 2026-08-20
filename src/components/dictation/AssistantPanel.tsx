@@ -20,7 +20,6 @@ import {
   AGENT_TOOL_ACTIVITY_ROTATION_MS,
   AGENT_TOOL_ACTIVITY_VERB_KEYS,
   AGENT_TOOL_NAME_FALLBACK_KEY,
-  formatAgentToolName,
 } from "../../helpers/agentToolPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
@@ -515,7 +514,9 @@ export function AssistantPanel({
               </span>
               <span className="h-4 w-px shrink-0 bg-border/70" />
               <span className="truncate text-sm font-medium text-foreground">
-                {formatAgentToolName(streaming.activeToolName) ?? t(AGENT_TOOL_NAME_FALLBACK_KEY)}
+                {t(`agentMode.tools.${streaming.activeToolName}Name`, {
+                  defaultValue: t(AGENT_TOOL_NAME_FALLBACK_KEY),
+                })}
               </span>
             </div>
           </div>

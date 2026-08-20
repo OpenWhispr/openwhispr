@@ -11,14 +11,16 @@ const noop = () => {};
 async function renderAssistantPanel(
   t,
   messages,
-  { initialConversationId = null, agentState = "idle" } = {}
+  { initialConversationId = null, agentState = "idle", activeToolName = null, locale = "en" } = {}
 ) {
   installBrowserGlobals(t);
   globalThis.__assistantPanelMessages = messages;
   globalThis.__assistantPanelAgentState = agentState;
+  globalThis.__assistantPanelActiveToolName = activeToolName;
   t.after(() => {
     delete globalThis.__assistantPanelMessages;
     delete globalThis.__assistantPanelAgentState;
+    delete globalThis.__assistantPanelActiveToolName;
   });
 
   const vite = await createRendererServer(t, {
@@ -42,7 +44,7 @@ async function renderAssistantPanel(
         export function useChatStreaming() {
           return {
             agentState: globalThis.__assistantPanelAgentState,
-            activeToolName: null,
+            activeToolName: globalThis.__assistantPanelActiveToolName,
             toolStatus: "",
             cancelStream() {},
           };
@@ -85,11 +87,11 @@ async function renderAssistantPanel(
     vite.ssrLoadModule("react-i18next"),
   ]);
   const translation = JSON.parse(
-    fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
+    fs.readFileSync(path.join(__dirname, `../../src/locales/${locale}/translation.json`), "utf8")
   );
   await viteI18next.use(initReactI18next).init({
-    lng: "en",
-    resources: { en: { translation } },
+    lng: locale,
+    resources: { [locale]: { translation } },
     interpolation: { escapeValue: false },
   });
   const { AssistantPanel } = await vite.ssrLoadModule("/components/dictation/AssistantPanel.tsx");
@@ -154,6 +156,26 @@ test("the Assistant response cancel control has an accessible name", async (t) =
   const markup = await renderAssistantPanel(t, [], { agentState: "streaming" });
 
   assert.match(markup, /<button[^>]*aria-label="Cancel"[^>]*title="Cancel"/);
+});
+
+test("the Assistant localizes the active registered tool name", async (t) => {
+  const markup = await renderAssistantPanel(t, [], {
+    activeToolName: "search_notes",
+    locale: "es",
+  });
+
+  assert.match(markup, />Buscar notas</);
+  assert.doesNotMatch(markup, />Search notes</);
+});
+
+test("the Assistant uses its localized fallback for an unknown active tool", async (t) => {
+  const markup = await renderAssistantPanel(t, [], {
+    activeToolName: "unregistered_tool",
+    locale: "es",
+  });
+
+  assert.match(markup, />Herramienta</);
+  assert.doesNotMatch(markup, />Unregistered tool</);
 });
 
 test("a failed Assistant resize releases its open claim so opening can retry", async (t) => {
