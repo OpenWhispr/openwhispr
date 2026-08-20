@@ -136,7 +136,7 @@ export default function AddNotesToFolderDialog({
                         <FileText size={12} className="text-foreground/20" />
                       </div>
                       <div className="flex-1 min-w-0 text-left">
-                        <p className="text-xs text-foreground/80 truncate">
+                        <p className="text-xs text-foreground/80 truncate" dir="auto">
                           {note.title || t("notes.list.untitled")}
                         </p>
                       </div>

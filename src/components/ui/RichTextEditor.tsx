@@ -58,6 +58,7 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class: "rich-text-editor-content",
+        dir: "auto",
       },
     },
   });

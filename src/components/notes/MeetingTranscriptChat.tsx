@@ -39,14 +39,14 @@ const SPEAKER_COLORS = [
 ];
 
 const SPEAKER_BORDER_COLORS = [
-  "border-l-blue-400/50",
-  "border-l-green-400/50",
-  "border-l-purple-400/50",
-  "border-l-orange-400/50",
-  "border-l-pink-400/50",
-  "border-l-cyan-400/50",
-  "border-l-yellow-400/50",
-  "border-l-red-400/50",
+  "border-s-blue-400/50",
+  "border-s-green-400/50",
+  "border-s-purple-400/50",
+  "border-s-orange-400/50",
+  "border-s-pink-400/50",
+  "border-s-cyan-400/50",
+  "border-s-yellow-400/50",
+  "border-s-red-400/50",
 ];
 
 const STICKY_SCROLL_THRESHOLD_PX = 80;
@@ -118,10 +118,11 @@ function PartialBubble({
             s.bg,
             "text-[13px] leading-relaxed italic"
           )}
+          dir="auto"
         >
           {text}
           <span
-            className={cn("inline-block w-[2px] h-[13px] align-middle ml-0.5", s.cursor)}
+            className={cn("inline-block w-[2px] h-[13px] align-middle ms-0.5", s.cursor)}
             style={{ animation: "agent-cursor-blink 800ms steps(1) infinite" }}
           />
         </div>
@@ -835,7 +836,7 @@ export function MeetingTranscriptChat({
                 "group flex flex-col",
                 selfSide ? "items-start" : "items-end",
                 !sameSpeaker && i > 0 && "mt-2",
-                selectable && (selfSide ? "pl-6" : "pr-6")
+                selectable && (selfSide ? "ps-6" : "pe-6")
               )}
               style={{ animation: "agent-message-in 200ms ease-out both" }}
             >
@@ -863,10 +864,11 @@ export function MeetingTranscriptChat({
                       : cn(
                           "bg-surface-2 border border-border/30 text-foreground",
                           sameSpeaker ? "rounded-lg rounded-tr-sm" : "rounded-lg rounded-br-sm",
-                          isSystemSpeaker && cn("border-l-2", SPEAKER_BORDER_COLORS[colorIdx])
+                          isSystemSpeaker && cn("border-s-2", SPEAKER_BORDER_COLORS[colorIdx])
                         ),
                     isSelected && "ring-2 ring-primary/60"
                   )}
+                  dir="auto"
                 >
                   {segment.text}
                 </div>

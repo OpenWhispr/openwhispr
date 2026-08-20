@@ -8,7 +8,7 @@ interface MarkdownRendererProps {
 
 export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
   return (
-    <div className={cn("prose prose-sm max-w-none", className)}>
+    <div className={cn("prose prose-sm max-w-none", className)} dir="auto">
       <Markdown
         components={{
           h1: ({ children }) => (
@@ -21,9 +21,9 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
             <h3 className="text-sm font-semibold mb-1.5 mt-2 first:mt-0">{children}</h3>
           ),
           p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-          ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
-          ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
-          li: ({ children }) => <li className="pl-1">{children}</li>,
+          ul: ({ children }) => <ul className="list-disc ps-4 mb-2 space-y-1">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal ps-4 mb-2 space-y-1">{children}</ol>,
+          li: ({ children }) => <li className="ps-1">{children}</li>,
           a: ({ href, children }) => (
             <a
               href={href}
@@ -43,7 +43,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
           em: ({ children }) => <em className="italic">{children}</em>,
           blockquote: ({ children }) => (
-            <blockquote className="border-l-2 border-current/30 pl-3 italic my-2">
+            <blockquote className="border-s-2 border-current/30 ps-3 italic my-2">
               {children}
             </blockquote>
           ),

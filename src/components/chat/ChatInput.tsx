@@ -114,7 +114,7 @@ export function ChatInput({
     <div className="shrink-0 px-3 pb-3 pt-1">
       <div
         className={cn(
-          "flex items-center gap-2 min-h-11 pl-4 pr-1.5 rounded-full",
+          "flex items-center gap-2 min-h-11 ps-4 pe-1.5 rounded-full",
           GLASS_SURFACE,
           "border border-black/10 dark:border-white/14",
           "transition-all duration-200",
@@ -125,7 +125,7 @@ export function ChatInput({
         {isListening && (
           <>
             <RecordingIndicator />
-            <span className="text-[12px] text-foreground/80 truncate flex-1">
+            <span className="text-[12px] text-foreground/80 truncate flex-1" dir="auto">
               {partialTranscript || t("agentMode.input.listening")}
             </span>
           </>
@@ -200,6 +200,7 @@ export function ChatInput({
               onKeyDown={handleKeyDown}
               disabled={isBusy}
               autoFocus={autoFocus}
+              dir="auto"
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
                 "input-inline flex-1 outline-none bg-transparent caret-primary",

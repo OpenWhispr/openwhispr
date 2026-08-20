@@ -45,4 +45,16 @@ export function getLanguageLabel(code: string | null | undefined): string {
   return entry?.label ?? code;
 }
 
+export type TextDirection = "rtl" | "ltr" | "auto";
+
+export function getLanguageDirection(language: string | null | undefined): TextDirection {
+  if (!language || language === "auto") return "auto";
+  const base = language.split("-")[0];
+  const entry =
+    registry.languages.find((l) => l.code === language) ??
+    registry.languages.find((l) => l.code === base);
+  if (entry && (entry as { dir?: string }).dir === "rtl") return "rtl";
+  return "ltr";
+}
+
 export { WHISPER_LANGUAGES, ASSEMBLYAI_UNIVERSAL3_PRO_LANGUAGES };

@@ -218,7 +218,9 @@ const Toast: React.FC<
       <div className="flex items-start gap-2 flex-1 min-w-0 px-2.5 py-2">
         <div className="flex-1 min-w-0">
           {message && (
-            <div className="text-xs font-medium leading-tight text-white/90">{message}</div>
+            <div className="text-xs font-medium leading-tight text-white/90" dir="auto">
+              {message}
+            </div>
           )}
           {detail &&
             (isDestructive ? (
@@ -230,7 +232,9 @@ const Toast: React.FC<
                 )}
               >
                 <div className="flex items-start justify-between gap-1.5">
-                  <span className="select-all wrap-break-word min-w-0">{detail}</span>
+                  <span className="select-all wrap-break-word min-w-0" dir="auto">
+                    {detail}
+                  </span>
                   <button
                     onClick={handleCopyError}
                     className={cn(

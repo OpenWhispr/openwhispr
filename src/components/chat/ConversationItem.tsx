@@ -67,7 +67,10 @@ export default function ConversationItem({
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <p className={cn("text-xs truncate text-foreground", isActive && "font-medium")}>
+          <p
+            className={cn("text-xs truncate text-foreground", isActive && "font-medium")}
+            dir="auto"
+          >
             {conversation.title}
           </p>
           <div className="flex items-center gap-0.5 shrink-0">
@@ -121,7 +124,7 @@ export default function ConversationItem({
           </div>
         </div>
         {conversation.preview && (
-          <p className="text-[11px] text-muted-foreground/50 line-clamp-1 mt-0.5">
+          <p className="text-[11px] text-muted-foreground/50 line-clamp-1 mt-0.5" dir="auto">
             {conversation.preview}
           </p>
         )}
