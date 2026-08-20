@@ -3118,6 +3118,7 @@
       "selectionHint": "Selecciona texto para editarlo con",
       "selectedContext": "Texto seleccionado añadido",
       "removeSelectedContext": "Quitar texto seleccionado",
+      "newConversation": "Nueva conversación",
       "copyToClipboard": "Copiar al portapapeles",
       "suggestions": {
         "summarizeNotes": "Resume mis notas recientes",

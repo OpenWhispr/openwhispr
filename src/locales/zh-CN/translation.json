@@ -3070,6 +3070,7 @@
       "selectionHint": "选择要编辑的文本，然后按",
       "selectedContext": "已添加所选文本",
       "removeSelectedContext": "移除所选文本",
+      "newConversation": "新对话",
       "copyToClipboard": "复制到剪贴板",
       "suggestions": {
         "summarizeNotes": "总结我最近的笔记",

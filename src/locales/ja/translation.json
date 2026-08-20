@@ -3070,6 +3070,7 @@
       "selectionHint": "編集するテキストを選択",
       "selectedContext": "選択したテキストを追加",
       "removeSelectedContext": "選択したテキストを削除",
+      "newConversation": "新しい会話",
       "copyToClipboard": "クリップボードにコピー",
       "suggestions": {
         "summarizeNotes": "最近のノートを要約して",

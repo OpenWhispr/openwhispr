@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, X } from "lucide-react";
+import { Check, Copy, Plus, X } from "lucide-react";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { Button } from "../ui/button";
@@ -272,6 +272,13 @@ export function AssistantPanel({
     window.getSelection()?.removeAllRanges();
   }, [onSelectionContextChange]);
 
+  const handleNewConversation = useCallback(() => {
+    if (isBusy || submissionInFlight) return;
+    persistence.handleNewChat();
+    onConversationIdChange(null);
+    clearSelectedContext();
+  }, [clearSelectedContext, isBusy, onConversationIdChange, persistence, submissionInFlight]);
+
   const handleTextSubmit = useCallback(
     (text: string): void => {
       if (!historyReady) return;
@@ -373,6 +380,23 @@ export function AssistantPanel({
         onMouseUp={handleMouseUp}
       >
         <BrandMarkIcon size={20} className="shrink-0 text-muted-foreground" />
+        {messages.length > 0 && (
+          <button
+            type="button"
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+            aria-label={t("assistant.panel.newConversation")}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleNewConversation();
+            }}
+          >
+            <Plus size={15} strokeWidth={2} />
+          </button>
+        )}
 
         <div className="flex min-w-0 flex-1 items-center justify-end text-right text-xs text-muted-foreground/70">
           {selectedContext ? (

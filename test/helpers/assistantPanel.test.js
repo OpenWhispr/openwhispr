@@ -34,6 +34,7 @@ async function renderAssistantPanel(
             async loadConversation() {},
             saveUserMessage() {},
             saveAssistantMessage() {},
+            handleNewChat() {},
           };
         }
       `,
@@ -130,6 +131,16 @@ test("a populated Assistant keeps typed input without empty-state suggestions", 
   assert.match(markup, /Existing answer/);
   assert.match(markup, /<input/);
   assert.doesNotMatch(markup, /Summarize my recent notes/);
+});
+
+test("the Assistant exposes an accessible new-conversation control only after messages exist", async (t) => {
+  const populatedMarkup = await renderAssistantPanel(t, [
+    { id: "assistant-1", role: "assistant", content: "Existing answer", isStreaming: false },
+  ]);
+  const emptyMarkup = await renderAssistantPanel(t, []);
+
+  assert.match(populatedMarkup, /<button[^>]*aria-label="New conversation"/);
+  assert.doesNotMatch(emptyMarkup, /<button[^>]*aria-label="New conversation"/);
 });
 
 test("a reopened Assistant blocks typed actions until retained history finishes loading", async (t) => {

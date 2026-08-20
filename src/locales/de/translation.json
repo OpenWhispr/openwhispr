@@ -3234,6 +3234,7 @@
       "selectionHint": "Text zum Bearbeiten auswählen mit",
       "selectedContext": "Ausgewählter Text hinzugefügt",
       "removeSelectedContext": "Ausgewählten Text entfernen",
+      "newConversation": "Neue Unterhaltung",
       "copyToClipboard": "In die Zwischenablage kopieren",
       "suggestions": {
         "summarizeNotes": "Meine letzten Notizen zusammenfassen",

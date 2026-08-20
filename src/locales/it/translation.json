@@ -3070,6 +3070,7 @@
       "selectionHint": "Seleziona il testo da modificare con",
       "selectedContext": "Testo selezionato aggiunto",
       "removeSelectedContext": "Rimuovi testo selezionato",
+      "newConversation": "Nuova conversazione",
       "copyToClipboard": "Copia negli appunti",
       "suggestions": {
         "summarizeNotes": "Riassumi le mie note recenti",

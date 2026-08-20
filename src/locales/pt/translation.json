@@ -3070,6 +3070,7 @@
       "selectionHint": "Selecione o texto para editar com",
       "selectedContext": "Texto selecionado adicionado",
       "removeSelectedContext": "Remover texto selecionado",
+      "newConversation": "Nova conversa",
       "copyToClipboard": "Copiar para a área de transferência",
       "suggestions": {
         "summarizeNotes": "Resuma minhas notas recentes",

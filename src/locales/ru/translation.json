@@ -3096,6 +3096,7 @@
       "selectionHint": "Выберите текст для редактирования с помощью",
       "selectedContext": "Выбранный текст добавлен",
       "removeSelectedContext": "Удалить выбранный текст",
+      "newConversation": "Новый разговор",
       "copyToClipboard": "Копировать в буфер обмена",
       "suggestions": {
         "summarizeNotes": "Подведи итог моих последних заметок",

@@ -3234,6 +3234,7 @@
       "selectionHint": "Select text to edit with",
       "selectedContext": "Selected text added",
       "removeSelectedContext": "Remove selected text",
+      "newConversation": "New conversation",
       "copyToClipboard": "Copy to clipboard",
       "suggestions": {
         "summarizeNotes": "Summarize my recent notes",
