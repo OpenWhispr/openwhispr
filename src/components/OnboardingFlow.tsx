@@ -23,6 +23,7 @@ import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
+import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed } from "../stores/policyRules";
@@ -48,6 +49,8 @@ import {
 } from "./onboarding/flow";
 import { useOnboardingSession } from "./onboarding/useOnboardingSession";
 import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
+import { ActivationModeSelector } from "./ui/ActivationModeSelector";
+import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
@@ -119,6 +122,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setPermissionAlert({ title: dialog.title, description: dialog.description })
   );
   const systemAudio = useSystemAudioPermission();
+  const { isUsingNativeShortcut, supportsPushToTalk } = useHotkeyModeInfo("onboarding");
+  const { activationMode, setActivationMode } = settings;
   // This hook also starts the membership fetch for already-authenticated users;
   // relying on the login transition alone would leave resumed onboarding stuck
   // waiting for workspace resolution after an app restart.
@@ -195,6 +200,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   useEffect(() => {
     setStageReady(false);
   }, [currentStepId]);
+
+  useEffect(() => {
+    if (isUsingNativeShortcut && !supportsPushToTalk && activationMode === "push") {
+      setActivationMode("tap");
+    }
+  }, [activationMode, isUsingNativeShortcut, setActivationMode, supportsPushToTalk]);
 
   // Track main's actual registration: the platform default may be unregistrable
   // (GNOME gsettings and X11 reject modifier-only combos like Control+Super), in
@@ -535,6 +546,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return hasUseCaseIntent(settings.onboardingUseCases, settings.onboardingUseCaseNote);
       case "dictation-hotkey":
         return dictationHotkeyConfirmed;
+      case "activation-mode":
+        return true;
       case "dictation-demo":
         return dictationDemoSuccess;
       case "assistant-hotkey":
@@ -703,6 +716,36 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         );
       }
 
+      case "activation-mode":
+        return (
+          <div className="flex h-full min-h-0 w-full flex-col pt-2">
+            <OnboardingStepHeader
+              title={t("onboarding.activation.title")}
+              description={t("onboarding.activation.description")}
+            />
+            <div className="mx-auto mt-10 w-full max-w-md rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-5">
+              <div className="flex items-center justify-between gap-5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[var(--onboarding-text-primary)]">
+                    {t("onboarding.activation.mode")}
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--onboarding-text-secondary)]">
+                    {t(
+                      activationMode === "push"
+                        ? "onboarding.activation.holdDescription"
+                        : "onboarding.activation.tapDescription"
+                    )}
+                  </p>
+                </div>
+                <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+              </div>
+              {getPlatform() === "linux" && activationMode === "push" && (
+                <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
+              )}
+            </div>
+          </div>
+        );
+
       case "dictation-demo":
       case "assistant-demo": {
         const assistant = currentStepId === "assistant-demo";
@@ -712,7 +755,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         const description = t(
           assistant
             ? "onboarding.rehaul.assistantDemo.description"
-            : "onboarding.rehaul.dictationDemo.description",
+            : activationMode === "push"
+              ? "onboarding.activation.holdHotkey"
+              : "onboarding.rehaul.dictationDemo.description",
           // Formatted for reading: the raw accelerator would show internal
           // syntax like "GLOBE" or "CommandOrControl+Shift+Space".
           { hotkey: hotkeyInstruction }

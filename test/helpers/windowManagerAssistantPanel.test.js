@@ -9,7 +9,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   if (request === "electron") {
     return {
       app: { on: () => undefined },
-      screen: { getPrimaryDisplay: () => ({}), getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } }) },
+      screen: { getPrimaryDisplay: () => ({}), getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } }), getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } }) },
       BrowserWindow: class {},
       shell: {},
       dialog: {},
@@ -34,6 +34,10 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       AUTO_END_NOTIFICATION_WINDOW_SIZE: { width: 620, height: 116 },
       getMeetingNotificationWindowSize: () => ({ width: 392, height: 92 }),
       WINDOW_SIZES: { BASE: { width: 96, height: 96 } },
+      ONBOARDING_WINDOW_SIZES: {
+        COMPACT: { width: 480, height: 624 },
+        EXPANDED: { width: 1000, height: 740 },
+      },
       WindowPositionUtil: { setupAlwaysOnTop: () => undefined, clampToWorkArea: (b) => b, getMainWindowPosition: () => ({ x: 0, y: 0 }), getNotificationPosition: () => ({ x: 0, y: 0 }) },
       fitAssistantWindowToWorkArea: (s) => s,
       fitAssistantContentWindowToWorkArea: (h) => ({ width: 466, height: h }),
@@ -106,6 +110,73 @@ test("hideDictationPanel refuses while an assistant command is busy or the panel
   calls.length = 0;
   manager.hideDictationPanel();
   assert.deepEqual(calls, ["hide"]);
+});
+
+test("compact onboarding stays fixed-size but remains minimizable and closable", () => {
+  const manager = new WindowManager();
+  const state = {};
+  const win = {
+    getBounds: () => ({ x: 0, y: 0, width: 480, height: 624 }),
+    setResizable: (value) => {
+      state.resizable = value;
+    },
+    setMinimizable: (value) => {
+      state.minimizable = value;
+    },
+    setMaximizable: (value) => {
+      state.maximizable = value;
+    },
+    setClosable: (value) => {
+      state.closable = value;
+    },
+    setFullScreenable: (value) => {
+      state.fullScreenable = value;
+    },
+    setMinimumSize: (width, height) => {
+      state.minimumSize = { width, height };
+    },
+    setWindowButtonVisibility: () => undefined,
+  };
+
+  manager._applyOnboardingWindowChrome(win, "compact");
+
+  assert.deepEqual(state, {
+    resizable: false,
+    minimizable: true,
+    maximizable: false,
+    closable: true,
+    fullScreenable: false,
+    minimumSize: { width: 480, height: 624 },
+  });
+});
+
+test("native Linux push-to-talk keeps only the dictation low-level listener", () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+
+  try {
+    const manager = new WindowManager();
+    let reconciledKeys = null;
+    manager.mainWindow = { isDestroyed: () => false };
+    manager.setActivationModeCache("push");
+    manager.hotkeyManager = {
+      isInListeningMode: () => false,
+      isUsingNativeShortcut: () => true,
+      getNativeListenerKeys: () => ["Control+Space", "Control+Shift+Space"],
+      slotHasHotkey: (slot, key) => slot === "dictation" && key === "Control+Space",
+    };
+    manager.linuxKeyManager = {
+      setKeys: (keys) => {
+        reconciledKeys = keys;
+      },
+    };
+
+    manager.reconcileNativeKeyListeners();
+
+    assert.deepEqual(reconciledKeys, ["Control+Space"]);
+  } finally {
+    Object.defineProperty(process, "platform", originalPlatform);
+  }
 });
 
 test("a zero-movement click does not mark the pill as manually positioned", async () => {

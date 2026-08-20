@@ -13,6 +13,9 @@ import type { SystemAudioAccessResult } from "../../types/electron";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import { getPlatform } from "../../utils/platform";
 import { areRequiredPermissionsMet } from "../../utils/permissions";
+import { needsLinuxPasteToolGuidance } from "../../utils/linuxPasteTools";
+import MicPermissionWarning from "../ui/MicPermissionWarning";
+import PasteToolsInfo from "../ui/PasteToolsInfo";
 import { CompactOnboardingFrame } from "./OnboardingShell";
 
 interface CompactPermissionsStepProps {
@@ -101,14 +104,19 @@ export default function CompactPermissionsStep({
 }: CompactPermissionsStepProps) {
   const { t } = useTranslation();
   const [busyPermission, setBusyPermission] = useState<PermissionRowId | null>(null);
+  const platform = getPlatform();
   const canRequestSystemAudio = canManageSystemAudioInApp(systemAudio);
   const requiredGranted = areRequiredPermissionsMet(permissions.micPermissionGranted);
   // Only macOS has grantable Accessibility (auto-paste) and System Audio
   // permissions. Windows auto-grants both (SendKeys needs nothing, WASAPI
   // loopback is permissionless) and Linux has no in-app grant for either, so
   // showing those rows there is either a no-op button or a dead disabled one.
-  const showAccessibility = getPlatform() === "darwin";
-  const showSystemAudio = getPlatform() === "darwin";
+  const showAccessibility = platform === "darwin";
+  const showSystemAudio = platform === "darwin";
+  const showLinuxPasteGuidance =
+    platform === "linux" &&
+    permissions.pasteToolsInfo !== null &&
+    needsLinuxPasteToolGuidance(permissions.pasteToolsInfo);
 
   const request = async (id: PermissionRowId, action: () => Promise<unknown>) => {
     setBusyPermission(id);
@@ -133,14 +141,14 @@ export default function CompactPermissionsStep({
             // Literal white, not tokens: this sits on the indigo hero, which
             // stays indigo in both themes.
             style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
-            className="onboarding-pressable fixed right-5 top-5 z-[60] h-8 rounded-full bg-white px-4 text-sm font-medium text-neutral-950 transition-colors hover:bg-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            className={`onboarding-pressable fixed top-5 z-[60] h-8 rounded-full bg-white px-4 text-sm font-medium text-neutral-950 transition-colors hover:bg-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${platform === "darwin" ? "right-5" : "right-24"}`}
           >
             {t("common.continue")}
           </button>,
           document.body
         )}
 
-      <div className="px-6 pt-44 text-center">
+      <div className="onboarding-shell-scroll h-full overflow-y-auto px-6 pb-6 pt-44 text-center">
         {/* text-balance evens the two lines out ("Set up OpenWhispr" / "in 3
             minutes") instead of leaving one word stranded. Preferred over a
             hardcoded <br> because the break point stays correct in all 9
@@ -191,6 +199,26 @@ export default function CompactPermissionsStep({
             </>
           )}
         </div>
+
+        {!permissions.micPermissionGranted && permissions.micPermissionError && (
+          <div className="mt-4 text-left">
+            <MicPermissionWarning
+              error={permissions.micPermissionError}
+              onOpenSoundSettings={() => void permissions.openSoundInputSettings()}
+              onOpenPrivacySettings={() => void permissions.openMicPrivacySettings()}
+            />
+          </div>
+        )}
+
+        {showLinuxPasteGuidance && (
+          <div className="mt-4 text-left">
+            <PasteToolsInfo
+              pasteToolsInfo={permissions.pasteToolsInfo}
+              isChecking={permissions.isCheckingPasteTools}
+              onCheck={() => void permissions.checkPasteToolsAvailability()}
+            />
+          </div>
+        )}
       </div>
     </CompactOnboardingFrame>
   );

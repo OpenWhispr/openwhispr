@@ -10,6 +10,7 @@ export type OnboardingStepId =
   | "languages"
   | "use-cases"
   | "dictation-hotkey"
+  | "activation-mode"
   | "dictation-demo"
   | "assistant-hotkey"
   | "assistant-demo"
@@ -46,6 +47,7 @@ const ACCOUNT_ROUTE: OnboardingStepId[] = [
   "languages",
   "use-cases",
   "dictation-hotkey",
+  "activation-mode",
   "dictation-demo",
 ];
 
@@ -62,6 +64,7 @@ const STEP_ORDER: OnboardingStepId[] = [
   "languages",
   "use-cases",
   "dictation-hotkey",
+  "activation-mode",
   "dictation-demo",
   "assistant-hotkey",
   "assistant-demo",
@@ -132,7 +135,13 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
         // finalizeOnboarding registers dictationHotkey either way, and skipping
         // these steps shipped users who neither granted the mic nor knew their
         // trigger key.
-        (["auth", "permissions", "dictation-hotkey", "setup-choice"] as OnboardingStepId[])
+        ([
+          "auth",
+          "permissions",
+          "dictation-hotkey",
+          "activation-mode",
+          "setup-choice",
+        ] as OnboardingStepId[])
       : [
           ...ACCOUNT_ROUTE,
           ...(context.agentAllowed

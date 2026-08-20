@@ -912,11 +912,17 @@ class WindowManager {
   reconcileNativeKeyListeners() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     if (this.hotkeyManager.isInListeningMode()) return;
-    // GNOME/KDE/Hyprland deliver hotkeys via D-Bus native shortcuts; the low-level
-    // listener would be redundant there and could double-fire, so watch nothing.
+    const activationMode = this.getActivationMode();
+    const nativeListenerKeys = this.hotkeyManager.getNativeListenerKeys(activationMode);
+    // GNOME/KDE/Hyprland native shortcuts are press-only. They replace the
+    // low-level listener in tap mode, but push-to-talk still needs raw dictation
+    // key-down/key-up events; createHotkeyCallback ignores the native press in
+    // that mode, so keeping only this slot cannot double-fire.
     const keys = this.hotkeyManager.isUsingNativeShortcut()
-      ? []
-      : this.hotkeyManager.getNativeListenerKeys(this.getActivationMode());
+      ? activationMode === "push"
+        ? nativeListenerKeys.filter((key) => this.hotkeyManager.slotHasHotkey("dictation", key))
+        : []
+      : nativeListenerKeys;
     if (process.platform === "win32" && this.windowsKeyManager) {
       this.windowsKeyManager.setKeys(keys);
     } else if (process.platform === "linux" && this.linuxKeyManager) {
@@ -1399,24 +1405,15 @@ class WindowManager {
     dockManager.setControlPanelVisible(true);
   }
 
-  // Onboarding runs in a fixed-size window: no resize/zoom, so every step
-  // renders at the bounds it was laid out for, but minimise and close stay
-  // available (close goes to the tray and the flow resumes where it left off).
+  // Compact onboarding stays fixed-size; expanded onboarding can resize and
+  // maximize. Both modes remain minimizable and closable so a frameless window
+  // never traps the user in setup.
   _applyOnboardingWindowChrome(win, mode) {
-    // Two scaffolds. Compact (auth, permissions) is a small fixed card: no
-    // resize, no window buttons — the original chromeless design. Expanded
-    // (languages onward) behaves like a normal window: resizable with the
-    // expanded size as the floor, maximizable, minimizable, closable (close
-    // hides to the tray; the persisted session resumes). Fullscreen stays off
-    // in both so the macOS zoom button maximizes instead of moving setup to
-    // its own Space. OnboardingShell mirrors this split for the frameless
-    // Windows/Linux window: it draws its minimise/close controls on the
-    // expanded scaffold only.
     const expanded = mode === "expanded";
     win.setResizable(expanded);
-    win.setMinimizable(expanded);
+    win.setMinimizable(true);
     win.setMaximizable(expanded);
-    win.setClosable(expanded);
+    win.setClosable(true);
     win.setFullScreenable(false);
     // Floor at the mode's canonical size so no step renders below the bounds
     // it was designed for — clamped to the work area, or a 1366x768-class

@@ -51,7 +51,7 @@ async function createRendererServer(
     appType: "custom",
     logLevel: "silent",
     optimizeDeps: { noDiscovery: true },
-    ssr: noExternal ? { noExternal: true } : undefined,
+    ssr: noExternal ? { noExternal } : undefined,
     plugins: [
       {
         name: "renderer-test-module-mocks",

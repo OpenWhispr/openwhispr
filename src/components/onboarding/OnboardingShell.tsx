@@ -1,6 +1,6 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { OnboardingProgressState } from "./flow";
-import { Minus, Undo2, X } from "lucide-react";
+import { Copy, Minus, Square, Undo2, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { useTranslation } from "react-i18next";
 import { getPlatform } from "../../utils/platform";
@@ -47,12 +47,53 @@ interface CompactOnboardingFrameProps {
  * the expanded scaffold). Close hides to the tray; the persisted session
  * resumes the flow on reopen, so this is never a way to lose progress.
  *
- * Expanded scaffold only: the compact card (auth, permissions) is a fixed
- * chromeless design and the window manager locks its chrome to match.
+ * Compact keeps only minimise/close because its fixed card cannot resize.
+ * Expanded adds maximize/restore alongside them.
  */
-function OnboardingWindowControls() {
+function OnboardingWindowControls({ compact }: { compact: boolean }) {
   const { t } = useTranslation();
-  if (getPlatform() === "darwin") return null;
+  const [isMaximized, setIsMaximized] = useState(false);
+  const platform = getPlatform();
+
+  useEffect(() => {
+    if (compact || platform === "darwin") return;
+    let mounted = true;
+    const syncIsMaximized = async (): Promise<void> => {
+      try {
+        const maximized = await window.electronAPI?.windowIsMaximized?.();
+        if (mounted) setIsMaximized(Boolean(maximized));
+      } catch {}
+    };
+
+    void syncIsMaximized();
+    const intervalId = window.setInterval(syncIsMaximized, 1000);
+    return () => {
+      mounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, [compact, platform]);
+
+  const handleMinimize = async (): Promise<void> => {
+    try {
+      await window.electronAPI?.windowMinimize?.();
+    } catch {}
+  };
+
+  const handleMaximize = async (): Promise<void> => {
+    try {
+      await window.electronAPI?.windowMaximize?.();
+      const maximized = await window.electronAPI?.windowIsMaximized?.();
+      setIsMaximized(Boolean(maximized));
+    } catch {}
+  };
+
+  const handleClose = async (): Promise<void> => {
+    try {
+      await window.electronAPI?.windowClose?.();
+    } catch {}
+  };
+
+  if (platform === "darwin") return null;
 
   const buttonClass =
     "inline-flex size-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary)] focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]";
@@ -64,15 +105,29 @@ function OnboardingWindowControls() {
     >
       <button
         type="button"
-        onClick={() => void window.electronAPI?.windowMinimize?.()}
+        onClick={handleMinimize}
         title={t("windowControls.minimize")}
         className={buttonClass}
       >
         <Minus className="size-4" aria-hidden="true" />
       </button>
+      {!compact && (
+        <button
+          type="button"
+          onClick={handleMaximize}
+          title={t(isMaximized ? "windowControls.restore" : "windowControls.maximize")}
+          className={buttonClass}
+        >
+          {isMaximized ? (
+            <Copy className="size-4" aria-hidden="true" />
+          ) : (
+            <Square className="size-3.5" aria-hidden="true" />
+          )}
+        </button>
+      )}
       <button
         type="button"
-        onClick={() => void window.electronAPI?.windowClose?.()}
+        onClick={handleClose}
         title={t("windowControls.close")}
         className={buttonClass}
       >
@@ -198,7 +253,7 @@ export default function OnboardingShell({
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         aria-hidden="true"
       />
-      {!compact && <OnboardingWindowControls />}
+      <OnboardingWindowControls compact={compact} />
 
       <div
         // Normally nothing scrolls here: each step sizes itself to the window and
