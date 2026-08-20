@@ -904,7 +904,9 @@ function NoteLeaf({
       }}
       className={MENU_ITEM_CLASS}
     >
-      <span className="truncate flex-1">{label}</span>
+      <span className="truncate flex-1" dir="auto">
+        {label}
+      </span>
       {option.isCurrent && <Check size={9} className="text-primary shrink-0" />}
     </DropdownMenuItem>
   );

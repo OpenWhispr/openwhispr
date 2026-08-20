@@ -322,7 +322,10 @@ export default function TranscriptionPreviewOverlay() {
                     : "border-border/25 bg-background/30",
               ].join(" ")}
             >
-              <p className="select-text text-[13px] leading-[1.52] text-foreground whitespace-pre-wrap break-words [text-wrap:pretty]">
+              <p
+                className="select-text text-[13px] leading-[1.52] text-foreground whitespace-pre-wrap break-words [text-wrap:pretty]"
+                dir="auto"
+              >
                 {activeText}
               </p>
             </div>

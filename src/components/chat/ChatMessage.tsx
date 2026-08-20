@@ -39,11 +39,11 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
     <div
       className={cn(
         "relative rounded-md mb-1 overflow-hidden",
-        "border-l-2 transition-colors duration-300",
-        isExecuting && "border-l-primary/60",
-        isCompleted && !isError && "border-l-muted-foreground/20",
-        isClipboard && "border-l-emerald-500/50",
-        isError && "border-l-destructive/50"
+        "border-s-2 transition-colors duration-300",
+        isExecuting && "border-s-primary/60",
+        isCompleted && !isError && "border-s-muted-foreground/20",
+        isClipboard && "border-s-emerald-500/50",
+        isError && "border-s-destructive/50"
       )}
     >
       {isExecuting && (
@@ -154,7 +154,9 @@ function NoteCard({
         <FileText size={12} className="text-primary/70" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[12px] font-medium text-foreground truncate">{title}</p>
+        <p className="text-[12px] font-medium text-foreground truncate" dir="auto">
+          {title}
+        </p>
         <p className="text-[10px] text-muted-foreground/50">{t("agentMode.tools.openNote")}</p>
       </div>
       <ChevronRight
@@ -193,6 +195,7 @@ export function ChatMessage({
       >
         <div
           data-chat-bubble
+          dir="auto"
           className={cn(
             "max-w-[80%] px-3 py-2 rounded-lg rounded-br-sm",
             "bg-primary/90 text-primary-foreground",
@@ -216,6 +219,7 @@ export function ChatMessage({
     >
       <div
         data-chat-bubble
+        dir="auto"
         className={cn(
           "max-w-[85%] px-3 py-2 rounded-lg rounded-bl-sm",
           "bg-surface-1 border border-border/30 text-foreground",
@@ -243,7 +247,7 @@ export function ChatMessage({
 
         {isStreaming && hasContent && (
           <span
-            className="inline-block w-[2px] h-[14px] bg-foreground/70 align-middle ml-0.5"
+            className="inline-block w-[2px] h-[14px] bg-foreground/70 align-middle ms-0.5"
             style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
           />
         )}

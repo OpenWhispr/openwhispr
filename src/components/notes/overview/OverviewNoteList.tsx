@@ -81,7 +81,7 @@ export function OverviewNoteList({
                   size={14}
                   className="text-foreground/30 dark:text-foreground/20 shrink-0"
                 />
-                <span className="text-[13px] text-foreground/85 truncate flex-1">
+                <span className="text-[13px] text-foreground/85 truncate flex-1" dir="auto">
                   {note.title || t("notes.list.untitled")}
                 </span>
                 {authorName && (

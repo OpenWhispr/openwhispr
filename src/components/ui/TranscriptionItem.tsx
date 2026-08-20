@@ -98,8 +98,8 @@ export default function TranscriptionItem({
           : isDiscarded
             ? "border-border/30 bg-muted/20 hover:bg-muted/30 opacity-80"
             : "border-border/40 dark:border-border-subtle/60 bg-card/50 dark:bg-surface-2/60 hover:bg-muted/30 dark:hover:bg-surface-2/80",
-        // Translation rows get a 2px primary accent; pl-[11px] keeps text pixel-aligned with 1px-bordered rows.
-        item.route_kind === "translation" && "border-l-2 border-l-primary/70 pl-[11px]"
+        // Translation rows get a 2px primary accent; ps-[11px] keeps text pixel-aligned with 1px-bordered rows.
+        item.route_kind === "translation" && "border-s-2 border-s-primary/70 ps-[11px]"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -171,7 +171,10 @@ export default function TranscriptionItem({
             </span>
           </div>
         ) : (
-          <p className="flex-1 min-w-0 text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap">
+          <p
+            className="flex-1 min-w-0 text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap"
+            dir="auto"
+          >
             {item.text}
           </p>
         )}
@@ -323,7 +326,9 @@ export default function TranscriptionItem({
                   </Button>
                 </Tooltip>
               </div>
-              <p className="text-xs text-muted-foreground/80 leading-relaxed mt-1">{rawText}</p>
+              <p className="text-xs text-muted-foreground/80 leading-relaxed mt-1" dir="auto">
+                {rawText}
+              </p>
               {rawText === item.text && (
                 <p className="text-[10px] text-muted-foreground/50 italic mt-1">
                   {t("controlPanel.history.noAiProcessing")}

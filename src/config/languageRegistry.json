@@ -25,6 +25,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
+      "dir": "rtl",
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Arabic. The transcribed text will be in Arabic. You MUST write your entire output in Arabic while maintaining proper Arabic grammar and punctuation. Preserve any English technical terms as the user spoke them."
     },
     {
@@ -209,6 +210,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
+      "dir": "rtl",
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Hebrew. The transcribed text will be in Hebrew. You MUST write your entire output in Hebrew while maintaining proper Hebrew grammar and punctuation. Preserve any English technical terms as the user spoke them."
     },
     {
@@ -371,6 +373,7 @@
       "whisper": true,
       "parakeet": false,
       "assemblyai": false,
+      "dir": "rtl",
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Persian. The transcribed text will be in Persian. You MUST write your entire output in Persian while maintaining proper Persian grammar and punctuation. Preserve any English technical terms as the user spoke them."
     },
     {
@@ -511,7 +514,8 @@
       "flag": "\uD83C\uDDF5\uD83C\uDDF0",
       "whisper": true,
       "parakeet": false,
-      "assemblyai": false
+      "assemblyai": false,
+      "dir": "rtl"
     },
     {
       "code": "vi",
