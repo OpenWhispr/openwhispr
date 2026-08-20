@@ -1,5 +1,18 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
+import type React from "react";
 import { useTranslation } from "react-i18next";
+
+interface PillCommandMenuProps {
+  buttonRef: React.RefObject<HTMLDivElement | null>;
+  isRecording: boolean;
+  agentAllowed: boolean;
+  isHovered: boolean;
+  setWindowInteractivity: (capture: boolean) => void;
+  onToggleListening: () => void;
+  onAskAssistant: () => void;
+  onHide: () => void;
+  onClose: () => void;
+}
 
 /**
  * The pill's right-click command menu. Mounted only while open; clicking
@@ -15,17 +28,18 @@ export function PillCommandMenu({
   onAskAssistant,
   onHide,
   onClose,
-}) {
+}: PillCommandMenuProps): React.JSX.Element {
   const { t } = useTranslation();
-  const menuRef = useRef(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
+    const handleClickOutside = (event: MouseEvent): void => {
+      const target = event.target as Node | null;
       if (
         menuRef.current &&
-        !menuRef.current.contains(event.target) &&
+        !menuRef.current.contains(target) &&
         buttonRef.current &&
-        !buttonRef.current.contains(event.target)
+        !buttonRef.current.contains(target)
       ) {
         onClose();
       }

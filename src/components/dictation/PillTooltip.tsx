@@ -1,11 +1,26 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import type React from "react";
+
+interface PillTooltipProps {
+  children: React.ReactNode;
+  content: React.ReactNode;
+  emoji?: string;
+  align?: "left" | "right" | "center";
+  disabled?: boolean;
+}
 
 /**
  * Minimal hover tooltip for the dictation pill. The pill window is tiny and
  * frameless, so this stays lighter than the app-wide Radix tooltip and can be
  * aligned against the pill's docked edge.
  */
-export function PillTooltip({ children, content, emoji, align = "center", disabled = false }) {
+export function PillTooltip({
+  children,
+  content,
+  emoji,
+  align = "center",
+  disabled = false,
+}: PillTooltipProps): React.JSX.Element {
   const [isVisible, setIsVisible] = useState(false);
 
   const alignClass =
