@@ -762,6 +762,7 @@ class WindowManager {
       this._clearControlPanelVisibilityTimer();
       this.endOnboardingDemo();
       this.controlPanelWindow = null;
+      this._onboardingActive = false;
       this._onboardingRestoreBounds = null;
       this._onboardingWindowMode = null;
       this._onboardingWindowState = null;
@@ -771,6 +772,14 @@ class WindowManager {
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
 
     this.controlPanelWindow.webContents.on("did-finish-load", () => {
+      // A fresh document is not mid-onboarding until OnboardingFlow mounts and
+      // re-asserts it over IPC. Without this reset, a renderer that crashed or
+      // reloaded after onboarding completed leaves the fail-closed input gate
+      // stuck on and every global hotkey dead until app restart. Reset the
+      // field directly: setOnboardingActive(false) would also re-show the
+      // dictation panel, flashing it over onboarding on the OAuth reload path.
+      this._onboardingActive = false;
+      this.endOnboardingDemo();
       this.controlPanelWindow.setTitle(i18nMain.t("window.controlPanelTitle"));
     });
 
@@ -1396,6 +1405,10 @@ class WindowManager {
       return;
     }
 
+    // An explicit hide is authoritative: the visibility backstop exists to
+    // rescue a window that never got shown, and letting it fire now would
+    // pull the panel (and the Dock icon) back out of the tray.
+    this._clearControlPanelVisibilityTimer();
     // A demo left running when the panel hides would keep swallowing normal
     // dictations (paste suppressed, transcripts rerouted to the demo session).
     this.endOnboardingDemo();

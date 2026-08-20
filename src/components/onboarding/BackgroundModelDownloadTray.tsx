@@ -34,6 +34,11 @@ function downloadKey(kind: DownloadKind, id: string) {
   return `${kind}:${id}`;
 }
 
+// How long a cancelled key swallows in-flight progress events. Long enough for
+// chunk events queued before the abort lands, short enough that a deliberate
+// re-download of the same model renders promptly.
+const CANCEL_SUPPRESSION_MS = 4000;
+
 function clampPercentage(value: number | undefined) {
   return Math.max(0, Math.min(100, Number.isFinite(value) ? (value ?? 0) : 0));
 }
@@ -113,11 +118,13 @@ export default function BackgroundModelDownloadTray() {
   const { t } = useTranslation();
   const [downloads, setDownloads] = useState<Record<string, ActiveDownload>>({});
   const [hydrated, setHydrated] = useState(false);
-  // Aborting a download makes the underlying transfer reject, which arrives here
-  // as an error-type progress event. After an explicit cancel that error is noise,
-  // so swallow exactly one per cancelled key. Any non-error event for the key
-  // means a fresh download started, which clears the suppression.
-  const cancelledKeys = useRef<Set<string>>(new Set());
+  // An abort emits no terminal progress event (the IPC handlers exclude
+  // DOWNLOAD_CANCELLED from the error emit), but chunk events already queued
+  // when the user clicks cancel still arrive and would resurrect the removed
+  // row. Suppress a cancelled key for a short grace window: in-flight events
+  // are dropped, a completion always wins (the model really installed), and a
+  // later re-download of the same model renders — and errors — normally.
+  const cancelledKeys = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     // Hydration only exists to re-surface downloads the onboarding flow kicked
@@ -191,9 +198,18 @@ export default function BackgroundModelDownloadTray() {
       error?: string;
     }) => {
       const key = downloadKey(event.kind, event.id);
-      if (event.type === "error" && cancelledKeys.current.delete(key)) return;
-      if (event.type !== "error") cancelledKeys.current.delete(key);
+      const cancelledAt = cancelledKeys.current.get(key);
+      if (cancelledAt !== undefined && event.type !== "complete") {
+        if (Date.now() - cancelledAt < CANCEL_SUPPRESSION_MS) {
+          // Consume the suppression only on a terminal event; a progress chunk
+          // must keep it, or the next queued chunk resurrects the row.
+          if (event.type === "error") cancelledKeys.current.delete(key);
+          return;
+        }
+        cancelledKeys.current.delete(key);
+      }
       if (event.type === "complete") {
+        cancelledKeys.current.delete(key);
         activatePendingLocalModel(event.kind === "llm" ? "assistant" : "dictation", event.id);
       }
       setDownloads((current) => {
@@ -267,7 +283,7 @@ export default function BackgroundModelDownloadTray() {
       return;
     }
 
-    cancelledKeys.current.add(key);
+    cancelledKeys.current.set(key, Date.now());
     // Drop the row on click rather than waiting for the main process: the cancel
     // handlers resolve after the transfer unwinds, and a row that lingers reads as
     // a click that did nothing.
