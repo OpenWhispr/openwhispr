@@ -1878,7 +1878,7 @@
         "noteRecording": "Grabación de notas",
         "upload": "Subir audio"
       },
-      "selfHostedStreamingNote": "Requiere un servidor que admita transcripción en streaming."
+      "selfHostedChunkedNote": "El audio se envía en fragmentos cortos al endpoint /audio/transcriptions de tu servidor, con el mismo contrato compatible con OpenAI que el dictado. La transcripción por fragmentos puede ser menos precisa que en tiempo real en grabaciones largas con varios hablantes."
     },
     "llms": {
       "title": "Modelos de lenguaje",

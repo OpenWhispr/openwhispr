@@ -64,13 +64,54 @@ test("BYOK OpenAI never downgrades to managed cloud when its key is unavailable"
 test("self-hosted mode never follows a stale Tinfoil provider", async () => {
   const { resolveMeetingTranscriptionOptions } = await load();
 
-  assert.throws(
-    () =>
-      resolveMeetingTranscriptionOptions({
-        ...baseOptions,
-        transcriptionMode: "self-hosted",
-      }),
-    /Self-hosted realtime transcription is not supported/
+  assert.deepEqual(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      transcriptionMode: "self-hosted",
+      remoteTranscriptionUrl: "http://127.0.0.1:8765/v1",
+      remoteTranscriptionModel: "whisper-large-v3-turbo",
+    }),
+    {
+      provider: "self-hosted",
+      url: "http://127.0.0.1:8765/v1",
+      model: "whisper-large-v3-turbo",
+      language: "en",
+    }
+  );
+});
+
+test("self-hosted mode fails closed without a configured URL", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  for (const remoteTranscriptionUrl of ["", "   ", undefined]) {
+    assert.throws(
+      () =>
+        resolveMeetingTranscriptionOptions({
+          ...baseOptions,
+          transcriptionMode: "self-hosted",
+          remoteTranscriptionUrl,
+        }),
+      /needs a transcription server URL/
+    );
+  }
+});
+
+test("self-hosted mode leaves an unset model to the server default", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  assert.deepEqual(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      transcriptionMode: "self-hosted",
+      remoteTranscriptionUrl: " http://127.0.0.1:8765/v1 ",
+      remoteTranscriptionModel: "  ",
+    }),
+    {
+      provider: "self-hosted",
+      url: "http://127.0.0.1:8765/v1",
+      model: null,
+      language: "en",
+    }
   );
 });
 

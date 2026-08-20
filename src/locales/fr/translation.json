@@ -2114,7 +2114,7 @@
         "noteRecording": "Enregistrement de notes",
         "upload": "Importer un audio"
       },
-      "selfHostedStreamingNote": "Nécessite un serveur qui prend en charge la transcription en streaming."
+      "selfHostedChunkedNote": "L'audio est envoyé par courts segments au point de terminaison /audio/transcriptions de votre serveur, avec le même contrat compatible OpenAI que la dictée. La transcription par segments peut être moins précise qu'en temps réel sur de longs enregistrements à plusieurs locuteurs."
     },
     "llms": {
       "title": "Modèles de langage",

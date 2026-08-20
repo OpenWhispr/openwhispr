@@ -215,9 +215,10 @@ test("closure: shared-channel dictation providers have token entries under their
 
 test("closure: every allowed meeting provider has a token entry", async () => {
   const { REALTIME_TOKEN_PROVIDERS } = await loadTokens();
-  const { ALLOWED_MEETING_PROVIDERS } = await loadMeeting();
+  const { ALLOWED_MEETING_PROVIDERS, NON_STREAMING_MEETING_PROVIDERS } = await loadMeeting();
   for (const provider of ALLOWED_MEETING_PROVIDERS) {
-    if (provider === "local") continue;
+    // Main-process transcription: no socket, so no realtime token to mint.
+    if (NON_STREAMING_MEETING_PROVIDERS.has(provider)) continue;
     assert.equal(
       typeof REALTIME_TOKEN_PROVIDERS[provider],
       "function",
