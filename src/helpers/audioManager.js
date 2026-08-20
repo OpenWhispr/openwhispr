@@ -26,7 +26,7 @@ import {
 import { MicStreamHold } from "./micStreamHold";
 import { ActiveMicRecoveryController } from "./activeMicRecovery";
 import { followsSystemDefaultMic } from "./micSelectionRecovery";
-import { resolvePreferredMicrophone } from "./microphoneSelection";
+import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import {
@@ -873,7 +873,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const deviceId = resolution.device?.deviceId;
 
       if (deviceId && deviceId !== this.rejectedMicDeviceId) {
-        this.cachedMicDeviceId = deviceId;
+        if (isCacheableMicrophoneResolution(resolution)) {
+          this.cachedMicDeviceId = deviceId;
+        }
         logger.debug(
           "Resolved microphone input",
           {
@@ -907,7 +909,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       const resolution = await resolvePreferredMicrophone({ settings: getSettings() });
-      if (resolution.device?.deviceId) {
+      if (isCacheableMicrophoneResolution(resolution)) {
         this.cachedMicDeviceId = resolution.device.deviceId;
         logger.debug(
           "Microphone device ID pre-cached",

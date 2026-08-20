@@ -1,3 +1,9 @@
+import type {
+  LocalLLMModelStatus,
+  ParakeetModelResult,
+  WhisperModelResult,
+} from "../../types/electron";
+
 export const PENDING_LOCAL_MODELS_KEY = "pendingLocalModelSelectionsV1";
 
 export type PendingLocalModelKind = "dictation" | "assistant";
@@ -10,6 +16,14 @@ export interface PendingLocalModelSelection {
 export type PendingLocalModelSelections = Partial<
   Record<PendingLocalModelKind, PendingLocalModelSelection>
 >;
+
+export interface PendingLocalModelInventory {
+  whisper?: WhisperModelResult[];
+  parakeet?: ParakeetModelResult[];
+  llm?: LocalLLMModelStatus[];
+}
+
+export type PendingLocalModelAvailability = "downloading" | "downloaded" | "missing" | "unknown";
 
 export function readPendingLocalModels(): PendingLocalModelSelections {
   try {
@@ -63,4 +77,25 @@ export function clearPendingLocalModels() {
 
 export function hasPendingLocalModels() {
   return Object.keys(readPendingLocalModels()).length > 0;
+}
+
+export function getPendingLocalModelAvailability(
+  kind: PendingLocalModelKind,
+  selection: PendingLocalModelSelection,
+  inventory: PendingLocalModelInventory
+): PendingLocalModelAvailability {
+  if (kind === "assistant") {
+    if (!inventory.llm) return "unknown";
+    const model = inventory.llm.find((candidate) => candidate.id === selection.modelId);
+    if (model?.isDownloaded) return "downloaded";
+    if (model?.isDownloading) return "downloading";
+    return "missing";
+  }
+
+  const models = selection.provider === "nvidia" ? inventory.parakeet : inventory.whisper;
+  if (!models) return "unknown";
+  const model = models.find((candidate) => candidate.model === selection.modelId);
+  if (model?.downloaded) return "downloaded";
+  if (model?.isDownloading) return "downloading";
+  return "missing";
 }

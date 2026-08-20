@@ -17,7 +17,8 @@ test("system mode maps the native default name to an exact Chromium input", asyn
 });
 
 test("system mode uses Chromium's explicit default device when native mapping is unavailable", async () => {
-  const { resolveMicrophoneSelection } = await import("../../src/helpers/microphoneSelection.js");
+  const { isCacheableMicrophoneResolution, resolveMicrophoneSelection } =
+    await import("../../src/helpers/microphoneSelection.js");
   const expected = mic("default", "Default - Microphone Array");
   const result = resolveMicrophoneSelection([expected, mic("continuity", "Joshua P Microphone")], {
     microphoneSelectionMode: "system",
@@ -25,6 +26,19 @@ test("system mode uses Chromium's explicit default device when native mapping is
 
   assert.equal(result.device, expected);
   assert.equal(result.status, "chromium-default");
+  assert.equal(isCacheableMicrophoneResolution(result), false);
+});
+
+test("a resolved physical microphone can be cached", async () => {
+  const { isCacheableMicrophoneResolution, resolveMicrophoneSelection } =
+    await import("../../src/helpers/microphoneSelection.js");
+  const result = resolveMicrophoneSelection(
+    [mic("default", "Default - USB Microphone"), mic("usb", "USB Microphone")],
+    { microphoneSelectionMode: "system" },
+    { name: "USB Microphone" }
+  );
+
+  assert.equal(isCacheableMicrophoneResolution(result), true);
 });
 
 test("system mode never guesses the first physical microphone", async () => {

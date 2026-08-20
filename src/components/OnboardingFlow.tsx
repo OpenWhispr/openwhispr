@@ -41,6 +41,7 @@ import {
   getOnboardingProgress,
   getOnboardingRoute,
   reconcileStepWithRoute,
+  resolveEnterpriseWorkspaceForOnboarding,
   shouldSkipOnboardingSetupChoice,
   type OnboardingSetupMode,
   type OnboardingStepId,
@@ -75,8 +76,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const settings = useSettings();
   const settingsStore = useSettingsStore();
-  const { session, setSession, goTo, goBack, setAuthPath, setSetupMode, clearSession } =
-    useOnboardingSession();
+  const {
+    session,
+    setSession,
+    goTo,
+    goBack,
+    setAuthPath,
+    setSetupMode,
+    setSelfHostedRequested,
+    clearSession,
+  } = useOnboardingSession();
 
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [dictationHotkey, setDictationHotkey] = useState(
@@ -95,7 +104,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [dictationDemoSuccess, setDictationDemoSuccess] = useState(false);
   const [assistantDemoSuccess, setAssistantDemoSuccess] = useState(false);
   const [stageReady, setStageReady] = useState(false);
-  const [selfHostedRequested, setSelfHostedRequested] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [permissionAlert, setPermissionAlert] = useState<{
@@ -114,15 +122,45 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // This hook also starts the membership fetch for already-authenticated users;
   // relying on the login transition alone would leave resumed onboarding stuck
   // waiting for workspace resolution after an app restart.
-  const { active: activeWorkspace, loaded: workspacesLoaded } = useWorkspace();
-  const enterpriseWorkspace = shouldSkipOnboardingSetupChoice({
+  const {
+    active: activeWorkspace,
+    workspaces,
+    loaded: workspacesLoaded,
+    setActive: setActiveWorkspace,
+  } = useWorkspace();
+  const enterpriseWorkspace = useMemo(
+    () => resolveEnterpriseWorkspaceForOnboarding(activeWorkspace, workspaces),
+    [activeWorkspace, workspaces]
+  );
+  const skipSetupChoiceForEnterprise = shouldSkipOnboardingSetupChoice({
     isSignedIn,
     authPath: session.authPath,
     setupMode: session.setupMode,
-    activeWorkspace,
+    activeWorkspace: enterpriseWorkspace,
   });
+
+  useEffect(() => {
+    if (
+      workspacesLoaded &&
+      !activeWorkspace &&
+      skipSetupChoiceForEnterprise &&
+      enterpriseWorkspace
+    ) {
+      setActiveWorkspace(enterpriseWorkspace.id);
+    }
+  }, [
+    activeWorkspace,
+    enterpriseWorkspace,
+    setActiveWorkspace,
+    skipSetupChoiceForEnterprise,
+    workspacesLoaded,
+  ]);
+
   const workspaceResolutionPending =
-    isSignedIn && session.authPath === "account" && !workspacesLoaded;
+    isSignedIn &&
+    session.authPath === "account" &&
+    (!workspacesLoaded ||
+      (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)));
 
   const route = useMemo(
     () =>
@@ -130,9 +168,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         authPath: session.authPath,
         setupMode: session.setupMode,
         agentAllowed,
-        skipSetupChoice: enterpriseWorkspace,
+        skipSetupChoice: skipSetupChoiceForEnterprise,
       }),
-    [agentAllowed, enterpriseWorkspace, session.authPath, session.setupMode]
+    [agentAllowed, session.authPath, session.setupMode, skipSetupChoiceForEnterprise]
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
   const compact = COMPACT_STEPS.has(currentStepId);
@@ -243,8 +281,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     cloudPost("/api/onboarding-intent", {
       useCases: settings.onboardingUseCases,
       note: settings.onboardingUseCaseNote || undefined,
+      spokenLanguages: settings.spokenLanguages,
     }).catch((error) => logger.warn("Failed to sync onboarding intent", { error }, "onboarding"));
-  }, [isSignedIn, session.authPath, settings.onboardingUseCaseNote, settings.onboardingUseCases]);
+  }, [
+    isSignedIn,
+    session.authPath,
+    settings.onboardingUseCaseNote,
+    settings.onboardingUseCases,
+    settings.spokenLanguages,
+  ]);
 
   const finalizeOnboarding = useCallback(
     async (mode: OnboardingCompletionMode, options: { localPending?: boolean } = {}) => {
@@ -266,10 +311,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           }
         }
 
-        const skippedAuth = session.authPath === "guest";
-        localStorage.setItem("authenticationSkipped", String(skippedAuth));
-        localStorage.setItem("skipAuth", String(skippedAuth));
-        localStorage.setItem("onboardingCompleted", "true");
+        await window.electronAPI?.saveAllKeysToEnv?.();
+        await window.electronAPI?.markBundleMigrated?.();
+        await window.electronAPI?.setOnboardingWindowMode?.("restore");
+
         // hasPendingLocalModels() covers proceeding past a still-running download
         // rather than skipping: the model was remembered when the download
         // started, and BackgroundModelDownloadTray only applies it (and then
@@ -285,10 +330,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           localStorage.removeItem("localSetupPending");
           clearPendingLocalModels();
         }
-        await window.electronAPI?.saveAllKeysToEnv?.();
-        await window.electronAPI?.markBundleMigrated?.();
+
+        const skippedAuth = session.authPath === "guest";
+        localStorage.setItem("authenticationSkipped", String(skippedAuth));
+        localStorage.setItem("skipAuth", String(skippedAuth));
         clearSession();
-        await window.electronAPI?.setOnboardingWindowMode?.("restore");
+        localStorage.setItem("onboardingCompleted", "true");
         onComplete();
       } catch (error) {
         logger.error("Failed to finish onboarding", { error }, "onboarding");
@@ -313,11 +360,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // Enterprise workspace is confirmed. Finish them without writing provider or
   // model settings, just as if Notes had been their final step originally.
   useEffect(() => {
-    if (!enterpriseWorkspace || session.currentStepId !== "setup-choice" || isFinishing) {
+    if (!skipSetupChoiceForEnterprise || session.currentStepId !== "setup-choice" || isFinishing) {
       return;
     }
     void finalizeOnboarding("managed");
-  }, [enterpriseWorkspace, finalizeOnboarding, isFinishing, session.currentStepId]);
+  }, [finalizeOnboarding, isFinishing, session.currentStepId, skipSetupChoiceForEnterprise]);
 
   const applyReasoningSelectionToAllScopes = useCallback(
     (mode: "byok" | "local") => {
@@ -370,7 +417,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       const next = getNextOnboardingStep("setup-choice", nextRoute);
       if (next) goTo(next);
     },
-    [agentAllowed, finalizeOnboarding, goTo, session.authPath, setSetupMode, settingsStore]
+    [
+      agentAllowed,
+      finalizeOnboarding,
+      goTo,
+      session.authPath,
+      setSelfHostedRequested,
+      setSetupMode,
+      settingsStore,
+    ]
   );
 
   const continueFromCurrentStep = useCallback(async () => {
@@ -436,7 +491,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       return;
     }
 
-    if (enterpriseWorkspace) {
+    if (skipSetupChoiceForEnterprise) {
       await finalizeOnboarding("managed");
       return;
     }
@@ -446,7 +501,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     assistantHotkey,
     currentStepId,
     dictationHotkey,
-    enterpriseWorkspace,
     finalizeOnboarding,
     goTo,
     permissions.accessibilityPermissionGranted,
@@ -460,11 +514,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     t,
     withExtraDictationHotkeys,
     workspaceResolutionPending,
+    skipSetupChoiceForEnterprise,
   ]);
 
   const skipLocalSetup = useCallback(async () => {
+    if (currentStepId === "local-dictation") {
+      await continueFromCurrentStep();
+      return;
+    }
     await finalizeOnboarding("local", { localPending: true });
-  }, [finalizeOnboarding]);
+  }, [continueFromCurrentStep, currentStepId, finalizeOnboarding]);
 
   const canContinue = (() => {
     switch (currentStepId) {
@@ -784,7 +843,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             </div>
             <ByokProviderStep
               stepId={currentStepId}
-              selfHostedRequested={selfHostedRequested}
+              selfHostedRequested={session.selfHostedRequested}
+              onSelfHostedChange={setSelfHostedRequested}
               onConnectionChange={setStageReady}
               onProceed={() => void continueFromCurrentStep()}
             />

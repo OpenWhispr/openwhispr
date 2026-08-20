@@ -11,8 +11,11 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import {
   consumePendingLocalModel,
   forgetPendingLocalModel,
+  getPendingLocalModelAvailability,
   hasPendingLocalModels,
+  readPendingLocalModels,
   type PendingLocalModelKind,
+  type PendingLocalModelSelection,
 } from "./pendingLocalModels";
 import type {
   LocalLLMDownloadProgressEvent,
@@ -175,6 +178,25 @@ export default function BackgroundModelDownloadTray() {
           percentage: clampPercentage(model.downloadProgress),
         };
       }
+
+      const inventory = {
+        whisper: whisper?.models,
+        parakeet: parakeet?.models,
+        llm,
+      };
+      const canActivate = localStorage.getItem("localSetupPending") === "true";
+      for (const [kind, selection] of Object.entries(readPendingLocalModels()) as [
+        PendingLocalModelKind,
+        PendingLocalModelSelection,
+      ][]) {
+        const availability = getPendingLocalModelAvailability(kind, selection, inventory);
+        if (availability === "downloaded" && canActivate) {
+          activatePendingLocalModel(kind, selection.modelId);
+        } else if (availability === "downloaded" || availability === "missing") {
+          forgetPendingLocalModel(kind, selection.modelId);
+        }
+      }
+
       setDownloads((current) => ({ ...active, ...current }));
       setHydrated(true);
     };

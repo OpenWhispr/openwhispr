@@ -93,6 +93,11 @@ export function resolveMicrophoneSelection(devices, settings, systemDefault = nu
   return { mode, ...selection };
 }
 
+export function isCacheableMicrophoneResolution(resolution) {
+  const deviceId = resolution?.device?.deviceId;
+  return Boolean(deviceId && deviceId !== "default");
+}
+
 export async function resolvePreferredMicrophone({
   settings,
   mediaDevices = navigator.mediaDevices,

@@ -214,12 +214,14 @@ function FieldLabel({ children }: { children: ReactNode }) {
 export function ByokProviderStep({
   stepId,
   selfHostedRequested = false,
+  onSelfHostedChange,
   onConnectionChange,
   onProceed,
 }: {
   stepId: "byok-dictation" | "byok-assistant";
   /** Set when the user picked "Self-hosted" on setup-choice rather than BYOK. */
   selfHostedRequested?: boolean;
+  onSelfHostedChange: (requested: boolean) => void;
   onConnectionChange: (connected: boolean) => void;
   onProceed: () => void;
 }) {
@@ -272,6 +274,7 @@ export function ByokProviderStep({
   const toggleSelfHosted = () => {
     const next = !selfHosted;
     setSelfHosted(next);
+    onSelfHostedChange(next);
     setSelectedProvider("");
     setSelectedModel("");
     setDraftApiKey("");

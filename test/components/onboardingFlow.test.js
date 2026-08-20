@@ -92,6 +92,19 @@ test("only a signed-in account with an uncommitted choice skips enterprise setup
   assert.equal(shouldSkipOnboardingSetupChoice({ ...base, activeWorkspace: null }), false);
 });
 
+test("a fresh multi-workspace account resolves its enterprise workspace", async () => {
+  const { resolveEnterpriseWorkspaceForOnboarding } = await load();
+  const personal = { id: "personal", plan: "pro", status: "active" };
+  const enterprise = { id: "enterprise", plan: "enterprise", status: "trialing" };
+
+  assert.equal(resolveEnterpriseWorkspaceForOnboarding(null, [personal, enterprise]), enterprise);
+  assert.equal(resolveEnterpriseWorkspaceForOnboarding(personal, [personal, enterprise]), null);
+  assert.equal(
+    resolveEnterpriseWorkspaceForOnboarding(enterprise, [personal, enterprise]),
+    enterprise
+  );
+});
+
 test("versioned sessions reject malformed or old data", async () => {
   const { createOnboardingSession, parseOnboardingSession } = await load();
   assert.equal(parseOnboardingSession(null), null);
@@ -100,6 +113,14 @@ test("versioned sessions reject malformed or old data", async () => {
 
   const session = createOnboardingSession();
   assert.deepEqual(parseOnboardingSession(JSON.stringify(session)), session);
+
+  const legacyV2 = { ...session };
+  delete legacyV2.selfHostedRequested;
+  assert.equal(parseOnboardingSession(JSON.stringify(legacyV2)).selfHostedRequested, false);
+  assert.equal(
+    parseOnboardingSession(JSON.stringify({ ...session, selfHostedRequested: "yes" })),
+    null
+  );
 });
 
 test("an explicit restart clears every persisted route choice and returns to auth", async () => {

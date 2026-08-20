@@ -70,10 +70,23 @@ export function useOnboardingSession() {
     setSession((current) => ({ ...current, setupMode }));
   }, []);
 
+  const setSelfHostedRequested = useCallback((selfHostedRequested: boolean) => {
+    setSession((current) => ({ ...current, selfHostedRequested }));
+  }, []);
+
   const clearSession = useCallback(() => {
     localStorage.removeItem(ONBOARDING_SESSION_KEY);
     localStorage.removeItem(LEGACY_ONBOARDING_STEP_KEY);
   }, []);
 
-  return { session, setSession, goTo, goBack, setAuthPath, setSetupMode, clearSession };
+  return {
+    session,
+    setSession,
+    goTo,
+    goBack,
+    setAuthPath,
+    setSetupMode,
+    setSelfHostedRequested,
+    clearSession,
+  };
 }

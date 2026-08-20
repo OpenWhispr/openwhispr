@@ -59,3 +59,31 @@ test("pending selections can be cleared when onboarding finishes on another mode
   assert.deepEqual(pending.readPendingLocalModels(), {});
   assert.equal(pending.hasPendingLocalModels(), false);
 });
+
+test("pending local model availability distinguishes active, installed, and orphaned models", async () => {
+  global.localStorage = createStorage();
+  const { getPendingLocalModelAvailability } =
+    await import("../../src/components/onboarding/pendingLocalModels.ts");
+  const dictation = { provider: "whisper", modelId: "base" };
+  const assistant = { provider: "qwen", modelId: "qwen-local" };
+
+  assert.equal(
+    getPendingLocalModelAvailability("dictation", dictation, {
+      whisper: [{ model: "base", downloaded: false, isDownloading: true }],
+    }),
+    "downloading"
+  );
+  assert.equal(
+    getPendingLocalModelAvailability("assistant", assistant, {
+      llm: [{ id: "qwen-local", isDownloaded: true, isDownloading: false }],
+    }),
+    "downloaded"
+  );
+  assert.equal(
+    getPendingLocalModelAvailability("dictation", dictation, {
+      whisper: [{ model: "base", downloaded: false, isDownloading: false }],
+    }),
+    "missing"
+  );
+  assert.equal(getPendingLocalModelAvailability("dictation", dictation, {}), "unknown");
+});

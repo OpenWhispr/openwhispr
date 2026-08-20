@@ -29,6 +29,7 @@ export interface OnboardingSession {
   history: OnboardingStepId[];
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
+  selfHostedRequested: boolean;
 }
 
 export interface OnboardingRouteContext {
@@ -106,6 +107,7 @@ export function createOnboardingSession(): OnboardingSession {
     history: [],
     authPath: null,
     setupMode: null,
+    selfHostedRequested: false,
   };
 }
 
@@ -179,6 +181,12 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
     ) {
       return null;
     }
+    if (
+      parsed.selfHostedRequested !== undefined &&
+      typeof parsed.selfHostedRequested !== "boolean"
+    ) {
+      return null;
+    }
 
     return {
       version: ONBOARDING_FLOW_VERSION,
@@ -186,6 +194,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
       history: parsed.history.filter(isOnboardingStepId),
       authPath,
       setupMode,
+      selfHostedRequested: parsed.selfHostedRequested ?? false,
     };
   } catch {
     return null;
@@ -268,13 +277,29 @@ export function getOnboardingProgress(
 }
 
 /** Enterprise customers keep provider/model selection in Settings, outside onboarding. */
+export interface OnboardingWorkspaceEntitlement {
+  id: string;
+  plan?: string | null;
+  status?: string | null;
+}
+
 export function isEnterpriseWorkspaceEntitled(
-  workspace: { plan?: string | null; status?: string | null } | null | undefined
+  workspace: Pick<OnboardingWorkspaceEntitlement, "plan" | "status"> | null | undefined
 ): boolean {
   return (
     workspace?.plan === "enterprise" &&
     (workspace.status === "active" || workspace.status === "trialing")
   );
+}
+
+export function resolveEnterpriseWorkspaceForOnboarding<T extends OnboardingWorkspaceEntitlement>(
+  activeWorkspace: T | null | undefined,
+  workspaces: T[]
+): T | null {
+  if (activeWorkspace) {
+    return isEnterpriseWorkspaceEntitled(activeWorkspace) ? activeWorkspace : null;
+  }
+  return workspaces.find(isEnterpriseWorkspaceEntitled) ?? null;
 }
 
 export function shouldSkipOnboardingSetupChoice({
@@ -286,7 +311,7 @@ export function shouldSkipOnboardingSetupChoice({
   isSignedIn: boolean;
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
-  activeWorkspace: { plan?: string | null; status?: string | null } | null | undefined;
+  activeWorkspace: Pick<OnboardingWorkspaceEntitlement, "plan" | "status"> | null | undefined;
 }): boolean {
   return (
     isSignedIn &&
