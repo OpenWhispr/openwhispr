@@ -169,6 +169,7 @@ export function useLiveTranscriptPanel({
   const close = useCallback(
     ({ suppress = false, clear = false } = {}) => {
       clearFinalHide();
+      finalHoldRef.current = false;
       if (suppress) {
         suppressedRef.current = true;
         setManuallyCollapsed(reopenEligibleRef.current);
@@ -337,6 +338,7 @@ export function useLiveTranscriptPanel({
   // and suppress late preview events until the next recording begins.
   const dismissForError = useCallback(() => {
     clearFinalHide();
+    finalHoldRef.current = false;
     suppressedRef.current = true;
     openGenerationRef.current += 1;
     openPromiseRef.current = null;
@@ -416,6 +418,7 @@ export function useLiveTranscriptPanel({
     const normalRecording = isRecording && !isAssistantVoice;
     if (normalRecording && !previousNormalRecordingRef.current) {
       clearFinalHide();
+      finalHoldRef.current = false;
     }
   }, [clearFinalHide, isAssistantVoice, isRecording]);
 

@@ -147,6 +147,13 @@ test("normalizes fullwidth punctuation so CJK cues and sentence ends work", asyn
   assert.equal(detectAgentName("うーん ねぇ、Jarvis、メールを書いて", "Jarvis", "ja"), true);
 });
 
+test("stripping a CJK address consumes its adjacent comma", async () => {
+  const { stripAgentAddress } = await load();
+
+  assert.equal(stripAgentAddress("ねぇ、Jarvis、メールを書いて", "Jarvis", "ja"), "メールを書いて");
+  assert.equal(stripAgentAddress("嘿，Jarvis，总结这段话", "Jarvis", "zh-CN"), "总结这段话");
+});
+
 test("splits unsegmented CJK-Latin transitions so cue and name separate", async () => {
   const { detectAgentName } = await load();
 

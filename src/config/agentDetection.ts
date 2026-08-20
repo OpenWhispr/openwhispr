@@ -150,7 +150,9 @@ function locateAgentAddress(
       ) {
         const cueBefore =
           i > 0 && (VOCATIVE_CUES.has(words[i - 1]) || localizedCues.has(words[i - 1]));
-        return { start: cueBefore ? i - 1 : i, end: i + span + 1, rawWords };
+        const nameEnd = i + span + 1;
+        const addressEnd = rawWords[nameEnd] === "," ? nameEnd + 1 : nameEnd;
+        return { start: cueBefore ? i - 1 : i, end: addressEnd, rawWords };
       }
     }
   }

@@ -630,7 +630,12 @@ class ReasoningService extends BaseReasoningService {
       resolveLlmRequestTimeoutSeconds(getSettings().llmRequestTimeoutSeconds),
       LLM_STREAMING_TIMEOUT_FLOOR_SECONDS
     );
-    const timeoutId = setTimeout(() => abortController.abort(), timeoutSeconds * 1000);
+    let timeoutTriggered = false;
+    const timeoutId = setTimeout(() => {
+      if (abortController.signal.aborted) return;
+      timeoutTriggered = true;
+      abortController.abort();
+    }, timeoutSeconds * 1000);
 
     let response: Response;
     try {
@@ -647,7 +652,8 @@ class ReasoningService extends BaseReasoningService {
       );
     } catch (error) {
       clearTimeout(timeoutId);
-      if ((error as Error).name === "AbortError") {
+      if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
+        if (!timeoutTriggered) return;
         throw new Error("Streaming request timed out");
       }
       throw error;
@@ -717,6 +723,12 @@ class ReasoningService extends BaseReasoningService {
 
       const trailing = filterThinkTags?.finish();
       if (trailing) yield trailing;
+    } catch (error) {
+      if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
+        if (!timeoutTriggered) return;
+        throw new Error("Streaming request timed out");
+      }
+      throw error;
     } finally {
       clearTimeout(timeoutId);
       reader.releaseLock();
@@ -775,6 +787,9 @@ class ReasoningService extends BaseReasoningService {
           yield { type: "content", text };
         }
         yield { type: "done", finishReason: "stop" };
+      } catch (error) {
+        if (abortController.signal.aborted && (error as Error).name === "AbortError") return;
+        throw error;
       } finally {
         if (this.streamAbortController === abortController) {
           this.streamAbortController = null;

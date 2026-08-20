@@ -188,13 +188,19 @@ export function AssistantPanel({
         consumedCommandIdRef.current = null;
       })
       .catch((error: unknown) => {
+        const errorMessage =
+          error instanceof Error && error.message
+            ? error.message
+            : error == null
+              ? t("common.unknownError")
+              : String(error);
         onCommandDiscarded(commandId);
         setMessages((prev) => [
           ...prev,
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: `${t("agentMode.chat.errorPrefix")}: ${(error as Error).message}`,
+            content: `${t("agentMode.chat.errorPrefix")}: ${errorMessage}`,
             isStreaming: false,
           },
         ]);

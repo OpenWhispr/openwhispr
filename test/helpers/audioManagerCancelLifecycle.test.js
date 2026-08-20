@@ -23,6 +23,7 @@ function createManager(AudioManager, transcription) {
   const manager = Object.assign(Object.create(AudioManager.prototype), {
     isProcessing: true,
     _localSpeechGateState: null,
+    _processingCancellationGeneration: 0,
     _streamingStopPromise: null,
     _streamingCancellationGeneration: 0,
     _activeTranscriptionAbortController: null,
@@ -43,6 +44,108 @@ function createManager(AudioManager, transcription) {
   };
   return { manager, calls };
 }
+
+function createBatchFinalizationManager(AudioManager, merge) {
+  let processAudioCalls = 0;
+  const mergedBlob = new Blob([new Uint8Array(512)], { type: "audio/webm" });
+  const manager = Object.assign(Object.create(AudioManager.prototype), {
+    isRecording: true,
+    isProcessing: false,
+    _processingCancellationGeneration: 0,
+    _streamingCancellationGeneration: 0,
+    _streamingStopPromise: null,
+    _activeTranscriptionAbortController: null,
+    _batchSegments: [],
+    _receivedAudioData: true,
+    _localSpeechGateState: null,
+    _streamingCommitActive: false,
+    recordingMimeType: "audio/webm",
+    recordingStartTime: Date.now(),
+    lastAudioBlob: null,
+    micRecovery: { stop() {} },
+    teardownSpeechGate() {},
+    cleanupPreview: async () => null,
+    shouldShowPreviewCleanupState: () => false,
+    mergeRecordedSegments: () => merge.promise,
+    getLargestRecordedSegment: () => null,
+    processAudio: async () => {
+      processAudioCalls += 1;
+    },
+    onStateChange() {},
+  });
+  manager._requestStreamingCancellation = () => {
+    manager._streamingCancellationGeneration += 1;
+  };
+  return { manager, mergedBlob, getProcessAudioCalls: () => processAudioCalls };
+}
+
+test("cancelling while batch segments merge never starts transcription", async (t) => {
+  const { AudioManager } = await loadManagerClass(t);
+  const merge = deferred();
+  const { manager, mergedBlob, getProcessAudioCalls } = createBatchFinalizationManager(
+    AudioManager,
+    merge
+  );
+
+  const finalization = manager.finalizeBatchRecording(mergedBlob);
+  assert.equal(manager.isProcessing, true);
+  assert.equal(manager.cancelProcessing(), true);
+  merge.resolve(mergedBlob);
+  await finalization;
+
+  assert.equal(getProcessAudioCalls(), 0);
+  assert.equal(manager.lastAudioBlob, null);
+});
+
+test("a cancelled older pipeline cannot publish or clear a newer pipeline", async (t) => {
+  const { AudioManager } = await loadManagerClass(t);
+  const firstTranscription = deferred();
+  const secondTranscription = deferred();
+  const completed = [];
+  const firstBlob = new Blob(["first"], { type: "audio/webm" });
+  const secondBlob = new Blob(["second"], { type: "audio/webm" });
+  const { manager } = createManager(AudioManager, firstTranscription);
+  manager.processWithLocalWhisper = (audioBlob) =>
+    audioBlob === firstBlob ? firstTranscription.promise : secondTranscription.promise;
+  manager.onTranscriptionComplete = (result) => completed.push(result.text);
+
+  const firstRun = manager.processAudio(firstBlob);
+  assert.equal(manager.cancelProcessing(), true);
+
+  manager.isProcessing = true;
+  const secondRun = manager.processAudio(secondBlob);
+  firstTranscription.resolve({ success: true, text: "old", source: "local", timings: {} });
+  await firstRun;
+
+  assert.equal(manager.isProcessing, true, "the old pipeline must not clear the new busy state");
+  assert.deepEqual(completed, [], "the old pipeline must not publish after cancellation");
+
+  secondTranscription.resolve({ success: true, text: "new", source: "local", timings: {} });
+  await secondRun;
+
+  assert.equal(manager.isProcessing, false);
+  assert.deepEqual(completed, ["new"]);
+});
+
+test("a cancelled current pipeline clears busy when its pending work settles", async (t) => {
+  const { AudioManager } = await loadManagerClass(t);
+  const transcription = deferred();
+  const { manager, calls } = createManager(AudioManager, transcription);
+  // Streaming finalization keeps the lifecycle busy while provider/model work
+  // is still settling instead of advertising an idle state prematurely.
+  manager._streamingStopPromise = Promise.resolve(true);
+
+  const run = manager.processAudio(new Blob(["audio"], { type: "audio/webm" }));
+  assert.equal(manager.cancelProcessing(), true);
+  assert.equal(manager.isProcessing, true, "cancel keeps busy until the owned work settles");
+
+  transcription.resolve({ success: true, text: "stale", source: "local", timings: {} });
+  await run;
+
+  assert.equal(manager.isProcessing, false);
+  assert.deepEqual(calls.states, ["idle"]);
+  assert.equal(calls.completed, 0);
+});
 
 test("a user cancel during batch transcription is not an error and saves nothing", async (t) => {
   const { AudioManager } = await loadManagerClass(t);
@@ -125,16 +228,9 @@ test("cancelling when nothing is processing dismisses nothing", async (t) => {
   assert.equal(dismissCalls.length, 0);
 });
 
-// Regression for a leak the reset above must close: _processingCancelled is a
-// single instance flag, not per-request. A cancelled BATCH pipeline leaves it
-// true; only processAudio()'s own entry resets it back to false. A STREAMING
-// session's no-speech fallback calls processWithOpenWhisprCloud directly
-// (never through processAudio), so without a matching reset at
-// _finalizeStreamingRecording's entry, a genuine (non-abort) cloud-reasoning
-// failure in that fallback would have its recordCleanupFailure call silently
-// skipped by the stale flag — dropping a real "Cleanup Failed" toast
-// (src/stores/cleanupFailureStore.ts -> CleanupFailureToastListener.tsx) that
-// has nothing to do with the earlier, unrelated cancel.
+// A prior batch cancellation must never transfer into a later streaming
+// session's no-speech fallback. The processing generation belongs only to the
+// batch pipeline that captured it.
 async function loadCancelGuardManagerClass(t) {
   const { AudioManager, window } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-streaming-leak-test-",
@@ -234,6 +330,7 @@ function createStreamingLeakManager(AudioManager) {
     recordingStartTime: Date.now() - 5000,
     _streamingStopPromise: null,
     _streamingStopMode: null,
+    _processingCancellationGeneration: 0,
     _streamingCancellationGeneration: 0,
     _activeTranscriptionAbortController: null,
     _streamingSessionGeneration: 1,
@@ -284,6 +381,39 @@ function createStreamingLeakManager(AudioManager) {
   return { manager, completions };
 }
 
+test("a cancelled batch pipeline cannot clear newer streaming finalization", async (t) => {
+  const { AudioManager } = await loadCancelGuardManagerClass(t);
+  const { manager } = createStreamingLeakManager(AudioManager);
+  const oldTranscription = deferred();
+  manager.isRecording = false;
+  manager.isProcessing = true;
+  manager.isStreaming = false;
+  manager._localSpeechGateState = null;
+  manager.processWithOpenWhisprCloud = () => oldTranscription.promise;
+
+  const oldRun = manager.processAudio(new Blob(["old"], { type: "audio/webm" }));
+  assert.equal(manager.cancelProcessing(), true);
+
+  manager.isRecording = true;
+  manager.isStreaming = true;
+  manager.streamingFinalText = "new streaming result";
+  manager.recordingStartTime = Date.now() - 1000;
+  globalThis.__streamingLeakCleanupFailureCalls = [];
+  const streamingStop = manager.stopStreamingRecording();
+  assert.equal(manager.isProcessing, true);
+
+  oldTranscription.resolve({ success: true, text: "old", source: "openwhispr", timings: {} });
+  await oldRun;
+  const remainedBusy = manager.isProcessing;
+  await streamingStop;
+
+  assert.equal(
+    remainedBusy,
+    true,
+    "the old batch owner must not clear a newer streaming finalization"
+  );
+});
+
 test(
   "a cancelled batch pipeline does not swallow a real cleanup failure in a later streaming fallback",
   async (t) => {
@@ -300,10 +430,9 @@ test(
       code: "SERVER_ERROR",
     });
 
-    // Simulate the leak precondition: an earlier BATCH pipeline was
-    // cancelled and left the instance-level flag set. Nothing about this
-    // brand-new streaming session should inherit that.
-    manager._processingCancelled = true;
+    // Simulate an earlier batch cancellation. The new streaming session does
+    // not capture that batch pipeline's old generation.
+    manager._processingCancellationGeneration = 1;
 
     assert.equal(await manager.stopStreamingRecording(), true);
 
@@ -345,16 +474,21 @@ test(
       text: "the raw transcript",
     });
 
-    // Simulate the leak precondition again, this time on the agent route.
-    manager._processingCancelled = true;
-
-    const result = await manager.processWithOpenWhisprCloud({
-      size: 1024,
-      type: "audio/webm",
-      arrayBuffer: async () => new ArrayBuffer(8),
-    });
+    const result = await manager.processWithOpenWhisprCloud(
+      {
+        size: 1024,
+        type: "audio/webm",
+        arrayBuffer: async () => new ArrayBuffer(8),
+      },
+      {},
+      () => true
+    );
 
     assert.equal(result.text, "the raw transcript", "the raw transcript is still returned");
-    assert.deepEqual(errors, [], "a cancelled agent command must notify nothing, not even Agent Unavailable");
+    assert.deepEqual(
+      errors,
+      [],
+      "a cancelled agent command must notify nothing, not even Agent Unavailable"
+    );
   }
 );

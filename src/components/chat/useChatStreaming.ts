@@ -504,18 +504,26 @@ export function useChatStreaming({
         const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
         onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
       } catch (error) {
-        announceResponse();
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? {
-                  ...m,
-                  content: `${t("agentMode.chat.errorPrefix")}: ${(error as Error).message}`,
-                  isStreaming: false,
-                }
-              : m
-          )
-        );
+        if (cancelled()) {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId ? { ...message, isStreaming: false } : message
+            )
+          );
+        } else {
+          announceResponse();
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    content: `${t("agentMode.chat.errorPrefix")}: ${(error as Error).message}`,
+                    isStreaming: false,
+                  }
+                : m
+            )
+          );
+        }
       }
 
       setAgentState("idle");

@@ -386,6 +386,93 @@ test("cancelling tool-ineligible local setup prevents raw streaming", async (t) 
   assert.equal(fetchCalls, 0);
 });
 
+test("cancelling a raw stream after its reader starts ends normally", async (t) => {
+  const { reasoningService } = await loadReasoningService(t, "openwhispr-raw-reader-cancel-test-");
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let readerStarted = false;
+  globalThis.fetch = async (_input, init) => {
+    const body = new ReadableStream({
+      pull() {
+        readerStarted = true;
+      },
+      start(controller) {
+        init?.signal?.addEventListener(
+          "abort",
+          () => controller.error(new DOMException("aborted", "AbortError")),
+          { once: true }
+        );
+      },
+    });
+    return new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  const stream = reasoningService.processTextStreamingAI(
+    [{ role: "user", content: "hello" }],
+    "qwen3-1.7b-q4_k_m",
+    "lan",
+    {
+      systemPrompt: "Answer the user.",
+      lanUrl: "http://127.0.0.1:11434/v1",
+      disableThinking: true,
+    },
+    undefined
+  );
+  const output = collectAgentText(stream);
+  for (let i = 0; i < 50 && !readerStarted; i++) await waitForMicrotasks();
+  assert.equal(readerStarted, true, "fixture setup: the response reader must be pending");
+
+  reasoningService.cancelActiveStream();
+
+  assert.equal(await output, "");
+});
+
+test("a timeout-owned abort during raw response reading remains a timeout error", async (t) => {
+  const { reasoningService } = await loadReasoningService(t, "openwhispr-raw-reader-timeout-test-");
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+  });
+  globalThis.setTimeout = (callback, delay, ...args) =>
+    originalSetTimeout(callback, delay === 60_000 ? 0 : delay, ...args);
+  globalThis.fetch = async (_input, init) => {
+    const body = new ReadableStream({
+      start(controller) {
+        init?.signal?.addEventListener(
+          "abort",
+          () => controller.error(new DOMException("aborted", "AbortError")),
+          { once: true }
+        );
+      },
+    });
+    return new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  const stream = reasoningService.processTextStreamingAI(
+    [{ role: "user", content: "hello" }],
+    "qwen3-1.7b-q4_k_m",
+    "lan",
+    {
+      systemPrompt: "Answer the user.",
+      lanUrl: "http://127.0.0.1:11434/v1",
+      disableThinking: true,
+    },
+    undefined
+  );
+
+  await assert.rejects(collectAgentText(stream), /Streaming request timed out/);
+});
+
 // Was "does not flush buffered text after error" and asserted the stream
 // silently ended with "". A provider-reported error part must now reject the
 // generator instead; buffered text must still never leak into that rejection.

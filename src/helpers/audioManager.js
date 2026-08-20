@@ -108,6 +108,7 @@ const REASONING_CACHE_TTL = 30000; // 30 seconds
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
 // Failure detector only: fires when the worklet or audio graph is dead and never flushes.
 const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
+const neverCancelled = () => false;
 
 const micDeviceKey = (settings) => `${settings.preferBuiltInMic}|${settings.selectedMicDeviceId}`;
 
@@ -495,7 +496,8 @@ class AudioManager {
     this.translationApplied = false;
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
-    this._processingCancelled = false;
+    this._processingCancellationGeneration = 0;
+    this._activeProcessingPipeline = null;
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.selectionCapturePromise = null;
@@ -1444,6 +1446,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async finalizeBatchRecording(finalSegment) {
+    const processingPipeline = this._startProcessingPipeline();
+    const wasCancelled = () => this._shouldAbandonProcessingPipeline(processingPipeline);
     this.micRecovery.stop();
     this.teardownSpeechGate();
     const previewStopPromise = this.cleanupPreview({
@@ -1465,10 +1469,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     try {
       audioBlob = await this.mergeRecordedSegments(segments);
     } catch (error) {
+      if (wasCancelled()) {
+        this._settleProcessingPipeline(processingPipeline);
+        return;
+      }
       logger.error("Failed to assemble recovered recording", { error: error.message }, "audio");
       // Salvage the largest segment rather than dropping the whole recording.
       audioBlob = this.getLargestRecordedSegment(segments);
       salvagedRecording = !!audioBlob;
+    }
+    if (wasCancelled()) {
+      this._settleProcessingPipeline(processingPipeline);
+      return;
     }
     audioBlob = audioBlob || new Blob([], { type: this.recordingMimeType || "audio/webm" });
     this.lastAudioBlob = audioBlob;
@@ -1501,21 +1513,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         },
         "audio"
       );
-      this.isProcessing = false;
+      if (!this._settleProcessingPipeline(processingPipeline)) return;
       this._localSpeechGateState = null;
-      this.onStateChange?.({ isRecording: false, isProcessing: false });
       this.onTranscriptionComplete?.({ success: true, text: "" });
       return;
     }
     // Non-commit sessions stop concurrently with the decode below.
     const previewStop = this._streamingCommitActive ? await previewStopPromise : null;
+    if (wasCancelled()) {
+      this._settleProcessingPipeline(processingPipeline);
+      return;
+    }
     this._streamingCommitActive = false;
 
-    await this.processAudio(audioBlob, {
-      durationSeconds,
-      ...(salvagedRecording ? { salvagedRecording: true } : {}),
-      ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
-    });
+    await this.processAudio(
+      audioBlob,
+      {
+        durationSeconds,
+        ...(salvagedRecording ? { salvagedRecording: true } : {}),
+        ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
+      },
+      processingPipeline
+    );
   }
 
   async replaceBatchMic(replacement) {
@@ -1723,9 +1742,34 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  _startProcessingPipeline() {
+    const pipeline = {
+      cancellationGeneration: this._processingCancellationGeneration ?? 0,
+    };
+    this._activeProcessingPipeline = pipeline;
+    return pipeline;
+  }
+
+  _shouldAbandonProcessingPipeline(pipeline) {
+    return (
+      pipeline.cancellationGeneration !== (this._processingCancellationGeneration ?? 0) ||
+      this._activeProcessingPipeline !== pipeline
+    );
+  }
+
+  _settleProcessingPipeline(pipeline) {
+    if (this._activeProcessingPipeline !== pipeline) return false;
+    this._activeProcessingPipeline = null;
+    if (this.isProcessing) {
+      this.isProcessing = false;
+      this.onStateChange?.({ isRecording: false, isProcessing: false });
+    }
+    return true;
+  }
+
   cancelProcessing() {
     if (this.isProcessing) {
-      this._processingCancelled = true;
+      this._processingCancellationGeneration = (this._processingCancellationGeneration ?? 0) + 1;
       this._requestStreamingCancellation();
       // Streaming finalization can be inside a provider or model await that
       // cannot be aborted. Keep the lifecycle truthfully busy until that await
@@ -1750,8 +1794,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return false;
   }
 
-  async processAudio(audioBlob, metadata = {}) {
-    this._processingCancelled = false;
+  async processAudio(audioBlob, metadata = {}, processingPipeline = null) {
+    const pipeline = processingPipeline ?? this._startProcessingPipeline();
+    if (processingPipeline && this._activeProcessingPipeline !== processingPipeline) return;
+    const wasCancelled = () => this._shouldAbandonProcessingPipeline(pipeline);
     const pipelineStart = performance.now();
     const settings = getSettings();
     let noAudioDetected = false;
@@ -1777,8 +1823,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         },
         "audio"
       );
-      this.isProcessing = false;
-      this.onStateChange?.({ isRecording: false, isProcessing: false });
+      if (!this._settleProcessingPipeline(pipeline)) return;
       this.onTranscriptionComplete?.({ success: true, text: "" });
       return;
     }
@@ -1805,10 +1850,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (useLocalWhisper) {
         if (localProvider === "nvidia") {
           activeModel = parakeetModel;
-          result = await this.processWithLocalParakeet(audioBlob, parakeetModel, metadata);
+          result = await this.processWithLocalParakeet(
+            audioBlob,
+            parakeetModel,
+            metadata,
+            wasCancelled
+          );
         } else {
           activeModel = whisperModel;
-          result = await this.processWithLocalWhisper(audioBlob, whisperModel, metadata);
+          result = await this.processWithLocalWhisper(
+            audioBlob,
+            whisperModel,
+            metadata,
+            wasCancelled
+          );
         }
       } else if (isOpenWhisprCloudMode) {
         if (!isSignedIn) {
@@ -1820,13 +1875,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw err;
         }
         activeModel = "openwhispr-cloud";
-        result = await this.processWithOpenWhisprCloud(audioBlob, metadata);
+        result = await this.processWithOpenWhisprCloud(audioBlob, metadata, wasCancelled);
       } else {
         activeModel = this.getTranscriptionModel();
-        result = await this.processWithOpenAIAPI(audioBlob, metadata);
+        result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
       }
 
-      if (!this.isProcessing) {
+      if (wasCancelled() || !this.isProcessing) {
         return;
       }
 
@@ -1872,7 +1927,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     } catch (error) {
       const errorAtMs = Math.round(performance.now() - pipelineStart);
 
-      if (this._processingCancelled) {
+      if (wasCancelled()) {
         // The user cancelled mid-pipeline; the aborted request's rejection is
         // the expected outcome, not a failure to report or persist.
         logger.info("Transcription cancelled by user", { errorAtMs }, "performance");
@@ -1915,18 +1970,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       }
     } finally {
-      if (this.isProcessing) {
-        this.isProcessing = false;
-        this.onStateChange?.({ isRecording: false, isProcessing: false });
-      }
+      const shouldNotifyNoAudio =
+        !wasCancelled() && noAudioDetected && this._activeProcessingPipeline === pipeline;
+      this._settleProcessingPipeline(pipeline);
       // Every provider reports genuine silence through this one post-processing
       // outcome. The pill can now leave thinking before the error surface takes
       // ownership, instead of receiving an IPC event mid-pipeline.
-      if (noAudioDetected) this.onNoAudio?.();
+      if (shouldNotifyNoAudio) this.onNoAudio?.();
     }
   }
 
-  async processWithLocalWhisper(audioBlob, model = "base", metadata = {}) {
+  async processWithLocalWhisper(
+    audioBlob,
+    model = "base",
+    metadata = {},
+    wasCancelled = neverCancelled
+  ) {
     const timings = {};
 
     try {
@@ -1995,7 +2054,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         const rawText = result.text;
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(result.text, "local");
+        const text = await this.processTranscription(result.text, "local", wasCancelled);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         if (text !== null && text !== undefined) {
@@ -2029,7 +2088,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       if (allowOpenAIFallback && isLocalMode && fallbackAllowedByPolicy) {
         try {
-          const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata);
+          const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };
         } catch (fallbackError) {
           if (fallbackError.selectionEditFatal) {
@@ -2045,7 +2104,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async processWithLocalParakeet(audioBlob, model = "parakeet-tdt-0.6b-v3", metadata = {}) {
+  async processWithLocalParakeet(
+    audioBlob,
+    model = "parakeet-tdt-0.6b-v3",
+    metadata = {},
+    wasCancelled = neverCancelled
+  ) {
     const timings = {};
 
     try {
@@ -2089,7 +2153,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (result.success && result.text) {
         const rawText = result.text;
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(result.text, "local-parakeet");
+        const text = await this.processTranscription(result.text, "local-parakeet", wasCancelled);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         if (text !== null && text !== undefined) {
@@ -2130,7 +2194,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       if (allowOpenAIFallback && isLocalMode && fallbackAllowedByPolicy) {
         try {
-          const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata);
+          const fallbackResult = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
           return { ...fallbackResult, source: "openai-fallback" };
         } catch (fallbackError) {
           if (fallbackError.selectionEditFatal) {
@@ -2347,9 +2411,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // at the cursor. The transcript flows back as the result text so history
   // and previews stay truthful.
   _bankAssistantDirective(transcript, config, selectedContext) {
-    // A capture that resolved after the user cancelled (or after the next
-    // recording started) must not redirect a later result into the panel.
-    if (!this.isProcessing || this._processingCancelled) return;
+    if (!this.isProcessing) return;
     this.pendingAssistantConversation = {
       transcript,
       // resolveReasoningRoute mirrors an attached screenContext into
@@ -2388,7 +2450,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return text;
   }
 
-  async processAgentCommand(text, model, agentName, config) {
+  async processAgentCommand(text, model, agentName, config, wasCancelled = neverCancelled) {
+    if (wasCancelled()) return text;
     const assistantSelectionContext = this.consumeAssistantSelectionContext();
     if (assistantSelectionContext) {
       // An in-panel selection is conversational context, not an editable OS
@@ -2411,6 +2474,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       error.cause = cause;
       throw error;
     }
+    if (wasCancelled()) return text;
 
     const captureDisposition = getSelectionCaptureDisposition(capture);
 
@@ -2492,6 +2556,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         agentName,
         selectionConfig
       );
+      if (wasCancelled()) return text;
       const replacement = extractSelectionEditReplacement(result, completionMarker);
       this.pendingSelectionEdit = { sessionId: capture.sessionId };
       return replacement;
@@ -2656,12 +2721,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async processTranscription(text, source) {
-    const result = await this.processTranscriptionCore(text, source);
+  async processTranscription(text, source, wasCancelled = neverCancelled) {
+    const result = await this.processTranscriptionCore(text, source, wasCancelled);
+    if (wasCancelled()) return result;
     return this.finalizeChineseScript(result);
   }
 
-  async processTranscriptionCore(text, source) {
+  async processTranscriptionCore(text, source, wasCancelled = neverCancelled) {
     const normalizedText = typeof text === "string" ? text.trim() : "";
 
     if (!normalizedText) {
@@ -2671,6 +2737,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
       return normalizedText;
     }
+    if (wasCancelled()) return normalizedText;
 
     logger.logReasoning("TRANSCRIPTION_RECEIVED", {
       source,
@@ -2704,6 +2771,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     const useReasoning = this.voiceAgentRequested || (await this.isReasoningAvailable());
+    if (wasCancelled()) return normalizedText;
 
     logger.logReasoning("REASONING_CHECK", {
       useReasoning,
@@ -2765,10 +2833,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
         const result =
           route.kind === "agent"
-            ? await this.processAgentCommand(normalizedText, targetModel, agentName, {
-                ...reasoningConfig,
-                requiresAgent: true,
-              })
+            ? await this.processAgentCommand(
+                normalizedText,
+                targetModel,
+                agentName,
+                {
+                  ...reasoningConfig,
+                  requiresAgent: true,
+                },
+                wasCancelled
+              )
             : await this.processWithReasoningModel(
                 normalizedText,
                 targetModel,
@@ -2786,7 +2860,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return hasTextContent(result) ? result : normalizedText;
       } catch (error) {
         if (error.selectionEditFatal) throw error;
-        if (this._processingCancelled) return normalizedText;
+        if (wasCancelled()) return normalizedText;
         logger.logReasoning("REASONING_FAILED", {
           error: error.message,
           stack: error.stack,
@@ -2960,7 +3034,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return result;
   }
 
-  async processWithOpenWhisprCloud(audioBlob, metadata = {}) {
+  async processWithOpenWhisprCloud(audioBlob, metadata = {}, wasCancelled = neverCancelled) {
     if (!navigator.onLine) {
       const err = new Error("You're offline. Cloud transcription requires an internet connection.");
       err.code = "OFFLINE";
@@ -3031,10 +3105,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       try {
         if (route.kind === "agent") {
-          const reasoned = await this.processAgentCommand(processedText, route.model, agentName, {
-            ...route.config,
-            requiresAgent: true,
-          });
+          const reasoned = await this.processAgentCommand(
+            processedText,
+            route.model,
+            agentName,
+            {
+              ...route.config,
+              requiresAgent: true,
+            },
+            wasCancelled
+          );
           if (hasTextContent(reasoned)) processedText = reasoned;
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
           const reasonResult = await withSessionRefresh(async () => {
@@ -3109,13 +3189,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       } catch (reasonError) {
         if (reasonError.selectionEditFatal) throw reasonError;
-        // Deliberate override of the brief's literal two-line enumeration: a
-        // cancelled voice-agent command must notify nothing on this path
-        // either, matching processTranscriptionCore's BYOK catch (which
-        // returns before reaching _notifyAgentReasoningFailed) — otherwise a
-        // cancel here still pops "Agent Unavailable", contradicting this
-        // task's whole point.
-        if (!this._processingCancelled) {
+        if (!wasCancelled()) {
           logger.error(
             "Cloud reasoning failed, using raw transcription",
             { error: reasonError.message },
@@ -3154,7 +3228,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.getCustomDictionaryArray();
   }
 
-  async processWithOpenAIAPI(audioBlob, metadata = {}) {
+  async processWithOpenAIAPI(audioBlob, metadata = {}, wasCancelled = neverCancelled) {
     const timings = {};
     let requestController = null;
     const apiSettings = getSettings();
@@ -3220,7 +3294,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(proxyText, provider);
+        const text = await this.processTranscription(proxyText, provider, wasCancelled);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         const source = (await this.isReasoningAvailable()) ? `${provider}-reasoned` : provider;
@@ -3430,7 +3504,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const rawText = result.text;
 
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(result.text, "openai");
+        const text = await this.processTranscription(result.text, "openai", wasCancelled);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         const source = (await this.isReasoningAvailable()) ? "openai-reasoned" : "openai";
@@ -3502,7 +3576,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const result = await window.electronAPI.transcribeLocalWhisper(arrayBuffer, options);
 
           if (result.success && result.text) {
-            const text = await this.processTranscription(result.text, "local-fallback");
+            const text = await this.processTranscription(
+              result.text,
+              "local-fallback",
+              wasCancelled
+            );
             if (text) {
               return { success: true, text, source: "local-fallback" };
             }
@@ -4384,6 +4462,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.stopRequestedDuringStreamingStart = false;
       this.recordingStartTime = null;
       this.isRecording = false;
+      this._activeProcessingPipeline = null;
       this.isProcessing = true;
       this.micRecovery.stop();
       this.cleanupStreamingAudio();
@@ -4464,13 +4543,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     // Enter processing synchronously, before any mic/provider await. This is
     // the authoritative guard that makes a second hotkey a no-op for the full
-    // finalization and reasoning interval. Reset the cancel flag here too — a
-    // prior batch pipeline's cancel must not leak into this streaming
-    // pipeline's own failure bookkeeping (e.g. the no-speech cloud fallback
-    // below shares processWithOpenWhisprCloud's catch with the batch path).
+    // finalization and reasoning interval.
+    // Supersede cancelled batch work that may still be settling in the background.
+    this._activeProcessingPipeline = null;
     this.isRecording = false;
     this.isProcessing = true;
-    this._processingCancelled = false;
     this.recordingStartTime = null;
     this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
 
@@ -4625,10 +4702,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       try {
         if (route.kind === "agent") {
-          const reasoned = await this.processAgentCommand(finalText, route.model, agentName, {
-            ...route.config,
-            requiresAgent: true,
-          });
+          const reasoned = await this.processAgentCommand(
+            finalText,
+            route.model,
+            agentName,
+            {
+              ...route.config,
+              requiresAgent: true,
+            },
+            wasCancelled
+          );
           if (hasTextContent(reasoned)) finalText = reasoned;
           logger.info(
             "Streaming dictation-agent complete",
@@ -4770,8 +4853,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           // Cloud records usage server-side via /api/transcribe; BYOK has no metering.
           const batchResult =
             target === "cloud"
-              ? await this.processWithOpenWhisprCloud(fallbackBlob, { durationSeconds })
-              : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds });
+              ? await this.processWithOpenWhisprCloud(
+                  fallbackBlob,
+                  { durationSeconds },
+                  wasCancelled
+                )
+              : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds }, wasCancelled);
           if (wasCancelled()) return true;
           if (batchResult?.text) {
             finalText = batchResult.text;

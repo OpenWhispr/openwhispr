@@ -89,18 +89,29 @@ async function renderChatStreaming(t, { electronAPI = {}, settings = {} } = {}) 
   t.after(() => reasoningService.destroy());
 
   let messages = [];
+  let responseContentCalls = 0;
   const setMessages = (updater) => {
     messages = typeof updater === "function" ? updater(messages) : updater;
   };
 
   let captured = null;
   function Harness() {
-    captured = useChatStreaming({ messages, setMessages });
+    captured = useChatStreaming({
+      messages,
+      setMessages,
+      onResponseContent: () => {
+        responseContentCalls += 1;
+      },
+    });
     return null;
   }
   renderToStaticMarkup(React.createElement(Harness));
 
-  return { captured, getMessages: () => messages };
+  return {
+    captured,
+    getMessages: () => messages,
+    getResponseContentCalls: () => responseContentCalls,
+  };
 }
 
 test("a genuine empty completion still shows the empty-response fallback", async (t) => {
@@ -208,6 +219,48 @@ test("cancelling before any token arrives never shows the empty-response fallbac
   assert.notEqual(message.content, EMPTY_RESPONSE_TEXT);
   assert.equal(message.content, "");
   assert.equal(message.isStreaming, false);
+});
+
+test("cancelling a tool-ineligible raw stream after reading starts shows no error", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let readerStarted = false;
+  globalThis.fetch = async (_input, init) => {
+    const body = new ReadableStream({
+      pull() {
+        readerStarted = true;
+      },
+      start(controller) {
+        init?.signal?.addEventListener(
+          "abort",
+          () => controller.error(new DOMException("aborted", "AbortError")),
+          { once: true }
+        );
+      },
+    });
+    return new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  const { captured, getMessages, getResponseContentCalls } = await renderChatStreaming(t, {
+    settings: { chatAgentModel: "qwen3-1.7b-q4_k_m" },
+  });
+  const sendPromise = captured.sendToAI("hello", []);
+  const waitForMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+  for (let i = 0; i < 50 && !readerStarted; i++) await waitForMicrotasks();
+  assert.equal(readerStarted, true, "fixture setup: the raw response reader must be pending");
+
+  captured.cancelStream();
+  await sendPromise;
+
+  const [message] = getMessages();
+  assert.equal(message.content, "");
+  assert.equal(message.isStreaming, false);
+  assert.equal(getResponseContentCalls(), 0, "a user cancellation must not announce an error");
 });
 
 test("cloud screen context is sent without claiming the screenshot is already attached", async (t) => {
