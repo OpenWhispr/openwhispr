@@ -651,6 +651,57 @@ test("re-entering providers mode replaces a dormant policy-disallowed provider",
   );
 });
 
+// The STT picker feeds reconcile the browsed tab (browsedCloudProvider ??
+// selectedCloudProvider) while the committed pair stays untouched in the store.
+test("a browsed provider resolves for display without leaking the committed model", async () => {
+  const { reconcileCloudProviderSelection } = await load();
+  const allowedProviders = [
+    { id: "openai", models: [{ id: "whisper-1" }] },
+    { id: "groq", models: [{ id: "whisper-large-v3" }] },
+  ];
+
+  // Browsing an allowed tab: the display lands on the browsed provider with
+  // its own default — the committed model (openai's) never leaks into it.
+  assert.deepEqual(
+    reconcileCloudProviderSelection({
+      selectedProvider: "groq",
+      selectedModel: "whisper-1",
+      allowedProviders,
+      customAllowed: false,
+      hasCustomUrl: false,
+    }),
+    { provider: "groq", model: "whisper-large-v3" }
+  );
+
+  // Browsing the Custom tab is always a valid input (null = no correction);
+  // the caller must echo the browsed input, not the committed pair.
+  assert.equal(
+    reconcileCloudProviderSelection({
+      selectedProvider: "custom",
+      selectedModel: "whisper-1",
+      allowedProviders,
+      customAllowed: true,
+      hasCustomUrl: false,
+    }),
+    null
+  );
+
+  // A browsed provider that policy has since disallowed falls back. The
+  // component can't browse there directly (handleCloudProviderChange guards
+  // providerAllowed); this state is only reachable when policy flips while
+  // the tab is already being browsed.
+  assert.deepEqual(
+    reconcileCloudProviderSelection({
+      selectedProvider: "xai",
+      selectedModel: "whisper-1",
+      allowedProviders,
+      customAllowed: false,
+      hasCustomUrl: false,
+    }),
+    { provider: "openai", model: "whisper-1" }
+  );
+});
+
 test("active control-panel views reroute on their specific policy capability", async () => {
   const { isControlPanelViewAllowed } = await load();
 

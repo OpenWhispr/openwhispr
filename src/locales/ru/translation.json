@@ -767,7 +767,9 @@
     },
     "parakeet": {
       "multilingual": "25 языков",
-      "english": "Английский"
+      "english": "Английский",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "Недоступно"
     },
     "apiKeyOptional": "API-ключ (необязательно)",
     "getKey": "Получить ключ ->",
@@ -2072,6 +2074,10 @@
         "noteFormatting": "Форматирование заметок",
         "chatIntelligence": "Чат",
         "dictationTranslation": "Перевод"
+      },
+      "requestTimeout": {
+        "label": "Тайм-аут запроса (секунды)",
+        "description": "Как долго ждать ответа, прежде чем отменить запрос. Локальным или self-hosted моделям может потребоваться больше стандартных 30 секунд, особенно для длинных заметок."
       }
     },
     "noteFormatting": {
@@ -3120,7 +3126,10 @@
     "limitReachedDescription": "Перейдите на Pro для безлимитных транскрипций.",
     "viewPlans": "Посмотреть тарифы",
     "upgradeTitle": "Перейдите на Pro",
-    "upgradeDescription": "Безлимитные транскрипции, транскрипция в реальном времени и многое другое.",
+    "upgradeDescription": "Безлимитная, более точная и быстрая транскрипция.",
+    "upgradeInstantSetup": "Мгновенная настройка",
+    "upgradeZeroRetention": "Нулевое хранение данных",
+    "upgradeEnterpriseSecurity": "Корпоративная безопасность SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "Узнать больше",
     "integrations": "Интеграции",
     "defaultUser": "Пользователь",
@@ -3474,20 +3483,21 @@
     "tomorrow": "Завтра"
   },
   "upcoming": {
-    "title": "Предстоящие встречи",
+    "title": "Скоро",
     "transcriptions": "Транскрипции",
-    "tomorrow": "Завтра",
-    "noMoreMeetings": "Больше встреч сегодня нет",
     "now": "Сейчас",
-    "join": "Присоединиться",
     "untitledEvent": "Без названия",
+    "joinAndTakeNotes": "Присоединиться и вести заметки",
+    "takeNotes": "Вести заметки",
+    "noEventsToday": "Сегодня событий нет",
+    "noUpcomingEvents": "Нет предстоящих событий",
+    "moreCalendarsHint": "Нужны другие календари?",
+    "connectHere": "Подключите их здесь",
+    "openMeetingLink": "Открыть ссылку на встречу",
     "systemAudioRequired": "Разрешение «Системное аудио» необходимо для записи звука других участников.",
     "openSettings": "Открыть Системные настройки",
-    "signInRequired": "Войдите, чтобы записывать встречи",
-    "signInDescription": "Создайте аккаунт или войдите для записи и транскрипции встреч.",
     "connectCalendar": "Подключите календарь",
-    "connectCalendarDescription": "Свяжите Google Календарь, чтобы видеть предстоящие встречи и автоматически записывать заметки.",
-    "notABot": "OpenWhispr записывает через системный звук — он никогда не присоединяется к встречам как бот.",
+    "connectCalendarDescription": "Просматривайте встречи и присоединяйтесь к ним, не выходя из OpenWhispr.",
     "connectCalendarButton": "Подключить календарь"
   },
   "notesView": {

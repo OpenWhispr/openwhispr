@@ -767,7 +767,9 @@
     },
     "parakeet": {
       "multilingual": "25 种语言",
-      "english": "英语"
+      "english": "英语",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "不可用"
     },
     "apiKeyOptional": "API Key（可选）",
     "getKey": "获取密钥 ->",
@@ -2066,6 +2068,10 @@
         "noteFormatting": "笔记格式化",
         "chatIntelligence": "聊天",
         "dictationTranslation": "翻译"
+      },
+      "requestTimeout": {
+        "label": "请求超时时间(秒)",
+        "description": "放弃前等待响应的时长。自托管或本地模型可能需要超过默认的 30 秒,尤其是处理较长的笔记时。"
       }
     },
     "noteFormatting": {
@@ -3094,7 +3100,10 @@
     "limitReachedDescription": "升级到 Pro 即可无限转录。",
     "viewPlans": "查看套餐",
     "upgradeTitle": "升级到 Pro",
-    "upgradeDescription": "无限转录、实时转录等更多功能。",
+    "upgradeDescription": "无限量、更准确、更快速的转录。",
+    "upgradeInstantSetup": "即时设置",
+    "upgradeZeroRetention": "零数据保留",
+    "upgradeEnterpriseSecurity": "企业级安全 SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "了解更多",
     "integrations": "集成",
     "defaultUser": "用户",
@@ -3448,20 +3457,21 @@
     "tomorrow": "明天"
   },
   "upcoming": {
-    "title": "即将开始的会议",
+    "title": "即将开始",
     "transcriptions": "转录",
-    "tomorrow": "明天",
-    "noMoreMeetings": "今天没有更多会议了",
     "now": "进行中",
-    "join": "加入",
     "untitledEvent": "无标题事件",
+    "joinAndTakeNotes": "加入并记笔记",
+    "takeNotes": "记笔记",
+    "noEventsToday": "今天没有日程",
+    "noUpcomingEvents": "暂无即将开始的日程",
+    "moreCalendarsHint": "想连接更多日历？",
+    "connectHere": "在这里连接",
+    "openMeetingLink": "打开会议链接",
     "systemAudioRequired": "需要系统音频权限来录制其他参与者的音频。",
     "openSettings": "打开系统设置",
-    "signInRequired": "登录以使用会议录制",
-    "signInDescription": "创建账户或登录以录制和转录会议。",
     "connectCalendar": "连接您的日历",
-    "connectCalendarDescription": "关联 Google 日历以查看即将到来的会议并自动记录笔记。",
-    "notABot": "OpenWhispr 通过系统音频录制 — 它不会以机器人身份加入您的会议。",
+    "connectCalendarDescription": "无需离开 OpenWhispr 即可查看并加入您的会议。",
     "connectCalendarButton": "连接日历"
   },
   "notesView": {

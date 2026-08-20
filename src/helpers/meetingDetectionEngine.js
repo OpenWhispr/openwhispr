@@ -492,6 +492,20 @@ class MeetingDetectionEngine {
 
         const eventSummary = detection.event?.summary || "New note";
 
+        const isRealEvent =
+          detection.event?.calendar_id &&
+          detection.event.calendar_id !== "__detected__" &&
+          detection.event.calendar_id !== "__manual__";
+
+        if (
+          isRealEvent &&
+          (await this._resumeExistingEventNote(detection.event, "calendar-join"))
+        ) {
+          this._meetingModeActive = true;
+          this.audioActivityDetector.resetPrompt();
+          return;
+        }
+
         const noteResult = this.databaseManager.saveNote(eventSummary, "", "meeting");
         const meetingsFolder = this.databaseManager.getMeetingsFolder();
 
@@ -507,11 +521,6 @@ class MeetingDetectionEngine {
         this._meetingModeActive = true;
 
         broadcastToWindows("note-added", noteResult.note);
-
-        const isRealEvent =
-          detection.event?.calendar_id &&
-          detection.event.calendar_id !== "__detected__" &&
-          detection.event.calendar_id !== "__manual__";
 
         if (isRealEvent) {
           const calEvent = this.databaseManager.getCalendarEventById(detection.event.id);
@@ -588,6 +597,24 @@ class MeetingDetectionEngine {
     });
   }
 
+  /** Navigates to the note already linked to a calendar event, if any. */
+  async _resumeExistingEventNote(event, trigger) {
+    const existingNote = this.databaseManager.getNoteByCalendarEventId(event.id);
+    if (!existingNote?.id) return false;
+    debugLogger.info(
+      "Reusing existing note for calendar meeting",
+      { eventId: event.id, noteId: existingNote.id, trigger },
+      "meeting"
+    );
+    await this.windowManager.queueMeetingNoteNavigation({
+      noteId: existingNote.id,
+      folderId: existingNote.folder_id ?? this.databaseManager.getMeetingsFolder()?.id,
+      event,
+      trigger,
+    });
+    return true;
+  }
+
   async joinCalendarMeeting(eventId, trigger = "calendar-join") {
     this._meetingModeActive = true;
     debugLogger.info("Joining calendar meeting", { eventId, trigger }, "meeting");
@@ -596,6 +623,11 @@ class MeetingDetectionEngine {
     if (!calEvent) {
       debugLogger.error("Calendar event not found", { eventId }, "meeting");
       this._meetingModeActive = false;
+      return;
+    }
+
+    // Joining the same event twice resumes its note instead of creating a duplicate.
+    if (await this._resumeExistingEventNote(calEvent, trigger)) {
       return;
     }
 

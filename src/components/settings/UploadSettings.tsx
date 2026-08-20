@@ -87,8 +87,11 @@ export function UploadTranscriptionPanel() {
   };
 
   const handleLocalTranscriptionModelSelect = useCallback(
-    (modelId: string) => {
-      if (uploadLocalTranscriptionProvider === "nvidia") {
+    (modelId: string, providerId?: string) => {
+      if (
+        providerId === "nvidia" ||
+        (!providerId && uploadLocalTranscriptionProvider === "nvidia")
+      ) {
         setUploadParakeetModel(modelId);
       } else {
         setUploadWhisperModel(modelId);

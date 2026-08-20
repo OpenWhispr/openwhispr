@@ -767,7 +767,9 @@
     },
     "parakeet": {
       "multilingual": "25 idiomas",
-      "english": "Inglés"
+      "english": "Inglés",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "No disponible"
     },
     "apiKeyOptional": "Clave API (opcional)",
     "getKey": "Obtener clave ->",
@@ -2114,6 +2116,10 @@
         "noteFormatting": "Formato de notas",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Traducción"
+      },
+      "requestTimeout": {
+        "label": "Tiempo de espera de la solicitud (segundos)",
+        "description": "Cuánto tiempo esperar una respuesta antes de desistir. Los modelos autoalojados o locales pueden necesitar más de los 30 s predeterminados, sobre todo con notas largas."
       }
     },
     "noteFormatting": {
@@ -3142,7 +3148,10 @@
     "limitReachedDescription": "Mejora a Pro para transcripciones ilimitadas.",
     "viewPlans": "Ver planes",
     "upgradeTitle": "Mejorar a Pro",
-    "upgradeDescription": "Transcripciones ilimitadas y más.",
+    "upgradeDescription": "Transcripción ilimitada, más precisa y más rápida.",
+    "upgradeInstantSetup": "Configuración instantánea",
+    "upgradeZeroRetention": "Cero retención de datos",
+    "upgradeEnterpriseSecurity": "Seguridad empresarial SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "Más información",
     "integrations": "Integraciones",
     "defaultUser": "Usuario",
@@ -3496,20 +3505,21 @@
     "tomorrow": "Mañana"
   },
   "upcoming": {
-    "title": "Próximas reuniones",
+    "title": "Próximamente",
     "transcriptions": "Transcripciones",
-    "tomorrow": "Mañana",
-    "noMoreMeetings": "No hay más reuniones hoy",
     "now": "Ahora",
-    "join": "Unirse",
     "untitledEvent": "Evento sin título",
+    "joinAndTakeNotes": "Unirse y tomar notas",
+    "takeNotes": "Tomar notas",
+    "noEventsToday": "Hoy no hay eventos",
+    "noUpcomingEvents": "No hay próximos eventos",
+    "moreCalendarsHint": "¿Quieres añadir más calendarios?",
+    "connectHere": "Conéctalos aquí",
+    "openMeetingLink": "Abrir enlace de la reunión",
     "systemAudioRequired": "Se necesita el permiso de Audio del Sistema para capturar el audio de otros participantes.",
     "openSettings": "Abrir Ajustes del Sistema",
-    "signInRequired": "Inicia sesión para usar la grabación de reuniones",
-    "signInDescription": "Crea una cuenta o inicia sesión para grabar y transcribir reuniones.",
     "connectCalendar": "Conecta tu calendario",
-    "connectCalendarDescription": "Vincula tu Google Calendar para ver próximas reuniones y grabar notas automáticamente.",
-    "notABot": "OpenWhispr graba usando el audio de tu sistema — nunca se une a las reuniones como un bot.",
+    "connectCalendarDescription": "Ve tus reuniones y únete a ellas sin salir de OpenWhispr.",
     "connectCalendarButton": "Conectar calendario"
   },
   "notesView": {

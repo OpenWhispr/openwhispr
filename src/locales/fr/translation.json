@@ -767,7 +767,9 @@
     },
     "parakeet": {
       "multilingual": "25 langues",
-      "english": "Anglais"
+      "english": "Anglais",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "Indisponible"
     },
     "apiKeyOptional": "Clé API (optionnelle)",
     "getKey": "Obtenir la clé ->",
@@ -1075,20 +1077,21 @@
     "tomorrow": "Demain"
   },
   "upcoming": {
-    "title": "Réunions à venir",
+    "title": "À venir",
     "transcriptions": "Transcriptions",
-    "tomorrow": "Demain",
-    "noMoreMeetings": "Plus de réunions aujourd'hui",
     "now": "En cours",
-    "join": "Rejoindre",
     "untitledEvent": "Événement sans titre",
+    "joinAndTakeNotes": "Rejoindre et noter",
+    "takeNotes": "Prendre des notes",
+    "noEventsToday": "Aucun événement aujourd'hui",
+    "noUpcomingEvents": "Aucun événement à venir",
+    "moreCalendarsHint": "Vous voulez d'autres calendriers ?",
+    "connectHere": "Connectez-les ici",
+    "openMeetingLink": "Ouvrir le lien de la réunion",
     "systemAudioRequired": "L'autorisation Audio Système est nécessaire pour capturer l'audio des autres participants.",
     "openSettings": "Ouvrir les Réglages Système",
-    "signInRequired": "Connectez-vous pour utiliser l'enregistrement de réunions",
-    "signInDescription": "Créez un compte ou connectez-vous pour enregistrer et transcrire vos réunions.",
     "connectCalendar": "Connectez votre calendrier",
-    "connectCalendarDescription": "Associez votre Google Calendar pour voir vos prochaines réunions et enregistrer des notes automatiquement.",
-    "notABot": "OpenWhispr enregistre via l'audio de votre système — il ne rejoint jamais vos réunions en tant que bot.",
+    "connectCalendarDescription": "Consultez vos réunions et rejoignez-les sans quitter OpenWhispr.",
     "connectCalendarButton": "Connecter le calendrier"
   },
   "cleanupPrompt": "Correction",
@@ -2349,6 +2352,10 @@
         "noteFormatting": "Mise en forme des notes",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Traduction"
+      },
+      "requestTimeout": {
+        "label": "Délai d'expiration de la requête (secondes)",
+        "description": "Durée d'attente d'une réponse avant abandon. Les modèles auto-hébergés ou locaux peuvent nécessiter plus que les 30 s par défaut, surtout pour les notes longues."
       }
     },
     "noteFormatting": {
@@ -2601,7 +2608,10 @@
     "limitReachedDescription": "Passez à Pro pour des transcriptions illimitées.",
     "viewPlans": "Voir les forfaits",
     "upgradeTitle": "Passer à Pro",
-    "upgradeDescription": "Transcriptions illimitées et fonctionnalités premium.",
+    "upgradeDescription": "Transcription illimitée, plus précise et plus rapide.",
+    "upgradeInstantSetup": "Configuration instantanée",
+    "upgradeZeroRetention": "Zéro conservation des données",
+    "upgradeEnterpriseSecurity": "Sécurité entreprise SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "En savoir plus",
     "integrations": "Intégrations",
     "defaultUser": "Utilisateur",

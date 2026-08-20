@@ -6,6 +6,8 @@ import TaskItem from "@tiptap/extension-task-item";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "tiptap-markdown";
 import { cn } from "../lib/utils";
+import { createMentionExtension } from "./RichTextEditorMention";
+import type { MentionPerson } from "../../utils/mentionMarkdown";
 
 interface RichTextEditorProps {
   value: string;
@@ -14,6 +16,8 @@ interface RichTextEditorProps {
   className?: string;
   disabled?: boolean;
   editorRef?: MutableRefObject<Editor | null>;
+  /** Enables @mention tagging with these people as suggestions. */
+  mentionPeople?: MentionPerson[];
 }
 
 export function RichTextEditor({
@@ -23,12 +27,22 @@ export function RichTextEditor({
   className,
   disabled,
   editorRef,
+  mentionPeople,
 }: RichTextEditorProps) {
   const internalValueRef = useRef(value);
   const suppressUpdateRef = useRef(false);
 
+  // Mention support is decided at mount; the ref keeps suggestions current
+  // without rebuilding the editor when the people list changes.
+  const mentionPeopleRef = useRef(mentionPeople);
+  useEffect(() => {
+    mentionPeopleRef.current = mentionPeople;
+  }, [mentionPeople]);
+  const withMentions = useRef(mentionPeople != null).current;
+
   const editor = useEditor({
     extensions: [
+      ...(withMentions ? [createMentionExtension(() => mentionPeopleRef.current ?? [])] : []),
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         bulletList: { keepMarks: true },

@@ -767,7 +767,9 @@
     },
     "parakeet": {
       "multilingual": "25 言語対応",
-      "english": "英語"
+      "english": "英語",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "利用不可"
     },
     "apiKeyOptional": "API キー（任意）",
     "getKey": "キーを取得 ->",
@@ -2066,6 +2068,10 @@
         "noteFormatting": "ノートのフォーマット",
         "chatIntelligence": "チャット",
         "dictationTranslation": "翻訳"
+      },
+      "requestTimeout": {
+        "label": "リクエストのタイムアウト(秒)",
+        "description": "応答を待つ時間の上限です。セルフホストやローカルモデルでは、特に長いノートの場合、デフォルトの30秒より長い時間が必要になることがあります。"
       }
     },
     "noteFormatting": {
@@ -3094,7 +3100,10 @@
     "limitReachedDescription": "Pro にアップグレードして無制限の文字起こしをご利用ください。",
     "viewPlans": "プランを見る",
     "upgradeTitle": "Pro にアップグレード",
-    "upgradeDescription": "無制限の文字起こしと最新の AI モデルをご利用いただけます。",
+    "upgradeDescription": "無制限・高精度・高速の文字起こし。",
+    "upgradeInstantSetup": "すぐに使える",
+    "upgradeZeroRetention": "データ保持ゼロ",
+    "upgradeEnterpriseSecurity": "エンタープライズセキュリティ SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "詳しく見る",
     "integrations": "連携",
     "defaultUser": "ユーザー",
@@ -3448,20 +3457,21 @@
     "tomorrow": "明日"
   },
   "upcoming": {
-    "title": "今後の会議",
+    "title": "今後の予定",
     "transcriptions": "文字起こし",
-    "tomorrow": "明日",
-    "noMoreMeetings": "今日の予定はありません",
     "now": "進行中",
-    "join": "参加",
     "untitledEvent": "無題のイベント",
+    "joinAndTakeNotes": "参加してメモを取る",
+    "takeNotes": "メモを取る",
+    "noEventsToday": "今日の予定はありません",
+    "noUpcomingEvents": "今後の予定はありません",
+    "moreCalendarsHint": "他のカレンダーも連携しますか？",
+    "connectHere": "ここから連携",
+    "openMeetingLink": "会議リンクを開く",
     "systemAudioRequired": "他の参加者の音声を録音するには、システムオーディオの権限が必要です。",
     "openSettings": "システム設定を開く",
-    "signInRequired": "会議録音を使用するにはログインしてください",
-    "signInDescription": "アカウントを作成またはログインして、会議を録音・文字起こしできます。",
     "connectCalendar": "カレンダーを接続",
-    "connectCalendarDescription": "Google カレンダーを連携して、今後のミーティングを確認し、自動的にノートを記録します。",
-    "notABot": "OpenWhispr はシステムオーディオで録音します — ボットとしてミーティングに参加することはありません。",
+    "connectCalendarDescription": "OpenWhispr を離れずに会議を確認して参加できます。",
     "connectCalendarButton": "カレンダーを接続"
   },
   "notesView": {

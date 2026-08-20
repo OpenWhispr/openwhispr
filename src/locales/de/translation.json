@@ -767,7 +767,9 @@
     },
     "parakeet": {
       "multilingual": "25 Sprachen",
-      "english": "Englisch"
+      "english": "Englisch",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "Nicht verfügbar"
     },
     "apiKeyOptional": "API-Schlüssel (optional)",
     "getKey": "Schlüssel holen ->",
@@ -1075,20 +1077,21 @@
     "tomorrow": "Morgen"
   },
   "upcoming": {
-    "title": "Anstehende Meetings",
+    "title": "Demnächst",
     "transcriptions": "Transkriptionen",
-    "tomorrow": "Morgen",
-    "noMoreMeetings": "Keine weiteren Meetings heute",
     "now": "Jetzt",
-    "join": "Beitreten",
     "untitledEvent": "Unbenanntes Ereignis",
+    "joinAndTakeNotes": "Beitreten & Notizen",
+    "takeNotes": "Notizen machen",
+    "noEventsToday": "Heute keine Termine",
+    "noUpcomingEvents": "Keine anstehenden Termine",
+    "moreCalendarsHint": "Weitere Kalender gewünscht?",
+    "connectHere": "Hier verbinden",
+    "openMeetingLink": "Meeting-Link öffnen",
     "systemAudioRequired": "Die Systemaudio-Berechtigung wird benötigt, um den Ton anderer Teilnehmer aufzunehmen.",
     "openSettings": "Systemeinstellungen öffnen",
-    "signInRequired": "Melden Sie sich an, um Meeting-Aufnahmen zu nutzen",
-    "signInDescription": "Erstellen Sie ein Konto oder melden Sie sich an, um Meetings aufzunehmen und zu transkribieren.",
     "connectCalendar": "Kalender verbinden",
-    "connectCalendarDescription": "Verknüpfe deinen Google Kalender, um anstehende Meetings zu sehen und automatisch Notizen aufzuzeichnen.",
-    "notABot": "OpenWhispr nimmt über dein Systemaudio auf — es tritt niemals als Bot deinen Meetings bei.",
+    "connectCalendarDescription": "Sieh deine Meetings und tritt ihnen bei, ohne OpenWhispr zu verlassen.",
     "connectCalendarButton": "Kalender verbinden"
   },
   "cleanupPrompt": "Textbereinigung",
@@ -2349,6 +2352,10 @@
         "noteFormatting": "Notizformatierung",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Übersetzung"
+      },
+      "requestTimeout": {
+        "label": "Zeitlimit für Anfragen (Sekunden)",
+        "description": "Wie lange auf eine Antwort gewartet wird, bevor abgebrochen wird. Selbst gehostete oder lokale Modelle benötigen oft mehr als die Standardeinstellung von 30 s, besonders bei langen Notizen."
       }
     },
     "noteFormatting": {
@@ -2601,7 +2608,10 @@
     "limitReachedDescription": "Upgraden Sie auf Pro für unbegrenzte Transkriptionen.",
     "viewPlans": "Tarife ansehen",
     "upgradeTitle": "Auf Pro upgraden",
-    "upgradeDescription": "Unbegrenzte Transkriptionen und mehr.",
+    "upgradeDescription": "Unbegrenzte, genauere und schnellere Transkription.",
+    "upgradeInstantSetup": "Sofort einsatzbereit",
+    "upgradeZeroRetention": "Keine Datenaufbewahrung",
+    "upgradeEnterpriseSecurity": "Enterprise-Sicherheit SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "Mehr erfahren",
     "integrations": "Integrationen",
     "defaultUser": "Benutzer",

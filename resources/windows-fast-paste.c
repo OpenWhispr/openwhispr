@@ -10,6 +10,13 @@
  *   1. Window class name (fast, works for native terminals)
  *   2. Executable name (fallback, catches Electron-based terminals like Termius)
  *
+ * Focus restore (issue #859): the caller captures the target window handle at
+ * record start (the hex "TARGET %p" line that --detect-only prints), then
+ * passes it back as --restore-window <hwnd> at paste time. We re-activate that
+ * window before sending the keystroke so dictation lands in the field the user
+ * was in, even when something stole the foreground during transcription. This
+ * mirrors the macOS PID capture/activate path and the Linux --window path.
+ *
  * Compile with: cl /O2 windows-fast-paste.c /Fe:windows-fast-paste.exe user32.lib
  * Or with MinGW: gcc -O2 windows-fast-paste.c -o windows-fast-paste.exe -luser32
  */
@@ -17,6 +24,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
 static const char* TERMINAL_CLASSES[] = {
@@ -144,6 +153,45 @@ static int SendPasteNormal(void) {
     return (sent == 4) ? 0 : 1;
 }
 
+/* Bring a captured target window back to the foreground before pasting.
+   SetForegroundWindow alone is blocked by Windows' foreground lock when the
+   calling process isn't the current foreground owner, so we attach this
+   thread's input queue to both the current foreground thread and the target
+   thread first — the standard workaround, and what nircmd's "win activate"
+   does internally. Returns TRUE if the target ended up foreground. */
+static BOOL RestoreForegroundWindow(HWND target) {
+    if (!target || !IsWindow(target)) return FALSE;
+
+    if (GetForegroundWindow() == target) return TRUE;
+
+    if (IsIconic(target)) {
+        ShowWindow(target, SW_RESTORE);
+    }
+
+    HWND fg = GetForegroundWindow();
+    DWORD thisThread = GetCurrentThreadId();
+    DWORD targetThread = GetWindowThreadProcessId(target, NULL);
+    DWORD fgThread = fg ? GetWindowThreadProcessId(fg, NULL) : 0;
+
+    BOOL attachedTarget = FALSE;
+    BOOL attachedFg = FALSE;
+    if (targetThread && targetThread != thisThread) {
+        attachedTarget = AttachThreadInput(thisThread, targetThread, TRUE);
+    }
+    if (fgThread && fgThread != thisThread && fgThread != targetThread) {
+        attachedFg = AttachThreadInput(thisThread, fgThread, TRUE);
+    }
+
+    BringWindowToTop(target);
+    BOOL ok = SetForegroundWindow(target);
+    SetFocus(target);
+
+    if (attachedFg) AttachThreadInput(thisThread, fgThread, FALSE);
+    if (attachedTarget) AttachThreadInput(thisThread, targetThread, FALSE);
+
+    return ok && GetForegroundWindow() == target;
+}
+
 static int SendPasteTerminal(void) {
     INPUT inputs[6];
     ZeroMemory(inputs, sizeof(inputs));
@@ -189,6 +237,7 @@ int main(int argc, char* argv[]) {
     BOOL detectOnly = FALSE;
     BOOL copyMode = FALSE;
     BOOL capabilitiesOnly = FALSE;
+    HWND restoreWindow = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--detect-only") == 0) {
@@ -197,12 +246,26 @@ int main(int argc, char* argv[]) {
             copyMode = TRUE;
         } else if (strcmp(argv[i], "--capabilities") == 0) {
             capabilitiesOnly = TRUE;
+        } else if (strcmp(argv[i], "--restore-window") == 0 && i + 1 < argc) {
+            /* Base 16: the handle comes back exactly as --detect-only printed
+               it with "TARGET %p" (hex, with or without an 0x prefix). */
+            restoreWindow = (HWND)(uintptr_t)strtoull(argv[++i], NULL, 16);
         }
     }
 
     if (capabilitiesOnly) {
-        printf("paste-v1 selection-copy-v1 target-identity-v1\n");
+        printf("paste-v1 selection-copy-v1 target-identity-v1 focus-restore-v1\n");
         return 0;
+    }
+
+    /* Restore the captured target to the foreground before pasting. If it is
+       gone or can't be restored we fall through to whatever is foreground now,
+       which is the pre-#859 behavior. The settle sleep only applies when a
+       window switch actually happened — in the common case where the target
+       never lost the foreground, the paste goes out immediately. */
+    if (restoreWindow && GetForegroundWindow() != restoreWindow &&
+        RestoreForegroundWindow(restoreWindow)) {
+        Sleep(20);
     }
 
     HWND hwnd = GetForegroundWindow();

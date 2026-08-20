@@ -242,6 +242,64 @@ test("finish is idempotent and returns the same result", async () => {
   }
 });
 
+test("offline transcription rejects with AbortError when cancelled mid-flight", async () => {
+  const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
+  await once(wss, "listening");
+  const controller = new AbortController();
+  // The server holds the request open; only the abort can settle it.
+  wss.on("connection", () => controller.abort());
+
+  try {
+    const server = onlineWsServerAt(wss.address().port);
+    server.modelRuntime = "offline";
+    await assert.rejects(
+      () => server.transcribe(Buffer.alloc(3200), 16000, { signal: controller.signal }),
+      (err) => {
+        assert.equal(err.name, "AbortError");
+        return true;
+      }
+    );
+  } finally {
+    await new Promise((resolve) => wss.close(resolve));
+  }
+});
+
+test("offline transcription rejects immediately on a pre-aborted signal", async () => {
+  const controller = new AbortController();
+  controller.abort();
+
+  const server = onlineWsServerAt(1);
+  server.modelRuntime = "offline";
+  await assert.rejects(
+    () => server.transcribe(Buffer.alloc(3200), 16000, { signal: controller.signal }),
+    (err) => {
+      assert.equal(err.name, "AbortError");
+      return true;
+    }
+  );
+});
+
+test("online transcription rejects with AbortError when cancelled mid-flight", async () => {
+  // The server never acknowledges Done, so only the abort settles the stream.
+  const mock = await startMockOnlineServer({});
+  mock.ignoreDone();
+
+  try {
+    const server = onlineWsServerAt(mock.port);
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 20);
+    await assert.rejects(
+      () => server.transcribe(Buffer.alloc(3200), 16000, { signal: controller.signal }),
+      (err) => {
+        assert.equal(err.name, "AbortError");
+        return true;
+      }
+    );
+  } finally {
+    await mock.close();
+  }
+});
+
 test("offline transcription rejects when the connection closes without a result", async () => {
   const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
   await once(wss, "listening");

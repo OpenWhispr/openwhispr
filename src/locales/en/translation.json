@@ -767,7 +767,9 @@
     },
     "parakeet": {
       "multilingual": "25 languages",
-      "english": "English"
+      "english": "English",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "Unavailable"
     },
     "apiKeyOptional": "API Key (Optional)",
     "getKey": "Get key ->",
@@ -1075,20 +1077,21 @@
     "tomorrow": "Tomorrow"
   },
   "upcoming": {
-    "title": "Upcoming Meetings",
+    "title": "Coming up",
     "transcriptions": "Transcriptions",
-    "tomorrow": "Tomorrow",
-    "noMoreMeetings": "No more meetings today",
     "now": "Now",
-    "join": "Join",
     "untitledEvent": "Untitled Event",
+    "joinAndTakeNotes": "Join & take notes",
+    "takeNotes": "Take notes",
+    "noEventsToday": "No events today",
+    "noUpcomingEvents": "No upcoming events",
+    "moreCalendarsHint": "Want additional calendars?",
+    "connectHere": "Connect them here",
+    "openMeetingLink": "Open meeting link",
     "systemAudioRequired": "System Audio permission is needed to capture other participants' audio.",
     "openSettings": "Open System Settings",
-    "signInRequired": "Sign in to use meeting recording",
-    "signInDescription": "Create an account or sign in to record and transcribe meetings.",
     "connectCalendar": "Connect your calendar",
-    "connectCalendarDescription": "Link your Google Calendar to see upcoming meetings and automatically record notes.",
-    "notABot": "OpenWhispr records using your system audio — it never joins meetings as a bot.",
+    "connectCalendarDescription": "See your meetings and join them without leaving OpenWhispr.",
     "connectCalendarButton": "Connect Calendar"
   },
   "cleanupPrompt": "Cleanup",
@@ -2349,6 +2352,10 @@
         "noteFormatting": "Note Formatting",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Translation"
+      },
+      "requestTimeout": {
+        "label": "Request timeout (seconds)",
+        "description": "How long to wait for a response before giving up. Self-hosted or local models may need more than the default 30s, especially for long notes."
       }
     },
     "noteFormatting": {
@@ -2601,8 +2608,11 @@
     "limitReachedDescription": "Upgrade to Pro for unlimited transcriptions.",
     "viewPlans": "View Plans",
     "upgradeTitle": "Upgrade to Pro",
-    "upgradeDescription": "Unlimited transcriptions and premium features.",
-    "learnMore": "Learn more",
+    "upgradeDescription": "Unlimited, more accurate, faster transcription.",
+    "upgradeInstantSetup": "Instant setup",
+    "upgradeZeroRetention": "Zero data retention",
+    "upgradeEnterpriseSecurity": "Enterprise security SOC 2 Type II, HIPAA, ISO27001",
+    "learnMore": "Learn More",
     "integrations": "Integrations",
     "defaultUser": "User",
     "notSignedIn": "Not signed in",
