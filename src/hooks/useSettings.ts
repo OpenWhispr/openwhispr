@@ -346,6 +346,8 @@ function useSettingsInternal() {
     setNotifyCalendarReminders: store.setNotifyCalendarReminders,
     notifyUpdates: store.notifyUpdates,
     setNotifyUpdates: store.setNotifyUpdates,
+    autoUpdates: store.autoUpdates,
+    setAutoUpdates: store.setAutoUpdates,
     audioCuesEnabled: store.audioCuesEnabled,
     setAudioCuesEnabled: store.setAudioCuesEnabled,
     pauseMediaOnDictation: store.pauseMediaOnDictation,

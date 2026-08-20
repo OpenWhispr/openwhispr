@@ -281,6 +281,7 @@ const BOOLEAN_SETTINGS = new Set([
   "notifyMeetingDetection",
   "notifyCalendarReminders",
   "notifyUpdates",
+  "autoUpdates",
   "gcalPrimaryOnly",
   "mcalPrimaryOnly",
   "appleCalendarConnected",
@@ -608,6 +609,7 @@ export interface SettingsState
   notifyMeetingDetection: boolean;
   notifyCalendarReminders: boolean;
   notifyUpdates: boolean;
+  autoUpdates: boolean;
   gcalPrimaryOnly: boolean;
   mcalPrimaryOnly: boolean;
   appleCalendarConnected: boolean;
@@ -912,6 +914,7 @@ export interface SettingsState
   setNotifyMeetingDetection: (value: boolean) => void;
   setNotifyCalendarReminders: (value: boolean) => void;
   setNotifyUpdates: (value: boolean) => void;
+  setAutoUpdates: (value: boolean) => void;
   setGcalPrimaryOnly: (value: boolean) => void;
   setMcalPrimaryOnly: (value: boolean) => void;
   setAppleCalendarConnected: (value: boolean) => void;
@@ -1311,6 +1314,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   notifyMeetingDetection: readBoolean("notifyMeetingDetection", true),
   notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
   notifyUpdates: readBoolean("notifyUpdates", true),
+  autoUpdates: readBoolean("autoUpdates", true),
   ...(() => {
     let accounts: CalendarAccount[] = [];
     try {
@@ -2091,6 +2095,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setNotifyMeetingDetection: createBooleanSetter("notifyMeetingDetection"),
   setNotifyCalendarReminders: createBooleanSetter("notifyCalendarReminders"),
   setNotifyUpdates: createBooleanSetter("notifyUpdates"),
+  setAutoUpdates: createBooleanSetter("autoUpdates"),
   setGcalPrimaryOnly: (value: boolean) => {
     if (isBrowser) localStorage.setItem("gcalPrimaryOnly", String(value));
     useSettingsStore.setState({ gcalPrimaryOnly: value });
@@ -3193,6 +3198,7 @@ export async function initializeSettings(): Promise<void> {
         notifyMeetingDetection: currentState.notifyMeetingDetection,
         notifyCalendarReminders: currentState.notifyCalendarReminders,
         notifyUpdates: currentState.notifyUpdates,
+        autoUpdates: currentState.autoUpdates,
       });
     } catch (err) {
       logger.warn(

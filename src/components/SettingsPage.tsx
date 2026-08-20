@@ -884,6 +884,8 @@ export default function SettingsPage({
     setNotifyCalendarReminders,
     notifyUpdates,
     setNotifyUpdates,
+    autoUpdates,
+    setAutoUpdates,
     audioCuesEnabled,
     setAudioCuesEnabled,
     pauseMediaOnDictation,
@@ -1264,8 +1266,15 @@ export default function SettingsPage({
       notifyMeetingDetection,
       notifyCalendarReminders,
       notifyUpdates,
+      autoUpdates,
     });
-  }, [notificationsEnabled, notifyMeetingDetection, notifyCalendarReminders, notifyUpdates]);
+  }, [
+    notificationsEnabled,
+    notifyMeetingDetection,
+    notifyCalendarReminders,
+    notifyUpdates,
+    autoUpdates,
+  ]);
 
   const handleAutoStartChange = async (enabled: boolean) => {
     if (!window.electronAPI?.setAutoStartEnabled) return;
@@ -4035,6 +4044,15 @@ EOF`,
                 </SettingsPanelRow>
 
                 <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.updates.autoUpdates")}
+                    description={t("settingsPage.general.updates.autoUpdatesDescription")}
+                  >
+                    <Toggle checked={autoUpdates} onChange={setAutoUpdates} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+
+                <SettingsPanelRow>
                   <div className="space-y-2.5">
                     <Button
                       onClick={async () => {
@@ -4064,7 +4082,7 @@ EOF`,
                         : t("settingsPage.general.updates.checkForUpdates")}
                     </Button>
 
-                    {isUpdateAvailable && !updateStatus.updateDownloaded && (
+                    {isUpdateAvailable && !updateStatus.updateDownloaded && !autoUpdates && (
                       <div className="space-y-2">
                         <Button
                           onClick={async () => {

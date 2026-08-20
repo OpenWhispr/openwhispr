@@ -176,9 +176,9 @@ test("offline with App updates off, no update-error reaches the renderers (#1605
 
 test("the update-available popup honors the same App updates gate", () => {
   const cases = [
-    { prefs: { notificationsEnabled: true, notifyUpdates: true }, shown: 1 },
-    { prefs: { notificationsEnabled: true, notifyUpdates: false }, shown: 0 },
-    { prefs: { notificationsEnabled: false, notifyUpdates: true }, shown: 0 },
+    { prefs: { notificationsEnabled: true, notifyUpdates: true, autoUpdates: false }, shown: 1 },
+    { prefs: { notificationsEnabled: true, notifyUpdates: false, autoUpdates: false }, shown: 0 },
+    { prefs: { notificationsEnabled: false, notifyUpdates: true, autoUpdates: false }, shown: 0 },
   ];
 
   for (const { prefs, shown } of cases) {

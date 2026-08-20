@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 interface UpdateNotificationData {
   version: string;
   releaseDate?: string;
+  mode?: "available" | "ready";
 }
 
 export default function UpdateNotificationOverlay() {
@@ -49,6 +50,8 @@ export default function UpdateNotificationOverlay() {
     [data]
   );
 
+  const isRestartReady = data?.mode === "ready";
+
   return (
     <div className="meeting-notification-window w-full h-full bg-transparent p-3">
       <div
@@ -92,18 +95,20 @@ export default function UpdateNotificationOverlay() {
 
           <div className="flex-1 min-w-0">
             <p className="text-[12px] font-semibold text-foreground leading-tight truncate">
-              {t("updateNotification.title")}
+              {t(isRestartReady ? "updateNotification.readyTitle" : "updateNotification.title")}
             </p>
             <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
-              {t("updateNotification.body", { version: data?.version ?? "" })}
+              {t(isRestartReady ? "updateNotification.readyBody" : "updateNotification.body", {
+                version: data?.version ?? "",
+              })}
             </p>
           </div>
 
           <button
-            onClick={() => respond("update")}
+            onClick={() => respond(isRestartReady ? "restart" : "update")}
             className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80 text-[11px] font-medium px-2.5 py-1 rounded-md transition-colors"
           >
-            {t("updateNotification.cta")}
+            {t(isRestartReady ? "updateNotification.restartCta" : "updateNotification.cta")}
           </button>
         </div>
       </div>
