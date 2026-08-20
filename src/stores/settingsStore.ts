@@ -191,6 +191,26 @@ function readStringArray(key: string, fallback: string[]): string[] {
   }
 }
 
+type MicrophoneSelectionMode = "system" | "built-in" | "specific";
+
+function migrateMicrophoneSelectionMode() {
+  if (!isBrowser) return;
+  const current = localStorage.getItem("microphoneSelectionMode");
+  if (current === "system" || current === "built-in" || current === "specific") return;
+
+  const selectedDeviceId = localStorage.getItem("selectedMicDeviceId") || "";
+  const legacyBuiltIn = localStorage.getItem("preferBuiltInMic");
+  const mode: MicrophoneSelectionMode =
+    legacyBuiltIn === "true"
+      ? "built-in"
+      : selectedDeviceId && selectedDeviceId !== "default"
+        ? "specific"
+        : "system";
+  localStorage.setItem("microphoneSelectionMode", mode);
+}
+
+migrateMicrophoneSelectionMode();
+
 // One-time migration for legacy `meetingFollows{Transcription,Reasoning}` flags.
 // When the flag was true (the default), meeting/note recordings inherited the
 // main dictation/intelligence settings. We've removed the toggle; copy the
@@ -894,6 +914,7 @@ export interface SettingsState
   setActivationMode: (mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
+  setMicrophoneSelectionMode: (mode: MicrophoneSelectionMode) => void;
   setSelectedMicDevice: (deviceId: string, label: string) => void;
   setMicWarmHoldSeconds: (seconds: number) => void;
 
@@ -1290,7 +1311,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     "tap" | "push",
 
-  preferBuiltInMic: readBoolean("preferBuiltInMic", true),
+  microphoneSelectionMode: (() => {
+    const mode = readString("microphoneSelectionMode", "system");
+    return (
+      mode === "built-in" || mode === "specific" ? mode : "system"
+    ) as MicrophoneSelectionMode;
+  })(),
+  preferBuiltInMic: readBoolean("preferBuiltInMic", false),
   selectedMicDeviceId: readString("selectedMicDeviceId", ""),
   selectedMicDeviceLabel: readString("selectedMicDeviceLabel", ""),
   micWarmHoldSeconds: snapMicWarmHold(readNumber("micWarmHoldSeconds", 0)),
@@ -2024,7 +2051,24 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
   },
 
-  setPreferBuiltInMic: createBooleanSetter("preferBuiltInMic"),
+  setPreferBuiltInMic: (value: boolean) => {
+    const mode: MicrophoneSelectionMode = value ? "built-in" : "system";
+    if (isBrowser) {
+      localStorage.setItem("preferBuiltInMic", String(value));
+      localStorage.setItem("microphoneSelectionMode", mode);
+    }
+    set({ preferBuiltInMic: value, microphoneSelectionMode: mode });
+  },
+  setMicrophoneSelectionMode: (mode: MicrophoneSelectionMode) => {
+    const normalized: MicrophoneSelectionMode =
+      mode === "built-in" || mode === "specific" ? mode : "system";
+    const preferBuiltInMic = normalized === "built-in";
+    if (isBrowser) {
+      localStorage.setItem("microphoneSelectionMode", normalized);
+      localStorage.setItem("preferBuiltInMic", String(preferBuiltInMic));
+    }
+    set({ microphoneSelectionMode: normalized, preferBuiltInMic });
+  },
   setSelectedMicDevice: (deviceId: string, label: string) => {
     if (isBrowser) {
       localStorage.setItem("selectedMicDeviceLabel", label);

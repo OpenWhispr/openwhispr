@@ -844,11 +844,11 @@ export default function SettingsPage({
     dictationKey,
     activationMode,
     setActivationMode,
-    preferBuiltInMic,
+    microphoneSelectionMode,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
     micWarmHoldSeconds,
-    setPreferBuiltInMic,
+    setMicrophoneSelectionMode,
     setSelectedMicDevice,
     setMicWarmHoldSeconds,
     setUseLocalWhisper,
@@ -2947,11 +2947,11 @@ export default function SettingsPage({
               <SettingsPanel>
                 <SettingsPanelRow>
                   <MicrophoneSettings
-                    preferBuiltInMic={preferBuiltInMic}
+                    microphoneSelectionMode={microphoneSelectionMode}
                     selectedMicDeviceId={selectedMicDeviceId}
                     selectedMicDeviceLabel={selectedMicDeviceLabel}
                     micWarmHoldSeconds={micWarmHoldSeconds}
-                    onPreferBuiltInChange={setPreferBuiltInMic}
+                    onSelectionModeChange={setMicrophoneSelectionMode}
                     onDeviceSelect={setSelectedMicDevice}
                     onMicWarmHoldSecondsChange={setMicWarmHoldSeconds}
                   />

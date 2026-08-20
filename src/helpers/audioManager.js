@@ -1,7 +1,6 @@
 import ReasoningService from "../services/ReasoningService";
 import { PROVIDER_REGISTRY } from "../services/ai/inferenceProviders";
 import logger from "../utils/logger";
-import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
@@ -26,7 +25,8 @@ import {
 } from "./preparedMicCapture";
 import { MicStreamHold } from "./micStreamHold";
 import { ActiveMicRecoveryController } from "./activeMicRecovery";
-import { followsSystemDefaultMic, reconcileSavedMicSelection } from "./micSelectionRecovery";
+import { followsSystemDefaultMic } from "./micSelectionRecovery";
+import { resolvePreferredMicrophone } from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import {
@@ -107,7 +107,8 @@ const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short record
 // Failure detector only: fires when the worklet or audio graph is dead and never flushes.
 const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
 
-const micDeviceKey = (settings) => `${settings.preferBuiltInMic}|${settings.selectedMicDeviceId}`;
+const micDeviceKey = (settings) =>
+  `${settings.microphoneSelectionMode}|${settings.selectedMicDeviceId}`;
 
 function getEffectiveRetentionPreferences() {
   const settings = getSettings();
@@ -432,6 +433,10 @@ class AudioManager {
       const deviceKey = micDeviceKey(state);
       if (deviceKey !== this._micDeviceKey) {
         this._micDeviceKey = deviceKey;
+        this.cachedMicDeviceId = null;
+        this.rejectedMicDeviceId = null;
+        this._micWarmedAt = 0;
+        this.cancelPreparedMicCapture();
         this.micStreamHold.drop();
       }
     });
@@ -446,7 +451,6 @@ class AudioManager {
     // Otherwise wake-after-idle keeps requesting a stale deviceId that yields silence.
     this._onDeviceChange = () => {
       this.cachedMicDeviceId = null;
-      this.validatedSelectedMicDeviceId = null;
       this._micWarmedAt = 0;
       this.rejectedMicDeviceId = null;
       this.cancelPreparedMicCapture();
@@ -467,7 +471,6 @@ class AudioManager {
     this.streamingTextBump = null;
     this.streamingTextDebounce = null;
     this.cachedMicDeviceId = null;
-    this.validatedSelectedMicDeviceId = null;
     this.rejectedMicDeviceId = null;
     this.persistentAudioContext = null;
     this.workletModuleLoaded = false;
@@ -500,9 +503,12 @@ class AudioManager {
     this._streamingMicSwapPromise = null;
     this.micRecovery = new ActiveMicRecoveryController({
       mediaDevices: navigator.mediaDevices,
-      acquire: async () => {
+      acquire: async (reason) => {
         try {
-          const constraints = await this.getAudioConstraints();
+          const constraints = await this.getAudioConstraints(
+            false,
+            reason === "devicechange" || reason === "devicechange-ended"
+          );
           return await navigator.mediaDevices.getUserMedia(constraints);
         } catch (error) {
           logger.debug(
@@ -833,12 +839,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return STREAMING_PROVIDERS[name] ? name : defaultStreamingProviderName(this.context);
   }
 
-  async getAudioConstraints(forceDefaultMic = false) {
-    const {
-      preferBuiltInMic: preferBuiltIn,
-      selectedMicDeviceId: selectedDeviceId,
-      selectedMicDeviceLabel: selectedDeviceLabel,
-    } = getSettings();
+  async getAudioConstraints(forceDefaultMic = false, refreshSystemDefault = false) {
+    const settings = getSettings();
 
     // All browser audio processing disabled to avoid OS-level side-effects.
     // AGC off: Chromium's AGC on Windows mutates the system mic volume via WASAPI (#476).
@@ -851,125 +853,67 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       channelCount: 2,
     };
 
-    // Pinned device was unavailable (Chromium rotates IDs / device unplugged); fall back to the
-    // system default for this capture without discarding the saved preference. See #900.
-    if (forceDefaultMic) {
-      logger.debug("Using default microphone (pinned device unavailable)", {}, "audio");
-      return { audio: noProcessing };
+    if (
+      !forceDefaultMic &&
+      !refreshSystemDefault &&
+      this.cachedMicDeviceId &&
+      this.cachedMicDeviceId !== this.rejectedMicDeviceId
+    ) {
+      return {
+        audio: { deviceId: { exact: this.cachedMicDeviceId }, ...noProcessing },
+      };
     }
 
-    if (preferBuiltIn) {
-      if (this.cachedMicDeviceId) {
-        // The device was already proven silent this session; don't pin it again.
-        if (this.cachedMicDeviceId === this.rejectedMicDeviceId) {
-          logger.debug(
-            "Skipping cached microphone (delivered no audio)",
-            { deviceId: this.cachedMicDeviceId },
-            "audio"
-          );
-          return { audio: noProcessing };
-        }
+    try {
+      const resolution = await resolvePreferredMicrophone({
+        settings,
+        forceSystemDefault: forceDefaultMic,
+        refreshSystemDefault: forceDefaultMic || refreshSystemDefault,
+      });
+      const deviceId = resolution.device?.deviceId;
 
+      if (deviceId && deviceId !== this.rejectedMicDeviceId) {
+        this.cachedMicDeviceId = deviceId;
         logger.debug(
-          "Using cached microphone device ID",
-          { deviceId: this.cachedMicDeviceId },
+          "Resolved microphone input",
+          {
+            mode: resolution.mode,
+            status: resolution.status,
+            label: resolution.device.label,
+          },
           "audio"
         );
-        return { audio: { deviceId: { exact: this.cachedMicDeviceId }, ...noProcessing } };
+        return { audio: { deviceId: { exact: deviceId }, ...noProcessing } };
       }
 
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioInputs = devices.filter((d) => d.kind === "audioinput");
-        const builtInMic = audioInputs.find((d) => isBuiltInMicrophone(d.label));
-
-        if (builtInMic) {
-          // Leave it uncached so a later devicechange can re-resolve it cleanly.
-          if (builtInMic.deviceId === this.rejectedMicDeviceId) {
-            logger.debug(
-              "Skipping built-in microphone (delivered no audio)",
-              { deviceId: builtInMic.deviceId, label: builtInMic.label },
-              "audio"
-            );
-            return { audio: noProcessing };
-          }
-
-          this.cachedMicDeviceId = builtInMic.deviceId;
-          logger.debug(
-            "Using built-in microphone (cached for next time)",
-            { deviceId: builtInMic.deviceId, label: builtInMic.label },
-            "audio"
-          );
-          return { audio: { deviceId: { exact: builtInMic.deviceId }, ...noProcessing } };
-        }
-      } catch (error) {
-        logger.debug(
-          "Failed to enumerate devices for built-in mic detection",
-          { error: error.message },
-          "audio"
-        );
-      }
+      logger.debug(
+        "Microphone selection could not be pinned; using browser fallback",
+        { mode: resolution.mode, status: resolution.status },
+        "audio"
+      );
+    } catch (error) {
+      logger.debug(
+        "Failed to resolve microphone selection; using browser fallback",
+        { error: error.message },
+        "audio"
+      );
     }
 
-    if (!preferBuiltIn && selectedDeviceId) {
-      let resolvedDeviceId = selectedDeviceId;
-
-      if (this.validatedSelectedMicDeviceId !== selectedDeviceId) {
-        try {
-          const reconciled = await reconcileSavedMicSelection(
-            selectedDeviceId,
-            selectedDeviceLabel,
-            "audio"
-          );
-          resolvedDeviceId = reconciled.deviceId;
-
-          if (reconciled.resolved) {
-            this.validatedSelectedMicDeviceId = resolvedDeviceId;
-          } else {
-            // Avoid enumerating on every recording while the saved device is
-            // unplugged. A devicechange event clears this cache when it returns.
-            this.validatedSelectedMicDeviceId = reconciled.labelsAvailable
-              ? selectedDeviceId
-              : null;
-          }
-        } catch (error) {
-          logger.debug(
-            "Failed to reconcile selected microphone",
-            { error: error.message },
-            "audio"
-          );
-        }
-      }
-
-      if (resolvedDeviceId === this.rejectedMicDeviceId) {
-        logger.debug(
-          "Skipping selected microphone (delivered no audio)",
-          { deviceId: resolvedDeviceId },
-          "audio"
-        );
-        return { audio: noProcessing };
-      }
-
-      logger.debug("Using selected microphone", { deviceId: resolvedDeviceId }, "audio");
-      return { audio: { deviceId: { exact: resolvedDeviceId }, ...noProcessing } };
-    }
-
-    logger.debug("Using default microphone", {}, "audio");
     return { audio: noProcessing };
   }
 
   async cacheMicrophoneDeviceId() {
     if (this.cachedMicDeviceId) return; // Already cached
 
-    if (!getSettings().preferBuiltInMic) return; // Only needed for built-in mic detection
-
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const audioInputs = devices.filter((d) => d.kind === "audioinput");
-      const builtInMic = audioInputs.find((d) => isBuiltInMicrophone(d.label));
-      if (builtInMic) {
-        this.cachedMicDeviceId = builtInMic.deviceId;
-        logger.debug("Microphone device ID pre-cached", { deviceId: builtInMic.deviceId }, "audio");
+      const resolution = await resolvePreferredMicrophone({ settings: getSettings() });
+      if (resolution.device?.deviceId) {
+        this.cachedMicDeviceId = resolution.device.deviceId;
+        logger.debug(
+          "Microphone device ID pre-cached",
+          { mode: resolution.mode, status: resolution.status },
+          "audio"
+        );
       }
     } catch (error) {
       logger.debug("Failed to pre-cache microphone device ID", { error: error.message }, "audio");
