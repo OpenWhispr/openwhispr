@@ -25,6 +25,7 @@ function restoreEnvironment(snapshot) {
 
 function loadEnvironmentManager(t, userDataDirectory) {
   const environmentPath = require.resolve("../../src/helpers/environment");
+  const originalEnvironmentModule = require.cache[environmentPath];
   const originalLoad = Module._load;
   delete require.cache[environmentPath];
 
@@ -47,7 +48,10 @@ function loadEnvironmentManager(t, userDataDirectory) {
     return require(environmentPath);
   } finally {
     Module._load = originalLoad;
-    t.after(() => delete require.cache[environmentPath]);
+    t.after(() => {
+      if (originalEnvironmentModule) require.cache[environmentPath] = originalEnvironmentModule;
+      else delete require.cache[environmentPath];
+    });
   }
 }
 
