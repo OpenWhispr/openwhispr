@@ -532,37 +532,37 @@
       "continue": "Continua comunque"
     },
     "useCase": {
-      "title": "Cosa ti porta qui?",
+      "title": "Come userai OpenWhispr?",
       "titleLineOne": "Come userai",
       "titleLineTwo": "OpenWhispr?",
-      "description": "Siamo un piccolo team e pubblichiamo ogni settimana. Ciò che scegli configura l'app per te — e ci dice cosa costruire dopo.",
+      "description": "Scegli tutte le opzioni pertinenti. Adatteremo la configurazione.",
       "noteLabel": "C'è altro che vorresti farci sapere?",
-      "notePlaceholder": "Facoltativo",
+      "notePlaceholder": "Raccontaci come pensi di usare OpenWhispr (facoltativo)",
       "proceedToSetup": "Continua la configurazione",
       "options": {
         "dictation": {
-          "title": "Scrivere più velocemente",
-          "description": "Detta in qualsiasi app invece di digitare"
+          "title": "Scrivi più velocemente",
+          "description": "Parla invece di digitare, in qualsiasi app."
         },
         "meetings": {
-          "title": "Note e riepiloghi delle riunioni",
-          "description": "Registra, trascrivi e riassumi le riunioni"
+          "title": "Note delle riunioni",
+          "description": "Registra, trascrivi e riassumi le riunioni."
         },
         "healthcare": {
-          "title": "Trascrizione medica, clinica e terapeutica",
-          "description": "Detta note dei pazienti, note di seduta e referti"
+          "title": "Documentazione clinica",
+          "description": "Crea note dei pazienti, note di seduta e referti."
         },
         "translation": {
-          "title": "Tradurre lingue",
-          "description": "Parla una lingua, scrivi in un'altra"
+          "title": "Traduci mentre parli",
+          "description": "Parla una lingua e scrivi in un'altra."
         },
         "ai": {
-          "title": "Parlare con la mia IA",
-          "description": "Guida con la voce ChatGPT, Claude e altri agenti"
+          "title": "Parla con la tua IA",
+          "description": "Usa la tua voce con ChatGPT, Claude e altri strumenti di IA."
         },
         "upload": {
-          "title": "Caricare file audio",
-          "description": "Carica e trascrivi MP3, OGG e altro"
+          "title": "Trascrivi file audio",
+          "description": "Carica file audio da trascrivere."
         }
       },
       "selectHint": "Seleziona tutte le opzioni pertinenti"
@@ -1039,9 +1039,12 @@
       "or": "o"
     },
     "emailStep": {
+      "checkingEmail": "Verifica dell'e-mail in corso...",
       "continueWithEmail": "Continua con l'e-mail",
-      "continueWithoutAccount": "Continua senza account",
-      "emailPlaceholder": "tu@esempio.com"
+      "continueWithoutAccount": "Usa OpenWhispr senza account",
+      "emailLabel": "E-mail",
+      "emailPlaceholder": "tu@esempio.com",
+      "useDifferentEmail": "Usa un'altra e-mail"
     },
     "errors": {
       "accountExistsSignIn": "Esiste già un account con questa e-mail. Accedi.",
@@ -1064,19 +1067,19 @@
     },
     "passwordForm": {
       "createAccount": "Crea un account",
-      "createAccountButton": "Crea account",
+      "createAccountButton": "Continua con l'e-mail",
       "createAccountLink": "Crea account",
       "createPasswordPlaceholder": "Crea una password",
       "creatingAccount": "Creazione account...",
       "enterPasswordPlaceholder": "Inserisci la password",
       "forgotPassword": "Password dimenticata?",
-      "fullNamePlaceholder": "Nome completo",
+      "fullNamePlaceholder": "Aggiungi il tuo nome",
       "nameLabel": "Nome",
       "passwordLabel": "Password",
       "haveAccount": "Hai già un account?",
       "newHere": "Nuovo qui?",
       "passwordMinLength": "La password deve essere di almeno 8 caratteri",
-      "signIn": "Accedi",
+      "signIn": "Continua con l'e-mail",
       "signInLink": "Accedi",
       "signingIn": "Accesso in corso...",
       "welcomeBack": "Bentornato"
@@ -1102,7 +1105,7 @@
       "continueWithMicrosoft": "Continua con Microsoft",
       "protocolUnavailable": "Accesso dal browser non disponibile — registra di nuovo il protocollo openwhispr:// nelle impostazioni Applicazioni predefinite del sistema."
     },
-    "welcomeSubtitle": "Detta ovunque usando la tua voce",
+    "welcomeSubtitle": "Usa la tua voce per tutto",
     "welcomeTitle": "Benvenuto in OpenWhispr"
   },
   "cleanupPrompt": "Correzione",
@@ -1173,8 +1176,8 @@
   },
   "dictionarySuffix": "Suffisso dizionario",
   "emailVerification": {
-    "checkEmailDescription": "Abbiamo inviato un link di verifica a",
-    "checkEmailTitle": "Controlla la tua e-mail",
+    "checkEmailDescription": "Abbiamo inviato un link di verifica alla tua e-mail:",
+    "checkEmailTitle": "E-mail di verifica inviata",
     "errors": {
       "resendFailed": "Non è stato possibile reinviare l'e-mail. Riprova.",
       "serverUnreachable": "Impossibile raggiungere il server. Controlla la connessione e riprova."
@@ -1182,8 +1185,8 @@
     "resendButton": "Reinvia e-mail di verifica",
     "resendIn": "Reinvia tra {{seconds}}s",
     "verifiedDescription": "Il tuo account è pronto.",
-    "verifiedTitle": "E-mail verificata",
-    "waiting": "In attesa della verifica...",
+    "verifiedTitle": "Verificata",
+    "waiting": "In attesa della verifica",
     "backToSignIn": "Torna all'accesso"
   },
   "errorBoundary": {
@@ -1276,7 +1279,7 @@
   },
   "languageSelector": {
     "noLanguagesFound": "Nessuna lingua trovata",
-    "searchPlaceholder": "Cerca..."
+    "searchPlaceholder": "Cerca lingue"
   },
   "microphoneSettings": {
     "builtIn": "(Integrato)",
@@ -1907,7 +1910,7 @@
       },
       "waylandPaste": {
         "title": "Configurazione incolla su Wayland",
-        "description": "L'incolla automatico su Wayland richiede ydotool. Controlla lo stato di ogni componente qui sotto.",
+        "description": "L'incolla automatico su Wayland usa ydotool o wtype. Sui compositor wlroots è preferito wtype.",
         "allGoodDesc": "L'incolla automatico è pronto.",
         "recheck": "Ricontrolla",
         "copy": "Copia",

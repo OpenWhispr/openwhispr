@@ -532,37 +532,37 @@
       "continue": "仍然继续"
     },
     "useCase": {
-      "title": "你为什么来到这里？",
+      "title": "你会如何使用 OpenWhispr？",
       "titleLineOne": "你会如何使用",
       "titleLineTwo": "OpenWhispr？",
-      "description": "我们是一个小团队，每周发布更新。你的选择会为你配置应用，也告诉我们接下来该做什么。",
+      "description": "选择所有适用项，我们会据此为你定制设置。",
       "noteLabel": "还有什么想告诉我们的吗？",
-      "notePlaceholder": "可选",
+      "notePlaceholder": "告诉我们你打算如何使用 OpenWhispr（可选）",
       "proceedToSetup": "继续设置",
       "options": {
         "dictation": {
           "title": "更快地写作",
-          "description": "在任何应用中口述，而不是打字"
+          "description": "在任何应用中用说话代替打字。"
         },
         "meetings": {
-          "title": "会议笔记与摘要",
-          "description": "录制、转写并总结会议"
+          "title": "会议笔记",
+          "description": "录制、转写并总结会议。"
         },
         "healthcare": {
-          "title": "医疗、临床与治疗转写",
-          "description": "口述病历、咨询记录和报告"
+          "title": "临床记录",
+          "description": "创建病历、咨询记录和报告。"
         },
         "translation": {
-          "title": "语言翻译",
-          "description": "说一种语言，输出另一种"
+          "title": "边说边翻译",
+          "description": "说一种语言，写出另一种。"
         },
         "ai": {
-          "title": "与我的 AI 对话",
-          "description": "用语音驱动 ChatGPT、Claude 等智能体"
+          "title": "与你的 AI 对话",
+          "description": "用语音使用 ChatGPT、Claude 等 AI 工具。"
         },
         "upload": {
-          "title": "上传音频文件",
-          "description": "上传并转写 MP3、OGG 等"
+          "title": "转写音频文件",
+          "description": "上传音频文件进行转写。"
         }
       },
       "selectHint": "可多选"
@@ -1038,9 +1038,12 @@
       "or": "或"
     },
     "emailStep": {
+      "checkingEmail": "正在检查您的邮箱...",
       "continueWithEmail": "使用邮箱继续",
-      "continueWithoutAccount": "不登录继续",
-      "emailPlaceholder": "you@example.com"
+      "continueWithoutAccount": "无需账户使用 OpenWhispr",
+      "emailLabel": "邮箱",
+      "emailPlaceholder": "you@example.com",
+      "useDifferentEmail": "使用其他邮箱"
     },
     "errors": {
       "accountExistsSignIn": "此邮箱已注册账户，请直接登录。",
@@ -1063,19 +1066,19 @@
     },
     "passwordForm": {
       "createAccount": "创建账户",
-      "createAccountButton": "创建账户",
+      "createAccountButton": "使用邮箱继续",
       "createAccountLink": "创建账户",
       "createPasswordPlaceholder": "创建密码",
       "creatingAccount": "正在创建账户...",
       "enterPasswordPlaceholder": "输入密码",
       "forgotPassword": "忘记密码？",
-      "fullNamePlaceholder": "姓名",
+      "fullNamePlaceholder": "填写你的姓名",
       "nameLabel": "姓名",
       "passwordLabel": "密码",
       "haveAccount": "已有账户？",
       "newHere": "新用户？",
       "passwordMinLength": "密码至少需要 8 个字符",
-      "signIn": "登录",
+      "signIn": "使用邮箱继续",
       "signInLink": "登录",
       "signingIn": "正在登录...",
       "welcomeBack": "欢迎回来"
@@ -1101,7 +1104,7 @@
       "continueWithMicrosoft": "使用 Microsoft 继续",
       "protocolUnavailable": "无法通过浏览器登录 — 请在系统的“默认应用”设置中重新注册 openwhispr:// 协议。"
     },
-    "welcomeSubtitle": "随时随地用语音输入",
+    "welcomeSubtitle": "用语音完成一切",
     "welcomeTitle": "欢迎使用 OpenWhispr",
     "sessionExpired": "会话已过期，请重新登录。"
   },
@@ -1173,8 +1176,8 @@
   },
   "dictionarySuffix": "词典后缀",
   "emailVerification": {
-    "checkEmailDescription": "我们已向以下邮箱发送了验证链接",
-    "checkEmailTitle": "查看你的邮箱",
+    "checkEmailDescription": "我们已向你的邮箱发送了验证链接：",
+    "checkEmailTitle": "验证邮件已发送",
     "errors": {
       "resendFailed": "无法重新发送邮件，请重试。",
       "serverUnreachable": "无法连接到服务器，请检查网络连接后重试。"
@@ -1182,8 +1185,8 @@
     "resendButton": "重新发送验证邮件",
     "resendIn": "{{seconds}} 秒后可重新发送",
     "verifiedDescription": "你的账户已准备就绪。",
-    "verifiedTitle": "邮箱已验证",
-    "waiting": "正在等待验证...",
+    "verifiedTitle": "已验证",
+    "waiting": "正在等待验证",
     "backToSignIn": "返回登录"
   },
   "errorBoundary": {
@@ -1276,7 +1279,7 @@
   },
   "languageSelector": {
     "noLanguagesFound": "未找到匹配的语言",
-    "searchPlaceholder": "搜索..."
+    "searchPlaceholder": "搜索语言"
   },
   "microphoneSettings": {
     "builtIn": "（内置）",
@@ -1907,7 +1910,7 @@
       },
       "waylandPaste": {
         "title": "Wayland 粘贴设置",
-        "description": "Wayland 下的自动粘贴需要 ydotool。请检查以下各组件的状态。",
+        "description": "Wayland 下的自动粘贴使用 ydotool 或 wtype。在 wlroots 合成器上优先使用 wtype。",
         "allGoodDesc": "自动粘贴已就绪。",
         "recheck": "重新检查",
         "copy": "复制",

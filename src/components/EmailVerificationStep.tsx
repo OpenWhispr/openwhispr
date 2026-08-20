@@ -26,6 +26,11 @@ export default function EmailVerificationStep({
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onVerifiedRef = useRef(onVerified);
+
+  useEffect(() => {
+    onVerifiedRef.current = onVerified;
+  }, [onVerified]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -34,19 +39,21 @@ export default function EmailVerificationStep({
   }, [resendCooldown]);
 
   useEffect(() => {
-    if (!OPENWHISPR_API_URL || verified) return;
+    if (!OPENWHISPR_API_URL) return;
 
     const url = `${OPENWHISPR_API_URL}/api/auth/verification-status?email=${encodeURIComponent(email)}`;
+    let stopped = false;
 
-    pollRef.current = setInterval(async () => {
+    const checkVerificationStatus = async () => {
       try {
         const res = await fetch(url, { credentials: "include" });
+        if (stopped) return;
+
         if (res.ok) {
           const data = await res.json();
           if (data.verified) {
             setVerified(true);
             if (pollRef.current) clearInterval(pollRef.current);
-            setTimeout(() => onVerified(), 1200);
           }
         } else if (res.status === 401 || res.status === 400) {
           if (pollRef.current) clearInterval(pollRef.current);
@@ -55,12 +62,24 @@ export default function EmailVerificationStep({
       } catch {
         // Network error — silently retry on next poll
       }
-    }, 5000);
+    };
+
+    // Check immediately so returning from the verification link never leaves the
+    // user staring at a stale waiting state for a full polling interval.
+    void checkVerificationStatus();
+    pollRef.current = setInterval(checkVerificationStatus, 5000);
 
     return () => {
+      stopped = true;
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [email, verified, onVerified, t]);
+  }, [email, t]);
+
+  useEffect(() => {
+    if (!verified) return;
+    const timer = setTimeout(() => onVerifiedRef.current(), 1200);
+    return () => clearTimeout(timer);
+  }, [verified]);
 
   const handleResend = useCallback(async () => {
     if (resendCooldown > 0 || isResending) return;
@@ -82,9 +101,9 @@ export default function EmailVerificationStep({
 
   return (
     <CompactOnboardingFrame showBrandMark={false} embedded={embedded}>
-      <div className={`${embedded ? "pt-1" : "px-5 pt-[11.9rem]"} text-center`}>
-        <div className="mx-auto flex size-[4.25rem] items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-950 shadow-sm">
-          <MailCheck className="size-8" strokeWidth={1.8} />
+      <div className={`${embedded ? "pt-1" : "px-5 pt-42"} text-center`}>
+        <div className="mx-auto flex size-16 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)] shadow-sm">
+          <MailCheck className="size-7" strokeWidth={1.8} />
         </div>
         <h1
           className={
@@ -95,14 +114,16 @@ export default function EmailVerificationStep({
         >
           {t("emailVerification.checkEmailTitle")}
         </h1>
-        <p className="mx-auto mt-3.5 max-w-xs text-base leading-6 text-neutral-500 dark:text-neutral-500">
+        <p className="mx-auto mt-2 max-w-xs text-sm leading-5 text-[var(--onboarding-text-secondary)]">
           {t("emailVerification.checkEmailDescription")}{" "}
-          <span className="font-medium text-neutral-950 dark:text-neutral-950">{email}</span>
+          <span className="font-medium text-[var(--onboarding-text-primary)]">{email}</span>
         </p>
 
         <div
-          className={`mx-auto mt-7 inline-flex h-[2.875rem] items-center justify-center gap-3 rounded-full px-6 text-base font-medium ${
-            verified ? "bg-blue-500 text-white" : "bg-neutral-950 text-white"
+          className={`mx-auto mt-5 inline-flex h-10 items-center justify-center gap-3 rounded-full px-6 text-sm font-medium ${
+            verified
+              ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)]"
+              : "bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]"
           }`}
           role="status"
           aria-live="polite"
@@ -121,10 +142,10 @@ export default function EmailVerificationStep({
           </div>
         )}
 
-        {/* Resend and Back stay available the whole time the poll is running: a
-            verification email that never arrives raises no error, and without
-            these the step is a dead end. */}
-        {!verified && (
+        {/* Keep the reference state uncluttered during the initial delivery
+            window, then expose recovery actions once resending is possible or
+            immediately when polling reports a terminal session error. */}
+        {!verified && (error || resendCooldown <= 0) && (
           <div className="mt-5 flex justify-center gap-2">
             <Button
               type="button"

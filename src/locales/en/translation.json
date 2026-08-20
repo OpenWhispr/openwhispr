@@ -1038,9 +1038,12 @@
       "or": "or"
     },
     "emailStep": {
+      "checkingEmail": "Checking your email...",
       "continueWithEmail": "Continue with email",
       "continueWithoutAccount": "Use OpenWhispr without an account",
-      "emailPlaceholder": "you@example.com"
+      "emailLabel": "Email",
+      "emailPlaceholder": "you@example.com",
+      "useDifferentEmail": "Use a different email"
     },
     "errors": {
       "accountExistsSignIn": "An account with this email already exists. Please sign in.",

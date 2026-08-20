@@ -532,37 +532,37 @@
       "continue": "そのまま続行"
     },
     "useCase": {
-      "title": "どんな目的でお使いですか？",
+      "title": "OpenWhispr をどのように使いますか？",
       "titleLineOne": "OpenWhisprを",
       "titleLineTwo": "どう使いますか？",
-      "description": "私たちは小さなチームで、毎週リリースしています。選んだ内容に合わせてアプリを設定し、次に何を作るかの参考にします。",
+      "description": "当てはまるものをすべて選んでください。それに合わせてセットアップします。",
       "noteLabel": "他に伝えておきたいことはありますか？",
-      "notePlaceholder": "任意",
+      "notePlaceholder": "OpenWhispr の使い方を教えてください（任意）",
       "proceedToSetup": "設定に進む",
       "options": {
         "dictation": {
           "title": "より速く書く",
-          "description": "タイピングの代わりにどのアプリでも音声入力"
+          "description": "タイピングの代わりに、どのアプリでも話して入力。"
         },
         "meetings": {
-          "title": "会議のメモと要約",
-          "description": "会議を録音・文字起こし・要約"
+          "title": "会議メモ",
+          "description": "会議を録音・文字起こし・要約します。"
         },
         "healthcare": {
-          "title": "医療・臨床・セラピーの文字起こし",
-          "description": "患者メモ、セッション記録、レポートを音声入力"
+          "title": "臨床記録",
+          "description": "患者メモ、セッション記録、レポートを作成します。"
         },
         "translation": {
-          "title": "言語の翻訳",
-          "description": "話す言語とは別の言語で入力"
+          "title": "話しながら翻訳",
+          "description": "ある言語で話して、別の言語で書き出します。"
         },
         "ai": {
-          "title": "AI との対話",
-          "description": "ChatGPT、Claude などのエージェントを声で操作"
+          "title": "AI と話す",
+          "description": "ChatGPT や Claude などの AI ツールを声で使えます。"
         },
         "upload": {
-          "title": "音声ファイルのアップロード",
-          "description": "MP3、OGG などをアップロードして文字起こし"
+          "title": "音声ファイルを文字起こし",
+          "description": "音声ファイルをアップロードして文字起こしします。"
         }
       },
       "selectHint": "当てはまるものをすべて選択してください"
@@ -1039,9 +1039,12 @@
       "or": "または"
     },
     "emailStep": {
+      "checkingEmail": "メールアドレスを確認しています...",
       "continueWithEmail": "メールで続ける",
-      "continueWithoutAccount": "アカウントなしで続ける",
-      "emailPlaceholder": "you@example.com"
+      "continueWithoutAccount": "アカウントなしで OpenWhispr を使う",
+      "emailLabel": "メールアドレス",
+      "emailPlaceholder": "you@example.com",
+      "useDifferentEmail": "別のメールアドレスを使用"
     },
     "errors": {
       "accountExistsSignIn": "このメールアドレスのアカウントは既に存在します。サインインしてください。",
@@ -1064,19 +1067,19 @@
     },
     "passwordForm": {
       "createAccount": "アカウントを作成",
-      "createAccountButton": "アカウントを作成",
+      "createAccountButton": "メールで続ける",
       "createAccountLink": "アカウントを作成",
       "createPasswordPlaceholder": "パスワードを作成",
       "creatingAccount": "アカウント作成中...",
       "enterPasswordPlaceholder": "パスワードを入力",
       "forgotPassword": "パスワードをお忘れですか？",
-      "fullNamePlaceholder": "氏名",
+      "fullNamePlaceholder": "名前を入力",
       "nameLabel": "名前",
       "passwordLabel": "パスワード",
       "haveAccount": "既にアカウントをお持ちですか？",
       "newHere": "初めてですか？",
       "passwordMinLength": "パスワードは 8 文字以上にしてください",
-      "signIn": "サインイン",
+      "signIn": "メールで続ける",
       "signInLink": "サインイン",
       "signingIn": "サインイン中...",
       "welcomeBack": "おかえりなさい"
@@ -1102,7 +1105,7 @@
       "continueWithMicrosoft": "Microsoft で続ける",
       "protocolUnavailable": "ブラウザでのサインインを利用できません — システムの「既定のアプリ」設定で openwhispr:// プロトコルを再登録してください。"
     },
-    "welcomeSubtitle": "音声でどこでもディクテーション",
+    "welcomeSubtitle": "すべてを声で",
     "welcomeTitle": "OpenWhispr へようこそ"
   },
   "cleanupPrompt": "クリーンアップ",
@@ -1173,8 +1176,8 @@
   },
   "dictionarySuffix": "辞書サフィックス",
   "emailVerification": {
-    "checkEmailDescription": "確認リンクを送信しました",
-    "checkEmailTitle": "メールを確認してください",
+    "checkEmailDescription": "確認リンクを次のメールアドレスに送信しました：",
+    "checkEmailTitle": "確認メールを送信しました",
     "errors": {
       "resendFailed": "メールを再送信できませんでした。もう一度お試しください。",
       "serverUnreachable": "サーバーに接続できませんでした。接続を確認してもう一度お試しください。"
@@ -1182,8 +1185,8 @@
     "resendButton": "確認メールを再送信",
     "resendIn": "{{seconds}} 秒後に再送信可能",
     "verifiedDescription": "アカウントの設定が完了しました。",
-    "verifiedTitle": "メール確認完了",
-    "waiting": "確認を待っています...",
+    "verifiedTitle": "確認済み",
+    "waiting": "確認を待っています",
     "backToSignIn": "サインインに戻る"
   },
   "errorBoundary": {
@@ -1276,7 +1279,7 @@
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",
-    "searchPlaceholder": "検索..."
+    "searchPlaceholder": "言語を検索"
   },
   "microphoneSettings": {
     "builtIn": "（内蔵）",
@@ -1907,7 +1910,7 @@
       },
       "waylandPaste": {
         "title": "Wayland 貼り付け設定",
-        "description": "Wayland での自動貼り付けには ydotool が必要です。各コンポーネントの状態を確認してください。",
+        "description": "Wayland での自動貼り付けには ydotool または wtype を使用します。wlroots 系コンポジタでは wtype が優先されます。",
         "allGoodDesc": "自動貼り付けの準備ができています。",
         "recheck": "再確認",
         "copy": "コピー",
@@ -2084,7 +2087,7 @@
       "lastSynced": "最終同期 {{time}}",
       "minutesAgo": "{{count}}分前",
       "audioRetention": "音声の保持",
-      "audioRetentionDescription": "再文字起こしやダウンロードのために音声録音をローカルに保存します。ファイルは保持期間が過ぎると自動的に削除されます。",
+      "audioRetentionDescription": "再文字起こしやダウンロードのために、ディクテーションの音声をローカルに保存します。ファイルは保持期間が過ぎると自動的に削除されます。会議の音声は保存されません。",
       "audioRetentionDisabled": "無効",
       "retentionDays_one": "{{count}}日",
       "retentionDays_other": "{{count}}日",

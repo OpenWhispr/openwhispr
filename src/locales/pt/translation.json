@@ -511,37 +511,37 @@
       "continue": "Continuar mesmo assim"
     },
     "useCase": {
-      "title": "O que traz você aqui?",
+      "title": "Como você vai usar o OpenWhispr?",
       "titleLineOne": "Como você usará",
       "titleLineTwo": "o OpenWhispr?",
-      "description": "Somos uma equipe pequena lançando melhorias toda semana. O que você escolher configura o app para você — e nos diz o que construir em seguida.",
+      "description": "Escolha todas as opções que se aplicam. Vamos adaptar sua configuração.",
       "noteLabel": "Algo mais que gostaria de nos contar?",
-      "notePlaceholder": "Opcional",
+      "notePlaceholder": "Conte como você pretende usar o OpenWhispr (opcional)",
       "proceedToSetup": "Continuar a configuração",
       "options": {
         "dictation": {
-          "title": "Escrever mais rápido",
-          "description": "Dite em qualquer aplicativo em vez de digitar"
+          "title": "Escreva mais rápido",
+          "description": "Fale em vez de digitar, em qualquer aplicativo."
         },
         "meetings": {
-          "title": "Notas e resumos de reuniões",
-          "description": "Grave, transcreva e resuma suas reuniões"
+          "title": "Notas de reuniões",
+          "description": "Grave, transcreva e resuma reuniões."
         },
         "healthcare": {
-          "title": "Transcrição médica, clínica e terapêutica",
-          "description": "Dite notas de pacientes, notas de sessão e relatórios"
+          "title": "Documentação clínica",
+          "description": "Crie notas de pacientes, notas de sessão e relatórios."
         },
         "translation": {
-          "title": "Traduzir idiomas",
-          "description": "Fale um idioma, escreva em outro"
+          "title": "Traduza enquanto fala",
+          "description": "Fale um idioma e escreva em outro."
         },
         "ai": {
-          "title": "Falar com minha IA",
-          "description": "Controle por voz o ChatGPT, o Claude e outros agentes"
+          "title": "Fale com sua IA",
+          "description": "Use sua voz com o ChatGPT, o Claude e outras ferramentas de IA."
         },
         "upload": {
-          "title": "Enviar arquivos de áudio",
-          "description": "Envie e transcreva MP3, OGG e mais"
+          "title": "Transcreva arquivos de áudio",
+          "description": "Envie arquivos de áudio para transcrição."
         }
       },
       "selectHint": "Selecione todas as opções aplicáveis"
@@ -1018,9 +1018,12 @@
       "or": "ou"
     },
     "emailStep": {
+      "checkingEmail": "Verificando seu e-mail...",
       "continueWithEmail": "Continuar com e-mail",
-      "continueWithoutAccount": "Continuar sem conta",
-      "emailPlaceholder": "voce@exemplo.com"
+      "continueWithoutAccount": "Usar o OpenWhispr sem conta",
+      "emailLabel": "E-mail",
+      "emailPlaceholder": "voce@exemplo.com",
+      "useDifferentEmail": "Usar outro e-mail"
     },
     "errors": {
       "accountExistsSignIn": "Já existe uma conta com este e-mail. Faça login.",
@@ -1043,19 +1046,19 @@
     },
     "passwordForm": {
       "createAccount": "Criar uma conta",
-      "createAccountButton": "Criar conta",
+      "createAccountButton": "Continuar com e-mail",
       "createAccountLink": "Criar conta",
       "createPasswordPlaceholder": "Crie uma senha",
       "creatingAccount": "Criando conta...",
       "enterPasswordPlaceholder": "Digite sua senha",
       "forgotPassword": "Esqueceu a senha?",
-      "fullNamePlaceholder": "Nome completo",
+      "fullNamePlaceholder": "Adicione seu nome",
       "nameLabel": "Nome",
       "passwordLabel": "Senha",
       "haveAccount": "Já tem uma conta?",
       "newHere": "Novo por aqui?",
       "passwordMinLength": "A senha deve ter pelo menos 8 caracteres",
-      "signIn": "Entrar",
+      "signIn": "Continuar com e-mail",
       "signInLink": "Entrar",
       "signingIn": "Entrando...",
       "welcomeBack": "Que bom ter você de volta"
@@ -1081,7 +1084,7 @@
       "continueWithMicrosoft": "Continuar com a Microsoft",
       "protocolUnavailable": "Login pelo navegador indisponível — registre novamente o protocolo openwhispr:// nas configurações de Aplicativos Padrão do sistema."
     },
-    "welcomeSubtitle": "Use sua voz para ditar em qualquer lugar",
+    "welcomeSubtitle": "Use sua voz para tudo",
     "welcomeTitle": "Boas-vindas ao OpenWhispr"
   },
   "cleanupPrompt": "Limpeza",
@@ -1152,8 +1155,8 @@
   },
   "dictionarySuffix": "Sufixo do dicionário",
   "emailVerification": {
-    "checkEmailDescription": "Enviamos um link de verificação para",
-    "checkEmailTitle": "Verifique seu e-mail",
+    "checkEmailDescription": "Enviamos um link de verificação para o seu e-mail:",
+    "checkEmailTitle": "E-mail de verificação enviado",
     "errors": {
       "resendFailed": "Não foi possível reenviar o e-mail. Tente novamente.",
       "serverUnreachable": "Não foi possível acessar o servidor. Verifique sua conexão e tente novamente."
@@ -1161,8 +1164,8 @@
     "resendButton": "Reenviar e-mail de verificação",
     "resendIn": "Reenviar em {{seconds}}s",
     "verifiedDescription": "Sua conta está pronta.",
-    "verifiedTitle": "E-mail verificado",
-    "waiting": "Aguardando verificação...",
+    "verifiedTitle": "Verificado",
+    "waiting": "Aguardando verificação",
     "backToSignIn": "Voltar para o login"
   },
   "errorBoundary": {
@@ -1255,7 +1258,7 @@
   },
   "languageSelector": {
     "noLanguagesFound": "Nenhum idioma encontrado",
-    "searchPlaceholder": "Buscar..."
+    "searchPlaceholder": "Buscar idiomas"
   },
   "microphoneSettings": {
     "builtIn": "(Integrado)",
@@ -1886,7 +1889,7 @@
       },
       "waylandPaste": {
         "title": "Configuração de colagem no Wayland",
-        "description": "A colagem automática no Wayland requer o ydotool. Verifique o estado de cada componente abaixo.",
+        "description": "A colagem automática no Wayland usa ydotool ou wtype. Em compositores wlroots, o wtype é preferido.",
         "allGoodDesc": "A colagem automática está pronta.",
         "recheck": "Verificar novamente",
         "copy": "Copiar",

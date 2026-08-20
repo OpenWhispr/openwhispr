@@ -532,37 +532,37 @@
       "continue": "Продолжить всё равно"
     },
     "useCase": {
-      "title": "Что вас сюда привело?",
+      "title": "Как вы будете использовать OpenWhispr?",
       "titleLineOne": "Как вы будете",
       "titleLineTwo": "использовать OpenWhispr?",
-      "description": "Мы — небольшая команда и выпускаем обновления каждую неделю. Ваш выбор настраивает приложение под вас — и подсказывает нам, что делать дальше.",
+      "description": "Выберите всё, что подходит. Мы настроим приложение под вас.",
       "noteLabel": "Хотите рассказать что-то ещё?",
-      "notePlaceholder": "Необязательно",
+      "notePlaceholder": "Расскажите, как вы планируете использовать OpenWhispr (необязательно)",
       "proceedToSetup": "Продолжить настройку",
       "options": {
         "dictation": {
-          "title": "Писать быстрее",
-          "description": "Диктуйте в любом приложении вместо набора текста"
+          "title": "Пишите быстрее",
+          "description": "Говорите вместо набора текста — в любом приложении."
         },
         "meetings": {
-          "title": "Заметки и резюме встреч",
-          "description": "Записывайте, расшифровывайте и резюмируйте встречи"
+          "title": "Заметки со встреч",
+          "description": "Записывайте, расшифровывайте и резюмируйте встречи."
         },
         "healthcare": {
-          "title": "Медицинская, клиническая и терапевтическая транскрипция",
-          "description": "Диктуйте записи пациентов, заметки сессий и отчёты"
+          "title": "Клиническая документация",
+          "description": "Создавайте записи пациентов, заметки сессий и отчёты."
         },
         "translation": {
-          "title": "Перевод языков",
-          "description": "Говорите на одном языке — печатайте на другом"
+          "title": "Переводите, пока говорите",
+          "description": "Говорите на одном языке — пишите на другом."
         },
         "ai": {
-          "title": "Общение с моим ИИ",
-          "description": "Управляйте голосом ChatGPT, Claude и другими агентами"
+          "title": "Говорите со своим ИИ",
+          "description": "Используйте голос с ChatGPT, Claude и другими ИИ-инструментами."
         },
         "upload": {
-          "title": "Загрузка аудиофайлов",
-          "description": "Загружайте и расшифровывайте MP3, OGG и другие"
+          "title": "Расшифровывайте аудиофайлы",
+          "description": "Загружайте аудиофайлы для расшифровки."
         }
       },
       "selectHint": "Выберите все подходящие варианты"
@@ -1038,9 +1038,12 @@
       "or": "или"
     },
     "emailStep": {
+      "checkingEmail": "Проверяем адрес электронной почты...",
       "continueWithEmail": "Продолжить с электронной почтой",
-      "continueWithoutAccount": "Продолжить без аккаунта",
-      "emailPlaceholder": "you@example.com"
+      "continueWithoutAccount": "Использовать OpenWhispr без аккаунта",
+      "emailLabel": "Электронная почта",
+      "emailPlaceholder": "you@example.com",
+      "useDifferentEmail": "Использовать другой адрес"
     },
     "errors": {
       "accountExistsSignIn": "Аккаунт с этой электронной почтой уже существует. Войдите в систему.",
@@ -1063,19 +1066,19 @@
     },
     "passwordForm": {
       "createAccount": "Создать аккаунт",
-      "createAccountButton": "Создать аккаунт",
+      "createAccountButton": "Продолжить с эл. почтой",
       "createAccountLink": "Создать аккаунт",
       "createPasswordPlaceholder": "Придумайте пароль",
       "creatingAccount": "Создание аккаунта...",
       "enterPasswordPlaceholder": "Введите пароль",
       "forgotPassword": "Забыли пароль?",
-      "fullNamePlaceholder": "Полное имя",
+      "fullNamePlaceholder": "Укажите ваше имя",
       "nameLabel": "Имя",
       "passwordLabel": "Пароль",
       "haveAccount": "Уже есть аккаунт?",
       "newHere": "Впервые здесь?",
       "passwordMinLength": "Пароль должен содержать не менее 8 символов",
-      "signIn": "Войти",
+      "signIn": "Продолжить с эл. почтой",
       "signInLink": "Войти",
       "signingIn": "Вход...",
       "welcomeBack": "С возвращением"
@@ -1101,7 +1104,7 @@
       "continueWithMicrosoft": "Продолжить с Microsoft",
       "protocolUnavailable": "Вход через браузер недоступен — повторно зарегистрируйте протокол openwhispr:// в системных настройках приложений по умолчанию."
     },
-    "welcomeSubtitle": "Диктуйте где угодно голосом",
+    "welcomeSubtitle": "Используйте голос для всего",
     "welcomeTitle": "Добро пожаловать в OpenWhispr",
     "sessionExpired": "Сессия истекла. Пожалуйста, войдите снова."
   },
@@ -1173,8 +1176,8 @@
   },
   "dictionarySuffix": "Суффикс словаря",
   "emailVerification": {
-    "checkEmailDescription": "Мы отправили ссылку для подтверждения на",
-    "checkEmailTitle": "Проверьте почту",
+    "checkEmailDescription": "Мы отправили ссылку для подтверждения на вашу почту:",
+    "checkEmailTitle": "Письмо с подтверждением отправлено",
     "errors": {
       "resendFailed": "Не удалось повторно отправить письмо. Попробуйте ещё раз.",
       "serverUnreachable": "Не удалось подключиться к серверу. Проверьте соединение и попробуйте снова."
@@ -1182,8 +1185,8 @@
     "resendButton": "Отправить письмо повторно",
     "resendIn": "Повторная отправка через {{seconds}} с",
     "verifiedDescription": "Ваш аккаунт настроен.",
-    "verifiedTitle": "Электронная почта подтверждена",
-    "waiting": "Ожидание подтверждения...",
+    "verifiedTitle": "Подтверждено",
+    "waiting": "Ожидание подтверждения",
     "backToSignIn": "Вернуться ко входу"
   },
   "errorBoundary": {
@@ -1276,7 +1279,7 @@
   },
   "languageSelector": {
     "noLanguagesFound": "Языки не найдены",
-    "searchPlaceholder": "Поиск..."
+    "searchPlaceholder": "Поиск языков"
   },
   "microphoneSettings": {
     "builtIn": "(Встроенный)",
@@ -1911,7 +1914,7 @@
       },
       "waylandPaste": {
         "title": "Настройка вставки в Wayland",
-        "description": "Автоматическая вставка в Wayland требует ydotool. Проверьте состояние каждого компонента ниже.",
+        "description": "Автоматическая вставка в Wayland использует ydotool или wtype. На композиторах wlroots предпочтителен wtype.",
         "allGoodDesc": "Автоматическая вставка готова к работе.",
         "recheck": "Проверить снова",
         "copy": "Копировать",

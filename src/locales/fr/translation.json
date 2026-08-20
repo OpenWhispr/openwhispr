@@ -532,37 +532,37 @@
       "continue": "Continuer quand même"
     },
     "useCase": {
-      "title": "Qu'est-ce qui vous amène ?",
+      "title": "Comment utiliserez-vous OpenWhispr ?",
       "titleLineOne": "Comment utiliserez-vous",
       "titleLineTwo": "OpenWhispr ?",
-      "description": "Nous sommes une petite équipe qui publie chaque semaine. Vos choix configurent l'application pour vous — et nous disent quoi construire ensuite.",
+      "description": "Choisissez tout ce qui s'applique. Nous adapterons votre configuration.",
       "noteLabel": "Autre chose à nous dire ?",
-      "notePlaceholder": "Facultatif",
+      "notePlaceholder": "Dites-nous comment vous comptez utiliser OpenWhispr (facultatif)",
       "proceedToSetup": "Continuer la configuration",
       "options": {
         "dictation": {
-          "title": "Écrire plus vite",
-          "description": "Dictez dans n'importe quelle application au lieu de taper"
+          "title": "Écrivez plus vite",
+          "description": "Parlez au lieu de taper, dans n'importe quelle application."
         },
         "meetings": {
-          "title": "Notes et résumés de réunion",
-          "description": "Enregistrez, transcrivez et résumez vos réunions"
+          "title": "Notes de réunion",
+          "description": "Enregistrez, transcrivez et résumez vos réunions."
         },
         "healthcare": {
-          "title": "Transcription médicale, clinique et thérapeutique",
-          "description": "Dictez notes de patients, notes de séance et comptes rendus"
+          "title": "Documentation clinique",
+          "description": "Créez des notes de patients, des notes de séance et des comptes rendus."
         },
         "translation": {
-          "title": "Traduire des langues",
-          "description": "Parlez une langue, écrivez-en une autre"
+          "title": "Traduisez en parlant",
+          "description": "Parlez une langue et écrivez dans une autre."
         },
         "ai": {
-          "title": "Parler à mon IA",
-          "description": "Pilotez ChatGPT, Claude et d'autres agents à la voix"
+          "title": "Parlez à votre IA",
+          "description": "Utilisez votre voix avec ChatGPT, Claude et d'autres outils d'IA."
         },
         "upload": {
-          "title": "Importer des fichiers audio",
-          "description": "Importez et transcrivez MP3, OGG et plus"
+          "title": "Transcrivez des fichiers audio",
+          "description": "Importez des fichiers audio à transcrire."
         }
       },
       "selectHint": "Sélectionnez tout ce qui s'applique"
@@ -1038,9 +1038,12 @@
       "or": "ou"
     },
     "emailStep": {
+      "checkingEmail": "Vérification de votre adresse e-mail...",
       "continueWithEmail": "Continuer avec l'e-mail",
-      "continueWithoutAccount": "Continuer sans compte",
-      "emailPlaceholder": "vous@exemple.com"
+      "continueWithoutAccount": "Utiliser OpenWhispr sans compte",
+      "emailLabel": "Adresse e-mail",
+      "emailPlaceholder": "vous@exemple.com",
+      "useDifferentEmail": "Utiliser une autre adresse e-mail"
     },
     "errors": {
       "accountExistsSignIn": "Un compte avec cet e-mail existe déjà. Veuillez vous connecter.",
@@ -1063,19 +1066,19 @@
     },
     "passwordForm": {
       "createAccount": "Créer un compte",
-      "createAccountButton": "Créer un compte",
+      "createAccountButton": "Continuer avec l'e-mail",
       "createAccountLink": "Créer un compte",
       "createPasswordPlaceholder": "Créer un mot de passe",
       "creatingAccount": "Création du compte...",
       "enterPasswordPlaceholder": "Saisissez votre mot de passe",
       "forgotPassword": "Mot de passe oublié ?",
-      "fullNamePlaceholder": "Nom complet",
+      "fullNamePlaceholder": "Ajoutez votre nom",
       "nameLabel": "Nom",
       "passwordLabel": "Mot de passe",
       "haveAccount": "Vous avez déjà un compte ?",
       "newHere": "Nouveau ici ?",
       "passwordMinLength": "Le mot de passe doit contenir au moins 8 caractères",
-      "signIn": "Se connecter",
+      "signIn": "Continuer avec l'e-mail",
       "signInLink": "Se connecter",
       "signingIn": "Connexion en cours...",
       "welcomeBack": "Bon retour"
@@ -1101,7 +1104,7 @@
       "continueWithMicrosoft": "Continuer avec Microsoft",
       "protocolUnavailable": "Connexion par navigateur indisponible — réenregistrez le protocole openwhispr:// dans les paramètres Applications par défaut du système."
     },
-    "welcomeSubtitle": "Dictez n'importe où en utilisant votre voix",
+    "welcomeSubtitle": "Utilisez votre voix pour tout",
     "welcomeTitle": "Bienvenue sur OpenWhispr",
     "sessionExpired": "Session expirée. Veuillez relancer le processus d'inscription."
   },
@@ -1261,8 +1264,8 @@
   },
   "dictionarySuffix": "Suffixe du dictionnaire",
   "emailVerification": {
-    "checkEmailDescription": "Nous avons envoyé un lien de vérification à",
-    "checkEmailTitle": "Vérifiez votre e-mail",
+    "checkEmailDescription": "Nous avons envoyé un lien de vérification à votre adresse :",
+    "checkEmailTitle": "E-mail de vérification envoyé",
     "errors": {
       "resendFailed": "Nous n'avons pas pu renvoyer l'e-mail. Veuillez réessayer.",
       "serverUnreachable": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez."
@@ -1270,8 +1273,8 @@
     "resendButton": "Renvoyer l'e-mail de vérification",
     "resendIn": "Renvoyer dans {{seconds}}s",
     "verifiedDescription": "Votre compte est prêt.",
-    "verifiedTitle": "E-mail vérifié",
-    "waiting": "En attente de la vérification...",
+    "verifiedTitle": "Vérifié",
+    "waiting": "En attente de la vérification",
     "backToSignIn": "Retour à la connexion"
   },
   "errorBoundary": {
@@ -1364,7 +1367,7 @@
   },
   "languageSelector": {
     "noLanguagesFound": "Aucune langue trouvée",
-    "searchPlaceholder": "Rechercher..."
+    "searchPlaceholder": "Rechercher des langues"
   },
   "microphoneSettings": {
     "builtIn": "(Intégré)",
@@ -2190,7 +2193,7 @@
       },
       "waylandPaste": {
         "title": "Configuration du collage Wayland",
-        "description": "Le collage automatique sous Wayland nécessite ydotool. Vérifiez l'état de chaque composant ci-dessous.",
+        "description": "Le collage automatique sous Wayland utilise ydotool ou wtype. wtype est préféré sur les compositeurs wlroots.",
         "allGoodDesc": "Le collage automatique est prêt.",
         "recheck": "Revérifier",
         "copy": "Copier",

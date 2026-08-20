@@ -46,12 +46,14 @@
 }
 
 :root {
-  /* Easing. The built-in CSS curves are too weak to read as intentional, so UI
-     motion uses --ease-out for anything entering or exiting (starts fast, so the
-     user sees movement at the moment they are watching most closely). Never
-     ease-in on UI: it delays the first frame and reads as sluggish at the same
-     duration. */
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Easing. The built-in CSS curves are too weak to read as intentional, so
+     onboarding motion uses --onboarding-ease-out for anything entering or
+     exiting (starts fast, so the user sees movement at the moment they are
+     watching most closely). Never ease-in on UI: it delays the first frame and
+     reads as sluggish at the same duration. Scoped name on purpose: a bare
+     --ease-out here overrides Tailwind's @layer theme variable of the same
+     name and silently retimes every `ease-out` utility app-wide. */
+  --onboarding-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
   /* Typography */
   --font-family-sans:
@@ -195,11 +197,8 @@
   }
 
   /* The control panel window is transparent (windowConfig.js), so the page backing
-     is cleared here rather than filled: the compact frame paints its own opaque
-     surface across the whole window, and a filled body/#root would only show up
-     as a seam if the frame ever inset itself from the window edge. Every other
-     control panel screen paints its own background, so this stays scoped to
-     .compact. */
+     is cleared here rather than filled. The compact frame owns the complete
+     480x576 surface, including its rounded corners. */
   body:has(.onboarding-canvas.compact),
   body:has(.onboarding-canvas.compact) #root {
     background: transparent;
@@ -357,6 +356,24 @@ body.dark:has(.onboarding-canvas) {
   --onboarding-scrim: rgb(0 0 0 / 0.55);
 }
 
+/* Authentication also appears in the control-panel sign-in dialog. Give that
+   embedded version the same semantic names without applying onboarding's page
+   chrome or overriding the dialog's existing theme. */
+.onboarding-embedded-auth {
+  --onboarding-accent: var(--color-primary);
+  --onboarding-accent-foreground: var(--color-primary-foreground);
+  --onboarding-text-primary: var(--color-foreground);
+  --onboarding-text-secondary: var(--color-muted-foreground);
+  --onboarding-text-tertiary: color-mix(in srgb, var(--color-muted-foreground) 75%, transparent);
+  --onboarding-control-border: var(--color-border);
+  --onboarding-surface: var(--color-background);
+  --onboarding-surface-secondary: var(--color-muted);
+  --onboarding-surface-tertiary: var(--color-secondary);
+  --onboarding-surface-hover: var(--color-surface-1);
+  --onboarding-inverse-surface: var(--color-foreground);
+  --onboarding-inverse-text: var(--color-background);
+}
+
 /* Remaps the app-wide shadcn tokens onto the onboarding palette, so any shared
    ui/ primitive dropped into a step (Button, Input, Select) picks up the
    onboarding theme instead of the control panel's. Bound to the --onboarding-*
@@ -418,7 +435,7 @@ body.dark:has(.onboarding-canvas) {
 }
 
 .onboarding-step-enter {
-  animation: onboarding-step-in 320ms var(--ease-out) both;
+  animation: onboarding-step-in 320ms var(--onboarding-ease-out) both;
 }
 
 /* Staggered children, for the step bodies that are a row or column of peers (the
@@ -426,7 +443,7 @@ body.dark:has(.onboarding-canvas) {
    enough that the last item is in under 200ms. Decorative only — nothing waits on
    it, and every item is interactive from the first frame. */
 .onboarding-stagger > * {
-  animation: onboarding-step-in 300ms var(--ease-out) both;
+  animation: onboarding-step-in 300ms var(--onboarding-ease-out) both;
 }
 
 .onboarding-stagger > *:nth-child(1) {
@@ -450,13 +467,13 @@ body.dark:has(.onboarding-canvas) {
    visible animation rather than just tactile. transform only — it is the one
    property besides opacity that skips layout and paint. */
 .onboarding-pressable {
-  /* Both properties named explicitly, never `all`. The press uses --ease-out so
+  /* Both properties named explicitly, never `all`. The press uses --onboarding-ease-out so
      the scale is felt immediately; hover fills use plain `ease`, which is the
      right curve for a colour change that has no direction. Declaring colours here
      too means these elements do not also need transition-colors, which would
      overwrite transition-property and silently drop the press. */
   transition:
-    transform 160ms var(--ease-out),
+    transform 160ms var(--onboarding-ease-out),
     background-color 160ms ease,
     border-color 160ms ease,
     color 160ms ease;
@@ -818,6 +835,15 @@ h1 {
      the token has to be bound here. All four call sites are onboarding. */
   border-color: var(--onboarding-control-border) !important;
   background-color: var(--onboarding-surface) !important;
+}
+
+/* Auth fields use the same visible stroke as the rest of onboarding while
+   retaining the raised input fill shown in the compact authentication frames. */
+.onboarding-canvas .onboarding-light-input.onboarding-auth-input,
+.onboarding-canvas .onboarding-light-input.onboarding-auth-input:hover,
+.onboarding-canvas .onboarding-light-input.onboarding-auth-input:focus-visible {
+  border-color: var(--onboarding-control-border) !important;
+  background-color: var(--onboarding-surface-secondary) !important;
 }
 
 .onboarding-provider-input,

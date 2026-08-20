@@ -78,7 +78,7 @@ const MAIN_WINDOW_CONFIG = {
 // panel. Its typography, cards and spacing are sized for this 1000x740 canvas;
 // clampedBounds still handles displays whose work area is smaller.
 const ONBOARDING_WINDOW_SIZES = {
-  COMPACT: { width: 546, height: 654 },
+  COMPACT: { width: 480, height: 576 },
   EXPANDED: { width: 1000, height: 740 },
 };
 

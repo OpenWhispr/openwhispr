@@ -532,37 +532,37 @@
       "continue": "仍然繼續"
     },
     "useCase": {
-      "title": "你為什麼來到這裡？",
+      "title": "你會如何使用 OpenWhispr？",
       "titleLineOne": "你會如何使用",
       "titleLineTwo": "OpenWhispr？",
-      "description": "我們是一個小團隊，每週發布更新。你的選擇會為你設定應用程式，也告訴我們接下來該做什麼。",
+      "description": "選擇所有適用項目，我們會據此為你量身設定。",
       "noteLabel": "還有什麼想告訴我們的嗎？",
-      "notePlaceholder": "選填",
+      "notePlaceholder": "告訴我們你打算如何使用 OpenWhispr（選填）",
       "proceedToSetup": "繼續設定",
       "options": {
         "dictation": {
           "title": "更快地寫作",
-          "description": "在任何應用程式中口述，而不是打字"
+          "description": "在任何應用程式中用說話代替打字。"
         },
         "meetings": {
-          "title": "會議筆記與摘要",
-          "description": "錄製、轉寫並總結會議"
+          "title": "會議筆記",
+          "description": "錄製、轉寫並總結會議。"
         },
         "healthcare": {
-          "title": "醫療、臨床與治療轉寫",
-          "description": "口述病歷、諮商紀錄和報告"
+          "title": "臨床紀錄",
+          "description": "建立病歷、諮商紀錄和報告。"
         },
         "translation": {
-          "title": "語言翻譯",
-          "description": "說一種語言，輸出另一種"
+          "title": "邊說邊翻譯",
+          "description": "說一種語言，寫出另一種。"
         },
         "ai": {
-          "title": "與我的 AI 對話",
-          "description": "用語音驅動 ChatGPT、Claude 等代理"
+          "title": "與你的 AI 對話",
+          "description": "用語音使用 ChatGPT、Claude 等 AI 工具。"
         },
         "upload": {
-          "title": "上傳音訊檔案",
-          "description": "上傳並轉寫 MP3、OGG 等"
+          "title": "轉寫音訊檔案",
+          "description": "上傳音訊檔案進行轉寫。"
         }
       },
       "selectHint": "可複選"
@@ -1038,9 +1038,12 @@
       "or": "或"
     },
     "emailStep": {
+      "checkingEmail": "正在檢查您的電子郵件...",
       "continueWithEmail": "使用電子郵件繼續",
-      "continueWithoutAccount": "不建立帳號繼續",
-      "emailPlaceholder": "you@example.com"
+      "continueWithoutAccount": "無需帳號使用 OpenWhispr",
+      "emailLabel": "電子郵件",
+      "emailPlaceholder": "you@example.com",
+      "useDifferentEmail": "使用其他電子郵件"
     },
     "errors": {
       "accountExistsSignIn": "此電子郵件已有帳號。請直接登入。",
@@ -1063,19 +1066,19 @@
     },
     "passwordForm": {
       "createAccount": "建立帳號",
-      "createAccountButton": "建立帳號",
+      "createAccountButton": "使用電子郵件繼續",
       "createAccountLink": "建立帳號",
       "createPasswordPlaceholder": "建立密碼",
       "creatingAccount": "正在建立帳號...",
       "enterPasswordPlaceholder": "輸入你的密碼",
       "forgotPassword": "忘記密碼？",
-      "fullNamePlaceholder": "姓名",
+      "fullNamePlaceholder": "填寫你的姓名",
       "nameLabel": "姓名",
       "passwordLabel": "密碼",
       "haveAccount": "已經有帳號了？",
       "newHere": "第一次來？",
       "passwordMinLength": "密碼至少需要 8 個字元",
-      "signIn": "登入",
+      "signIn": "使用電子郵件繼續",
       "signInLink": "登入",
       "signingIn": "登入中...",
       "welcomeBack": "歡迎回來"
@@ -1101,7 +1104,7 @@
       "continueWithMicrosoft": "使用 Microsoft 繼續",
       "protocolUnavailable": "無法透過瀏覽器登入 — 請在系統的「預設應用程式」設定中重新註冊 openwhispr:// 協定。"
     },
-    "welcomeSubtitle": "隨時隨地用語音輸入文字",
+    "welcomeSubtitle": "用語音完成一切",
     "welcomeTitle": "歡迎使用 OpenWhispr",
     "sessionExpired": "工作階段已過期，請重新登入。"
   },
@@ -1173,8 +1176,8 @@
   },
   "dictionarySuffix": "字典後綴",
   "emailVerification": {
-    "checkEmailDescription": "我們已寄送驗證連結至",
-    "checkEmailTitle": "請查看你的電子郵件",
+    "checkEmailDescription": "我們已將驗證連結寄送至你的電子郵件：",
+    "checkEmailTitle": "驗證郵件已寄出",
     "errors": {
       "resendFailed": "無法重新寄送驗證信。請再試一次。",
       "serverUnreachable": "無法連線到伺服器。請檢查你的網路連線後再試。"
@@ -1182,8 +1185,8 @@
     "resendButton": "重新寄送驗證信",
     "resendIn": "{{seconds}} 秒後可重新寄送",
     "verifiedDescription": "你的帳號已設定完成。",
-    "verifiedTitle": "電子郵件已驗證",
-    "waiting": "等待驗證中...",
+    "verifiedTitle": "已驗證",
+    "waiting": "等待驗證中",
     "backToSignIn": "返回登入"
   },
   "errorBoundary": {
@@ -1276,7 +1279,7 @@
   },
   "languageSelector": {
     "noLanguagesFound": "找不到語言",
-    "searchPlaceholder": "搜尋..."
+    "searchPlaceholder": "搜尋語言"
   },
   "microphoneSettings": {
     "builtIn": "（內建）",
@@ -1907,7 +1910,7 @@
       },
       "waylandPaste": {
         "title": "Wayland 貼上設定",
-        "description": "Wayland 下的自動貼上需要 ydotool。請檢查以下各元件的狀態。",
+        "description": "Wayland 下的自動貼上使用 ydotool 或 wtype。在 wlroots 合成器上優先使用 wtype。",
         "allGoodDesc": "自動貼上已就緒。",
         "recheck": "重新檢查",
         "copy": "複製",

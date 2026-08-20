@@ -310,7 +310,7 @@ export function CompactOnboardingFrame({
 }: CompactOnboardingFrameProps) {
   const { t } = useTranslation();
 
-  if (embedded) return <>{children}</>;
+  if (embedded) return <div className="onboarding-embedded-auth">{children}</div>;
 
   return (
     <section className="relative flex h-full min-h-screen w-full flex-col overflow-hidden bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]">
@@ -330,18 +330,16 @@ export function CompactOnboardingFrame({
         <BrandMark className="pointer-events-none absolute left-1/2 top-13 z-10 size-28 -translate-x-1/2 text-white" />
       )}
 
-      {/* Capped at the compact window's own width (546, ONBOARDING_WINDOW_SIZES.COMPACT
-          in windowConfig.js) and centred, so a viewport wider than the real window —
-          the browser dev harness, or an unlocked window in dev tools — keeps the
-          authored column instead of stretching the email field and the OAuth row
-          edge to edge. The hero strip stays full-bleed above it: it is a background
-          ramp, so it reads correctly at any width. */}
-      <div className="relative z-10 mx-auto flex w-full max-w-[34.125rem] flex-1 flex-col">
+      {/* The compact BrowserWindow is the authored 480x576 surface. This layer
+          deliberately remains square and full-bleed: Electron owns the actual
+          window clipping, so a second CSS radius cannot expose dark seams around
+          the top or bottom edges. */}
+      <div className="relative z-10 mx-auto flex w-full max-w-[30rem] flex-1 flex-col">
         {children}
       </div>
 
       {showLegalNotice && (
-        <p className="relative z-10 mx-auto mt-auto w-full max-w-xs shrink-0 px-2 pb-6 pt-5 text-center text-sm leading-5 text-[var(--onboarding-text-secondary)]">
+        <p className="relative z-10 mx-auto mt-auto w-full max-w-xs shrink-0 px-2 pb-4 pt-5 text-center text-sm leading-5 text-[var(--onboarding-text-secondary)]">
           {t("auth.legal.prefix")}{" "}
           <a
             href="https://openwhispr.com/terms"

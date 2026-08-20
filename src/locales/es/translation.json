@@ -532,37 +532,37 @@
       "continue": "Continuar de todos modos"
     },
     "useCase": {
-      "title": "¿Qué te trae por aquí?",
+      "title": "¿Cómo usarás OpenWhispr?",
       "titleLineOne": "¿Cómo usarás",
       "titleLineTwo": "OpenWhispr?",
-      "description": "Somos un equipo pequeño que lanza mejoras cada semana. Lo que elijas configura la aplicación a tu medida y nos dice qué construir a continuación.",
+      "description": "Elige todas las opciones que apliquen. Adaptaremos tu configuración.",
       "noteLabel": "¿Algo más que quieras contarnos?",
-      "notePlaceholder": "Opcional",
+      "notePlaceholder": "Cuéntanos cómo piensas usar OpenWhispr (opcional)",
       "proceedToSetup": "Continuar con la configuración",
       "options": {
         "dictation": {
-          "title": "Escribir más rápido",
-          "description": "Dicta en cualquier aplicación en lugar de teclear"
+          "title": "Escribe más rápido",
+          "description": "Habla en lugar de teclear, en cualquier aplicación."
         },
         "meetings": {
-          "title": "Notas y resúmenes de reuniones",
-          "description": "Graba, transcribe y resume tus reuniones"
+          "title": "Notas de reuniones",
+          "description": "Graba, transcribe y resume reuniones."
         },
         "healthcare": {
-          "title": "Transcripción médica, clínica y terapéutica",
-          "description": "Dicta notas de pacientes, notas de sesión e informes"
+          "title": "Documentación clínica",
+          "description": "Crea notas de pacientes, notas de sesión e informes."
         },
         "translation": {
-          "title": "Traducir idiomas",
-          "description": "Habla un idioma, escribe en otro"
+          "title": "Traduce mientras hablas",
+          "description": "Habla un idioma y escribe en otro."
         },
         "ai": {
-          "title": "Hablar con mi IA",
-          "description": "Controla por voz ChatGPT, Claude y otros agentes"
+          "title": "Habla con tu IA",
+          "description": "Usa tu voz con ChatGPT, Claude y otras herramientas de IA."
         },
         "upload": {
-          "title": "Subir archivos de audio",
-          "description": "Sube y transcribe MP3, OGG y más"
+          "title": "Transcribe archivos de audio",
+          "description": "Sube archivos de audio para transcribirlos."
         }
       },
       "selectHint": "Selecciona todas las que correspondan"
@@ -1038,9 +1038,12 @@
       "or": "o"
     },
     "emailStep": {
+      "checkingEmail": "Comprobando tu correo...",
       "continueWithEmail": "Continuar con correo electrónico",
-      "continueWithoutAccount": "Continuar sin cuenta",
-      "emailPlaceholder": "tu@ejemplo.com"
+      "continueWithoutAccount": "Usar OpenWhispr sin cuenta",
+      "emailLabel": "Correo electrónico",
+      "emailPlaceholder": "tu@ejemplo.com",
+      "useDifferentEmail": "Usar otro correo electrónico"
     },
     "errors": {
       "accountExistsSignIn": "Ya existe una cuenta con este correo. Inicia sesión.",
@@ -1063,19 +1066,19 @@
     },
     "passwordForm": {
       "createAccount": "Crear una cuenta",
-      "createAccountButton": "Crear cuenta",
+      "createAccountButton": "Continuar con correo",
       "createAccountLink": "Crear cuenta",
       "createPasswordPlaceholder": "Crea una contraseña",
       "creatingAccount": "Creando cuenta...",
       "enterPasswordPlaceholder": "Introduce tu contraseña",
       "forgotPassword": "¿Olvidaste tu contraseña?",
-      "fullNamePlaceholder": "Nombre completo",
+      "fullNamePlaceholder": "Añade tu nombre",
       "nameLabel": "Nombre",
       "passwordLabel": "Contraseña",
       "haveAccount": "¿Ya tienes una cuenta?",
       "newHere": "¿Eres nuevo?",
       "passwordMinLength": "La contraseña debe tener al menos 8 caracteres",
-      "signIn": "Iniciar sesión",
+      "signIn": "Continuar con correo",
       "signInLink": "Iniciar sesión",
       "signingIn": "Iniciando sesión...",
       "welcomeBack": "Bienvenido de nuevo"
@@ -1101,7 +1104,7 @@
       "continueWithMicrosoft": "Continuar con Microsoft",
       "protocolUnavailable": "Inicio de sesión por navegador no disponible — vuelve a registrar el protocolo openwhispr:// en los ajustes de Aplicaciones predeterminadas del sistema."
     },
-    "welcomeSubtitle": "Dicta en cualquier lugar usando tu voz",
+    "welcomeSubtitle": "Usa tu voz para todo",
     "welcomeTitle": "Bienvenido a OpenWhispr",
     "sessionExpired": "Sesión expirada"
   },
@@ -1221,8 +1224,8 @@
   },
   "dictionarySuffix": "Sufijo del diccionario",
   "emailVerification": {
-    "checkEmailDescription": "Enviamos un enlace de verificación a",
-    "checkEmailTitle": "Revisa tu correo",
+    "checkEmailDescription": "Hemos enviado un enlace de verificación a tu correo:",
+    "checkEmailTitle": "Correo de verificación enviado",
     "errors": {
       "resendFailed": "No pudimos reenviar el correo. Inténtalo de nuevo.",
       "serverUnreachable": "No se pudo conectar al servidor. Revisa tu conexión e inténtalo de nuevo."
@@ -1230,8 +1233,8 @@
     "resendButton": "Reenviar correo de verificación",
     "resendIn": "Reenviar en {{seconds}}s",
     "verifiedDescription": "Tu cuenta está lista.",
-    "verifiedTitle": "Correo verificado",
-    "waiting": "Esperando verificación...",
+    "verifiedTitle": "Verificado",
+    "waiting": "Esperando verificación",
     "backToSignIn": "Volver a iniciar sesión"
   },
   "errorBoundary": {
@@ -1324,7 +1327,7 @@
   },
   "languageSelector": {
     "noLanguagesFound": "No se encontraron idiomas",
-    "searchPlaceholder": "Buscar..."
+    "searchPlaceholder": "Buscar idiomas"
   },
   "microphoneSettings": {
     "builtIn": "(Integrado)",
@@ -1955,7 +1958,7 @@
       },
       "waylandPaste": {
         "title": "Configuración de pegado en Wayland",
-        "description": "El pegado automático en Wayland requiere ydotool. Comprueba el estado de cada componente a continuación.",
+        "description": "El pegado automático en Wayland usa ydotool o wtype. En compositores wlroots se prefiere wtype.",
         "allGoodDesc": "El pegado automático está listo.",
         "recheck": "Volver a comprobar",
         "copy": "Copiar",

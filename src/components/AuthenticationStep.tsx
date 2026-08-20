@@ -55,7 +55,7 @@ function ProviderTile({
       disabled={disabled}
       title={title}
       aria-label={label}
-      className="flex h-[3.8rem] min-w-0 flex-1 flex-col items-center justify-center gap-1.5 rounded-xl bg-neutral-100 px-2 text-neutral-950 transition-colors hover:bg-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/40 disabled:pointer-events-none disabled:text-neutral-500"
+      className="flex h-13 min-w-0 flex-1 flex-col items-center justify-center gap-1.5 rounded-xl bg-[var(--onboarding-surface-secondary)] px-2 text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_40%,transparent)] disabled:pointer-events-none disabled:opacity-100"
     >
       {loading ? (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -115,7 +115,7 @@ export default function AuthenticationStep({
   embedded = false,
 }: AuthenticationStepProps) {
   const { t } = useTranslation();
-  // The fixed top offsets centre content in the 546px compact setup window;
+  // The fixed top offsets centre content in the compact setup window;
   // inside the SignInDialog the dialog supplies its own padding.
   const frameInset = (topClass: string) => (embedded ? "pt-1" : `px-5 ${topClass}`);
   const titleClass = embedded
@@ -148,6 +148,10 @@ export default function AuthenticationStep({
   useEffect(() => {
     if (!isLoaded || !isSignedIn || needsVerificationRef.current || !user?.id || !user?.email)
       return;
+    // The ref only latches within one mount. Remounting over a session that is
+    // still unverified (Back from the verification step) must not complete —
+    // that would advance with an email the user came back to correct.
+    if (user.emailVerified === false) return;
     onAuthComplete();
   }, [isLoaded, isSignedIn, user, onAuthComplete]);
 
@@ -256,7 +260,7 @@ export default function AuthenticationStep({
       setAuthMode(data.exists ? "sign-in" : "sign-up");
     } catch (err) {
       logger.error("Error checking user existence", err, "auth");
-      setAuthMode("sign-up");
+      setError(t("auth.errors.failedUserCheck"));
     } finally {
       setIsCheckingEmail(false);
     }
@@ -407,7 +411,7 @@ export default function AuthenticationStep({
   if (forgotPasswordOpen) {
     return (
       <CompactOnboardingFrame embedded={embedded}>
-        <div className={frameInset("pt-72")}>
+        <div className={frameInset("pt-42")}>
           <ForgotPasswordView email={email} onBack={handleBackFromForgotPassword} />
         </div>
       </CompactOnboardingFrame>
@@ -485,32 +489,57 @@ export default function AuthenticationStep({
   // Password form (after email is entered)
   if (authMode !== null) {
     return (
-      <CompactOnboardingFrame showLegalNotice={false} embedded={embedded}>
-        <div className={frameInset("pt-[18.3rem]")}>
-          <button type="button" onClick={handleBack} className="sr-only">
-            <ChevronLeft className="w-3 h-3" />
+      <CompactOnboardingFrame embedded={embedded}>
+        <div className={`${frameInset("pt-42")} text-center`}>
+          <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
+          <p className="mt-3 text-base text-[var(--onboarding-text-secondary)]">
+            {t("auth.welcomeSubtitle")}
+          </p>
+
+          <button
+            type="button"
+            onClick={handleBack}
+            className={
+              embedded
+                ? "mb-3 inline-flex h-8 items-center gap-1 text-xs text-[var(--onboarding-text-secondary)] transition-colors hover:text-[var(--onboarding-text-primary)]"
+                : "absolute left-5 top-13 inline-flex h-8 items-center gap-1 text-xs font-medium text-white/80 transition-colors hover:text-white"
+            }
+            style={embedded ? undefined : ({ WebkitAppRegion: "no-drag" } as React.CSSProperties)}
+            disabled={isSubmitting}
+          >
+            <ChevronLeft className="size-3.5" />
             {t("auth.common.back")}
           </button>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {authMode === "sign-up" && (
-              <label className="block space-y-2">
-                <span className="text-xs text-neutral-500 dark:text-neutral-500">
-                  {t("auth.passwordForm.nameLabel")}
-                </span>
+          <form onSubmit={handleSubmit} className="mt-4 space-y-3 text-left">
+            <label className="block space-y-2">
+              <span className="text-xs text-[var(--onboarding-text-secondary)]">
+                {authMode === "sign-up"
+                  ? t("auth.passwordForm.nameLabel")
+                  : t("auth.emailStep.emailLabel")}
+              </span>
+              {authMode === "sign-up" ? (
                 <Input
                   type="text"
                   placeholder={t("auth.passwordForm.fullNamePlaceholder")}
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="onboarding-light-input onboarding-light-input-bordered h-11 rounded-xl px-3 text-sm"
+                  className="onboarding-light-input onboarding-auth-input h-10 rounded-xl px-3 text-sm"
                   disabled={isSubmitting}
                   autoFocus
                 />
-              </label>
-            )}
+              ) : (
+                <Input
+                  type="email"
+                  value={email}
+                  className="onboarding-light-input onboarding-auth-input h-10 rounded-xl px-3 text-sm"
+                  readOnly
+                  disabled={isSubmitting}
+                />
+              )}
+            </label>
             <label className="block space-y-2">
-              <span className="text-xs text-neutral-500 dark:text-neutral-500">
+              <span className="text-xs text-[var(--onboarding-text-secondary)]">
                 {t("auth.passwordForm.passwordLabel")}
               </span>
               <Input
@@ -518,24 +547,13 @@ export default function AuthenticationStep({
                 placeholder={t("auth.passwordForm.passwordLabel")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="onboarding-light-input onboarding-light-input-bordered h-11 rounded-xl px-3 text-sm"
+                className="onboarding-light-input onboarding-auth-input h-10 rounded-xl px-3 text-sm"
                 required
                 minLength={authMode === "sign-up" ? 8 : undefined}
                 disabled={isSubmitting}
                 autoFocus={authMode === "sign-in"}
               />
             </label>
-
-            {authMode === "sign-in" && (
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                className="block text-left text-xs text-primary transition-colors hover:text-primary/80"
-                disabled={isSubmitting}
-              >
-                {t("auth.passwordForm.forgotPassword")}
-              </button>
-            )}
 
             {error && (
               <div className="px-2.5 py-1.5 rounded bg-destructive/5 border border-destructive/20 flex items-center gap-1.5">
@@ -547,7 +565,7 @@ export default function AuthenticationStep({
             <Button
               type="submit"
               disabled={isSubmitting || !password}
-              className="h-[2.875rem] w-full rounded-full border-transparent bg-blue-600 text-base font-normal shadow-none hover:bg-blue-500 disabled:border-transparent disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100 dark:bg-blue-600 dark:hover:bg-blue-500 dark:disabled:bg-neutral-200 dark:disabled:text-neutral-500"
+              className="h-10 w-full rounded-full border-transparent bg-[var(--onboarding-inverse-surface)] text-base font-normal text-[var(--onboarding-inverse-text)] shadow-none hover:opacity-90 disabled:border-transparent disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)] disabled:opacity-100"
             >
               {isSubmitting ? (
                 <>
@@ -568,30 +586,23 @@ export default function AuthenticationStep({
             </Button>
           </form>
 
-          <div className="sr-only">
-            <button
-              type="button"
-              onClick={toggleAuthMode}
-              className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
-              disabled={isSubmitting}
-            >
-              {authMode === "sign-in" ? (
-                <>
-                  {t("auth.passwordForm.newHere")}{" "}
-                  <span className="font-medium text-primary">
-                    {t("auth.passwordForm.createAccountLink")}
-                  </span>
-                </>
-              ) : (
-                <>
-                  {t("auth.passwordForm.haveAccount")}{" "}
-                  <span className="font-medium text-primary">
-                    {t("auth.passwordForm.signInLink")}
-                  </span>
-                </>
-              )}
-            </button>
-          </div>
+          {authMode === "sign-in" && (
+            <div className="mt-3 text-xs text-[var(--onboarding-text-secondary)]">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="transition-colors hover:text-[var(--onboarding-text-primary)]"
+                disabled={isSubmitting}
+              >
+                {t("auth.passwordForm.forgotPassword")}
+              </button>
+            </div>
+          )}
+          <button type="button" onClick={toggleAuthMode} className="sr-only">
+            {authMode === "sign-in"
+              ? t("auth.passwordForm.createAccountLink")
+              : t("auth.passwordForm.signInLink")}
+          </button>
         </div>
       </CompactOnboardingFrame>
     );
@@ -630,9 +641,9 @@ export default function AuthenticationStep({
 
   return (
     <CompactOnboardingFrame embedded={embedded}>
-      <div className={`${frameInset("pt-48")} text-center`}>
+      <div className={`${frameInset("pt-42")} text-center`}>
         <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
-        <p className="mt-3 text-base text-neutral-500 dark:text-neutral-500">
+        <p className="mt-3 text-base text-[var(--onboarding-text-secondary)]">
           {t("auth.welcomeSubtitle")}
         </p>
 
@@ -641,28 +652,34 @@ export default function AuthenticationStep({
             event.preventDefault();
             handleEmailContinue();
           }}
-          className="mt-6 space-y-3"
+          className="mt-3 space-y-3"
         >
           <Input
             type="email"
             placeholder={t("auth.emailStep.emailPlaceholder")}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="onboarding-light-input h-11 rounded-xl px-3 text-sm"
+            className="onboarding-light-input h-10 rounded-xl px-3 text-sm disabled:opacity-100"
             required
             disabled={busy}
           />
           <Button
             type="submit"
             disabled={!email.trim() || busy}
-            className="h-[2.875rem] w-full rounded-full border-transparent bg-blue-600 text-base font-normal shadow-none hover:bg-blue-500 disabled:border-transparent disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100 dark:bg-blue-600 dark:hover:bg-blue-500 dark:disabled:bg-neutral-200 dark:disabled:text-neutral-500"
+            className={`h-10 w-full rounded-full border-transparent bg-[var(--onboarding-inverse-surface)] text-base font-normal text-[var(--onboarding-inverse-text)] shadow-none hover:opacity-90 disabled:border-transparent disabled:opacity-100 ${
+              email.trim()
+                ? ""
+                : "disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)]"
+            }`}
           >
             {isCheckingEmail ? <Loader2 className="size-4 animate-spin" /> : null}
-            {t("auth.emailStep.continueWithEmail")}
+            {isCheckingEmail
+              ? t("auth.emailStep.checkingEmail")
+              : t("auth.emailStep.continueWithEmail")}
           </Button>
         </form>
 
-        <p className="pb-3 pt-4 text-sm font-normal uppercase text-neutral-500 dark:text-neutral-500">
+        <p className="pb-3 pt-4 text-sm font-normal uppercase text-[var(--onboarding-text-secondary)]">
           {t("auth.common.or")}
         </p>
 
@@ -700,7 +717,7 @@ export default function AuthenticationStep({
               variant="ghost"
               size="sm"
               onClick={onContinueWithoutAccount}
-              className="w-full rounded-full text-base font-normal text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950 dark:text-neutral-600 dark:hover:bg-neutral-100 dark:hover:text-neutral-950"
+              className="w-full rounded-full text-base font-normal text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-hover)] hover:text-[var(--onboarding-text-primary)]"
               disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
             >
               {t("auth.emailStep.continueWithoutAccount")}
