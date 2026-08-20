@@ -20,7 +20,7 @@ const EMA_NEXT = 0.5;
 // Anything that is not a sentinel reaches the toast unchanged.
 const MEETING_ERROR_KEYS: Record<string, string> = {
   policyRestricted: "notes.meeting.restrictedByOrg",
-  unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
+  selfHostedUrlMissing: "notes.meeting.selfHostedUrlMissing",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",
 };

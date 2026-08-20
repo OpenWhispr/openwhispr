@@ -2155,7 +2155,7 @@
         "noteRecording": "筆記錄音",
         "upload": "上傳音訊"
       },
-      "selfHostedStreamingNote": "需要支援串流轉錄的伺服器。"
+      "selfHostedChunkedNote": "音訊會以短片段傳送至伺服器的 /audio/transcriptions 端點，與聽寫使用相同的 OpenAI 相容介面。在多人長時間錄音中，分段轉錄的準確度可能低於即時轉錄。"
     },
     "llms": {
       "title": "語言模型",
@@ -3047,7 +3047,7 @@
       "description": "轉錄與結構化摘要",
       "back": "返回",
       "restrictedByOrg": "會議轉錄已被您的組織限制。",
-      "unsupportedSelfHosted": "筆記錄音尚不支援自架端點。請開啟設定，選擇本機或支援串流的服務商。",
+      "selfHostedUrlMissing": "自架筆記錄音需要轉錄伺服器的 URL。請在設定中新增。",
       "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
       "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
       "systemAudioSilent": {

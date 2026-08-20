@@ -2155,7 +2155,7 @@
         "noteRecording": "Registrazione note",
         "upload": "Carica audio"
       },
-      "selfHostedStreamingNote": "Richiede un server che supporti la trascrizione in streaming."
+      "selfHostedChunkedNote": "L'audio viene inviato in brevi segmenti all'endpoint /audio/transcriptions del tuo server, con lo stesso contratto compatibile con OpenAI della dettatura. La trascrizione a segmenti può essere meno accurata di quella in tempo reale nelle registrazioni lunghe con più interlocutori."
     },
     "llms": {
       "title": "Modelli linguistici",
@@ -3047,7 +3047,7 @@
       "description": "Trascrizioni e riassunti strutturati",
       "back": "Indietro",
       "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione.",
-      "unsupportedSelfHosted": "La registrazione delle note non può ancora usare un endpoint self-hosted. Apri le Impostazioni e scegli Locale o un provider in streaming.",
+      "selfHostedUrlMissing": "La registrazione delle note self-hosted richiede l'URL di un server di trascrizione. Aggiungilo nelle Impostazioni.",
       "unsupportedProvider": "La registrazione delle note non può usare {{provider}} per la trascrizione dal vivo. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "noProviderSelected": "Nessun provider selezionato per la registrazione delle note. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "systemAudioSilent": {

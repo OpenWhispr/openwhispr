@@ -2208,7 +2208,7 @@
         "noteRecording": "Grabación de notas",
         "upload": "Subir audio"
       },
-      "selfHostedStreamingNote": "Requiere un servidor que admita transcripción en streaming."
+      "selfHostedChunkedNote": "El audio se envía en fragmentos cortos al endpoint /audio/transcriptions de tu servidor, con el mismo contrato compatible con OpenAI que el dictado. La transcripción por fragmentos puede ser menos precisa que en tiempo real en grabaciones largas con varios hablantes."
     },
     "llms": {
       "title": "Modelos de lenguaje",
@@ -3100,7 +3100,7 @@
       "description": "Transcripciones y resúmenes estructurados",
       "back": "Atrás",
       "restrictedByOrg": "La transcripción de reuniones está restringida por tu organización.",
-      "unsupportedSelfHosted": "La grabación de notas aún no puede usar un servidor propio. Abre Ajustes y elige Local o un proveedor de streaming.",
+      "selfHostedUrlMissing": "La grabación de notas con servidor propio necesita la URL de un servidor de transcripción. Añádela en Ajustes.",
       "unsupportedProvider": "La grabación de notas no puede usar {{provider}} para transcripción en vivo. Abre Ajustes y elige Local o un proveedor de streaming.",
       "noProviderSelected": "No hay ningún proveedor seleccionado para la grabación de notas. Abre Ajustes y elige Local o un proveedor de streaming.",
       "systemAudioSilent": {

@@ -445,6 +445,7 @@ const MEETING_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
   ["transcriptionMode", "meetingTranscriptionMode"],
   ["remoteTranscriptionType", "meetingRemoteTranscriptionType"],
   ["remoteTranscriptionUrl", "meetingRemoteTranscriptionUrl"],
+  ["remoteTranscriptionModel", "meetingRemoteTranscriptionModel"],
 ];
 const MEETING_REASONING_PAIRS: ReadonlyArray<[string, string]> = [
   ["reasoningProvider", "meetingReasoningProvider"],
@@ -910,6 +911,7 @@ export interface SettingsState
   meetingCloudTranscriptionMode: string;
   meetingRemoteTranscriptionType: SelfHostedType;
   meetingRemoteTranscriptionUrl: string;
+  meetingRemoteTranscriptionModel: string;
 
   uploadTranscriptionMode: InferenceMode;
   uploadUseLocalWhisper: boolean;
@@ -1013,6 +1015,7 @@ export interface SettingsState
   setMeetingCloudTranscriptionMode: (value: string) => void;
   setMeetingRemoteTranscriptionType: (type: SelfHostedType) => void;
   setMeetingRemoteTranscriptionUrl: (url: string) => void;
+  setMeetingRemoteTranscriptionModel: (model: string) => void;
 
   setUploadTranscriptionMode: (mode: InferenceMode) => void;
   setUploadUseLocalWhisper: (value: boolean) => void;
@@ -1710,6 +1713,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
   })(),
   meetingRemoteTranscriptionUrl: readString("meetingRemoteTranscriptionUrl", ""),
+  meetingRemoteTranscriptionModel: readString("meetingRemoteTranscriptionModel", ""),
 
   uploadTranscriptionMode: (() => {
     const v = readString("uploadTranscriptionMode", "openwhispr");
@@ -1803,6 +1807,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     type: SelfHostedType
   ) => void,
   setMeetingRemoteTranscriptionUrl: createStringSetter("meetingRemoteTranscriptionUrl"),
+  setMeetingRemoteTranscriptionModel: createStringSetter("meetingRemoteTranscriptionModel"),
 
   setUploadTranscriptionMode: createStringSetter("uploadTranscriptionMode") as (
     mode: InferenceMode
@@ -2721,6 +2726,7 @@ export interface ResolvedMeetingTranscription {
   transcriptionMode: InferenceMode;
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
+  remoteTranscriptionModel: string;
 }
 
 export const selectResolvedMeetingTranscription = (
@@ -2740,6 +2746,7 @@ export const selectResolvedMeetingTranscription = (
   transcriptionMode: state.meetingTranscriptionMode,
   remoteTranscriptionType: state.meetingRemoteTranscriptionType,
   remoteTranscriptionUrl: state.meetingRemoteTranscriptionUrl || state.remoteTranscriptionUrl,
+  remoteTranscriptionModel: state.meetingRemoteTranscriptionModel || state.remoteTranscriptionModel,
 });
 
 export interface ResolvedUploadTranscription {

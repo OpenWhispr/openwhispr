@@ -167,6 +167,8 @@ const getMeetingTranscriptionOptions = () => {
     cohereModel: resolved.cohereModel,
     selectedProvider: resolved.cloudTranscriptionProvider,
     selectedModel: resolved.cloudTranscriptionModel,
+    remoteTranscriptionUrl: resolved.remoteTranscriptionUrl,
+    remoteTranscriptionModel: resolved.remoteTranscriptionModel,
     byokProviders: getMeetingStreamingTranscriptionProviders(),
     managedProviders: useStreamingProvidersStore.getState().providers,
     cortiEnvironment: state.cortiEnvironment,
