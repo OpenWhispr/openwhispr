@@ -17,8 +17,10 @@ jobs:
         # --ignore-scripts skips the native build, so every DB-backed test
         # (snippetsDatabase, noteCloudUpsertGuard, …) silently skips without this.
         run: npm rebuild better-sqlite3
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Quality checks
+        # format:check + typecheck — the same gate build-and-notarize runs, so
+        # the two workflows can't disagree about whether a PR passed (#1735).
+        run: npm run quality-check
       - name: Run tests
         run: npm test
         env:
