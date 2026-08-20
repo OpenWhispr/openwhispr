@@ -22,6 +22,7 @@ import type {
   ParakeetDownloadProgressData,
   WhisperDownloadProgressData,
 } from "../../types/electron";
+import { mergeHydratedDownloads } from "./localDownloadState";
 
 type DownloadKind = "whisper" | "parakeet" | "llm";
 
@@ -121,6 +122,8 @@ export default function BackgroundModelDownloadTray() {
   const { t } = useTranslation();
   const [downloads, setDownloads] = useState<Record<string, ActiveDownload>>({});
   const [hydrated, setHydrated] = useState(false);
+  const hydrationInProgress = useRef(true);
+  const removedDuringHydration = useRef<Set<string>>(new Set());
   // An abort emits no terminal progress event (the IPC handlers exclude
   // DOWNLOAD_CANCELLED from the error emit), but chunk events already queued
   // when the user clicks cancel still arrive and would resurrect the removed
@@ -137,6 +140,7 @@ export default function BackgroundModelDownloadTray() {
     // download started after mount reaches us through the progress listeners in
     // the next effect regardless.
     if (localStorage.getItem("localSetupPending") !== "true" && !hasPendingLocalModels()) {
+      hydrationInProgress.current = false;
       setHydrated(true);
       return;
     }
@@ -197,7 +201,10 @@ export default function BackgroundModelDownloadTray() {
         }
       }
 
-      setDownloads((current) => ({ ...active, ...current }));
+      setDownloads((current) =>
+        mergeHydratedDownloads(active, current, removedDuringHydration.current)
+      );
+      hydrationInProgress.current = false;
       setHydrated(true);
     };
 
@@ -231,6 +238,7 @@ export default function BackgroundModelDownloadTray() {
         cancelledKeys.current.delete(key);
       }
       if (event.type === "complete") {
+        if (hydrationInProgress.current) removedDuringHydration.current.add(key);
         cancelledKeys.current.delete(key);
         activatePendingLocalModel(event.kind === "llm" ? "assistant" : "dictation", event.id);
       }
@@ -305,6 +313,7 @@ export default function BackgroundModelDownloadTray() {
       return;
     }
 
+    if (hydrationInProgress.current) removedDuringHydration.current.add(key);
     cancelledKeys.current.set(key, Date.now());
     // Drop the row on click rather than waiting for the main process: the cancel
     // handlers resolve after the transfer unwinds, and a row that lingers reads as

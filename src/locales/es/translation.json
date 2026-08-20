@@ -375,6 +375,7 @@
           "apiKeyRequired": "Añade una clave API antes de probar.",
           "credentialsRejected": "El proveedor rechazó estas credenciales.",
           "endpointNotFound": "El endpoint no expone una lista de modelos compatible con OpenAI.",
+          "modelNotFound": "El modelo seleccionado no está disponible en este proveedor.",
           "providerStatus": "El proveedor devolvió el estado {{status}}.",
           "timeout": "La prueba de conexión agotó el tiempo de espera.",
           "network": "No se pudo contactar con el proveedor."

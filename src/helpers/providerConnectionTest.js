@@ -208,6 +208,7 @@ function resolveProviderRequest(config) {
 const FAILURE_PRIORITY = {
   credentialsRejected: 4,
   providerStatus: 3,
+  modelNotFound: 2.5,
   endpointNotFound: 2,
   timeout: 1,
   network: 0,
@@ -236,6 +237,37 @@ function describeStatusFailure(status, provider) {
   return { errorCode: "providerStatus", error: `The provider returned status ${status}.`, status };
 }
 
+function normalizeModelId(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^models\//i, "");
+}
+
+function responseModelIds(payload) {
+  const models = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload?.models)
+        ? payload.models
+        : [];
+
+  return models
+    .map((model) => (typeof model === "string" ? model : model?.id || model?.name))
+    .map(normalizeModelId)
+    .filter(Boolean);
+}
+
+async function responseOffersModel(response, model) {
+  if (!model) return true;
+  try {
+    const payload = await response.json();
+    return responseModelIds(payload).includes(normalizeModelId(model));
+  } catch {
+    return false;
+  }
+}
+
 async function testProviderConnection(config, fetchImpl = fetch) {
   let request;
   try {
@@ -249,6 +281,7 @@ async function testProviderConnection(config, fetchImpl = fetch) {
   }
 
   const provider = String(config?.provider || "").toLowerCase();
+  const model = String(config?.model || "").trim();
   let failure = null;
   for (const endpoint of request.endpoints) {
     const controller = new AbortController();
@@ -259,7 +292,14 @@ async function testProviderConnection(config, fetchImpl = fetch) {
         headers: request.headers,
         signal: controller.signal,
       });
-      if (response.ok) return { success: true };
+      if (response.ok) {
+        if (await responseOffersModel(response, model)) return { success: true };
+        failure = pickFailure(failure, {
+          errorCode: "modelNotFound",
+          error: "The selected model is not available from this provider.",
+        });
+        continue;
+      }
       failure = pickFailure(failure, describeStatusFailure(response.status, provider));
     } catch (error) {
       if (error?.name === "AbortError") {

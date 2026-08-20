@@ -150,6 +150,59 @@ test("succeeds when only the /v1 candidate responds", async () => {
   assert.deepEqual(attempted, ["http://localhost:1234/models", "http://localhost:1234/v1/models"]);
 });
 
+test("rejects a successful model list that omits the selected model", async () => {
+  assert.deepEqual(
+    await testProviderConnection(
+      { provider: "custom", baseUrl: "http://localhost:1234/v1", model: "typo-model" },
+      async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ id: "real-model" }] }),
+      })
+    ),
+    {
+      success: false,
+      errorCode: "modelNotFound",
+      error: "The selected model is not available from this provider.",
+    }
+  );
+});
+
+test("accepts selected models from OpenAI and Gemini model-list shapes", async () => {
+  for (const payload of [
+    { data: [{ id: "selected-model" }] },
+    { models: [{ name: "models/selected-model" }] },
+  ]) {
+    assert.deepEqual(
+      await testProviderConnection(
+        { provider: "custom", baseUrl: "http://localhost:1234/v1", model: "selected-model" },
+        async () => ({ ok: true, status: 200, json: async () => payload })
+      ),
+      { success: true }
+    );
+  }
+});
+
+test("continues to a compatible candidate when an earlier model list omits the selection", async () => {
+  const attempted = [];
+  const result = await testProviderConnection(
+    { provider: "custom", baseUrl: "http://localhost:1234", model: "selected-model" },
+    async (url) => {
+      attempted.push(url);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: [{ id: url.includes("/v1/models") ? "selected-model" : "native-model" }],
+        }),
+      };
+    }
+  );
+
+  assert.deepEqual(result, { success: true });
+  assert.deepEqual(attempted, ["http://localhost:1234/models", "http://localhost:1234/v1/models"]);
+});
+
 test("reports endpointNotFound only after every candidate 404s", async () => {
   assert.deepEqual(
     await testProviderConnection(

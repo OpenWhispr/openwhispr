@@ -375,6 +375,7 @@
           "apiKeyRequired": "測試前請先新增 API Key。",
           "credentialsRejected": "服務商拒絕了這些憑證。",
           "endpointNotFound": "這個端點未提供相容 OpenAI 的模型清單。",
+          "modelNotFound": "所選模型無法從此服務商取得。",
           "providerStatus": "服務商回傳了狀態碼 {{status}}。",
           "timeout": "連線測試逾時。",
           "network": "無法連上服務商。"
