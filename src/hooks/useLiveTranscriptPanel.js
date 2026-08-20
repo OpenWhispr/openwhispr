@@ -308,16 +308,15 @@ export function useLiveTranscriptPanel({
   const holdFinal = useCallback(
     (held) => {
       finalHoldRef.current = held;
-      if (
-        !held &&
-        phaseRef.current === "final" &&
-        openRef.current &&
-        finalHideTimerRef.current === null
-      ) {
+      if (held) {
+        clearFinalHide();
+        return;
+      }
+      if (phaseRef.current === "final" && openRef.current && finalHideTimerRef.current === null) {
         scheduleFinalHide();
       }
     },
-    [scheduleFinalHide]
+    [clearFinalHide, scheduleFinalHide]
   );
 
   const showFinalText = useCallback(

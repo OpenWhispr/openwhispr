@@ -64,6 +64,7 @@ interface AssistantPanelProps {
   onBusyChange: (busy: boolean) => void;
   onResponseReadyChange: (ready: boolean) => void;
   onResponseContent: () => void;
+  onConversationReset: () => void;
   onSelectionContextChange: (context: AgentSelectionContext | null) => void;
 }
 
@@ -89,6 +90,7 @@ export function AssistantPanel({
   onBusyChange,
   onResponseReadyChange,
   onResponseContent,
+  onConversationReset,
   onSelectionContextChange,
 }: AssistantPanelProps) {
   const { t } = useTranslation();
@@ -276,7 +278,16 @@ export function AssistantPanel({
     persistence.handleNewChat();
     onConversationIdChange(null);
     clearSelectedContext();
-  }, [clearSelectedContext, isBusy, onConversationIdChange, persistence, submissionInFlight]);
+    displayedResponseRef.current = "";
+    onConversationReset();
+  }, [
+    clearSelectedContext,
+    isBusy,
+    onConversationIdChange,
+    onConversationReset,
+    persistence,
+    submissionInFlight,
+  ]);
 
   const handleTextSubmit = useCallback(
     (text: string): void => {

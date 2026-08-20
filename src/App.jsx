@@ -718,6 +718,7 @@ export default function App() {
             onBusyChange={assistant.setBusy}
             onResponseReadyChange={assistant.setResponseReady}
             onResponseContent={assistant.handleResponseContent}
+            onConversationReset={assistant.handleConversationReset}
             onSelectionContextChange={assistant.handleSelectionContextChange}
           />
         )}

@@ -150,6 +150,12 @@ export function useAssistantPanel({
     void openPanel();
   }, [openPanel]);
 
+  const handleConversationReset = useCallback(() => {
+    hasContentRef.current = false;
+    errorDownplayRequestedRef.current = false;
+    setResponseReady(false);
+  }, []);
+
   const handleCommandConsumed = useCallback((id) => {
     setPendingCommand((current) => (current?.id === id ? null : current));
   }, []);
@@ -309,6 +315,7 @@ export function useAssistantPanel({
     beginThinking,
     handleCommand,
     handleResponseContent,
+    handleConversationReset,
     handleCommandConsumed,
     handleCommandDiscarded,
     handleCommandSettled,

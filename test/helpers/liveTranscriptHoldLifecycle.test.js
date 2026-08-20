@@ -167,3 +167,27 @@ test("a new recording releases a hold inherited from the prior session", async (
 
   assert.equal(getPanel().openRef.current, false);
 });
+
+test("hovering a final transcript pauses its active hide countdown and leaving restarts it", async (t) => {
+  const { getPanel } = await mountLiveTranscript(t);
+  const getFinalHideTimer = capturePanelTimers(t);
+
+  await React.act(async () => getPanel().showFinalText("finished transcript"));
+  const activeHideTimer = getFinalHideTimer();
+  assert.ok(activeHideTimer, "fixture setup: a final result must schedule its hide");
+
+  getPanel().holdFinal(true);
+
+  assert.equal(activeHideTimer.cancelled, true);
+  await React.act(async () => activeHideTimer.callback());
+  assert.equal(getPanel().openRef.current, true);
+
+  getPanel().holdFinal(false);
+  const resumedHideTimer = getFinalHideTimer();
+  assert.ok(resumedHideTimer, "leaving the hovered final must schedule a fresh hide");
+  assert.notEqual(resumedHideTimer, activeHideTimer);
+  assert.equal(resumedHideTimer.delay, FINAL_HIDE_MS);
+
+  await React.act(async () => resumedHideTimer.callback());
+  assert.equal(getPanel().openRef.current, false);
+});
