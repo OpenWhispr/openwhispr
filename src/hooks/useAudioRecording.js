@@ -49,7 +49,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const wasRecordingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
   const demoKindRef = useRef("dictation");
-  const onDemoEventRef = useRef(onDemoEvent);
+  const onDemoEventRef = useRef(options.onDemoEvent);
   const reportedLifecycleRef = useRef(null);
   const lastStartOptionsRef = useRef({
     voiceAgentRequested: false,
