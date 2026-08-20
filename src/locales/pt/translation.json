@@ -2970,7 +2970,8 @@
       },
       "cleanupFailed": {
         "title": "Falha na limpeza",
-        "description": "Seu ditado foi colado sem limpeza por IA."
+        "description": "Seu ditado foi colado sem limpeza por IA.",
+        "notConfigured": "A limpeza está ativada, mas nenhum modelo de IA está configurado para executá-la. Escolha um modelo em Configurações → Modelos de IA (ou entre no OpenWhispr Cloud) e a limpeza começará a funcionar."
       }
     },
     "mic": {

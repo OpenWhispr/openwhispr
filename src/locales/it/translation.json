@@ -2970,7 +2970,8 @@
       },
       "cleanupFailed": {
         "title": "Pulizia non riuscita",
-        "description": "La dettatura è stata incollata senza pulizia IA."
+        "description": "La dettatura è stata incollata senza pulizia IA.",
+        "notConfigured": "La pulizia è attiva, ma non è configurato alcun modello di IA per eseguirla. Scegli un modello in Impostazioni → Modelli IA (o accedi a OpenWhispr Cloud) e la pulizia inizierà a funzionare."
       }
     },
     "mic": {

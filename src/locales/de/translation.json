@@ -3135,7 +3135,8 @@
       },
       "cleanupFailed": {
         "title": "Bereinigung fehlgeschlagen",
-        "description": "Dein Diktat wurde ohne KI-Bereinigung eingefügt."
+        "description": "Dein Diktat wurde ohne KI-Bereinigung eingefügt.",
+        "notConfigured": "Die Bereinigung ist aktiviert, aber es ist kein KI-Modell dafür eingerichtet. Wähle ein Modell unter Einstellungen → KI-Modelle (oder melde dich bei OpenWhispr Cloud an), damit die Bereinigung funktioniert."
       }
     },
     "mic": {

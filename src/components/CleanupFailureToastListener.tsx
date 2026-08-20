@@ -13,17 +13,17 @@ export default function CleanupFailureToastListener() {
 
   useEffect(() => {
     if (pending === 0) return;
-    const cause = useCleanupFailureStore.getState().lastMessage;
+    const { lastMessage: cause, lastMessageKey: causeKey } = useCleanupFailureStore.getState();
     // Draining first keeps a re-run of this effect from toasting the same failure twice.
     if (consumeCleanupFailures() === 0) return;
     // The panel may already be hidden after dictation; surface it so the toast is seen.
     if (isDictationPanelWindow()) {
       window.electronAPI?.showDictationPanel?.();
     }
-    const description = t("app.toasts.cleanupFailed.description");
+    const description = causeKey ? t(causeKey) : t("app.toasts.cleanupFailed.description");
     toast({
       title: t("app.toasts.cleanupFailed.title"),
-      description: cause ? `${description} ${cause}` : description,
+      description: !causeKey && cause ? `${description} ${cause}` : description,
       duration: 10000,
     });
   }, [pending, toast, t]);
