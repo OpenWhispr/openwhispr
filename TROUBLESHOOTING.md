@@ -171,7 +171,7 @@ On GNOME and KDE, the first automatic paste can show a remote-interaction permis
 
 **Fix:**
 
-1. Ensure the voice assistant is enabled in Settings → AI Models → Voice Assistant
+1. Check your chat model under Settings → AI Models → Chat (the panel runs on the chat scope); the Voice Assistant toggle only gates in-place selection edits
 2. Check that you have a valid API key for your selected provider
 3. Verify the Voice Assistant hotkey doesn't conflict with other global shortcuts
 4. Remember there is no separate assistant window — answers open in a floating panel attached to the dictation pill. Press the Voice Assistant hotkey (or use the pill) and speak; if text is highlighted it is edited in place instead of opening the panel

@@ -69,7 +69,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **dragManager.js**: Window dragging functionality
 - **environment.js**: Environment variable and OpenAI API management
 - **hotkeyManager.js**: Global hotkey registration and management
-  - Named hotkey slots: `dictation`, `voiceAgent` (voice assistant — dictation routed to the assistant panel), `meeting`
+  - Named hotkey slots: `dictation`, `voiceAgent` (voice assistant — dictation routed to the assistant panel), `translation`, `meeting`
   - Handles platform-specific defaults (GLOBE on macOS, Control+Super on Windows/Linux)
   - Auto-fallback to F8/F9 if default hotkey is unavailable
   - Notifies renderer via IPC when hotkey registration fails
@@ -647,7 +647,7 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 
 ### 17. Voice Assistant Hotkey
 
-A dedicated global hotkey that starts a dictation whose transcript is sent straight to the voice assistant as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. Standalone commands never type at the cursor: the answer streams into a floating assistant panel attached to the dictation pill (there is no separate assistant window).
+A dedicated global hotkey that starts a dictation whose transcript is sent straight to the voice assistant as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. Standalone commands never type at the cursor: the answer streams into a floating assistant panel attached to the dictation pill (there is no separate assistant window). The pill window is content-protected while the panel is open (the panel never appears in screen shares).
 
 **Flow**:
 
@@ -665,7 +665,7 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 
 **Panel**:
 
-- Esc collapses the panel; a Copy button copies the answer; a follow-up input takes typed questions
+- Esc collapses the panel; a Copy button copies the answer; a follow-up input takes typed questions. Esc while the command is still thinking cancels it; a command whose stream ends without content settles as `agentMode.chat.emptyResponse`
 - Pressing the hotkey again while the panel is open records a follow-up into the same conversation
 
 **UI**:
