@@ -143,14 +143,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
   }, [currentStepId, session.currentStepId, setSession]);
 
-  // Cleared on unmount as well as on completion: main fails hotkeys closed while
-  // this is set, so an ErrorBoundary catch or a route swap that never comes back
-  // would otherwise leave every shortcut dead until the app restarts.
+  // AppRouter releases this only after it has committed the normal app. Keeping
+  // the gate active across this component's unmount prevents a one-frame flash
+  // of the dictation pill or another normal-app overlay at completion/error.
   useEffect(() => {
     void window.electronAPI?.setOnboardingActive?.(true);
-    return () => {
-      void window.electronAPI?.setOnboardingActive?.(false);
-    };
   }, []);
 
   useEffect(() => {
@@ -291,7 +288,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         await window.electronAPI?.saveAllKeysToEnv?.();
         await window.electronAPI?.markBundleMigrated?.();
         clearSession();
-        await window.electronAPI?.setOnboardingActive?.(false);
         await window.electronAPI?.setOnboardingWindowMode?.("restore");
         onComplete();
       } catch (error) {

@@ -33,7 +33,9 @@ class WindowManager {
     this._onboardingRestoreBounds = null;
     this._onboardingWindowMode = null;
     this._onboardingWindowState = null;
-    this._onboardingActive = false;
+    // Fail closed until AppRouter has resolved persisted onboarding state and
+    // committed the normal app. This covers the startup gap before React mounts.
+    this._onboardingActive = true;
     this._onboardingDemoKind = null;
     // Set by IPCHandlers so its demo session dies with the demo kind on every
     // teardown path (id-matched end, onboarding exit, control panel closed).
@@ -49,6 +51,8 @@ class WindowManager {
     });
     this.transcriptionPreviewWindow = null;
     this.updateNotificationWindow = null;
+    this._pendingUpdateNotificationData = null;
+    this._deferredUpdateNotificationInfo = null;
     this._updateNotificationDismissed = false;
     this.notificationPrefs = {
       notificationsEnabled: true,
@@ -119,6 +123,10 @@ class WindowManager {
     );
 
     this.mainWindow.webContents.on("did-finish-load", () => {
+      // A reload has not resolved its route yet. AppRouter releases this gate
+      // after it renders the normal app; fresh onboarding keeps it active.
+      this.setOnboardingActive(true);
+      this.endOnboardingDemo();
       this.mainWindow.setTitle(i18nMain.t("window.voiceRecorderTitle"));
       this.enforceMainWindowOnTop();
     });
@@ -762,7 +770,8 @@ class WindowManager {
       this._clearControlPanelVisibilityTimer();
       this.endOnboardingDemo();
       this.controlPanelWindow = null;
-      this._onboardingActive = false;
+      this._onboardingActive = true;
+      this._hideNormalAppSurfaces();
       this._onboardingRestoreBounds = null;
       this._onboardingWindowMode = null;
       this._onboardingWindowState = null;
@@ -772,13 +781,10 @@ class WindowManager {
     MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
 
     this.controlPanelWindow.webContents.on("did-finish-load", () => {
-      // A fresh document is not mid-onboarding until OnboardingFlow mounts and
-      // re-asserts it over IPC. Without this reset, a renderer that crashed or
-      // reloaded after onboarding completed leaves the fail-closed input gate
-      // stuck on and every global hotkey dead until app restart. Reset the
-      // field directly: setOnboardingActive(false) would also re-show the
-      // dictation panel, flashing it over onboarding on the OAuth reload path.
-      this._onboardingActive = false;
+      // Every fresh document starts unresolved. AppRouter releases the gate
+      // only after it commits the normal app, so OAuth/onboarding reloads cannot
+      // expose the dictation pill, hotkeys, or popup surfaces in between.
+      this.setOnboardingActive(true);
       this.endOnboardingDemo();
       this.controlPanelWindow.setTitle(i18nMain.t("window.controlPanelTitle"));
     });
@@ -931,9 +937,16 @@ class WindowManager {
   }
 
   async showTranscriptionPreview(text) {
+    if (this._onboardingActive) return;
     await this.ensureTranscriptionPreviewWindow();
 
-    if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
+    if (
+      this._onboardingActive ||
+      !this.transcriptionPreviewWindow ||
+      this.transcriptionPreviewWindow.isDestroyed()
+    ) {
+      return;
+    }
 
     const mainBounds =
       this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : null;
@@ -953,11 +966,13 @@ class WindowManager {
   }
 
   appendTranscriptionPreview(text) {
+    if (this._onboardingActive) return;
     if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
     this.transcriptionPreviewWindow.webContents.send("preview-append", text);
   }
 
   holdTranscriptionPreview(options = {}) {
+    if (this._onboardingActive) return;
     if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
     this.transcriptionPreviewWindow.webContents.send("preview-hold", {
       showCleanup: !!options.showCleanup,
@@ -965,6 +980,7 @@ class WindowManager {
   }
 
   completeTranscriptionPreview(text) {
+    if (this._onboardingActive) return;
     if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
     this.transcriptionPreviewWindow.webContents.send("preview-result", { text });
     this.transcriptionPreviewWindow.showInactive();
@@ -1214,15 +1230,14 @@ class WindowManager {
   setOnboardingActive(active) {
     const nextActive = active === true;
     if (nextActive === this._onboardingActive) {
-      if (nextActive) this.hideDictationPanel();
+      if (nextActive) this._hideNormalAppSurfaces();
       return true;
     }
 
     if (nextActive) {
       this._onboardingActive = true;
       this.sendCancelDictation();
-      this.hideDictationPanel();
-      this.hideAgentOverlay();
+      this._hideNormalAppSurfaces();
       return true;
     }
 
@@ -1231,7 +1246,22 @@ class WindowManager {
     this.hideDictationPanel();
     this._onboardingActive = false;
     if (!this._floatingIconAutoHide) this.showDictationPanel();
+    const deferredUpdate = this._deferredUpdateNotificationInfo;
+    this._deferredUpdateNotificationInfo = null;
+    if (deferredUpdate) void this.showUpdateNotification(deferredUpdate);
     return true;
+  }
+
+  _hideNormalAppSurfaces() {
+    this.hideDictationPanel();
+    this.hideAgentOverlay();
+    this.hideTranscriptionPreview();
+    this.dismissMeetingNotification();
+
+    if (this._pendingUpdateNotificationData) {
+      this._deferredUpdateNotificationInfo = { ...this._pendingUpdateNotificationData };
+    }
+    this.dismissUpdateNotification({ persistent: false });
   }
 
   beginOnboardingDemo(kind) {
@@ -1455,11 +1485,7 @@ class WindowManager {
       clearTimeout(showTimeout);
       this.enforceMainWindowOnTop();
       if (!this.mainWindow.isVisible() && !this._floatingIconAutoHide) {
-        if (typeof this.mainWindow.showInactive === "function") {
-          this.mainWindow.showInactive();
-        } else {
-          this.mainWindow.show();
-        }
+        this.showDictationPanel();
       }
     });
 
@@ -1484,6 +1510,7 @@ class WindowManager {
   }
 
   async showMeetingNotification(promptData, { autoDismiss = true } = {}) {
+    if (this._onboardingActive) return false;
     if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
       const previousWindow = this.notificationWindow;
       this.notificationWindow = null;
@@ -1593,11 +1620,15 @@ class WindowManager {
       }
     }
     if (this.notificationWindow !== win) return;
+    if (this._onboardingActive) {
+      this.dismissMeetingNotification();
+      return false;
+    }
 
     const readyFallback = setTimeout(() => {
       if (this._notificationReadyFallback !== readyFallback) return;
       this._notificationReadyFallback = null;
-      if (this.notificationWindow !== win || win.isDestroyed()) return;
+      if (this._onboardingActive || this.notificationWindow !== win || win.isDestroyed()) return;
       debugLogger.warn("Notification renderer did not signal ready, force-showing", {}, "meeting");
       win.webContents.send("meeting-notification-data", promptData);
       win.showInactive();
@@ -1614,6 +1645,10 @@ class WindowManager {
   // Only the window that loaded the prompt may reveal it: a stale window's late
   // "ready" must not clear the fallback that would force-show its replacement.
   showNotificationWindow(ownerWebContents) {
+    if (this._onboardingActive) {
+      this.dismissMeetingNotification();
+      return;
+    }
     const win = this.notificationWindow;
     if (!win || win.isDestroyed() || (ownerWebContents && win.webContents !== ownerWebContents)) {
       return;
@@ -1660,6 +1695,11 @@ class WindowManager {
   }
 
   async showUpdateNotification(info) {
+    if (this._onboardingActive) {
+      this._deferredUpdateNotificationInfo = info;
+      return false;
+    }
+    this._deferredUpdateNotificationInfo = null;
     if (this._updateNotificationDismissed) return;
     if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
       this.updateNotificationWindow.close();
@@ -1678,35 +1718,38 @@ class WindowManager {
       ...position,
     });
     this.updateNotificationWindow = win;
-
-    WindowPositionUtil.setupAlwaysOnTop(this.updateNotificationWindow);
-
-    if (process.env.NODE_ENV === "development") {
-      await DevServerManager.waitForDevServer();
-      await this.updateNotificationWindow.loadURL(
-        `${DevServerManager.DEV_SERVER_URL}?update-notification=true`
-      );
-    } else {
-      const fileInfo = DevServerManager.getAppFilePath(false);
-      await this.updateNotificationWindow.loadFile(fileInfo.path, {
-        query: { ...fileInfo.query, "update-notification": "true" },
-      });
-    }
-
     this._pendingUpdateNotificationData = {
       version: info?.version,
       releaseDate: info?.releaseDate,
     };
 
+    WindowPositionUtil.setupAlwaysOnTop(win);
+
+    try {
+      if (process.env.NODE_ENV === "development") {
+        await DevServerManager.waitForDevServer();
+        await win.loadURL(`${DevServerManager.DEV_SERVER_URL}?update-notification=true`);
+      } else {
+        const fileInfo = DevServerManager.getAppFilePath(false);
+        await win.loadFile(fileInfo.path, {
+          query: { ...fileInfo.query, "update-notification": "true" },
+        });
+      }
+    } catch (error) {
+      // Entering onboarding closes any in-flight normal-app popup. Its aborted
+      // load is expected, and the saved update is replayed once the gate opens.
+      if (this._onboardingActive || this.updateNotificationWindow !== win) return false;
+      throw error;
+    }
+
+    if (this._onboardingActive || this.updateNotificationWindow !== win) return false;
+
     this._updateNotificationReadyFallback = setTimeout(() => {
       this._updateNotificationReadyFallback = null;
-      if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
-        this.updateNotificationWindow.webContents.send(
-          "update-notification-data",
-          this._pendingUpdateNotificationData
-        );
-        this.updateNotificationWindow.showInactive();
-      }
+      if (this._onboardingActive || this.updateNotificationWindow !== win || win.isDestroyed())
+        return;
+      win.webContents.send("update-notification-data", this._pendingUpdateNotificationData);
+      win.showInactive();
     }, 3000);
 
     this._updateNotificationAutoDismiss = setTimeout(() => {
@@ -1724,6 +1767,7 @@ class WindowManager {
   }
 
   showUpdateNotificationWindow() {
+    if (this._onboardingActive) return;
     if (this._updateNotificationReadyFallback) {
       clearTimeout(this._updateNotificationReadyFallback);
       this._updateNotificationReadyFallback = null;
@@ -1735,7 +1779,10 @@ class WindowManager {
 
   dismissUpdateNotification({ persistent = true } = {}) {
     this._pendingUpdateNotificationData = null;
-    if (persistent) this._updateNotificationDismissed = true;
+    if (persistent) {
+      this._updateNotificationDismissed = true;
+      this._deferredUpdateNotificationInfo = null;
+    }
     if (this._updateNotificationReadyFallback) {
       clearTimeout(this._updateNotificationReadyFallback);
       this._updateNotificationReadyFallback = null;

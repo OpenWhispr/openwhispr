@@ -140,6 +140,17 @@ function MainApp() {
     void window.electronAPI?.setOnboardingWindowMode?.("restore");
   }, [isControlPanel, isLoading, isWaitingForPolicyStart, showOnboarding]);
 
+  useEffect(() => {
+    if (isAgentPanel || isLoading || isWaitingForPolicyStart) return;
+
+    const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
+    const normalAppVisible = onboardingCompleted && (!isControlPanel || !showOnboarding);
+    // Main starts fail-closed. Only a renderer that has resolved the route and
+    // actually committed the normal app may release global hotkeys and popup
+    // surfaces; fresh installs and onboarding reloads keep them suppressed.
+    void window.electronAPI?.setOnboardingActive?.(!normalAppVisible);
+  }, [isAgentPanel, isControlPanel, isLoading, isWaitingForPolicyStart, showOnboarding]);
+
   const handleOnboardingComplete = (options) => {
     if (options?.openSettings) {
       setPostOnboardingSettingsSection("transcription");

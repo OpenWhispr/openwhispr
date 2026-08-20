@@ -61,6 +61,10 @@ class FakeBrowserWindow extends EventEmitter {
 
 class FakeHotkeyManager {
   unregisterAll() {}
+
+  isInListeningMode() {
+    return false;
+  }
 }
 FakeHotkeyManager.isGlobeLikeHotkey = () => false;
 
@@ -122,6 +126,12 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
 const WindowManager = require("../../src/helpers/windowManager");
 Module._load = originalLoad;
 
+function createNormalWindowManager() {
+  const manager = new WindowManager();
+  manager.setOnboardingActive(false);
+  return manager;
+}
+
 function installFakeTimers() {
   const originalSetTimeout = global.setTimeout;
   const originalClearTimeout = global.clearTimeout;
@@ -155,8 +165,20 @@ test.beforeEach(() => {
   createdWindows.length = 0;
 });
 
-test("window creation uses the auto-end dimensions and variant-aware position", async () => {
+test("window manager starts fail-closed and suppresses normal-app popup surfaces", async () => {
   const manager = new WindowManager();
+  const update = { version: "2.0.0", releaseDate: "2026-08-20" };
+
+  assert.equal(manager.isMeetingInputAllowed(), false);
+  assert.equal(await manager.showMeetingNotification({ detectionId: "onboarding" }), false);
+  assert.equal(await manager.showTranscriptionPreview("partial transcript"), undefined);
+  assert.equal(await manager.showUpdateNotification(update), false);
+  assert.deepEqual(manager._deferredUpdateNotificationInfo, update);
+  assert.deepEqual(createdWindows, []);
+});
+
+test("window creation uses the auto-end dimensions and variant-aware position", async () => {
+  const manager = createNormalWindowManager();
 
   try {
     const showPromise = manager.showMeetingAutoEndCountdown({
@@ -192,7 +214,7 @@ test("window creation uses the auto-end dimensions and variant-aware position", 
 });
 
 test("unexpected auto-end window closure suppresses that countdown", async () => {
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   const unavailableSessions = [];
   manager.meetingDetectionEngine = {
     handleAutoEndNotificationUnavailable: (sessionId) => unavailableSessions.push(sessionId),
@@ -214,7 +236,7 @@ test("unexpected auto-end window closure suppresses that countdown", async () =>
 
 test("auto-end notification loading has a fail-safe timeout", async () => {
   const timers = installFakeTimers();
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   const showPromise = manager.showMeetingAutoEndCountdown({
     sessionId: "meeting-1",
     expiresAt: 70_000,
@@ -239,7 +261,7 @@ test("auto-end notification loading has a fail-safe timeout", async () => {
 
 test("a replaced deferred notification cannot send its payload to the newer window", async () => {
   const timers = installFakeTimers();
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   let secondShowPromise;
 
   try {
@@ -270,7 +292,7 @@ test("a replaced deferred notification cannot send its payload to the newer wind
 
 test("canceling during a deferred load prevents later timers and timeout callbacks", async () => {
   const timers = installFakeTimers();
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   let timeoutCount = 0;
   manager.meetingDetectionEngine = {
     handleNotificationTimeout: () => {
@@ -300,7 +322,7 @@ test("canceling during a deferred load prevents later timers and timeout callbac
 
 test("canceling while waiting for the dev server never loads the stale window", async () => {
   const timers = installFakeTimers();
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   const originalNodeEnv = process.env.NODE_ENV;
   const devServerWait = createDeferred();
   devServerWaitPromise = devServerWait.promise;
@@ -324,7 +346,7 @@ test("canceling while waiting for the dev server never loads the stale window", 
 
 test("a stale ready callback cannot show the replacement notification window", async () => {
   const timers = installFakeTimers();
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
 
   try {
     const firstShowPromise = manager.showMeetingNotification(
