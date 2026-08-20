@@ -522,9 +522,28 @@ export function HotkeyInput({
 
   useEffect(() => {
     if (!autoFocus) return;
-    const frame = requestAnimationFrame(() => containerRef.current?.focus({ preventScroll: true }));
-    return () => cancelAnimationFrame(frame);
-  }, [autoFocus]);
+    let cancelled = false;
+    let frame: number | null = null;
+
+    const focusCaptureSurface = async () => {
+      if (platform === "win32") {
+        // On Windows, focusing a DOM node does not bring an inactive native
+        // window to the foreground. Main restores/focuses the BrowserWindow as
+        // part of this handshake; waiting for it makes the first chord reliable.
+        const listening = window.electronAPI?.setHotkeyListeningMode?.(true);
+        if (listening) await listening.catch(() => undefined);
+      }
+      if (cancelled) return;
+
+      frame = requestAnimationFrame(() => containerRef.current?.focus({ preventScroll: true }));
+    };
+
+    void focusCaptureSurface();
+    return () => {
+      cancelled = true;
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [autoFocus, platform]);
 
   useEffect(() => {
     onHeldModifiersChange?.(activeModifiers.join("+"));
