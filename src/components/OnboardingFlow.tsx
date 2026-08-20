@@ -348,10 +348,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           cloudTranscriptionMode: "openwhispr",
           cloudTranscriptionProvider: "openwhispr",
         });
-        settingsStore.setCloudReasoningForAllScopes({
-          cleanupCloudMode: "openwhispr",
-          cleanupProvider: "openwhispr",
-        });
+        if (agentAllowed) {
+          settingsStore.setCloudReasoningForAllScopes({
+            cleanupCloudMode: "openwhispr",
+            cleanupProvider: "openwhispr",
+          });
+        } else {
+          // The policy-shortened route has no assistant setup. Avoid persisting
+          // a reasoning provider the workspace disallows, and keep dictation
+          // from attempting cleanup through an unconfigured LLM.
+          settingsStore.updateCleanupSettings({ useCleanupModel: false });
+        }
         await finalizeOnboarding("cloud");
         return;
       }
@@ -749,6 +756,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             <SetupChoiceStep
               isSignedIn={isSignedIn}
+              agentAllowed={agentAllowed}
               onSelect={(mode, options) => void handleSetupSelection(mode, options)}
               onRequestAuthentication={() => {
                 setSetupMode("cloud");

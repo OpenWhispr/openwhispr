@@ -30,6 +30,7 @@ function availability(policy, overrides = {}) {
   return load().then(({ getOnboardingSetupAvailability }) =>
     getOnboardingSetupAvailability({
       policy,
+      agentAllowed: true,
       transcriptionProviders: TRANSCRIPTION_PROVIDERS,
       llmProviders: LLM_PROVIDERS,
       ...overrides,
@@ -87,5 +88,35 @@ test("availability reports no setup when policy permits no onboarding mode", asy
     local: false,
     byok: false,
     selfHosted: false,
+  });
+});
+
+test("dictation-only policies ignore LLM availability when the agent is disabled", async () => {
+  const policy = managedPolicy({
+    transcription: {
+      allowedModes: ["openwhispr", "local", "providers", "self-hosted"],
+      allowedByokProviders: ["groq", "custom"],
+    },
+    llm: {
+      allowedModes: [],
+      allowedByokProviders: [],
+      allowedEnterpriseProviders: [],
+    },
+  });
+  policy.policy.features.agentEnabled = false;
+
+  assert.deepEqual(await availability(policy, { agentAllowed: true }), {
+    cloud: false,
+    local: false,
+    byok: false,
+    selfHosted: false,
+  });
+
+  const result = await availability(policy, { agentAllowed: false });
+  assert.deepEqual(result, {
+    cloud: true,
+    local: true,
+    byok: true,
+    selfHosted: true,
   });
 });

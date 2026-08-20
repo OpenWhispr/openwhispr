@@ -41,6 +41,7 @@ const REFERENCE_LOCAL_MODEL_ID = "nemotron-3.5-asr-streaming-0.6b";
 
 interface SetupChoiceStepProps {
   isSignedIn: boolean;
+  agentAllowed: boolean;
   onSelect: (mode: SetupMode, options?: { selfHosted?: boolean }) => void;
   onRequestAuthentication: () => void;
 }
@@ -117,6 +118,7 @@ const CardAction = forwardRef<
 
 export default function SetupChoiceStep({
   isSignedIn,
+  agentAllowed,
   onSelect,
   onRequestAuthentication,
 }: SetupChoiceStepProps) {
@@ -137,6 +139,7 @@ export default function SetupChoiceStep({
 
   const availability = getOnboardingSetupAvailability({
     policy,
+    agentAllowed,
     transcriptionProviders: getTranscriptionProviders(),
     llmProviders: modelRegistry.getCloudProviders(),
   });

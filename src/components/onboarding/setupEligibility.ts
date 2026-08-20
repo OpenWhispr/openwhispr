@@ -23,29 +23,35 @@ export interface OnboardingSetupAvailability {
  */
 export function getOnboardingSetupAvailability({
   policy,
+  agentAllowed,
   transcriptionProviders,
   llmProviders,
 }: {
   policy: PolicyDecisionSnapshot;
+  agentAllowed: boolean;
   transcriptionProviders: ProviderOption[];
   llmProviders: ProviderOption[];
 }): OnboardingSetupAvailability {
+  const transcriptionByokAvailable =
+    isModeAllowedByPolicy(policy, "transcription", "providers") &&
+    filterByokProviderOptionsByPolicy(transcriptionProviders, "transcription", policy).length > 0;
+  const llmByokAvailable =
+    isModeAllowedByPolicy(policy, "llm", "providers") &&
+    filterByokProviderOptionsByPolicy(llmProviders, "llm", policy).length > 0;
+
   const cloud =
     isModeAllowedByPolicy(policy, "transcription", "openwhispr") &&
-    isModeAllowedByPolicy(policy, "llm", "openwhispr");
+    (!agentAllowed || isModeAllowedByPolicy(policy, "llm", "openwhispr"));
   const local =
     isModeAllowedByPolicy(policy, "transcription", "local") &&
-    isModeAllowedByPolicy(policy, "llm", "local");
-  const byok =
-    isModeAllowedByPolicy(policy, "transcription", "providers") &&
-    isModeAllowedByPolicy(policy, "llm", "providers") &&
-    filterByokProviderOptionsByPolicy(transcriptionProviders, "transcription", policy).length > 0 &&
-    filterByokProviderOptionsByPolicy(llmProviders, "llm", policy).length > 0;
+    (!agentAllowed || isModeAllowedByPolicy(policy, "llm", "local"));
+  const byok = transcriptionByokAvailable && (!agentAllowed || llmByokAvailable);
   const selfHosted =
     isModeAllowedByPolicy(policy, "transcription", "self-hosted") &&
-    isModeAllowedByPolicy(policy, "llm", "self-hosted") &&
     isProviderAllowedByPolicy(policy, "transcription", "custom") &&
-    isProviderAllowedByPolicy(policy, "llm", "custom");
+    (!agentAllowed ||
+      (isModeAllowedByPolicy(policy, "llm", "self-hosted") &&
+        isProviderAllowedByPolicy(policy, "llm", "custom")));
 
   return { cloud, local, byok, selfHosted };
 }
