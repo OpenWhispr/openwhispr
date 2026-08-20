@@ -923,6 +923,7 @@ declare global {
       onPrepareDictation?: (callback: () => void) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
+      dictationLifecycleStateChanged: (state: "idle" | "recording" | "processing") => void;
 
       // STT config
       getSttConfig?: () => Promise<
