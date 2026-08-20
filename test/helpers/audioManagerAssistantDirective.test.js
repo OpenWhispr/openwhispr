@@ -183,6 +183,31 @@ test("a selection without a reachable dictation agent routes to the panel with t
   assert.ok(!manager.pendingSelectionEdit, "no in-place replacement session may be armed");
 });
 
+test("a too-large selection with no dictation editor goes to the panel as a plain command", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-assistant-toolarge-",
+    settingsKey: "__assistantTooLargeSettings",
+  });
+  const { manager } = managerWithCapture(createManager, { status: "too_large", maxCharacters: 6000 });
+  const result = await manager.processAgentCommand("summarize this", "gpt", "Aria", {
+    selectionEditReachable: false,
+  });
+  assert.equal(result, "summarize this");
+  assert.equal(manager.pendingAssistantConversation.transcript, "summarize this");
+});
+
+test("an ambiguous capture with no dictation editor goes to the panel as a plain command", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-assistant-ambiguous-",
+    settingsKey: "__assistantAmbiguousSettings",
+  });
+  const { manager } = managerWithCapture(createManager, { status: "target_changed" });
+  await manager.processAgentCommand("summarize this", "gpt", "Aria", {
+    selectionEditReachable: false,
+  });
+  assert.equal(manager.pendingAssistantConversation.transcript, "summarize this");
+});
+
 test("a selection with the dictation agent reachable keeps the in-place edit path", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-assistant-sel-reachable-",

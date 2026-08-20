@@ -2412,6 +2412,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw error;
     }
 
+    const captureDisposition = getSelectionCaptureDisposition(capture);
+
+    if (!config?.selectionEditReachable) {
+      // No in-place editor: the panel never types, so only a readable
+      // selection is quoted; every other capture sends the plain command.
+      return this._bankPanelAgentCommand(
+        text,
+        agentName,
+        config,
+        undefined,
+        captureDisposition === "selection" && typeof capture?.text === "string"
+          ? capture.text
+          : undefined
+      );
+    }
+
     if (capture?.status === "too_large") {
       // A large selection definitely exists, so running the command as plain
       // agent dictation would paste over it — the one capture failure that
@@ -2425,24 +2441,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw error;
     }
 
-    const captureDisposition = getSelectionCaptureDisposition(capture);
-
-    // A selection with the dictation agent unconfigured can't be edited in
-    // place; route it to the panel with the selected text quoted so the
-    // command still succeeds instead of pasting over the selection.
-    const selectionWithoutEditor =
-      captureDisposition === "selection" && !config?.selectionEditReachable;
-
-    if (captureDisposition === "standalone" || selectionWithoutEditor) {
-      // The directive's transcript carries the quoted selection when the
-      // selection-without-editor fallback routed a highlighted passage here.
-      return this._bankPanelAgentCommand(
-        text,
-        agentName,
-        config,
-        undefined,
-        selectionWithoutEditor ? capture.text : undefined
-      );
+    if (captureDisposition === "standalone") {
+      return this._bankPanelAgentCommand(text, agentName, config);
     }
 
     if (capture?.status !== "selected") {
