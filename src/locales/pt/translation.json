@@ -29,10 +29,6 @@
       "speakerDetection": {
         "title": "Identificar e rotular participantes",
         "description": "Quando desativado, as transcrições mostram \"Você\" e \"Outros\""
-      },
-      "autoEnd": {
-        "title": "Encerrar gravações esquecidas",
-        "description": "Para as gravações de reunião automaticamente quando a chamada parece ter terminado, após uma contagem regressiva que você pode cancelar"
       }
     }
   },
@@ -1824,10 +1820,6 @@
         "noteFormatting": "Formatação de notas",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Tradução"
-      },
-      "requestTimeout": {
-        "label": "Tempo limite da solicitação (segundos)",
-        "description": "Quanto tempo aguardar por uma resposta antes de desistir. Modelos auto-hospedados ou locais podem precisar de mais que os 30 s padrão, especialmente para notas longas."
       }
     },
     "noteFormatting": {

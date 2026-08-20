@@ -531,16 +531,13 @@ test("keep recording after countdown expiry reports a stale session", async () =
   engine.stop();
 });
 
-test("the autoEnd preference disables the feature mid-recording and re-enabling arms a fresh session", async () => {
-  const {
-    audioActivityDetector,
-    clock,
-    dismissedCountdowns,
-    engine,
-    micState,
-    owner,
-    shownCountdowns,
-  } = createEngine();
+test("a legacy autoEnd preference cannot disable eligible meeting auto-end", async () => {
+  const { audioActivityDetector, clock, engine, micState, owner, shownCountdowns } = createEngine();
+  engine.setPreferences({ audioDetection: false, processDetection: false, autoEnd: false });
+  assert.deepEqual(engine.getPreferences(), {
+    processDetection: false,
+    audioDetection: false,
+  });
 
   await engine.beginRecordingSession({
     sessionId: "meeting-1",
@@ -548,43 +545,15 @@ test("the autoEnd preference disables the feature mid-recording and re-enabling 
     ownerWebContents: owner(),
     systemAudioAvailable: true,
   });
+  assert.equal(audioActivityDetector.running, true);
+  assert.equal(clock.activeIntervals(), 1);
+
   clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   micState(true, false);
   assert.equal(shownCountdowns.length, 1);
 
   engine.setPreferences({ autoEnd: false });
-  assert.deepEqual(dismissedCountdowns, ["meeting-1"]);
-  assert.equal(clock.activeIntervals(), 0, "ticker released while disabled");
-  clock.advance(2 * COUNTDOWN_MS);
-  micState(true, true);
-  micState(true, false);
-  assert.equal(shownCountdowns.length, 1, "nothing prompts while disabled");
-
-  audioActivityDetector.externalMicState = { reliable: true, externalMicActive: false };
-  engine.setPreferences({ autoEnd: true });
-  await Promise.resolve();
-  clock.advance(SILENCE_WINDOW_MS);
-  assert.equal(shownCountdowns.length, 2, "re-enabled → fresh session in fallback mode");
-  assert.equal(shownCountdowns[1].reason, "silence");
-  engine.stop();
-});
-
-test("a session started while autoEnd is off does not arm and does not retain the detectors", async () => {
-  const { audioActivityDetector, clock, engine, micState, owner, shownCountdowns } = createEngine();
-  engine.setPreferences({ audioDetection: false, processDetection: false, autoEnd: false });
-
-  await engine.beginRecordingSession({
-    sessionId: "meeting-1",
-    autoEndEligible: true,
-    ownerWebContents: owner(),
-    systemAudioAvailable: true,
-  });
-  micState(true, false);
-  clock.advance(2 * SILENCE_WINDOW_MS);
-
-  assert.equal(audioActivityDetector.running, false);
-  assert.deepEqual(shownCountdowns, []);
-  assert.equal(clock.activeIntervals(), 0);
+  assert.equal(clock.activeIntervals(), 1);
   engine.stop();
 });
 

@@ -29,10 +29,6 @@
       "speakerDetection": {
         "title": "話者を識別してラベル付け",
         "description": "オフにすると、文字起こしには「あなた」と「他の人」と表示されます"
-      },
-      "autoEnd": {
-        "title": "停止し忘れた録音を自動終了",
-        "description": "通話が終わったと判断されると、キャンセル可能なカウントダウンの後に会議の録音を自動的に停止します"
       }
     }
   },
@@ -1845,10 +1841,6 @@
         "noteFormatting": "ノートのフォーマット",
         "chatIntelligence": "チャット",
         "dictationTranslation": "翻訳"
-      },
-      "requestTimeout": {
-        "label": "リクエストのタイムアウト(秒)",
-        "description": "応答を待つ時間の上限です。セルフホストやローカルモデルでは、特に長いノートの場合、デフォルトの30秒より長い時間が必要になることがあります。"
       }
     },
     "noteFormatting": {

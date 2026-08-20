@@ -48,7 +48,7 @@ class MeetingDetectionEngine {
     this.windowManager = windowManager;
     this.databaseManager = databaseManager;
     this.activeDetections = new Map();
-    this.preferences = { processDetection: true, audioDetection: true, autoEnd: true };
+    this.preferences = { processDetection: true, audioDetection: true };
     this._userRecording = false;
     this._meetingModeActive = false;
     this._notificationQueue = [];
@@ -176,8 +176,7 @@ class MeetingDetectionEngine {
   _isAutoEndWanted() {
     return (
       this._recordingSession?.autoEndEligible === true &&
-      this._recordingSession.systemAudioAvailable === true &&
-      this.preferences.autoEnd !== false
+      this._recordingSession.systemAudioAvailable === true
     );
   }
 
@@ -745,17 +744,11 @@ class MeetingDetectionEngine {
 
   setPreferences(prefs) {
     debugLogger.info("Updating detection preferences", prefs, "meeting");
-    const autoEndWasWanted = this._isAutoEndWanted();
-    Object.assign(this.preferences, prefs);
-    const autoEndWanted = this._isAutoEndWanted();
-
-    // Toggling auto-end mid-recording takes effect immediately: off dismisses
-    // any visible countdown (the recording itself continues); on arms a fresh
-    // session from the current mic-ownership state.
-    if (autoEndWasWanted && !autoEndWanted) {
-      this._deactivateAutoEnd();
-    } else if (!autoEndWasWanted && autoEndWanted && this._recordingSession) {
-      void this._activateAutoEnd(this._recordingSession.sessionId);
+    if (typeof prefs?.processDetection === "boolean") {
+      this.preferences.processDetection = prefs.processDetection;
+    }
+    if (typeof prefs?.audioDetection === "boolean") {
+      this.preferences.audioDetection = prefs.audioDetection;
     }
 
     this._syncMeetingProcessDetector();

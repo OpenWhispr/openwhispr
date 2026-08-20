@@ -29,10 +29,6 @@
       "speakerDetection": {
         "title": "Identifica ed etichetta i partecipanti",
         "description": "Se disattivato, le trascrizioni mostrano \"Tu\" e \"Altri\""
-      },
-      "autoEnd": {
-        "title": "Termina le registrazioni dimenticate",
-        "description": "Interrompe automaticamente le registrazioni delle riunioni quando la chiamata sembra finita, dopo un conto alla rovescia annullabile"
       }
     }
   },
@@ -1845,10 +1841,6 @@
         "noteFormatting": "Formattazione note",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Traduzione"
-      },
-      "requestTimeout": {
-        "label": "Timeout della richiesta (secondi)",
-        "description": "Per quanto tempo attendere una risposta prima di rinunciare. I modelli self-hosted o locali possono richiedere più dei 30 s predefiniti, soprattutto per le note lunghe."
       }
     },
     "noteFormatting": {

@@ -263,8 +263,6 @@ function useSettingsInternal() {
     remoteTranscriptionModel: store.remoteTranscriptionModel,
     cleanupMode: store.cleanupMode,
     cleanupRemoteUrl: store.cleanupRemoteUrl,
-    llmRequestTimeoutSeconds: store.llmRequestTimeoutSeconds,
-    setLlmRequestTimeoutSeconds: store.setLlmRequestTimeoutSeconds,
     customDictionary: store.customDictionary,
     snippets: store.snippets,
     setSnippets: store.setSnippets,

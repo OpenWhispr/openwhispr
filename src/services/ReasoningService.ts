@@ -14,10 +14,7 @@ import logger from "../utils/logger";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
-import {
-  resolveLlmRequestTimeoutSeconds,
-  LLM_STREAMING_TIMEOUT_FLOOR_SECONDS,
-} from "../helpers/llmRequestTimeout.js";
+import { getLlmRequestTimeoutSeconds } from "../helpers/llmRequestTimeout.js";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
@@ -324,9 +321,7 @@ class ReasoningService extends BaseReasoningService {
       }
       const controller = new AbortController();
       this.activeRequestControllers.add(controller);
-      const timeoutSeconds = resolveLlmRequestTimeoutSeconds(
-        getSettings().llmRequestTimeoutSeconds
-      );
+      const timeoutSeconds = getLlmRequestTimeoutSeconds();
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
       try {
         const headers: Record<string, string> = {
@@ -626,10 +621,7 @@ class ReasoningService extends BaseReasoningService {
       headers["Authorization"] = `Bearer ${apiKey}`;
     }
 
-    const timeoutSeconds = Math.max(
-      resolveLlmRequestTimeoutSeconds(getSettings().llmRequestTimeoutSeconds),
-      LLM_STREAMING_TIMEOUT_FLOOR_SECONDS
-    );
+    const timeoutSeconds = getLlmRequestTimeoutSeconds({ streaming: true });
     let timeoutTriggered = false;
     const timeoutId = setTimeout(() => {
       if (abortController.signal.aborted) return;

@@ -29,10 +29,6 @@
       "speakerDetection": {
         "title": "Sprecher erkennen und beschriften",
         "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
-      },
-      "autoEnd": {
-        "title": "Vergessene Aufnahmen automatisch beenden",
-        "description": "Beendet Meeting-Aufnahmen automatisch, wenn das Gespräch beendet scheint – nach einem Countdown, den Sie abbrechen können"
       }
     }
   },
@@ -2129,10 +2125,6 @@
         "noteFormatting": "Notizformatierung",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Übersetzung"
-      },
-      "requestTimeout": {
-        "label": "Zeitlimit für Anfragen (Sekunden)",
-        "description": "Wie lange auf eine Antwort gewartet wird, bevor abgebrochen wird. Selbst gehostete oder lokale Modelle benötigen oft mehr als die Standardeinstellung von 30 s, besonders bei langen Notizen."
       }
     },
     "noteFormatting": {

@@ -11,7 +11,7 @@ import {
   isTruncatedFinishReason,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
-import { resolveLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
+import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 
@@ -215,9 +215,7 @@ export const openaiProvider: InferenceProvider = {
 
       for (const { url: endpoint, type } of endpointCandidates) {
         const controller = new AbortController();
-        const timeoutSeconds = resolveLlmRequestTimeoutSeconds(
-          getSettings().llmRequestTimeoutSeconds
-        );
+        const timeoutSeconds = getLlmRequestTimeoutSeconds();
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
         try {
           const maxTokens =

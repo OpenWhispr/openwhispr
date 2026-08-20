@@ -29,10 +29,6 @@
       "speakerDetection": {
         "title": "识别并标记发言者",
         "description": "关闭后，转写会显示\"你\"和\"其他人\""
-      },
-      "autoEnd": {
-        "title": "自动结束遗忘的录音",
-        "description": "当通话似乎已结束时，在可取消的倒计时后自动停止会议录音"
       }
     }
   },
@@ -1845,10 +1841,6 @@
         "noteFormatting": "笔记格式化",
         "chatIntelligence": "聊天",
         "dictationTranslation": "翻译"
-      },
-      "requestTimeout": {
-        "label": "请求超时时间(秒)",
-        "description": "放弃前等待响应的时长。自托管或本地模型可能需要超过默认的 30 秒,尤其是处理较长的笔记时。"
       }
     },
     "noteFormatting": {

@@ -260,7 +260,6 @@ const BOOLEAN_SETTINGS = new Set([
   "floatingIconAutoHide",
   "startMinimized",
   "meetingProcessDetection",
-  "meetingAutoEndEnabled",
   "speakerDiarizationEnabled",
   "dictationSileroEnabled",
   "noteRecordingSileroEnabled",
@@ -299,7 +298,6 @@ const NUMERIC_SETTINGS = new Set([
   "micWarmHoldSeconds",
   "audioRetentionDays",
   "transcriptRetentionDays",
-  "llmRequestTimeoutSeconds",
   "whisperVadThreshold",
   "whisperVadMinSpeechDurationMs",
   "whisperVadMinSilenceDurationMs",
@@ -611,7 +609,6 @@ export interface SettingsState
   mcalPrimaryOnly: boolean;
   appleCalendarConnected: boolean;
   meetingProcessDetection: boolean;
-  meetingAutoEndEnabled: boolean;
   speakerDiarizationEnabled: boolean;
   dictationSileroEnabled: boolean;
   noteRecordingSileroEnabled: boolean;
@@ -635,10 +632,6 @@ export interface SettingsState
   remoteTranscriptionModel: string;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
-  // Abort timeout for LLM requests (cleanup, note formatting, agent tool calls,
-  // self-hosted LAN calls), in seconds. Clamped to a sane range at the point of
-  // use, and floored at 60s for streaming — see src/helpers/llmRequestTimeout.js.
-  llmRequestTimeoutSeconds: number;
 
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
@@ -741,7 +734,6 @@ export interface SettingsState
   setRemoteTranscriptionModel: (model: string) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
-  setLlmRequestTimeoutSeconds: (seconds: number) => void;
 
   setMeetingTranscriptionMode: (mode: InferenceMode) => void;
   setMeetingUseLocalWhisper: (value: boolean) => void;
@@ -915,7 +907,6 @@ export interface SettingsState
   setMcalPrimaryOnly: (value: boolean) => void;
   setAppleCalendarConnected: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
-  setMeetingAutoEndEnabled: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
   setDictationSileroEnabled: (value: boolean) => void;
   setNoteRecordingSileroEnabled: (value: boolean) => void;
@@ -1340,7 +1331,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   mcalPrimaryOnly: readBoolean("mcalPrimaryOnly", true),
   appleCalendarConnected: readBoolean("appleCalendarConnected", false),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
-  meetingAutoEndEnabled: readBoolean("meetingAutoEndEnabled", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
   // Off by default: VAD on pause-heavy dictations can strip the speech and make
   // Whisper hallucinate the dictionary prompt as the transcript (#1454).
@@ -1401,7 +1391,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return "openwhispr" as InferenceMode;
   })(),
   cleanupRemoteUrl: readString("cleanupRemoteUrl", ""),
-  llmRequestTimeoutSeconds: readNumber("llmRequestTimeoutSeconds", 30),
 
   meetingTranscriptionMode: (() => {
     const v = readString("meetingTranscriptionMode", "openwhispr");
@@ -1499,7 +1488,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
-  setLlmRequestTimeoutSeconds: createNumberSetter("llmRequestTimeoutSeconds"),
 
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
     mode: InferenceMode
@@ -2100,14 +2088,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setAppleCalendarConnected: createBooleanSetter("appleCalendarConnected"),
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
-  setMeetingAutoEndEnabled: (value: boolean) => {
-    if (isBrowser) localStorage.setItem("meetingAutoEndEnabled", String(value));
-    useSettingsStore.setState({ meetingAutoEndEnabled: value });
-    // Takes effect immediately — a live countdown is dismissed when turned off.
-    if (isBrowser) {
-      window.electronAPI?.meetingDetectionSetPreferences?.({ autoEnd: value });
-    }
-  },
   setSpeakerDiarizationEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("speakerDiarizationEnabled", String(value));
     useSettingsStore.setState({ speakerDiarizationEnabled: value });
@@ -3152,7 +3132,6 @@ export async function initializeSettings(): Promise<void> {
       const currentState = useSettingsStore.getState();
       await window.electronAPI.meetingDetectionSetPreferences?.({
         processDetection: currentState.meetingProcessDetection,
-        autoEnd: currentState.meetingAutoEndEnabled,
       });
     } catch (err) {
       logger.warn(

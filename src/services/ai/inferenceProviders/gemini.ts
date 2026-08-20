@@ -2,8 +2,7 @@ import type { InferenceProvider } from "./types";
 import { getCloudModel } from "../../../models/ModelRegistry";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
-import { getSettings } from "../../../stores/settingsStore";
-import { resolveLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
+import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import logger from "../../../utils/logger";
@@ -86,9 +85,7 @@ export const geminiProvider: InferenceProvider = {
       });
 
       const controller = new AbortController();
-      const timeoutSeconds = resolveLlmRequestTimeoutSeconds(
-        getSettings().llmRequestTimeoutSeconds
-      );
+      const timeoutSeconds = getLlmRequestTimeoutSeconds();
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
       try {
         const res = await fetch(`${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`, {

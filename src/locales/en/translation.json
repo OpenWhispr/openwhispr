@@ -29,10 +29,6 @@
       "speakerDetection": {
         "title": "Identify and label speakers",
         "description": "When off, transcripts show \"You\" and \"Others\""
-      },
-      "autoEnd": {
-        "title": "Auto-end forgotten recordings",
-        "description": "Stop meeting recordings automatically when the call seems over, after a countdown you can cancel"
       }
     }
   },
@@ -2129,10 +2125,6 @@
         "noteFormatting": "Note Formatting",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Translation"
-      },
-      "requestTimeout": {
-        "label": "Request timeout (seconds)",
-        "description": "How long to wait for a response before giving up. Self-hosted or local models may need more than the default 30s, especially for long notes."
       }
     },
     "noteFormatting": {

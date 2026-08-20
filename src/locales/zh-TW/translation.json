@@ -29,10 +29,6 @@
       "speakerDetection": {
         "title": "辨識並標記發言者",
         "description": "關閉後，逐字稿會顯示「你」和「其他人」"
-      },
-      "autoEnd": {
-        "title": "自動結束遺忘的錄音",
-        "description": "當通話似乎已結束時，在可取消的倒數後自動停止會議錄音"
       }
     }
   },
@@ -1845,10 +1841,6 @@
         "noteFormatting": "筆記格式化",
         "chatIntelligence": "聊天",
         "dictationTranslation": "翻譯"
-      },
-      "requestTimeout": {
-        "label": "請求逾時時間(秒)",
-        "description": "放棄前等待回應的時長。自架或本機模型可能需要超過預設的 30 秒,尤其是處理較長的筆記時。"
       }
     },
     "noteFormatting": {

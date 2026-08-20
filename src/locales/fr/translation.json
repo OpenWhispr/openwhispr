@@ -29,10 +29,6 @@
       "speakerDetection": {
         "title": "Identifier et étiqueter les intervenants",
         "description": "Lorsque désactivé, les transcriptions affichent « Vous » et « Autres »"
-      },
-      "autoEnd": {
-        "title": "Terminer les enregistrements oubliés",
-        "description": "Arrête automatiquement les enregistrements de réunion quand l'appel semble terminé, après un compte à rebours annulable"
       }
     }
   },
@@ -2129,10 +2125,6 @@
         "noteFormatting": "Mise en forme des notes",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Traduction"
-      },
-      "requestTimeout": {
-        "label": "Délai d'expiration de la requête (secondes)",
-        "description": "Durée d'attente d'une réponse avant abandon. Les modèles auto-hébergés ou locaux peuvent nécessiter plus que les 30 s par défaut, surtout pour les notes longues."
       }
     },
     "noteFormatting": {
