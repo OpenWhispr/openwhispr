@@ -82,7 +82,6 @@ export const useAudioRecording = (toast, options = {}) => {
       lastStartOptionsRef.current = { voiceAgentRequested, translationRequested };
       startLockRef.current = true;
       stopRequestedDuringStartRef.current = false;
-      let preparationStarted = false;
       let recordingStarted = false;
       try {
         if (!audioManagerRef.current) return false;
@@ -102,7 +101,6 @@ export const useAudioRecording = (toast, options = {}) => {
           : null;
 
         const preparationGeneration = ++preparationGenerationRef.current;
-        preparationStarted = true;
         setIsStopping(false);
         setIsPreparing(true);
         // Preserve the requested identity while Windows is still opening the
@@ -202,12 +200,9 @@ export const useAudioRecording = (toast, options = {}) => {
         // no state change will ever arrive.
         if (stopRequestedDuringStartRef.current && !recordingStarted) setIsStopping(false);
         stopRequestedDuringStartRef.current = false;
-        if (preparationStarted) {
+        if (!recordingStarted) {
           setIsPreparing(false);
-          // The assistant identity set at preparation time is only confirmed
-          // by a real recording's onStateChange; an aborted or failed start
-          // must shed it or the idle pill keeps wearing the assistant look.
-          if (!recordingStarted) setIsAssistantVoice(false);
+          setIsAssistantVoice(false);
         }
       }
     },
