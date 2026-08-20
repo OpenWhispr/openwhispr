@@ -85,7 +85,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // toastsRef from state.
       toastsRef.current =
         presentation === "dictation-error"
-          ? [...toastsRef.current.filter((item) => item.presentation !== "dictation-error"), newToast]
+          ? [
+              ...toastsRef.current.filter((item) => item.presentation !== "dictation-error"),
+              newToast,
+            ]
           : [...toastsRef.current, newToast];
 
       if (duration > 0) {

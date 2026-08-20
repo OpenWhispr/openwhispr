@@ -2444,8 +2444,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const command = this.voiceAgentRequested
       ? text
       : stripAgentAddress(text, agentName, resolveWakeWordLanguage(getSettings()));
-    const transcript =
-      selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
+    const transcript = selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
     this._bankAssistantDirective(transcript, config, selectedContext);
     return text;
   }

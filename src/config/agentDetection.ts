@@ -170,7 +170,11 @@ export function detectAgentName(transcript: string, agentName: string, language?
  * stays consistent); returns the transcript unchanged when no address is
  * found or when stripping would leave nothing.
  */
-export function stripAgentAddress(transcript: string, agentName: string, language?: string): string {
+export function stripAgentAddress(
+  transcript: string,
+  agentName: string,
+  language?: string
+): string {
   const address = locateAgentAddress(transcript, agentName, language);
   if (!address) return transcript;
   const { rawWords, start, end } = address;
