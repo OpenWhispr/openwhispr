@@ -143,3 +143,65 @@ test("the Assistant response cancel control has an accessible name", async (t) =
 
   assert.match(markup, /<button[^>]*aria-label="Cancel"[^>]*title="Cancel"/);
 });
+
+test("a failed Assistant resize releases its open claim so opening can retry", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-open-failure-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  let resizeCalls = 0;
+  let assistant;
+
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => {
+        resizeCalls += 1;
+        throw new Error("resize failed");
+      },
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+  renderToStaticMarkup(React.createElement(Harness));
+
+  await assistant.openPanel();
+  await assistant.openPanel();
+
+  assert.equal(resizeCalls, 2);
+  assert.equal(assistant.openRef.current, false);
+});
+
+test("a failed live-transcript resize releases its open claim so opening can retry", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-live-transcript-open-failure-test-",
+  });
+  const { useLiveTranscriptPanel } = await vite.ssrLoadModule("/hooks/useLiveTranscriptPanel.js");
+  let resizeCalls = 0;
+  let liveTranscript;
+
+  function Harness() {
+    liveTranscript = useLiveTranscriptPanel({
+      resizeToContent: async () => {
+        resizeCalls += 1;
+        throw new Error("resize failed");
+      },
+      assistantOpenRef: { current: false },
+      isRecording: true,
+      isProcessing: false,
+      isAssistantVoice: false,
+    });
+    return null;
+  }
+  renderToStaticMarkup(React.createElement(Harness));
+
+  liveTranscript.reopen();
+  await new Promise((resolve) => setImmediate(resolve));
+  liveTranscript.reopen();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(resizeCalls, 2);
+  assert.equal(liveTranscript.openRef.current, false);
+});

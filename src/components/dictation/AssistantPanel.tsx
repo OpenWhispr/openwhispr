@@ -168,7 +168,6 @@ export function AssistantPanel({
     }
     consumedCommandIdRef.current = pendingCommand.id;
     const commandId = pendingCommand.id;
-    onCommandConsumed(commandId);
     if (pendingCommand.selectedContext) {
       setSelectedContext(null);
       onSelectionContextChange(null);
@@ -177,15 +176,22 @@ export function AssistantPanel({
       attachment: pendingCommand.attachment ?? undefined,
       selectedContext: pendingCommand.selectedContext ?? undefined,
     })
+      .then((sent) => {
+        if (sent) {
+          onCommandConsumed(commandId);
+          return;
+        }
+        // Another submission held the lock; let the effect retry once
+        // submissionInFlight flips back to false.
+        consumedCommandIdRef.current = null;
+      })
       .catch((error: unknown) => {
-        // A failure before the stream starts (conversation create/save) must
-        // land in the conversation like a stream error does.
         setMessages((prev) => [
           ...prev,
           {
             id: crypto.randomUUID(),
             role: "assistant",
-            content: `${t("agentMode.chat.errorPrefix")}: ${error instanceof Error ? error.message : String(error)}`,
+            content: `${t("agentMode.chat.errorPrefix")}: ${(error as Error).message}`,
             isStreaming: false,
           },
         ]);

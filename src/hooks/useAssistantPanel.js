@@ -94,7 +94,12 @@ export function useAssistantPanel({
     clearTimeout(closeTimerRef.current);
     // Grow the window before the panel mounts so its entrance never paints
     // clipped inside the compact pill bounds.
-    await requestMainWindowSize("ASSISTANT");
+    try {
+      await requestMainWindowSize("ASSISTANT");
+    } catch {
+      if (generation === openGenerationRef.current) openRef.current = false;
+      return;
+    }
     if (generation !== openGenerationRef.current || !openRef.current) {
       return;
     }

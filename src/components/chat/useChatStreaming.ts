@@ -94,8 +94,8 @@ export interface ChatStreaming {
 // so supportsVision is decidable — the same dual gate the single-shot
 // dictation path applies. OpenRouter/custom alias the OpenAI client here, but
 // their model ids never appear in the registry (vision would be a guess that
-// errors the whole command on a text-only backend), and the cloud agent drops
-// attachments until the API grows vision routing.
+// errors the whole command on a text-only backend). The cloud path carries its
+// screenshot separately as a server-routed field below.
 const providerSupportsStreamImages = (providerId: string) =>
   Boolean(providerId && PROVIDER_REGISTRY[providerId]?.supportsImages);
 
@@ -332,9 +332,10 @@ export function useChatStreaming({
         options?.attachment && isCloudAgent
           ? { data: options.attachment.image, mediaType: options.attachment.mediaType }
           : null;
-      if (attachment || cloudScreenContext) {
+      if (attachment) {
         // The screenshot needs its grounding instruction, exactly like the
-        // dictation path pairs the suffix with an attached image.
+        // dictation path pairs the suffix with an attached image. Restore it
+        // for cloud context once openwhispr-api#157 vision-routes that field.
         systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
       }
       if (attachment) {

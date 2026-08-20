@@ -1193,7 +1193,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("show-dictation-panel", () => {
-      this.windowManager.showDictationPanel();
+      this.windowManager.showDictationPanel({ reposition: true });
     });
 
     ipcMain.handle("capture-dictation-target", async () => {

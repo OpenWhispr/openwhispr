@@ -48,7 +48,7 @@ export function useChatMessageSender({
   onBeforeSend,
   onMessagePersisted,
   onSendingChange,
-}: UseChatMessageSenderOptions): (text: string, options?: SendToAIOptions) => Promise<void> {
+}: UseChatMessageSenderOptions): (text: string, options?: SendToAIOptions) => Promise<boolean> {
   const submissionLockRef = useRef<MessageSubmissionLock | null>(null);
   if (submissionLockRef.current === null) {
     submissionLockRef.current = createMessageSubmissionLock();
@@ -56,7 +56,7 @@ export function useChatMessageSender({
 
   return useCallback(
     async (text: string, options?: SendToAIOptions) => {
-      await submissionLockRef.current!.run(async () => {
+      return await submissionLockRef.current!.run(async () => {
         onSendingChange?.(true);
         try {
           onBeforeSend?.();

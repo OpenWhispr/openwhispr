@@ -271,7 +271,9 @@ export function useLiveTranscriptPanel({
         }, timeline.panelAtMs);
         entranceTimersRef.current.push(finishEntrance);
       });
-    })();
+    })().catch(() => {
+      if (generation === openGenerationRef.current) openRef.current = false;
+    });
     openPromiseRef.current = openPromise;
     void openPromise.finally(() => {
       if (openPromiseRef.current === openPromise) {

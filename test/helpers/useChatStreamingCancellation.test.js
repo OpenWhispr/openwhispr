@@ -45,7 +45,7 @@ const EMPTY_RESPONSE_TEXT = JSON.parse(
   fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
 ).agentMode.chat.emptyResponse;
 
-async function renderChatStreaming(t, { electronAPI = {} } = {}) {
+async function renderChatStreaming(t, { electronAPI = {}, settings = {} } = {}) {
   installBrowserGlobals(t, { window: { electronAPI } });
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-cancellation-test-",
@@ -78,6 +78,7 @@ async function renderChatStreaming(t, { electronAPI = {} } = {}) {
     chatAgentRemoteUrl: "http://127.0.0.1:11434/v1",
     chatAgentDisableThinking: true,
     isSignedIn: false,
+    ...settings,
   });
 
   const { useChatStreaming } = await vite.ssrLoadModule("/components/chat/useChatStreaming.ts");
@@ -207,4 +208,46 @@ test("cancelling before any token arrives never shows the empty-response fallbac
   assert.notEqual(message.content, EMPTY_RESPONSE_TEXT);
   assert.equal(message.content, "");
   assert.equal(message.isStreaming, false);
+});
+
+test("cloud screen context is sent without claiming the screenshot is already attached", async (t) => {
+  let streamEndListener;
+  let streamOptions;
+  const electronAPI = {
+    onAgentStreamChunk() {
+      return () => {};
+    },
+    onAgentStreamError() {
+      return () => {};
+    },
+    onAgentStreamEnd(listener) {
+      streamEndListener = listener;
+      return () => {};
+    },
+    startAgentStream(requestId, _messages, options) {
+      streamOptions = options;
+      streamEndListener({ requestId });
+    },
+    cancelAgentStream() {},
+  };
+  const { captured } = await renderChatStreaming(t, {
+    electronAPI,
+    settings: {
+      chatAgentMode: "openwhispr",
+      chatAgentCloudMode: "openwhispr",
+      isSignedIn: true,
+    },
+  });
+
+  await captured.sendToAI(
+    "What is on screen?",
+    [{ id: "user-1", role: "user", content: "What is on screen?", isStreaming: false }],
+    { attachment: { image: "base64-image", mediaType: "image/png" } }
+  );
+
+  assert.deepEqual(streamOptions.screenContext, {
+    data: "base64-image",
+    mediaType: "image/png",
+  });
+  assert.doesNotMatch(streamOptions.systemPrompt, /SCREEN CONTEXT:/);
 });
