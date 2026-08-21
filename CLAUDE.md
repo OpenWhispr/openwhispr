@@ -329,6 +329,11 @@ CREATE TABLE transcriptions (
 );
 ```
 
+**Transcript pagination + search**: the history list and Ctrl+K palette are not capped at 50 rows.
+
+- `getTranscriptionsPage({ limit, cursor, includeDiscarded })` (database.js) serves keyset pages of 50; the cursor is the `(timestamp, id)` of the last loaded row (`timestamp` has 1-second resolution, so `id` breaks ties). A partial index `idx_transcriptions_timestamp_id ON transcriptions(timestamp DESC, id DESC) WHERE deleted_at IS NULL` backs the query. `transcriptionStore.ts` exposes `loadMoreTranscriptions()`; HistoryView virtualizes the grouped list with `@tanstack/react-virtual` (own scroll container, `measureElement` rows) and infinite-scrolls near the bottom.
+- `searchTranscriptions(query, limit)` searches the full history via `transcriptions_fts`, an external-content FTS5 table over `text` with the same Unicode token/prefix semantics as `notes_fts`. When the table is first introduced, `initDatabase()` creates its triggers and runs FTS5's `rebuild` command atomically so existing transcripts are indexed; triggers keep later insert/update-of-text/delete writes current. The palette debounces (200 ms), shows up to 20 results in its existing scroll container, and honors the History discarded filter; empty query shows recents from the store. SQLite-backed coverage lives in `test/helpers/transcriptionSearch.test.js`.
+
 ### 5. Settings Storage
 
 Settings stored in localStorage with these keys:

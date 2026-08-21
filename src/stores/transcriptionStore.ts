@@ -1,19 +1,25 @@
 import { create } from "zustand";
-import type { TranscriptionItem } from "../types/electron";
+import type { TranscriptionCursor, TranscriptionItem } from "../types/electron";
 
 interface TranscriptionState {
   transcriptions: TranscriptionItem[];
   includeDiscarded: boolean;
+  hasMore: boolean;
+  isLoadingMore: boolean;
 }
 
 const useTranscriptionStore = create<TranscriptionState>()(() => ({
   transcriptions: [],
   includeDiscarded: false,
+  hasMore: false,
+  isLoadingMore: false,
 }));
 
 let hasBoundIpcListeners = false;
-const DEFAULT_LIMIT = 50;
-let currentLimit = DEFAULT_LIMIT;
+const PAGE_SIZE = 50;
+// Keyset cursor of the oldest loaded row; null while on the first page.
+let nextCursor: TranscriptionCursor | null = null;
+let requestGeneration = 0;
 
 function ensureIpcListeners() {
   if (hasBoundIpcListeners || typeof window === "undefined") {
@@ -70,14 +76,51 @@ function ensureIpcListeners() {
 }
 
 export async function initializeTranscriptions(
-  limit = currentLimit,
+  limit = PAGE_SIZE,
   includeDiscarded = useTranscriptionStore.getState().includeDiscarded
 ) {
-  currentLimit = limit;
   ensureIpcListeners();
-  const items = await window.electronAPI.getTranscriptions(limit, { includeDiscarded });
-  useTranscriptionStore.setState({ transcriptions: items, includeDiscarded });
-  return items;
+  const generation = ++requestGeneration;
+  nextCursor = null;
+  useTranscriptionStore.setState({ hasMore: false, isLoadingMore: false });
+  const page = await window.electronAPI.getTranscriptionsPage({ limit, includeDiscarded });
+  if (generation !== requestGeneration) return useTranscriptionStore.getState().transcriptions;
+  nextCursor = page.nextCursor;
+  useTranscriptionStore.setState({
+    transcriptions: page.items,
+    includeDiscarded,
+    hasMore: page.hasMore,
+    isLoadingMore: false,
+  });
+  return page.items;
+}
+
+export async function loadMoreTranscriptions() {
+  const { hasMore, isLoadingMore, includeDiscarded } = useTranscriptionStore.getState();
+  if (!hasMore || isLoadingMore) return;
+  const generation = requestGeneration;
+  const cursor = nextCursor;
+  useTranscriptionStore.setState({ isLoadingMore: true });
+  try {
+    const page = await window.electronAPI.getTranscriptionsPage({
+      limit: PAGE_SIZE,
+      cursor,
+      includeDiscarded,
+    });
+    if (generation !== requestGeneration) return;
+    nextCursor = page.nextCursor;
+    const { transcriptions: current } = useTranscriptionStore.getState();
+    useTranscriptionStore.setState({
+      transcriptions: [...current, ...page.items],
+      hasMore: page.hasMore,
+    });
+  } catch {
+    // Keep hasMore so scrolling again retries the failed page.
+  } finally {
+    if (generation === requestGeneration) {
+      useTranscriptionStore.setState({ isLoadingMore: false });
+    }
+  }
 }
 
 export function addTranscription(item: TranscriptionItem) {
@@ -86,7 +129,7 @@ export function addTranscription(item: TranscriptionItem) {
   const { transcriptions } = useTranscriptionStore.getState();
   const withoutDuplicate = transcriptions.filter((existing) => existing.id !== item.id);
   useTranscriptionStore.setState({
-    transcriptions: [item, ...withoutDuplicate].slice(0, currentLimit),
+    transcriptions: [item, ...withoutDuplicate],
   });
 }
 
@@ -100,14 +143,23 @@ export function removeTranscription(id: number) {
 
 export function updateTranscription(item: TranscriptionItem) {
   if (!item) return;
-  const { transcriptions } = useTranscriptionStore.getState();
+  const { transcriptions, includeDiscarded } = useTranscriptionStore.getState();
+  if (item.status === "discarded" && !includeDiscarded) {
+    removeTranscription(item.id);
+    return;
+  }
   const next = transcriptions.map((existing) => (existing.id === item.id ? item : existing));
   useTranscriptionStore.setState({ transcriptions: next });
 }
 
 export function clearTranscriptions() {
-  if (useTranscriptionStore.getState().transcriptions.length === 0) return;
-  useTranscriptionStore.setState({ transcriptions: [] });
+  requestGeneration++;
+  nextCursor = null;
+  useTranscriptionStore.setState({
+    transcriptions: [],
+    hasMore: false,
+    isLoadingMore: false,
+  });
 }
 
 export function useTranscriptions() {
@@ -116,4 +168,12 @@ export function useTranscriptions() {
 
 export function useShowDiscarded() {
   return useTranscriptionStore((state) => state.includeDiscarded);
+}
+
+export function useHasMoreTranscriptions() {
+  return useTranscriptionStore((state) => state.hasMore);
+}
+
+export function useIsLoadingMoreTranscriptions() {
+  return useTranscriptionStore((state) => state.isLoadingMore);
 }
