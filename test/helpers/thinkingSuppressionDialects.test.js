@@ -112,7 +112,7 @@ test("unlisted providers keep the legacy reasoning_effort none plus chat_templat
   const { suppressThinking } = await load();
 
   const body = {};
-  suppressThinking(body, "openai", "gpt-5.2");
+  suppressThinking(body, "openai", "llama-4-maverick");
 
   assert.deepEqual(body, {
     reasoning_effort: "none",
