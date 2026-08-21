@@ -104,6 +104,7 @@ function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
         cleanup();
         resolve(result);
       } catch (err) {
+        callbackClaimed = true;
         redirect(res, { [errorParam]: err.redirectCode || "server_error" });
         cleanup();
         reject(err);
@@ -124,6 +125,7 @@ function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
     });
 
     timeoutId = setTimeout(() => {
+      callbackClaimed = true;
       server.close();
       reject(new Error("OAuth flow timed out"));
     }, OAUTH_TIMEOUT_MS);
