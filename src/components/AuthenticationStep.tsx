@@ -14,7 +14,6 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "lucide-react";
 import logger from "../utils/logger";
-import { getCachedPlatform } from "../utils/platform";
 import ForgotPasswordView from "./ForgotPasswordView";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
 
@@ -134,7 +133,6 @@ export default function AuthenticationStep({
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState(true);
-  const isMacOS = getCachedPlatform() === "darwin";
 
   const needsVerificationRef = useRef(false);
 
@@ -618,17 +616,13 @@ export default function AuthenticationStep({
       onClick: () => handleSocialSignIn("google"),
       loading: isSocialLoading === "google",
     },
-    ...(isMacOS
-      ? [
-          {
-            id: "apple",
-            label: "Apple",
-            icon: AppleIcon,
-            onClick: () => handleSocialSignIn("apple"),
-            loading: isSocialLoading === "apple",
-          },
-        ]
-      : []),
+    {
+      id: "apple",
+      label: "Apple",
+      icon: AppleIcon,
+      onClick: () => handleSocialSignIn("apple"),
+      loading: isSocialLoading === "apple",
+    },
     {
       id: "microsoft",
       label: "Microsoft",
