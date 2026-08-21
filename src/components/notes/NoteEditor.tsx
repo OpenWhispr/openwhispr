@@ -69,6 +69,7 @@ import {
 } from "../../utils/transcriptSpeakerState";
 import NoteParticipants from "./NoteParticipants";
 import type { CalendarAttendee } from "../../types/calendar";
+import { observeFloatingChatLayout } from "./floatingChatLayout";
 
 const CHIP_BUTTON_CLASS =
   "inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
@@ -716,45 +717,32 @@ export default function NoteEditor({
     prevRecordingRef.current = isRecording;
   }, [isRecording, scheduleUiUpdate]);
 
-  // Reserve scroll space for the floating chat panel; +32 = bottom-4 + gap.
   const contentScrollRef = useRef<HTMLDivElement>(null);
 
-  // Pin the active view's scroller to its content bottom: always on open,
-  // on resize only if already near it (padding isn't content).
-  const pinActiveScroller = useCallback((root: HTMLDivElement | null, force = false) => {
-    if (!root) return;
+  const getActiveScroller = useCallback((root: HTMLDivElement): HTMLElement | null => {
     const candidates = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))].filter(
       (el) => el.scrollHeight - el.clientHeight > 2
     );
-    if (!candidates.length) return;
-    const scroller = candidates.reduce((a, b) =>
+    if (!candidates.length) return null;
+    return candidates.reduce((a, b) =>
       b.scrollHeight - b.clientHeight > a.scrollHeight - a.clientHeight ? b : a
     );
-    const pad = parseFloat(getComputedStyle(scroller).paddingBottom) || 0;
-    const distToContent = scroller.scrollHeight - pad - scroller.scrollTop - scroller.clientHeight;
-    if (force || distToContent < 80) {
-      scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight;
-    }
   }, []);
 
   const floatingChatPanelRef = useCallback(
-    (el: HTMLDivElement | null) => {
-      const container = el?.parentElement;
-      if (!el || !container) return;
-      const applyInset = (force = false) => {
-        container.style.setProperty("--floating-inset", `${el.offsetHeight + 32}px`);
-        if (force) requestAnimationFrame(() => pinActiveScroller(contentScrollRef.current, true));
-        else pinActiveScroller(contentScrollRef.current);
-      };
-      applyInset(true);
-      const observer = new ResizeObserver(() => applyInset());
-      observer.observe(el);
-      return () => {
-        observer.disconnect();
-        container.style.removeProperty("--floating-inset");
-      };
+    (panel: HTMLDivElement | null): (() => void) | undefined => {
+      const container = panel?.parentElement;
+      const contentRoot = contentScrollRef.current;
+      if (!panel || !container || !contentRoot) return undefined;
+
+      return observeFloatingChatLayout({
+        panel,
+        container,
+        contentRoot,
+        getActiveScroller: (): HTMLElement | null => getActiveScroller(contentRoot),
+      });
     },
-    [pinActiveScroller]
+    [getActiveScroller]
   );
 
   const handleContentChange = useCallback(
