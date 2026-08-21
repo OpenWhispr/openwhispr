@@ -4198,14 +4198,15 @@ class IPCHandlers {
             abortSignal: AbortSignal.timeout(timeoutMs),
           });
 
-          if (
-            config?.requireCompleteOutput &&
-            ["length", "max-tokens", "max_tokens"].includes(finishReason)
-          ) {
+          // Normalize once so the selection-edit guard and the renderer's
+          // success log cannot disagree about what counts as truncated.
+          const truncated = ["length", "max-tokens", "max_tokens"].includes(finishReason);
+
+          if (config?.requireCompleteOutput && truncated) {
             throw new Error("Model output was truncated before the selection edit completed");
           }
 
-          return { success: true, text: (generated || "").trim() };
+          return { success: true, text: (generated || "").trim(), finishReason, truncated };
         } catch (err) {
           debugLogger.error("Enterprise reasoning error:", err);
           const mapped = mapEnterpriseError(provider, err, config || {});
@@ -4561,7 +4562,11 @@ class IPCHandlers {
           if (config?.requireCompleteOutput && data.stop_reason === "max_tokens") {
             throw new Error("Model output was truncated before the selection edit completed");
           }
-          return { success: true, text: data.content[0].text.trim() };
+          return {
+            success: true,
+            text: data.content[0].text.trim(),
+            stopReason: data.stop_reason,
+          };
         } catch (error) {
           debugLogger.error("Anthropic reasoning error:", error);
           return { success: false, error: error.message };

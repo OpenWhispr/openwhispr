@@ -63,6 +63,8 @@ export const enterpriseProvider: InferenceProvider = {
       model,
       processingTimeMs,
       resultLength: result.text?.length || 0,
+      finishReason: result.finishReason,
+      truncated: result.truncated,
     });
     return result.text || "";
   },

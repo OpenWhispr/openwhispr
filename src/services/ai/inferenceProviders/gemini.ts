@@ -156,6 +156,8 @@ export const geminiProvider: InferenceProvider = {
       model,
       responseLength: responseText.length,
       tokensUsed: response.usageMetadata?.totalTokenCount || 0,
+      finishReason: candidate.finishReason,
+      truncated: candidate.finishReason === "MAX_TOKENS",
       success: true,
     });
     return responseText;
