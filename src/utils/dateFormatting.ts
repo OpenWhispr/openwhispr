@@ -30,6 +30,7 @@ export function formatRelativeTime(
   const date = normalizeDbDate(dateStr);
   if (Number.isNaN(date.getTime())) return "";
   const diff = Date.now() - date.getTime();
+  if (diff < 0) return formatShortDate(dateStr);
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
