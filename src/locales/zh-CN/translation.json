@@ -1555,7 +1555,8 @@
             "SSO 与合规",
             "专属支持"
           ],
-          "cta": "联系销售"
+          "cta": "联系销售",
+          "upgradeCta": "升级到 Enterprise"
         },
         "currentPlan": "当前套餐",
         "coveredByWorkspace": "已包含在您的工作区套餐中",
@@ -2373,7 +2374,28 @@
             "admin": "工作区管理员"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise 控制台",
+        "description": "在网页端管理 SSO、策略和成员",
+        "open": "打开控制台"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "升级到 Enterprise",
+      "description": "选择工作区、席位数量和计费周期。付款将在 Stripe Checkout 中完成。",
+      "allSubscribed": "您拥有的所有工作区都已有有效订阅。如需更改现有工作区的方案，请联系销售。",
+      "workspaceLabel": "工作区",
+      "seatsLabel": "席位",
+      "seatsHint_one": "当前已使用 {{count}} 个席位",
+      "seatsHint_other": "当前已使用 {{count}} 个席位",
+      "intervalLabel": "计费周期",
+      "interval": {
+        "monthly": "按月",
+        "annual": "按年"
+      },
+      "priceNote": "最终价格将在结账时显示。",
+      "continueCta": "继续结账"
     }
   },
   "models": {

@@ -1676,6 +1676,11 @@
             "admin": "Administrateur de l'espace"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Console Enterprise",
+        "description": "Gérez le SSO, les politiques et les membres sur le web",
+        "open": "Ouvrir la console"
       }
     },
     "unifiedBilling": {
@@ -1820,7 +1825,8 @@
             "SSO et conformité",
             "Support dédié"
           ],
-          "cta": "Contacter les ventes"
+          "cta": "Contacter les ventes",
+          "upgradeCta": "Passer à Enterprise"
         },
         "currentPlan": "Forfait actuel",
         "coveredByWorkspace": "Inclus dans votre plan d'espace de travail",
@@ -2463,6 +2469,22 @@
       "endpointUrl": "URL du point d'accès",
       "serverUrl": "URL du serveur",
       "apiKeyOptional": "Clé API (facultative)"
+    },
+    "enterpriseCheckout": {
+      "title": "Passer à Enterprise",
+      "description": "Choisissez l'espace de travail, les sièges et le cycle de facturation. Le paiement s'effectue dans Stripe Checkout.",
+      "allSubscribed": "Tous les espaces de travail que vous possédez ont déjà un abonnement actif. Pour changer le plan d'un espace existant, contactez le service commercial.",
+      "workspaceLabel": "Espace de travail",
+      "seatsLabel": "Sièges",
+      "seatsHint_one": "{{count}} siège actuellement utilisé",
+      "seatsHint_other": "{{count}} sièges actuellement utilisés",
+      "intervalLabel": "Cycle de facturation",
+      "interval": {
+        "monthly": "Mensuel",
+        "annual": "Annuel"
+      },
+      "priceNote": "Le prix final est affiché lors du paiement.",
+      "continueCta": "Continuer vers le paiement"
     }
   },
   "models": {

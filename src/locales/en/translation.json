@@ -1676,6 +1676,11 @@
             "admin": "Workspace admin"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise console",
+        "description": "Manage SSO, policies, and members on the web",
+        "open": "Open console"
       }
     },
     "unifiedBilling": {
@@ -1820,7 +1825,8 @@
             "SSO & compliance",
             "Dedicated support"
           ],
-          "cta": "Contact Sales"
+          "cta": "Contact Sales",
+          "upgradeCta": "Upgrade to Enterprise"
         },
         "currentPlan": "Current plan",
         "coveredByWorkspace": "Included with your workspace plan",
@@ -2463,6 +2469,22 @@
       "endpointUrl": "Endpoint URL",
       "serverUrl": "Server URL",
       "apiKeyOptional": "API Key (optional)"
+    },
+    "enterpriseCheckout": {
+      "title": "Upgrade to Enterprise",
+      "description": "Choose a workspace, seats, and billing cycle. Payment is completed in Stripe Checkout.",
+      "allSubscribed": "All workspaces you own already have an active subscription. To change an existing workspace's plan, contact sales.",
+      "workspaceLabel": "Workspace",
+      "seatsLabel": "Seats",
+      "seatsHint_one": "{{count}} seat currently in use",
+      "seatsHint_other": "{{count}} seats currently in use",
+      "intervalLabel": "Billing cycle",
+      "interval": {
+        "monthly": "Monthly",
+        "annual": "Annual"
+      },
+      "priceNote": "Final pricing is shown at checkout.",
+      "continueCta": "Continue to checkout"
     }
   },
   "models": {

@@ -1584,7 +1584,8 @@
             "SSO y cumplimiento normativo",
             "Soporte dedicado"
           ],
-          "cta": "Contactar a ventas"
+          "cta": "Contactar a ventas",
+          "upgradeCta": "Mejorar a Enterprise"
         },
         "currentPlan": "Plan actual",
         "coveredByWorkspace": "Incluido en tu plan de espacio de trabajo",
@@ -2421,7 +2422,28 @@
             "admin": "Administrador del espacio de trabajo"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Consola Enterprise",
+        "description": "Gestiona SSO, políticas y miembros desde la web",
+        "open": "Abrir consola"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "Mejorar a Enterprise",
+      "description": "Elige el espacio de trabajo, los puestos y el ciclo de facturación. El pago se completa en Stripe Checkout.",
+      "allSubscribed": "Todos los espacios de trabajo de tu propiedad ya tienen una suscripción activa. Para cambiar el plan de un espacio existente, contacta con ventas.",
+      "workspaceLabel": "Espacio de trabajo",
+      "seatsLabel": "Puestos",
+      "seatsHint_one": "{{count}} puesto en uso actualmente",
+      "seatsHint_other": "{{count}} puestos en uso actualmente",
+      "intervalLabel": "Ciclo de facturación",
+      "interval": {
+        "monthly": "Mensual",
+        "annual": "Anual"
+      },
+      "priceNote": "El precio final se muestra al pagar.",
+      "continueCta": "Continuar al pago"
     }
   },
   "models": {

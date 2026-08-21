@@ -134,6 +134,8 @@ import { usePolicyStore } from "../stores/policyStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
+import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
+import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
 import { getTranscriptionProvider } from "../models/ModelRegistry";
@@ -1047,6 +1049,8 @@ export default function SettingsPage({
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
   const billingWorkspaces = useWorkspaceStore((s) => s.workspaces);
+  const [enterpriseCheckoutOpen, setEnterpriseCheckoutOpen] = useState(false);
+  const [enterpriseWorkspaceCreateOpen, setEnterpriseWorkspaceCreateOpen] = useState(false);
   const coveringWorkspaces = billingWorkspaces.filter((workspace) =>
     usage?.entitledWorkspaceIds?.includes(workspace.id)
   );
@@ -2379,17 +2383,50 @@ export default function SettingsPage({
                           </li>
                         ))}
                       </ul>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                        onClick={() =>
-                          window.electronAPI?.openExternal?.("https://openwhispr.com/contact-sales")
-                        }
-                      >
-                        <Mail size={10} />
-                        {t("settingsPage.account.pricing.enterprise.cta")}
-                      </Button>
+                      {isSignedIn ? (
+                        <div className="mt-2 space-y-1">
+                          <Button
+                            size="sm"
+                            className="w-full h-6 text-[10px]"
+                            onClick={() => {
+                              if (billingWorkspaces.some((w) => w.role === "owner")) {
+                                setEnterpriseCheckoutOpen(true);
+                              } else {
+                                setEnterpriseWorkspaceCreateOpen(true);
+                              }
+                            }}
+                          >
+                            {t("settingsPage.account.pricing.enterprise.upgradeCta")}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full h-6 text-[10px] text-muted-foreground"
+                            onClick={() =>
+                              window.electronAPI?.openExternal?.(
+                                "https://openwhispr.com/contact-sales"
+                              )
+                            }
+                          >
+                            <Mail size={10} />
+                            {t("settingsPage.account.pricing.enterprise.cta")}
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                          onClick={() =>
+                            window.electronAPI?.openExternal?.(
+                              "https://openwhispr.com/contact-sales"
+                            )
+                          }
+                        >
+                          <Mail size={10} />
+                          {t("settingsPage.account.pricing.enterprise.cta")}
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -2479,6 +2516,18 @@ export default function SettingsPage({
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
+
+                  <EnterpriseCheckoutDialog
+                    open={enterpriseCheckoutOpen}
+                    onOpenChange={setEnterpriseCheckoutOpen}
+                    workspaces={billingWorkspaces}
+                    onRefreshEntitlement={usage?.refetch}
+                  />
+                  <CreateWorkspaceDialog
+                    open={enterpriseWorkspaceCreateOpen}
+                    onOpenChange={setEnterpriseWorkspaceCreateOpen}
+                    onCreated={() => setEnterpriseCheckoutOpen(true)}
+                  />
                 </div>
               </>
             ) : (
