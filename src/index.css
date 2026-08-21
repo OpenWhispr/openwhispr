@@ -830,7 +830,7 @@ h1 {
 }
 
 /* Scoped to .onboarding-canvas because AuthenticationStep also renders outside
-   onboarding (SignInDialog, AppRouter's re-auth card), where the --onboarding-*
+   onboarding (SignInDialog), where the --onboarding-*
    tokens are undefined and these !important rules would paint invisible inputs.
    Outside the canvas the Input component's default skin wins instead. */
 .onboarding-canvas .onboarding-light-input,

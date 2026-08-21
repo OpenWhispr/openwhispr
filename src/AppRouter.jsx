@@ -1,16 +1,15 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import App from "./App.jsx";
-import AuthenticationStep from "./components/AuthenticationStep.tsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
+import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
 import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
-import WindowControls from "./components/WindowControls.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
-import { Card, CardContent } from "./components/ui/card.tsx";
 import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
 import { usePolicyStore } from "./stores/policyStore";
+import { resolveSettledControlPanelWindowMode } from "./utils/controlPanelWindowMode.ts";
 import { isControlPanelWindow } from "./utils/windowContext.ts";
 
 // Either marker means the flow is mid-way: the legacy step key is kept for
@@ -111,36 +110,47 @@ function MainApp() {
   }, [authLoaded, isControlPanel, isDictationPanel, isGracePeriodOnly, isSignedIn]);
 
   useEffect(() => {
-    if (!isControlPanel) return;
+    if (!isControlPanel || !authLoaded) return;
     // Fast path: a user who already finished onboarding can never enter the
-    // compact flow, so show the control panel immediately instead of holding
-    // it hidden behind auth/policy resolution. Fresh installs and mid-flow
-    // restarts fall through to the effect below, preserving the no-flash
-    // guarantee for windows that will enter compact onboarding mode.
+    // compact flow only when their session or guest choice is still valid.
+    // Signed-out account users fall through so reauthentication can select the
+    // compact window without first flashing restored control-panel dimensions.
     const completed = localStorage.getItem("onboardingCompleted") === "true";
-    if (completed && !isOnboardingInProgress()) {
+    const authSkipped =
+      localStorage.getItem("authenticationSkipped") === "true" ||
+      localStorage.getItem("skipAuth") === "true";
+    if (completed && !isOnboardingInProgress() && (isSignedIn || authSkipped)) {
       void window.electronAPI?.setOnboardingWindowMode?.("restore");
     }
-  }, [isControlPanel]);
+  }, [authLoaded, isControlPanel, isSignedIn]);
+
+  const settledControlPanelWindowMode = resolveSettledControlPanelWindowMode({
+    isControlPanel,
+    isLoading,
+    isWaitingForPolicyStart,
+    showOnboarding,
+    needsReauth,
+  });
 
   useEffect(() => {
-    if (!isControlPanel || isLoading || isWaitingForPolicyStart || showOnboarding) return;
+    if (!settledControlPanelWindowMode) return;
     // The main process waits for this renderer decision before showing the
     // control panel, preventing a fresh install from flashing at 1200×800
-    // before the compact onboarding mode is applied.
-    void window.electronAPI?.setOnboardingWindowMode?.("restore");
-  }, [isControlPanel, isLoading, isWaitingForPolicyStart, showOnboarding]);
+    // before its route-appropriate window mode is applied.
+    void window.electronAPI?.setOnboardingWindowMode?.(settledControlPanelWindowMode);
+  }, [settledControlPanelWindowMode]);
 
   useEffect(() => {
     if (isLoading || isWaitingForPolicyStart) return;
 
     const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
-    const normalAppVisible = onboardingCompleted && (!isControlPanel || !showOnboarding);
+    const normalAppVisible =
+      onboardingCompleted && (!isControlPanel || (!showOnboarding && !needsReauth));
     // Main starts fail-closed. Only a renderer that has resolved the route and
     // actually committed the normal app may release global hotkeys and popup
     // surfaces; fresh installs and onboarding reloads keep them suppressed.
     void window.electronAPI?.setOnboardingActive?.(!normalAppVisible);
-  }, [isControlPanel, isLoading, isWaitingForPolicyStart, showOnboarding]);
+  }, [isControlPanel, isLoading, isWaitingForPolicyStart, needsReauth, showOnboarding]);
 
   const handleOnboardingComplete = (options) => {
     if (options?.openSettings) {
@@ -168,39 +178,14 @@ function MainApp() {
 
   if (isControlPanel && needsReauth) {
     return (
-      <div
-        className="h-screen flex flex-col bg-background"
-        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
-      >
-        <div
-          className="flex items-center justify-end w-full h-10 shrink-0"
-          style={{ WebkitAppRegion: "drag" }}
-        >
-          {window.electronAPI?.getPlatform?.() !== "darwin" && (
-            <div className="pr-1" style={{ WebkitAppRegion: "no-drag" }}>
-              <WindowControls />
-            </div>
-          )}
-        </div>
-        <div className="flex-1 px-6 overflow-y-auto flex items-center">
-          <div className="w-full max-w-sm mx-auto">
-            <Card className="bg-card/90 backdrop-blur-2xl border border-border/50 dark:border-white/5 shadow-lg rounded-xl overflow-hidden">
-              <CardContent className="p-6">
-                <AuthenticationStep
-                  onContinueWithoutAccount={() => {
-                    localStorage.setItem("authenticationSkipped", "true");
-                    localStorage.setItem("skipAuth", "true");
-                    setNeedsReauth(false);
-                  }}
-                  onAuthComplete={() => setNeedsReauth(false)}
-                  onNeedsVerification={() => {}}
-                  embedded
-                />
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
+      <ReauthenticationScreen
+        onContinueWithoutAccount={() => {
+          localStorage.setItem("authenticationSkipped", "true");
+          localStorage.setItem("skipAuth", "true");
+          setNeedsReauth(false);
+        }}
+        onAuthComplete={() => setNeedsReauth(false)}
+      />
     );
   }
 

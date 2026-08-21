@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
-import AuthenticationStep from "./AuthenticationStep";
-import EmailVerificationStep from "./EmailVerificationStep";
+import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
 import UseCaseStep from "./onboarding/UseCaseStep";
 import { hasUseCaseIntent } from "./onboarding/useCases";
 import OnboardingShell, { OnboardingStepHeader } from "./onboarding/OnboardingShell";
@@ -16,7 +15,6 @@ import SetupChoiceStep from "./onboarding/SetupChoiceStep";
 import { ByokProviderStep, LocalModelSetupStep } from "./onboarding/ProviderSetupStep";
 import { AlertDialog } from "./ui/dialog";
 import { useAuth } from "../hooks/useAuth";
-import { signOut } from "../lib/auth";
 import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
@@ -90,7 +88,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     clearSession,
   } = useOnboardingSession();
 
-  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [dictationHotkey, setDictationHotkey] = useState(
     () => parseHotkeyList(settings.dictationKey)[0] || getDefaultHotkey()
   );
@@ -571,37 +568,19 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "auth":
         return (
           <div className="min-h-full w-full">
-            {pendingVerificationEmail ? (
-              <EmailVerificationStep
-                email={pendingVerificationEmail}
-                onVerified={() => {
-                  setPendingVerificationEmail(null);
-                  setAuthPath("account");
-                  goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
-                }}
-                onBack={() => {
-                  // Abandoning verification leaves a live session for the
-                  // wrong email; end it first or the remounted auth step
-                  // auto-completes with that account (signOut never rejects).
-                  void signOut().then(() => setPendingVerificationEmail(null));
-                }}
-              />
-            ) : (
-              <AuthenticationStep
-                onContinueWithoutAccount={() => {
-                  // Guests continue onto their route's permissions step — jumping
-                  // straight to setup-choice would skip the permission grants and
-                  // hotkey the guest route exists to guarantee (see flow.ts).
-                  setAuthPath("guest");
-                  goTo("permissions");
-                }}
-                onAuthComplete={() => {
-                  setAuthPath("account");
-                  goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
-                }}
-                onNeedsVerification={setPendingVerificationEmail}
-              />
-            )}
+            <CompactAuthenticationFlow
+              onContinueWithoutAccount={() => {
+                // Guests continue onto their route's permissions step — jumping
+                // straight to setup-choice would skip the permission grants and
+                // hotkey the guest route exists to guarantee (see flow.ts).
+                setAuthPath("guest");
+                goTo("permissions");
+              }}
+              onAuthComplete={() => {
+                setAuthPath("account");
+                goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
+              }}
+            />
           </div>
         );
 
