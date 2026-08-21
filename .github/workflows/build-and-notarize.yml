@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  tests:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +44,7 @@ jobs:
           REQUIRE_DB_TESTS: "1"
 
   build-linux:
-    needs: tests
+    needs: quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -135,7 +135,7 @@ jobs:
           retention-days: 7
 
   build-windows:
-    needs: tests
+    needs: quality
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -251,7 +251,7 @@ jobs:
           retention-days: 7
 
   build-macos:
-    needs: tests
+    needs: quality
     runs-on: macos-latest
     strategy:
       fail-fast: false
