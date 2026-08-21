@@ -1,5 +1,6 @@
 const { autoUpdater } = require("electron-updater");
 const { appUpdatesEnabled } = require("./helpers/updateCheckPolicy");
+const { parseAutoInstallEnv, shouldRegisterQuitHandler } = require("./helpers/updateInstallPolicy");
 
 class UpdateManager {
   constructor() {
@@ -65,7 +66,7 @@ class UpdateManager {
     }
 
     autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.autoInstallOnAppQuit = parseAutoInstallEnv(process.env.UPDATE_AUTO_INSTALL);
     autoUpdater.logger = console;
 
     this.setupEventHandlers();
@@ -266,6 +267,23 @@ class UpdateManager {
       console.error("❌ Update installation error:", error);
       throw error;
     }
+  }
+
+  setAutoInstallOnAppQuit(enabled) {
+    const value = enabled === true;
+    autoUpdater.autoInstallOnAppQuit = value;
+    // On Windows/Linux electron-updater registers its install-on-quit hook only
+    // when a download completes with the flag on (BaseUpdater.addQuitHandler),
+    // so enabling after a gated download must re-register it. The hook is
+    // protected API, so guard against it disappearing upstream (macOS's
+    // MacUpdater never had it — Squirrel handles staging there).
+    if (
+      shouldRegisterQuitHandler(value, this.updateDownloaded) &&
+      typeof autoUpdater.addQuitHandler === "function"
+    ) {
+      autoUpdater.addQuitHandler();
+    }
+    return { success: true, enabled: value };
   }
 
   async getAppVersion() {

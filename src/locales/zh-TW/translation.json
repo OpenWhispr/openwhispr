@@ -1929,6 +1929,8 @@
         }
       },
       "updates": {
+        "autoInstall": "自動安裝更新",
+        "autoInstallDescription": "已下載的更新會在結束應用程式時安裝。關閉後，只有在你選擇安裝時才會安裝。",
         "badges": {
           "dev": "開發版",
           "latest": "最新",

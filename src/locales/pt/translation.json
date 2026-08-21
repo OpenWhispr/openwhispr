@@ -1908,6 +1908,8 @@
         }
       },
       "updates": {
+        "autoInstall": "Instalar atualizações automaticamente",
+        "autoInstallDescription": "As atualizações baixadas são instaladas ao fechar o aplicativo. Desative para instalá-las apenas quando você decidir.",
         "badges": {
           "dev": "Dev",
           "latest": "Mais recente",
