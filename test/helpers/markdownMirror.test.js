@@ -48,6 +48,18 @@ test("a note title ending in transcript keeps both mirrored files", (t) => {
   assert.equal(markdownMirror.getNotePath(note.id), notePath);
 });
 
+test("folder names cannot escape the configured mirror directory", (t) => {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+
+  markdownMirror.init(basePath);
+  markdownMirror.writeNote({ id: 13, title: "Safe note", content: "Body" }, "../outside");
+
+  const escapedPath = path.resolve(basePath, "..", "outside", "13-safe-note.md");
+  assert.equal(fs.existsSync(escapedPath), false);
+  assert.equal(fs.existsSync(path.join(basePath, "..-outside", "13-safe-note.md")), true);
+});
+
 test("renaming a mirrored note cleans up both stale files and reveals the note", (t) => {
   const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));

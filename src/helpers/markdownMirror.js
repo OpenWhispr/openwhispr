@@ -21,6 +21,12 @@ class MarkdownMirror {
     return this._basePath;
   }
 
+  _safeFolderName(folderName) {
+    const raw = String(folderName || "Personal");
+    const safe = raw.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-");
+    return safe === "." || safe === ".." ? "-" : safe || "Personal";
+  }
+
   _slugify(title) {
     return (title || "Untitled")
       .replace(/[/\\?%*:|"<>]/g, "-")
@@ -68,7 +74,7 @@ class MarkdownMirror {
   writeNote(note, folderName) {
     if (!this._basePath) return;
     try {
-      const dirName = folderName || "Personal";
+      const dirName = this._safeFolderName(folderName);
       const dirPath = path.join(this._basePath, dirName);
       fs.mkdirSync(dirPath, { recursive: true });
 
@@ -85,7 +91,7 @@ class MarkdownMirror {
         }
       }
 
-      const frontmatter = this._buildFrontmatter(note, dirName);
+      const frontmatter = this._buildFrontmatter(note, folderName || "Personal");
       const body = note.enhanced_content || note.content || "";
       fs.writeFileSync(newFilePath, `${frontmatter}\n\n${body}`, "utf-8");
     } catch (err) {
@@ -103,7 +109,7 @@ class MarkdownMirror {
       const segments = JSON.parse(note.transcript || "[]");
       if (!segments.length) return;
 
-      const dirName = folderName || "Personal";
+      const dirName = this._safeFolderName(folderName);
       const dirPath = path.join(this._basePath, dirName);
       fs.mkdirSync(dirPath, { recursive: true });
 
@@ -157,7 +163,9 @@ class MarkdownMirror {
   ensureFolder(folderName) {
     if (!this._basePath) return;
     try {
-      fs.mkdirSync(path.join(this._basePath, folderName), { recursive: true });
+      fs.mkdirSync(path.join(this._basePath, this._safeFolderName(folderName)), {
+        recursive: true,
+      });
     } catch (err) {
       debugLogger.error(
         "Failed to ensure folder",
@@ -170,8 +178,8 @@ class MarkdownMirror {
   renameFolder(oldName, newName) {
     if (!this._basePath) return;
     try {
-      const oldPath = path.join(this._basePath, oldName);
-      const newPath = path.join(this._basePath, newName);
+      const oldPath = path.join(this._basePath, this._safeFolderName(oldName));
+      const newPath = path.join(this._basePath, this._safeFolderName(newName));
       if (fs.existsSync(oldPath)) {
         fs.renameSync(oldPath, newPath);
       }
@@ -187,7 +195,7 @@ class MarkdownMirror {
   deleteFolder(folderName) {
     if (!this._basePath) return;
     try {
-      const dir = path.join(this._basePath, folderName);
+      const dir = path.join(this._basePath, this._safeFolderName(folderName));
       if (fs.existsSync(dir)) {
         fs.rmSync(dir, { recursive: true, force: true });
       }
@@ -224,7 +232,7 @@ class MarkdownMirror {
 
   getFolderPath(folderName) {
     if (!this._basePath) return null;
-    const dirPath = path.join(this._basePath, folderName);
+    const dirPath = path.join(this._basePath, this._safeFolderName(folderName));
     return fs.existsSync(dirPath) ? dirPath : null;
   }
 
