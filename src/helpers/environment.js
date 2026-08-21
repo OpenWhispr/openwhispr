@@ -5,6 +5,7 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
+const { parseAutoInstallEnv } = require("./updateInstallPolicy");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 
 const SECRET_KEYS = [
@@ -43,6 +44,7 @@ const PERSISTED_KEYS = [
   "FLOATING_ICON_AUTO_HIDE",
   "PANEL_START_POSITION",
   "START_MINIMIZED",
+  "UPDATE_AUTO_INSTALL",
   "UI_LANGUAGE",
   "WHISPER_CUDA_ENABLED",
   "WHISPER_VULKAN_ENABLED",
@@ -468,6 +470,16 @@ class EnvironmentManager {
 
   saveStartMinimized(enabled) {
     const result = this._saveKey("START_MINIMIZED", String(enabled));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getUpdateAutoInstall() {
+    return parseAutoInstallEnv(this._getKey("UPDATE_AUTO_INSTALL"));
+  }
+
+  saveUpdateAutoInstall(enabled) {
+    const result = this._saveKey("UPDATE_AUTO_INSTALL", String(enabled === true));
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

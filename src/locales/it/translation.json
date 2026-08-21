@@ -1929,6 +1929,8 @@
         }
       },
       "updates": {
+        "autoInstall": "Installa gli aggiornamenti automaticamente",
+        "autoInstallDescription": "Gli aggiornamenti scaricati vengono installati alla chiusura dell'app. Disattiva per installarli solo quando decidi tu.",
         "badges": {
           "dev": "Dev",
           "latest": "Aggiornato",
