@@ -1,3 +1,5 @@
+import { isSelfHostedTranscription } from "./selfHostedTranscription.js";
+
 const DEFAULT_MANAGED_PROVIDER = {
   id: "openai",
   models: [{ id: "gpt-4o-mini-transcribe", default: true }],
@@ -16,6 +18,8 @@ export function resolveMeetingTranscriptionOptions({
   parakeetModel,
   selectedProvider,
   selectedModel,
+  remoteTranscriptionUrl,
+  remoteTranscriptionModel,
   byokProviders,
   managedProviders,
   cortiEnvironment,
@@ -44,10 +48,23 @@ export function resolveMeetingTranscriptionOptions({
     };
   }
 
+  // Self-hosted servers speak batch HTTP, not the realtime socket protocol, so
+  // Note Recording chunks through the same /audio/transcriptions endpoint that
+  // dictation, retry, and upload use. The main process resolves and validates
+  // the endpoint via resolveTranscriptionRoute and fails closed without one, so
+  // this can never fall through to a realtime provider the user did not select.
   if (transcriptionMode === "self-hosted") {
-    throw new Error(
-      "Self-hosted realtime transcription is not supported for Note Recording. Choose Local or Cloud Providers."
-    );
+    if (!isSelfHostedTranscription({ transcriptionMode, remoteTranscriptionUrl })) {
+      throw new Error(
+        "Self-hosted Note Recording needs a transcription server URL. Add one in Settings."
+      );
+    }
+    return {
+      provider: "self-hosted",
+      url: remoteTranscriptionUrl.trim(),
+      model: (remoteTranscriptionModel || "").trim() || null,
+      language,
+    };
   }
 
   if (transcriptionMode !== "providers") {

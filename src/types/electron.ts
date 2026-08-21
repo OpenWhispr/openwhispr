@@ -2433,11 +2433,15 @@ declare global {
         provider?: string;
         model?: string;
         language?: string;
+        /** Self-hosted only: the OpenAI-compatible base URL to chunk audio to. */
+        url?: string;
       }) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
       meetingTranscriptionStart?: (options: {
         provider?: string;
         model?: string;
         language?: string;
+        /** Self-hosted only: the OpenAI-compatible base URL to chunk audio to. */
+        url?: string;
         noteId?: number | null;
         sessionId: string;
         autoEndEligible: boolean;

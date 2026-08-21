@@ -150,6 +150,8 @@ const getMeetingTranscriptionOptions = () => {
     parakeetModel: resolved.parakeetModel,
     selectedProvider: resolved.cloudTranscriptionProvider,
     selectedModel: resolved.cloudTranscriptionModel,
+    remoteTranscriptionUrl: resolved.remoteTranscriptionUrl,
+    remoteTranscriptionModel: resolved.remoteTranscriptionModel,
     byokProviders: getStreamingTranscriptionProviders(),
     managedProviders: useStreamingProvidersStore.getState().providers,
     cortiEnvironment: state.cortiEnvironment,

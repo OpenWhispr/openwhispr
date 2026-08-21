@@ -15,15 +15,29 @@ test("tinfoil-realtime resolves to the Tinfoil client, never the OpenAI default"
 });
 
 test("every allowed realtime provider has a streaming client (no silent OpenAI fallback)", async () => {
-  const { STREAMING_CLIENT_BY_PROVIDER, ALLOWED_MEETING_PROVIDERS } = await load();
+  const { STREAMING_CLIENT_BY_PROVIDER, ALLOWED_MEETING_PROVIDERS, NON_STREAMING_MEETING_PROVIDERS } =
+    await load();
 
   for (const provider of ALLOWED_MEETING_PROVIDERS) {
-    if (provider === "local") continue;
+    if (NON_STREAMING_MEETING_PROVIDERS.has(provider)) continue;
     assert.equal(
       typeof STREAMING_CLIENT_BY_PROVIDER[provider],
       "function",
       `${provider} is allowed but would fall through to the OpenAI default class`
     );
+  }
+});
+
+test("non-streaming providers are allowed without a streaming client", async () => {
+  const { STREAMING_CLIENT_BY_PROVIDER, ALLOWED_MEETING_PROVIDERS, NON_STREAMING_MEETING_PROVIDERS } =
+    await load();
+
+  for (const provider of ["local", "self-hosted"]) {
+    assert.equal(NON_STREAMING_MEETING_PROVIDERS.has(provider), true);
+    assert.equal(ALLOWED_MEETING_PROVIDERS.has(provider), true);
+    // Transcribed in the main process, so a client class here would mean a
+    // socket the user never asked for.
+    assert.equal(STREAMING_CLIENT_BY_PROVIDER[provider], undefined);
   }
 });
 
