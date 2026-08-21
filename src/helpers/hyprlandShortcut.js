@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const debugLogger = require("./debugLogger");
+const { isHyprctlResponseOk } = require("./hyprctlResponse");
 
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
 const DBUS_OBJECT_PATH = "/com/openwhispr/App";
@@ -393,10 +394,14 @@ class HyprlandShortcutManager {
         );
       }
 
-      execFileSync("hyprctl", ["keyword", "bind", bindValue], {
+      const bindResponse = execFileSync("hyprctl", ["keyword", "bind", bindValue], {
         stdio: "pipe",
         timeout: 5000,
+        encoding: "utf8",
       });
+      if (!isHyprctlResponseOk(bindResponse)) {
+        throw new Error(`hyprctl rejected the bind: ${bindResponse.trim()}`);
+      }
 
       this.currentBinding = converted.bindKey;
       this.isRegistered = true;
