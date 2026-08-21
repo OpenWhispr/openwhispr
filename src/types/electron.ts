@@ -861,6 +861,19 @@ export interface ConversationPreview {
   last_message_role?: "user" | "assistant" | "system" | null;
 }
 
+export interface ConversationCreateSnapshot {
+  client_conversation_id?: string | null;
+  title: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export interface ConversationCreateAckResult {
+  success: boolean;
+  outcome: "synced" | "changed" | "already-linked" | "delete-pending" | "orphaned" | "unresolved";
+  cloud_id?: string | null;
+}
+
 export type OnboardingDemoKind = "dictation" | "assistant";
 export type OnboardingDemoStatus = "listening" | "processing" | "partial" | "success" | "error";
 export interface OnboardingDemoEvent {
@@ -2224,7 +2237,8 @@ declare global {
         id: number;
         title: string;
         archived_at?: string;
-        cloud_id?: string;
+        cloud_id?: string | null;
+        client_conversation_id?: string | null;
         created_at: string;
         updated_at: string;
         messages: Array<{
@@ -2814,6 +2828,11 @@ declare global {
         cloudConv: Record<string, unknown>,
         messages: Array<Record<string, unknown>>
       ) => Promise<void>;
+      acknowledgeConversationCreate?: (
+        id: number,
+        snapshot: ConversationCreateSnapshot,
+        cloudId: string
+      ) => Promise<ConversationCreateAckResult | undefined>;
       markConversationSynced?: (
         id: number,
         cloudId: string

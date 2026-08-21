@@ -1078,6 +1078,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-get-conversation-by-client-id", clientId),
   upsertConversationFromCloud: (cloudConv, messages) =>
     ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages),
+  acknowledgeConversationCreate: (id, snapshot, cloudId) =>
+    ipcRenderer.invoke("db-acknowledge-conversation-create", id, snapshot, cloudId),
   markConversationSynced: (id, cloudId) =>
     ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId),
   hardDeleteConversation: (id) => ipcRenderer.invoke("db-hard-delete-conversation", id),

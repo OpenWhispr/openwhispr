@@ -2293,6 +2293,9 @@ class IPCHandlers {
     ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages) =>
       this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
     );
+    ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
+      this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
+    );
     ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
       this.databaseManager.markConversationSynced(id, cloudId)
     );
