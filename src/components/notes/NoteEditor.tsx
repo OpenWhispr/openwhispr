@@ -716,6 +716,47 @@ export default function NoteEditor({
     prevRecordingRef.current = isRecording;
   }, [isRecording, scheduleUiUpdate]);
 
+  // Reserve scroll space for the floating chat panel; +32 = bottom-4 + gap.
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+
+  // Pin the active view's scroller to its content bottom: always on open,
+  // on resize only if already near it (padding isn't content).
+  const pinActiveScroller = useCallback((root: HTMLDivElement | null, force = false) => {
+    if (!root) return;
+    const candidates = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))].filter(
+      (el) => el.scrollHeight - el.clientHeight > 2
+    );
+    if (!candidates.length) return;
+    const scroller = candidates.reduce((a, b) =>
+      b.scrollHeight - b.clientHeight > a.scrollHeight - a.clientHeight ? b : a
+    );
+    const pad = parseFloat(getComputedStyle(scroller).paddingBottom) || 0;
+    const distToContent = scroller.scrollHeight - pad - scroller.scrollTop - scroller.clientHeight;
+    if (force || distToContent < 80) {
+      scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight;
+    }
+  }, []);
+
+  const floatingChatPanelRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      const container = el?.parentElement;
+      if (!el || !container) return;
+      const applyInset = (force = false) => {
+        container.style.setProperty("--floating-inset", `${el.offsetHeight + 32}px`);
+        if (force) requestAnimationFrame(() => pinActiveScroller(contentScrollRef.current, true));
+        else pinActiveScroller(contentScrollRef.current);
+      };
+      applyInset(true);
+      const observer = new ResizeObserver(() => applyInset());
+      observer.observe(el);
+      return () => {
+        observer.disconnect();
+        container.style.removeProperty("--floating-inset");
+      };
+    },
+    [pinActiveScroller]
+  );
+
   const handleContentChange = useCallback(
     (newValue: string) => {
       onContentChange(note.id, newValue);
@@ -1150,7 +1191,7 @@ export default function NoteEditor({
         )}
 
         <div className="flex-1 relative min-h-0">
-          <div className="h-full overflow-y-auto">
+          <div ref={contentScrollRef} className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
@@ -1245,6 +1286,7 @@ export default function NoteEditor({
           {chatMode === "floating" && (
             <EmbeddedChat
               mode="floating"
+              floatingPanelRef={floatingChatPanelRef}
               onModeChange={setChatMode}
               messages={embeddedChat.messages}
               agentState={embeddedChat.agentState}

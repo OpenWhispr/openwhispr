@@ -22,6 +22,8 @@ interface EmbeddedChatProps {
   activeConversationId?: number | null;
   onSwitchConversation?: (id: number) => void;
   onNewChat?: () => void;
+  /** Floating panel ref; NoteEditor reserves scroll space with it. */
+  floatingPanelRef?: React.Ref<HTMLDivElement>;
 }
 
 function EmptyState() {
@@ -46,6 +48,7 @@ export default function EmbeddedChat({
   activeConversationId,
   onSwitchConversation,
   onNewChat,
+  floatingPanelRef,
 }: EmbeddedChatProps) {
   const { t } = useTranslation();
 
@@ -143,6 +146,7 @@ export default function EmbeddedChat({
   if (mode === "floating") {
     return (
       <div
+        ref={floatingPanelRef}
         className={cn(
           "absolute bottom-4 left-5 right-5 z-20 mx-auto max-w-[600px]",
           "max-h-[calc(100%-2rem)] min-h-50",
