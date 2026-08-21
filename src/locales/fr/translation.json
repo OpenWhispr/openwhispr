@@ -3355,7 +3355,8 @@
       },
       "cleanupFailed": {
         "title": "Échec du nettoyage",
-        "description": "Votre dictée a été collée sans nettoyage par IA."
+        "description": "Votre dictée a été collée sans nettoyage par IA.",
+        "notConfigured": "Le nettoyage est activé, mais aucun modèle d'IA n'est configuré pour l'exécuter. Choisissez un modèle dans Réglages → Modèles d'IA (ou connectez-vous à OpenWhispr Cloud) pour que le nettoyage fonctionne."
       }
     },
     "mic": {

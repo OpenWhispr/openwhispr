@@ -87,7 +87,7 @@ const {
   MEETING_MIC_SILENCE_PEAK,
 } = require("./meetingMicGate");
 const { resolveDiarizationInput } = require("./meetingDiarizationInput");
-const { applySmartSpacing } = require("./smartSpacing");
+const { applySmartSpacing, applyContinuationCasing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
 const {
   DEFAULT_RETENTION_SETTINGS,
@@ -686,6 +686,21 @@ class IPCHandlers {
     }
     this.whisperVadSettings = { ...this._getWhisperVadSettings(), ...filtered };
     return this._getWhisperVadSettings();
+  }
+
+  // Cursor context captured at dictation start, single-use. Stale or
+  // foreign-pid context is discarded so a paste never continues another
+  // field's text; the race keeps a hung Accessibility read from ever
+  // delaying the paste.
+  async _consumePasteContext(targetPid) {
+    const entry = this._pasteContext;
+    this._pasteContext = null;
+    if (!entry) return null;
+    if (targetPid && entry.pid !== targetPid) return null;
+    if (Date.now() - entry.at > 5 * 60 * 1000) return null;
+    const timeout = new Promise((resolve) => setTimeout(resolve, 50, null));
+    const result = await Promise.race([entry.promise, timeout]);
+    return result && result.state !== "unknown" ? result : null;
   }
 
   _resolveWhisperVadOptions(context) {
@@ -1319,6 +1334,20 @@ class IPCHandlers {
     ipcMain.handle("capture-dictation-target", async () => {
       const pid = (await this.textEditMonitor?.captureTargetPid?.()) ?? null;
       await this.selectionManager?.captureTarget?.();
+      // Read the text before the cursor now, while recording runs and there is
+      // no latency pressure; paste-text consumes it for prepend spacing and
+      // continuation casing.
+      if (process.platform === "darwin" && pid && this.textEditMonitor?.getPrecedingText) {
+        this._pasteContext = {
+          pid,
+          at: Date.now(),
+          promise: this.textEditMonitor
+            .getPrecedingText(pid)
+            .catch(() => ({ state: "unknown" })),
+        };
+      } else {
+        this._pasteContext = null;
+      }
       return { success: true, pid };
     });
 
@@ -2648,11 +2677,22 @@ class IPCHandlers {
         }
       }
 
-      // Smart spacing (#856): append a trailing space so the next paste's leading
-      // space self-corrects the gap. macOS prepend-mode (getPrecedingChar) is
-      // intentionally skipped here — its Accessibility read costs hundreds of ms,
-      // too slow for the paste hot path.
-      const textToPaste = applySmartSpacing({ text, mode: "append" });
+      // Smart spacing (#856): prefer the cursor context captured at dictation
+      // start (capture-dictation-target) — it powers prepend spacing plus
+      // continuation casing with no cost in the paste hot path. Fall back to
+      // append-mode (trailing space) when the context is missing or stale.
+      const context = await this._consumePasteContext(targetPid);
+      let textToPaste;
+      if (context) {
+        const tail = context.state === "ok" ? context.text : "";
+        const cased = applyContinuationCasing(text, tail);
+        textToPaste = applySmartSpacing({
+          text: applySmartSpacing({ text: cased, mode: "prepend", precedingChar: tail.slice(-1) }),
+          mode: "append",
+        });
+      } else {
+        textToPaste = applySmartSpacing({ text, mode: "append" });
+      }
 
       // Windows: restore the foreground window captured at record start so the
       // paste lands in the field the user was dictating into, not wherever focus
