@@ -3,11 +3,8 @@ import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { getStreamingTranscriptionProviders } from "../models/ModelRegistry";
 import { resolveMeetingTranscriptionOptions } from "../helpers/meetingTranscriptionRouting";
-import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
-import {
-  followsSystemDefaultMic,
-  reconcileSavedMicSelection,
-} from "../helpers/micSelectionRecovery";
+import { followsSystemDefaultMic } from "../helpers/micSelectionRecovery";
+import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
 import {
@@ -295,57 +292,33 @@ export const primeMeetingWorklet = () => {
   getMeetingWorkletBlobUrl();
 };
 
-const getMeetingMicConstraints = async (): Promise<MediaStreamConstraints> => {
-  const { preferBuiltInMic, selectedMicDeviceId, selectedMicDeviceLabel } = getSettings();
-
-  if (preferBuiltInMic) {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const builtInMic = devices.find(
-        (device) => device.kind === "audioinput" && isBuiltInMicrophone(device.label)
-      );
-
-      if (builtInMic?.deviceId) {
-        return {
-          audio: {
-            deviceId: { exact: builtInMic.deviceId },
-            ...MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
-          },
-        };
-      }
-    } catch (err) {
+const getMeetingMicConstraints = async (
+  refreshSystemDefault = false
+): Promise<MediaStreamConstraints> => {
+  try {
+    const resolution = await resolvePreferredMicrophone({
+      settings: getSettings(),
+      refreshSystemDefault,
+    });
+    if (resolution.device?.deviceId) {
       logger.debug(
-        "Failed to enumerate microphones for meeting transcription",
-        { error: (err as Error).message },
+        "Resolved meeting microphone input",
+        { mode: resolution.mode, status: resolution.status, label: resolution.device.label },
         "meeting"
       );
+      return {
+        audio: {
+          deviceId: { exact: resolution.device.deviceId },
+          ...MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
+        },
+      };
     }
-  }
-
-  if (selectedMicDeviceId && selectedMicDeviceId !== "default") {
-    let resolvedDeviceId = selectedMicDeviceId;
-
-    try {
-      const reconciled = await reconcileSavedMicSelection(
-        selectedMicDeviceId,
-        selectedMicDeviceLabel,
-        "meeting"
-      );
-      resolvedDeviceId = reconciled.deviceId;
-    } catch (err) {
-      logger.debug(
-        "Failed to reconcile selected microphone for meeting transcription",
-        { error: (err as Error).message },
-        "meeting"
-      );
-    }
-
-    return {
-      audio: {
-        deviceId: { exact: resolvedDeviceId },
-        ...MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
-      },
-    };
+  } catch (err) {
+    logger.debug(
+      "Failed to resolve microphone for meeting transcription",
+      { error: (err as Error).message },
+      "meeting"
+    );
   }
 
   return { audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS };
@@ -1277,9 +1250,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         }
         micRecovery = new ActiveMicRecoveryController({
           mediaDevices: navigator.mediaDevices,
-          acquire: async () => {
+          acquire: async (reason) => {
             try {
-              return await navigator.mediaDevices.getUserMedia(await getMeetingMicConstraints());
+              return await navigator.mediaDevices.getUserMedia(
+                await getMeetingMicConstraints(
+                  reason === "devicechange" || reason === "devicechange-ended"
+                )
+              );
             } catch {
               return navigator.mediaDevices.getUserMedia({
                 audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,

@@ -250,10 +250,13 @@ export async function signInWithSSO(email: string): Promise<{ error?: Error }> {
 
 export async function requestPasswordReset(email: string): Promise<{ error?: Error }> {
   try {
-    await authClient.requestPasswordReset({
+    const { error } = await authClient.requestPasswordReset({
       email: email.trim(),
       redirectTo: "https://openwhispr.com/reset-password",
     });
+    if (error) {
+      return { error: toAuthActionError(error, "Failed to send reset email") };
+    }
     return {};
   } catch (error) {
     return { error: error instanceof Error ? error : new Error("Failed to send reset email") };

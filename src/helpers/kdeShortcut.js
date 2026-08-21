@@ -91,6 +91,18 @@ const QT_KEYS = {
   right: 0x01000014,
   "`": 0x60,
   grave: 0x60,
+  // Unshifted punctuation (Qt::Key_*). Same set GNOME maps to X11 keysyms.
+  ",": 0x2c,
+  ".": 0x2e,
+  "/": 0x2f,
+  "-": 0x2d,
+  "=": 0x3d,
+  ";": 0x3b,
+  "'": 0x27,
+  "\\": 0x5c,
+  "[": 0x5b,
+  "]": 0x5d,
+  plus: 0x2b,
   print: 0x01000009,
   scrolllock: 0x01000026,
   pause: 0x01000008,
@@ -230,11 +242,6 @@ class KDEShortcutManager {
       friendlyToSlot[`OpenWhispr`] = "dictation"; // legacy compat
     }
     return friendlyToSlot[name] || null;
-  }
-
-  setAgentCallback(callback) {
-    this.callbacks.set("agent", callback);
-    debugLogger.log("[KDEShortcut] Agent callback set");
   }
 
   async registerKeybinding(electronHotkey, slotName = "dictation", callback, isPushToTalk = false) {
@@ -404,6 +411,10 @@ class KDEShortcutManager {
     } catch (err) {
       debugLogger.log(`[KDEShortcut] Unregister failed for "${slotName}":`, err.message);
     }
+  }
+
+  async removeRetiredAgentKeybinding() {
+    await this.unregisterKeybinding("agent");
   }
 
   close() {

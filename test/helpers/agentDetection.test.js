@@ -3,6 +3,22 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/config/agentDetection.ts");
 
+test("stripAgentAddress removes the leading cue and name, keeping the command", async () => {
+  const { stripAgentAddress } = await load();
+  assert.equal(stripAgentAddress("Hey OpenWhispr, make this formal", "OpenWhispr"), "make this formal");
+  assert.equal(stripAgentAddress("Max take a note", "Max"), "take a note");
+  assert.equal(
+    stripAgentAddress("That's everything. OpenWhispr, format this", "OpenWhispr"),
+    "That's everything. format this"
+  );
+  assert.equal(stripAgentAddress("make this formal", "OpenWhispr"), "make this formal");
+  assert.equal(
+    stripAgentAddress("OpenWhispr", "OpenWhispr"),
+    "OpenWhispr",
+    "never returns an empty command"
+  );
+});
+
 test("matches the name when it starts the dictation", async () => {
   const { detectAgentName } = await load();
 
@@ -129,6 +145,13 @@ test("normalizes fullwidth punctuation so CJK cues and sentence ends work", asyn
   assert.equal(detectAgentName("えっと ねぇ Jarvis、メールを書いて", "Jarvis", "ja"), true);
   assert.equal(detectAgentName("以上です。 Jarvis、続けて", "Jarvis", "ja"), true);
   assert.equal(detectAgentName("うーん ねぇ、Jarvis、メールを書いて", "Jarvis", "ja"), true);
+});
+
+test("stripping a CJK address consumes its adjacent comma", async () => {
+  const { stripAgentAddress } = await load();
+
+  assert.equal(stripAgentAddress("ねぇ、Jarvis、メールを書いて", "Jarvis", "ja"), "メールを書いて");
+  assert.equal(stripAgentAddress("嘿，Jarvis，总结这段话", "Jarvis", "zh-CN"), "总结这段话");
 });
 
 test("splits unsegmented CJK-Latin transitions so cue and name separate", async () => {

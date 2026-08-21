@@ -56,6 +56,9 @@ function successfulHyprctl(provider) {
   };
 }
 
+const DBUS_COMMAND =
+  "dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.Toggle";
+
 test(
   "persists a legacy binding through hyprland.conf",
   withTempHyprConfig(async (configDir) => {
@@ -69,10 +72,78 @@ test(
     assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
 
     assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().path, configPath);
-    assert.match(fs.readFileSync(configPath, "utf8"), /source = \.\/openwhispr-binds\.conf/);
+    assert.ok(
+      fs
+        .readFileSync(configPath, "utf8")
+        .includes(`source = ${path.join(configDir, "openwhispr-binds.conf")}\n`)
+    );
     assert.match(
       fs.readFileSync(path.join(configDir, "openwhispr-binds.conf"), "utf8"),
       /bind = CTRL SHIFT, Return, exec, dbus-send/
+    );
+    assert.equal(await manager.unregisterKeybinding(), true);
+    assert.deepEqual(
+      hyprctl.calls.filter(({ args }) => args[0] === "keyword").map(({ args }) => args),
+      [
+        ["keyword", "unbind", "CTRL SHIFT, Return"],
+        ["keyword", "bind", `CTRL SHIFT, Return, exec, ${DBUS_COMMAND}`],
+        ["keyword", "unbind", "CTRL SHIFT, Return"],
+      ]
+    );
+  })
+);
+
+test(
+  "prefers Hyprland's active Lua config when both formats exist",
+  withTempHyprConfig(async (configDir) => {
+    const luaPath = path.join(configDir, "hyprland.lua");
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, "hyprland.conf"), "# legacy config\n");
+    fs.writeFileSync(luaPath, 'require("hypr.bindings")\n');
+    const hyprctl = successfulHyprctl("lua");
+    const HyprlandShortcutManager = loadManager(hyprctl.execFileSync);
+
+    const manager = new HyprlandShortcutManager();
+    assert.equal(hyprctl.calls.filter(({ args }) => args[0] === "systeminfo").length, 0);
+    assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
+    assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
+    assert.equal(hyprctl.calls.filter(({ args }) => args[0] === "systeminfo").length, 1);
+
+    assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().path, luaPath);
+    assert.match(fs.readFileSync(luaPath, "utf8"), /pcall\(require, .+openwhispr-binds\.lua/);
+    assert.equal(
+      (fs.readFileSync(luaPath, "utf8").match(/openwhispr-binds\.lua/g) || []).length,
+      1
+    );
+    const binds = fs.readFileSync(path.join(configDir, "openwhispr-binds.lua"), "utf8");
+    assert.match(binds, /^-- OpenWhispr keybinds/m);
+    assert.match(binds, /hl\.bind\("CTRL \+ SHIFT \+ RETURN", hl\.dsp\.exec_cmd\("dbus-send/);
+    assert.doesNotMatch(
+      fs.readFileSync(path.join(configDir, "hyprland.conf"), "utf8"),
+      /openwhispr/
+    );
+    assert.equal(hyprctl.calls.filter(({ args }) => args[0] === "systeminfo").length, 1);
+  })
+);
+
+test(
+  "registers the default modifier-only hotkey through Lua eval",
+  withTempHyprConfig(async (configDir) => {
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, "hyprland.lua"), "-- lua config\n");
+    const hyprctl = successfulHyprctl("lua");
+    const HyprlandShortcutManager = loadManager(hyprctl.execFileSync);
+
+    const manager = new HyprlandShortcutManager();
+    assert.equal(await manager.registerKeybinding("Control+Super"), true);
+
+    const runtimeCalls = hyprctl.calls.filter(({ args }) => args[0] !== "systeminfo");
+    assert.deepEqual(
+      runtimeCalls.map(({ args }) => args),
+      [
+        ["eval", 'hl.unbind("CTRL + SUPER_L")'],
+        ["eval", `hl.bind("CTRL + SUPER_L", hl.dsp.exec_cmd(${JSON.stringify(DBUS_COMMAND)}))`],
+      ]
     );
   })
 );
@@ -80,9 +151,8 @@ test(
 test(
   "rejects modifier-only push-to-talk bindings",
   withTempHyprConfig(async (configDir) => {
-    const configPath = path.join(configDir, "hyprland.conf");
     fs.mkdirSync(configDir, { recursive: true });
-    fs.writeFileSync(configPath, "# legacy config\n");
+    fs.writeFileSync(path.join(configDir, "hyprland.conf"), "# legacy config\n");
     const hyprctl = successfulHyprctl("hyprlang");
     const HyprlandShortcutManager = loadManager(hyprctl.execFileSync);
 
@@ -119,9 +189,8 @@ test(
 test(
   "registers Lua push-to-talk bindings through the active runtime API",
   withTempHyprConfig(async (configDir) => {
-    const luaPath = path.join(configDir, "hyprland.lua");
     fs.mkdirSync(configDir, { recursive: true });
-    fs.writeFileSync(luaPath, "-- lua config\n");
+    fs.writeFileSync(path.join(configDir, "hyprland.lua"), "-- lua config\n");
     const hyprctl = successfulHyprctl("lua");
     const HyprlandShortcutManager = loadManager(hyprctl.execFileSync);
 
@@ -138,17 +207,46 @@ test(
 );
 
 test(
+  "reuses each exact Lua key string when changing and unregistering a hotkey",
+  withTempHyprConfig(async (configDir) => {
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, "hyprland.lua"), "-- lua config\n");
+    const hyprctl = successfulHyprctl("lua");
+    const HyprlandShortcutManager = loadManager(hyprctl.execFileSync);
+    const manager = new HyprlandShortcutManager();
+
+    assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
+    assert.equal(await manager.updateKeybinding("Alt+PageUp"), true);
+    assert.equal(await manager.unregisterKeybinding(), true);
+
+    const evalExpressions = hyprctl.calls
+      .filter(({ args }) => args[0] === "eval")
+      .map(({ args }) => args[1]);
+    assert.deepEqual(evalExpressions, [
+      'hl.unbind("CTRL + SHIFT + RETURN")',
+      `hl.bind("CTRL + SHIFT + RETURN", hl.dsp.exec_cmd(${JSON.stringify(DBUS_COMMAND)}))`,
+      'hl.unbind("CTRL + SHIFT + RETURN")',
+      'hl.unbind("ALT + PAGE_UP")',
+      `hl.bind("ALT + PAGE_UP", hl.dsp.exec_cmd(${JSON.stringify(DBUS_COMMAND)}))`,
+      'hl.unbind("ALT + PAGE_UP")',
+    ]);
+  })
+);
+
+test(
   "rejects a Hyprland error reply even when hyprctl exits successfully",
   withTempHyprConfig(async (configDir) => {
     fs.mkdirSync(configDir, { recursive: true });
     fs.writeFileSync(path.join(configDir, "hyprland.lua"), "-- lua config\n");
-    const HyprlandShortcutManager = loadManager((_command, args) => {
+    const calls = [];
+    const HyprlandShortcutManager = loadManager((command, args) => {
+      calls.push({ command, args });
       if (args[0] === "systeminfo") return "configProvider: lua\n";
       return "keyword can't work with non-legacy parsers. Use eval.\n";
     });
 
     const manager = new HyprlandShortcutManager();
-    assert.equal(await manager.registerKeybinding("F8", true), false);
+    assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), false);
     assert.equal(manager.isRegistered, false);
     assert.equal(manager.currentBinding, null);
     assert.equal(fs.existsSync(path.join(configDir, "openwhispr-binds.lua")), false);
@@ -156,33 +254,165 @@ test(
 );
 
 test(
-  "prefers Hyprland's active Lua config when both formats exist",
+  "keeps a Lua binding registered when runtime unbind fails",
+  withTempHyprConfig(async (configDir) => {
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, "hyprland.lua"), "-- lua config\n");
+    let rejectUnbind = false;
+    const HyprlandShortcutManager = loadManager((command, args) => {
+      if (args[0] === "systeminfo") return "configProvider: lua\n";
+      if (rejectUnbind && args[1] === 'hl.unbind("CTRL + SHIFT + RETURN")') {
+        return "unbind failed\n";
+      }
+      return "ok\n";
+    });
+    const manager = new HyprlandShortcutManager();
+
+    assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
+    rejectUnbind = true;
+
+    assert.equal(await manager.unregisterKeybinding(), false);
+    assert.equal(manager.currentBinding, "CTRL + SHIFT + RETURN");
+    assert.equal(manager.isRegistered, true);
+  })
+);
+
+test(
+  "uses HYPRLAND_CONFIG for a Lua config without spawning systeminfo",
+  withTempHyprConfig(async (configDir) => {
+    const configPath = path.join(configDir, "dotfiles", "custom.lua");
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, "-- custom lua config\n");
+    process.env.HYPRLAND_CONFIG = configPath;
+    const hyprctl = successfulHyprctl("hyprlang");
+    const HyprlandShortcutManager = loadManager(hyprctl.execFileSync);
+    const manager = new HyprlandShortcutManager();
+
+    assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
+    assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().path, configPath);
+    assert.equal(hyprctl.calls.filter(({ args }) => args[0] === "systeminfo").length, 0);
+    assert.match(fs.readFileSync(configPath, "utf8"), /pcall\(require,/);
+    assert.equal(fs.existsSync(path.join(path.dirname(configPath), "openwhispr-binds.lua")), true);
+  })
+);
+
+test(
+  "falls back to an existing Lua config when systeminfo fails",
   withTempHyprConfig(async (configDir) => {
     const luaPath = path.join(configDir, "hyprland.lua");
     fs.mkdirSync(configDir, { recursive: true });
-    fs.writeFileSync(path.join(configDir, "hyprland.conf"), "# legacy config\n");
-    fs.writeFileSync(luaPath, 'require("hypr.bindings")\n');
+    fs.writeFileSync(luaPath, "-- lua config\n");
+    const calls = [];
+    const HyprlandShortcutManager = loadManager((command, args) => {
+      calls.push({ command, args });
+      if (args[0] === "systeminfo") throw new Error("hyprctl timed out");
+      return "ok\n";
+    });
+    const manager = new HyprlandShortcutManager();
+
+    assert.equal(calls.length, 0);
+    assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
+    assert.equal(calls.filter(({ args }) => args[0] === "systeminfo").length, 1);
+    assert.equal(calls.filter(({ args }) => args[0] === "eval").length, 2);
+    assert.equal(fs.existsSync(path.join(configDir, "openwhispr-binds.lua")), true);
+  })
+);
+
+test(
+  "falls back to an existing Lua config when systeminfo returns unusable output",
+  withTempHyprConfig(async (configDir) => {
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, "hyprland.lua"), "-- lua config\n");
+    const calls = [];
+    const HyprlandShortcutManager = loadManager((command, args) => {
+      calls.push({ command, args });
+      if (args[0] === "systeminfo") return "Hyprland IPC unavailable\n";
+      return "ok\n";
+    });
+
+    assert.equal(
+      await new HyprlandShortcutManager().registerKeybinding("Control+Shift+Enter"),
+      true
+    );
+    assert.equal(calls.filter(({ args }) => args[0] === "eval").length, 2);
+    assert.equal(calls.filter(({ args }) => args[0] === "keyword").length, 0);
+  })
+);
+
+test(
+  "replaces an old dofile loader before a trailing top-level return",
+  withTempHyprConfig(async (configDir) => {
+    const luaPath = path.join(configDir, "hyprland.lua");
+    const bindsPath = path.join(configDir, "openwhispr-binds.lua");
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(
+      luaPath,
+      `-- lua config\ndofile("${bindsPath}")\nreturn {}\n-- trailing comment\n`
+    );
     const hyprctl = successfulHyprctl("lua");
     const HyprlandShortcutManager = loadManager(hyprctl.execFileSync);
 
-    const manager = new HyprlandShortcutManager();
-    assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
-    assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
-    assert.equal(hyprctl.calls.filter(({ args }) => args[0] === "systeminfo").length, 1);
-
-    assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().path, luaPath);
-    assert.match(fs.readFileSync(luaPath, "utf8"), /dofile\(.+openwhispr-binds\.lua/);
     assert.equal(
-      (fs.readFileSync(luaPath, "utf8").match(/openwhispr-binds\.lua/g) || []).length,
-      1
+      await new HyprlandShortcutManager().registerKeybinding("Control+Shift+Enter"),
+      true
     );
-    const binds = fs.readFileSync(path.join(configDir, "openwhispr-binds.lua"), "utf8");
-    assert.match(binds, /^-- OpenWhispr keybinds/m);
-    assert.match(binds, /hl\.bind\("CTRL \+ SHIFT \+ RETURN", hl\.dsp\.exec_cmd\("dbus-send/);
-    assert.doesNotMatch(
-      fs.readFileSync(path.join(configDir, "hyprland.conf"), "utf8"),
-      /openwhispr/
+
+    const content = fs.readFileSync(luaPath, "utf8");
+    const protectedLoader = `pcall(require, "${bindsPath}")`;
+    assert.doesNotMatch(content, /dofile\(/);
+    assert.equal((content.match(/openwhispr-binds\.lua/g) || []).length, 1);
+    assert.ok(content.indexOf(protectedLoader) < content.indexOf("return {}"));
+  })
+);
+
+test(
+  "removes the previous header wording when rewriting managed binds",
+  withTempHyprConfig(async (configDir) => {
+    const configPath = path.join(configDir, "hyprland.conf");
+    const bindsPath = path.join(configDir, "openwhispr-binds.conf");
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(configPath, "# legacy config\n");
+    fs.writeFileSync(
+      bindsPath,
+      "# OpenWhispr keybinds (managed automatically)\n" +
+        "# If you delete this file, also remove the matching source line from your Hyprland config.\n"
     );
-    assert.equal(hyprctl.calls.filter(({ args }) => args[0] === "systeminfo").length, 2);
+    const hyprctl = successfulHyprctl("hyprlang");
+    const HyprlandShortcutManager = loadManager(hyprctl.execFileSync);
+
+    assert.equal(
+      await new HyprlandShortcutManager().registerKeybinding("Control+Shift+Enter"),
+      true
+    );
+
+    const content = fs.readFileSync(bindsPath, "utf8");
+    assert.doesNotMatch(content, /matching source line/);
+    assert.equal((content.match(/OpenWhispr keybinds/g) || []).length, 1);
+  })
+);
+
+test(
+  "removes stale managed legacy artifacts after migrating to Lua",
+  withTempHyprConfig(async (configDir) => {
+    const confPath = path.join(configDir, "hyprland.conf");
+    const legacyBindsPath = path.join(configDir, "openwhispr-binds.conf");
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, "hyprland.lua"), "-- lua config\n");
+    fs.writeFileSync(confPath, "# keep this comment\nsource = ./openwhispr-binds.conf\n");
+    fs.writeFileSync(
+      legacyBindsPath,
+      "# OpenWhispr keybinds (managed automatically)\n" +
+        `bind = CTRL SHIFT, Return, exec, ${DBUS_COMMAND}\n`
+    );
+    const hyprctl = successfulHyprctl("lua");
+    const HyprlandShortcutManager = loadManager(hyprctl.execFileSync);
+
+    assert.equal(
+      await new HyprlandShortcutManager().registerKeybinding("Control+Shift+Enter"),
+      true
+    );
+
+    assert.equal(fs.existsSync(legacyBindsPath), false);
+    assert.equal(fs.readFileSync(confPath, "utf8"), "# keep this comment\n");
   })
 );

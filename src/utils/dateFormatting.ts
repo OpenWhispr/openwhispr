@@ -1,3 +1,16 @@
+// Calendar events store all-day starts as date-only `YYYY-MM-DD` (Google's
+// `start.date`). The ECMAScript parser reads that form as UTC midnight, which
+// is still the previous local calendar day west of UTC, so date-only values
+// must be parsed as local dates.
+export function parseEventDate(value: string): Date | null {
+  if (typeof value !== "string" || !value) return null;
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const parsed = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function normalizeDbDate(dateStr: string): Date {
   const hasExplicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(dateStr);
   const source = hasExplicitZone ? dateStr : `${dateStr}Z`;
@@ -25,19 +38,6 @@ export function formatRelativeTime(
   if (hours < 24) return t("notes.list.hoursAgo", { count: hours });
   if (days < 7) return t("notes.list.daysAgo", { count: days });
   return formatShortDate(dateStr);
-}
-
-export function formatUpcomingDateGroup(date: Date | string, t: (key: string) => string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-
-  if (target.getTime() === today.getTime()) return t("controlPanel.history.dateGroups.today");
-  if (target.getTime() === tomorrow.getTime()) return t("upcoming.tomorrow");
-  return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 }
 
 export function formatDateGroup(date: Date | string, t: (key: string) => string): string {

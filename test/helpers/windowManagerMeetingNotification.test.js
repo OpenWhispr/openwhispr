@@ -61,6 +61,10 @@ class FakeBrowserWindow extends EventEmitter {
 
 class FakeHotkeyManager {
   unregisterAll() {}
+
+  isInListeningMode() {
+    return false;
+  }
 }
 FakeHotkeyManager.isGlobeLikeHotkey = () => false;
 
@@ -99,13 +103,10 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     return {
       MAIN_WINDOW_CONFIG: {},
       CONTROL_PANEL_CONFIG: {},
-      AGENT_OVERLAY_CONFIG: {},
       NOTIFICATION_WINDOW_CONFIG: { ...detectionSize, acceptFirstMouse: true },
       AUTO_END_NOTIFICATION_WINDOW_SIZE: autoEndSize,
       getMeetingNotificationWindowSize: (data) =>
         data?.kind === "auto-end" ? autoEndSize : detectionSize,
-      TRANSCRIPTION_PREVIEW_CONFIG: {},
-      TRANSCRIPTION_PREVIEW_SIZE_LIMITS: {},
       WINDOW_SIZES: {},
       WindowPositionUtil: {
         getNotificationPosition: (_display, size = detectionSize) => ({
@@ -121,6 +122,12 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
 };
 const WindowManager = require("../../src/helpers/windowManager");
 Module._load = originalLoad;
+
+function createNormalWindowManager() {
+  const manager = new WindowManager();
+  manager.setOnboardingActive(false);
+  return manager;
+}
 
 function installFakeTimers() {
   const originalSetTimeout = global.setTimeout;
@@ -165,7 +172,7 @@ test.beforeEach(() => {
 
 test("native push-to-talk force-stops after the safety timeout", () => {
   const timers = installFakeTimers();
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   let starts = 0;
   let stops = 0;
   manager.showDictationPanel = () => undefined;
@@ -197,15 +204,95 @@ test("native push-to-talk force-stops after the safety timeout", () => {
 });
 
 test("a failed activation-mode change preserves the cached mode", async () => {
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   manager.hotkeyManager.setActivationMode = async () => false;
 
   assert.equal(await manager.setActivationModeCache("push"), false);
   assert.equal(manager.getActivationMode(), "tap");
 });
 
-test("window creation uses the auto-end dimensions and variant-aware position", async () => {
+test("a busy Assistant blocks its voice hotkey before native side effects", () => {
+  const manager = createNormalWindowManager();
+  const rendererChannels = [];
+  let showCount = 0;
+  let prepareCount = 0;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel) => rendererChannels.push(channel) },
+  };
+  manager.hotkeyManager = {
+    isInListeningMode: () => false,
+    unregisterAll: () => undefined,
+  };
+  manager.textEditMonitor = { captureTargetPid: () => Promise.resolve(null) };
+  manager.selectionManager = { captureTarget: () => undefined };
+  manager.showDictationPanel = () => {
+    showCount += 1;
+  };
+  manager.sendPrepareDictation = () => {
+    prepareCount += 1;
+  };
+  // Initial Assistant thinking happens before the response panel opens; busy
+  // state must stand on its own during that part of the journey.
+  manager._assistantPanelOpen = false;
+  manager._assistantPanelBusy = true;
+
+  manager.sendToggleVoiceAgent();
+
+  assert.equal(showCount, 0);
+  assert.equal(prepareCount, 0);
+  assert.deepEqual(rendererChannels, []);
+
+  manager._assistantPanelBusy = false;
+  manager.sendToggleVoiceAgent();
+
+  assert.equal(showCount, 1);
+  assert.equal(prepareCount, 1);
+  assert.deepEqual(rendererChannels, ["toggle-voice-agent"]);
+});
+
+test("a busy Assistant blocks direct push-to-talk prepare and start paths", () => {
+  const manager = createNormalWindowManager();
+  const rendererChannels = [];
+  let showCount = 0;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel) => rendererChannels.push(channel) },
+  };
+  manager.hotkeyManager = {
+    isInListeningMode: () => false,
+    unregisterAll: () => undefined,
+  };
+  manager._dictationLifecycleState = "idle";
+  manager._assistantPanelOpen = false;
+  manager._assistantPanelBusy = true;
+  manager.textEditMonitor = { captureTargetPid: () => Promise.resolve(null) };
+  manager.selectionManager = { captureTarget: () => undefined };
+  manager.showDictationPanel = () => {
+    showCount += 1;
+  };
+
+  manager.sendPrepareDictation();
+  manager.sendStartDictation();
+
+  assert.equal(showCount, 0);
+  assert.deepEqual(rendererChannels, []);
+});
+
+test("window manager starts fail-closed and suppresses normal-app popup surfaces", async () => {
   const manager = new WindowManager();
+  const update = { version: "2.0.0", releaseDate: "2026-08-20" };
+
+  assert.equal(manager.isMeetingInputAllowed(), false);
+  assert.equal(await manager.showMeetingNotification({ detectionId: "onboarding" }), false);
+  assert.equal(await manager.showTranscriptionPreview("partial transcript"), undefined);
+  assert.equal(await manager.showUpdateNotification(update), false);
+  assert.deepEqual(manager._deferredUpdateNotificationInfo, update);
+  assert.deepEqual(createdWindows, []);
+});
+
+test("window creation uses the auto-end dimensions and variant-aware position", async () => {
+  const manager = createNormalWindowManager();
 
   try {
     const showPromise = manager.showMeetingAutoEndCountdown({
@@ -241,7 +328,7 @@ test("window creation uses the auto-end dimensions and variant-aware position", 
 });
 
 test("unexpected auto-end window closure suppresses that countdown", async () => {
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   const unavailableSessions = [];
   manager.meetingDetectionEngine = {
     handleAutoEndNotificationUnavailable: (sessionId) => unavailableSessions.push(sessionId),
@@ -263,7 +350,7 @@ test("unexpected auto-end window closure suppresses that countdown", async () =>
 
 test("auto-end notification loading has a fail-safe timeout", async () => {
   const timers = installFakeTimers();
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   const showPromise = manager.showMeetingAutoEndCountdown({
     sessionId: "meeting-1",
     expiresAt: 70_000,
@@ -288,7 +375,7 @@ test("auto-end notification loading has a fail-safe timeout", async () => {
 
 test("a replaced deferred notification cannot send its payload to the newer window", async () => {
   const timers = installFakeTimers();
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   let secondShowPromise;
 
   try {
@@ -319,7 +406,7 @@ test("a replaced deferred notification cannot send its payload to the newer wind
 
 test("canceling during a deferred load prevents later timers and timeout callbacks", async () => {
   const timers = installFakeTimers();
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   let timeoutCount = 0;
   manager.meetingDetectionEngine = {
     handleNotificationTimeout: () => {
@@ -349,7 +436,7 @@ test("canceling during a deferred load prevents later timers and timeout callbac
 
 test("canceling while waiting for the dev server never loads the stale window", async () => {
   const timers = installFakeTimers();
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
   const originalNodeEnv = process.env.NODE_ENV;
   const devServerWait = createDeferred();
   devServerWaitPromise = devServerWait.promise;
@@ -373,7 +460,7 @@ test("canceling while waiting for the dev server never loads the stale window", 
 
 test("a stale ready callback cannot show the replacement notification window", async () => {
   const timers = installFakeTimers();
-  const manager = new WindowManager();
+  const manager = createNormalWindowManager();
 
   try {
     const firstShowPromise = manager.showMeetingNotification(

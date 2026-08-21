@@ -14,7 +14,9 @@ export type ValidationErrorCode =
   | "LEFT_MODIFIER_ONLY"
   | "DUPLICATE"
   | "RESERVED"
-  | "INVALID_GLOBE";
+  | "INVALID_GLOBE"
+  | "FN_COMBINATION_UNSUPPORTED"
+  | "MODIFIER_ONLY_UNSUPPORTED";
 
 export interface ValidationResult {
   valid: boolean;
@@ -613,6 +615,17 @@ export function validateHotkey(
     return { valid: true };
   }
 
+  // Electron cannot represent Fn inside an accelerator. Stripping it would
+  // register the base key globally, so the native listener supports standalone
+  // Globe/Fn only.
+  if (/^fn\+/i.test(hotkey)) {
+    return {
+      valid: false,
+      error: "The Globe/Fn key can only be used by itself.",
+      errorCode: "FN_COMBINATION_UNSUPPORTED",
+    };
+  }
+
   if (isMouseButtonHotkey(hotkey)) {
     if (platform !== "darwin") {
       return {
@@ -682,13 +695,28 @@ export function validateHotkey(
   const modifierCount = parts.filter((part) => normalizeModifier(part, platform) !== null).length;
   const hasBaseKey = parts.length > modifierCount;
 
+  // Only Windows routes a modifier-only chord to a native low-level hook. macOS
+  // has no equivalent — the Globe listener reports Fn, right-side modifiers and
+  // mouse buttons, nothing else — and Electron cannot register an accelerator
+  // without a key, so the chord would be accepted here and then fail to bind.
+  if (!hasBaseKey && modifierCount >= 2 && platform === "darwin") {
+    return {
+      valid: false,
+      error:
+        "Two-modifier shortcuts are not supported on macOS. Use a right-side modifier on its own (e.g. RightOption), or add a regular key.",
+      errorCode: "MODIFIER_ONLY_UNSUPPORTED",
+    };
+  }
+
   if (!hasBaseKey && modifierCount === 1) {
     const singleMod = parts[0];
     if (!isRightSideModifier(singleMod)) {
       return {
         valid: false,
         error:
-          "Single modifier hotkeys must use the right-side key (e.g., RightOption). Or use two modifiers (e.g., Control+Alt).",
+          platform === "darwin"
+            ? "Single modifier hotkeys must use the right-side key (e.g., RightOption). Or add a regular key (e.g., Control+Space)."
+            : "Single modifier hotkeys must use the right-side key (e.g., RightOption). Or use two modifiers (e.g., Control+Alt).",
         errorCode: "LEFT_MODIFIER_ONLY",
       };
     }

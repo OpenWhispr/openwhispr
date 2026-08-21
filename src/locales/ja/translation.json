@@ -29,10 +29,6 @@
       "speakerDetection": {
         "title": "話者を識別してラベル付け",
         "description": "オフにすると、文字起こしには「あなた」と「他の人」と表示されます"
-      },
-      "autoEnd": {
-        "title": "停止し忘れた録音を自動終了",
-        "description": "通話が終わったと判断されると、キャンセル可能なカウントダウンの後に会議の録音を自動的に停止します"
       }
     }
   },
@@ -58,8 +54,7 @@
   },
   "window": {
     "voiceRecorderTitle": "ボイスレコーダー",
-    "controlPanelTitle": "コントロールパネル",
-    "agentChatTitle": "エージェントチャット"
+    "controlPanelTitle": "コントロールパネル"
   },
   "dialog": {
     "openLink": {
@@ -97,6 +92,7 @@
     "errors": {
       "callbackRequired": "ホットキー設定にはコールバック関数が必要です",
       "globeOnlyMac": "Globe キーは macOS でのみ利用できます。",
+      "fnCombinationUnsupported": "Globe/Fn キーは単独でのみ使用できます。",
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
@@ -139,6 +135,7 @@
     "pttUnavailable": "プッシュトゥトークのネイティブリスナーが利用できません"
   },
   "common": {
+    "continue": "続ける",
     "add": "追加",
     "retry": "再試行",
     "back": "戻る",
@@ -182,6 +179,221 @@
     "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。"
   },
   "onboarding": {
+    "rehaul": {
+      "permissions": {
+        "title": "3 分で OpenWhispr を設定",
+        "microphoneDescription": "音声をテキストに変換します。",
+        "accessibilityDescription": "アクティブなアプリにテキストを貼り付けます。",
+        "systemAudioTitle": "システムオーディオ",
+        "systemAudioDescription": "ほかのアプリの音声を取り込みます。",
+        "enable": "有効にする",
+        "enabled": "有効"
+      },
+      "languages": {
+        "title": "どの言語を話しますか？",
+        "titleLineOne": "どの言語を",
+        "titleLineTwo": "話しますか？",
+        "description": "当てはまるものをすべて選択してください。OpenWhisprが言語の切り替えをより正確に認識できるようになります。"
+      },
+      "dictationHotkey": {
+        "title": "キーボードショートカットを設定",
+        "titleLineOne": "キーボードショートカットを",
+        "titleLineTwo": "設定しましょう",
+        "description": "どこからでもディクテーションを開始・停止できるキーボードショートカットを選びます。"
+      },
+      "assistantHotkey": {
+        "title": "OpenWhispr Assistant を設定",
+        "titleLineOne": "セットアップ",
+        "titleLineTwo": "OpenWhispr Assistant",
+        "description": "話しかけるだけで、OpenWhispr Assistant が結果を書き上げます。"
+      },
+      "hotkey": {
+        "capture": "使用したいキーを押してください",
+        "chooseAnother": "別のショートカットを選ぶ",
+        "inUse": "そのショートカットはすでに使用されています。別のものを選んでください。",
+        "holding": "押したままにするか、別のキーを押してください"
+      },
+      "dictationDemo": {
+        "title": "最初のディクテーションを試す",
+        "titleLineOne": "最初の",
+        "titleLineTwo": "ディクテーションを試す",
+        "description": "{{hotkey}} を押して話し始めてください。OpenWhispr が音声をテキストに変換します。",
+        "founder": "こんにちは、OpenWhispr創業者のゲイブです",
+        "prompt": "「初めてディクテーションを試しています」と話してみてください。",
+        "placeholder": "ここにディクテーションが表示されます…"
+      },
+      "assistantDemo": {
+        "title": "OpenWhispr Assistant を使ってみる",
+        "titleLineOne": "ご紹介します",
+        "titleLineTwo": "OpenWhispr Assistant",
+        "description": "話しかけるだけで、OpenWhispr Assistant が結果を書き上げます。",
+        "senderName": "Eren Lauren",
+        "senderEmail": "eren32@gmail.com",
+        "recipientLabel": "John Doe 宛て",
+        "email": "こんにちは！来週コーヒーでもどうですか？ご都合を教えてください。",
+        "prompt": "火曜の15時で大丈夫だと返信して。招待を送って。",
+        "response": "エレンさん\n\nぜひ近況をお話ししたいです。火曜日の15時で大丈夫です。ご都合がよければ、カレンダーの招待をお送りします。\n楽しみにしています。\nジョン"
+      },
+      "demo": {
+        "listening": "聞き取り中…",
+        "processing": "音声をテキストに変換中…",
+        "stop": "停止",
+        "typing": "入力中…"
+      },
+      "notes": {
+        "title": "ボットなしで会議を録音 — OpenWhispr Notes",
+        "titleLineOne": "ボットなしでミーティングを録音",
+        "titleLineTwoPrefix": "OpenWhispr の",
+        "titleLineTwoBrand": "Notes",
+        "description": "OpenWhispr は会話をわかりやすいノートに変換します。ミーティングボットが通話に参加することはありません。",
+        "hero": {
+          "description": "ミーティングを録音すれば、OpenWhispr が会話をわかりやすく整理されたノートに変換します。",
+          "chat": "ミーティングノートとチャット",
+          "transcript": "全文の文字起こしを確認",
+          "speakers": "誰が何を話したかを確認"
+        },
+        "connectors": {
+          "connect": "接続",
+          "googleTitle": "Google カレンダー",
+          "googleDescription": "ミーティングを同期します。",
+          "microsoftTitle": "Microsoft Outlook",
+          "microsoftDescription": "仕事のミーティングと招待を取り込みます。",
+          "appleTitle": "Apple カレンダー",
+          "appleDescription": "Mac と iPhone の予定を同期します。"
+        }
+      },
+      "setupChoice": {
+        "title": "OpenWhispr のセットアップを選択",
+        "titleLineOne": "OpenWhispr の",
+        "titleLineTwo": "セットアップを選択",
+        "description": "働き方に合った方法を選んでください。",
+        "unavailable": {
+          "title": "利用できるセットアップ方法がありません",
+          "description": "ワークスペースのポリシーでは、文字起こしと AI の完全なセットアップが許可されていません。管理者にお問い合わせください。"
+        },
+        "cloud": {
+          "title": "OpenWhispr Cloud",
+          "description": "毎週 2,000 語を無料で利用できます。設定はデバイス間で同期されます。",
+          "continue": "無料で続ける",
+          "signIn": "サインインしてクラウドを使う",
+          "features": {
+            "fast": "最速、セットアップ不要",
+            "privacy": "Privacy-focused processing",
+            "sync": "設定をデバイス間で同期",
+            "features": "ノートとアクションの AI 機能"
+          }
+        },
+        "byok": {
+          "title": "API プロバイダー",
+          "description": "自分の API キーを使用します。"
+        },
+        "local": {
+          "title": "デバイス上で実行",
+          "description": "プライベートなオフライン文字起こし。空き容量が {{minimumSpace}} GB 以上必要です。",
+          "badge": "無料",
+          "download": "モデルをダウンロード",
+          "features": {
+            "device": "デバイス上で動作",
+            "offline": "設定後はオフラインで動作",
+            "models": "ディクテーションとアシスタント用のモデルを選択",
+            "free": "ずっと無料で使える"
+          }
+        },
+        "warnings": {
+          "byok": {
+            "title": "データはプロバイダーが取り扱います",
+            "description": "ディクテーションと Assistant のプロバイダーそれぞれに認証情報を追加します。プロバイダーの料金と保持ポリシーが適用されます。",
+            "continue": "API プロバイダーを設定",
+            "steps": {
+              "1": "ディクテーションと Assistant のプロバイダーを選ぶ",
+              "2": "安全なストレージを使って認証情報を追加する",
+              "3": "有効化する前に各接続をテストする"
+            }
+          },
+          "local": {
+            "title": "ローカル設定には追加の手順がいくつか必要です",
+            "description": "ローカル処理では音声がこのデバイスに留まりますが、初回の設定と {{minimumSpace}} GB 以上の空き容量が必要です。",
+            "continue": "ローカルでセットアップ",
+            "steps": {
+              "1": "文字起こしエンジンを選ぶ",
+              "2": "モデルを設定またはダウンロードする（約 {{modelSize}}）",
+              "3": "インストールと有効化を待つ"
+            }
+          }
+        },
+        "useCloud": "代わりにクラウドを使う",
+        "continueSetup": "セットアップを続ける",
+        "showMore": "その他のオプションを表示",
+        "moreOptions": {
+          "title": "API の設定方法を選択",
+          "description": "API キーを追加するか、セルフホストモデルを接続します。",
+          "selfHosted": {
+            "title": "セルフホスト",
+            "description": "自分でホストしているモデルを接続します。"
+          }
+        }
+      },
+      "provider": {
+        "progress": "プロバイダー設定の進行状況",
+        "dictation": "ディクテーション",
+        "assistant": "アシスタント",
+        "title": "AI プロバイダーを接続",
+        "description": "プロバイダーを選び、認証情報を追加して、接続をテストします。",
+        "descriptionLineOne": "プロバイダーを選んで",
+        "descriptionLineTwo": "API キーを追加してください。",
+        "selfHosted": "セルフホストモデルのキーを持っている",
+        "providerLabel": "プロバイダー",
+        "providerPlaceholder": "モデルプロバイダーを選択",
+        "modelLabel": "モデル",
+        "modelPlaceholder": "モデルを選択",
+        "apiKey": "API キー",
+        "apiKeyPlaceholder": "API キーを貼り付け",
+        "endpointUrl": "エンドポイント URL",
+        "endpointPlaceholder": "エンドポイント URL を貼り付け",
+        "optional": "任意",
+        "modelId": "モデル ID",
+        "modelIdPlaceholder": "モデル ID を入力",
+        "testConnection": "接続をテスト",
+        "proceed": "次へ進む",
+        "clinical": "臨床文字起こし向け",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "runTest": "テストを実行",
+        "testing": "テスト中…",
+        "connected": "接続済み",
+        "connectionFailed": "接続を確認できませんでした。",
+        "errors": {
+          "endpointRequired": "テストの前にエンドポイント URL を入力してください。",
+          "invalidUrl": "エンドポイントは有効な HTTP または HTTPS の URL である必要があります。",
+          "httpsRequired": "公開エンドポイントにはHTTPSが必要です。HTTPはプライベートアドレスでのみ使用できます。",
+          "unsupportedProvider": "このプロバイダーでは接続テストを利用できません。",
+          "apiKeyRequired": "テストの前に API キーを追加してください。",
+          "credentialsRejected": "プロバイダーがこの認証情報を拒否しました。",
+          "endpointNotFound": "このエンドポイントは OpenAI 互換のモデル一覧を公開していません。",
+          "modelNotFound": "選択したモデルはこのプロバイダーでは利用できません。",
+          "providerStatus": "プロバイダーがステータス {{status}} を返しました。",
+          "timeout": "接続テストがタイムアウトしました。",
+          "network": "プロバイダーに接続できませんでした。"
+        }
+      },
+      "local": {
+        "title": "ローカルモデルを設定",
+        "description": "デバイス上で実行するモデルを選択してください。",
+        "descriptionLineOne": "デバイス上で実行する",
+        "descriptionLineTwo": "モデルを選択してください。",
+        "providerLabel": "プロバイダー",
+        "agent": "エージェント",
+        "download": "ダウンロード",
+        "downloadingShort": "ダウンロード中",
+        "selected": "選択済み",
+        "use": "使用",
+        "downloadInProgress": "ダウンロード中",
+        "cancelDownload": "{{model}} のダウンロードをキャンセル",
+        "downloads": "モデルのダウンロード",
+        "downloading": "ダウンロード中… {{progress}}%",
+        "installing": "モデルをインストール中…"
+      }
+    },
     "steps": {
       "welcome": "ようこそ",
       "setup": "セットアップ",
@@ -190,7 +402,7 @@
       "useCase": "あなたについて",
       "meeting": "会議",
       "finish": "完了",
-      "voiceAgent": "ボイスエージェント"
+      "voiceAgent": "音声アシスタント"
     },
     "hotkey": {
       "couldNotRegisterTitle": "ホットキーを登録できませんでした",
@@ -237,14 +449,14 @@
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
     },
     "voiceAgent": {
-      "title": "ボイスエージェント設定",
-      "description": "ワンキーでAIエージェントに話しかけられます",
+      "title": "音声アシスタント設定",
+      "description": "ワンキーでAIアシスタントに話しかけられます",
       "hotkey": "ホットキー",
-      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えます。テキストが選択されていれば、{{agentName}}がその選択範囲を編集して置き換えます。選択がなければカーソル位置に結果を入力します。「Hey {{agentName}}」と言う必要はありません。",
+      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えます。テキストが選択されていれば、{{agentName}}がその選択範囲を編集して置き換えます。選択がなければ、答えはフローティングパネルに表示されます。「Hey {{agentName}}」と言う必要はありません。",
       "test": "試す",
-      "testInstruction": "下をクリックし、{{hotkey}} を押してコマンドを話してください",
+      "testInstruction": "下のサンプルテキストを選択して {{hotkey}} を押し、「短くして」と話してください。編集結果がそのままテキストボックスに反映されます",
       "testSetHotkey": "上でホットキーを設定すると試せます",
-      "testPlaceholder": "ここをクリックし、ホットキーを押して例の一つを話してください...",
+      "sampleText": "木曜のミーティングが移動になったので、来週の頭に集まってローンチ計画を確認し、残りのタスクを分担しましょう。",
       "examples": [
         "イタリア語に翻訳して:「私はタイプするより話す方が速い」",
         "上司に昇進したいと伝える短いメールを書いて、彼の名前はマークです",
@@ -259,34 +471,37 @@
       "continue": "そのまま続行"
     },
     "useCase": {
-      "title": "どんな目的でお使いですか？",
-      "description": "私たちは小さなチームで、毎週リリースしています。選んだ内容に合わせてアプリを設定し、次に何を作るかの参考にします。",
+      "title": "OpenWhispr をどのように使いますか？",
+      "titleLineOne": "OpenWhisprを",
+      "titleLineTwo": "どう使いますか？",
+      "description": "当てはまるものをすべて選んでください。それに合わせてセットアップします。",
       "noteLabel": "他に伝えておきたいことはありますか？",
-      "notePlaceholder": "任意",
+      "notePlaceholder": "OpenWhispr の使い方を教えてください（任意）",
+      "proceedToSetup": "設定に進む",
       "options": {
         "dictation": {
           "title": "より速く書く",
-          "description": "タイピングの代わりにどのアプリでも音声入力"
+          "description": "タイピングの代わりに、どのアプリでも話して入力。"
         },
         "meetings": {
-          "title": "会議のメモと要約",
-          "description": "会議を録音・文字起こし・要約"
+          "title": "会議メモ",
+          "description": "会議を録音・文字起こし・要約します。"
         },
         "healthcare": {
-          "title": "医療・臨床・セラピーの文字起こし",
-          "description": "患者メモ、セッション記録、レポートを音声入力"
+          "title": "臨床記録",
+          "description": "患者メモ、セッション記録、レポートを作成します。"
         },
         "translation": {
-          "title": "言語の翻訳",
-          "description": "話す言語とは別の言語で入力"
+          "title": "話しながら翻訳",
+          "description": "ある言語で話して、別の言語で書き出します。"
         },
         "ai": {
-          "title": "AI との対話",
-          "description": "ChatGPT、Claude などのエージェントを声で操作"
+          "title": "AI と話す",
+          "description": "ChatGPT や Claude などの AI ツールを声で使えます。"
         },
         "upload": {
-          "title": "音声ファイルのアップロード",
-          "description": "MP3、OGG などをアップロードして文字起こし"
+          "title": "音声ファイルを文字起こし",
+          "description": "音声ファイルをアップロードして文字起こしします。"
         }
       },
       "selectHint": "当てはまるものをすべて選択してください"
@@ -588,9 +803,12 @@
         "title": "フォールバックモード",
         "description": "ローカル Whisper が失敗しました。代わりに OpenAI API を使用しました。"
       },
+      "errorActions": {
+        "viewTranscript": "文字起こしを表示"
+      },
       "noAudio": {
-        "title": "音声が検出されませんでした",
-        "description": "録音に音声が含まれていませんでした。もう一度お試しください。"
+        "title": "聞き取れませんでした",
+        "description": "マイクを確認して、もう一度お試しください。"
       },
       "micDisconnected": {
         "title": "マイクが切断されました",
@@ -611,7 +829,7 @@
         "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
         "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
         "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
-        "agentReasoningFailed": "ボイスエージェントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
+        "agentReasoningFailed": "音声アシスタントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
         "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。",
         "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声テキスト変換 から更新してください。"
       },
@@ -765,9 +983,12 @@
       "or": "または"
     },
     "emailStep": {
+      "checkingEmail": "メールアドレスを確認しています...",
       "continueWithEmail": "メールで続ける",
-      "continueWithoutAccount": "アカウントなしで続ける",
-      "emailPlaceholder": "you@example.com"
+      "continueWithoutAccount": "アカウントなしで OpenWhispr を使う",
+      "emailLabel": "メールアドレス",
+      "emailPlaceholder": "you@example.com",
+      "useDifferentEmail": "別のメールアドレスを使用"
     },
     "errors": {
       "accountExistsSignIn": "このメールアドレスのアカウントは既に存在します。サインインしてください。",
@@ -790,17 +1011,19 @@
     },
     "passwordForm": {
       "createAccount": "アカウントを作成",
-      "createAccountButton": "アカウントを作成",
+      "createAccountButton": "メールで続ける",
       "createAccountLink": "アカウントを作成",
       "createPasswordPlaceholder": "パスワードを作成",
       "creatingAccount": "アカウント作成中...",
       "enterPasswordPlaceholder": "パスワードを入力",
       "forgotPassword": "パスワードをお忘れですか？",
-      "fullNamePlaceholder": "氏名",
+      "fullNamePlaceholder": "名前を入力",
+      "nameLabel": "名前",
+      "passwordLabel": "パスワード",
       "haveAccount": "既にアカウントをお持ちですか？",
       "newHere": "初めてですか？",
       "passwordMinLength": "パスワードは 8 文字以上にしてください",
-      "signIn": "サインイン",
+      "signIn": "メールで続ける",
       "signInLink": "サインイン",
       "signingIn": "サインイン中...",
       "welcomeBack": "おかえりなさい"
@@ -826,7 +1049,7 @@
       "continueWithMicrosoft": "Microsoft で続ける",
       "protocolUnavailable": "ブラウザでのサインインを利用できません — システムの「既定のアプリ」設定で openwhispr:// プロトコルを再登録してください。"
     },
-    "welcomeSubtitle": "音声でどこでもディクテーション",
+    "welcomeSubtitle": "すべてを声で",
     "welcomeTitle": "OpenWhispr へようこそ"
   },
   "cleanupPrompt": "クリーンアップ",
@@ -897,8 +1120,8 @@
   },
   "dictionarySuffix": "辞書サフィックス",
   "emailVerification": {
-    "checkEmailDescription": "確認リンクを送信しました",
-    "checkEmailTitle": "メールを確認してください",
+    "checkEmailDescription": "確認リンクを次のメールアドレスに送信しました：",
+    "checkEmailTitle": "確認メールを送信しました",
     "errors": {
       "resendFailed": "メールを再送信できませんでした。もう一度お試しください。",
       "serverUnreachable": "サーバーに接続できませんでした。接続を確認してもう一度お試しください。"
@@ -906,8 +1129,8 @@
     "resendButton": "確認メールを再送信",
     "resendIn": "{{seconds}} 秒後に再送信可能",
     "verifiedDescription": "アカウントの設定が完了しました。",
-    "verifiedTitle": "メール確認完了",
-    "waiting": "確認を待っています...",
+    "verifiedTitle": "確認済み",
+    "waiting": "確認を待っています",
     "backToSignIn": "サインインに戻る"
   },
   "errorBoundary": {
@@ -995,11 +1218,12 @@
     "tryShortcutMac": "⌘⇧K をお試しください",
     "remove": "ホットキーを削除",
     "addAnother": "ホットキーをもう1つ追加",
-    "duplicate": "すでに追加されています"
+    "duplicate": "すでに追加されています",
+    "singleModifierNeedsRightSide": "{{key}} だけではショートカットにできません。{{alternative}} を押すか、2つ目のキーを追加してください。"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",
-    "searchPlaceholder": "検索..."
+    "searchPlaceholder": "言語を検索"
   },
   "microphoneSettings": {
     "builtIn": "（内蔵）",
@@ -1112,7 +1336,7 @@
       "translation": "翻訳",
       "translationDisabled": "このプロンプトをテストするには音声入力翻訳を有効にしてください",
       "noTargetLanguage": "先に翻訳先の言語を選択してください",
-      "agentDisabled": "このプロンプトをテストするには音声エージェントを有効にしてください"
+      "agentDisabled": "このプロンプトをテストするには音声アシスタントを有効にしてください"
     },
     "view": {
       "customPrompt": "カスタムプロンプト",
@@ -1419,12 +1643,12 @@
       },
       "examplesTitle": "例",
       "helper": "声に出して言いやすい短い名前を選びましょう",
-      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、AI がコマンドを実行します。テキストが選択されている場合、そのテキストは設定済みのボイスエージェントモデルに送信され、結果で安全に置き換えられます。",
+      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、回答がフローティングのアシスタントパネルに表示されます。テキストが選択されている場合、そのテキストは設定済みの音声アシスタントモデルに送信され、結果で安全に置き換えられます。",
       "howItWorksTitle": "仕組み",
       "instructionMode": "指示",
       "placeholder": "例: ジャービス、ノヴァ、アトラス...",
       "save": "保存",
-      "title": "音声エージェント",
+      "title": "音声アシスタント",
       "examples": {
         "formalEmail": "Hey {{agentName}}、予算についてフォーマルなメールを書いて",
         "professional": "テキストを選択してから話しかけます：Hey {{agentName}}、これをもっとプロフェッショナルにして",
@@ -1582,8 +1806,8 @@
         "layoutSidePanel": "サイドパネル"
       },
       "voiceAgentHotkey": {
-        "title": "ボイスエージェントホットキー",
-        "description": "話しかけるだけ — 選択中のテキストはその場で編集され、選択がなければエージェントがカーソル位置に入力します"
+        "title": "音声アシスタントホットキー",
+        "description": "コマンドを話すと、アシスタントがノート・カレンダー・ウェブツールを使ってフローティングパネルで答えます。テキストを選択してから話すと、その場で編集されます。"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -1630,7 +1854,7 @@
       },
       "waylandPaste": {
         "title": "Wayland 貼り付け設定",
-        "description": "Wayland での自動貼り付けには ydotool が必要です。各コンポーネントの状態を確認してください。",
+        "description": "Wayland での自動貼り付けには ydotool または wtype を使用します。wlroots 系コンポジタでは wtype が優先されます。",
         "allGoodDesc": "自動貼り付けの準備ができています。",
         "recheck": "再確認",
         "copy": "コピー",
@@ -1807,7 +2031,7 @@
       "lastSynced": "最終同期 {{time}}",
       "minutesAgo": "{{count}}分前",
       "audioRetention": "音声の保持",
-      "audioRetentionDescription": "再文字起こしやダウンロードのために音声録音をローカルに保存します。ファイルは保持期間が過ぎると自動的に削除されます。",
+      "audioRetentionDescription": "再文字起こしやダウンロードのために、ディクテーションの音声をローカルに保存します。ファイルは保持期間が過ぎると自動的に削除されます。会議の音声は保存されません。",
       "audioRetentionDisabled": "無効",
       "retentionDays_one": "{{count}}日",
       "retentionDays_other": "{{count}}日",
@@ -1839,14 +2063,10 @@
       "description": "クリーンアップ、ノートのフォーマット、チャット用のモデルを設定",
       "tabs": {
         "dictationCleanup": "ディクテーションのクリーンアップ",
-        "dictationAgent": "Voice Agent",
+        "dictationAgent": "音声アシスタント",
         "noteFormatting": "ノートのフォーマット",
         "chatIntelligence": "チャット",
         "dictationTranslation": "翻訳"
-      },
-      "requestTimeout": {
-        "label": "リクエストのタイムアウト(秒)",
-        "description": "応答を待つ時間の上限です。セルフホストやローカルモデルでは、特に長いノートの場合、デフォルトの30秒より長い時間が必要になることがあります。"
       }
     },
     "noteFormatting": {
@@ -2875,7 +3095,10 @@
     "limitReachedDescription": "Pro にアップグレードして無制限の文字起こしをご利用ください。",
     "viewPlans": "プランを見る",
     "upgradeTitle": "Pro にアップグレード",
-    "upgradeDescription": "無制限の文字起こしと最新の AI モデルをご利用いただけます。",
+    "upgradeDescription": "無制限・高精度・高速の文字起こし。",
+    "upgradeInstantSetup": "すぐに使える",
+    "upgradeZeroRetention": "データ保持ゼロ",
+    "upgradeEnterpriseSecurity": "エンタープライズセキュリティ SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "詳しく見る",
     "integrations": "連携",
     "defaultUser": "ユーザー",
@@ -2984,17 +3207,18 @@
     "commandMenu": {
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
-      "hideForNow": "一時的に非表示"
+      "hideForNow": "一時的に非表示",
+      "askAssistant": "アシスタントに質問"
     }
   },
   "dictationAgent": {
-    "enabled": "音声エージェントを有効にする",
+    "enabled": "音声アシスタントを有効にする",
     "enabledDescription": "エージェントに指示を口述できます。選択中のテキストは設定済みのモデルに送信され、その場で編集されます。「{{agentName}}」と話しかけて起動します。",
     "screenContext": {
       "title": "画面コンテキスト",
-      "description": "ボイスエージェントのコマンドに、作業中の画面のスクリーンショットを添付します。",
+      "description": "音声アシスタントのコマンドに、作業中の画面のスクリーンショットを添付します。",
       "enable": "画面コンテキストを共有",
-      "enableDescription": "ボイスエージェントの録音開始時に、カーソルのあるディスプレイをキャプチャします。保存やログ記録は一切されません。",
+      "enableDescription": "音声アシスタントの録音開始時に、カーソルのあるディスプレイをキャプチャします。保存やログ記録は一切されません。",
       "unsupported": "Linux Wayland では画面キャプチャを利用できません。",
       "visionModel": "専用のビジョンモデル",
       "visionModelDescription": "スクリーンショット付きのコマンドを、画像対応の別モデルに振り分けます。",
@@ -3021,10 +3245,6 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "チャットエージェントホットキー",
-      "hotkeyDescription": "チャットエージェントのオーバーレイを開閉します",
-      "model": "エージェントモデル",
-      "modelDescription": "エージェント会話に使用するAIモデル",
       "systemPrompt": "システムプロンプト",
       "systemPromptDescription": "エージェントへのカスタム指示",
       "systemPromptPlaceholder": "カスタムシステムプロンプトを入力...",
@@ -3039,31 +3259,13 @@
         "selfHostedDesc": "ネットワーク上の自分のサーバー。",
         "enterprise": "エンタープライズ",
         "enterpriseDesc": "組織のクラウドアカウントを使用 (AWS, Azure, GCP)。"
-      },
-      "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "信頼できる精度。設定不要。",
-      "customSetup": "カスタム設定 (BYOK)",
-      "customSetupDescription": "自分のAPIキーを使用してお好みのモデルを選択する"
+      }
     },
     "chat": {
-      "placeholder": "{{hotkey}}を押して話す",
-      "thinking": "考え中...",
-      "transcribing": "文字起こし中...",
-      "listening": "聞いています...",
-      "newConversation": "新規",
-      "copyToClipboard": "クリップボードにコピー",
-      "copied": "コピーしました！",
-      "emptyState": "なんでも聞いてください",
-      "errorPrefix": "エラー"
-    },
-    "titleBar": {
-      "label": "エージェント",
-      "newChat": "新しい会話",
-      "close": "閉じる"
+      "errorPrefix": "エラー",
+      "emptyResponse": "モデルから応答がありませんでした。"
     },
     "input": {
-      "holdToSpeak": "長押しして話す",
-      "toClose": "閉じる",
       "listening": "聞いています...",
       "transcribing": "文字起こし中...",
       "thinking": "考え中...",
@@ -3071,6 +3273,14 @@
       "send": "送信"
     },
     "tools": {
+      "search_notesName": "ノートを検索",
+      "get_noteName": "ノートを取得",
+      "create_noteName": "ノートを作成",
+      "update_noteName": "ノートを更新",
+      "list_foldersName": "フォルダー一覧",
+      "copy_to_clipboardName": "クリップボードにコピー",
+      "web_searchName": "ウェブ検索",
+      "get_calendar_eventsName": "カレンダーの予定を取得",
       "search_notesStatus": "ノートを検索中...",
       "web_searchStatus": "ウェブを検索中...",
       "copy_to_clipboardStatus": "クリップボードにコピー中...",
@@ -3079,17 +3289,31 @@
       "create_noteStatus": "ノートを作成中...",
       "update_noteStatus": "ノートを更新中...",
       "copiedToClipboard": "クリップボードにコピーしました",
-      "foundNotes": "{{count}}件のノートが見つかりました",
-      "foundNotes_plural": "{{count}}件のノートが見つかりました",
-      "searchResults": "{{count}}件の結果が見つかりました",
-      "searchResults_plural": "{{count}}件の結果が見つかりました",
       "openNote": "ノートを開く",
-      "calendarEvents": "{{count}}件の予定が見つかりました",
-      "calendarEvents_plural": "{{count}}件の予定が見つかりました",
-      "noResults": "結果が見つかりません",
-      "error": "ツールエラー",
       "unknownTool": "不明なツール: {{name}}",
       "invalidArgs": "{{name}} のツール引数が無効です"
+    }
+  },
+  "assistant": {
+    "panel": {
+      "selectionHint": "編集するテキストを選択",
+      "selectedContext": "選択したテキストを追加",
+      "removeSelectedContext": "選択したテキストを削除",
+      "newConversation": "新しい会話",
+      "copyToClipboard": "クリップボードにコピー",
+      "suggestions": {
+        "summarizeNotes": "最近のノートを要約して",
+        "calendar": "カレンダーの予定を教えて",
+        "draft": "文章の下書きを手伝って"
+      }
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "呼び出し中",
+        "calling": "実行中",
+        "using": "使用中"
+      },
+      "toolFallback": "ツール"
     }
   },
   "integrations": {
@@ -3229,20 +3453,21 @@
     "tomorrow": "明日"
   },
   "upcoming": {
-    "title": "今後の会議",
+    "title": "今後の予定",
     "transcriptions": "文字起こし",
-    "tomorrow": "明日",
-    "noMoreMeetings": "今日の予定はありません",
     "now": "進行中",
-    "join": "参加",
     "untitledEvent": "無題のイベント",
+    "joinAndTakeNotes": "参加してメモを取る",
+    "takeNotes": "メモを取る",
+    "noEventsToday": "今日の予定はありません",
+    "noUpcomingEvents": "今後の予定はありません",
+    "moreCalendarsHint": "他のカレンダーも連携しますか？",
+    "connectHere": "ここから連携",
+    "openMeetingLink": "会議リンクを開く",
     "systemAudioRequired": "他の参加者の音声を録音するには、システムオーディオの権限が必要です。",
     "openSettings": "システム設定を開く",
-    "signInRequired": "会議録音を使用するにはログインしてください",
-    "signInDescription": "アカウントを作成またはログインして、会議を録音・文字起こしできます。",
     "connectCalendar": "カレンダーを接続",
-    "connectCalendarDescription": "Google カレンダーを連携して、今後のミーティングを確認し、自動的にノートを記録します。",
-    "notABot": "OpenWhispr はシステムオーディオで録音します — ボットとしてミーティングに参加することはありません。",
+    "connectCalendarDescription": "OpenWhispr を離れずに会議を確認して参加できます。",
     "connectCalendarButton": "カレンダーを接続"
   },
   "notesView": {
@@ -3411,6 +3636,7 @@
     "ready": "準備完了",
     "copy": "コピー",
     "copied": "コピー済み",
+    "collapse": "文字起こしを折りたたむ",
     "waitingForInput": "何か話してください..."
   },
   "transcript": {

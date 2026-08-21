@@ -60,6 +60,7 @@ import NoteBottomBar from "./NoteBottomBar";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import { normalizeDbDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
+import { collectKnownPeople } from "../../utils/llmTranscript";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
@@ -401,6 +402,20 @@ export default function NoteEditor({
       return [];
     }
   }, [note.participants]);
+
+  const mentionPeople = useMemo(
+    () =>
+      collectKnownPeople(
+        {
+          selfName: user?.name?.trim() || null,
+          selfEmail: user?.email?.trim() || null,
+          participants: parsedParticipants,
+        },
+        speakerMappings,
+        displaySegments
+      ),
+    [user?.name, user?.email, parsedParticipants, speakerMappings, displaySegments]
+  );
 
   const refreshSpeakerProfiles = useCallback(() => {
     window.electronAPI?.getSpeakerProfiles?.().then((profiles) => {
@@ -1180,6 +1195,7 @@ export default function NoteEditor({
                 value={enhancement.content}
                 onChange={handleEnhancedChange}
                 disabled={!canEditNote}
+                mentionPeople={mentionPeople}
               />
             ) : (
               <RichTextEditor
@@ -1188,6 +1204,7 @@ export default function NoteEditor({
                 editorRef={editorRef}
                 placeholder={t("notes.editor.startWriting")}
                 disabled={!canEditNote || actionProcessingState === "processing"}
+                mentionPeople={mentionPeople}
               />
             )}
           </div>

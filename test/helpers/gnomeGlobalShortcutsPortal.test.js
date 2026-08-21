@@ -78,8 +78,7 @@ test("D-Bus method calls reject when the service never replies", async () => {
   portal.bus = { invoke: () => undefined };
 
   const deadline = new Promise((_, reject) => {
-    const timer = setTimeout(() => reject(new Error("test deadline expired")), 100);
-    timer.unref?.();
+    setTimeout(() => reject(new Error("test deadline expired")), 100);
   });
 
   await assert.rejects(
@@ -107,8 +106,7 @@ test("portal requests time out and remove their response listener", async () => 
 
   const request = portal._request("BindShortcuts", "", [], "request_token");
   const deadline = new Promise((_, reject) => {
-    const timer = setTimeout(() => reject(new Error("test deadline expired")), 100);
-    timer.unref?.();
+    setTimeout(() => reject(new Error("test deadline expired")), 100);
   });
   await assert.rejects(
     Promise.race([request, deadline]),

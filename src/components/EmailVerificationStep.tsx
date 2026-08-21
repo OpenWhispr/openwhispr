@@ -3,19 +3,22 @@ import { useTranslation } from "react-i18next";
 import { OPENWHISPR_API_URL } from "../config/constants";
 import { authClient } from "../lib/auth";
 import { Button } from "./ui/button";
-import { Mail, Loader2, Check, RefreshCw } from "lucide-react";
-import logoIcon from "../assets/icon.png";
+import { CircleCheck, Loader, Loader2, MailCheck, RefreshCw } from "lucide-react";
+import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
 
 interface EmailVerificationStepProps {
   email: string;
   onVerified: () => void;
   onBack: () => void;
+  /** Rendering inside SignInDialog rather than the onboarding window. */
+  embedded?: boolean;
 }
 
 export default function EmailVerificationStep({
   email,
   onVerified,
   onBack,
+  embedded = false,
 }: EmailVerificationStepProps) {
   const { t } = useTranslation();
   const [resendCooldown, setResendCooldown] = useState(60);
@@ -23,6 +26,11 @@ export default function EmailVerificationStep({
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onVerifiedRef = useRef(onVerified);
+
+  useEffect(() => {
+    onVerifiedRef.current = onVerified;
+  }, [onVerified]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -31,19 +39,21 @@ export default function EmailVerificationStep({
   }, [resendCooldown]);
 
   useEffect(() => {
-    if (!OPENWHISPR_API_URL || verified) return;
+    if (!OPENWHISPR_API_URL) return;
 
     const url = `${OPENWHISPR_API_URL}/api/auth/verification-status?email=${encodeURIComponent(email)}`;
+    let stopped = false;
 
-    pollRef.current = setInterval(async () => {
+    const checkVerificationStatus = async () => {
       try {
         const res = await fetch(url, { credentials: "include" });
+        if (stopped) return;
+
         if (res.ok) {
           const data = await res.json();
           if (data.verified) {
             setVerified(true);
             if (pollRef.current) clearInterval(pollRef.current);
-            setTimeout(() => onVerified(), 1200);
           }
         } else if (res.status === 401 || res.status === 400) {
           if (pollRef.current) clearInterval(pollRef.current);
@@ -52,12 +62,24 @@ export default function EmailVerificationStep({
       } catch {
         // Network error — silently retry on next poll
       }
-    }, 5000);
+    };
+
+    // Check immediately so returning from the verification link never leaves the
+    // user staring at a stale waiting state for a full polling interval.
+    void checkVerificationStatus();
+    pollRef.current = setInterval(checkVerificationStatus, 5000);
 
     return () => {
+      stopped = true;
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [email, verified, onVerified, t]);
+  }, [email, t]);
+
+  useEffect(() => {
+    if (!verified) return;
+    const timer = setTimeout(() => onVerifiedRef.current(), 1200);
+    return () => clearTimeout(timer);
+  }, [verified]);
 
   const handleResend = useCallback(async () => {
     if (resendCooldown > 0 || isResending) return;
@@ -77,90 +99,83 @@ export default function EmailVerificationStep({
     }
   }, [resendCooldown, isResending, email, t]);
 
-  if (verified) {
-    return (
-      <div className="space-y-3">
-        <div className="text-center mb-4">
-          <img
-            src={logoIcon}
-            alt="OpenWhispr"
-            className="w-12 h-12 mx-auto mb-2.5 rounded-lg shadow-sm"
-          />
-          <div className="w-8 h-8 mx-auto bg-success/10 rounded-full flex items-center justify-center mb-2">
-            <Check className="w-4 h-4 text-success" />
-          </div>
-          <p className="text-lg font-semibold text-foreground tracking-tight leading-tight">
-            {t("emailVerification.verifiedTitle")}
-          </p>
-          <p className="text-muted-foreground text-sm mt-1 leading-tight">
-            {t("emailVerification.verifiedDescription")}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-3">
-      <div className="text-center mb-4">
-        <img
-          src={logoIcon}
-          alt="OpenWhispr"
-          className="w-12 h-12 mx-auto mb-2.5 rounded-lg shadow-sm"
-        />
-        <div className="w-8 h-8 mx-auto bg-primary/10 rounded-full flex items-center justify-center mb-3">
-          <Mail className="w-4 h-4 text-primary" />
+    <CompactOnboardingFrame showBrandMark={false} embedded={embedded}>
+      <div className={`${embedded ? "pt-1" : "px-5 pt-42"} text-center`}>
+        <div className="mx-auto flex size-16 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)] shadow-sm">
+          <MailCheck className="size-7" strokeWidth={1.8} />
         </div>
-        <p className="text-lg font-semibold text-foreground tracking-tight leading-tight">
+        <h1
+          className={
+            embedded
+              ? "mt-6 text-2xl font-semibold tracking-tight"
+              : "onboarding-display-title mt-9"
+          }
+        >
           {t("emailVerification.checkEmailTitle")}
+        </h1>
+        <p className="mx-auto mt-2 max-w-xs text-sm leading-5 text-[var(--onboarding-text-secondary)]">
+          {t("emailVerification.checkEmailDescription")}{" "}
+          <span className="font-medium text-[var(--onboarding-text-primary)]">{email}</span>
         </p>
-        <p className="text-muted-foreground text-sm mt-1 leading-tight">
-          {t("emailVerification.checkEmailDescription")}
-        </p>
-        <p className="text-sm font-medium text-foreground mt-0.5">{email}</p>
-      </div>
 
-      <div className="flex items-center justify-center gap-1.5 py-1">
-        <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/50" />
-        <p className="text-xs text-muted-foreground/50">{t("emailVerification.waiting")}</p>
-      </div>
-
-      {error && (
-        <div className="px-2.5 py-1.5 rounded bg-destructive/5 border border-destructive/20 flex items-center gap-1.5">
-          <p className="text-xs text-destructive leading-snug">{error}</p>
+        <div
+          className={`mx-auto mt-5 inline-flex h-10 items-center justify-center gap-3 rounded-full px-6 text-sm font-medium ${
+            verified
+              ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)]"
+              : "bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]"
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          {verified ? (
+            <CircleCheck className="size-4" />
+          ) : (
+            <Loader className="size-4 animate-spin" />
+          )}
+          {verified ? t("emailVerification.verifiedTitle") : t("emailVerification.waiting")}
         </div>
-      )}
 
-      <Button
-        type="button"
-        variant="outline"
-        onClick={handleResend}
-        disabled={resendCooldown > 0 || isResending}
-        className="w-full h-9"
-      >
-        {isResending ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : resendCooldown > 0 ? (
-          <span className="text-sm font-medium">
-            {t("emailVerification.resendIn", { seconds: resendCooldown })}
-          </span>
-        ) : (
-          <>
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span className="text-sm font-medium">{t("emailVerification.resendButton")}</span>
-          </>
+        {error && (
+          <div className="mt-5 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2">
+            <p className="text-xs leading-snug text-destructive">{error}</p>
+          </div>
         )}
-      </Button>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={onBack}
-        className="w-full font-normal text-muted-foreground/85 hover:text-foreground hover:bg-muted/30"
-      >
-        {t("emailVerification.backToSignIn")}
-      </Button>
-    </div>
+        {/* Keep the reference state uncluttered during the initial delivery
+            window, then expose recovery actions once resending is possible or
+            immediately when polling reports a terminal session error. */}
+        {!verified && (error || resendCooldown <= 0) && (
+          <div className="mt-5 flex justify-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleResend}
+              disabled={resendCooldown > 0 || isResending}
+              className="rounded-full text-muted-foreground"
+            >
+              {isResending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : resendCooldown > 0 ? (
+                t("emailVerification.resendIn", { seconds: resendCooldown })
+              ) : (
+                <RefreshCw className="size-3.5" />
+              )}
+              {!isResending && resendCooldown <= 0 && t("emailVerification.resendButton")}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onBack}
+              className="rounded-full text-muted-foreground"
+            >
+              {t("emailVerification.backToSignIn")}
+            </Button>
+          </div>
+        )}
+      </div>
+    </CompactOnboardingFrame>
   );
 }

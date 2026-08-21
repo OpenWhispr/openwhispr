@@ -18,7 +18,7 @@ const DEFAULT_HOTKEY = "Control+Super";
 
 // Slots routed through GNOME native gsettings (not globalShortcut).
 // Temporary slots like "cancel" stay on globalShortcut.
-const GNOME_NATIVE_SLOTS = new Set(["agent", "meeting", "voiceAgent", "translation"]);
+const GNOME_NATIVE_SLOTS = new Set(["meeting", "voiceAgent", "translation"]);
 
 // KDE registration failure reasons — reuse existing i18n keys
 const KDE_FAILURE_REASONS = {
@@ -65,13 +65,15 @@ function isMouseButtonHotkey(hotkey) {
 }
 
 function normalizeToAccelerator(hotkey) {
-  let accelerator = hotkey.startsWith("Fn+") ? hotkey.slice(3) : hotkey;
-  accelerator = accelerator
+  return hotkey
     .replace(/\bRight(Command|Cmd)\b/g, "Command")
     .replace(/\bRight(Control|Ctrl)\b/g, "Control")
     .replace(/\bRight(Alt|Option)\b/g, "Alt")
     .replace(/\bRightShift\b/g, "Shift");
-  return accelerator;
+}
+
+function isUnsupportedFnCombination(hotkey) {
+  return /^Fn\+/i.test(hotkey || "");
 }
 
 // Suggested alternative hotkeys when registration fails
@@ -220,9 +222,7 @@ class HotkeyManager extends EventEmitter {
 
       this.unregisterSlot(slotName);
 
-      if (slotName === "agent") {
-        this.gnomeManager.setAgentCallback(callback);
-      } else if (slotName === "meeting") {
+      if (slotName === "meeting") {
         this.gnomeManager.setMeetingCallback(callback);
       } else if (slotName === "voiceAgent") {
         this.gnomeManager.setVoiceAgentCallback(callback);
@@ -258,10 +258,6 @@ class HotkeyManager extends EventEmitter {
     // KGlobalAccel registrations after crash (Escape would stop working system-wide).
     if (this.useKDE && this.kdeManager && slotName !== "cancel") {
       this.unregisterSlot(slotName);
-
-      if (slotName === "agent") {
-        this.kdeManager.setAgentCallback(callback);
-      }
 
       const result = await this.kdeManager.registerKeybinding(
         hotkey,
@@ -514,6 +510,20 @@ class HotkeyManager extends EventEmitter {
         }
         debugLogger.log(`[HotkeyManager] GLOBE/Fn key "${hotkey}" set successfully`);
         return { success: true, hotkey, accelerator: null };
+      }
+
+      // Electron cannot represent Fn as part of an accelerator. Registering
+      // Fn+A as A claims an ordinary typing key globally, so only standalone
+      // Globe/Fn (handled by the native listener above) is supported.
+      if (isUnsupportedFnCombination(hotkey)) {
+        return {
+          success: false,
+          hotkey,
+          error: i18nMain.t("hotkey.errors.fnCombinationUnsupported", {
+            defaultValue: "The Globe/Fn key can only be used by itself.",
+          }),
+          reason: "fn_combination_unsupported",
+        };
       }
 
       if (isRightSideModifier(hotkey)) {
@@ -769,6 +779,7 @@ class HotkeyManager extends EventEmitter {
       this.kdeManager = new KDEShortcutManager();
       const ok = await this.kdeManager.init();
       if (ok) {
+        await this.kdeManager.removeRetiredAgentKeybinding();
         this.useKDE = true;
         this.hotkeyCallback = callback;
         debugLogger.log("[HotkeyManager] KDE shortcuts initialized via KGlobalAccel D-Bus");

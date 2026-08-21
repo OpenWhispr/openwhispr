@@ -10,7 +10,6 @@ const t = (key) =>
   ({
     "controlPanel.history.dateGroups.today": "Today",
     "controlPanel.history.dateGroups.yesterday": "Yesterday",
-    "upcoming.tomorrow": "Tomorrow",
   })[key] || key;
 
 // Local-time constructors keep these assertions timezone-independent.
@@ -62,6 +61,35 @@ test("string dates are accepted", async (t2) => {
   assert.equal(formatDateGroup(new Date(NOON_JUNE_15).toISOString(), t), "Today");
 });
 
+test("date-only event starts parse as the local calendar day, not UTC midnight", async () => {
+  const { parseEventDate } = await load();
+  const previousTimezone = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+
+  try {
+    // A UTC-midnight parse would land on June 14 in Los Angeles.
+    const parsed = parseEventDate("2024-06-15");
+    assert.equal(parsed.getFullYear(), 2024);
+    assert.equal(parsed.getMonth(), 5);
+    assert.equal(parsed.getDate(), 15);
+  } finally {
+    if (previousTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  }
+});
+
+test("timed event starts keep their instant and invalid values return null", async () => {
+  const { parseEventDate } = await load();
+
+  assert.equal(
+    parseEventDate("2024-06-15T10:00:00-07:00").getTime(),
+    Date.parse("2024-06-15T10:00:00-07:00")
+  );
+  assert.equal(parseEventDate("not-a-date"), null);
+  assert.equal(parseEventDate(""), null);
+  assert.equal(parseEventDate(null), null);
+});
+
 test("history groups zone-less SQLite timestamps as UTC near a local day boundary", async (t2) => {
   const { formatDateGroup } = await load();
   const previousTimezone = process.env.TZ;
@@ -76,22 +104,4 @@ test("history groups zone-less SQLite timestamps as UTC near a local day boundar
     if (previousTimezone === undefined) delete process.env.TZ;
     else process.env.TZ = previousTimezone;
   }
-});
-
-test("upcoming groups label today and tomorrow by calendar day", async (t2) => {
-  const { formatUpcomingDateGroup } = await load();
-  t2.mock.timers.enable({ apis: ["Date"], now: NOON_JUNE_15 });
-
-  assert.equal(formatUpcomingDateGroup(new Date(2024, 5, 15, 8), t), "Today");
-  assert.equal(formatUpcomingDateGroup(new Date(2024, 5, 16, 8), t), "Tomorrow");
-});
-
-test("upcoming groups fall back to a formatted date further out", async (t2) => {
-  const { formatUpcomingDateGroup } = await load();
-  t2.mock.timers.enable({ apis: ["Date"], now: NOON_JUNE_15 });
-
-  const result = formatUpcomingDateGroup(new Date(2024, 5, 20, 12), t);
-  assert.ok(result);
-  assert.notEqual(result, "Today");
-  assert.notEqual(result, "Tomorrow");
 });

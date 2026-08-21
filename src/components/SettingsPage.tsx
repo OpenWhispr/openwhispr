@@ -94,6 +94,7 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
+import { resetOnboardingProgress } from "./onboarding/flow";
 import type {
   ChineseScriptPreference,
   GpuDevice,
@@ -110,11 +111,6 @@ import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
-import {
-  LLM_REQUEST_TIMEOUT_SECONDS_MIN,
-  LLM_REQUEST_TIMEOUT_SECONDS_MAX,
-  resolveLlmRequestTimeoutSeconds,
-} from "../helpers/llmRequestTimeout.js";
 import { formatBytes } from "../utils/formatBytes";
 import {
   clearMissingLocalModelSelections,
@@ -140,6 +136,8 @@ import WorkspaceSection from "./settings/WorkspaceSection";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
+import { getTranscriptionProvider } from "../models/ModelRegistry";
+import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
 export type SettingsSectionType =
   | "account"
@@ -370,6 +368,16 @@ function TranscriptionSection({
     [localTranscriptionProvider, setParakeetModel, setWhisperModel]
   );
 
+  const selectedCloudModelStreams = Boolean(
+    getTranscriptionProvider(cloudTranscriptionProvider)?.models.some(
+      (model) => model.id === cloudTranscriptionModel && model.streaming
+    )
+  );
+  const previewAvailable = supportsLiveTranscriptionPreview(
+    effectiveTranscriptionMode,
+    selectedCloudModelStreams
+  );
+
   const renderPreviewToggle = () => (
     <SettingsPanel>
       <SettingsPanelRow>
@@ -419,12 +427,8 @@ function TranscriptionSection({
       />
 
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {effectiveTranscriptionMode === "local" && (
-        <>
-          {renderTranscriptionPicker("local")}
-          {renderPreviewToggle()}
-        </>
-      )}
+      {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+      {previewAvailable && renderPreviewToggle()}
 
       {effectiveTranscriptionMode === "self-hosted" && (
         <SelfHostedPanel
@@ -674,8 +678,6 @@ function LlmsTabs({
 }) {
   const { t } = useTranslation();
   const agentAllowed = usePolicyStore(isAgentAllowed);
-  const llmRequestTimeoutSeconds = useSettingsStore((s) => s.llmRequestTimeoutSeconds);
-  const setLlmRequestTimeoutSeconds = useSettingsStore((s) => s.setLlmRequestTimeoutSeconds);
   const visibleTabIds = agentAllowed
     ? LLM_TABS
     : LLM_TABS.filter((tabId) => !AGENT_LLM_TABS.has(tabId));
@@ -716,35 +718,6 @@ function LlmsTabs({
       {agentAllowed && (
         <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
       )}
-
-      {/* Applies to every scope above — the timeout setting is global, not per-scope. */}
-      <div className="border-t border-border/40 pt-4 mt-4">
-        <SettingsPanel>
-          <SettingsPanelRow>
-            <SettingsRow
-              label={t("settingsPage.llms.requestTimeout.label")}
-              description={t("settingsPage.llms.requestTimeout.description")}
-            >
-              <Input
-                type="number"
-                min={LLM_REQUEST_TIMEOUT_SECONDS_MIN}
-                max={LLM_REQUEST_TIMEOUT_SECONDS_MAX}
-                step={5}
-                value={llmRequestTimeoutSeconds}
-                onChange={(e) => setLlmRequestTimeoutSeconds(Number(e.target.value))}
-                // Clamp on blur so the stored value always matches the effective
-                // one (point of use clamps to 10-600s; a cleared field stores 0).
-                onBlur={() =>
-                  setLlmRequestTimeoutSeconds(
-                    resolveLlmRequestTimeoutSeconds(llmRequestTimeoutSeconds)
-                  )
-                }
-                className="w-20"
-              />
-            </SettingsRow>
-          </SettingsPanelRow>
-        </SettingsPanel>
-      </div>
     </div>
   );
 }
@@ -843,11 +816,11 @@ export default function SettingsPage({
     dictationKey,
     activationMode,
     setActivationMode,
-    preferBuiltInMic,
+    microphoneSelectionMode,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
     micWarmHoldSeconds,
-    setPreferBuiltInMic,
+    setMicrophoneSelectionMode,
     setSelectedMicDevice,
     setMicWarmHoldSeconds,
     setUseLocalWhisper,
@@ -937,8 +910,6 @@ export default function SettingsPage({
     setWhisperVadSamplesOverlap,
   } = useSettings();
 
-  const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
-  const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
@@ -1121,7 +1092,10 @@ export default function SettingsPage({
 
   const meetingRegisterFn = useCallback(async (hotkey: string) => {
     const result = await window.electronAPI?.registerMeetingHotkey?.(hotkey);
-    return result ?? { success: false, message: "Electron API unavailable" };
+    // No `message`: useHotkeyRegistration falls back to the translated
+    // hooks.hotkeyRegistration.errors.couldNotRegister, and that string is what
+    // gets shown in a toast. An English literal here would surface untranslated.
+    return result ?? { success: false };
   }, []);
 
   const { registerHotkey: registerMeetingHotkey, isRegistering: isMeetingHotkeyRegistering } =
@@ -1163,13 +1137,12 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [meetingKey, chatAgentKey, voiceAgentKey, translationKey, t]
+    [meetingKey, voiceAgentKey, translationKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -1178,28 +1151,12 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.hotkey.title": dictationKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, chatAgentKey, voiceAgentKey, translationKey, t]
-  );
-
-  const validateChatAgentHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
-          "settingsPage.general.translationHotkey.title": translationKey,
-        },
-        t
-      ),
-    [dictationKey, meetingKey, voiceAgentKey, translationKey, t]
+    [dictationKey, voiceAgentKey, translationKey, t]
   );
 
   const validateVoiceAgentHotkey = useCallback(
@@ -1209,12 +1166,11 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, translationKey, t]
+    [dictationKey, meetingKey, translationKey, t]
   );
 
   const validateTranslationHotkey = useCallback(
@@ -1224,12 +1180,11 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, voiceAgentKey, t]
+    [dictationKey, meetingKey, voiceAgentKey, t]
   );
 
   const {
@@ -1501,8 +1456,7 @@ export default function SettingsPage({
 
   const startOnboarding = useCallback(() => {
     localStorage.setItem("pendingCloudMigration", "true");
-    localStorage.setItem("onboardingCurrentStep", "0");
-    localStorage.removeItem("onboardingCompleted");
+    resetOnboardingProgress(localStorage);
     window.location.reload();
   }, []);
 
@@ -2943,11 +2897,11 @@ export default function SettingsPage({
               <SettingsPanel>
                 <SettingsPanelRow>
                   <MicrophoneSettings
-                    preferBuiltInMic={preferBuiltInMic}
+                    microphoneSelectionMode={microphoneSelectionMode}
                     selectedMicDeviceId={selectedMicDeviceId}
                     selectedMicDeviceLabel={selectedMicDeviceLabel}
                     micWarmHoldSeconds={micWarmHoldSeconds}
-                    onPreferBuiltInChange={setPreferBuiltInMic}
+                    onSelectionModeChange={setMicrophoneSelectionMode}
                     onDeviceSelect={setSelectedMicDevice}
                     onMicWarmHoldSecondsChange={setMicWarmHoldSeconds}
                   />
@@ -3643,28 +3597,6 @@ EOF`,
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
-
-            {/* Chat Agent Hotkey */}
-            {agentAllowedByPolicy && (
-              <div>
-                <SectionHeader
-                  title={t("agentMode.settings.hotkey")}
-                  description={t("agentMode.settings.hotkeyDescription")}
-                />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <HotkeyListInput
-                      value={chatAgentKey}
-                      onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
-                      onClear={() => commitAgentHotkey(setChatAgentKey, "")}
-                      validate={validateChatAgentHotkey}
-                      disabled={isAgentHotkeyCommitting}
-                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                    />
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </div>
-            )}
           </div>
         );
 

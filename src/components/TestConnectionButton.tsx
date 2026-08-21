@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { CheckCircle, XCircle, Loader2, Copy } from "lucide-react";
@@ -16,15 +16,35 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
     action?: string;
     copyCommand?: string;
   } | null>(null);
+  const requestIdRef = useRef(0);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      requestIdRef.current += 1;
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    };
+  }, []);
 
   const handleTest = async () => {
+    const requestId = ++requestIdRef.current;
     setStatus("testing");
     setErrorInfo(null);
     try {
-      const result = await window.electronAPI?.testEnterpriseConnection?.(provider, getConfig());
+      const result:
+        | {
+            success?: boolean;
+            error?: string;
+            action?: string;
+            copyCommand?: string;
+          }
+        | undefined = await window.electronAPI?.testEnterpriseConnection?.(provider, getConfig());
+      if (requestId !== requestIdRef.current) return;
       if (result?.success) {
         setStatus("success");
-        setTimeout(() => setStatus("idle"), 8000);
+        resetTimerRef.current = setTimeout(() => {
+          if (requestId === requestIdRef.current) setStatus("idle");
+        }, 8000);
       } else {
         setStatus("error");
         setErrorInfo({
@@ -34,6 +54,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
         });
       }
     } catch {
+      if (requestId !== requestIdRef.current) return;
       setStatus("error");
       setErrorInfo({ message: "Connection test failed unexpectedly." });
     }

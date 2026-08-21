@@ -23,6 +23,7 @@ const {
   toPolicyFailure,
 } = require("./policyResponseError");
 const { classifyAndLog } = require("./networkErrors");
+const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
 // The renderer's ModelRegistry is not main-loadable; the raw registry data is
 // packaged, and the route resolver only needs {id, baseUrl} per provider.
 const transcriptionProviderBaseUrls = () =>
@@ -58,11 +59,14 @@ const DeepgramStreaming = require("./deepgramStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
+const { ONBOARDING_DEMO_KINDS } = require("./onboardingInputPolicy");
+const { focusWindowsHotkeyCaptureWindow } = require("./hotkeyCaptureFocus");
 const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const AudioStorageManager = require("./audioStorage");
+const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
 const { registerMeetingAutoEndKeepHandler } = require("./meetingAutoEndKeep");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
@@ -148,6 +152,7 @@ const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 const { createAbortError } = require("./abortError");
+const { testProviderConnection } = require("./providerConnectionTest");
 const { createUploadCancelRegistry } = require("./uploadCancelRegistry");
 const { applyOpenWhisprOriginHeader } = require("./sessionHeaders");
 const {
@@ -571,6 +576,9 @@ class IPCHandlers {
     // upload, or local transcription + diarization sharing one id), so a
     // cancel can abort the exact job.
     this._uploadCancelRegistry = createUploadCancelRegistry();
+    this._agentStreamRequests = new AgentStreamRequestRegistry();
+    this._cloudReasonRequests = new AgentStreamRequestRegistry();
+    this._cloudTranscriptionRequests = new AgentStreamRequestRegistry();
     // webContents id -> its release listener, for renderers holding the mic open.
     this._micHoldSenders = new Map();
     this.assemblyAiStreaming = null;
@@ -588,6 +596,7 @@ class IPCHandlers {
     this._autoLearnLatestData = null;
     this._textEditHandler = null;
     this._activeRecordingPipeline = null;
+    this._onboardingDemoSession = null;
     this.audioStorageManager = new AudioStorageManager();
     this._retentionCleanupInterval = null;
     this._retentionSettings = { ...DEFAULT_RETENTION_SETTINGS }; // Synced from renderer
@@ -1145,6 +1154,121 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
+      this.windowManager.setOnboardingWindowMode(mode)
+    );
+
+    // WindowManager owns every teardown path for a demo (id-matched end,
+    // onboarding-set-active(false), control panel closed); without this hook a
+    // renderer crash mid-demo would leave the session set and broadcast every
+    // later dictation's transcripts on onboarding-demo-event forever.
+    this.windowManager.onOnboardingDemoTeardown = () => {
+      this._onboardingDemoSession = null;
+    };
+
+    ipcMain.handle("onboarding-set-active", (_event, active) => {
+      if (typeof active !== "boolean") return false;
+      return this.windowManager.setOnboardingActive(active);
+    });
+
+    ipcMain.handle("onboarding-demo-begin", (_event, session) => {
+      if (
+        !session ||
+        typeof session.id !== "string" ||
+        session.id.length > 128 ||
+        !ONBOARDING_DEMO_KINDS.has(session.kind)
+      ) {
+        return false;
+      }
+      this._onboardingDemoSession = {
+        id: session.id,
+        kind: session.kind,
+        startedAt: Date.now(),
+      };
+      return this.windowManager.beginOnboardingDemo(session.kind);
+    });
+
+    ipcMain.handle("onboarding-demo-end", (_event, id) => {
+      if (this._onboardingDemoSession?.id === id) {
+        // Session cleanup rides on the teardown hook above.
+        this.windowManager.endOnboardingDemo();
+      }
+      return true;
+    });
+
+    ipcMain.handle("onboarding-demo-stop", (_event, id) => {
+      if (this._onboardingDemoSession?.id !== id) return false;
+      return this.windowManager.stopOnboardingDemoRecording();
+    });
+
+    ipcMain.handle("onboarding-demo-publish", (_event, event) => {
+      const session = this._onboardingDemoSession;
+      if (!session || !event || event.kind !== session.kind) return false;
+      if (!["listening", "processing", "partial", "success", "error"].includes(event.status)) {
+        return false;
+      }
+      const text = typeof event.text === "string" ? event.text.slice(0, 20000) : undefined;
+      const message = typeof event.message === "string" ? event.message.slice(0, 500) : undefined;
+      broadcastToWindows("onboarding-demo-event", {
+        demoId: session.id,
+        kind: session.kind,
+        status: event.status,
+        text,
+        message,
+      });
+      return true;
+    });
+
+    ipcMain.handle("test-provider-connection", async (_event, config) => {
+      if (config?.provider === "corti" && config?.scope === "transcription") {
+        try {
+          const clientId = String(config.clientId || "").trim();
+          const clientSecret = String(config.clientSecret || "").trim();
+          if (clientId && clientSecret) {
+            await getCortiToken({
+              environment: config.environment || "us",
+              tenant: String(config.tenant || "").trim() || "base",
+              clientId,
+              clientSecret,
+            });
+          } else {
+            await this._mintStoredCortiToken({
+              environment: config.environment,
+              tenant: config.tenant,
+            });
+          }
+          return { success: true };
+        } catch (error) {
+          // errorCode is the machine-readable field the renderer maps to i18n;
+          // the English string stays for logs/back-compat. Only a response
+          // Corti actually sent counts as a rejection (getCortiToken prefixes
+          // those); a fetch that never reached it is a network problem, and
+          // reporting it as "credentials rejected" sends the user to re-type a
+          // key that was never the issue.
+          if (error?.name === "AbortError") {
+            return {
+              success: false,
+              errorCode: "timeout",
+              error: "The connection test timed out.",
+            };
+          }
+          if (!/^(Corti authentication failed|Invalid Corti)/.test(error?.message || "")) {
+            return {
+              success: false,
+              errorCode: "network",
+              error: "The provider could not be reached.",
+            };
+          }
+          return {
+            success: false,
+            errorCode: "credentialsRejected",
+            error: "Corti rejected these credentials.",
+          };
+        }
+      }
+      return testProviderConnection(config);
+    });
+
     ipcMain.handle("window-minimize", () => {
       if (this.windowManager.controlPanelWindow) {
         this.windowManager.controlPanelWindow.minimize();
@@ -1188,7 +1312,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("show-dictation-panel", () => {
-      this.windowManager.showDictationPanel();
+      this.windowManager.showDictationPanel({ reposition: true });
     });
 
     ipcMain.handle("capture-dictation-target", async () => {
@@ -1209,6 +1333,10 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("get-main-window-horizontal-direction", () => {
+      return this.windowManager.getMainWindowHorizontalDirection();
+    });
+
     ipcMain.handle("set-notification-interactivity", (event, interactive) => {
       this.windowManager.setNotificationInteractivity(event.sender, Boolean(interactive));
       return { success: true };
@@ -1216,6 +1344,14 @@ class IPCHandlers {
 
     ipcMain.handle("resize-main-window", (event, sizeKey) => {
       return this.windowManager.resizeMainWindow(sizeKey);
+    });
+
+    ipcMain.handle("resize-assistant-window-to-content", (event, surfaceHeight) => {
+      return this.windowManager.resizeAssistantWindowToContent(surfaceHeight);
+    });
+
+    ipcMain.handle("resize-dictation-error-window-to-content", (event, surfaceHeight) => {
+      return this.windowManager.resizeDictationErrorWindowToContent(surfaceHeight);
     });
 
     for (const k of BYOK_API_KEYS) {
@@ -1383,6 +1519,22 @@ class IPCHandlers {
       event.sender.on("destroyed", release);
       event.sender.on("did-finish-load", release);
       this.meetingDetectionEngine?.setMicWarmHold(true);
+    });
+
+    // Hotkey handlers run in main, while AudioManager owns the real lifecycle
+    // in the dictation renderer. Only confirmed renderer state may change the
+    // main-process recording gate; raw key presses are merely requests and can
+    // be declined while a transcript is still being finalized.
+    ipcMain.on("dictation-lifecycle-state-changed", (event, state) => {
+      const dictationWindow = this.windowManager.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return;
+      }
+      this.windowManager.setDictationLifecycleState(state);
     });
 
     // Dictionary handlers
@@ -2466,6 +2618,14 @@ class IPCHandlers {
     });
 
     ipcMain.handle("paste-text", async (event, text, options) => {
+      // An onboarding demo already puts the transcript in its own textarea from
+      // the demo event, and that textarea is what has focus — pasting on top of
+      // it appends the same sentence a second time. Reported as success because
+      // nothing failed and the caller would otherwise toast a paste error.
+      if (this.windowManager?.isOnboardingDemoActive()) {
+        return { success: true };
+      }
+
       const mainWindow = this.windowManager?.mainWindow;
       const targetPid = this.textEditMonitor?.lastTargetPid || null;
 
@@ -2555,7 +2715,7 @@ class IPCHandlers {
 
     // Voice drafts (chat input): persist a recorded buffer so the file-based
     // transcription pipeline (all providers) can consume it, then delete it.
-    ipcMain.handle("save-temp-audio", async (event, buffer) => {
+    ipcMain.handle("save-temp-audio", async (_event, buffer) => {
       const tempPath = path.join(
         os.tmpdir(),
         `ow-voice-draft-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.webm`
@@ -2564,7 +2724,7 @@ class IPCHandlers {
       return { success: true, path: tempPath };
     });
 
-    ipcMain.handle("delete-temp-audio", async (event, tempPath) => {
+    ipcMain.handle("delete-temp-audio", async (_event, tempPath) => {
       // Only files this handler family created are deletable.
       const resolved = path.resolve(tempPath);
       const validPrefix = path.join(os.tmpdir(), "ow-voice-draft-");
@@ -2579,7 +2739,7 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("transcribe-local-whisper", async (event, audioBlob, options = {}) => {
+    ipcMain.handle("transcribe-local-whisper", async (_event, audioBlob, options = {}) => {
       debugLogger.log("transcribe-local-whisper called", {
         audioBlobType: typeof audioBlob,
         audioBlobSize: audioBlob?.byteLength || audioBlob?.length || 0,
@@ -2604,12 +2764,6 @@ class IPCHandlers {
           message: result.message,
           error: result.error,
         });
-
-        // Check if no audio was detected and send appropriate event
-        if (!result.success && result.message === "No audio detected") {
-          debugLogger.log("Sending no-audio-detected event to renderer");
-          event.sender.send("no-audio-detected");
-        }
 
         return result;
       } catch (error) {
@@ -2956,7 +3110,7 @@ class IPCHandlers {
       return this.whisperManager.checkFFmpegAvailability();
     });
 
-    ipcMain.handle("transcribe-local-parakeet", async (event, audioBlob, options = {}) => {
+    ipcMain.handle("transcribe-local-parakeet", async (_event, audioBlob, options = {}) => {
       debugLogger.log("transcribe-local-parakeet called", {
         audioBlobType: typeof audioBlob,
         audioBlobSize: audioBlob?.byteLength || audioBlob?.length || 0,
@@ -2972,11 +3126,6 @@ class IPCHandlers {
           message: result.message,
           error: result.error,
         });
-
-        if (!result.success && result.message === "No audio detected") {
-          debugLogger.log("Sending no-audio-detected event to renderer");
-          event.sender.send("no-audio-detected");
-        }
 
         return result;
       } catch (error) {
@@ -3367,6 +3516,15 @@ class IPCHandlers {
     });
 
     ipcMain.handle("set-hotkey-listening-mode", async (event, enabled) => {
+      if (enabled) {
+        const captureWindow = BrowserWindow.fromWebContents(event.sender);
+        // Only the control panel owns editable hotkey fields. Refocusing the
+        // sender before the idempotence check also repairs a stale capture-mode
+        // flag after Windows has moved foreground focus to another window.
+        if (captureWindow === this.windowManager.controlPanelWindow) {
+          focusWindowsHotkeyCaptureWindow(captureWindow);
+        }
+      }
       if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
       this._hotkeyCaptureMode = enabled;
       this.windowManager.setHotkeyListeningMode(enabled);
@@ -3455,7 +3613,7 @@ class IPCHandlers {
           // may hold several).
           for (const hk of hotkeyManager.getSlotHotkeys("dictation")) {
             if (!hk || usesNativeListener(hk)) continue;
-            const accelerator = hk.startsWith("Fn+") ? hk.slice(3) : hk;
+            const accelerator = hk;
             if (!globalShortcut.isRegistered(accelerator)) {
               debugLogger.log(
                 `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
@@ -4689,6 +4847,9 @@ class IPCHandlers {
 
     ipcMain.handle("open-microphone-settings", () => openSystemSettings("microphone"));
     ipcMain.handle("open-sound-input-settings", () => openSystemSettings("sound"));
+    ipcMain.handle("get-system-default-microphone", (_event, options = {}) =>
+      resolveSystemDefaultMicrophone({ refresh: options?.refresh === true })
+    );
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
     ipcMain.handle("open-screen-recording-settings", () => openSystemSettings("screenRecording"));
@@ -4753,13 +4914,40 @@ class IPCHandlers {
       return screenContextCapture.getAccessResult();
     });
 
-    // Keeps the dictation overlay out of its own screenshots (and screen
-    // shares) while the screen-context feature is enabled.
+    // Preserve the renderer setting while app-wide content protection is
+    // temporarily disabled for screen recording.
     ipcMain.handle("screen-context-set-enabled", (event, enabled) => {
-      const mainWindow = this.windowManager?.mainWindow;
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setContentProtection(Boolean(enabled));
+      this.windowManager?.setScreenContextProtection(enabled);
+      return { success: true };
+    });
+
+    // Panel open: window becomes focusable so follow-up keyboard input works.
+    // Only the dictation renderer may flip main-window focusability.
+    ipcMain.handle("set-assistant-panel-open", (event, open) => {
+      const dictationWindow = this.windowManager?.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return { success: false, error: "Not the dictation window" };
       }
+      this.windowManager.setAssistantPanelOpen(open);
+      return { success: true };
+    });
+
+    // Busy state is enforced in the main process so a hotkey cannot trigger
+    // native capture side effects before the renderer has a chance to reject it.
+    ipcMain.handle("set-assistant-panel-busy", (event, busy) => {
+      const dictationWindow = this.windowManager?.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return { success: false, error: "Not the dictation window" };
+      }
+      this.windowManager.setAssistantPanelBusy(busy);
       return { success: true };
     });
 
@@ -5164,6 +5352,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
+      const sender = event.sender;
+      const senderId = sender.id;
+      const requestId = crypto.randomUUID();
+      const controller = this._cloudTranscriptionRequests.begin(senderId, requestId);
+      const cancelSenderRequests = () => this._cloudTranscriptionRequests.cancelSender(senderId);
+      sender.once("destroyed", cancelSenderRequests);
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -5194,6 +5388,7 @@ class IPCHandlers {
             apiUrl,
             policyHeaders: withPolicyHeaders(authHeader),
             multipartFields,
+            signal: controller.signal,
           });
           const sum = (field) => responses.reduce((s, r) => s + (r?.[field] || 0), 0);
           return {
@@ -5222,7 +5417,10 @@ class IPCHandlers {
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
         const data = await postMultipart(url, body, boundary, withPolicyHeaders(authHeader), {
-          signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+          ]),
           session: getInlineCloudUploadSession(),
         });
 
@@ -5249,9 +5447,19 @@ class IPCHandlers {
           audioDurationMs: result.audioDurationMs,
         };
       } catch (error) {
+        if (controller.signal.aborted) {
+          return { success: false, error: "Cancelled", code: "TRANSCRIPTION_CANCELLED" };
+        }
         debugLogger.error("Cloud transcription error", { error: error.message }, "cloud-api");
         return toPolicyFailure(error);
+      } finally {
+        sender.removeListener("destroyed", cancelSenderRequests);
+        this._cloudTranscriptionRequests.complete(senderId, requestId, controller);
       }
+    });
+
+    ipcMain.on("cloud-transcribe-cancel", (event) => {
+      this._cloudTranscriptionRequests.cancelSender(event.sender.id);
     });
 
     ipcMain.handle("cloud-health-check", async () => {
@@ -6903,6 +7111,19 @@ class IPCHandlers {
     let dictationPreviewDisplay = true;
     // Bumped on every reset so async preview work can detect a stale session.
     let dictationPreviewGen = 0;
+    // Cloud partials can arrive faster than the preview window is created. Keep
+    // preview updates, completion, and dismissal ordered so a late partial can
+    // never overwrite the final result or reopen a dismissed window.
+    let dictationPreviewOperation = Promise.resolve();
+
+    const queueDictationPreviewOperation = (operation) => {
+      const result = dictationPreviewOperation.catch(() => {}).then(operation);
+      dictationPreviewOperation = result.then(
+        () => undefined,
+        () => undefined
+      );
+      return result;
+    };
 
     const resetDictationPreviewState = ({ preserveSession = false } = {}) => {
       dictationPreviewGen++;
@@ -7083,6 +7304,14 @@ class IPCHandlers {
     };
 
     const connectDictationStreaming = async (event, options) => {
+      // Older renderers did not label the OpenAI dictation adapter. Dictation
+      // realtime was OpenAI-only before Tinfoil support, so preserve that
+      // established default while requiring new adapters to be explicit.
+      options = {
+        ...options,
+        provider: options?.provider || "openai-realtime",
+      };
+
       if (this._dictationConnectPromise) {
         await this._dictationConnectPromise.catch(() => {});
       }
@@ -7820,37 +8049,51 @@ class IPCHandlers {
       dictationPreviewBuffer.push(pcm);
     });
 
-    ipcMain.handle("dismiss-dictation-preview", async () => {
-      resetDictationPreviewState();
-      this.windowManager.hideTranscriptionPreview();
-      return { success: true };
-    });
-
-    ipcMain.handle("complete-dictation-preview", async (_event, { text } = {}) => {
-      if (!dictationPreviewSessionActive) {
-        return { success: true };
-      }
-      if (typeof text === "string" && text.trim()) {
-        this.windowManager.completeTranscriptionPreview(text);
-      } else {
+    ipcMain.handle("dismiss-dictation-preview", () =>
+      queueDictationPreviewOperation(async () => {
         resetDictationPreviewState();
         this.windowManager.hideTranscriptionPreview();
-      }
-      return { success: true };
-    });
+        return { success: true };
+      })
+    );
 
-    ipcMain.handle("hide-dictation-preview", async () => {
-      resetDictationPreviewState();
-      this.windowManager.hideTranscriptionPreview();
-      return { success: true };
-    });
+    ipcMain.handle("update-dictation-preview", (_event, text) =>
+      queueDictationPreviewOperation(async () => {
+        if (typeof text !== "string" || !text.trim()) {
+          return { success: true };
+        }
+        if (!dictationPreviewSessionActive) {
+          resetDictationPreviewState();
+          dictationPreviewSessionActive = true;
+          dictationPreviewDisplay = true;
+        }
+        await this.windowManager.showTranscriptionPreview(text);
+        return { success: true };
+      })
+    );
 
-    ipcMain.handle("resize-transcription-preview-window", async (_event, width, height) => {
-      if (!dictationPreviewSessionActive) {
-        return { success: false, error: "Preview session not active" };
-      }
-      return this.windowManager.resizeTranscriptionPreview(width, height);
-    });
+    ipcMain.handle("complete-dictation-preview", (_event, { text } = {}) =>
+      queueDictationPreviewOperation(async () => {
+        if (!dictationPreviewSessionActive) {
+          return { success: true };
+        }
+        if (typeof text === "string" && text.trim()) {
+          this.windowManager.completeTranscriptionPreview(text);
+        } else {
+          resetDictationPreviewState();
+          this.windowManager.hideTranscriptionPreview();
+        }
+        return { success: true };
+      })
+    );
+
+    ipcMain.handle("hide-dictation-preview", () =>
+      queueDictationPreviewOperation(async () => {
+        resetDictationPreviewState();
+        this.windowManager.hideTranscriptionPreview();
+        return { success: true };
+      })
+    );
 
     ipcMain.handle("stop-dictation-preview", async (_event, options = {}) => {
       if (!dictationPreviewMode && !dictationPreviewSessionActive) {
@@ -7906,6 +8149,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("cloud-reason", async (event, text, opts = {}) => {
+      const sender = event.sender;
+      const senderId = sender.id;
+      const requestId = crypto.randomUUID();
+      const controller = this._cloudReasonRequests.begin(senderId, requestId);
+      const cancelSenderRequests = () => this._cloudReasonRequests.cancelSender(senderId);
+      sender.once("destroyed", cancelSenderRequests);
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -7926,6 +8175,7 @@ class IPCHandlers {
 
         const response = await proxyFetch(`${apiUrl}/api/reason`, {
           method: "POST",
+          signal: controller.signal,
           headers: withPolicyHeaders({
             "Content-Type": "application/json",
             ...authHeader,
@@ -7991,12 +8241,33 @@ class IPCHandlers {
           screenContextApplied: data.screenContextApplied,
         };
       } catch (error) {
+        if (controller.signal.aborted) {
+          return { success: false, error: "Cancelled", code: "REASON_CANCELLED" };
+        }
         debugLogger.error("Cloud reasoning error:", error);
         return toPolicyFailure(error);
+      } finally {
+        sender.removeListener("destroyed", cancelSenderRequests);
+        this._cloudReasonRequests.complete(senderId, requestId, controller);
       }
     });
 
-    ipcMain.on("cloud-agent-stream-start", async (event, messages, opts = {}) => {
+    ipcMain.on("cloud-reason-cancel", (event) => {
+      this._cloudReasonRequests.cancelSender(event.sender.id);
+    });
+
+    ipcMain.on("cloud-agent-stream-start", async (event, requestId, messages, opts = {}) => {
+      if (typeof requestId !== "string" || !requestId.trim()) return;
+
+      const sender = event.sender;
+      const senderId = sender.id;
+      const controller = this._agentStreamRequests.begin(senderId, requestId);
+      const cancelSenderRequests = () => this._agentStreamRequests.cancelSender(senderId);
+      const sendToRenderer = (channel, payload) => {
+        if (!sender.isDestroyed()) sender.send(channel, payload);
+      };
+      sender.once("destroyed", cancelSenderRequests);
+
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -8014,17 +8285,22 @@ class IPCHandlers {
             messages,
             systemPrompt: opts.systemPrompt,
             tools: opts.tools,
+            ...(opts.screenContext ? { screenContext: opts.screenContext } : {}),
             sessionId: this.sessionId,
             clientType: "desktop",
             appVersion: app.getVersion(),
           }),
+          signal: controller.signal,
         });
 
         if (!response.ok) {
           const error = await readPolicyResponseError(response, `API error: ${response.status}`);
           if (response.status === 401 && !error.code) error.code = "AUTH_EXPIRED";
           if (response.status === 503 && !error.code) error.code = "SERVER_ERROR";
-          event.sender.send("cloud-agent-stream-error", toPolicyFailure(error));
+          sendToRenderer("cloud-agent-stream-error", {
+            requestId,
+            ...toPolicyFailure(error),
+          });
           return;
         }
 
@@ -8044,7 +8320,10 @@ class IPCHandlers {
             for (const line of lines) {
               if (!line.trim()) continue;
               try {
-                event.sender.send("cloud-agent-stream-chunk", JSON.parse(line));
+                sendToRenderer("cloud-agent-stream-chunk", {
+                  requestId,
+                  chunk: JSON.parse(line),
+                });
               } catch {
                 // skip malformed NDJSON line
               }
@@ -8052,7 +8331,10 @@ class IPCHandlers {
           }
           if (buffer.trim()) {
             try {
-              event.sender.send("cloud-agent-stream-chunk", JSON.parse(buffer));
+              sendToRenderer("cloud-agent-stream-chunk", {
+                requestId,
+                chunk: JSON.parse(buffer),
+              });
             } catch {
               // skip malformed remainder
             }
@@ -8061,11 +8343,26 @@ class IPCHandlers {
           reader.releaseLock();
         }
 
-        event.sender.send("cloud-agent-stream-end");
+        sendToRenderer("cloud-agent-stream-end", { requestId });
       } catch (error) {
+        if (controller.signal.aborted) {
+          sendToRenderer("cloud-agent-stream-end", { requestId });
+          return;
+        }
         debugLogger.error("Cloud agent stream error:", error);
-        event.sender.send("cloud-agent-stream-error", toPolicyFailure(error));
+        sendToRenderer("cloud-agent-stream-error", {
+          requestId,
+          ...toPolicyFailure(error),
+        });
+      } finally {
+        sender.removeListener("destroyed", cancelSenderRequests);
+        this._agentStreamRequests.complete(senderId, requestId, controller);
       }
+    });
+
+    ipcMain.on("cloud-agent-stream-cancel", (event, requestId) => {
+      if (typeof requestId !== "string" || !requestId.trim()) return;
+      this._agentStreamRequests.cancel(event.sender.id, requestId);
     });
 
     ipcMain.handle("agent-open-note", async (_event, noteId) => {
@@ -9510,37 +9807,6 @@ class IPCHandlers {
     });
 
     // Agent mode handlers
-    ipcMain.handle("update-agent-hotkey", async (_event, hotkey) => {
-      const hotkeyManager = this.windowManager.hotkeyManager;
-      const agentCallback = this.windowManager._agentHotkeyCallback;
-      if (!agentCallback) {
-        return { success: false, message: "Agent hotkey callback not initialized" };
-      }
-
-      if (!hotkey) {
-        hotkeyManager.unregisterSlot("agent");
-        this.environmentManager.saveAgentKey?.("");
-        this.windowManager.reconcileNativeKeyListeners();
-        this._notifyHotkeyChanged("");
-        return { success: true, message: "Agent hotkey cleared" };
-      }
-
-      const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback, {
-        atomic: true,
-      });
-      this.windowManager.reconcileNativeKeyListeners();
-      if (result.success) {
-        this.environmentManager.saveAgentKey?.(hotkey);
-        this._notifyHotkeyChanged(hotkey);
-        return { success: true, message: `Agent hotkey updated to: ${hotkey}` };
-      }
-
-      return {
-        success: false,
-        message: result.error || `Failed to update agent hotkey to: ${hotkey}`,
-      };
-    });
-
     ipcMain.handle("update-voice-agent-hotkey", async (_event, hotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
@@ -9609,38 +9875,6 @@ class IPCHandlers {
 
     ipcMain.handle("get-translation-key", async () => {
       return this.environmentManager.getTranslationKey?.() || "";
-    });
-
-    ipcMain.handle("get-agent-key", async () => {
-      return this.environmentManager.getAgentKey?.() || "";
-    });
-
-    ipcMain.handle("save-agent-key", async (_event, key) => {
-      return this.environmentManager.saveAgentKey?.(key) || { success: true };
-    });
-
-    ipcMain.handle("toggle-agent-overlay", async () => {
-      this.windowManager.toggleAgentOverlay();
-      return { success: true };
-    });
-
-    ipcMain.handle("hide-agent-overlay", async () => {
-      this.windowManager.hideAgentOverlay();
-      return { success: true };
-    });
-
-    ipcMain.handle("resize-agent-window", async (_event, width, height) => {
-      this.windowManager.resizeAgentWindow(width, height);
-      return { success: true };
-    });
-
-    ipcMain.handle("get-agent-window-bounds", async () => {
-      return this.windowManager.getAgentWindowBounds();
-    });
-
-    ipcMain.handle("set-agent-window-bounds", async (_event, x, y, width, height) => {
-      this.windowManager.setAgentWindowBounds(x, y, width, height);
-      return { success: true };
     });
 
     ipcMain.handle("acquire-recording-lock", async (_event, pipeline) => {
