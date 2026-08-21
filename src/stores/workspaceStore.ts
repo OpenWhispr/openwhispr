@@ -4,6 +4,10 @@ import { WorkspacesService } from "../services/WorkspacesService";
 import logger from "../utils/logger";
 import { usePolicyStore } from "./policyStore";
 import { useEnterpriseIdentityStore } from "./enterpriseIdentityStore";
+import {
+  ACTIVE_WORKSPACE_KEY,
+  subscribeToActiveWorkspaceStorageChanges,
+} from "./activeWorkspaceSync";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -19,8 +23,6 @@ interface WorkspaceState {
   createWorkspace: (name: string) => Promise<Workspace>;
   refreshMembers: (workspaceId: string) => Promise<void>;
 }
-
-const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
 
 function readActiveWorkspaceId(): string | null {
   if (typeof window === "undefined") return null;
@@ -169,3 +171,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 }));
+
+if (typeof window !== "undefined") {
+  subscribeToActiveWorkspaceStorageChanges(
+    window,
+    localStorage,
+    () => useWorkspaceStore.getState().activeWorkspaceId,
+    (workspaceId) => {
+      membersRequestSeq += 1;
+      useWorkspaceStore.setState({ activeWorkspaceId: workspaceId, members: [] });
+      refreshForWorkspace(workspaceId);
+    }
+  );
+}

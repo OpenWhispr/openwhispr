@@ -178,6 +178,64 @@
     "policyAgentRestricted": "L’uso dell’agente IA è limitato dalla tua organizzazione.",
     "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione."
   },
+  "managedLocalModels": {
+    "compatibility": {
+      "checking": "Verifica della compatibilità del dispositivo…",
+      "unavailable": "Impossibile verificare la compatibilità del dispositivo.",
+      "unsupported": "Questo modello non è supportato su questo dispositivo.",
+      "requiresMacOS": "Questo modello richiede macOS {{version}} o versione successiva."
+    },
+    "policy": {
+      "allBlocked": "Un criterio aziendale più restrittivo blocca i modelli locali richiesti. Contatta l’amministratore IT."
+    },
+    "categories": {
+      "transcriptionTitle": "Dettatura",
+      "transcriptionDescription": "Scegli un modello vocale approvato dall’azienda.",
+      "reasoningTitle": "IA, agente vocale e Note",
+      "reasoningDescription": "Scegli un modello approvato condiviso dalle funzionalità di IA."
+    },
+    "errors": {
+      "policyTranscription": "Un criterio aziendale più restrittivo blocca il modello locale di dettatura richiesto. Contatta il reparto IT.",
+      "policyReasoning": "Un criterio aziendale più restrittivo blocca il modello locale di IA richiesto. Contatta il reparto IT.",
+      "incompatibleTranscription": "Nessun modello di dettatura approvato dall’azienda è compatibile con questo dispositivo. Contatta il reparto IT.",
+      "incompatibleReasoning": "Nessun modello di IA approvato dall’azienda è compatibile con questo dispositivo. Contatta il reparto IT.",
+      "downloadCancelled": "Il download del modello aziendale è stato annullato. Riavvialo per continuare."
+    },
+    "attention": {
+      "title": "Il modello aziendale richiede attenzione"
+    },
+    "workspaceSetup": {
+      "title": "Configura i modelli di questo spazio di lavoro",
+      "description": "Questo spazio di lavoro aziendale dispone di modelli approvati specifici. Sceglili una volta per continuare."
+    },
+    "notice": {
+      "waiting": "In attesa della configurazione dei modelli aziendali",
+      "managedDescription": "Gestito dalla tua azienda. Non puoi modificare o eliminare questo modello mentre lo spazio di lavoro è attivo."
+    },
+    "settings": {
+      "title": "Modelli gestiti dalla tua azienda",
+      "removalBlocked": "I modelli gestiti dall’azienda non possono essere rimossi mentre questo spazio di lavoro aziendale è attivo.",
+      "cacheRemovalBlocked": "{{path}} · I modelli gestiti dall’azienda non possono essere rimossi."
+    },
+    "onboarding": {
+      "configUnavailableFallback": "Impossibile caricare la configurazione dei modelli della tua azienda.",
+      "configInvalid": "La configurazione dei modelli della tua azienda non è valida. Contatta l’amministratore IT.",
+      "requiresNewerVersion": "I modelli gestiti dalla tua azienda richiedono una versione più recente di OpenWhispr.",
+      "authExpired": "La sessione OpenWhispr è scaduta. Esci e accedi di nuovo.",
+      "enterpriseRequired": "È necessario uno spazio di lavoro Enterprise attivo. Scegline uno o contatta l’amministratore IT.",
+      "ssoRequired": "È richiesto l’SSO aziendale. Esci e accedi di nuovo con il tuo account SSO aziendale.",
+      "administratorRequired": "La configurazione dei modelli aziendali richiede l’intervento di un amministratore. Contatta l’amministratore IT.",
+      "unavailableTitle": "La configurazione aziendale non è disponibile",
+      "unavailableInstructions": "Riprova ora o contatta l’amministratore IT se il problema persiste.",
+      "checking": "Verifica della configurazione aziendale…",
+      "downloadTitle": "Scarica i modelli della tua azienda",
+      "downloadDescription": "Scegli un modello approvato per ogni gruppo richiesto. Puoi continuare mentre i download vengono completati in background.",
+      "restartDownload": "Riavvia tutti i download di modelli aziendali annullati o non riusciti prima di completare la configurazione."
+    },
+    "runtime": {
+      "transcriptionUnavailable": "Il modello locale di trascrizione gestito dall’azienda non è disponibile."
+    }
+  },
   "onboarding": {
     "rehaul": {
       "permissions": {

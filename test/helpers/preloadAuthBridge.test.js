@@ -64,6 +64,14 @@ test("meeting stop forwards the optional expected recording session ID", async (
   assert.deepEqual(invocations, [["meeting-transcription-stop", "meeting-2"]]);
 });
 
+test("meeting authorization abort forwards the optional recording session ID", async () => {
+  const { api, invocations } = loadPreloadApi();
+
+  await api.meetingTranscriptionAbort("meeting-2");
+
+  assert.deepEqual(invocations, [["meeting-transcription-abort", "meeting-2"]]);
+});
+
 test("meeting system-audio availability forwards the scoped session", async () => {
   const { api, invocations } = loadPreloadApi();
 
@@ -133,6 +141,27 @@ test("cloud transcription cancellation is forwarded to the main process", () => 
   api.cancelCloudTranscription();
 
   assert.deepEqual(sends, [["cloud-transcribe-cancel"]]);
+});
+
+test("dictation authorization abort invokes the non-finalizing main-process channel", async () => {
+  const { api, invocations } = loadPreloadApi();
+
+  await api.dictationStreamingAbort();
+
+  assert.deepEqual(invocations, [["dictation-streaming-abort"]]);
+});
+
+test("history retry forwards request ownership through retry and commit", async () => {
+  const { api, invocations } = loadPreloadApi();
+  const settings = { transcriptionMode: "providers" };
+
+  await api.retryTranscription(7, settings, "history-retry-1");
+  await api.commitRetryTranscription(7, "history-retry-1", "final text", "raw text");
+
+  assert.deepEqual(invocations, [
+    ["retry-transcription", 7, settings, "history-retry-1"],
+    ["commit-retry-transcription", 7, "history-retry-1", "final text", "raw text"],
+  ]);
 });
 
 test("agent streaming listeners strip Electron events and preserve correlation", () => {

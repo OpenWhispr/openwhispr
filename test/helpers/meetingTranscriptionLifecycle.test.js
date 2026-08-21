@@ -187,3 +187,58 @@ test("a replacement start waits for a deferred accepted stop to finish", async (
   assert.deepEqual(stops, ["meeting-1"]);
   assert.equal(activeCaptureSessionId, "meeting-2");
 });
+
+test("authorization abort during startup never uses the graceful stop path", async () => {
+  const startDeferred = createDeferred();
+  const events = [];
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => {
+      events.push(`start:${sessionId}`);
+      await startDeferred.promise;
+      return { success: true, sessionId };
+    },
+    stop: async (sessionId) => {
+      events.push(`stop:${sessionId}`);
+      return { success: true };
+    },
+    abort: async (sessionId) => {
+      events.push(`abort:${sessionId}`);
+      return { success: true };
+    },
+  });
+
+  const start = lifecycle.startSession({
+    sessionId: "meeting-1",
+    ownerWebContents: createOwnerWebContents(),
+    options: {},
+  });
+  await Promise.resolve();
+  const abort = lifecycle.abortSession("meeting-1");
+  startDeferred.resolve();
+
+  await Promise.all([start, abort]);
+  assert.deepEqual(events, ["start:meeting-1", "abort:meeting-1"]);
+});
+
+test("authorization abort of an active session never finalizes through stop", async () => {
+  const events = [];
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => ({ success: true, sessionId }),
+    stop: async (sessionId) => {
+      events.push(`stop:${sessionId}`);
+      return { success: true };
+    },
+    abort: async (sessionId) => {
+      events.push(`abort:${sessionId}`);
+      return { success: true };
+    },
+  });
+  await lifecycle.startSession({
+    sessionId: "meeting-1",
+    ownerWebContents: createOwnerWebContents(),
+    options: {},
+  });
+
+  await lifecycle.abortSession("meeting-1");
+  assert.deepEqual(events, ["abort:meeting-1"]);
+});

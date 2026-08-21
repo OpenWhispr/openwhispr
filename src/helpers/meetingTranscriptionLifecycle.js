@@ -1,4 +1,10 @@
-function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }) {
+function createMeetingTranscriptionLifecycle({
+  start,
+  stop,
+  abort = stop,
+  onAbortRequested = () => {},
+  onError = () => {},
+}) {
   let operationTail = Promise.resolve();
   const sessions = new Map();
 
@@ -36,6 +42,7 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
     if (!session) {
       return Promise.resolve({ success: false, reason: "stale-session" });
     }
+    if (session.abortPromise) return session.abortPromise;
     if (session.stopPromise) return session.stopPromise;
 
     session.stopRequested = true;
@@ -49,6 +56,27 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
       }
     });
     return session.stopPromise;
+  };
+
+  const abortSession = (expectedSessionId) => {
+    const session = resolveSession(expectedSessionId);
+    if (!session) {
+      return Promise.resolve({ success: false, reason: "stale-session" });
+    }
+    if (session.abortPromise) return session.abortPromise;
+    if (session.stopPromise) return session.stopPromise;
+
+    session.abortRequested = true;
+    session.state = "aborting";
+    onAbortRequested(session.sessionId);
+    session.abortPromise = enqueue(async () => {
+      try {
+        return await abort(session.sessionId);
+      } finally {
+        removeSession(session);
+      }
+    });
+    return session.abortPromise;
   };
 
   const startSession = ({ sessionId, ownerWebContents, options }) => {
@@ -65,7 +93,9 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
       state: "queued",
       startSucceeded: false,
       stopRequested: false,
+      abortRequested: false,
       stopPromise: null,
+      abortPromise: null,
       ownerLossHandler: null,
     };
     sessions.set(sessionId, session);
@@ -82,7 +112,7 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
         session.startSucceeded = result?.success === true;
         if (!session.startSucceeded) {
           removeSession(session);
-        } else if (!session.stopRequested) {
+        } else if (!session.stopRequested && !session.abortRequested) {
           session.state = "active";
         }
         return result;
@@ -108,7 +138,7 @@ function createMeetingTranscriptionLifecycle({ start, stop, onError = () => {} }
     return startPromise;
   };
 
-  return { startSession, stopSession };
+  return { abortSession, startSession, stopSession };
 }
 
 module.exports = createMeetingTranscriptionLifecycle;

@@ -6,6 +6,7 @@ import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.
 import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
 import WindowControls from "./components/WindowControls.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
+import ManagedEnterpriseModelCoordinator from "./components/onboarding/ManagedEnterpriseModelCoordinator.tsx";
 import { Card, CardContent } from "./components/ui/card.tsx";
 import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
@@ -208,9 +209,13 @@ function MainApp() {
     <Suspense fallback={<LoadingFallback />}>
       <ControlPanel initialSettingsSection={postOnboardingSettingsSection} />
       <BackgroundModelDownloadTray />
+      <ManagedEnterpriseModelCoordinator showUi />
     </Suspense>
   ) : (
-    <App />
+    <>
+      <App />
+      <ManagedEnterpriseModelCoordinator showUi={false} />
+    </>
   );
 }
 

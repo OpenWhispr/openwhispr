@@ -1,6 +1,11 @@
 import type { SpaceItem } from "../../types/electron";
 import type { ContainerScope } from "../../types/chat";
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import {
+  assertToolExecutionAuthorized,
+  type ToolDefinition,
+  type ToolExecutionContext,
+  type ToolResult,
+} from "./ToolRegistry";
 import { resolveLocalNoteId, resolveSpace } from "./utils";
 
 const MAX_CONTENT_LENGTH = 500;
@@ -46,12 +51,17 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
     },
     readOnly: true,
 
-    async execute(args: Record<string, unknown>): Promise<ToolResult> {
+    async execute(
+      args: Record<string, unknown>,
+      context?: ToolExecutionContext
+    ): Promise<ToolResult> {
       const query = args.query as string;
       const limit = typeof args.limit === "number" ? args.limit : 5;
       const spaceName = fixedScope ? undefined : (args.space as string | undefined);
 
+      assertToolExecutionAuthorized(context);
       const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
+      assertToolExecutionAuthorized(context);
       let space: SpaceItem | undefined;
       if (fixedScope) {
         space = spaces.find((s) => s.id === fixedScope.spaceId);
@@ -75,19 +85,20 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
         ? !!space && (space.kind === "private" || !!space.cloud_space_id)
         : !space || space.kind === "private" || !!space.cloud_space_id;
       if (useCloudSearch && cloudCanScope && folderId == null) {
-        strategies.push(() => executeCloudSearch(query, limit, space, spaces));
+        strategies.push(() => executeCloudSearch(query, limit, space, spaces, context));
       }
       strategies.push(() =>
-        executeLocalSearch(query, limit, true, space, spaces, spaceId, folderId)
+        executeLocalSearch(query, limit, true, space, spaces, spaceId, folderId, context)
       );
       strategies.push(() =>
-        executeLocalSearch(query, limit, false, space, spaces, spaceId, folderId)
+        executeLocalSearch(query, limit, false, space, spaces, spaceId, folderId, context)
       );
 
       for (let i = 0; i < strategies.length; i++) {
         try {
           return await strategies[i]();
         } catch (error) {
+          assertToolExecutionAuthorized(context);
           if (i === strategies.length - 1) {
             return {
               success: false,
@@ -121,11 +132,14 @@ async function executeLocalSearch(
   space: SpaceItem | undefined,
   spaces: SpaceItem[],
   spaceId: number | null,
-  folderId: number | null
+  folderId: number | null,
+  context?: ToolExecutionContext
 ): Promise<ToolResult> {
+  assertToolExecutionAuthorized(context);
   const notes = semantic
     ? await window.electronAPI.semanticSearchNotes(query, limit, spaceId, folderId)
     : await window.electronAPI.searchNotes(query, limit, spaceId, folderId);
+  assertToolExecutionAuthorized(context);
 
   const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]));
   const results = notes.map((note) => ({
@@ -148,22 +162,26 @@ async function executeCloudSearch(
   query: string,
   limit: number,
   space: SpaceItem | undefined,
-  spaces: SpaceItem[]
+  spaces: SpaceItem[],
+  context?: ToolExecutionContext
 ): Promise<ToolResult> {
   const { NotesService } = await import("../../services/NotesService.js");
+  assertToolExecutionAuthorized(context);
   // No space → all accessible spaces; team space → that space only (membership
   // is server-enforced); private space → the personal-only default.
   const spaceId = space?.kind === "team" ? (space.cloud_space_id ?? undefined) : undefined;
   const scope = space ? undefined : ("all" as const);
   const { notes: cloudNotes } = await NotesService.search(query, limit, scope, spaceId);
+  assertToolExecutionAuthorized(context);
 
   const spaceNameByCloudId = new Map(
     spaces.filter((s) => s.cloud_space_id).map((s) => [s.cloud_space_id!, s.name])
   );
   const privateSpaceName = spaces.find((s) => s.kind === "private")?.name ?? null;
+  assertToolExecutionAuthorized(context);
   const results = await Promise.all(
     cloudNotes.map(async (cn) => ({
-      id: await resolveLocalNoteId(cn.client_note_id),
+      id: await resolveLocalNoteId(cn.client_note_id, undefined, context),
       title: cn.title,
       date: cn.created_at,
       type: cn.note_type,
@@ -172,6 +190,7 @@ async function executeCloudSearch(
       content: (cn.enhanced_content || cn.content).slice(0, MAX_CONTENT_LENGTH),
     }))
   );
+  assertToolExecutionAuthorized(context);
 
   return {
     success: true,

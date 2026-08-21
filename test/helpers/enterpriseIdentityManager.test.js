@@ -124,7 +124,7 @@ test("authorization failures evict cached config while server failures use it tr
     cachePath,
     getApiUrl: () => "https://api.example.com",
     getAppVersion: () => "1.8.1",
-    proxyFetch: async () => response,
+    proxyFetch: async () => response.clone(),
     tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
   });
 
@@ -138,6 +138,10 @@ test("authorization failures evict cached config while server failures use it tr
   assert.equal(denied.code, "SSO_REQUIRED");
   assert.equal(denied.enforcementRequired, true);
   assert.deepEqual(JSON.parse(fs.readFileSync(cachePath, "utf8")).entries, []);
+
+  const repeatedDenial = await manager.getConfig({ ...request(), forceRefresh: true });
+  assert.equal(repeatedDenial.code, "SSO_REQUIRED");
+  assert.equal(repeatedDenial.enforcementRequired, true);
 });
 
 test("an Enterprise-plan downgrade clears prior managed enforcement", async (t) => {
@@ -152,7 +156,7 @@ test("an Enterprise-plan downgrade clears prior managed enforcement", async (t) 
     cachePath: path.join(tempDir, "config.json"),
     getApiUrl: () => "https://api.example.com",
     getAppVersion: () => "1.8.1",
-    proxyFetch: async () => response,
+    proxyFetch: async () => response.clone(),
     tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
     broadcast: (snapshot) => snapshots.push(snapshot),
   });
@@ -181,7 +185,7 @@ test("a malformed successful config response fails closed instead of using disk 
     cachePath,
     getApiUrl: () => "https://api.example.com",
     getAppVersion: () => "1.8.1",
-    proxyFetch: async () => response,
+    proxyFetch: async () => response.clone(),
     tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
   });
 
@@ -192,6 +196,57 @@ test("a malformed successful config response fails closed instead of using disk 
   assert.equal(malformed.code, "MANAGED_CONFIG_INVALID");
   assert.equal(malformed.enforcementRequired, true);
   assert.deepEqual(JSON.parse(fs.readFileSync(cachePath, "utf8")).entries, []);
+});
+
+test("first authorization and malformed failures keep enforcement unknown", async (t) => {
+  for (const scenario of [
+    {
+      response: jsonResponse({ error: "Sign in with company SSO", code: "SSO_REQUIRED" }, 403),
+      code: "SSO_REQUIRED",
+    },
+    {
+      response: jsonResponse({ data: {} }),
+      code: "MANAGED_CONFIG_INVALID",
+    },
+  ]) {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+    t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+    const snapshots = [];
+    const manager = createEnterpriseIdentityManager({
+      cachePath: path.join(tempDir, "config.json"),
+      getApiUrl: () => "https://api.example.com",
+      getAppVersion: () => "1.8.1",
+      proxyFetch: async () => scenario.response,
+      tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+      broadcast: (snapshot) => snapshots.push(snapshot),
+    });
+
+    const result = await manager.getConfig(request());
+    assert.equal(result.code, scenario.code);
+    assert.equal(result.enforcementRequired, undefined);
+    assert.equal(Object.hasOwn(snapshots.at(-1), "enforcementRequired"), false);
+  }
+});
+
+test("a known nonrequired configuration produces a definitive unmanaged denial", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  let response = jsonResponse({ data: managedConfig() });
+  const snapshots = [];
+  const manager = createEnterpriseIdentityManager({
+    cachePath: path.join(tempDir, "config.json"),
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => response.clone(),
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+    broadcast: (snapshot) => snapshots.push(snapshot),
+  });
+
+  assert.equal((await manager.getConfig(request())).success, true);
+  response = jsonResponse({ error: "Sign in with company SSO", code: "SSO_REQUIRED" }, 403);
+  const denied = await manager.getConfig({ ...request(), forceRefresh: true });
+  assert.equal(denied.enforcementRequired, false);
+  assert.equal(snapshots.at(-1).enforcementRequired, false);
 });
 
 test("a first transient failure does not claim that enforcement is disabled", async (t) => {
@@ -210,6 +265,96 @@ test("a first transient failure does not claim that enforcement is disabled", as
   const unavailable = await manager.getConfig(request());
   assert.equal(unavailable.success, false);
   assert.equal(unavailable.enforcementRequired, undefined);
+});
+
+test("a missing local API URL returns a stable managed-config error code", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  let called = false;
+  const manager = createEnterpriseIdentityManager({
+    cachePath: path.join(tempDir, "config.json"),
+    getApiUrl: () => "",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => {
+      called = true;
+      return jsonResponse({ data: managedConfig() });
+    },
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+
+  const result = await manager.getConfig(request());
+
+  assert.equal(result.success, false);
+  assert.equal(result.code, "MANAGED_CONFIG_UNAVAILABLE");
+  assert.equal(called, false);
+});
+
+test("a response without server detail uses a stable code while supplied detail remains raw", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  let response = new Response("upstream unavailable", {
+    status: 502,
+    headers: { "Content-Type": "text/plain" },
+  });
+  const manager = createEnterpriseIdentityManager({
+    cachePath: path.join(tempDir, "config.json"),
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => response.clone(),
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+
+  const generatedFallback = await manager.getConfig(request());
+
+  assert.equal(generatedFallback.success, false);
+  assert.equal(generatedFallback.code, "MANAGED_CONFIG_UNAVAILABLE");
+
+  response = jsonResponse({ error: "The enterprise gateway returned status 502." }, 502);
+  const suppliedDetail = await manager.getConfig({ ...request(), forceRefresh: true });
+
+  assert.equal(suppliedDetail.success, false);
+  assert.equal(suppliedDetail.code, "MANAGED_CONFIG_FAILED");
+  assert.equal(suppliedDetail.error, "The enterprise gateway returned status 502.");
+});
+
+test("generic and unknown JSON codes without detail become unavailable", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  let response;
+  const manager = createEnterpriseIdentityManager({
+    cachePath: path.join(tempDir, "config.json"),
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => response.clone(),
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+
+  for (const code of ["MANAGED_CONFIG_FAILED", "UNRECOGNIZED_CONFIG_FAILURE"]) {
+    await t.test(code, async () => {
+      response = jsonResponse({ code }, 502);
+      const result = await manager.getConfig({ ...request(), forceRefresh: true });
+
+      assert.equal(result.success, false);
+      assert.equal(result.code, "MANAGED_CONFIG_UNAVAILABLE");
+    });
+  }
+});
+
+test("a code-only identity failure remains actionable", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const manager = createEnterpriseIdentityManager({
+    cachePath: path.join(tempDir, "config.json"),
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => jsonResponse({ code: "SSO_REQUIRED" }, 403),
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+
+  const actionableIdentityFailure = await manager.getConfig(request());
+
+  assert.equal(actionableIdentityFailure.success, false);
+  assert.equal(actionableIdentityFailure.code, "SSO_REQUIRED");
 });
 
 test("a generation change discards old cloud credentials and broadcasts the new envelope", async (t) => {

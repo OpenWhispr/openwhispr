@@ -59,6 +59,20 @@ test("OpenAI dictation realtime requests identify the token provider", async (t)
   ]);
 });
 
+test("dictation realtime exposes a non-finalizing transport abort", async (t) => {
+  const manager = await loadManager(t);
+  setSettings();
+  const calls = [];
+  globalThis.window.electronAPI.dictationStreamingAbort = async () => {
+    calls.push("abort");
+    return { success: true };
+  };
+
+  await manager.getStreamingProvider().abort();
+
+  assert.deepEqual(calls, ["abort"]);
+});
+
 test("managed OpenWhispr Cloud still respects its batch configuration", async (t) => {
   const manager = await loadManager(t);
   manager.sttConfig = { dictation: { mode: "batch" } };

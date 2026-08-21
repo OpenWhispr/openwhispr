@@ -128,7 +128,7 @@ async function detectServerType(base: string): Promise<void> {
 export const openaiProvider: InferenceProvider = {
   id: "openai",
   supportsImages: true,
-  async call({ text, model, agentName, config, ctx }) {
+  async call({ text, model, agentName, config, ctx, authorization }) {
     const resolvedProvider = config.provider || getSettings().cleanupProvider || "";
     const isCustomProvider = resolvedProvider === "custom";
     const isOpenRouter = resolvedProvider === "openrouter";
@@ -146,6 +146,7 @@ export const openaiProvider: InferenceProvider = {
       (canFallBackToSharedKey
         ? await ctx.getApiKey(isCustomProvider ? "custom" : isOpenRouter ? "openrouter" : "openai")
         : "");
+    authorization.assertCurrent();
 
     logger.logReasoning("OPENAI_API_KEY", {
       hasApiKey: !!apiKey,
@@ -188,7 +189,9 @@ export const openaiProvider: InferenceProvider = {
     if (isOpenRouter || dialect) {
       endpointCandidates = [{ url: buildApiUrl(openAiBase, "/chat/completions"), type: "chat" }];
     } else {
+      authorization.assertCurrent();
       await detectServerType(openAiBase);
+      authorization.assertCurrent();
       endpointCandidates = getEndpointCandidates(openAiBase);
     }
     const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
@@ -211,9 +214,11 @@ export const openaiProvider: InferenceProvider = {
     }
 
     const response = await withRetry(async () => {
+      authorization.assertCurrent();
       let lastError: Error | null = null;
 
       for (const { url: endpoint, type } of endpointCandidates) {
+        authorization.assertCurrent();
         const controller = new AbortController();
         const timeoutSeconds = getLlmRequestTimeoutSeconds();
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
@@ -253,8 +258,9 @@ export const openaiProvider: InferenceProvider = {
           }
 
           const res = await fetchWithParamFallback(
-            () =>
-              fetch(endpoint, {
+            () => {
+              authorization.assertCurrent();
+              return fetch(endpoint, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -262,7 +268,8 @@ export const openaiProvider: InferenceProvider = {
                 },
                 body: JSON.stringify(requestBody),
                 signal: controller.signal,
-              }),
+              });
+            },
             requestBody,
             (details) => logger.logReasoning("OPENAI_PARAM_FALLBACK", { endpoint, ...details })
           );

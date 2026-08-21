@@ -10,6 +10,24 @@ const CONFIG_CACHE_VERSION = 1;
 const CONFIG_REFRESH_MS = 5 * 60 * 1000;
 const CREDENTIAL_REFRESH_WINDOW_MS = 60 * 1000;
 const AZURE_SCOPE = "https://cognitiveservices.azure.com/.default";
+const AUTHORIZATION_ERROR_CODES = new Set([
+  "AUTH_EXPIRED",
+  "ENTERPRISE_REQUIRED",
+  "SSO_REQUIRED",
+  "DIRECTORY_ASSIGNMENT_REQUIRED",
+  "PROVIDER_NOT_ALLOWED",
+  "PROVIDER_NOT_CONFIGURED",
+  "POLICY_UNRESOLVABLE",
+]);
+const LOCALIZED_CONFIG_ERROR_CODES = new Set([
+  ...AUTHORIZATION_ERROR_CODES,
+  "AUTH_CONTEXT_CHANGED",
+  "AUTH_CONTEXT_UNVALIDATED",
+  "MANAGED_WORKSPACE_REQUIRED",
+  "MANAGED_CONFIG_INVALID",
+  "MANAGED_CONFIG_UNAVAILABLE",
+  "MANAGED_ENTERPRISE_UNSUPPORTED",
+]);
 
 function normalizeId(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -78,28 +96,34 @@ function isTransientConfigError(error) {
 }
 
 function isAuthorizationError(error) {
-  return (
-    [401, 403, 404].includes(error?.status) ||
-    [
-      "AUTH_EXPIRED",
-      "ENTERPRISE_REQUIRED",
-      "SSO_REQUIRED",
-      "DIRECTORY_ASSIGNMENT_REQUIRED",
-      "PROVIDER_NOT_ALLOWED",
-      "PROVIDER_NOT_CONFIGURED",
-      "POLICY_UNRESOLVABLE",
-    ].includes(error?.code)
-  );
+  return [401, 403, 404].includes(error?.status) || AUTHORIZATION_ERROR_CODES.has(error?.code);
+}
+
+function resolveConfigResponseErrorCode(detail, status) {
+  if (detail.hasServerDetail) {
+    return detail.code || (status === 401 ? "AUTH_EXPIRED" : "MANAGED_CONFIG_FAILED");
+  }
+  if (LOCALIZED_CONFIG_ERROR_CODES.has(detail.code)) return detail.code;
+  return !detail.code && status === 401 ? "AUTH_EXPIRED" : "MANAGED_CONFIG_UNAVAILABLE";
 }
 
 function requiresEnforcedManagedAccess(config) {
   return Boolean(
+    config?.localModels?.transcription?.length ||
+    config?.localModels?.reasoning?.length ||
     config?.providers?.some(
       (record) =>
         record.mode !== "disabled" &&
         (record.mode === "managed_required" || !record.allowManualSetup)
     )
   );
+}
+
+function resolveEnforcementRequired(errorCode, prior, knownRequired) {
+  if (errorCode === "ENTERPRISE_REQUIRED") return false;
+  if (knownRequired || requiresEnforcedManagedAccess(prior)) return true;
+  if (prior) return false;
+  return undefined;
 }
 
 function responseError(code, error, identity = null, enforcementRequired) {
@@ -132,6 +156,7 @@ function createEnterpriseIdentityManager({
   const configRequests = new Map();
   const cloudCredentials = new Map();
   const cloudCredentialRequests = new Map();
+  const enforcedConfigRequired = new Set();
   let credentialEpoch = 0;
 
   function clearIdentityCredentials(identity) {
@@ -145,7 +170,7 @@ function createEnterpriseIdentityManager({
     }
   }
 
-  function evictIdentity(identity, code, enforcementRequired = false) {
+  function evictIdentity(identity, code, enforcementRequired) {
     configs.delete(identity.cacheKey);
     configRequests.delete(identity.cacheKey);
     clearIdentityCredentials(identity);
@@ -156,7 +181,7 @@ function createEnterpriseIdentityManager({
       authGeneration: identity.authGeneration,
       config: null,
       code,
-      enforcementRequired,
+      ...(typeof enforcementRequired === "boolean" ? { enforcementRequired } : {}),
     });
   }
 
@@ -178,7 +203,11 @@ function createEnterpriseIdentityManager({
       );
     }
     const apiUrl = getApiUrl()?.replace(/\/+$/, "");
-    if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+    if (!apiUrl) {
+      throw Object.assign(new Error("OpenWhispr API URL not configured"), {
+        code: "MANAGED_CONFIG_UNAVAILABLE",
+      });
+    }
     const authHeaders = normalizeAuthHeaders(request.authHeaders, tokenState.token);
     if (!Object.keys(authHeaders).length) {
       throw new AuthContextError("Not authenticated", "AUTH_CONTEXT_UNVALIDATED");
@@ -232,9 +261,14 @@ function createEnterpriseIdentityManager({
   async function readError(response, fallback) {
     try {
       const body = await response.json();
-      return { message: body?.error || fallback, code: body?.code };
+      const hasServerDetail = Boolean(body?.error);
+      return {
+        message: body?.error || fallback,
+        code: body?.code,
+        hasServerDetail,
+      };
     } catch {
-      return { message: fallback };
+      return { message: fallback, hasServerDetail: false };
     }
   }
 
@@ -250,8 +284,7 @@ function createEnterpriseIdentityManager({
     if (!response.ok) {
       const detail = await readError(response, `Managed enterprise API error: ${response.status}`);
       const error = new Error(detail.message);
-      error.code =
-        detail.code || (response.status === 401 ? "AUTH_EXPIRED" : "MANAGED_CONFIG_FAILED");
+      error.code = resolveConfigResponseErrorCode(detail, response.status);
       error.status = response.status;
       throw error;
     }
@@ -275,6 +308,8 @@ function createEnterpriseIdentityManager({
       clearIdentityCredentials(identity);
     }
     configs.set(identity.cacheKey, { config, refreshedAt: now() });
+    if (requiresEnforcedManagedAccess(config)) enforcedConfigRequired.add(identity.cacheKey);
+    else enforcedConfigRequired.delete(identity.cacheKey);
     try {
       writeCache(cachePath, identity, config);
     } catch (error) {
@@ -304,8 +339,14 @@ function createEnterpriseIdentityManager({
       .catch((error) => {
         if (isAuthorizationError(error) || error?.code === "MANAGED_CONFIG_INVALID") {
           const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
-          error.enforcementRequired =
-            error?.code === "ENTERPRISE_REQUIRED" ? false : requiresEnforcedManagedAccess(prior);
+          error.enforcementRequired = resolveEnforcementRequired(
+            error?.code,
+            prior,
+            enforcedConfigRequired.has(identity.cacheKey)
+          );
+          if (error.enforcementRequired === true) enforcedConfigRequired.add(identity.cacheKey);
+          else if (error.enforcementRequired === false)
+            enforcedConfigRequired.delete(identity.cacheKey);
           evictIdentity(identity, error.code || "MANAGED_CONFIG_FAILED", error.enforcementRequired);
           throw error;
         }
@@ -368,8 +409,14 @@ function createEnterpriseIdentityManager({
       error.status = response.status;
       if (isAuthorizationError(error)) {
         const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
-        error.enforcementRequired =
-          error.code === "ENTERPRISE_REQUIRED" ? false : requiresEnforcedManagedAccess(prior);
+        error.enforcementRequired = resolveEnforcementRequired(
+          error.code,
+          prior,
+          enforcedConfigRequired.has(identity.cacheKey)
+        );
+        if (error.enforcementRequired === true) enforcedConfigRequired.add(identity.cacheKey);
+        else if (error.enforcementRequired === false)
+          enforcedConfigRequired.delete(identity.cacheKey);
         evictIdentity(identity, error.code, error.enforcementRequired);
       }
       throw error;
@@ -524,6 +571,7 @@ function createEnterpriseIdentityManager({
     configRequests.clear();
     cloudCredentials.clear();
     cloudCredentialRequests.clear();
+    enforcedConfigRequired.clear();
     try {
       fs.unlinkSync(cachePath);
     } catch (error) {

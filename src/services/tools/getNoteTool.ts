@@ -1,4 +1,9 @@
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import {
+  assertToolExecutionAuthorized,
+  type ToolDefinition,
+  type ToolExecutionContext,
+  type ToolResult,
+} from "./ToolRegistry";
 
 export const getNoteTool: ToolDefinition = {
   name: "get_note",
@@ -17,11 +22,16 @@ export const getNoteTool: ToolDefinition = {
   },
   readOnly: true,
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    args: Record<string, unknown>,
+    context?: ToolExecutionContext
+  ): Promise<ToolResult> {
     const id = args.id as number;
 
     try {
+      assertToolExecutionAuthorized(context);
       const note = await window.electronAPI.getNote(id);
+      assertToolExecutionAuthorized(context);
 
       if (!note) {
         return {
@@ -45,6 +55,7 @@ export const getNoteTool: ToolDefinition = {
         displayText: `Retrieved note: "${note.title}"`,
       };
     } catch (error) {
+      assertToolExecutionAuthorized(context);
       return {
         success: false,
         data: null,

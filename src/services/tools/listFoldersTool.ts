@@ -1,4 +1,9 @@
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import {
+  assertToolExecutionAuthorized,
+  type ToolDefinition,
+  type ToolExecutionContext,
+  type ToolResult,
+} from "./ToolRegistry";
 
 export const listFoldersTool: ToolDefinition = {
   name: "list_folders",
@@ -11,12 +16,17 @@ export const listFoldersTool: ToolDefinition = {
   },
   readOnly: true,
 
-  async execute(): Promise<ToolResult> {
+  async execute(
+    _args: Record<string, unknown>,
+    context?: ToolExecutionContext
+  ): Promise<ToolResult> {
     try {
-      const [folders, spaces] = await Promise.all([
-        window.electronAPI.getFolders(),
-        window.electronAPI.getSpaces?.() ?? Promise.resolve([]),
-      ]);
+      assertToolExecutionAuthorized(context);
+      const foldersPromise = window.electronAPI.getFolders();
+      assertToolExecutionAuthorized(context);
+      const spacesPromise = window.electronAPI.getSpaces?.() ?? Promise.resolve([]);
+      const [folders, spaces] = await Promise.all([foldersPromise, spacesPromise]);
+      assertToolExecutionAuthorized(context);
       const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]));
       const data = folders.map((f) => ({
         id: f.id,
@@ -30,6 +40,7 @@ export const listFoldersTool: ToolDefinition = {
         : "No folders";
       return { success: true, data, displayText };
     } catch (error) {
+      assertToolExecutionAuthorized(context);
       return {
         success: false,
         data: null,

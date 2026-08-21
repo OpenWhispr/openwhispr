@@ -31,6 +31,7 @@ import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import modelRegistryData from "../models/modelRegistryData.json";
 import {
   getTranscriptionSelection,
+  isModeAllowedByPolicy,
   isScreenContextAllowed,
   resolveEffectivePolicySelection,
   type PolicyDecisionSnapshot,
@@ -50,7 +51,11 @@ import type {
 } from "../hooks/useSettings";
 import type { Snippet } from "../utils/snippets";
 import type { EnterpriseSetupMode } from "../types/enterpriseIdentity";
-import { getManagedScopeResolution } from "./enterpriseIdentityStore";
+import {
+  getApprovedFailClosedManagedLocalReasoning,
+  getManagedLocalModelRuntimeLock,
+  getManagedScopeResolution,
+} from "./enterpriseIdentityStore";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -2290,6 +2295,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     s.updateTranscriptionSettings(settings);
     const {
       useLocalWhisper,
+      localTranscriptionProvider,
+      whisperModel,
+      parakeetModel,
       cloudTranscriptionMode,
       cloudTranscriptionProvider,
       cloudTranscriptionModel,
@@ -2313,6 +2321,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     s.setUploadCloudTranscriptionMode(cloudTranscriptionMode);
     s.setUploadCloudTranscriptionProvider(cloudTranscriptionProvider);
     s.setUploadCloudTranscriptionModel(cloudTranscriptionModel);
+    if (mode === "local") {
+      s.setMeetingLocalTranscriptionProvider(localTranscriptionProvider);
+      s.setMeetingWhisperModel(whisperModel);
+      s.setMeetingParakeetModel(parakeetModel);
+      s.setUploadLocalTranscriptionProvider(localTranscriptionProvider);
+      s.setUploadWhisperModel(whisperModel);
+      s.setUploadParakeetModel(parakeetModel);
+    }
     // Seed the per-provider model memory so a later provider switch-and-return
     // in any scope restores the model onboarding chose.
     if (cloudTranscriptionProvider && cloudTranscriptionModel) {
@@ -2423,26 +2439,28 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
 // --- Selectors (derived state, not stored) ---
 
-export const selectIsCloudCleanupMode = (state: SettingsState) =>
-  state.isSignedIn && state.cleanupMode === "openwhispr" && state.cleanupCloudMode === "openwhispr";
+export const selectIsCloudCleanupMode = (state: SettingsState) => {
+  const resolved = selectResolvedLLMConfig(state, "dictationCleanup");
+  return state.isSignedIn && resolved.mode === "openwhispr" && resolved.cloudMode === "openwhispr";
+};
 
 export const selectEffectiveCleanupProvider = (state: SettingsState) =>
   selectIsCloudCleanupMode(state) ? "openwhispr" : state.cleanupProvider;
 
-export const selectIsCloudChatAgentMode = (state: SettingsState) =>
-  state.isSignedIn &&
-  state.chatAgentMode === "openwhispr" &&
-  state.chatAgentCloudMode === "openwhispr";
+export const selectIsCloudChatAgentMode = (state: SettingsState) => {
+  const resolved = selectResolvedLLMConfig(state, "chatIntelligence");
+  return state.isSignedIn && resolved.mode === "openwhispr" && resolved.cloudMode === "openwhispr";
+};
 
-export const selectIsCloudDictationAgentMode = (state: SettingsState) =>
-  state.isSignedIn &&
-  state.dictationAgentMode === "openwhispr" &&
-  state.dictationAgentCloudMode === "openwhispr";
+export const selectIsCloudDictationAgentMode = (state: SettingsState) => {
+  const resolved = selectResolvedLLMConfig(state, "dictationAgent");
+  return state.isSignedIn && resolved.mode === "openwhispr" && resolved.cloudMode === "openwhispr";
+};
 
-export const selectIsCloudTranslationMode = (state: SettingsState) =>
-  state.isSignedIn &&
-  state.translationMode === "openwhispr" &&
-  state.translationCloudMode === "openwhispr";
+export const selectIsCloudTranslationMode = (state: SettingsState) => {
+  const resolved = selectResolvedLLMConfig(state, "dictationTranslation");
+  return state.isSignedIn && resolved.mode === "openwhispr" && resolved.cloudMode === "openwhispr";
+};
 
 export const selectIsCloudNoteFormattingMode = (state: SettingsState) => {
   const cfg = selectResolvedNoteFormatting(state);
@@ -2589,8 +2607,35 @@ export const selectResolvedLLMConfig = (
     customApiKey: read("customApiKey"),
     disableThinking,
   };
+  const managedLocal = getManagedLocalModelRuntimeLock("reasoning");
+  if (managedLocal.managed) {
+    if (
+      managedLocal.selection &&
+      isModeAllowedByPolicy(usePolicyStore.getState(), "llm", "local")
+    ) {
+      return {
+        ...localConfig,
+        mode: "local",
+        provider: managedLocal.selection.provider,
+        model: managedLocal.selection.modelId,
+      };
+    }
+    return { ...localConfig, mode: "enterprise", provider: "", model: "" };
+  }
   const managed = getManagedScopeResolution(scope, state.enterpriseSetupMode);
   if (managed.kind === "error") {
+    const approvedLocal = getApprovedFailClosedManagedLocalReasoning(
+      localConfig.provider,
+      localConfig.model
+    );
+    if (approvedLocal) {
+      return {
+        ...localConfig,
+        mode: "local",
+        provider: approvedLocal.provider,
+        model: approvedLocal.modelId,
+      };
+    }
     return { ...localConfig, mode: "enterprise", provider: "", model: "" };
   }
   if (managed.kind !== "managed") return localConfig;
@@ -3337,6 +3382,19 @@ export async function initializeSettings(): Promise<void> {
         value = Array.isArray(parsed) ? parsed : [];
       } catch {
         value = [];
+      }
+    } else if (key === "transcriptionModelByProvider" || key === "reasoningModelByProvider") {
+      try {
+        const parsed = JSON.parse(newValue);
+        value =
+          parsed &&
+          typeof parsed === "object" &&
+          !Array.isArray(parsed) &&
+          Object.values(parsed).every((entry) => typeof entry === "string")
+            ? parsed
+            : (state as unknown as Record<string, unknown>)[key];
+      } catch {
+        value = (state as unknown as Record<string, unknown>)[key];
       }
     } else if (NUMERIC_SETTINGS.has(key)) {
       const parsed = Number(newValue);

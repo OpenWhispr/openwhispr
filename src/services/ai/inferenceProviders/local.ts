@@ -4,7 +4,7 @@ import logger from "../../../utils/logger";
 
 export const localProvider: InferenceProvider = {
   id: "local",
-  async call({ text, model, agentName, config, ctx }) {
+  async call({ text, model, agentName, config, ctx, authorization }) {
     if (typeof window === "undefined" || !window.electronAPI) {
       throw new Error("Local reasoning is not available in this environment");
     }
@@ -16,6 +16,7 @@ export const localProvider: InferenceProvider = {
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
+    authorization.assertCurrent();
     const result = await window.electronAPI.processLocalReasoning(userContent, model, agentName, {
       ...config,
       systemPrompt,

@@ -120,6 +120,7 @@ const {
 
 const {
   ALLOWED_MEETING_PROVIDERS,
+  disconnectMeetingStreamingClient,
   getMeetingStreamingClient,
   getMeetingConnectionKey,
 } = require("./meetingStreamingProviders");
@@ -2829,21 +2830,15 @@ class IPCHandlers {
       return this.whisperManager.getDiagnostics();
     });
 
-    ipcMain.handle("download-whisper-model", async (event, modelName) => {
+    ipcMain.handle("download-whisper-model", async (_event, modelName) => {
       try {
         const result = await this.whisperManager.downloadWhisperModel(modelName, (progressData) => {
-          if (!event.sender.isDestroyed()) {
-            event.sender.send("whisper-download-progress", progressData);
-          }
+          broadcastToWindows("whisper-download-progress", progressData);
         });
         return result;
       } catch (error) {
-        if (
-          error.code !== "DOWNLOAD_IN_PROGRESS" &&
-          error.code !== "DOWNLOAD_CANCELLED" &&
-          !event.sender.isDestroyed()
-        ) {
-          event.sender.send("whisper-download-progress", {
+        if (error.code !== "DOWNLOAD_IN_PROGRESS" && error.code !== "DOWNLOAD_CANCELLED") {
+          broadcastToWindows("whisper-download-progress", {
             type: "error",
             model: modelName,
             error: error.message,
@@ -3163,24 +3158,18 @@ class IPCHandlers {
       return this.parakeetManager.checkInstallation();
     });
 
-    ipcMain.handle("download-parakeet-model", async (event, modelName) => {
+    ipcMain.handle("download-parakeet-model", async (_event, modelName) => {
       try {
         const result = await this.parakeetManager.downloadParakeetModel(
           modelName,
           (progressData) => {
-            if (!event.sender.isDestroyed()) {
-              event.sender.send("parakeet-download-progress", progressData);
-            }
+            broadcastToWindows("parakeet-download-progress", progressData);
           }
         );
         return result;
       } catch (error) {
-        if (
-          error.code !== "DOWNLOAD_IN_PROGRESS" &&
-          error.code !== "DOWNLOAD_CANCELLED" &&
-          !event.sender.isDestroyed()
-        ) {
-          event.sender.send("parakeet-download-progress", {
+        if (error.code !== "DOWNLOAD_IN_PROGRESS" && error.code !== "DOWNLOAD_CANCELLED") {
+          broadcastToWindows("parakeet-download-progress", {
             type: "error",
             model: modelName,
             error: error.message,
@@ -3779,7 +3768,7 @@ class IPCHandlers {
       return modelManager.isModelDownloaded(modelId);
     });
 
-    ipcMain.handle("model-download", async (event, modelId) => {
+    ipcMain.handle("model-download", async (_event, modelId) => {
       let lastProgress = {
         progress: 0,
         downloadedSize: 0,
@@ -3792,33 +3781,25 @@ class IPCHandlers {
           modelId,
           (progress, downloadedSize, totalSize) => {
             lastProgress = { progress, downloadedSize, totalSize };
-            if (!event.sender.isDestroyed()) {
-              event.sender.send("model-download-progress", {
-                modelId,
-                progress,
-                downloadedSize,
-                totalSize,
-              });
-            }
+            broadcastToWindows("model-download-progress", {
+              modelId,
+              progress,
+              downloadedSize,
+              totalSize,
+            });
           }
         );
-        if (!event.sender.isDestroyed()) {
-          event.sender.send("model-download-progress", {
-            type: "complete",
-            modelId,
-            progress: 100,
-            downloadedSize: lastProgress.downloadedSize,
-            totalSize: lastProgress.totalSize,
-          });
-        }
+        broadcastToWindows("model-download-progress", {
+          type: "complete",
+          modelId,
+          progress: 100,
+          downloadedSize: lastProgress.downloadedSize,
+          totalSize: lastProgress.totalSize,
+        });
         return { success: true, path: result };
       } catch (error) {
-        if (
-          error.code !== "DOWNLOAD_IN_PROGRESS" &&
-          error.code !== "DOWNLOAD_CANCELLED" &&
-          !event.sender.isDestroyed()
-        ) {
-          event.sender.send("model-download-progress", {
+        if (error.code !== "DOWNLOAD_IN_PROGRESS" && error.code !== "DOWNLOAD_CANCELLED") {
+          broadcastToWindows("model-download-progress", {
             type: "error",
             modelId,
             error: error.message,
@@ -5475,10 +5456,48 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("retry-transcription", async (event, id, settings) => {
-      const buffer = this.audioStorageManager.getAudioBuffer(id);
-      if (!buffer) return { success: false, error: "Audio file not found" };
+    const pendingRetryTranscriptionCommits = new Map();
+    const retryTranscriptionOwnerId = (event) => event.sender?.id ?? null;
+    const retryTranscriptionCommitKey = (ownerId, requestId) =>
+      `${ownerId ?? "unknown"}:${requestId}`;
+    const discardPendingRetryTranscription = (ownerId, requestId) => {
+      const key = retryTranscriptionCommitKey(ownerId, requestId);
+      const pending = pendingRetryTranscriptionCommits.get(key);
+      if (!pending) return false;
+      pendingRetryTranscriptionCommits.delete(key);
+      clearTimeout(pending.expiryTimer);
+      pending.sender?.removeListener?.("destroyed", pending.onSenderDestroyed);
+      return true;
+    };
+    const commitRetryTranscription = (id, result, text = result.text, rawText = result.text) => {
+      this.databaseManager.updateTranscriptionText(id, text, rawText);
+      this.databaseManager.updateTranscriptionStatus(id, "completed");
+      const providerName = result.source || "local";
+      const modelName = result.model || null;
+      const existingRow = this.databaseManager.getTranscriptionById(id);
+      this.databaseManager.updateTranscriptionAudio(id, {
+        hasAudio: 1,
+        audioDurationMs: existingRow?.audio_duration_ms ?? null,
+        provider: providerName,
+        model: modelName,
+      });
+      const updated = this.databaseManager.getTranscriptionById(id);
+      if (updated) broadcastToWindows("transcription-updated", updated);
+      return updated;
+    };
+
+    ipcMain.handle("retry-transcription", async (event, id, settings, requestId) => {
+      const request = this._uploadCancelRegistry.register(requestId);
+      const assertNotCancelled = () => {
+        if (!request.signal?.aborted) return;
+        throw Object.assign(createAbortError("History transcription retry cancelled"), {
+          code: "UPLOAD_CANCELLED",
+        });
+      };
       try {
+        assertNotCancelled();
+        const buffer = this.audioStorageManager.getAudioBuffer(id);
+        if (!buffer) return { success: false, error: "Audio file not found" };
         let result;
         const preferredLanguage = settings?.preferredLanguage;
         const language =
@@ -5486,6 +5505,7 @@ class IPCHandlers {
             ? preferredLanguage.split("-")[0]
             : undefined;
         const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+        assertNotCancelled();
         // Renderer pre-flight owns policy; retry re-routes stored audio through
         // whatever is selected NOW.
         const route = resolveTranscriptionRoute({
@@ -5517,15 +5537,20 @@ class IPCHandlers {
             formData.append("language", route.language);
           }
 
+          assertNotCancelled();
           const response = await proxyFetch(route.endpoint, {
             method: "POST",
             body: formData,
+            signal: request.signal,
           });
+          assertNotCancelled();
           if (!response.ok) {
             const errorText = await response.text();
+            assertNotCancelled();
             throw new Error(`Self-hosted API Error: ${response.status} ${errorText}`);
           }
           const data = await response.json();
+          assertNotCancelled();
           if (data?.text) {
             result = {
               text: data.text,
@@ -5537,19 +5562,26 @@ class IPCHandlers {
           if (settings.localTranscriptionProvider === "nvidia") {
             const model =
               settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3";
-            result = await this.parakeetManager.transcribeLocalParakeet(buffer, { model });
+            result = await this.parakeetManager.transcribeLocalParakeet(buffer, {
+              model,
+              signal: request.signal,
+            });
+            assertNotCancelled();
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
             const vadOptions = this._resolveWhisperVadOptions("noteRecording");
             result = await this.whisperManager.transcribeLocalWhisper(buffer, {
               model: settings.whisperModel,
               language,
               ...vadOptions,
+              signal: request.signal,
             });
+            assertNotCancelled();
           }
         } else if (settings?.cloudTranscriptionMode === "openwhispr") {
           const win = BrowserWindow.fromWebContents(event.sender);
           if (win) {
             const authHeader = await getAuthHeaderFromWindow(win);
+            assertNotCancelled();
             if (Object.keys(authHeader).length) {
               const apiUrl = getApiUrl();
               if (apiUrl) {
@@ -5565,7 +5597,9 @@ class IPCHandlers {
                     apiUrl,
                     policyHeaders: withPolicyHeaders(authHeader),
                     multipartFields,
+                    signal: request.signal,
                   });
+                  assertNotCancelled();
                   result = { text, source: "openwhispr", model: "cloud" };
                 } else {
                   const { body, boundary } = buildMultipartBody(
@@ -5581,10 +5615,14 @@ class IPCHandlers {
                     boundary,
                     withPolicyHeaders(authHeader),
                     {
-                      signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+                      signal: AbortSignal.any([
+                        ...(request.signal ? [request.signal] : []),
+                        AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+                      ]),
                       session: getInlineCloudUploadSession(),
                     }
                   );
+                  assertNotCancelled();
                   const responseData = interpretTranscribeResponse(data);
                   result = {
                     text: responseData.text,
@@ -5603,7 +5641,9 @@ class IPCHandlers {
             contentType: "audio/webm",
             language: route.language,
             apiKey: this.environmentManager.getTinfoilKey(),
+            signal: request.signal,
           });
+          assertNotCancelled();
           if (text) result = { text, source: "tinfoil", model };
         } else if (route.transport === "proxied" && route.provider === "corti") {
           // Corti uses OAuth + an interaction-based REST flow, so it can't use
@@ -5621,7 +5661,9 @@ class IPCHandlers {
             clientSecret,
             audioBuffer: buffer,
             language: route.language,
+            signal: request.signal,
           });
+          assertNotCancelled();
           if (text) result = { text, source: "corti", model: route.model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
@@ -5670,12 +5712,21 @@ class IPCHandlers {
             }
           }
 
-          const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
+          assertNotCancelled();
+          const response = await proxyFetch(endpoint, {
+            method: "POST",
+            headers,
+            body: formData,
+            signal: request.signal,
+          });
+          assertNotCancelled();
           if (!response.ok) {
             const errorText = await response.text();
+            assertNotCancelled();
             throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
           }
           const data = await response.json();
+          assertNotCancelled();
           if (data?.text) {
             result = { text: data.text, source: provider, model: route.model };
           }
@@ -5685,25 +5736,49 @@ class IPCHandlers {
           return { success: false, error: "No transcription engine available" };
         }
 
-        this.databaseManager.updateTranscriptionText(id, result.text, result.text);
-        this.databaseManager.updateTranscriptionStatus(id, "completed");
-        const providerName = result.source || "local";
-        const modelName = result.model || null;
-        const existingRow = this.databaseManager.getTranscriptionById(id);
-        this.databaseManager.updateTranscriptionAudio(id, {
-          hasAudio: 1,
-          audioDurationMs: existingRow?.audio_duration_ms ?? null,
-          provider: providerName,
-          model: modelName,
-        });
-        const updated = this.databaseManager.getTranscriptionById(id);
-        if (updated) {
-          setImmediate(() => {
-            broadcastToWindows("transcription-updated", updated);
+        assertNotCancelled();
+        if (typeof requestId === "string" && requestId) {
+          const ownerId = retryTranscriptionOwnerId(event);
+          discardPendingRetryTranscription(ownerId, requestId);
+          const expiryTimer = setTimeout(
+            () => discardPendingRetryTranscription(ownerId, requestId),
+            60_000
+          );
+          expiryTimer.unref?.();
+          const sender = event.sender;
+          const onSenderDestroyed = () => discardPendingRetryTranscription(ownerId, requestId);
+          sender?.once?.("destroyed", onSenderDestroyed);
+          const existingRow = this.databaseManager.getTranscriptionById(id);
+          const transcription = existingRow
+            ? {
+                ...existingRow,
+                text: result.text,
+                raw_text: result.text,
+                has_audio: 1,
+                provider: result.source || "local",
+                model: result.model || null,
+                status: "completed",
+              }
+            : null;
+          pendingRetryTranscriptionCommits.set(retryTranscriptionCommitKey(ownerId, requestId), {
+            id,
+            result,
+            sender,
+            onSenderDestroyed,
+            expiryTimer,
           });
+          return { success: true, pendingCommit: true, transcription };
         }
+        const updated = commitRetryTranscription(id, result);
         return { success: true, transcription: updated };
       } catch (error) {
+        if (request.signal?.aborted || error?.name === "AbortError") {
+          return {
+            success: false,
+            error: "Cancelled",
+            code: "UPLOAD_CANCELLED",
+          };
+        }
         debugLogger.error(
           "Retry transcription failed",
           { id, error: error.message, code: error.code },
@@ -5713,12 +5788,41 @@ class IPCHandlers {
           return { success: false, error: error.message, code: error.code, ...error };
         }
         return { success: false, error: error.message };
+      } finally {
+        request.release();
       }
+    });
+
+    ipcMain.handle("commit-retry-transcription", (event, id, requestId, text, rawText) => {
+      const ownerId = retryTranscriptionOwnerId(event);
+      const pending = pendingRetryTranscriptionCommits.get(
+        retryTranscriptionCommitKey(ownerId, requestId)
+      );
+      if (!pending || pending.id !== id) {
+        return { success: false, error: "Retry result expired or was cancelled" };
+      }
+      discardPendingRetryTranscription(ownerId, requestId);
+      const transcription = commitRetryTranscription(
+        id,
+        pending.result,
+        typeof text === "string" ? text : pending.result.text,
+        typeof rawText === "string" ? rawText : pending.result.text
+      );
+      return { success: true, transcription };
     });
 
     let meetingTranscriptionStartInProgress = false;
     let meetingTranscriptionPrepareInProgress = false;
     let meetingTranscriptionPreparePromise = null;
+    let meetingTransportGeneration = 0;
+    let meetingSessionTransportGeneration = null;
+    const assertCurrentMeetingTransport = (generation) => {
+      if (generation === meetingTransportGeneration) return;
+      const error = new Error("Meeting transcription authorization changed");
+      error.name = "AbortError";
+      error.code = "AUTHORIZATION_BOUNDARY_CHANGED";
+      throw error;
+    };
 
     const DUPLICATE_TRANSCRIPT_WINDOW_MS = 6000;
     const DUPLICATE_TRANSCRIPT_MERGE_LIMIT = 3;
@@ -5827,6 +5931,7 @@ class IPCHandlers {
       send = null,
       includeInLocalTranscript = false,
     }) => {
+      if (meetingSessionTransportGeneration !== meetingTransportGeneration) return;
       if (includeInLocalTranscript) {
         appendMeetingLocalTranscript(text);
       }
@@ -5980,8 +6085,14 @@ class IPCHandlers {
       };
     };
 
-    const attachMeetingStreamingHandlers = (streaming, win, source) => {
+    const attachMeetingStreamingHandlers = (
+      streaming,
+      win,
+      source,
+      generation = meetingTransportGeneration
+    ) => {
       const send = (channel, data) => {
+        if (generation !== meetingTransportGeneration) return;
         if (!win || win.isDestroyed()) {
           debugLogger.error("Meeting segment send failed: window unavailable", {
             channel,
@@ -6096,6 +6207,7 @@ class IPCHandlers {
         send("meeting-transcription-error", error.message);
       };
       const recoverConnection = async (error, restoreOldOnFailure) => {
+        if (generation !== meetingTransportGeneration) return;
         let recovered = false;
         try {
           recovered = await reconnectMeetingStreams({ restoreOldOnFailure });
@@ -6104,6 +6216,7 @@ class IPCHandlers {
             error: reconnectError.message,
           });
         }
+        if (generation !== meetingTransportGeneration) return;
         if (!recovered && !meetingFatalErrorSent) {
           meetingFatalErrorSent = true;
           send(
@@ -6157,8 +6270,10 @@ class IPCHandlers {
 
     const reconnectMeetingStreams = ({ restoreOldOnFailure = false } = {}) => {
       if (meetingReconnectPromise) return meetingReconnectPromise;
+      const generation = meetingTransportGeneration;
 
       const pending = (async () => {
+        assertCurrentMeetingTransport(generation);
         if (meetingLocalMode) return false;
 
         const options = meetingConnectionOptions;
@@ -6187,10 +6302,10 @@ class IPCHandlers {
         try {
           const StreamingClass = getMeetingStreamingClient(options.provider);
           newMic = new StreamingClass();
-          attachMeetingStreamingHandlers(newMic, win, "mic");
+          attachMeetingStreamingHandlers(newMic, win, "mic", generation);
           if (oldSystem) {
             newSystem = new StreamingClass();
-            attachMeetingStreamingHandlers(newSystem, win, "system");
+            attachMeetingStreamingHandlers(newSystem, win, "system", generation);
           }
 
           debugLogger.info("Reconnecting meeting streams", {
@@ -6212,32 +6327,40 @@ class IPCHandlers {
           let pairs;
           if (newSystem) {
             const secrets = await fetchRealtimeToken(tokenEvent, options, { streams: 2 });
+            assertCurrentMeetingTransport(generation);
             pairs = [
               { streaming: newMic, secret: secrets[0] },
               { streaming: newSystem, secret: secrets[1] },
             ];
           } else {
-            pairs = [{ streaming: newMic, secret: await fetchRealtimeToken(tokenEvent, options) }];
+            const secret = await fetchRealtimeToken(tokenEvent, options);
+            assertCurrentMeetingTransport(generation);
+            pairs = [{ streaming: newMic, secret }];
           }
 
+          assertCurrentMeetingTransport(generation);
           await Promise.all(
             pairs.map(({ streaming, secret }) =>
               streaming.connect({ apiKey: secret, token: secret, ...connectOpts })
             )
           );
+          assertCurrentMeetingTransport(generation);
 
           if (pairs.some(({ streaming }) => !streaming.isConnected)) {
             throw new Error("Meeting transcription connection closed during reconnect.");
           }
 
           if (meetingConnectionOptions !== options) {
-            for (const { streaming } of pairs) streaming.disconnect().catch(() => {});
-            oldMic?.disconnect().catch(() => {});
-            oldSystem?.disconnect().catch(() => {});
+            for (const { streaming } of pairs) {
+              disconnectMeetingStreamingClient(streaming, options.provider, false).catch(() => {});
+            }
+            disconnectMeetingStreamingClient(oldMic, options.provider, false).catch(() => {});
+            disconnectMeetingStreamingClient(oldSystem, options.provider, false).catch(() => {});
             resetMeetingReconnectAudio();
             return true;
           }
 
+          assertCurrentMeetingTransport(generation);
           const replayedMic = replayMeetingReconnectAudio("mic", newMic);
           const replayedSystem = !newSystem || replayMeetingReconnectAudio("system", newSystem);
           if (!replayedMic || !replayedSystem) {
@@ -6246,9 +6369,10 @@ class IPCHandlers {
           this._meetingMicStreaming = newMic;
           this._meetingSystemStreaming = newSystem;
           resetMeetingReconnectAudio();
-          oldMic?.disconnect().catch(() => {});
-          oldSystem?.disconnect().catch(() => {});
+          disconnectMeetingStreamingClient(oldMic, options.provider, false).catch(() => {});
+          disconnectMeetingStreamingClient(oldSystem, options.provider, false).catch(() => {});
           meetingConnectionKey = getMeetingConnectionKey(options);
+          meetingConnectionProvider = options.provider;
 
           debugLogger.info("Meeting streams reconnected", { attempt: meetingReconnectCount });
           meetingReconnectCount = 0;
@@ -6258,11 +6382,11 @@ class IPCHandlers {
             error: error.message,
             attempt: meetingReconnectCount,
           });
-          newMic?.disconnect().catch(() => {});
-          newSystem?.disconnect().catch(() => {});
-          if (meetingConnectionOptions !== options) {
-            oldMic?.disconnect().catch(() => {});
-            oldSystem?.disconnect().catch(() => {});
+          disconnectMeetingStreamingClient(newMic, options.provider, false).catch(() => {});
+          disconnectMeetingStreamingClient(newSystem, options.provider, false).catch(() => {});
+          if (generation !== meetingTransportGeneration || meetingConnectionOptions !== options) {
+            disconnectMeetingStreamingClient(oldMic, options.provider, false).catch(() => {});
+            disconnectMeetingStreamingClient(oldSystem, options.provider, false).catch(() => {});
             resetMeetingReconnectAudio();
             return true;
           }
@@ -6273,11 +6397,12 @@ class IPCHandlers {
             this._meetingMicStreaming = oldMic;
             this._meetingSystemStreaming = oldSystem;
           } else {
-            oldMic?.disconnect().catch(() => {});
-            oldSystem?.disconnect().catch(() => {});
+            disconnectMeetingStreamingClient(oldMic, options.provider, false).catch(() => {});
+            disconnectMeetingStreamingClient(oldSystem, options.provider, false).catch(() => {});
             this._meetingMicStreaming = null;
             this._meetingSystemStreaming = null;
             meetingConnectionKey = null;
+            meetingConnectionProvider = null;
           }
           resetMeetingReconnectAudio();
           if (!win.isDestroyed()) {
@@ -6386,15 +6511,29 @@ class IPCHandlers {
       !!this._meetingMicStreaming?.isConnected &&
       (systemAudioMode === "unsupported" || !!this._meetingSystemStreaming?.isConnected);
 
-    const connectRealtimeStreaming = async (event, options) => {
+    const connectRealtimeStreaming = async (
+      event,
+      options,
+      generation = meetingTransportGeneration
+    ) => {
+      assertCurrentMeetingTransport(generation);
       const connectionKey = getMeetingConnectionKey(options);
       const StreamingClass = getMeetingStreamingClient(options.provider);
       if (this._meetingMicStreaming?.isConnected) {
-        await this._meetingMicStreaming.disconnect();
+        await disconnectMeetingStreamingClient(
+          this._meetingMicStreaming,
+          meetingConnectionProvider,
+          false
+        );
       }
       if (this._meetingSystemStreaming?.isConnected) {
-        await this._meetingSystemStreaming.disconnect();
+        await disconnectMeetingStreamingClient(
+          this._meetingSystemStreaming,
+          meetingConnectionProvider,
+          false
+        );
       }
+      assertCurrentMeetingTransport(generation);
       this._meetingMicStreaming = null;
       this._meetingSystemStreaming = null;
       const win = BrowserWindow.fromWebContents(event.sender);
@@ -6409,45 +6548,62 @@ class IPCHandlers {
         sampleRate: MEETING_STREAM_SAMPLE_RATE,
       };
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
+      assertCurrentMeetingTransport(generation);
       let pairs;
       if (systemAudioMode !== "unsupported") {
         const secrets = await fetchRealtimeToken(event, options, { streams: 2 });
+        assertCurrentMeetingTransport(generation);
         pairs = [
           { ref: "_meetingMicStreaming", secret: secrets[0], source: "mic" },
           { ref: "_meetingSystemStreaming", secret: secrets[1], source: "system" },
         ];
       } else {
+        const secret = await fetchRealtimeToken(event, options);
+        assertCurrentMeetingTransport(generation);
         pairs = [
           {
             ref: "_meetingMicStreaming",
-            secret: await fetchRealtimeToken(event, options),
+            secret,
             source: "mic",
           },
         ];
       }
 
-      for (const { ref, source } of pairs) {
-        this[ref] = new StreamingClass();
-        attachMeetingStreamingHandlers(this[ref], win, source);
-      }
+      pairs = pairs.map(({ ref, source, secret }) => {
+        const streaming = new StreamingClass();
+        this[ref] = streaming;
+        attachMeetingStreamingHandlers(streaming, win, source, generation);
+        return { ref, source, secret, streaming };
+      });
 
       try {
+        assertCurrentMeetingTransport(generation);
         await Promise.all(
-          pairs.map(({ ref, secret }) =>
-            this[ref].connect({ apiKey: secret, token: secret, ...connectOpts })
+          pairs.map(({ streaming, secret }) =>
+            streaming.connect({ apiKey: secret, token: secret, ...connectOpts })
           )
         );
-        if (pairs.some(({ ref }) => !this[ref]?.isConnected)) {
+        assertCurrentMeetingTransport(generation);
+        if (pairs.some(({ streaming }) => !streaming?.isConnected)) {
           throw new Error("Meeting transcription connection closed during startup.");
         }
         meetingConnectionKey = connectionKey;
+        meetingConnectionProvider = options.provider;
       } catch (error) {
         await Promise.all(
-          pairs.map(({ ref }) => this[ref]?.disconnect().catch(() => ({ text: "" })))
+          pairs.map(({ streaming }) =>
+            disconnectMeetingStreamingClient(streaming, options.provider, false).catch(() => ({
+              text: "",
+            }))
+          )
         );
-        this._meetingMicStreaming = null;
-        this._meetingSystemStreaming = null;
-        meetingConnectionKey = null;
+        for (const { ref, streaming } of pairs) {
+          if (this[ref] === streaming) this[ref] = null;
+        }
+        if (!this._meetingMicStreaming && !this._meetingSystemStreaming) {
+          meetingConnectionKey = null;
+          meetingConnectionProvider = null;
+        }
         throw error;
       }
 
@@ -6469,6 +6625,7 @@ class IPCHandlers {
     let meetingConnectionOptions = null;
     let meetingConnectionWin = null;
     let meetingConnectionKey = null;
+    let meetingConnectionProvider = null;
     let meetingReconnectAudioBuffers = { mic: [], system: [] };
     let meetingReconnectAudioBytes = { mic: 0, system: 0 };
     let meetingReconnectReplaySources = new Set();
@@ -6569,6 +6726,7 @@ class IPCHandlers {
     };
 
     const dispatchMeetingAudioBuffer = (buffer, source) => {
+      if (meetingSessionTransportGeneration !== meetingTransportGeneration) return;
       if (meetingLocalMode) {
         meetingLocalBuffers[source].push(buffer);
         return;
@@ -6840,6 +6998,8 @@ class IPCHandlers {
     };
 
     const transcribeLocalMeetingChunk = async (source) => {
+      const generation = meetingTransportGeneration;
+      if (meetingSessionTransportGeneration !== generation) return;
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
 
@@ -6887,6 +7047,13 @@ class IPCHandlers {
             language: meetingLocalLanguage,
             ...vadOptions,
           });
+        }
+
+        if (
+          generation !== meetingTransportGeneration ||
+          meetingSessionTransportGeneration !== generation
+        ) {
+          return;
         }
 
         if (result?.success && result.text?.trim()) {
@@ -7095,6 +7262,16 @@ class IPCHandlers {
     let dictationPreviewDisplay = true;
     // Bumped on every reset so async preview work can detect a stale session.
     let dictationPreviewGen = 0;
+    // Unlike a normal stop, an authorization boundary must invalidate token
+    // fetches and connects that have not reached the transport yet.
+    let dictationTransportGeneration = 0;
+    const assertCurrentDictationTransport = (generation) => {
+      if (generation === dictationTransportGeneration) return;
+      const error = new Error("Dictation authorization changed");
+      error.name = "AbortError";
+      error.code = "AUTHORIZATION_BOUNDARY_CHANGED";
+      throw error;
+    };
     // Cloud partials can arrive faster than the preview window is created. Keep
     // preview updates, completion, and dismissal ordered so a late partial can
     // never overwrite the final result or reopen a dismissed window.
@@ -7211,17 +7388,22 @@ class IPCHandlers {
       meetingConnectionOptions = null;
       meetingConnectionWin = null;
       meetingConnectionKey = null;
+      meetingConnectionProvider = null;
+      meetingSessionTransportGeneration = null;
       resetMeetingReconnectAudio();
     };
 
     const disconnectMeetingStreaming = async ({ flushPending = false } = {}) => {
+      const provider = meetingConnectionProvider || meetingConnectionOptions?.provider;
       const results = await Promise.all([
-        this._meetingMicStreaming
-          ? this._meetingMicStreaming.disconnect().catch(() => ({ text: "" }))
-          : Promise.resolve({ text: "" }),
-        this._meetingSystemStreaming
-          ? this._meetingSystemStreaming.disconnect().catch(() => ({ text: "" }))
-          : Promise.resolve({ text: "" }),
+        disconnectMeetingStreamingClient(this._meetingMicStreaming, provider, flushPending).catch(
+          () => ({ text: "" })
+        ),
+        disconnectMeetingStreamingClient(
+          this._meetingSystemStreaming,
+          provider,
+          flushPending
+        ).catch(() => ({ text: "" })),
       ]);
 
       if (flushPending) {
@@ -7230,6 +7412,33 @@ class IPCHandlers {
 
       resetMeetingStreamingState();
       return results;
+    };
+
+    const abortMeetingTranscription = async (expectedSessionId) => {
+      if (this.meetingDetectionEngine?.endRecordingSession(expectedSessionId) === false) {
+        return { success: false, reason: "stale-session" };
+      }
+      this.meetingDetectionEngine?.setUserRecording(false);
+      await this.audioTapManager?.stop().catch(() => {});
+      await this.linuxPortalAudioManager?.stop().catch(() => {});
+      await this.windowsLoopbackAudioManager?.stop().catch(() => {});
+      await stopMeetingAec();
+      await stopLiveSpeakerIdentification().catch(() => null);
+      resetMeetingLocalState();
+      await disconnectMeetingStreaming({ flushPending: false });
+      this.activeMeetingSpeakerConfig = null;
+      return { success: true };
+    };
+
+    const invalidateMeetingTranscriptionTransport = () => {
+      meetingTransportGeneration += 1;
+      meetingSessionTransportGeneration = null;
+      meetingPendingMicChunks = [];
+      resetPendingMicFinals();
+      meetingLocalBuffers = { mic: [], system: [] };
+      resetMeetingReconnectAudio();
+      meetingConnectionOptions = null;
+      meetingConnectionWin = null;
     };
 
     const rollbackMeetingTranscriptionStart = async () => {
@@ -7281,13 +7490,14 @@ class IPCHandlers {
       this._dictationIdleTimer = setTimeout(() => {
         if (this._dictationStreaming) {
           debugLogger.debug("Closing idle dictation warmup connection");
-          this._dictationStreaming.disconnect().catch(() => {});
+          this._dictationStreaming.disconnect({ commit: false }).catch(() => {});
           this._dictationStreaming = null;
         }
       }, DICTATION_IDLE_TIMEOUT_MS);
     };
 
     const connectDictationStreaming = async (event, options) => {
+      const generation = dictationTransportGeneration;
       // Older renderers did not label the OpenAI dictation adapter. Dictation
       // realtime was OpenAI-only before Tinfoil support, so preserve that
       // established default while requiring new adapters to be explicit.
@@ -7299,14 +7509,16 @@ class IPCHandlers {
       if (this._dictationConnectPromise) {
         await this._dictationConnectPromise.catch(() => {});
       }
+      assertCurrentDictationTransport(generation);
 
       clearDictationIdleTimer();
       this._dictationPreviewEnabled = !!options.preview;
 
       if (this._dictationStreaming) {
-        await this._dictationStreaming.disconnect().catch(() => {});
+        await this._dictationStreaming.disconnect({ commit: false }).catch(() => {});
         this._dictationStreaming = null;
       }
+      assertCurrentDictationTransport(generation);
 
       const connectInner = async () => {
         const isCloud = options.mode !== "byok";
@@ -7326,6 +7538,7 @@ class IPCHandlers {
             mode: options.mode,
             provider,
           });
+          assertCurrentDictationTransport(generation);
           if (provider === "tinfoil-realtime") {
             const model = options.model || TINFOIL_REALTIME_MODEL;
             await streaming.connect({
@@ -7344,7 +7557,11 @@ class IPCHandlers {
               preconfigured: isCloud,
             });
           }
+          assertCurrentDictationTransport(generation);
         } catch (err) {
+          if (generation !== dictationTransportGeneration) {
+            await streaming.disconnect({ commit: false }).catch(() => {});
+          }
           if (this._dictationStreaming === streaming) this._dictationStreaming = null;
           throw err;
         }
@@ -7360,6 +7577,7 @@ class IPCHandlers {
 
     // Pre-warm: fetch tokens + connect WebSockets before user hits record
     ipcMain.handle("meeting-transcription-prepare", async (event, options = {}) => {
+      const generation = meetingTransportGeneration;
       if (meetingTranscriptionPrepareInProgress || meetingTranscriptionStartInProgress) {
         debugLogger.debug("Meeting transcription prepare already in progress, ignoring");
         return { success: false, error: "Operation in progress" };
@@ -7374,6 +7592,7 @@ class IPCHandlers {
       }
 
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
+      assertCurrentMeetingTransport(generation);
       const requestedConnectionKey = getMeetingConnectionKey(options);
 
       if (
@@ -7389,11 +7608,12 @@ class IPCHandlers {
         let timeoutHandle;
         try {
           await Promise.race([
-            connectRealtimeStreaming(event, options),
+            connectRealtimeStreaming(event, options, generation),
             new Promise((_, reject) => {
               timeoutHandle = setTimeout(() => reject(new Error("Prepare timed out")), 15000);
             }),
           ]);
+          assertCurrentMeetingTransport(generation);
           debugLogger.debug("Meeting transcription prepared (meeting streams warm)");
           return { success: true };
         } catch (error) {
@@ -7420,11 +7640,14 @@ class IPCHandlers {
     });
 
     const startMeetingTranscription = async (event, options = {}) => {
+      const generation = options.authorizationGeneration ?? meetingTransportGeneration;
       // Wait for any in-flight prepare to finish before starting
       if (meetingTranscriptionPreparePromise) {
         debugLogger.debug("Meeting transcription start: waiting for in-flight prepare");
         await meetingTranscriptionPreparePromise;
       }
+
+      assertCurrentMeetingTransport(generation);
 
       if (meetingTranscriptionStartInProgress) {
         debugLogger.debug("Meeting transcription start already in progress, ignoring");
@@ -7441,6 +7664,7 @@ class IPCHandlers {
       // scoped stop/auto-end matching.
       const recordingSessionId = options.sessionId;
       meetingStartedAt = Date.now();
+      meetingSessionTransportGeneration = generation;
       meetingConnectionOptions = options;
       meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
       meetingReconnectCount = 0;
@@ -7449,6 +7673,7 @@ class IPCHandlers {
       this.meetingDetectionEngine?.setUserRecording(true);
 
       const completeStart = async (result) => {
+        assertCurrentMeetingTransport(generation);
         await this.meetingDetectionEngine?.beginRecordingSession({
           sessionId: recordingSessionId,
           autoEndEligible: options.autoEndEligible === true,
@@ -7457,11 +7682,13 @@ class IPCHandlers {
           // Auto-end stays fail-safe until the renderer confirms a real source.
           systemAudioAvailable: false,
         });
+        assertCurrentMeetingTransport(generation);
         return { ...result, sessionId: recordingSessionId };
       };
 
       try {
         const systemAudioPlan = await getMeetingSystemAudioPlan({ refreshWindowsCapability: true });
+        assertCurrentMeetingTransport(generation);
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
         const requestedConnectionKey = getMeetingConnectionKey(options);
         meetingEchoLeakDetector.reset();
@@ -7477,7 +7704,12 @@ class IPCHandlers {
         }
 
         if (systemAudioMode === "unsupported" && this._meetingSystemStreaming?.isConnected) {
-          await this._meetingSystemStreaming.disconnect().catch(() => ({ text: "" }));
+          await disconnectMeetingStreamingClient(
+            this._meetingSystemStreaming,
+            meetingConnectionProvider,
+            false
+          ).catch(() => ({ text: "" }));
+          assertCurrentMeetingTransport(generation);
           this._meetingSystemStreaming = null;
         }
 
@@ -7489,18 +7721,21 @@ class IPCHandlers {
         ) {
           debugLogger.debug("Meeting transcription start: reusing warm connections");
           const win = BrowserWindow.fromWebContents(event.sender);
-          attachMeetingStreamingHandlers(this._meetingMicStreaming, win, "mic");
+          attachMeetingStreamingHandlers(this._meetingMicStreaming, win, "mic", generation);
           if (systemAudioMode !== "unsupported") {
-            attachMeetingStreamingHandlers(this._meetingSystemStreaming, win, "system");
+            attachMeetingStreamingHandlers(this._meetingSystemStreaming, win, "system", generation);
           }
           await startMeetingAec(systemAudioMode);
+          assertCurrentMeetingTransport(generation);
           await startLiveSpeakerIdentification(win, systemAudioMode);
+          assertCurrentMeetingTransport(generation);
           ({ systemAudioMode, systemAudioStrategy } = await startMeetingSystemAudio(
             event,
             systemAudioMode,
             systemAudioStrategy,
             "during warm-start reuse"
           ));
+          assertCurrentMeetingTransport(generation);
           return await completeStart({
             success: true,
             systemAudioMode,
@@ -7519,8 +7754,11 @@ class IPCHandlers {
           meetingLocalTranscript = "";
 
           await startLiveSpeakerIdentification(meetingLocalWin, systemAudioMode);
+          assertCurrentMeetingTransport(generation);
           await startMeetingAec(systemAudioMode);
+          assertCurrentMeetingTransport(generation);
 
+          assertCurrentMeetingTransport(generation);
           meetingLocalTimer = setInterval(() => {
             transcribeAllLocalBuffers();
           }, LOCAL_MEETING_CHUNK_INTERVAL_MS);
@@ -7531,6 +7769,7 @@ class IPCHandlers {
             systemAudioStrategy,
             "in local meeting mode"
           ));
+          assertCurrentMeetingTransport(generation);
 
           debugLogger.debug("Meeting transcription started in local mode", {
             provider: meetingLocalProvider,
@@ -7546,16 +7785,20 @@ class IPCHandlers {
           });
         }
 
-        await connectRealtimeStreaming(event, options);
+        await connectRealtimeStreaming(event, options, generation);
+        assertCurrentMeetingTransport(generation);
         const realtimeWin = BrowserWindow.fromWebContents(event.sender);
         await startLiveSpeakerIdentification(realtimeWin, systemAudioMode);
+        assertCurrentMeetingTransport(generation);
         await startMeetingAec(systemAudioMode);
+        assertCurrentMeetingTransport(generation);
         ({ systemAudioMode, systemAudioStrategy } = await startMeetingSystemAudio(
           event,
           systemAudioMode,
           systemAudioStrategy,
           "in realtime mode"
         ));
+        assertCurrentMeetingTransport(generation);
         return await completeStart({
           success: true,
           systemAudioMode,
@@ -7574,6 +7817,7 @@ class IPCHandlers {
     };
 
     const sendMeetingAudio = (audioBuffer, source) => {
+      if (meetingSessionTransportGeneration !== meetingTransportGeneration) return;
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.
@@ -7687,7 +7931,11 @@ class IPCHandlers {
 
     const fallBackToMicOnly = async (context) => {
       if (this._meetingSystemStreaming?.isConnected) {
-        await this._meetingSystemStreaming.disconnect().catch((disconnectError) => {
+        await disconnectMeetingStreamingClient(
+          this._meetingSystemStreaming,
+          meetingConnectionProvider,
+          false
+        ).catch((disconnectError) => {
           debugLogger.debug(
             `System streaming disconnect during ${context} fallback failed`,
             { error: disconnectError.message },
@@ -7868,6 +8116,8 @@ class IPCHandlers {
       start: ({ sessionId, ownerWebContents, options }) =>
         startMeetingTranscription({ sender: ownerWebContents }, { ...options, sessionId }),
       stop: (sessionId) => stopMeetingTranscription(sessionId),
+      abort: (sessionId) => abortMeetingTranscription(sessionId),
+      onAbortRequested: invalidateMeetingTranscriptionTransport,
       onError: (error, sessionId) => {
         debugLogger.error(
           "Meeting transcription owner-loss teardown failed",
@@ -7878,6 +8128,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("meeting-transcription-start", (event, options = {}) => {
+      const authorizationGeneration = meetingTransportGeneration;
       const sessionId =
         typeof options.sessionId === "string" && options.sessionId.length > 0
           ? options.sessionId
@@ -7885,13 +8136,21 @@ class IPCHandlers {
       return meetingTranscriptionLifecycle.startSession({
         sessionId,
         ownerWebContents: event.sender,
-        options,
+        options: { ...options, authorizationGeneration },
       });
     });
 
     ipcMain.handle("meeting-transcription-stop", (_event, expectedSessionId) =>
       meetingTranscriptionLifecycle.stopSession(expectedSessionId)
     );
+
+    ipcMain.handle("meeting-transcription-abort", async (_event, expectedSessionId) => {
+      const result = await meetingTranscriptionLifecycle.abortSession(expectedSessionId);
+      if (result?.reason !== "stale-session") return result;
+      if (expectedSessionId != null) return result;
+      invalidateMeetingTranscriptionTransport();
+      return abortMeetingTranscription(expectedSessionId);
+    });
 
     ipcMain.handle(
       "meeting-transcription-set-system-audio-available",
@@ -7949,6 +8208,32 @@ class IPCHandlers {
         this._dictationPreviewEnabled = false;
       }
       return { success: true, text: result.text || "" };
+    });
+
+    ipcMain.handle("dictation-streaming-abort", async () => {
+      dictationTransportGeneration += 1;
+      clearDictationIdleTimer();
+      resetDictationPreviewState();
+      this._dictationPreviewEnabled = false;
+
+      const realtime = this._dictationStreaming;
+      const assemblyAi = this.assemblyAiStreaming;
+      const deepgram = this.deepgramStreaming;
+      const corti = this.cortiStreaming;
+      this._dictationStreaming = null;
+      this.assemblyAiStreaming = null;
+      this.deepgramStreaming = null;
+      this.cortiStreaming = null;
+
+      await Promise.all([
+        realtime?.disconnect({ commit: false }).catch(() => {}),
+        assemblyAi?.disconnect(false).catch(() => {}),
+        deepgram?.disconnect(false).catch(() => {}),
+        corti?.disconnect(false).catch(() => {}),
+      ]);
+      assemblyAi?.cleanupAll?.();
+      this.windowManager.hideTranscriptionPreview();
+      return { success: true };
     });
 
     ipcMain.handle(
@@ -8710,8 +8995,13 @@ class IPCHandlers {
 
     // Unknown ids are a no-op: BYOK providers don't register a controller,
     // and the renderer fires this for every cancel.
-    ipcMain.handle("cancel-upload-transcription", async (_event, requestId) => {
-      return { success: this._uploadCancelRegistry.cancel(requestId) > 0 };
+    ipcMain.handle("cancel-upload-transcription", async (event, requestId) => {
+      const activeCancelled = this._uploadCancelRegistry.cancel(requestId) > 0;
+      const pendingDiscarded = discardPendingRetryTranscription(
+        retryTranscriptionOwnerId(event),
+        requestId
+      );
+      return { success: activeCancelled || pendingDiscarded };
     });
 
     ipcMain.handle(
@@ -9261,6 +9551,7 @@ class IPCHandlers {
     };
 
     ipcMain.handle("assemblyai-streaming-warmup", async (event, options = {}) => {
+      const generation = dictationTransportGeneration;
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) {
@@ -9282,7 +9573,9 @@ class IPCHandlers {
           token = await fetchStreamingToken(event);
         }
 
+        assertCurrentDictationTransport(generation);
         await this.assemblyAiStreaming.warmup({ ...options, token });
+        assertCurrentDictationTransport(generation);
         debugLogger.debug("AssemblyAI connection warmed up", {}, "streaming");
 
         return { success: true };
@@ -9295,6 +9588,7 @@ class IPCHandlers {
     let streamingStartInProgress = false;
 
     ipcMain.handle("assemblyai-streaming-start", async (event, options = {}) => {
+      const generation = dictationTransportGeneration;
       if (streamingStartInProgress) {
         debugLogger.debug("Streaming start already in progress, ignoring", {}, "streaming");
         return { success: false, error: "Operation in progress" };
@@ -9334,6 +9628,7 @@ class IPCHandlers {
         if (!token) {
           debugLogger.debug("Fetching streaming token from API", {}, "streaming");
           token = await fetchStreamingToken(event);
+          assertCurrentDictationTransport(generation);
           this.assemblyAiStreaming.cacheToken(token);
         } else {
           debugLogger.debug("Using cached streaming token", {}, "streaming");
@@ -9364,7 +9659,9 @@ class IPCHandlers {
           }
         };
 
+        assertCurrentDictationTransport(generation);
         await this.assemblyAiStreaming.connect({ ...options, token });
+        assertCurrentDictationTransport(generation);
         debugLogger.debug("AssemblyAI streaming started", {}, "streaming");
 
         return {
@@ -9492,6 +9789,7 @@ class IPCHandlers {
     };
 
     ipcMain.handle("deepgram-streaming-warmup", async (event, options = {}) => {
+      const generation = dictationTransportGeneration;
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) {
@@ -9523,7 +9821,9 @@ class IPCHandlers {
           token = await fetchDeepgramStreamingToken(event);
         }
 
+        assertCurrentDictationTransport(generation);
         await this.deepgramStreaming.warmup({ ...options, token });
+        assertCurrentDictationTransport(generation);
         debugLogger.debug("Deepgram connection warmed up", {}, "streaming");
 
         return { success: true };
@@ -9537,6 +9837,7 @@ class IPCHandlers {
     let sendDropCount = 0;
 
     ipcMain.handle("deepgram-streaming-start", async (event, options = {}) => {
+      const generation = dictationTransportGeneration;
       if (deepgramStreamingStartInProgress) {
         debugLogger.debug(
           "Deepgram streaming start already in progress, ignoring",
@@ -9579,6 +9880,7 @@ class IPCHandlers {
         if (!token) {
           debugLogger.debug("Fetching Deepgram streaming token from API", {}, "streaming");
           token = await fetchDeepgramStreamingToken(event);
+          assertCurrentDictationTransport(generation);
           this.deepgramStreaming.cacheToken(token);
         } else {
           debugLogger.debug("Using cached Deepgram streaming token", {}, "streaming");
@@ -9608,8 +9910,10 @@ class IPCHandlers {
           }
         };
 
+        assertCurrentDictationTransport(generation);
         sendDropCount = 0;
         await this.deepgramStreaming.connect({ ...options, token });
+        assertCurrentDictationTransport(generation);
         debugLogger.debug(
           "Deepgram streaming started",
           {
@@ -9700,6 +10004,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("corti-streaming-warmup", async (_event, options = {}) => {
+      const generation = dictationTransportGeneration;
       try {
         if (!this.cortiStreaming) {
           this.cortiStreaming = new CortiStreaming();
@@ -9708,6 +10013,7 @@ class IPCHandlers {
           return { success: true, alreadyWarm: true };
         }
         const { token, environment, tenant } = await this._mintStoredCortiToken(options);
+        assertCurrentDictationTransport(generation);
         await this.cortiStreaming.warmup({
           token,
           environment,
@@ -9715,6 +10021,7 @@ class IPCHandlers {
           language: options.language,
           keyterms: options.keyterms,
         });
+        assertCurrentDictationTransport(generation);
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message, code: error.code };
@@ -9722,6 +10029,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("corti-streaming-start", async (event, options = {}) => {
+      const generation = dictationTransportGeneration;
       try {
         if (!this.cortiStreaming) {
           this.cortiStreaming = new CortiStreaming();
@@ -9731,6 +10039,7 @@ class IPCHandlers {
         }
 
         const { token, environment, tenant } = await this._mintStoredCortiToken(options);
+        assertCurrentDictationTransport(generation);
         const win = BrowserWindow.fromWebContents(event.sender);
 
         this.cortiStreaming.onPartialTranscript = (text) => {
@@ -9746,6 +10055,7 @@ class IPCHandlers {
           if (win && !win.isDestroyed()) win.webContents.send("corti-session-end", data);
         };
 
+        assertCurrentDictationTransport(generation);
         await this.cortiStreaming.connect({
           token,
           environment,
@@ -9753,6 +10063,7 @@ class IPCHandlers {
           language: options.language,
           keyterms: options.keyterms,
         });
+        assertCurrentDictationTransport(generation);
         return { success: true };
       } catch (error) {
         debugLogger.error("Corti streaming start error", { error: error.message }, "streaming");

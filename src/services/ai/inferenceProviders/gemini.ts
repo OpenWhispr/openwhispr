@@ -27,9 +27,10 @@ interface GeminiGenerationConfig {
 export const geminiProvider: InferenceProvider = {
   id: "gemini",
   supportsImages: true,
-  async call({ text, model, agentName, config, ctx }) {
+  async call({ text, model, agentName, config, ctx, authorization }) {
     logger.logReasoning("GEMINI_START", { model, agentName, hasApiKey: false });
     const apiKey = await ctx.getApiKey("gemini");
+    authorization.assertCurrent();
     logger.logReasoning("GEMINI_API_KEY", { hasApiKey: !!apiKey, keyLength: apiKey?.length || 0 });
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
@@ -71,6 +72,7 @@ export const geminiProvider: InferenceProvider = {
     };
 
     const response = await withRetry(async () => {
+      authorization.assertCurrent();
       logger.logReasoning("GEMINI_REQUEST", {
         endpoint: `${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`,
         model,
@@ -88,6 +90,7 @@ export const geminiProvider: InferenceProvider = {
       const timeoutSeconds = getLlmRequestTimeoutSeconds();
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
       try {
+        authorization.assertCurrent();
         const res = await fetch(`${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },

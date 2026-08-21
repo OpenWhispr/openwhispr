@@ -10,6 +10,11 @@ import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import type { InferenceMode } from "../../types/electron";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 import { getStreamingTranscriptionProviders } from "../../models/ModelRegistry";
+import { useManagedLocalModelLock } from "../../hooks/useManagedLocalModelLock";
+import {
+  canSelectManagedLocalMode,
+  constrainManagedLocalModeOptions,
+} from "../onboarding/managedLocalModels";
 
 const MEETING_BYOK_PROVIDER_IDS = getStreamingTranscriptionProviders().map(
   (provider) => provider.id
@@ -35,6 +40,7 @@ const noop = () => {};
 export function MeetingTranscriptionPanel() {
   const { t } = useTranslation();
   const startOnboarding = useStartOnboarding();
+  const managedLocalLock = useManagedLocalModelLock("transcription");
 
   const {
     isSignedIn,
@@ -94,7 +100,12 @@ export function MeetingTranscriptionPanel() {
     meetingTranscriptionMode,
     { byokProviders: MEETING_BYOK_PROVIDER_IDS }
   );
+  const selectableTranscriptionModes = constrainManagedLocalModeOptions(
+    transcriptionModes,
+    managedLocalLock.managed
+  );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
+    if (!canSelectManagedLocalMode(managedLocalLock.managed, mode)) return;
     if (!isModeAllowed(mode)) return;
     if (mode === "self-hosted") return;
     if (mode === "openwhispr" && !isSignedIn) {
@@ -147,7 +158,7 @@ export function MeetingTranscriptionPanel() {
   return (
     <div className="space-y-3">
       <InferenceModeSelector
-        modes={transcriptionModes}
+        modes={selectableTranscriptionModes}
         activeMode={effectiveTranscriptionMode}
         onSelect={handleTranscriptionModeSelect}
       />

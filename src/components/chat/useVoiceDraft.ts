@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useSettings } from "../../hooks/useSettings";
-import { useSettingsStore } from "../../stores/settingsStore";
+import { getSettings } from "../../stores/settingsStore";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
 import {
   transcribeFile,
@@ -9,6 +9,12 @@ import {
   type FileTranscriptionConfig,
 } from "../../services/fileTranscription";
 import { analyserRms } from "../../utils/audioLevel";
+import {
+  isManagedLocalTranscriptionRuntimeAllowed,
+  resolveManagedLocalTranscriptionRuntime,
+} from "../../helpers/managedLocalTranscriptionRuntime";
+import { captureRuntimeAuthorizationLease } from "../../helpers/runtimeAuthorizationBoundary";
+import { usePolicyStore } from "../../stores/policyStore";
 
 export type VoiceDraftStatus = "idle" | "recording" | "transcribing";
 
@@ -24,23 +30,7 @@ interface UseVoiceDraftOptions {
  */
 export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
   const { isSignedIn } = useAuth();
-  const settings = useSettings();
-  const {
-    useLocalWhisper,
-    whisperModel,
-    localTranscriptionProvider,
-    parakeetModel,
-    cloudTranscriptionMode,
-    cloudTranscriptionProvider,
-    cloudTranscriptionBaseUrl,
-    cloudTranscriptionModel,
-    preferredLanguage,
-    transcriptionMode,
-    remoteTranscriptionUrl,
-    remoteTranscriptionModel,
-  } = settings;
-  const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
-  const cortiTenant = useSettingsStore((s) => s.cortiTenant);
+  useSettings();
 
   const [status, setStatus] = useState<VoiceDraftStatus>("idle");
   const [elapsed, setElapsed] = useState(0);
@@ -52,25 +42,34 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
   const levelBufRef = useRef<Float32Array<ArrayBuffer> | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const discardRef = useRef(false);
+  const operationGenerationRef = useRef(0);
+  const activeRequestIdRef = useRef<string | null>(null);
+  const authorizationLeaseRef = useRef<ReturnType<typeof captureRuntimeAuthorizationLease> | null>(
+    null
+  );
 
-  const buildConfig = (): FileTranscriptionConfig => ({
-    useLocalWhisper,
-    localTranscriptionProvider: localTranscriptionProvider as string,
-    whisperModel,
-    parakeetModel,
-    isOpenWhisprCloud: isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper,
-    getApiKey: () => getTranscriptionApiKey(cloudTranscriptionProvider as string, settings),
-    cloudTranscriptionProvider: cloudTranscriptionProvider as string,
-    cloudTranscriptionBaseUrl: cloudTranscriptionBaseUrl || "",
-    cloudTranscriptionModel,
-    // Empty = auto-detect; the resolver supplies a default where one is required.
-    language: getBaseLanguageCode(preferredLanguage) || "",
-    cortiEnvironment,
-    cortiTenant,
-    transcriptionMode,
-    remoteTranscriptionUrl,
-    remoteTranscriptionModel,
-  });
+  const buildConfig = (): FileTranscriptionConfig => {
+    const settings = getSettings();
+    return {
+      useLocalWhisper: settings.useLocalWhisper,
+      localTranscriptionProvider: settings.localTranscriptionProvider,
+      whisperModel: settings.whisperModel,
+      parakeetModel: settings.parakeetModel,
+      isOpenWhisprCloud:
+        isSignedIn && settings.cloudTranscriptionMode === "openwhispr" && !settings.useLocalWhisper,
+      getApiKey: () => getTranscriptionApiKey(settings.cloudTranscriptionProvider, settings),
+      cloudTranscriptionProvider: settings.cloudTranscriptionProvider,
+      cloudTranscriptionBaseUrl: settings.cloudTranscriptionBaseUrl || "",
+      cloudTranscriptionModel: settings.cloudTranscriptionModel,
+      // Empty = auto-detect; the resolver supplies a default where one is required.
+      language: getBaseLanguageCode(settings.preferredLanguage) || "",
+      cortiEnvironment: settings.cortiEnvironment,
+      cortiTenant: settings.cortiTenant,
+      transcriptionMode: settings.transcriptionMode,
+      remoteTranscriptionUrl: settings.remoteTranscriptionUrl,
+      remoteTranscriptionModel: settings.remoteTranscriptionModel,
+    };
+  };
 
   // Latest-value refs so the recorder's onstop (bound at start time) uses
   // current settings and callbacks.
@@ -104,22 +103,40 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
   }, []);
 
   const finishRecording = useCallback(async () => {
+    const operationGeneration = operationGenerationRef.current;
+    const authorization = authorizationLeaseRef.current;
     const blob = new Blob(chunksRef.current, { type: "audio/webm" });
     chunksRef.current = [];
     teardownCapture();
 
-    if (discardRef.current || blob.size === 0) {
+    if (discardRef.current || blob.size === 0 || !authorization?.isCurrent()) {
+      authorization?.dispose();
+      if (authorizationLeaseRef.current === authorization) authorizationLeaseRef.current = null;
       setStatus("idle");
       return;
     }
 
     setStatus("transcribing");
     let tempPath: string | null = null;
+    let requestId: string | null = null;
     try {
+      authorization.assertCurrent();
       const buffer = await blob.arrayBuffer();
+      authorization.assertCurrent();
       const saved = await window.electronAPI.saveTempAudio(buffer);
       tempPath = saved.path;
-      const result = await transcribeFile(tempPath, buildConfigRef.current(), false);
+      authorization.assertCurrent();
+      const runtime = resolveManagedLocalTranscriptionRuntime(buildConfigRef.current());
+      if (!isManagedLocalTranscriptionRuntimeAllowed(runtime, usePolicyStore.getState())) {
+        throw new Error("Transcription is restricted by your organization.");
+      }
+      if (runtime.kind === "error") throw Object.assign(new Error(runtime.message), runtime);
+      requestId = crypto.randomUUID();
+      activeRequestIdRef.current = requestId;
+      authorization.assertCurrent();
+      const result = await transcribeFile(tempPath, runtime.settings, false, { requestId });
+      authorization.assertCurrent();
+      if (operationGeneration !== operationGenerationRef.current || discardRef.current) return;
       const text = result.text?.trim();
       if (!result.success || !text) {
         onErrorRef.current(result.error || "");
@@ -127,17 +144,47 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
         onTranscriptRef.current(text);
       }
     } catch (error) {
+      if (
+        operationGeneration !== operationGenerationRef.current ||
+        discardRef.current ||
+        (error as { code?: string }).code === "AUTHORIZATION_BOUNDARY_CHANGED"
+      ) {
+        return;
+      }
       onErrorRef.current(error instanceof Error ? error.message : String(error));
     } finally {
+      if (activeRequestIdRef.current === requestId) activeRequestIdRef.current = null;
       if (tempPath) void window.electronAPI.deleteTempAudio(tempPath);
-      setStatus("idle");
+      authorization.dispose();
+      if (authorizationLeaseRef.current === authorization) authorizationLeaseRef.current = null;
+      if (operationGeneration === operationGenerationRef.current) setStatus("idle");
     }
   }, [teardownCapture]);
 
   const start = useCallback(async () => {
     if (recorderRef.current) return;
+    const operationGeneration = ++operationGenerationRef.current;
+    const authorization = captureRuntimeAuthorizationLease("transcription", () => {
+      if (operationGeneration !== operationGenerationRef.current) return;
+      operationGenerationRef.current += 1;
+      discardRef.current = true;
+      const requestId = activeRequestIdRef.current;
+      activeRequestIdRef.current = null;
+      if (requestId) void window.electronAPI.cancelUploadTranscription?.(requestId);
+      recorderRef.current?.stop();
+      setStatus("idle");
+    });
+    authorizationLeaseRef.current?.dispose();
+    authorizationLeaseRef.current = authorization;
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const runtime = resolveManagedLocalTranscriptionRuntime(buildConfigRef.current());
+      if (!isManagedLocalTranscriptionRuntimeAllowed(runtime, usePolicyStore.getState())) {
+        throw new Error("Transcription is restricted by your organization.");
+      }
+      authorization.assertCurrent();
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      authorization.assertCurrent();
       const context = new AudioContext();
       const source = context.createMediaStreamSource(stream);
       const analyser = context.createAnalyser();
@@ -165,7 +212,16 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
       analyserRef.current = analyser;
       setStatus("recording");
     } catch (error) {
+      stream?.getTracks().forEach((track) => track.stop());
       teardownCapture();
+      authorization.dispose();
+      if (authorizationLeaseRef.current === authorization) authorizationLeaseRef.current = null;
+      if (
+        operationGeneration !== operationGenerationRef.current ||
+        (error as { code?: string }).code === "AUTHORIZATION_BOUNDARY_CHANGED"
+      ) {
+        return;
+      }
       onErrorRef.current(error instanceof Error ? error.message : String(error));
     }
   }, [finishRecording, teardownCapture]);
@@ -176,13 +232,24 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
 
   const cancel = useCallback(() => {
     discardRef.current = true;
+    operationGenerationRef.current += 1;
+    const requestId = activeRequestIdRef.current;
+    activeRequestIdRef.current = null;
+    if (requestId) void window.electronAPI.cancelUploadTranscription?.(requestId);
     recorderRef.current?.stop();
+    setStatus("idle");
   }, []);
 
   // Discard silently if the surface unmounts mid-take.
   useEffect(
     () => () => {
       discardRef.current = true;
+      operationGenerationRef.current += 1;
+      const requestId = activeRequestIdRef.current;
+      activeRequestIdRef.current = null;
+      if (requestId) void window.electronAPI.cancelUploadTranscription?.(requestId);
+      authorizationLeaseRef.current?.dispose();
+      authorizationLeaseRef.current = null;
       recorderRef.current?.stop();
     },
     []

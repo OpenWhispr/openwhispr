@@ -28,6 +28,33 @@ const gateMocks = {
   "./settingsStore": "export const getSettings = () => ({});",
   "./policyStore": "export const usePolicyStore = { getState: () => ({}) };",
   "./policyRules": "export const isTranscriptionContextAllowed = () => true;",
+  managedLocalTranscriptionRuntime: `
+    export const resolveManagedLocalTranscriptionRuntime = (settings) => ({
+      kind: 'ready', managed: false, settings,
+    });
+    export const isManagedLocalTranscriptionRuntimeAllowed = () => true;
+  `,
+  runtimeAuthorizationBoundary: `
+    export const captureRuntimeAuthorizationLease = (_domains, onChanged) => {
+      let current = true;
+      const callback = () => {
+        if (!current) return;
+        current = false;
+        onChanged();
+      };
+      globalThis.__batchAuthorizationCallbacks?.add(callback);
+      return {
+        isCurrent: () => current,
+        assertCurrent() {
+          if (!current) throw Object.assign(new Error('Authorization changed'), {
+            name: 'AbortError',
+            code: 'AUTHORIZATION_BOUNDARY_CHANGED',
+          });
+        },
+        dispose() { globalThis.__batchAuthorizationCallbacks?.delete(callback); },
+      };
+    };
+  `,
 };
 
 async function waitForQueueSettled(store, timeoutMs = 5000) {
@@ -170,4 +197,70 @@ test("an upload without diarization leaves the note columns untouched", async (t
   assert.equal(calls.updateNote.length, 0);
   assert.equal(calls.saveNote.length, 1);
   assert.equal(calls.saveNote[0][4], null);
+});
+
+test("an authorization change cancels a detached batch and prevents later title or save work", async (t) => {
+  globalThis.__batchAuthorizationCallbacks = new Set();
+  t.after(() => delete globalThis.__batchAuthorizationCallbacks);
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-upload-batch-auth-boundary-test-",
+    mockModules: gateMocks,
+  });
+  let resolveTranscription;
+  const transcriptionResult = new Promise((resolve) => {
+    resolveTranscription = resolve;
+  });
+  const transcriptionRequests = [];
+  const cancelledRequests = [];
+  const savedNotes = [];
+  Object.assign(window.electronAPI, {
+    transcribeAudioFile: async (_path, options) => {
+      transcriptionRequests.push(options.requestId);
+      return transcriptionResult;
+    },
+    cancelUploadTranscription: async (requestId) => {
+      cancelledRequests.push(requestId);
+      return { success: true };
+    },
+    cancelUrlDownload() {},
+    saveNote: async (...args) => {
+      savedNotes.push(args);
+      return { success: true, note: { id: 17 } };
+    },
+  });
+  let titleCalls = 0;
+  const store = await vite.ssrLoadModule("/stores/batchQueueStore.ts");
+  store.addFiles([
+    { name: "first.m4a", path: "/tmp/first.m4a", sizeBytes: 100 },
+    { name: "second.m4a", path: "/tmp/second.m4a", sizeBytes: 100 },
+  ]);
+  store.processBatchQueue(
+    {
+      transcription,
+      folderId: null,
+      generateTitle: async () => {
+        titleCalls += 1;
+        return "Generated";
+      },
+    },
+    { enabled: false, localModelsReady: false, numSpeakers: null }
+  );
+  while (transcriptionRequests.length === 0) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  for (const callback of [...globalThis.__batchAuthorizationCallbacks]) callback();
+  resolveTranscription({ success: true, text: "late transcript" });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(cancelledRequests, [transcriptionRequests[0]]);
+  assert.equal(transcriptionRequests.length, 1);
+  assert.equal(titleCalls, 0);
+  assert.equal(savedNotes.length, 0);
+  assert.equal(store.useBatchQueueStore.getState().isProcessing, false);
+  assert.deepEqual(
+    store.useBatchQueueStore.getState().queue.map((item) => item.status),
+    ["error", "error"]
+  );
 });

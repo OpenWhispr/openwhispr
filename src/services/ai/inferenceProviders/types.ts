@@ -1,4 +1,5 @@
 import type { ReasoningConfig } from "../../BaseReasoningService";
+import type { RuntimeAuthorizationGuard } from "../../../helpers/runtimeAuthorizationBoundary";
 
 export interface ProviderContext {
   getApiKey(provider: string): Promise<string>;
@@ -13,7 +14,8 @@ export interface ProviderContext {
     text: string,
     agentName: string | null,
     config: ReasoningConfig,
-    providerName: string
+    providerName: string,
+    authorization: RuntimeAuthorizationGuard
   ): Promise<string>;
   calculateMaxTokens(
     textLength: number,
@@ -29,6 +31,7 @@ export interface ProviderCallParams {
   agentName: string | null;
   config: ReasoningConfig;
   ctx: ProviderContext;
+  authorization: RuntimeAuthorizationGuard;
 }
 
 export interface InferenceProvider {

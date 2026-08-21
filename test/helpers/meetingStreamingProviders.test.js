@@ -90,3 +90,27 @@ test("connection identity includes every provider-specific option", async () => 
     getMeetingConnectionKey({ ...options, tenant: "tenant-b" })
   );
 });
+
+test("authorization abort disconnects every provider without committing", async () => {
+  const { disconnectMeetingStreamingClient } = await load();
+
+  for (const provider of ["openai-realtime", "tinfoil-realtime"]) {
+    const calls = [];
+    await disconnectMeetingStreamingClient(
+      { disconnect: async (...args) => calls.push(args) },
+      provider,
+      false
+    );
+    assert.deepEqual(calls, [[{ commit: false }]], provider);
+  }
+
+  for (const provider of ["deepgram-realtime", "corti-realtime", "assemblyai-realtime"]) {
+    const calls = [];
+    await disconnectMeetingStreamingClient(
+      { disconnect: async (...args) => calls.push(args) },
+      provider,
+      false
+    );
+    assert.deepEqual(calls, [[false]], provider);
+  }
+});

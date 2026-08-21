@@ -1,4 +1,9 @@
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import {
+  assertToolExecutionAuthorized,
+  type ToolDefinition,
+  type ToolExecutionContext,
+  type ToolResult,
+} from "./ToolRegistry";
 
 export const webSearchTool: ToolDefinition = {
   name: "web_search",
@@ -21,12 +26,17 @@ export const webSearchTool: ToolDefinition = {
   },
   readOnly: true,
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    args: Record<string, unknown>,
+    context?: ToolExecutionContext
+  ): Promise<ToolResult> {
     const query = args.query as string;
     const numResults = typeof args.numResults === "number" ? args.numResults : 5;
 
     try {
+      assertToolExecutionAuthorized(context);
       const raw = await window.electronAPI.agentWebSearch!(query, numResults);
+      assertToolExecutionAuthorized(context);
 
       const results = Array.isArray(raw?.results)
         ? raw.results.map(
@@ -45,6 +55,7 @@ export const webSearchTool: ToolDefinition = {
         displayText: `Found web results for "${query}"`,
       };
     } catch (error) {
+      assertToolExecutionAuthorized(context);
       return {
         success: false,
         data: null,

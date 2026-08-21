@@ -1,4 +1,9 @@
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import {
+  assertToolExecutionAuthorized,
+  type ToolDefinition,
+  type ToolExecutionContext,
+  type ToolResult,
+} from "./ToolRegistry";
 
 export const clipboardTool: ToolDefinition = {
   name: "copy_to_clipboard",
@@ -16,11 +21,16 @@ export const clipboardTool: ToolDefinition = {
   },
   readOnly: false,
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    args: Record<string, unknown>,
+    context?: ToolExecutionContext
+  ): Promise<ToolResult> {
     const text = args.text as string;
 
     try {
+      assertToolExecutionAuthorized(context);
       await window.electronAPI.writeClipboard(text);
+      assertToolExecutionAuthorized(context);
 
       const preview = text.length > 100 ? text.slice(0, 100) + "..." : text;
       return {
@@ -29,6 +39,7 @@ export const clipboardTool: ToolDefinition = {
         displayText: `Copied to clipboard: "${preview}"`,
       };
     } catch (error) {
+      assertToolExecutionAuthorized(context);
       return {
         success: false,
         data: null,

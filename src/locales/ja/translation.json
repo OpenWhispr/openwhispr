@@ -178,6 +178,64 @@
     "policyAgentRestricted": "AIエージェントの使用は組織によって制限されています。",
     "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。"
   },
+  "managedLocalModels": {
+    "compatibility": {
+      "checking": "デバイスの互換性を確認しています…",
+      "unavailable": "デバイスの互換性を確認できませんでした。",
+      "unsupported": "このモデルはこのデバイスではサポートされていません。",
+      "requiresMacOS": "このモデルには macOS {{version}} 以降が必要です。"
+    },
+    "policy": {
+      "allBlocked": "より厳格な会社ポリシーにより、必須のローカルモデルがブロックされています。IT 管理者に連絡してください。"
+    },
+    "categories": {
+      "transcriptionTitle": "音声入力",
+      "transcriptionDescription": "会社が承認した音声モデルを1つ選択してください。",
+      "reasoningTitle": "AI、音声エージェント、ノート",
+      "reasoningDescription": "AI 機能で共通して使用する承認済みモデルを1つ選択してください。"
+    },
+    "errors": {
+      "policyTranscription": "より厳格な会社ポリシーにより、必須のローカル音声入力モデルがブロックされています。IT 管理者に連絡してください。",
+      "policyReasoning": "より厳格な会社ポリシーにより、必須のローカル AI モデルがブロックされています。IT 管理者に連絡してください。",
+      "incompatibleTranscription": "このデバイスと互換性のある会社承認済み音声入力モデルがありません。IT 管理者に連絡してください。",
+      "incompatibleReasoning": "このデバイスと互換性のある会社承認済み AI モデルがありません。IT 管理者に連絡してください。",
+      "downloadCancelled": "会社モデルのダウンロードがキャンセルされました。続行するには再開してください。"
+    },
+    "attention": {
+      "title": "会社モデルを確認してください"
+    },
+    "workspaceSetup": {
+      "title": "このワークスペースのモデルを設定",
+      "description": "この会社ワークスペースには独自の承認済みモデルがあります。続行するには一度選択してください。"
+    },
+    "notice": {
+      "waiting": "会社のモデル設定を待機中",
+      "managedDescription": "会社によって管理されています。このワークスペースがアクティブな間、このモデルを変更または削除することはできません。"
+    },
+    "settings": {
+      "title": "会社が管理するモデル",
+      "removalBlocked": "このエンタープライズワークスペースがアクティブな間、会社管理モデルを削除することはできません。",
+      "cacheRemovalBlocked": "{{path}} · 会社管理モデルは削除できません。"
+    },
+    "onboarding": {
+      "configUnavailableFallback": "会社のモデル設定を読み込めませんでした。",
+      "configInvalid": "会社のモデル設定が無効です。IT 管理者に連絡してください。",
+      "requiresNewerVersion": "会社が管理するモデルを使用するには、より新しいバージョンの OpenWhispr が必要です。",
+      "authExpired": "OpenWhispr のセッションが期限切れです。サインアウトして、もう一度サインインしてください。",
+      "enterpriseRequired": "有効な Enterprise ワークスペースが必要です。Enterprise ワークスペースを選択するか、IT 管理者に連絡してください。",
+      "ssoRequired": "会社の SSO が必要です。サインアウトし、会社の SSO アカウントでもう一度サインインしてください。",
+      "administratorRequired": "会社のモデル設定には管理者の対応が必要です。IT 管理者に連絡してください。",
+      "unavailableTitle": "会社の設定を利用できません",
+      "unavailableInstructions": "今すぐ再試行してください。問題が続く場合は IT 管理者に連絡してください。",
+      "checking": "会社の設定を確認しています…",
+      "downloadTitle": "会社モデルをダウンロード",
+      "downloadDescription": "必須グループごとに承認済みモデルを1つ選択してください。ダウンロードはバックグラウンドで続行できます。",
+      "restartDownload": "設定を完了する前に、キャンセルまたは失敗した会社モデルのダウンロードを再開してください。"
+    },
+    "runtime": {
+      "transcriptionUnavailable": "会社が管理するローカル文字起こしモデルを利用できません。"
+    }
+  },
   "onboarding": {
     "rehaul": {
       "permissions": {

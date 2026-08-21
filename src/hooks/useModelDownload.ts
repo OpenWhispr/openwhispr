@@ -11,7 +11,19 @@ import type {
   WhisperModelResult,
 } from "../types/electron";
 import { clearMissingLocalModelSelections } from "../stores/settingsStore";
+import {
+  attachModelDownloadRequestToActive,
+  createModelDownloadRequest,
+  routeModelDownloadTerminalEvent,
+  settleModelDownloadOriginSuccess,
+  type ModelDownloadTerminalEvent,
+  type PendingModelDownloadRequest,
+} from "./modelDownloadRequest";
 import "../types/electron";
+import {
+  MODEL_DOWNLOAD_CANCELLATION_EVENT,
+  readModelDownloadCancellationEvent,
+} from "./modelDownloadCancellation";
 
 const PROGRESS_THROTTLE_MS = 100;
 
@@ -24,23 +36,14 @@ export interface DownloadProgress {
 }
 
 export type ModelType = "whisper" | "llm" | "parakeet";
+export type ModelDownloadOutcome =
+  "started" | "joined-same" | "busy-other" | "cancelled" | "failed";
 
 interface UseModelDownloadOptions {
   modelType: ModelType;
   onDownloadComplete?: () => void;
   onModelsCleared?: () => void;
-}
-
-interface ModelDownloadTerminalEvent {
-  type: "complete" | "error";
-  modelId: string;
-  error?: string;
-  code?: string;
-}
-
-interface PendingModelDownloadRequest {
-  modelId: string;
-  terminalEvent?: ModelDownloadTerminalEvent;
+  onTerminalError?: (modelId: string, error: string) => void;
 }
 
 type TranscriptionModelStatus = WhisperModelResult | ParakeetModelResult;
@@ -75,6 +78,7 @@ export function useModelDownload({
   modelType,
   onDownloadComplete,
   onModelsCleared,
+  onTerminalError,
 }: UseModelDownloadOptions) {
   const { t } = useTranslation();
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
@@ -86,6 +90,7 @@ export function useModelDownload({
   const [isCancelling, setIsCancelling] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [hasHydratedDownloads, setHasHydratedDownloads] = useState(false);
   const isCancellingRef = useRef(false);
   const lastProgressUpdateRef = useRef(0);
   const downloadingModelRef = useRef<string | null>(null);
@@ -97,6 +102,7 @@ export function useModelDownload({
   const showAlertDialogRef = useRef(showAlertDialog);
   const onDownloadCompleteRef = useRef(onDownloadComplete);
   const onModelsClearedRef = useRef(onModelsCleared);
+  const onTerminalErrorRef = useRef(onTerminalError);
 
   useEffect(() => {
     showAlertDialogRef.current = showAlertDialog;
@@ -109,6 +115,10 @@ export function useModelDownload({
   useEffect(() => {
     onModelsClearedRef.current = onModelsCleared;
   }, [onModelsCleared]);
+
+  useEffect(() => {
+    onTerminalErrorRef.current = onTerminalError;
+  }, [onTerminalError]);
 
   useEffect(() => {
     downloadingModelRef.current = downloadingModel;
@@ -137,9 +147,9 @@ export function useModelDownload({
         if (modelType === "llm") {
           const models: LocalLLMModelStatus[] | undefined =
             await window.electronAPI?.modelGetAll?.();
-          const active =
-            models?.find((model) => model.isDownloading && model.id === preferredModelId) ??
-            models?.find((model) => model.isDownloading);
+          const active = preferredModelId
+            ? models?.find((model) => model.isDownloading && model.id === preferredModelId)
+            : models?.find((model) => model.isDownloading);
           if (active) {
             activeModel = {
               id: active.id,
@@ -154,9 +164,9 @@ export function useModelDownload({
               ? await window.electronAPI?.listWhisperModels?.()
               : await window.electronAPI?.listParakeetModels?.();
           const models = result?.models as TranscriptionModelStatus[] | undefined;
-          const active =
-            models?.find((model) => model.isDownloading && model.model === preferredModelId) ??
-            models?.find((model) => model.isDownloading);
+          const active = preferredModelId
+            ? models?.find((model) => model.isDownloading && model.model === preferredModelId)
+            : models?.find((model) => model.isDownloading);
           if (active) {
             activeModel = {
               id: active.model,
@@ -196,7 +206,10 @@ export function useModelDownload({
   );
 
   const applyTerminalEvent = useCallback(
-    (data: ModelDownloadTerminalEvent) => {
+    (
+      data: ModelDownloadTerminalEvent,
+      { requestErrorHandled = false }: { requestErrorHandled?: boolean } = {}
+    ) => {
       const trackedModel = downloadingModelRef.current;
       if (trackedModel && trackedModel !== data.modelId) return;
 
@@ -225,6 +238,8 @@ export function useModelDownload({
         data.code
       );
       setDownloadError(msg);
+      if (!requestErrorHandled) onTerminalErrorRef.current?.(data.modelId, msg);
+      void onDownloadCompleteRef.current?.();
       showAlertDialogRef.current({
         title:
           data.code === "EXTRACTION_FAILED"
@@ -259,7 +274,16 @@ export function useModelDownload({
         const activeRequest = activeDownloadRequestRef.current;
         if (activeRequest?.modelId === data.model) {
           downloadStateVersionRef.current += 1;
-          activeRequest.terminalEvent = terminalEvent;
+          const routed = routeModelDownloadTerminalEvent(activeRequest, terminalEvent, {
+            formatError: (event) =>
+              getDownloadErrorMessage(
+                t,
+                event.error || t("hooks.modelDownload.errors.unknown"),
+                event.code
+              ),
+            applyTerminal: applyTerminalEvent,
+          });
+          if (routed === "settled") activeDownloadRequestRef.current = null;
           return;
         }
         applyTerminalEvent(terminalEvent);
@@ -289,7 +313,7 @@ export function useModelDownload({
         }));
       }
     },
-    [applyTerminalEvent]
+    [applyTerminalEvent, t]
   );
 
   const handleLLMProgress = useCallback(
@@ -300,7 +324,16 @@ export function useModelDownload({
         const activeRequest = activeDownloadRequestRef.current;
         if (activeRequest?.modelId === data.modelId) {
           downloadStateVersionRef.current += 1;
-          activeRequest.terminalEvent = data;
+          const routed = routeModelDownloadTerminalEvent(activeRequest, data, {
+            formatError: (event) =>
+              getDownloadErrorMessage(
+                t,
+                event.error || t("hooks.modelDownload.errors.unknown"),
+                event.code
+              ),
+            applyTerminal: applyTerminalEvent,
+          });
+          if (routed === "settled") activeDownloadRequestRef.current = null;
           return;
         }
         applyTerminalEvent({ ...data, modelId: data.modelId });
@@ -311,7 +344,16 @@ export function useModelDownload({
         const activeRequest = activeDownloadRequestRef.current;
         if (activeRequest?.modelId === data.modelId) {
           downloadStateVersionRef.current += 1;
-          activeRequest.terminalEvent = data;
+          const routed = routeModelDownloadTerminalEvent(activeRequest, data, {
+            formatError: (event) =>
+              getDownloadErrorMessage(
+                t,
+                event.error || t("hooks.modelDownload.errors.unknown"),
+                event.code
+              ),
+            applyTerminal: applyTerminalEvent,
+          });
+          if (routed === "settled") activeDownloadRequestRef.current = null;
           return;
         }
         applyTerminalEvent({ ...data, modelId: data.modelId });
@@ -338,7 +380,7 @@ export function useModelDownload({
         totalBytes: data.totalSize || 0,
       });
     },
-    [applyTerminalEvent]
+    [applyTerminalEvent, t]
   );
 
   useEffect(() => {
@@ -361,16 +403,20 @@ export function useModelDownload({
     let cancelled = false;
 
     const hydrateAfterMount = async () => {
-      // A remount can overlap a download starting or its final atomic file move.
-      // Retry briefly so a single transitional snapshot cannot restore the idle UI.
-      for (const delay of [0, 200, 600]) {
-        if (delay > 0) {
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-        if (cancelled) return;
+      try {
+        // A remount can overlap a download starting or its final atomic file move.
+        // Retry briefly so a single transitional snapshot cannot restore the idle UI.
+        for (const delay of [0, 200, 600]) {
+          if (delay > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+          if (cancelled) return;
 
-        const hydrated = await hydrateActiveDownload(undefined, () => !cancelled);
-        if (cancelled || hydrated || downloadingModelRef.current) return;
+          const hydrated = await hydrateActiveDownload(undefined, () => !cancelled);
+          if (cancelled || hydrated || downloadingModelRef.current) return;
+        }
+      } finally {
+        if (!cancelled) setHasHydratedDownloads(true);
       }
     };
 
@@ -380,19 +426,63 @@ export function useModelDownload({
     };
   }, [hydrateActiveDownload]);
 
+  useEffect(() => {
+    const handleCancellation = (event: Event): void => {
+      const cancellation = readModelDownloadCancellationEvent(event);
+      if (
+        !cancellation ||
+        cancellation.modelType !== modelType ||
+        cancellation.modelId !== downloadingModelRef.current
+      ) {
+        return;
+      }
+      downloadStateVersionRef.current += 1;
+      activeDownloadRequestRef.current = null;
+      downloadingModelRef.current = null;
+      setIsInstalling(false);
+      setDownloadingModel(null);
+      setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
+      void onDownloadCompleteRef.current?.();
+    };
+    window.addEventListener(MODEL_DOWNLOAD_CANCELLATION_EVENT, handleCancellation);
+    window.addEventListener("storage", handleCancellation);
+    return () => {
+      window.removeEventListener(MODEL_DOWNLOAD_CANCELLATION_EVENT, handleCancellation);
+      window.removeEventListener("storage", handleCancellation);
+    };
+  }, [modelType]);
+
   const downloadModel = useCallback(
-    async (modelId: string, onSelectAfterDownload?: (id: string) => void) => {
+    async (
+      modelId: string,
+      onSelectAfterDownload?: (id: string) => void,
+      onDownloadError?: (error: string) => void
+    ): Promise<ModelDownloadOutcome> => {
       if (downloadingModelRef.current) {
+        const attachment = attachModelDownloadRequestToActive(
+          activeDownloadRequestRef.current,
+          downloadingModelRef.current,
+          modelId,
+          { onSelect: onSelectAfterDownload, onError: onDownloadError }
+        );
+        if (attachment.outcome === "joined-same") {
+          activeDownloadRequestRef.current = attachment.request;
+          return "joined-same";
+        }
         toast({
           title: t("hooks.modelDownload.downloadInProgress.title"),
           description: t("hooks.modelDownload.downloadInProgress.description"),
         });
-        return;
+        return "busy-other";
       }
 
       let keepActiveDownloadState = false;
       let terminalEventApplied = false;
-      const downloadRequest: PendingModelDownloadRequest = { modelId };
+      let outcome: ModelDownloadOutcome = "failed";
+      const downloadRequest: PendingModelDownloadRequest = createModelDownloadRequest(modelId, {
+        onSelect: onSelectAfterDownload,
+        onError: onDownloadError,
+      });
 
       try {
         downloadStateVersionRef.current += 1;
@@ -420,35 +510,43 @@ export function useModelDownload({
             result?.code === "DOWNLOAD_CANCELLED" ||
             result?.error?.includes("interrupted by user") ||
             result?.error?.includes("cancelled by user");
-          if (wasCancelled) return;
+          if (wasCancelled) return "cancelled";
 
           if (result?.code === "DOWNLOAD_IN_PROGRESS") {
             const hydrated = await hydrateActiveDownload(modelId);
             const terminalEvent = downloadRequest.terminalEvent;
 
             if (terminalEvent) {
-              activeDownloadRequestRef.current = null;
               terminalEventApplied = true;
-              applyTerminalEvent(terminalEvent);
+              downloadRequest.awaitingTerminalEvent = true;
+              routeModelDownloadTerminalEvent(downloadRequest, terminalEvent, {
+                formatError: (event) =>
+                  getDownloadErrorMessage(
+                    t,
+                    event.error || t("hooks.modelDownload.errors.unknown"),
+                    event.code
+                  ),
+                applyTerminal: applyTerminalEvent,
+              });
+              activeDownloadRequestRef.current = null;
+              return terminalEvent.type === "complete" ? "joined-same" : "failed";
             } else if (hydrated) {
               keepActiveDownloadState = true;
+              downloadRequest.awaitingTerminalEvent = true;
             } else {
-              try {
-                await onDownloadCompleteRef.current?.();
-              } catch {
-                // The active download ended while the duplicate request was resolving.
-              }
+              return "busy-other";
             }
             toast({
               title: t("hooks.modelDownload.downloadInProgress.title"),
               description: t("hooks.modelDownload.downloadInProgress.description"),
             });
-            return;
+            return "joined-same";
           }
 
           if (result?.error) {
             const msg = getDownloadErrorMessage(t, result.error, result.code);
             setDownloadError(msg);
+            downloadRequest.onError?.(msg);
             showAlertDialog({
               title:
                 result.code === "EXTRACTION_FAILED"
@@ -457,8 +555,10 @@ export function useModelDownload({
               description: msg,
             });
           }
+          outcome = "failed";
         } else {
-          onSelectAfterDownload?.(modelId);
+          settleModelDownloadOriginSuccess(downloadRequest);
+          outcome = "started";
         }
 
         // Await the refresh so the model list is updated before we clear
@@ -469,8 +569,9 @@ export function useModelDownload({
         } catch {
           // Non-fatal — the model is on disk regardless
         }
+        return outcome;
       } catch (error: unknown) {
-        if (isCancellingRef.current) return;
+        if (isCancellingRef.current) return "cancelled";
 
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (
@@ -480,21 +581,23 @@ export function useModelDownload({
         ) {
           const msg = getDownloadErrorMessage(t, errorMessage);
           setDownloadError(msg);
+          downloadRequest.onError?.(msg);
           showAlertDialog({
             title: t("hooks.modelDownload.downloadFailed.title"),
             description: msg,
           });
         }
+        return "failed";
       } finally {
-        if (activeDownloadRequestRef.current === downloadRequest) {
+        if (!keepActiveDownloadState && activeDownloadRequestRef.current === downloadRequest) {
           activeDownloadRequestRef.current = null;
         }
-        if (keepActiveDownloadState) return;
-        if (terminalEventApplied) return;
-        downloadingModelRef.current = null;
-        setIsInstalling(false);
-        setDownloadingModel(null);
-        setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
+        if (!keepActiveDownloadState && !terminalEventApplied) {
+          downloadingModelRef.current = null;
+          setIsInstalling(false);
+          setDownloadingModel(null);
+          setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
+        }
       }
     },
     [applyTerminalEvent, hydrateActiveDownload, modelType, showAlertDialog, toast, t]
@@ -594,6 +697,7 @@ export function useModelDownload({
     downloadingModel,
     downloadProgress,
     downloadError,
+    hasHydratedDownloads,
     isDownloading,
     isDownloadingModel,
     isInstalling,

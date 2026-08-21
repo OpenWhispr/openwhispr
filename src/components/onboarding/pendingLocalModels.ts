@@ -11,6 +11,14 @@ export type PendingLocalModelKind = "dictation" | "assistant";
 export interface PendingLocalModelSelection {
   provider: string;
   modelId: string;
+  managedIdentity?: PendingManagedModelIdentity;
+}
+
+export interface PendingManagedModelIdentity {
+  accountId: string;
+  workspaceId: string;
+  authGeneration: number;
+  configVersion: number;
 }
 
 export type PendingLocalModelSelections = Partial<
@@ -46,21 +54,91 @@ function writePendingLocalModels(selections: PendingLocalModelSelections) {
 
 export function rememberPendingLocalModel(
   kind: PendingLocalModelKind,
-  selection: PendingLocalModelSelection
+  selection: PendingLocalModelSelection,
+  managedIdentity?: PendingManagedModelIdentity
 ) {
-  writePendingLocalModels({ ...readPendingLocalModels(), [kind]: selection });
+  writePendingLocalModels({
+    ...readPendingLocalModels(),
+    [kind]: managedIdentity ? { ...selection, managedIdentity } : selection,
+  });
+}
+
+function isSameManagedIdentity(
+  left: PendingManagedModelIdentity,
+  right: PendingManagedModelIdentity
+): boolean {
+  return (
+    left.accountId === right.accountId &&
+    left.workspaceId === right.workspaceId &&
+    left.authGeneration === right.authGeneration &&
+    left.configVersion === right.configVersion
+  );
+}
+
+function isSamePendingLocalModelSelection(
+  left: PendingLocalModelSelection,
+  right: PendingLocalModelSelection
+): boolean {
+  if (left.provider !== right.provider || left.modelId !== right.modelId) return false;
+  if (!left.managedIdentity || !right.managedIdentity) {
+    return left.managedIdentity === right.managedIdentity;
+  }
+  return isSameManagedIdentity(left.managedIdentity, right.managedIdentity);
+}
+
+export function isPendingLocalModelSelectionCurrent(
+  kind: PendingLocalModelKind,
+  selection: PendingLocalModelSelection
+): boolean {
+  const current = readPendingLocalModels()[kind];
+  return Boolean(current && isSamePendingLocalModelSelection(current, selection));
 }
 
 export function consumePendingLocalModel(
   kind: PendingLocalModelKind,
-  modelId: string
+  modelId: string,
+  managedIdentity?: PendingManagedModelIdentity
 ): PendingLocalModelSelection | null {
   const selections = readPendingLocalModels();
   const selection = selections[kind];
   if (!selection || selection.modelId !== modelId) return null;
+  if (
+    selection.managedIdentity &&
+    (!managedIdentity || !isSameManagedIdentity(selection.managedIdentity, managedIdentity))
+  ) {
+    return null;
+  }
   delete selections[kind];
   writePendingLocalModels(selections);
-  return selection;
+  return { provider: selection.provider, modelId: selection.modelId };
+}
+
+export function consumePendingLocalModelCompletion(
+  kind: PendingLocalModelKind,
+  modelId: string
+): {
+  selection: PendingLocalModelSelection;
+  activationOwner: "coordinator" | "tray";
+} | null {
+  const activationOwner = getPendingLocalModelActivationOwner(kind, modelId);
+  if (!activationOwner) return null;
+  const pending = readPendingLocalModels()[kind];
+  if (!pending) return null;
+  const selection = consumePendingLocalModel(kind, modelId, pending.managedIdentity);
+  if (!selection) return null;
+  return {
+    selection,
+    activationOwner,
+  };
+}
+
+export function getPendingLocalModelActivationOwner(
+  kind: PendingLocalModelKind,
+  modelId: string
+): "coordinator" | "tray" | null {
+  const pending = readPendingLocalModels()[kind];
+  if (!pending || pending.modelId !== modelId) return null;
+  return pending.managedIdentity ? "coordinator" : "tray";
 }
 
 export function forgetPendingLocalModel(kind: PendingLocalModelKind, modelId?: string) {
@@ -68,6 +146,18 @@ export function forgetPendingLocalModel(kind: PendingLocalModelKind, modelId?: s
   if (modelId && selections[kind]?.modelId !== modelId) return;
   delete selections[kind];
   writePendingLocalModels(selections);
+}
+
+export function forgetPendingLocalModelSelection(
+  kind: PendingLocalModelKind,
+  selection: PendingLocalModelSelection
+): boolean {
+  const selections = readPendingLocalModels();
+  const current = selections[kind];
+  if (!current || !isSamePendingLocalModelSelection(current, selection)) return false;
+  delete selections[kind];
+  writePendingLocalModels(selections);
+  return true;
 }
 
 /** Drops every remembered selection, e.g. when onboarding ends on another mode. */

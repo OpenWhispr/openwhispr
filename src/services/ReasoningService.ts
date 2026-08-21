@@ -18,7 +18,12 @@ import { getLlmRequestTimeoutSeconds } from "../helpers/llmRequestTimeout.js";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
-import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
+import {
+  getManagedLocalModelRuntimeLock,
+  getManagedScopeResolution,
+} from "../stores/enterpriseIdentityStore";
+import { isModeAllowedByPolicy } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 import type { InferenceScope } from "../config/inferenceScopes";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
 import {
@@ -39,6 +44,11 @@ import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
 import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
 import type { InferenceMode } from "../types/electron";
+import {
+  captureRuntimeAuthorizationGuard,
+  subscribeRuntimeAuthorizationBoundary,
+  type RuntimeAuthorizationGuard,
+} from "../helpers/runtimeAuthorizationBoundary";
 
 export type ToolMetadata = Record<string, unknown> | Array<Record<string, unknown>>;
 
@@ -105,6 +115,7 @@ class ReasoningService extends BaseReasoningService {
   private apiKeyCache: SecureCache<string>;
   private static readonly MAX_TOOL_STEPS = 20;
   private cacheCleanupStop: (() => void) | undefined;
+  private authorizationBoundaryStop: (() => void) | undefined;
   private streamAbortController: AbortController | null = null;
   private activeRequestControllers = new Set<AbortController>();
   private activeCloudStream: { requestId: string; cancel: () => void } | null = null;
@@ -128,6 +139,10 @@ class ReasoningService extends BaseReasoningService {
       calculateMaxTokens: this.calculateMaxTokens.bind(this),
     };
 
+    this.authorizationBoundaryStop = subscribeRuntimeAuthorizationBoundary("reasoning", () => {
+      this.cancelAllRequests();
+    });
+
     if (typeof window !== "undefined") {
       window.addEventListener("beforeunload", () => this.destroy());
     }
@@ -147,8 +162,34 @@ class ReasoningService extends BaseReasoningService {
     fallbackScope: InferenceScope
   ): { model: string; provider: P; config: T; isManaged: boolean } {
     const inferenceScope = config.inferenceScope || fallbackScope;
+    const managedLocal = getManagedLocalModelRuntimeLock("reasoning");
+    if (managedLocal.managed) {
+      if (
+        !managedLocal.selection ||
+        !isModeAllowedByPolicy(usePolicyStore.getState(), "llm", "local")
+      ) {
+        throw new Error(
+          "Managed enterprise access is unavailable. Sign in with company SSO or contact IT."
+        );
+      }
+      return {
+        model: managedLocal.selection.modelId,
+        provider: managedLocal.selection.provider as P,
+        config: {
+          ...config,
+          inferenceScope,
+          provider: managedLocal.selection.provider,
+          lanUrl: undefined,
+          baseUrl: undefined,
+          customApiKey: undefined,
+        },
+        isManaged: false,
+      };
+    }
     const managed = getManagedScopeResolution(inferenceScope, getSettings().enterpriseSetupMode);
-    if (managed.kind === "error") throw new Error(managed.message);
+    if (managed.kind === "error") {
+      throw new Error(managed.message);
+    }
     if (managed.kind !== "managed") {
       return { model, provider, config: { ...config, inferenceScope }, isManaged: false };
     }
@@ -252,13 +293,15 @@ class ReasoningService extends BaseReasoningService {
   // lets a custom scope borrow the shared cleanup key for the cleanup endpoint.
   private async resolveByokAccess(
     provider: string,
-    config: Pick<ReasoningConfig, "baseUrl" | "customApiKey">
+    config: Pick<ReasoningConfig, "baseUrl" | "customApiKey">,
+    authorization: RuntimeAuthorizationGuard
   ): Promise<{ apiKey: string; baseURL?: string }> {
     const providerKey = toByokStreamProvider(provider);
     const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() || "" : "";
     const canFallBackToSharedKey =
       providerKey !== "custom" || canBorrowCleanupCustomKey(config.baseUrl);
     const apiKey = overrideKey || (canFallBackToSharedKey ? await this.getApiKey(providerKey) : "");
+    authorization.assertCurrent();
     const baseURL =
       providerKey === "openrouter"
         ? API_ENDPOINTS.OPENROUTER_BASE
@@ -275,7 +318,8 @@ class ReasoningService extends BaseReasoningService {
     text: string,
     agentName: string | null,
     config: ReasoningConfig,
-    providerName: string
+    providerName: string,
+    authorization: RuntimeAuthorizationGuard
   ): Promise<string> {
     // No systemPrompt override means the default cleanup path: a deterministic
     // transform, so zero temperature and a delimited transcript.
@@ -316,6 +360,7 @@ class ReasoningService extends BaseReasoningService {
 
     const requestGeneration = this.requestCancellationGeneration;
     const response = await withRetry(async () => {
+      authorization.assertCurrent();
       if (requestGeneration !== this.requestCancellationGeneration) {
         throw httpError("Request cancelled", 499);
       }
@@ -333,12 +378,15 @@ class ReasoningService extends BaseReasoningService {
 
         const res = await fetchWithParamFallback(
           () =>
-            fetch(endpoint, {
-              method: "POST",
-              headers,
-              body: JSON.stringify(requestBody),
-              signal: controller.signal,
-            }),
+            (() => {
+              authorization.assertCurrent();
+              return fetch(endpoint, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(requestBody),
+                signal: controller.signal,
+              });
+            })(),
           requestBody,
           logParamFallback(`${providerName.toUpperCase()}_PARAM_FALLBACK`)
         );
@@ -439,6 +487,7 @@ class ReasoningService extends BaseReasoningService {
     agentName: string | null = null,
     config: ReasoningConfig = {}
   ): Promise<string> {
+    const authorization = captureRuntimeAuthorizationGuard("reasoning");
     const managed = this.resolveManagedScope(model, config.provider, config, "dictationCleanup");
     ({ model, config } = managed);
     const trimmedModel = model?.trim?.() || "";
@@ -492,13 +541,16 @@ class ReasoningService extends BaseReasoningService {
 
     const startTime = Date.now();
     try {
+      authorization.assertCurrent();
       const result = await handler.call({
         text,
         model: trimmedModel,
         agentName,
         config: dispatchConfig,
         ctx: this.providerContext,
+        authorization,
       });
+      authorization.assertCurrent();
 
       logger.logReasoning("PROVIDER_SUCCESS", {
         provider: providerId,
@@ -518,16 +570,34 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
-  async *processTextStreaming(
+  processTextStreaming(
     messages: Array<{ role: string; content: string }>,
     model: string,
     provider: string,
     config: ReasoningConfig & { systemPrompt: string }
   ): AsyncGenerator<string, void, unknown> {
+    const authorization = captureRuntimeAuthorizationGuard("reasoning");
+    return this._processTextStreaming(messages, model, provider, config, authorization);
+  }
+
+  private async *_processTextStreaming(
+    messages: Array<{ role: string; content: string }>,
+    model: string,
+    provider: string,
+    config: ReasoningConfig & { systemPrompt: string },
+    authorization: RuntimeAuthorizationGuard
+  ): AsyncGenerator<string, void, unknown> {
     const abortController = new AbortController();
     this.streamAbortController = abortController;
     try {
-      yield* this.processTextStreamingRaw(messages, model, provider, config, abortController);
+      yield* this.processTextStreamingRaw(
+        messages,
+        model,
+        provider,
+        config,
+        abortController,
+        authorization
+      );
     } finally {
       if (this.streamAbortController === abortController) {
         this.streamAbortController = null;
@@ -540,8 +610,10 @@ class ReasoningService extends BaseReasoningService {
     model: string,
     provider: string,
     config: ReasoningConfig & { systemPrompt: string },
-    abortController: AbortController
+    abortController: AbortController,
+    authorization: RuntimeAuthorizationGuard
   ): AsyncGenerator<string, void, unknown> {
+    authorization.assertCurrent();
     const route = resolveChatRoute({
       provider,
       lanUrl: config.lanUrl,
@@ -562,12 +634,13 @@ class ReasoningService extends BaseReasoningService {
       apiKey = route.apiKey;
     } else if (isLocalProvider) {
       const serverResult = await window.electronAPI.llamaServerStart(model);
+      authorization.assertCurrent();
       if (!serverResult.success || !serverResult.port) {
         throw new Error(serverResult.error || "Failed to start local model server");
       }
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
     } else {
-      const access = await this.resolveByokAccess(provider, config);
+      const access = await this.resolveByokAccess(provider, config, authorization);
       apiKey = access.apiKey;
       const chatBase =
         access.baseURL ??
@@ -589,6 +662,7 @@ class ReasoningService extends BaseReasoningService {
       );
     }
 
+    authorization.assertCurrent();
     if (abortController.signal.aborted) return;
 
     const requestBody: Record<string, unknown> = {
@@ -632,13 +706,15 @@ class ReasoningService extends BaseReasoningService {
     let response: Response;
     try {
       response = await fetchWithParamFallback(
-        () =>
-          fetch(endpoint, {
+        () => {
+          authorization.assertCurrent();
+          return fetch(endpoint, {
             method: "POST",
             headers,
             body: JSON.stringify(requestBody),
             signal: abortController.signal,
-          }),
+          });
+        },
         requestBody,
         logParamFallback("AGENT_STREAM_PARAM_FALLBACK")
       );
@@ -678,7 +754,9 @@ class ReasoningService extends BaseReasoningService {
 
     try {
       while (true) {
+        authorization.assertCurrent();
         const { done, value } = await reader.read();
+        authorization.assertCurrent();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
@@ -727,7 +805,7 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
-  async *processTextStreamingAI(
+  processTextStreamingAI(
     // Content is a string, or text+image parts when a screenshot rides along
     // (image-capable BYOK providers only — the caller drops it elsewhere).
     messages: Array<{ role: string; content: string | Array<Record<string, unknown>> }>,
@@ -736,6 +814,19 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig & { systemPrompt: string },
     tools?: Record<string, import("ai").Tool>
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
+    const authorization = captureRuntimeAuthorizationGuard("reasoning");
+    return this._processTextStreamingAI(messages, model, provider, config, tools, authorization);
+  }
+
+  private async *_processTextStreamingAI(
+    messages: Array<{ role: string; content: string | Array<Record<string, unknown>> }>,
+    model: string,
+    provider: string,
+    config: ReasoningConfig & { systemPrompt: string },
+    tools: Record<string, import("ai").Tool> | undefined,
+    authorization: RuntimeAuthorizationGuard
+  ): AsyncGenerator<AgentStreamChunk, void, unknown> {
+    authorization.assertCurrent();
     ({ model, provider, config } = this.resolveManagedScope(
       model,
       provider,
@@ -773,7 +864,8 @@ class ReasoningService extends BaseReasoningService {
           model,
           provider,
           config,
-          abortController
+          abortController,
+          authorization
         );
         for await (const text of contentGen) {
           yield { type: "content", text };
@@ -805,12 +897,13 @@ class ReasoningService extends BaseReasoningService {
       baseURL = resolveSelfHostedOpenAIBase(route.baseUrl);
     } else if (isLocalProvider) {
       const serverResult = await window.electronAPI.llamaServerStart(model);
+      authorization.assertCurrent();
       if (!serverResult.success || !serverResult.port) {
         throw new Error(serverResult.error || "Failed to start local model server");
       }
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
     } else {
-      ({ apiKey, baseURL } = await this.resolveByokAccess(provider, config));
+      ({ apiKey, baseURL } = await this.resolveByokAccess(provider, config, authorization));
     }
     const aiProvider = isLocalProvider || isLanChat ? "local" : provider;
     // OpenRouter ids are never in the local registry, so the supportsThinking
@@ -823,6 +916,7 @@ class ReasoningService extends BaseReasoningService {
           disableThinking: openrouterDisableThinking,
         });
 
+    authorization.assertCurrent();
     if (abortController.signal.aborted) {
       yield { type: "done", finishReason: "stop" };
       return;
@@ -860,6 +954,7 @@ class ReasoningService extends BaseReasoningService {
 
     const useTemperature = isLocalProvider || isLanChat || apiConfig.supportsTemperature;
 
+    authorization.assertCurrent();
     const result = streamText({
       model: aiModel,
       messages: messages.map((m) => ({
@@ -882,6 +977,7 @@ class ReasoningService extends BaseReasoningService {
 
     try {
       for await (const chunk of result.fullStream) {
+        authorization.assertCurrent();
         if (chunk.type === "text-delta") {
           const text = filterThinkTags ? filterThinkTags(chunk.text) : chunk.text;
           if (text) yield { type: "content", text };
@@ -1080,7 +1176,27 @@ class ReasoningService extends BaseReasoningService {
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     // Capture synchronously so a cancel before the first next() is observed.
     const operationGeneration = ++this.cloudOperationGeneration;
-    return this._processTextStreamingCloud(messages, config, operationGeneration);
+    const authorization = captureRuntimeAuthorizationGuard("reasoning");
+    return this._processTextStreamingCloud(messages, config, operationGeneration, authorization);
+  }
+
+  private assertCloudStreamingEnterpriseAccess(): void {
+    if (getManagedLocalModelRuntimeLock("reasoning").managed) {
+      throw new Error(
+        "Managed enterprise access is unavailable. Sign in with company SSO or contact IT."
+      );
+    }
+    const managed = getManagedScopeResolution(
+      "chatIntelligence",
+      getSettings().enterpriseSetupMode
+    );
+    if (managed.kind !== "manual") {
+      throw new Error(
+        managed.kind === "error"
+          ? managed.message
+          : "Managed enterprise access requires the organization-provided reasoning route."
+      );
+    }
   }
 
   private async *_processTextStreamingCloud(
@@ -1091,8 +1207,11 @@ class ReasoningService extends BaseReasoningService {
       executeToolCall?: (name: string, args: string) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
     },
-    operationGeneration: number
+    operationGeneration: number,
+    authorization: RuntimeAuthorizationGuard
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
+    authorization.assertCurrent();
+    this.assertCloudStreamingEnterpriseAccess();
     assertAgentSessionAllowedByPolicy("openwhispr", "openwhispr");
     const operationWasCancelled = (): boolean =>
       operationGeneration !== this.cloudOperationGeneration;
@@ -1101,6 +1220,8 @@ class ReasoningService extends BaseReasoningService {
 
     for (let step = 0; step < maxSteps; step++) {
       if (operationWasCancelled()) return;
+      authorization.assertCurrent();
+      this.assertCloudStreamingEnterpriseAccess();
       // The screenshot rides every step of the tool loop so the model keeps
       // its vision after tool results come back.
       const ipcStream = this.streamFromIPC(currentMessages, {
@@ -1112,6 +1233,7 @@ class ReasoningService extends BaseReasoningService {
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
 
       for await (const ev of ipcStream.stream) {
+        authorization.assertCurrent();
         if (ev.type === "content") {
           yield { type: "content", text: ev.text as string };
         } else if (ev.type === "tool_call") {
@@ -1126,6 +1248,7 @@ class ReasoningService extends BaseReasoningService {
       }
 
       if (ipcStream.wasCancelled() || operationWasCancelled()) return;
+      authorization.assertCurrent();
 
       if (pendingToolCalls.length === 0 || !config.executeToolCall) {
         yield { type: "done", finishReason: "stop" };
@@ -1134,6 +1257,7 @@ class ReasoningService extends BaseReasoningService {
 
       for (const call of pendingToolCalls) {
         if (operationWasCancelled()) return;
+        authorization.assertCurrent();
         let toolResult: ToolExecutionResult;
         try {
           toolResult = await config.executeToolCall(call.name, call.arguments);
@@ -1142,6 +1266,7 @@ class ReasoningService extends BaseReasoningService {
           toolResult = { data: errMsg, displayText: errMsg };
         }
         if (operationWasCancelled()) return;
+        authorization.assertCurrent();
         yield {
           type: "tool_result",
           callId: call.id,
@@ -1179,6 +1304,7 @@ class ReasoningService extends BaseReasoningService {
     }
 
     if (operationWasCancelled()) return;
+    authorization.assertCurrent();
     yield { type: "done", finishReason: "stop" };
   }
 
@@ -1302,6 +1428,8 @@ class ReasoningService extends BaseReasoningService {
 
   destroy(): void {
     this.cancelAllRequests();
+    this.authorizationBoundaryStop?.();
+    this.authorizationBoundaryStop = undefined;
     if (this.cacheCleanupStop) {
       this.cacheCleanupStop();
     }

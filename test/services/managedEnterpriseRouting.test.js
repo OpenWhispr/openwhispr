@@ -45,6 +45,20 @@ function managedBedrockConfig() {
   };
 }
 
+function managedLocalReasoningConfig() {
+  return {
+    ...managedBedrockConfig(),
+    providers: [],
+    localModels: {
+      transcription: [],
+      reasoning: [{ provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" }],
+      version: 2,
+      updatedAt: "2026-08-20T00:00:00.000Z",
+      updatedByUserId: null,
+    },
+  };
+}
+
 function buildPolicy({ llmModes, llmEnterpriseProviders = [] }) {
   return {
     version: 1,
@@ -241,4 +255,172 @@ test("required managed access fails closed when workspace policy forbids it", as
   assert.equal(unavailable.mode, "enterprise");
   assert.equal(unavailable.provider, "");
   assert.equal(unavailable.model, "");
+});
+
+test("fail-closed refresh keeps only the approved local reasoning route usable", async (t) => {
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        processLocalReasoning: async (_text, model) => ({
+          success: true,
+          text: `local:${model}`,
+        }),
+      },
+    },
+  });
+  globalThis.__managedLocalRoutingResult = {
+    success: true,
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+    config: managedLocalReasoningConfig(),
+  };
+  t.after(() => delete globalThis.__managedLocalRoutingResult);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-managed-local-fail-closed-routing-test-",
+    mockModules: {
+      "/services/EnterpriseIdentityService": `
+        export async function getManagedEnterpriseConfig() {
+          return globalThis.__managedLocalRoutingResult;
+        }
+        export function clearManagedEnterpriseIdentity() {}
+      `,
+    },
+  });
+  const reasoningService = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
+  t.after(() => reasoningService.destroy());
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { useSettingsStore, selectResolvedLLMConfig } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.8.1",
+    policy: buildPolicy({ llmModes: ["local"] }),
+  });
+  useSettingsStore.setState({
+    enterpriseSetupMode: "auto",
+    cleanupMode: "providers",
+    cleanupProvider: "openai",
+    cleanupModel: "gpt-4.1",
+  });
+  localStorage.setItem(
+    "enterpriseManagedLocalModelBindingsV1",
+    JSON.stringify({
+      "account-a:workspace-a": {
+        configVersion: 2,
+        transcription: null,
+        reasoning: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" },
+        error: null,
+      },
+    })
+  );
+  await useEnterpriseIdentityStore
+    .getState()
+    .refresh("account-a", "workspace-a", 1);
+
+  const readyResolved = selectResolvedLLMConfig(
+    useSettingsStore.getState(),
+    "dictationCleanup"
+  );
+  assert.deepEqual(
+    { mode: readyResolved.mode, provider: readyResolved.provider, model: readyResolved.model },
+    { mode: "local", provider: "qwen", model: "qwen3.5-4b-q4_k_m" }
+  );
+  assert.equal(
+    await reasoningService.processText("hello", "gpt-4.1", null, {
+      inferenceScope: "dictationCleanup",
+      provider: "openai",
+      baseUrl: "https://api.openai.example.test",
+    }),
+    "local:qwen3.5-4b-q4_k_m"
+  );
+
+  globalThis.__managedLocalRoutingResult = {
+    success: false,
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+    error: "Company SSO is required",
+    enforcementRequired: true,
+  };
+  await useEnterpriseIdentityStore
+    .getState()
+    .refresh("account-a", "workspace-a", 1, true);
+
+  const resolved = selectResolvedLLMConfig(
+    useSettingsStore.getState(),
+    "dictationCleanup"
+  );
+  assert.deepEqual(
+    { mode: resolved.mode, provider: resolved.provider, model: resolved.model },
+    { mode: "local", provider: "qwen", model: "qwen3.5-4b-q4_k_m" }
+  );
+  assert.equal(
+    await reasoningService.processText("hello", resolved.model, null, {
+      inferenceScope: "dictationCleanup",
+      provider: resolved.provider,
+    }),
+    "local:qwen3.5-4b-q4_k_m"
+  );
+  assert.equal(
+    await reasoningService.processText("hello", "gpt-4.1", null, {
+      inferenceScope: "dictationCleanup",
+      provider: "openai",
+    }),
+    "local:qwen3.5-4b-q4_k_m"
+  );
+
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.8.1",
+    policy: buildPolicy({ llmModes: ["enterprise"], llmEnterpriseProviders: ["bedrock"] }),
+  });
+  const policyBlocked = selectResolvedLLMConfig(
+    useSettingsStore.getState(),
+    "dictationCleanup"
+  );
+  assert.deepEqual(
+    { mode: policyBlocked.mode, provider: policyBlocked.provider, model: policyBlocked.model },
+    { mode: "enterprise", provider: "", model: "" }
+  );
+  await assert.rejects(
+    reasoningService.processText("hello", resolved.model, null, {
+      inferenceScope: "dictationCleanup",
+      provider: resolved.provider,
+    }),
+    { message: "Managed enterprise access is unavailable. Sign in with company SSO or contact IT." }
+  );
+
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.8.1",
+    policy: buildPolicy({ llmModes: ["local"] }),
+  });
+
+  for (const snapshot of [
+    { lastKnownLocalModels: null, lastKnownLocalModelsKnown: false },
+    { lastKnownLocalModels: null, lastKnownLocalModelsKnown: true },
+    {
+      lastKnownLocalModels: {
+        ...managedLocalReasoningConfig().localModels,
+        reasoning: [],
+      },
+      lastKnownLocalModelsKnown: true,
+    },
+  ]) {
+    useEnterpriseIdentityStore.setState({ ...snapshot, config: null, failClosed: true });
+    const unavailable = selectResolvedLLMConfig(
+      useSettingsStore.getState(),
+      "dictationCleanup"
+    );
+    assert.deepEqual(
+      { mode: unavailable.mode, provider: unavailable.provider, model: unavailable.model },
+      { mode: "enterprise", provider: "", model: "" }
+    );
+  }
 });

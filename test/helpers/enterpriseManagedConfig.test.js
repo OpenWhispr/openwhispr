@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  isValidManagedEnterpriseLocalModels,
   resolveManagedEnterpriseScope,
   validateManagedEnterpriseEnvelope,
 } = require("../../src/helpers/enterpriseManagedConfig.mjs");
@@ -42,8 +43,80 @@ function envelope(providers = [provider()]) {
       audiences: { bedrock: "sts.amazonaws.com", azure: "api://AzureADTokenExchange" },
     },
     providers,
+    localModels: null,
   };
 }
+
+test("validates ordered enterprise local-model configuration", () => {
+  const localModels = {
+    transcription: [
+      { provider: "nvidia", modelId: "parakeet-tdt-0.6b-v3" },
+      { provider: "whisper", modelId: "base" },
+    ],
+    reasoning: [{ provider: "liquidai", modelId: "lfm2.5-1.2b-instruct-q4_k_m" }],
+    version: 2,
+    updatedAt: "2026-08-20T00:00:00.000Z",
+    updatedByUserId: "admin-a",
+  };
+  const parsed = validateManagedEnterpriseEnvelope({ ...envelope([]), localModels }, "workspace-a");
+  assert.deepEqual(parsed.localModels.transcription, localModels.transcription);
+  assert.equal(isValidManagedEnterpriseLocalModels(localModels), true);
+  assert.equal(
+    isValidManagedEnterpriseLocalModels({ ...localModels, managedCloudCredential: "secret" }),
+    false
+  );
+
+  assert.equal(
+    validateManagedEnterpriseEnvelope(
+      {
+        ...envelope([]),
+        localModels: {
+          ...localModels,
+          transcription: [{ provider: "whisper", modelId: "unknown" }],
+        },
+      },
+      "workspace-a"
+    ),
+    null
+  );
+  assert.equal(
+    validateManagedEnterpriseEnvelope(
+      {
+        ...envelope([]),
+        localModels: {
+          ...localModels,
+          reasoning: [{ provider: "qwen", modelId: "unknown-model" }],
+        },
+      },
+      "workspace-a"
+    ),
+    null
+  );
+});
+
+test("rejects simultaneous managed cloud and local reasoning routes", () => {
+  const localModels = {
+    transcription: [],
+    reasoning: [{ provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" }],
+    version: 2,
+    updatedAt: "2026-08-20T00:00:00.000Z",
+    updatedByUserId: null,
+  };
+
+  assert.equal(
+    validateManagedEnterpriseEnvelope({ ...envelope(), localModels }, "workspace-a"),
+    null
+  );
+  assert.ok(
+    validateManagedEnterpriseEnvelope({ ...envelope([]), localModels }, "workspace-a")
+  );
+  assert.ok(
+    validateManagedEnterpriseEnvelope(
+      { ...envelope([provider({ mode: "disabled" })]), localModels },
+      "workspace-a"
+    )
+  );
+});
 
 test("validates safe managed configuration and rejects unknown models", () => {
   assert.ok(validateManagedEnterpriseEnvelope(envelope(), "workspace-a"));

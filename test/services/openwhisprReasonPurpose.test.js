@@ -66,6 +66,11 @@ test("OpenWhispr reasoning labels only dictation-agent requests for server enfor
     getPreferredLanguage: () => "en",
     getUiLanguage: () => "en",
   };
+  const authorization = {
+    domains: ["reasoning"],
+    isCurrent: () => true,
+    assertCurrent() {},
+  };
 
   await openwhisprProvider.call({
     text: "do this",
@@ -73,6 +78,7 @@ test("OpenWhispr reasoning labels only dictation-agent requests for server enfor
     agentName: "Whisper",
     config: { systemPrompt: "Act on the request.", requiresAgent: true },
     ctx: context,
+    authorization,
   });
   await openwhisprProvider.call({
     text: "clean this",
@@ -80,6 +86,7 @@ test("OpenWhispr reasoning labels only dictation-agent requests for server enfor
     agentName: "Whisper",
     config: {},
     ctx: context,
+    authorization,
   });
 
   assert.equal(requests[0].requestPurpose, "agent");

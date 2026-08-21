@@ -178,6 +178,64 @@
     "policyAgentRestricted": "AI agent use is restricted by your organization.",
     "policyTranscriptionRestricted": "Transcription is restricted by your organization."
   },
+  "managedLocalModels": {
+    "compatibility": {
+      "checking": "Checking device compatibility…",
+      "unavailable": "Device compatibility could not be verified.",
+      "unsupported": "This model is not supported on this device.",
+      "requiresMacOS": "This model requires macOS {{version}} or later."
+    },
+    "policy": {
+      "allBlocked": "A stricter company policy blocks the required local models. Contact your IT administrator."
+    },
+    "categories": {
+      "transcriptionTitle": "Dictation",
+      "transcriptionDescription": "Choose one company-approved speech model.",
+      "reasoningTitle": "AI, voice agent, and Notes",
+      "reasoningDescription": "Choose one approved model shared by your AI features."
+    },
+    "errors": {
+      "policyTranscription": "A stricter company policy blocks the required local dictation model. Contact IT.",
+      "policyReasoning": "A stricter company policy blocks the required local AI model. Contact IT.",
+      "incompatibleTranscription": "No company-approved dictation model is compatible with this device. Contact IT.",
+      "incompatibleReasoning": "No company-approved AI model is compatible with this device. Contact IT.",
+      "downloadCancelled": "The company model download was cancelled. Restart it to continue."
+    },
+    "attention": {
+      "title": "Company model needs attention"
+    },
+    "workspaceSetup": {
+      "title": "Set up this workspace’s models",
+      "description": "This company workspace has its own approved models. Choose them once to continue."
+    },
+    "notice": {
+      "waiting": "Waiting for company model setup",
+      "managedDescription": "Managed by your company. You cannot change or delete this model while this workspace is active."
+    },
+    "settings": {
+      "title": "Models managed by your company",
+      "removalBlocked": "Company-managed models cannot be removed while this enterprise workspace is active.",
+      "cacheRemovalBlocked": "{{path}} · Company-managed models cannot be removed."
+    },
+    "onboarding": {
+      "configUnavailableFallback": "Your company model setup could not be loaded.",
+      "configInvalid": "Your company's model setup is invalid. Contact your IT administrator.",
+      "requiresNewerVersion": "Your company's managed models require a newer version of OpenWhispr.",
+      "authExpired": "Your OpenWhispr session expired. Sign out and sign in again.",
+      "enterpriseRequired": "An active Enterprise workspace is required. Choose an Enterprise workspace or contact your IT administrator.",
+      "ssoRequired": "Company SSO is required. Sign out and sign back in with your company SSO account.",
+      "administratorRequired": "Your company model setup needs administrator attention. Contact your IT administrator.",
+      "unavailableTitle": "Company setup is unavailable",
+      "unavailableInstructions": "Retry now, or contact your IT administrator if this continues.",
+      "checking": "Checking your company setup…",
+      "downloadTitle": "Download your company models",
+      "downloadDescription": "Choose one approved model for each required group. You can continue while downloads finish in the background.",
+      "restartDownload": "Restart any cancelled or failed company model download before finishing setup."
+    },
+    "runtime": {
+      "transcriptionUnavailable": "The company-managed local transcription model is unavailable."
+    }
+  },
   "onboarding": {
     "rehaul": {
       "permissions": {

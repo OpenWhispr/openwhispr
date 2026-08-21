@@ -94,6 +94,21 @@ test("a missing key fails before any request is made", async () => {
   assert.equal(called, false);
 });
 
+test("an already-cancelled authorization never dispatches to Tinfoil", async () => {
+  let called = false;
+  const { transcribeWithTinfoil } = loadTranscription(async () => {
+    called = true;
+    return okResponse("x");
+  });
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(() => transcribeWithTinfoil({ ...AUDIO, signal: controller.signal }), {
+    name: "AbortError",
+  });
+  assert.equal(called, false);
+});
+
 test("401 surfaces as INVALID_KEY", async () => {
   const { transcribeWithTinfoil } = loadTranscription(async () => ({
     ok: false,

@@ -3,7 +3,16 @@ const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { getCortiToken } = require("./cortiAuth");
 
+function assertNotAborted(signal) {
+  if (!signal?.aborted) return;
+  if (signal.reason) throw signal.reason;
+  const error = new Error("Corti transcription cancelled");
+  error.name = "AbortError";
+  throw error;
+}
+
 async function request(token, tenant, url, options = {}) {
+  assertNotAborted(options.signal);
   const response = await net.fetch(url, {
     ...options,
     headers: {
@@ -12,6 +21,7 @@ async function request(token, tenant, url, options = {}) {
       ...options.headers,
     },
   });
+  assertNotAborted(options.signal);
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
     throw new Error(`Corti API Error: ${response.status} ${errorText}`.trim());
@@ -20,7 +30,9 @@ async function request(token, tenant, url, options = {}) {
 }
 
 async function requestJson(token, tenant, url, options) {
-  return (await request(token, tenant, url, options)).json();
+  const data = await (await request(token, tenant, url, options)).json();
+  assertNotAborted(options?.signal);
+  return data;
 }
 
 // Corti's WSS /transcribe endpoint is a strictly real-time engine — replaying a
@@ -33,8 +45,11 @@ async function transcribeAudio({
   clientSecret,
   audioBuffer,
   language,
+  signal,
 }) {
-  const token = await getCortiToken({ environment, tenant, clientId, clientSecret });
+  assertNotAborted(signal);
+  const token = await getCortiToken({ environment, tenant, clientId, clientSecret, signal });
+  assertNotAborted(signal);
   const base = `https://api.${environment}.corti.app/v2`;
 
   debugLogger.debug(
@@ -46,6 +61,7 @@ async function transcribeAudio({
   const { interactionId } = await requestJson(token, tenant, `${base}/interactions/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    signal,
     body: JSON.stringify({
       encounter: {
         identifier: `openwhispr-${crypto.randomUUID()}`,
@@ -64,6 +80,7 @@ async function transcribeAudio({
         method: "POST",
         headers: { "Content-Type": "application/octet-stream" },
         body: Buffer.from(audioBuffer),
+        signal,
       }
     );
 
@@ -75,6 +92,7 @@ async function transcribeAudio({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recordingId, primaryLanguage: language, isDictation: true }),
+        signal,
       }
     );
 

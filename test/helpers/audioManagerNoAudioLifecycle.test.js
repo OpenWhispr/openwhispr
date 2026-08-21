@@ -20,6 +20,7 @@ async function loadManagerClass(t) {
 function createManager(AudioManager, failure) {
   const order = [];
   const saved = [];
+  const errors = [];
   const manager = Object.assign(Object.create(AudioManager.prototype), {
     isProcessing: true,
     _localSpeechGateState: null,
@@ -31,19 +32,26 @@ function createManager(AudioManager, failure) {
     },
     onStateChange: (state) => order.push(state.isProcessing ? "processing" : "idle"),
     onNoAudio: () => order.push("no-audio"),
-    onError: () => order.push("error"),
+    onError: (error) => {
+      errors.push(error);
+      order.push("error");
+    },
     saveFailedTranscription: (message, code) => saved.push({ message, code }),
   });
-  return { manager, order, saved };
+  return { manager, order, saved, errors };
 }
 
 test("local silence becomes one no-audio outcome after processing is idle", async (t) => {
   const AudioManager = await loadManagerClass(t);
-  const { manager, order, saved } = createManager(AudioManager, new Error("No audio detected"));
+  const { manager, order, saved, errors } = createManager(
+    AudioManager,
+    new Error("No audio detected")
+  );
 
   await manager.processAudio({ size: 256, type: "audio/webm" });
 
   assert.equal(manager.isProcessing, false);
+  assert.deepEqual(errors, []);
   assert.deepEqual(order, ["idle", "no-audio"]);
   assert.deepEqual(saved, []);
 });
@@ -53,10 +61,11 @@ test("dictionary-echo silence keeps the recording but shares the settled outcome
   const { DICTIONARY_ECHO_CODE } = await import("../../src/utils/dictionaryEchoFilter.js");
   const failure = new Error("No audio detected");
   failure.code = DICTIONARY_ECHO_CODE;
-  const { manager, order, saved } = createManager(AudioManager, failure);
+  const { manager, order, saved, errors } = createManager(AudioManager, failure);
 
   await manager.processAudio({ size: 256, type: "audio/webm" });
 
+  assert.deepEqual(errors, []);
   assert.deepEqual(order, ["idle", "no-audio"]);
   assert.deepEqual(saved, [{ message: "No audio detected", code: DICTIONARY_ECHO_CODE }]);
 });

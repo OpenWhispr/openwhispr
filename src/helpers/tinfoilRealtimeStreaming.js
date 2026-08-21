@@ -199,8 +199,12 @@ class TinfoilRealtimeStreaming extends OpenAIRealtimeStreaming {
     this._commitDrain = null;
   }
 
-  async disconnect() {
+  async disconnect({ commit = true } = {}) {
     this._stopCommitTimer();
+    if (!commit) {
+      this._settleCommit();
+      return super.disconnect({ commit: false });
+    }
     const deadline = Date.now() + COMMIT_DRAIN_TIMEOUT_MS;
     if (!(await this._waitForCommitDrain(deadline))) {
       return super.disconnect({ commit: false });

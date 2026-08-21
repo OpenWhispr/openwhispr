@@ -1,4 +1,9 @@
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import {
+  assertToolExecutionAuthorized,
+  type ToolDefinition,
+  type ToolExecutionContext,
+  type ToolResult,
+} from "./ToolRegistry";
 import { getMeetingJoinUrl } from "../../helpers/meetingJoinUrl";
 
 type TimeRange = "today" | "tomorrow" | "week";
@@ -38,12 +43,17 @@ export const calendarTool: ToolDefinition = {
   },
   readOnly: true,
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    args: Record<string, unknown>,
+    context?: ToolExecutionContext
+  ): Promise<ToolResult> {
     const timeRange = (args.timeRange as TimeRange) || "today";
     const windowMinutes = getWindowMinutes(timeRange);
 
     try {
+      assertToolExecutionAuthorized(context);
       const response = await window.electronAPI.gcalGetUpcomingEvents!(windowMinutes);
+      assertToolExecutionAuthorized(context);
 
       if (!response.success) {
         return {
@@ -77,6 +87,7 @@ export const calendarTool: ToolDefinition = {
         displayText: `Found ${events.length} event${events.length === 1 ? "" : "s"} for ${timeRange}`,
       };
     } catch (error) {
+      assertToolExecutionAuthorized(context);
       return {
         success: false,
         data: null,

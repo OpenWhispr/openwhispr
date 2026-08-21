@@ -671,6 +671,40 @@ test("cloud agent streaming correlates events to the initiating request", async 
   assert.deepEqual(bridge.cleanupCounts, { chunk: 1, error: 1, end: 1 });
 });
 
+test("cloud agent streaming fails closed for a known cloud-only enterprise snapshot", async (t) => {
+  const bridge = createAgentStreamBridge();
+  const { reasoningService, vite } = await loadReasoningService(
+    t,
+    "openwhispr-cloud-agent-fail-closed-test-",
+    { window: { electronAPI: bridge.electronAPI } }
+  );
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  useEnterpriseIdentityStore.setState({
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+    status: "error",
+    config: null,
+    lastKnownLocalModels: null,
+    lastKnownLocalModelsKnown: true,
+    error: "SSO_REQUIRED",
+    failClosed: true,
+  });
+
+  const stream = reasoningService.processTextStreamingCloud([{ role: "user", content: "hello" }], {
+    systemPrompt: "Answer the user.",
+  });
+  const rejected = assert.rejects(stream.next(), /Managed enterprise access is unavailable/);
+  await waitForMicrotasks();
+  if (bridge.startCalls.length > 0) {
+    bridge.emitEnd({ requestId: bridge.startCalls[0][0] });
+  }
+  await rejected;
+  assert.equal(bridge.startCalls.length, 0);
+});
+
 test("cancelling a cloud agent stream aborts main and ends the local generator", async (t) => {
   const bridge = createAgentStreamBridge();
   const { reasoningService } = await loadReasoningService(

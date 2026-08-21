@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import AuthenticationStep from "./AuthenticationStep";
 import EmailVerificationStep from "./EmailVerificationStep";
 import UseCaseStep from "./onboarding/UseCaseStep";
@@ -15,6 +15,7 @@ import CalendarConnectionsStep from "./onboarding/CalendarConnectionsStep";
 import SetupChoiceStep from "./onboarding/SetupChoiceStep";
 import { ByokProviderStep, LocalModelSetupStep } from "./onboarding/ProviderSetupStep";
 import { AlertDialog } from "./ui/dialog";
+import { Button } from "./ui/button";
 import { useAuth } from "../hooks/useAuth";
 import { signOut } from "../lib/auth";
 import { usePermissions } from "../hooks/usePermissions";
@@ -51,6 +52,18 @@ import { useOnboardingSession } from "./onboarding/useOnboardingSession";
 import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
+import EnterpriseModelSetupStep from "./onboarding/EnterpriseModelSetupStep";
+import { EnterpriseConfigErrorActions } from "./onboarding/ManagedSetupBlockedActions";
+import {
+  selectEffectiveManagedLocalModels,
+  useEnterpriseIdentityStore,
+} from "../stores/enterpriseIdentityStore";
+import {
+  areManagedLocalModelBindingsReady,
+  readManagedLocalModelBinding,
+  requiresManagedLocalModels,
+  translateManagedLocalModelError,
+} from "./onboarding/managedLocalModels";
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
@@ -143,6 +156,26 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setupMode: session.setupMode,
     activeWorkspace: enterpriseWorkspace,
   });
+  const enterpriseIdentity = useEnterpriseIdentityStore();
+  const enterpriseLocalModels =
+    enterpriseIdentity.workspaceId === enterpriseWorkspace?.id
+      ? selectEffectiveManagedLocalModels(enterpriseIdentity)
+      : null;
+  const requiresEnterpriseModels = requiresManagedLocalModels(enterpriseLocalModels);
+  const enterpriseConfigPending = Boolean(
+    enterpriseWorkspace &&
+    (enterpriseIdentity.workspaceId !== enterpriseWorkspace.id ||
+      enterpriseIdentity.status === "idle" ||
+      enterpriseIdentity.status === "loading")
+  );
+  const enterpriseConfigError =
+    enterpriseWorkspace &&
+    enterpriseIdentity.workspaceId === enterpriseWorkspace.id &&
+    enterpriseIdentity.status === "error"
+      ? enterpriseIdentity.error
+        ? translateManagedLocalModelError(enterpriseIdentity.error, t)
+        : t("managedLocalModels.onboarding.configUnavailableFallback")
+      : null;
 
   useEffect(() => {
     if (
@@ -165,7 +198,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     isSignedIn &&
     session.authPath === "account" &&
     (!workspacesLoaded ||
-      (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)));
+      (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)) ||
+      enterpriseConfigPending);
 
   const route = useMemo(
     () =>
@@ -174,8 +208,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         setupMode: session.setupMode,
         agentAllowed,
         skipSetupChoice: skipSetupChoiceForEnterprise,
+        requiresEnterpriseModels,
       }),
-    [agentAllowed, session.authPath, session.setupMode, skipSetupChoiceForEnterprise]
+    [
+      agentAllowed,
+      requiresEnterpriseModels,
+      session.authPath,
+      session.setupMode,
+      skipSetupChoiceForEnterprise,
+    ]
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
   const compact = COMPACT_STEPS.has(currentStepId);
@@ -185,6 +226,84 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       setSession((current) => ({ ...current, currentStepId }));
     }
   }, [currentStepId, session.currentStepId, setSession]);
+
+  // Authentication is not complete for onboarding until both workspace
+  // membership and the active Enterprise configuration have resolved. This
+  // keeps a slow or failed configuration request from silently skipping the
+  // managed-model step.
+  useEffect(() => {
+    if (
+      !isSignedIn ||
+      session.authPath !== "account" ||
+      session.currentStepId !== "auth" ||
+      !workspacesLoaded
+    ) {
+      return;
+    }
+    if (enterpriseWorkspace && activeWorkspace?.id !== enterpriseWorkspace.id) {
+      setActiveWorkspace(enterpriseWorkspace.id);
+      return;
+    }
+    if (enterpriseWorkspace && (enterpriseConfigPending || enterpriseConfigError)) return;
+    goTo(
+      enterpriseWorkspace
+        ? requiresEnterpriseModels
+          ? "enterprise-models"
+          : "permissions"
+        : session.setupMode === "cloud"
+          ? "setup-choice"
+          : "permissions"
+    );
+  }, [
+    activeWorkspace?.id,
+    enterpriseConfigError,
+    enterpriseConfigPending,
+    enterpriseWorkspace,
+    goTo,
+    isSignedIn,
+    requiresEnterpriseModels,
+    session.authPath,
+    session.currentStepId,
+    session.setupMode,
+    setActiveWorkspace,
+    workspacesLoaded,
+  ]);
+
+  const [, setManagedBindingRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setManagedBindingRevision((revision) => revision + 1);
+    window.addEventListener("openwhispr-managed-local-model-binding", refresh);
+    return () => window.removeEventListener("openwhispr-managed-local-model-binding", refresh);
+  }, []);
+  const managedBinding =
+    enterpriseIdentity.accountId && enterpriseWorkspace
+      ? readManagedLocalModelBinding(enterpriseIdentity.accountId, enterpriseWorkspace.id)
+      : null;
+  const requiredManagedBindingsReady = areManagedLocalModelBindingsReady(
+    enterpriseLocalModels,
+    managedBinding
+  );
+
+  useEffect(() => {
+    if (
+      !requiresEnterpriseModels ||
+      requiredManagedBindingsReady ||
+      currentStepId === "auth" ||
+      currentStepId === "enterprise-models" ||
+      enterpriseConfigPending ||
+      enterpriseConfigError
+    ) {
+      return;
+    }
+    goTo("enterprise-models");
+  }, [
+    currentStepId,
+    enterpriseConfigError,
+    enterpriseConfigPending,
+    goTo,
+    requiredManagedBindingsReady,
+    requiresEnterpriseModels,
+  ]);
 
   // AppRouter releases this only after it has committed the normal app. Keeping
   // the gate active across this component's unmount prevents a one-frame flash
@@ -334,7 +453,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         // Only preserve a pending download when the completed route still uses
         // local models. A user who walks Back and finishes on Cloud/BYOK must not
         // be switched back to a stale local selection when it completes later.
-        const routeKeepsLocalModels = mode === "local";
+        const routeKeepsLocalModels =
+          mode === "local" || (mode === "managed" && requiresEnterpriseModels);
         if (routeKeepsLocalModels && (options.localPending || hasPendingLocalModels())) {
           localStorage.setItem("localSetupPending", "true");
         } else {
@@ -364,6 +484,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       session.authPath,
       t,
       withExtraDictationHotkeys,
+      requiresEnterpriseModels,
     ]
   );
 
@@ -371,11 +492,23 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // Enterprise workspace is confirmed. Finish them without writing provider or
   // model settings, just as if Notes had been their final step originally.
   useEffect(() => {
-    if (!skipSetupChoiceForEnterprise || session.currentStepId !== "setup-choice" || isFinishing) {
+    if (!skipSetupChoiceForEnterprise || session.currentStepId !== "setup-choice") {
       return;
     }
+    if (requiresEnterpriseModels) {
+      goTo("enterprise-models");
+      return;
+    }
+    if (isFinishing) return;
     void finalizeOnboarding("managed");
-  }, [finalizeOnboarding, isFinishing, session.currentStepId, skipSetupChoiceForEnterprise]);
+  }, [
+    finalizeOnboarding,
+    goTo,
+    isFinishing,
+    requiresEnterpriseModels,
+    session.currentStepId,
+    skipSetupChoiceForEnterprise,
+  ]);
 
   const applyReasoningSelectionToAllScopes = useCallback(
     (mode: "byok" | "local") => {
@@ -442,7 +575,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const continueFromCurrentStep = useCallback(async () => {
     // A banner from an earlier failed attempt must not outlive the retry.
     setFatalError(null);
-    if (currentStepId === "notes" && workspaceResolutionPending) return;
+    if (
+      currentStepId === "notes" &&
+      (workspaceResolutionPending || !requiredManagedBindingsReady)
+    ) {
+      setFatalError(
+        !requiredManagedBindingsReady ? t("managedLocalModels.onboarding.restartDownload") : null
+      );
+      return;
+    }
     if (currentStepId === "permissions") {
       if (getPlatform() === "darwin" && !permissions.accessibilityPermissionGranted) {
         setAccessibilitySkipped(true);
@@ -526,6 +667,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     withExtraDictationHotkeys,
     workspaceResolutionPending,
     skipSetupChoiceForEnterprise,
+    requiredManagedBindingsReady,
   ]);
 
   const skipLocalSetup = useCallback(async () => {
@@ -555,7 +697,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "assistant-demo":
         return assistantDemoSuccess;
       case "notes":
-        return !workspaceResolutionPending;
+        return !workspaceResolutionPending && requiredManagedBindingsReady;
+      case "enterprise-models":
+        return stageReady;
       case "byok-dictation":
       case "byok-assistant":
       case "local-dictation":
@@ -569,6 +713,47 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const renderStep = () => {
     switch (currentStepId) {
       case "auth":
+        if (isSignedIn && session.authPath === "account") {
+          return (
+            <div className="flex min-h-full w-full items-center justify-center p-8 text-center">
+              {enterpriseConfigError ? (
+                <div className="max-w-sm space-y-4">
+                  <AlertCircle className="mx-auto size-8 text-destructive" />
+                  <div>
+                    <h1 className="text-lg font-semibold">
+                      {t("managedLocalModels.onboarding.unavailableTitle")}
+                    </h1>
+                    <p className="mt-2 text-sm text-muted-foreground">{enterpriseConfigError}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {t("managedLocalModels.onboarding.unavailableInstructions")}
+                    </p>
+                  </div>
+                  <EnterpriseConfigErrorActions
+                    onRetry={() => {
+                      if (
+                        enterpriseIdentity.accountId &&
+                        enterpriseIdentity.workspaceId &&
+                        enterpriseIdentity.authGeneration != null
+                      ) {
+                        void enterpriseIdentity.refresh(
+                          enterpriseIdentity.accountId,
+                          enterpriseIdentity.workspaceId,
+                          enterpriseIdentity.authGeneration,
+                          true
+                        );
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  <Loader2 className="mx-auto size-6 animate-spin" />
+                  {t("managedLocalModels.onboarding.checking")}
+                </div>
+              )}
+            </div>
+          );
+        }
         return (
           <div className="min-h-full w-full">
             {pendingVerificationEmail ? (
@@ -577,7 +762,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 onVerified={() => {
                   setPendingVerificationEmail(null);
                   setAuthPath("account");
-                  goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
                 }}
                 onBack={() => {
                   // Abandoning verification leaves a live session for the
@@ -597,11 +781,40 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 }}
                 onAuthComplete={() => {
                   setAuthPath("account");
-                  goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
                 }}
                 onNeedsVerification={setPendingVerificationEmail}
               />
             )}
+          </div>
+        );
+
+      case "enterprise-models":
+        if (
+          !enterpriseLocalModels ||
+          !enterpriseIdentity.accountId ||
+          !enterpriseIdentity.workspaceId ||
+          enterpriseIdentity.authGeneration == null
+        ) {
+          return null;
+        }
+        return (
+          <div className="flex h-full min-h-0 w-full flex-col pt-1">
+            <OnboardingStepHeader
+              title={t("managedLocalModels.onboarding.downloadTitle")}
+              description={t("managedLocalModels.onboarding.downloadDescription")}
+              wideTitle
+            />
+            <EnterpriseModelSetupStep
+              key={`${enterpriseIdentity.accountId}:${enterpriseIdentity.workspaceId}:${enterpriseIdentity.authGeneration}:${enterpriseLocalModels.version}`}
+              identity={{
+                accountId: enterpriseIdentity.accountId,
+                workspaceId: enterpriseIdentity.workspaceId,
+                authGeneration: enterpriseIdentity.authGeneration,
+                configVersion: enterpriseLocalModels.version,
+              }}
+              config={enterpriseLocalModels}
+              onReadinessChange={setStageReady}
+            />
           </div>
         );
 

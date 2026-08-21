@@ -6,6 +6,7 @@ type OnboardingStorage = Pick<Storage, "setItem" | "removeItem">;
 
 export type OnboardingStepId =
   | "auth"
+  | "enterprise-models"
   | "permissions"
   | "languages"
   | "use-cases"
@@ -39,6 +40,8 @@ export interface OnboardingRouteContext {
   agentAllowed: boolean;
   /** A confirmed Enterprise workspace is already provisioned outside onboarding. */
   skipSetupChoice?: boolean;
+  /** The active Enterprise workspace requires at least one managed local model. */
+  requiresEnterpriseModels?: boolean;
 }
 
 const ACCOUNT_ROUTE: OnboardingStepId[] = [
@@ -60,6 +63,7 @@ const SETUP_ROUTES: Record<Exclude<OnboardingSetupMode, null | "cloud">, Onboard
 // it to clamp backwards instead of jumping to the end of the route.
 const STEP_ORDER: OnboardingStepId[] = [
   "auth",
+  "enterprise-models",
   "permissions",
   "languages",
   "use-cases",
@@ -143,7 +147,11 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
           "setup-choice",
         ] as OnboardingStepId[])
       : [
-          ...ACCOUNT_ROUTE,
+          ACCOUNT_ROUTE[0],
+          ...(context.requiresEnterpriseModels
+            ? (["enterprise-models"] as OnboardingStepId[])
+            : []),
+          ...ACCOUNT_ROUTE.slice(1),
           ...(context.agentAllowed
             ? (["assistant-hotkey", "assistant-demo"] as OnboardingStepId[])
             : []),

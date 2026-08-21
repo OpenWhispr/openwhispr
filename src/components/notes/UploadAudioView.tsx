@@ -36,6 +36,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
+import { useManagedLocalModelLock } from "../../hooks/useManagedLocalModelLock";
 import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
@@ -64,11 +65,19 @@ import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import BatchQueueView from "./BatchQueueView";
 import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
-import { isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
 import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
+import {
+  isManagedLocalTranscriptionRuntimeAllowed,
+  resolveManagedLocalTranscriptionRuntime,
+} from "../../helpers/managedLocalTranscriptionRuntime";
+import {
+  applyManagedLocalModeChange,
+  canSelectManagedLocalMode,
+} from "../onboarding/managedLocalModels";
+import { captureRuntimeAuthorizationLease } from "../../helpers/runtimeAuthorizationBoundary";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
@@ -242,6 +251,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const [providerReady, setProviderReady] = useState<boolean | null>(null);
 
   const { isSignedIn } = useAuth();
+  const managedLocalLock = useManagedLocalModelLock("transcription");
   const usage = useUsage();
   // The server enforces the free-tier size limit regardless, so an unresolved
   // entitlement should not block a payer's upload.
@@ -344,6 +354,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      runIdRef.current += 1;
+      if (activeRequestIdRef.current) {
+        void window.electronAPI.cancelUploadTranscription?.(activeRequestIdRef.current);
+        activeRequestIdRef.current = null;
+      }
       if (urlDownloadActiveRef.current) {
         window.electronAPI.cancelUrlDownload();
       }
@@ -601,7 +616,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
   const handleTranscribe = async () => {
     if (!file || batch.isProcessing) return;
-    if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) {
+    const runtime = resolveManagedLocalTranscriptionRuntime(buildTranscriptionConfig());
+    if (!isManagedLocalTranscriptionRuntimeAllowed(runtime, usePolicyStore.getState())) {
       setError(t("common.managedByOrg"));
       return;
     }
@@ -610,6 +626,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     const runId = ++runIdRef.current;
     const requestId = crypto.randomUUID();
     activeRequestIdRef.current = requestId;
+    const authorization = captureRuntimeAuthorizationLease("transcription", () => {
+      if (runId === runIdRef.current) cancelTranscription();
+    });
     setState("transcribing");
     setError(null);
     setProgress(0);
@@ -641,6 +660,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
 
     try {
+      authorization.assertCurrent();
       const diarization: DiarizationSettings = {
         enabled: diarizationEnabled,
         localModelsReady: !!diarizationModelsReady,
@@ -648,7 +668,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       };
       const res: FileTranscriptionResult = await transcribeFileWithSpeakers(
         currentFile.path,
-        buildTranscriptionConfig(),
+        runtime.kind === "ready" ? runtime.settings : buildTranscriptionConfig(),
         diarization,
         currentFile.durationSeconds,
         { requestId, timestamps: true }
@@ -657,6 +677,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       });
 
       if (runId !== runIdRef.current) return;
+      authorization.assertCurrent();
 
       if (progressRef.current) clearInterval(progressRef.current);
       if (progressCleanupRef.current) progressCleanupRef.current();
@@ -675,11 +696,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         if (currentFile.fromUrl) {
           title = currentFile.name;
         } else {
+          authorization.assertCurrent();
           const aiTitle = await generateTitle(res.text);
           if (runId !== runIdRef.current) return;
+          authorization.assertCurrent();
           title = aiTitle || uploadTitleFallback(res.text, currentFile.name);
         }
 
+        authorization.assertCurrent();
         const noteRes = await saveUploadNote({
           title,
           text: res.text,
@@ -690,6 +714,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           segments: res.segments,
         });
         if (runId !== runIdRef.current) return;
+        authorization.assertCurrent();
         if (noteRes.success && noteRes.note) setNoteId(noteRes.note.id);
         if (currentTempPath) {
           window.electronAPI.deleteTempFile(currentTempPath);
@@ -719,6 +744,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setError(err instanceof Error ? err.message : t("notes.upload.errorOccurred"));
       }
       setState("error");
+    } finally {
+      authorization.dispose();
     }
   };
 
@@ -839,7 +866,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const startBatchProcessing = () => {
     if (state === "downloading" || state === "transcribing") return;
-    if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) {
+    const runtime = resolveManagedLocalTranscriptionRuntime(buildTranscriptionConfig());
+    if (!isManagedLocalTranscriptionRuntimeAllowed(runtime, usePolicyStore.getState())) {
       setBatchUrlNotice(t("common.managedByOrg"));
       return;
     }
@@ -891,9 +919,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const handleCreateAccount = useStartOnboarding();
 
   const switchToCloud = () => {
-    setUploadTranscriptionMode("openwhispr");
-    setUploadCloudTranscriptionMode("openwhispr");
-    setUploadUseLocalWhisper(false);
+    applyManagedLocalModeChange(managedLocalLock.managed, "openwhispr", () => {
+      setUploadTranscriptionMode("openwhispr");
+      setUploadCloudTranscriptionMode("openwhispr");
+      setUploadUseLocalWhisper(false);
+    });
   };
 
   const getTranscribingLabel = (): string => {
@@ -1102,6 +1132,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               byokTooLarge={byokTooLarge}
               requiresAccount={requiresAccount}
               isProUser={!!isProUser}
+              canSwitchToCloud={canSelectManagedLocalMode(managedLocalLock.managed, "openwhispr")}
               onUpgrade={() => usage?.openCheckout()}
               onCreateAccount={handleCreateAccount}
               onSwitchToCloud={switchToCloud}
@@ -1530,6 +1561,7 @@ interface SelectedViewProps {
   byokTooLarge: boolean;
   requiresAccount: boolean;
   isProUser: boolean;
+  canSwitchToCloud: boolean;
   onUpgrade: () => void;
   onCreateAccount: () => void;
   onSwitchToCloud: () => void;
@@ -1549,6 +1581,7 @@ function SelectedView({
   byokTooLarge,
   requiresAccount,
   isProUser,
+  canSwitchToCloud,
   onUpgrade,
   onCreateAccount,
   onSwitchToCloud,
@@ -1634,7 +1667,7 @@ function SelectedView({
         )}
 
         {/* BYOK too large — signed in, Pro: Switch to Cloud */}
-        {byokTooLarge && !requiresAccount && isProUser && (
+        {byokTooLarge && !requiresAccount && isProUser && canSwitchToCloud && (
           <Button
             variant="default"
             size="sm"
