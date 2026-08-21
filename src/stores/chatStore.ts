@@ -108,7 +108,15 @@ export async function startConversationMigration(): Promise<void> {
           content: m.content,
         })),
       });
-      updateConversation({ ...conv, cloud_id: cloudConv.id });
+      const linked = await window.electronAPI?.markConversationSynced?.(conv.id, cloudConv.id);
+      if (linked?.success === false) {
+        // The local row was deleted while the create was in flight. It cannot
+        // carry a delete tombstone, so retire the orphaned cloud row now.
+        await ConversationsService.delete(cloudConv.id);
+        continue;
+      }
+      const current = useChatStore.getState().conversations.find((item) => item.id === conv.id);
+      if (current) updateConversation({ ...current, cloud_id: cloudConv.id });
       useChatStore.setState((s) => ({
         migration: s.migration
           ? {
