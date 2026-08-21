@@ -7,6 +7,7 @@ import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
+import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
 import {
   isAgentAllowed,
   isScreenContextAllowed,
@@ -161,11 +162,21 @@ export const useAudioRecording = (toast, options = {}) => {
           audioManagerRef.current.beginSelectionCapture();
         }
 
-        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
+        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready).
+        // Await it only when it can change the start decision (signed-in
+        // OpenWhispr-cloud streaming); for local STT or a signed-out session the
+        // fetch stalls on auth resolution and would delay the mic open (#1673).
         if (!audioManagerRef.current.sttConfig) {
-          const config = await window.electronAPI.getSttConfig?.();
-          if (config?.success) {
-            audioManagerRef.current.setSttConfig(config);
+          const configFetch = (async () => {
+            const config = await window.electronAPI.getSttConfig?.();
+            if (config?.success) {
+              audioManagerRef.current.setSttConfig(config);
+            }
+          })().catch((error) => {
+            logger.warn("STT config fetch failed", { error: error?.message });
+          });
+          if (needsSttConfigBeforeStart(getSettings())) {
+            await configFetch;
           }
         }
 
