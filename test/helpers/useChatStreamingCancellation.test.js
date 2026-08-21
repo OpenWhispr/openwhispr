@@ -45,7 +45,10 @@ const EMPTY_RESPONSE_TEXT = JSON.parse(
   fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
 ).agentMode.chat.emptyResponse;
 
-async function renderChatStreaming(t, { electronAPI = {}, settings = {} } = {}) {
+async function renderChatStreaming(
+  t,
+  { electronAPI = {}, settings = {}, initialMessages = [] } = {}
+) {
   installBrowserGlobals(t, { window: { electronAPI } });
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-cancellation-test-",
@@ -67,7 +70,27 @@ async function renderChatStreaming(t, { electronAPI = {}, settings = {} } = {}) 
 
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
-  usePolicyStore.setState({ status: "unmanaged", appVersion: "1.8.3", policy: null });
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  usePolicyStore.setState({
+    accountId: "account-a",
+    authGeneration: 1,
+    status: "unmanaged",
+    appVersion: "1.8.3",
+    policy: null,
+  });
+  useEnterpriseIdentityStore.setState({
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+    status: "ready",
+    config: null,
+    lastKnownLocalModels: null,
+    lastKnownLocalModelsKnown: true,
+    error: null,
+    failClosed: false,
+  });
   // A self-hosted (LAN) chat agent with no tools in play: 4B+ in the model
   // name makes it tool-eligible by the size heuristic, but the fixture
   // fetch never emits a tool call, so it stays on the plain-content path.
@@ -88,8 +111,9 @@ async function renderChatStreaming(t, { electronAPI = {}, settings = {} } = {}) 
   // setInterval that otherwise keeps the process alive after the test ends.
   t.after(() => reasoningService.destroy());
 
-  let messages = [];
+  let messages = [...initialMessages];
   let responseContentCalls = 0;
+  const streamCompletions = [];
   const setMessages = (updater) => {
     messages = typeof updater === "function" ? updater(messages) : updater;
   };
@@ -102,6 +126,9 @@ async function renderChatStreaming(t, { electronAPI = {}, settings = {} } = {}) 
       onResponseContent: () => {
         responseContentCalls += 1;
       },
+      onStreamComplete: (assistantId, content, toolCalls) => {
+        streamCompletions.push({ assistantId, content, toolCalls });
+      },
     });
     return null;
   }
@@ -111,6 +138,14 @@ async function renderChatStreaming(t, { electronAPI = {}, settings = {} } = {}) 
     captured,
     getMessages: () => messages,
     getResponseContentCalls: () => responseContentCalls,
+    getStreamCompletions: () => streamCompletions,
+    changeAuthorization: () => {
+      useEnterpriseIdentityStore.setState({
+        accountId: "account-b",
+        workspaceId: "workspace-b",
+        authGeneration: 2,
+      });
+    },
   };
 }
 
@@ -177,6 +212,58 @@ test("cancelling during RAG setup does not start an assistant reply", async (t) 
   assert.deepEqual(getMessages(), []);
 });
 
+test("an authorization change during RAG keeps the user message and never starts a reply", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    const finishEvent = `data: ${JSON.stringify(createOpenAiChunk({}, "stop"))}\n\n`;
+    return new Response(`${finishEvent}data: [DONE]\n\n`, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  let resolveSearch;
+  let searchStarted = false;
+  const searchResults = new Promise((resolve) => {
+    resolveSearch = resolve;
+  });
+  const userMessage = { id: "user-rag", role: "user", content: "hello", isStreaming: false };
+  const {
+    captured,
+    getMessages,
+    getResponseContentCalls,
+    getStreamCompletions,
+    changeAuthorization,
+  } = await renderChatStreaming(t, {
+    initialMessages: [userMessage],
+    electronAPI: {
+      semanticSearchNotes: () => {
+        searchStarted = true;
+        return searchResults;
+      },
+    },
+  });
+
+  const sendPromise = captured.sendToAI("hello", [userMessage]);
+  const waitForMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+  for (let i = 0; i < 50 && !searchStarted; i++) await waitForMicrotasks();
+  assert.equal(searchStarted, true, "fixture setup: RAG search must be pending");
+
+  changeAuthorization();
+  resolveSearch([]);
+  await sendPromise;
+
+  assert.deepEqual(getMessages(), [userMessage]);
+  assert.equal(fetchCalls, 0);
+  assert.equal(getResponseContentCalls(), 0);
+  assert.equal(getStreamCompletions().length, 0);
+});
+
 test("cancelling before any token arrives never shows the empty-response fallback", async (t) => {
   const originalFetch = globalThis.fetch;
   t.after(() => {
@@ -199,7 +286,7 @@ test("cancelling before any token arrives never shows the empty-response fallbac
     return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
   };
 
-  const { captured, getMessages } = await renderChatStreaming(t);
+  const { captured, getMessages, getStreamCompletions } = await renderChatStreaming(t);
 
   const sendPromise = captured.sendToAI("hello", []);
 
@@ -219,6 +306,131 @@ test("cancelling before any token arrives never shows the empty-response fallbac
   assert.notEqual(message.content, EMPTY_RESPONSE_TEXT);
   assert.equal(message.content, "");
   assert.equal(message.isStreaming, false);
+  assert.equal(
+    getStreamCompletions().length,
+    1,
+    "manual Stop keeps the existing partial-reply persistence lifecycle"
+  );
+});
+
+test("an authorization change discards a partial local reply without persisting it", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let tokenSent = false;
+  globalThis.fetch = async (_input, init) => {
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            `data: ${JSON.stringify(createOpenAiChunk({ content: "partial" }))}\n\n`
+          )
+        );
+        tokenSent = true;
+        init?.signal?.addEventListener(
+          "abort",
+          () => controller.error(new DOMException("aborted", "AbortError")),
+          { once: true }
+        );
+      },
+    });
+    return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+  };
+
+  const userMessage = { id: "user-partial", role: "user", content: "hello", isStreaming: false };
+  const {
+    captured,
+    getMessages,
+    getResponseContentCalls,
+    getStreamCompletions,
+    changeAuthorization,
+  } = await renderChatStreaming(t, { initialMessages: [userMessage] });
+  const sendPromise = captured.sendToAI("hello", [userMessage]);
+  const waitForMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+  for (let i = 0; i < 50 && !getMessages().some((message) => message.content === "partial"); i++) {
+    await waitForMicrotasks();
+  }
+  assert.equal(tokenSent, true, "fixture setup: the local stream must emit a token");
+  assert.equal(getMessages().at(-1)?.content, "partial");
+
+  changeAuthorization();
+  await sendPromise;
+
+  assert.deepEqual(getMessages(), [userMessage]);
+  assert.equal(getResponseContentCalls(), 1, "already displayed content is announced exactly once");
+  assert.equal(getStreamCompletions().length, 0);
+});
+
+test("an authorization change during an AI-SDK tool setup blocks its later side effect", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let modelCalls = 0;
+  globalThis.fetch = async () => {
+    modelCalls += 1;
+    const toolEvent = `data: ${JSON.stringify(
+      createOpenAiChunk({
+        tool_calls: [
+          {
+            index: 0,
+            id: "create-note-1",
+            type: "function",
+            function: {
+              name: "create_note",
+              arguments: JSON.stringify({ title: "Private", content: "Do not persist" }),
+            },
+          },
+        ],
+      })
+    )}\n\n`;
+    const finishEvent = `data: ${JSON.stringify(createOpenAiChunk({}, "tool_calls"))}\n\n`;
+    return new Response(`${toolEvent}${finishEvent}data: [DONE]\n\n`, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  let resolveSpaces;
+  let spacesStarted = false;
+  const spaces = new Promise((resolve) => {
+    resolveSpaces = resolve;
+  });
+  const saveNoteCalls = [];
+  const userMessage = { id: "user-ai-tool", role: "user", content: "create", isStreaming: false };
+  const { captured, getMessages, getStreamCompletions, changeAuthorization } =
+    await renderChatStreaming(t, {
+      initialMessages: [userMessage],
+      electronAPI: {
+        getSpaces: () => {
+          spacesStarted = true;
+          return spaces;
+        },
+        saveNote: (...args) => {
+          saveNoteCalls.push(args);
+          return Promise.resolve({ success: false });
+        },
+      },
+    });
+
+  const sendPromise = captured.sendToAI("create", [userMessage]);
+  const waitForMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+  for (let i = 0; i < 50 && !spacesStarted; i++) await waitForMicrotasks();
+  assert.equal(spacesStarted, true, "fixture setup: the AI-SDK tool must be awaiting space setup");
+
+  changeAuthorization();
+  resolveSpaces([]);
+  await sendPromise;
+
+  assert.equal(
+    saveNoteCalls.length,
+    0,
+    "no tool side effect may start after authorization changes"
+  );
+  assert.equal(modelCalls, 1, "the tool result must not start another model step");
+  assert.deepEqual(getMessages(), [userMessage]);
+  assert.equal(getStreamCompletions().length, 0);
 });
 
 test("cancelling a tool-ineligible raw stream after reading starts shows no error", async (t) => {
@@ -303,4 +515,98 @@ test("cloud screen context is sent without claiming the screenshot is already at
     mediaType: "image/png",
   });
   assert.doesNotMatch(streamOptions.systemPrompt, /SCREEN CONTEXT:/);
+});
+
+test("an authorization change during a cloud tool prevents the next model step and persistence", async (t) => {
+  let streamChunkListener;
+  let streamEndListener;
+  const startCalls = [];
+  let resolveClipboard;
+  let clipboardStarted = false;
+  const clipboard = new Promise((resolve) => {
+    resolveClipboard = resolve;
+  });
+  const electronAPI = {
+    onAgentStreamChunk(listener) {
+      streamChunkListener = listener;
+      return () => {};
+    },
+    onAgentStreamError() {
+      return () => {};
+    },
+    onAgentStreamEnd(listener) {
+      streamEndListener = listener;
+      return () => {};
+    },
+    startAgentStream(requestId) {
+      startCalls.push(requestId);
+      streamChunkListener({
+        requestId,
+        chunk: {
+          type: "tool_call",
+          id: "tool-call-1",
+          name: "copy_to_clipboard",
+          arguments: JSON.stringify({ text: "sensitive output" }),
+        },
+      });
+      streamEndListener({ requestId });
+    },
+    cancelAgentStream() {},
+    async writeClipboard() {
+      clipboardStarted = true;
+      await clipboard;
+    },
+  };
+  const userMessage = { id: "user-tool", role: "user", content: "copy it", isStreaming: false };
+  const { captured, getMessages, getStreamCompletions, changeAuthorization } =
+    await renderChatStreaming(t, {
+      electronAPI,
+      initialMessages: [userMessage],
+      settings: {
+        chatAgentMode: "openwhispr",
+        chatAgentCloudMode: "openwhispr",
+        isSignedIn: true,
+      },
+    });
+
+  const sendPromise = captured.sendToAI("copy it", [userMessage]);
+  const waitForMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+  for (let i = 0; i < 50 && !clipboardStarted; i++) await waitForMicrotasks();
+  assert.equal(clipboardStarted, true, "fixture setup: cloud tool execution must be pending");
+  assert.equal(startCalls.length, 1);
+
+  changeAuthorization();
+  resolveClipboard();
+  await sendPromise;
+
+  assert.deepEqual(getMessages(), [userMessage]);
+  assert.equal(startCalls.length, 1, "authorization invalidation must prevent another model step");
+  assert.equal(getStreamCompletions().length, 0);
+});
+
+test("an authorization change after genuine completion leaves the completed reply intact", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  globalThis.fetch = async () => {
+    const contentEvent = `data: ${JSON.stringify(createOpenAiChunk({ content: "complete" }))}\n\n`;
+    return new Response(`${contentEvent}data: [DONE]\n\n`, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  const userMessage = { id: "user-complete", role: "user", content: "hello", isStreaming: false };
+  const { captured, getMessages, getStreamCompletions, changeAuthorization } =
+    await renderChatStreaming(t, { initialMessages: [userMessage] });
+
+  await captured.sendToAI("hello", [userMessage]);
+  const completedMessages = structuredClone(getMessages());
+  assert.equal(getStreamCompletions().length, 1);
+
+  changeAuthorization();
+
+  assert.deepEqual(getMessages(), completedMessages);
+  assert.equal(getStreamCompletions().length, 1);
 });

@@ -40,6 +40,8 @@ import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
 import logger from "../utils/logger";
 import type { ParakeetCheckResult } from "../types/electron";
+import { useManagedLocalModelLock } from "../hooks/useManagedLocalModelLock";
+import { ManagedLocalModelNotice } from "./settings/ManagedLocalModelNotice";
 
 interface LocalModel {
   model: string;
@@ -334,7 +336,7 @@ function ModeToggle({ useLocalWhisper, onModeChange }: ModeToggleProps) {
   );
 }
 
-export default function TranscriptionModelPicker({
+function TranscriptionModelPickerContent({
   transcriptionContext = "dictation",
   selectedCloudProvider,
   onCloudProviderSelect,
@@ -1385,4 +1387,10 @@ export default function TranscriptionModelPicker({
       />
     </div>
   );
+}
+
+export default function TranscriptionModelPicker(props: TranscriptionModelPickerProps) {
+  const lock = useManagedLocalModelLock("transcription");
+  if (lock.managed) return <ManagedLocalModelNotice selection={lock.selection} />;
+  return <TranscriptionModelPickerContent {...props} />;
 }

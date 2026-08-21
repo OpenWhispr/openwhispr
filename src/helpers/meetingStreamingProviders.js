@@ -33,9 +33,18 @@ const getMeetingConnectionKey = (options = {}) =>
     keyterms: options.keyterms,
   });
 
+const disconnectMeetingStreamingClient = (streaming, provider, commit = true) => {
+  if (!streaming) return Promise.resolve({ text: "" });
+  if (provider === "openai-realtime" || provider === "tinfoil-realtime") {
+    return streaming.disconnect({ commit });
+  }
+  return streaming.disconnect(commit);
+};
+
 module.exports = {
   STREAMING_CLIENT_BY_PROVIDER,
   ALLOWED_MEETING_PROVIDERS,
   getMeetingStreamingClient,
   getMeetingConnectionKey,
+  disconnectMeetingStreamingClient,
 };

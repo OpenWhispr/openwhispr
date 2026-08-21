@@ -1053,7 +1053,7 @@ declare global {
       }) => void;
       retryTranscription: (
         id: number,
-        settings?: {
+        settings: {
           useLocalWhisper: boolean;
           localTranscriptionProvider: string;
           cloudTranscriptionMode: string;
@@ -1069,12 +1069,24 @@ declare global {
           remoteTranscriptionType?: SelfHostedType;
           remoteTranscriptionUrl?: string;
           remoteTranscriptionModel?: string;
-        }
+        },
+        requestId: string
+      ) => Promise<{
+        success: boolean;
+        pendingCommit?: boolean;
+        transcription?: TranscriptionItem;
+        error?: string;
+        code?: TranscriptionErrorCode;
+      }>;
+      commitRetryTranscription: (
+        id: number,
+        requestId: string,
+        text: string,
+        rawText: string
       ) => Promise<{
         success: boolean;
         transcription?: TranscriptionItem;
         error?: string;
-        code?: TranscriptionErrorCode;
       }>;
       updateTranscriptionText: (
         id: number,
@@ -2463,6 +2475,11 @@ declare global {
         error?: string;
         reason?: "stale-session";
       }>;
+      meetingTranscriptionAbort?: (expectedSessionId?: string) => Promise<{
+        success: boolean;
+        reason?: string;
+        error?: string;
+      }>;
       meetingTranscriptionCancel?: () => Promise<{
         success: boolean;
         reason?: "recording-active";
@@ -2603,6 +2620,7 @@ declare global {
       ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
       dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
+      dictationStreamingAbort?: () => Promise<{ success: boolean }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeError?: (callback: (error: string) => void) => () => void;

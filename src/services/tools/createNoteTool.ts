@@ -1,4 +1,9 @@
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import {
+  assertToolExecutionAuthorized,
+  type ToolDefinition,
+  type ToolExecutionContext,
+  type ToolResult,
+} from "./ToolRegistry";
 import { resolveFolderId, resolveSpace } from "./utils";
 import { syncService } from "../SyncService.js";
 
@@ -33,7 +38,10 @@ export const createNoteTool: ToolDefinition = {
   },
   readOnly: false,
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    args: Record<string, unknown>,
+    context?: ToolExecutionContext
+  ): Promise<ToolResult> {
     const title = args.title as string;
     const content = args.content as string;
     const folderName = args.folder as string | undefined;
@@ -41,7 +49,9 @@ export const createNoteTool: ToolDefinition = {
 
     try {
       let spaceId: number | null = null;
+      assertToolExecutionAuthorized(context);
       const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
+      assertToolExecutionAuthorized(context);
       if (spaceName) {
         const resolved = resolveSpace(spaces, spaceName);
         if (resolved.error) {
@@ -59,7 +69,12 @@ export const createNoteTool: ToolDefinition = {
       let folderCreated = false;
 
       if (folderName) {
-        const resolved = await resolveFolderId(folderName, { createIfMissing: true }, spaceId);
+        const resolved = await resolveFolderId(
+          folderName,
+          { createIfMissing: true },
+          spaceId,
+          context
+        );
         if (resolved.error) {
           return { success: false, data: null, displayText: resolved.error };
         }
@@ -67,6 +82,7 @@ export const createNoteTool: ToolDefinition = {
         folderCreated = resolved.created;
       }
 
+      assertToolExecutionAuthorized(context);
       const result = await window.electronAPI.saveNote(
         title,
         content,
@@ -76,11 +92,13 @@ export const createNoteTool: ToolDefinition = {
         folderId,
         spaceId
       );
+      assertToolExecutionAuthorized(context);
 
       if (!result.success || !result.note) {
         return { success: false, data: null, displayText: "Failed to create note" };
       }
 
+      assertToolExecutionAuthorized(context);
       syncService.debouncedPush("note", result.note.id);
 
       const suffix = folderCreated ? ` in new folder "${folderName}"` : "";
@@ -90,6 +108,7 @@ export const createNoteTool: ToolDefinition = {
         displayText: `Created note: "${title}"${suffix}`,
       };
     } catch (error) {
+      assertToolExecutionAuthorized(context);
       return {
         success: false,
         data: null,

@@ -23,6 +23,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
 import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
 import { useUsage } from "../hooks/useUsage";
+import { useManagedLocalModelLock } from "../hooks/useManagedLocalModelLock";
 import { decideUpsell } from "../lib/upsell";
 import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
 import {
@@ -44,7 +45,6 @@ import {
   isAgentAllowed,
   isControlPanelViewAllowed,
   isPolicyActionAllowed,
-  isTranscriptionContextAllowed,
   isUpdateRequiredByOrg,
 } from "../stores/policyRules";
 import {
@@ -85,6 +85,14 @@ import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
+import { useEnterpriseIdentityStore } from "../stores/enterpriseIdentityStore";
+import { useWorkspaceStore } from "../stores/workspaceStore";
+import { canApplyPendingCloudMigration } from "./onboarding/managedLocalModels";
+import {
+  isManagedLocalTranscriptionRuntimeAllowed,
+  resolveManagedLocalTranscriptionRuntime,
+} from "../helpers/managedLocalTranscriptionRuntime";
+import { captureRuntimeAuthorizationLease } from "../helpers/runtimeAuthorizationBoundary";
 
 const platform = getCachedPlatform();
 
@@ -113,6 +121,13 @@ interface ControlPanelProps {
 
 export default function ControlPanel({ initialSettingsSection }: ControlPanelProps = {}) {
   const { t } = useTranslation();
+  const managedTranscriptionLock = useManagedLocalModelLock("transcription");
+  const enterpriseIdentityStatus = useEnterpriseIdentityStore((state) => state.status);
+  const enterpriseIdentityFailClosed = useEnterpriseIdentityStore((state) => state.failClosed);
+  const workspaceIdentityResolved = useWorkspaceStore(
+    (state) => state.loaded && !state.loading && !state.error
+  );
+  const enterpriseIdentityExpected = useWorkspaceStore((state) => state.activeWorkspaceId !== null);
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(!!initialSettingsSection);
@@ -398,13 +413,34 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     const isPending = localStorage.getItem("pendingCloudMigration") === "true";
     const alreadyShown = localStorage.getItem("cloudMigrationShown") === "true";
     if (!isPending || alreadyShown) return;
+    if (
+      !canApplyPendingCloudMigration(
+        enterpriseIdentityStatus,
+        enterpriseIdentityFailClosed,
+        managedTranscriptionLock.managed,
+        workspaceIdentityResolved,
+        enterpriseIdentityExpected
+      )
+    ) {
+      return;
+    }
 
     cloudMigrationProcessed.current = true;
     setUseLocalWhisper(false);
     setCloudTranscriptionMode("openwhispr");
     localStorage.removeItem("pendingCloudMigration");
     setShowCloudMigrationBanner(true);
-  }, [authLoaded, isSignedIn, setUseLocalWhisper, setCloudTranscriptionMode]);
+  }, [
+    authLoaded,
+    enterpriseIdentityExpected,
+    enterpriseIdentityFailClosed,
+    enterpriseIdentityStatus,
+    isSignedIn,
+    managedTranscriptionLock.managed,
+    setUseLocalWhisper,
+    setCloudTranscriptionMode,
+    workspaceIdentityResolved,
+  ]);
 
   useEffect(() => {
     if (platform === "darwin" || gpuBannerDismissed) return;
@@ -626,30 +662,46 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   const retryTranscription = useCallback(
     async (id: number, options?: { isRecover?: boolean }) => {
+      const requestId = crypto.randomUUID();
+      let pendingCommit = false;
+      const authorization = captureRuntimeAuthorizationLease(["reasoning", "transcription"], () => {
+        void window.electronAPI.cancelUploadTranscription?.(requestId);
+      });
       try {
+        authorization.assertCurrent();
         const s = getSettings();
-        if (!isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
+        const runtime = resolveManagedLocalTranscriptionRuntime(s);
+        if (!isManagedLocalTranscriptionRuntimeAllowed(runtime, usePolicyStore.getState())) {
           toast({ title: t("common.managedByOrg"), variant: "default" });
           return;
         }
-        const result = await window.electronAPI.retryTranscription(id, {
-          useLocalWhisper: s.useLocalWhisper,
-          localTranscriptionProvider: s.localTranscriptionProvider,
-          cloudTranscriptionMode: s.cloudTranscriptionMode,
-          cloudTranscriptionProvider: s.cloudTranscriptionProvider,
-          cloudTranscriptionModel: s.cloudTranscriptionModel,
-          cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
-          cortiEnvironment: s.cortiEnvironment,
-          cortiTenant: s.cortiTenant,
-          parakeetModel: s.parakeetModel,
-          whisperModel: s.whisperModel,
-          preferredLanguage: s.preferredLanguage,
-          transcriptionMode: s.transcriptionMode,
-          remoteTranscriptionType: s.remoteTranscriptionType,
-          remoteTranscriptionUrl: s.remoteTranscriptionUrl,
-          remoteTranscriptionModel: s.remoteTranscriptionModel,
-        });
-        if (result.success && result.transcription) {
+        if (runtime.kind === "error") return;
+        const effectiveSettings = runtime.settings;
+        authorization.assertCurrent();
+        const result = await window.electronAPI.retryTranscription(
+          id,
+          {
+            useLocalWhisper: effectiveSettings.useLocalWhisper,
+            localTranscriptionProvider: effectiveSettings.localTranscriptionProvider,
+            cloudTranscriptionMode: effectiveSettings.cloudTranscriptionMode,
+            cloudTranscriptionProvider: effectiveSettings.cloudTranscriptionProvider,
+            cloudTranscriptionModel: effectiveSettings.cloudTranscriptionModel,
+            cloudTranscriptionBaseUrl: effectiveSettings.cloudTranscriptionBaseUrl,
+            cortiEnvironment: effectiveSettings.cortiEnvironment,
+            cortiTenant: effectiveSettings.cortiTenant,
+            parakeetModel: effectiveSettings.parakeetModel,
+            whisperModel: effectiveSettings.whisperModel,
+            preferredLanguage: effectiveSettings.preferredLanguage,
+            transcriptionMode: effectiveSettings.transcriptionMode,
+            remoteTranscriptionType: effectiveSettings.remoteTranscriptionType,
+            remoteTranscriptionUrl: effectiveSettings.remoteTranscriptionUrl,
+            remoteTranscriptionModel: effectiveSettings.remoteTranscriptionModel,
+          },
+          requestId
+        );
+        pendingCommit = result.success && result.pendingCommit === true;
+        authorization.assertCurrent();
+        if (result.success && pendingCommit && result.transcription) {
           const rawText = result.transcription.text;
           let finalTranscription = result.transcription;
 
@@ -668,6 +720,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 import("../helpers/audioManager"),
                 import("../stores/settingsStore"),
               ]);
+              authorization.assertCurrent();
               const settings = getEffectiveSettings();
               const agentName = localStorage.getItem("agentName") || null;
               const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
@@ -675,15 +728,24 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const { text, translated } = await executeTranslationChain({
                   text: rawText,
                   cleanupReachable: route.cleanupReachable,
-                  runCleanup: (currentText: string) =>
-                    ReasoningService.processText(
+                  runCleanup: (currentText: string) => {
+                    authorization.assertCurrent();
+                    return ReasoningService.processText(
                       currentText,
                       getEffectiveCleanupModel(),
                       agentName,
                       route.cleanupConfig
-                    ),
-                  runTranslate: (currentText: string) =>
-                    ReasoningService.processText(currentText, route.model, agentName, route.config),
+                    );
+                  },
+                  runTranslate: (currentText: string) => {
+                    authorization.assertCurrent();
+                    return ReasoningService.processText(
+                      currentText,
+                      route.model,
+                      agentName,
+                      route.config
+                    );
+                  },
                   shouldTranslate: shouldRunTranslateStep(
                     settings.translationSourceLanguage,
                     settings.translationTargetLanguage
@@ -707,22 +769,20 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       "transcription"
                     ),
                 });
+                authorization.assertCurrent();
                 translationApplied = translated;
                 if (text !== rawText) {
-                  const updated = await window.electronAPI.updateTranscriptionText(
-                    id,
-                    text,
-                    rawText
-                  );
-                  if (updated.success && updated.transcription) {
-                    finalTranscription = updated.transcription;
-                  }
+                  authorization.assertCurrent();
+                  finalTranscription = { ...finalTranscription, text };
                 }
               } else {
                 // Translation disabled/unreachable since recording — fall through to cleanup.
                 handledTranslation = false;
               }
-            } catch {
+            } catch (error) {
+              if ((error as { code?: string }).code === "AUTHORIZATION_BOUNDARY_CHANGED") {
+                throw error;
+              }
               // Reasoning failed — keep the raw STT result
             }
           }
@@ -737,25 +797,25 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 import("../services/ReasoningService"),
                 import("../stores/settingsStore"),
               ]);
+              authorization.assertCurrent();
               const model = getEffectiveCleanupModel();
               const isCloud = isCloudCleanupMode();
               if (model || isCloud) {
                 const agentName = localStorage.getItem("agentName") || null;
+                authorization.assertCurrent();
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,
                 });
+                authorization.assertCurrent();
                 if (hasTextContent(reasonedText) && reasonedText !== rawText) {
-                  const updated = await window.electronAPI.updateTranscriptionText(
-                    id,
-                    reasonedText,
-                    rawText
-                  );
-                  if (updated.success && updated.transcription) {
-                    finalTranscription = updated.transcription;
-                  }
+                  authorization.assertCurrent();
+                  finalTranscription = { ...finalTranscription, text: reasonedText };
                 }
               }
-            } catch {
+            } catch (error) {
+              if ((error as { code?: string }).code === "AUTHORIZATION_BOUNDARY_CHANGED") {
+                throw error;
+              }
               // Reasoning failed — keep the raw STT result
             }
           }
@@ -766,6 +826,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           // translate step moves the text into the target language, so anything else
           // still has to be scripted as the language that was dictated.
           try {
+            authorization.assertCurrent();
             const outputLanguage =
               result.transcription.route_kind === "translation"
                 ? (translationApplied
@@ -780,21 +841,36 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 finalTranscription.text
               )
             );
+            authorization.assertCurrent();
             if (scripted !== finalTranscription.text) {
-              const updated = await window.electronAPI.updateTranscriptionText(
-                id,
-                scripted,
-                rawText
-              );
-              if (updated.success && updated.transcription) {
-                finalTranscription = updated.transcription;
-              }
+              authorization.assertCurrent();
+              finalTranscription = { ...finalTranscription, text: scripted };
             }
-          } catch {
+          } catch (error) {
+            if ((error as { code?: string }).code === "AUTHORIZATION_BOUNDARY_CHANGED") {
+              throw error;
+            }
             // Conversion failed — keep the text as transcribed
           }
 
-          updateInStore(finalTranscription);
+          authorization.assertCurrent();
+          const committed = await window.electronAPI.commitRetryTranscription(
+            id,
+            requestId,
+            finalTranscription.text,
+            rawText
+          );
+          pendingCommit = false;
+          authorization.assertCurrent();
+          if (!committed.success || !committed.transcription) {
+            toast({
+              title: t("controlPanel.history.retryError"),
+              description: committed.error,
+              variant: "destructive",
+            });
+            return;
+          }
+          updateInStore(committed.transcription);
           toast({
             title: t(
               options?.isRecover
@@ -809,11 +885,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             variant: "destructive",
           });
         }
-      } catch {
+      } catch (error) {
+        if ((error as { code?: string }).code === "AUTHORIZATION_BOUNDARY_CHANGED") return;
         toast({
           title: t("controlPanel.history.retryError"),
           variant: "destructive",
         });
+      } finally {
+        authorization.dispose();
+        if (pendingCommit) {
+          void window.electronAPI.cancelUploadTranscription?.(requestId);
+        }
       }
     },
     [toast, t, useCleanupModel]

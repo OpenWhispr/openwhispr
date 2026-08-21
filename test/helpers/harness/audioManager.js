@@ -21,6 +21,12 @@ const defaultMockModules = (settingsKey) => ({
   `,
   "/services/ReasoningService":
     "export default class ReasoningService { static cancelAllRequests() {} }",
+  "managedLocalTranscriptionRuntime.ts":
+    "export const resolveManagedLocalTranscriptionRuntime = (settings) => ({ kind: 'ready', managed: false, settings }); export const isManagedLocalTranscriptionRuntimeAllowed = (resolution) => resolution.kind === 'ready';",
+  "runtimeAuthorizationBoundary.ts":
+    "export const captureRuntimeAuthorizationGuard = () => ({ isCurrent: () => true, assertCurrent() {} }); export const subscribeRuntimeAuthorizationBoundary = () => () => {};",
+  "/stores/enterpriseIdentityStore":
+    "export const isManagedLocalModelCategoryRequired = () => false; export const getManagedScopeResolution = () => ({ kind: 'unmanaged' });",
   "/services/SyncService.js": "export const syncService = {};",
   "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
   "/utils/permissions": "export const isAccessibilitySkipped = () => false;",

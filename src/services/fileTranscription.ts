@@ -1,6 +1,7 @@
 import { withSessionRefresh } from "../lib/auth";
 import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
+import { resolveManagedLocalTranscriptionRuntime } from "../helpers/managedLocalTranscriptionRuntime";
 
 export interface FileTranscriptionResult {
   success: boolean;
@@ -81,6 +82,21 @@ export async function transcribeFile(
   diarize: boolean,
   opts: { requestId?: string; timestamps?: boolean } = {}
 ): Promise<FileTranscriptionResult> {
+  const runtime = resolveManagedLocalTranscriptionRuntime(cfg);
+  if (runtime.kind === "error") {
+    return { success: false, error: runtime.message, code: runtime.code };
+  }
+  if (runtime.managed) {
+    const settings = runtime.settings;
+    return window.electronAPI.transcribeAudioFile(filePath, {
+      provider: settings.localTranscriptionProvider as "whisper" | "nvidia",
+      model:
+        settings.localTranscriptionProvider === "nvidia"
+          ? settings.parakeetModel
+          : settings.whisperModel,
+      requestId: opts.requestId,
+    });
+  }
   if (cfg.isOpenWhisprCloud) {
     return withSessionRefresh(async () => {
       const r = await window.electronAPI.transcribeAudioFileCloud!(filePath, opts);

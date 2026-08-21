@@ -4,6 +4,11 @@ import { useTranslation } from "react-i18next";
 import { useUsage } from "../hooks/useUsage";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import { useSettingsStore } from "../stores/settingsStore";
+import { useManagedLocalModelLock } from "../hooks/useManagedLocalModelLock";
+import {
+  applyManagedLocalModeChange,
+  canSelectManagedLocalMode,
+} from "./onboarding/managedLocalModels";
 
 interface UpgradePromptProps {
   open: boolean;
@@ -22,6 +27,7 @@ export default function UpgradePrompt({
   const usage = useUsage();
   const { openBillingPortal } = useBillingPortal(usage);
   const isPastDue = usage?.isPastDue ?? false;
+  const managedLocalLock = useManagedLocalModelLock("transcription");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -68,16 +74,20 @@ export default function UpgradePrompt({
               disabled={usage?.checkoutLoading}
             />
           )}
-          <OptionCard
-            title={t("upgradePrompt.useApiKey")}
-            description={t("upgradePrompt.useApiKeyDescription")}
-            onClick={() => {
-              const s = useSettingsStore.getState();
-              s.setTranscriptionMode("providers");
-              s.setCloudTranscriptionMode("byok");
-              onOpenChange(false);
-            }}
-          />
+          {canSelectManagedLocalMode(managedLocalLock.managed, "providers") && (
+            <OptionCard
+              title={t("upgradePrompt.useApiKey")}
+              description={t("upgradePrompt.useApiKeyDescription")}
+              onClick={() => {
+                applyManagedLocalModeChange(managedLocalLock.managed, "providers", () => {
+                  const s = useSettingsStore.getState();
+                  s.setTranscriptionMode("providers");
+                  s.setCloudTranscriptionMode("byok");
+                  onOpenChange(false);
+                });
+              }}
+            />
+          )}
           <OptionCard
             title={t("upgradePrompt.switchToLocal")}
             description={t("upgradePrompt.switchToLocalDescription")}

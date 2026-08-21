@@ -248,7 +248,12 @@ async function loadCancelGuardManagerClass(t) {
       "/stores/settingsStore": `
         export const getSettings = () => globalThis.__streamingLeakSettings;
         export const getEffectiveCleanupModel = () => null;
-        export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
+        export const selectResolvedLLMConfig = () => ({
+          mode: "openwhispr",
+          cloudMode: "openwhispr",
+          model: null,
+          provider: null,
+        });
         export const isCloudCleanupMode = () => true;
         export const isCloudDictationAgentMode = () => false;
         export const isCloudTranslationMode = () => false;
@@ -414,37 +419,34 @@ test("a cancelled batch pipeline cannot clear newer streaming finalization", asy
   );
 });
 
-test(
-  "a cancelled batch pipeline does not swallow a real cleanup failure in a later streaming fallback",
-  async (t) => {
-    const { AudioManager, window } = await loadCancelGuardManagerClass(t);
-    const { manager, completions } = createStreamingLeakManager(AudioManager);
-    globalThis.__streamingLeakCleanupFailureCalls = [];
-    window.electronAPI.cloudTranscribe = async () => ({
-      success: true,
-      text: "the raw transcript",
-    });
-    window.electronAPI.cloudReason = async () => ({
-      success: false,
-      error: "genuine cloud reasoning failure",
-      code: "SERVER_ERROR",
-    });
+test("a cancelled batch pipeline does not swallow a real cleanup failure in a later streaming fallback", async (t) => {
+  const { AudioManager, window } = await loadCancelGuardManagerClass(t);
+  const { manager, completions } = createStreamingLeakManager(AudioManager);
+  globalThis.__streamingLeakCleanupFailureCalls = [];
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "the raw transcript",
+  });
+  window.electronAPI.cloudReason = async () => ({
+    success: false,
+    error: "genuine cloud reasoning failure",
+    code: "SERVER_ERROR",
+  });
 
-    // Simulate an earlier batch cancellation. The new streaming session does
-    // not capture that batch pipeline's old generation.
-    manager._processingCancellationGeneration = 1;
+  // Simulate an earlier batch cancellation. The new streaming session does
+  // not capture that batch pipeline's old generation.
+  manager._processingCancellationGeneration = 1;
 
-    assert.equal(await manager.stopStreamingRecording(), true);
+  assert.equal(await manager.stopStreamingRecording(), true);
 
-    assert.deepEqual(
-      globalThis.__streamingLeakCleanupFailureCalls,
-      ["genuine cloud reasoning failure"],
-      "a genuine cloud-reasoning failure in the streaming fallback must still be recorded"
-    );
-    assert.equal(completions.length, 1);
-    assert.equal(completions[0].text, "the raw transcript");
-  }
-);
+  assert.deepEqual(
+    globalThis.__streamingLeakCleanupFailureCalls,
+    ["genuine cloud reasoning failure"],
+    "a genuine cloud-reasoning failure in the streaming fallback must still be recorded"
+  );
+  assert.equal(completions.length, 1);
+  assert.equal(completions[0].text, "the raw transcript");
+});
 
 // Finding 2 (round-1 review override): processWithOpenWhisprCloud's catch
 // gates _notifyAgentReasoningFailed() too, not just the logger/cleanup-store
@@ -453,42 +455,41 @@ test(
 // toast via onError({ code: "AGENT_REASONING_FAILED" }) — the useAudioRecording
 // cancel guard only filters TRANSCRIPTION_CANCELLED/REASON_CANCELLED, so that
 // toast would reach the user, directly contradicting this task's goal.
-test(
-  "a cancelled voice-agent command's cloud reasoning failure notifies nothing",
-  async (t) => {
-    const { AudioManager, window } = await loadCancelGuardManagerClass(t);
-    const errors = [];
-    const manager = Object.assign(Object.create(AudioManager.prototype), {
-      voiceAgentRequested: true,
-      translationRequested: false,
-      isDictionaryEcho: () => false,
-      getWhisperPrompt: () => null,
-      finalizeChineseScript: async (text) => text,
-      processAgentCommand: async () => {
-        throw new Error("agent boom");
-      },
-      onError: (error) => errors.push(error),
-    });
-    window.electronAPI.cloudTranscribe = async () => ({
-      success: true,
-      text: "the raw transcript",
-    });
+test("a cancelled voice-agent command's cloud reasoning failure notifies nothing", async (t) => {
+  const { AudioManager, window } = await loadCancelGuardManagerClass(t);
+  const errors = [];
+  let cancelled = false;
+  const manager = Object.assign(Object.create(AudioManager.prototype), {
+    voiceAgentRequested: true,
+    translationRequested: false,
+    isDictionaryEcho: () => false,
+    getWhisperPrompt: () => null,
+    finalizeChineseScript: async (text) => text,
+    processAgentCommand: async () => {
+      cancelled = true;
+      throw new Error("agent boom");
+    },
+    onError: (error) => errors.push(error),
+  });
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "the raw transcript",
+  });
 
-    const result = await manager.processWithOpenWhisprCloud(
-      {
-        size: 1024,
-        type: "audio/webm",
-        arrayBuffer: async () => new ArrayBuffer(8),
-      },
-      {},
-      () => true
-    );
+  const result = await manager.processWithOpenWhisprCloud(
+    {
+      size: 1024,
+      type: "audio/webm",
+      arrayBuffer: async () => new ArrayBuffer(8),
+    },
+    {},
+    () => cancelled
+  );
 
-    assert.equal(result.text, "the raw transcript", "the raw transcript is still returned");
-    assert.deepEqual(
-      errors,
-      [],
-      "a cancelled agent command must notify nothing, not even Agent Unavailable"
-    );
-  }
-);
+  assert.equal(result.text, "the raw transcript", "the raw transcript is still returned");
+  assert.deepEqual(
+    errors,
+    [],
+    "a cancelled agent command must notify nothing, not even Agent Unavailable"
+  );
+});

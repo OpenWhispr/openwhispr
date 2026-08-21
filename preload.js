@@ -112,7 +112,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAudioStorageUsage: () => ipcRenderer.invoke("get-audio-storage-usage"),
   deleteAllAudio: () => ipcRenderer.invoke("delete-all-audio"),
   syncRetentionSettings: (settings) => ipcRenderer.send("retention-settings-changed", settings),
-  retryTranscription: (id, settings) => ipcRenderer.invoke("retry-transcription", id, settings),
+  retryTranscription: (id, settings, requestId) =>
+    ipcRenderer.invoke("retry-transcription", id, settings, requestId),
+  commitRetryTranscription: (id, requestId, text, rawText) =>
+    ipcRenderer.invoke("commit-retry-transcription", id, requestId, text, rawText),
   updateTranscriptionText: (id, text, rawText) =>
     ipcRenderer.invoke("update-transcription-text", id, text, rawText),
   getTranscriptionById: (id) => ipcRenderer.invoke("get-transcription-by-id", id),
@@ -796,6 +799,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
   meetingTranscriptionStop: (expectedSessionId) =>
     ipcRenderer.invoke("meeting-transcription-stop", expectedSessionId),
+  meetingTranscriptionAbort: (expectedSessionId) =>
+    ipcRenderer.invoke("meeting-transcription-abort", expectedSessionId),
   meetingTranscriptionCancel: () => ipcRenderer.invoke("meeting-transcription-cancel"),
   onMeetingTranscriptionSegment: registerListener(
     "meeting-transcription-segment",
@@ -827,6 +832,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
   dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
   dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
+  dictationStreamingAbort: () => ipcRenderer.invoke("dictation-streaming-abort"),
   onDictationRealtimePartial: registerListener(
     "dictation-realtime-partial",
     (callback) => (_event, data) => callback(data)

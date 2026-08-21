@@ -6,6 +6,11 @@ import { saveUploadNote, uploadTitleFallback } from "../services/uploadNotes";
 import { getSettings } from "./settingsStore";
 import { isTranscriptionContextAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
+import {
+  isManagedLocalTranscriptionRuntimeAllowed,
+  resolveManagedLocalTranscriptionRuntime,
+} from "../helpers/managedLocalTranscriptionRuntime";
+import { captureRuntimeAuthorizationLease } from "../helpers/runtimeAuthorizationBoundary";
 
 export type QueueItemStatus = "queued" | "downloading" | "transcribing" | "done" | "error";
 
@@ -121,12 +126,17 @@ export function processBatchQueue(
 ): void {
   if (useBatchQueueStore.getState().isProcessing) return;
   if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) return;
+  const runtime = resolveManagedLocalTranscriptionRuntime(transcribeOpts.transcription);
+  if (!isManagedLocalTranscriptionRuntimeAllowed(runtime, usePolicyStore.getState())) return;
   const run = ++runId;
+  const authorization = captureRuntimeAuthorizationLease("transcription", () => {
+    if (run === runId) cancelBatch();
+  });
   useBatchQueueStore.setState({ isProcessing: true });
 
   const snapshotApiKey = transcribeOpts.transcription.getApiKey();
   const transcription: FileTranscriptionConfig = {
-    ...transcribeOpts.transcription,
+    ...(runtime.kind === "ready" ? runtime.settings : transcribeOpts.transcription),
     getApiKey: () => snapshotApiKey,
   };
 
@@ -156,7 +166,9 @@ export function processBatchQueue(
         });
 
         try {
+          authorization.assertCurrent();
           const res = await window.electronAPI.downloadUrlAudio(item.url, item.id);
+          authorization.assertCurrent();
           if (!res.success) {
             const fail = res as { success: false; error: string; code?: string };
             const key =
@@ -183,6 +195,7 @@ export function processBatchQueue(
       }
 
       if (run !== runId) return;
+      authorization.assertCurrent();
 
       const sizeError = transcribeOpts.validateSize?.(sizeBytes) ?? null;
       if (sizeError) {
@@ -194,6 +207,7 @@ export function processBatchQueue(
 
       const requestId = crypto.randomUUID();
       activeUploadRequestId = requestId;
+      authorization.assertCurrent();
       const transcriptionResult = await transcribeFileWithSpeakers(
         filePath,
         transcription,
@@ -205,6 +219,7 @@ export function processBatchQueue(
       });
 
       if (run !== runId) return;
+      authorization.assertCurrent();
 
       if (!transcriptionResult.success || !transcriptionResult.text) {
         updateItem(item.id, {
@@ -223,12 +238,15 @@ export function processBatchQueue(
       // titles as the single-file flow.
       let noteTitle = noteName;
       if (item.source === "file") {
+        authorization.assertCurrent();
         noteTitle =
           (await transcribeOpts.generateTitle?.(finalText)) ||
           uploadTitleFallback(finalText, noteName);
         if (run !== runId) return;
+        authorization.assertCurrent();
       }
 
+      authorization.assertCurrent();
       const noteRes = await saveUploadNote({
         title: noteTitle,
         text: finalText,
@@ -238,6 +256,7 @@ export function processBatchQueue(
         durationSeconds: transcriptionResult.durationSeconds,
         segments: transcriptionResult.segments,
       });
+      authorization.assertCurrent();
 
       if (noteRes.success && noteRes.note) {
         updateItem(item.id, {
@@ -264,19 +283,24 @@ export function processBatchQueue(
   };
 
   (async () => {
-    const processed = new Set<string>();
-    let next: QueueItem | undefined;
-    while (
-      run === runId &&
-      (next = useBatchQueueStore
-        .getState()
-        .queue.find((i) => i.status === "queued" && !processed.has(i.id)))
-    ) {
-      processed.add(next.id);
-      await processItem(next);
-    }
-    if (run === runId) {
-      useBatchQueueStore.setState({ isProcessing: false });
+    try {
+      const processed = new Set<string>();
+      let next: QueueItem | undefined;
+      while (
+        run === runId &&
+        authorization.isCurrent() &&
+        (next = useBatchQueueStore
+          .getState()
+          .queue.find((i) => i.status === "queued" && !processed.has(i.id)))
+      ) {
+        processed.add(next.id);
+        await processItem(next);
+      }
+      if (run === runId) {
+        useBatchQueueStore.setState({ isProcessing: false });
+      }
+    } finally {
+      authorization.dispose();
     }
   })();
 }

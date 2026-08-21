@@ -4,6 +4,14 @@ const { tinfoilSecureFetch } = require("./tinfoilSecureClient");
 
 const TINFOIL_TRANSCRIPTION_PATH = "/v1/audio/transcriptions";
 
+function assertNotAborted(signal) {
+  if (!signal?.aborted) return;
+  if (signal.reason) throw signal.reason;
+  const error = new Error("Tinfoil transcription cancelled");
+  error.name = "AbortError";
+  throw error;
+}
+
 // "Voxtral" is one picker choice but two Tinfoil models: the realtime one streams
 // over /v1/realtime; this batch model handles every non-streaming path.
 function getBatchModel() {
@@ -24,7 +32,9 @@ async function transcribeWithTinfoil({
   language,
   prompt,
   apiKey,
+  signal,
 }) {
+  assertNotAborted(signal);
   if (!apiKey?.trim()) {
     const error = new Error("Tinfoil API key not configured. Add your key in Settings.");
     error.code = "API_KEY_MISSING";
@@ -48,7 +58,9 @@ async function transcribeWithTinfoil({
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}` },
     body: formData,
+    signal,
   });
+  assertNotAborted(signal);
 
   if (response.status === 401) {
     const error = new Error("Invalid Tinfoil API key. Check your key in Settings.");
@@ -68,6 +80,7 @@ async function transcribeWithTinfoil({
   }
 
   const data = await response.json();
+  assertNotAborted(signal);
   return { text: data?.text || "", model };
 }
 

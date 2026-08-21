@@ -178,6 +178,64 @@
     "policyAgentRestricted": "Die Nutzung des KI-Agenten ist durch Ihre Organisation eingeschränkt.",
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt."
   },
+  "managedLocalModels": {
+    "compatibility": {
+      "checking": "Gerätekompatibilität wird geprüft…",
+      "unavailable": "Die Gerätekompatibilität konnte nicht überprüft werden.",
+      "unsupported": "Dieses Modell wird auf diesem Gerät nicht unterstützt.",
+      "requiresMacOS": "Dieses Modell erfordert macOS {{version}} oder neuer."
+    },
+    "policy": {
+      "allBlocked": "Eine strengere Unternehmensrichtlinie blockiert die erforderlichen lokalen Modelle. Wende dich an deine IT-Administration."
+    },
+    "categories": {
+      "transcriptionTitle": "Diktat",
+      "transcriptionDescription": "Wähle ein vom Unternehmen genehmigtes Sprachmodell.",
+      "reasoningTitle": "KI, Sprachagent und Notizen",
+      "reasoningDescription": "Wähle ein genehmigtes Modell für deine KI-Funktionen."
+    },
+    "errors": {
+      "policyTranscription": "Eine strengere Unternehmensrichtlinie blockiert das erforderliche lokale Diktiermodell. Wende dich an die IT.",
+      "policyReasoning": "Eine strengere Unternehmensrichtlinie blockiert das erforderliche lokale KI-Modell. Wende dich an die IT.",
+      "incompatibleTranscription": "Kein vom Unternehmen genehmigtes Diktiermodell ist mit diesem Gerät kompatibel. Wende dich an die IT.",
+      "incompatibleReasoning": "Kein vom Unternehmen genehmigtes KI-Modell ist mit diesem Gerät kompatibel. Wende dich an die IT.",
+      "downloadCancelled": "Der Download des Unternehmensmodells wurde abgebrochen. Starte ihn neu, um fortzufahren."
+    },
+    "attention": {
+      "title": "Unternehmensmodell erfordert Aufmerksamkeit"
+    },
+    "workspaceSetup": {
+      "title": "Modelle für diesen Arbeitsbereich einrichten",
+      "description": "Dieser Unternehmensarbeitsbereich hat eigene genehmigte Modelle. Wähle sie einmal aus, um fortzufahren."
+    },
+    "notice": {
+      "waiting": "Warten auf die Einrichtung der Unternehmensmodelle",
+      "managedDescription": "Von deinem Unternehmen verwaltet. Du kannst dieses Modell nicht ändern oder löschen, solange dieser Arbeitsbereich aktiv ist."
+    },
+    "settings": {
+      "title": "Von deinem Unternehmen verwaltete Modelle",
+      "removalBlocked": "Vom Unternehmen verwaltete Modelle können nicht entfernt werden, solange dieser Unternehmensarbeitsbereich aktiv ist.",
+      "cacheRemovalBlocked": "{{path}} · Vom Unternehmen verwaltete Modelle können nicht entfernt werden."
+    },
+    "onboarding": {
+      "configUnavailableFallback": "Die Modellkonfiguration deines Unternehmens konnte nicht geladen werden.",
+      "configInvalid": "Die Modellkonfiguration deines Unternehmens ist ungültig. Wende dich an deine IT-Administration.",
+      "requiresNewerVersion": "Die von deinem Unternehmen verwalteten Modelle erfordern eine neuere Version von OpenWhispr.",
+      "authExpired": "Deine OpenWhispr-Sitzung ist abgelaufen. Melde dich ab und erneut an.",
+      "enterpriseRequired": "Ein aktiver Enterprise-Arbeitsbereich ist erforderlich. Wähle einen aus oder wende dich an deine IT-Administration.",
+      "ssoRequired": "Unternehmens-SSO ist erforderlich. Melde dich ab und mit deinem Unternehmens-SSO-Konto erneut an.",
+      "administratorRequired": "Die Modellkonfiguration deines Unternehmens erfordert die Unterstützung der Administration. Wende dich an deine IT-Administration.",
+      "unavailableTitle": "Unternehmenseinrichtung ist nicht verfügbar",
+      "unavailableInstructions": "Versuche es jetzt erneut oder wende dich an deine IT-Administration, wenn das Problem weiterhin besteht.",
+      "checking": "Unternehmenseinrichtung wird geprüft…",
+      "downloadTitle": "Unternehmensmodelle herunterladen",
+      "downloadDescription": "Wähle für jede erforderliche Gruppe ein genehmigtes Modell. Du kannst fortfahren, während die Downloads im Hintergrund abgeschlossen werden.",
+      "restartDownload": "Starte abgebrochene oder fehlgeschlagene Downloads von Unternehmensmodellen neu, bevor du die Einrichtung abschließt."
+    },
+    "runtime": {
+      "transcriptionUnavailable": "Das vom Unternehmen verwaltete lokale Transkriptionsmodell ist nicht verfügbar."
+    }
+  },
   "onboarding": {
     "rehaul": {
       "permissions": {

@@ -1,73 +1,146 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { loadAudioManager } = require("./harness/audioManager");
 
-// The pipeline's catch block decides what a discarded dictionary echo costs the
-// user. Before #1547 it shared the genuine-silence branch, which suppressed both
-// the toast and saveFailedTranscription, so a whole utterance vanished with no
-// feedback and no way to retry it.
-//
-// The dictionary-echo and genuine-silence branches are exercised against the
-// REAL processAudio in audioManagerNoAudioLifecycle.test.js; this mirror covers
-// only the remaining branch (a real failure) and must track the source's catch
-// block in processAudio (src/helpers/audioManager.js).
-const settleFailure = (error, manager) => {
-  let noAudioDetected = false;
-  if (error.code === "DICTIONARY_ECHO") {
-    noAudioDetected = true;
-    if (manager.lastAudioBlob) {
-      manager.saveFailedTranscription(error.message, error.code, {});
-    }
-  } else if (error.message === "No audio detected") {
-    noAudioDetected = true;
-  } else {
-    manager.onError?.({ description: error.message });
-    if (manager.lastAudioBlob) {
-      manager.saveFailedTranscription(error.message, error.code || null, {});
-    }
-  }
-  manager.onStateChange?.({ isRecording: false, isProcessing: false });
-  if (noAudioDetected) manager.onNoAudio?.();
+const AUDIO = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+const BASE_SETTINGS = {
+  preferredLanguage: "en",
+  customDictionary: ["Qdrant", "OpenAI"],
+  snippets: [],
+  chineseScriptPreference: "auto",
+  useCleanupModel: false,
+  cleanupCloudMode: "byok",
+  cloudTranscriptionMode: "byok",
+  transcriptionMode: "providers",
+  allowOpenAIFallback: false,
+  allowLocalFallback: false,
+  fallbackWhisperModel: "base",
 };
 
-const makeManager = () => {
-  const calls = { noAudio: 0, errors: [], saved: [], order: [] };
+async function createDictionaryEchoHarness(t, name, settings = {}) {
+  const loaded = await loadAudioManager(t, {
+    cachePrefix: `openwhispr-dictionary-echo-${name}-test-`,
+    settingsKey: `__dictionaryEcho${name}Settings`,
+    settings: { ...BASE_SETTINGS, ...settings },
+  });
   return {
-    calls,
-    lastAudioBlob: {},
-    onStateChange: () => calls.order.push("idle"),
-    onNoAudio: () => {
-      calls.noAudio++;
-      calls.order.push("no-audio");
-    },
-    onError: (payload) => calls.errors.push(payload),
-    saveFailedTranscription: (message, code) => calls.saved.push({ message, code }),
+    ...loaded,
+    manager: loaded.createManager({
+      voiceAgentRequested: false,
+      translationRequested: false,
+      getEffectiveSttLanguage: () => "en",
+      getTranscriptionModel: () => "whisper-1",
+      getAPIKey: async () => "test-key",
+      processTranscription: async (text) => text,
+      isReasoningAvailable: async () => false,
+      finalizeChineseScript: async (text) => text,
+    }),
   };
-};
+}
 
-test("a real failure still reports an error and saves for retry", () => {
-  const manager = makeManager();
+async function assertDictionaryEcho(promise) {
+  await assert.rejects(promise, (error) => {
+    assert.equal(error.message, "No audio detected");
+    assert.equal(error.code, "DICTIONARY_ECHO");
+    return true;
+  });
+}
 
-  settleFailure(new Error("Groq returned 500"), manager);
+test("a genuine transcription failure still reports an error and saves the recording", async (t) => {
+  const { createManager } = await createDictionaryEchoHarness(t, "Failure", {
+    useLocalWhisper: true,
+    localTranscriptionProvider: "whisper",
+    whisperModel: "base",
+  });
+  const errors = [];
+  const saved = [];
+  const manager = createManager({
+    isProcessing: true,
+    _localSpeechGateState: null,
+    pendingAssistantConversation: null,
+    pendingSelectionEdit: null,
+    lastAudioBlob: AUDIO,
+    processWithLocalWhisper: async () => {
+      throw new Error("Groq returned 500");
+    },
+    onStateChange() {},
+    onError: (error) => errors.push(error),
+    saveFailedTranscription: (message, code) => saved.push({ message, code }),
+  });
 
-  assert.equal(manager.calls.noAudio, 0);
-  assert.equal(manager.calls.errors.length, 1);
-  assert.deepEqual(manager.calls.saved, [{ message: "Groq returned 500", code: null }]);
+  await manager.processAudio(AUDIO);
+
+  assert.equal(errors.length, 1);
+  assert.match(errors[0].description, /Groq returned 500/);
+  assert.deepEqual(saved, [{ message: "Groq returned 500", code: null }]);
 });
 
-test("every dictionary-echo discard is tagged, on local and remote paths alike", async () => {
-  const fs = require("fs");
-  const source = fs.readFileSync("src/helpers/audioManager.js", "utf-8");
+test("local Whisper preserves dictionary-echo tagging after its prompt-free retry", async (t) => {
+  const { window, manager } = await createDictionaryEchoHarness(t, "Local", {
+    useLocalWhisper: true,
+  });
+  const calls = [];
+  window.electronAPI.transcribeLocalWhisper = async (_audio, options) => {
+    calls.push(options);
+    return { success: true, text: "Qdrant OpenAI" };
+  };
 
-  // Each isDictionaryEcho guard must throw the tagged error; a plain
-  // `new Error("No audio detected")` there would be swallowed again.
-  //
-  // The floor is a canary on the regex, not a target: it must track the real
-  // guard count so a pattern that silently stops matching can't make the loop
-  // below vacuous. It dropped from 7 to 4 when PROXY_TRANSCRIPTION_PROVIDERS
-  // collapsed the tinfoil/mistral/xai/corti blocks into one dispatch.
-  const guards = source.match(/isDictionaryEcho\([\s\S]{0,400}?throw [^;]+;/g) ?? [];
-  assert.ok(guards.length >= 4, `expected the known echo guards, found ${guards.length}`);
-  for (const guard of guards) {
-    assert.match(guard, /throw dictionaryEchoError\(\);/);
-  }
+  await assertDictionaryEcho(manager.processWithLocalWhisper(AUDIO, "base"));
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].skipVad, true);
+  assert.equal(calls[1].initialPrompt, undefined);
+});
+
+test("OpenWhispr cloud preserves dictionary-echo tagging", async (t) => {
+  const originalNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { ...originalNavigator, onLine: true },
+  });
+  t.after(() => {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: originalNavigator,
+    });
+  });
+  const { window, manager } = await createDictionaryEchoHarness(t, "Cloud");
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: "Qdrant OpenAI",
+  });
+
+  await assertDictionaryEcho(manager.processWithOpenWhisprCloud(AUDIO));
+});
+
+test("proxied BYOK providers preserve dictionary-echo tagging", async (t) => {
+  const { window, manager } = await createDictionaryEchoHarness(t, "Proxy", {
+    useLocalWhisper: false,
+    cloudTranscriptionProvider: "corti",
+  });
+  window.electronAPI.proxyCortiTranscription = async () => ({ text: "Qdrant OpenAI" });
+
+  await assertDictionaryEcho(manager.processWithOpenAIAPI(AUDIO));
+});
+
+test("renderer-fetch BYOK providers preserve dictionary-echo tagging", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    statusText: "OK",
+    headers: { get: () => "application/json" },
+    text: async () => JSON.stringify({ text: "Qdrant OpenAI" }),
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const { manager } = await createDictionaryEchoHarness(t, "Fetch", {
+    useLocalWhisper: false,
+    cloudTranscriptionProvider: "openai",
+  });
+  manager.getTranscriptionEndpoint = () => "https://api.openai.com/v1/audio/transcriptions";
+  manager.shouldStreamTranscription = () => false;
+
+  await assertDictionaryEcho(manager.processWithOpenAIAPI(AUDIO));
 });

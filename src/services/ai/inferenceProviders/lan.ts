@@ -6,7 +6,7 @@ import { resolveSelfHostedOpenAIBase } from "../openaiBase";
 
 export const lanProvider: InferenceProvider = {
   id: "lan",
-  async call({ text, model, agentName, config, ctx }) {
+  async call({ text, model, agentName, config, ctx, authorization }) {
     const isAgentCall = !!config.lanUrl;
     const settings = getSettings();
     const lanUrl = (config.lanUrl || settings.cleanupRemoteUrl).trim();
@@ -27,7 +27,8 @@ export const lanProvider: InferenceProvider = {
         text,
         agentName,
         config,
-        "LAN"
+        "LAN",
+        authorization
       );
     } catch (error) {
       logger.logReasoning("LAN_ERROR", {

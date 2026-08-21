@@ -178,6 +178,64 @@
     "policyAgentRestricted": "L’utilisation de l’agent IA est restreinte par votre organisation.",
     "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation."
   },
+  "managedLocalModels": {
+    "compatibility": {
+      "checking": "Vérification de la compatibilité de l’appareil…",
+      "unavailable": "La compatibilité de l’appareil n’a pas pu être vérifiée.",
+      "unsupported": "Ce modèle n’est pas pris en charge sur cet appareil.",
+      "requiresMacOS": "Ce modèle nécessite macOS {{version}} ou une version ultérieure."
+    },
+    "policy": {
+      "allBlocked": "Une politique d’entreprise plus stricte bloque les modèles locaux requis. Contactez votre administrateur informatique."
+    },
+    "categories": {
+      "transcriptionTitle": "Dictée",
+      "transcriptionDescription": "Choisissez un modèle vocal approuvé par l’entreprise.",
+      "reasoningTitle": "IA, agent vocal et Notes",
+      "reasoningDescription": "Choisissez un modèle approuvé commun à vos fonctionnalités d’IA."
+    },
+    "errors": {
+      "policyTranscription": "Une politique d’entreprise plus stricte bloque le modèle local de dictée requis. Contactez le service informatique.",
+      "policyReasoning": "Une politique d’entreprise plus stricte bloque le modèle local d’IA requis. Contactez le service informatique.",
+      "incompatibleTranscription": "Aucun modèle de dictée approuvé par l’entreprise n’est compatible avec cet appareil. Contactez le service informatique.",
+      "incompatibleReasoning": "Aucun modèle d’IA approuvé par l’entreprise n’est compatible avec cet appareil. Contactez le service informatique.",
+      "downloadCancelled": "Le téléchargement du modèle d’entreprise a été annulé. Redémarrez-le pour continuer."
+    },
+    "attention": {
+      "title": "Le modèle d’entreprise nécessite votre attention"
+    },
+    "workspaceSetup": {
+      "title": "Configurer les modèles de cet espace de travail",
+      "description": "Cet espace de travail d’entreprise possède ses propres modèles approuvés. Choisissez-les une fois pour continuer."
+    },
+    "notice": {
+      "waiting": "En attente de la configuration des modèles d’entreprise",
+      "managedDescription": "Géré par votre entreprise. Vous ne pouvez pas modifier ni supprimer ce modèle tant que cet espace de travail est actif."
+    },
+    "settings": {
+      "title": "Modèles gérés par votre entreprise",
+      "removalBlocked": "Les modèles gérés par l’entreprise ne peuvent pas être supprimés tant que cet espace de travail d’entreprise est actif.",
+      "cacheRemovalBlocked": "{{path}} · Les modèles gérés par l’entreprise ne peuvent pas être supprimés."
+    },
+    "onboarding": {
+      "configUnavailableFallback": "La configuration des modèles de votre entreprise n’a pas pu être chargée.",
+      "configInvalid": "La configuration des modèles de votre entreprise n’est pas valide. Contactez votre administrateur informatique.",
+      "requiresNewerVersion": "Les modèles gérés par votre entreprise nécessitent une version plus récente d’OpenWhispr.",
+      "authExpired": "Votre session OpenWhispr a expiré. Déconnectez-vous, puis reconnectez-vous.",
+      "enterpriseRequired": "Un espace de travail Enterprise actif est requis. Choisissez-en un ou contactez votre administrateur informatique.",
+      "ssoRequired": "Le SSO de l’entreprise est requis. Déconnectez-vous, puis reconnectez-vous avec votre compte SSO d’entreprise.",
+      "administratorRequired": "La configuration des modèles de votre entreprise nécessite l’intervention d’un administrateur. Contactez votre administrateur informatique.",
+      "unavailableTitle": "La configuration de l’entreprise est indisponible",
+      "unavailableInstructions": "Réessayez maintenant ou contactez votre administrateur informatique si le problème persiste.",
+      "checking": "Vérification de la configuration de votre entreprise…",
+      "downloadTitle": "Télécharger les modèles de votre entreprise",
+      "downloadDescription": "Choisissez un modèle approuvé pour chaque groupe requis. Vous pouvez continuer pendant que les téléchargements se terminent en arrière-plan.",
+      "restartDownload": "Redémarrez tout téléchargement de modèle d’entreprise annulé ou échoué avant de terminer la configuration."
+    },
+    "runtime": {
+      "transcriptionUnavailable": "Le modèle local de transcription géré par l’entreprise est indisponible."
+    }
+  },
   "onboarding": {
     "rehaul": {
       "permissions": {

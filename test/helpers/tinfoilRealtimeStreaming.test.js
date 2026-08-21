@@ -349,6 +349,18 @@ test("disconnect drains an in-flight commit before committing the tail", (t) => 
   })();
 });
 
+test("non-finalizing disconnect closes immediately without committing buffered audio", async () => {
+  const streaming = await makeConnected();
+  const socket = streaming.ws;
+  streaming.sendAudio(speechPcm());
+
+  const result = await streaming.disconnect({ commit: false });
+
+  assert.deepEqual(result, { text: "" });
+  assert.equal(sentEvents(socket, "input_audio_buffer.commit").length, 0);
+  assert.equal(streaming.ws, null);
+});
+
 test("disconnect remains bounded when the provider never completes", (t) => {
   t.mock.timers.enable({ apis: ["setInterval", "setTimeout", "Date"], now: 100000 });
   return (async () => {

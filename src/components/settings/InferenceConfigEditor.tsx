@@ -30,6 +30,11 @@ import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
 import { resetOnboardingProgress } from "../onboarding/flow";
+import { useManagedLocalModelLock } from "../../hooks/useManagedLocalModelLock";
+import {
+  canSelectManagedLocalMode,
+  constrainManagedLocalModeOptions,
+} from "../onboarding/managedLocalModels";
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",
@@ -70,6 +75,7 @@ export default function InferenceConfigEditor({
   const setEnterpriseSetupMode = useSettingsStore((s) => s.setEnterpriseSetupMode);
   const managed = useManagedScopeResolution(scope, enterpriseSetupMode);
   const managedAvailable = useManagedScopeResolution(scope, "managed");
+  const managedLocalLock = useManagedLocalModelLock("reasoning");
 
   const prefix = MODE_LABEL_PREFIX[scope];
   const { modes, effectiveMode, isModeAllowed } = usePolicyModeOptions<InferenceModeOption>(
@@ -116,6 +122,7 @@ export default function InferenceConfigEditor({
       enterpriseProviders: LLM_ENTERPRISE_POLICY_PROVIDER_IDS,
     }
   );
+  const selectableModes = constrainManagedLocalModeOptions(modes, managedLocalLock.managed);
 
   const setField = useCallback(
     <K extends keyof Omit<typeof config, "scope">>(field: K) =>
@@ -127,6 +134,7 @@ export default function InferenceConfigEditor({
 
   const handleModeSelect = useCallback(
     (mode: InferenceMode) => {
+      if (!canSelectManagedLocalMode(managedLocalLock.managed, mode)) return;
       if (!isModeAllowed(mode)) return;
       if (mode === "openwhispr" && !isSignedIn) {
         startCloudOnboarding();
@@ -150,7 +158,15 @@ export default function InferenceConfigEditor({
 
       onModeChange?.(mode);
     },
-    [scope, config.provider, effectiveMode, isSignedIn, onModeChange, isModeAllowed]
+    [
+      scope,
+      config.provider,
+      effectiveMode,
+      isSignedIn,
+      managedLocalLock.managed,
+      onModeChange,
+      isModeAllowed,
+    ]
   );
 
   const setMode = setField("mode");
@@ -264,7 +280,11 @@ export default function InferenceConfigEditor({
           </Button>
         </div>
       )}
-      <InferenceModeSelector modes={modes} activeMode={effectiveMode} onSelect={handleModeSelect} />
+      <InferenceModeSelector
+        modes={selectableModes}
+        activeMode={effectiveMode}
+        onSelect={handleModeSelect}
+      />
 
       {effectiveMode === "providers" && renderModelSelector("cloud")}
       {effectiveMode === "local" && renderModelSelector("local")}

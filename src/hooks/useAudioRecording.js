@@ -7,11 +7,7 @@ import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
-import {
-  isAgentAllowed,
-  isScreenContextAllowed,
-  isTranscriptionContextAllowed,
-} from "../stores/policyRules";
+import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import { getOnboardingDemoKind } from "../utils/onboardingDemo";
 import {
@@ -20,6 +16,10 @@ import {
 } from "../utils/transcriptionPreview";
 import { canStartDictation } from "../utils/dictationReadiness";
 import { waitForVisualFrames } from "../utils/visualFrame";
+import {
+  isManagedLocalTranscriptionRuntimeAllowed,
+  resolveManagedLocalTranscriptionRuntime,
+} from "../helpers/managedLocalTranscriptionRuntime";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -94,8 +94,9 @@ export const useAudioRecording = (toast, options = {}) => {
       try {
         if (!audioManagerRef.current) return false;
         const policyState = usePolicyStore.getState();
+        const transcriptionRuntime = resolveManagedLocalTranscriptionRuntime(getSettings());
         if (
-          !isTranscriptionContextAllowed(policyState, getSettings(), "dictation") ||
+          !isManagedLocalTranscriptionRuntimeAllowed(transcriptionRuntime, policyState) ||
           (voiceAgentRequested && !isAgentAllowed(policyState))
         ) {
           toast({ title: t("common.managedByOrg"), variant: "default" });

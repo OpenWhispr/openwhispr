@@ -2,6 +2,7 @@ import { createAuthClient } from "better-auth/react";
 import { ssoClient } from "@better-auth/sso/client";
 import { OPENWHISPR_API_URL } from "../config/constants";
 import { openExternalLink } from "../utils/externalLinks";
+import { restoreManagedLocalModelSettings } from "../components/onboarding/managedLocalModelSettings";
 import {
   authContextFetch,
   handleAuthRequestError,
@@ -165,6 +166,7 @@ export async function signOut(): Promise<void> {
     if (window.electronAPI?.authClearSession) {
       await window.electronAPI.authClearSession().catch(() => undefined);
     }
+    restoreManagedLocalModelSettings();
     markSignedOutState();
   }
 }

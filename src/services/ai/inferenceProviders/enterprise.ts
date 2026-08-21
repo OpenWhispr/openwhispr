@@ -11,7 +11,7 @@ import logger from "../../../utils/logger";
 
 export const enterpriseProvider: InferenceProvider = {
   id: "enterprise",
-  async call({ text, model, agentName, config, ctx }) {
+  async call({ text, model, agentName, config, ctx, authorization }) {
     if (typeof window === "undefined" || !window.electronAPI) {
       throw new Error("Enterprise reasoning is not available in this environment");
     }
@@ -29,6 +29,7 @@ export const enterpriseProvider: InferenceProvider = {
     const { supportsTemperature } = getOpenAiApiConfig(model);
 
     const startTime = Date.now();
+    authorization.assertCurrent();
     const result = await window.electronAPI.processEnterpriseReasoning(
       userContent,
       model,

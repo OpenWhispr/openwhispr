@@ -23,6 +23,19 @@ export interface ManagedEnterpriseProviderRecord {
   updatedAt: string;
 }
 
+export interface ManagedEnterpriseLocalModelSelection {
+  provider: string;
+  modelId: string;
+}
+
+export interface ManagedEnterpriseLocalModels {
+  transcription: ManagedEnterpriseLocalModelSelection[];
+  reasoning: ManagedEnterpriseLocalModelSelection[];
+  version: number;
+  updatedAt: string;
+  updatedByUserId: string | null;
+}
+
 export interface ManagedEnterpriseConfig {
   workspaceId: string;
   version: number;
@@ -37,6 +50,7 @@ export interface ManagedEnterpriseConfig {
     audiences: Record<ManagedEnterpriseProvider, string>;
   };
   providers: ManagedEnterpriseProviderRecord[];
+  localModels: ManagedEnterpriseLocalModels | null;
 }
 
 export type ManagedEnterpriseScopeResolution =

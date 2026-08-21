@@ -19,6 +19,7 @@ async function loadManagerClass(t) {
 function createFinalizingManager(AudioManager) {
   const states = [];
   let providerStopCalls = 0;
+  let providerAbortCalls = 0;
   const manager = Object.assign(Object.create(AudioManager.prototype), {
     isRecording: true,
     isProcessing: false,
@@ -61,6 +62,10 @@ function createFinalizingManager(AudioManager) {
         providerStopCalls += 1;
         return { success: true };
       },
+      async abort() {
+        providerAbortCalls += 1;
+        return { success: true };
+      },
     }),
     getEffectiveSttLanguage: () => "auto",
     getStreamingProviderName: () => "openai",
@@ -69,12 +74,18 @@ function createFinalizingManager(AudioManager) {
     onStateChange: (state) => states.push(state),
     onTranscriptionComplete() {},
   });
-  return { manager, states, getProviderStopCalls: () => providerStopCalls };
+  return {
+    manager,
+    states,
+    getProviderStopCalls: () => providerStopCalls,
+    getProviderAbortCalls: () => providerAbortCalls,
+  };
 }
 
 test("streaming finalization is immediately processing and cannot start another session", async (t) => {
   const AudioManager = await loadManagerClass(t);
-  const { manager, states, getProviderStopCalls } = createFinalizingManager(AudioManager);
+  const { manager, states, getProviderStopCalls, getProviderAbortCalls } =
+    createFinalizingManager(AudioManager);
 
   const firstStop = manager.stopStreamingRecording();
 
@@ -91,6 +102,7 @@ test("streaming finalization is immediately processing and cannot start another 
   assert.deepEqual(await Promise.all([firstStop, duplicateStop]), [true, true]);
 
   assert.equal(getProviderStopCalls(), 1);
+  assert.equal(getProviderAbortCalls(), 0);
   assert.equal(manager.isProcessing, false);
   assert.equal(manager.getState().isFinalizingStreaming, false);
   assert.equal(states.filter((state) => state.isProcessing).length, 1);
@@ -119,7 +131,8 @@ test("streaming silence publishes its empty outcome only after processing settle
 
 test("cancelling an active streaming recording discards it without publishing text", async (t) => {
   const AudioManager = await loadManagerClass(t);
-  const { manager, states, getProviderStopCalls } = createFinalizingManager(AudioManager);
+  const { manager, states, getProviderStopCalls, getProviderAbortCalls } =
+    createFinalizingManager(AudioManager);
   const completions = [];
   manager.streamingFinalText = "discard me";
   manager.cleanupPreview = async () => null;
@@ -127,7 +140,8 @@ test("cancelling an active streaming recording discards it without publishing te
 
   assert.equal(await manager.cancelStreamingRecording(), true);
 
-  assert.equal(getProviderStopCalls(), 1);
+  assert.equal(getProviderStopCalls(), 0);
+  assert.equal(getProviderAbortCalls(), 1);
   assert.deepEqual(completions, []);
   assert.equal(manager._activeStreamingSessionId, null);
   assert.equal(manager.isRecording, false);
@@ -140,31 +154,51 @@ test("cancelling an active streaming recording discards it without publishing te
   });
 });
 
+test("streaming discard aborts without invoking the provider's graceful stop", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  const calls = [];
+  manager.cleanupPreview = async () => null;
+  manager.getStreamingProvider = () => ({
+    abort: async () => {
+      calls.push("abort");
+      return { success: true };
+    },
+    stop: async () => {
+      calls.push("stop");
+      return { success: true };
+    },
+  });
+
+  assert.equal(await manager.cancelStreamingRecording(), true);
+  assert.deepEqual(calls, ["abort"]);
+});
+
 test("streaming discard blocks restart until the provider disconnects", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager } = createFinalizingManager(AudioManager);
-  let resolveProviderStop;
-  let providerStopStarted = false;
-  const providerStop = new Promise((resolve) => {
-    resolveProviderStop = resolve;
+  let resolveProviderAbort;
+  let providerAbortStarted = false;
+  const providerAbort = new Promise((resolve) => {
+    resolveProviderAbort = resolve;
   });
   manager.cleanupPreview = async () => null;
   manager.getStreamingProvider = () => ({
-    stop: async () => {
-      providerStopStarted = true;
-      await providerStop;
+    abort: async () => {
+      providerAbortStarted = true;
+      await providerAbort;
       return { success: true };
     },
   });
 
   const cancel = manager.cancelStreamingRecording();
-  while (!providerStopStarted) await new Promise((resolve) => setImmediate(resolve));
+  while (!providerAbortStarted) await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(manager.isProcessing, true);
   assert.equal(manager.getState().isFinalizingStreaming, true);
   assert.equal(await manager.startStreamingRecording(), false);
 
-  resolveProviderStop();
+  resolveProviderAbort();
   assert.equal(await cancel, true);
   assert.equal(manager.isProcessing, false);
   assert.equal(manager.getState().isFinalizingStreaming, false);
@@ -173,24 +207,24 @@ test("streaming discard blocks restart until the provider disconnects", async (t
 test("streaming discard waits for an in-progress provider start before disconnecting", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager } = createFinalizingManager(AudioManager);
-  let providerStopCalls = 0;
+  let providerAbortCalls = 0;
   manager.streamingStartInProgress = true;
   manager.cleanupPreview = async () => null;
   manager.getStreamingProvider = () => ({
-    stop: async () => {
-      providerStopCalls += 1;
+    abort: async () => {
+      providerAbortCalls += 1;
       return { success: true };
     },
   });
 
   const cancel = manager.cancelStreamingRecording();
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(providerStopCalls, 0);
+  assert.equal(providerAbortCalls, 0);
   assert.equal(manager.isProcessing, true);
 
   manager._settleStreamingStart();
   assert.equal(await cancel, true);
-  assert.equal(providerStopCalls, 1);
+  assert.equal(providerAbortCalls, 1);
   assert.equal(manager.isProcessing, false);
 });
 
@@ -227,6 +261,7 @@ test("cancelling while the streaming microphone opens never enters recording", a
     onSessionEnd: () => () => {},
     start: async () => ({ success: true }),
     stop: async () => ({ success: true }),
+    abort: async () => ({ success: true }),
   };
   const manager = Object.assign(Object.create(AudioManager.prototype), {
     isRecording: false,
@@ -335,6 +370,7 @@ test("cancelling streaming processing stays busy until an awaited transform exit
   const transform = new Promise((resolve) => {
     resolveTransform = resolve;
   });
+  t.after(() => resolveTransform?.("test cleanup"));
   manager.streamingFinalText = "raw transcript";
   manager.finalizeChineseScript = async () => {
     transformStarted = true;
@@ -345,10 +381,13 @@ test("cancelling streaming processing stays busy until an awaited transform exit
   const stop = manager.stopStreamingRecording();
   while (!transformStarted) await new Promise((resolve) => setImmediate(resolve));
 
-  assert.equal(manager.cancelProcessing(), true);
-  assert.equal(manager.isProcessing, true);
-  assert.equal(manager.getState().isFinalizingStreaming, true);
-  resolveTransform("transformed transcript");
+  try {
+    assert.equal(manager.cancelProcessing(), true);
+    assert.equal(manager.isProcessing, true);
+    assert.equal(manager.getState().isFinalizingStreaming, true);
+  } finally {
+    resolveTransform("transformed transcript");
+  }
   assert.equal(await stop, true);
 
   assert.deepEqual(completions, []);

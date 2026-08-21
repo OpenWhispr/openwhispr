@@ -131,6 +131,11 @@ import {
 } from "../stores/policyRules";
 import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
+import { useManagedLocalModelLock } from "../hooks/useManagedLocalModelLock";
+import {
+  canSelectManagedLocalMode,
+  constrainManagedLocalModeOptions,
+} from "./onboarding/managedLocalModels";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
@@ -294,6 +299,7 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
+  const managedLocalLock = useManagedLocalModelLock("transcription");
   const {
     modes: transcriptionModes,
     effectiveMode: effectiveTranscriptionMode,
@@ -331,7 +337,12 @@ function TranscriptionSection({
     transcriptionMode,
     { byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS }
   );
+  const selectableTranscriptionModes = constrainManagedLocalModeOptions(
+    transcriptionModes,
+    managedLocalLock.managed
+  );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
+    if (!canSelectManagedLocalMode(managedLocalLock.managed, mode)) return;
     if (!isModeAllowed(mode)) return;
     if (mode === "openwhispr" && !isSignedIn) {
       startOnboarding();
@@ -421,7 +432,7 @@ function TranscriptionSection({
   return (
     <div className="space-y-4">
       <InferenceModeSelector
-        modes={transcriptionModes}
+        modes={selectableTranscriptionModes}
         activeMode={effectiveTranscriptionMode}
         onSelect={handleTranscriptionModeSelect}
       />
@@ -916,6 +927,9 @@ export default function SettingsPage({
   const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
 
   const settingsPolicyState = usePolicySnapshot();
+  const managedTranscriptionLock = useManagedLocalModelLock("transcription");
+  const managedReasoningLock = useManagedLocalModelLock("reasoning");
+  const hasManagedLocalModels = managedTranscriptionLock.managed || managedReasoningLock.managed;
   const agentAllowedByPolicy = isAgentAllowed(settingsPolicyState);
   const historyLockedByPolicy = lockedLocalHistoryValue(settingsPolicyState) !== null;
   const effectiveDataRetentionEnabled = effectiveLocalHistoryEnabled(
@@ -1378,6 +1392,13 @@ export default function SettingsPage({
 
   const handleRemoveModels = useCallback(() => {
     if (isRemovingModels) return;
+    if (hasManagedLocalModels) {
+      showAlertDialog({
+        title: t("managedLocalModels.settings.title"),
+        description: t("managedLocalModels.settings.removalBlocked"),
+      });
+      return;
+    }
 
     showConfirmDialog({
       title: t("settingsPage.developer.removeModels.title"),
@@ -1422,7 +1443,14 @@ export default function SettingsPage({
         }
       },
     });
-  }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
+  }, [
+    cachePathHint,
+    hasManagedLocalModels,
+    isRemovingModels,
+    showAlertDialog,
+    showConfirmDialog,
+    t,
+  ]);
 
   const { isSignedIn, isLoaded, user, refetch } = useAuth();
   // Signed out there is nothing to load and the plan grid is purely
@@ -4121,7 +4149,13 @@ EOF`,
                   <SettingsPanelRow>
                     <SettingsRow
                       label={t("settingsPage.developer.modelCache")}
-                      description={cachePathHint}
+                      description={
+                        hasManagedLocalModels
+                          ? t("managedLocalModels.settings.cacheRemovalBlocked", {
+                              path: cachePathHint,
+                            })
+                          : cachePathHint
+                      }
                     >
                       <div className="flex items-center gap-2">
                         <Button
@@ -4136,7 +4170,7 @@ EOF`,
                           variant="destructive"
                           size="sm"
                           onClick={handleRemoveModels}
-                          disabled={isRemovingModels}
+                          disabled={isRemovingModels || hasManagedLocalModels}
                         >
                           {isRemovingModels
                             ? t("settingsPage.developer.removing")

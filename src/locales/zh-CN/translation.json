@@ -178,6 +178,64 @@
     "policyAgentRestricted": "AI 智能体的使用已被您的组织限制。",
     "policyTranscriptionRestricted": "转录已被您的组织限制。"
   },
+  "managedLocalModels": {
+    "compatibility": {
+      "checking": "正在检查设备兼容性…",
+      "unavailable": "无法验证设备兼容性。",
+      "unsupported": "此设备不支持该模型。",
+      "requiresMacOS": "此模型需要 macOS {{version}} 或更高版本。"
+    },
+    "policy": {
+      "allBlocked": "更严格的公司政策阻止了所需的本地模型。请联系 IT 管理员。"
+    },
+    "categories": {
+      "transcriptionTitle": "听写",
+      "transcriptionDescription": "选择一个公司批准的语音模型。",
+      "reasoningTitle": "AI、语音代理和笔记",
+      "reasoningDescription": "选择一个供 AI 功能共用的已批准模型。"
+    },
+    "errors": {
+      "policyTranscription": "更严格的公司政策阻止了所需的本地听写模型。请联系 IT 部门。",
+      "policyReasoning": "更严格的公司政策阻止了所需的本地 AI 模型。请联系 IT 部门。",
+      "incompatibleTranscription": "没有与此设备兼容的公司批准听写模型。请联系 IT 部门。",
+      "incompatibleReasoning": "没有与此设备兼容的公司批准 AI 模型。请联系 IT 部门。",
+      "downloadCancelled": "公司模型下载已取消。请重新开始下载以继续。"
+    },
+    "attention": {
+      "title": "公司模型需要处理"
+    },
+    "workspaceSetup": {
+      "title": "设置此工作区的模型",
+      "description": "此公司工作区有自己的已批准模型。选择一次即可继续。"
+    },
+    "notice": {
+      "waiting": "正在等待公司模型设置",
+      "managedDescription": "由你的公司管理。此工作区处于活动状态时，你无法更改或删除此模型。"
+    },
+    "settings": {
+      "title": "由你的公司管理的模型",
+      "removalBlocked": "此企业工作区处于活动状态时，无法移除公司管理的模型。",
+      "cacheRemovalBlocked": "{{path}} · 无法移除公司管理的模型。"
+    },
+    "onboarding": {
+      "configUnavailableFallback": "无法加载你公司的模型设置。",
+      "configInvalid": "你公司的模型设置无效。请联系 IT 管理员。",
+      "requiresNewerVersion": "你公司管理的模型需要更新版本的 OpenWhispr。",
+      "authExpired": "你的 OpenWhispr 会话已过期。请退出并重新登录。",
+      "enterpriseRequired": "需要有效的 Enterprise 工作区。请选择一个 Enterprise 工作区或联系 IT 管理员。",
+      "ssoRequired": "需要公司 SSO。请退出，并使用公司的 SSO 账户重新登录。",
+      "administratorRequired": "你公司的模型设置需要管理员处理。请联系 IT 管理员。",
+      "unavailableTitle": "公司设置不可用",
+      "unavailableInstructions": "请立即重试。如果问题仍然存在，请联系 IT 管理员。",
+      "checking": "正在检查你公司的设置…",
+      "downloadTitle": "下载你公司的模型",
+      "downloadDescription": "为每个必需组选择一个已批准的模型。下载可在后台继续进行。",
+      "restartDownload": "完成设置前，请重新开始任何已取消或失败的公司模型下载。"
+    },
+    "runtime": {
+      "transcriptionUnavailable": "公司管理的本地转录模型不可用。"
+    }
+  },
   "onboarding": {
     "rehaul": {
       "permissions": {

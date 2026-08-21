@@ -1,5 +1,9 @@
 import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
+import {
+  isManagedLocalTranscriptionRuntimeAllowed,
+  resolveManagedLocalTranscriptionRuntime,
+} from "../helpers/managedLocalTranscriptionRuntime";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { getStreamingTranscriptionProviders } from "../models/ModelRegistry";
 import { resolveMeetingTranscriptionOptions } from "../helpers/meetingTranscriptionRouting";
@@ -24,7 +28,6 @@ import {
   MAX_SPEAKER_COUNT,
 } from "../constants/speakerDetection.json";
 import logger from "../utils/logger";
-import { isTranscriptionContextAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
 import {
   lockTranscriptSpeaker,
@@ -46,6 +49,10 @@ import {
   teardownFailedMeetingRecordingSetup,
 } from "../helpers/meetingRecordingSession";
 import { persistFinalTranscriptAroundStop } from "../helpers/meetingTranscriptPersistence";
+import {
+  captureRuntimeAuthorizationGuard,
+  subscribeRuntimeAuthorizationBoundary,
+} from "../helpers/runtimeAuthorizationBoundary";
 
 export interface TranscriptSegment {
   id: string;
@@ -137,9 +144,18 @@ const isSegmentWithinIdentificationWindow = (
   );
 };
 
+const getMeetingTranscriptionRuntime = () => {
+  const state = getSettings();
+  return resolveManagedLocalTranscriptionRuntime(selectResolvedMeetingTranscription(state));
+};
+
 const getMeetingTranscriptionOptions = () => {
   const state = getSettings();
-  const resolved = selectResolvedMeetingTranscription(state);
+  const runtime = getMeetingTranscriptionRuntime();
+  if (runtime.kind === "error") {
+    throw Object.assign(new Error(runtime.message), { code: runtime.code });
+  }
+  const resolved = runtime.settings;
   const language = getBaseLanguageCode(state.preferredLanguage);
 
   return resolveMeetingTranscriptionOptions({
@@ -369,19 +385,24 @@ const detachFromOutputDevice = async (ctx: AudioContext) => {
   }
 };
 
-const flushAndDisconnectProcessor = async (processor: AudioWorkletNode | null) => {
+const disconnectProcessor = async (processor: AudioWorkletNode | null, flush: boolean) => {
   if (!processor) return;
 
-  try {
-    processor.port.postMessage("stop");
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, MEETING_STOP_FLUSH_TIMEOUT_MS);
-    });
-  } catch {}
+  if (flush) {
+    try {
+      processor.port.postMessage("stop");
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, MEETING_STOP_FLUSH_TIMEOUT_MS);
+      });
+    } catch {}
+  }
 
   processor.port.onmessage = null;
   processor.disconnect();
 };
+
+const flushAndDisconnectProcessor = (processor: AudioWorkletNode | null) =>
+  disconnectProcessor(processor, true);
 
 let segmentCounter = 0;
 
@@ -405,6 +426,7 @@ const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
 let segmentsRefValue: TranscriptSegment[] = [];
 let preparePromise: Promise<void> | null = null;
+let authorizationAbortPromise: Promise<void> | null = null;
 let ipcCleanups: Array<() => void> = [];
 let speakerIdentifications: SpeakerIdentification[] = [];
 let nextPlaceholderSpeakerIndex = 0;
@@ -641,10 +663,10 @@ function assignProvisionalSpeaker(segment: TranscriptSegment): TranscriptSegment
   });
 }
 
-async function cleanup(): Promise<void> {
+async function cleanup({ flushProcessors = true } = {}): Promise<void> {
   micRecovery?.stop();
   micRecovery = null;
-  await flushAndDisconnectProcessor(micProcessor);
+  await disconnectProcessor(micProcessor, flushProcessors);
   micProcessor = null;
 
   micSource?.disconnect();
@@ -663,7 +685,7 @@ async function cleanup(): Promise<void> {
   } catch {}
   micContext = null;
 
-  await flushAndDisconnectProcessor(systemProcessor);
+  await disconnectProcessor(systemProcessor, flushProcessors);
   systemProcessor = null;
 
   systemSource?.disconnect();
@@ -690,18 +712,64 @@ async function cleanup(): Promise<void> {
   isStartingFlag = false;
 }
 
+function abortForAuthorizationBoundary(): Promise<void> {
+  if (authorizationAbortPromise) return authorizationAbortPromise;
+
+  const abort = (async () => {
+    const sessionId = activeRecordingSessionId ?? undefined;
+    const canceledStart = meetingRecordingStartCoordinator.cancelActiveStart(sessionId);
+    activeRecordingSessionId = null;
+    isPrepared = false;
+    isRecordingFlag = false;
+    isStartingFlag = false;
+    useMeetingRecordingStore.setState({
+      isRecording: false,
+      isTranscribing: false,
+      micPartial: "",
+      systemPartial: "",
+      systemPartialSpeakerId: null,
+      systemPartialSpeakerName: null,
+      currentMicLevel: 0,
+    });
+    const mainAbort = window.electronAPI?.meetingTranscriptionAbort?.(sessionId);
+    const cleanupAbort = meetingRecordingStopBarrier.runStop(async () => {
+      await Promise.all([
+        cleanup({ flushProcessors: false }),
+        mainAbort?.catch(() => undefined) ?? Promise.resolve(),
+      ]);
+    });
+    await Promise.all([cleanupAbort, canceledStart ?? Promise.resolve()]);
+  })();
+  authorizationAbortPromise = abort;
+  const clearAbort = (): void => {
+    if (authorizationAbortPromise === abort) authorizationAbortPromise = null;
+  };
+  void abort.then(clearAbort, clearAbort);
+  return abort;
+}
+
 export async function prepareTranscription(): Promise<void> {
+  const authorization = captureRuntimeAuthorizationGuard("transcription");
   if (isPrepared || isRecordingFlag || isStartingFlag) return;
-  if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting")) return;
+  if (
+    !isManagedLocalTranscriptionRuntimeAllowed(
+      getMeetingTranscriptionRuntime(),
+      usePolicyStore.getState()
+    )
+  ) {
+    return;
+  }
   if (preparePromise) return preparePromise;
 
   logger.info("Meeting transcription preparing (pre-warming WebSockets)...", {}, "meeting");
 
   const promise = (async () => {
     try {
+      authorization.assertCurrent();
       const result = await window.electronAPI?.meetingTranscriptionPrepare?.(
         getMeetingTranscriptionOptions()
       );
+      authorization.assertCurrent();
 
       if (result?.success) {
         isPrepared = true;
@@ -743,8 +811,14 @@ export interface StartRecordingArgs {
 // outcome (including setup failures, which are reported through the store) is
 // "accepted" so callers don't roll back UI they didn't own.
 export async function startRecording(args: StartRecordingArgs): Promise<boolean> {
+  const authorization = captureRuntimeAuthorizationGuard("transcription");
   if (isRecordingFlag || isStartingFlag) return true;
-  if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting")) {
+  if (
+    !isManagedLocalTranscriptionRuntimeAllowed(
+      getMeetingTranscriptionRuntime(),
+      usePolicyStore.getState()
+    )
+  ) {
     logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
     reportMeetingError("policyRestricted");
     return false;
@@ -759,7 +833,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     isStartingFlag = true;
     activeRecordingSessionId = sessionId;
     const isCurrentStart = () =>
-      startOperation.isCurrent() && activeRecordingSessionId === sessionId;
+      startOperation.isCurrent() &&
+      activeRecordingSessionId === sessionId &&
+      authorization.isCurrent();
 
     const initialEnabled =
       args.diarizationEnabled ??
@@ -822,9 +898,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     const releaseSession = () => {
       if (activeRecordingSessionId === sessionId) activeRecordingSessionId = null;
     };
-    const stopScopedMainOnce = () =>
+    const stopScopedMainOnce = (authorizationChanged = false) =>
       startOperation.stopMainOnce(async () => {
-        await window.electronAPI?.meetingTranscriptionStop?.(sessionId).catch(() => undefined);
+        const operation = authorizationChanged
+          ? window.electronAPI?.meetingTranscriptionAbort?.(sessionId)
+          : window.electronAPI?.meetingTranscriptionStop?.(sessionId);
+        await operation?.catch(() => undefined);
       });
     const teardownStart = async () => {
       stopMediaStream(setupMicResult);
@@ -835,8 +914,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       isStartingFlag = false;
       await teardownFailedMeetingRecordingSetup({
         stopBarrier: meetingRecordingStopBarrier,
-        cleanup,
-        stopMain: stopScopedMainOnce,
+        cleanup: () => cleanup({ flushProcessors: authorization.isCurrent() }),
+        stopMain: () => stopScopedMainOnce(!authorization.isCurrent()),
         releaseSession,
       });
     };
@@ -863,6 +942,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         prepareMeetingSystemAudioCapture(initialSystemAudioAccess);
 
       startOperation.markMainStartAttempted();
+      authorization.assertCurrent();
       const mainStartPromise = window.electronAPI?.meetingTranscriptionStart?.({
         ...getMeetingTranscriptionOptions(),
         noteId: args.noteId ?? null,
@@ -1202,7 +1282,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           stream: micResult,
           context: ctx,
           onChunk: (chunk) => {
-            if (!isRecordingFlag || activeRecordingSessionId !== sessionId) return;
+            if (
+              !isRecordingFlag ||
+              activeRecordingSessionId !== sessionId ||
+              !authorization.isCurrent()
+            ) {
+              return;
+            }
             if (socketReady) {
               window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
               return;
@@ -1212,7 +1298,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         }).then(async ({ source, processor }) => {
           if (!isCurrentStart()) {
             source.disconnect();
-            await flushAndDisconnectProcessor(processor);
+            await disconnectProcessor(processor, authorization.isCurrent());
             return;
           }
           micSource = source;
@@ -1274,6 +1360,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             if (
               !isRecordingFlag ||
               activeRecordingSessionId !== sessionId ||
+              !authorization.isCurrent() ||
               !micContext ||
               !micProcessor
             ) {
@@ -1315,7 +1402,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           stream,
           context: ctx,
           onChunk: (chunk) => {
-            if (!isRecordingFlag || activeRecordingSessionId !== sessionId) return;
+            if (
+              !isRecordingFlag ||
+              activeRecordingSessionId !== sessionId ||
+              !authorization.isCurrent()
+            ) {
+              return;
+            }
             if (socketReady) {
               window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
               return;
@@ -1325,7 +1418,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         });
         if (!isCurrentStart()) {
           source.disconnect();
-          await flushAndDisconnectProcessor(processor);
+          await disconnectProcessor(processor, authorization.isCurrent());
           await teardownStart();
           return;
         }
@@ -1356,6 +1449,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       const systemAudioAvailable = systemAudioHandledInMain || systemStream !== null;
       try {
+        authorization.assertCurrent();
         const availabilityResult =
           await window.electronAPI?.meetingTranscriptionSetSystemAudioAvailable?.(
             sessionId,
@@ -1387,9 +1481,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       socketReady = true;
 
       for (const chunk of pendingMicChunks) {
+        if (!authorization.isCurrent()) break;
         window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
       }
       for (const chunk of pendingSystemChunks) {
+        if (!authorization.isCurrent()) break;
         window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
       }
 
@@ -1560,6 +1656,18 @@ export function lockSpeaker(speakerId: string, displayName: string): void {
 
 export function cancelPreparedTranscription(): void {
   window.electronAPI?.meetingTranscriptionCancel?.();
+}
+
+if (typeof window !== "undefined") {
+  subscribeRuntimeAuthorizationBoundary("transcription", () => {
+    void abortForAuthorizationBoundary().catch((error) => {
+      logger.warn(
+        "Meeting transcription authorization abort failed",
+        { error: error instanceof Error ? error.message : String(error) },
+        "meeting"
+      );
+    });
+  });
 }
 
 // Persists delayed diarization results to the note that owns the recording

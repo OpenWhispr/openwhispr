@@ -33,6 +33,8 @@ import {
   reconcileProviderSelection,
 } from "../stores/policyRules";
 import { usePolicySnapshot } from "../hooks/usePolicy";
+import { useManagedLocalModelLock } from "../hooks/useManagedLocalModelLock";
+import { ManagedLocalModelNotice } from "./settings/ManagedLocalModelNotice";
 
 type CloudModelOption = {
   value: string;
@@ -322,7 +324,7 @@ function GpuStatusBadge() {
   return null;
 }
 
-export default function ReasoningModelSelector({
+function ReasoningModelSelectorContent({
   reasoningModel,
   setReasoningModel,
   localReasoningProvider,
@@ -722,4 +724,10 @@ export default function ReasoningModelSelector({
       )}
     </div>
   );
+}
+
+export default function ReasoningModelSelector(props: ReasoningModelSelectorProps) {
+  const lock = useManagedLocalModelLock("reasoning");
+  if (lock.managed) return <ManagedLocalModelNotice selection={lock.selection} />;
+  return <ReasoningModelSelectorContent {...props} />;
 }

@@ -9,10 +9,12 @@ import {
 } from "../../models/ModelRegistry";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
-  consumePendingLocalModel,
+  consumePendingLocalModelCompletion,
   forgetPendingLocalModel,
+  forgetPendingLocalModelSelection,
   getPendingLocalModelAvailability,
   hasPendingLocalModels,
+  isPendingLocalModelSelectionCurrent,
   readPendingLocalModels,
   type PendingLocalModelKind,
   type PendingLocalModelSelection,
@@ -23,6 +25,13 @@ import type {
   WhisperDownloadProgressData,
 } from "../../types/electron";
 import { mergeHydratedDownloads } from "./localDownloadState";
+import { usePolicyStore } from "../../stores/policyStore";
+import { isAgentAllowed } from "../../stores/policyRules";
+import {
+  MANAGED_LOCAL_MODEL_ERROR_CODES,
+  recordManagedLocalModelDownloadError,
+} from "./managedLocalModels";
+import { notifyModelDownloadCancellation } from "../../hooks/modelDownloadCancellation";
 
 type DownloadKind = "whisper" | "parakeet" | "llm";
 
@@ -63,8 +72,9 @@ function downloadDisplay(download: ActiveDownload) {
 
 function activatePendingLocalModel(kind: PendingLocalModelKind, modelId: string) {
   if (localStorage.getItem("localSetupPending") !== "true") return;
-  const selection = consumePendingLocalModel(kind, modelId);
-  if (!selection) return;
+  const completion = consumePendingLocalModelCompletion(kind, modelId);
+  if (!completion || completion.activationOwner === "coordinator") return;
+  const { selection } = completion;
 
   const store = useSettingsStore.getState();
   if (kind === "dictation") {
@@ -87,7 +97,7 @@ function activatePendingLocalModel(kind: PendingLocalModelKind, modelId: string)
     cleanupProvider: selection.provider,
     cleanupModel: selection.modelId,
     useCleanupModel: true,
-    useDictationAgent: true,
+    useDictationAgent: isAgentAllowed(usePolicyStore.getState()),
   });
 }
 
@@ -124,6 +134,7 @@ export default function BackgroundModelDownloadTray() {
   const [hydrated, setHydrated] = useState(false);
   const hydrationInProgress = useRef(true);
   const removedDuringHydration = useRef<Set<string>>(new Set());
+  const mounted = useRef(false);
   // An abort emits no terminal progress event (the IPC handlers exclude
   // DOWNLOAD_CANCELLED from the error emit), but chunk events already queued
   // when the user clicks cancel still arrive and would resurrect the removed
@@ -131,6 +142,13 @@ export default function BackgroundModelDownloadTray() {
   // are dropped, a completion always wins (the model really installed), and a
   // later re-download of the same model renders — and errors — normally.
   const cancelledKeys = useRef<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     // Hydration only exists to re-surface downloads the onboarding flow kicked
@@ -300,6 +318,8 @@ export default function BackgroundModelDownloadTray() {
   const cancelDownload = useCallback(async (download: ActiveDownload) => {
     const key = downloadKey(download.kind, download.id);
     const pendingKind = download.kind === "llm" ? "assistant" : "dictation";
+    const currentPending = readPendingLocalModels()[pendingKind];
+    const pendingSelection = currentPending?.modelId === download.id ? currentPending : undefined;
 
     // An error row represents a transfer that has already stopped. Its X is a
     // dismiss action, so no cancellation IPC is needed (and would be refused).
@@ -309,7 +329,9 @@ export default function BackgroundModelDownloadTray() {
         delete next[key];
         return next;
       });
-      forgetPendingLocalModel(pendingKind, download.id);
+      if (pendingSelection) {
+        forgetPendingLocalModelSelection(pendingKind, pendingSelection);
+      }
       return;
     }
 
@@ -335,20 +357,54 @@ export default function BackgroundModelDownloadTray() {
       result = { success: false };
     }
 
+    if (!mounted.current) {
+      if (result?.success === true) {
+        notifyModelDownloadCancellation(download.kind, download.id);
+      }
+      return;
+    }
+
+    const pendingSelectionIsCurrent = pendingSelection
+      ? isPendingLocalModelSelectionCurrent(pendingKind, pendingSelection)
+      : readPendingLocalModels()[pendingKind]?.modelId !== download.id;
     // The main process can refuse: Parakeet returns INSTALLATION_IN_PROGRESS once
     // extraction starts, and modelManagerBridge returns false when the request has
     // already gone. Put the row back rather than leaving the user believing a
     // download that is still running was stopped.
     if (result?.success !== true) {
       cancelledKeys.current.delete(key);
-      setDownloads((current) => ({ ...current, [key]: download }));
+      if (pendingSelectionIsCurrent) {
+        setDownloads((current) => ({ ...current, [key]: download }));
+      }
+      return;
+    }
+
+    if (!pendingSelectionIsCurrent) {
+      cancelledKeys.current.delete(key);
+      notifyModelDownloadCancellation(download.kind, download.id);
       return;
     }
 
     // Only discard the intended selection once the transfer actually stopped.
     // If cancellation is refused, keeping it lets a finishing installation
     // activate the exact model the user originally chose.
-    forgetPendingLocalModel(pendingKind, download.id);
+    if (pendingSelection?.managedIdentity) {
+      recordManagedLocalModelDownloadError(
+        {
+          identity: pendingSelection.managedIdentity,
+          category: pendingKind === "assistant" ? "reasoning" : "transcription",
+          selection: {
+            provider: pendingSelection.provider,
+            modelId: pendingSelection.modelId,
+          },
+        },
+        MANAGED_LOCAL_MODEL_ERROR_CODES.downloadCancelled
+      );
+    }
+    notifyModelDownloadCancellation(download.kind, download.id);
+    if (pendingSelection) {
+      forgetPendingLocalModelSelection(pendingKind, pendingSelection);
+    }
   }, []);
 
   const activeDownloads = useMemo(() => Object.values(downloads), [downloads]);

@@ -20,8 +20,9 @@ function assertValidTarget(environment, tenant) {
   }
 }
 
-async function getCortiToken({ environment, tenant, clientId, clientSecret }, fetchImpl) {
+async function getCortiToken({ environment, tenant, clientId, clientSecret, signal }, fetchImpl) {
   assertValidTarget(environment, tenant);
+  signal?.throwIfAborted?.();
 
   // The secret is part of the key (digested, never stored raw) so edited
   // credentials always re-authenticate; a key without it makes a connection
@@ -38,6 +39,7 @@ async function getCortiToken({ environment, tenant, clientId, clientSecret }, fe
 
   const doFetch = fetchImpl || ((url, init) => net.fetch(url, init));
   const controller = new AbortController();
+  const requestSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
   const timeoutHandle = setTimeout(() => controller.abort(), TOKEN_FETCH_TIMEOUT_MS);
   try {
     const response = await doFetch(
@@ -51,7 +53,7 @@ async function getCortiToken({ environment, tenant, clientId, clientSecret }, fe
           client_secret: clientSecret,
           scope: "openid",
         }).toString(),
-        signal: controller.signal,
+        signal: requestSignal,
       }
     );
 
@@ -61,6 +63,7 @@ async function getCortiToken({ environment, tenant, clientId, clientSecret }, fe
     }
 
     const data = await response.json();
+    requestSignal.throwIfAborted?.();
     if (!data.access_token) {
       throw new Error("Corti authentication failed: no access token in response");
     }

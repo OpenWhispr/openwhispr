@@ -9,10 +9,16 @@ import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import SelfHostedPanel from "../SelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
+import { useManagedLocalModelLock } from "../../hooks/useManagedLocalModelLock";
+import {
+  canSelectManagedLocalMode,
+  constrainManagedLocalModeOptions,
+} from "../onboarding/managedLocalModels";
 
 export function UploadTranscriptionPanel() {
   const { t } = useTranslation();
   const startOnboarding = useStartOnboarding();
+  const managedLocalLock = useManagedLocalModelLock("transcription");
 
   const {
     isSignedIn,
@@ -74,7 +80,12 @@ export function UploadTranscriptionPanel() {
     uploadTranscriptionMode,
     { byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS }
   );
+  const selectableTranscriptionModes = constrainManagedLocalModeOptions(
+    transcriptionModes,
+    managedLocalLock.managed
+  );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
+    if (!canSelectManagedLocalMode(managedLocalLock.managed, mode)) return;
     if (!isModeAllowed(mode)) return;
     if (mode === "openwhispr" && !isSignedIn) {
       startOnboarding();
@@ -125,7 +136,7 @@ export function UploadTranscriptionPanel() {
   return (
     <div className="space-y-3">
       <InferenceModeSelector
-        modes={transcriptionModes}
+        modes={selectableTranscriptionModes}
         activeMode={effectiveTranscriptionMode}
         onSelect={handleTranscriptionModeSelect}
       />

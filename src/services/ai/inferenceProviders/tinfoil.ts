@@ -9,13 +9,15 @@ import { wrapCleanupTranscript } from "../../../config/prompts";
 
 export const tinfoilProvider: InferenceProvider = {
   id: "tinfoil",
-  async call({ text, model, agentName, config, ctx }) {
+  async call({ text, model, agentName, config, ctx, authorization }) {
     logger.logReasoning("TINFOIL_START", { model, agentName });
 
     const apiKey = await ctx.getApiKey("tinfoil");
+    authorization.assertCurrent();
     // The client verifies enclave attestation before every request and
     // refuses to send anything over an unverified transport.
     const client = await getTinfoilChatClient(apiKey);
+    authorization.assertCurrent();
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
@@ -41,14 +43,13 @@ export const tinfoilProvider: InferenceProvider = {
 
     // Keep SDK-internal retries off so withRetry stays the single retry layer.
     const timeoutMs = getLlmRequestTimeoutSeconds() * 1000;
-    const response = await withRetry(
-      () =>
-        client.chat.completions.create(requestBody as any, {
-          timeout: timeoutMs,
-          maxRetries: 0,
-        }),
-      createApiRetryStrategy()
-    );
+    const response = await withRetry(() => {
+      authorization.assertCurrent();
+      return client.chat.completions.create(requestBody as any, {
+        timeout: timeoutMs,
+        maxRetries: 0,
+      });
+    }, createApiRetryStrategy());
 
     const responseText =
       response.choices

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Enterprise workspaces can manage local models from first-run setup.** Company admins can publish ordered, approved Dictation and AI/Notes model lists. Employees download one approved model per required category before Permissions, may continue while downloads finish, and complete onboarding after Notes without seeing pricing or provider selection. Managed choices remain locked to the active workspace and automatically move to the first compatible fallback when an admin removes a selection.
 - **Uploaded and URL-ingested notes remember their speaker detection.** A note created through Upload ran speaker detection but stored none of it — the note now records that diarization ran, the speaker count you chose, and the audio duration, so it behaves like a meeting note when you record into it or resolve participants. An upload with speaker detection off writes nothing, preserving your global speaker setting. Present since upload speaker detection shipped in 1.7.6. (#1610)
 
 ## [1.8.3] - 2026-08-12

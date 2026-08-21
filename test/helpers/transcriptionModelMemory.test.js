@@ -111,6 +111,21 @@ test("per-provider transcription model memory", async (t) => {
       assert.equal(memory[`${context}:corti`], "corti-transcribe");
     }
   });
+
+  await t.test("managed local transcription selection reaches meeting and upload", () => {
+    state().setCloudTranscriptionForAllScopes({
+      useLocalWhisper: true,
+      localTranscriptionProvider: "nvidia",
+      parakeetModel: "nvidia-parakeet-tdt-0.6b-v3",
+    });
+
+    assert.equal(state().meetingTranscriptionMode, "local");
+    assert.equal(state().meetingLocalTranscriptionProvider, "nvidia");
+    assert.equal(state().meetingParakeetModel, "nvidia-parakeet-tdt-0.6b-v3");
+    assert.equal(state().uploadTranscriptionMode, "local");
+    assert.equal(state().uploadLocalTranscriptionProvider, "nvidia");
+    assert.equal(state().uploadParakeetModel, "nvidia-parakeet-tdt-0.6b-v3");
+  });
 });
 
 // The picker commits a cloud selection only on an explicit model click:

@@ -93,6 +93,35 @@ test("a confirmed enterprise workspace ends the account route at notes", async (
   assert.equal(route.includes("setup-choice"), false);
 });
 
+test("enterprise local models are the first setup step after authentication", async () => {
+  const { getOnboardingRoute } = await load();
+  const route = getOnboardingRoute({
+    authPath: "account",
+    setupMode: null,
+    agentAllowed: true,
+    skipSetupChoice: true,
+    requiresEnterpriseModels: true,
+  });
+  assert.equal(route[0], "auth");
+  assert.equal(route[1], "enterprise-models");
+  assert.equal(route[2], "permissions");
+  assert.equal(route.at(-1), "notes");
+  assert.equal(route.includes("setup-choice"), false);
+  assert.equal(route.includes("local-dictation"), false);
+});
+
+test("a cloud-only enterprise goes directly to permissions", async () => {
+  const { getOnboardingRoute } = await load();
+  const route = getOnboardingRoute({
+    authPath: "account",
+    setupMode: null,
+    agentAllowed: true,
+    skipSetupChoice: true,
+    requiresEnterpriseModels: false,
+  });
+  assert.deepEqual(route.slice(0, 2), ["auth", "permissions"]);
+});
+
 test("enterprise workspace entitlement requires a current paid entitlement", async () => {
   const { isEnterpriseWorkspaceEntitled } = await load();
   assert.equal(isEnterpriseWorkspaceEntitled({ plan: "enterprise", status: "active" }), true);

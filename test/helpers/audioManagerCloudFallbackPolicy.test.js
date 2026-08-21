@@ -4,10 +4,11 @@ const { loadAudioManager: loadAudioManagerHarness } = require("./harness/audioMa
 
 // The shared harness supplies the renderer-graph stubs; this wrapper adds the
 // no-op instance surface every manager in this suite needs.
-async function loadAudioManager(t, { cachePrefix, settingsKey }) {
+async function loadAudioManager(t, { cachePrefix, settingsKey, mockModules }) {
   const { window, vite, setSettings, createManager } = await loadAudioManagerHarness(t, {
     cachePrefix,
     settingsKey,
+    mockModules,
   });
   return {
     window,
@@ -28,6 +29,149 @@ async function loadAudioManager(t, { cachePrefix, settingsKey }) {
       }),
   };
 }
+
+test("managed local transcription failures never escape to the OpenAI fallback", async (t) => {
+  globalThis.__managedLocalTranscriptionRequired = true;
+  t.after(() => {
+    delete globalThis.__managedLocalTranscriptionRequired;
+  });
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-managed-local-fallback-test-",
+    settingsKey: "__managedLocalFallbackSettings",
+    mockModules: {
+      "/stores/enterpriseIdentityStore": `
+        export const isManagedLocalModelCategoryRequired = () =>
+          globalThis.__managedLocalTranscriptionRequired === true;
+      `,
+    },
+  });
+  setSettings({
+    allowOpenAIFallback: true,
+    cloudTranscriptionProvider: "openai",
+    useLocalWhisper: true,
+  });
+  const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+  let cloudFallbackCalls = 0;
+  const manager = createManager({
+    processWithOpenAIAPI: async () => {
+      cloudFallbackCalls += 1;
+      return { success: true, text: "cloud text" };
+    },
+  });
+  window.electronAPI.transcribeLocalWhisper = async () => ({
+    success: false,
+    error: "local whisper failed",
+  });
+  window.electronAPI.transcribeLocalParakeet = async () => ({
+    success: false,
+    error: "local parakeet failed",
+  });
+
+  await assert.rejects(manager.processWithLocalWhisper(audioBlob, "base"), /Local Whisper failed/);
+  await assert.rejects(
+    manager.processWithLocalParakeet(audioBlob, "parakeet-tdt-0.6b-v3"),
+    /Parakeet failed/
+  );
+  assert.equal(cloudFallbackCalls, 0);
+
+  globalThis.__managedLocalTranscriptionRequired = false;
+  const unmanagedResult = await manager.processWithLocalWhisper(audioBlob, "base");
+  assert.equal(unmanagedResult.source, "openai-fallback");
+  assert.equal(cloudFallbackCalls, 1);
+});
+
+test("local Whisper does not dispatch after authorization changes while reading audio", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-local-whisper-auth-boundary-test-",
+    settingsKey: "__localWhisperAuthBoundarySettings",
+  });
+  setSettings({ allowOpenAIFallback: false, useLocalWhisper: true });
+  let cancelled = false;
+  let ipcCalls = 0;
+  window.electronAPI.transcribeLocalWhisper = async () => {
+    ipcCalls += 1;
+    return { success: true, text: "must not run" };
+  };
+  const manager = createManager();
+
+  await assert.rejects(
+    manager.processWithLocalWhisper(
+      {
+        type: "audio/webm",
+        size: 4,
+        async arrayBuffer() {
+          cancelled = true;
+          return new ArrayBuffer(4);
+        },
+      },
+      "base",
+      {},
+      () => cancelled
+    ),
+    (error) => error.name === "AbortError"
+  );
+  assert.equal(ipcCalls, 0);
+});
+
+test("local Whisper does not retry a dictionary echo after authorization changes", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-local-whisper-retry-auth-boundary-test-",
+    settingsKey: "__localWhisperRetryAuthBoundarySettings",
+  });
+  setSettings({ allowOpenAIFallback: false, useLocalWhisper: true });
+  let cancelled = false;
+  let ipcCalls = 0;
+  window.electronAPI.transcribeLocalWhisper = async () => {
+    ipcCalls += 1;
+    cancelled = true;
+    return { success: true, text: "dictionary echo" };
+  };
+  const manager = createManager({ isDictionaryEcho: () => true });
+
+  await assert.rejects(
+    manager.processWithLocalWhisper(
+      new Blob([new Uint8Array([1])], { type: "audio/webm" }),
+      "base",
+      {},
+      () => cancelled
+    ),
+    (error) => error.name === "AbortError"
+  );
+  assert.equal(ipcCalls, 1);
+});
+
+test("local Parakeet does not dispatch after authorization changes while reading audio", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-local-parakeet-auth-boundary-test-",
+    settingsKey: "__localParakeetAuthBoundarySettings",
+  });
+  setSettings({ allowOpenAIFallback: false, useLocalWhisper: true });
+  let cancelled = false;
+  let ipcCalls = 0;
+  window.electronAPI.transcribeLocalParakeet = async () => {
+    ipcCalls += 1;
+    return { success: true, text: "must not run" };
+  };
+  const manager = createManager();
+
+  await assert.rejects(
+    manager.processWithLocalParakeet(
+      {
+        type: "audio/webm",
+        size: 4,
+        async arrayBuffer() {
+          cancelled = true;
+          return new ArrayBuffer(4);
+        },
+      },
+      "parakeet-tdt-0.6b-v3",
+      {},
+      () => cancelled
+    ),
+    (error) => error.name === "AbortError"
+  );
+  assert.equal(ipcCalls, 0);
+});
 
 // Replaces globalThis.fetch for the test and records every endpoint it saw.
 function captureFetch(t, respond) {
@@ -530,4 +674,38 @@ test("config-error code survives a failed local fallback", async (t) => {
       return true;
     }
   );
+});
+
+test("BYOK transcription never dispatches after cancellation during key lookup", async (t) => {
+  const { setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-byok-auth-key-race-test-",
+    settingsKey: "__byokAuthKeyRaceSettings",
+  });
+  setSettings({
+    allowLocalFallback: false,
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionModel: "whisper-1",
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+  });
+  let resolveKey;
+  let cancelled = false;
+  const key = new Promise((resolve) => {
+    resolveKey = resolve;
+  });
+  const manager = createManager({ getAPIKey: () => key });
+  const fetched = captureFetch(t, rejectFetch("cancelled audio must not be uploaded"));
+
+  const operation = manager.processWithOpenAIAPI(
+    new Blob([new Uint8Array([1])], { type: "audio/webm" }),
+    {},
+    () => cancelled
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  cancelled = true;
+  resolveKey("old-identity-key");
+
+  await assert.rejects(operation, { name: "AbortError" });
+  assert.equal(fetched.length, 0);
 });

@@ -3,12 +3,15 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
+const { createUploadCancelRegistry } = require("../../src/helpers/uploadCancelRegistry");
 const originalLoad = Module._load;
 
 // Captures every ipcMain.handle registration and every net.fetch request so the
 // registered handler closures can be invoked directly against a fake `this`.
 const handlers = new Map();
 const fetches = [];
+const databaseWrites = [];
+const broadcasts = [];
 let fetchResponse = () => ({
   ok: true,
   status: 200,
@@ -83,7 +86,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       };
     }
     if (request === "./windowBroadcast") {
-      return { broadcastToWindows: () => {} };
+      return { broadcastToWindows: (...args) => broadcasts.push(args) };
     }
   }
   return originalLoad.call(this, request, parent, isMain);
@@ -103,14 +106,15 @@ function anything() {
 }
 
 function buildFakeThis() {
-  const dbRows = new Map([[7, { id: 7, audio_duration_ms: 1200 }]]);
+  const dbRows = new Map([[7, { id: 7, audio_duration_ms: 1200, route_kind: "translation" }]]);
   const target = {
     sessionId: "test-session",
+    _uploadCancelRegistry: createUploadCancelRegistry(),
     audioStorageManager: { getAudioBuffer: (id) => (id === 7 ? Buffer.from([1, 2, 3]) : null) },
     databaseManager: {
-      updateTranscriptionText: () => {},
-      updateTranscriptionStatus: () => {},
-      updateTranscriptionAudio: () => {},
+      updateTranscriptionText: (...args) => databaseWrites.push(["text", ...args]),
+      updateTranscriptionStatus: (...args) => databaseWrites.push(["status", ...args]),
+      updateTranscriptionAudio: (...args) => databaseWrites.push(["audio", ...args]),
       getTranscriptionById: (id) => dbRows.get(id),
     },
     environmentManager: {
@@ -143,7 +147,170 @@ test.after(() => {
   Module._load = originalLoad;
 });
 
-const invoke = (settings, id = 7) => retryHandler({ sender: {} }, id, settings);
+test.beforeEach(() => {
+  fetches.length = 0;
+  databaseWrites.length = 0;
+  broadcasts.length = 0;
+  cortiCalls.length = 0;
+  tinfoilCalls.length = 0;
+});
+
+const invoke = (settings, id = 7, requestId) =>
+  retryHandler({ sender: {} }, id, settings, requestId);
+
+test("retry: cancelling request ownership prevents late database commit and broadcast", async () => {
+  databaseWrites.length = 0;
+  broadcasts.length = 0;
+  let resolveCorti;
+  cortiBehavior = () =>
+    new Promise((resolve) => {
+      resolveCorti = resolve;
+    });
+  try {
+    const callCount = cortiCalls.length;
+    const retry = invoke(
+      {
+        cloudTranscriptionProvider: "corti",
+        cloudTranscriptionMode: "byok",
+        transcriptionMode: "providers",
+        cortiEnvironment: "us",
+        cortiTenant: "base",
+        preferredLanguage: "auto",
+      },
+      7,
+      "history-retry-1"
+    );
+    while (cortiCalls.length === callCount) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    const cancelled = await handlers.get("cancel-upload-transcription")(
+      { sender: {} },
+      "history-retry-1"
+    );
+    resolveCorti({ text: "late corti result" });
+    const result = await retry;
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(cancelled.success, true);
+    assert.equal(result.success, false);
+    assert.equal(result.code, "UPLOAD_CANCELLED");
+    assert.deepEqual(databaseWrites, []);
+    assert.deepEqual(broadcasts, []);
+  } finally {
+    cortiBehavior = async () => ({ text: "corti text" });
+  }
+});
+
+test("retry: request-owned results stay uncommitted until the renderer authorizes commit", async () => {
+  databaseWrites.length = 0;
+  broadcasts.length = 0;
+  const result = await invoke(
+    {
+      cloudTranscriptionProvider: "corti",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+      cortiEnvironment: "us",
+      cortiTenant: "base",
+      preferredLanguage: "auto",
+    },
+    7,
+    "history-retry-2"
+  );
+
+  assert.equal(result.success, true);
+  assert.equal(result.pendingCommit, true);
+  assert.equal(result.transcription.text, "corti text");
+  assert.equal(result.transcription.route_kind, "translation");
+  assert.deepEqual(databaseWrites, []);
+  assert.deepEqual(broadcasts, []);
+
+  const committed = await handlers.get("commit-retry-transcription")(
+    { sender: {} },
+    7,
+    "history-retry-2",
+    "clean final text",
+    "corti text"
+  );
+  assert.equal(committed.success, true);
+  assert.deepEqual(databaseWrites[0], ["text", 7, "clean final text", "corti text"]);
+  assert.equal(databaseWrites.length, 3);
+  assert.equal(broadcasts.length, 1);
+});
+
+test("retry: cancelling a pending result prevents its later commit", async () => {
+  const result = await invoke(
+    {
+      cloudTranscriptionProvider: "corti",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+      cortiEnvironment: "us",
+      cortiTenant: "base",
+      preferredLanguage: "auto",
+    },
+    7,
+    "history-retry-3"
+  );
+  assert.equal(result.pendingCommit, true);
+
+  const cancelled = await handlers.get("cancel-upload-transcription")(
+    { sender: {} },
+    "history-retry-3"
+  );
+  const committed = await handlers.get("commit-retry-transcription")(
+    { sender: {} },
+    7,
+    "history-retry-3",
+    "late final text",
+    "corti text"
+  );
+
+  assert.equal(cancelled.success, true);
+  assert.equal(committed.success, false);
+  assert.deepEqual(databaseWrites, []);
+  assert.deepEqual(broadcasts, []);
+});
+
+test("retry: only the renderer that owns a pending result can cancel or commit it", async () => {
+  const ownerEvent = { sender: { id: 11 } };
+  const otherEvent = { sender: { id: 12 } };
+  const result = await retryHandler(
+    ownerEvent,
+    7,
+    {
+      cloudTranscriptionProvider: "corti",
+      cloudTranscriptionMode: "byok",
+      transcriptionMode: "providers",
+      cortiEnvironment: "us",
+      cortiTenant: "base",
+      preferredLanguage: "auto",
+    },
+    "history-retry-owner"
+  );
+  assert.equal(result.pendingCommit, true);
+
+  const otherCancel = await handlers.get("cancel-upload-transcription")(
+    otherEvent,
+    "history-retry-owner"
+  );
+  const otherCommit = await handlers.get("commit-retry-transcription")(
+    otherEvent,
+    7,
+    "history-retry-owner",
+    "wrong owner",
+    "corti text"
+  );
+  const ownerCancel = await handlers.get("cancel-upload-transcription")(
+    ownerEvent,
+    "history-retry-owner"
+  );
+
+  assert.equal(otherCancel.success, false);
+  assert.equal(otherCommit.success, false);
+  assert.equal(ownerCancel.success, true);
+  assert.deepEqual(databaseWrites, []);
+  assert.deepEqual(broadcasts, []);
+});
 
 test("retry: corti routes to the corti client, never OpenAI", async () => {
   fetches.length = 0;

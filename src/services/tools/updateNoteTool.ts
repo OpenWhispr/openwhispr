@@ -1,4 +1,9 @@
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import {
+  assertToolExecutionAuthorized,
+  type ToolDefinition,
+  type ToolExecutionContext,
+  type ToolResult,
+} from "./ToolRegistry";
 import { resolveFolderId } from "./utils";
 import { syncService } from "../SyncService.js";
 
@@ -31,7 +36,10 @@ export const updateNoteTool: ToolDefinition = {
   },
   readOnly: false,
 
-  async execute(args: Record<string, unknown>): Promise<ToolResult> {
+  async execute(
+    args: Record<string, unknown>,
+    context?: ToolExecutionContext
+  ): Promise<ToolResult> {
     const id = args.id as number;
     const title = args.title as string | undefined;
     const content = args.content as string | undefined;
@@ -46,7 +54,9 @@ export const updateNoteTool: ToolDefinition = {
     }
 
     try {
+      assertToolExecutionAuthorized(context);
       const note = await window.electronAPI.getNote(id);
+      assertToolExecutionAuthorized(context);
       if (!note) {
         return { success: false, data: null, displayText: `Note with ID ${id} not found` };
       }
@@ -62,7 +72,8 @@ export const updateNoteTool: ToolDefinition = {
         const resolved = await resolveFolderId(
           folderName,
           { createIfMissing: true },
-          note.space_id
+          note.space_id,
+          context
         );
         if (resolved.error) {
           return { success: false, data: null, displayText: resolved.error };
@@ -71,12 +82,15 @@ export const updateNoteTool: ToolDefinition = {
         folderCreated = resolved.created;
       }
 
+      assertToolExecutionAuthorized(context);
       const result = await window.electronAPI.updateNote(id, updates);
+      assertToolExecutionAuthorized(context);
 
       if (!result.success) {
         return { success: false, data: null, displayText: "Failed to update note" };
       }
 
+      assertToolExecutionAuthorized(context);
       syncService.debouncedPush("note", id);
 
       const suffix = folderCreated ? ` (moved to new folder "${folderName}")` : "";
@@ -86,6 +100,7 @@ export const updateNoteTool: ToolDefinition = {
         displayText: `Updated note: "${title || note.title}"${suffix}`,
       };
     } catch (error) {
+      assertToolExecutionAuthorized(context);
       return {
         success: false,
         data: null,

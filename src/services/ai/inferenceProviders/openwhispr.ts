@@ -6,7 +6,7 @@ import logger from "../../../utils/logger";
 export const openwhisprProvider: InferenceProvider = {
   id: "openwhispr",
   supportsImages: true,
-  async call({ text, model, agentName, config, ctx }) {
+  async call({ text, model, agentName, config, ctx, authorization }) {
     logger.logReasoning("OPENWHISPR_START", {
       model,
       agentName,
@@ -29,6 +29,7 @@ export const openwhisprProvider: InferenceProvider = {
       : "cleanup";
 
     const result = await withSessionRefresh(async () => {
+      authorization.assertCurrent();
       const res = await window.electronAPI?.cloudReason?.(text, {
         agentName,
         customDictionary: ctx.getCustomDictionary(),
