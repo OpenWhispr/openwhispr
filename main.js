@@ -968,13 +968,34 @@ async function startApp() {
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 
-  windowManager.setActivationModeCache(environmentManager.getActivationMode());
+  await windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 
+  let activationModeChangeQueue = Promise.resolve();
   ipcMain.on("activation-mode-changed", (_event, mode) => {
-    windowManager.setActivationModeCache(mode);
-    environmentManager.saveActivationMode(mode);
+    activationModeChangeQueue = activationModeChangeQueue
+      .then(async () => {
+        const success = await windowManager.setActivationModeCache(mode);
+        const effectiveMode = windowManager.getActivationMode();
+        if (success) {
+          environmentManager.saveActivationMode(effectiveMode);
+        } else {
+          for (const browserWindow of BrowserWindow.getAllWindows()) {
+            if (!browserWindow.isDestroyed()) {
+              browserWindow.webContents.send("setting-updated", {
+                key: "activationMode",
+                value: effectiveMode,
+              });
+            }
+          }
+        }
+        windowManager.resetWindowsPushState();
+        windowManager.reconcileNativeKeyListeners();
+      })
+      .catch((err) => {
+        debugLogger.error("Failed to change activation mode", { error: err.message }, "hotkey");
+      });
   });
 
   ipcMain.on("floating-icon-auto-hide-changed", (_event, enabled) => {
@@ -1685,11 +1706,6 @@ async function startApp() {
 
     const STARTUP_DELAY_MS = 3000;
     setTimeout(() => windowManager.reconcileNativeKeyListeners(), STARTUP_DELAY_MS);
-
-    ipcMain.on("activation-mode-changed", () => {
-      windowManager.resetWindowsPushState();
-      windowManager.reconcileNativeKeyListeners();
-    });
 
     ipcMain.on("hotkey-changed", () => {
       windowManager.resetWindowsPushState();

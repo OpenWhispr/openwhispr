@@ -3506,7 +3506,8 @@ class IPCHandlers {
           const result = await hotkeyManager.kdeManager.registerKeybinding(
             effectiveHotkey,
             "dictation",
-            callback
+            callback,
+            this.windowManager.getActivationMode() === "push"
           );
           if (result !== true) {
             debugLogger.warn(
@@ -3533,14 +3534,18 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("get-hotkey-mode-info", async () => {
+    ipcMain.handle("get-hotkey-mode-info", async (_event, requestedHotkey) => {
+      const hotkeyManager = this.windowManager.hotkeyManager;
+      const hotkey =
+        typeof requestedHotkey === "string" && requestedHotkey.trim()
+          ? requestedHotkey.split(",")[0].trim()
+          : hotkeyManager.getCurrentHotkey();
       const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
       const supportsPushToTalk =
         process.platform === "linux"
-          ? this.windowManager.isUsingHyprlandHotkeys() ||
-            this.windowManager.isUsingKDEHotkeys() ||
-            this.windowManager.hotkeyManager.gnomeManager?.supportsPushToTalk() === true ||
-            (!isUsingNativeShortcut && this.linuxKeyManager?.isAvailable?.() === true)
+          ? isUsingNativeShortcut
+            ? hotkeyManager.supportsPushToTalk(hotkey)
+            : this.linuxKeyManager?.isAvailable?.() === true
           : !isUsingNativeShortcut;
 
       return {
@@ -3549,6 +3554,9 @@ class IPCHandlers {
         isUsingKDE: this.windowManager.isUsingKDEHotkeys(),
         isUsingNativeShortcut,
         supportsPushToTalk,
+        pushToTalkUnavailableReason: supportsPushToTalk
+          ? null
+          : hotkeyManager.getPushToTalkUnavailableReason(hotkey),
       };
     });
 

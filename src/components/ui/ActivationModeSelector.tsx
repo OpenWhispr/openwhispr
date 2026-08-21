@@ -6,7 +6,7 @@ type ActivationMode = "tap" | "push";
 interface ActivationModeSelectorProps {
   value: ActivationMode;
   onChange: (mode: ActivationMode) => void;
-  disabled?: boolean;
+  pushDisabledReason?: string;
 }
 
 const OPTIONS = [
@@ -17,18 +17,12 @@ const OPTIONS = [
 export function ActivationModeSelector({
   value,
   onChange,
-  disabled = false,
+  pushDisabledReason,
 }: ActivationModeSelectorProps) {
   const { t } = useTranslation();
 
   return (
-    <div
-      className={`
-        relative flex rounded-md border p-0.5 transition-colors duration-200
-        bg-surface-1 border-border-subtle
-        ${disabled ? "opacity-50 cursor-not-allowed" : ""}
-      `}
-    >
+    <div className="relative flex rounded-md border p-0.5 transition-colors duration-200 bg-surface-1 border-border-subtle">
       {/* Sliding indicator */}
       <div
         className={`
@@ -39,23 +33,31 @@ export function ActivationModeSelector({
         `}
       />
 
-      {OPTIONS.map(({ mode, Icon, labelKey }) => (
-        <button
-          key={mode}
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange(mode)}
-          className={`
-            relative z-10 flex-1 flex items-center justify-center gap-1 rounded px-2.5 py-1
-            transition-colors duration-150
-            ${disabled ? "cursor-not-allowed" : "cursor-pointer"}
-            ${value === mode ? "text-foreground" : "text-muted-foreground hover:text-foreground"}
-          `}
-        >
-          <Icon className="w-3 h-3" />
-          <span className="text-xs font-medium">{t(labelKey)}</span>
-        </button>
-      ))}
+      {OPTIONS.map(({ mode, Icon, labelKey }) => {
+        const disabledReason = mode === "push" ? pushDisabledReason : undefined;
+        const disabled = Boolean(disabledReason);
+        const label = t(labelKey);
+
+        return (
+          <button
+            key={mode}
+            type="button"
+            disabled={disabled}
+            title={disabledReason}
+            aria-label={disabledReason ? `${label}: ${disabledReason}` : undefined}
+            onClick={() => onChange(mode)}
+            className={`
+              relative z-10 flex-1 flex items-center justify-center gap-1 rounded px-2.5 py-1
+              transition-colors duration-150
+              ${disabled ? "cursor-not-allowed" : "cursor-pointer"}
+              ${value === mode ? "text-foreground" : "text-muted-foreground hover:text-foreground"}
+            `}
+          >
+            <Icon className="w-3 h-3" />
+            <span className="text-xs font-medium">{label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

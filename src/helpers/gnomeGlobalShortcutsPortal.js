@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const { i18nMain } = require("./i18nMain");
 
 const PORTAL_SERVICE = "org.freedesktop.portal.Desktop";
 const PORTAL_PATH = "/org/freedesktop/portal/desktop";
@@ -8,6 +9,8 @@ const REQUEST_INTERFACE = "org.freedesktop.portal.Request";
 const SESSION_INTERFACE = "org.freedesktop.portal.Session";
 const REGISTRY_INTERFACE = "org.freedesktop.host.portal.Registry";
 const APP_ID = "open-whispr";
+const DBUS_CALL_TIMEOUT_MS = 5000;
+const PORTAL_REQUEST_TIMEOUT_MS = 120000;
 
 let dbus = null;
 
@@ -35,13 +38,18 @@ function readDict(value) {
 }
 
 class GnomeGlobalShortcutsPortal {
-  constructor() {
+  constructor({
+    callTimeoutMs = DBUS_CALL_TIMEOUT_MS,
+    requestTimeoutMs = PORTAL_REQUEST_TIMEOUT_MS,
+  } = {}) {
     this.bus = null;
     this.sessionHandle = null;
     this.callback = null;
     this.available = false;
     this.activationListener = null;
     this.deactivationListener = null;
+    this.callTimeoutMs = callTimeoutMs;
+    this.requestTimeoutMs = requestTimeoutMs;
   }
 
   async init() {
@@ -55,7 +63,7 @@ class GnomeGlobalShortcutsPortal {
       this.bus.connection.on("error", (err) => {
         debugLogger.log("[GnomeGlobalShortcutsPortal] D-Bus connection error:", err.message);
       });
-      await this._invoke({ member: "GetId" });
+      await this._invokeDbus({ member: "GetId" });
       if (!process.env.FLATPAK_ID) {
         await this._invoke({
           destination: PORTAL_SERVICE,
@@ -75,14 +83,14 @@ class GnomeGlobalShortcutsPortal {
         body: [GLOBAL_SHORTCUTS_INTERFACE, "version"],
       });
       this.available = Number(readVariant(version)) >= 1;
-      if (!this.available) this.close();
+      if (!this.available) await this.close();
       return this.available;
     } catch (err) {
       debugLogger.log(
         "[GnomeGlobalShortcutsPortal] Global Shortcuts portal unavailable:",
         err.message
       );
-      this.close();
+      await this.close();
       return false;
     }
   }
@@ -114,7 +122,7 @@ class GnomeGlobalShortcutsPortal {
       this.sessionHandle = readDict(session).get("session_handle");
       if (!this.sessionHandle) throw new Error("Portal did not return a session handle");
 
-      this._listenForShortcutEvents();
+      await this._listenForShortcutEvents();
       const bindRequestToken = this._newToken();
       const result = await this._request(
         "BindShortcuts",
@@ -125,7 +133,7 @@ class GnomeGlobalShortcutsPortal {
             [
               "dictation",
               vardict([
-                ["description", "s", "Hold to dictate"],
+                ["description", "s", i18nMain.t("onboarding.activation.holdDescription")],
                 ["preferred_trigger", "s", preferredTrigger],
               ]),
             ],
@@ -171,16 +179,16 @@ class GnomeGlobalShortcutsPortal {
     }
   }
 
-  close() {
-    void this.unregisterKeybinding();
-    if (this.bus) {
-      this.bus.connection.end();
-      this.bus = null;
-    }
+  async close() {
+    await this.unregisterKeybinding();
+    const bus = this.bus;
+    this.bus = null;
     this.available = false;
+    bus?.connection.end();
   }
 
-  _listenForShortcutEvents() {
+  async _listenForShortcutEvents() {
+    const bus = this.bus;
     const activationSignal = this.bus.mangle(PORTAL_PATH, GLOBAL_SHORTCUTS_INTERFACE, "Activated");
     const deactivationSignal = this.bus.mangle(
       PORTAL_PATH,
@@ -197,10 +205,17 @@ class GnomeGlobalShortcutsPortal {
         this.callback?.(undefined, "up");
       }
     };
-    this.bus.signals.on(activationSignal, this.activationListener);
-    this.bus.signals.on(deactivationSignal, this.deactivationListener);
-    this.bus.addMatch(this._shortcutMatch("Activated"), () => {});
-    this.bus.addMatch(this._shortcutMatch("Deactivated"), () => {});
+    bus.signals.on(activationSignal, this.activationListener);
+    bus.signals.on(deactivationSignal, this.deactivationListener);
+    try {
+      await Promise.all([
+        this._addMatch(this._shortcutMatch("Activated")),
+        this._addMatch(this._shortcutMatch("Deactivated")),
+      ]);
+    } catch (err) {
+      this._removeShortcutListeners();
+      throw err;
+    }
   }
 
   _removeShortcutListeners() {
@@ -224,22 +239,40 @@ class GnomeGlobalShortcutsPortal {
   }
 
   async _request(member, signature, body, token) {
+    const bus = this.bus;
     const requestPath = this._requestPath(token);
-    const signal = this.bus.mangle(requestPath, REQUEST_INTERFACE, "Response");
+    const signal = bus.mangle(requestPath, REQUEST_INTERFACE, "Response");
     const match = `type='signal',sender='${PORTAL_SERVICE}',path='${requestPath}',interface='${REQUEST_INTERFACE}',member='Response'`;
-    await new Promise((resolve, reject) =>
-      this.bus.addMatch(match, (err) => (err ? reject(err) : resolve()))
-    );
+    await this._addMatch(match);
 
     return new Promise((resolve, reject) => {
-      const onResponse = ([response, results]) => {
-        this.bus.signals.removeListener(signal, onResponse);
-        this.bus.removeMatch(match, () => {});
-        if (response === 0) resolve(results);
-        else reject(new Error(`Portal request was rejected (${response})`));
+      let settled = false;
+      let timeoutId;
+      const cleanup = () => {
+        clearTimeout(timeoutId);
+        bus.signals.removeListener(signal, onResponse);
+        try {
+          bus.removeMatch(match, () => undefined);
+        } catch {}
       };
-      this.bus.signals.once(signal, onResponse);
-      this.bus.invoke(
+      const finish = (err, result) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (err) reject(err);
+        else resolve(result);
+      };
+      const onResponse = ([response, results]) => {
+        if (response === 0) finish(null, results);
+        else finish(new Error(`Portal request was rejected (${response})`));
+      };
+      bus.signals.once(signal, onResponse);
+      timeoutId = setTimeout(
+        () => finish(new Error(`Portal request "${member}" timed out`)),
+        this.requestTimeoutMs
+      );
+      timeoutId.unref?.();
+      bus.invoke(
         {
           destination: PORTAL_SERVICE,
           path: PORTAL_PATH,
@@ -250,17 +283,46 @@ class GnomeGlobalShortcutsPortal {
         },
         (err) => {
           if (!err) return;
-          this.bus.signals.removeListener(signal, onResponse);
-          this.bus.removeMatch(match, () => {});
-          reject(err);
+          finish(err);
         }
       );
     });
   }
 
   _invoke(message) {
+    return this._callWithTimeout(message.member, (callback) => this.bus.invoke(message, callback));
+  }
+
+  _invokeDbus(message) {
+    return this._callWithTimeout(message.member, (callback) =>
+      this.bus.invokeDbus(message, callback)
+    );
+  }
+
+  _addMatch(match) {
+    return this._callWithTimeout("AddMatch", (callback) => this.bus.addMatch(match, callback));
+  }
+
+  _callWithTimeout(member, invoke) {
     return new Promise((resolve, reject) => {
-      this.bus.invoke(message, (err, result) => (err ? reject(err) : resolve(result)));
+      let settled = false;
+      const finish = (err, result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        if (err) reject(err);
+        else resolve(result);
+      };
+      const timeoutId = setTimeout(
+        () => finish(new Error(`D-Bus call "${member}" timed out`)),
+        this.callTimeoutMs
+      );
+      timeoutId.unref?.();
+      try {
+        invoke(finish);
+      } catch (err) {
+        finish(err);
+      }
     });
   }
 

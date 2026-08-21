@@ -428,16 +428,24 @@ class WindowManager {
     }
 
     const MIN_HOLD_DURATION_MS = 150;
+    const MAX_PUSH_DURATION_MS = 300000;
     const downTime = Date.now();
 
     this.showDictationPanel();
     this.sendPrepareDictation();
+
+    const safetyTimeoutId = setTimeout(() => {
+      if (!this.winPushState || this.winPushState.downTime !== downTime) return;
+      debugLogger.warn("Native PTT safety timeout", undefined, "ptt");
+      this.handleWindowsPushKeyUp();
+    }, MAX_PUSH_DURATION_MS);
 
     this.winPushState = {
       active: true,
       key,
       downTime,
       isRecording: false,
+      safetyTimeoutId,
     };
 
     setTimeout(() => {
@@ -460,6 +468,10 @@ class WindowManager {
     }
     if (key && this.winPushState.key && key !== this.winPushState.key) {
       return;
+    }
+
+    if (this.winPushState.safetyTimeoutId) {
+      clearTimeout(this.winPushState.safetyTimeoutId);
     }
 
     const wasRecording = this.winPushState.isRecording;
@@ -577,9 +589,12 @@ class WindowManager {
     return this._cachedActivationMode;
   }
 
-  setActivationModeCache(mode) {
-    this._cachedActivationMode = mode === "push" ? "push" : "tap";
-    this.hotkeyManager.setActivationMode(this._cachedActivationMode);
+  async setActivationModeCache(mode) {
+    const nextMode = mode === "push" ? "push" : "tap";
+    const success = await this.hotkeyManager.setActivationMode(nextMode);
+    if (!success) return false;
+    this._cachedActivationMode = nextMode;
+    return true;
   }
 
   /**

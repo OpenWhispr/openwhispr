@@ -141,8 +141,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [skipAuth, setSkipAuth] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
-  const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
-    useHotkeyModeInfo("onboarding");
+  const {
+    isUsingNativeShortcut,
+    isUsingHyprland,
+    hyprlandConfigStatus,
+    supportsPushToTalk,
+    pushToTalkUnavailableReason,
+  } = useHotkeyModeInfo("onboarding", hotkey);
   const readableHotkey = formatHotkeyLabel(hotkey);
   const readableVoiceAgentKey = formatHotkeyListLabel(voiceAgentKey);
   const { alertDialog, confirmDialog, showAlertDialog, hideAlertDialog, hideConfirmDialog } =
@@ -240,12 +245,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   // Only show progress for signed-up users after account creation step
   const showProgress = currentStep > 0;
-
-  useEffect(() => {
-    if (isUsingNativeShortcut && !supportsPushToTalk) {
-      setActivationMode("tap");
-    }
-  }, [isUsingNativeShortcut, supportsPushToTalk, setActivationMode]);
 
   // Update wizard UI when backend falls back to a different hotkey.
   // Only update local state — don't persist to localStorage so the app
@@ -800,7 +799,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <ActivationModeSelector
               value={activationMode}
               onChange={setActivationMode}
-              disabled={isUsingNativeShortcut && !supportsPushToTalk}
+              pushDisabledReason={
+                !supportsPushToTalk
+                  ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
+                  : undefined
+              }
             />
           </div>
         )}

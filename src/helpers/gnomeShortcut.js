@@ -269,7 +269,15 @@ class GnomeShortcutManager {
     if (!preferredTrigger) return false;
 
     await this.unregisterKeybinding("dictation");
-    return this.globalShortcutsPortal.registerKeybinding(preferredTrigger, callback);
+    const registered = await this.globalShortcutsPortal.registerKeybinding(
+      preferredTrigger,
+      callback
+    );
+    if (!registered) {
+      const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
+      await this.registerKeybinding(tapShortcut, "dictation");
+    }
+    return registered;
   }
 
   async unregisterPushToTalk() {
@@ -369,46 +377,6 @@ class GnomeShortcutManager {
     } catch (err) {
       debugLogger.log(
         `[GnomeShortcut] Failed to register keybinding for slot "${slotName}":`,
-        err.message
-      );
-      return false;
-    }
-  }
-
-  async updateKeybinding(shortcut, slotName = "dictation") {
-    if (!this.registeredSlots.has(slotName)) {
-      return this.registerKeybinding(shortcut, slotName);
-    }
-
-    if (!GnomeShortcutManager.isValidShortcut(shortcut)) {
-      debugLogger.log(
-        `[GnomeShortcut] Invalid shortcut format for update: "${shortcut}" (slot "${slotName}")`
-      );
-      return false;
-    }
-
-    const { path: keybindingPath } = getSlotConfig(slotName);
-
-    try {
-      const existing = this.getExistingKeybindings();
-      const conflict = this.findConflictingBinding(shortcut, existing, keybindingPath);
-      if (conflict) {
-        debugLogger.log(
-          `[GnomeShortcut] Shortcut conflict on update — "${shortcut}" already used by "${conflict}"`
-        );
-        return false;
-      }
-
-      execFileSync(
-        "gsettings",
-        ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding", shortcut],
-        { stdio: "pipe" }
-      );
-      debugLogger.log(`[GnomeShortcut] Keybinding updated to "${shortcut}" for slot "${slotName}"`);
-      return true;
-    } catch (err) {
-      debugLogger.log(
-        `[GnomeShortcut] Failed to update keybinding for slot "${slotName}":`,
         err.message
       );
       return false;
@@ -610,8 +578,8 @@ class GnomeShortcutManager {
     return [...modifiers, portalKey].join("+");
   }
 
-  close() {
-    this.globalShortcutsPortal.close();
+  async close() {
+    await this.globalShortcutsPortal.close();
     if (this.bus) {
       this.bus.connection.end();
       this.bus = null;

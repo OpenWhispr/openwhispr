@@ -72,3 +72,17 @@ test("portal shortcuts use the XDG modifier syntax", () => {
   assert.equal(GnomeShortcutManager.convertToPortalFormat("Control+Shift+`"), "CTRL+SHIFT+grave");
   assert.equal(GnomeShortcutManager.convertToPortalFormat("Control+Super"), "");
 });
+
+test("failed portal registration restores the working GNOME tap binding", async () => {
+  const manager = new GnomeShortcutManager();
+  const registrations = [];
+  manager.unregisterKeybinding = async () => true;
+  manager.registerKeybinding = async (shortcut) => {
+    registrations.push(shortcut);
+    return true;
+  };
+  manager.globalShortcutsPortal.registerKeybinding = async () => false;
+
+  assert.equal(await manager.registerPushToTalk("Alt+R", () => undefined), false);
+  assert.deepEqual(registrations, ["<Alt>r"]);
+});
