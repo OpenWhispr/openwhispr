@@ -27,6 +27,20 @@ test("falls back to the video entry point in conference_data", async () => {
   assert.equal(getMeetingJoinUrl(event), "https://zoom.us/j/123");
 });
 
+test("skips non-HTTP video entry points when a later web link is available", async () => {
+  const { getMeetingJoinUrl } = await load();
+  const event = {
+    conference_data: JSON.stringify({
+      entryPoints: [
+        { entryPointType: "video", uri: "tel:+15551234567" },
+        { entryPointType: "video", uri: "https://meet.google.com/abc-defg-hij" },
+      ],
+    }),
+  };
+
+  assert.equal(getMeetingJoinUrl(event), "https://meet.google.com/abc-defg-hij");
+});
+
 test("returns null without a video entry point", async () => {
   const { getMeetingJoinUrl } = await load();
   const event = {

@@ -44,7 +44,15 @@ export function getMeetingJoinUrl(event) {
   try {
     const data = JSON.parse(event.conference_data);
     const uri = data?.entryPoints
-      ?.find((ep) => ep.entryPointType === "video" && ep.uri?.trim())
+      ?.find((ep) => {
+        const candidate = ep?.uri?.trim();
+        if (ep?.entryPointType !== "video" || !candidate) return false;
+        try {
+          return ["http:", "https:"].includes(new URL(candidate).protocol);
+        } catch {
+          return false;
+        }
+      })
       ?.uri?.trim();
     return uri || null;
   } catch {
