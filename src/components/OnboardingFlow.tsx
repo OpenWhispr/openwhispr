@@ -452,7 +452,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         settings.spokenLanguages
       );
       settings.setPreferredLanguage(
-        settings.spokenLanguages.length === 1 ? settings.spokenLanguages[0] : selection.preferredLanguage
+        settings.spokenLanguages.length === 1
+          ? settings.spokenLanguages[0]
+          : selection.preferredLanguage
       );
       settings.setPreferredLanguages(selection.preferredLanguages);
     } else if (currentStepId === "use-cases") {

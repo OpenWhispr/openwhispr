@@ -671,74 +671,69 @@ export default function App() {
     (isHovered || isLanguageMenuOpen) && !isVisuallyProcessing && !anyPanelMounted;
   const chipAfterMic = panelStartPosition === "bottom-left";
   const reserveChipSpace = panelStartPosition === "center";
-  const languageChip =
-    showLanguageSwitcher &&
-    (isChipVisible || reserveChipSpace) && (
-      <div
-        ref={languageMenuRef}
-        className={`flex items-center${isChipVisible ? "" : " invisible"}`}
-      >
-        <PillTooltip content={activeLanguageLabel} disabled={isLanguageMenuOpen}>
-          <button
-            aria-label={t("app.mic.languageTooltip", {
-              language: activeLanguageLabel,
-            })}
-            aria-haspopup="menu"
-            aria-expanded={isLanguageMenuOpen}
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsCommandMenuOpen(false);
-              setIsLanguageMenuOpen((prev) => !prev);
-            }}
-            className="h-[18px] px-1.5 rounded-full bg-surface-2/90 hover:bg-surface-2 border border-border hover:border-border-hover flex items-center gap-1 text-[10px] font-medium text-foreground shadow-sm backdrop-blur-sm transition-colors duration-150"
-          >
-            <span className="uppercase">{preferredLanguage}</span>
-            <ChevronDown
-              size={10}
-              strokeWidth={2.5}
-              className={`shrink-0 transition-transform duration-150 ${
-                isLanguageMenuOpen ? "rotate-180" : ""
-              }`}
-            />
-          </button>
-        </PillTooltip>
-        {isLanguageMenuOpen && (
-          <div
-            ref={languagePopupRef}
-            className={`absolute bottom-full ${
-              panelStartPosition === "bottom-left"
-                ? "left-0"
-                : panelStartPosition === "center"
-                  ? "left-1/2 -translate-x-1/2"
-                  : "right-0"
-            } mb-2 w-44 max-h-48 overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm`}
-            role="menu"
-          >
-            {languageOptions.map((code) => {
-              const isActive = code === preferredLanguage;
-              return (
-                <button
-                  key={code}
-                  className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 first:pt-2 last:pb-2 hover:bg-muted focus:bg-muted focus:outline-none ${
-                    isActive ? "text-primary font-medium" : ""
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePanelLanguageSelect(code);
-                    setIsLanguageMenuOpen(false);
-                  }}
-                  role="menuitemradio"
-                  aria-checked={isActive}
-                >
-                  <span className="truncate flex-1">{getLanguageLabel(code)}</span>
-                  {isActive && <Check size={12} strokeWidth={2.5} className="shrink-0" />}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
+  const languageChip = showLanguageSwitcher && (isChipVisible || reserveChipSpace) && (
+    <div ref={languageMenuRef} className={`flex items-center${isChipVisible ? "" : " invisible"}`}>
+      <PillTooltip content={activeLanguageLabel} disabled={isLanguageMenuOpen}>
+        <button
+          aria-label={t("app.mic.languageTooltip", {
+            language: activeLanguageLabel,
+          })}
+          aria-haspopup="menu"
+          aria-expanded={isLanguageMenuOpen}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsCommandMenuOpen(false);
+            setIsLanguageMenuOpen((prev) => !prev);
+          }}
+          className="h-[18px] px-1.5 rounded-full bg-surface-2/90 hover:bg-surface-2 border border-border hover:border-border-hover flex items-center gap-1 text-[10px] font-medium text-foreground shadow-sm backdrop-blur-sm transition-colors duration-150"
+        >
+          <span className="uppercase">{preferredLanguage}</span>
+          <ChevronDown
+            size={10}
+            strokeWidth={2.5}
+            className={`shrink-0 transition-transform duration-150 ${
+              isLanguageMenuOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+      </PillTooltip>
+      {isLanguageMenuOpen && (
+        <div
+          ref={languagePopupRef}
+          className={`absolute bottom-full ${
+            panelStartPosition === "bottom-left"
+              ? "left-0"
+              : panelStartPosition === "center"
+                ? "left-1/2 -translate-x-1/2"
+                : "right-0"
+          } mb-2 w-44 max-h-48 overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm`}
+          role="menu"
+        >
+          {languageOptions.map((code) => {
+            const isActive = code === preferredLanguage;
+            return (
+              <button
+                key={code}
+                className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 first:pt-2 last:pb-2 hover:bg-muted focus:bg-muted focus:outline-none ${
+                  isActive ? "text-primary font-medium" : ""
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePanelLanguageSelect(code);
+                  setIsLanguageMenuOpen(false);
+                }}
+                role="menuitemradio"
+                aria-checked={isActive}
+              >
+                <span className="truncate flex-1">{getLanguageLabel(code)}</span>
+                {isActive && <Check size={12} strokeWidth={2.5} className="shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="dictation-window">

@@ -55,8 +55,7 @@ export function PillCommandMenu({
       // would momentarily leave no menu open, releasing window focus — and
       // the in-flight blur event would close the menu the click is about
       // to open.
-      const onLanguageTrigger =
-        languageMenuTriggerRef.current?.contains(target) ?? false;
+      const onLanguageTrigger = languageMenuTriggerRef.current?.contains(target) ?? false;
       if (
         !onLanguageTrigger &&
         resolvedMenuRef.current &&
