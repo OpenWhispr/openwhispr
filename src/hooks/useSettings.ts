@@ -9,6 +9,8 @@ import type {
   SelfHostedType,
 } from "../types/electron";
 import type { Snippet } from "../utils/snippets";
+import { effectiveAudioRetentionDays } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -63,12 +65,15 @@ export interface HotkeySettings {
 export interface OnboardingSettings {
   onboardingUseCases: string[];
   onboardingUseCaseNote: string;
+  spokenLanguages: string[];
 }
 
 export interface MicrophoneSettings {
+  microphoneSelectionMode: "system" | "built-in" | "specific";
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
   selectedMicDeviceLabel: string;
+  micWarmHoldSeconds: number;
 }
 
 export interface ApiKeySettings {
@@ -103,7 +108,6 @@ export interface ThemeSettings {
 export interface ChatAgentSettings {
   chatAgentModel: string;
   chatAgentProvider: string;
-  chatAgentKey: string;
   chatAgentCloudMode: string;
   chatAgentMode: InferenceMode;
   chatAgentCloudBaseUrl: string;
@@ -179,9 +183,15 @@ function useSettingsInternal() {
 
   // Retention periods are enforced by the main process cleanup sweep
   const { audioRetentionDays, transcriptRetentionDays } = store;
+  const enforcedAudioRetentionDays = usePolicyStore((policyState) =>
+    effectiveAudioRetentionDays(policyState, audioRetentionDays)
+  );
   useEffect(() => {
-    window.electronAPI?.syncRetentionSettings?.({ audioRetentionDays, transcriptRetentionDays });
-  }, [audioRetentionDays, transcriptRetentionDays]);
+    window.electronAPI?.syncRetentionSettings?.({
+      audioRetentionDays: enforcedAudioRetentionDays,
+      transcriptRetentionDays,
+    });
+  }, [enforcedAudioRetentionDays, transcriptRetentionDays]);
 
   // Sync startup pre-warming preferences to main process
   const {
@@ -327,6 +337,8 @@ function useSettingsInternal() {
     setOnboardingUseCases: store.setOnboardingUseCases,
     onboardingUseCaseNote: store.onboardingUseCaseNote,
     setOnboardingUseCaseNote: store.setOnboardingUseCaseNote,
+    spokenLanguages: store.spokenLanguages,
+    setSpokenLanguages: store.setSpokenLanguages,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
@@ -348,11 +360,15 @@ function useSettingsInternal() {
     setStartMinimized: store.setStartMinimized,
     panelStartPosition: store.panelStartPosition,
     setPanelStartPosition: store.setPanelStartPosition,
+    microphoneSelectionMode: store.microphoneSelectionMode,
     preferBuiltInMic: store.preferBuiltInMic,
     selectedMicDeviceId: store.selectedMicDeviceId,
     selectedMicDeviceLabel: store.selectedMicDeviceLabel,
+    micWarmHoldSeconds: store.micWarmHoldSeconds,
+    setMicrophoneSelectionMode: store.setMicrophoneSelectionMode,
     setPreferBuiltInMic: store.setPreferBuiltInMic,
     setSelectedMicDevice: store.setSelectedMicDevice,
+    setMicWarmHoldSeconds: store.setMicWarmHoldSeconds,
     autoLearnCorrections,
     setAutoLearnCorrections,
     showTranscriptionPreview: store.showTranscriptionPreview,

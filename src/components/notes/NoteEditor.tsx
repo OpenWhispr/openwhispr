@@ -1,12 +1,4 @@
-import {
-  useState,
-  useRef,
-  useEffect,
-  useMemo,
-  useCallback,
-  useSyncExternalStore,
-  type ComponentProps,
-} from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Download,
@@ -31,6 +23,7 @@ import {
   resolveNotePermission,
   type NoteAclState,
 } from "../../lib/notePermissions";
+import { ownsNote } from "../../lib/spacePermissions";
 import SpaceMembersDialog from "./SpaceMembersDialog";
 import {
   useShareCacheEntry,
@@ -44,7 +37,6 @@ import {
 } from "../../stores/noteStore";
 import { NoteSharingService } from "../../services/NoteSharingService";
 import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
-import { readIsSubscribed, subscribeIsSubscribed } from "../../lib/subscriptionFlag";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
@@ -68,15 +60,16 @@ import NoteBottomBar from "./NoteBottomBar";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import { normalizeDbDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
+import { collectKnownPeople } from "../../utils/llmTranscript";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
   lockTranscriptSpeaker,
-  mergeTranscriptSegments,
   serializeTranscriptSegments,
 } from "../../utils/transcriptSpeakerState";
 import NoteParticipants from "./NoteParticipants";
 import type { CalendarAttendee } from "../../types/calendar";
+import { observeFloatingChatLayout } from "./floatingChatLayout";
 
 const CHIP_BUTTON_CLASS =
   "inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
@@ -178,6 +171,7 @@ interface NoteEditorProps {
   isSaving: boolean;
   isRecording: boolean;
   isProcessing: boolean;
+  recordingAllowed?: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
   onExportNote?: (format: "md" | "txt") => void;
@@ -209,6 +203,7 @@ export default function NoteEditor({
   isSaving,
   isRecording,
   isProcessing,
+  recordingAllowed = true,
   onStartRecording,
   onStopRecording,
   onExportNote,
@@ -256,9 +251,6 @@ export default function NoteEditor({
   // Persisted flag is the restart-safe truth; the live cache overlays it for
   // the current session (it reflects server state before the flag persists).
   const isShared = shareCache ? shareCache.share.visibility !== "private" : Boolean(note.is_shared);
-  // Same gate as SyncService.canSyncSharedNotes: sharing needs a subscription.
-  // An already-shared note stays manageable (unshare/revoke) after a lapse.
-  const isSubscribed = useSyncExternalStore(subscribeIsSubscribed, readIsSubscribed);
   const aclState: NoteAclState = shareCache
     ? "loaded"
     : !note.cloud_id || !isSignedIn
@@ -270,13 +262,13 @@ export default function NoteEditor({
     cachedPermission: shareCache?.access?.my_permission,
     aclState,
     isTeamNote,
+    locallyOwned: ownsNote(note, user?.id),
   });
   const shareCapabilities = noteCapabilities(notePermission);
   const canShare =
     isSignedIn &&
     (!note.cloud_id || isTeamNote || aclState === "loaded") &&
-    shareCapabilities.canShare &&
-    (isSubscribed || Boolean(note.is_shared));
+    shareCapabilities.canShare;
   const canEditNote = shareCapabilities.canEdit;
   // Re-filing is owner-only on shared personal notes (a denied folder_id
   // PATCH would fork an unexpected Personal copy); team members keep
@@ -363,7 +355,6 @@ export default function NoteEditor({
     Array<{ id: number; display_name: string; email: string | null }>
   >([]);
   const editorRef = useRef<Editor | null>(null);
-  const displaySegmentsRef = useRef<TranscriptSegment[]>([]);
 
   const embeddedChat = useEmbeddedChat({
     noteId: note.id,
@@ -398,10 +389,6 @@ export default function NoteEditor({
     return parseTranscriptSegments(note.transcript || "");
   }, [diarizedSegments, note.transcript]);
 
-  useEffect(() => {
-    displaySegmentsRef.current = displaySegments;
-  }, [displaySegments]);
-
   const hasChatSegments = displaySegments.length > 0;
 
   const knownSpeakers = useMemo(
@@ -416,6 +403,20 @@ export default function NoteEditor({
       return [];
     }
   }, [note.participants]);
+
+  const mentionPeople = useMemo(
+    () =>
+      collectKnownPeople(
+        {
+          selfName: user?.name?.trim() || null,
+          selfEmail: user?.email?.trim() || null,
+          participants: parsedParticipants,
+        },
+        speakerMappings,
+        displaySegments
+      ),
+    [user?.name, user?.email, parsedParticipants, speakerMappings, displaySegments]
+  );
 
   const refreshSpeakerProfiles = useCallback(() => {
     window.electronAPI?.getSpeakerProfiles?.().then((profiles) => {
@@ -525,49 +526,28 @@ export default function NoteEditor({
     prevRecordingForDiarizationRef.current = isRecording;
   }, [diarizationSessionId, isRecording, scheduleUiUpdate]);
 
+  // Persistence happens in meetingRecordingStore's module-level listener
+  // (#1495); this only mirrors a published result into the rendered note's UI.
+  const completedDiarization = useMeetingRecordingStore((s) => s.completedDiarization);
   useEffect(() => {
-    const expectedSession = diarizationSessionId;
-    const cleanup = window.electronAPI?.onMeetingDiarizationComplete?.(async (data) => {
-      if (!expectedSession || data?.sessionId !== expectedSession) return;
+    if (!completedDiarization || completedDiarization.noteId !== note.id) return;
+    // Consume so a remount can't repaint this overlay over newer edits; the
+    // transcript itself is already persisted.
+    useMeetingRecordingStore.setState({ completedDiarization: null });
+    setIsDiarizing(false);
 
-      setIsDiarizing(false);
+    const enriched = completedDiarization.segments;
+    if (enriched.length === 0) return;
+    setDiarizedSegments(enriched);
 
-      if (!data?.segments?.length) return;
-
-      // Store segments outlive their recording — only use them for the note they belong to.
-      const { recordingNoteId, segments: liveSegments } = useMeetingRecordingStore.getState();
-      const persisted = await window.electronAPI?.getNote?.(note.id);
-      const existing = persisted?.transcript
-        ? parseTranscriptSegments(persisted.transcript)
-        : recordingNoteId === note.id && liveSegments.length > 0
-          ? liveSegments
-          : displaySegmentsRef.current;
-
-      const enriched = mergeTranscriptSegments(
-        existing,
-        data.segments.map((s: any, i: number) => ({
-          ...s,
-          id: s.id || `diarized-${i}`,
-        }))
-      );
-      setDiarizedSegments(enriched);
-
-      window.electronAPI.updateNote(note.id, { transcript: serializeTranscriptSegments(enriched) });
-
-      if (data.speakerEmbeddings) {
-        window.electronAPI?.saveNoteSpeakerEmbeddings?.(note.id, data.speakerEmbeddings);
-      }
-
-      const autoMappings: Record<string, string> = {};
-      for (const s of enriched) {
-        if (s.speakerName && s.speaker) autoMappings[s.speaker] = s.speakerName;
-      }
-      if (Object.keys(autoMappings).length > 0) {
-        setSpeakerMappings((prev) => ({ ...autoMappings, ...prev }));
-      }
-    });
-    return () => cleanup?.();
-  }, [note.id, diarizationSessionId]);
+    const autoMappings: Record<string, string> = {};
+    for (const s of enriched) {
+      if (s.speakerName && s.speaker) autoMappings[s.speaker] = s.speakerName;
+    }
+    if (Object.keys(autoMappings).length > 0) {
+      setSpeakerMappings((prev) => ({ ...autoMappings, ...prev }));
+    }
+  }, [completedDiarization, note.id]);
 
   const persistDisplaySegments = useCallback(
     async (nextSegments: TranscriptSegment[], updateOverlay = true) => {
@@ -736,6 +716,34 @@ export default function NoteEditor({
     }
     prevRecordingRef.current = isRecording;
   }, [isRecording, scheduleUiUpdate]);
+
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+
+  const getActiveScroller = useCallback((root: HTMLDivElement): HTMLElement | null => {
+    const candidates = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))].filter(
+      (el) => el.scrollHeight - el.clientHeight > 2
+    );
+    if (!candidates.length) return null;
+    return candidates.reduce((a, b) =>
+      b.scrollHeight - b.clientHeight > a.scrollHeight - a.clientHeight ? b : a
+    );
+  }, []);
+
+  const floatingChatPanelRef = useCallback(
+    (panel: HTMLDivElement | null): (() => void) | undefined => {
+      const container = panel?.parentElement;
+      const contentRoot = contentScrollRef.current;
+      if (!panel || !container || !contentRoot) return undefined;
+
+      return observeFloatingChatLayout({
+        panel,
+        container,
+        contentRoot,
+        getActiveScroller: (): HTMLElement | null => getActiveScroller(contentRoot),
+      });
+    },
+    [getActiveScroller]
+  );
 
   const handleContentChange = useCallback(
     (newValue: string) => {
@@ -1171,7 +1179,7 @@ export default function NoteEditor({
         )}
 
         <div className="flex-1 relative min-h-0">
-          <div className="h-full overflow-y-auto">
+          <div ref={contentScrollRef} className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
@@ -1216,6 +1224,7 @@ export default function NoteEditor({
                 value={enhancement.content}
                 onChange={handleEnhancedChange}
                 disabled={!canEditNote}
+                mentionPeople={mentionPeople}
               />
             ) : (
               <RichTextEditor
@@ -1224,6 +1233,7 @@ export default function NoteEditor({
                 editorRef={editorRef}
                 placeholder={t("notes.editor.startWriting")}
                 disabled={!canEditNote || actionProcessingState === "processing"}
+                mentionPeople={mentionPeople}
               />
             )}
           </div>
@@ -1252,6 +1262,7 @@ export default function NoteEditor({
           <NoteBottomBar
             isRecording={isRecording}
             isProcessing={isProcessing}
+            recordingDisabled={!recordingAllowed}
             onStartRecording={onStartRecording}
             onStopRecording={onStopRecording}
             onAskSubmit={handleAskSubmit}
@@ -1263,6 +1274,7 @@ export default function NoteEditor({
           {chatMode === "floating" && (
             <EmbeddedChat
               mode="floating"
+              floatingPanelRef={floatingChatPanelRef}
               onModeChange={setChatMode}
               messages={embeddedChat.messages}
               agentState={embeddedChat.agentState}

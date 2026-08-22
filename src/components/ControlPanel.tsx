@@ -1,5 +1,6 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
 import {
   Download,
@@ -20,6 +21,7 @@ import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
+import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
 import { useUsage } from "../hooks/useUsage";
 import { decideUpsell } from "../lib/upsell";
 import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
@@ -31,7 +33,20 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
-import { useSettingsStore } from "../stores/settingsStore";
+import {
+  getSettings,
+  selectPolicyEffectiveSettings,
+  useSettingsStore,
+} from "../stores/settingsStore";
+import { usePolicyStore } from "../stores/policyStore";
+import { usePolicySnapshot } from "../hooks/usePolicy";
+import {
+  isAgentAllowed,
+  isControlPanelViewAllowed,
+  isPolicyActionAllowed,
+  isTranscriptionContextAllowed,
+  isUpdateRequiredByOrg,
+} from "../stores/policyRules";
 import {
   useIsMeetingMode,
   useIsNarrowWindow,
@@ -44,6 +59,7 @@ import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
+import { eligibleGpuOffers, type GpuOffers } from "../utils/gpuBannerPolicy";
 import {
   setActiveNoteId,
   setActiveFolderId,
@@ -52,7 +68,11 @@ import {
   initializeNotes,
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
-import { executeTranslationChain, shouldRunTranslateStep } from "../helpers/translationChain";
+import {
+  executeTranslationChain,
+  hasTextContent,
+  shouldRunTranslateStep,
+} from "../helpers/translationChain";
 import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
@@ -60,6 +80,7 @@ import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
 import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
+import JoinYourTeamModal from "./JoinYourTeamModal";
 import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
@@ -135,12 +156,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     folderId: number;
     event: any;
   } | null>(null);
-  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{
-    transcription: boolean;
-    intelligence: boolean;
-  }>({
+  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<GpuOffers>({
     transcription: false,
-    intelligence: false,
+    intelligence: null,
   });
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
@@ -150,14 +168,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const updateErrorToastShown = useRef<Error | null>(null);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
-  const {
-    useLocalWhisper,
-    localTranscriptionProvider,
-    useCleanupModel,
-    setUseLocalWhisper,
-    setCloudTranscriptionMode,
-  } = useSettings();
+  const { useCleanupModel, setUseLocalWhisper, setCloudTranscriptionMode } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
+  // Suppressed while a deep-linked invitation is open so the two never stack.
+  const {
+    joinable,
+    dismiss: dismissJoinable,
+    markRequested,
+  } = useJoinableWorkspaces(user?.id ?? null, isSignedIn && !invitationToken);
   const usage = useUsage();
   const upsell = decideUpsell({
     authLoaded,
@@ -175,6 +193,33 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     installUpdate,
     error: updateError,
   } = useUpdater();
+
+  const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
+  const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
+  useEffect(() => {
+    if (!isControlPanelViewAllowed(activeView, agentAllowedByPolicy, policyActionsAllowed)) {
+      setActiveView("home");
+    }
+  }, [activeView, agentAllowedByPolicy, policyActionsAllowed]);
+  const updateRequiredByOrg = usePolicyStore(isUpdateRequiredByOrg);
+  const policyMinAppVersion = usePolicyStore((s) => s.policy?.minAppVersion ?? null);
+
+  // Policy-effective, because the settings pane the GPU banner links to renders
+  // the clamped mode — see eligibleGpuOffers.
+  const policySnapshot = usePolicySnapshot();
+  const gpuBannerSettings = useSettingsStore(
+    useShallow((settings) => {
+      const effective = selectPolicyEffectiveSettings(settings, policySnapshot);
+      return {
+        useLocalWhisper: effective.useLocalWhisper,
+        localTranscriptionProvider: effective.localTranscriptionProvider,
+        useCleanupModel: effective.useCleanupModel,
+        cleanupMode: effective.cleanupMode,
+        useDictationAgent: effective.useDictationAgent,
+        dictationAgentMode: effective.dictationAgentMode,
+      };
+    })
+  );
 
   const {
     confirmDialog,
@@ -363,12 +408,17 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   useEffect(() => {
     if (platform === "darwin" || gpuBannerDismissed) return;
+    const offers = eligibleGpuOffers({ ...gpuBannerSettings, agentAllowedByPolicy });
+    // A run that loses its settings mid-probe must not publish: switching to a
+    // cloud mode resolves with no IPC at all, so an older local-mode run would
+    // otherwise land last and re-raise the banner for the rest of the session.
+    let cancelled = false;
     const detect = async () => {
-      const results = { transcription: false, intelligence: false };
-      if (useLocalWhisper && localTranscriptionProvider === "whisper") {
+      const results: GpuOffers = { transcription: false, intelligence: null };
+      if (offers.transcription) {
         try {
           const status = await window.electronAPI?.getCudaWhisperStatus?.();
-          if (status?.gpuInfo.hasNvidiaGpu) {
+          if (status?.gpuInfo.hasNvidiaGpu && status.gpuInfo.cudaSupported) {
             if (!status.downloaded) results.transcription = true;
           } else {
             const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
@@ -376,19 +426,22 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           }
         } catch {}
       }
-      if (useCleanupModel) {
+      if (offers.intelligence) {
         try {
           const [gpu, vulkan] = await Promise.all([
             window.electronAPI?.detectVulkanGpu?.(),
             window.electronAPI?.getLlamaVulkanStatus?.(),
           ]);
-          if (gpu?.available && !vulkan?.downloaded) results.intelligence = true;
+          if (gpu?.available && !vulkan?.downloaded) results.intelligence = offers.intelligence;
         } catch {}
       }
-      setGpuAccelAvailable(results);
+      if (!cancelled) setGpuAccelAvailable(results);
     };
     detect();
-  }, [useLocalWhisper, localTranscriptionProvider, useCleanupModel, gpuBannerDismissed]);
+    return () => {
+      cancelled = true;
+    };
+  }, [gpuBannerSettings, agentAllowedByPolicy, gpuBannerDismissed]);
 
   useEffect(() => {
     const drain = async () => {
@@ -574,7 +627,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const retryTranscription = useCallback(
     async (id: number, options?: { isRecover?: boolean }) => {
       try {
-        const s = useSettingsStore.getState();
+        const s = getSettings();
+        if (!isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
+          toast({ title: t("common.managedByOrg"), variant: "default" });
+          return;
+        }
         const result = await window.electronAPI.retryTranscription(id, {
           useLocalWhisper: s.useLocalWhisper,
           localTranscriptionProvider: s.localTranscriptionProvider,
@@ -582,6 +639,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           cloudTranscriptionProvider: s.cloudTranscriptionProvider,
           cloudTranscriptionModel: s.cloudTranscriptionModel,
           cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
+          cortiEnvironment: s.cortiEnvironment,
+          cortiTenant: s.cortiTenant,
           parakeetModel: s.parakeetModel,
           whisperModel: s.whisperModel,
           preferredLanguage: s.preferredLanguage,
@@ -603,13 +662,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               const [
                 { default: ReasoningService },
                 { resolveReasoningRoute },
-                { getEffectiveCleanupModel },
+                { getEffectiveCleanupModel, getSettings: getEffectiveSettings },
               ] = await Promise.all([
                 import("../services/ReasoningService"),
                 import("../helpers/audioManager"),
                 import("../stores/settingsStore"),
               ]);
-              const settings = useSettingsStore.getState();
+              const settings = getEffectiveSettings();
               const agentName = localStorage.getItem("agentName") || null;
               const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
               if (route.kind === "translation") {
@@ -685,7 +744,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,
                 });
-                if (reasonedText && reasonedText !== rawText) {
+                if (hasTextContent(reasonedText) && reasonedText !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
                     reasonedText,
@@ -900,6 +959,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         }}
       />
 
+      <JoinYourTeamModal
+        joinable={joinable}
+        domain={user?.email?.split("@")[1] ?? null}
+        onDismiss={dismissJoinable}
+        onRequested={markRequested}
+        onJoined={() => setActiveView("personal-notes")}
+      />
+
       {showSearch && (
         <Suspense fallback={null}>
           <CommandSearch
@@ -1011,6 +1078,27 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
           </div>
           <div className="flex-1 overflow-y-auto pt-1">
+            {updateRequiredByOrg && (
+              <div className="max-w-3xl mx-auto w-full mb-3">
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                      <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
+                        {t("controlPanel.updateRequiredByOrg.title")}
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300/80">
+                        {t("controlPanel.updateRequiredByOrg.description", {
+                          version: policyMinAppVersion,
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {usage?.isPastDue && activeView === "home" && (
               <div className="max-w-3xl mx-auto w-full mb-3">
                 <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
@@ -1066,7 +1154,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                             className="h-7 text-xs"
                             onClick={() => {
                               setSettingsSection(
-                                gpuAccelAvailable.transcription ? "transcription" : "intelligence"
+                                gpuAccelAvailable.transcription
+                                  ? "transcription"
+                                  : gpuAccelAvailable.intelligence === "dictationAgent"
+                                    ? "dictationAgent"
+                                    : "intelligence"
                               );
                               setShowSettings(true);
                             }}
@@ -1109,9 +1201,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   setSettingsSection(section);
                   setShowSettings(true);
                 }}
+                onOpenIntegrations={() => setActiveView("integrations")}
               />
             )}
-            {activeView === "chat" && (
+            {activeView === "chat" && agentAllowedByPolicy && (
               <Suspense fallback={null}>
                 <ChatView />
               </Suspense>
@@ -1123,7 +1216,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     setSettingsSection(section);
                     setShowSettings(true);
                   }}
-                  onOpenSearch={() => setShowSearch(true)}
                   meetingRecordingRequest={meetingRecordingRequest}
                   onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                   invitationEntry={invitationNotesEntry}
@@ -1136,7 +1228,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <DictionaryView />
               </Suspense>
             )}
-            {activeView === "upload" && (
+            {activeView === "upload" && policyActionsAllowed && (
               <Suspense fallback={null}>
                 <UploadAudioView
                   onNoteCreated={(noteId, folderId) => {

@@ -4,6 +4,7 @@ import type {
   SpaceItem,
   TranscriptionItem,
   ConversationPreview,
+  ConversationCreateSnapshot,
 } from "../types/electron";
 import { NotesService, type CloudNote } from "./NotesService.js";
 import { ConversationsService } from "./ConversationsService.js";
@@ -26,6 +27,8 @@ import {
 } from "../lib/teamSpacesCapability";
 import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag";
 import { readNoteConflictIds } from "../lib/noteConflictRegistry";
+import { cloudBackupResumed, isCloudBackupAllowed } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 import {
   buildNoteCreatePayload,
   buildNoteUpdatePayload,
@@ -43,11 +46,14 @@ import {
   recordUpdate404,
   resolvePulledNoteFolderId,
   resolvePullCursorAdvance,
+  resolveSyncConsent,
+  shouldRunAmbientTeamOnlyPass,
   revokedNoteForkUpdate,
   shouldSetOwnerFromCloud,
   UPDATE_404_FORK_THRESHOLD,
   type PurgedSpaceEntry,
   type PurgedSpaceReason,
+  type SyncConsent,
 } from "./syncPassPolicy";
 
 function isHttpStatus(err: unknown, status: number): boolean {
@@ -142,6 +148,24 @@ const PURGED_SPACE_GUARD_LOCK = "openwhispr-purged-spaces";
 const NOTE_UPDATE_404_KEY = "noteUpdate404Counts";
 const FOLDER_UPDATE_404_KEY = "folderUpdate404Counts";
 
+interface ConversationCreateSource {
+  client_conversation_id?: string | null;
+  title: string;
+  updated_at: string;
+  messages: readonly unknown[];
+}
+
+function conversationCreateSnapshot(
+  conversation: ConversationCreateSource
+): ConversationCreateSnapshot {
+  return {
+    client_conversation_id: conversation.client_conversation_id ?? null,
+    title: conversation.title,
+    updated_at: conversation.updated_at,
+    message_count: conversation.messages.length,
+  };
+}
+
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   try {
     const raw = localStorage.getItem(PURGED_SPACE_GUARD_KEY);
@@ -204,7 +228,7 @@ export async function upsertCloudSpaces(cloudSpaces: MySpace[]): Promise<number[
   return backfillIds;
 }
 
-class SyncService {
+export class SyncService {
   private syncing = false;
   private syncAllPending = false;
   private autoSyncStarted = false;
@@ -216,36 +240,57 @@ class SyncService {
   private teamSpacesRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private teamSpacesRetryAttempt = 0;
   private openNoteSyncTimer: ReturnType<typeof setInterval> | null = null;
+  // Set by any pass that actually moves team or shared content; drives the
+  // ambient team-only backoff (see shouldRunAmbientTeamOnlyPass).
+  private teamPassMovedWork = false;
+
+  private consent(): SyncConsent {
+    return resolveSyncConsent({
+      authValidated: hasValidatedAuthContext(),
+      signedIn: localStorage.getItem("isSignedIn") === "true",
+      backupEnabled: localStorage.getItem("cloudBackupEnabled") === "true",
+      subscribed: readIsSubscribed(),
+      backupAllowedByPolicy: isCloudBackupAllowed(usePolicyStore.getState()),
+    });
+  }
 
   canSync(): boolean {
-    return (
-      hasValidatedAuthContext() &&
-      localStorage.getItem("isSignedIn") === "true" &&
-      localStorage.getItem("cloudBackupEnabled") === "true" &&
-      readIsSubscribed()
-    );
+    return this.consent().backup;
   }
 
-  // Sharing a note is per-note consent: shared notes keep syncing even when
-  // the global cloud-backup toggle is off, as long as the account can sync.
   private canSyncSharedNotes(): boolean {
-    return (
-      hasValidatedAuthContext() &&
-      localStorage.getItem("isSignedIn") === "true" &&
-      readIsSubscribed()
-    );
+    return this.consent().shared;
   }
 
-  // Team-space membership, like sharing, is per-space consent: team content
-  // syncs while signed in + subscribed even when cloud backup is off (D7).
+  // Team-space membership is per-space consent on the same terms as sharing.
   private canSyncTeamSpaces(): boolean {
-    return this.canSyncSharedNotes();
+    return this.consent().shared;
   }
 
   // Whether the API supports team scope (GET /api/me/teams deployed); probed
   // by syncSpaces and cached for the UI gate (useTeamSpacesCapability).
   private hasTeamSpacesCapability(): boolean {
     return readTeamSpacesCapability();
+  }
+
+  private ambientTeamPassDue(): boolean {
+    return shouldRunAmbientTeamOnlyPass({
+      emptyStreak: Number(localStorage.getItem("teamOnlyPass.emptyStreak") ?? 0),
+      lastPassAt: Number(localStorage.getItem("teamOnlyPass.lastAt")) || null,
+      now: Date.now(),
+    });
+  }
+
+  // Recorded only for team-only passes: a full pass runs on the backup
+  // schedule regardless, and letting it clear the streak would restart the
+  // 5-minute cadence the moment backup was switched off.
+  private recordTeamOnlyPass(): void {
+    const streak = Number(localStorage.getItem("teamOnlyPass.emptyStreak") ?? 0);
+    localStorage.setItem(
+      "teamOnlyPass.emptyStreak",
+      String(this.teamPassMovedWork ? 0 : streak + 1)
+    );
+    localStorage.setItem("teamOnlyPass.lastAt", String(Date.now()));
   }
 
   private cacheTeamSpacesCapability(available: boolean): void {
@@ -387,6 +432,9 @@ class SyncService {
     // subscription flag itself (post-checkout refetch, invite acceptance)
     // kicks a pass through the reactive flag instead.
     subscribeIsSubscribed(() => this.requestSyncAll("start"));
+    usePolicyStore.subscribe((policyState, previousPolicyState) => {
+      if (cloudBackupResumed(previousPolicyState, policyState)) this.requestSyncAll("start");
+    });
     setInterval(() => this.requestSyncAll("interval"), AUTO_SYNC_INTERVAL_MS);
   }
 
@@ -435,6 +483,7 @@ class SyncService {
       return;
     }
     this.syncing = true;
+    this.teamPassMovedWork = false;
     let teamSpacesReady = false;
     try {
       // Ambient passes skip when another window holds the lock — that pass
@@ -470,6 +519,7 @@ class SyncService {
           await this.syncFolders(true);
           if (!hasValidatedAuthContext()) return;
           await this.syncNotes(true);
+          this.recordTeamOnlyPass();
         }
         if (!hasValidatedAuthContext()) return;
         if (teamSpacesReady) {
@@ -518,6 +568,16 @@ class SyncService {
     if (
       !bypassThrottle &&
       (this.syncing || Date.now() - this.lastCompletedSyncAt() < AUTO_SYNC_THROTTLE_MS)
+    ) {
+      return;
+    }
+    // A team-only pass with nothing to move backs off; a local push
+    // ("team-push") and anything the user asked for are never held back.
+    if (
+      !bypassThrottle &&
+      reason !== "team-push" &&
+      !this.canSync() &&
+      !this.ambientTeamPassDue()
     ) {
       return;
     }
@@ -837,6 +897,27 @@ class SyncService {
     return synced?.cloud_id ?? null;
   }
 
+  private async acknowledgeConversationCreate(
+    localId: number,
+    snapshot: ConversationCreateSnapshot,
+    cloudId: string
+  ): Promise<void> {
+    const result = await window.electronAPI.acknowledgeConversationCreate?.(
+      localId,
+      snapshot,
+      cloudId
+    );
+    if (!result?.success) return;
+
+    const shouldDeleteCreate =
+      result.outcome === "changed" ||
+      result.outcome === "orphaned" ||
+      (result.outcome === "already-linked" && result.cloud_id !== cloudId);
+    if (shouldDeleteCreate) {
+      await ConversationsService.delete(cloudId);
+    }
+  }
+
   private async pushConversation(id: number): Promise<void> {
     const full = await window.electronAPI.getAgentConversation?.(id);
     if (!full) return;
@@ -844,8 +925,9 @@ class SyncService {
     if (full.cloud_id) {
       await ConversationsService.update(full.cloud_id, { title: full.title });
     } else {
+      const snapshot = conversationCreateSnapshot(full);
       const cloud = await ConversationsService.create({
-        client_conversation_id: String(full.id),
+        client_conversation_id: full.client_conversation_id ?? String(full.id),
         title: full.title,
         created_at: full.created_at,
         updated_at: full.updated_at,
@@ -859,12 +941,7 @@ class SyncService {
             : null,
         })),
       });
-      const linked = await window.electronAPI.markConversationSynced?.(full.id, cloud.id);
-      if (linked?.success === false) {
-        // The local row was purged while POST was in flight. It cannot carry a
-        // delete tombstone, so retire the orphaned cloud row immediately.
-        await ConversationsService.delete(cloud.id);
-      }
+      await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id);
     }
   }
 
@@ -907,6 +984,7 @@ class SyncService {
       return false;
     }
     this.cacheTeamSpacesCapability(true);
+    if (cloudSpaces.length > 0) this.teamPassMovedWork = true;
 
     const cloudIds = new Set(cloudSpaces.map((s) => s.id));
     // Spaces confirmed gone can no longer resurrect through pulls — their
@@ -1448,6 +1526,7 @@ class SyncService {
       const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
       const scope = teamCapable ? "all" : undefined;
       const { folders: cloudFolders } = await FoldersService.list(since, scope);
+      if (cloudFolders.length > 0) this.teamPassMovedWork = true;
       const ctx = await this.buildSpaceContext();
       // Parked or failed rows must retry: they hold the cursor back (and fail
       // a backfill) so one bad row never drops the rest of the delta.
@@ -1652,6 +1731,7 @@ class SyncService {
     const pending =
       (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
     if (pending.length === 0) return;
+    this.teamPassMovedWork = true;
 
     const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
     const ctx = await this.buildSpaceContext();
@@ -1775,8 +1855,9 @@ class SyncService {
     const deletes = (await window.electronAPI.getPendingNoteDeletes?.()) ?? [];
     let denied = false;
     for (const note of deletes) {
+      if (!note.cloud_id) continue;
       try {
-        await NotesService.delete(note.cloud_id!);
+        await NotesService.delete(note.cloud_id);
         await window.electronAPI.hardDeleteNote?.(note.id);
         // A settled tombstone can never resolve a conflict; drop the entry
         // (and its full cloud snapshot) from the durable registry.
@@ -1823,6 +1904,7 @@ class SyncService {
           ? await NotesService.list(BATCH_SIZE, undefined, cursor, scope, cursorId)
           : await NotesService.list(BATCH_SIZE, cursor, undefined, scope, cursorId);
         if (cloudNotes.length === 0) break;
+        this.teamPassMovedWork = true;
 
         for (const cloudNote of cloudNotes) {
           const local = await window.electronAPI.getNoteByClientId?.(
@@ -1924,6 +2006,7 @@ class SyncService {
             continue;
           }
 
+          if (local?.deleted_at) continue;
           if (!local || isCloudEntryNewer(cloudNote.updated_at, local.updated_at)) {
             if (local && local.sync_status !== "synced") {
               // A newer cloud copy over unpushed local edits ('pending' or
@@ -2006,11 +2089,12 @@ class SyncService {
       try {
         const full = await window.electronAPI.getAgentConversation?.(conv.id);
         if (!full) continue;
+        const snapshot = conversationCreateSnapshot(full);
         const cloudConv = await ConversationsService.create({
-          client_conversation_id: conv.client_conversation_id ?? String(conv.id),
-          title: conv.title,
-          created_at: conv.created_at,
-          updated_at: conv.updated_at,
+          client_conversation_id: full.client_conversation_id ?? String(full.id),
+          title: full.title,
+          created_at: full.created_at,
+          updated_at: full.updated_at,
           messages: full.messages.map((m) => ({
             role: m.role,
             content: m.content,
@@ -2021,10 +2105,7 @@ class SyncService {
               : null,
           })),
         });
-        const linked = await window.electronAPI.markConversationSynced?.(conv.id, cloudConv.id);
-        if (linked?.success === false) {
-          await ConversationsService.delete(cloudConv.id);
-        }
+        await this.acknowledgeConversationCreate(full.id, snapshot, cloudConv.id);
       } catch (err) {
         console.error("Conversation sync failed:", err);
       }
@@ -2034,8 +2115,9 @@ class SyncService {
   private async pushConversationDeletes(): Promise<void> {
     const deletes = (await window.electronAPI.getPendingConversationDeletes?.()) ?? [];
     for (const conv of deletes) {
+      if (!conv.cloud_id) continue;
       try {
-        await ConversationsService.delete(conv.cloud_id!);
+        await ConversationsService.delete(conv.cloud_id);
         await window.electronAPI.hardDeleteConversation?.(conv.id);
       } catch (err) {
         console.error("Conversation delete sync failed:", err);

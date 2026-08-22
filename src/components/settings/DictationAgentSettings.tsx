@@ -1,12 +1,17 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Monitor } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules";
+import { usePolicyStore } from "../../stores/policyStore";
 import { useAgentName } from "../../utils/agentName";
 import { useDialogs } from "../../hooks/useDialogs";
+import { useScreenRecordingPermission } from "../../hooks/useScreenRecordingPermission";
 import { Toggle } from "../ui/toggle";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { SettingsPanel, SettingsPanelRow, SettingsRow, SectionHeader } from "../ui/SettingsSection";
+import PermissionCard from "../ui/PermissionCard";
 import PromptStudio from "../ui/PromptStudio";
 import InferenceConfigEditor from "./InferenceConfigEditor";
 
@@ -14,6 +19,24 @@ export default function DictationAgentSettings() {
   const { t } = useTranslation();
   const useDictationAgent = useSettingsStore((s) => s.useDictationAgent);
   const setUseDictationAgent = useSettingsStore((s) => s.setUseDictationAgent);
+  const voiceAgentScreenContext = useSettingsStore((s) => s.voiceAgentScreenContext);
+  const setVoiceAgentScreenContext = useSettingsStore((s) => s.setVoiceAgentScreenContext);
+  const useDictationAgentVisionModel = useSettingsStore((s) => s.useDictationAgentVisionModel);
+  const setUseDictationAgentVisionModel = useSettingsStore(
+    (s) => s.setUseDictationAgentVisionModel
+  );
+  const {
+    isMacOS,
+    granted: screenGranted,
+    supported: screenSupported,
+    needsRelaunch: screenNeedsRelaunch,
+    request: requestScreenAccess,
+  } = useScreenRecordingPermission();
+  const agentAllowed = usePolicyStore(isAgentAllowed);
+  const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
+  // Display the effective value: an org that forces the feature off shows the
+  // toggle off while the raw preference survives for when the policy lifts.
+  const screenContextActive = voiceAgentScreenContext && screenContextAllowed;
 
   const { agentName, setAgentName } = useAgentName();
   const [agentNameInput, setAgentNameInput] = useState(agentName);
@@ -33,6 +56,18 @@ export default function DictationAgentSettings() {
       }),
     });
   }, [agentNameInput, setAgentName, showAlertDialog, t]);
+
+  const handleScreenContextToggle = useCallback(
+    (enabled: boolean) => {
+      setVoiceAgentScreenContext(enabled);
+      // Keeps the dictation overlay out of its own screenshots.
+      window.electronAPI?.setScreenContextEnabled?.(enabled);
+      if (enabled && isMacOS && !screenGranted) {
+        void requestScreenAccess();
+      }
+    },
+    [setVoiceAgentScreenContext, isMacOS, screenGranted, requestScreenAccess]
+  );
 
   const instructionMode = t("settingsPage.agentConfig.instructionMode");
   const examples = [
@@ -111,14 +146,88 @@ export default function DictationAgentSettings() {
         <SettingsPanelRow>
           <SettingsRow
             label={t("dictationAgent.enabled")}
-            description={t("dictationAgent.enabledDescription", { agentName })}
+            description={
+              agentAllowed
+                ? t("dictationAgent.enabledDescription", { agentName })
+                : t("common.managedByOrg")
+            }
           >
-            <Toggle checked={useDictationAgent} onChange={setUseDictationAgent} />
+            <Toggle
+              checked={useDictationAgent}
+              onChange={setUseDictationAgent}
+              disabled={!agentAllowed}
+            />
           </SettingsRow>
         </SettingsPanelRow>
       </SettingsPanel>
 
       {useDictationAgent && <InferenceConfigEditor scope="dictationAgent" />}
+
+      {/* Screen context is a voice-agent sub-feature: hidden when an org
+          blocks the agent, since enabling it would grant screen-capture
+          permission for a route that can never run. */}
+      {useDictationAgent && agentAllowed && (
+        <div className="border-t border-border/40 pt-6 space-y-3">
+          <SectionHeader
+            title={t("dictationAgent.screenContext.title")}
+            description={t("dictationAgent.screenContext.description")}
+          />
+          <SettingsPanel>
+            <SettingsPanelRow>
+              <SettingsRow
+                label={t("dictationAgent.screenContext.enable")}
+                description={
+                  !screenContextAllowed
+                    ? t("common.managedByOrg")
+                    : screenSupported
+                      ? t("dictationAgent.screenContext.enableDescription")
+                      : t("dictationAgent.screenContext.unsupported")
+                }
+              >
+                <Toggle
+                  checked={screenContextActive}
+                  onChange={handleScreenContextToggle}
+                  disabled={!screenSupported || !screenContextAllowed}
+                />
+              </SettingsRow>
+            </SettingsPanelRow>
+            {screenContextActive && (
+              <SettingsPanelRow>
+                <SettingsRow
+                  label={t("dictationAgent.screenContext.visionModel")}
+                  description={t("dictationAgent.screenContext.visionModelDescription")}
+                >
+                  <Toggle
+                    checked={useDictationAgentVisionModel}
+                    onChange={setUseDictationAgentVisionModel}
+                  />
+                </SettingsRow>
+              </SettingsPanelRow>
+            )}
+          </SettingsPanel>
+          {screenContextActive && isMacOS && !screenGranted && (
+            <PermissionCard
+              icon={Monitor}
+              title={t("dictationAgent.screenContext.permissionTitle")}
+              description={t("dictationAgent.screenContext.permissionDescription")}
+              granted={false}
+              onRequest={requestScreenAccess}
+              buttonText={t("onboarding.permissions.grantAccess")}
+            />
+          )}
+          {screenContextActive && isMacOS && screenNeedsRelaunch && (
+            <p className="text-[11px] text-warning/80 leading-snug">
+              {t("dictationAgent.screenContext.relaunchHint")}
+            </p>
+          )}
+          {screenContextActive && useDictationAgentVisionModel && (
+            <InferenceConfigEditor
+              scope="dictationAgentVision"
+              allowedModes={["openwhispr", "providers"]}
+            />
+          )}
+        </div>
+      )}
 
       {voiceAgentSection}
 

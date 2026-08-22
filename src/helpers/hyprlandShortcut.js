@@ -45,19 +45,55 @@ const ELECTRON_TO_HYPRLAND_KEY = {
 const VALID_HOTKEY_PATTERN =
   /^((CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd)(\+(CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd))*(\+)?)?(F([1-9]|1[0-9]|2[0-4])|[A-Za-z0-9]|Space|Escape|Tab|Backspace|Delete|Insert|Home|End|PageUp|PageDown|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Enter|PrintScreen|ScrollLock|Pause|Backquote|`)?$/i;
 
-const BINDS_FILENAME = "openwhispr-binds.conf";
-const MANAGED_HEADER_LINES = [
-  "# OpenWhispr keybinds (managed automatically)",
-  "# If you delete this file, also remove the matching source line from your Hyprland config.",
+const BINDS_FILENAMES = {
+  conf: "openwhispr-binds.conf",
+  lua: "openwhispr-binds.lua",
+};
+const MANAGED_HEADER_TEXT = [
+  "OpenWhispr keybinds (managed automatically)",
+  "If you delete this file, also remove the matching load line from your Hyprland config.",
 ];
+const MANAGED_HEADER_VARIANTS = new Set([
+  ...MANAGED_HEADER_TEXT,
+  "If you delete this file, also remove the matching source line from your Hyprland config.",
+]);
 
 function isManagedHeaderLine(line) {
-  return MANAGED_HEADER_LINES.includes(line.trim());
+  return MANAGED_HEADER_VARIANTS.has(line.trim().replace(/^(#|--)\s*/, ""));
 }
 
-function buildManagedBindsContent(lines = []) {
+function buildManagedBindsContent(lines = [], format = "conf") {
   const body = lines.join("\n").trim();
-  return MANAGED_HEADER_LINES.join("\n") + "\n" + (body ? body + "\n" : "");
+  const comment = format === "lua" ? "--" : "#";
+  const header = MANAGED_HEADER_TEXT.map((line) => `${comment} ${line}`).join("\n");
+  return header + "\n" + (body ? body + "\n" : "");
+}
+
+function buildLuaBindExpression(luaKeys, dbusCommand, flags = "") {
+  return `hl.bind(${JSON.stringify(luaKeys)}, hl.dsp.exec_cmd(${JSON.stringify(
+    dbusCommand
+  )})${flags ? `, ${flags}` : ""})`;
+}
+
+function runHyprctl(args) {
+  const output = execFileSync("hyprctl", args, {
+    encoding: "utf8",
+    stdio: "pipe",
+    timeout: 5000,
+  });
+  const response = Buffer.isBuffer(output) ? output.toString("utf8").trim() : String(output).trim();
+
+  if (response !== "ok") {
+    throw new Error(response || `hyprctl ${args[0]} returned an empty response`);
+  }
+}
+
+function isModifierOnlyHotkey(hotkey) {
+  const parts = hotkey
+    .split("+")
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+  return parts.length > 0 && parts.every((part) => ELECTRON_TO_HYPRLAND_MOD[part]);
 }
 
 function getHyprConfigDir() {
@@ -68,15 +104,52 @@ function getHyprConfigDir() {
   return path.join(xdgConfigHome, "hypr");
 }
 
-function getHyprlandConfPath() {
+let cachedHyprlandConfig = null;
+
+function getHyprlandConfig() {
+  if (cachedHyprlandConfig) return cachedHyprlandConfig;
+
   if (process.env.HYPRLAND_CONFIG) {
-    return path.resolve(process.env.HYPRLAND_CONFIG);
+    const configPath = path.resolve(process.env.HYPRLAND_CONFIG);
+    const format = path.extname(configPath).toLowerCase() === ".lua" ? "lua" : "conf";
+    cachedHyprlandConfig = {
+      path: configPath,
+      format,
+      bindsPath: getBindsFilePath(configPath, format),
+    };
+    return cachedHyprlandConfig;
   }
-  return path.join(getHyprConfigDir(), "hyprland.conf");
+
+  const configDir = getHyprConfigDir();
+  let format = "conf";
+  try {
+    const systemInfo = execFileSync("hyprctl", ["systeminfo"], {
+      encoding: "utf8",
+      stdio: "pipe",
+      timeout: 3000,
+    });
+    const provider = systemInfo.match(/configProvider:\s*(\S+)/i)?.[1]?.toLowerCase();
+    if (
+      provider === "lua" ||
+      (provider !== "hyprlang" && fs.existsSync(path.join(configDir, "hyprland.lua")))
+    ) {
+      format = "lua";
+    }
+  } catch {
+    if (fs.existsSync(path.join(configDir, "hyprland.lua"))) format = "lua";
+  }
+
+  const configPath = path.join(configDir, `hyprland.${format}`);
+  cachedHyprlandConfig = {
+    path: configPath,
+    format,
+    bindsPath: getBindsFilePath(configPath, format),
+  };
+  return cachedHyprlandConfig;
 }
 
-function getBindsFilePath() {
-  return path.join(getHyprConfigDir(), BINDS_FILENAME);
+function getBindsFilePath(configPath, format) {
+  return path.join(path.dirname(configPath), BINDS_FILENAMES[format]);
 }
 
 let dbus = null;
@@ -98,6 +171,7 @@ class HyprlandShortcutManager {
     this.callback = null;
     this.isRegistered = false;
     this.currentBinding = null; // Store the current Hyprland bind string for unbinding
+    this.config = null;
   }
 
   /**
@@ -130,7 +204,7 @@ class HyprlandShortcutManager {
   }
 
   /**
-   * Initialize a D-Bus service to receive Toggle() calls from Hyprland keybindings.
+   * Initialize a D-Bus service to receive hotkey events from Hyprland keybindings.
    * Reuses the same D-Bus service name/path as the GNOME integration.
    */
   async initDBusService(callback) {
@@ -157,12 +231,24 @@ class HyprlandShortcutManager {
               this.callback();
             }
           },
+          PttDown: () => {
+            if (this.callback) {
+              this.callback(undefined, "down");
+            }
+          },
+          PttUp: () => {
+            if (this.callback) {
+              this.callback(undefined, "up");
+            }
+          },
         },
         DBUS_OBJECT_PATH,
         {
           name: DBUS_INTERFACE,
           methods: {
             Toggle: ["", ""],
+            PttDown: ["", ""],
+            PttUp: ["", ""],
           },
         }
       );
@@ -258,18 +344,18 @@ class HyprlandShortcutManager {
     return {
       mods: uniqueMods.join(" "),
       key: key,
+      luaKeys: [...uniqueMods, key].filter(Boolean).join(" + ").toUpperCase(),
       // Full bind key string for hyprctl keyword bind/unbind
       bindKey: uniqueMods.length > 0 ? `${uniqueMods.join(" ")}, ${key}` : `, ${key}`,
     };
   }
 
-  _writeBindToConfig(bindLine) {
-    const bindsFile = getBindsFilePath();
-    fs.mkdirSync(path.dirname(bindsFile), { recursive: true });
+  _writeBindToConfig(config, bindLines) {
+    fs.mkdirSync(path.dirname(config.bindsPath), { recursive: true });
 
     let content = "";
     try {
-      content = fs.readFileSync(bindsFile, "utf-8");
+      content = fs.readFileSync(config.bindsPath, "utf-8");
     } catch (err) {
       if (err.code !== "ENOENT") throw err;
     }
@@ -277,20 +363,20 @@ class HyprlandShortcutManager {
     const lines = content.split("\n").filter((line) => {
       const trimmed = line.trim();
       if (!trimmed || isManagedHeaderLine(trimmed)) return false;
-      if (trimmed.startsWith("#")) return true;
+      if (trimmed.startsWith("#") || trimmed.startsWith("--")) return true;
       return !trimmed.includes(DBUS_SERVICE_NAME);
     });
 
-    const newContent = buildManagedBindsContent([...lines, bindLine]);
+    const managedBindLines = Array.isArray(bindLines) ? bindLines : [bindLines];
+    const newContent = buildManagedBindsContent([...lines, ...managedBindLines], config.format);
 
-    fs.writeFileSync(bindsFile, newContent, "utf-8");
+    fs.writeFileSync(config.bindsPath, newContent, "utf-8");
   }
 
-  _removeBindFromConfig() {
-    const bindsFile = getBindsFilePath();
+  _removeBindFromConfig(config) {
     let content = "";
     try {
-      content = fs.readFileSync(bindsFile, "utf-8");
+      content = fs.readFileSync(config.bindsPath, "utf-8");
     } catch (err) {
       if (err.code === "ENOENT") return;
       throw err;
@@ -299,33 +385,148 @@ class HyprlandShortcutManager {
     const lines = content.split("\n").filter((line) => {
       const trimmed = line.trim();
       if (!trimmed || isManagedHeaderLine(trimmed)) return false;
-      if (trimmed.startsWith("#")) return true;
+      if (trimmed.startsWith("#") || trimmed.startsWith("--")) return true;
       return !trimmed.includes(DBUS_SERVICE_NAME);
     });
 
-    fs.writeFileSync(bindsFile, buildManagedBindsContent(lines), "utf-8");
+    fs.writeFileSync(config.bindsPath, buildManagedBindsContent(lines, config.format), "utf-8");
   }
 
-  _ensureSourceInMainConfig() {
-    const mainConfig = getHyprlandConfPath();
+  _ensureSourceInMainConfig(config) {
     let content;
     try {
-      content = fs.readFileSync(mainConfig, "utf-8");
+      content = fs.readFileSync(config.path, "utf-8");
     } catch (err) {
-      if (err.code === "ENOENT") return;
+      if (err.code === "ENOENT") return false;
       throw err;
     }
 
-    const sourceLine = `source = ./${BINDS_FILENAME}`;
-    if (content.includes(`./${BINDS_FILENAME}`)) return;
+    const sourceLine =
+      config.format === "lua"
+        ? `pcall(require, ${JSON.stringify(config.bindsPath)})`
+        : `source = ${config.bindsPath}`;
+    const lines = content.split("\n").filter((line) => {
+      if (!line.includes(BINDS_FILENAMES[config.format])) return true;
+      const trimmed = line.trim();
+      return config.format === "lua"
+        ? !/^(?:dofile|require)\s*\(|^pcall\s*\(\s*require\s*,/.test(trimmed)
+        : !/^source\s*=/.test(trimmed);
+    });
 
-    const separator = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
-    fs.appendFileSync(mainConfig, `${separator}${sourceLine}\n`, "utf-8");
-    debugLogger.log("[HyprlandShortcut] Added source directive to hyprland.conf");
+    let insertionIndex = lines.length;
+    while (insertionIndex > 0 && lines[insertionIndex - 1] === "") insertionIndex -= 1;
+    if (config.format === "lua") {
+      let lastStatementIndex = insertionIndex - 1;
+      while (lastStatementIndex >= 0 && lines[lastStatementIndex].trim().startsWith("--")) {
+        lastStatementIndex -= 1;
+      }
+      if (/^return\b/.test((lines[lastStatementIndex] || "").trim())) {
+        insertionIndex = lastStatementIndex;
+      }
+    }
+    lines.splice(insertionIndex, 0, sourceLine);
+
+    const newContent = lines.join("\n");
+    if (newContent === content) return true;
+
+    fs.writeFileSync(config.path, newContent, "utf-8");
+    debugLogger.log(`[HyprlandShortcut] Added binding load directive to ${config.path}`);
+    return true;
+  }
+
+  _removeLegacyArtifacts(config) {
+    if (config.format !== "lua") return;
+
+    const configDir = path.dirname(config.path);
+    const legacyConfigPath = path.join(configDir, "hyprland.conf");
+    const legacyBindsPath = path.join(configDir, BINDS_FILENAMES.conf);
+
+    try {
+      const content = fs.readFileSync(legacyConfigPath, "utf-8");
+      const newContent = content
+        .split("\n")
+        .filter((line) => {
+          const trimmed = line.trim();
+          return !(trimmed.includes(BINDS_FILENAMES.conf) && /^source\s*=/.test(trimmed));
+        })
+        .join("\n");
+      if (newContent !== content) fs.writeFileSync(legacyConfigPath, newContent, "utf-8");
+    } catch (err) {
+      if (err.code !== "ENOENT") throw err;
+    }
+
+    try {
+      const content = fs.readFileSync(legacyBindsPath, "utf-8");
+      if (content.includes(MANAGED_HEADER_TEXT[0]) || content.includes(DBUS_SERVICE_NAME)) {
+        fs.unlinkSync(legacyBindsPath);
+      }
+    } catch (err) {
+      if (err.code !== "ENOENT") throw err;
+    }
+  }
+
+  _getConfig() {
+    if (!this.config) this.config = getHyprlandConfig();
+    return this.config;
+  }
+
+  _unbindRuntime(config, binding) {
+    const args =
+      config.format === "lua"
+        ? ["eval", `hl.unbind(${JSON.stringify(binding)})`]
+        : ["keyword", "unbind", binding];
+    runHyprctl(args);
+  }
+
+  _bindRuntime(config, converted, isPushToTalk, pressCommand, releaseCommand) {
+    const runtimeBinding = config.format === "lua" ? converted.luaKeys : converted.bindKey;
+
+    if (config.format === "lua") {
+      runHyprctl([
+        "eval",
+        buildLuaBindExpression(
+          converted.luaKeys,
+          pressCommand,
+          isPushToTalk ? "{ transparent = true }" : ""
+        ),
+      ]);
+      if (isPushToTalk) {
+        try {
+          runHyprctl([
+            "eval",
+            buildLuaBindExpression(
+              converted.luaKeys,
+              releaseCommand,
+              "{ release = true, transparent = true }"
+            ),
+          ]);
+        } catch (err) {
+          try {
+            this._unbindRuntime(config, runtimeBinding);
+          } catch {}
+          throw err;
+        }
+      }
+      return runtimeBinding;
+    }
+
+    const bindValue = `${converted.bindKey}, exec, ${pressCommand}`;
+    runHyprctl(["keyword", isPushToTalk ? "bindt" : "bind", bindValue]);
+    if (isPushToTalk) {
+      try {
+        runHyprctl(["keyword", "bindrt", `${converted.bindKey}, exec, ${releaseCommand}`]);
+      } catch (err) {
+        try {
+          this._unbindRuntime(config, runtimeBinding);
+        } catch {}
+        throw err;
+      }
+    }
+    return runtimeBinding;
   }
 
   static getHyprlandConfigStatus() {
-    const mainConfig = getHyprlandConfPath();
+    const mainConfig = getHyprlandConfig().path;
     const status = {
       path: mainConfig,
       canWrite: false,
@@ -347,13 +548,13 @@ class HyprlandShortcutManager {
   }
 
   /**
-   * Register a keybinding in Hyprland using hyprctl keyword bind.
+   * Register a keybinding using the runtime API for the active config provider.
    * The binding executes a dbus-send command that calls our Toggle() method.
    *
-   * Also writes the bind to openwhispr-binds.conf (sourced from hyprland.conf)
-   * so it survives `hyprctl reload`.
+   * Also writes the bind to a format-specific config file so it survives
+   * `hyprctl reload`.
    */
-  async registerKeybinding(hotkey) {
+  async registerKeybinding(hotkey, isPushToTalk = false) {
     if (!HyprlandShortcutManager.isHyprland()) {
       debugLogger.log("[HyprlandShortcut] Not running on Hyprland, skipping registration");
       return false;
@@ -364,6 +565,13 @@ class HyprlandShortcutManager {
       return false;
     }
 
+    if (isPushToTalk && isModifierOnlyHotkey(hotkey)) {
+      debugLogger.log(
+        `[HyprlandShortcut] Modifier-only hotkey "${hotkey}" does not support push-to-talk`
+      );
+      return false;
+    }
+
     const converted = HyprlandShortcutManager.convertToHyprlandFormat(hotkey);
     if (!converted) {
       debugLogger.log(`[HyprlandShortcut] Could not convert hotkey "${hotkey}" to Hyprland format`);
@@ -371,39 +579,53 @@ class HyprlandShortcutManager {
     }
 
     try {
+      const config = this._getConfig();
+      const runtimeBinding = config.format === "lua" ? converted.luaKeys : converted.bindKey;
+
       // First unregister any existing OpenWhispr binding if the hotkey changed.
-      if (this.currentBinding && this.currentBinding !== converted.bindKey) {
-        await this.unregisterKeybinding();
+      if (this.currentBinding && this.currentBinding !== runtimeBinding) {
+        const unregistered = await this.unregisterKeybinding();
+        if (!unregistered) return false;
       }
 
-      const dbusCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.Toggle`;
-
-      // hyprctl keyword bind "MODS, key, exec, command"
-      const bindValue = `${converted.bindKey}, exec, ${dbusCommand}`;
+      const pressCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${isPushToTalk ? "PttDown" : "Toggle"}`;
+      const releaseCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.PttUp`;
 
       try {
-        execFileSync("hyprctl", ["keyword", "unbind", converted.bindKey], {
-          stdio: "pipe",
-          timeout: 5000,
-        });
+        this._unbindRuntime(config, runtimeBinding);
       } catch (err) {
         debugLogger.log(
-          `[HyprlandShortcut] Pre-bind unbind for "${converted.bindKey}" failed, continuing:`,
+          `[HyprlandShortcut] Pre-bind unbind for "${runtimeBinding}" failed, continuing:`,
           err.message
         );
       }
 
-      execFileSync("hyprctl", ["keyword", "bind", bindValue], {
-        stdio: "pipe",
-        timeout: 5000,
-      });
+      this._bindRuntime(config, converted, isPushToTalk, pressCommand, releaseCommand);
 
-      this.currentBinding = converted.bindKey;
+      this.currentBinding = runtimeBinding;
       this.isRegistered = true;
 
       try {
-        this._writeBindToConfig(`bind = ${bindValue}`);
-        this._ensureSourceInMainConfig();
+        const persistedPressBind =
+          config.format === "lua"
+            ? buildLuaBindExpression(
+                converted.luaKeys,
+                pressCommand,
+                isPushToTalk ? "{ transparent = true }" : ""
+              )
+            : `${isPushToTalk ? "bindt" : "bind"} = ${converted.bindKey}, exec, ${pressCommand}`;
+        const persistedReleaseBind = !isPushToTalk
+          ? null
+          : config.format === "lua"
+            ? buildLuaBindExpression(
+                converted.luaKeys,
+                releaseCommand,
+                "{ release = true, transparent = true }"
+              )
+            : `bindrt = ${converted.bindKey}, exec, ${releaseCommand}`;
+        this._writeBindToConfig(config, [persistedPressBind, persistedReleaseBind].filter(Boolean));
+        const mainConfigFound = this._ensureSourceInMainConfig(config);
+        if (mainConfigFound) this._removeLegacyArtifacts(config);
       } catch (err) {
         debugLogger.log(
           "[HyprlandShortcut] Failed to persist keybinding; runtime bind is still active:",
@@ -412,7 +634,7 @@ class HyprlandShortcutManager {
       }
 
       debugLogger.log(
-        `[HyprlandShortcut] Keybinding "${hotkey}" (${converted.bindKey}) registered successfully`
+        `[HyprlandShortcut] Keybinding "${hotkey}" (${runtimeBinding}) registered successfully`
       );
       return true;
     } catch (err) {
@@ -424,9 +646,9 @@ class HyprlandShortcutManager {
   /**
    * Update the keybinding to a new hotkey.
    */
-  async updateKeybinding(hotkey) {
+  async updateKeybinding(hotkey, isPushToTalk = false) {
     // Just unregister old and register new
-    return this.registerKeybinding(hotkey);
+    return this.registerKeybinding(hotkey, isPushToTalk);
   }
 
   /**
@@ -439,18 +661,17 @@ class HyprlandShortcutManager {
     }
 
     const binding = this.currentBinding;
+    const config = this._getConfig();
 
     try {
-      execFileSync("hyprctl", ["keyword", "unbind", binding], {
-        stdio: "pipe",
-        timeout: 5000,
-      });
+      this._unbindRuntime(config, binding);
     } catch (err) {
       debugLogger.log(`[HyprlandShortcut] Runtime unbind for "${binding}" failed:`, err.message);
+      return false;
     }
 
     try {
-      this._removeBindFromConfig();
+      this._removeBindFromConfig(config);
     } catch (err) {
       debugLogger.log("[HyprlandShortcut] Failed to remove persisted keybinding:", err.message);
     }

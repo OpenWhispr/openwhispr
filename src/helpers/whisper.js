@@ -11,6 +11,7 @@ const {
   checkDiskSpace,
 } = require("./downloadUtils");
 const WhisperServerManager = require("./whisperServer");
+const { createAbortError } = require("./abortError");
 const { getModelsDirForService } = require("./modelDirUtils");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
@@ -29,6 +30,15 @@ function getWhisperModelConfig(modelName) {
 
 function getValidModelNames() {
   return Object.keys(modelRegistryData.whisperModels);
+}
+
+// WHISPER_GPU_FAILED holds a comma-separated list of backends that fell back
+// to CPU on this machine (e.g. "cuda" or "cuda,vulkan")
+function resolveFailedGpuBackends(value) {
+  return String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 function shouldRewarmOnWake({
@@ -57,6 +67,51 @@ class WhisperManager {
     this.cachedVadModelPath = undefined;
     this._transcribing = false;
     this._rewarmInFlight = false;
+    this._cudaBinaryManager = null;
+    this._vulkanBinaryManager = null;
+  }
+
+  setGpuBinaryManagers({ cuda, vulkan }) {
+    this._cudaBinaryManager = cuda || null;
+    this._vulkanBinaryManager = vulkan || null;
+  }
+
+  // The GPU backend for every server start is resolved fresh from the current
+  // env + installed packs, so enabling or removing a pack applies immediately
+  // instead of after an app restart. A pack on disk implies intent: the user
+  // downloaded it, so it engages unless WHISPER_*_ENABLED is explicitly set to
+  // "false" (case-insensitive; an opt-out that survives without deleting the
+  // pack). Requiring the flag to be present stranded downloaded packs on
+  // silent CPU whenever the .env line was lost (#1340). WHISPER_GPU_FAILED
+  // lists backends that crashed on this machine (persisted by ipcHandlers
+  // when the server falls back to CPU); they stay off until the user retries
+  // or re-downloads, so a doomed backend isn't re-attempted — and its model
+  // reload re-paid — on every launch.
+  resolveGpuStartOptions() {
+    const failed = resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
+    const useCuda =
+      (process.env.WHISPER_CUDA_ENABLED || "").toLowerCase() !== "false" &&
+      !failed.includes("cuda") &&
+      !!this._cudaBinaryManager?.isDownloaded();
+    const useVulkan =
+      !useCuda &&
+      (process.env.WHISPER_VULKAN_ENABLED || "").toLowerCase() !== "false" &&
+      !failed.includes("vulkan") &&
+      !!this._vulkanBinaryManager?.isDownloaded();
+    return { useCuda, useVulkan };
+  }
+
+  // Re-resolve GPU options and reload the server in place. Used after a GPU
+  // pack download, delete, or failure-retry so the change takes effect without
+  // an app restart. Callers that had to stop the server before touching pack
+  // files pass the model they captured first; no-op when none was loaded.
+  async restartServerWithGpuPreference(modelName = this.currentServerModel) {
+    if (!modelName || this.serverManager.isRemote) return { success: true, restarted: false };
+
+    const options = { ...this.serverManager.lastStartOptions, ...this.resolveGpuStartOptions() };
+    await this.stopServer();
+    const result = await this.startServer(modelName, options);
+    return { ...result, restarted: true };
   }
 
   getModelsDir() {
@@ -103,7 +158,8 @@ class WhisperManager {
       await cleanupStaleDownloads(this.getModelsDir());
 
       // Pre-warm whisper-server if local mode enabled (eliminates 2-5s cold-start delay)
-      const { localTranscriptionProvider, whisperModel, useCuda, useVulkan } = settings;
+      const { localTranscriptionProvider, whisperModel } = settings;
+      const { useCuda, useVulkan } = this.resolveGpuStartOptions();
 
       if (
         localTranscriptionProvider === "whisper" &&
@@ -116,16 +172,13 @@ class WhisperManager {
           debugLogger.info("Pre-warming whisper-server", {
             model: whisperModel,
             modelPath,
-            cuda: !!useCuda,
-            vulkan: !!useVulkan,
+            cuda: useCuda,
+            vulkan: useVulkan,
           });
 
           try {
             const serverStartTime = Date.now();
-            await this.serverManager.start(modelPath, {
-              useCuda: !!useCuda,
-              useVulkan: !!useVulkan,
-            });
+            await this.serverManager.start(modelPath, { useCuda, useVulkan });
             this.currentServerModel = whisperModel;
 
             debugLogger.info("whisper-server pre-warmed successfully", {
@@ -272,11 +325,12 @@ class WhisperManager {
       return false;
     }
 
-    // Replay the last start options (VAD, threads, GPU backend) so the reloaded
-    // server matches the signature the next dictation will use; a bare start would
-    // otherwise be rejected by start()'s no-op guard and reload the model on the
-    // first dictation. See #766.
-    const options = { ...sm.lastStartOptions };
+    // Replay the last start options (VAD, threads) so the reloaded server
+    // matches the signature the next dictation will use; a bare start would
+    // otherwise be rejected by start()'s no-op guard and reload the model on
+    // the first dictation. See #766. GPU flags are re-resolved so a backend
+    // that failed since is not re-attempted.
+    const options = { ...sm.lastStartOptions, ...this.resolveGpuStartOptions() };
     this._rewarmInFlight = true;
     try {
       debugLogger.info("Re-warming whisper-server after wake from sleep", { model: modelName });
@@ -339,6 +393,7 @@ class WhisperManager {
     return await this.transcribeViaServer(audioBlob, model, language, initialPrompt, {
       vadEnabled,
       vadConfig,
+      signal: options.signal,
     });
   }
 
@@ -353,6 +408,11 @@ class WhisperManager {
   }
 
   async _runServerTranscription(audioBlob, model, language, initialPrompt = null, options = {}) {
+    // An already-cancelled upload skips the server boot entirely.
+    if (options.signal?.aborted) {
+      throw createAbortError("whisper-server transcription cancelled");
+    }
+
     debugLogger.info("Transcription mode: SERVER", { model, language: language || "auto" });
     const modelPath = this.getModelPath(model);
 
@@ -363,8 +423,7 @@ class WhisperManager {
     }
 
     await this.serverManager.start(modelPath, {
-      useCuda: this.serverManager.useCuda,
-      useVulkan: this.serverManager.useVulkan,
+      ...this.resolveGpuStartOptions(),
       vadEnabled,
       vadModelPath,
       vadConfig: options.vadConfig || null,
@@ -399,7 +458,11 @@ class WhisperManager {
     });
 
     const startTime = Date.now();
-    const result = await this.serverManager.transcribe(audioBuffer, { language, initialPrompt });
+    const result = await this.serverManager.transcribe(audioBuffer, {
+      language,
+      initialPrompt,
+      signal: options.signal,
+    });
     const elapsed = Date.now() - startTime;
 
     debugLogger.logWhisperPipeline("transcribeViaServer - completed", {
@@ -501,7 +564,17 @@ class WhisperManager {
       return { success: true, text };
     }
 
-    return { success: false, message: "No audio detected" };
+    // A response with neither shape is a broken backend, not silence. Reporting it
+    // as "No audio detected" sends users chasing their microphone when the engine
+    // is at fault, so surface it as the transcription failure it is.
+    const serverError = typeof result.error === "string" && result.error.trim();
+    return {
+      success: false,
+      error: "invalid_response",
+      message: serverError
+        ? `Transcription engine error: ${serverError}`
+        : "Transcription engine returned an unexpected response",
+    };
   }
 
   // Check if text is a whisper.cpp blank audio marker
@@ -867,3 +940,4 @@ class WhisperManager {
 
 module.exports = WhisperManager;
 module.exports.shouldRewarmOnWake = shouldRewarmOnWake;
+module.exports.resolveFailedGpuBackends = resolveFailedGpuBackends;

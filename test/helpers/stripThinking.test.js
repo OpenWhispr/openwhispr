@@ -35,3 +35,21 @@ test("non-string input is returned as-is", async () => {
   const { stripThinkingTags } = await load();
   assert.equal(stripThinkingTags(undefined), undefined);
 });
+
+test("peels nested think blocks instead of leaving a stray close tag", async () => {
+  const { stripThinkingTags } = await load();
+  assert.equal(stripThinkingTags("<think>a<think>b</think>c</think>Answer"), "Answer");
+});
+
+test("peels doubly nested think blocks", async () => {
+  const { stripThinkingTags } = await load();
+  assert.equal(
+    stripThinkingTags("<think>outer<think>mid<think>inner</think>x</think>y</think>Done"),
+    "Done"
+  );
+});
+
+test("still keeps sequential (non-nested) think blocks from leaking", async () => {
+  const { stripThinkingTags } = await load();
+  assert.equal(stripThinkingTags("<think>one</think>Keep<think>two</think>This"), "KeepThis");
+});

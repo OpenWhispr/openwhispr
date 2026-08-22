@@ -1,25 +1,18 @@
 import { useSyncExternalStore } from "react";
 import { useSpaces } from "../stores/noteStore";
 import {
-  readTeamSpacesCapability,
+  readTeamSpacesAvailable,
   subscribeTeamSpacesCapability,
 } from "../lib/teamSpacesCapability";
 
-/** Dev override forcing the TEAM SPACES section on without a server probe. */
-function hasTeamSpacesDevOverride(): boolean {
-  return localStorage.getItem("teamSpacesDevOverride") === "true";
-}
-
 /**
- * Whether the TEAM SPACES section should render: the cached server capability
- * probe (written by the spaces sync pass), the dev override, or locally known
- * team spaces.
+ * Whether the TEAM SPACES section should render. Every signed-in user gets it;
+ * the only thing that removes it is an API without the spaces endpoint, and
+ * even then locally mirrored team spaces keep it visible so their content
+ * stays reachable.
  */
 export function useTeamSpacesCapability(isSignedIn: boolean): boolean {
   const spaces = useSpaces();
-  const capability = useSyncExternalStore(subscribeTeamSpacesCapability, readTeamSpacesCapability);
-  return (
-    isSignedIn &&
-    (hasTeamSpacesDevOverride() || capability || spaces.some((space) => space.kind === "team"))
-  );
+  const available = useSyncExternalStore(subscribeTeamSpacesCapability, readTeamSpacesAvailable);
+  return isSignedIn && (available || spaces.some((space) => space.kind === "team"));
 }

@@ -8,6 +8,7 @@ const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { app } = require("electron");
 const sidecarPidFile = require("./sidecarPidFile");
+const { BIN_SUBDIR: LLAMA_VULKAN_BIN_SUBDIR } = require("./llamaVulkanManager");
 
 // Range kept clear of cliBridge (8200-8219) to avoid port-bind collisions.
 const PORT_RANGE_START = 8221;
@@ -74,11 +75,16 @@ class LlamaServerManager {
         resolveBinary(`llama-server-${platformArch}`) || resolveBinary(`llama-server${ext}`);
       paths = defaultBin ? { default: defaultBin } : {};
     } else {
-      const userBinDir = path.join(app.getPath("userData"), "bin");
       const vulkanName = `llama-server-vulkan${ext}`;
       let vulkanBin = null;
       try {
-        const vulkanPath = path.join(userBinDir, vulkanName);
+        // Installed by LlamaVulkanManager into its own pack directory
+        const vulkanPath = path.join(
+          app.getPath("userData"),
+          "bin",
+          LLAMA_VULKAN_BIN_SUBDIR,
+          vulkanName
+        );
         if (fs.existsSync(vulkanPath)) vulkanBin = vulkanPath;
       } catch {}
 
@@ -92,7 +98,11 @@ class LlamaServerManager {
       if (cpuBin) paths.cpu = cpuBin;
     }
 
-    this.cachedServerBinaryPaths = paths;
+    // Only cache hits: a miss may be transient (binary downloaded after
+    // startup), and caching it would require an app restart to recover.
+    if (Object.keys(paths).length > 0) {
+      this.cachedServerBinaryPaths = paths;
+    }
     return paths;
   }
 
@@ -568,6 +578,13 @@ class LlamaServerManager {
 
             try {
               const response = JSON.parse(data);
+              if (
+                options.requireCompleteOutput &&
+                ["length", "max_tokens"].includes(response.choices?.[0]?.finish_reason)
+              ) {
+                reject(new Error("Model output was truncated before the selection edit completed"));
+                return;
+              }
               const message = response.choices?.[0]?.message;
               const text = message?.content || message?.reasoning_content || "";
               resolve(text.trim());

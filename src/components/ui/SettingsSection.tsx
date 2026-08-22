@@ -144,7 +144,7 @@ export function InferenceModeSelector({
   onSelect,
 }: {
   modes: InferenceModeOption[];
-  activeMode: InferenceMode;
+  activeMode: InferenceMode | null;
   onSelect: (mode: InferenceMode) => void;
 }) {
   const { t } = useTranslation();

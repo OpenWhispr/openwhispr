@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., 1.0.0)'
+        description: 'Override version tag (defaults to MIC_LISTENER_VERSION in the C source)'
         required: false
-        default: '1.0.0'
+        default: ''
         type: string
 
 permissions:
@@ -23,6 +23,20 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      # The release tag comes from the source so protocol changes ship under a
+      # new tag and download-windows-mic-listener.js (pinned to the same
+      # constant) can never silently pick up a binary built from older source.
+      - name: Read binary version from source
+        id: version
+        run: |
+          $match = Select-String -Path resources/windows-mic-listener.c -Pattern 'MIC_LISTENER_VERSION "([0-9.]+)"'
+          if (-not $match) {
+            Write-Error "MIC_LISTENER_VERSION not found in resources/windows-mic-listener.c"
+            exit 1
+          }
+          "version=$($match.Matches[0].Groups[1].Value)" >> $env:GITHUB_OUTPUT
+        shell: pwsh
 
       - name: Setup MSVC
         uses: microsoft/setup-msbuild@v2
@@ -60,13 +74,15 @@ jobs:
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: windows-mic-listener-v${{ inputs.version || '1.0.0' }}
-          name: Windows Mic Listener v${{ inputs.version || '1.0.0' }}
+          tag_name: windows-mic-listener-v${{ inputs.version || steps.version.outputs.version }}
+          name: Windows Mic Listener v${{ inputs.version || steps.version.outputs.version }}
           body: |
             Prebuilt Windows mic listener binary for event-driven microphone detection.
 
-            Uses WASAPI IAudioSessionManager2 to monitor capture sessions.
-            Supports --exclude-pid to filter out OpenWhispr's own mic usage.
+            Uses WASAPI IAudioSessionManager2 to monitor capture sessions with
+            per-PID refcounting across all capture endpoints (hot-plug aware).
+            Announces "CAPABILITY PID" on stdout; PID exclusions are handled by
+            the JavaScript caller.
           files: windows-mic-listener-win32-x64.zip
           make_latest: false
         env:

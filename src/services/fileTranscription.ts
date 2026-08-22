@@ -1,4 +1,6 @@
 import { withSessionRefresh } from "../lib/auth";
+import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
+import { getTranscriptionProviders } from "../models/ModelRegistry";
 
 export interface FileTranscriptionResult {
   success: boolean;
@@ -7,6 +9,15 @@ export interface FileTranscriptionResult {
   code?: string;
   diarized?: boolean;
   warning?: string;
+  // Set alongside `warning` by the chunked cloud path: how much audio was lost.
+  failedChunks?: number;
+  totalChunks?: number;
+  // Measured duration of the source audio, for persisting as
+  // audio_duration_seconds. Only transcribeFileWithSpeakers sets it.
+  durationSeconds?: number | null;
+  // Segment-level timing from BYOK providers that support it (opts.timestamps
+  // or BYOK diarization). Absent whenever the provider returned text only.
+  segments?: Array<{ text: string; start: number; end: number; speaker?: string }>;
 }
 
 export interface DiarizationSettings {
@@ -34,13 +45,41 @@ export interface FileTranscriptionConfig {
   remoteTranscriptionModel?: string;
 }
 
+export interface TranscriptionApiKeys {
+  openaiApiKey: string;
+  groqApiKey: string;
+  xaiApiKey: string;
+  mistralApiKey: string;
+  tinfoilApiKey: string;
+  customTranscriptionApiKey?: string;
+}
+
+export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiKeys): string {
+  switch (provider) {
+    case "openai":
+      return keys.openaiApiKey;
+    case "groq":
+      return keys.groqApiKey;
+    case "xai":
+      return keys.xaiApiKey;
+    case "mistral":
+      return keys.mistralApiKey;
+    case "tinfoil":
+      return keys.tinfoilApiKey;
+    case "custom":
+      return keys.customTranscriptionApiKey || "";
+    default:
+      return "";
+  }
+}
+
 // Single provider dispatch shared by the single-file flow and the batch queue,
 // so BYOK providers receive identical options in both.
 export async function transcribeFile(
   filePath: string,
   cfg: FileTranscriptionConfig,
   diarize: boolean,
-  opts: { requestId?: string } = {}
+  opts: { requestId?: string; timestamps?: boolean } = {}
 ): Promise<FileTranscriptionResult> {
   if (cfg.isOpenWhisprCloud) {
     return withSessionRefresh(async () => {
@@ -58,7 +97,30 @@ export async function transcribeFile(
     return window.electronAPI.transcribeAudioFile(filePath, {
       provider: cfg.localTranscriptionProvider as "whisper" | "nvidia",
       model: cfg.localTranscriptionProvider === "nvidia" ? cfg.parakeetModel : cfg.whisperModel,
+      requestId: opts.requestId,
     });
+  }
+
+  // Pre-flight through the shared resolver: code-carrying errors (incl. the
+  // Tinfoil-URL and fail-closed custom guards) surface here without an IPC
+  // round-trip; the main-process handler re-resolves the same fields as
+  // defense in depth.
+  const route = resolveTranscriptionRoute({
+    settings: {
+      transcriptionMode: cfg.transcriptionMode,
+      remoteTranscriptionUrl: cfg.remoteTranscriptionUrl,
+      remoteTranscriptionModel: cfg.remoteTranscriptionModel,
+      cloudTranscriptionProvider: cfg.cloudTranscriptionProvider,
+      cloudTranscriptionModel: cfg.cloudTranscriptionModel,
+      cloudTranscriptionBaseUrl: cfg.cloudTranscriptionBaseUrl,
+      cortiEnvironment: cfg.cortiEnvironment,
+      cortiTenant: cfg.cortiTenant,
+    },
+    providers: getTranscriptionProviders(),
+    request: { effectiveLanguage: cfg.language || undefined },
+  });
+  if (route.transport === "error") {
+    return { success: false, error: route.message, code: route.code };
   }
 
   // Self-hosted fields make the handler route to the configured server
@@ -66,9 +128,10 @@ export async function transcribeFile(
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
     apiKey: cfg.getApiKey(),
-    baseUrl: cfg.cloudTranscriptionBaseUrl || "",
+    baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,
+    timestamps: opts.timestamps || undefined,
     provider: cfg.cloudTranscriptionProvider,
     language: cfg.language,
     environment: cfg.cortiEnvironment,
@@ -103,7 +166,7 @@ export async function transcribeFileWithSpeakers(
   cfg: FileTranscriptionConfig,
   diarization: DiarizationSettings,
   durationSeconds?: number | null,
-  opts: { requestId?: string } = {}
+  opts: { requestId?: string; timestamps?: boolean } = {}
 ): Promise<FileTranscriptionResult> {
   const byokDiarize = shouldUseByokDiarize(cfg, diarization.enabled);
   const diarizePromise =
@@ -111,14 +174,20 @@ export async function transcribeFileWithSpeakers(
       ? (window.electronAPI
           .diarizeAudioFile?.(filePath, {
             numSpeakers: diarization.numSpeakers ?? undefined,
+            requestId: opts.requestId,
           })
           .catch(() => null) ?? Promise.resolve(null))
       : Promise.resolve(null);
 
-  const [result, diar] = await Promise.all([
+  const [transcribed, diar] = await Promise.all([
     transcribeFile(filePath, cfg, byokDiarize, opts),
     diarizePromise,
   ]);
+
+  // The diarizer measures the converted audio, so it covers picked files whose
+  // duration the caller never knew. 0/NaN mean "unknown", hence ||.
+  const measuredDuration = durationSeconds || (diar?.success && diar.durationSeconds) || null;
+  const result = { ...transcribed, durationSeconds: measuredDuration };
 
   if (!result.success || !result.text || result.diarized) return result;
   if (!diar?.success || !diar.segments?.length) return result;

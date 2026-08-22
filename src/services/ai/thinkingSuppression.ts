@@ -13,7 +13,9 @@ export function applyThinkingSuppression(
   const providerKey = detectEndpointDialect(baseUrl)?.key ?? provider.toLowerCase();
   const cloudModel = getCloudModel(model);
 
-  if (cloudModel?.disableThinking && providerKey === "groq") {
+  // A registry model flagged disableThinking is force-suppressed on every
+  // provider — scoping this to one provider is the #1611 bug pattern.
+  if (cloudModel?.disableThinking) {
     suppressThinking(requestBody, providerKey, model);
     return;
   }

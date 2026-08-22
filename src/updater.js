@@ -1,4 +1,5 @@
 const { autoUpdater } = require("electron-updater");
+const { appUpdatesEnabled } = require("./helpers/updateCheckPolicy");
 
 class UpdateManager {
   constructor() {
@@ -86,9 +87,7 @@ class UpdateManager {
           };
         }
         this.notifyRenderers("update-available", info);
-        const nPrefs = this.windowManager?.notificationPrefs || {};
-        const notifAllowed =
-          nPrefs.notificationsEnabled !== false && nPrefs.notifyUpdates !== false;
+        const notifAllowed = appUpdatesEnabled(this.windowManager?.notificationPrefs);
         if (this.windowManager && info && !this._suppressNotification && notifAllowed) {
           this.windowManager.showUpdateNotification(info).catch((err) => {
             console.error("Failed to show update notification:", err);
@@ -301,21 +300,28 @@ class UpdateManager {
     }
   }
 
+  // Prefs are read at fire time, not scheduling time, so flipping the
+  // "App updates" toggle takes effect without a restart (#1605).
+  _autoCheckForUpdates(label) {
+    if (!appUpdatesEnabled(this.windowManager?.notificationPrefs)) {
+      console.log(`⏭️ ${label} update check skipped (app updates disabled)`);
+      return;
+    }
+    console.log(`🔄 ${label} update check...`);
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error(`${label} update check failed:`, err);
+    });
+  }
+
   checkForUpdatesOnStartup() {
     if (process.env.NODE_ENV !== "development") {
       setTimeout(() => {
-        console.log("🔄 Checking for updates on startup...");
-        autoUpdater.checkForUpdates().catch((err) => {
-          console.error("Startup update check failed:", err);
-        });
+        this._autoCheckForUpdates("Startup");
       }, 3000);
 
       const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
       this.updateCheckInterval = setInterval(() => {
-        console.log("🔄 Periodic update check...");
-        autoUpdater.checkForUpdates().catch((err) => {
-          console.error("Periodic update check failed:", err);
-        });
+        this._autoCheckForUpdates("Periodic");
       }, FOUR_HOURS_MS);
     }
   }

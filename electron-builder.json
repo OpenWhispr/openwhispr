@@ -25,6 +25,8 @@
     "src/hooks/**/*",
     "src/models/**/*",
     "src/services/localReasoningBridge.js",
+    "src/services/transcriptionBaseUrl.ts",
+    "src/stores/policyRules.ts",
     "src/types/**/*",
     "src/utils.js",
     "src/utils/**/*",

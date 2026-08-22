@@ -78,10 +78,8 @@ class ModelManager {
   }
 
   getModelsDir() {
-    const os = require("os");
-    // Use os.homedir() as fallback if app.getPath fails
-    const homeDir = app.isReady() ? app.getPath("home") : os.homedir();
-    return path.join(homeDir, ".cache", "openwhispr", "models");
+    const { getCacheRoot } = require("./modelDirUtils");
+    return path.join(getCacheRoot(), "models");
   }
 
   async ensureModelsDirExists() {
@@ -515,6 +513,7 @@ class ModelManager {
         temperature: options.temperature ?? 0.7,
         max_tokens: options.maxTokens ?? 512,
         disableThinking: options.disableThinking,
+        requireCompleteOutput: options.requireCompleteOutput,
       });
 
       const totalTime = Date.now() - startTime;
