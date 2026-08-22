@@ -21,7 +21,10 @@ test("choosing auto as active language clears the multi-select set", async () =>
   const { resolveActiveLanguageChange } = await load();
 
   assert.deepEqual(
-    resolveActiveLanguageChange({ preferredLanguage: "en", preferredLanguages: ["en", "pl"] }, "auto"),
+    resolveActiveLanguageChange(
+      { preferredLanguage: "en", preferredLanguages: ["en", "pl"] },
+      "auto"
+    ),
     { preferredLanguage: "auto", preferredLanguages: [] }
   );
 });
@@ -41,7 +44,10 @@ test("activating a language missing from a non-empty set inserts it", async () =
   const { resolveActiveLanguageChange } = await load();
 
   assert.deepEqual(
-    resolveActiveLanguageChange({ preferredLanguage: "en", preferredLanguages: ["en", "pl"] }, "de"),
+    resolveActiveLanguageChange(
+      { preferredLanguage: "en", preferredLanguages: ["en", "pl"] },
+      "de"
+    ),
     { preferredLanguage: "de", preferredLanguages: ["en", "pl", "de"] }
   );
 });
@@ -73,10 +79,10 @@ test("activating a language already in the set leaves the set untouched (same re
 test("replacing the set keeps the active language when it is still present", async () => {
   const { resolveLanguageSetChange } = await load();
 
-  assert.deepEqual(
-    resolveLanguageSetChange({ preferredLanguage: "pl" }, ["en", "pl", "de"]),
-    { preferredLanguage: "pl", preferredLanguages: ["en", "pl", "de"] }
-  );
+  assert.deepEqual(resolveLanguageSetChange({ preferredLanguage: "pl" }, ["en", "pl", "de"]), {
+    preferredLanguage: "pl",
+    preferredLanguages: ["en", "pl", "de"],
+  });
 });
 
 test("replacing the set moves the active language to the first preset when evicted", async () => {
