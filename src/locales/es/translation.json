@@ -6,7 +6,8 @@
       "uiLabel": "Idioma de la interfaz",
       "uiDescription": "Elige el idioma usado en la interfaz de OpenWhispr",
       "transcriptionLabel": "Idioma de transcripción",
-      "transcriptionDescription": "Elige el idioma que hablas para mejorar la precisión",
+      "transcriptionDescription": "Elige hasta {{max}} idiomas que hablas — cambia el idioma activo desde el panel de dictado",
+      "removeLanguage": "Quitar {{language}}",
       "chineseScriptLabel": "Escritura china (dictado)",
       "chineseScriptDescription": "Cuando se detecte chino, convierte las transcripciones dictadas a caracteres simplificados o tradicionales. El chino hablado suena igual; Whisper solo devuelve una escritura.",
       "chineseScriptAsTranscribed": "Mantener como se transcribió",
@@ -1270,6 +1271,10 @@
     "singleModifierNeedsRightSide": "{{key}} por sí sola no puede ser un atajo. Pulsa {{alternative}} o añade una segunda tecla."
   },
   "languageSelector": {
+    "lastLanguageHint": "Debe quedar seleccionado al menos un idioma",
+    "maxLanguagesHint": "Límite de {{max}} idiomas alcanzado",
+    "selectedCount_one": "{{count}} idioma",
+    "selectedCount_other": "{{count}} idiomas",
     "noLanguagesFound": "No se encontraron idiomas",
     "searchPlaceholder": "Buscar idiomas"
   },
@@ -3239,6 +3244,10 @@
       "cleanupFailed": {
         "title": "Limpieza fallida",
         "description": "Tu dictado se pegó sin limpieza con IA."
+      },
+      "streamingLanguageSwitch": {
+        "title": "El idioma se aplicará a tu próximo dictado",
+        "description": "Esta transcripción en vivo mantiene el idioma anterior. {{language}} se aplicará cuando inicies un nuevo dictado."
       }
     },
     "mic": {
@@ -3246,7 +3255,8 @@
       "recording": "Grabando...",
       "processing": "Procesando...",
       "clickToSpeak": "Haz clic para hablar",
-      "waitingForMicrophone": "Esperando el micrófono…"
+      "waitingForMicrophone": "Esperando el micrófono…",
+      "languageTooltip": "Idioma: {{language}} — haz clic para cambiar"
     },
     "buttons": {
       "cancelRecording": "Cancelar grabación",
@@ -3256,6 +3266,7 @@
       "stopListening": "Dejar de escuchar",
       "startListening": "Empezar a escuchar",
       "hideForNow": "Ocultar por ahora",
+      "language": "Idioma de transcripción",
       "askAssistant": "Preguntar al asistente"
     }
   },

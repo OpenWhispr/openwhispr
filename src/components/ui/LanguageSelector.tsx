@@ -18,8 +18,19 @@ const REGISTRY_OPTIONS: LanguageOption[] = registry.languages.map(({ code, label
 }));
 
 interface LanguageSelectorProps {
-  value: string;
-  onChange: (value: string) => void;
+  value?: string;
+  onChange?: (value: string) => void;
+  /** Multi-select mode: options toggle in and out of `values` and the
+   * dropdown stays open. `values`/`onValuesChange` replace `value`/`onChange`. */
+  multiple?: boolean;
+  values?: string[];
+  onValuesChange?: (values: string[]) => void;
+  /** In multiple mode, cap on how many languages can be selected. */
+  maxValues?: number;
+  /** In multiple mode, values that replace the whole selection when picked
+   * (e.g. auto detect). The cap does not apply to them — the parent decides
+   * the resulting state. */
+  exclusiveValues?: string[];
   options?: LanguageOption[];
   className?: string;
   placeholder?: string;
@@ -28,6 +39,11 @@ interface LanguageSelectorProps {
 export default function LanguageSelector({
   value,
   onChange,
+  multiple = false,
+  values,
+  onValuesChange,
+  maxValues,
+  exclusiveValues = ["auto"],
   options,
   className = "",
   placeholder,
@@ -108,8 +124,19 @@ export default function LanguageSelector({
       }
     };
 
+    // Clicks in another application never reach this document, so also
+    // collapse when the window itself loses focus.
+    const handleWindowBlur = () => {
+      setIsOpen(false);
+      setSearchQuery("");
+    };
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("blur", handleWindowBlur);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
   }, []);
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isOpen) {
@@ -143,10 +170,45 @@ export default function LanguageSelector({
     }
   };
 
+  const selectedValues = multiple ? (values ?? []) : value ? [value] : [];
+
+  // Why a toggle in multiple mode cannot happen; used to disable the option
+  // and explain the disabled state. Null means the option is toggleable.
+  const getDisabledReason = (languageValue: string): string | null => {
+    if (!multiple) return null;
+    const isSelected = selectedValues.includes(languageValue);
+    if (isSelected && selectedValues.length <= 1) {
+      return t("languageSelector.lastLanguageHint");
+    }
+    if (
+      !isSelected &&
+      !exclusiveValues.includes(languageValue) &&
+      maxValues !== undefined &&
+      selectedValues.length >= maxValues
+    ) {
+      return t("languageSelector.maxLanguagesHint", { max: maxValues });
+    }
+    return null;
+  };
+
   const handleSelect = (languageValue: string) => {
-    onChange(languageValue);
-    setIsOpen(false);
-    handleSearchQueryChange("");
+    if (!multiple) {
+      onChange?.(languageValue);
+      setIsOpen(false);
+      handleSearchQueryChange("");
+      return;
+    }
+    if (getDisabledReason(languageValue)) return;
+    const current = values ?? [];
+    if (current.includes(languageValue)) {
+      onValuesChange?.(current.filter((v) => v !== languageValue));
+    } else {
+      onValuesChange?.([...current, languageValue]);
+    }
+    // The dropdown stays open in multiple mode, but a mouse toggle leaves
+    // focus on the clicked option button, which has no key handler — return
+    // focus to the search input so Escape/arrow keys keep working.
+    searchInputRef.current?.focus();
   };
 
   const clearSearch = () => {
@@ -157,6 +219,7 @@ export default function LanguageSelector({
   };
 
   const selected = items.find((l) => l.value === value);
+  const selectedOptions = multiple ? items.filter((l) => selectedValues.includes(l.value)) : [];
 
   return (
     <div className={`relative ${className}`} ref={setContainerNode}>
@@ -182,10 +245,30 @@ export default function LanguageSelector({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span className={`truncate ${selected ? "text-foreground" : "text-muted-foreground"}`}>
-          <span className="mr-1.5">{selected?.flag ?? "\uD83C\uDF10"}</span>
-          {selected?.label ?? (value || placeholder || "")}
-        </span>
+        {multiple ? (
+          <span
+            className={`truncate ${selectedOptions.length > 0 ? "text-foreground" : "text-muted-foreground"}`}
+            title={selectedOptions.map((l) => l.label).join(", ")}
+          >
+            {selectedOptions.length === 0 ? (
+              placeholder || ""
+            ) : (
+              <>
+                <span className="mr-1.5" aria-hidden="true">
+                  {selectedOptions.map((l) => l.flag).join(" ")}
+                </span>
+                {selectedOptions.length === 1
+                  ? selectedOptions[0].label
+                  : t("languageSelector.selectedCount", { count: selectedOptions.length })}
+              </>
+            )}
+          </span>
+        ) : (
+          <span className={`truncate ${selected ? "text-foreground" : "text-muted-foreground"}`}>
+            <span className="mr-1.5">{selected?.flag ?? "\uD83C\uDF10"}</span>
+            {selected?.label ?? (value || placeholder || "")}
+          </span>
+        )}
         <ChevronDown
           className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-[color,transform] duration-200 ${
             isOpen ? "rotate-180 text-primary" : "group-hover:text-foreground"
@@ -204,6 +287,18 @@ export default function LanguageSelector({
               top: `${dropdownPosition.top}px`,
               left: `${dropdownPosition.left}px`,
               width: `${dropdownPosition.width}px`,
+            }}
+            onKeyDown={(e) => {
+              // Escape must close the dropdown even when focus sits on an
+              // option button (there is no search input to refocus in short
+              // lists). Only Escape: other keys bubbling from the search
+              // input already ran handleKeyDown there, and handling them
+              // again here would double-step navigation.
+              if (e.key === "Escape" && !e.defaultPrevented) {
+                e.preventDefault();
+                setIsOpen(false);
+                handleSearchQueryChange("");
+              }
             }}
             className="z-9999 bg-popover/95 backdrop-blur-xl border border-border/70 rounded shadow-xl overflow-hidden"
           >
@@ -240,30 +335,42 @@ export default function LanguageSelector({
                   {t("languageSelector.noLanguagesFound")}
                 </div>
               ) : (
-                <div role="listbox" className="space-y-0.5 pt-1">
+                <div
+                  role="listbox"
+                  aria-multiselectable={multiple || undefined}
+                  className="space-y-0.5 pt-1"
+                >
                   {filteredLanguages.map((language, index) => {
-                    const isSelected = language.value === value;
+                    const isSelected = multiple
+                      ? selectedValues.includes(language.value)
+                      : language.value === value;
                     const isHighlighted = index === highlightedIndex;
+                    const disabledReason = getDisabledReason(language.value);
 
                     return (
                       <button
                         key={language.value}
                         type="button"
                         onClick={() => handleSelect(language.value)}
+                        disabled={!!disabledReason}
+                        title={disabledReason ?? undefined}
                         className={`
                           group w-full flex items-center justify-between gap-2
                           h-7 px-2.5 text-left text-xs font-medium
                           rounded transition-[background-color,color,transform] duration-150 ease-out
                           ${
-                            isSelected
-                              ? "bg-primary/15 text-primary shadow-sm"
-                              : isHighlighted
-                                ? "bg-muted/70 text-foreground"
-                                : "text-foreground hover:bg-muted/50 active:scale-[0.98]"
+                            disabledReason
+                              ? `cursor-not-allowed ${isSelected ? "bg-primary/15 text-primary/50" : "text-muted-foreground/50"}`
+                              : isSelected
+                                ? "bg-primary/15 text-primary shadow-sm"
+                                : isHighlighted
+                                  ? "bg-muted/70 text-foreground"
+                                  : "text-foreground hover:bg-muted/50 active:scale-[0.98]"
                           }
                         `}
                         role="option"
                         aria-selected={isSelected}
+                        aria-disabled={disabledReason ? true : undefined}
                       >
                         <span className="truncate">
                           <span className="mr-1.5">{language.flag}</span>

@@ -27,6 +27,9 @@ export default function LanguageSelectionStep({
   const languages = useMemo(() => getOnboardingLanguageOptions(query, selected), [query, selected]);
 
   const toggle = (code: string) => {
+    // Matches MAX_PREFERRED_LANGUAGES: the dictation-panel switcher offers at
+    // most five languages, so onboarding stops offering more past five.
+    if (!selected.includes(code) && selected.length >= 5) return;
     onChange(
       selected.includes(code) ? selected.filter((item) => item !== code) : [...selected, code]
     );

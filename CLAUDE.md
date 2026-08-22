@@ -335,7 +335,8 @@ Settings stored in localStorage with these keys:
 
 - `whisperModel`: Selected Whisper model
 - `useLocalWhisper`: Boolean for local vs cloud
-- `language`: Selected language code
+- `preferredLanguage`: Active transcription language code ("auto" for detection)
+- `preferredLanguages`: JSON array of up to 5 preferred transcription languages (multi-select set feeding the dictation panel switcher; never contains "auto")
 - `agentName`: User's custom agent name
 - `reasoningModel`: Selected AI model for processing
 - `reasoningProvider`: AI provider (openai/anthropic/gemini/local)

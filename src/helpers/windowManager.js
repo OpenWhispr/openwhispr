@@ -212,6 +212,31 @@ class WindowManager {
     }
   }
 
+  setMainWindowMenuFocus(open) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      return;
+    }
+
+    // The panel is non-focusable so it never steals focus from the app the
+    // user is dictating into. But that also means a click landing in another
+    // app is invisible to us, leaving an open menu dangling. While a menu is
+    // open, temporarily take focus so such a click blurs the window and the
+    // renderer can close the menu on its blur event. The paste path already
+    // guards against the panel holding focus (see "paste-text").
+    if (open) {
+      this.mainWindow.setFocusable(true);
+      this.mainWindow.focus();
+    } else {
+      if (this.mainWindow.isFocused()) {
+        this.mainWindow.blur();
+      }
+      this.mainWindow.setFocusable(false);
+      // Toggling focusable can reset the window level on some platforms —
+      // re-assert the floating-panel/always-on-top setup.
+      this.enforceMainWindowOnTop();
+    }
+  }
+
   // Only the meeting prompt owns this: another overlay reporting its own hover
   // must not pause a countdown it cannot resume — it may be destroyed before
   // its pointer ever leaves.

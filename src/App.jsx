@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import "./index.css";
 import { useToast } from "./components/ui/useToast";
 import { useHotkey } from "./hooks/useHotkey";
@@ -13,6 +13,10 @@ import { useMainWindowSizeOwner } from "./hooks/useMainWindowSizeOwner";
 import { useMainProcessNotifications } from "./hooks/useMainProcessNotifications";
 import { useWindowResizeCompensation } from "./hooks/useWindowResizeCompensation";
 import { useSettingsStore } from "./stores/settingsStore";
+import { getBaseLanguageCode, getLanguageLabel } from "./utils/languageSupport";
+import { getCachedPlatform } from "./utils/platform";
+
+const platform = getCachedPlatform();
 import { isAgentAllowed } from "./stores/policyRules";
 import { usePolicyStore } from "./stores/policyStore";
 import { VoicePill } from "./components/dictation/VoicePill";
@@ -55,7 +59,11 @@ const UNMOUNTED_RESIZE = {
 export default function App() {
   const [isHovered, setIsHovered] = useState(false);
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const buttonRef = useRef(null);
+  const commandMenuRef = useRef(null);
+  const languageMenuRef = useRef(null);
+  const languagePopupRef = useRef(null);
   const { toast, dismiss, toastCount, dictationErrorActionCount, dismissByPresentation } =
     useToast();
   const { t } = useTranslation();
@@ -68,6 +76,21 @@ export default function App() {
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
+  const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
+  const setPreferredLanguage = useSettingsStore((s) => s.setPreferredLanguage);
+  const preferredLanguages = useSettingsStore((s) => s.preferredLanguages);
+
+  // Effective multi-select set: falls back to the single active language for
+  // users who never selected multiple.
+  const languageOptions = React.useMemo(
+    () => (preferredLanguages.length > 0 ? preferredLanguages : [preferredLanguage]),
+    [preferredLanguages, preferredLanguage]
+  );
+  const showLanguageSwitcher = languageOptions.length > 1;
+  const activeLanguageLabel = React.useMemo(
+    () => getLanguageLabel(preferredLanguage),
+    [preferredLanguage]
+  );
   const beamTheme = useSettingsStore((s) => s.theme);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
   const [voiceHorizontalDirection, setVoiceHorizontalDirection] = useState(() =>
@@ -167,6 +190,30 @@ export default function App() {
     [noteDictationError]
   );
 
+  // Switching is allowed mid-recording: whisper and batch cloud read the
+  // language at transcription time (the switch applies to the recording in
+  // progress) and Parakeet models auto-detect, ignoring the hint either way.
+  // The chunked live preview captures its language at session start, so
+  // retarget it too. The exception is cloud realtime streaming, which fixes
+  // its language when the session starts — tell the user the switch only
+  // takes effect from the next dictation.
+  const handlePanelLanguageSelect = React.useCallback(
+    (code) => {
+      setPreferredLanguage(code);
+      window.electronAPI?.updateDictationPreviewLanguage?.(getBaseLanguageCode(code) ?? null);
+      if (isStreaming) {
+        toast({
+          title: t("app.toasts.streamingLanguageSwitch.title"),
+          description: t("app.toasts.streamingLanguageSwitch.description", {
+            language: getLanguageLabel(code),
+          }),
+          duration: 6000,
+        });
+      }
+    },
+    [setPreferredLanguage, isStreaming, toast, t]
+  );
+
   const handleDictationToggle = React.useCallback(() => {
     setIsCommandMenuOpen(false);
     if (!assistantOpenRef.current && !liveTranscriptApiRef.current?.openRef.current) {
@@ -177,6 +224,7 @@ export default function App() {
   const {
     isRecording,
     isProcessing,
+    isStreaming,
     isAssistantVoice,
     isPreparing,
     isStopping,
@@ -289,11 +337,23 @@ export default function App() {
   });
   const isCompactPill = isRecording ? listeningEntrance.compactPill : voiceActivity.compactPill;
 
+  // Wider rest size so the hover language chip isn't clipped. On Windows the
+  // panel never becomes click-through (see setMainWindowInteractivity), so the
+  // extra width at rest would be an invisible click-eating strip beside the
+  // mic — rest at the compact size there and widen only while hovered (or
+  // while the chip's menu keeps the chip mounted), which is when the chip
+  // mounts anyway.
+  const wantsLanguageWidth =
+    showLanguageSwitcher && (platform !== "win32" || isHovered || isLanguageMenuOpen);
+
   const { dictationErrorPillHandoffActive } = useMainWindowSizeOwner({
     requestMainWindowSize,
     dictationErrorActionCount,
     toastCount,
     isCommandMenuOpen,
+    isLanguageMenuOpen,
+    commandMenuIncludesLanguage: isCommandMenuOpen && showLanguageSwitcher,
+    wantsLanguageWidth,
     isCompactPill,
     assistantOpen: assistant.open,
     assistantMounted: assistant.mounted,
@@ -304,19 +364,85 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (isCommandMenuOpen || toastCount > 0 || assistant.mounted || liveTranscript.mounted) {
+    if (
+      isCommandMenuOpen ||
+      isLanguageMenuOpen ||
+      toastCount > 0 ||
+      assistant.mounted ||
+      liveTranscript.mounted
+    ) {
       setWindowInteractivity(true);
     } else if (!isHovered) {
       setWindowInteractivity(false);
     }
   }, [
     isCommandMenuOpen,
+    isLanguageMenuOpen,
     isHovered,
     toastCount,
     assistant.mounted,
     liveTranscript.mounted,
     setWindowInteractivity,
   ]);
+
+  // The language chip (and its open menu) disappears during processing —
+  // close the menu state too, or the invisible panel would keep window focus
+  // and the enlarged menu size, then reopen the menu unprompted afterwards.
+  useEffect(() => {
+    if (isVisuallyProcessing || assistant.mounted || liveTranscript.mounted) {
+      setIsLanguageMenuOpen(false);
+    }
+  }, [isVisuallyProcessing, assistant.mounted, liveTranscript.mounted]);
+
+  // Keep toasts stacked above an open menu instead of covering it
+  // (the toast viewport in Toast.tsx reads --toast-viewport-bottom)
+  useLayoutEffect(() => {
+    const menuTops = [];
+    if (isLanguageMenuOpen && languagePopupRef.current) {
+      menuTops.push(languagePopupRef.current.getBoundingClientRect().top);
+    }
+    if (isCommandMenuOpen && commandMenuRef.current) {
+      menuTops.push(commandMenuRef.current.getBoundingClientRect().top);
+    }
+    if (menuTops.length > 0) {
+      document.documentElement.style.setProperty(
+        "--toast-viewport-bottom",
+        `${Math.round(window.innerHeight - Math.min(...menuTops) + 8)}px`
+      );
+    } else {
+      document.documentElement.style.removeProperty("--toast-viewport-bottom");
+    }
+    return () => document.documentElement.style.removeProperty("--toast-viewport-bottom");
+  }, [isCommandMenuOpen, isLanguageMenuOpen, languageOptions]);
+
+  // The panel window is non-focusable, so a click landing in another app is
+  // invisible to the renderer and would leave an open menu dangling. While a
+  // menu is open the main process makes the window focusable and focused, so
+  // that click blurs the window and the renderer closes the menu on blur.
+  // Keyed on the derived boolean: switching directly between the two menus
+  // must not release focus in between, or the transient blur event would
+  // close the menu that just opened.
+  const hasOpenMenu = isCommandMenuOpen || isLanguageMenuOpen;
+  useEffect(() => {
+    window.electronAPI?.setMainWindowMenuFocus?.(hasOpenMenu);
+    return () => {
+      if (hasOpenMenu) {
+        window.electronAPI?.setMainWindowMenuFocus?.(false);
+      }
+    };
+  }, [hasOpenMenu]);
+
+  // Close the menus when the window loses focus (e.g. a click landing in
+  // another app) — the window holds focus while a menu is open, see above.
+  useEffect(() => {
+    if (!hasOpenMenu) return;
+    const handleWindowBlur = () => {
+      setIsCommandMenuOpen(false);
+      setIsLanguageMenuOpen(false);
+    };
+    window.addEventListener("blur", handleWindowBlur);
+    return () => window.removeEventListener("blur", handleWindowBlur);
+  }, [hasOpenMenu]);
 
   useEffect(() => {
     if (isRecording && dictationErrorActionCount > 0) {
@@ -388,7 +514,9 @@ export default function App() {
       if (e.key === "Escape") {
         // The assistant panel owns Escape while it is open.
         if (assistant.mounted) return;
-        if (isCommandMenuOpen) {
+        if (isLanguageMenuOpen) {
+          setIsLanguageMenuOpen(false);
+        } else if (isCommandMenuOpen) {
           setIsCommandMenuOpen(false);
         } else if (isRecording) {
           cancelRecording();
@@ -406,6 +534,7 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyPress);
   }, [
     isCommandMenuOpen,
+    isLanguageMenuOpen,
     assistant.mounted,
     isRecording,
     isPreparing,
@@ -532,6 +661,80 @@ export default function App() {
   const pillVisuallySuppressed = dictationErrorSuppressesPill || assistantActionsSuppressPill;
   const pillInteractionSuppressed = pillVisuallySuppressed || assistant.closing;
 
+  // Where the hover-mounted chip lives depends on the row's anchor, so the
+  // mic never shifts out from under an aimed click: bottom-right grows
+  // leftward from its pinned right edge (chip before the mic is safe);
+  // bottom-left grows rightward, so the chip goes after the mic; center
+  // would shift the mic on any insertion, so the chip's space stays
+  // reserved and only its visibility toggles.
+  const isChipVisible =
+    (isHovered || isLanguageMenuOpen) && !isVisuallyProcessing && !anyPanelMounted;
+  const chipAfterMic = panelStartPosition === "bottom-left";
+  const reserveChipSpace = panelStartPosition === "center";
+  const languageChip = showLanguageSwitcher && (isChipVisible || reserveChipSpace) && (
+    <div ref={languageMenuRef} className={`flex items-center${isChipVisible ? "" : " invisible"}`}>
+      <PillTooltip content={activeLanguageLabel} disabled={isLanguageMenuOpen}>
+        <button
+          aria-label={t("app.mic.languageTooltip", {
+            language: activeLanguageLabel,
+          })}
+          aria-haspopup="menu"
+          aria-expanded={isLanguageMenuOpen}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsCommandMenuOpen(false);
+            setIsLanguageMenuOpen((prev) => !prev);
+          }}
+          className="h-[18px] px-1.5 rounded-full bg-surface-2/90 hover:bg-surface-2 border border-border hover:border-border-hover flex items-center gap-1 text-[10px] font-medium text-foreground shadow-sm backdrop-blur-sm transition-colors duration-150"
+        >
+          <span className="uppercase">{preferredLanguage}</span>
+          <ChevronDown
+            size={10}
+            strokeWidth={2.5}
+            className={`shrink-0 transition-transform duration-150 ${
+              isLanguageMenuOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+      </PillTooltip>
+      {isLanguageMenuOpen && (
+        <div
+          ref={languagePopupRef}
+          className={`absolute bottom-full ${
+            panelStartPosition === "bottom-left"
+              ? "left-0"
+              : panelStartPosition === "center"
+                ? "left-1/2 -translate-x-1/2"
+                : "right-0"
+          } mb-2 w-44 max-h-48 overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm`}
+          role="menu"
+        >
+          {languageOptions.map((code) => {
+            const isActive = code === preferredLanguage;
+            return (
+              <button
+                key={code}
+                className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 first:pt-2 last:pb-2 hover:bg-muted focus:bg-muted focus:outline-none ${
+                  isActive ? "text-primary font-medium" : ""
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePanelLanguageSelect(code);
+                  setIsLanguageMenuOpen(false);
+                }}
+                role="menuitemradio"
+                aria-checked={isActive}
+              >
+                <span className="truncate flex-1">{getLanguageLabel(code)}</span>
+                {isActive && <Check size={12} strokeWidth={2.5} className="shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="dictation-window">
       {/* The panel footer can hide this pill, but never unmounts it. */}
@@ -567,6 +770,7 @@ export default function App() {
             }
           }}
         >
+          {!chipAfterMic && languageChip}
           <PillTooltip
             content={canReopenLiveTranscript ? t("transcriptionPreview.label") : micTooltip}
             disabled={anyPanelMounted}
@@ -666,9 +870,19 @@ export default function App() {
               <X size={13} strokeWidth={2.5} aria-hidden="true" />
             </button>
           )}
+          {chipAfterMic && languageChip}
           {!anyPanelMounted && isCommandMenuOpen && (
             <PillCommandMenu
               buttonRef={buttonRef}
+              menuRef={commandMenuRef}
+              languageMenuTriggerRef={languageMenuRef}
+              showLanguageSwitcher={showLanguageSwitcher}
+              languageOptions={languageOptions}
+              preferredLanguage={preferredLanguage}
+              onSelectLanguage={(code) => {
+                handlePanelLanguageSelect(code);
+                setIsCommandMenuOpen(false);
+              }}
               isRecording={isRecording}
               agentAllowed={agentAllowed}
               isHovered={isHovered}

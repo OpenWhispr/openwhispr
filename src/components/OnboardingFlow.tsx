@@ -27,6 +27,7 @@ import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
+import { resolveLanguageSetChange } from "../helpers/languagePreferences";
 import { formatHotkeyInstruction } from "./onboarding/hotkeyPresentation";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
@@ -442,9 +443,20 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         setAccessibilitySkipped(true);
       }
     } else if (currentStepId === "languages") {
-      settings.setPreferredLanguage(
-        settings.spokenLanguages.length === 1 ? settings.spokenLanguages[0] : "auto"
+      // Feed the dictation-panel switcher: the selected languages become the
+      // multi-language set, with the active language staying a member of it
+      // (auto is exclusive and never part of the set). The single-selection
+      // fallback matches upstream behavior when only one is picked.
+      const selection = resolveLanguageSetChange(
+        { preferredLanguage: settings.preferredLanguage },
+        settings.spokenLanguages
       );
+      settings.setPreferredLanguage(
+        settings.spokenLanguages.length === 1
+          ? settings.spokenLanguages[0]
+          : selection.preferredLanguage
+      );
+      settings.setPreferredLanguages(selection.preferredLanguages);
     } else if (currentStepId === "use-cases") {
       syncUseCases();
     } else if (currentStepId === "dictation-hotkey") {
