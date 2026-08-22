@@ -3218,7 +3218,7 @@
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示",
-      "language": "文字起こし言語"
+      "language": "文字起こし言語",
       "askAssistant": "アシスタントに質問"
     }
   },

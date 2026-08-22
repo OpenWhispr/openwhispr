@@ -922,8 +922,6 @@ export default function SettingsPage({
   const transcriptionLanguages =
     preferredLanguages.length > 0 ? preferredLanguages : [preferredLanguage];
 
-  const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
-  const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
