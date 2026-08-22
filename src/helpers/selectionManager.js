@@ -143,6 +143,17 @@ class SelectionManager {
     return null;
   }
 
+  // The Windows foreground window captured at record start, for the paste path
+  // to restore before Ctrl+V lands (#859). Waits out an in-flight probe for the
+  // same reason captureSelectedText does: the stop-press probe can still be
+  // running when fast transcription reaches the paste.
+  async getWinTargetHwnd() {
+    while (this._captureTargetPromise) {
+      await this._captureTargetPromise;
+    }
+    return this.lastTarget?.kind === "win-hwnd" ? this.lastTarget.id : null;
+  }
+
   async captureSelectedText() {
     return this.clipboardManager.runClipboardOperation(async () => {
       // captureTarget() fires on every toggle press, including stop. Fast
@@ -368,14 +379,24 @@ class SelectionManager {
           const result = await runSpawn(binary, args, { timeout: COPY_TIMEOUT_MS });
           return { success: result.success, target };
         }
-        if (this.clipboardManager._runPortalPaste && !this.clipboardManager.portalDenied) {
+        if (
+          this.clipboardManager._runPortalPaste &&
+          !this.clipboardManager.portalDenied &&
+          !this.clipboardManager.portalUnavailable &&
+          !this.clipboardManager.portalFailed
+        ) {
           try {
             await this.clipboardManager._runPortalPaste(binary, {
               copy: true,
               terminal: isTerminal,
             });
             return { success: true, target };
-          } catch {
+          } catch (err) {
+            // Same session-level memory as the paste path (#1614): a stale
+            // portal session would otherwise stall every selection capture.
+            if (err?.message !== "portal-denied" && err?.message !== "portal-dismissed") {
+              this.clipboardManager.portalFailed = true;
+            }
             return { success: false };
           }
         }

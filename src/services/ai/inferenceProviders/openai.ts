@@ -5,13 +5,17 @@ import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
-import { applyThinkingSuppression } from "../thinkingSuppression";
+import {
+  applyChatCompletionsParams,
+  fetchWithParamFallback,
+  isTruncatedFinishReason,
+} from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
+import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
-const REQUEST_TIMEOUT_MS = 30_000;
 const PROBE_TIMEOUT_MS = 2_000;
 
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
@@ -206,12 +210,15 @@ export const openaiProvider: InferenceProvider = {
       });
     }
 
+    const retryStrategy = createApiRetryStrategy();
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
+      let lastRetryableError: Error | null = null;
 
       for (const { url: endpoint, type } of endpointCandidates) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const timeoutSeconds = getLlmRequestTimeoutSeconds();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
         try {
           const maxTokens =
             config.maxTokens ||
@@ -225,36 +232,42 @@ export const openaiProvider: InferenceProvider = {
               )
             );
 
-          // A known endpoint host knows its own request shape better than the model id does.
-          const apiConfig = dialect ?? getOpenAiApiConfig(model, resolvedProvider);
           const requestBody: Record<string, unknown> = { model };
 
           if (type === "responses") {
             requestBody.input = buildMessages(type);
             requestBody.store = false;
             requestBody.max_output_tokens = maxTokens;
+            // A known endpoint host knows its own request shape better than the model id does.
+            const apiConfig = dialect ?? getOpenAiApiConfig(model, resolvedProvider);
+            if (apiConfig.supportsTemperature) {
+              requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
+            }
           } else {
             requestBody.messages = buildMessages(type);
-            requestBody[apiConfig.tokenParam] = maxTokens;
-            if (!config.systemPrompt && model.includes("gpt-oss")) {
-              requestBody.reasoning_effort = "low";
-            }
-            applyThinkingSuppression(requestBody, model, resolvedProvider, config, openAiBase);
+            applyChatCompletionsParams(requestBody, {
+              model,
+              provider: resolvedProvider,
+              endpoint: openAiBase,
+              config,
+              maxTokens,
+            });
           }
 
-          if (apiConfig.supportsTemperature) {
-            requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
-          }
-
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
-            body: JSON.stringify(requestBody),
-            signal: controller.signal,
-          });
+          const res = await fetchWithParamFallback(
+            () =>
+              fetch(endpoint, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+                },
+                body: JSON.stringify(requestBody),
+                signal: controller.signal,
+              }),
+            requestBody,
+            (details) => logger.logReasoning("OPENAI_PARAM_FALLBACK", { endpoint, ...details })
+          );
 
           if (!res.ok) {
             const errorData = await res.json().catch(() => ({ error: res.statusText }));
@@ -283,9 +296,12 @@ export const openaiProvider: InferenceProvider = {
           return res.json();
         } catch (error) {
           if ((error as Error).name === "AbortError") {
-            throw new Error("Request timed out after 30s");
+            throw new Error(`Request timed out after ${timeoutSeconds}s`);
           }
           lastError = error as Error;
+          if (retryStrategy.shouldRetry(lastError)) {
+            lastRetryableError = lastError;
+          }
           if (type === "responses") {
             logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
               attemptedEndpoint: endpoint,
@@ -293,14 +309,14 @@ export const openaiProvider: InferenceProvider = {
             });
             continue;
           }
-          throw error;
+          throw lastRetryableError || error;
         } finally {
           clearTimeout(timeoutId);
         }
       }
 
-      throw lastError || new Error("No OpenAI endpoint responded");
-    }, createApiRetryStrategy());
+      throw lastRetryableError || lastError || new Error("No OpenAI endpoint responded");
+    }, retryStrategy);
 
     const isResponsesApi = Array.isArray(response?.output);
     const isChatCompletions = Array.isArray(response?.choices);
@@ -309,9 +325,7 @@ export const openaiProvider: InferenceProvider = {
       const responseIncomplete =
         response?.status === "incomplete" ||
         !!response?.incomplete_details ||
-        response?.choices?.some((choice: any) =>
-          ["length", "max_tokens"].includes(choice?.finish_reason)
-        );
+        response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
       if (responseIncomplete) {
         throw new Error("Model output was truncated before the selection edit completed");
       }

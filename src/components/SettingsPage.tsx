@@ -74,6 +74,10 @@ import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
 import { formatHotkeyLabel } from "../utils/hotkeys";
+import {
+  getLinuxPasteInstallCommands,
+  needsLinuxPasteToolGuidance,
+} from "../utils/linuxPasteTools";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
@@ -90,6 +94,7 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
+import { resetOnboardingProgress } from "./onboarding/flow";
 import type {
   ChineseScriptPreference,
   GpuDevice,
@@ -102,6 +107,7 @@ import type { InferenceModeOption } from "./ui/SettingsSection";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
+import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
@@ -130,6 +136,8 @@ import WorkspaceSection from "./settings/WorkspaceSection";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
+import { getTranscriptionProvider } from "../models/ModelRegistry";
+import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
 export type SettingsSectionType =
   | "account"
@@ -350,14 +358,24 @@ function TranscriptionSection({
   };
 
   const handleLocalModelSelect = useCallback(
-    (modelId: string) => {
-      if (localTranscriptionProvider === "nvidia") {
+    (modelId: string, providerId?: string) => {
+      if (providerId === "nvidia" || (!providerId && localTranscriptionProvider === "nvidia")) {
         setParakeetModel(modelId);
       } else {
         setWhisperModel(modelId);
       }
     },
     [localTranscriptionProvider, setParakeetModel, setWhisperModel]
+  );
+
+  const selectedCloudModelStreams = Boolean(
+    getTranscriptionProvider(cloudTranscriptionProvider)?.models.some(
+      (model) => model.id === cloudTranscriptionModel && model.streaming
+    )
+  );
+  const previewAvailable = supportsLiveTranscriptionPreview(
+    effectiveTranscriptionMode,
+    selectedCloudModelStreams
   );
 
   const renderPreviewToggle = () => (
@@ -409,12 +427,8 @@ function TranscriptionSection({
       />
 
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {effectiveTranscriptionMode === "local" && (
-        <>
-          {renderTranscriptionPicker("local")}
-          {renderPreviewToggle()}
-        </>
-      )}
+      {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+      {previewAvailable && renderPreviewToggle()}
 
       {effectiveTranscriptionMode === "self-hosted" && (
         <SelfHostedPanel
@@ -562,12 +576,26 @@ function TabPanel({ active, children }: { active: boolean; children: React.React
   return <div className={active ? undefined : "hidden"}>{children}</div>;
 }
 
-function AccountAvatar({ image, name }: { image?: string | null; name: string }) {
+// "Gabriel Stein" → "GS"; single names fall back to their first letter.
+function nameInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : "";
+  return (first + last).toUpperCase();
+}
+
+export function AccountAvatar({ image, name }: { image?: string | null; name: string }) {
   // Same stale-URL fallback as MemberAvatar: OAuth-hosted images expire, and a
-  // bare <img> would render the broken-image glyph instead of the icon.
+  // bare <img> would render the broken-image glyph instead of the initials.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const initials = nameInitials(name);
   return (
-    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden bg-primary/10 dark:bg-primary/15">
+    <div
+      className={cn(
+        "w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden",
+        GRADIENT_CIRCLE
+      )}
+    >
       {image && image !== failedSrc ? (
         <img
           src={image}
@@ -577,8 +605,10 @@ function AccountAvatar({ image, name }: { image?: string | null; name: string })
           onError={() => setFailedSrc(image)}
           className="w-10 h-10 rounded-full object-cover"
         />
+      ) : initials ? (
+        <span className="text-[13px] font-semibold leading-none select-none">{initials}</span>
       ) : (
-        <UserCircle className="w-5 h-5 text-primary" />
+        <UserCircle className="w-5 h-5" />
       )}
     </div>
   );
@@ -786,11 +816,11 @@ export default function SettingsPage({
     dictationKey,
     activationMode,
     setActivationMode,
-    preferBuiltInMic,
+    microphoneSelectionMode,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
     micWarmHoldSeconds,
-    setPreferBuiltInMic,
+    setMicrophoneSelectionMode,
     setSelectedMicDevice,
     setMicWarmHoldSeconds,
     setUseLocalWhisper,
@@ -880,8 +910,6 @@ export default function SettingsPage({
     setWhisperVadSamplesOverlap,
   } = useSettings();
 
-  const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
-  const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
@@ -906,10 +934,19 @@ export default function SettingsPage({
 
   const [currentVersion, setCurrentVersion] = useState<string>("");
   const [isRemovingModels, setIsRemovingModels] = useState(false);
-  const cachePathHint =
+  const [cachePathHint, setCachePathHint] = useState(
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
       ? "%USERPROFILE%\\.cache\\openwhispr"
-      : "~/.cache/openwhispr";
+      : "~/.cache/openwhispr"
+  );
+  useEffect(() => {
+    window.electronAPI
+      ?.getModelCacheRoot?.()
+      .then((root) => {
+        if (root) setCachePathHint(root);
+      })
+      .catch(() => {});
+  }, []);
 
   const {
     status: updateStatus,
@@ -976,22 +1013,23 @@ export default function SettingsPage({
     }
   };
 
-  // ydotool status for Wayland paste diagnostics
+  // Wayland paste tool status for diagnostics.
   const [ydotoolStatus, setYdotoolStatus] = useState<{
     isLinux: boolean;
     isWayland: boolean;
     hasYdotool: boolean;
     hasYdotoold: boolean;
+    hasWtype: boolean;
     daemonRunning: boolean;
     hasService: boolean;
     hasUinput: boolean;
     hasUdevRule: boolean;
     hasGroup: boolean;
-    allGood: boolean;
-    isKde?: boolean;
-    hasXclip?: boolean;
-    hasXsel?: boolean;
-    isNixOS?: boolean;
+    isKde: boolean;
+    isWlroots: boolean;
+    hasXclip: boolean;
+    hasXsel: boolean;
+    isNixOS: boolean;
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
 
@@ -1054,7 +1092,10 @@ export default function SettingsPage({
 
   const meetingRegisterFn = useCallback(async (hotkey: string) => {
     const result = await window.electronAPI?.registerMeetingHotkey?.(hotkey);
-    return result ?? { success: false, message: "Electron API unavailable" };
+    // No `message`: useHotkeyRegistration falls back to the translated
+    // hooks.hotkeyRegistration.errors.couldNotRegister, and that string is what
+    // gets shown in a toast. An English literal here would surface untranslated.
+    return result ?? { success: false };
   }, []);
 
   const { registerHotkey: registerMeetingHotkey, isRegistering: isMeetingHotkeyRegistering } =
@@ -1096,13 +1137,12 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [meetingKey, chatAgentKey, voiceAgentKey, translationKey, t]
+    [meetingKey, voiceAgentKey, translationKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -1111,28 +1151,12 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.hotkey.title": dictationKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, chatAgentKey, voiceAgentKey, translationKey, t]
-  );
-
-  const validateChatAgentHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
-          "settingsPage.general.translationHotkey.title": translationKey,
-        },
-        t
-      ),
-    [dictationKey, meetingKey, voiceAgentKey, translationKey, t]
+    [dictationKey, voiceAgentKey, translationKey, t]
   );
 
   const validateVoiceAgentHotkey = useCallback(
@@ -1142,12 +1166,11 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, translationKey, t]
+    [dictationKey, meetingKey, translationKey, t]
   );
 
   const validateTranslationHotkey = useCallback(
@@ -1157,16 +1180,20 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, voiceAgentKey, t]
+    [dictationKey, meetingKey, voiceAgentKey, t]
   );
 
-  const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
-    useHotkeyModeInfo("settings");
+  const {
+    isUsingNativeShortcut,
+    isUsingHyprland,
+    hyprlandConfigStatus,
+    supportsPushToTalk,
+    pushToTalkUnavailableReason,
+  } = useHotkeyModeInfo("settings", dictationKey);
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -1275,12 +1302,6 @@ export default function SettingsPage({
       clearTimeout(timer);
     };
   }, [checkWhisperInstallation, getAppVersion]);
-
-  useEffect(() => {
-    if (isUsingNativeShortcut && !supportsPushToTalk) {
-      setActivationMode("tap");
-    }
-  }, [isUsingNativeShortcut, supportsPushToTalk, setActivationMode]);
 
   useEffect(() => {
     const loadEffectiveDefaultHotkey = async () => {
@@ -1435,8 +1456,7 @@ export default function SettingsPage({
 
   const startOnboarding = useCallback(() => {
     localStorage.setItem("pendingCloudMigration", "true");
-    localStorage.setItem("onboardingCurrentStep", "0");
-    localStorage.removeItem("onboardingCompleted");
+    resetOnboardingProgress(localStorage);
     window.location.reload();
   }, []);
 
@@ -1713,24 +1733,6 @@ export default function SettingsPage({
             ) : isLoaded && isSignedIn && user ? (
               <>
                 <SectionHeader title={t("settingsPage.account.title")} />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <div className="flex items-center gap-3">
-                      <AccountAvatar
-                        image={user.image}
-                        name={user.name || t("settingsPage.account.user")}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-foreground truncate">
-                          {user.name || t("settingsPage.account.user")}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                      </div>
-                      <Badge variant="success">{t("settingsPage.account.signedIn")}</Badge>
-                    </div>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-
                 <ProfileSection
                   name={user.name || ""}
                   onSessionRefresh={() => {
@@ -2895,11 +2897,11 @@ export default function SettingsPage({
               <SettingsPanel>
                 <SettingsPanelRow>
                   <MicrophoneSettings
-                    preferBuiltInMic={preferBuiltInMic}
+                    microphoneSelectionMode={microphoneSelectionMode}
                     selectedMicDeviceId={selectedMicDeviceId}
                     selectedMicDeviceLabel={selectedMicDeviceLabel}
                     micWarmHoldSeconds={micWarmHoldSeconds}
-                    onPreferBuiltInChange={setPreferBuiltInMic}
+                    onSelectionModeChange={setMicrophoneSelectionMode}
                     onDeviceSelect={setSelectedMicDevice}
                     onMicWarmHoldSecondsChange={setMicWarmHoldSeconds}
                   />
@@ -2940,7 +2942,7 @@ export default function SettingsPage({
                   })}
                   description={t("settingsPage.general.waylandPaste.description", {
                     defaultValue:
-                      "Auto-paste on Wayland requires ydotool. Check the status of each component below.",
+                      "Auto-paste on Wayland uses ydotool or wtype. wtype is preferred on wlroots compositors.",
                   })}
                 />
                 {(() => {
@@ -2951,9 +2953,28 @@ export default function SettingsPage({
                   }
                   const checks = [
                     {
+                      key: "hasWtype",
+                      label: "wtype",
+                      ok: ydotoolStatus.hasWtype,
+                      required: ydotoolStatus.isWlroots,
+                      desc: t("settingsPage.general.waylandPaste.wtypeDesc"),
+                      steps: [
+                        {
+                          title: t("settingsPage.general.waylandPaste.guide.wtype.step1Title"),
+                          desc: t("settingsPage.general.waylandPaste.guide.wtype.step1Desc"),
+                          cmds: getLinuxPasteInstallCommands(t, "wtype"),
+                        },
+                        {
+                          title: t("settingsPage.general.waylandPaste.guide.wtype.step2Title"),
+                          cmds: [{ cmd: "which wtype" }],
+                        },
+                      ],
+                    },
+                    {
                       key: "hasYdotool",
                       label: "ydotool",
                       ok: ydotoolStatus.hasYdotool,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.ydotoolDesc", {
                         defaultValue: "Input automation tool for Wayland",
                       }),
@@ -2966,12 +2987,7 @@ export default function SettingsPage({
                             defaultValue:
                               "Use your distribution's package manager to install ydotool.",
                           }),
-                          cmds: [
-                            { label: "Ubuntu / Pop!_OS / Debian", cmd: "sudo apt install ydotool" },
-                            { label: "Fedora", cmd: "sudo dnf install ydotool" },
-                            { label: "Arch Linux", cmd: "sudo pacman -S ydotool" },
-                            { label: "openSUSE", cmd: "sudo zypper install ydotool" },
-                          ],
+                          cmds: getLinuxPasteInstallCommands(t, "ydotool"),
                         },
                         {
                           title: t("settingsPage.general.waylandPaste.guide.ydotool.step2Title", {
@@ -2988,6 +3004,7 @@ export default function SettingsPage({
                       key: "hasYdotoold",
                       label: "ydotoold",
                       ok: ydotoolStatus.hasYdotoold,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.ydotooldDesc", {
                         defaultValue: "Daemon for ydotool (separate package on Ubuntu/Pop!_OS)",
                       }),
@@ -3015,6 +3032,7 @@ export default function SettingsPage({
                       key: "hasUinput",
                       label: "/dev/uinput",
                       ok: ydotoolStatus.hasUinput,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.uinputDesc", {
                         defaultValue: "Kernel input device access",
                       }),
@@ -3114,6 +3132,7 @@ export default function SettingsPage({
                         defaultValue: "input group",
                       }),
                       ok: ydotoolStatus.hasGroup,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.inputGroupDesc", {
                         defaultValue: "User must be in the input group (requires re-login)",
                       }),
@@ -3141,6 +3160,7 @@ export default function SettingsPage({
                         defaultValue: "systemd service",
                       }),
                       ok: ydotoolStatus.hasService,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.serviceDesc", {
                         defaultValue: "User service file for auto-starting ydotoold",
                       }),
@@ -3196,6 +3216,7 @@ EOF`,
                         defaultValue: "ydotoold daemon",
                       }),
                       ok: ydotoolStatus.daemonRunning,
+                      required: !ydotoolStatus.isWlroots,
                       desc: t("settingsPage.general.waylandPaste.daemonDesc", {
                         defaultValue: "Background service must be running",
                       }),
@@ -3238,6 +3259,7 @@ EOF`,
                       key: "hasXclip",
                       label: "xclip",
                       ok: ydotoolStatus.hasXclip || ydotoolStatus.hasXsel || false,
+                      required: true,
                       desc: t("settingsPage.general.waylandPaste.xclipDesc", {
                         defaultValue: "Clipboard tool for KDE Wayland paste (xclip or xsel)",
                       }),
@@ -3255,7 +3277,7 @@ EOF`,
                     });
                   }
 
-                  const allOk = checks.every((c) => c.ok);
+                  const allOk = checks.filter((c) => c.required).every((c) => c.ok);
                   const activeGuide = checks.find((c) => c.key === ydotoolGuideKey);
 
                   return (
@@ -3464,7 +3486,15 @@ EOF`,
                       <span className="text-xs text-muted-foreground/80">
                         {t("settingsPage.general.hotkey.activationMode")}
                       </span>
-                      <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+                      <ActivationModeSelector
+                        value={activationMode}
+                        onChange={setActivationMode}
+                        pushDisabledReason={
+                          !supportsPushToTalk
+                            ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
+                            : undefined
+                        }
+                      />
                     </div>
                     {getCachedPlatform() === "linux" && activationMode === "push" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
@@ -3567,28 +3597,6 @@ EOF`,
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
-
-            {/* Chat Agent Hotkey */}
-            {agentAllowedByPolicy && (
-              <div>
-                <SectionHeader
-                  title={t("agentMode.settings.hotkey")}
-                  description={t("agentMode.settings.hotkeyDescription")}
-                />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <HotkeyListInput
-                      value={chatAgentKey}
-                      onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
-                      onClear={() => commitAgentHotkey(setChatAgentKey, "")}
-                      validate={validateChatAgentHotkey}
-                      disabled={isAgentHotkeyCommitting}
-                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                    />
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </div>
-            )}
           </div>
         );
 
@@ -3888,7 +3896,7 @@ EOF`,
 
               {platform === "linux" &&
                 permissionsHook.pasteToolsInfo &&
-                !permissionsHook.pasteToolsInfo.available && (
+                needsLinuxPasteToolGuidance(permissionsHook.pasteToolsInfo) && (
                   <PasteToolsInfo
                     pasteToolsInfo={permissionsHook.pasteToolsInfo}
                     isChecking={permissionsHook.isCheckingPasteTools}

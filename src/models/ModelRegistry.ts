@@ -26,7 +26,6 @@ export interface LocalProviderData {
   id: string;
   name: string;
   baseUrl: string;
-  promptTemplate: string;
   models: ModelDefinition[];
 }
 
@@ -35,7 +34,6 @@ export interface ModelProvider {
   name: string;
   baseUrl: string;
   models: ModelDefinition[];
-  formatPrompt(text: string, systemPrompt: string): string;
   getDownloadUrl(model: ModelDefinition): string;
 }
 
@@ -136,12 +134,6 @@ if (cachedTinfoilModels.length > 0) {
   }
 }
 
-function createPromptFormatter(template: string): (text: string, systemPrompt: string) => string {
-  return (text: string, systemPrompt: string) => {
-    return template.replace("{system}", systemPrompt).replace("{user}", text);
-  };
-}
-
 class ModelRegistry {
   private static instance: ModelRegistry;
   private providers = new Map<string, ModelProvider>();
@@ -205,14 +197,11 @@ class ModelRegistry {
     const localProviders = modelData.localProviders;
 
     for (const providerData of localProviders) {
-      const formatPrompt = createPromptFormatter(providerData.promptTemplate);
-
       this.registerProvider({
         id: providerData.id,
         name: providerData.name,
         baseUrl: providerData.baseUrl,
         models: providerData.models,
-        formatPrompt,
         getDownloadUrl(model: ModelDefinition): string {
           return `${providerData.baseUrl}/${model.hfRepo}/resolve/main/${model.fileName}`;
         },
@@ -402,6 +391,7 @@ export function getModelProvider(modelId: string): string {
       modelId.includes("llama") ||
       modelId.includes("mistral") ||
       modelId.includes("lfm2") ||
+      modelId.includes("gemma") ||
       modelId.includes("gpt-oss-20b-mxfp4")
     )
       return "local";
@@ -497,8 +487,12 @@ export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiAp
   // OpenRouter's vendor-prefixed ids (openai/gpt-4o, anthropic/claude-…) speak
   // standard Chat Completions. Scoped to the provider so vendor-prefixed ids on
   // custom endpoints keep the request shape they had before OpenRouter landed.
+  // Sampling params pass through to the upstream vendor, so a model the
+  // registry knows rejects temperature (Claude Opus 4.7+, #1417) must keep it
+  // omitted here too — OpenRouter forwards the 400 rather than stripping it.
   if (provider === "openrouter" && modelId.includes("/")) {
-    return { tokenParam: "max_tokens", supportsTemperature: true };
+    const upstream = getCloudModel(modelId.slice(modelId.lastIndexOf("/") + 1));
+    return { tokenParam: "max_tokens", supportsTemperature: upstream?.supportsTemperature ?? true };
   }
 
   // Fallback for models not in the registry (custom model IDs, etc.)

@@ -1,11 +1,39 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { WindowPositionUtil } = require("../../src/helpers/windowConfig");
+const {
+  resolveHorizontalWindowDirection,
+  WindowPositionUtil,
+} = require("../../src/helpers/windowConfig");
 
 // A 1512px laptop screen with a wider monitor mounted above it: x beyond 1512
 // is dead space at the laptop's y range, even though the desktop spans further.
 const LAPTOP = { workArea: { x: 0, y: 0, width: 1512, height: 949 } };
+
+test("voice direction follows the overlay's actual half of the display", () => {
+  assert.equal(
+    resolveHorizontalWindowDirection({ x: 4, width: 96 }, LAPTOP, "bottom-right"),
+    "left"
+  );
+  assert.equal(
+    resolveHorizontalWindowDirection({ x: 1412, width: 96 }, LAPTOP, "bottom-left"),
+    "right"
+  );
+});
+
+test("center and unavailable geometry retain the established preference fallback", () => {
+  assert.equal(
+    resolveHorizontalWindowDirection({ x: 708, width: 96 }, LAPTOP, "bottom-left"),
+    "left"
+  );
+  assert.equal(
+    resolveHorizontalWindowDirection({ x: 708, width: 96 }, LAPTOP, "bottom-right"),
+    "right"
+  );
+  assert.equal(resolveHorizontalWindowDirection(null, null, "bottom-left"), "left");
+  assert.equal(resolveHorizontalWindowDirection(null, null, "bottom-right"), "right");
+  assert.equal(resolveHorizontalWindowDirection({ x: 4, width: 96 }, LAPTOP, "center"), "right");
+});
 
 test("pulls a window parked beyond a display edge back into its work area", () => {
   const stranded = { x: 1472, y: 33, width: 96, height: 96 };

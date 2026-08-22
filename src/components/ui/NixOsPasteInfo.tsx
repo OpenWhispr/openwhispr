@@ -4,6 +4,7 @@ import { Copy, CircleCheck, CircleX, RotateCw } from "lucide-react";
 interface NixOsPasteInfoProps {
   status: {
     hasYdotool: boolean;
+    hasWtype: boolean;
     hasUinput: boolean;
     daemonRunning: boolean;
   };
@@ -75,6 +76,7 @@ export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProp
           })}
           :
         </span>
+        <StatusPill ok={status.hasWtype} label="wtype" />
         <StatusPill ok={status.hasYdotool} label="ydotool" />
         <StatusPill ok={status.hasUinput} label="/dev/uinput" />
         <StatusPill ok={status.daemonRunning} label="ydotoold" />

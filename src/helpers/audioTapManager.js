@@ -2,6 +2,7 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const debugLogger = require("./debugLogger");
+const { compareVersions } = require("./parakeetCapability");
 
 const ARCH_CPU_TYPE = {
   arm64: 0x0100000c,
@@ -13,26 +14,6 @@ const DEFAULT_CHUNK_MS = 100;
 const START_TIMEOUT_MS = 3000;
 const REQUEST_TIMEOUT_MS = 60000;
 const STOP_TIMEOUT_MS = 5000;
-
-function compareVersions(left, right) {
-  const leftParts = String(left)
-    .split(".")
-    .map((part) => parseInt(part, 10) || 0);
-  const rightParts = String(right)
-    .split(".")
-    .map((part) => parseInt(part, 10) || 0);
-  const length = Math.max(leftParts.length, rightParts.length);
-
-  for (let index = 0; index < length; index += 1) {
-    const leftPart = leftParts[index] || 0;
-    const rightPart = rightParts[index] || 0;
-    if (leftPart !== rightPart) {
-      return leftPart > rightPart ? 1 : -1;
-    }
-  }
-
-  return 0;
-}
 
 class AudioTapManager {
   constructor() {

@@ -65,6 +65,16 @@ test("rejects a malformed screenContextEnabled", () => {
   }
 });
 
+test("tolerates the server-only memoryEnabled flag", () => {
+  // The API gates Mem0 agent memory itself and the app never reads the field,
+  // so its presence must not invalidate an otherwise valid policy.
+  for (const value of [true, false]) {
+    const policy = validPolicy();
+    policy.features.memoryEnabled = value;
+    assert.equal(isValidPolicyShape(policy), true, String(value));
+  }
+});
+
 test("requires the supported policy schema version", () => {
   for (const version of [undefined, null, 0, 2, "1"]) {
     const policy = validPolicy();

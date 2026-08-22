@@ -129,7 +129,10 @@ test("an agent command consumes the prefetch rather than re-reading the selectio
   };
 
   await assert.rejects(
-    () => manager.processAgentCommand("make it shorter", "gpt-5", "Agent", {}),
+    () =>
+      manager.processAgentCommand("make it shorter", "gpt-5", "Agent", {
+        selectionEditReachable: true,
+      }),
     /Selection edit failed: model unavailable/
   );
   assert.equal(calls.length, 1, "the command must not read the selection a second time");

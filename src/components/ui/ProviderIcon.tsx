@@ -4,9 +4,14 @@ import { getProviderIcon, isMonochromeProvider } from "@/utils/providerIcons";
 interface ProviderIconProps {
   provider: string;
   className?: string;
+  monochrome?: boolean;
 }
 
-export function ProviderIcon({ provider, className = "w-5 h-5" }: ProviderIconProps) {
+export function ProviderIcon({
+  provider,
+  className = "w-5 h-5",
+  monochrome = false,
+}: ProviderIconProps) {
   if (provider === "custom") {
     return <Wrench className={className} />;
   }
@@ -27,7 +32,7 @@ export function ProviderIcon({ provider, className = "w-5 h-5" }: ProviderIconPr
     <img
       src={iconUrl}
       alt={`${provider} icon`}
-      className={`${className} ${isMonochrome ? "icon-monochrome" : ""}`}
+      className={`${className} ${isMonochrome ? "icon-monochrome" : ""} ${monochrome ? "onboarding-provider-icon-monochrome" : ""}`}
     />
   );
 }

@@ -22,6 +22,13 @@ test("4xx rejections do not retry, because the same request will be refused agai
   assert.equal(shouldRetry(Object.assign(new Error("not found"), { status: 404 })), false);
 });
 
+test("408 retries, since a request timeout can succeed on the next attempt", async () => {
+  const { createApiRetryStrategy } = await load();
+  const { shouldRetry } = createApiRetryStrategy();
+
+  assert.equal(shouldRetry(Object.assign(new Error("request timeout"), { status: 408 })), true);
+});
+
 test("429 retries, since rate limits clear on their own", async () => {
   const { createApiRetryStrategy } = await load();
   const { shouldRetry } = createApiRetryStrategy();

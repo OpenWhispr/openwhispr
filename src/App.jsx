@@ -1,88 +1,63 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import "./index.css";
 import { X } from "lucide-react";
+import "./index.css";
 import { useToast } from "./components/ui/useToast";
-import { LoadingDots } from "./components/ui/LoadingDots";
 import { useHotkey } from "./hooks/useHotkey";
 import { formatHotkeyListLabel } from "./utils/hotkeys";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useAudioRecording } from "./hooks/useAudioRecording";
+import { useAssistantPanel } from "./hooks/useAssistantPanel";
+import { useLiveTranscriptPanel } from "./hooks/useLiveTranscriptPanel";
+import { useMainWindowSizeOwner } from "./hooks/useMainWindowSizeOwner";
+import { useMainProcessNotifications } from "./hooks/useMainProcessNotifications";
+import { useWindowResizeCompensation } from "./hooks/useWindowResizeCompensation";
 import { useSettingsStore } from "./stores/settingsStore";
+import { isAgentAllowed } from "./stores/policyRules";
+import { usePolicyStore } from "./stores/policyStore";
+import { VoicePill } from "./components/dictation/VoicePill";
+import { AssistantPanel } from "./components/dictation/AssistantPanel";
+import { LiveTranscriptPanel } from "./components/dictation/LiveTranscriptPanel";
+import { VoiceModePanelCore } from "./components/dictation/VoiceModePanelCore";
+import { PillTooltip } from "./components/dictation/PillTooltip";
+import { PillCommandMenu } from "./components/dictation/PillCommandMenu";
+import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
+import {
+  ASSISTANT_FOOTER_TRANSITION_TIMING,
+  getListeningEntranceTimeline,
+  LIVE_TRANSCRIPT_ENTRANCE_TIMING,
+  resolveLiveTranscriptEntrancePresentation,
+  resolveAssistantFooterPresentation,
+  resolveAgentModeActive,
+  resolveListeningEntrancePresentation,
+  resolveVoiceActivityPresentation,
+  resolveVoiceHorizontalDirection,
+  resolveVoicePanelCorePresentation,
+  resolveVoicePillDock,
+  resolveVoicePillInteraction,
+  isVoicePillActivationKey,
+  shouldActivateVoicePill,
+  shouldOfferLiveTranscriptReopen,
+} from "./helpers/voicePillPresentation";
 
-// Sound Wave Icon Component (for idle/hover states)
-const SoundWaveIcon = ({ size = 16 }) => {
-  return (
-    <div className="flex items-center justify-center gap-1">
-      <div
-        className={`bg-white rounded-full`}
-        style={{ width: size * 0.25, height: size * 0.6 }}
-      ></div>
-      <div className={`bg-white rounded-full`} style={{ width: size * 0.25, height: size }}></div>
-      <div
-        className={`bg-white rounded-full`}
-        style={{ width: size * 0.25, height: size * 0.6 }}
-      ></div>
-    </div>
-  );
-};
+const formatPillHotkeyLabel = (value) =>
+  formatHotkeyListLabel(value)
+    .replace(/\s*\+\s*/g, " + ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-// Voice Wave Animation Component (for processing state)
-const VoiceWaveIndicator = ({ isListening }) => {
-  return (
-    <div className="flex items-center justify-center gap-0.5">
-      {[...Array(4)].map((_, i) => (
-        <div
-          key={i}
-          className={`w-0.5 bg-white rounded-full transition-[height] duration-150 ${
-            isListening ? "animate-pulse h-4" : "h-2"
-          }`}
-          style={{
-            animationDelay: isListening ? `${i * 0.1}s` : "0s",
-            animationDuration: isListening ? `${0.6 + i * 0.1}s` : "0s",
-          }}
-        />
-      ))}
-    </div>
-  );
-};
-
-// Tooltip Component
-const Tooltip = ({ children, content, emoji, align = "center" }) => {
-  const [isVisible, setIsVisible] = useState(false);
-
-  const alignClass =
-    align === "right" ? "right-0" : align === "left" ? "left-0" : "left-1/2 -translate-x-1/2";
-
-  const arrowClass =
-    align === "right" ? "right-3" : align === "left" ? "left-3" : "left-1/2 -translate-x-1/2";
-
-  return (
-    <div className="relative inline-block">
-      <div onMouseEnter={() => setIsVisible(true)} onMouseLeave={() => setIsVisible(false)}>
-        {children}
-      </div>
-      {isVisible && (
-        <div
-          className={`absolute bottom-full ${alignClass} mb-2 px-1.5 py-1 text-[10px] text-popover-foreground bg-popover border border-border rounded-md z-10 shadow-lg transition-opacity duration-150 whitespace-nowrap`}
-        >
-          {emoji && <span className="mr-1">{emoji}</span>}
-          {content}
-          <div
-            className={`absolute top-full ${arrowClass} w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-popover`}
-          ></div>
-        </div>
-      )}
-    </div>
-  );
+const UNMOUNTED_RESIZE = {
+  success: false,
+  superseded: true,
+  message: "Resize coordinator not mounted",
 };
 
 export default function App() {
   const [isHovered, setIsHovered] = useState(false);
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
-  const commandMenuRef = useRef(null);
   const buttonRef = useRef(null);
-  const { toast, dismiss, toastCount } = useToast();
+  const { toast, dismiss, toastCount, dictationErrorActionCount, dismissByPresentation } =
+    useToast();
   const { t } = useTranslation();
   const { hotkey } = useHotkey();
   const { isDragging, handleMouseDown, handleMouseUp } = useWindowDrag();
@@ -93,11 +68,20 @@ export default function App() {
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
+  const beamTheme = useSettingsStore((s) => s.theme);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
+  const [voiceHorizontalDirection, setVoiceHorizontalDirection] = useState(() =>
+    resolveVoiceHorizontalDirection(panelStartPosition)
+  );
+  const [mainWindowHorizontalDirection, setMainWindowHorizontalDirection] = useState(null);
 
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
     window.electronAPI?.setMainWindowInteractivity?.(shouldCapture);
   }, []);
+  const dismissDictationError = React.useCallback(
+    () => dismissByPresentation("dictation-error"),
+    [dismissByPresentation]
+  );
 
   useEffect(() => {
     setWindowInteractivity(false);
@@ -105,117 +89,240 @@ export default function App() {
   }, [setWindowInteractivity]);
 
   useEffect(() => {
-    const unsubscribeFallback = window.electronAPI?.onHotkeyFallbackUsed?.((data) => {
-      toast({
-        title: t("app.toasts.hotkeyChanged.title"),
-        description: t("app.toasts.hotkeyChanged.description", {
-          original: data.original,
-          fallback: data.fallback,
-        }),
-        duration: 8000,
-      });
-    });
-
-    const unsubscribeFailed = window.electronAPI?.onHotkeyRegistrationFailed?.((_data) => {
-      toast({
-        title: t("app.toasts.hotkeyUnavailable.title"),
-        description: t("app.toasts.hotkeyUnavailable.description"),
-        duration: 10000,
-      });
-    });
-
-    const showGpuFallbackToast = () => {
-      toast({
-        title: t("app.toasts.gpuFallback.title"),
-        description: t("app.toasts.gpuFallback.description"),
-        duration: 10000,
-      });
-    };
-    const unsubscribeCudaFallback =
-      window.electronAPI?.onCudaFallbackNotification?.(showGpuFallbackToast);
-    const unsubscribeGpuFallback =
-      window.electronAPI?.onGpuFallbackNotification?.(showGpuFallbackToast);
-
-    const unsubscribeCorrections = window.electronAPI?.onCorrectionsLearned?.((words) => {
-      if (words && words.length > 0) {
-        const wordList = words.map((w) => `\u201c${w}\u201d`).join(", ");
-        let toastId;
-        toastId = toast({
-          title: t("app.toasts.addedToDict", { words: wordList }),
-          variant: "success",
-          duration: 6000,
-          action: (
-            <button
-              onClick={async () => {
-                try {
-                  const result = await window.electronAPI?.undoLearnedCorrections?.(words);
-                  if (result?.success) {
-                    dismiss(toastId);
-                  }
-                } catch {
-                  // silently fail — word stays in dictionary
-                }
-              }}
-              className="text-[10px] font-medium px-2.5 py-1 rounded-sm whitespace-nowrap
-                text-emerald-100/90 hover:text-white
-                bg-emerald-500/15 hover:bg-emerald-500/25
-                border border-emerald-400/20 hover:border-emerald-400/35
-                transition-all duration-150"
-            >
-              {t("app.toasts.undo")}
-            </button>
-          ),
-        });
+    let disposed = false;
+    const applyDirection = (direction) => {
+      if (!disposed && (direction === "left" || direction === "right")) {
+        setMainWindowHorizontalDirection(direction);
       }
-    });
-
+    };
+    const unsubscribe =
+      window.electronAPI?.onMainWindowHorizontalDirectionChanged?.(applyDirection);
+    const initialDirection = window.electronAPI?.getMainWindowHorizontalDirection?.();
+    initialDirection?.then(applyDirection).catch(() => {});
     return () => {
-      unsubscribeFallback?.();
-      unsubscribeFailed?.();
-      unsubscribeCudaFallback?.();
-      unsubscribeGpuFallback?.();
-      unsubscribeCorrections?.();
+      disposed = true;
+      unsubscribe?.();
     };
-  }, [toast, dismiss, t]);
+  }, []);
 
-  useEffect(() => {
-    if (isCommandMenuOpen || toastCount > 0) {
-      setWindowInteractivity(true);
-    } else if (!isHovered) {
-      setWindowInteractivity(false);
-    }
-  }, [isCommandMenuOpen, isHovered, toastCount, setWindowInteractivity]);
+  useWindowResizeCompensation();
+  useMainProcessNotifications({ toast, dismiss, t });
 
+  const agentAllowed = usePolicyStore(isAgentAllowed);
+
+  const mainWindowResizeCoordinatorRef = useRef(null);
   useEffect(() => {
-    const resizeWindow = () => {
-      if (isCommandMenuOpen && toastCount > 0) {
-        window.electronAPI?.resizeMainWindow?.("EXPANDED");
-      } else if (isCommandMenuOpen) {
-        window.electronAPI?.resizeMainWindow?.("WITH_MENU");
-      } else if (toastCount > 0) {
-        window.electronAPI?.resizeMainWindow?.("WITH_TOAST");
-      } else {
-        window.electronAPI?.resizeMainWindow?.("BASE");
+    // Created in the effect, not lazily during render: React StrictMode's
+    // dev-only setup→cleanup→setup cycle then disposes and recreates it
+    // instead of disposing the only instance for the rest of the session.
+    const coordinator = createMainWindowResizeCoordinator({
+      resizeMainWindow: (sizeKey) => window.electronAPI?.resizeMainWindow?.(sizeKey),
+      resizeAssistantWindowToContent: (height) =>
+        window.electronAPI?.resizeAssistantWindowToContent?.(height),
+    });
+    mainWindowResizeCoordinatorRef.current = coordinator;
+    return () => {
+      coordinator.dispose();
+      if (mainWindowResizeCoordinatorRef.current === coordinator) {
+        mainWindowResizeCoordinatorRef.current = null;
       }
     };
-    resizeWindow();
-  }, [isCommandMenuOpen, toastCount]);
+  }, []);
+
+  const requestMainWindowSize = React.useCallback(
+    (sizeKey) =>
+      mainWindowResizeCoordinatorRef.current?.resizeMainWindow(sizeKey) ??
+      Promise.resolve(UNMOUNTED_RESIZE),
+    []
+  );
+  const resizeLiveTranscriptToContent = React.useCallback(
+    (height) =>
+      mainWindowResizeCoordinatorRef.current?.resizeAssistantWindowToContent(height) ??
+      Promise.resolve(UNMOUNTED_RESIZE),
+    []
+  );
+
+  const onPanelOpened = React.useCallback(() => setIsHovered(false), []);
+
+  // The assistant panel and the recording pipeline reference each other
+  // (voice commands flow in, closing the panel cancels a recording), and the
+  // live transcript needs recording state as effect deps. These refs break the
+  // render-order cycle; both are read only at event time, never during render.
+  const recordingControlsRef = useRef({});
+  const liveTranscriptApiRef = useRef(null);
+
+  const assistant = useAssistantPanel({
+    requestMainWindowSize,
+    dictationErrorActionCount,
+    recordingControlsRef,
+    onPanelOpened,
+  });
+  const { noteDictationError, openRef: assistantOpenRef } = assistant;
+
+  const handleDictationError = React.useCallback(
+    (options = {}) => {
+      noteDictationError(options);
+      liveTranscriptApiRef.current?.dismissForError();
+    },
+    [noteDictationError]
+  );
 
   const handleDictationToggle = React.useCallback(() => {
     setIsCommandMenuOpen(false);
-    setWindowInteractivity(false);
-  }, [setWindowInteractivity]);
+    if (!assistantOpenRef.current && !liveTranscriptApiRef.current?.openRef.current) {
+      setWindowInteractivity(false);
+    }
+  }, [assistantOpenRef, setWindowInteractivity]);
 
   const {
     isRecording,
     isProcessing,
+    isAssistantVoice,
+    isPreparing,
+    isStopping,
     micCaptureStatus,
     toggleListening,
     cancelRecording,
     cancelProcessing,
+    getAudioLevel,
   } = useAudioRecording(toast, {
     onToggle: handleDictationToggle,
+    onDemoEvent: (event) => {
+      // Demo sessions only exist while onboarding is incomplete — skip the IPC otherwise.
+      if (localStorage.getItem("onboardingCompleted") === "true") return;
+      window.electronAPI?.publishOnboardingDemoEvent?.(event);
+    },
+    onAssistantCommand: assistant.handleCommand,
+    dismissDictationError,
+    onDictationError: handleDictationError,
+    getAssistantSelectionContext: assistant.getSelectionContext,
+    onShowTranscript: (text) => liveTranscriptApiRef.current?.showFinalText(text),
   });
+  const isVisuallyProcessing = isProcessing || isPreparing || isStopping;
+
+  useLayoutEffect(() => {
+    recordingControlsRef.current = {
+      isAssistantVoice,
+      isRecording,
+      isPreparing,
+      isProcessing,
+      cancelRecording,
+      cancelProcessing,
+    };
+  });
+
+  const liveTranscript = useLiveTranscriptPanel({
+    resizeToContent: resizeLiveTranscriptToContent,
+    assistantOpenRef,
+    onWillOpen: onPanelOpened,
+    isRecording,
+    isProcessing,
+    isAssistantVoice,
+  });
+
+  useLayoutEffect(() => {
+    liveTranscriptApiRef.current = liveTranscript;
+  });
+
+  // Must run before the size owner's ladder effect below: the error teardown
+  // drops the live transcript's open ref, which the ladder reads this commit.
+  useEffect(() => {
+    if (dictationErrorActionCount > 0) handleDictationError();
+  }, [dictationErrorActionCount, handleDictationError]);
+
+  // Direction is part of the interaction's geometry, not a live decoration.
+  // Hold the origin through processing and panel exit so every close animation
+  // returns to the same side from which that voice session started.
+  const voiceDirectionLocked =
+    isRecording || isVisuallyProcessing || assistant.mounted || liveTranscript.mounted;
+  useLayoutEffect(() => {
+    if (voiceDirectionLocked) return;
+    setVoiceHorizontalDirection(
+      mainWindowHorizontalDirection ?? resolveVoiceHorizontalDirection(panelStartPosition)
+    );
+  }, [mainWindowHorizontalDirection, panelStartPosition, voiceDirectionLocked]);
+
+  const { beginThinking: beginAssistantThinking } = assistant;
+  useEffect(() => {
+    if (isAssistantVoice && isProcessing && assistantOpenRef.current) {
+      beginAssistantThinking();
+    }
+  }, [isAssistantVoice, isProcessing, assistantOpenRef, beginAssistantThinking]);
+
+  const voiceActivity = resolveVoiceActivityPresentation({
+    isRecording,
+    isProcessing: isVisuallyProcessing,
+    isAssistantVoice,
+    assistantThinking: assistant.thinking || assistant.busy,
+  });
+  const [listeningEntrancePhase, setListeningEntrancePhase] = useState("idle");
+  useLayoutEffect(() => {
+    if (!isRecording) {
+      setListeningEntrancePhase("idle");
+      return;
+    }
+
+    setListeningEntrancePhase("thinking");
+    const timeline = getListeningEntranceTimeline();
+    const expansionTimer = setTimeout(
+      () => setListeningEntrancePhase("expanding"),
+      timeline.expandAtMs
+    );
+    const settledTimer = setTimeout(
+      () => setListeningEntrancePhase("settled"),
+      timeline.settleAtMs
+    );
+    const waveformTimer = setTimeout(
+      () => setListeningEntrancePhase("waveform"),
+      timeline.waveformAtMs
+    );
+
+    return () => {
+      clearTimeout(expansionTimer);
+      clearTimeout(settledTimer);
+      clearTimeout(waveformTimer);
+    };
+  }, [isRecording]);
+  const listeningEntrance = resolveListeningEntrancePresentation({
+    isRecording,
+    phase: listeningEntrancePhase,
+  });
+  const isCompactPill = isRecording ? listeningEntrance.compactPill : voiceActivity.compactPill;
+
+  const { dictationErrorPillHandoffActive } = useMainWindowSizeOwner({
+    requestMainWindowSize,
+    dictationErrorActionCount,
+    toastCount,
+    isCommandMenuOpen,
+    isCompactPill,
+    assistantOpen: assistant.open,
+    assistantMounted: assistant.mounted,
+    assistantOpenRef,
+    liveTranscriptOpen: liveTranscript.open,
+    liveTranscriptMounted: liveTranscript.mounted,
+    liveTranscriptOpenRef: liveTranscript.openRef,
+  });
+
+  useEffect(() => {
+    if (isCommandMenuOpen || toastCount > 0 || assistant.mounted || liveTranscript.mounted) {
+      setWindowInteractivity(true);
+    } else if (!isHovered) {
+      setWindowInteractivity(false);
+    }
+  }, [
+    isCommandMenuOpen,
+    isHovered,
+    toastCount,
+    assistant.mounted,
+    liveTranscript.mounted,
+    setWindowInteractivity,
+  ]);
+
+  useEffect(() => {
+    if (isRecording && dictationErrorActionCount > 0) {
+      dismissByPresentation("dictation-error");
+    }
+  }, [isRecording, dictationErrorActionCount, dismissByPresentation]);
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
@@ -243,7 +350,15 @@ export default function App() {
   useEffect(() => {
     let hideTimeout;
 
-    if (floatingIconAutoHide && !isRecording && !isProcessing && toastCount === 0) {
+    if (
+      floatingIconAutoHide &&
+      !isRecording &&
+      !isVisuallyProcessing &&
+      toastCount === 0 &&
+      !dictationErrorPillHandoffActive &&
+      !assistant.mounted &&
+      !liveTranscript.mounted
+    ) {
       // Delay briefly so processing can start after recording stops without a flash
       hideTimeout = setTimeout(() => {
         window.electronAPI?.hideWindow?.();
@@ -254,37 +369,33 @@ export default function App() {
 
     prevAutoHideRef.current = floatingIconAutoHide;
     return () => clearTimeout(hideTimeout);
-  }, [isRecording, isProcessing, floatingIconAutoHide, toastCount]);
+  }, [
+    isRecording,
+    isVisuallyProcessing,
+    floatingIconAutoHide,
+    toastCount,
+    dictationErrorPillHandoffActive,
+    assistant.mounted,
+    liveTranscript.mounted,
+  ]);
 
   const handleClose = () => {
     window.electronAPI.hideWindow();
   };
 
   useEffect(() => {
-    if (!isCommandMenuOpen) {
-      return;
-    }
-
-    const handleClickOutside = (event) => {
-      if (
-        commandMenuRef.current &&
-        !commandMenuRef.current.contains(event.target) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(event.target)
-      ) {
-        setIsCommandMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isCommandMenuOpen]);
-
-  useEffect(() => {
     const handleKeyPress = (e) => {
       if (e.key === "Escape") {
+        // The assistant panel owns Escape while it is open.
+        if (assistant.mounted) return;
         if (isCommandMenuOpen) {
           setIsCommandMenuOpen(false);
+        } else if (isRecording) {
+          cancelRecording();
+        } else if (isPreparing) {
+          cancelRecording();
+        } else if (isProcessing) {
+          cancelProcessing();
         } else {
           handleClose();
         }
@@ -293,119 +404,215 @@ export default function App() {
 
     document.addEventListener("keydown", handleKeyPress);
     return () => document.removeEventListener("keydown", handleKeyPress);
-  }, [isCommandMenuOpen]);
+  }, [
+    isCommandMenuOpen,
+    assistant.mounted,
+    isRecording,
+    isPreparing,
+    isProcessing,
+    cancelRecording,
+    cancelProcessing,
+  ]);
 
   // Determine current mic state
   const getMicState = () => {
     if (isRecording && (micCaptureStatus === "reconnecting" || micCaptureStatus === "unavailable"))
       return "unavailable";
     if (isRecording) return "recording";
-    if (isProcessing) return "processing";
-    if (isHovered && !isRecording && !isProcessing) return "hover";
+    if (isVisuallyProcessing) return "processing";
+    if (isHovered && !isRecording && !isVisuallyProcessing) return "hover";
     return "idle";
   };
 
   const micState = getMicState();
 
-  const getMicButtonProps = () => {
-    const baseClasses =
-      "rounded-full w-10 h-10 flex items-center justify-center relative overflow-hidden border-2 border-white/70 cursor-pointer";
-
+  const getMicTooltip = () => {
     switch (micState) {
-      case "idle":
-      case "hover":
-        return {
-          className: `${baseClasses} bg-black/50 cursor-pointer`,
-          tooltip: formatHotkeyListLabel(hotkey),
-        };
       case "recording":
-        return {
-          className: `${baseClasses} bg-primary cursor-pointer`,
-          tooltip: t("app.mic.recording"),
-        };
+        return t("app.mic.recording");
       case "unavailable":
-        return {
-          className: `${baseClasses} bg-amber-500 cursor-pointer`,
-          tooltip: t("app.mic.waitingForMicrophone"),
-        };
+        return t("app.mic.waitingForMicrophone");
       case "processing":
-        return {
-          className: `${baseClasses} bg-accent cursor-not-allowed`,
-          tooltip: t("app.mic.processing"),
-        };
+        return t("app.mic.processing");
       default:
-        return {
-          className: `${baseClasses} bg-black/50 cursor-pointer`,
-          style: { transform: "scale(0.8)" },
-          tooltip: t("app.mic.clickToSpeak"),
-        };
+        return formatPillHotkeyLabel(hotkey);
     }
   };
 
-  const micProps = getMicButtonProps();
+  const micTooltip = getMicTooltip();
+  const assistantVoiceState =
+    isRecording && isAssistantVoice
+      ? "listening"
+      : isProcessing && isAssistantVoice
+        ? "transcribing"
+        : "idle";
+  const anyPanelOpen = assistant.open || liveTranscript.open;
+  const anyPanelMounted = assistant.mounted || liveTranscript.mounted;
+  const canReopenLiveTranscript =
+    shouldOfferLiveTranscriptReopen({
+      manuallyCollapsed: liveTranscript.manuallyCollapsed,
+      isRecording,
+      isProcessing,
+      isAssistantVoice,
+    }) && !anyPanelMounted;
+  const agentModeActive = resolveAgentModeActive({
+    isAssistantVoice,
+    isRecording,
+    isProcessing: isVisuallyProcessing,
+    assistantPanelMounted: assistant.mounted,
+  });
+  const assistantFooter = resolveAssistantFooterPresentation(assistant.footerPhase);
+  const voicePillInteraction = resolveVoicePillInteraction({
+    assistantMounted: assistant.mounted,
+    liveTranscriptMounted: liveTranscript.mounted,
+    isRecording,
+    isProcessing,
+    isHovered,
+  });
+  const pillIsInteractive = voicePillInteraction.pillInteractive;
+  const activateVoicePill = () => {
+    if (!pillIsInteractive) return;
+    if (canReopenLiveTranscript) {
+      liveTranscript.reopen();
+      return;
+    }
+    if (
+      shouldActivateVoicePill({
+        hasDragged,
+        liveTranscriptMounted: liveTranscript.mounted,
+        isProcessing: micState === "processing",
+        isAgentThinking: voiceActivity.isAgentThinking,
+      })
+    ) {
+      setIsCommandMenuOpen(false);
+      toggleListening({ voiceAgentRequested: assistant.mounted });
+    }
+  };
+  // Prefer a currently open mode over a sibling finishing its exit. The core
+  // itself never unmounts; only these inner sections change ownership.
+  const activeVoicePanel = resolveVoicePanelCorePresentation({
+    assistantOpen: assistant.open,
+    assistantMounted: assistant.mounted,
+    liveTranscriptOpen: liveTranscript.open,
+    liveTranscriptMounted: liveTranscript.mounted,
+  });
+  const activeVoicePanelMode = activeVoicePanel.mode;
+  const liveTranscriptEntrance = resolveLiveTranscriptEntrancePresentation(
+    liveTranscript.entrancePhase
+  );
+  const activeVoicePanelLabel =
+    activeVoicePanelMode === "assistant"
+      ? t("settingsPage.agentConfig.title")
+      : activeVoicePanelMode === "live-transcript"
+        ? t("transcriptionPreview.label")
+        : undefined;
+  const commonPillState =
+    micState === "unavailable"
+      ? "unavailable"
+      : listeningEntrance.activeState ||
+        voiceActivity.activeState ||
+        (assistant.open ? (isHovered ? "hover" : "idle") : micState);
+  const voicePillDock = resolveVoicePillDock({
+    liveTranscriptOpen: liveTranscript.open,
+    liveTranscriptEntrancePhase: liveTranscript.entrancePhase,
+    assistantOpen: assistant.open,
+    panelStartPosition,
+    horizontalDirection: voiceHorizontalDirection,
+  });
+  const voicePillTravelDuration =
+    liveTranscript.open && liveTranscript.entrancePhase === "encapsulate"
+      ? LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs
+      : LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs;
+  const dictationErrorSuppressesPill =
+    dictationErrorActionCount > 0 || dictationErrorPillHandoffActive;
+  // Keep one pill DOM node alive while final Agent actions own the footer. On
+  // close it can fade and travel from the panel dock instead of mounting at
+  // the resting dock halfway through the surface contraction.
+  const assistantActionsSuppressPill = assistant.open && !assistantFooter.pillVisible;
+  const pillVisuallySuppressed = dictationErrorSuppressesPill || assistantActionsSuppressPill;
+  const pillInteractionSuppressed = pillVisuallySuppressed || assistant.closing;
 
   return (
     <div className="dictation-window">
-      {/* Voice button - position determined by panelStartPosition setting */}
+      {/* The panel footer can hide this pill, but never unmounts it. */}
       <div
-        className={`fixed bottom-1 z-50 ${
-          panelStartPosition === "bottom-left"
-            ? "left-1"
-            : panelStartPosition === "center"
-              ? "left-1/2 -translate-x-1/2"
-              : "right-1"
-        }`}
+        className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50 transition-opacity duration-150 ease-out ${
+          pillInteractionSuppressed ? "pointer-events-none" : ""
+        } ${pillVisuallySuppressed ? "opacity-0" : "opacity-100"}`}
+        style={{
+          "--voice-pill-travel-duration": `${voicePillTravelDuration}ms`,
+        }}
+        data-dictation-error-suppressed={dictationErrorSuppressesPill || undefined}
+        data-assistant-actions-suppressed={assistantActionsSuppressPill || undefined}
+        aria-hidden={pillVisuallySuppressed || undefined}
       >
         <div
-          className="relative flex items-center gap-2"
+          className="assistant-pill-presence relative flex items-center gap-2"
+          data-assistant-footer-phase={assistant.open ? assistant.footerPhase : undefined}
+          data-horizontal-direction={voiceHorizontalDirection}
+          style={{
+            "--assistant-pill-retreat-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.pillRetreatMs}ms`,
+            "--assistant-pill-entrance-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.pillEntranceMs}ms`,
+          }}
           onMouseEnter={() => {
+            if (!pillIsInteractive) return;
             setIsHovered(true);
             setWindowInteractivity(true);
           }}
           onMouseLeave={() => {
             setIsHovered(false);
-            if (!isCommandMenuOpen) {
+            if (!pillIsInteractive) return;
+            if (!isCommandMenuOpen && !assistant.mounted) {
               setWindowInteractivity(false);
             }
           }}
         >
-          {(isRecording || isProcessing) && isHovered && (
-            <button
-              aria-label={
-                isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
-              }
-              onClick={(e) => {
-                e.stopPropagation();
-                isRecording ? cancelRecording() : cancelProcessing();
-              }}
-              className="group/cancel w-5 h-5 rounded-full bg-surface-2/90 hover:bg-destructive border border-border hover:border-destructive/70 flex items-center justify-center transition-colors duration-150 shadow-sm backdrop-blur-sm"
-            >
-              <X
-                size={10}
-                strokeWidth={2.5}
-                className="text-foreground group-hover/cancel:text-destructive-foreground transition-colors duration-150"
-              />
-            </button>
-          )}
-          <Tooltip
-            content={micProps.tooltip}
-            align={
-              panelStartPosition === "bottom-left"
-                ? "left"
-                : panelStartPosition === "center"
-                  ? "center"
-                  : "right"
-            }
+          <PillTooltip
+            content={canReopenLiveTranscript ? t("transcriptionPreview.label") : micTooltip}
+            disabled={anyPanelMounted}
+            align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
           >
-            <button
+            <VoicePill
               ref={buttonRef}
+              variant={anyPanelOpen ? "panel" : "floating"}
+              state={commonPillState}
+              expanded={!anyPanelOpen && isCompactPill}
+              collapseToLogo={
+                listeningEntrance.collapseToLogo || assistantFooter.collapsePillToLogo
+              }
+              beamActive={listeningEntrance.beamActive ?? undefined}
+              waveformVisible={listeningEntrance.waveformVisible}
+              waveformOnlyWhileRecording={anyPanelMounted}
+              integratedWithPanel={liveTranscript.open}
+              agentMode={agentModeActive}
+              beamTheme={beamTheme}
+              showExpandChevron={canReopenLiveTranscript && isHovered}
+              getAudioLevel={getAudioLevel}
+              isDragging={isDragging}
+              horizontalDirection={voiceHorizontalDirection}
+              role={pillIsInteractive ? "button" : "status"}
+              tabIndex={pillIsInteractive ? 0 : undefined}
+              aria-label={
+                canReopenLiveTranscript
+                  ? t("transcriptionPreview.label")
+                  : assistant.mounted
+                    ? t("settingsPage.agentConfig.title")
+                    : liveTranscript.mounted
+                      ? t("transcriptionPreview.label")
+                      : micTooltip
+              }
               onMouseDown={(e) => {
+                if (anyPanelMounted) {
+                  setHasDragged(false);
+                  return;
+                }
                 setIsCommandMenuOpen(false);
                 setDragStartPos({ x: e.clientX, y: e.clientY });
                 setHasDragged(false);
                 handleMouseDown(e);
               }}
               onMouseMove={(e) => {
+                if (anyPanelMounted) return;
                 if (dragStartPos && !hasDragged) {
                   const distance = Math.sqrt(
                     Math.pow(e.clientX - dragStartPos.x, 2) +
@@ -418,113 +625,122 @@ export default function App() {
                 }
               }}
               onMouseUp={(e) => {
+                if (anyPanelMounted) return;
                 handleMouseUp(e);
                 setDragStartPos(null);
               }}
               onClick={(e) => {
-                if (!hasDragged) {
-                  setIsCommandMenuOpen(false);
-                  toggleListening();
-                }
+                activateVoicePill();
                 e.preventDefault();
               }}
+              onKeyDown={(event) => {
+                if (event.repeat || !isVoicePillActivationKey(event.key)) return;
+                event.preventDefault();
+                activateVoicePill();
+              }}
               onContextMenu={(e) => {
+                if (anyPanelMounted) return;
                 e.preventDefault();
                 if (!hasDragged) {
                   setWindowInteractivity(true);
                   setIsCommandMenuOpen((prev) => !prev);
                 }
               }}
-              onFocus={() => setIsHovered(true)}
-              onBlur={() => setIsHovered(false)}
-              className={micProps.className}
-              style={{
-                ...micProps.style,
-                cursor:
-                  micState === "processing"
-                    ? "not-allowed !important"
-                    : isDragging
-                      ? "grabbing !important"
-                      : "pointer !important",
-                transition:
-                  "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s ease-out",
+            />
+          </PillTooltip>
+          {voicePillInteraction.cancelVisible && (
+            <button
+              type="button"
+              aria-label={
+                isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
+              }
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (isRecording) cancelRecording();
+                else cancelProcessing();
               }}
+              className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/55 bg-surface-2 text-muted-foreground shadow-sm transition-colors hover:bg-surface-3 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
-              {/* Background effects */}
-              <div
-                className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent transition-opacity duration-150"
-                style={{ opacity: micState === "hover" ? 0.8 : 0 }}
-              ></div>
-              <div
-                className="absolute inset-0 transition-colors duration-150"
-                style={{
-                  backgroundColor: micState === "hover" ? "rgba(0,0,0,0.1)" : "transparent",
-                }}
-              ></div>
-
-              {/* Dynamic content based on state */}
-              {micState === "idle" || micState === "hover" ? (
-                <SoundWaveIcon size={micState === "idle" ? 12 : 14} />
-              ) : micState === "recording" ? (
-                <LoadingDots />
-              ) : micState === "processing" ? (
-                <VoiceWaveIndicator isListening={true} />
-              ) : micState === "unavailable" ? (
-                <span className="text-white text-base font-bold">!</span>
-              ) : null}
-
-              {/* State indicator ring for recording */}
-              {micState === "recording" && (
-                <div className="absolute inset-0 rounded-full border-2 border-primary/50 animate-pulse"></div>
-              )}
-              {micState === "unavailable" && (
-                <div className="absolute inset-0 rounded-full border-2 border-amber-200/70 animate-pulse"></div>
-              )}
-
-              {/* State indicator ring for processing */}
-              {micState === "processing" && (
-                <div className="absolute inset-0 rounded-full border-2 border-primary/30 opacity-50"></div>
-              )}
+              <X size={13} strokeWidth={2.5} aria-hidden="true" />
             </button>
-          </Tooltip>
-          {isCommandMenuOpen && (
-            <div
-              ref={commandMenuRef}
-              className="absolute bottom-full right-0 mb-3 w-48 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm"
-              onMouseEnter={() => {
-                setWindowInteractivity(true);
+          )}
+          {!anyPanelMounted && isCommandMenuOpen && (
+            <PillCommandMenu
+              buttonRef={buttonRef}
+              isRecording={isRecording}
+              agentAllowed={agentAllowed}
+              isHovered={isHovered}
+              setWindowInteractivity={setWindowInteractivity}
+              onToggleListening={() => {
+                toggleListening();
               }}
-              onMouseLeave={() => {
-                if (!isHovered) {
-                  setWindowInteractivity(false);
-                }
+              onAskAssistant={() => {
+                setIsCommandMenuOpen(false);
+                assistant.openPanel();
               }}
-            >
-              <button
-                className="w-full px-3 py-2 text-left text-sm font-medium hover:bg-muted focus:bg-muted focus:outline-none"
-                onClick={() => {
-                  toggleListening();
-                }}
-              >
-                {isRecording
-                  ? t("app.commandMenu.stopListening")
-                  : t("app.commandMenu.startListening")}
-              </button>
-              <div className="h-px bg-border" />
-              <button
-                className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
-                onClick={() => {
-                  setIsCommandMenuOpen(false);
-                  setWindowInteractivity(false);
-                  handleClose();
-                }}
-              >
-                {t("app.commandMenu.hideForNow")}
-              </button>
-            </div>
+              onHide={() => {
+                setIsCommandMenuOpen(false);
+                setWindowInteractivity(false);
+                handleClose();
+              }}
+              onClose={() => setIsCommandMenuOpen(false)}
+            />
           )}
         </div>
       </div>
+
+      <VoiceModePanelCore
+        mode={activeVoicePanelMode}
+        open={activeVoicePanel.open}
+        closing={activeVoicePanelMode === "assistant" && assistant.closing}
+        stage={
+          activeVoicePanelMode === "live-transcript" ? liveTranscriptEntrance.coreStage : "content"
+        }
+        horizontalDirection={voiceHorizontalDirection}
+        label={activeVoicePanelLabel}
+        measurementRevision={
+          activeVoicePanelMode === "live-transcript" ? liveTranscript.measurementText : null
+        }
+        onPreferredHeightChange={liveTranscript.requestHeight}
+        onClosingFadeComplete={assistant.completeContentFade}
+      >
+        {activeVoicePanelMode === "assistant" && assistant.mounted && (
+          <AssistantPanel
+            pendingCommand={assistant.pendingCommand}
+            onCommandConsumed={assistant.handleCommandConsumed}
+            onCommandDiscarded={assistant.handleCommandDiscarded}
+            onCommandSettled={assistant.handleCommandSettled}
+            initialConversationId={assistant.conversationId}
+            onConversationIdChange={assistant.setConversationId}
+            voiceState={assistantVoiceState}
+            thinking={assistant.thinking && assistant.open}
+            open={assistant.open}
+            footerPhase={assistant.footerPhase}
+            horizontalDirection={voiceHorizontalDirection}
+            onClose={assistant.handleClose}
+            onBusyChange={assistant.setBusy}
+            onResponseReadyChange={assistant.setResponseReady}
+            onResponseContent={assistant.handleResponseContent}
+            onConversationReset={assistant.handleConversationReset}
+            onSelectionContextChange={assistant.handleSelectionContextChange}
+          />
+        )}
+
+        {activeVoicePanelMode !== "assistant" && (
+          <LiveTranscriptPanel
+            text={liveTranscript.mounted ? liveTranscript.text : ""}
+            measurementText={liveTranscript.mounted ? liveTranscript.measurementText : ""}
+            phase={liveTranscript.phase}
+            processing={liveTranscript.mounted && isProcessing && !isAssistantVoice}
+            controlsVisible={liveTranscript.mounted && liveTranscriptEntrance.controlsVisible}
+            contentVisible={liveTranscript.mounted && liveTranscriptEntrance.contentVisible}
+            onCollapse={() => liveTranscript.close({ suppress: true })}
+            onHoldChange={liveTranscript.holdFinal}
+          />
+        )}
+      </VoiceModePanelCore>
     </div>
   );
 }

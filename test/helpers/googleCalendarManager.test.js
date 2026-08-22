@@ -136,3 +136,68 @@ test("_syncCalendar preserves incremental sync parameters across pages", async (
   assert.equal(secondPageParams.get("syncToken"), "sync-token-previous");
   assert.equal(secondPageParams.get("pageToken"), "token-page-2");
 });
+
+test("_syncCalendar preserves meeting links from Google event location and description", async () => {
+  const GoogleCalendarManager = loadManagerModule();
+
+  const upsertedEvents = [];
+  const databaseManager = {
+    getGoogleAccounts: () => [],
+    removeStaleCalendarEvents: () => {},
+    upsertCalendarEvents: (events) => {
+      upsertedEvents.push(...events);
+    },
+    removeCalendarEvents: () => {},
+    updateCalendarSyncToken: () => {},
+    upsertContacts: () => {},
+  };
+  const reminderScheduler = {
+    scheduleNextMeeting: () => {},
+    reset: () => {},
+  };
+  const manager = new GoogleCalendarManager(databaseManager, null, reminderScheduler);
+
+  manager._apiGet = async () => ({
+    items: [
+      {
+        id: "location-link",
+        summary: "Location call",
+        location: "Zoom: https://example.zoom.us/j/123456789",
+        start: { dateTime: "2026-08-14T10:00:00Z" },
+        end: { dateTime: "2026-08-14T10:30:00Z" },
+        status: "confirmed",
+      },
+      {
+        id: "description-link",
+        summary: "Description call",
+        description: "Join via https://teams.live.com/meet/9876543210",
+        start: { dateTime: "2026-08-14T11:00:00Z" },
+        end: { dateTime: "2026-08-14T11:30:00Z" },
+        status: "confirmed",
+      },
+    ],
+    nextSyncToken: "sync-token-final",
+  });
+
+  await manager._syncCalendar({ id: "cal-1", account_email: "test@example.com" });
+
+  assert.deepEqual(
+    upsertedEvents.map(({ id, hangout_link, attendees_count }) => ({
+      id,
+      hangout_link,
+      attendees_count,
+    })),
+    [
+      {
+        id: "location-link",
+        hangout_link: "https://example.zoom.us/j/123456789",
+        attendees_count: 0,
+      },
+      {
+        id: "description-link",
+        hangout_link: "https://teams.live.com/meet/9876543210",
+        attendees_count: 0,
+      },
+    ]
+  );
+});

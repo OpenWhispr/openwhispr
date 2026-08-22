@@ -39,6 +39,7 @@ const hasSpeechEnergy = (pcmBuffer) => {
 class TinfoilRealtimeStreaming extends OpenAIRealtimeStreaming {
   constructor(createSocketImpl = createTinfoilRealtimeSocket) {
     super();
+    this.providerLabel = "Tinfoil Realtime";
     this._createSocketImpl = createSocketImpl;
     this._commitTimer = null;
     this._commitInFlight = false;
@@ -165,7 +166,7 @@ class TinfoilRealtimeStreaming extends OpenAIRealtimeStreaming {
       return true;
     } catch (error) {
       this._settleCommit();
-      debugLogger.debug("Tinfoil Realtime commit send failed", { error: error.message });
+      debugLogger.debug(`${this.providerLabel} commit send failed`, { error: error.message });
       return false;
     }
   }
@@ -173,7 +174,7 @@ class TinfoilRealtimeStreaming extends OpenAIRealtimeStreaming {
   _requestRecovery(error, surfaceError = true) {
     if (this._recoveryRequested) return;
     this._recoveryRequested = true;
-    debugLogger.warn("Tinfoil Realtime connection recovery requested", {
+    debugLogger.warn(`${this.providerLabel} connection recovery requested`, {
       error: error.message,
     });
     if (this.onConnectionLost) {

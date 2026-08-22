@@ -13,6 +13,13 @@ import {
   isTranscriptionContextAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { getOnboardingDemoKind } from "../utils/onboardingDemo";
+import {
+  buildLiveTranscriptionPreview,
+  shouldShowByokStreamingPreview,
+} from "../utils/transcriptionPreview";
+import { canStartDictation } from "../utils/dictationReadiness";
+import { waitForVisualFrames } from "../utils/visualFrame";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -28,6 +35,9 @@ export const useAudioRecording = (toast, options = {}) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isAssistantVoice, setIsAssistantVoice] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const [micCaptureStatus, setMicCaptureStatus] = useState("inactive");
   const [transcript, setTranscript] = useState("");
   const [partialTranscript, setPartialTranscript] = useState("");
@@ -35,15 +45,52 @@ export const useAudioRecording = (toast, options = {}) => {
   const startLockRef = useRef(false);
   const stopRequestedDuringStartRef = useRef(false);
   const stopLockRef = useRef(false);
+  const preparationGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
-  const { onToggle } = options;
+  const demoKindRef = useRef("dictation");
+  const onDemoEventRef = useRef(options.onDemoEvent);
+  const reportedLifecycleRef = useRef(null);
+  const lastStartOptionsRef = useRef({
+    voiceAgentRequested: false,
+    translationRequested: false,
+  });
+  const {
+    onToggle,
+    onAssistantCommand,
+    dismissDictationError,
+    onDictationError,
+    getAssistantSelectionContext,
+    onShowTranscript,
+    onDemoEvent,
+  } = options;
+
+  useEffect(() => {
+    onDemoEventRef.current = onDemoEvent;
+  }, [onDemoEvent]);
+
+  // Read through a ref so a re-render never tears down the AudioManager
+  // (the mount effect below must not depend on this callback).
+  const onAssistantCommandRef = useRef(onAssistantCommand);
+  useEffect(() => {
+    onAssistantCommandRef.current = onAssistantCommand;
+  });
+  const onShowTranscriptRef = useRef(onShowTranscript);
+  useEffect(() => {
+    onShowTranscriptRef.current = onShowTranscript;
+  });
+  const getAssistantSelectionContextRef = useRef(getAssistantSelectionContext);
+  useEffect(() => {
+    getAssistantSelectionContextRef.current = getAssistantSelectionContext;
+  });
 
   const performStartRecording = useCallback(
     async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
       if (startLockRef.current) return false;
+      lastStartOptionsRef.current = { voiceAgentRequested, translationRequested };
       startLockRef.current = true;
       stopRequestedDuringStartRef.current = false;
+      let recordingStarted = false;
       try {
         if (!audioManagerRef.current) return false;
         const policyState = usePolicyStore.getState();
@@ -55,8 +102,25 @@ export const useAudioRecording = (toast, options = {}) => {
           return false;
         }
 
-        const currentState = audioManagerRef.current.getState();
-        if (currentState.isRecording || currentState.isProcessing) return false;
+        if (!canStartDictation(audioManagerRef.current.getState())) return false;
+
+        const assistantSelectionContext = voiceAgentRequested
+          ? (getAssistantSelectionContextRef.current?.() ?? null)
+          : null;
+
+        const preparationGeneration = ++preparationGenerationRef.current;
+        setIsStopping(false);
+        setIsPreparing(true);
+        // Preserve the requested identity while Windows is still opening the
+        // microphone; AudioManager confirms the same value once recording.
+        setIsAssistantVoice(voiceAgentRequested);
+        await waitForVisualFrames();
+        if (preparationGeneration !== preparationGenerationRef.current) return false;
+
+        // Start acquisition only after the compact thinking frame has reached
+        // the compositor. startRecording() joins this prepared capture, so the
+        // device still opens exactly once.
+        void audioManagerRef.current.prepareMicCapture?.();
 
         // The floating dictation panel is non-focusable, so the foreground app is
         // still the user's actual editing target here. Refresh it for recordings
@@ -68,7 +132,9 @@ export const useAudioRecording = (toast, options = {}) => {
           logger.warn("Failed to refresh dictation target", { error: error?.message });
         }
 
+        demoKindRef.current = getOnboardingDemoKind(voiceAgentRequested);
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
+        audioManagerRef.current.setAssistantSelectionContext(assistantSelectionContext);
         audioManagerRef.current.setTranslationRequested(translationRequested);
         if (voiceAgentRequested) {
           logger.info(
@@ -91,7 +157,7 @@ export const useAudioRecording = (toast, options = {}) => {
         // The selection to edit is whatever was highlighted at press time, so
         // read it now: it resolves while the user speaks instead of adding a
         // round trip after transcription.
-        if (voiceAgentRequested) {
+        if (voiceAgentRequested && !assistantSelectionContext) {
           audioManagerRef.current.beginSelectionCapture();
         }
 
@@ -106,6 +172,8 @@ export const useAudioRecording = (toast, options = {}) => {
         const didStart = audioManagerRef.current.shouldUseStreaming()
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
+        recordingStarted = didStart;
+        if (didStart) dismissDictationError?.();
 
         // A stop that landed while the start was still awaiting the mic open was
         // dropped (isRecording was still false), leaving a runaway recording
@@ -136,15 +204,25 @@ export const useAudioRecording = (toast, options = {}) => {
         return didStart;
       } finally {
         startLockRef.current = false;
+        // A stop that landed mid-start set isStopping expecting the started
+        // recording's state change to clear it; if the recording never began,
+        // no state change will ever arrive.
+        if (stopRequestedDuringStartRef.current && !recordingStarted) setIsStopping(false);
         stopRequestedDuringStartRef.current = false;
+        if (!recordingStarted) {
+          setIsPreparing(false);
+          setIsAssistantVoice(false);
+        }
       }
     },
-    [t, toast]
+    [t, toast, dismissDictationError]
   );
 
   const performStopRecording = useCallback(async () => {
     if (startLockRef.current) {
       stopRequestedDuringStartRef.current = true;
+      setIsPreparing(false);
+      setIsStopping(true);
       return true;
     }
     if (stopLockRef.current) return false;
@@ -156,6 +234,11 @@ export const useAudioRecording = (toast, options = {}) => {
       if (!currentState.isRecording && !currentState.isStreamingStartInProgress) return false;
 
       window.electronAPI?.unregisterCancelHotkey?.();
+      setIsPreparing(false);
+      setIsStopping(true);
+      // Contract to the stable thinking state before MediaRecorder/streaming
+      // finalization can occupy the renderer on slower Windows machines.
+      await waitForVisualFrames();
 
       if (currentState.isStreaming || currentState.isStreamingStartInProgress) {
         void playStopCue();
@@ -171,14 +254,68 @@ export const useAudioRecording = (toast, options = {}) => {
       return didStop;
     } finally {
       stopLockRef.current = false;
+      setIsStopping(false);
     }
   }, []);
 
   useEffect(() => {
     audioManagerRef.current = new AudioManager();
 
+    const reportLifecycle = (state) => {
+      if (reportedLifecycleRef.current === state) return;
+      reportedLifecycleRef.current = state;
+      window.electronAPI?.dictationLifecycleStateChanged?.(state);
+    };
+    // Reset stale main-process state after a renderer reload or crash recovery.
+    reportLifecycle("idle");
+
+    const getRecoverableTranscript = (fallback = "") =>
+      buildLiveTranscriptionPreview(
+        audioManagerRef.current?.streamingFinalText,
+        audioManagerRef.current?.streamingPartialText
+      ).trim() || fallback.trim();
+
+    const showDictationError = ({ title, description, transcript = "", duration }) => {
+      const recoverAssistant = Boolean(audioManagerRef.current?.voiceAgentRequested);
+      onDictationError?.({ recoverAssistant });
+      const recoverableTranscript = getRecoverableTranscript(transcript);
+      const actions = [
+        {
+          label: t("common.retry"),
+          icon: "retry",
+          dismissOnClick: false,
+          onClick: () => performStartRecording(lastStartOptionsRef.current),
+        },
+      ];
+
+      if (recoverableTranscript) {
+        actions.push({
+          label: t("hooks.audioRecording.errorActions.viewTranscript"),
+          icon: "transcript",
+          onClick: () => {
+            onShowTranscriptRef.current?.(recoverableTranscript);
+          },
+        });
+      }
+
+      toast({
+        title,
+        description,
+        variant: "destructive",
+        presentation: "dictation-error",
+        duration,
+        actions,
+      });
+    };
+
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
+        reportLifecycle(isRecording ? "recording" : isProcessing ? "processing" : "idle");
+        if (isRecording) {
+          onDemoEventRef.current?.({ kind: demoKindRef.current, status: "listening" });
+        } else if (isProcessing) {
+          onDemoEventRef.current?.({ kind: demoKindRef.current, status: "processing" });
+        }
         if (!isRecording) {
           window.electronAPI?.unregisterCancelHotkey?.();
           // Resume media the instant recording ends, not after transcription.
@@ -190,6 +327,12 @@ export const useAudioRecording = (toast, options = {}) => {
         setIsRecording(isRecording);
         setIsProcessing(isProcessing);
         setIsStreaming(isStreaming ?? false);
+        if (isRecording) setIsPreparing(false);
+        if (!isRecording) setIsStopping(false);
+        // The panel only mirrors assistant-routed recordings; a plain
+        // dictation started while it is open must not masquerade as a
+        // follow-up (its transcript takes the paste route, not the panel).
+        setIsAssistantVoice(!!audioManagerRef.current?.voiceAgentRequested);
         if (micCaptureStatus) {
           setMicCaptureStatus(micCaptureStatus);
           const unavailable = micCaptureStatus === "unavailable";
@@ -216,45 +359,84 @@ export const useAudioRecording = (toast, options = {}) => {
         }
       },
       onError: (error) => {
+        setIsPreparing(false);
+        setIsStopping(false);
+        if (error?.code === "TRANSCRIPTION_CANCELLED" || error?.code === "REASON_CANCELLED") return;
+        onDemoEventRef.current?.({
+          kind: demoKindRef.current,
+          status: "error",
+          message: error?.message,
+        });
         if (error?.title !== "Paste Error") {
           window.electronAPI?.hideDictationPreview?.();
         }
         const title = getRecordingErrorTitle(error, t);
         const description = getRecordingErrorDescription(error, t);
-        toast({
-          title,
-          description,
-          variant: error.variant || "destructive",
-          duration: error.code === "AUTH_EXPIRED" ? 8000 : undefined,
-        });
+        if (error?.variant === "default") {
+          // Informational outcomes (SCREEN_CONTEXT_SKIPPED after a successful
+          // text-only retry) are notices, not failures: no card, no Retry.
+          toast({ title, description, variant: "default" });
+        } else {
+          showDictationError({
+            title,
+            description,
+            duration: error?.code === "AUTH_EXPIRED" ? 8000 : undefined,
+          });
+        }
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
       },
       onNoAudio: () => {
+        setIsPreparing(false);
+        setIsStopping(false);
+        onDemoEventRef.current?.({
+          kind: demoKindRef.current,
+          status: "error",
+          message: t("hooks.audioRecording.noAudio.title"),
+        });
         window.electronAPI?.hideDictationPreview?.();
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
-        toast({
+        showDictationError({
           title: t("hooks.audioRecording.noAudio.title"),
           description: t("hooks.audioRecording.noAudio.description"),
-          variant: "default",
         });
       },
       onPartialTranscript: (text) => {
+        onDemoEventRef.current?.({ kind: demoKindRef.current, status: "partial", text });
         setPartialTranscript(text);
+        const settings = getSettings();
+        if (
+          audioManagerRef.current?.getStreamingProviderName?.() !== "tinfoil-realtime" &&
+          shouldShowByokStreamingPreview(
+            settings.showTranscriptionPreview,
+            settings.cloudTranscriptionMode,
+            !!audioManagerRef.current?.voiceAgentRequested
+          )
+        ) {
+          const previewText = buildLiveTranscriptionPreview(
+            audioManagerRef.current?.streamingFinalText,
+            text
+          );
+          window.electronAPI
+            ?.updateDictationPreview?.(previewText)
+            .catch((error) =>
+              logger.warn("Failed to update transcription preview", { error: error?.message })
+            );
+        }
       },
       onTranscriptionComplete: async (result) => {
         if (result.success) {
+          dismissDictationError?.();
           const transcribedText = result.text?.trim();
 
           if (!transcribedText) {
             window.electronAPI?.hideDictationPreview?.();
-            toast({
+            showDictationError({
               title: t("hooks.audioRecording.noAudio.title"),
               description: t("hooks.audioRecording.noAudio.description"),
-              variant: "default",
             });
             return;
           }
@@ -267,7 +449,36 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           setTranscript(result.text);
-          window.electronAPI?.completeDictationPreview?.({ text: result.text });
+          onDemoEventRef.current?.({
+            kind: demoKindRef.current,
+            status: "success",
+            text: result.text,
+          });
+          if (result.assistantConversation) {
+            // The onboarding demo owns the transcript/result surface. Opening
+            // the normal Assistant panel here would cover the flow even though
+            // the main-process onboarding gate correctly hid normal surfaces.
+            if (localStorage.getItem("onboardingCompleted") !== "true") {
+              window.electronAPI?.hideDictationPreview?.();
+            } else {
+              // Panel-first: the command streams into the assistant panel;
+              // nothing types at the cursor and nothing lands in the clipboard.
+              // The directive's transcript is the command to send — it carries
+              // the quoted selection when the selection-without-editor fallback
+              // routed a highlighted passage here.
+              window.electronAPI?.hideDictationPreview?.();
+              const { screenContext, transcript, selectedContext } = result.assistantConversation;
+              onAssistantCommandRef.current?.({
+                text: expandSnippets(transcript, getSettings().snippets),
+                attachment: screenContext
+                  ? { image: screenContext.data, mediaType: screenContext.mediaType }
+                  : null,
+                selectedContext: selectedContext ?? null,
+              });
+            }
+          } else {
+            window.electronAPI?.completeDictationPreview?.({ text: result.text });
+          }
 
           if (result.warning) {
             toast({
@@ -280,7 +491,7 @@ export const useAudioRecording = (toast, options = {}) => {
           const isStreaming = result.source?.includes("streaming");
           const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
 
-          if (autoPasteEnabled) {
+          if (autoPasteEnabled && !result.assistantConversation) {
             const pasteStart = performance.now();
             let pasteSucceeded = true;
             if (result.selectionEdit?.sessionId) {
@@ -294,15 +505,16 @@ export const useAudioRecording = (toast, options = {}) => {
               );
               pasteSucceeded = replacement?.success === true;
               if (!pasteSucceeded) {
+                window.electronAPI?.hideDictationPreview?.();
                 if (keepTranscriptionInClipboard) {
                   await navigator.clipboard.writeText(result.text);
                 }
                 const detailKey =
                   SELECTION_EDIT_DETAIL_KEY_BY_CODE[replacement?.code] || "unavailable";
-                toast({
+                showDictationError({
                   title: t("hooks.audioRecording.selectionEditing.notAppliedTitle"),
                   description: t(`hooks.audioRecording.selectionEditing.${detailKey}`),
-                  variant: "destructive",
+                  transcript: result.rawText ?? result.text,
                 });
               }
             } else {
@@ -323,7 +535,7 @@ export const useAudioRecording = (toast, options = {}) => {
               },
               "streaming"
             );
-          } else if (keepTranscriptionInClipboard) {
+          } else if (keepTranscriptionInClipboard && !result.assistantConversation) {
             await navigator.clipboard.writeText(result.text);
           }
 
@@ -367,12 +579,11 @@ export const useAudioRecording = (toast, options = {}) => {
             reason === "unreachable"
               ? t("hooks.audioRecording.translationFallback.unreachableDescription")
               : t("hooks.audioRecording.translationFallback.failedDescription"),
-          variant: "default",
+          variant: "destructive",
         });
       },
     });
 
-    audioManagerRef.current.setContext("dictation");
     // Keep overlay content protection in sync with the screen-context setting
     // so the dictation pill stays out of captures (survives window recreation).
     window.electronAPI.setScreenContextEnabled?.(getSettings().voiceAgentScreenContext);
@@ -401,16 +612,12 @@ export const useAudioRecording = (toast, options = {}) => {
       // the lock check this toggle-off would take the start branch and be lost.
       if (startLockRef.current || currentState.isRecording) {
         await performStopRecording();
-      } else if (!currentState.isProcessing) {
-        // Fire-and-forget: startRecording's take() joins this same acquisition,
-        // so the device is opened exactly once. See #845.
-        audioManagerRef.current.prepareMicCapture?.();
+      } else if (canStartDictation(currentState)) {
         await performStartRecording({ voiceAgentRequested, translationRequested });
       }
     };
 
     const handleStart = async () => {
-      audioManagerRef.current?.prepareMicCapture?.();
       await performStartRecording();
     };
 
@@ -438,11 +645,20 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
-    const disposePrepare = window.electronAPI.onPrepareDictation?.(() => {
-      audioManagerRef.current?.prepareMicCapture?.();
+    const disposePrepare = window.electronAPI.onPrepareDictation?.(async () => {
+      if (!audioManagerRef.current || startLockRef.current) return;
+      if (!canStartDictation(audioManagerRef.current.getState())) return;
+      const generation = ++preparationGenerationRef.current;
+      setIsAssistantVoice(false);
+      setIsPreparing(true);
+      await waitForVisualFrames();
+      if (generation !== preparationGenerationRef.current || startLockRef.current) return;
+      void audioManagerRef.current.prepareMicCapture?.();
     });
 
     const disposeCancelPreparation = window.electronAPI.onCancelDictationPreparation?.(() => {
+      preparationGenerationRef.current += 1;
+      setIsPreparing(false);
       audioManagerRef.current?.cancelPreparedMicCapture?.();
     });
 
@@ -451,21 +667,9 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
-    const handleNoAudioDetected = () => {
-      if (getSettings().pauseMediaOnDictation) {
-        window.electronAPI?.resumeMediaPlayback?.();
-      }
-      toast({
-        title: t("hooks.audioRecording.noAudio.title"),
-        description: t("hooks.audioRecording.noAudio.description"),
-        variant: "default",
-      });
-    };
-
-    const disposeNoAudio = window.electronAPI.onNoAudioDetected?.(handleNoAudioDetected);
-
     // Cleanup
     return () => {
+      reportLifecycle("idle");
       unsubscribePolicy();
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
@@ -474,22 +678,35 @@ export const useAudioRecording = (toast, options = {}) => {
       disposePrepare?.();
       disposeCancelPreparation?.();
       disposeStop?.();
-      disposeNoAudio?.();
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();
       }
     };
-  }, [toast, onToggle, performStartRecording, performStopRecording, t]);
+  }, [
+    toast,
+    onToggle,
+    performStartRecording,
+    performStopRecording,
+    dismissDictationError,
+    onDictationError,
+    t,
+  ]);
 
   const cancelRecording = useCallback(async () => {
     if (audioManagerRef.current) {
+      preparationGenerationRef.current += 1;
+      setIsPreparing(false);
+      setIsStopping(false);
+      audioManagerRef.current.cancelPreparedMicCapture?.();
       window.electronAPI?.unregisterCancelHotkey?.();
       const state = audioManagerRef.current.getState();
       if (getSettings().pauseMediaOnDictation) {
         window.electronAPI?.resumeMediaPlayback?.();
       }
-      if (state.isStreaming) {
-        return await audioManagerRef.current.stopStreamingRecording();
+      // A streaming start in its mic-open phase is not yet `isStreaming`;
+      // only the streaming cancel knows how to abandon it.
+      if (state.isStreaming || state.isStreamingStartInProgress) {
+        return await audioManagerRef.current.cancelStreamingRecording();
       }
       return audioManagerRef.current.cancelRecording();
     }
@@ -503,9 +720,17 @@ export const useAudioRecording = (toast, options = {}) => {
     return false;
   };
 
-  const toggleListening = async () => {
+  const getAudioLevel = useCallback(
+    () => audioManagerRef.current?.getRecordingAudioLevel() ?? null,
+    []
+  );
+
+  const toggleListening = async ({
+    voiceAgentRequested = false,
+    translationRequested = false,
+  } = {}) => {
     if (!isRecording && !isProcessing) {
-      await performStartRecording();
+      await performStartRecording({ voiceAgentRequested, translationRequested });
     } else if (isRecording) {
       await performStopRecording();
     }
@@ -515,6 +740,9 @@ export const useAudioRecording = (toast, options = {}) => {
     isRecording,
     isProcessing,
     isStreaming,
+    isAssistantVoice,
+    isPreparing,
+    isStopping,
     micCaptureStatus,
     transcript,
     partialTranscript,
@@ -523,5 +751,6 @@ export const useAudioRecording = (toast, options = {}) => {
     cancelRecording,
     cancelProcessing,
     toggleListening,
+    getAudioLevel,
   };
 };

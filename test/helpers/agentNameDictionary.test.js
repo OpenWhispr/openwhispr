@@ -55,6 +55,46 @@ test("never names a word outside the agent name itself", async () => {
   assert.deepEqual([...add, ...remove].sort(), ["Jarvis", "OpenWhispr"]);
 });
 
+test("does not add a case-variant of an agent name already in the dictionary", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges(["openwhispr", "Alice"], "OpenWhispr"), {
+    add: [],
+    remove: [],
+  });
+});
+
+test("removes the stored spelling when renaming away from a case-variant", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges(["openwhispr", "Alice"], "Jarvis", "OpenWhispr"), {
+    add: ["Jarvis"],
+    remove: ["openwhispr"],
+  });
+});
+
+test("does not recase an existing agent name when only capitalization changes", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges(["OpenWhispr"], "openwhispr", "OpenWhispr"), {
+    add: [],
+    remove: [],
+  });
+});
+
+test("does not remove a padded stored agent name when the name is unchanged", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges([" OpenWhispr "], "OpenWhispr", "OpenWhispr"), {
+    add: [],
+    remove: [],
+  });
+});
+
+test("removes the padded stored spelling when renaming away", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(agentNameDictionaryChanges([" OpenWhispr ", "Alice"], "Jarvis", "OpenWhispr"), {
+    add: ["Jarvis"],
+    remove: [" OpenWhispr "],
+  });
+});
+
 test("does not remove agent name when only surrounding whitespace changes", async () => {
   const { agentNameDictionaryChanges } = await load();
   assert.deepEqual(agentNameDictionaryChanges(["OpenWhispr"], "  OpenWhispr  ", "OpenWhispr"), {

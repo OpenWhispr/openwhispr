@@ -37,10 +37,12 @@ export default function DictionaryView() {
 
   const pendingImportCount = useMemo(() => parseDictionaryImportText(bulkText).length, [bulkText]);
 
-  const userWords = useMemo(
-    () => customDictionary.filter((w) => w !== agentName),
-    [customDictionary, agentName]
-  );
+  // Same membership rule as agentNameDictionaryChanges: a stored spelling that
+  // differs only by case is still the agent name's entry, so keep it hidden.
+  const userWords = useMemo(() => {
+    const agentWord = agentName.trim().toLowerCase();
+    return customDictionary.filter((w) => w.trim().toLowerCase() !== agentWord);
+  }, [customDictionary, agentName]);
 
   const searchQuery = newWord.trim().toLowerCase();
   const visibleWords = useMemo(

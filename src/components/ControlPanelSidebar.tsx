@@ -7,11 +7,14 @@ import {
   Upload,
   Blocks,
   Gift,
+  Lock,
   Settings,
+  ShieldCheck,
   HelpCircle,
   UserCircle,
   X,
   Search,
+  Zap,
 } from "lucide-react";
 import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
@@ -191,32 +194,44 @@ export default function ControlPanelSidebar({
 
       {showUpgradeBanner && (
         <div className="px-2 pb-2">
-          <div className="relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
+          <div className="relative rounded-xl border border-[#6c50e9]/25 dark:border-[#6c50e9]/40 bg-card bg-gradient-to-b from-[#6c50e9]/15 via-[#6c50e9]/5 to-transparent dark:from-[#6c50e9]/30 dark:via-[#6c50e9]/10 p-3">
             <button
               onClick={() => {
                 setUpgradeDismissed(true);
                 localStorage.setItem("upgradeProDismissed", "true");
               }}
               aria-label={t("common.dismiss")}
-              className="absolute top-1.5 right-1.5 p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="absolute top-2 right-2 p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
               <X size={12} />
             </button>
-            <div className="flex flex-col items-center text-center pt-1">
-              <img src={logoIcon} alt="" className="w-7 h-7 rounded-md mb-2" />
-              <p className="text-xs font-medium text-foreground mb-0.5">
-                {t("sidebar.upgradeTitle")}
-              </p>
-              <p className="text-[11px] leading-snug text-muted-foreground mb-2.5">
-                {t("sidebar.upgradeDescription")}
-              </p>
-              <button
-                onClick={onUpgrade}
-                className="w-full h-7 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
-              >
-                {t("sidebar.learnMore")}
-              </button>
+            <img src={logoIcon} alt="" className="w-7 h-7 rounded-md mb-2.5" />
+            <p className="text-[13px] font-semibold text-foreground mb-0.5">
+              {t("sidebar.upgradeTitle")}
+            </p>
+            <p className="text-xs leading-snug text-muted-foreground mb-2.5">
+              {t("sidebar.upgradeDescription")}
+            </p>
+            <div className="space-y-1.5 mb-3">
+              {(
+                [
+                  [Zap, t("sidebar.upgradeInstantSetup")],
+                  [Lock, t("sidebar.upgradeZeroRetention")],
+                  [ShieldCheck, t("sidebar.upgradeEnterpriseSecurity")],
+                ] as const
+              ).map(([Icon, label]) => (
+                <div key={label} className="flex items-start gap-1.5">
+                  <Icon size={12} className="shrink-0 mt-px text-foreground/60" />
+                  <span className="text-[11px] leading-snug text-foreground/80">{label}</span>
+                </div>
+              ))}
             </div>
+            <button
+              onClick={onUpgrade}
+              className="w-full h-7 rounded-full bg-[#4079ed] text-white text-xs font-medium hover:bg-[#3568d9] active:bg-[#2f5dc4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4079ed]/40 transition-colors"
+            >
+              {t("sidebar.learnMore")}
+            </button>
           </div>
         </div>
       )}

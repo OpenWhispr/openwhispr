@@ -69,6 +69,8 @@ export const INFERENCE_SCOPES = {
     },
     fallbackScope: "dictationCleanup",
   },
+  // Runs every chat conversation, including the voice assistant panel's
+  // standalone commands. Selection edits stay on dictationAgent(Vision).
   chatIntelligence: {
     storeKeys: {
       mode: "chatAgentMode",

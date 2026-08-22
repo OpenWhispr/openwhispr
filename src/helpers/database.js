@@ -5434,6 +5434,80 @@ class DatabaseManager {
     }
   }
 
+  acknowledgeConversationCreate(id, snapshot, cloudId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!snapshot || !cloudId) {
+        return { success: false, outcome: "unresolved", cloud_id: null };
+      }
+
+      return this.db.transaction(() => {
+        const current = this.db
+          .prepare(
+            `SELECT c.*, COUNT(m.id) AS message_count
+             FROM agent_conversations c
+             LEFT JOIN agent_messages m ON m.conversation_id = c.id
+             WHERE c.id = ?
+             GROUP BY c.id`
+          )
+          .get(id);
+        const expectedClientId = snapshot.client_conversation_id ?? null;
+
+        if (!current || (current.client_conversation_id ?? null) !== expectedClientId) {
+          const identityStillExists = expectedClientId
+            ? this.db
+                .prepare("SELECT 1 FROM agent_conversations WHERE client_conversation_id = ?")
+                .get(expectedClientId)
+            : null;
+          return {
+            success: true,
+            outcome: identityStillExists ? "unresolved" : "orphaned",
+            cloud_id: null,
+          };
+        }
+
+        if (current.cloud_id) {
+          return { success: true, outcome: "already-linked", cloud_id: current.cloud_id };
+        }
+
+        if (current.deleted_at) {
+          this.db
+            .prepare(
+              `UPDATE agent_conversations
+               SET cloud_id = ?, sync_status = 'pending'
+               WHERE id = ? AND cloud_id IS NULL`
+            )
+            .run(cloudId, id);
+          return { success: true, outcome: "delete-pending", cloud_id: cloudId };
+        }
+
+        const unchanged =
+          current.title === snapshot.title &&
+          current.updated_at === snapshot.updated_at &&
+          Number(current.message_count) === snapshot.message_count;
+        if (!unchanged) {
+          return { success: true, outcome: "changed", cloud_id: null };
+        }
+
+        this.db
+          .prepare(
+            `UPDATE agent_conversations
+             SET cloud_id = ?, sync_status = 'synced'
+             WHERE id = ? AND cloud_id IS NULL`
+          )
+          .run(cloudId, id);
+        return { success: true, outcome: "synced", cloud_id: cloudId };
+      })();
+    } catch (error) {
+      debugLogger.error(
+        "Error acknowledging conversation create",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
   hardDeleteConversation(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");

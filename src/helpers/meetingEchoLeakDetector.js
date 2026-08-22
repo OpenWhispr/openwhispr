@@ -1,8 +1,14 @@
+const {
+  pcm16ToFloat32,
+  MEETING_MIC_ACTIVITY_RMS,
+  MEETING_SYSTEM_ACTIVITY_RMS,
+} = require("../utils/audioUtils");
+
 const SAMPLE_RATE = 24000;
 const MAX_SYSTEM_HISTORY_MS = 6000;
 const MAX_MIC_HISTORY_MS = 12000;
-const MIN_RMS = 0.006;
-const MIN_SYSTEM_RMS = 0.004;
+const MIN_RMS = MEETING_MIC_ACTIVITY_RMS;
+const MIN_SYSTEM_RMS = MEETING_SYSTEM_ACTIVITY_RMS;
 const MAX_LAG_MS = 500;
 const LAG_STEP_SAMPLES = 120;
 const PARTIAL_WINDOW_MS = 600;
@@ -29,8 +35,6 @@ const DOUBLE_TALK_CORRELATION = 0.45;
 const DOUBLE_TALK_EXPLAINED = 0.3;
 const DOUBLE_TALK_RESIDUAL = 0.2;
 const DOUBLE_TALK_MIC_TO_SYSTEM_RATIO = 1.16;
-
-const { pcm16ToFloat32 } = require("../utils/audioUtils");
 
 function computeRms(samples) {
   if (!samples.length) {
