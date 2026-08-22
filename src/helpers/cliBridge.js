@@ -32,7 +32,7 @@ function readJsonBody(req) {
     let raw = "";
     req.on("data", (chunk) => {
       raw += chunk;
-      if (raw.length > MAX_REQUEST_BODY_BYTES) {
+      if (Buffer.byteLength(raw, "utf8") > MAX_REQUEST_BODY_BYTES) {
         reject(new Error("Request body too large"));
         req.destroy();
       }
