@@ -148,3 +148,18 @@ test("macOS detects a login launch from wasOpenedAtLogin, not from argv", () => 
     false
   );
 });
+
+test("autoStartPolicy helpers handle nullish inputs safely", () => {
+  assert.deepEqual(resolveAutoStartState({ platform: "darwin", loginItemSettings: null }), {
+    enabled: false,
+    requiresApproval: false,
+  });
+  assert.deepEqual(resolveAutoStartState({ platform: "win32", loginItemSettings: undefined }), {
+    enabled: false,
+    requiresApproval: false,
+  });
+  assert.equal(needsHiddenFlagMigration({ platform: "win32", loginItemSettings: null }), false);
+  assert.equal(wasLaunchedHidden({ platform: "darwin", loginItemSettings: null }), false);
+  assert.equal(wasLaunchedHidden({ platform: "linux", argv: null }), false);
+  assert.equal(wasLaunchedHidden({ platform: "win32", argv: undefined }), false);
+});

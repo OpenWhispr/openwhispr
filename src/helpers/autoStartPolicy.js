@@ -15,18 +15,19 @@ function getLoginItemArgs(platform) {
 
 // For the platforms setLoginItemSettings covers: win32 and darwin.
 function resolveAutoStartState({ platform, loginItemSettings }) {
+  const settings = loginItemSettings || {};
   if (platform === "win32") {
     // openAtLogin only checks whether the Run entry matches this executable and
     // args; it ignores Explorer's StartupApproved key, which is what Task Manager
     // writes when a user disables a startup app. Only this field covers both.
-    return { enabled: !!loginItemSettings.executableWillLaunchAtLogin, requiresApproval: false };
+    return { enabled: !!settings.executableWillLaunchAtLogin, requiresApproval: false };
   }
   return {
-    enabled: !!loginItemSettings.openAtLogin,
+    enabled: !!settings.openAtLogin,
     // macOS 13+ routes login items through SMAppService, which can register an
     // item and still leave it awaiting approval in System Settings. Unsurfaced,
     // that just looks like a toggle that will not stick.
-    requiresApproval: loginItemSettings.status === "requires-approval",
+    requiresApproval: settings.status === "requires-approval",
   };
 }
 
@@ -36,13 +37,14 @@ function resolveAutoStartState({ platform, loginItemSettings }) {
 // entry rather than adding a second one.
 function needsHiddenFlagMigration({ platform, loginItemSettings }) {
   if (platform !== "win32") return false;
-  return !!loginItemSettings.executableWillLaunchAtLogin && !loginItemSettings.openAtLogin;
+  const settings = loginItemSettings || {};
+  return !!settings.executableWillLaunchAtLogin && !settings.openAtLogin;
 }
 
 // Whether the session started this process rather than the user.
 function wasLaunchedHidden({ platform, argv, loginItemSettings }) {
-  if (platform === "darwin") return !!loginItemSettings.wasOpenedAtLogin;
-  return argv.includes(HIDDEN_LAUNCH_FLAG);
+  if (platform === "darwin") return !!loginItemSettings?.wasOpenedAtLogin;
+  return Array.isArray(argv) && argv.includes(HIDDEN_LAUNCH_FLAG);
 }
 
 module.exports = {
