@@ -15,13 +15,13 @@ const partitionPendingMicFinals = ({ pending, now, force = false, isDuplicate })
   const duplicates = [];
   const releases = [];
 
-  for (const entry of pending) {
+  for (const entry of pending || []) {
     if (!force && entry.releaseAt > now) {
       deferred.push(entry);
       continue;
     }
 
-    if (isDuplicate(entry)) {
+    if (typeof isDuplicate === "function" && isDuplicate(entry)) {
       duplicates.push(entry);
       continue;
     }
@@ -43,12 +43,22 @@ const partitionPendingMicFinals = ({ pending, now, force = false, isDuplicate })
  * `holdback` away from the capture timestamp.
  */
 const isWithinRetractWindow = ({ candidate, systemTimestamp, windowMs }) => {
+  if (
+    !candidate ||
+    !Number.isFinite(candidate.timestamp) ||
+    !Number.isFinite(systemTimestamp) ||
+    !Number.isFinite(windowMs)
+  ) {
+    return false;
+  }
+
   if (Math.abs(candidate.timestamp - systemTimestamp) <= windowMs) {
     return true;
   }
 
   return (
     candidate.committedAt != null &&
+    Number.isFinite(candidate.committedAt) &&
     systemTimestamp >= candidate.timestamp &&
     Math.abs(candidate.committedAt - systemTimestamp) <= windowMs
   );

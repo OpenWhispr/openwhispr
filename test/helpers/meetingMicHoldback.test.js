@@ -461,3 +461,44 @@ test("partitionOverlappingPendingMicFinals splits pending finals by system overl
     { text: "c", relaxed: false },
   ]);
 });
+
+test("partitionPendingMicFinals and isWithinRetractWindow handle nullish inputs safely", () => {
+  assert.deepEqual(partitionPendingMicFinals({ pending: null, now: NOW }), {
+    deferred: [],
+    duplicates: [],
+    releases: [],
+  });
+  assert.deepEqual(partitionPendingMicFinals({ pending: undefined, now: NOW }), {
+    deferred: [],
+    duplicates: [],
+    releases: [],
+  });
+  assert.deepEqual(
+    partitionPendingMicFinals({
+      pending: [entry({ releaseAt: NOW - 100 })],
+      now: NOW,
+    }),
+    {
+      deferred: [],
+      duplicates: [],
+      releases: [entry({ releaseAt: NOW - 100 })],
+    }
+  );
+
+  assert.equal(
+    isWithinRetractWindow({ candidate: null, systemTimestamp: NOW, windowMs: 1000 }),
+    false
+  );
+  assert.equal(
+    isWithinRetractWindow({ candidate: undefined, systemTimestamp: NOW, windowMs: 1000 }),
+    false
+  );
+  assert.equal(
+    isWithinRetractWindow({
+      candidate: entry({ timestamp: null }),
+      systemTimestamp: NOW,
+      windowMs: 1000,
+    }),
+    false
+  );
+});
