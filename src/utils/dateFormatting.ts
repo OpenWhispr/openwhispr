@@ -12,12 +12,15 @@ export function parseEventDate(value: string): Date | null {
 }
 
 export function normalizeDbDate(dateStr: string): Date {
-  const hasExplicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(dateStr);
-  const source = hasExplicitZone ? dateStr : `${dateStr}Z`;
+  if (typeof dateStr !== "string" || !dateStr.trim()) return new Date(NaN);
+  const trimmed = dateStr.trim();
+  const hasExplicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed);
+  const source = hasExplicitZone ? trimmed : `${trimmed}Z`;
   return new Date(source);
 }
 
 export function formatShortDate(dateStr: string): string {
+  if (!dateStr) return "";
   const date = normalizeDbDate(dateStr);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -27,6 +30,7 @@ export function formatRelativeTime(
   dateStr: string,
   t: (key: string, options?: Record<string, unknown>) => string
 ): string {
+  if (!dateStr) return "";
   const date = normalizeDbDate(dateStr);
   if (Number.isNaN(date.getTime())) return "";
   const diff = Date.now() - date.getTime();
@@ -42,7 +46,9 @@ export function formatRelativeTime(
 }
 
 export function formatDateGroup(date: Date | string, t: (key: string) => string): string {
+  if (!date) return "";
   const d = typeof date === "string" ? normalizeDbDate(date) : date;
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today);
