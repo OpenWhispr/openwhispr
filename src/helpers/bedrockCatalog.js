@@ -4,10 +4,13 @@
 
 function profileIdByModelId(inferenceProfileSummaries) {
   const map = new Map();
-  for (const profile of inferenceProfileSummaries || []) {
+  const profiles = Array.isArray(inferenceProfileSummaries) ? inferenceProfileSummaries : [];
+  for (const profile of profiles) {
     if (!profile?.inferenceProfileId) continue;
-    for (const model of profile.models || []) {
-      const modelId = model?.modelArn?.split("/").pop();
+    const models = Array.isArray(profile.models) ? profile.models : [];
+    for (const model of models) {
+      const modelId =
+        typeof model?.modelArn === "string" ? model.modelArn.split("/").pop() : undefined;
       if (modelId && !map.has(modelId)) map.set(modelId, profile.inferenceProfileId);
     }
   }
@@ -18,22 +21,32 @@ function normalizeBedrockCatalog(modelSummaries, inferenceProfileSummaries) {
   const profiles = profileIdByModelId(inferenceProfileSummaries);
   const seen = new Set();
   const models = [];
+  const summaries = Array.isArray(modelSummaries) ? modelSummaries : [];
 
-  for (const summary of modelSummaries || []) {
-    if (!summary?.modelId) continue;
-    if (!(summary.outputModalities || []).includes("TEXT")) continue;
+  for (const summary of summaries) {
+    if (!summary?.modelId || typeof summary.modelId !== "string") continue;
+    const modalities = Array.isArray(summary.outputModalities) ? summary.outputModalities : [];
+    if (!modalities.includes("TEXT")) continue;
     const status = summary.modelLifecycle?.status;
     if (status && status !== "ACTIVE") continue;
 
-    const types = summary.inferenceTypesSupported || [];
+    const types = Array.isArray(summary.inferenceTypesSupported)
+      ? summary.inferenceTypesSupported
+      : [];
     const value = types.includes("ON_DEMAND") ? summary.modelId : profiles.get(summary.modelId);
     if (!value || seen.has(value)) continue;
     seen.add(value);
 
+    const vendor = typeof summary.providerName === "string" ? summary.providerName : "";
+    const label =
+      typeof summary.modelName === "string" && summary.modelName
+        ? summary.modelName
+        : String(summary.modelId);
+
     models.push({
       value,
-      label: summary.modelName || summary.modelId,
-      vendor: summary.providerName || "",
+      label,
+      vendor,
     });
   }
 

@@ -96,3 +96,28 @@ test("sorts by vendor then label and dedupes by value", () => {
   const vendors = models.map((m) => m.vendor);
   assert.deepEqual(vendors, [...vendors].sort((a, b) => a.localeCompare(b)));
 });
+
+test("handles non-array summaries and nullish fields safely", () => {
+  assert.deepEqual(normalizeBedrockCatalog(null, null), []);
+  assert.deepEqual(normalizeBedrockCatalog(undefined, undefined), []);
+  assert.deepEqual(normalizeBedrockCatalog({}, {}), []);
+  assert.deepEqual(normalizeBedrockCatalog("invalid", "invalid"), []);
+  assert.deepEqual(
+    normalizeBedrockCatalog([
+      {
+        modelId: "test-model",
+        outputModalities: ["TEXT"],
+        inferenceTypesSupported: ["ON_DEMAND"],
+        providerName: null,
+        modelName: null,
+      },
+    ]),
+    [
+      {
+        value: "test-model",
+        label: "test-model",
+        vendor: "",
+      },
+    ]
+  );
+});
