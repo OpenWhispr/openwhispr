@@ -1,6 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { mergeSpeakersWithText, formatSpeakerTranscript } = require("../../src/helpers/speakerMerge");
+const {
+  mergeSpeakersWithText,
+  formatSpeakerTranscript,
+  splitIntoSentences,
+  formatTimestamp,
+} = require("../../src/helpers/speakerMerge");
 
 test("mergeSpeakersWithText assigns sentences to speakers by time proportion", () => {
   const segments = [
@@ -170,4 +175,45 @@ test("zero duration with unsorted segments still maps proportionally against the
   const merged = mergeSpeakersWithText(segments, text, 0);
   const last = merged[merged.length - 1];
   assert.equal(last.speaker, "spk_1", "tail sentences must map to the late segment");
+});
+
+test("splitIntoSentences returns empty array for nullish, non-string, or whitespace input", () => {
+  assert.deepEqual(splitIntoSentences(null), []);
+  assert.deepEqual(splitIntoSentences(undefined), []);
+  assert.deepEqual(splitIntoSentences(""), []);
+  assert.deepEqual(splitIntoSentences("   "), []);
+  assert.deepEqual(splitIntoSentences(123), []);
+});
+
+test("formatTimestamp handles non-finite, negative, and nullish inputs safely", () => {
+  assert.equal(formatTimestamp(undefined), "0:00");
+  assert.equal(formatTimestamp(null), "0:00");
+  assert.equal(formatTimestamp(NaN), "0:00");
+  assert.equal(formatTimestamp(Infinity), "0:00");
+  assert.equal(formatTimestamp(-Infinity), "0:00");
+  assert.equal(formatTimestamp(-5), "0:00");
+  assert.equal(formatTimestamp(0), "0:00");
+  assert.equal(formatTimestamp(65), "1:05");
+  assert.equal(formatTimestamp(3665), "1:01:05");
+});
+
+test("formatSpeakerTranscript returns empty string for nullish or invalid inputs", () => {
+  assert.equal(formatSpeakerTranscript(null), "");
+  assert.equal(formatSpeakerTranscript(undefined), "");
+  assert.equal(formatSpeakerTranscript("not an array"), "");
+});
+
+test("mergeSpeakersWithText handles nullish text and segments safely", () => {
+  const resultNull = mergeSpeakersWithText(null, null, 10);
+  assert.equal(resultNull.length, 1);
+  assert.equal(resultNull[0].speaker, "speaker_0");
+  assert.equal(resultNull[0].text, "");
+  assert.equal(resultNull[0].start, 0);
+  assert.equal(resultNull[0].end, 10);
+
+  const segments = [{ start: 0, end: 10, speaker: "speaker_0" }];
+  const resultNullText = mergeSpeakersWithText(segments, null, 10);
+  assert.equal(resultNullText.length, 1);
+  assert.equal(resultNullText[0].speaker, "speaker_0");
+  assert.equal(resultNullText[0].text, "");
 });

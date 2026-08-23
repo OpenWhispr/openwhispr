@@ -1,4 +1,7 @@
 function splitIntoSentences(text) {
+  if (typeof text !== "string" || text.trim().length === 0) {
+    return [];
+  }
   if (typeof Intl !== "undefined" && Intl.Segmenter) {
     try {
       const segmenter = new Intl.Segmenter(undefined, { granularity: "sentence" });
@@ -16,9 +19,13 @@ function splitIntoSentences(text) {
 }
 
 function formatTimestamp(seconds) {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
+  const totalSeconds =
+    typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0
+      ? Math.floor(seconds)
+      : 0;
+  const hrs = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
   if (hrs > 0) {
     return `${hrs}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   }
@@ -26,16 +33,17 @@ function formatTimestamp(seconds) {
 }
 
 function mergeSpeakersWithText(segments, text, durationSeconds) {
+  const safeText = typeof text === "string" ? text : "";
   if (!segments || segments.length === 0) {
-    return [{ speaker: "speaker_0", text, start: 0, end: durationSeconds || 0 }];
+    return [{ speaker: "speaker_0", text: safeText, start: 0, end: durationSeconds || 0 }];
   }
 
   // Segments arrive in stdout order, not sorted — never assume the last one ends latest.
   const maxSegmentEnd = segments.reduce((max, s) => Math.max(max, s.end || 0), 0);
 
-  const sentences = splitIntoSentences(text);
+  const sentences = splitIntoSentences(safeText);
   if (sentences.length === 0) {
-    return [{ speaker: segments[0].speaker, text, start: segments[0].start, end: maxSegmentEnd }];
+    return [{ speaker: segments[0].speaker, text: safeText, start: segments[0].start, end: maxSegmentEnd }];
   }
 
   const totalDuration = durationSeconds || maxSegmentEnd || 1;
@@ -87,6 +95,10 @@ function mergeSpeakersWithText(segments, text, durationSeconds) {
 }
 
 function formatSpeakerTranscript(mergedSegments) {
+  if (!Array.isArray(mergedSegments) || mergedSegments.length === 0) {
+    return "";
+  }
+
   const speakerMap = new Map();
   let nextIndex = 1;
 
