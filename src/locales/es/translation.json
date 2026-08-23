@@ -3238,7 +3238,8 @@
       },
       "cleanupFailed": {
         "title": "Limpieza fallida",
-        "description": "Tu dictado se pegó sin limpieza con IA."
+        "description": "Tu dictado se pegó sin limpieza con IA.",
+        "notConfigured": "La limpieza está activada, pero no hay ningún modelo de IA configurado para ejecutarla. Elige un modelo en Ajustes → Modelos de IA (o inicia sesión en OpenWhispr Cloud) y la limpieza empezará a funcionar."
       }
     },
     "mic": {

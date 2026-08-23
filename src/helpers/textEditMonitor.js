@@ -41,12 +41,13 @@ function isPersistentAxNoValueFailure(stderr) {
 // keyboard focus. Modern Chromium builds the tree on demand when our
 // reads arrive; where it doesn't, we skip auto-learn for that paste instead.
 
-// Returns the character before the cursor for smart-spacing. Output protocol:
-//   "OK:X"   — preceding char is X
-//   "START:" — cursor at field start, no preceding char
+// Returns the text just before the cursor (up to 32 chars) for smart-spacing
+// and continuation casing. Output protocol:
+//   "OK:X…"  — preceding text is X… (may span lines)
+//   "START:" — cursor at field start, no preceding text
 //   ""       — unknown / read failed (caller falls back to append-mode spacing)
-// AppleScript `character N` is 1-indexed; AXSelectedTextRange.location is
-// 0-indexed, so the char at offset (loc-1) is `character loc`.
+// AppleScript `text M thru N` is 1-indexed; AXSelectedTextRange.location is
+// 0-indexed, so the text ending at offset (loc-1) is `text … thru loc`.
 const MACOS_AX_PRECEDING_CHAR_SCRIPT = (pid) =>
   `tell application "System Events"\n` +
   `\tset targetProc to first application process whose unix id is ${pid}\n` +
@@ -69,7 +70,9 @@ const MACOS_AX_PRECEDING_CHAR_SCRIPT = (pid) =>
   `\tif (length of theVal) is 0 then return "START:"\n` +
   `\tif loc > (length of theVal) then set loc to length of theVal\n` +
   `\tif loc < 1 then return "START:"\n` +
-  `\treturn "OK:" & (character loc of theVal)\n` +
+  `\tset tailStart to loc - 31\n` +
+  `\tif tailStart < 1 then set tailStart to 1\n` +
+  `\treturn "OK:" & (text tailStart thru loc of theVal)\n` +
   `end tell`;
 
 // Read the exact current selection without touching the clipboard. Prefixes
@@ -366,12 +369,13 @@ class TextEditMonitor extends EventEmitter {
   }
 
   /**
-   * macOS: read the char before the cursor in the focused text field, used by
-   * paste-time smart spacing. Resolves to { state: "ok", char } | { state:
-   * "start" } | { state: "unknown" }. Tight timeout so paste latency is
-   * unaffected; on "unknown" the caller falls back to append-mode spacing.
+   * macOS: read the text before the cursor in the focused text field, used for
+   * smart spacing and continuation casing. Captured at dictation start (not in
+   * the paste hot path) since the Accessibility read costs hundreds of ms.
+   * Resolves to { state: "ok", text } | { state: "start" } | { state:
+   * "unknown" }; on "unknown" the caller falls back to append-mode spacing.
    */
-  getPrecedingChar(pid, timeoutMs = 400) {
+  getPrecedingText(pid, timeoutMs = 3000) {
     return new Promise((resolve) => {
       if (process.platform !== "darwin" || !pid) {
         resolve({ state: "unknown" });
@@ -389,7 +393,7 @@ class TextEditMonitor extends EventEmitter {
           return;
         }
         if (out.startsWith("OK:")) {
-          resolve({ state: "ok", char: out.slice(3) });
+          resolve({ state: "ok", text: out.slice(3) });
           return;
         }
         resolve({ state: "unknown" });

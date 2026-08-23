@@ -46,7 +46,7 @@ import {
   isTranscriptionSelectionAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
-import { recordCleanupFailure } from "../stores/cleanupFailureStore";
+import { recordCleanupFailure, recordCleanupSkipped } from "../stores/cleanupFailureStore";
 import {
   getBatchTranscriptionModel,
   getCloudModel,
@@ -147,6 +147,16 @@ function translationChainReachable(settings) {
   }).reachable;
 }
 
+// The cleanup toggle can be on with no reasoning model reachable (no cloud
+// account, key, or local model), which silently pastes raw text. Surface that
+// once per app run so the toggle isn't a lie.
+let warnedCleanupUnconfigured = false;
+function warnCleanupUnconfigured() {
+  if (warnedCleanupUnconfigured) return;
+  warnedCleanupUnconfigured = true;
+  recordCleanupSkipped();
+}
+
 function resolveReasoningRoute(
   text,
   settings,
@@ -188,6 +198,15 @@ function resolveReasoningRoute(
     agentModel: agent.model,
     hasScreenContext: !!screenContext,
   });
+  if (
+    kind === "skip" &&
+    !voiceAgentRequested &&
+    !translationRequested &&
+    settings.useCleanupModel &&
+    !cleanupReachable
+  ) {
+    warnCleanupUnconfigured();
+  }
   if (translationRequested && kind !== "translation") {
     logger.warn(
       "Translation requested but unreachable, falling back",

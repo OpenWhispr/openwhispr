@@ -3190,7 +3190,8 @@
       },
       "cleanupFailed": {
         "title": "清理失败",
-        "description": "你的听写已直接粘贴，未经 AI 清理。"
+        "description": "你的听写已直接粘贴，未经 AI 清理。",
+        "notConfigured": "清理功能已开启，但尚未设置用于运行它的 AI 模型。请在“设置 → AI 模型”中选择一个模型（或登录 OpenWhispr Cloud），清理功能即可生效。"
       }
     },
     "mic": {

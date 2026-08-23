@@ -3355,7 +3355,8 @@
       },
       "cleanupFailed": {
         "title": "Cleanup failed",
-        "description": "Your dictation was pasted without AI cleanup."
+        "description": "Your dictation was pasted without AI cleanup.",
+        "notConfigured": "Cleanup is switched on, but no AI model is set up to run it. Pick a model under Settings → AI Models (or sign in to OpenWhispr Cloud) and cleanup will start working."
       }
     },
     "mic": {
