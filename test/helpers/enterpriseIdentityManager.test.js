@@ -56,6 +56,14 @@ function jsonResponse(data, status = 200) {
   });
 }
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 function request(overrides = {}) {
   return {
     accountId,
@@ -173,6 +181,68 @@ test("an Enterprise-plan downgrade clears prior managed enforcement", async (t) 
   assert.equal(snapshots.at(-1).enforcementRequired, false);
 });
 
+test("an authoritative unmanaged verdict survives restart and a transient outage", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const cachePath = path.join(tempDir, "config.json");
+  const tokenStore = { getState: () => ({ token: "session", generation: 4 }) };
+  const common = {
+    cachePath,
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    tokenStore,
+  };
+  const online = createEnterpriseIdentityManager({
+    ...common,
+    proxyFetch: async () =>
+      jsonResponse(
+        { error: "An active Enterprise workspace is required", code: "ENTERPRISE_REQUIRED" },
+        403
+      ),
+  });
+
+  const unmanaged = await online.getConfig(request());
+  assert.equal(unmanaged.enforcementRequired, false);
+
+  const offline = createEnterpriseIdentityManager({
+    ...common,
+    proxyFetch: async () => {
+      throw new Error("offline");
+    },
+  });
+  const restored = await offline.getConfig(request());
+
+  assert.equal(restored.success, false);
+  assert.equal(restored.code, "ENTERPRISE_REQUIRED");
+  assert.equal(restored.enforcementRequired, false);
+});
+
+test("an authoritative unmanaged verdict survives an unwritable cache in memory", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  let offline = false;
+  const manager = createEnterpriseIdentityManager({
+    cachePath: tempDir,
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => {
+      if (offline) throw new Error("offline");
+      return jsonResponse(
+        { error: "An active Enterprise workspace is required", code: "ENTERPRISE_REQUIRED" },
+        403
+      );
+    },
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+
+  assert.equal((await manager.getConfig(request())).enforcementRequired, false);
+  offline = true;
+  const restored = await manager.getConfig({ ...request(), forceRefresh: true });
+
+  assert.equal(restored.code, "ENTERPRISE_REQUIRED");
+  assert.equal(restored.enforcementRequired, false);
+});
+
 test("a malformed successful config response fails closed instead of using disk cache", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
@@ -228,25 +298,234 @@ test("first authorization and malformed failures keep enforcement unknown", asyn
   }
 });
 
-test("a known nonrequired configuration produces a definitive unmanaged denial", async (t) => {
+test("a prior non-enforced config cannot turn potentially-managed failures into unmanaged", async (t) => {
+  const scenarios = [
+    { code: "SSO_REQUIRED", status: 403 },
+    { code: "AUTH_EXPIRED", status: 401 },
+    { code: "DIRECTORY_ASSIGNMENT_REQUIRED", status: 403 },
+  ];
+
+  for (const scenario of scenarios) {
+    await t.test(scenario.code, async (t) => {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+      t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+      let response = jsonResponse({ data: managedConfig() });
+      const snapshots = [];
+      const manager = createEnterpriseIdentityManager({
+        cachePath: path.join(tempDir, "config.json"),
+        getApiUrl: () => "https://api.example.com",
+        getAppVersion: () => "1.8.1",
+        proxyFetch: async () => response.clone(),
+        tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+        broadcast: (snapshot) => snapshots.push(snapshot),
+      });
+
+      assert.equal((await manager.getConfig(request())).success, true);
+      response = jsonResponse({ error: scenario.code, code: scenario.code }, scenario.status);
+      const denied = await manager.getConfig({ ...request(), forceRefresh: true });
+
+      assert.equal(denied.code, scenario.code);
+      assert.equal(denied.enforcementRequired, undefined);
+      assert.equal(Object.hasOwn(snapshots.at(-1), "enforcementRequired"), false);
+    });
+  }
+});
+
+test("failed identity cache invalidation cannot resurrect an unmanaged disk verdict", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-  let response = jsonResponse({ data: managedConfig() });
+  const cachePath = path.join(tempDir, "config.json");
+  let mode = "unmanaged";
+  const manager = createEnterpriseIdentityManager({
+    cachePath,
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => {
+      if (mode === "offline") throw new Error("offline");
+      if (mode === "unknown") {
+        return jsonResponse({ error: "Sign in with company SSO", code: "SSO_REQUIRED" }, 403);
+      }
+      return jsonResponse(
+        { error: "An active Enterprise workspace is required", code: "ENTERPRISE_REQUIRED" },
+        403
+      );
+    },
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+
+  assert.equal((await manager.getConfig(request())).enforcementRequired, false);
+  const originalWriteFileSync = fs.writeFileSync;
+  fs.writeFileSync = (target, ...args) => {
+    if (target === cachePath) throw Object.assign(new Error("read only"), { code: "EACCES" });
+    return originalWriteFileSync(target, ...args);
+  };
+  try {
+    mode = "unknown";
+    const unknown = await manager.getConfig({ ...request(), forceRefresh: true });
+    assert.equal(unknown.enforcementRequired, undefined);
+    mode = "offline";
+    const offline = await manager.getConfig({ ...request(), forceRefresh: true });
+    assert.equal(offline.enforcementRequired, undefined);
+    assert.notEqual(offline.code, "ENTERPRISE_REQUIRED");
+  } finally {
+    fs.writeFileSync = originalWriteFileSync;
+  }
+});
+
+test("clear tombstones an unmanaged disk verdict when cache unlink fails", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const cachePath = path.join(tempDir, "config.json");
+  let offline = false;
+  const manager = createEnterpriseIdentityManager({
+    cachePath,
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => {
+      if (offline) throw new Error("offline");
+      return jsonResponse(
+        { error: "An active Enterprise workspace is required", code: "ENTERPRISE_REQUIRED" },
+        403
+      );
+    },
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+
+  assert.equal((await manager.getConfig(request())).enforcementRequired, false);
+  const originalUnlinkSync = fs.unlinkSync;
+  fs.unlinkSync = (target) => {
+    if (target === cachePath) throw Object.assign(new Error("read only"), { code: "EACCES" });
+    return originalUnlinkSync(target);
+  };
+  try {
+    manager.clear();
+  } finally {
+    fs.unlinkSync = originalUnlinkSync;
+  }
+  offline = true;
+  const result = await manager.getConfig({ ...request(), forceRefresh: true });
+  assert.equal(result.enforcementRequired, undefined);
+  assert.notEqual(result.code, "ENTERPRISE_REQUIRED");
+});
+
+test("clear fences an in-flight managed response before any cache or broadcast mutation", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const cachePath = path.join(tempDir, "config.json");
+  const firstResponse = deferred();
+  const freshResponse = deferred();
+  const snapshots = [];
+  let calls = 0;
+  const manager = createEnterpriseIdentityManager({
+    cachePath,
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => {
+      calls += 1;
+      if (calls === 1) return firstResponse.promise;
+      return freshResponse.promise;
+    },
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+    broadcast: (snapshot) => snapshots.push(snapshot),
+  });
+
+  const staleRequest = manager.getConfig(request());
+  await new Promise((resolve) => setImmediate(resolve));
+  manager.clear();
+  const freshRequests = Promise.all([manager.getConfig(request()), manager.getConfig(request())]);
+  firstResponse.resolve(jsonResponse({ data: managedConfig() }));
+
+  const staleResult = await staleRequest;
+  assert.equal(staleResult.success, false);
+  assert.equal(staleResult.code, "AUTH_CONTEXT_CHANGED");
+  assert.equal(snapshots.length, 0);
+  assert.equal(fs.existsSync(cachePath), false);
+
+  freshResponse.resolve(jsonResponse({ data: managedConfig() }));
+  const [freshResult, deduplicatedResult] = await freshRequests;
+  assert.equal(freshResult.success, true);
+  assert.equal(freshResult.status, "network");
+  assert.equal(deduplicatedResult.success, true);
+  assert.equal(calls, 2);
+  assert.equal(snapshots.length, 1);
+  assert.equal(JSON.parse(fs.readFileSync(cachePath, "utf8")).entries.length, 1);
+});
+
+test("clear fences an in-flight unmanaged verdict and preserves a failed-unlink tombstone", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const cachePath = path.join(tempDir, "config.json");
+  const unmanagedResponse = () =>
+    jsonResponse(
+      { error: "An active Enterprise workspace is required", code: "ENTERPRISE_REQUIRED" },
+      403
+    );
+  const inFlightResponse = deferred();
+  const snapshots = [];
+  let mode = "seed";
+  const manager = createEnterpriseIdentityManager({
+    cachePath,
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => {
+      if (mode === "pending") return inFlightResponse.promise;
+      if (mode === "offline") throw new Error("offline");
+      return unmanagedResponse();
+    },
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+    broadcast: (snapshot) => snapshots.push(snapshot),
+  });
+
+  assert.equal((await manager.getConfig(request())).enforcementRequired, false);
+  const broadcastsBeforeClear = snapshots.length;
+  mode = "pending";
+  const staleRequest = manager.getConfig({ ...request(), forceRefresh: true });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const originalUnlinkSync = fs.unlinkSync;
+  fs.unlinkSync = (target) => {
+    if (target === cachePath) throw Object.assign(new Error("read only"), { code: "EACCES" });
+    return originalUnlinkSync(target);
+  };
+  try {
+    manager.clear();
+  } finally {
+    fs.unlinkSync = originalUnlinkSync;
+  }
+  inFlightResponse.resolve(unmanagedResponse());
+
+  const staleResult = await staleRequest;
+  assert.equal(staleResult.success, false);
+  assert.equal(staleResult.code, "AUTH_CONTEXT_CHANGED");
+  assert.equal(snapshots.length, broadcastsBeforeClear);
+
+  mode = "offline";
+  const offline = await manager.getConfig({ ...request(), forceRefresh: true });
+  assert.equal(offline.enforcementRequired, undefined);
+  assert.notEqual(offline.code, "ENTERPRISE_REQUIRED");
+
+  mode = "fresh";
+  const freshUnmanaged = await manager.getConfig({ ...request(), forceRefresh: true });
+  assert.equal(freshUnmanaged.enforcementRequired, false);
+  assert.equal(snapshots.length, broadcastsBeforeClear + 1);
+});
+
+test("an unchanged successful refresh does not broadcast an authorization change", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const snapshots = [];
   const manager = createEnterpriseIdentityManager({
     cachePath: path.join(tempDir, "config.json"),
     getApiUrl: () => "https://api.example.com",
     getAppVersion: () => "1.8.1",
-    proxyFetch: async () => response.clone(),
+    proxyFetch: async () => jsonResponse({ data: managedConfig() }),
     tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
     broadcast: (snapshot) => snapshots.push(snapshot),
   });
 
   assert.equal((await manager.getConfig(request())).success, true);
-  response = jsonResponse({ error: "Sign in with company SSO", code: "SSO_REQUIRED" }, 403);
-  const denied = await manager.getConfig({ ...request(), forceRefresh: true });
-  assert.equal(denied.enforcementRequired, false);
-  assert.equal(snapshots.at(-1).enforcementRequired, false);
+  assert.equal((await manager.getConfig({ ...request(), forceRefresh: true })).success, true);
+  assert.equal(snapshots.length, 1);
 });
 
 test("a first transient failure does not claim that enforcement is disabled", async (t) => {

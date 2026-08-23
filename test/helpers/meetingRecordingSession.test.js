@@ -108,6 +108,39 @@ test("a new renderer start waits for the accepted stop to finish", async () => {
   assert.equal(nextStartBegan, true);
 });
 
+test("authorization cleanup runs immediately while a graceful stop is pending", async () => {
+  const { createMeetingRecordingStopBarrier } = await load();
+  const stopCompletion = createDeferred();
+  const abortCompletion = createDeferred();
+  const barrier = createMeetingRecordingStopBarrier();
+  const events = [];
+
+  const stopping = barrier.runStop(async () => {
+    events.push("stop");
+    await stopCompletion.promise;
+  });
+  await Promise.resolve();
+  const aborting = barrier.runAbort(async () => {
+    events.push("abort");
+    await abortCompletion.promise;
+  });
+  let barrierSettled = false;
+  const waiting = barrier.waitForPendingStop().then(() => {
+    barrierSettled = true;
+  });
+  await Promise.resolve();
+
+  assert.deepEqual(events, ["stop", "abort"]);
+  assert.equal(barrierSettled, false);
+
+  abortCompletion.resolve();
+  await aborting;
+  assert.equal(barrierSettled, false);
+  stopCompletion.resolve();
+  await Promise.all([stopping, waiting]);
+  assert.equal(barrierSettled, true);
+});
+
 test("renderer setup failure teardown blocks retry and deduplicates concurrent stop cleanup", async () => {
   const { createMeetingRecordingStopBarrier, teardownFailedMeetingRecordingSetup } = await load();
   let finishMainStop;

@@ -3,6 +3,8 @@ const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { getCortiToken } = require("./cortiAuth");
 
+const CORTI_PRIVACY_CLEANUP_TIMEOUT_MS = 5000;
+
 function assertNotAborted(signal) {
   if (!signal?.aborted) return;
   if (signal.reason) throw signal.reason;
@@ -13,8 +15,9 @@ function assertNotAborted(signal) {
 
 async function request(token, tenant, url, options = {}) {
   assertNotAborted(options.signal);
+  const { acceptNotFound = false, ...requestOptions } = options;
   const response = await net.fetch(url, {
-    ...options,
+    ...requestOptions,
     headers: {
       Authorization: `Bearer ${token}`,
       "Tenant-Name": tenant,
@@ -22,7 +25,7 @@ async function request(token, tenant, url, options = {}) {
     },
   });
   assertNotAborted(options.signal);
-  if (!response.ok) {
+  if (!response.ok && !(acceptNotFound && response.status === 404)) {
     const errorText = await response.text().catch(() => "");
     throw new Error(`Corti API Error: ${response.status} ${errorText}`.trim());
   }
@@ -46,6 +49,7 @@ async function transcribeAudio({
   audioBuffer,
   language,
   signal,
+  onCleanupFailure,
 }) {
   assertNotAborted(signal);
   const token = await getCortiToken({ environment, tenant, clientId, clientSecret, signal });
@@ -100,15 +104,46 @@ async function transcribeAudio({
   } finally {
     // Dictation audio must not persist on Corti's servers — deleting the
     // interaction cascades to its recordings and transcripts.
-    request(token, tenant, `${base}/interactions/${interactionId}`, { method: "DELETE" }).catch(
-      (error) =>
+    try {
+      await request(token, tenant, `${base}/interactions/${interactionId}`, {
+        method: "DELETE",
+        signal: AbortSignal.timeout(CORTI_PRIVACY_CLEANUP_TIMEOUT_MS),
+        acceptNotFound: true,
+      });
+    } catch (error) {
+      debugLogger.error(
+        "Failed to delete Corti interaction",
+        { interactionId, error: error.message },
+        "transcription"
+      );
+      try {
+        await onCleanupFailure?.({ environment, tenant, interactionId });
+      } catch (persistError) {
         debugLogger.error(
-          "Failed to delete Corti interaction",
-          { interactionId, error: error.message },
+          "Failed to persist Corti privacy cleanup retry",
+          { interactionId, error: persistError.message },
           "transcription"
-        )
-    );
+        );
+      }
+    }
   }
 }
 
-module.exports = { transcribeAudio };
+async function deleteCortiInteraction({
+  environment,
+  tenant,
+  interactionId,
+  clientId,
+  clientSecret,
+}) {
+  const signal = AbortSignal.timeout(CORTI_PRIVACY_CLEANUP_TIMEOUT_MS);
+  const token = await getCortiToken({ environment, tenant, clientId, clientSecret, signal });
+  await request(
+    token,
+    tenant,
+    `https://api.${environment}.corti.app/v2/interactions/${interactionId}`,
+    { method: "DELETE", signal, acceptNotFound: true }
+  );
+}
+
+module.exports = { deleteCortiInteraction, transcribeAudio };

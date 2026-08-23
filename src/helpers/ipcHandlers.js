@@ -16,6 +16,19 @@ const {
   isScreenContextBlocked,
 } = require("./workspacePolicyManager");
 const { createEnterpriseIdentityManager } = require("./enterpriseIdentityManager");
+const {
+  AUTHORIZATION_BOUNDARY_CHANGED,
+  MANAGED_CONFIG_UNAVAILABLE,
+  MANAGED_MODEL_REQUIRED,
+  POLICY_RESTRICTED,
+  authorizeManagedTranscription,
+} = require("./managedTranscriptionAuthorization");
+const {
+  createManagedTranscriptionOperationRegistry,
+} = require("./managedTranscriptionOperationRegistry");
+const { createMeetingTranscriptCommitRegistry } = require("./meetingTranscriptCommitRegistry");
+const { createActionNoteCommitRegistry } = require("./actionNoteCommitRegistry");
+const { createCortiPrivacyCleanupQueue } = require("./cortiPrivacyCleanupQueue");
 const { createCloudConfigRequestHandler } = require("./cloudConfigRequest");
 const {
   createPolicyResponseError,
@@ -37,18 +50,26 @@ const serializeIpcError =
     try {
       return await fn(...args);
     } catch (error) {
-      return { error: error.message, code: error.code, messageKey: error.messageKey };
+      return {
+        success: false,
+        error: error.message,
+        code: error.code,
+        messageKey: error.messageKey,
+      };
     }
   };
-// Which diarization dialect a resolved endpoint speaks, for Custom endpoints
-// that front a known provider. Null when the host offers no known dialect.
-const diarizationHost = (endpoint) => {
-  try {
-    const host = new URL(endpoint).hostname;
-    if (host === "mistral.ai" || host.endsWith(".mistral.ai")) return "mistral";
-    if (host === "openai.com" || host.endsWith(".openai.com")) return "openai";
-  } catch {}
-  return null;
+const isManagedTranscriptionAuthorizationError = (error) =>
+  [
+    AUTHORIZATION_BOUNDARY_CHANGED,
+    MANAGED_CONFIG_UNAVAILABLE,
+    MANAGED_MODEL_REQUIRED,
+    POLICY_RESTRICTED,
+  ].includes(error?.code);
+const combineAbortSignals = (...signals) => {
+  const activeSignals = signals.filter(Boolean);
+  if (activeSignals.length === 0) return undefined;
+  if (activeSignals.length === 1) return activeSignals[0];
+  return AbortSignal.any(activeSignals);
 };
 const { resolveLocalServerNeeds } = require("./localServerPolicy");
 const autoStart = require("./autoStart");
@@ -322,6 +343,31 @@ async function postMultipart(
   }
 }
 
+function byokProviderFailure(statusCode, data, label = "API error") {
+  if (statusCode === 200) return null;
+  if (statusCode === 401) {
+    return {
+      success: false,
+      error: "Invalid API key. Check your key in Settings.",
+      code: "INVALID_KEY",
+    };
+  }
+  if (statusCode === 429) {
+    return {
+      success: false,
+      error: "Rate limit exceeded. Please try again later.",
+      code: "PROVIDER_RATE_LIMITED",
+      messageKey: "hooks.audioRecording.errorDescriptions.providerRateLimited",
+    };
+  }
+  const error = data?.error?.message || data?.error || `${label}: ${statusCode}`;
+  return {
+    success: false,
+    error: typeof error === "string" ? error : `${label}: ${statusCode}`,
+    ...(statusCode >= 500 ? { code: "SERVER_ERROR" } : {}),
+  };
+}
+
 function interpretTranscribeResponse(data) {
   if (data.statusCode === 401) {
     throw Object.assign(new Error("Session expired"), { code: "AUTH_EXPIRED" });
@@ -574,6 +620,16 @@ class IPCHandlers {
     this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
+    this._cortiPrivacyCleanupQueue = createCortiPrivacyCleanupQueue({
+      filePath: path.join(app.getPath("userData"), "corti-privacy-cleanup.json"),
+      cleanup: async (record) => {
+        const clientId = this.environmentManager.getCortiClientId();
+        const clientSecret = this.environmentManager.getCortiClientSecret();
+        if (!clientId || !clientSecret) throw new Error("Corti credentials not configured");
+        const { deleteCortiInteraction } = require("./cortiTranscription");
+        await deleteCortiInteraction({ ...record, clientId, clientSecret });
+      },
+    });
     // requestId -> AbortControllers for in-flight audio-upload work (cloud
     // upload, or local transcription + diarization sharing one id), so a
     // cancel can abort the exact job.
@@ -619,6 +675,8 @@ class IPCHandlers {
     this.setupHandlers();
     // Lives for the app's lifetime; IPCHandlers has no teardown path.
     tokenStore.subscribe(({ generation, token }) => {
+      this._revokeManagedTranscriptionOperations?.();
+      this._invalidateActionNoteCommits?.();
       this.enterpriseIdentityManager?.clear();
       broadcastToWindows("auth-token-state-changed", {
         generation,
@@ -646,6 +704,14 @@ class IPCHandlers {
         this._syncStartupEnv({}, ["WHISPER_VULKAN_DEVICE"]);
       });
     }
+  }
+
+  retryCortiPrivacyCleanup() {
+    return this._cortiPrivacyCleanupQueue.retryPending();
+  }
+
+  _enqueueCortiPrivacyCleanup(record) {
+    return this._cortiPrivacyCleanupQueue.enqueue(record);
   }
 
   // The dictation slot reports its own changes from the renderer. Slots
@@ -1739,6 +1805,43 @@ class IPCHandlers {
       return result;
     });
 
+    ipcMain.handle("begin-action-note-commit", async (event, noteId, context) => {
+      const ownerKey = event.sender?.id ?? event.sender;
+      const admissionGeneration = (actionNoteAdmissionGenerations.get(ownerKey) || 0) + 1;
+      actionNoteAdmissionGenerations.set(ownerKey, admissionGeneration);
+      try {
+        const authorizationBinding = await authorizeActionNoteCommit(event, noteId, context);
+        if (
+          actionNoteAdmissionGenerations.get(ownerKey) !== admissionGeneration ||
+          event.sender?.isDestroyed?.()
+        ) {
+          throw Object.assign(
+            new Error("Authorization changed while the note action was active."),
+            { code: AUTHORIZATION_BOUNDARY_CHANGED }
+          );
+        }
+        if (!isActionNoteAuthorizationBindingCurrent(authorizationBinding)) {
+          throw Object.assign(
+            new Error("Authorization changed while the note action was active."),
+            { code: AUTHORIZATION_BOUNDARY_CHANGED }
+          );
+        }
+        const commitToken = actionNoteCommitRegistry.issue({
+          authorizationBinding,
+          ownerWebContents: event.sender,
+          noteId,
+          reasoningSignature: context.signature,
+        });
+        return { success: true, commitToken };
+      } catch (error) {
+        return toPolicyFailure(error);
+      }
+    });
+
+    ipcMain.handle("commit-action-note", (event, payload = {}) =>
+      actionNoteCommitRegistry.commitAuthorized(event.sender, payload)
+    );
+
     ipcMain.handle("db-delete-note", async (event, id) => {
       return this.deleteNoteInternal(id);
     });
@@ -2561,12 +2664,28 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
+    ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}, context) => {
+      const managedRuntimeContext = context;
       const fs = require("fs");
       // Uploads pass a requestId so cancel-upload-transcription can abort the
       // local decode; flows without one (voice drafts) register nothing.
-      const { signal, release } = this._uploadCancelRegistry.register(options.requestId);
+      const { signal: uploadSignal, release } = this._uploadCancelRegistry.register(
+        options.requestId
+      );
+      let operation = null;
       try {
+        const provider = options.provider === "nvidia" ? "nvidia" : "whisper";
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          "local",
+          provider,
+          options.model || null
+        );
+        operation = beginManagedTranscriptionOperation(event, authorization, "file", {
+          channel: "transcribe-audio-file",
+        });
+        const signal = combineAbortSignals(uploadSignal, operation.signal);
         if (typeof filePath !== "string") {
           return { success: false, error: "Invalid file path" };
         }
@@ -2578,6 +2697,7 @@ class IPCHandlers {
             ...options,
             signal,
           });
+          operation.assertCurrent();
           return result;
         }
         const vadOptions = this._resolveWhisperVadOptions("noteRecording");
@@ -2586,17 +2706,26 @@ class IPCHandlers {
           ...vadOptions,
           signal,
         });
+        operation.assertCurrent();
         return result;
       } catch (error) {
-        if (error?.name === "AbortError" || signal?.aborted) {
+        if (operation && !operation.isCurrent()) {
+          try {
+            operation.assertCurrent();
+          } catch (authorizationError) {
+            return toPolicyFailure(authorizationError);
+          }
+        }
+        if (error?.name === "AbortError" || uploadSignal?.aborted) {
           debugLogger.debug("Local audio file transcription cancelled", {
             requestId: options.requestId,
           });
           return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
         }
         debugLogger.error("Audio file transcription error", { error: error.message });
-        return { success: false, error: error.message };
+        return toPolicyFailure(error);
       } finally {
+        operation?.release();
         release();
       }
     });
@@ -2741,7 +2870,9 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("transcribe-local-whisper", async (_event, audioBlob, options = {}) => {
+    ipcMain.handle("transcribe-local-whisper", async (event, audioBlob, options = {}, context) => {
+      const managedRuntimeContext = context;
+      let operation = null;
       debugLogger.log("transcribe-local-whisper called", {
         audioBlobType: typeof audioBlob,
         audioBlobSize: audioBlob?.byteLength || audioBlob?.length || 0,
@@ -2749,6 +2880,16 @@ class IPCHandlers {
       });
 
       try {
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          "local",
+          "whisper",
+          options.model || null
+        );
+        operation = beginManagedTranscriptionOperation(event, authorization, "local", {
+          channel: "direct-whisper",
+        });
         // skipVad: dictionary-echo rescue retries decode VAD-free, since VAD
         // stripping the speech is what turned the transcript into prompt echo.
         const { skipVad, ...requestOptions } = options;
@@ -2758,7 +2899,9 @@ class IPCHandlers {
         const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, {
           ...requestOptions,
           ...vadOptions,
+          signal: operation.signal,
         });
+        operation.assertCurrent();
 
         debugLogger.log("Whisper result", {
           success: result.success,
@@ -2770,6 +2913,14 @@ class IPCHandlers {
         return result;
       } catch (error) {
         debugLogger.error("Local Whisper transcription error", error);
+        if (operation && !operation.isCurrent()) {
+          try {
+            operation.assertCurrent();
+          } catch (authorizationError) {
+            return toPolicyFailure(authorizationError);
+          }
+        }
+        if (isManagedTranscriptionAuthorizationError(error)) return toPolicyFailure(error);
         const errorMessage = error.message || "Unknown error";
 
         // Return specific error types for better user feedback
@@ -2819,6 +2970,8 @@ class IPCHandlers {
         }
 
         throw error;
+      } finally {
+        operation?.release();
       }
     });
 
@@ -3106,7 +3259,9 @@ class IPCHandlers {
       return this.whisperManager.checkFFmpegAvailability();
     });
 
-    ipcMain.handle("transcribe-local-parakeet", async (_event, audioBlob, options = {}) => {
+    ipcMain.handle("transcribe-local-parakeet", async (event, audioBlob, options = {}, context) => {
+      const managedRuntimeContext = context;
+      let operation = null;
       debugLogger.log("transcribe-local-parakeet called", {
         audioBlobType: typeof audioBlob,
         audioBlobSize: audioBlob?.byteLength || audioBlob?.length || 0,
@@ -3114,7 +3269,21 @@ class IPCHandlers {
       });
 
       try {
-        const result = await this.parakeetManager.transcribeLocalParakeet(audioBlob, options);
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          "local",
+          "nvidia",
+          options.model || null
+        );
+        operation = beginManagedTranscriptionOperation(event, authorization, "local", {
+          channel: "direct-parakeet",
+        });
+        const result = await this.parakeetManager.transcribeLocalParakeet(audioBlob, {
+          ...options,
+          signal: operation.signal,
+        });
+        operation.assertCurrent();
 
         debugLogger.log("Parakeet result", {
           success: result.success,
@@ -3126,6 +3295,14 @@ class IPCHandlers {
         return result;
       } catch (error) {
         debugLogger.error("Local Parakeet transcription error", error);
+        if (operation && !operation.isCurrent()) {
+          try {
+            operation.assertCurrent();
+          } catch (authorizationError) {
+            return toPolicyFailure(authorizationError);
+          }
+        }
+        if (isManagedTranscriptionAuthorizationError(error)) return toPolicyFailure(error);
         const errorMessage = error.message || "Unknown error";
 
         if (errorMessage.includes("sherpa-onnx") && errorMessage.includes("not found")) {
@@ -3151,6 +3328,8 @@ class IPCHandlers {
         }
 
         throw error;
+      } finally {
+        operation?.release();
       }
     });
 
@@ -3276,81 +3455,124 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("diarize-audio-file", async (event, filePath, options = {}) => {
-      // Registered under the same requestId as the upload's transcription, so
-      // one cancel kills both the decode and the diarization child process.
-      const { signal, release } = this._uploadCancelRegistry.register(options.requestId);
-      try {
-        if (!this.diarizationManager) {
-          return { success: false, error: "Diarization not available" };
-        }
-        if (!this.diarizationManager.isModelDownloaded()) {
-          return { success: false, error: "Diarization models not downloaded" };
-        }
-
-        if (typeof filePath !== "string") {
-          return { success: false, error: "Invalid file path" };
-        }
-        const realPath = resolveAllowedAudioPath(filePath);
-        if (!realPath) return { success: false, error: "File path not allowed" };
-        filePath = realPath;
-
-        const numSpeakers = Math.min(
-          MAX_SPEAKER_COUNT,
-          Math.max(-1, Math.round(Number(options.numSpeakers) || -1))
-        );
-
-        const { convertToWav } = require("./ffmpegUtils");
-        const { getSafeTempDir } = require("./safeTempDir");
-        const { resolveClusterThreshold, dropNegligibleClusters } = require("./diarizationPolicy");
-        const { PCM16_MONO_16K_BYTES_PER_SECOND } = require("./transcriptionTimeout");
-        const wavPath = path.join(getSafeTempDir(), `ow-diarize-${Date.now()}.wav`);
-
+    ipcMain.handle(
+      "diarize-audio-file",
+      async (event, filePath, options = {}, managedRuntimeContext) => {
+        let authorizationBinding;
+        let operation = null;
         try {
-          await convertToWav(filePath, wavPath, { sampleRate: 16000, channels: 1 });
-          if (signal?.aborted) {
-            return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
-          }
-          // Auto-clustering over-splits long single-mic audio at the 0.55
-          // default, so the threshold ramps with duration unless pinned.
-          const durationSeconds = fs.statSync(wavPath).size / PCM16_MONO_16K_BYTES_PER_SECOND;
-          const threshold = resolveClusterThreshold(durationSeconds, options.threshold);
-
-          let segments = await this.diarizationManager.diarize(wavPath, {
-            numSpeakers,
-            threshold,
-            signal,
-          });
-          if (signal?.aborted) {
-            return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
-          }
-          // The meeting path caps clusters via its expectation resolver; this
-          // path fed raw sherpa output to the merge, which is how a 2-person
-          // voice memo surfaced 46 speakers.
-          segments = dropNegligibleClusters(segments);
-          segments = this.diarizationManager.capSpeakerClusters(
-            segments,
-            numSpeakers > 0 ? numSpeakers : MAX_SPEAKER_COUNT
+          const authorization = await authorizeTranscriptionRoute(
+            event,
+            managedRuntimeContext,
+            managedRuntimeContext?.transcriptionMode,
+            managedRuntimeContext?.provider,
+            managedRuntimeContext?.model
           );
-          // Callers persist this as audio_duration_seconds: for picked files
-          // the renderer has no other duration source.
-          return { success: true, segments, durationSeconds };
-        } finally {
+          authorizationBinding = captureTranscriptionSessionBinding(
+            authorization,
+            "file-diarization"
+          );
+          operation = beginManagedTranscriptionOperation(event, authorization, "diarization", {
+            channel: "file-diarization",
+          });
+        } catch (error) {
+          return toPolicyFailure(error);
+        }
+
+        // Registered under the same requestId as the upload's transcription, so
+        // one cancel kills both the decode and the diarization child process.
+        const { signal: uploadSignal, release } = this._uploadCancelRegistry.register(
+          options.requestId
+        );
+        const signal = combineAbortSignals(uploadSignal, operation.signal);
+        try {
+          assertTranscriptionSessionBindingCurrent(authorizationBinding, "file-diarization");
+          if (!this.diarizationManager) {
+            return { success: false, error: "Diarization not available" };
+          }
+          if (!this.diarizationManager.isModelDownloaded()) {
+            return { success: false, error: "Diarization models not downloaded" };
+          }
+
+          if (typeof filePath !== "string") {
+            return { success: false, error: "Invalid file path" };
+          }
+          const realPath = resolveAllowedAudioPath(filePath);
+          if (!realPath) return { success: false, error: "File path not allowed" };
+          filePath = realPath;
+
+          const numSpeakers = Math.min(
+            MAX_SPEAKER_COUNT,
+            Math.max(-1, Math.round(Number(options.numSpeakers) || -1))
+          );
+
+          const { convertToWav } = require("./ffmpegUtils");
+          const { getSafeTempDir } = require("./safeTempDir");
+          const {
+            resolveClusterThreshold,
+            dropNegligibleClusters,
+          } = require("./diarizationPolicy");
+          const { PCM16_MONO_16K_BYTES_PER_SECOND } = require("./transcriptionTimeout");
+          const wavPath = path.join(getSafeTempDir(), `ow-diarize-${Date.now()}.wav`);
+
           try {
-            fs.unlinkSync(wavPath);
-          } catch {}
+            await convertToWav(filePath, wavPath, { sampleRate: 16000, channels: 1 });
+            assertTranscriptionSessionBindingCurrent(authorizationBinding, "file-diarization");
+            if (signal?.aborted) {
+              return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+            }
+            // Auto-clustering over-splits long single-mic audio at the 0.55
+            // default, so the threshold ramps with duration unless pinned.
+            const durationSeconds = fs.statSync(wavPath).size / PCM16_MONO_16K_BYTES_PER_SECOND;
+            const threshold = resolveClusterThreshold(durationSeconds, options.threshold);
+
+            let segments = await this.diarizationManager.diarize(wavPath, {
+              numSpeakers,
+              threshold,
+              signal,
+            });
+            assertTranscriptionSessionBindingCurrent(authorizationBinding, "file-diarization");
+            if (signal?.aborted) {
+              return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+            }
+            // The meeting path caps clusters via its expectation resolver; this
+            // path fed raw sherpa output to the merge, which is how a 2-person
+            // voice memo surfaced 46 speakers.
+            segments = dropNegligibleClusters(segments);
+            segments = this.diarizationManager.capSpeakerClusters(
+              segments,
+              numSpeakers > 0 ? numSpeakers : MAX_SPEAKER_COUNT
+            );
+            operation.assertCurrent();
+            // Callers persist this as audio_duration_seconds: for picked files
+            // the renderer has no other duration source.
+            return { success: true, segments, durationSeconds };
+          } finally {
+            try {
+              fs.unlinkSync(wavPath);
+            } catch {}
+          }
+        } catch (error) {
+          if (operation && !operation.isCurrent()) {
+            try {
+              operation.assertCurrent();
+            } catch (authorizationError) {
+              return toPolicyFailure(authorizationError);
+            }
+          }
+          if (isManagedTranscriptionAuthorizationError(error)) return toPolicyFailure(error);
+          if (error?.name === "AbortError" || uploadSignal?.aborted) {
+            debugLogger.debug("Diarization cancelled", { requestId: options.requestId });
+            return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+          }
+          debugLogger.error("Diarization error", { error: error.message });
+          return { success: false, error: error.message };
+        } finally {
+          operation?.release();
+          release();
         }
-      } catch (error) {
-        if (error?.name === "AbortError" || signal?.aborted) {
-          debugLogger.debug("Diarization cancelled", { requestId: options.requestId });
-          return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
-        }
-        debugLogger.error("Diarization error", { error: error.message });
-        return { success: false, error: error.message };
-      } finally {
-        release();
       }
-    });
+    );
 
     ipcMain.handle("merge-speaker-text", async (event, { segments, text, duration }) => {
       try {
@@ -3876,77 +4098,127 @@ class IPCHandlers {
 
     ipcMain.handle(
       "proxy-xai-transcription",
-      serializeIpcError(async (event, { audioBuffer, language, keyterms }) => {
-        const apiKey = this.environmentManager.getXaiKey();
-        if (!apiKey) {
-          throw new Error("xAI API key not configured");
-        }
+      serializeIpcError(
+        async (event, { audioBuffer, language, keyterms }, managedRuntimeContext) => {
+          let operation = null;
+          try {
+            const authorization = await authorizeTranscriptionRoute(
+              event,
+              managedRuntimeContext,
+              "providers",
+              "xai",
+              "grok-stt"
+            );
+            operation = beginManagedTranscriptionOperation(event, authorization, "proxy", {
+              channel: "proxy-xai",
+            });
+            const apiKey = this.environmentManager.getXaiKey();
+            if (!apiKey) {
+              throw new Error("xAI API key not configured");
+            }
 
-        const formData = new FormData();
-        const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
-        formData.append("file", audioBlob, "audio.webm");
-        const { XAI_STT_LANGUAGES } = await import("./transcriptionRoute.ts");
-        if (language && language !== "auto" && XAI_STT_LANGUAGES.has(language)) {
-          formData.append("language", language);
-          formData.append("format", "true");
-        }
-        if (keyterms && keyterms.length > 0) {
-          for (const term of keyterms) {
-            formData.append("keyterm", term);
+            const formData = new FormData();
+            const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
+            formData.append("file", audioBlob, "audio.webm");
+            const { XAI_STT_LANGUAGES } = await import("./transcriptionRoute.ts");
+            operation.assertCurrent();
+            if (language && language !== "auto" && XAI_STT_LANGUAGES.has(language)) {
+              formData.append("language", language);
+              formData.append("format", "true");
+            }
+            if (keyterms && keyterms.length > 0) {
+              for (const term of keyterms) {
+                formData.append("keyterm", term);
+              }
+            }
+
+            const response = await proxyFetch(XAI_STT_URL, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${apiKey}` },
+              body: formData,
+              signal: operation.signal,
+            });
+            operation.assertCurrent();
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              operation.assertCurrent();
+              throw new Error(`xAI API Error: ${response.status} ${errorText}`);
+            }
+
+            const result = await response.json();
+            operation.assertCurrent();
+            return result;
+          } catch (error) {
+            operation?.assertCurrent();
+            throw error;
+          } finally {
+            operation?.release();
           }
         }
-
-        const response = await proxyFetch(XAI_STT_URL, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${apiKey}` },
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`xAI API Error: ${response.status} ${errorText}`);
-        }
-
-        return await response.json();
-      })
+      )
     );
 
     ipcMain.handle(
       "proxy-mistral-transcription",
-      serializeIpcError(async (event, { audioBuffer, model, language, contextBias }) => {
-        const apiKey = this.environmentManager.getMistralKey();
-        if (!apiKey) {
-          throw new Error("Mistral API key not configured");
-        }
+      serializeIpcError(
+        async (event, { audioBuffer, model, language, contextBias }, managedRuntimeContext) => {
+          const requestedModel = model || "voxtral-mini-latest";
+          let operation = null;
+          try {
+            const authorization = await authorizeTranscriptionRoute(
+              event,
+              managedRuntimeContext,
+              "providers",
+              "mistral",
+              requestedModel
+            );
+            operation = beginManagedTranscriptionOperation(event, authorization, "proxy", {
+              channel: "proxy-mistral",
+            });
+            const apiKey = this.environmentManager.getMistralKey();
+            if (!apiKey) {
+              throw new Error("Mistral API key not configured");
+            }
 
-        const formData = new FormData();
-        const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
-        formData.append("file", audioBlob, "audio.webm");
-        formData.append("model", model || "voxtral-mini-latest");
-        if (language && language !== "auto") {
-          formData.append("language", language);
-        }
-        if (contextBias && contextBias.length > 0) {
-          for (const token of contextBias) {
-            formData.append("context_bias", token);
+            const formData = new FormData();
+            const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
+            formData.append("file", audioBlob, "audio.webm");
+            formData.append("model", requestedModel);
+            if (language && language !== "auto") {
+              formData.append("language", language);
+            }
+            if (contextBias && contextBias.length > 0) {
+              for (const token of contextBias) {
+                formData.append("context_bias", token);
+              }
+            }
+
+            const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
+              method: "POST",
+              headers: { "x-api-key": apiKey },
+              body: formData,
+              signal: operation.signal,
+            });
+            operation.assertCurrent();
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              operation.assertCurrent();
+              throw new Error(`Mistral API Error: ${response.status} ${errorText}`);
+            }
+
+            const result = await response.json();
+            operation.assertCurrent();
+            return result;
+          } catch (error) {
+            operation?.assertCurrent();
+            throw error;
+          } finally {
+            operation?.release();
           }
         }
-
-        const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
-          method: "POST",
-          headers: {
-            "x-api-key": apiKey,
-          },
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Mistral API Error: ${response.status} ${errorText}`);
-        }
-
-        return await response.json();
-      })
+      )
     );
 
     ipcMain.handle("get-corti-client-id", async () => {
@@ -3967,23 +4239,47 @@ class IPCHandlers {
 
     ipcMain.handle(
       "proxy-corti-transcription",
-      serializeIpcError(async (event, { audioBuffer, language, environment, tenant }) => {
-        const clientId = this.environmentManager.getCortiClientId();
-        const clientSecret = this.environmentManager.getCortiClientSecret();
-        if (!clientId || !clientSecret) {
-          throw new Error("Corti credentials not configured");
-        }
+      serializeIpcError(
+        async (event, { audioBuffer, language, environment, tenant }, managedRuntimeContext) => {
+          let operation = null;
+          try {
+            const authorization = await authorizeTranscriptionRoute(
+              event,
+              managedRuntimeContext,
+              "providers",
+              "corti",
+              "corti-transcribe"
+            );
+            operation = beginManagedTranscriptionOperation(event, authorization, "proxy", {
+              channel: "proxy-corti",
+            });
+            const clientId = this.environmentManager.getCortiClientId();
+            const clientSecret = this.environmentManager.getCortiClientSecret();
+            if (!clientId || !clientSecret) {
+              throw new Error("Corti credentials not configured");
+            }
 
-        const { transcribeAudio } = require("./cortiTranscription");
-        return await transcribeAudio({
-          environment,
-          tenant,
-          clientId,
-          clientSecret,
-          audioBuffer,
-          language,
-        });
-      })
+            const { transcribeAudio } = require("./cortiTranscription");
+            const result = await transcribeAudio({
+              environment,
+              tenant,
+              clientId,
+              clientSecret,
+              audioBuffer,
+              language,
+              signal: operation.signal,
+              onCleanupFailure: (record) => this._enqueueCortiPrivacyCleanup(record),
+            });
+            operation.assertCurrent();
+            return result;
+          } catch (error) {
+            operation?.assertCurrent();
+            throw error;
+          } finally {
+            operation?.release();
+          }
+        }
+      )
     );
 
     ipcMain.handle("get-tinfoil-chat-models", async () => {
@@ -3993,15 +4289,36 @@ class IPCHandlers {
     // Enclave attestation is Node-only, so batch transcription is proxied through main.
     ipcMain.handle(
       "proxy-tinfoil-transcription",
-      serializeIpcError(async (event, { audioBuffer, language, prompt }) => {
-        return await transcribeWithTinfoil({
-          audioBuffer: Buffer.from(audioBuffer),
-          fileName: "audio.webm",
-          contentType: "audio/webm",
-          language,
-          prompt,
-          apiKey: this.environmentManager.getTinfoilKey(),
-        });
+      serializeIpcError(async (event, { audioBuffer, language, prompt }, managedRuntimeContext) => {
+        let operation = null;
+        try {
+          const authorization = await authorizeTranscriptionRoute(
+            event,
+            managedRuntimeContext,
+            "providers",
+            "tinfoil",
+            null
+          );
+          operation = beginManagedTranscriptionOperation(event, authorization, "proxy", {
+            channel: "proxy-tinfoil",
+          });
+          const result = await transcribeWithTinfoil({
+            audioBuffer: Buffer.from(audioBuffer),
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+            language,
+            prompt,
+            apiKey: this.environmentManager.getTinfoilKey(),
+            signal: operation.signal,
+          });
+          operation.assertCurrent();
+          return result;
+        } catch (error) {
+          operation?.assertCurrent();
+          throw error;
+        } finally {
+          operation?.release();
+        }
       })
     );
 
@@ -5225,24 +5542,390 @@ class IPCHandlers {
       tokenStore,
       logger: debugLogger,
     });
+    const workspacePolicyAuthorizationEpochs = new Map();
+    const workspacePolicyAuthorizationSnapshots = new Map();
+    const workspacePolicyAuthorizationListeners = new Set();
+    let actionNoteAuthorizationEpoch = 0;
+    let actionNoteCommitRegistry = null;
+    const workspacePolicyAuthorizationIdentityKey = (snapshot) => {
+      const { accountId, authGeneration } = snapshot || {};
+      return typeof accountId === "string" && Number.isSafeInteger(authGeneration)
+        ? `${accountId}\n${authGeneration}`
+        : null;
+    };
+    const publishWorkspacePolicyAuthorizationChange = (snapshot) => {
+      actionNoteAuthorizationEpoch += 1;
+      actionNoteCommitRegistry?.revoke();
+      const identityKey = workspacePolicyAuthorizationIdentityKey(snapshot);
+      if (identityKey) {
+        workspacePolicyAuthorizationEpochs.set(
+          identityKey,
+          (workspacePolicyAuthorizationEpochs.get(identityKey) || 0) + 1
+        );
+        workspacePolicyAuthorizationSnapshots.set(identityKey, snapshot);
+      }
+      for (const listener of workspacePolicyAuthorizationListeners) {
+        listener(snapshot, identityKey);
+      }
+    };
     const workspacePolicyManager = createWorkspacePolicyManager({
       cachePath: path.join(app.getPath("userData"), "workspace-policy.json"),
       getApiUrl,
       getAppVersion: () => app.getVersion(),
       proxyFetch,
       tokenStore,
-      broadcast: (snapshot) => broadcastToWindows("workspace-policy-changed", snapshot),
+      broadcast: (snapshot) => {
+        publishWorkspacePolicyAuthorizationChange(snapshot);
+        broadcastToWindows("workspace-policy-changed", snapshot);
+      },
       logger: debugLogger,
     });
+    const managedTranscriptionAuthorizationEpochs = new Map();
+    const managedTranscriptionAuthorizationSnapshots = new Map();
+    const managedTranscriptionAuthorizationListeners = new Set();
+    let managedTranscriptionClearGeneration = 0;
+    const managedTranscriptionIdentityKey = (snapshot) => {
+      const { accountId, workspaceId, authGeneration } = snapshot || {};
+      return typeof accountId === "string" &&
+        typeof workspaceId === "string" &&
+        Number.isSafeInteger(authGeneration)
+        ? `${accountId}\n${workspaceId}\n${authGeneration}`
+        : null;
+    };
+    const publishManagedTranscriptionAuthorizationChange = (snapshot) => {
+      const identityKey = managedTranscriptionIdentityKey(snapshot);
+      if (identityKey) {
+        managedTranscriptionAuthorizationEpochs.set(
+          identityKey,
+          (managedTranscriptionAuthorizationEpochs.get(identityKey) || 0) + 1
+        );
+        managedTranscriptionAuthorizationSnapshots.set(identityKey, snapshot);
+      }
+      for (const listener of managedTranscriptionAuthorizationListeners) {
+        listener(snapshot, identityKey);
+      }
+    };
     this.enterpriseIdentityManager = createEnterpriseIdentityManager({
       cachePath: path.join(app.getPath("userData"), "managed-enterprise-config.json"),
       getApiUrl,
       getAppVersion: () => app.getVersion(),
       proxyFetch,
       tokenStore,
-      broadcast: (snapshot) => broadcastToWindows("managed-enterprise-config-changed", snapshot),
+      broadcast: (snapshot) => {
+        actionNoteAuthorizationEpoch += 1;
+        actionNoteCommitRegistry?.revoke();
+        publishManagedTranscriptionAuthorizationChange(snapshot);
+        broadcastToWindows("managed-enterprise-config-changed", snapshot);
+      },
       logger: debugLogger,
     });
+    const authorizeTranscriptionRoute = async (
+      event,
+      managedRuntimeContext,
+      requestedMode,
+      requestedProvider,
+      requestedModel
+    ) => {
+      const authStateBeforeHeaders = tokenStore.getState();
+      const authHeaders = await getAuthHeader(event);
+      const authState = tokenStore.getState();
+      if (
+        authStateBeforeHeaders.generation !== authState.generation ||
+        authStateBeforeHeaders.token !== authState.token
+      ) {
+        throw Object.assign(new Error("Transcription authorization changed. Retry the request."), {
+          code: AUTHORIZATION_BOUNDARY_CHANGED,
+        });
+      }
+      const authorization = await authorizeManagedTranscription({
+        context: managedRuntimeContext,
+        requestedMode,
+        requestedProvider,
+        requestedModel,
+        currentAuthGeneration: Object.keys(authHeaders).length ? authState.generation : null,
+        currentAppVersion: app.getVersion(),
+        resolveConfig: (context) =>
+          this.enterpriseIdentityManager.getConfig({
+            accountId: context.accountId,
+            workspaceId: context.workspaceId,
+            expectedAuthGeneration: context.authGeneration,
+            authHeaders,
+          }),
+        resolvePolicy: (context) =>
+          workspacePolicyManager.getPolicy({
+            accountId: context.accountId,
+            expectedAuthGeneration: context.authGeneration,
+            authHeaders,
+          }),
+      });
+      const identityKey = managedTranscriptionIdentityKey(authorization);
+      const latestSnapshot = identityKey
+        ? managedTranscriptionAuthorizationSnapshots.get(identityKey)
+        : null;
+      if (
+        latestSnapshot &&
+        (latestSnapshot.accountId !== authorization.accountId ||
+          latestSnapshot.workspaceId !== authorization.workspaceId ||
+          latestSnapshot.authGeneration !== authorization.authGeneration ||
+          (latestSnapshot.config
+            ? latestSnapshot.config.workspaceId !== authorization.workspaceId ||
+              latestSnapshot.config.generation !== authorization.configGeneration
+            : latestSnapshot.enforcementRequired !== false ||
+              authorization.configGeneration !== null ||
+              authorization.managed !== false))
+      ) {
+        throw Object.assign(new Error("Transcription authorization changed. Retry the request."), {
+          code: AUTHORIZATION_BOUNDARY_CHANGED,
+        });
+      }
+      const workspacePolicyIdentityKey = workspacePolicyAuthorizationIdentityKey(authorization);
+      const latestPolicySnapshot = workspacePolicyIdentityKey
+        ? workspacePolicyAuthorizationSnapshots.get(workspacePolicyIdentityKey)
+        : null;
+      if (
+        latestPolicySnapshot &&
+        (latestPolicySnapshot.accountId !== authorization.accountId ||
+          latestPolicySnapshot.authGeneration !== authorization.authGeneration ||
+          latestPolicySnapshot.revision !== authorization.policyRevision)
+      ) {
+        throw Object.assign(new Error("Transcription authorization changed. Retry the request."), {
+          code: AUTHORIZATION_BOUNDARY_CHANGED,
+        });
+      }
+      return Object.freeze({
+        ...authorization,
+        identityKey,
+        workspacePolicyIdentityKey,
+        tokenGeneration: authState.generation,
+        managedAuthorizationEpoch: identityKey
+          ? managedTranscriptionAuthorizationEpochs.get(identityKey) || 0
+          : 0,
+        clearGeneration: managedTranscriptionClearGeneration,
+        workspacePolicyAuthorizationEpoch: workspacePolicyIdentityKey
+          ? workspacePolicyAuthorizationEpochs.get(workspacePolicyIdentityKey) || 0
+          : 0,
+      });
+    };
+    const captureTranscriptionSessionBinding = (authorization, channel, extras = {}) =>
+      Object.freeze({
+        ...authorization,
+        channel,
+        ...extras,
+      });
+    const isTranscriptionAuthorizationBindingCurrent = (binding) => {
+      if (!binding) return false;
+      const currentGeneration = tokenStore.getState().generation;
+      return (
+        binding.tokenGeneration === currentGeneration &&
+        binding.clearGeneration === managedTranscriptionClearGeneration &&
+        (binding.authGeneration === null || binding.authGeneration === currentGeneration) &&
+        (!binding.identityKey ||
+          binding.managedAuthorizationEpoch ===
+            (managedTranscriptionAuthorizationEpochs.get(binding.identityKey) || 0)) &&
+        (!binding.workspacePolicyIdentityKey ||
+          binding.workspacePolicyAuthorizationEpoch ===
+            (workspacePolicyAuthorizationEpochs.get(binding.workspacePolicyIdentityKey) || 0))
+      );
+    };
+    const isTranscriptionSessionBindingCurrent = (binding, channel) =>
+      binding?.channel === channel && isTranscriptionAuthorizationBindingCurrent(binding);
+    const assertTranscriptionSessionBindingCurrent = (binding, channel) => {
+      if (!isTranscriptionSessionBindingCurrent(binding, channel)) {
+        throw Object.assign(new Error("Transcription authorization changed. Retry the request."), {
+          code: AUTHORIZATION_BOUNDARY_CHANGED,
+        });
+      }
+    };
+    const hasSameTranscriptionAuthorization = (left, right) =>
+      !!left &&
+      !!right &&
+      left.accountId === right.accountId &&
+      left.workspaceId === right.workspaceId &&
+      left.authGeneration === right.authGeneration &&
+      left.tokenGeneration === right.tokenGeneration &&
+      left.configGeneration === right.configGeneration &&
+      left.managedAuthorizationEpoch === right.managedAuthorizationEpoch &&
+      left.workspacePolicyIdentityKey === right.workspacePolicyIdentityKey &&
+      left.workspacePolicyAuthorizationEpoch === right.workspacePolicyAuthorizationEpoch &&
+      left.clearGeneration === right.clearGeneration &&
+      left.provider === right.provider &&
+      left.model === right.model &&
+      left.managed === right.managed;
+    const isActionNoteAuthorizationBindingCurrent = (binding) =>
+      !!binding &&
+      binding.tokenGeneration === tokenStore.getState().generation &&
+      binding.actionNoteAuthorizationEpoch === actionNoteAuthorizationEpoch;
+    const actionNoteAdmissionGenerations = new Map();
+    const authorizeActionNoteCommit = async (event, noteId, context) => {
+      const authorizationEpoch = actionNoteAuthorizationEpoch;
+      if (
+        !Number.isSafeInteger(noteId) ||
+        noteId <= 0 ||
+        !context ||
+        typeof context.signature !== "string" ||
+        context.signature.length === 0
+      ) {
+        throw Object.assign(new Error("Authorization changed while the note action was active."), {
+          code: AUTHORIZATION_BOUNDARY_CHANGED,
+        });
+      }
+      const authBeforeHeaders = tokenStore.getState();
+      const authHeaders = await getAuthHeader(event);
+      const authState = tokenStore.getState();
+      if (
+        authBeforeHeaders.generation !== authState.generation ||
+        authBeforeHeaders.token !== authState.token
+      ) {
+        throw Object.assign(new Error("Authorization changed while the note action was active."), {
+          code: AUTHORIZATION_BOUNDARY_CHANGED,
+        });
+      }
+
+      if (!Object.keys(authHeaders).length) {
+        if (
+          context.accountId !== null ||
+          context.workspaceId !== null ||
+          context.authGeneration !== null ||
+          context.configGeneration !== null ||
+          context.policyRevision !== null
+        ) {
+          throw Object.assign(
+            new Error("Authorization changed while the note action was active."),
+            { code: AUTHORIZATION_BOUNDARY_CHANGED }
+          );
+        }
+      } else {
+        if (
+          typeof context.accountId !== "string" ||
+          typeof context.workspaceId !== "string" ||
+          context.authGeneration !== authState.generation ||
+          !Number.isSafeInteger(context.policyRevision)
+        ) {
+          throw Object.assign(
+            new Error("Authorization changed while the note action was active."),
+            { code: AUTHORIZATION_BOUNDARY_CHANGED }
+          );
+        }
+        const enterprise = await this.enterpriseIdentityManager.getConfig({
+          accountId: context.accountId,
+          workspaceId: context.workspaceId,
+          expectedAuthGeneration: context.authGeneration,
+          authHeaders,
+        });
+        if (
+          enterprise?.accountId !== context.accountId ||
+          enterprise?.workspaceId !== context.workspaceId ||
+          enterprise?.authGeneration !== context.authGeneration ||
+          (enterprise.success
+            ? enterprise.config?.workspaceId !== context.workspaceId ||
+              enterprise.config?.generation !== context.configGeneration
+            : enterprise.enforcementRequired !== false || context.configGeneration !== null)
+        ) {
+          throw Object.assign(
+            new Error("Authorization changed while the note action was active."),
+            { code: AUTHORIZATION_BOUNDARY_CHANGED }
+          );
+        }
+        const policy = await workspacePolicyManager.getPolicy({
+          accountId: context.accountId,
+          expectedAuthGeneration: context.authGeneration,
+          authHeaders,
+        });
+        if (
+          !policy?.success ||
+          policy.accountId !== context.accountId ||
+          policy.authGeneration !== context.authGeneration ||
+          policy.revision !== context.policyRevision
+        ) {
+          throw Object.assign(
+            new Error("Authorization changed while the note action was active."),
+            { code: AUTHORIZATION_BOUNDARY_CHANGED }
+          );
+        }
+      }
+
+      const currentAuthState = tokenStore.getState();
+      if (
+        actionNoteAuthorizationEpoch !== authorizationEpoch ||
+        currentAuthState.generation !== authState.generation ||
+        currentAuthState.token !== authState.token
+      ) {
+        throw Object.assign(new Error("Authorization changed while the note action was active."), {
+          code: AUTHORIZATION_BOUNDARY_CHANGED,
+        });
+      }
+      return Object.freeze({
+        tokenGeneration: authState.generation,
+        actionNoteAuthorizationEpoch,
+        reasoningSignature: context.signature,
+      });
+    };
+    const isSameWebContentsOwner = (left, right) =>
+      left === right || (left?.id != null && left.id === right?.id);
+    const managedTranscriptionOperations = createManagedTranscriptionOperationRegistry({
+      isBindingCurrent: isTranscriptionAuthorizationBindingCurrent,
+    });
+    const revokeManagedTranscriptionOperations = (identityKey = null) =>
+      managedTranscriptionOperations.revoke({ identityKey });
+    this._revokeManagedTranscriptionOperations = revokeManagedTranscriptionOperations;
+    managedTranscriptionAuthorizationListeners.add((_snapshot, identityKey) => {
+      revokeManagedTranscriptionOperations(identityKey);
+    });
+    workspacePolicyAuthorizationListeners.add((_snapshot, identityKey) => {
+      managedTranscriptionOperations.revoke({
+        predicate: (operation) =>
+          !identityKey || operation.binding?.workspacePolicyIdentityKey === identityKey,
+      });
+    });
+    actionNoteCommitRegistry = createActionNoteCommitRegistry({
+      isBindingCurrent: isActionNoteAuthorizationBindingCurrent,
+      isSameOwner: isSameWebContentsOwner,
+      commit: (_grant, payload) => {
+        const result = this.databaseManager.updateNote(payload.noteId, payload.updates);
+        if (result?.success && result?.note) {
+          setImmediate(() => broadcastToWindows("note-updated", result.note));
+          this._asyncVectorUpsert(result.note);
+          this._asyncMirrorWrite(result.note);
+        }
+        return result;
+      },
+    });
+    this._invalidateActionNoteCommits = () => {
+      actionNoteAuthorizationEpoch += 1;
+      actionNoteCommitRegistry.revoke();
+    };
+    const beginManagedTranscriptionOperation = (
+      event,
+      authorization,
+      family,
+      { channel = family, onRevoke, bindingExtras } = {}
+    ) =>
+      managedTranscriptionOperations.begin({
+        family,
+        binding: captureTranscriptionSessionBinding(authorization, channel, bindingExtras),
+        ownerWebContents: event.sender,
+        onRevoke,
+      });
+    const isTranscriptionTransportIngressAuthorized = (event, transportId, binding, channel) => {
+      if (!isTranscriptionSessionBindingCurrent(binding, channel)) return false;
+      const ownerMatches = isSameWebContentsOwner(binding.ownerWebContents, event.sender);
+      if (typeof binding.transportId === "string") {
+        if (transportId == null) {
+          return (
+            binding.managed === false &&
+            (ownerMatches || binding.ownerWebContents?.id == null || event.sender?.id == null)
+          );
+        }
+        return ownerMatches && transportId === binding.transportId;
+      }
+      // Compatibility for pre-session-ID renderers is safe only for an
+      // unmanaged binding, and still scopes by sender whenever Electron exposed
+      // stable webContents IDs to both calls.
+      return (
+        binding.managed === false &&
+        (ownerMatches || binding.ownerWebContents?.id == null || event.sender?.id == null)
+      );
+    };
     const resolveEnterpriseRuntime = async (event, provider, model, config = {}) => {
       const manual = {
         provider,
@@ -5316,14 +5999,27 @@ class IPCHandlers {
       configPath: "note-recording-config",
     });
 
-    ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
+    ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}, context) => {
+      const managedRuntimeContext = context;
       const sender = event.sender;
       const senderId = sender.id;
       const requestId = crypto.randomUUID();
       const controller = this._cloudTranscriptionRequests.begin(senderId, requestId);
+      let operation = null;
       const cancelSenderRequests = () => this._cloudTranscriptionRequests.cancelSender(senderId);
       sender.once("destroyed", cancelSenderRequests);
       try {
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          "openwhispr",
+          "openwhispr",
+          null
+        );
+        operation = beginManagedTranscriptionOperation(event, authorization, "cloud", {
+          channel: "cloud-transcribe",
+        });
+        const operationSignal = combineAbortSignals(controller.signal, operation.signal);
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
@@ -5353,9 +6049,10 @@ class IPCHandlers {
             apiUrl,
             policyHeaders: withPolicyHeaders(authHeader),
             multipartFields,
-            signal: controller.signal,
+            signal: operationSignal,
           });
           const sum = (field) => responses.reduce((s, r) => s + (r?.[field] || 0), 0);
+          operation.assertCurrent();
           return {
             success: true,
             text,
@@ -5382,10 +6079,7 @@ class IPCHandlers {
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
         const data = await postMultipart(url, body, boundary, withPolicyHeaders(authHeader), {
-          signal: AbortSignal.any([
-            controller.signal,
-            AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
-          ]),
+          signal: AbortSignal.any([operationSignal, AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS)]),
           session: getInlineCloudUploadSession(),
         });
 
@@ -5396,6 +6090,7 @@ class IPCHandlers {
         );
 
         const result = interpretTranscribeResponse(data);
+        operation.assertCurrent();
         return {
           success: true,
           text: result.text,
@@ -5412,12 +6107,20 @@ class IPCHandlers {
           audioDurationMs: result.audioDurationMs,
         };
       } catch (error) {
+        if (operation && !operation.isCurrent()) {
+          try {
+            operation.assertCurrent();
+          } catch (authorizationError) {
+            return toPolicyFailure(authorizationError);
+          }
+        }
         if (controller.signal.aborted) {
           return { success: false, error: "Cancelled", code: "TRANSCRIPTION_CANCELLED" };
         }
         debugLogger.error("Cloud transcription error", { error: error.message }, "cloud-api");
         return toPolicyFailure(error);
       } finally {
+        operation?.release();
         sender.removeListener("destroyed", cancelSenderRequests);
         this._cloudTranscriptionRequests.complete(senderId, requestId, controller);
       }
@@ -5469,6 +6172,13 @@ class IPCHandlers {
       pending.sender?.removeListener?.("destroyed", pending.onSenderDestroyed);
       return true;
     };
+    managedTranscriptionAuthorizationListeners.add((_snapshot, identityKey) => {
+      for (const pending of pendingRetryTranscriptionCommits.values()) {
+        if (identityKey && pending.authorizationBinding?.identityKey !== identityKey) continue;
+        pending.authorizationRevoked = true;
+        pending.result = null;
+      }
+    });
     const commitRetryTranscription = (id, result, text = result.text, rawText = result.text) => {
       this.databaseManager.updateTranscriptionText(id, text, rawText);
       this.databaseManager.updateTranscriptionStatus(id, "completed");
@@ -5486,8 +6196,10 @@ class IPCHandlers {
       return updated;
     };
 
-    ipcMain.handle("retry-transcription", async (event, id, settings, requestId) => {
+    ipcMain.handle("retry-transcription", async (event, id, settings, requestId, context) => {
+      const managedRuntimeContext = context;
       const request = this._uploadCancelRegistry.register(requestId);
+      let operation = null;
       const assertNotCancelled = () => {
         if (!request.signal?.aborted) return;
         throw Object.assign(createAbortError("History transcription retry cancelled"), {
@@ -5496,8 +6208,6 @@ class IPCHandlers {
       };
       try {
         assertNotCancelled();
-        const buffer = this.audioStorageManager.getAudioBuffer(id);
-        if (!buffer) return { success: false, error: "Audio file not found" };
         let result;
         const preferredLanguage = settings?.preferredLanguage;
         const language =
@@ -5506,9 +6216,9 @@ class IPCHandlers {
             : undefined;
         const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
         assertNotCancelled();
-        // Renderer pre-flight owns policy; retry re-routes stored audio through
-        // whatever is selected NOW.
-        const route = resolveTranscriptionRoute({
+        // Re-resolve renderer settings in main before authorization so a
+        // caller-provided route label cannot redirect stored audio.
+        let route = resolveTranscriptionRoute({
           settings: settings || {},
           providers: transcriptionProviderBaseUrls(),
           request: { effectiveLanguage: language },
@@ -5516,16 +6226,61 @@ class IPCHandlers {
 
         // An error route is fatal unless OpenWhispr cloud is selected — a
         // leftover BYOK misconfiguration must not block the cloud pipeline.
-        if (
-          route.transport === "error" &&
-          (settings?.transcriptionMode === "self-hosted" ||
-            settings?.cloudTranscriptionMode !== "openwhispr")
+        if (route.transport === "error") {
+          if (
+            settings?.transcriptionMode !== "self-hosted" &&
+            settings?.cloudTranscriptionMode === "openwhispr"
+          ) {
+            route = { transport: "openwhispr", provider: "openwhispr", model: null };
+          } else {
+            const err = new Error(route.message);
+            if (route.code) err.code = route.code;
+            if (route.messageKey) err.messageKey = route.messageKey;
+            throw err;
+          }
+        } else if (route.transport === "local") {
+          const provider = settings.localTranscriptionProvider === "nvidia" ? "nvidia" : "whisper";
+          route = {
+            ...route,
+            provider,
+            model:
+              provider === "nvidia"
+                ? settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3"
+                : settings.whisperModel || null,
+          };
+        } else if (
+          settings?.cloudTranscriptionMode === "openwhispr" &&
+          route.provider !== "self-hosted"
         ) {
-          const err = new Error(route.message);
-          if (route.code) err.code = route.code;
-          if (route.messageKey) err.messageKey = route.messageKey;
-          throw err;
+          route = { transport: "openwhispr", provider: "openwhispr", model: null };
         }
+
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          route.transport === "local"
+            ? "local"
+            : route.transport === "openwhispr"
+              ? "openwhispr"
+              : route.provider === "self-hosted"
+                ? "self-hosted"
+                : "providers",
+          route.provider,
+          route.model
+        );
+        operation = beginManagedTranscriptionOperation(event, authorization, "file", {
+          channel: "history-retry",
+        });
+        const retryAuthorizationBinding = operation.binding;
+        const transportSignal = combineAbortSignals(request.signal, operation.signal);
+        const assertAuthorizationCurrent = () => {
+          assertNotCancelled();
+          operation.assertCurrent();
+        };
+        assertAuthorizationCurrent();
+
+        const buffer = this.audioStorageManager.getAudioBuffer(id);
+        if (!buffer) return { success: false, error: "Audio file not found" };
 
         if (route.transport === "http-batch" && route.provider === "self-hosted") {
           const formData = new FormData();
@@ -5537,20 +6292,20 @@ class IPCHandlers {
             formData.append("language", route.language);
           }
 
-          assertNotCancelled();
+          assertAuthorizationCurrent();
           const response = await proxyFetch(route.endpoint, {
             method: "POST",
             body: formData,
-            signal: request.signal,
+            signal: transportSignal,
           });
-          assertNotCancelled();
+          assertAuthorizationCurrent();
           if (!response.ok) {
             const errorText = await response.text();
-            assertNotCancelled();
+            assertAuthorizationCurrent();
             throw new Error(`Self-hosted API Error: ${response.status} ${errorText}`);
           }
           const data = await response.json();
-          assertNotCancelled();
+          assertAuthorizationCurrent();
           if (data?.text) {
             result = {
               text: data.text,
@@ -5559,29 +6314,27 @@ class IPCHandlers {
             };
           }
         } else if (route.transport === "local") {
-          if (settings.localTranscriptionProvider === "nvidia") {
-            const model =
-              settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3";
+          if (route.provider === "nvidia") {
             result = await this.parakeetManager.transcribeLocalParakeet(buffer, {
-              model,
-              signal: request.signal,
+              model: route.model,
+              signal: transportSignal,
             });
-            assertNotCancelled();
+            assertAuthorizationCurrent();
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
             const vadOptions = this._resolveWhisperVadOptions("noteRecording");
             result = await this.whisperManager.transcribeLocalWhisper(buffer, {
-              model: settings.whisperModel,
+              model: route.model,
               language,
               ...vadOptions,
-              signal: request.signal,
+              signal: transportSignal,
             });
-            assertNotCancelled();
+            assertAuthorizationCurrent();
           }
-        } else if (settings?.cloudTranscriptionMode === "openwhispr") {
+        } else if (route.transport === "openwhispr") {
           const win = BrowserWindow.fromWebContents(event.sender);
           if (win) {
             const authHeader = await getAuthHeaderFromWindow(win);
-            assertNotCancelled();
+            assertAuthorizationCurrent();
             if (Object.keys(authHeader).length) {
               const apiUrl = getApiUrl();
               if (apiUrl) {
@@ -5597,9 +6350,9 @@ class IPCHandlers {
                     apiUrl,
                     policyHeaders: withPolicyHeaders(authHeader),
                     multipartFields,
-                    signal: request.signal,
+                    signal: transportSignal,
                   });
-                  assertNotCancelled();
+                  assertAuthorizationCurrent();
                   result = { text, source: "openwhispr", model: "cloud" };
                 } else {
                   const { body, boundary } = buildMultipartBody(
@@ -5616,13 +6369,13 @@ class IPCHandlers {
                     withPolicyHeaders(authHeader),
                     {
                       signal: AbortSignal.any([
-                        ...(request.signal ? [request.signal] : []),
+                        ...(transportSignal ? [transportSignal] : []),
                         AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
                       ]),
                       session: getInlineCloudUploadSession(),
                     }
                   );
-                  assertNotCancelled();
+                  assertAuthorizationCurrent();
                   const responseData = interpretTranscribeResponse(data);
                   result = {
                     text: responseData.text,
@@ -5641,9 +6394,9 @@ class IPCHandlers {
             contentType: "audio/webm",
             language: route.language,
             apiKey: this.environmentManager.getTinfoilKey(),
-            signal: request.signal,
+            signal: transportSignal,
           });
-          assertNotCancelled();
+          assertAuthorizationCurrent();
           if (text) result = { text, source: "tinfoil", model };
         } else if (route.transport === "proxied" && route.provider === "corti") {
           // Corti uses OAuth + an interaction-based REST flow, so it can't use
@@ -5661,9 +6414,10 @@ class IPCHandlers {
             clientSecret,
             audioBuffer: buffer,
             language: route.language,
-            signal: request.signal,
+            signal: transportSignal,
+            onCleanupFailure: (record) => this._enqueueCortiPrivacyCleanup(record),
           });
-          assertNotCancelled();
+          assertAuthorizationCurrent();
           if (text) result = { text, source: "corti", model: route.model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
@@ -5712,21 +6466,21 @@ class IPCHandlers {
             }
           }
 
-          assertNotCancelled();
+          assertAuthorizationCurrent();
           const response = await proxyFetch(endpoint, {
             method: "POST",
             headers,
             body: formData,
-            signal: request.signal,
+            signal: transportSignal,
           });
-          assertNotCancelled();
+          assertAuthorizationCurrent();
           if (!response.ok) {
             const errorText = await response.text();
-            assertNotCancelled();
+            assertAuthorizationCurrent();
             throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
           }
           const data = await response.json();
-          assertNotCancelled();
+          assertAuthorizationCurrent();
           if (data?.text) {
             result = { text: data.text, source: provider, model: route.model };
           }
@@ -5736,7 +6490,7 @@ class IPCHandlers {
           return { success: false, error: "No transcription engine available" };
         }
 
-        assertNotCancelled();
+        assertAuthorizationCurrent();
         if (typeof requestId === "string" && requestId) {
           const ownerId = retryTranscriptionOwnerId(event);
           discardPendingRetryTranscription(ownerId, requestId);
@@ -5763,6 +6517,7 @@ class IPCHandlers {
           pendingRetryTranscriptionCommits.set(retryTranscriptionCommitKey(ownerId, requestId), {
             id,
             result,
+            authorizationBinding: retryAuthorizationBinding,
             sender,
             onSenderDestroyed,
             expiryTimer,
@@ -5772,6 +6527,13 @@ class IPCHandlers {
         const updated = commitRetryTranscription(id, result);
         return { success: true, transcription: updated };
       } catch (error) {
+        if (operation && !operation.isCurrent()) {
+          try {
+            operation.assertCurrent();
+          } catch (authorizationError) {
+            return toPolicyFailure(authorizationError);
+          }
+        }
         if (request.signal?.aborted || error?.name === "AbortError") {
           return {
             success: false,
@@ -5789,6 +6551,7 @@ class IPCHandlers {
         }
         return { success: false, error: error.message };
       } finally {
+        operation?.release();
         request.release();
       }
     });
@@ -5800,6 +6563,17 @@ class IPCHandlers {
       );
       if (!pending || pending.id !== id) {
         return { success: false, error: "Retry result expired or was cancelled" };
+      }
+      if (
+        pending.authorizationRevoked ||
+        !isTranscriptionSessionBindingCurrent(pending.authorizationBinding, "history-retry")
+      ) {
+        discardPendingRetryTranscription(ownerId, requestId);
+        return {
+          success: false,
+          error: "Transcription authorization changed. Retry the request.",
+          code: AUTHORIZATION_BOUNDARY_CHANGED,
+        };
       }
       discardPendingRetryTranscription(ownerId, requestId);
       const transcription = commitRetryTranscription(
@@ -5815,7 +6589,37 @@ class IPCHandlers {
     let meetingTranscriptionPrepareInProgress = false;
     let meetingTranscriptionPreparePromise = null;
     let meetingTransportGeneration = 0;
+    let meetingTransportAbortController = new AbortController();
     let meetingSessionTransportGeneration = null;
+    let meetingAuthorizationBinding = null;
+    let meetingWarmAuthorizationBinding = null;
+    let meetingPrepareAuthorizationBinding = null;
+    let meetingWarmOperation = null;
+    let activeMeetingCommitToken = null;
+    const meetingCommitRegistry = createMeetingTranscriptCommitRegistry({
+      isBindingCurrent: isTranscriptionAuthorizationBindingCurrent,
+      isSameOwner: isSameWebContentsOwner,
+      commit: (grant, payload) => {
+        const result = this.databaseManager.updateNote(grant.noteId, {
+          transcript: payload.transcript,
+        });
+        if (result?.success && result?.note) {
+          setImmediate(() => broadcastToWindows("note-updated", result.note));
+          this._asyncVectorUpsert(result.note);
+          this._asyncMirrorWrite(result.note);
+        }
+        if (payload.kind === "diarization" && payload.speakerEmbeddings) {
+          const buffers = {};
+          for (const [speakerId, values] of Object.entries(payload.speakerEmbeddings)) {
+            if (!Array.isArray(values)) continue;
+            buffers[speakerId] = Buffer.from(new Float32Array(values).buffer);
+          }
+          this.databaseManager.saveNoteSpeakerEmbeddings(grant.noteId, buffers);
+          this._tryAutoLabelOneOnOne(grant.noteId);
+        }
+        return result;
+      },
+    });
     const assertCurrentMeetingTransport = (generation) => {
       if (generation === meetingTransportGeneration) return;
       const error = new Error("Meeting transcription authorization changed");
@@ -5932,6 +6736,7 @@ class IPCHandlers {
       includeInLocalTranscript = false,
     }) => {
       if (meetingSessionTransportGeneration !== meetingTransportGeneration) return;
+      if (!isTranscriptionSessionBindingCurrent(meetingAuthorizationBinding, "meeting")) return;
       if (includeInLocalTranscript) {
         appendMeetingLocalTranscript(text);
       }
@@ -5949,6 +6754,10 @@ class IPCHandlers {
     };
 
     function flushPendingMicFinals(force = false) {
+      if (!isTranscriptionSessionBindingCurrent(meetingAuthorizationBinding, "meeting")) {
+        resetPendingMicFinals();
+        return;
+      }
       if (meetingPendingMicFinals.length === 0) {
         if (meetingPendingMicFinalTimer) {
           clearTimeout(meetingPendingMicFinalTimer);
@@ -6091,8 +6900,10 @@ class IPCHandlers {
       source,
       generation = meetingTransportGeneration
     ) => {
+      const authorizationBinding = meetingAuthorizationBinding;
       const send = (channel, data) => {
         if (generation !== meetingTransportGeneration) return;
+        if (!isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting")) return;
         if (!win || win.isDestroyed()) {
           debugLogger.error("Meeting segment send failed: window unavailable", {
             channel,
@@ -6105,6 +6916,7 @@ class IPCHandlers {
       };
 
       streaming.onPartialTranscript = (text) => {
+        if (!isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting")) return;
         if (source === "mic" && meetingEchoLeakDetector.isMicProbablyRenderBleed()) {
           send("meeting-transcription-segment", { text: "", source, type: "partial" });
           return;
@@ -6113,6 +6925,7 @@ class IPCHandlers {
         send("meeting-transcription-segment", { text, source, type: "partial" });
       };
       streaming.onFinalTranscript = (text, timestamp) => {
+        if (!isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting")) return;
         const segments = streaming.completedSegments;
         const latestSegment = segments.length > 0 ? segments[segments.length - 1] : text;
         let micSuppression = null;
@@ -6208,6 +7021,7 @@ class IPCHandlers {
       };
       const recoverConnection = async (error, restoreOldOnFailure) => {
         if (generation !== meetingTransportGeneration) return;
+        if (!isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting")) return;
         let recovered = false;
         try {
           recovered = await reconnectMeetingStreams({ restoreOldOnFailure });
@@ -6217,6 +7031,7 @@ class IPCHandlers {
           });
         }
         if (generation !== meetingTransportGeneration) return;
+        if (!isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting")) return;
         if (!recovered && !meetingFatalErrorSent) {
           meetingFatalErrorSent = true;
           send(
@@ -6891,8 +7706,15 @@ class IPCHandlers {
 
     const startLiveSpeakerIdentification = async (win, systemAudioMode) => {
       await stopLiveSpeakerIdentification();
+      const generation = meetingTransportGeneration;
+      const authorizationBinding = meetingAuthorizationBinding;
+      const authorizationIsCurrent = () =>
+        generation === meetingTransportGeneration &&
+        meetingSessionTransportGeneration === generation &&
+        isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting");
 
       if (
+        !authorizationIsCurrent() ||
         !supportsLiveSpeakerIdentification(systemAudioMode) ||
         !liveSpeakerIdentifier.isAvailable()
       ) {
@@ -6910,7 +7732,12 @@ class IPCHandlers {
       const started = await liveSpeakerIdentifier
         .start(
           (identification) => {
-            if (!win || win.isDestroyed() || meetingLiveSpeakerStartedAt == null) {
+            if (
+              !authorizationIsCurrent() ||
+              !win ||
+              win.isDestroyed() ||
+              meetingLiveSpeakerStartedAt == null
+            ) {
               return;
             }
 
@@ -6971,12 +7798,19 @@ class IPCHandlers {
           return false;
         });
 
+      if (!authorizationIsCurrent()) {
+        await liveSpeakerIdentifier.stop().catch(() => null);
+        return false;
+      }
       if (started) {
         meetingLiveSpeakerActive = true;
         meetingReclusterTimer = setInterval(async () => {
-          if (!meetingLiveSpeakerActive || !win || win.isDestroyed()) return;
+          if (!authorizationIsCurrent() || !meetingLiveSpeakerActive || !win || win.isDestroyed()) {
+            return;
+          }
 
           const merges = await liveSpeakerIdentifier.recluster();
+          if (!authorizationIsCurrent()) return;
           if (!merges.length) return;
 
           for (const { keep, remove, displayName } of merges) {
@@ -6997,9 +7831,14 @@ class IPCHandlers {
       return started;
     };
 
-    const transcribeLocalMeetingChunk = async (source) => {
+    const transcribeLocalMeetingChunk = async (
+      source,
+      signal = meetingTransportAbortController.signal
+    ) => {
       const generation = meetingTransportGeneration;
+      const authorizationBinding = meetingAuthorizationBinding;
       if (meetingSessionTransportGeneration !== generation) return;
+      if (!isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting")) return;
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
 
@@ -7039,6 +7878,7 @@ class IPCHandlers {
         if (meetingLocalProvider === "nvidia") {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: meetingLocalModel,
+            signal,
           });
         } else {
           const vadOptions = this._resolveWhisperVadOptions("meeting");
@@ -7046,12 +7886,14 @@ class IPCHandlers {
             model: meetingLocalModel,
             language: meetingLocalLanguage,
             ...vadOptions,
+            signal,
           });
         }
 
         if (
           generation !== meetingTransportGeneration ||
-          meetingSessionTransportGeneration !== generation
+          meetingSessionTransportGeneration !== generation ||
+          !isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting")
         ) {
           return;
         }
@@ -7115,7 +7957,11 @@ class IPCHandlers {
 
             const retracted = removeRacingMicEntriesFor(text, segTimestamp);
             for (const stale of retracted) {
-              if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
+              if (
+                isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting") &&
+                meetingLocalWin &&
+                !meetingLocalWin.isDestroyed()
+              ) {
                 meetingLocalWin.webContents.send("meeting-transcription-segment", {
                   text: stale.text,
                   source: "mic",
@@ -7131,7 +7977,11 @@ class IPCHandlers {
               return;
             }
 
-            if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
+            if (
+              isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting") &&
+              meetingLocalWin &&
+              !meetingLocalWin.isDestroyed()
+            ) {
               meetingLocalWin.webContents.send(channel, payload);
             }
           };
@@ -7171,22 +8021,29 @@ class IPCHandlers {
           });
         }
       } catch (error) {
-        debugLogger.error("Local meeting transcription chunk failed", {
-          source,
-          error: error.message,
-        });
-        if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
+        if (!signal?.aborted) {
+          debugLogger.error("Local meeting transcription chunk failed", {
+            source,
+            error: error.message,
+          });
+        }
+        if (
+          isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting") &&
+          meetingLocalWin &&
+          !meetingLocalWin.isDestroyed()
+        ) {
           meetingLocalWin.webContents.send("meeting-transcription-error", error.message);
         }
       }
     };
 
-    const transcribeAllLocalBuffers = async () => {
+    const transcribeAllLocalBuffers = async (signal = meetingTransportAbortController.signal) => {
+      if (!isTranscriptionSessionBindingCurrent(meetingAuthorizationBinding, "meeting")) return;
       if (meetingLocalTranscribing) return;
       meetingLocalTranscribing = true;
       try {
-        await transcribeLocalMeetingChunk("system");
-        await transcribeLocalMeetingChunk("mic");
+        await transcribeLocalMeetingChunk("system", signal);
+        if (!signal?.aborted) await transcribeLocalMeetingChunk("mic", signal);
       } finally {
         meetingLocalTranscribing = false;
       }
@@ -7254,6 +8111,9 @@ class IPCHandlers {
     let dictationPreviewProvider = null;
     let dictationPreviewModel = null;
     let dictationPreviewLanguage = null;
+    let dictationPreviewManagedRuntimeContext = null;
+    let dictationPreviewAuthorizationBinding = null;
+    let dictationPreviewManagedOperation = null;
     let dictationPreviewSessionActive = false;
     let dictationPreviewChunkCount = 0;
     // Online-runtime models stream here instead of the 1.5s chunked path.
@@ -7265,6 +8125,12 @@ class IPCHandlers {
     // Unlike a normal stop, an authorization boundary must invalidate token
     // fetches and connects that have not reached the transport yet.
     let dictationTransportGeneration = 0;
+    let dictationAuthorizationBinding = null;
+    let dictationWarmAuthorizationBinding = null;
+    let dictationWarmOperation = null;
+    let dictationActiveOperation = null;
+    let dictationProviderClose = null;
+    const dictationOperationTeardowns = new WeakMap();
     const assertCurrentDictationTransport = (generation) => {
       if (generation === dictationTransportGeneration) return;
       const error = new Error("Dictation authorization changed");
@@ -7287,6 +8153,8 @@ class IPCHandlers {
     };
 
     const resetDictationPreviewState = ({ preserveSession = false } = {}) => {
+      dictationPreviewManagedOperation?.release();
+      dictationPreviewManagedOperation = null;
       dictationPreviewGen++;
       if (dictationPreviewTimer) {
         clearInterval(dictationPreviewTimer);
@@ -7305,6 +8173,8 @@ class IPCHandlers {
       dictationPreviewProvider = null;
       dictationPreviewModel = null;
       dictationPreviewLanguage = null;
+      dictationPreviewManagedRuntimeContext = null;
+      dictationPreviewAuthorizationBinding = null;
       dictationPreviewDisplay = true;
     };
 
@@ -7315,6 +8185,12 @@ class IPCHandlers {
     };
 
     const transcribeDictationPreviewChunk = async () => {
+      const authorizationBinding = dictationPreviewAuthorizationBinding;
+      const managedOperation = dictationPreviewManagedOperation;
+      const previewGeneration = dictationPreviewGen;
+      if (!isTranscriptionSessionBindingCurrent(authorizationBinding, "preview")) {
+        return;
+      }
       // The chunked path only feeds the preview window.
       if (!dictationPreviewDisplay) return;
       if (dictationPreviewTranscribing) return;
@@ -7345,6 +8221,7 @@ class IPCHandlers {
         if (dictationPreviewProvider === "nvidia") {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: dictationPreviewModel,
+            signal: managedOperation?.signal,
           });
         } else {
           const vadOptions = this._resolveWhisperVadOptions("dictation");
@@ -7352,7 +8229,17 @@ class IPCHandlers {
             model: dictationPreviewModel,
             language: dictationPreviewLanguage,
             ...vadOptions,
+            signal: managedOperation?.signal,
           });
+        }
+
+        managedOperation?.assertCurrent();
+
+        if (
+          previewGeneration !== dictationPreviewGen ||
+          !isTranscriptionSessionBindingCurrent(authorizationBinding, "preview")
+        ) {
+          return;
         }
 
         if (result?.success && result.text?.trim()) {
@@ -7393,9 +8280,9 @@ class IPCHandlers {
       resetMeetingReconnectAudio();
     };
 
-    const disconnectMeetingStreaming = async ({ flushPending = false } = {}) => {
+    const disconnectMeetingStreaming = async ({ flushPending = false, signal = null } = {}) => {
       const provider = meetingConnectionProvider || meetingConnectionOptions?.provider;
-      const results = await Promise.all([
+      const disconnectPromise = Promise.all([
         disconnectMeetingStreamingClient(this._meetingMicStreaming, provider, flushPending).catch(
           () => ({ text: "" })
         ),
@@ -7405,6 +8292,27 @@ class IPCHandlers {
           flushPending
         ).catch(() => ({ text: "" })),
       ]);
+      if (!signal) {
+        const results = await disconnectPromise;
+        if (flushPending) flushPendingMicFinals(true);
+        resetMeetingStreamingState();
+        return results;
+      }
+
+      let abortListener = null;
+      const results = await Promise.race([
+        disconnectPromise,
+        new Promise((resolve) => {
+          if (signal.aborted) {
+            resolve(null);
+            return;
+          }
+          abortListener = () => resolve(null);
+          signal.addEventListener("abort", abortListener, { once: true });
+        }),
+      ]);
+      if (abortListener) signal.removeEventListener("abort", abortListener);
+      if (!results) return [{ text: "" }, { text: "" }];
 
       if (flushPending) {
         flushPendingMicFinals(true);
@@ -7431,8 +8339,10 @@ class IPCHandlers {
     };
 
     const invalidateMeetingTranscriptionTransport = () => {
+      meetingTransportAbortController.abort();
       meetingTransportGeneration += 1;
       meetingSessionTransportGeneration = null;
+      meetingAuthorizationBinding = null;
       meetingPendingMicChunks = [];
       resetPendingMicFinals();
       meetingLocalBuffers = { mic: [], system: [] };
@@ -7440,6 +8350,43 @@ class IPCHandlers {
       meetingConnectionOptions = null;
       meetingConnectionWin = null;
     };
+    let meetingTranscriptionLifecycle = null;
+    const revokeMeetingAuthorization = (matchesIdentity) => {
+      const activeBindingMatches = matchesIdentity(meetingAuthorizationBinding);
+      meetingTranscriptionLifecycle?.cancelQueuedSessions(matchesIdentity);
+      if (!activeBindingMatches) return;
+
+      const abortPromise = meetingTranscriptionLifecycle?.abortSession();
+      if (!abortPromise) {
+        invalidateMeetingTranscriptionTransport();
+        return;
+      }
+      void abortPromise.then(
+        (result) => {
+          if (result?.reason === "stale-session") invalidateMeetingTranscriptionTransport();
+        },
+        (error) => {
+          debugLogger.error(
+            "Meeting transcription authorization teardown failed",
+            { error: error?.message },
+            "meeting"
+          );
+        }
+      );
+    };
+    managedTranscriptionAuthorizationListeners.add((_snapshot, identityKey) => {
+      meetingCommitRegistry.revoke(identityKey);
+      revokeMeetingAuthorization(
+        (binding) => !!binding && (!identityKey || binding.identityKey === identityKey)
+      );
+    });
+    workspacePolicyAuthorizationListeners.add((_snapshot, identityKey) => {
+      meetingCommitRegistry.revokeWorkspacePolicy(identityKey);
+      revokeMeetingAuthorization(
+        (binding) =>
+          !!binding && (!identityKey || binding.workspacePolicyIdentityKey === identityKey)
+      );
+    });
 
     const rollbackMeetingTranscriptionStart = async () => {
       if (this.audioTapManager) {
@@ -7458,19 +8405,51 @@ class IPCHandlers {
       this.activeMeetingSpeakerConfig = null;
     };
 
-    const setupDictationCallbacks = (streaming, event) => {
+    const ownsActiveProviderCallbacks = (
+      operation,
+      authorizationBinding,
+      client,
+      currentClient,
+      channel
+    ) =>
+      !!operation &&
+      dictationActiveOperation === operation &&
+      dictationAuthorizationBinding === authorizationBinding &&
+      currentClient === client &&
+      operation.isCurrent() &&
+      isTranscriptionSessionBindingCurrent(authorizationBinding, channel);
+
+    const setupDictationCallbacks = (
+      streaming,
+      event,
+      authorizationBinding = null,
+      operation = null
+    ) => {
+      const canPublish = () =>
+        ownsActiveProviderCallbacks(
+          operation,
+          authorizationBinding,
+          streaming,
+          this._dictationStreaming,
+          "dictation-realtime"
+        );
       streaming.onPartialTranscript = (text) => {
+        if (!canPublish()) return;
         event.sender.send("dictation-realtime-partial", text);
         if (this._dictationPreviewEnabled && text) {
           this.windowManager.showTranscriptionPreview(text);
         }
       };
-      streaming.onFinalTranscript = (text) => event.sender.send("dictation-realtime-final", text);
+      streaming.onFinalTranscript = (text) => {
+        if (canPublish()) event.sender.send("dictation-realtime-final", text);
+      };
       streaming.onError = (err) => {
+        if (!canPublish()) return;
         event.sender.send("dictation-realtime-error", err.message);
         if (this._dictationPreviewEnabled) this.windowManager.hideTranscriptionPreview();
       };
       streaming.onSessionEnd = (data) => {
+        if (!canPublish()) return;
         event.sender.send("dictation-realtime-session-end", data || {});
         if (this._dictationPreviewEnabled) this.windowManager.hideTranscriptionPreview();
       };
@@ -7496,7 +8475,12 @@ class IPCHandlers {
       }, DICTATION_IDLE_TIMEOUT_MS);
     };
 
-    const connectDictationStreaming = async (event, options) => {
+    const connectDictationStreaming = async (
+      event,
+      options,
+      authorizationBinding = null,
+      operation = null
+    ) => {
       const generation = dictationTransportGeneration;
       // Older renderers did not label the OpenAI dictation adapter. Dictation
       // realtime was OpenAI-only before Tinfoil support, so preserve that
@@ -7527,7 +8511,7 @@ class IPCHandlers {
         // fail-closed for genuinely unknown providers (#1624).
         const provider = options.provider ?? "openai-realtime";
         const streaming = new OpenAIRealtimeStreaming();
-        setupDictationCallbacks(streaming, event);
+        setupDictationCallbacks(streaming, event, authorizationBinding, operation);
         // Assign before the token fetch (a real network round trip) so
         // dictation-realtime-send has a live instance to buffer into instead
         // of silently dropping the start of the recording.
@@ -7576,7 +8560,8 @@ class IPCHandlers {
     };
 
     // Pre-warm: fetch tokens + connect WebSockets before user hits record
-    ipcMain.handle("meeting-transcription-prepare", async (event, options = {}) => {
+    ipcMain.handle("meeting-transcription-prepare", async (event, options = {}, context) => {
+      const managedRuntimeContext = context;
       const generation = meetingTransportGeneration;
       if (meetingTranscriptionPrepareInProgress || meetingTranscriptionStartInProgress) {
         debugLogger.debug("Meeting transcription prepare already in progress, ignoring");
@@ -7587,9 +8572,37 @@ class IPCHandlers {
         return { success: false, error: `Unsupported provider: ${options.provider}` };
       }
 
+      const requestedProvider =
+        options.provider === "local" ? options.localProvider || "whisper" : options.provider;
+      const requestedModel =
+        options.provider === "local" ? options.localModel || null : options.model || null;
+      let authorization;
+      try {
+        authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          options.provider === "local"
+            ? "local"
+            : options.mode === "openwhispr"
+              ? "openwhispr"
+              : "providers",
+          requestedProvider,
+          requestedModel
+        );
+      } catch (error) {
+        return toPolicyFailure(error);
+      }
+
       if (options.provider === "local") {
         return { success: true };
       }
+
+      const warmAuthorizationBinding = captureTranscriptionSessionBinding(
+        authorization,
+        "meeting-warm",
+        { ownerWebContents: event.sender, transportId: options.transportId ?? null }
+      );
+      meetingPrepareAuthorizationBinding = warmAuthorizationBinding;
 
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
       assertCurrentMeetingTransport(generation);
@@ -7597,8 +8610,15 @@ class IPCHandlers {
 
       if (
         isMeetingStreamingConnected(systemAudioMode) &&
-        meetingConnectionKey === requestedConnectionKey
+        meetingConnectionKey === requestedConnectionKey &&
+        hasSameTranscriptionAuthorization(
+          meetingWarmAuthorizationBinding,
+          warmAuthorizationBinding
+        ) &&
+        isSameWebContentsOwner(meetingWarmAuthorizationBinding?.ownerWebContents, event.sender) &&
+        meetingWarmAuthorizationBinding?.transportId === warmAuthorizationBinding.transportId
       ) {
+        meetingPrepareAuthorizationBinding = null;
         debugLogger.debug("Meeting transcription already prepared (warm connections)");
         return { success: true, alreadyPrepared: true };
       }
@@ -7606,7 +8626,25 @@ class IPCHandlers {
       meetingTranscriptionPrepareInProgress = true;
       meetingTranscriptionPreparePromise = (async () => {
         let timeoutHandle;
+        let warmOperation;
         try {
+          meetingWarmOperation?.revoke();
+          meetingWarmOperation = null;
+          meetingWarmAuthorizationBinding = null;
+          warmOperation = beginManagedTranscriptionOperation(event, authorization, "meeting", {
+            channel: "meeting-warm",
+            bindingExtras: {
+              ownerWebContents: event.sender,
+              transportId: options.transportId ?? null,
+            },
+            onRevoke: () => {
+              void disconnectMeetingStreaming({ flushPending: false }).catch(() => {});
+              meetingWarmAuthorizationBinding = null;
+              meetingWarmOperation = null;
+            },
+          });
+          meetingWarmAuthorizationBinding = warmAuthorizationBinding;
+          meetingWarmOperation = warmOperation;
           await Promise.race([
             connectRealtimeStreaming(event, options, generation),
             new Promise((_, reject) => {
@@ -7614,12 +8652,21 @@ class IPCHandlers {
             }),
           ]);
           assertCurrentMeetingTransport(generation);
+          warmOperation.assertCurrent();
           debugLogger.debug("Meeting transcription prepared (meeting streams warm)");
           return { success: true };
         } catch (error) {
+          warmOperation?.revoke();
+          if (meetingWarmOperation === warmOperation) {
+            meetingWarmOperation = null;
+            meetingWarmAuthorizationBinding = null;
+          }
           debugLogger.error("Meeting transcription prepare error", { error: error.message });
           return toPolicyFailure(error);
         } finally {
+          if (meetingPrepareAuthorizationBinding === warmAuthorizationBinding) {
+            meetingPrepareAuthorizationBinding = null;
+          }
           if (timeoutHandle) clearTimeout(timeoutHandle);
           meetingTranscriptionPrepareInProgress = false;
           meetingTranscriptionPreparePromise = null;
@@ -7629,13 +8676,29 @@ class IPCHandlers {
       return meetingTranscriptionPreparePromise;
     });
 
-    ipcMain.handle("meeting-transcription-cancel", async () => {
+    ipcMain.handle("meeting-transcription-cancel", async (event, expectedTransportId) => {
       if (isMeetingStreamingConnected() || meetingLocalTimer) {
         return { success: false, reason: "recording-active" };
+      }
+      const cancellationBinding =
+        meetingPrepareAuthorizationBinding ?? meetingWarmAuthorizationBinding;
+      if (
+        typeof expectedTransportId !== "string" ||
+        expectedTransportId.length === 0 ||
+        cancellationBinding?.ownerWebContents !== event.sender ||
+        cancellationBinding?.transportId !== expectedTransportId ||
+        !isTranscriptionSessionBindingCurrent(cancellationBinding, "meeting-warm")
+      ) {
+        return { success: false, reason: "stale-session" };
       }
       meetingTranscriptionPrepareInProgress = false;
       meetingTranscriptionStartInProgress = false;
       meetingTranscriptionPreparePromise = null;
+      meetingPrepareAuthorizationBinding = null;
+      meetingWarmOperation?.revoke();
+      meetingWarmOperation = null;
+      meetingWarmAuthorizationBinding = null;
+      invalidateMeetingTranscriptionTransport();
       return { success: true };
     });
 
@@ -7714,12 +8777,21 @@ class IPCHandlers {
         }
 
         // If already prepared (warm connections from prepare), just re-attach handlers
-        if (
+        const canReuseWarmMeeting =
           !meetingLocalMode &&
           isMeetingStreamingConnected(systemAudioMode) &&
-          meetingConnectionKey === requestedConnectionKey
-        ) {
+          meetingConnectionKey === requestedConnectionKey &&
+          hasSameTranscriptionAuthorization(
+            meetingWarmAuthorizationBinding,
+            meetingAuthorizationBinding
+          ) &&
+          isSameWebContentsOwner(meetingWarmAuthorizationBinding?.ownerWebContents, event.sender) &&
+          meetingWarmAuthorizationBinding?.transportId === options.warmTransportId;
+        if (canReuseWarmMeeting) {
           debugLogger.debug("Meeting transcription start: reusing warm connections");
+          meetingWarmOperation?.release();
+          meetingWarmOperation = null;
+          meetingWarmAuthorizationBinding = null;
           const win = BrowserWindow.fromWebContents(event.sender);
           attachMeetingStreamingHandlers(this._meetingMicStreaming, win, "mic", generation);
           if (systemAudioMode !== "unsupported") {
@@ -7742,6 +8814,14 @@ class IPCHandlers {
             systemAudioStrategy,
             oneOnOneAttendee: meetingOneOnOneAttendee,
           });
+        }
+
+        if (meetingWarmOperation) {
+          meetingWarmOperation.revoke();
+          meetingWarmOperation = null;
+          meetingWarmAuthorizationBinding = null;
+          await disconnectMeetingStreaming({ flushPending: false }).catch(() => {});
+          assertCurrentMeetingTransport(generation);
         }
 
         if (options.provider === "local") {
@@ -7818,6 +8898,7 @@ class IPCHandlers {
 
     const sendMeetingAudio = (audioBuffer, source) => {
       if (meetingSessionTransportGeneration !== meetingTransportGeneration) return;
+      if (!isTranscriptionSessionBindingCurrent(meetingAuthorizationBinding, "meeting")) return;
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.
@@ -7910,12 +8991,19 @@ class IPCHandlers {
 
     const startManagedMeetingSystemAudio = (event, manager, warningLabel) => {
       const win = BrowserWindow.fromWebContents(event.sender);
+      const generation = meetingTransportGeneration;
+      const authorizationBinding = meetingAuthorizationBinding;
+      const authorizationIsCurrent = () =>
+        generation === meetingTransportGeneration &&
+        meetingSessionTransportGeneration === generation &&
+        isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting");
       return manager.start({
         onChunk: (chunk) => {
+          if (!authorizationIsCurrent()) return;
           sendMeetingAudio(chunk, "system");
         },
         onError: (error) => {
-          if (win && !win.isDestroyed()) {
+          if (authorizationIsCurrent() && win && !win.isDestroyed()) {
             win.webContents.send("meeting-transcription-error", error.message);
           }
         },
@@ -8014,11 +9102,42 @@ class IPCHandlers {
       }
     };
 
-    ipcMain.on("meeting-transcription-send", (_event, audioBuffer, source) => {
+    ipcMain.on("meeting-transcription-send", (event, sessionId, audioBuffer, source) => {
+      if (source === undefined) {
+        source = audioBuffer;
+        audioBuffer = sessionId;
+        sessionId = null;
+      }
+      if (
+        !isTranscriptionTransportIngressAuthorized(
+          event,
+          sessionId,
+          meetingAuthorizationBinding,
+          "meeting"
+        )
+      ) {
+        return;
+      }
       sendMeetingAudio(audioBuffer, source);
     });
 
-    const stopMeetingTranscription = async (expectedSessionId) => {
+    const stopMeetingTranscription = async (expectedSessionId, abortSignal = null) => {
+      const authorizationBinding = meetingAuthorizationBinding;
+      const commitToken = activeMeetingCommitToken;
+      const authorizationIsCurrent = () =>
+        !abortSignal?.aborted &&
+        isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting");
+      const discardRevokedStop = async (capturedDiarization = null) => {
+        if (capturedDiarization?.diarizationPcmPath) {
+          fs.unlink(capturedDiarization.diarizationPcmPath, () => {});
+        }
+        resetMeetingLocalState();
+        if (!abortSignal?.aborted) {
+          await disconnectMeetingStreaming({ flushPending: false });
+        }
+        this.activeMeetingSpeakerConfig = null;
+        return { success: true, transcript: "" };
+      };
       // Only a *different* live session blocks teardown — it owns the shared
       // capture now. With no engine session (e.g. after quit-path engine stop)
       // the streams below must still be torn down.
@@ -8037,10 +9156,12 @@ class IPCHandlers {
           await this.windowsLoopbackAudioManager.stop().catch(() => {});
         }
 
+        if (!authorizationIsCurrent()) return await discardRevokedStop();
         flushPendingMeetingMicChunks(true);
         await stopMeetingAec();
 
         const liveSpeakerState = await stopLiveSpeakerIdentification().catch(() => null);
+        if (!authorizationIsCurrent()) return await discardRevokedStop();
 
         const diarizationSessionId = `diar-${Date.now()}`;
         const diarizationWin = meetingLocalWin || this.windowManager.controlPanelWindow;
@@ -8051,13 +9172,17 @@ class IPCHandlers {
             meetingLocalTimer = null;
           }
           try {
-            await transcribeAllLocalBuffers();
+            await transcribeAllLocalBuffers(abortSignal);
           } catch (err) {
             debugLogger.error("Local meeting final transcription failed", { error: err.message });
           }
+          if (!authorizationIsCurrent()) return await discardRevokedStop();
           flushPendingMicFinals(true);
+          if (!authorizationIsCurrent()) return await discardRevokedStop();
+          const capturedDiarization = await captureMeetingDiarizationState();
+          if (!authorizationIsCurrent()) return await discardRevokedStop(capturedDiarization);
           const { diarizationPcmPath, diarizationSegments, diarizationStartedAt, diarizedSource } =
-            await captureMeetingDiarizationState();
+            capturedDiarization;
           const transcript =
             buildOrderedTranscriptText(diarizationSegments) || meetingLocalTranscript;
           const sessionSpeakerConfigSnapshot = this.activeMeetingSpeakerConfig;
@@ -8066,6 +9191,7 @@ class IPCHandlers {
           resetMeetingLocalState();
 
           // Fire-and-forget background diarization (or notify skip)
+          if (!authorizationIsCurrent()) return await discardRevokedStop(capturedDiarization);
           this._startOrSkipDiarization(
             diarizationSessionId,
             diarizationPcmPath,
@@ -8075,15 +9201,24 @@ class IPCHandlers {
             liveSpeakerState,
             sessionSpeakerConfigSnapshot,
             noteIdSnapshot,
-            diarizedSource
+            diarizedSource,
+            authorizationIsCurrent,
+            commitToken
           );
 
           return { success: true, transcript, diarizationSessionId };
         }
 
-        const results = await disconnectMeetingStreaming({ flushPending: true });
+        if (!authorizationIsCurrent()) return await discardRevokedStop();
+        const results = await disconnectMeetingStreaming({
+          flushPending: true,
+          signal: abortSignal,
+        });
+        if (!authorizationIsCurrent()) return await discardRevokedStop();
+        const capturedDiarization = await captureMeetingDiarizationState();
+        if (!authorizationIsCurrent()) return await discardRevokedStop(capturedDiarization);
         const { diarizationPcmPath, diarizationSegments, diarizationStartedAt, diarizedSource } =
-          await captureMeetingDiarizationState();
+          capturedDiarization;
         const transcript =
           buildOrderedTranscriptText(diarizationSegments) ||
           [results[0]?.text, results[1]?.text].filter(Boolean).join(" ");
@@ -8093,6 +9228,7 @@ class IPCHandlers {
         this.activeMeetingSpeakerConfig = null;
 
         // Fire-and-forget background diarization (or notify skip)
+        if (!authorizationIsCurrent()) return await discardRevokedStop(capturedDiarization);
         this._startOrSkipDiarization(
           diarizationSessionId,
           diarizationPcmPath,
@@ -8102,7 +9238,9 @@ class IPCHandlers {
           liveSpeakerState,
           sessionSpeakerConfigSnapshot,
           noteIdSnapshot,
-          diarizedSource
+          diarizedSource,
+          authorizationIsCurrent,
+          commitToken
         );
 
         return { success: true, transcript, diarizationSessionId };
@@ -8112,12 +9250,21 @@ class IPCHandlers {
       }
     };
 
-    const meetingTranscriptionLifecycle = createMeetingTranscriptionLifecycle({
-      start: ({ sessionId, ownerWebContents, options }) =>
-        startMeetingTranscription({ sender: ownerWebContents }, { ...options, sessionId }),
-      stop: (sessionId) => stopMeetingTranscription(sessionId),
+    meetingTranscriptionLifecycle = createMeetingTranscriptionLifecycle({
+      start: ({ sessionId, ownerWebContents, options, authorizationBinding }) => {
+        meetingAuthorizationBinding = authorizationBinding;
+        meetingTransportAbortController = new AbortController();
+        return startMeetingTranscription({ sender: ownerWebContents }, { ...options, sessionId });
+      },
+      stop: (sessionId, abortSignal) => stopMeetingTranscription(sessionId, abortSignal),
       abort: (sessionId) => abortMeetingTranscription(sessionId),
-      onAbortRequested: invalidateMeetingTranscriptionTransport,
+      onAbortRequested: () => {
+        invalidateMeetingTranscriptionTransport();
+        if (activeMeetingCommitToken) meetingCommitRegistry.remove(activeMeetingCommitToken);
+        activeMeetingCommitToken = null;
+      },
+      isStartAuthorized: (authorizationBinding) =>
+        isTranscriptionSessionBindingCurrent(authorizationBinding, "meeting"),
       onError: (error, sessionId) => {
         debugLogger.error(
           "Meeting transcription owner-loss teardown failed",
@@ -8127,29 +9274,84 @@ class IPCHandlers {
       },
     });
 
-    ipcMain.handle("meeting-transcription-start", (event, options = {}) => {
+    ipcMain.handle("meeting-transcription-start", async (event, options = {}, context) => {
+      const managedRuntimeContext = context;
       const authorizationGeneration = meetingTransportGeneration;
+      const requestedProvider =
+        options.provider === "local" ? options.localProvider || "whisper" : options.provider;
+      const requestedModel =
+        options.provider === "local" ? options.localModel || null : options.model || null;
+      let authorization;
+      try {
+        authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          options.provider === "local"
+            ? "local"
+            : options.mode === "openwhispr"
+              ? "openwhispr"
+              : "providers",
+          requestedProvider,
+          requestedModel
+        );
+      } catch (error) {
+        return toPolicyFailure(error);
+      }
       const sessionId =
         typeof options.sessionId === "string" && options.sessionId.length > 0
           ? options.sessionId
           : crypto.randomUUID();
-      return meetingTranscriptionLifecycle.startSession({
+      const authorizationBinding = captureTranscriptionSessionBinding(authorization, "meeting", {
+        ownerWebContents: event.sender,
+        transportId: sessionId,
+      });
+      const result = await meetingTranscriptionLifecycle.startSession({
         sessionId,
         ownerWebContents: event.sender,
-        options: { ...options, authorizationGeneration },
+        options: {
+          ...options,
+          warmTransportId: options.transportId ?? null,
+          authorizationGeneration,
+        },
+        authorizationBinding,
       });
+      if (!result?.success && meetingAuthorizationBinding === authorizationBinding) {
+        meetingAuthorizationBinding = null;
+      }
+      if (!result?.success) return result;
+      const commitToken = meetingCommitRegistry.issue({
+        authorizationBinding,
+        ownerWebContents: event.sender,
+        sessionId,
+        noteId: options.noteId ?? null,
+      });
+      activeMeetingCommitToken = commitToken;
+      return { ...result, commitToken };
     });
 
-    ipcMain.handle("meeting-transcription-stop", (_event, expectedSessionId) =>
-      meetingTranscriptionLifecycle.stopSession(expectedSessionId)
-    );
+    ipcMain.handle("meeting-transcription-stop", async (event, expectedSessionId) => {
+      if (!meetingTranscriptionLifecycle.isOwnedSession(expectedSessionId, event.sender)) {
+        return { success: false, reason: "stale-session" };
+      }
+      const commitToken = activeMeetingCommitToken;
+      const result = await meetingTranscriptionLifecycle.stopSession(expectedSessionId);
+      return result?.success ? { ...result, commitToken } : result;
+    });
 
-    ipcMain.handle("meeting-transcription-abort", async (_event, expectedSessionId) => {
+    ipcMain.handle("meeting-transcription-commit", (event, payload = {}) => {
+      return meetingCommitRegistry.commitAuthorized(event.sender, payload);
+    });
+
+    ipcMain.handle("meeting-transcription-abort", async (event, expectedSessionId) => {
+      if (!meetingTranscriptionLifecycle.isOwnedSession(expectedSessionId, event.sender)) {
+        return { success: false, reason: "stale-session" };
+      }
       const result = await meetingTranscriptionLifecycle.abortSession(expectedSessionId);
-      if (result?.reason !== "stale-session") return result;
-      if (expectedSessionId != null) return result;
-      invalidateMeetingTranscriptionTransport();
-      return abortMeetingTranscription(expectedSessionId);
+      if (result?.success && activeMeetingCommitToken) {
+        meetingCommitRegistry.remove(activeMeetingCommitToken);
+        activeMeetingCommitToken = null;
+      }
+      return result;
     });
 
     ipcMain.handle(
@@ -8170,138 +9372,494 @@ class IPCHandlers {
       if (err.networkCode) result.networkCode = err.networkCode;
       return result;
     };
+    const providerWarmBindings = new Map();
+    const providerWarmOperations = new Map();
+    const captureProviderTransportBinding = (authorization, channel, event, options) =>
+      captureTranscriptionSessionBinding(authorization, channel, {
+        ownerWebContents: event.sender,
+        transportId: options.transportId ?? null,
+      });
+    const canReuseProviderWarm = (channel, activeBinding, event, options) => {
+      const warmBinding = providerWarmBindings.get(channel);
+      return (
+        hasSameTranscriptionAuthorization(warmBinding, activeBinding) &&
+        isSameWebContentsOwner(warmBinding?.ownerWebContents, event.sender) &&
+        warmBinding?.transportId === options.transportId
+      );
+    };
+    const clearProviderWarm = (channel, { revoke = false } = {}) => {
+      const operation = providerWarmOperations.get(channel);
+      if (revoke) operation?.revoke();
+      else operation?.release();
+      providerWarmOperations.delete(channel);
+      providerWarmBindings.delete(channel);
+    };
+    const registerProviderWarm = (channel, event, authorization, options, onRevoke) => {
+      clearProviderWarm(channel, { revoke: true });
+      const operation = beginManagedTranscriptionOperation(event, authorization, "dictation", {
+        channel: `${channel}-warm`,
+        bindingExtras: {
+          ownerWebContents: event.sender,
+          transportId: options.transportId ?? null,
+        },
+        onRevoke: () => {
+          providerWarmBindings.delete(channel);
+          providerWarmOperations.delete(channel);
+          return onRevoke();
+        },
+      });
+      providerWarmBindings.set(
+        channel,
+        captureProviderTransportBinding(authorization, `${channel}-warm`, event, options)
+      );
+      providerWarmOperations.set(channel, operation);
+      return operation;
+    };
+    const settleActiveProviderOperation = async () => {
+      const operation = dictationActiveOperation;
+      if (!operation) return;
+      operation.revoke();
+      await dictationOperationTeardowns.get(operation);
+    };
+    const beginActiveProviderOperation = (channel, event, authorization, options, onRevoke) => {
+      let operation = null;
+      operation = beginManagedTranscriptionOperation(event, authorization, "dictation", {
+        channel,
+        bindingExtras: {
+          ownerWebContents: event.sender,
+          transportId: options.transportId ?? null,
+        },
+        onRevoke: () => {
+          dictationTransportGeneration += 1;
+          if (dictationAuthorizationBinding === operation?.binding) {
+            dictationAuthorizationBinding = null;
+          }
+          if (dictationActiveOperation === operation) dictationActiveOperation = null;
+          let revokeResult;
+          try {
+            revokeResult = onRevoke();
+          } catch (error) {
+            revokeResult = Promise.reject(error);
+          }
+          const teardown = Promise.resolve(revokeResult).catch((error) => {
+            debugLogger.debug(
+              "Dictation provider authorization teardown failed",
+              { channel, error: error?.message },
+              "streaming"
+            );
+          });
+          if (operation) dictationOperationTeardowns.set(operation, teardown);
+        },
+      });
+      if (!operation.signal.aborted) dictationActiveOperation = operation;
+      return operation;
+    };
+    const releaseFailedProviderOperation = (operation) => {
+      operation?.release();
+      if (dictationActiveOperation === operation) dictationActiveOperation = null;
+      if (dictationAuthorizationBinding === operation?.binding) {
+        dictationAuthorizationBinding = null;
+      }
+    };
+    const streamingControlFailure = () => ({
+      success: false,
+      error: "Transcription authorization changed. Retry the request.",
+      code: AUTHORIZATION_BOUNDARY_CHANGED,
+    });
+    const getAuthorizedProviderControl = (event, transportId, channel) => {
+      const operation = dictationActiveOperation;
+      const binding = dictationAuthorizationBinding;
+      if (
+        typeof transportId !== "string" ||
+        transportId.length === 0 ||
+        !operation ||
+        operation.binding !== binding ||
+        !isTranscriptionTransportIngressAuthorized(event, transportId, binding, channel)
+      ) {
+        return null;
+      }
+      return { operation, binding };
+    };
+    const closeOwnedProvider = (event, transportId, channel, close) => {
+      const control = getAuthorizedProviderControl(event, transportId, channel);
+      if (!control) return Promise.resolve(streamingControlFailure());
+      if (dictationProviderClose?.operation === control.operation) {
+        return dictationProviderClose.promise;
+      }
+      if (dictationProviderClose) return Promise.resolve(streamingControlFailure());
 
-    ipcMain.handle("dictation-realtime-warmup", async (event, options = {}) => {
+      const promise = (async () => {
+        try {
+          return await close(control);
+        } finally {
+          await dictationOperationTeardowns.get(control.operation);
+          control.operation.release();
+          if (dictationActiveOperation === control.operation) dictationActiveOperation = null;
+          if (dictationAuthorizationBinding === control.binding) {
+            dictationAuthorizationBinding = null;
+          }
+          if (dictationProviderClose?.operation === control.operation) {
+            dictationProviderClose = null;
+          }
+        }
+      })();
+      dictationProviderClose = { operation: control.operation, promise };
+      return promise;
+    };
+
+    ipcMain.handle("dictation-realtime-warmup", async (event, options = {}, context) => {
+      const managedRuntimeContext = context;
+      let warmOperation;
       try {
+        const provider = options.provider || "openai-realtime";
+        const model =
+          options.model ||
+          (provider === "tinfoil-realtime" ? TINFOIL_REALTIME_MODEL : "gpt-4o-mini-transcribe");
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          options.mode === "openwhispr" ? "openwhispr" : "providers",
+          provider,
+          model
+        );
+        const authorizationBinding = captureTranscriptionSessionBinding(
+          authorization,
+          "dictation-realtime-warm",
+          { ownerWebContents: event.sender, transportId: options.transportId ?? null }
+        );
+        dictationWarmOperation?.revoke();
+        dictationWarmOperation = null;
+        dictationWarmAuthorizationBinding = null;
+        warmOperation = beginManagedTranscriptionOperation(event, authorization, "dictation", {
+          channel: "dictation-realtime-warm",
+          bindingExtras: {
+            ownerWebContents: event.sender,
+            transportId: options.transportId ?? null,
+          },
+          onRevoke: () => {
+            void this._dictationStreaming?.disconnect({ commit: false }).catch(() => {});
+            this._dictationStreaming = null;
+            dictationWarmAuthorizationBinding = null;
+            dictationWarmOperation = null;
+          },
+        });
         await connectDictationStreaming(event, options);
+        warmOperation.assertCurrent();
+        dictationWarmAuthorizationBinding = authorizationBinding;
+        dictationWarmOperation = warmOperation;
         startDictationIdleTimer();
-        return { success: true };
+        return { success: true, transportId: options.transportId ?? null };
       } catch (err) {
+        if (warmOperation && !warmOperation.isCurrent()) {
+          try {
+            warmOperation.assertCurrent();
+          } catch (authorizationError) {
+            err = authorizationError;
+          }
+        }
+        warmOperation?.revoke();
         return streamingStartFailure(err);
       }
     });
 
-    ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+    ipcMain.handle("dictation-realtime-start", async (event, options = {}, context) => {
+      const managedRuntimeContext = context;
+      let activeOperation = null;
       try {
+        if (dictationProviderClose) {
+          return { success: false, error: "Operation in progress" };
+        }
+        const provider = options.provider || "openai-realtime";
+        const model =
+          options.model ||
+          (provider === "tinfoil-realtime" ? TINFOIL_REALTIME_MODEL : "gpt-4o-mini-transcribe");
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          options.mode === "openwhispr" ? "openwhispr" : "providers",
+          provider,
+          model
+        );
+        await settleActiveProviderOperation();
+        let activeClient = this._dictationStreaming;
+        activeOperation = beginActiveProviderOperation(
+          "dictation-realtime",
+          event,
+          authorization,
+          options,
+          () => {
+            const revokedClient = activeClient || this._dictationStreaming;
+            if (!revokedClient || this._dictationStreaming !== revokedClient) return;
+            this._dictationStreaming = null;
+            return revokedClient.disconnect({ commit: false }).catch(() => {});
+          }
+        );
+        dictationAuthorizationBinding = activeOperation.binding;
+        const canReuseWarm =
+          this._dictationStreaming?.isConnected &&
+          hasSameTranscriptionAuthorization(
+            dictationWarmAuthorizationBinding,
+            dictationAuthorizationBinding
+          ) &&
+          isSameWebContentsOwner(
+            dictationWarmAuthorizationBinding?.ownerWebContents,
+            event.sender
+          ) &&
+          dictationWarmAuthorizationBinding?.transportId === options.transportId;
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
-        if (!this._dictationStreaming?.isConnected) await connectDictationStreaming(event, options);
-        return { success: true };
+        if (canReuseWarm) {
+          dictationWarmOperation?.release();
+          dictationWarmOperation = null;
+          dictationWarmAuthorizationBinding = null;
+          setupDictationCallbacks(
+            this._dictationStreaming,
+            event,
+            dictationAuthorizationBinding,
+            activeOperation
+          );
+        } else {
+          dictationWarmOperation?.revoke();
+          dictationWarmOperation = null;
+          dictationWarmAuthorizationBinding = null;
+          await connectDictationStreaming(
+            event,
+            options,
+            dictationAuthorizationBinding,
+            activeOperation
+          );
+        }
+        activeClient = this._dictationStreaming;
+        activeOperation.assertCurrent();
+        return { success: true, transportId: options.transportId ?? null };
       } catch (err) {
+        if (activeOperation && !activeOperation.isCurrent()) {
+          try {
+            activeOperation.assertCurrent();
+          } catch (authorizationError) {
+            err = authorizationError;
+          }
+        }
+        releaseFailedProviderOperation(activeOperation);
         return streamingStartFailure(err);
       }
     });
 
-    ipcMain.on("dictation-realtime-send", (_event, buffer) => {
+    ipcMain.on("dictation-realtime-send", (event, transportId, buffer) => {
+      if (buffer === undefined) {
+        buffer = transportId;
+        transportId = null;
+      }
+      if (
+        !isTranscriptionTransportIngressAuthorized(
+          event,
+          transportId,
+          dictationAuthorizationBinding,
+          "dictation-realtime"
+        )
+      ) {
+        return;
+      }
       this._dictationStreaming?.sendAudio(Buffer.from(buffer));
     });
 
-    ipcMain.handle("dictation-realtime-stop", async () => {
+    ipcMain.handle("dictation-realtime-stop", (event, transportId) => {
       clearDictationIdleTimer();
-      if (!this._dictationStreaming) {
-        return { success: true, text: "" };
-      }
-      const result = await this._dictationStreaming.disconnect().catch(() => ({ text: "" }));
-      this._dictationStreaming = null;
-      if (this._dictationPreviewEnabled) {
-        this.windowManager.hideTranscriptionPreview();
-        this._dictationPreviewEnabled = false;
-      }
-      return { success: true, text: result.text || "" };
-    });
-
-    ipcMain.handle("dictation-streaming-abort", async () => {
-      dictationTransportGeneration += 1;
-      clearDictationIdleTimer();
-      resetDictationPreviewState();
-      this._dictationPreviewEnabled = false;
-
-      const realtime = this._dictationStreaming;
-      const assemblyAi = this.assemblyAiStreaming;
-      const deepgram = this.deepgramStreaming;
-      const corti = this.cortiStreaming;
-      this._dictationStreaming = null;
-      this.assemblyAiStreaming = null;
-      this.deepgramStreaming = null;
-      this.cortiStreaming = null;
-
-      await Promise.all([
-        realtime?.disconnect({ commit: false }).catch(() => {}),
-        assemblyAi?.disconnect(false).catch(() => {}),
-        deepgram?.disconnect(false).catch(() => {}),
-        corti?.disconnect(false).catch(() => {}),
-      ]);
-      assemblyAi?.cleanupAll?.();
-      this.windowManager.hideTranscriptionPreview();
-      return { success: true };
-    });
-
-    ipcMain.handle(
-      "start-dictation-preview",
-      async (_event, { provider, model, language, display = true }) => {
-        resetDictationPreviewState();
-        const gen = dictationPreviewGen;
-        dictationPreviewMode = true;
-        dictationPreviewSessionActive = true;
-        dictationPreviewProvider = provider;
-        dictationPreviewModel = model;
-        dictationPreviewLanguage = language || null;
-        dictationPreviewDisplay = display;
-        dictationPreviewChunkCount = 0;
-        if (display) this.windowManager.showTranscriptionPreview("");
-
-        if (provider === "nvidia" && this.parakeetManager.supportsOnlineStreaming(model)) {
-          try {
-            const stream = await this.parakeetManager.createOnlineStream(model, {
-              onUpdate: (text) => {
-                if (gen === dictationPreviewGen && text && dictationPreviewDisplay) {
-                  this.windowManager.showTranscriptionPreview(text);
-                }
-              },
-              onError: (error) => {
-                if (gen !== dictationPreviewGen || dictationPreviewStream !== stream) return;
-                // Keep the preview alive on the chunked path; the final
-                // transcript falls back to decoding the full recording.
-                debugLogger.warn("Online preview stream failed mid-session, falling back", {
-                  model,
-                  error: error.message,
-                });
-                dictationPreviewStream = null;
-                if (dictationPreviewDisplay) startDictationPreviewTimer();
-              },
-            });
-            if (gen !== dictationPreviewGen) {
-              stream.abort();
-              return { success: true };
-            }
-            dictationPreviewStream = stream;
-            for (const chunk of dictationPreviewBuffer) {
-              stream.sendPcm16(chunk);
-            }
-            dictationPreviewBuffer = [];
-            return { success: true };
-          } catch (error) {
-            debugLogger.warn("Online preview stream unavailable, falling back to chunked preview", {
-              model,
-              error: error.message,
-            });
+      return closeOwnedProvider(
+        event,
+        transportId,
+        "dictation-realtime",
+        async ({ operation, binding }) => {
+          const activeClient = this._dictationStreaming;
+          const result = activeClient
+            ? await activeClient.disconnect().catch(() => ({ text: "" }))
+            : { text: "" };
+          const canPublishResult =
+            operation.isCurrent() &&
+            isTranscriptionSessionBindingCurrent(binding, "dictation-realtime");
+          if (this._dictationStreaming === activeClient) this._dictationStreaming = null;
+          if (this._dictationPreviewEnabled) {
+            this.windowManager.hideTranscriptionPreview();
+            this._dictationPreviewEnabled = false;
           }
+          return { success: true, text: canPublishResult ? result.text || "" : "" };
         }
+      );
+    });
 
-        if (gen !== dictationPreviewGen) return { success: true };
-        if (!display) {
-          // A headless session exists only to feed the online stream; without
-          // one, buffered PCM would just accumulate with no consumer.
-          resetDictationPreviewState();
-          return { success: true };
-        }
-        startDictationPreviewTimer();
+    ipcMain.handle("dictation-streaming-abort", async (event, transportId) => {
+      const activeControl = getAuthorizedProviderControl(
+        event,
+        transportId,
+        dictationAuthorizationBinding?.channel
+      );
+      if (activeControl) {
+        activeControl.operation.revoke();
+        await dictationOperationTeardowns.get(activeControl.operation);
         return { success: true };
       }
-    );
 
-    ipcMain.on("dictation-preview-audio", (_event, audioBuffer) => {
+      if (
+        dictationWarmOperation &&
+        isTranscriptionTransportIngressAuthorized(
+          event,
+          transportId,
+          dictationWarmAuthorizationBinding,
+          "dictation-realtime-warm"
+        )
+      ) {
+        dictationWarmOperation.revoke();
+        return { success: true };
+      }
+      for (const [channel, binding] of providerWarmBindings) {
+        if (
+          isTranscriptionTransportIngressAuthorized(event, transportId, binding, `${channel}-warm`)
+        ) {
+          clearProviderWarm(channel, { revoke: true });
+          return { success: true };
+        }
+      }
+      return streamingControlFailure();
+    });
+
+    ipcMain.handle("start-dictation-preview", async (event, previewOptions, context) => {
+      const { provider, model, language, display = true, transportId = null } = previewOptions;
+      const managedRuntimeContext = context;
+      let authorization;
+      try {
+        authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          "local",
+          provider,
+          model || null
+        );
+      } catch (error) {
+        return toPolicyFailure(error);
+      }
+      resetDictationPreviewState();
+      const gen = dictationPreviewGen;
+      dictationPreviewMode = true;
+      dictationPreviewSessionActive = true;
+      dictationPreviewProvider = provider;
+      dictationPreviewModel = model;
+      dictationPreviewLanguage = language || null;
+      dictationPreviewManagedRuntimeContext = managedRuntimeContext || null;
+      dictationPreviewAuthorizationBinding = captureTranscriptionSessionBinding(
+        authorization,
+        "preview",
+        { ownerWebContents: event.sender, transportId }
+      );
+      const previewOperation = beginManagedTranscriptionOperation(
+        event,
+        authorization,
+        "dictation",
+        {
+          channel: "preview",
+          bindingExtras: { ownerWebContents: event.sender, transportId },
+          onRevoke: () => resetDictationPreviewState(),
+        }
+      );
+      dictationPreviewManagedOperation = previewOperation;
+      dictationPreviewDisplay = display;
+      dictationPreviewChunkCount = 0;
+      if (display) this.windowManager.showTranscriptionPreview("");
+
+      if (provider === "nvidia" && this.parakeetManager.supportsOnlineStreaming(model)) {
+        try {
+          const stream = await this.parakeetManager.createOnlineStream(model, {
+            onUpdate: (text) => {
+              if (
+                gen === dictationPreviewGen &&
+                isTranscriptionSessionBindingCurrent(
+                  dictationPreviewAuthorizationBinding,
+                  "preview"
+                ) &&
+                text &&
+                dictationPreviewDisplay
+              ) {
+                this.windowManager.showTranscriptionPreview(text);
+              }
+            },
+            onError: (error) => {
+              if (
+                gen !== dictationPreviewGen ||
+                dictationPreviewStream !== stream ||
+                !isTranscriptionSessionBindingCurrent(
+                  dictationPreviewAuthorizationBinding,
+                  "preview"
+                )
+              ) {
+                return;
+              }
+              // Keep the preview alive on the chunked path; the final
+              // transcript falls back to decoding the full recording.
+              debugLogger.warn("Online preview stream failed mid-session, falling back", {
+                model,
+                error: error.message,
+              });
+              dictationPreviewStream = null;
+              if (dictationPreviewDisplay) startDictationPreviewTimer();
+            },
+          });
+          previewOperation.assertCurrent();
+          if (gen !== dictationPreviewGen) {
+            stream.abort();
+            previewOperation.assertCurrent();
+          }
+          dictationPreviewStream = stream;
+          for (const chunk of dictationPreviewBuffer) {
+            stream.sendPcm16(chunk);
+          }
+          dictationPreviewBuffer = [];
+          return { success: true, transportId };
+        } catch (error) {
+          if (!previewOperation.isCurrent()) {
+            try {
+              previewOperation.assertCurrent();
+            } catch (authorizationError) {
+              return toPolicyFailure(authorizationError);
+            }
+          }
+          debugLogger.warn("Online preview stream unavailable, falling back to chunked preview", {
+            model,
+            error: error.message,
+          });
+        }
+      }
+
+      previewOperation.assertCurrent();
+      if (gen !== dictationPreviewGen) previewOperation.assertCurrent();
+      if (!display) {
+        // A headless session exists only to feed the online stream; without
+        // one, buffered PCM would just accumulate with no consumer.
+        resetDictationPreviewState();
+        return { success: true, transportId };
+      }
+      startDictationPreviewTimer();
+      previewOperation.assertCurrent();
+      return { success: true, transportId };
+    });
+
+    ipcMain.on("dictation-preview-audio", (event, transportId, audioBuffer) => {
+      if (audioBuffer === undefined) {
+        audioBuffer = transportId;
+        transportId = null;
+      }
       if (!dictationPreviewMode) return;
+      if (!isTranscriptionSessionBindingCurrent(dictationPreviewAuthorizationBinding, "preview")) {
+        resetDictationPreviewState();
+        return;
+      }
+      if (
+        !isTranscriptionTransportIngressAuthorized(
+          event,
+          transportId,
+          dictationPreviewAuthorizationBinding,
+          "preview"
+        )
+      )
+        return;
       dictationPreviewChunkCount++;
       if (dictationPreviewChunkCount <= 3 || dictationPreviewChunkCount % 50 === 0) {
         debugLogger.debug("Dictation preview audio received", {
@@ -8370,6 +9928,15 @@ class IPCHandlers {
       }
       clearInterval(dictationPreviewTimer);
       dictationPreviewTimer = null;
+      if (
+        dictationPreviewMode &&
+        !isTranscriptionSessionBindingCurrent(dictationPreviewAuthorizationBinding, "preview")
+      ) {
+        dictationPreviewStream?.abort();
+        resetDictationPreviewState();
+        this.windowManager.hideTranscriptionPreview();
+        return { success: true, streamed: false, text: "" };
+      }
       const display = dictationPreviewDisplay;
       // Missing flag defaults to trusted so non-streaming callers never regress.
       const rendererFlushOk = options.flushed !== false;
@@ -8381,6 +9948,13 @@ class IPCHandlers {
         const gen = dictationPreviewGen;
         const result = await stream.finish().catch(() => null);
         if (gen !== dictationPreviewGen) {
+          return { success: true, streamed: false, text: "" };
+        }
+        if (
+          !isTranscriptionSessionBindingCurrent(dictationPreviewAuthorizationBinding, "preview")
+        ) {
+          resetDictationPreviewState();
+          this.windowManager.hideTranscriptionPreview();
           return { success: true, streamed: false, text: "" };
         }
         if (result) {
@@ -8908,15 +10482,32 @@ class IPCHandlers {
       }
     );
     ipcMain.handle("clear-managed-enterprise-identity", async () => {
+      managedTranscriptionClearGeneration += 1;
+      managedTranscriptionAuthorizationSnapshots.clear();
+      revokeManagedTranscriptionOperations();
+      publishManagedTranscriptionAuthorizationChange(null);
       this.enterpriseIdentityManager.clear();
     });
 
     ipcMain.handle("get-note-recording-config", handleNoteRecordingConfigRequest);
 
-    ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath, opts = {}) => {
+    ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath, opts = {}, context) => {
+      const managedRuntimeContext = context;
       const requestId = typeof opts?.requestId === "string" ? opts.requestId : null;
-      const { signal, release } = this._uploadCancelRegistry.register(requestId);
+      const { signal: uploadSignal, release } = this._uploadCancelRegistry.register(requestId);
+      let operation = null;
       try {
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          "openwhispr",
+          "openwhispr",
+          null
+        );
+        operation = beginManagedTranscriptionOperation(event, authorization, "cloud", {
+          channel: "transcribe-audio-file-cloud",
+        });
+        const signal = combineAbortSignals(uploadSignal, operation.signal);
         if (typeof filePath !== "string") {
           return { success: false, error: "Invalid file path" };
         }
@@ -8952,6 +10543,7 @@ class IPCHandlers {
             onProgress: (payload) => event.sender.send("upload-transcription-progress", payload),
             signal,
           });
+          operation.assertCurrent();
           return {
             success: true,
             text,
@@ -8979,22 +10571,31 @@ class IPCHandlers {
           session: getInlineCloudUploadSession(),
         });
         const result = interpretTranscribeResponse(data);
+        operation.assertCurrent();
 
         return { success: true, text: result.text };
       } catch (error) {
-        if (signal?.aborted) {
+        if (operation && !operation.isCurrent()) {
+          try {
+            operation.assertCurrent();
+          } catch (authorizationError) {
+            return toPolicyFailure(authorizationError);
+          }
+        }
+        if (uploadSignal?.aborted) {
           debugLogger.debug("Cloud audio file transcription cancelled", { requestId });
           return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
         }
         debugLogger.error("Cloud audio file transcription error", { error: error.message });
         return toPolicyFailure(error);
       } finally {
+        operation?.release();
         release();
       }
     });
 
-    // Unknown ids are a no-op: BYOK providers don't register a controller,
-    // and the renderer fires this for every cancel.
+    // Unknown/already-finished ids are a no-op. The renderer can race a cancel
+    // with registration or fire it after the provider has already released.
     ipcMain.handle("cancel-upload-transcription", async (event, requestId) => {
       const activeCancelled = this._uploadCancelRegistry.cancel(requestId) > 0;
       const pendingDiscarded = discardPendingRetryTranscription(
@@ -9010,6 +10611,7 @@ class IPCHandlers {
         event,
         {
           filePath,
+          requestId,
           apiKey,
           baseUrl,
           model,
@@ -9017,22 +10619,28 @@ class IPCHandlers {
           timestamps,
           provider,
           language,
+          useLanguageHint,
           environment,
           tenant,
           transcriptionMode,
           remoteTranscriptionUrl,
           remoteTranscriptionModel,
-        }
+          prompt,
+        },
+        managedRuntimeContext
       ) => {
         const fs = require("fs");
+        const { signal: uploadSignal, release } = this._uploadCancelRegistry.register(requestId);
+        let operation = null;
+        let signal = uploadSignal;
         try {
-          if (typeof filePath !== "string") {
-            return { success: false, error: "Invalid file path" };
-          }
-          const realByok = resolveAllowedAudioPath(filePath);
-          if (!realByok) return { success: false, error: "File path not allowed" };
-
-          const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+          const [
+            { resolveTranscriptionRoute },
+            { resolveDiarizationTarget, resolveEffectiveDiarizationModel },
+          ] = await Promise.all([
+            import("./transcriptionRoute.ts"),
+            import("./transcriptionDiarizationRoute.ts"),
+          ]);
           const route = resolveTranscriptionRoute({
             settings: {
               transcriptionMode,
@@ -9052,6 +10660,36 @@ class IPCHandlers {
           if (route.transport === "error") {
             return { success: false, error: route.message, code: route.code };
           }
+          if (route.transport === "local") {
+            return { success: false, error: "Invalid BYOK transcription route" };
+          }
+          const diarizeTarget = diarize ? resolveDiarizationTarget(route) : null;
+          const effectiveDispatchModel = resolveEffectiveDiarizationModel(route, diarize);
+          const authorization = await authorizeTranscriptionRoute(
+            event,
+            managedRuntimeContext,
+            route.provider === "self-hosted" ? "self-hosted" : "providers",
+            route.provider,
+            effectiveDispatchModel
+          );
+          operation = beginManagedTranscriptionOperation(
+            event,
+            authorization,
+            route.provider === "self-hosted"
+              ? "self-hosted"
+              : route.transport === "proxied"
+                ? "proxy"
+                : "byok",
+            { channel: "transcribe-audio-file-byok" }
+          );
+          signal = combineAbortSignals(uploadSignal, operation.signal);
+          if (signal?.aborted) throw createAbortError("Upload cancelled");
+
+          if (typeof filePath !== "string") {
+            return { success: false, error: "Invalid file path" };
+          }
+          const realByok = resolveAllowedAudioPath(filePath);
+          if (!realByok) return { success: false, error: "File path not allowed" };
 
           if (route.transport === "http-batch" && route.provider === "self-hosted") {
             // User's own server, so the 25 MB third-party cap does not apply.
@@ -9060,16 +10698,23 @@ class IPCHandlers {
               fs.readFileSync(realByok),
               path.basename(realByok),
               AUDIO_MIME_TYPES[ext] || "audio/mpeg",
-              { model: route.model, language: route.language }
+              { model: route.model, language: route.language, prompt }
             );
-            const data = await postMultipart(new URL(route.endpoint), body, boundary);
-            if (data.statusCode !== 200) {
-              throw new Error(
-                data.data?.error?.message ||
-                  data.data?.error ||
-                  `Self-hosted API Error: ${data.statusCode}`
-              );
-            }
+            const data = await postMultipart(
+              new URL(route.endpoint),
+              body,
+              boundary,
+              {},
+              { signal }
+            );
+            if (signal?.aborted) throw createAbortError("Upload cancelled");
+            operation.assertCurrent();
+            const failure = byokProviderFailure(
+              data.statusCode,
+              data.data,
+              "Self-hosted API Error"
+            );
+            if (failure) return failure;
             return { success: true, text: data.data.text };
           }
 
@@ -9095,7 +10740,10 @@ class IPCHandlers {
               clientSecret,
               audioBuffer: fs.readFileSync(realByok),
               language: route.language,
+              signal,
+              onCleanupFailure: (record) => this._enqueueCortiPrivacyCleanup(record),
             });
+            operation.assertCurrent();
             return { success: true, text };
           }
 
@@ -9107,7 +10755,9 @@ class IPCHandlers {
               contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
               language: route.language,
               apiKey: this.environmentManager.getTinfoilKey(),
+              signal,
             });
+            operation.assertCurrent();
             return { success: true, text };
           }
 
@@ -9134,22 +10784,21 @@ class IPCHandlers {
           } else {
             transcriptionUrl =
               route.provider === "mistral" ? MISTRAL_TRANSCRIPTION_URL : route.endpoint;
-            multipartFields.model = route.model;
+            multipartFields.model = effectiveDispatchModel;
             // No language field: an uploaded file is often not in the dictation
             // language, and a wrong hint silently mistranscribes it. Providers
             // that require one (Corti) are handled on their own branch above.
           }
+          if (useLanguageHint && route.language) multipartFields.language = route.language;
+          if (prompt) multipartFields.prompt = prompt;
 
           if (diarize) {
             // A Custom endpoint may front OpenAI or Mistral, so fall back to the
             // resolved host before giving up on speaker labels.
-            const diarizeTarget =
-              route.provider === "custom" ? diarizationHost(route.endpoint) : route.provider;
             if (diarizeTarget === "mistral") {
               multipartFields.diarize = "true";
               multipartFields.timestamp_granularities = "segment";
             } else if (diarizeTarget === "openai") {
-              multipartFields.model = "gpt-4o-transcribe-diarize";
               // Speaker annotations require diarized_json; verbose_json is not supported by this model.
               multipartFields.response_format = "diarized_json";
               multipartFields.chunking_strategy = "auto";
@@ -9183,19 +10832,11 @@ class IPCHandlers {
                 ? { "api-key": apiKey }
                 : { Authorization: `Bearer ${apiKey}` }
             : undefined;
-          const data = await postMultipart(url, body, boundary, headers);
-
-          if (data.statusCode === 401) {
-            return { success: false, error: "Invalid API key. Check your key in Settings." };
-          }
-          if (data.statusCode === 429) {
-            return { success: false, error: "Rate limit exceeded. Please try again later." };
-          }
-          if (data.statusCode !== 200) {
-            throw new Error(
-              data.data?.error?.message || data.data?.error || `API error: ${data.statusCode}`
-            );
-          }
+          const data = await postMultipart(url, body, boundary, headers, { signal });
+          if (signal?.aborted) throw createAbortError("Upload cancelled");
+          operation.assertCurrent();
+          const failure = byokProviderFailure(data.statusCode, data.data);
+          if (failure) return failure;
 
           if (diarize && data.data?.speakers) {
             const segments = (data.data.speakers || []).map((s) => ({
@@ -9235,8 +10876,27 @@ class IPCHandlers {
           const segments = timestamps ? mapVerboseSegments(data.data) : null;
           return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
         } catch (error) {
+          if (operation && !operation.isCurrent()) {
+            try {
+              operation.assertCurrent();
+            } catch (authorizationError) {
+              return toPolicyFailure(authorizationError);
+            }
+          }
+          if (uploadSignal?.aborted) {
+            debugLogger.debug("BYOK audio file transcription cancelled", { requestId });
+            return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+          }
           debugLogger.error("BYOK audio file transcription error", { error: error.message });
-          return { success: false, error: error.message };
+          return {
+            success: false,
+            error: error.message,
+            ...(error.code ? { code: error.code } : {}),
+            ...(error.messageKey ? { messageKey: error.messageKey } : {}),
+          };
+        } finally {
+          operation?.release();
+          release();
         }
       }
     );
@@ -9550,9 +11210,19 @@ class IPCHandlers {
       return token;
     };
 
-    ipcMain.handle("assemblyai-streaming-warmup", async (event, options = {}) => {
+    ipcMain.handle("assemblyai-streaming-warmup", async (event, options = {}, context) => {
+      const managedRuntimeContext = context;
       const generation = dictationTransportGeneration;
+      let warmAttemptStarted = false;
+      let warmOperation = null;
       try {
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          options.mode === "openwhispr" ? "openwhispr" : "providers",
+          "assemblyai",
+          options.model || null
+        );
         const apiUrl = getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
@@ -9561,11 +11231,31 @@ class IPCHandlers {
         if (!this.assemblyAiStreaming) {
           this.assemblyAiStreaming = new AssemblyAiStreaming();
         }
+        warmAttemptStarted = true;
 
         if (this.assemblyAiStreaming.hasWarmConnection()) {
-          debugLogger.debug("AssemblyAI connection already warm", {}, "streaming");
-          return { success: true, alreadyWarm: true };
+          const requestedBinding = captureProviderTransportBinding(
+            authorization,
+            "assemblyai",
+            event,
+            options
+          );
+          if (canReuseProviderWarm("assemblyai", requestedBinding, event, options)) {
+            debugLogger.debug("AssemblyAI connection already warm", {}, "streaming");
+            return { success: true, alreadyWarm: true, transportId: options.transportId ?? null };
+          }
+          const staleClient = this.assemblyAiStreaming;
+          clearProviderWarm("assemblyai", { revoke: true });
+          staleClient.cleanupAll();
+          this.assemblyAiStreaming = new AssemblyAiStreaming();
         }
+
+        const warmClient = this.assemblyAiStreaming;
+        warmOperation = registerProviderWarm("assemblyai", event, authorization, options, () => {
+          warmClient.disconnect(false).catch(() => {});
+          warmClient.cleanupAll();
+          if (this.assemblyAiStreaming === warmClient) this.assemblyAiStreaming = null;
+        });
 
         let token = this.assemblyAiStreaming.getCachedToken();
         if (!token) {
@@ -9576,10 +11266,23 @@ class IPCHandlers {
         assertCurrentDictationTransport(generation);
         await this.assemblyAiStreaming.warmup({ ...options, token });
         assertCurrentDictationTransport(generation);
+        warmOperation.assertCurrent();
         debugLogger.debug("AssemblyAI connection warmed up", {}, "streaming");
 
-        return { success: true };
+        return { success: true, transportId: options.transportId ?? null };
       } catch (error) {
+        if (warmOperation && !warmOperation.isCurrent()) {
+          try {
+            warmOperation.assertCurrent();
+          } catch (authorizationError) {
+            error = authorizationError;
+          }
+        }
+        if (warmOperation) clearProviderWarm("assemblyai", { revoke: true });
+        if (warmAttemptStarted && !providerWarmBindings.has("assemblyai")) {
+          this.assemblyAiStreaming?.cleanupAll();
+          this.assemblyAiStreaming = null;
+        }
         debugLogger.error("AssemblyAI warmup error", { error: error.message });
         return toPolicyFailure(error);
       }
@@ -9587,25 +11290,82 @@ class IPCHandlers {
 
     let streamingStartInProgress = false;
 
-    ipcMain.handle("assemblyai-streaming-start", async (event, options = {}) => {
-      const generation = dictationTransportGeneration;
-      if (streamingStartInProgress) {
+    ipcMain.handle("assemblyai-streaming-start", async (event, options = {}, context) => {
+      const managedRuntimeContext = context;
+      if (streamingStartInProgress || dictationProviderClose) {
         debugLogger.debug("Streaming start already in progress, ignoring", {}, "streaming");
         return { success: false, error: "Operation in progress" };
       }
 
       streamingStartInProgress = true;
+      let activeOperation = null;
       try {
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          options.mode === "openwhispr" ? "openwhispr" : "providers",
+          "assemblyai",
+          options.model || null
+        );
         const apiUrl = getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
         }
 
         const win = BrowserWindow.fromWebContents(event.sender);
+        await settleActiveProviderOperation();
+        const generation = dictationTransportGeneration;
 
         if (!this.assemblyAiStreaming) {
           this.assemblyAiStreaming = new AssemblyAiStreaming();
         }
+
+        const requestedAuthorizationBinding = captureProviderTransportBinding(
+          authorization,
+          "assemblyai",
+          event,
+          options
+        );
+        const canReuseWarm = canReuseProviderWarm(
+          "assemblyai",
+          requestedAuthorizationBinding,
+          event,
+          options
+        );
+        if (!canReuseWarm && this.assemblyAiStreaming.hasWarmConnection()) {
+          const staleClient = this.assemblyAiStreaming;
+          clearProviderWarm("assemblyai", { revoke: true });
+          staleClient.cleanupAll();
+          this.assemblyAiStreaming = new AssemblyAiStreaming();
+        }
+        const activeClient = this.assemblyAiStreaming;
+        activeOperation = beginActiveProviderOperation(
+          "assemblyai",
+          event,
+          authorization,
+          options,
+          () => {
+            if (this.assemblyAiStreaming === activeClient) this.assemblyAiStreaming = null;
+            return activeClient
+              .disconnect(false)
+              .catch(() => {})
+              .finally(() => {
+                activeClient.cleanupAll();
+              });
+          }
+        );
+        dictationAuthorizationBinding = activeOperation.binding;
+        const authorizationBinding = dictationAuthorizationBinding;
+        const canPublish = () =>
+          ownsActiveProviderCallbacks(
+            activeOperation,
+            authorizationBinding,
+            activeClient,
+            this.assemblyAiStreaming,
+            "assemblyai"
+          ) &&
+          win &&
+          !win.isDestroyed();
 
         // Clean up any stale active connection (shouldn't happen normally)
         if (this.assemblyAiStreaming.isConnected) {
@@ -9635,26 +11395,26 @@ class IPCHandlers {
         }
 
         // Set up callbacks to forward events to renderer
-        this.assemblyAiStreaming.onPartialTranscript = (text) => {
-          if (win && !win.isDestroyed()) {
+        activeClient.onPartialTranscript = (text) => {
+          if (canPublish()) {
             win.webContents.send("assemblyai-partial-transcript", text);
           }
         };
 
-        this.assemblyAiStreaming.onFinalTranscript = (text) => {
-          if (win && !win.isDestroyed()) {
+        activeClient.onFinalTranscript = (text) => {
+          if (canPublish()) {
             win.webContents.send("assemblyai-final-transcript", text);
           }
         };
 
-        this.assemblyAiStreaming.onError = (error) => {
-          if (win && !win.isDestroyed()) {
+        activeClient.onError = (error) => {
+          if (canPublish()) {
             win.webContents.send("assemblyai-error", error.message);
           }
         };
 
-        this.assemblyAiStreaming.onSessionEnd = (data) => {
-          if (win && !win.isDestroyed()) {
+        activeClient.onSessionEnd = (data) => {
+          if (canPublish()) {
             win.webContents.send("assemblyai-session-end", data);
           }
         };
@@ -9662,13 +11422,24 @@ class IPCHandlers {
         assertCurrentDictationTransport(generation);
         await this.assemblyAiStreaming.connect({ ...options, token });
         assertCurrentDictationTransport(generation);
+        if (canReuseWarm) clearProviderWarm("assemblyai");
+        activeOperation.assertCurrent();
         debugLogger.debug("AssemblyAI streaming started", {}, "streaming");
 
         return {
           success: true,
           usedWarmConnection: this.assemblyAiStreaming.hasWarmConnection() === false,
+          transportId: options.transportId ?? null,
         };
       } catch (error) {
+        if (activeOperation && !activeOperation.isCurrent()) {
+          try {
+            activeOperation.assertCurrent();
+          } catch (authorizationError) {
+            error = authorizationError;
+          }
+        }
+        releaseFailedProviderOperation(activeOperation);
         debugLogger.error("AssemblyAI streaming start error", { error: error.message });
         if (error.code === "AUTH_EXPIRED") {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
@@ -9679,8 +11450,22 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.on("assemblyai-streaming-send", (event, audioBuffer) => {
+    ipcMain.on("assemblyai-streaming-send", (event, transportId, audioBuffer) => {
       try {
+        if (audioBuffer === undefined) {
+          audioBuffer = transportId;
+          transportId = null;
+        }
+        if (
+          !isTranscriptionTransportIngressAuthorized(
+            event,
+            transportId,
+            dictationAuthorizationBinding,
+            "assemblyai"
+          )
+        ) {
+          return;
+        }
         if (!this.assemblyAiStreaming) return;
         const buffer = Buffer.from(audioBuffer);
         this.assemblyAiStreaming.sendAudio(buffer);
@@ -9689,24 +11474,34 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.on("assemblyai-streaming-force-endpoint", () => {
+    ipcMain.on("assemblyai-streaming-force-endpoint", (event, transportId) => {
+      if (!getAuthorizedProviderControl(event, transportId, "assemblyai")) {
+        return;
+      }
       this.assemblyAiStreaming?.forceEndpoint();
     });
 
-    ipcMain.handle("assemblyai-streaming-stop", async () => {
-      try {
-        let result = { text: "" };
-        if (this.assemblyAiStreaming) {
-          result = await this.assemblyAiStreaming.disconnect(true);
-          this.assemblyAiStreaming.cleanupAll();
-          this.assemblyAiStreaming = null;
+    ipcMain.handle("assemblyai-streaming-stop", (event, transportId) => {
+      return closeOwnedProvider(
+        event,
+        transportId,
+        "assemblyai",
+        async ({ operation, binding }) => {
+          const activeClient = this.assemblyAiStreaming;
+          try {
+            const result = activeClient ? await activeClient.disconnect(true) : { text: "" };
+            const canPublishResult =
+              operation.isCurrent() && isTranscriptionSessionBindingCurrent(binding, "assemblyai");
+            return { success: true, text: canPublishResult ? result?.text || "" : "" };
+          } catch (error) {
+            debugLogger.error("AssemblyAI streaming stop error", { error: error.message });
+            return { success: false, error: error.message };
+          } finally {
+            activeClient?.cleanupAll();
+            if (this.assemblyAiStreaming === activeClient) this.assemblyAiStreaming = null;
+          }
         }
-
-        return { success: true, text: result?.text || "" };
-      } catch (error) {
-        debugLogger.error("AssemblyAI streaming stop error", { error: error.message });
-        return { success: false, error: error.message };
-      }
+      );
     });
 
     ipcMain.handle("assemblyai-streaming-status", async () => {
@@ -9788,9 +11583,19 @@ class IPCHandlers {
       return token;
     };
 
-    ipcMain.handle("deepgram-streaming-warmup", async (event, options = {}) => {
+    ipcMain.handle("deepgram-streaming-warmup", async (event, options = {}, context) => {
+      const managedRuntimeContext = context;
       const generation = dictationTransportGeneration;
+      let warmAttemptStarted = false;
+      let warmOperation = null;
       try {
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          options.mode === "openwhispr" ? "openwhispr" : "providers",
+          "deepgram",
+          options.model || null
+        );
         const apiUrl = getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
@@ -9804,6 +11609,7 @@ class IPCHandlers {
         if (!this.deepgramStreaming) {
           this.deepgramStreaming = new DeepgramStreaming();
         }
+        warmAttemptStarted = true;
 
         this.deepgramStreaming.setTokenRefreshFn(async () => {
           if (!deepgramTokenWindowId) throw new Error("No window reference");
@@ -9811,9 +11617,32 @@ class IPCHandlers {
         });
 
         if (this.deepgramStreaming.hasWarmConnection()) {
-          debugLogger.debug("Deepgram connection already warm", {}, "streaming");
-          return { success: true, alreadyWarm: true };
+          const requestedBinding = captureProviderTransportBinding(
+            authorization,
+            "deepgram",
+            event,
+            options
+          );
+          if (canReuseProviderWarm("deepgram", requestedBinding, event, options)) {
+            debugLogger.debug("Deepgram connection already warm", {}, "streaming");
+            return { success: true, alreadyWarm: true, transportId: options.transportId ?? null };
+          }
+          const staleClient = this.deepgramStreaming;
+          clearProviderWarm("deepgram", { revoke: true });
+          staleClient.cleanupAll();
+          this.deepgramStreaming = new DeepgramStreaming();
+          this.deepgramStreaming.setTokenRefreshFn(async () => {
+            if (!deepgramTokenWindowId) throw new Error("No window reference");
+            return fetchDeepgramStreamingTokenFromWindow(deepgramTokenWindowId);
+          });
         }
+
+        const warmClient = this.deepgramStreaming;
+        warmOperation = registerProviderWarm("deepgram", event, authorization, options, () => {
+          warmClient.disconnect(false).catch(() => {});
+          warmClient.cleanupAll();
+          if (this.deepgramStreaming === warmClient) this.deepgramStreaming = null;
+        });
 
         let token = this.deepgramStreaming.getCachedToken();
         if (!token) {
@@ -9824,10 +11653,23 @@ class IPCHandlers {
         assertCurrentDictationTransport(generation);
         await this.deepgramStreaming.warmup({ ...options, token });
         assertCurrentDictationTransport(generation);
+        warmOperation.assertCurrent();
         debugLogger.debug("Deepgram connection warmed up", {}, "streaming");
 
-        return { success: true };
+        return { success: true, transportId: options.transportId ?? null };
       } catch (error) {
+        if (warmOperation && !warmOperation.isCurrent()) {
+          try {
+            warmOperation.assertCurrent();
+          } catch (authorizationError) {
+            error = authorizationError;
+          }
+        }
+        if (warmOperation) clearProviderWarm("deepgram", { revoke: true });
+        if (warmAttemptStarted && !providerWarmBindings.has("deepgram")) {
+          this.deepgramStreaming?.cleanupAll();
+          this.deepgramStreaming = null;
+        }
         debugLogger.error("Deepgram warmup error", { error: error.message });
         return toPolicyFailure(error);
       }
@@ -9836,9 +11678,9 @@ class IPCHandlers {
     let deepgramStreamingStartInProgress = false;
     let sendDropCount = 0;
 
-    ipcMain.handle("deepgram-streaming-start", async (event, options = {}) => {
-      const generation = dictationTransportGeneration;
-      if (deepgramStreamingStartInProgress) {
+    ipcMain.handle("deepgram-streaming-start", async (event, options = {}, context) => {
+      const managedRuntimeContext = context;
+      if (deepgramStreamingStartInProgress || dictationProviderClose) {
         debugLogger.debug(
           "Deepgram streaming start already in progress, ignoring",
           {},
@@ -9848,7 +11690,15 @@ class IPCHandlers {
       }
 
       deepgramStreamingStartInProgress = true;
+      let activeOperation = null;
       try {
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          options.mode === "openwhispr" ? "openwhispr" : "providers",
+          "deepgram",
+          options.model || null
+        );
         const apiUrl = getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
@@ -9858,6 +11708,8 @@ class IPCHandlers {
         if (win && !win.isDestroyed()) {
           deepgramTokenWindowId = win.id;
         }
+        await settleActiveProviderOperation();
+        const generation = dictationTransportGeneration;
 
         if (!this.deepgramStreaming) {
           this.deepgramStreaming = new DeepgramStreaming();
@@ -9868,6 +11720,56 @@ class IPCHandlers {
           return fetchDeepgramStreamingTokenFromWindow(deepgramTokenWindowId);
         });
 
+        const requestedAuthorizationBinding = captureProviderTransportBinding(
+          authorization,
+          "deepgram",
+          event,
+          options
+        );
+        const canReuseWarm = canReuseProviderWarm(
+          "deepgram",
+          requestedAuthorizationBinding,
+          event,
+          options
+        );
+        if (!canReuseWarm && this.deepgramStreaming.hasWarmConnection()) {
+          const staleClient = this.deepgramStreaming;
+          clearProviderWarm("deepgram", { revoke: true });
+          staleClient.cleanupAll();
+          this.deepgramStreaming = new DeepgramStreaming();
+          this.deepgramStreaming.setTokenRefreshFn(async () => {
+            if (!deepgramTokenWindowId) throw new Error("No window reference");
+            return fetchDeepgramStreamingTokenFromWindow(deepgramTokenWindowId);
+          });
+        }
+        const activeClient = this.deepgramStreaming;
+        activeOperation = beginActiveProviderOperation(
+          "deepgram",
+          event,
+          authorization,
+          options,
+          () => {
+            if (this.deepgramStreaming === activeClient) this.deepgramStreaming = null;
+            return activeClient
+              .disconnect(false)
+              .catch(() => {})
+              .finally(() => {
+                activeClient.cleanupAll();
+              });
+          }
+        );
+        dictationAuthorizationBinding = activeOperation.binding;
+        const authorizationBinding = dictationAuthorizationBinding;
+        const canPublish = () =>
+          ownsActiveProviderCallbacks(
+            activeOperation,
+            authorizationBinding,
+            activeClient,
+            this.deepgramStreaming,
+            "deepgram"
+          ) &&
+          win &&
+          !win.isDestroyed();
         if (this.deepgramStreaming.isConnected) {
           debugLogger.debug("Deepgram cleaning up stale connection before start", {}, "streaming");
           await this.deepgramStreaming.disconnect(false);
@@ -9886,26 +11788,26 @@ class IPCHandlers {
           debugLogger.debug("Using cached Deepgram streaming token", {}, "streaming");
         }
 
-        this.deepgramStreaming.onPartialTranscript = (text) => {
-          if (win && !win.isDestroyed()) {
+        activeClient.onPartialTranscript = (text) => {
+          if (canPublish()) {
             win.webContents.send("deepgram-partial-transcript", text);
           }
         };
 
-        this.deepgramStreaming.onFinalTranscript = (text) => {
-          if (win && !win.isDestroyed()) {
+        activeClient.onFinalTranscript = (text) => {
+          if (canPublish()) {
             win.webContents.send("deepgram-final-transcript", text);
           }
         };
 
-        this.deepgramStreaming.onError = (error) => {
-          if (win && !win.isDestroyed()) {
+        activeClient.onError = (error) => {
+          if (canPublish()) {
             win.webContents.send("deepgram-error", error.message);
           }
         };
 
-        this.deepgramStreaming.onSessionEnd = (data) => {
-          if (win && !win.isDestroyed()) {
+        activeClient.onSessionEnd = (data) => {
+          if (canPublish()) {
             win.webContents.send("deepgram-session-end", data);
           }
         };
@@ -9914,6 +11816,8 @@ class IPCHandlers {
         sendDropCount = 0;
         await this.deepgramStreaming.connect({ ...options, token });
         assertCurrentDictationTransport(generation);
+        if (canReuseWarm) clearProviderWarm("deepgram");
+        activeOperation.assertCurrent();
         debugLogger.debug(
           "Deepgram streaming started",
           {
@@ -9928,8 +11832,17 @@ class IPCHandlers {
         return {
           success: true,
           usedWarmConnection: hasWarm && !options.forceNew,
+          transportId: options.transportId ?? null,
         };
       } catch (error) {
+        if (activeOperation && !activeOperation.isCurrent()) {
+          try {
+            activeOperation.assertCurrent();
+          } catch (authorizationError) {
+            error = authorizationError;
+          }
+        }
+        releaseFailedProviderOperation(activeOperation);
         debugLogger.error("Deepgram streaming start error", { error: error.message });
         if (error.code === "AUTH_EXPIRED") {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
@@ -9940,8 +11853,22 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.on("deepgram-streaming-send", (event, audioBuffer) => {
+    ipcMain.on("deepgram-streaming-send", (event, transportId, audioBuffer) => {
       try {
+        if (audioBuffer === undefined) {
+          audioBuffer = transportId;
+          transportId = null;
+        }
+        if (
+          !isTranscriptionTransportIngressAuthorized(
+            event,
+            transportId,
+            dictationAuthorizationBinding,
+            "deepgram"
+          )
+        ) {
+          return;
+        }
         if (!this.deepgramStreaming) return;
         const buffer = Buffer.from(audioBuffer);
         const sent = this.deepgramStreaming.sendAudio(buffer);
@@ -9976,24 +11903,36 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.on("deepgram-streaming-finalize", () => {
+    ipcMain.on("deepgram-streaming-finalize", (event, transportId) => {
+      if (!getAuthorizedProviderControl(event, transportId, "deepgram")) {
+        return;
+      }
       this.deepgramStreaming?.finalize();
     });
 
-    ipcMain.handle("deepgram-streaming-stop", async () => {
-      try {
-        const model = this.deepgramStreaming?.currentModel || "nova-3";
-        const audioBytesSent = this.deepgramStreaming?.audioBytesSent || 0;
-        let result = { text: "" };
-        if (this.deepgramStreaming) {
-          result = await this.deepgramStreaming.disconnect(true);
+    ipcMain.handle("deepgram-streaming-stop", (event, transportId) => {
+      return closeOwnedProvider(event, transportId, "deepgram", async ({ operation, binding }) => {
+        const activeClient = this.deepgramStreaming;
+        const model = activeClient?.currentModel || "nova-3";
+        const audioBytesSent = activeClient?.audioBytesSent || 0;
+        try {
+          const result = activeClient ? await activeClient.disconnect(true) : { text: "" };
+          const canPublishResult =
+            operation.isCurrent() && isTranscriptionSessionBindingCurrent(binding, "deepgram");
+          return {
+            success: true,
+            text: canPublishResult ? result?.text || "" : "",
+            model,
+            audioBytesSent,
+          };
+        } catch (error) {
+          debugLogger.error("Deepgram streaming stop error", { error: error.message });
+          return { success: false, error: error.message };
+        } finally {
+          activeClient?.cleanupAll();
+          if (this.deepgramStreaming === activeClient) this.deepgramStreaming = null;
         }
-
-        return { success: true, text: result?.text || "", model, audioBytesSent };
-      } catch (error) {
-        debugLogger.error("Deepgram streaming stop error", { error: error.message });
-        return { success: false, error: error.message };
-      }
+      });
     });
 
     ipcMain.handle("deepgram-streaming-status", async () => {
@@ -10003,15 +11942,41 @@ class IPCHandlers {
       return this.deepgramStreaming.getStatus();
     });
 
-    ipcMain.handle("corti-streaming-warmup", async (_event, options = {}) => {
+    ipcMain.handle("corti-streaming-warmup", async (event, options = {}, managedRuntimeContext) => {
       const generation = dictationTransportGeneration;
+      let warmOperation = null;
       try {
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          options.mode === "openwhispr" ? "openwhispr" : "providers",
+          "corti",
+          options.model || "corti-transcribe"
+        );
         if (!this.cortiStreaming) {
           this.cortiStreaming = new CortiStreaming();
         }
         if (this.cortiStreaming.hasWarmConnection() || this.cortiStreaming.isConnected) {
-          return { success: true, alreadyWarm: true };
+          const requestedBinding = captureProviderTransportBinding(
+            authorization,
+            "corti",
+            event,
+            options
+          );
+          if (canReuseProviderWarm("corti", requestedBinding, event, options)) {
+            return { success: true, alreadyWarm: true, transportId: options.transportId ?? null };
+          }
+          const staleClient = this.cortiStreaming;
+          clearProviderWarm("corti", { revoke: true });
+          await staleClient.disconnect(false).catch(() => {});
+          this.cortiStreaming = new CortiStreaming();
         }
+        const warmClient = this.cortiStreaming;
+        warmOperation = registerProviderWarm("corti", event, authorization, options, () => {
+          warmClient.cleanupWarmConnection();
+          if (this.cortiStreaming === warmClient) this.cortiStreaming = null;
+          return warmClient.disconnect(false).catch(() => {});
+        });
         const { token, environment, tenant } = await this._mintStoredCortiToken(options);
         assertCurrentDictationTransport(generation);
         await this.cortiStreaming.warmup({
@@ -10022,18 +11987,80 @@ class IPCHandlers {
           keyterms: options.keyterms,
         });
         assertCurrentDictationTransport(generation);
-        return { success: true };
+        warmOperation.assertCurrent();
+        return { success: true, transportId: options.transportId ?? null };
       } catch (error) {
+        if (warmOperation && !warmOperation.isCurrent()) {
+          try {
+            warmOperation.assertCurrent();
+          } catch (authorizationError) {
+            error = authorizationError;
+          }
+        }
+        if (warmOperation) clearProviderWarm("corti", { revoke: true });
         return { success: false, error: error.message, code: error.code };
       }
     });
 
-    ipcMain.handle("corti-streaming-start", async (event, options = {}) => {
-      const generation = dictationTransportGeneration;
+    ipcMain.handle("corti-streaming-start", async (event, options = {}, managedRuntimeContext) => {
+      let activeOperation = null;
       try {
+        if (dictationProviderClose) {
+          return { success: false, error: "Operation in progress" };
+        }
+        const authorization = await authorizeTranscriptionRoute(
+          event,
+          managedRuntimeContext,
+          options.mode === "openwhispr" ? "openwhispr" : "providers",
+          "corti",
+          options.model || "corti-transcribe"
+        );
+        await settleActiveProviderOperation();
+        const generation = dictationTransportGeneration;
         if (!this.cortiStreaming) {
           this.cortiStreaming = new CortiStreaming();
         }
+        const requestedAuthorizationBinding = captureProviderTransportBinding(
+          authorization,
+          "corti",
+          event,
+          options
+        );
+        const canReuseWarm = canReuseProviderWarm(
+          "corti",
+          requestedAuthorizationBinding,
+          event,
+          options
+        );
+        if (!canReuseWarm && this.cortiStreaming.hasWarmConnection()) {
+          const staleClient = this.cortiStreaming;
+          clearProviderWarm("corti", { revoke: true });
+          await staleClient.disconnect(false).catch(() => {});
+          this.cortiStreaming = new CortiStreaming();
+        }
+        const activeClient = this.cortiStreaming;
+        activeOperation = beginActiveProviderOperation(
+          "corti",
+          event,
+          authorization,
+          options,
+          () => {
+            if (this.cortiStreaming === activeClient) this.cortiStreaming = null;
+            return activeClient.disconnect(false).catch(() => {});
+          }
+        );
+        dictationAuthorizationBinding = activeOperation.binding;
+        const authorizationBinding = dictationAuthorizationBinding;
+        const canPublish = () =>
+          ownsActiveProviderCallbacks(
+            activeOperation,
+            authorizationBinding,
+            activeClient,
+            this.cortiStreaming,
+            "corti"
+          ) &&
+          win &&
+          !win.isDestroyed();
         if (this.cortiStreaming.isConnected) {
           await this.cortiStreaming.disconnect(false);
         }
@@ -10042,17 +12069,25 @@ class IPCHandlers {
         assertCurrentDictationTransport(generation);
         const win = BrowserWindow.fromWebContents(event.sender);
 
-        this.cortiStreaming.onPartialTranscript = (text) => {
-          if (win && !win.isDestroyed()) win.webContents.send("corti-partial-transcript", text);
+        activeClient.onPartialTranscript = (text) => {
+          if (canPublish()) {
+            win.webContents.send("corti-partial-transcript", text);
+          }
         };
-        this.cortiStreaming.onFinalTranscript = (text) => {
-          if (win && !win.isDestroyed()) win.webContents.send("corti-final-transcript", text);
+        activeClient.onFinalTranscript = (text) => {
+          if (canPublish()) {
+            win.webContents.send("corti-final-transcript", text);
+          }
         };
-        this.cortiStreaming.onError = (error) => {
-          if (win && !win.isDestroyed()) win.webContents.send("corti-error", error.message);
+        activeClient.onError = (error) => {
+          if (canPublish()) {
+            win.webContents.send("corti-error", error.message);
+          }
         };
-        this.cortiStreaming.onSessionEnd = (data) => {
-          if (win && !win.isDestroyed()) win.webContents.send("corti-session-end", data);
+        activeClient.onSessionEnd = (data) => {
+          if (canPublish()) {
+            win.webContents.send("corti-session-end", data);
+          }
         };
 
         assertCurrentDictationTransport(generation);
@@ -10064,34 +12099,67 @@ class IPCHandlers {
           keyterms: options.keyterms,
         });
         assertCurrentDictationTransport(generation);
-        return { success: true };
+        if (canReuseWarm) clearProviderWarm("corti");
+        activeOperation.assertCurrent();
+        return { success: true, transportId: options.transportId ?? null };
       } catch (error) {
+        if (activeOperation && !activeOperation.isCurrent()) {
+          try {
+            activeOperation.assertCurrent();
+          } catch (authorizationError) {
+            error = authorizationError;
+          }
+        }
+        releaseFailedProviderOperation(activeOperation);
         debugLogger.error("Corti streaming start error", { error: error.message }, "streaming");
         return { success: false, error: error.message, code: error.code };
       }
     });
 
-    ipcMain.on("corti-streaming-send", (_event, audioBuffer) => {
+    ipcMain.on("corti-streaming-send", (event, transportId, audioBuffer) => {
+      if (audioBuffer === undefined) {
+        audioBuffer = transportId;
+        transportId = null;
+      }
+      if (
+        !isTranscriptionTransportIngressAuthorized(
+          event,
+          transportId,
+          dictationAuthorizationBinding,
+          "corti"
+        )
+      )
+        return;
       this.cortiStreaming?.sendAudio(Buffer.from(audioBuffer));
     });
 
-    ipcMain.on("corti-streaming-finalize", () => {
+    ipcMain.on("corti-streaming-finalize", (event, transportId) => {
+      if (!getAuthorizedProviderControl(event, transportId, "corti")) return;
       this.cortiStreaming?.finalize();
     });
 
-    ipcMain.handle("corti-streaming-stop", async () => {
-      try {
-        const model = this.cortiStreaming?.currentModel || "corti-transcribe";
-        const audioBytesSent = this.cortiStreaming?.audioBytesSent || 0;
-        let result = { text: "" };
-        if (this.cortiStreaming) {
-          result = await this.cortiStreaming.disconnect(true);
+    ipcMain.handle("corti-streaming-stop", (event, transportId) => {
+      return closeOwnedProvider(event, transportId, "corti", async ({ operation, binding }) => {
+        const activeClient = this.cortiStreaming;
+        const model = activeClient?.currentModel || "corti-transcribe";
+        const audioBytesSent = activeClient?.audioBytesSent || 0;
+        try {
+          const result = activeClient ? await activeClient.disconnect(true) : { text: "" };
+          const canPublishResult =
+            operation.isCurrent() && isTranscriptionSessionBindingCurrent(binding, "corti");
+          return {
+            success: true,
+            text: canPublishResult ? result?.text || "" : "",
+            model,
+            audioBytesSent,
+          };
+        } catch (error) {
+          debugLogger.error("Corti streaming stop error", { error: error.message }, "streaming");
+          return { success: false, error: error.message };
+        } finally {
+          if (this.cortiStreaming === activeClient) this.cortiStreaming = null;
         }
-        return { success: true, text: result?.text || "", model, audioBytesSent };
-      } catch (error) {
-        debugLogger.error("Corti streaming stop error", { error: error.message }, "streaming");
-        return { success: false, error: error.message };
-      }
+      });
     });
 
     ipcMain.handle("corti-streaming-status", async () => {
@@ -10994,11 +13062,18 @@ class IPCHandlers {
     liveSpeakerState = null,
     sessionConfig = null,
     noteId = null,
-    diarizedSource = "system"
+    diarizedSource = "system",
+    authorizationIsCurrent = () => true,
+    commitToken = null
   ) {
     const send = (payload) => {
-      if (win && !win.isDestroyed()) {
-        win.webContents.send("meeting-diarization-complete", { sessionId, noteId, ...payload });
+      if (authorizationIsCurrent() && win && !win.isDestroyed()) {
+        win.webContents.send("meeting-diarization-complete", {
+          sessionId,
+          noteId,
+          commitToken,
+          ...payload,
+        });
       }
     };
 
@@ -11019,7 +13094,9 @@ class IPCHandlers {
     (async () => {
       let tmpWav = null;
       try {
+        if (!authorizationIsCurrent()) return;
         tmpWav = await this.diarizationManager.convertRawPcmToWav(rawPcmPath, 24000);
+        if (!authorizationIsCurrent()) return;
         const observedSpeakerIds = new Set(
           transcriptSegments
             .filter((segment) => segment.source === "system" && segment.speaker)
@@ -11045,6 +13122,7 @@ class IPCHandlers {
           tmpWav,
           numSpeakers > 0 ? { numSpeakers } : {}
         );
+        if (!authorizationIsCurrent()) return;
         if (cap != null) {
           diarizationSegments = this.diarizationManager.capSpeakerClusters(
             diarizationSegments,
@@ -11101,6 +13179,7 @@ class IPCHandlers {
               for (const seg of sorted) {
                 if (seg.end - seg.start < 1.5) continue;
                 const emb = await speakerEmb.extractEmbedding(tmpWav, seg.start, seg.end);
+                if (!authorizationIsCurrent()) return;
                 if (emb) embeddings.push(emb);
               }
               if (embeddings.length > 0) {
@@ -11114,6 +13193,7 @@ class IPCHandlers {
           debugLogger.debug("Speaker embedding extraction skipped", { error: err.message });
         }
 
+        if (!authorizationIsCurrent()) return;
         const reconciledSpeakers = this._reconcileLiveSpeakerState(
           liveSpeakerState,
           speakerEmbeddingsMap,
@@ -11122,6 +13202,7 @@ class IPCHandlers {
 
         if (speakerEmbeddingsMap) {
           try {
+            if (!authorizationIsCurrent()) return;
             const profiles = this.databaseManager.getSpeakerProfiles(true);
 
             if (profiles.length > 0) {
@@ -11181,10 +13262,12 @@ class IPCHandlers {
           }
         }
 
-        send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
+        if (authorizationIsCurrent()) {
+          send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
+        }
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
-        send({ segments: [] });
+        if (authorizationIsCurrent()) send({ segments: [] });
       } finally {
         try {
           fs.unlinkSync(rawPcmPath);

@@ -187,6 +187,25 @@ function captureFetch(t, respond) {
   return endpoints;
 }
 
+function captureMainBatch(window, respond = async () => ({ success: true, text: "main text" })) {
+  const calls = [];
+  const deletedPaths = [];
+  let tempIndex = 0;
+  window.electronAPI.saveTempAudio = async () => ({
+    success: true,
+    path: `/tmp/dictation-test-${++tempIndex}.webm`,
+  });
+  window.electronAPI.deleteTempAudio = async (tempPath) => {
+    deletedPaths.push(tempPath);
+    return { success: true };
+  };
+  window.electronAPI.transcribeAudioFileByok = async (options, context) => {
+    calls.push({ options, context });
+    return respond(options, context);
+  };
+  return { calls, deletedPaths };
+}
+
 const okJson = (body) => async () => ({
   ok: true,
   status: 200,
@@ -335,12 +354,16 @@ test("managed custom transcription never falls through to OpenAI", async (t) => 
 });
 
 test("unmanaged custom transcription fails closed instead of defaulting to OpenAI", async (t) => {
-  const { vite, setSettings, createManager } = await loadAudioManager(t, {
+  const { window, vite, setSettings, createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-custom-endpoint-guard-test-",
     settingsKey: "__customGuardSettings",
   });
   const { API_ENDPOINTS } = await vite.ssrLoadModule("/config/constants.ts");
-  const fetched = captureFetch(t, okJson({ text: "custom text" }));
+  const fetched = captureFetch(t, rejectFetch("custom transcription must run in main"));
+  const { calls } = captureMainBatch(window, async () => ({
+    success: true,
+    text: "custom text",
+  }));
 
   const manager = createManager({ getAPIKey: async () => "custom-key" });
   const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
@@ -379,6 +402,7 @@ test("unmanaged custom transcription fails closed instead of defaulting to OpenA
         });
       }
       assert.equal(fetched.length, 0, "no misconfigured request may leave the app");
+      assert.equal(calls.length, 0, "no misconfigured request may reach the main executor");
     }
   );
 
@@ -386,15 +410,17 @@ test("unmanaged custom transcription fails closed instead of defaulting to OpenA
     useBaseUrl("https://stt.parasail.example.com/v1");
     const result = await manager.processWithOpenAIAPI(audioBlob);
     assert.equal(result.success, true);
-    assert.deepEqual(fetched, ["https://stt.parasail.example.com/v1/audio/transcriptions"]);
+    assert.equal(calls.at(-1).options.baseUrl, "https://stt.parasail.example.com/v1");
+    assert.equal(calls.at(-1).options.provider, "custom");
+    assert.equal(calls.at(-1).context.provider, "custom");
+    assert.equal(fetched.length, 0);
   });
 
   await t.test("error after a valid resolve does not cache the OpenAI default", async () => {
-    fetched.length = 0;
     useBaseUrl("https://stt.parasail.example.com/v1");
-    globalThis.fetch = async (endpoint) => {
-      fetched.push(String(endpoint));
-      throw new Error("network down");
+    window.electronAPI.transcribeAudioFileByok = async (options, context) => {
+      calls.push({ options, context });
+      return { success: false, error: "network down" };
     };
     await assert.rejects(manager.processWithOpenAIAPI(audioBlob));
     useBaseUrl("");
@@ -402,25 +428,22 @@ test("unmanaged custom transcription fails closed instead of defaulting to OpenA
       assert.equal(error.code, "CUSTOM_ENDPOINT_INVALID");
       return true;
     });
-    assert.deepEqual(fetched, ["https://stt.parasail.example.com/v1/audio/transcriptions"]);
+    assert.equal(calls.at(-1).options.baseUrl, "https://stt.parasail.example.com/v1");
+    assert.equal(fetched.length, 0);
   });
 
   await t.test("an Azure custom endpoint keeps its deployment URL and api-key auth", async () => {
-    fetched.length = 0;
-    let seenHeaders;
-    globalThis.fetch = async (endpoint, init) => {
-      fetched.push(String(endpoint));
-      seenHeaders = init?.headers;
-      return okJson({ text: "azure text" })();
+    window.electronAPI.transcribeAudioFileByok = async (options, context) => {
+      calls.push({ options, context });
+      return { success: true, text: "azure text" };
     };
     useBaseUrl("https://myorg.openai.azure.com");
     const result = await manager.processWithOpenAIAPI(audioBlob);
     assert.equal(result.success, true);
-    assert.deepEqual(fetched, [
-      "https://myorg.openai.azure.com/openai/deployments/whisper-1/audio/transcriptions?api-version=2025-03-01-preview",
-    ]);
-    assert.equal(seenHeaders["api-key"], "custom-key");
-    assert.equal(seenHeaders.Authorization, undefined);
+    assert.equal(calls.at(-1).options.baseUrl, "https://myorg.openai.azure.com");
+    assert.equal(calls.at(-1).options.apiKey, "custom-key");
+    assert.equal(calls.at(-1).context.provider, "custom");
+    assert.equal(fetched.length, 0);
   });
 });
 
@@ -442,6 +465,10 @@ test("self-hosted mode is never hijacked by a leftover proxied provider", async 
     };
   }
   const fetched = captureFetch(t, okJson({ text: "self-hosted text" }));
+  const { calls } = captureMainBatch(window, async () => ({
+    success: true,
+    text: "self-hosted text",
+  }));
   const manager = createManager({
     getTranscriptionModel: () => "self-hosted-model",
     getAPIKey: async () => null,
@@ -461,10 +488,17 @@ test("self-hosted mode is never hijacked by a leftover proxied provider", async 
   }
 
   assert.deepEqual(proxyCalls, { mistral: 0, xai: 0, corti: 0 });
+  assert.equal(fetched.length, 0);
+  assert.equal(calls.length, 3);
   assert.equal(
-    fetched.every((e) => e.startsWith("https://stt.internal.example.com")),
-    true,
-    `unexpected endpoints: ${fetched.join(", ")}`
+    calls.every(({ context }) => context.provider === "self-hosted"),
+    true
+  );
+  assert.equal(
+    calls.every(
+      ({ options }) => options.remoteTranscriptionUrl === "https://stt.internal.example.com"
+    ),
+    true
   );
 });
 
@@ -472,11 +506,15 @@ test("self-hosted mode is never hijacked by a leftover proxied provider", async 
 // files every legacy `custom + byok` user under transcriptionMode "self-hosted"
 // and copies their base URL across.
 test("self-hosted Azure endpoints keep their deployment URL", async (t) => {
-  const { setSettings, createManager } = await loadAudioManager(t, {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-selfhosted-azure-test-",
     settingsKey: "__selfHostedAzureSettings",
   });
-  const fetched = captureFetch(t, okJson({ text: "azure text" }));
+  const fetched = captureFetch(t, rejectFetch("self-hosted transcription must run in main"));
+  const { calls } = captureMainBatch(window, async () => ({
+    success: true,
+    text: "azure text",
+  }));
   const manager = createManager({
     getTranscriptionModel: () => "my-deployment",
     getAPIKey: async () => "azure-key",
@@ -495,26 +533,25 @@ test("self-hosted Azure endpoints keep their deployment URL", async (t) => {
   await t.test("a bare Azure origin gains the deployment path and api-version", async () => {
     useRemote("https://myorg.openai.azure.com", "my-deployment");
     await manager.processWithOpenAIAPI(audioBlob);
-    assert.deepEqual(fetched, [
-      "https://myorg.openai.azure.com/openai/deployments/my-deployment/audio/transcriptions?api-version=2025-03-01-preview",
-    ]);
+    assert.equal(calls.at(-1).options.remoteTranscriptionUrl, "https://myorg.openai.azure.com");
+    assert.equal(calls.at(-1).options.remoteTranscriptionModel, "my-deployment");
+    assert.equal(calls.at(-1).context.provider, "self-hosted");
   });
 
   await t.test("a pinned deployment URL is preserved verbatim", async () => {
-    fetched.length = 0;
     const pinned =
       "https://myorg.openai.azure.com/openai/deployments/pinned/audio/transcriptions?api-version=2024-06-01";
     useRemote(pinned, "my-deployment");
     await manager.processWithOpenAIAPI(audioBlob);
-    assert.deepEqual(fetched, [pinned]);
+    assert.equal(calls.at(-1).options.remoteTranscriptionUrl, pinned);
   });
 
   await t.test("a non-Azure self-hosted host is untouched", async () => {
-    fetched.length = 0;
     useRemote("https://stt.internal.example.com", "tiny");
     await manager.processWithOpenAIAPI(audioBlob);
-    assert.deepEqual(fetched, ["https://stt.internal.example.com/audio/transcriptions"]);
+    assert.equal(calls.at(-1).options.remoteTranscriptionUrl, "https://stt.internal.example.com");
   });
+  assert.equal(fetched.length, 0);
 });
 
 test("corti without a preload bridge throws instead of falling through to OpenAI", async (t) => {
@@ -642,6 +679,196 @@ test("proxied providers dispatch through the registry", async (t) => {
     }
     assert.equal(fetched.length, 0);
   });
+});
+
+test("batch BYOK and self-hosted dictation dispatch through main with the resolved route", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-batch-main-routing-test-",
+    settingsKey: "__batchMainRoutingSettings",
+  });
+  const fetched = captureFetch(t, rejectFetch("batch transcription must not fetch in renderer"));
+  const calls = [];
+  const deletedPaths = [];
+  let tempIndex = 0;
+  window.electronAPI.saveTempAudio = async () => ({
+    success: true,
+    path: `/tmp/dictation-${++tempIndex}.webm`,
+  });
+  window.electronAPI.deleteTempAudio = async (tempPath) => {
+    deletedPaths.push(tempPath);
+    return { success: true };
+  };
+  window.electronAPI.transcribeAudioFileByok = async (options, context) => {
+    calls.push({ options, context });
+    return { success: true, text: "main transcript" };
+  };
+
+  let selectedModel = "gpt-4o-mini-transcribe";
+  const manager = createManager({
+    getTranscriptionModel: () => selectedModel,
+    getEffectiveSttLanguage: () => "en-US",
+    getAPIKey: async () => "route-key",
+    getWhisperPrompt: () => "Alpha, Beta",
+  });
+  const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+  const routes = [
+    {
+      settings: {
+        cloudTranscriptionProvider: "openai",
+        cloudTranscriptionModel: "gpt-4o-mini-transcribe",
+        transcriptionMode: "providers",
+      },
+      expected: { provider: "openai", model: "gpt-4o-mini-transcribe" },
+    },
+    {
+      settings: {
+        cloudTranscriptionProvider: "groq",
+        cloudTranscriptionModel: "whisper-large-v3-turbo",
+        transcriptionMode: "providers",
+      },
+      expected: { provider: "groq", model: "whisper-large-v3-turbo" },
+    },
+    {
+      settings: {
+        cloudTranscriptionProvider: "custom",
+        cloudTranscriptionBaseUrl: "https://stt.example.test/v1",
+        cloudTranscriptionModel: "custom-whisper",
+        transcriptionMode: "providers",
+      },
+      expected: { provider: "custom", model: "custom-whisper" },
+    },
+    {
+      settings: {
+        cloudTranscriptionProvider: "openai",
+        transcriptionMode: "self-hosted",
+        remoteTranscriptionUrl: "https://stt.internal.example.test",
+        remoteTranscriptionModel: "private-whisper",
+      },
+      expected: { provider: "self-hosted", model: "private-whisper" },
+    },
+  ];
+
+  for (const { settings, expected } of routes) {
+    selectedModel = expected.model;
+    setSettings({
+      allowLocalFallback: false,
+      preferredLanguage: "en-US",
+      useLocalWhisper: false,
+      ...settings,
+    });
+    const result = await manager.processWithOpenAIAPI(audioBlob);
+    assert.equal(result.text, "main transcript");
+    assert.deepEqual(
+      {
+        provider: calls.at(-1).context.provider,
+        model: calls.at(-1).context.model,
+        managed: calls.at(-1).context.managed,
+      },
+      { ...expected, managed: false }
+    );
+    assert.equal(calls.at(-1).options.provider, settings.cloudTranscriptionProvider);
+    assert.equal(calls.at(-1).options.apiKey, "route-key");
+    assert.equal(calls.at(-1).options.model, expected.model);
+    assert.equal(calls.at(-1).options.language, "en");
+    assert.equal(calls.at(-1).options.useLanguageHint, true);
+    assert.equal(calls.at(-1).options.prompt, "Alpha, Beta");
+  }
+
+  assert.equal(fetched.length, 0);
+  assert.equal(calls.length, routes.length);
+  assert.deepEqual(
+    deletedPaths,
+    calls.map(({ options }) => options.filePath)
+  );
+});
+
+test("cancelling migrated BYOK dictation cancels its main request and ignores late text", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-batch-main-cancel-test-",
+    settingsKey: "__batchMainCancelSettings",
+  });
+  setSettings({
+    allowLocalFallback: false,
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionModel: "whisper-1",
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+  });
+  window.electronAPI.saveTempAudio = async () => ({
+    success: true,
+    path: "/tmp/dictation-cancel.webm",
+  });
+  const deletedPaths = [];
+  window.electronAPI.deleteTempAudio = async (tempPath) => {
+    deletedPaths.push(tempPath);
+    return { success: true };
+  };
+  let resolveTranscription;
+  let seenRequestId;
+  window.electronAPI.transcribeAudioFileByok = async (options) => {
+    seenRequestId = options.requestId;
+    return new Promise((resolve) => {
+      resolveTranscription = resolve;
+    });
+  };
+  const cancelledRequestIds = [];
+  window.electronAPI.cancelUploadTranscription = async (requestId) => {
+    cancelledRequestIds.push(requestId);
+    return { success: true };
+  };
+  let processingCalls = 0;
+  const manager = createManager({
+    getAPIKey: async () => "openai-key",
+    processTranscription: async () => {
+      processingCalls += 1;
+      return "must not process";
+    },
+  });
+
+  const operation = manager.processWithOpenAIAPI(
+    new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" })
+  );
+  while (!resolveTranscription) await new Promise((resolve) => setImmediate(resolve));
+  manager._activeTranscriptionAbortController.abort();
+  await new Promise((resolve) => setImmediate(resolve));
+  resolveTranscription({ success: true, text: "late text must be ignored" });
+
+  await assert.rejects(operation, { name: "AbortError" });
+  assert.equal(typeof seenRequestId, "string");
+  assert.notEqual(seenRequestId, "");
+  assert.deepEqual(cancelledRequestIds, [seenRequestId]);
+  assert.equal(processingCalls, 0);
+  assert.deepEqual(deletedPaths, ["/tmp/dictation-cancel.webm"]);
+});
+
+test("Tinfoil dictation context uses the resolver-normalized null model", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-tinfoil-context-route-test-",
+    settingsKey: "__tinfoilContextRouteSettings",
+  });
+  setSettings({
+    allowLocalFallback: false,
+    cloudTranscriptionProvider: "tinfoil",
+    cloudTranscriptionModel: "voxtral-small-24b",
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+  });
+  let seenContext;
+  window.electronAPI.proxyTinfoilTranscription = async (_payload, context) => {
+    seenContext = context;
+    return { text: "tinfoil transcript" };
+  };
+  const manager = createManager({
+    getTranscriptionModel: () => "voxtral-small-24b",
+    getAPIKey: async () => "tinfoil-key",
+  });
+
+  await manager.processWithOpenAIAPI(new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }));
+
+  assert.deepEqual(
+    { provider: seenContext.provider, model: seenContext.model, managed: seenContext.managed },
+    { provider: "tinfoil", model: null, managed: false }
+  );
 });
 
 test("config-error code survives a failed local fallback", async (t) => {

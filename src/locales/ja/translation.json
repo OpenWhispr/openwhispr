@@ -201,6 +201,9 @@
       "incompatibleReasoning": "このデバイスと互換性のある会社承認済み AI モデルがありません。IT 管理者に連絡してください。",
       "downloadCancelled": "会社モデルのダウンロードがキャンセルされました。続行するには再開してください。"
     },
+    "actions": {
+      "dismissError": "{{model}} のダウンロードエラーを閉じる"
+    },
     "attention": {
       "title": "会社モデルを確認してください"
     },

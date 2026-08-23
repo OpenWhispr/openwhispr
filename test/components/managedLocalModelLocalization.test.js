@@ -8,6 +8,21 @@ const { installInteractiveDom } = require("../lib/interactiveDom");
 
 const english = require("../../src/locales/en/translation.json");
 const japanese = require("../../src/locales/ja/translation.json");
+const managedModelLocales = [
+  "de",
+  "en",
+  "es",
+  "fr",
+  "it",
+  "ja",
+  "pt",
+  "ru",
+  "zh-CN",
+  "zh-TW",
+].map((language) => ({
+  language,
+  translation: require(`../../src/locales/${language}/translation.json`),
+}));
 
 function eventTarget() {
   const listeners = new Map();
@@ -60,6 +75,18 @@ const iconMocks = {
     export function ProviderIcon() { return React.createElement("span"); }
   `,
 };
+
+test("terminal download errors have a distinct localized dismissal label", () => {
+  for (const { language, translation } of managedModelLocales) {
+    const label = translation.managedLocalModels.actions?.dismissError;
+    assert.equal(typeof label, "string", `${language} is missing a dismiss-error label`);
+    assert.match(label, /{{model}}/, `${language} must identify the affected model`);
+  }
+  assert.notEqual(
+    english.managedLocalModels.actions.dismissError,
+    english.onboarding.rehaul.local.cancelDownload
+  );
+});
 
 test("managed model notice renders the active non-English locale", async (t) => {
   installBrowserGlobals(t);

@@ -357,13 +357,6 @@ export default function BackgroundModelDownloadTray() {
       result = { success: false };
     }
 
-    if (!mounted.current) {
-      if (result?.success === true) {
-        notifyModelDownloadCancellation(download.kind, download.id);
-      }
-      return;
-    }
-
     const pendingSelectionIsCurrent = pendingSelection
       ? isPendingLocalModelSelectionCurrent(pendingKind, pendingSelection)
       : readPendingLocalModels()[pendingKind]?.modelId !== download.id;
@@ -373,7 +366,7 @@ export default function BackgroundModelDownloadTray() {
     // download that is still running was stopped.
     if (result?.success !== true) {
       cancelledKeys.current.delete(key);
-      if (pendingSelectionIsCurrent) {
+      if (mounted.current && pendingSelectionIsCurrent) {
         setDownloads((current) => ({ ...current, [key]: download }));
       }
       return;
@@ -483,9 +476,15 @@ export default function BackgroundModelDownloadTray() {
             type="button"
             onClick={() => void cancelDownload(download)}
             disabled={download.installing}
-            aria-label={t("onboarding.rehaul.local.cancelDownload", {
-              model: downloadDisplay(download).name,
-            })}
+            aria-label={
+              download.error
+                ? t("managedLocalModels.actions.dismissError", {
+                    model: downloadDisplay(download).name,
+                  })
+                : t("onboarding.rehaul.local.cancelDownload", {
+                    model: downloadDisplay(download).name,
+                  })
+            }
             className="shrink-0 rounded-full transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-default disabled:opacity-40 disabled:hover:opacity-40"
           >
             <CancelGlyph />

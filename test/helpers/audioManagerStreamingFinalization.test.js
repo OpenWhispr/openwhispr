@@ -2,6 +2,14 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadAudioManager } = require("./harness/audioManager");
 
+function createDeferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 async function loadManagerClass(t) {
   const { AudioManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-streaming-finalization-test-",
@@ -34,6 +42,7 @@ function createFinalizingManager(AudioManager) {
     _activeTranscriptionAbortController: null,
     _streamingSessionGeneration: 7,
     _activeStreamingSessionId: 7,
+    _activeStreamingTransportId: "streaming-7",
     _streamingMicSwapPromise: null,
     streamingFinalText: "",
     streamingPartialText: "",
@@ -320,6 +329,226 @@ test("cancelling while the streaming microphone opens never enters recording", a
     false,
     "a cancelled start must not publish a recording state"
   );
+});
+
+test("authorization invalidation after provider start aborts the exact requested transport", async (t) => {
+  let authorizationCurrent = true;
+  globalThis.__streamingStartAuthorizationCurrent = () => authorizationCurrent;
+  t.after(() => delete globalThis.__streamingStartAuthorizationCurrent);
+  const { AudioManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-streaming-start-auth-race-test-",
+    settingsKey: "__streamingStartAuthRaceSettings",
+    settings: {
+      useLocalWhisper: false,
+      transcriptionMode: "providers",
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "openai",
+    },
+    mockModules: {
+      "runtimeAuthorizationBoundary.ts": `
+        export const captureRuntimeAuthorizationGuard = () => ({
+          isCurrent: () => globalThis.__streamingStartAuthorizationCurrent(),
+          assertCurrent() {
+            if (!this.isCurrent()) {
+              const error = new Error('Authorization changed');
+              error.code = 'AUTHORIZATION_BOUNDARY_CHANGED';
+              throw error;
+            }
+          },
+        });
+        export const subscribeRuntimeAuthorizationBoundary = () => () => {};
+      `,
+    },
+  });
+  const previousAudioWorkletNode = globalThis.AudioWorkletNode;
+  globalThis.AudioWorkletNode = class {
+    constructor() {
+      this.port = { onmessage: null, postMessage() {} };
+    }
+
+    disconnect() {}
+  };
+  t.after(() => {
+    if (previousAudioWorkletNode === undefined) delete globalThis.AudioWorkletNode;
+    else globalThis.AudioWorkletNode = previousAudioWorkletNode;
+  });
+
+  const providerStart = createDeferred();
+  const abortTransportIds = [];
+  let requestedTransportId = null;
+  let providerActive = false;
+  const provider = {
+    onPartial: () => () => {},
+    onFinal: () => () => {},
+    onError: () => () => {},
+    onSessionEnd: () => () => {},
+    async start(options) {
+      requestedTransportId = options.transportId;
+      await providerStart.promise;
+      providerActive = true;
+      return { success: true, transportId: options.transportId };
+    },
+    send() {},
+    async abort(transportId) {
+      abortTransportIds.push(transportId);
+      if (transportId === requestedTransportId) providerActive = false;
+      return { success: true };
+    },
+  };
+  const stream = {
+    getAudioTracks: () => [{ label: "test", getSettings: () => ({}) }],
+    getTracks: () => [{ stop() {} }],
+  };
+  const source = { connect() {}, disconnect() {} };
+  const manager = Object.assign(Object.create(AudioManager.prototype), {
+    isRecording: false,
+    isProcessing: false,
+    isStreaming: false,
+    streamingStartInProgress: false,
+    _streamingStartSettlementWaiters: [],
+    stopRequestedDuringStreamingStart: false,
+    _streamingStopPromise: null,
+    _streamingStopMode: null,
+    _streamingCancellationGeneration: 0,
+    _streamingSessionGeneration: 0,
+    _activeStreamingSessionId: null,
+    _activeStreamingTransportId: null,
+    _warmStreamingProviderName: null,
+    _warmStreamingTransportId: null,
+    streamingCleanupFns: [],
+    streamingFallbackRecorder: null,
+    streamingFallbackChunks: [],
+    _streamingFallbackSegments: [],
+    streamingTextDebounce: null,
+    workletModuleLoaded: true,
+    preparedMicCapture: { take: async () => null },
+    micRecovery: { stop() {} },
+    isRecordingAllowedByPolicy: () => true,
+    getAudioConstraints: async () => ({}),
+    _acquireCaptureStream: async () => stream,
+    startStreamingFallbackRecorder() {},
+    getOrCreateAudioContext: async () => ({
+      createMediaStreamSource: () => source,
+      createAnalyser: () => ({ fftSize: 0 }),
+    }),
+    getStreamingProvider: () => provider,
+    getStreamingProviderName: () => "openai",
+    getEffectiveSttLanguage: () => "auto",
+    getKeyterms: () => [],
+    beginMicRecovery: async () => {},
+    _markCaptureStreamReleased() {},
+    onStateChange() {},
+  });
+
+  const starting = manager.startStreamingRecording();
+  while (!requestedTransportId) await new Promise((resolve) => setImmediate(resolve));
+  authorizationCurrent = false;
+  providerStart.resolve();
+
+  assert.equal(await starting, false);
+  assert.deepEqual(abortTransportIds, [requestedTransportId]);
+  assert.equal(providerActive, false);
+});
+
+test("graceful stop releases its transport before re-warm and buffers the next session's early PCM", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  const providerStart = createDeferred();
+  const sentAudio = [];
+  const abortedTransportIds = [];
+  let streamingPort = null;
+  const previousAudioWorkletNode = globalThis.AudioWorkletNode;
+  globalThis.AudioWorkletNode = class {
+    constructor() {
+      streamingPort = { onmessage: null, postMessage() {} };
+      this.port = streamingPort;
+    }
+
+    disconnect() {}
+  };
+  t.after(() => {
+    if (previousAudioWorkletNode === undefined) delete globalThis.AudioWorkletNode;
+    else globalThis.AudioWorkletNode = previousAudioWorkletNode;
+  });
+
+  const provider = {
+    awaitsFinalTranscript: true,
+    onPartial: () => () => {},
+    onFinal: () => () => {},
+    onError: () => () => {},
+    onSessionEnd: () => () => {},
+    finalize() {},
+    async stop() {
+      return { success: true };
+    },
+    async warmup() {
+      return { success: true };
+    },
+    async start() {
+      await providerStart.promise;
+      return { success: true, transportId: "streaming-rewarm-3" };
+    },
+    send(transportId, pcm) {
+      sentAudio.push([transportId, pcm]);
+    },
+    async abort(transportId) {
+      abortedTransportIds.push(transportId);
+      return { success: true };
+    },
+  };
+  const stream = {
+    getAudioTracks: () => [{ label: "test", getSettings: () => ({}) }],
+    getTracks: () => [{ stop() {} }],
+  };
+  const source = { connect() {}, disconnect() {} };
+  Object.assign(manager, {
+    _warmStreamingTransportId: null,
+    _warmStreamingProviderName: null,
+    workletModuleLoaded: true,
+    preparedMicCapture: { take: async () => null },
+    getAudioConstraints: async () => ({}),
+    _acquireCaptureStream: async () => stream,
+    startStreamingFallbackRecorder() {},
+    getOrCreateAudioContext: async () => ({
+      createMediaStreamSource: () => source,
+      createAnalyser: () => ({ fftSize: 0 }),
+    }),
+    getStreamingProvider: () => provider,
+    getStreamingProviderName: () => "openai",
+    getKeyterms: () => [],
+    beginMicRecovery: async () => {},
+    _markCaptureStreamReleased() {},
+    shouldUseStreaming: () => true,
+    warmupStreamingConnection: async () => {
+      manager._warmStreamingTransportId = "streaming-rewarm-2";
+      manager._warmStreamingProviderName = "openai";
+      return true;
+    },
+    _requestStreamingCancellation() {},
+    cancelPreparedMicCapture() {},
+  });
+
+  assert.equal(await manager.stopStreamingRecording(), true);
+  assert.equal(manager._activeStreamingTransportId, null);
+  assert.equal(manager._warmStreamingTransportId, "streaming-rewarm-2");
+
+  globalThis.window.electronAPI.dictationStreamingAbort = async (transportId) => {
+    abortedTransportIds.push(transportId);
+    return { success: true };
+  };
+  manager._handleRuntimeAuthorizationBoundaryChange();
+  assert.deepEqual(abortedTransportIds, ["streaming-rewarm-2"]);
+
+  manager._warmStreamingTransportId = "streaming-rewarm-3";
+  const starting = manager.startStreamingRecording();
+  while (!streamingPort?.onmessage) await new Promise((resolve) => setImmediate(resolve));
+  const earlyPcm = new Int16Array([1, 2, 3]).buffer;
+  streamingPort.onmessage({ data: earlyPcm });
+  assert.deepEqual(sentAudio, []);
+
+  providerStart.resolve();
+  assert.equal(await starting, true);
+  assert.deepEqual(sentAudio, [["streaming-rewarm-3", earlyPcm]]);
 });
 
 test("cancel overrides a normal streaming stop before it can publish text", async (t) => {

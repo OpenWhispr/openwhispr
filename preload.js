@@ -60,6 +60,11 @@ const registerListener = (channel, handlerFactory) => {
   };
 };
 
+const invokeWithRuntimeContext = (channel, args, managedRuntimeContext) =>
+  managedRuntimeContext === undefined
+    ? ipcRenderer.invoke(channel, ...args)
+    : ipcRenderer.invoke(channel, ...args, managedRuntimeContext);
+
 contextBridge.exposeInMainWorld("electronAPI", {
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
@@ -112,8 +117,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAudioStorageUsage: () => ipcRenderer.invoke("get-audio-storage-usage"),
   deleteAllAudio: () => ipcRenderer.invoke("delete-all-audio"),
   syncRetentionSettings: (settings) => ipcRenderer.send("retention-settings-changed", settings),
-  retryTranscription: (id, settings, requestId) =>
-    ipcRenderer.invoke("retry-transcription", id, settings, requestId),
+  retryTranscription: (id, settings, requestId, managedRuntimeContext) =>
+    invokeWithRuntimeContext(
+      "retry-transcription",
+      [id, settings, requestId],
+      managedRuntimeContext
+    ),
   commitRetryTranscription: (id, requestId, text, rawText) =>
     ipcRenderer.invoke("commit-retry-transcription", id, requestId, text, rawText),
   updateTranscriptionText: (id, text, rawText) =>
@@ -161,6 +170,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-get-notes", noteType, limit, folderId, spaceId),
   getSpaceNotes: (spaceId, limit) => ipcRenderer.invoke("db-get-space-notes", spaceId, limit),
   updateNote: (id, updates) => ipcRenderer.invoke("db-update-note", id, updates),
+  beginActionNoteCommit: (noteId, context) =>
+    ipcRenderer.invoke("begin-action-note-commit", noteId, context),
+  commitActionNote: (payload) => ipcRenderer.invoke("commit-action-note", payload),
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
   exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
@@ -224,8 +236,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Audio file operations
   selectAudioFile: (options) => ipcRenderer.invoke("select-audio-file", options),
   getFileSize: (filePath) => ipcRenderer.invoke("get-file-size", filePath),
-  transcribeAudioFile: (filePath, options) =>
-    ipcRenderer.invoke("transcribe-audio-file", filePath, options),
+  transcribeAudioFile: (filePath, options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("transcribe-audio-file", [filePath, options], managedRuntimeContext),
   getPathForFile: (file) => {
     const filePath = webUtils.getPathForFile(file);
     // Register real dropped-file paths so the main-process audio allowlist accepts them.
@@ -332,8 +344,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteTempAudio: (tempPath) => ipcRenderer.invoke("delete-temp-audio", tempPath),
 
   // Local Whisper functions (whisper.cpp)
-  transcribeLocalWhisper: (audioBlob, options) =>
-    ipcRenderer.invoke("transcribe-local-whisper", audioBlob, options),
+  transcribeLocalWhisper: (audioBlob, options, managedRuntimeContext) =>
+    invokeWithRuntimeContext(
+      "transcribe-local-whisper",
+      [audioBlob, options],
+      managedRuntimeContext
+    ),
   checkWhisperInstallation: () => ipcRenderer.invoke("check-whisper-installation"),
   downloadWhisperModel: (modelName) => ipcRenderer.invoke("download-whisper-model", modelName),
   onWhisperDownloadProgress: registerListener("whisper-download-progress"),
@@ -388,8 +404,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   dismissGpuPackMigrationNotice: () => ipcRenderer.invoke("dismiss-gpu-pack-migration-notice"),
 
   // Local Parakeet (NVIDIA) functions
-  transcribeLocalParakeet: (audioBlob, options) =>
-    ipcRenderer.invoke("transcribe-local-parakeet", audioBlob, options),
+  transcribeLocalParakeet: (audioBlob, options, managedRuntimeContext) =>
+    invokeWithRuntimeContext(
+      "transcribe-local-parakeet",
+      [audioBlob, options],
+      managedRuntimeContext
+    ),
   checkParakeetInstallation: () => ipcRenderer.invoke("check-parakeet-installation"),
   downloadParakeetModel: (modelName) => ipcRenderer.invoke("download-parakeet-model", modelName),
   onParakeetDownloadProgress: registerListener("parakeet-download-progress"),
@@ -411,8 +431,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getDiarizationModelStatus: () => ipcRenderer.invoke("get-diarization-model-status"),
   deleteDiarizationModels: () => ipcRenderer.invoke("delete-diarization-models"),
   cancelDiarizationDownload: () => ipcRenderer.invoke("cancel-diarization-download"),
-  diarizeAudioFile: (filePath, options) =>
-    ipcRenderer.invoke("diarize-audio-file", filePath, options),
+  diarizeAudioFile: (filePath, options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("diarize-audio-file", [filePath, options], managedRuntimeContext),
   mergeSpeakerText: (segments, text, duration) =>
     ipcRenderer.invoke("merge-speaker-text", { segments, text, duration }),
   onDiarizationDownloadProgress: registerListener(
@@ -518,17 +538,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setUiLanguage: (language) => ipcRenderer.invoke("set-ui-language", language),
 
   // xAI / Mistral transcription proxies (keys handled by the manifest bridge)
-  proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
-  proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
+  proxyXaiTranscription: (data, managedRuntimeContext) =>
+    invokeWithRuntimeContext("proxy-xai-transcription", [data], managedRuntimeContext),
+  proxyMistralTranscription: (data, managedRuntimeContext) =>
+    invokeWithRuntimeContext("proxy-mistral-transcription", [data], managedRuntimeContext),
 
   // Corti API
   getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),
   saveCortiClientId: (key) => ipcRenderer.invoke("save-corti-client-id", key),
   getCortiClientSecret: () => ipcRenderer.invoke("get-corti-client-secret"),
   saveCortiClientSecret: (key) => ipcRenderer.invoke("save-corti-client-secret", key),
-  proxyCortiTranscription: (data) => ipcRenderer.invoke("proxy-corti-transcription", data),
+  proxyCortiTranscription: (data, managedRuntimeContext) =>
+    invokeWithRuntimeContext("proxy-corti-transcription", [data], managedRuntimeContext),
   getTinfoilChatModels: () => ipcRenderer.invoke("get-tinfoil-chat-models"),
-  proxyTinfoilTranscription: (data) => ipcRenderer.invoke("proxy-tinfoil-transcription", data),
+  proxyTinfoilTranscription: (data, managedRuntimeContext) =>
+    invokeWithRuntimeContext("proxy-tinfoil-transcription", [data], managedRuntimeContext),
 
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
@@ -679,7 +703,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // OpenWhispr Cloud API
   cloudHealthCheck: () => ipcRenderer.invoke("cloud-health-check"),
-  cloudTranscribe: (audioBuffer, opts) => ipcRenderer.invoke("cloud-transcribe", audioBuffer, opts),
+  cloudTranscribe: (audioBuffer, opts, managedRuntimeContext) =>
+    invokeWithRuntimeContext("cloud-transcribe", [audioBuffer, opts], managedRuntimeContext),
   cancelCloudTranscription: () => ipcRenderer.send("cloud-transcribe-cancel"),
   cloudReason: (text, opts) => ipcRenderer.invoke("cloud-reason", text, opts),
   cancelCloudReason: () => ipcRenderer.send("cloud-reason-cancel"),
@@ -702,11 +727,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getNoteRecordingConfig: () => ipcRenderer.invoke("get-note-recording-config"),
 
   // Cloud audio file transcription
-  transcribeAudioFileCloud: (filePath, options) =>
-    ipcRenderer.invoke("transcribe-audio-file-cloud", filePath, options),
+  transcribeAudioFileCloud: (filePath, options, managedRuntimeContext) =>
+    invokeWithRuntimeContext(
+      "transcribe-audio-file-cloud",
+      [filePath, options],
+      managedRuntimeContext
+    ),
   cancelUploadTranscription: (requestId) =>
     ipcRenderer.invoke("cancel-upload-transcription", requestId),
-  transcribeAudioFileByok: (options) => ipcRenderer.invoke("transcribe-audio-file-byok", options),
+  transcribeAudioFileByok: (options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("transcribe-audio-file-byok", [options], managedRuntimeContext),
   onUploadTranscriptionProgress: registerListener(
     "upload-transcription-progress",
     (callback) => (_event, data) => callback(data)
@@ -718,13 +748,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getReferralInvites: () => ipcRenderer.invoke("get-referral-invites"),
 
   // Assembly AI Streaming
-  assemblyAiStreamingWarmup: (options) =>
-    ipcRenderer.invoke("assemblyai-streaming-warmup", options),
-  assemblyAiStreamingStart: (options) => ipcRenderer.invoke("assemblyai-streaming-start", options),
-  assemblyAiStreamingSend: (audioBuffer) =>
-    ipcRenderer.send("assemblyai-streaming-send", audioBuffer),
-  assemblyAiStreamingForceEndpoint: () => ipcRenderer.send("assemblyai-streaming-force-endpoint"),
-  assemblyAiStreamingStop: () => ipcRenderer.invoke("assemblyai-streaming-stop"),
+  assemblyAiStreamingWarmup: (options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("assemblyai-streaming-warmup", [options], managedRuntimeContext),
+  assemblyAiStreamingStart: (options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("assemblyai-streaming-start", [options], managedRuntimeContext),
+  assemblyAiStreamingSend: (transportId, audioBuffer) =>
+    ipcRenderer.send("assemblyai-streaming-send", transportId, audioBuffer),
+  assemblyAiStreamingForceEndpoint: (transportId) =>
+    ipcRenderer.send("assemblyai-streaming-force-endpoint", transportId),
+  assemblyAiStreamingStop: (transportId) =>
+    ipcRenderer.invoke("assemblyai-streaming-stop", transportId),
   assemblyAiStreamingStatus: () => ipcRenderer.invoke("assemblyai-streaming-status"),
   onAssemblyAiPartialTranscript: registerListener(
     "assemblyai-partial-transcript",
@@ -744,11 +777,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Deepgram Streaming
-  deepgramStreamingWarmup: (options) => ipcRenderer.invoke("deepgram-streaming-warmup", options),
-  deepgramStreamingStart: (options) => ipcRenderer.invoke("deepgram-streaming-start", options),
-  deepgramStreamingSend: (audioBuffer) => ipcRenderer.send("deepgram-streaming-send", audioBuffer),
-  deepgramStreamingFinalize: () => ipcRenderer.send("deepgram-streaming-finalize"),
-  deepgramStreamingStop: () => ipcRenderer.invoke("deepgram-streaming-stop"),
+  deepgramStreamingWarmup: (options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("deepgram-streaming-warmup", [options], managedRuntimeContext),
+  deepgramStreamingStart: (options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("deepgram-streaming-start", [options], managedRuntimeContext),
+  deepgramStreamingSend: (transportId, audioBuffer) =>
+    ipcRenderer.send("deepgram-streaming-send", transportId, audioBuffer),
+  deepgramStreamingFinalize: (transportId) =>
+    ipcRenderer.send("deepgram-streaming-finalize", transportId),
+  deepgramStreamingStop: (transportId) =>
+    ipcRenderer.invoke("deepgram-streaming-stop", transportId),
   deepgramStreamingStatus: () => ipcRenderer.invoke("deepgram-streaming-status"),
   onDeepgramPartialTranscript: registerListener(
     "deepgram-partial-transcript",
@@ -768,11 +806,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Corti streaming (BYOK)
-  cortiStreamingWarmup: (options) => ipcRenderer.invoke("corti-streaming-warmup", options),
-  cortiStreamingStart: (options) => ipcRenderer.invoke("corti-streaming-start", options),
-  cortiStreamingSend: (audioBuffer) => ipcRenderer.send("corti-streaming-send", audioBuffer),
-  cortiStreamingFinalize: () => ipcRenderer.send("corti-streaming-finalize"),
-  cortiStreamingStop: () => ipcRenderer.invoke("corti-streaming-stop"),
+  cortiStreamingWarmup: (options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("corti-streaming-warmup", [options], managedRuntimeContext),
+  cortiStreamingStart: (options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("corti-streaming-start", [options], managedRuntimeContext),
+  cortiStreamingSend: (transportId, audioBuffer) =>
+    ipcRenderer.send("corti-streaming-send", transportId, audioBuffer),
+  cortiStreamingFinalize: (transportId) =>
+    ipcRenderer.send("corti-streaming-finalize", transportId),
+  cortiStreamingStop: (transportId) => ipcRenderer.invoke("corti-streaming-stop", transportId),
   cortiStreamingStatus: () => ipcRenderer.invoke("corti-streaming-status"),
   onCortiPartialTranscript: registerListener(
     "corti-partial-transcript",
@@ -789,19 +831,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Meeting transcription (streaming, dual-channel)
-  meetingTranscriptionPrepare: (options) =>
-    ipcRenderer.invoke("meeting-transcription-prepare", options),
-  meetingTranscriptionStart: (options) =>
-    ipcRenderer.invoke("meeting-transcription-start", options),
-  meetingTranscriptionSend: (buffer, source) =>
-    ipcRenderer.send("meeting-transcription-send", buffer, source),
+  meetingTranscriptionPrepare: (options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("meeting-transcription-prepare", [options], managedRuntimeContext),
+  meetingTranscriptionStart: (options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("meeting-transcription-start", [options], managedRuntimeContext),
+  meetingTranscriptionSend: (sessionId, buffer, source) =>
+    ipcRenderer.send("meeting-transcription-send", sessionId, buffer, source),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
     ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
   meetingTranscriptionStop: (expectedSessionId) =>
     ipcRenderer.invoke("meeting-transcription-stop", expectedSessionId),
   meetingTranscriptionAbort: (expectedSessionId) =>
     ipcRenderer.invoke("meeting-transcription-abort", expectedSessionId),
-  meetingTranscriptionCancel: () => ipcRenderer.invoke("meeting-transcription-cancel"),
+  commitMeetingTranscript: (payload) => ipcRenderer.invoke("meeting-transcription-commit", payload),
+  meetingTranscriptionCancel: (expectedTransportId) =>
+    ipcRenderer.invoke("meeting-transcription-cancel", expectedTransportId),
   onMeetingTranscriptionSegment: registerListener(
     "meeting-transcription-segment",
     (callback) => (_event, data) => callback(data)
@@ -828,11 +872,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Dictation realtime streaming
-  dictationRealtimeWarmup: (options) => ipcRenderer.invoke("dictation-realtime-warmup", options),
-  dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
-  dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
-  dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
-  dictationStreamingAbort: () => ipcRenderer.invoke("dictation-streaming-abort"),
+  dictationRealtimeWarmup: (options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("dictation-realtime-warmup", [options], managedRuntimeContext),
+  dictationRealtimeStart: (options, managedRuntimeContext) =>
+    invokeWithRuntimeContext("dictation-realtime-start", [options], managedRuntimeContext),
+  dictationRealtimeSend: (transportId, buffer) =>
+    ipcRenderer.send("dictation-realtime-send", transportId, buffer),
+  dictationRealtimeStop: (transportId) =>
+    ipcRenderer.invoke("dictation-realtime-stop", transportId),
+  dictationStreamingAbort: (transportId) =>
+    ipcRenderer.invoke("dictation-streaming-abort", transportId),
   onDictationRealtimePartial: registerListener(
     "dictation-realtime-partial",
     (callback) => (_event, data) => callback(data)
@@ -954,13 +1003,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   onPreviewHide: registerListener("preview-hide", (callback) => () => callback()),
-  startDictationPreview: (opts) => ipcRenderer.invoke("start-dictation-preview", opts),
+  startDictationPreview: (opts, managedRuntimeContext) =>
+    invokeWithRuntimeContext("start-dictation-preview", [opts], managedRuntimeContext),
   stopDictationPreview: (opts) => ipcRenderer.invoke("stop-dictation-preview", opts),
   dismissDictationPreview: () => ipcRenderer.invoke("dismiss-dictation-preview"),
   updateDictationPreview: (text) => ipcRenderer.invoke("update-dictation-preview", text),
   completeDictationPreview: (payload) => ipcRenderer.invoke("complete-dictation-preview", payload),
   hideDictationPreview: () => ipcRenderer.invoke("hide-dictation-preview"),
-  sendDictationPreviewAudio: (data) => ipcRenderer.send("dictation-preview-audio", data),
+  sendDictationPreviewAudio: (transportId, data) =>
+    ipcRenderer.send("dictation-preview-audio", transportId, data),
   acquireRecordingLock: (pipeline) => ipcRenderer.invoke("acquire-recording-lock", pipeline),
   releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
 

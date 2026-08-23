@@ -200,7 +200,12 @@ test("StrictMode coordinators keep one current owner through errors, retries, an
   globalThis.__managedCoordinatorSettingsCalls = [];
   globalThis.__managedCoordinatorSettingsMutations = [];
   globalThis.__managedCoordinatorEnforcedSettings = null;
-  globalThis.__managedSetupEnterpriseState = { ...identity, status: "ready", config };
+  globalThis.__managedSetupEnterpriseState = {
+    ...identity,
+    status: "ready",
+    failClosed: false,
+    config,
+  };
   t.after(() => {
     delete globalThis.__managedCoordinatorReconciliations;
     delete globalThis.__managedCoordinatorSettingsCalls;
@@ -362,16 +367,25 @@ test("StrictMode coordinators keep one current owner through errors, retries, an
 
   const writesBeforeTakeoverError = bindingWrites.length;
   await React.act(async () => {
-    downloads.emitError("base", "disk full");
-    downloads.requests[1].resolve({ success: false, error: "disk full" });
+    downloads.emitError("base", "MANAGED_LOCAL_MODEL_DOWNLOAD_CANCELLED");
+    downloads.requests[1].resolve({
+      success: false,
+      error: "MANAGED_LOCAL_MODEL_DOWNLOAD_CANCELLED",
+    });
     await new Promise((resolve) => setImmediate(resolve));
   });
   binding = managedModels.readManagedLocalModelBinding("account-1", "workspace-1");
-  assert.equal(binding.categoryErrors.transcription, "disk full");
+  assert.equal(binding.categoryErrors.transcription, "MANAGED_LOCAL_MODEL_DOWNLOAD_CANCELLED");
   assert.equal(
     bindingWrites.length - writesBeforeTakeoverError,
     1,
     "the released owner must not persist the promoted renderer's terminal error"
+  );
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(
+    downloads.requests.length,
+    2,
+    "the successor must not restart a managed download cancelled by the released owner"
   );
 
   await React.act(async () => {

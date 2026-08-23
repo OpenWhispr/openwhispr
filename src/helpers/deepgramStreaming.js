@@ -864,6 +864,7 @@ class DeepgramStreaming {
     this.connectionTimeout = null;
     clearTimeout(this.livenessTimer);
     this.livenessTimer = null;
+    this.closeResolve?.({ text: this.accumulatedText });
     this.replayBuffer = [];
     this.replayBufferSize = 0;
 

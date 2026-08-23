@@ -119,3 +119,34 @@ test("self-hosted file transcription bypasses stale Custom endpoint validation",
   assert.equal(receivedOptions.remoteTranscriptionUrl, "http://192.168.1.20:9000/v1");
   assert.equal(receivedOptions.remoteTranscriptionModel, "whisper-large-v3");
 });
+
+test("OpenAI diarization captures the effective dispatch model before main admission", async (t) => {
+  const { window } = installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-file-diarization-model-test-",
+    mockModules: {
+      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
+    },
+  });
+  const { shouldUseByokDiarize, transcribeFile } = await vite.ssrLoadModule(
+    "/services/fileTranscription.ts"
+  );
+  const calls = [];
+  window.electronAPI.transcribeAudioFileByok = async (options, context) => {
+    calls.push({ options, context });
+    return { success: true, text: "diarized" };
+  };
+
+  const openai = {
+    ...customConfig(""),
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionModel: "gpt-4o-mini-transcribe",
+  };
+  await transcribeFile("/tmp/openai.webm", openai, true);
+  const customOpenai = customConfig("https://api.openai.com/v1/audio/transcriptions");
+  await transcribeFile("/tmp/custom.webm", customOpenai, true);
+
+  assert.equal(calls[0].context.model, "gpt-4o-transcribe-diarize");
+  assert.equal(calls[1].context.model, "gpt-4o-transcribe-diarize");
+  assert.equal(shouldUseByokDiarize(customOpenai, true), true);
+});

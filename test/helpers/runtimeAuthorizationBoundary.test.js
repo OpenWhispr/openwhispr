@@ -50,12 +50,79 @@ const baseSnapshot = {
     authGeneration: 1,
     configGeneration: 4,
   },
+  enterprise: {
+    status: "ready",
+    failClosed: false,
+    managedInferenceConfigured: true,
+  },
   managedLock: {
     managed: true,
     selection: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" },
   },
   policy: managedPolicy,
 };
+
+test("fail-closed availability invalidates runtime guards exactly once", async () => {
+  const { captureRuntimeAuthorizationGuard, subscribeRuntimeAuthorizationBoundary } =
+    await load();
+  const { useEnterpriseIdentityStore } =
+    await import("../../src/stores/enterpriseIdentityStore.ts");
+
+  useEnterpriseIdentityStore.setState({
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+    status: "ready",
+    failClosed: false,
+    config: null,
+    lastKnownLocalModels: null,
+    lastKnownLocalModelsKnown: true,
+    lastKnownManagedInferenceConfigured: true,
+  });
+
+  const guard = captureRuntimeAuthorizationGuard("reasoning");
+  const transcriptionGuard = captureRuntimeAuthorizationGuard("transcription");
+  let changes = 0;
+  const unsubscribe = subscribeRuntimeAuthorizationBoundary("reasoning", () => {
+    changes += 1;
+  });
+
+  useEnterpriseIdentityStore.setState({ status: "ready", failClosed: false, error: "refreshing" });
+  assert.equal(guard.isCurrent(), true);
+  assert.equal(changes, 0);
+
+  useEnterpriseIdentityStore.setState({ failClosed: true });
+
+  assert.equal(guard.isCurrent(), false);
+  assert.equal(transcriptionGuard.isCurrent(), false);
+  assert.throws(() => guard.assertCurrent(), { code: "AUTHORIZATION_BOUNDARY_CHANGED" });
+  assert.throws(() => transcriptionGuard.assertCurrent(), {
+    code: "AUTHORIZATION_BOUNDARY_CHANGED",
+  });
+  assert.equal(changes, 1);
+
+  unsubscribe();
+});
+
+test("authorization signature isolates every enterprise availability field", async () => {
+  const { buildRuntimeAuthorizationSignature } = await load();
+  const initial = buildRuntimeAuthorizationSignature("reasoning", baseSnapshot);
+
+  const enterpriseChanges = [
+    { status: "loading" },
+    { failClosed: true },
+    { managedInferenceConfigured: false },
+  ];
+  for (const enterpriseChange of enterpriseChanges) {
+    assert.notEqual(
+      buildRuntimeAuthorizationSignature("reasoning", {
+        ...baseSnapshot,
+        enterprise: { ...baseSnapshot.enterprise, ...enterpriseChange },
+      }),
+      initial
+    );
+  }
+});
 
 test("authorization signature changes at identity and exact managed-model boundaries", async () => {
   const { buildRuntimeAuthorizationSignature } = await load();

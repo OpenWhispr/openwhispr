@@ -201,6 +201,9 @@
       "incompatibleReasoning": "Ningún modelo de IA aprobado por la empresa es compatible con este dispositivo. Ponte en contacto con TI.",
       "downloadCancelled": "Se canceló la descarga del modelo de la empresa. Reiníciala para continuar."
     },
+    "actions": {
+      "dismissError": "Descartar el error de descarga de {{model}}"
+    },
     "attention": {
       "title": "El modelo de la empresa requiere atención"
     },

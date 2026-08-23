@@ -79,7 +79,7 @@ async function createStoreHarness(t) {
     vite.moduleGraph.invalidateAll();
     return vite.ssrLoadModule("/stores/enterpriseIdentityStore.ts");
   };
-  return { loadFreshEnterprise, loadFreshStore };
+  return { loadFreshEnterprise, loadFreshStore, vite };
 }
 
 function successResult() {
@@ -205,7 +205,7 @@ test("a fresh renderer fails closed for prior managed cloud-only access while lo
   await refresh;
 });
 
-test("a fresh renderer keeps an authoritative unmanaged downgrade unlocked while loading", async (t) => {
+test("a fresh renderer keeps an authoritative unmanaged downgrade ready while refreshing", async (t) => {
   const { loadFreshEnterprise, loadFreshStore } = await createStoreHarness(t);
   globalThis.__managedEnterprisePersistenceResult = {
     ...successResult(),
@@ -224,7 +224,7 @@ test("a fresh renderer keeps an authoritative unmanaged downgrade unlocked while
   const freshStore = enterprise.useEnterpriseIdentityStore;
   const refresh = freshStore.getState().refresh(accountId, workspaceId, authGeneration);
 
-  assert.equal(freshStore.getState().status, "loading");
+  assert.equal(freshStore.getState().status, "ready");
   assert.equal(freshStore.getState().lastKnownLocalModels, null);
   assert.equal(freshStore.getState().lastKnownLocalModelsKnown, true);
   assert.equal(freshStore.getState().lastKnownManagedInferenceConfigured, false);
@@ -236,6 +236,56 @@ test("a fresh renderer keeps an authoritative unmanaged downgrade unlocked while
 
   resolveRefresh(unavailableResult(false));
   await refresh;
+});
+
+test("a same-identity managed refresh preserves runtime authorization and router readiness", async (t) => {
+  const { loadFreshEnterprise, vite } = await createStoreHarness(t);
+  globalThis.__managedEnterprisePersistenceResult = successResult();
+  const enterprise = await loadFreshEnterprise();
+  const store = enterprise.useEnterpriseIdentityStore;
+  await store.getState().refresh(accountId, workspaceId, authGeneration);
+  const { getRuntimeAuthorizationSignature } = await vite.ssrLoadModule(
+    "/helpers/runtimeAuthorizationBoundary.ts"
+  );
+  const { isEnterpriseInferenceReady } = await vite.ssrLoadModule(
+    "/helpers/enterpriseInferenceReadiness.ts"
+  );
+  const initialSignature = getRuntimeAuthorizationSignature("reasoning");
+
+  let resolveRefresh;
+  globalThis.__managedEnterprisePersistenceResult = new Promise((resolve) => {
+    resolveRefresh = resolve;
+  });
+  const refresh = store.getState().refresh(accountId, workspaceId, authGeneration, true);
+
+  assert.equal(store.getState().status, "ready");
+  assert.equal(store.getState().failClosed, false);
+  assert.equal(getRuntimeAuthorizationSignature("reasoning"), initialSignature);
+  assert.equal(
+    isEnterpriseInferenceReady({
+      authLoaded: true,
+      policyResolved: true,
+      isSignedIn: true,
+      enterpriseStatus: store.getState().status,
+      enterpriseFailClosed: store.getState().failClosed,
+    }),
+    true
+  );
+
+  resolveRefresh(unavailableResult(true));
+  await refresh;
+
+  assert.notEqual(getRuntimeAuthorizationSignature("reasoning"), initialSignature);
+  assert.equal(
+    isEnterpriseInferenceReady({
+      authLoaded: true,
+      policyResolved: true,
+      isSignedIn: true,
+      enterpriseStatus: store.getState().status,
+      enterpriseFailClosed: store.getState().failClosed,
+    }),
+    false
+  );
 });
 
 test("persisted local policy never crosses account or workspace identity", async (t) => {
@@ -274,6 +324,153 @@ test("a new identity with no snapshot is fail-closed while resolution is pending
   await refresh;
   assert.equal(store.getState().failClosed, false);
   assert.equal(store.getState().lastKnownLocalModelsKnown, true);
+});
+
+test("a policy-confirmed unmanaged identity remains unlocked after a transient config failure", async (t) => {
+  const { loadFreshEnterprise, vite } = await createStoreHarness(t);
+  let resolveRefresh;
+  globalThis.__managedEnterprisePersistenceResult = new Promise((resolve) => {
+    resolveRefresh = resolve;
+  });
+  const enterprise = await loadFreshEnterprise();
+  const store = enterprise.useEnterpriseIdentityStore;
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+
+  usePolicyStore.setState({
+    accountId,
+    authGeneration,
+    status: "unmanaged",
+    managed: false,
+    policy: null,
+  });
+
+  const refresh = store.getState().refresh(accountId, workspaceId, authGeneration);
+
+  assert.equal(store.getState().status, "ready");
+  assert.equal(store.getState().lastKnownManagedInferenceConfigured, false);
+  assert.equal(store.getState().failClosed, false);
+  assert.deepEqual(enterprise.getManagedScopeResolution("dictationCleanup", "auto"), {
+    kind: "manual",
+  });
+
+  resolveRefresh(unavailableResult(undefined));
+  await refresh;
+});
+
+test("an authoritative unmanaged policy supersedes a persisted managed snapshot", async (t) => {
+  const { loadFreshEnterprise, loadFreshStore, vite } = await createStoreHarness(t);
+  globalThis.__managedEnterprisePersistenceResult = successResult();
+  const initialStore = await loadFreshStore();
+  await initialStore.getState().refresh(accountId, workspaceId, authGeneration);
+
+  let resolveRefresh;
+  globalThis.__managedEnterprisePersistenceResult = new Promise((resolve) => {
+    resolveRefresh = resolve;
+  });
+  const enterprise = await loadFreshEnterprise();
+  const store = enterprise.useEnterpriseIdentityStore;
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({
+    accountId,
+    authGeneration,
+    status: "unmanaged",
+    managed: false,
+    policy: null,
+  });
+
+  const refresh = store.getState().refresh(accountId, workspaceId, authGeneration);
+
+  assert.equal(store.getState().status, "ready");
+  assert.equal(store.getState().config, null);
+  assert.equal(store.getState().lastKnownLocalModels, null);
+  assert.equal(store.getState().lastKnownLocalModelsKnown, true);
+  assert.equal(store.getState().lastKnownManagedInferenceConfigured, false);
+  assert.equal(store.getState().failClosed, false);
+
+  resolveRefresh(unavailableResult(undefined));
+  await refresh;
+});
+
+test("an authoritative unmanaged policy reconciles after an ambiguous config failure", async (t) => {
+  const { loadFreshEnterprise, vite } = await createStoreHarness(t);
+  globalThis.__managedEnterprisePersistenceResult = unavailableResult(undefined);
+  const enterprise = await loadFreshEnterprise();
+  const store = enterprise.useEnterpriseIdentityStore;
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+
+  await store.getState().refresh(accountId, workspaceId, authGeneration);
+  assert.equal(store.getState().status, "error");
+  assert.equal(store.getState().failClosed, true);
+
+  usePolicyStore.setState({
+    accountId,
+    authGeneration,
+    status: "unmanaged",
+    managed: false,
+    policy: null,
+  });
+
+  assert.equal(store.getState().status, "ready");
+  assert.equal(store.getState().config, null);
+  assert.equal(store.getState().lastKnownLocalModels, null);
+  assert.equal(store.getState().lastKnownLocalModelsKnown, true);
+  assert.equal(store.getState().lastKnownManagedInferenceConfigured, false);
+  assert.equal(store.getState().failClosed, false);
+});
+
+test("a managed policy transition re-closes an in-flight refresh started as unmanaged", async (t) => {
+  const { loadFreshEnterprise, vite } = await createStoreHarness(t);
+  let resolveRefresh;
+  globalThis.__managedEnterprisePersistenceResult = new Promise((resolve) => {
+    resolveRefresh = resolve;
+  });
+  const enterprise = await loadFreshEnterprise();
+  const store = enterprise.useEnterpriseIdentityStore;
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+
+  usePolicyStore.setState({
+    accountId,
+    authGeneration,
+    status: "unmanaged",
+    managed: false,
+    policy: null,
+  });
+  const refresh = store.getState().refresh(accountId, workspaceId, authGeneration);
+  assert.equal(store.getState().status, "ready");
+  assert.equal(store.getState().failClosed, false);
+
+  usePolicyStore.setState({
+    accountId,
+    authGeneration,
+    status: "managed",
+    managed: true,
+    policy: {},
+  });
+  assert.equal(store.getState().status, "loading");
+  assert.equal(store.getState().failClosed, true);
+
+  resolveRefresh(unavailableResult(undefined));
+  await refresh;
+
+  assert.equal(store.getState().status, "error");
+  assert.equal(store.getState().failClosed, true);
+  assert.notEqual(store.getState().lastKnownManagedInferenceConfigured, false);
+});
+
+test("an authoritative managed transition supersedes a prior unmanaged snapshot", async (t) => {
+  const { loadFreshStore } = await createStoreHarness(t);
+  const store = await loadFreshStore();
+  globalThis.__managedEnterprisePersistenceResult = unavailableResult(false);
+  await store.getState().refresh(accountId, workspaceId, authGeneration);
+
+  globalThis.__managedEnterprisePersistenceResult = unavailableResult(true);
+  await store.getState().refresh(accountId, workspaceId, authGeneration, true);
+  assert.equal(store.getState().lastKnownManagedInferenceConfigured, true);
+  assert.equal(store.getState().failClosed, true);
+
+  globalThis.__managedEnterprisePersistenceResult = unavailableResult(undefined);
+  await store.getState().refresh(accountId, workspaceId, authGeneration, true);
+  assert.equal(store.getState().failClosed, true);
 });
 
 test("persisted local policy never crosses API origins", async (t) => {
@@ -387,7 +584,7 @@ test("an ambiguous legacy known-empty snapshot remains unknown and fail-closed",
 });
 
 test("an explicit downgrade persists a known-empty local policy", async (t) => {
-  const { loadFreshStore } = await createStoreHarness(t);
+  const { loadFreshStore, vite } = await createStoreHarness(t);
   globalThis.__managedEnterprisePersistenceResult = successResult();
   const initialStore = await loadFreshStore();
   await initialStore.getState().refresh(accountId, workspaceId, authGeneration);
@@ -396,12 +593,46 @@ test("an explicit downgrade persists a known-empty local policy", async (t) => {
 
   globalThis.__managedEnterprisePersistenceResult = unavailableResult(undefined);
   const freshStore = await loadFreshStore();
+  const { isEnterpriseInferenceReady } = await vite.ssrLoadModule(
+    "/helpers/enterpriseInferenceReadiness.ts"
+  );
   const refresh = freshStore.getState().refresh(accountId, workspaceId, authGeneration);
+  assert.equal(freshStore.getState().status, "ready");
   assert.equal(freshStore.getState().failClosed, false);
   assert.equal(freshStore.getState().lastKnownLocalModelsKnown, true);
+  assert.equal(
+    isEnterpriseInferenceReady({
+      authLoaded: true,
+      policyResolved: true,
+      isSignedIn: true,
+      enterpriseStatus: freshStore.getState().status,
+      enterpriseFailClosed: freshStore.getState().failClosed,
+    }),
+    true
+  );
   await refresh;
 
   assert.equal(freshStore.getState().lastKnownLocalModels, null);
   assert.equal(freshStore.getState().lastKnownLocalModelsKnown, true);
-  assert.equal(freshStore.getState().failClosed, true);
+  assert.equal(freshStore.getState().failClosed, false);
+
+  let resolveSameIdentityRefresh;
+  globalThis.__managedEnterprisePersistenceResult = new Promise((resolve) => {
+    resolveSameIdentityRefresh = resolve;
+  });
+  const sameIdentityRefresh = freshStore
+    .getState()
+    .refresh(accountId, workspaceId, authGeneration, true);
+  assert.equal(
+    isEnterpriseInferenceReady({
+      authLoaded: true,
+      policyResolved: true,
+      isSignedIn: true,
+      enterpriseStatus: freshStore.getState().status,
+      enterpriseFailClosed: freshStore.getState().failClosed,
+    }),
+    true
+  );
+  resolveSameIdentityRefresh(unavailableResult(undefined));
+  await sameIdentityRefresh;
 });

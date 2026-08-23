@@ -12,6 +12,8 @@ import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
 import { usePolicyStore } from "./stores/policyStore";
+import { useEnterpriseIdentityStore } from "./stores/enterpriseIdentityStore";
+import { isEnterpriseInferenceReady } from "./helpers/enterpriseInferenceReadiness";
 import { isControlPanelWindow } from "./utils/windowContext.ts";
 
 // Either marker means the flow is mid-way: the legacy step key is kept for
@@ -41,12 +43,21 @@ export default function AppRouter() {
 function MainApp() {
   const { isSignedIn, isGracePeriodOnly, isLoaded: authLoaded } = useAuth();
   const policyStatus = usePolicyStore((state) => state.status);
+  const enterpriseStatus = useEnterpriseIdentityStore((state) => state.status);
+  const enterpriseFailClosed = useEnterpriseIdentityStore((state) => state.failClosed);
   const policyResolved =
     !isSignedIn ||
     policyStatus === "managed" ||
     policyStatus === "unmanaged" ||
     policyStatus === "error";
-  const isWaitingForPolicyStart = isSignedIn && !policyResolved;
+  const enterpriseInferenceReady = isEnterpriseInferenceReady({
+    authLoaded,
+    policyResolved,
+    isSignedIn,
+    enterpriseStatus,
+    enterpriseFailClosed,
+  });
+  const isWaitingForPolicyStart = !enterpriseInferenceReady;
   const autoSyncReady = authLoaded && policyResolved;
 
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -133,7 +144,10 @@ function MainApp() {
   }, [isControlPanel, isLoading, isWaitingForPolicyStart, showOnboarding]);
 
   useEffect(() => {
-    if (isLoading || isWaitingForPolicyStart) return;
+    if (isLoading || isWaitingForPolicyStart) {
+      void window.electronAPI?.setOnboardingActive?.(true);
+      return;
+    }
 
     const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
     const normalAppVisible = onboardingCompleted && (!isControlPanel || !showOnboarding);

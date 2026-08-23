@@ -81,6 +81,33 @@ test("cleanup throws: onCleanupError fires, translate runs on original text", as
   assert.equal(result.text, "translated(raw)");
 });
 
+test("a fatal cleanup error never starts translation", async () => {
+  const { executeTranslationChain } = await load();
+  const boundaryError = Object.assign(new Error("Authorization changed"), {
+    code: "AUTHORIZATION_BOUNDARY_CHANGED",
+    name: "AbortError",
+  });
+  let dispatches = 0;
+
+  await assert.rejects(
+    () =>
+      executeTranslationChain(
+        makeOpts({
+          runCleanup: async () => {
+            throw boundaryError;
+          },
+          runTranslate: async () => {
+            dispatches += 1;
+            return "translated";
+          },
+          isFatalError: (error) => error?.code === "AUTHORIZATION_BOUNDARY_CHANGED",
+        })
+      ),
+    { code: "AUTHORIZATION_BOUNDARY_CHANGED" }
+  );
+  assert.equal(dispatches, 0);
+});
+
 test("cleanup returns whitespace-only: text unchanged, translate still runs", async () => {
   const { executeTranslationChain } = await load();
 

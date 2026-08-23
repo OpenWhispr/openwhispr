@@ -123,24 +123,25 @@ test("proxied BYOK providers preserve dictionary-echo tagging", async (t) => {
   await assertDictionaryEcho(manager.processWithOpenAIAPI(AUDIO));
 });
 
-test("renderer-fetch BYOK providers preserve dictionary-echo tagging", async (t) => {
+test("main-process BYOK providers preserve dictionary-echo tagging", async (t) => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => ({
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    headers: { get: () => "application/json" },
-    text: async () => JSON.stringify({ text: "Qdrant OpenAI" }),
-  });
+  globalThis.fetch = async () => assert.fail("BYOK transcription must not fetch in renderer");
   t.after(() => {
     globalThis.fetch = originalFetch;
   });
-  const { manager } = await createDictionaryEchoHarness(t, "Fetch", {
+  const { window, manager } = await createDictionaryEchoHarness(t, "Fetch", {
     useLocalWhisper: false,
     cloudTranscriptionProvider: "openai",
   });
-  manager.getTranscriptionEndpoint = () => "https://api.openai.com/v1/audio/transcriptions";
-  manager.shouldStreamTranscription = () => false;
+  window.electronAPI.saveTempAudio = async () => ({
+    success: true,
+    path: "/tmp/dictionary-echo.webm",
+  });
+  window.electronAPI.deleteTempAudio = async () => ({ success: true });
+  window.electronAPI.transcribeAudioFileByok = async () => ({
+    success: true,
+    text: "Qdrant OpenAI",
+  });
 
   await assertDictionaryEcho(manager.processWithOpenAIAPI(AUDIO));
 });

@@ -1,4 +1,5 @@
 import type { ManagedEnterpriseLocalModelSelection } from "../types/enterpriseIdentity";
+import type { ReasoningRuntimeAuthorizationContext } from "../types/electron";
 import type { PolicyState } from "../stores/policyStore";
 import { usePolicyStore } from "../stores/policyStore";
 import {
@@ -16,6 +17,11 @@ export interface RuntimeAuthorizationSnapshot {
     workspaceId: string | null;
     authGeneration: number | null;
     configGeneration: number | null;
+  };
+  enterprise: {
+    status: "idle" | "loading" | "ready" | "error";
+    failClosed: boolean;
+    managedInferenceConfigured: boolean | null;
   };
   managedLock: {
     managed: boolean;
@@ -84,6 +90,11 @@ export function buildRuntimeAuthorizationSignature(
   return JSON.stringify({
     domain,
     identity: snapshot.identity,
+    enterprise: {
+      status: snapshot.enterprise.status,
+      failClosed: snapshot.enterprise.failClosed,
+      managedInferenceConfigured: snapshot.enterprise.managedInferenceConfigured,
+    },
     managedLock: {
       managed: snapshot.managedLock.managed,
       provider: snapshot.managedLock.selection?.provider ?? null,
@@ -103,9 +114,33 @@ export function getRuntimeAuthorizationSignature(domain: RuntimeAuthorizationDom
       authGeneration: enterprise.authGeneration,
       configGeneration: enterprise.config?.generation ?? null,
     },
+    enterprise: {
+      status: enterprise.status,
+      failClosed: enterprise.failClosed,
+      managedInferenceConfigured: enterprise.lastKnownManagedInferenceConfigured,
+    },
     managedLock: getManagedLocalModelRuntimeLock(domain),
     policy,
   });
+}
+
+export function captureReasoningRuntimeAuthorizationContext(): ReasoningRuntimeAuthorizationContext {
+  const enterprise = useEnterpriseIdentityStore.getState();
+  const policy = usePolicyStore.getState();
+  const policyRevision =
+    enterprise.accountId &&
+    policy.accountId === enterprise.accountId &&
+    policy.authGeneration === enterprise.authGeneration
+      ? policy.revision
+      : null;
+  return {
+    accountId: enterprise.accountId,
+    workspaceId: enterprise.workspaceId,
+    authGeneration: enterprise.authGeneration,
+    configGeneration: enterprise.config?.generation ?? null,
+    policyRevision,
+    signature: getRuntimeAuthorizationSignature("reasoning"),
+  };
 }
 
 function normalizeDomains(

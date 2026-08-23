@@ -118,6 +118,10 @@ function pick(state, keys) {
   return Object.fromEntries(keys.map((key) => [key, state[key]]));
 }
 
+function pickStorage(keys) {
+  return Object.fromEntries(keys.map((key) => [key, localStorage.getItem(key)]));
+}
+
 function localModels(transcription, reasoning, version = 1) {
   return {
     transcription,
@@ -216,6 +220,7 @@ test("managed A to B retains baselines and authoritative category removal restor
     reconcileManagedLocalModelSettings({
       ownsReconciliation: true,
       status,
+      failClosed: true,
       localModels: null,
     });
     assert.deepEqual(pick(useSettingsStore.getState(), TRANSCRIPTION_KEYS), managedTranscription);
@@ -225,6 +230,7 @@ test("managed A to B retains baselines and authoritative category removal restor
   reconcileManagedLocalModelSettings({
     ownsReconciliation: false,
     status: "ready",
+    failClosed: false,
     localModels: localModels(
       [],
       [{ provider: "llama", modelId: "llama-3.2-3b-instruct-q4_k_m" }],
@@ -236,6 +242,7 @@ test("managed A to B retains baselines and authoritative category removal restor
   reconcileManagedLocalModelSettings({
     ownsReconciliation: true,
     status: "ready",
+    failClosed: false,
     localModels: localModels(
       [],
       [{ provider: "llama", modelId: "llama-3.2-3b-instruct-q4_k_m" }],
@@ -249,11 +256,67 @@ test("managed A to B retains baselines and authoritative category removal restor
   reconcileManagedLocalModelSettings({
     ownsReconciliation: true,
     status: "ready",
+    failClosed: false,
     localModels: null,
   });
   assert.deepEqual(pick(useSettingsStore.getState(), REASONING_KEYS), personalReasoning);
   assert.equal(useSettingsStore.getState().useDictationAgent, true);
   assert.equal(useSettingsStore.getState().useCleanupModel, false);
+});
+
+test("definitive unmanaged errors restore both categories while unknown errors retain managed settings", async (t) => {
+  const {
+    MANAGED_LOCAL_MODEL_PREFERENCES_KEY,
+    useSettingsStore,
+    enforceManagedLocalModelSettings,
+    reconcileManagedLocalModelSettings,
+  } = await loadManagedSettings(t);
+  const settings = useSettingsStore.getState();
+  settings.setCloudTranscriptionForAllScopes({
+    useLocalWhisper: false,
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionModel: "gpt-4o-transcribe",
+  });
+  settings.setCloudReasoningForAllScopes({
+    cleanupCloudMode: "byok",
+    cleanupProvider: "openai",
+    cleanupModel: "gpt-5-mini",
+    useDictationAgent: true,
+  });
+  const restoredKeys = [...MUTATED_TRANSCRIPTION_KEYS, ...MUTATED_REASONING_KEYS];
+  const personalSettings = pick(useSettingsStore.getState(), restoredKeys);
+  const personalStorage = pickStorage([...restoredKeys, "useDictationAgent"]);
+
+  enforceManagedLocalModelSettings("transcription", {
+    provider: "whisper",
+    modelId: "whisper-large-v3-turbo",
+  });
+  enforceManagedLocalModelSettings(
+    "reasoning",
+    { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" },
+    false
+  );
+  const managedSettings = pick(useSettingsStore.getState(), restoredKeys);
+
+  reconcileManagedLocalModelSettings({
+    ownsReconciliation: true,
+    status: "error",
+    failClosed: true,
+    localModels: null,
+  });
+  assert.deepEqual(pick(useSettingsStore.getState(), restoredKeys), managedSettings);
+  assert.ok(localStorage.getItem(MANAGED_LOCAL_MODEL_PREFERENCES_KEY));
+
+  reconcileManagedLocalModelSettings({
+    ownsReconciliation: true,
+    status: "error",
+    failClosed: false,
+    localModels: null,
+  });
+  assert.deepEqual(pick(useSettingsStore.getState(), restoredKeys), personalSettings);
+  assert.deepEqual(pickStorage([...restoredKeys, "useDictationAgent"]), personalStorage);
+  assert.equal(localStorage.getItem(MANAGED_LOCAL_MODEL_PREFERENCES_KEY), null);
 });
 
 test("inherited route keys and model memory return to raw absence after managed enforcement", async (t) => {
@@ -292,6 +355,7 @@ test("inherited route keys and model memory return to raw absence after managed 
   reconcileManagedLocalModelSettings({
     ownsReconciliation: true,
     status: "ready",
+    failClosed: false,
     localModels: null,
   });
 
@@ -332,6 +396,7 @@ test("only a forbidden agent toggle is restored, without materializing inherited
   reconcileManagedLocalModelSettings({
     ownsReconciliation: true,
     status: "ready",
+    failClosed: false,
     localModels: null,
   });
 
@@ -383,6 +448,7 @@ test("persisted baselines survive a renderer restart and malformed snapshots fai
   restartedManagedSettings.reconcileManagedLocalModelSettings({
     ownsReconciliation: true,
     status: "ready",
+    failClosed: false,
     localModels: null,
   });
   assert.deepEqual(pick(restartedSettingsStore.getState(), TRANSCRIPTION_KEYS), personal);
@@ -400,6 +466,7 @@ test("persisted baselines survive a renderer restart and malformed snapshots fai
   restartedManagedSettings.reconcileManagedLocalModelSettings({
     ownsReconciliation: true,
     status: "ready",
+    failClosed: false,
     localModels: null,
   });
   assert.deepEqual(pick(restartedSettingsStore.getState(), TRANSCRIPTION_KEYS), stillManaged);
@@ -411,6 +478,7 @@ test("persisted baselines survive a renderer restart and malformed snapshots fai
   restartedManagedSettings.reconcileManagedLocalModelSettings({
     ownsReconciliation: true,
     status: "ready",
+    failClosed: false,
     localModels: null,
   });
   assert.deepEqual(pick(restartedSettingsStore.getState(), TRANSCRIPTION_KEYS), stillManaged);

@@ -12,4 +12,16 @@ function isCanonicalAppVersion(value) {
   return parseCanonicalAppVersion(value) !== null;
 }
 
-module.exports = { isCanonicalAppVersion, parseCanonicalAppVersion };
+function compareAppVersions(leftVersion, rightVersion) {
+  const left = parseCanonicalAppVersion(leftVersion);
+  const right = parseCanonicalAppVersion(rightVersion);
+  if (!left) return right ? -1 : 0;
+  if (!right) return 1;
+  for (let index = 0; index < left.length; index += 1) {
+    const difference = left[index] - right[index];
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
+module.exports = { compareAppVersions, isCanonicalAppVersion, parseCanonicalAppVersion };

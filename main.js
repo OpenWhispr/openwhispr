@@ -534,6 +534,11 @@ function initializeCoreManagers() {
 }
 
 function registerSidecars() {
+  if (ipcHandlers) {
+    sidecarRegistry.register("corti-privacy-cleanup", () =>
+      ipcHandlers.retryCortiPrivacyCleanup()
+    );
+  }
   if (whisperManager) sidecarRegistry.register("whisper", () => whisperManager.stopServer());
   if (parakeetManager) sidecarRegistry.register("parakeet", () => parakeetManager.stopServer());
   if (diarizationManager) {
@@ -961,6 +966,9 @@ async function startApp() {
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
   await environmentManager.init();
+  void ipcHandlers.retryCortiPrivacyCleanup().catch((error) => {
+    debugLogger.error("Corti privacy cleanup retry failed", { error: error?.message });
+  });
   registerSidecars();
   startAuthBridgeServer();
 

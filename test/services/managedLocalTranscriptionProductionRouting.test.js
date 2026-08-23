@@ -191,9 +191,12 @@ test("meeting prepare and start send the exact managed local provider and model"
       localProvider: "nvidia",
       localModel: selection.modelId,
       language: "en",
+      transportId: preparedOptions[0].transportId,
     },
   ]);
+  assert.match(preparedOptions[0].transportId, /^[0-9a-f-]{36}$/i);
   assert.equal(startedOptions.length, 1);
+  assert.match(startedOptions[0].transportId, /^[0-9a-f-]{36}$/i);
   assert.deepEqual(
     {
       provider: startedOptions[0].provider,

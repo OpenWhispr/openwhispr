@@ -12,6 +12,28 @@ export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted"
 
 export type SelfHostedType = "openai-compatible" | "lan";
 
+export interface ManagedRuntimeAuthorizationContext {
+  accountId: string | null;
+  workspaceId: string | null;
+  authGeneration: number | null;
+  configGeneration: number | null;
+  policyRevision: number | null;
+  category: "transcription";
+  transcriptionMode: InferenceMode;
+  provider: string;
+  model: string | null;
+  managed: boolean;
+}
+
+export interface ReasoningRuntimeAuthorizationContext {
+  accountId: string | null;
+  workspaceId: string | null;
+  authGeneration: number | null;
+  configGeneration: number | null;
+  policyRevision: number | null;
+  signature: string;
+}
+
 export type TranscriptionStatus = "completed" | "failed" | "pending" | "discarded";
 
 export interface PolicyFailureMetadata {
@@ -41,6 +63,7 @@ export interface NoteRecordingProvider {
 // renderers (#1624).
 export interface DictationRealtimeSessionOptions {
   provider: string;
+  transportId: string;
   model?: string;
   mode?: "byok" | "openwhispr";
   language?: string;
@@ -1070,7 +1093,8 @@ declare global {
           remoteTranscriptionUrl?: string;
           remoteTranscriptionModel?: string;
         },
-        requestId: string
+        requestId: string,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
       ) => Promise<{
         success: boolean;
         pendingCommit?: boolean;
@@ -1155,6 +1179,21 @@ declare global {
           left_team?: number;
         }
       ) => Promise<{ success: boolean; note?: NoteItem }>;
+      beginActionNoteCommit: (
+        noteId: number,
+        context: ReasoningRuntimeAuthorizationContext
+      ) => Promise<{ success: boolean; commitToken?: string; error?: string; code?: string }>;
+      commitActionNote: (payload: {
+        commitToken: string;
+        noteId: number;
+        reasoningSignature: string;
+        updates: {
+          enhanced_content: string;
+          enhancement_prompt: string;
+          enhanced_at_content_hash: string;
+          title?: string;
+        };
+      }) => Promise<{ success: boolean; note?: NoteItem; error?: string; code?: string }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
       exportNote: (
         noteId: number,
@@ -1285,13 +1324,16 @@ declare global {
       getFileSize?: (filePath: string) => Promise<number>;
       transcribeAudioFile: (
         filePath: string,
-        options?: {
-          provider?: "whisper" | "nvidia";
-          model?: string;
-          language?: string;
-          requestId?: string;
-          [key: string]: unknown;
-        }
+        options:
+          | {
+              provider?: "whisper" | "nvidia";
+              model?: string;
+              language?: string;
+              requestId?: string;
+              [key: string]: unknown;
+            }
+          | undefined,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
       ) => Promise<{ success: boolean; text?: string; error?: string; code?: string }>;
       getPathForFile: (file: File) => string;
 
@@ -1369,7 +1411,11 @@ declare global {
       // Audio
 
       // Whisper operations (whisper.cpp)
-      transcribeLocalWhisper: (audioBlob: Blob | ArrayBuffer, options?: any) => Promise<any>;
+      transcribeLocalWhisper: (
+        audioBlob: Blob | ArrayBuffer,
+        options: Record<string, unknown> | undefined,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<any>;
       checkWhisperInstallation: () => Promise<WhisperCheckResult>;
       downloadWhisperModel: (modelName: string) => Promise<WhisperModelResult>;
       onWhisperDownloadProgress: (
@@ -1445,7 +1491,8 @@ declare global {
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
         audioBlob: ArrayBuffer,
-        options?: { model?: string }
+        options: { model?: string } | undefined,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
       ) => Promise<ParakeetTranscriptionResult>;
       checkParakeetInstallation: () => Promise<ParakeetCheckResult>;
       downloadParakeetModel: (modelName: string) => Promise<ParakeetModelResult>;
@@ -1708,21 +1755,27 @@ declare global {
       // xAI API key management
       getXaiKey?: () => Promise<string | null>;
       saveXaiKey?: (key: string) => Promise<void>;
-      proxyXaiTranscription?: (data: {
-        audioBuffer: ArrayBuffer;
-        language?: string;
-        keyterms?: string[];
-      }) => Promise<ProxyTranscriptionResult>;
+      proxyXaiTranscription?: (
+        data: {
+          audioBuffer: ArrayBuffer;
+          language?: string;
+          keyterms?: string[];
+        },
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<ProxyTranscriptionResult>;
 
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;
-      proxyMistralTranscription: (data: {
-        audioBuffer: ArrayBuffer;
-        model?: string;
-        language?: string;
-        contextBias?: string[];
-      }) => Promise<ProxyTranscriptionResult>;
+      proxyMistralTranscription: (
+        data: {
+          audioBuffer: ArrayBuffer;
+          model?: string;
+          language?: string;
+          contextBias?: string[];
+        },
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<ProxyTranscriptionResult>;
 
       // Corti credential management
       getCortiClientId?: () => Promise<string | null>;
@@ -1731,20 +1784,26 @@ declare global {
       saveCortiClientSecret?: (key: string) => Promise<void>;
       getCortiKey?: () => Promise<string | null>;
       saveCortiKey?: (key: string) => Promise<void>;
-      proxyCortiTranscription?: (data: {
-        audioBuffer: ArrayBuffer;
-        language: string;
-        environment: string;
-        tenant: string;
-      }) => Promise<ProxyTranscriptionResult>;
+      proxyCortiTranscription?: (
+        data: {
+          audioBuffer: ArrayBuffer;
+          language: string;
+          environment: string;
+          tenant: string;
+        },
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<ProxyTranscriptionResult>;
       getTinfoilKey?: () => Promise<string | null>;
       saveTinfoilKey?: (key: string) => Promise<void>;
       getTinfoilChatModels?: () => Promise<TinfoilCatalogModel[]>;
-      proxyTinfoilTranscription?: (data: {
-        audioBuffer: ArrayBuffer;
-        language?: string;
-        prompt?: string;
-      }) => Promise<ProxyTranscriptionResult>;
+      proxyTinfoilTranscription?: (
+        data: {
+          audioBuffer: ArrayBuffer;
+          language?: string;
+          prompt?: string;
+        },
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<ProxyTranscriptionResult>;
 
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
@@ -1927,7 +1986,8 @@ declare global {
       // OpenWhispr Cloud API
       cloudTranscribe?: (
         audioBuffer: ArrayBuffer,
-        opts: { language?: string; prompt?: string; useCase?: string; diarization?: boolean }
+        opts: { language?: string; prompt?: string; useCase?: string; diarization?: boolean },
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
       ) => Promise<
         {
           success: boolean;
@@ -2056,7 +2116,8 @@ declare global {
       // Cloud audio file transcription
       transcribeAudioFileCloud?: (
         filePath: string,
-        options?: { requestId?: string }
+        options: { requestId?: string } | undefined,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
       ) => Promise<
         {
           success: boolean;
@@ -2074,24 +2135,32 @@ declare global {
       ) => () => void;
 
       // BYOK audio file transcription
-      transcribeAudioFileByok?: (options: {
-        filePath: string;
-        apiKey: string;
-        baseUrl: string;
-        model: string;
-        diarize?: boolean;
-        timestamps?: boolean;
-        provider?: string;
-        language?: string;
-        environment?: string;
-        tenant?: string;
-        transcriptionMode?: string;
-        remoteTranscriptionUrl?: string;
-        remoteTranscriptionModel?: string;
-      }) => Promise<{
+      transcribeAudioFileByok?: (
+        options: {
+          filePath: string;
+          requestId?: string;
+          apiKey: string;
+          baseUrl: string;
+          model: string;
+          diarize?: boolean;
+          timestamps?: boolean;
+          provider?: string;
+          language?: string;
+          useLanguageHint?: boolean;
+          environment?: string;
+          tenant?: string;
+          transcriptionMode?: string;
+          remoteTranscriptionUrl?: string;
+          remoteTranscriptionModel?: string;
+          prompt?: string;
+        },
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<{
         success: boolean;
         text?: string;
         error?: string;
+        code?: string;
+        messageKey?: string;
         diarized?: boolean;
         segments?: Array<{ text: string; start: number; end: number; speaker?: string }>;
       }>;
@@ -2107,24 +2176,33 @@ declare global {
       getPendingInvitationToken?: () => Promise<string | null>;
 
       // AssemblyAI Streaming
-      assemblyAiStreamingWarmup?: (options?: { sampleRate?: number; language?: string }) => Promise<
+      assemblyAiStreamingWarmup?: (
+        options: { sampleRate?: number; language?: string; transportId?: string } | undefined,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<
         {
           success: boolean;
           alreadyWarm?: boolean;
+          transportId?: string | null;
         } & PolicyFailureMetadata
       >;
-      assemblyAiStreamingStart?: (options?: { sampleRate?: number; language?: string }) => Promise<
+      assemblyAiStreamingStart?: (
+        options: { sampleRate?: number; language?: string; transportId?: string } | undefined,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<
         {
           success: boolean;
           usedWarmConnection?: boolean;
+          transportId?: string | null;
         } & PolicyFailureMetadata
       >;
-      assemblyAiStreamingSend?: (audioBuffer: ArrayBuffer) => void;
-      assemblyAiStreamingForceEndpoint?: () => void;
-      assemblyAiStreamingStop?: () => Promise<{
+      assemblyAiStreamingSend?: (transportId: string, audioBuffer: ArrayBuffer) => void;
+      assemblyAiStreamingForceEndpoint?: (transportId: string) => void;
+      assemblyAiStreamingStop?: (transportId: string) => Promise<{
         success: boolean;
         text?: string;
         error?: string;
+        code?: string;
       }>;
       assemblyAiStreamingStatus?: () => Promise<{
         isConnected: boolean;
@@ -2291,28 +2369,40 @@ declare global {
       ) => Promise<ConversationPreview[]>;
 
       // Deepgram Streaming
-      deepgramStreamingWarmup?: (options?: { sampleRate?: number; language?: string }) => Promise<{
+      deepgramStreamingWarmup?: (
+        options: { sampleRate?: number; language?: string; transportId?: string } | undefined,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<{
         success: boolean;
         alreadyWarm?: boolean;
         error?: string;
         code?: string;
+        transportId?: string | null;
       }>;
-      deepgramStreamingStart?: (options?: {
-        sampleRate?: number;
-        language?: string;
-        forceNew?: boolean;
-      }) => Promise<
+      deepgramStreamingStart?: (
+        options:
+          | {
+              sampleRate?: number;
+              language?: string;
+              forceNew?: boolean;
+              transportId?: string;
+            }
+          | undefined,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<
         {
           success: boolean;
           usedWarmConnection?: boolean;
+          transportId?: string | null;
         } & PolicyFailureMetadata
       >;
-      deepgramStreamingSend?: (audioBuffer: ArrayBuffer) => void;
-      deepgramStreamingFinalize?: () => void;
-      deepgramStreamingStop?: () => Promise<{
+      deepgramStreamingSend?: (transportId: string, audioBuffer: ArrayBuffer) => void;
+      deepgramStreamingFinalize?: (transportId: string) => void;
+      deepgramStreamingStop?: (transportId: string) => Promise<{
         success: boolean;
         text?: string;
         error?: string;
+        code?: string;
       }>;
       deepgramStreamingStatus?: () => Promise<{
         isConnected: boolean;
@@ -2326,26 +2416,39 @@ declare global {
       ) => () => void;
 
       // Corti streaming (BYOK)
-      cortiStreamingWarmup?: (options?: {
-        environment?: string;
-        tenant?: string;
-        language?: string;
-        keyterms?: string[];
-      }) => Promise<{ success: boolean } & PolicyFailureMetadata>;
-      cortiStreamingStart?: (options?: {
-        environment?: string;
-        tenant?: string;
-        language?: string;
-        keyterms?: string[];
-      }) => Promise<{ success: boolean } & PolicyFailureMetadata>;
-      cortiStreamingSend?: (audioBuffer: ArrayBuffer) => void;
-      cortiStreamingFinalize?: () => void;
-      cortiStreamingStop?: () => Promise<{
+      cortiStreamingWarmup?: (
+        options:
+          | {
+              environment?: string;
+              tenant?: string;
+              language?: string;
+              keyterms?: string[];
+              transportId?: string;
+            }
+          | undefined,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<{ success: boolean; transportId?: string | null } & PolicyFailureMetadata>;
+      cortiStreamingStart?: (
+        options:
+          | {
+              environment?: string;
+              tenant?: string;
+              language?: string;
+              keyterms?: string[];
+              transportId?: string;
+            }
+          | undefined,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<{ success: boolean; transportId?: string | null } & PolicyFailureMetadata>;
+      cortiStreamingSend?: (transportId: string, audioBuffer: ArrayBuffer) => void;
+      cortiStreamingFinalize?: (transportId: string) => void;
+      cortiStreamingStop?: (transportId: string) => Promise<{
         success: boolean;
         text?: string;
         model?: string;
         audioBytesSent?: number;
         error?: string;
+        code?: string;
       }>;
       cortiStreamingStatus?: () => Promise<{ isConnected: boolean; sessionId: string | null }>;
       onCortiPartialTranscript?: (callback: (text: string) => void) => () => void;
@@ -2441,19 +2544,27 @@ declare global {
       getMD5Hash: (text: string) => Promise<string>;
 
       // Meeting transcription (streaming, dual-channel)
-      meetingTranscriptionPrepare?: (options: {
-        provider?: string;
-        model?: string;
-        language?: string;
-      }) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
-      meetingTranscriptionStart?: (options: {
-        provider?: string;
-        model?: string;
-        language?: string;
-        noteId?: number | null;
-        sessionId: string;
-        autoEndEligible: boolean;
-      }) => Promise<
+      meetingTranscriptionPrepare?: (
+        options: {
+          provider?: string;
+          model?: string;
+          language?: string;
+          transportId: string;
+        },
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
+      meetingTranscriptionStart?: (
+        options: {
+          provider?: string;
+          model?: string;
+          language?: string;
+          transportId: string;
+          noteId?: number | null;
+          sessionId: string;
+          autoEndEligible: boolean;
+        },
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<
         {
           success: boolean;
           sessionId?: string;
@@ -2461,9 +2572,14 @@ declare global {
           systemAudioMode?: SystemAudioMode;
           systemAudioStrategy?: SystemAudioStrategy;
           oneOnOneAttendee?: { displayName: string; email: string | null } | null;
+          commitToken?: string;
         } & PolicyFailureMetadata
       >;
-      meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
+      meetingTranscriptionSend?: (
+        sessionId: string,
+        buffer: ArrayBuffer,
+        source: "mic" | "system"
+      ) => void;
       meetingTranscriptionSetSystemAudioAvailable?: (
         sessionId: string,
         available: boolean
@@ -2472,6 +2588,7 @@ declare global {
         success: boolean;
         transcript?: string;
         diarizationSessionId?: string;
+        commitToken?: string;
         error?: string;
         reason?: "stale-session";
       }>;
@@ -2480,7 +2597,14 @@ declare global {
         reason?: string;
         error?: string;
       }>;
-      meetingTranscriptionCancel?: () => Promise<{
+      commitMeetingTranscript?: (payload: {
+        commitToken: string;
+        noteId: number;
+        transcript: string;
+        kind: "final" | "diarization";
+        speakerEmbeddings?: Record<string, number[]> | null;
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      meetingTranscriptionCancel?: (expectedTransportId: string) => Promise<{
         success: boolean;
         reason?: "recording-active";
       }>;
@@ -2535,7 +2659,8 @@ declare global {
       ) => Promise<{ success: boolean; text?: string; error?: string }>;
       diarizeAudioFile?: (
         filePath: string,
-        options?: { numSpeakers?: number; threshold?: number; requestId?: string }
+        options: { numSpeakers?: number; threshold?: number; requestId?: string } | undefined,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
       ) => Promise<{
         success: boolean;
         segments?: Array<{ start: number; end: number; speaker: string }>;
@@ -2548,6 +2673,7 @@ declare global {
         callback: (data: {
           sessionId?: string;
           noteId?: number | null;
+          commitToken: string;
           segments: Array<{
             id: string;
             text: string;
@@ -2613,14 +2739,22 @@ declare global {
 
       // Dictation realtime streaming
       dictationRealtimeWarmup?: (
-        options: DictationRealtimeSessionOptions
-      ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
+        options: DictationRealtimeSessionOptions,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<{ success: boolean; transportId?: string | null } & PolicyFailureMetadata>;
       dictationRealtimeStart?: (
-        options: DictationRealtimeSessionOptions
-      ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
-      dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
-      dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
-      dictationStreamingAbort?: () => Promise<{ success: boolean }>;
+        options: DictationRealtimeSessionOptions,
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<{ success: boolean; transportId?: string | null } & PolicyFailureMetadata>;
+      dictationRealtimeSend?: (transportId: string, buffer: ArrayBuffer) => void;
+      dictationRealtimeStop?: (
+        transportId: string
+      ) => Promise<
+        { success: boolean; text?: string; error?: string; code?: string } & PolicyFailureMetadata
+      >;
+      dictationStreamingAbort?: (
+        transportId: string
+      ) => Promise<{ success: boolean; error?: string; code?: string }>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeError?: (callback: (error: string) => void) => () => void;
@@ -2734,12 +2868,15 @@ declare global {
       onPreviewHold?: (callback: (payload: { showCleanup: boolean }) => void) => () => void;
       onPreviewResult?: (callback: (payload: { text: string }) => void) => () => void;
       onPreviewHide?: (callback: () => void) => () => void;
-      startDictationPreview?: (opts: {
-        provider: string;
-        model: string;
-        language?: string;
-        display?: boolean;
-      }) => Promise<{ success: boolean }>;
+      startDictationPreview?: (
+        opts: {
+          provider: string;
+          model: string;
+          language?: string;
+          display?: boolean;
+        },
+        managedRuntimeContext: ManagedRuntimeAuthorizationContext
+      ) => Promise<{ success: boolean }>;
       stopDictationPreview?: (opts?: {
         showCleanup?: boolean;
         flushed?: boolean;
@@ -2748,7 +2885,7 @@ declare global {
       updateDictationPreview?: (text: string) => Promise<{ success: boolean }>;
       completeDictationPreview?: (payload: { text?: string }) => Promise<{ success: boolean }>;
       hideDictationPreview?: () => Promise<{ success: boolean }>;
-      sendDictationPreviewAudio?: (data: ArrayBuffer) => void;
+      sendDictationPreviewAudio?: (transportId: string, data: ArrayBuffer) => void;
 
       // Sync operations
       getPendingNotes?: (spaceKind?: "private" | "team") => Promise<NoteItem[]>;

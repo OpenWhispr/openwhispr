@@ -4,7 +4,13 @@ function createMeetingTranscriptionLifecycle({
   abort = stop,
   onAbortRequested = () => {},
   onError = () => {},
+  isStartAuthorized = () => true,
 }) {
+  const authorizationChangedResult = () => ({
+    success: false,
+    reason: "authorization-changed",
+    code: "AUTHORIZATION_BOUNDARY_CHANGED",
+  });
   let operationTail = Promise.resolve();
   const sessions = new Map();
 
@@ -37,6 +43,29 @@ function createMeetingTranscriptionLifecycle({
     return sessions.values().next().value ?? null;
   };
 
+  const isOwnedSession = (expectedSessionId, ownerWebContents) => {
+    if (typeof expectedSessionId !== "string" || expectedSessionId.length === 0) return false;
+    const session = sessions.get(expectedSessionId);
+    return session?.ownerWebContents === ownerWebContents;
+  };
+
+  const cancelQueuedSessions = (matchesAuthorizationBinding = () => true) => {
+    let canceledCount = 0;
+    for (const session of sessions.values()) {
+      if (
+        session.state !== "queued" ||
+        !matchesAuthorizationBinding(session.authorizationBinding)
+      ) {
+        continue;
+      }
+      session.authorizationRevoked = true;
+      session.abortController.abort();
+      canceledCount += 1;
+      removeSession(session);
+    }
+    return canceledCount;
+  };
+
   const stopSession = (expectedSessionId) => {
     const session = resolveSession(expectedSessionId);
     if (!session) {
@@ -49,8 +78,11 @@ function createMeetingTranscriptionLifecycle({
     session.state = "stopping";
     session.stopPromise = enqueue(async () => {
       try {
-        if (!session.startSucceeded) return { success: true };
-        return await stop(session.sessionId);
+        if (!session.startSucceeded) {
+          return session.abortRequested ? authorizationChangedResult() : { success: true };
+        }
+        const result = await stop(session.sessionId, session.abortController.signal);
+        return session.abortRequested ? authorizationChangedResult() : result;
       } finally {
         removeSession(session);
       }
@@ -64,11 +96,22 @@ function createMeetingTranscriptionLifecycle({
       return Promise.resolve({ success: false, reason: "stale-session" });
     }
     if (session.abortPromise) return session.abortPromise;
-    if (session.stopPromise) return session.stopPromise;
 
     session.abortRequested = true;
     session.state = "aborting";
+    session.abortController.abort();
     onAbortRequested(session.sessionId);
+    if (session.stopPromise) {
+      const abortPromise = Promise.resolve().then(() => abort(session.sessionId));
+      session.abortPromise = abortPromise;
+      const stopTail = operationTail;
+      operationTail = Promise.allSettled([stopTail, abortPromise]).then(() => undefined);
+      void abortPromise.then(
+        () => removeSession(session),
+        () => removeSession(session)
+      );
+      return abortPromise;
+    }
     session.abortPromise = enqueue(async () => {
       try {
         return await abort(session.sessionId);
@@ -79,9 +122,9 @@ function createMeetingTranscriptionLifecycle({
     return session.abortPromise;
   };
 
-  const startSession = ({ sessionId, ownerWebContents, options }) => {
+  const startSession = ({ sessionId, ownerWebContents, options, authorizationBinding = null }) => {
     const operationInProgress = [...sessions.values()].some(
-      (session) => session.state !== "stopping"
+      (session) => session.state !== "stopping" && session.state !== "aborting"
     );
     if (operationInProgress || sessions.has(sessionId)) {
       return Promise.resolve({ success: false, error: "Operation in progress" });
@@ -94,6 +137,9 @@ function createMeetingTranscriptionLifecycle({
       startSucceeded: false,
       stopRequested: false,
       abortRequested: false,
+      authorizationRevoked: false,
+      authorizationBinding,
+      abortController: new AbortController(),
       stopPromise: null,
       abortPromise: null,
       ownerLossHandler: null,
@@ -101,6 +147,14 @@ function createMeetingTranscriptionLifecycle({
     sessions.set(sessionId, session);
 
     const startPromise = enqueue(async () => {
+      if (session.authorizationRevoked || !isStartAuthorized(session.authorizationBinding)) {
+        removeSession(session);
+        return authorizationChangedResult();
+      }
+      if (session.abortRequested) {
+        removeSession(session);
+        return authorizationChangedResult();
+      }
       if (session.stopRequested) {
         removeSession(session);
         return { success: false, error: "Start canceled", reason: "canceled", sessionId };
@@ -108,7 +162,12 @@ function createMeetingTranscriptionLifecycle({
 
       session.state = "starting";
       try {
-        const result = await start({ sessionId, ownerWebContents, options });
+        const result = await start({
+          sessionId,
+          ownerWebContents,
+          options,
+          authorizationBinding: session.authorizationBinding,
+        });
         session.startSucceeded = result?.success === true;
         if (!session.startSucceeded) {
           removeSession(session);
@@ -123,7 +182,7 @@ function createMeetingTranscriptionLifecycle({
     });
 
     const handleOwnerLoss = () => {
-      void stopSession(sessionId).catch((error) => {
+      void abortSession(sessionId).catch((error) => {
         onError(error, sessionId);
       });
     };
@@ -138,7 +197,7 @@ function createMeetingTranscriptionLifecycle({
     return startPromise;
   };
 
-  return { abortSession, startSession, stopSession };
+  return { abortSession, cancelQueuedSessions, isOwnedSession, startSession, stopSession };
 }
 
 module.exports = createMeetingTranscriptionLifecycle;

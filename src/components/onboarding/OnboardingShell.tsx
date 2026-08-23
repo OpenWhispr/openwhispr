@@ -14,6 +14,7 @@ import onboardingBackgroundDark from "@/assets/onboarding-bg-dark.svg";
 interface OnboardingShellProps {
   compact?: boolean;
   children: ReactNode;
+  footerLeadingAction?: ReactNode;
   onBack?: () => void;
   onContinue?: () => void;
   onSkip?: () => void;
@@ -218,6 +219,7 @@ export function OnboardingStepHeader({
 export default function OnboardingShell({
   compact = false,
   children,
+  footerLeadingAction,
   onBack,
   onContinue,
   onSkip,
@@ -230,7 +232,7 @@ export default function OnboardingShell({
   stepKey,
 }: OnboardingShellProps) {
   const { t } = useTranslation();
-  const hasFooter = onBack || onContinue || onSkip || progress;
+  const hasFooter = footerLeadingAction || onBack || onContinue || onSkip || progress;
 
   return (
     <main
@@ -286,6 +288,7 @@ export default function OnboardingShell({
         <footer className="shrink-0 px-5 pb-6 pt-2 md:px-8">
           <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-3.5">
             <div className="flex items-center justify-center gap-2">
+              {footerLeadingAction}
               {onBack && (
                 <Button
                   type="button"

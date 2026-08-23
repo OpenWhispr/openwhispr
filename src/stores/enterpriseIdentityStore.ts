@@ -100,6 +100,47 @@ function hasManagedInferenceConfiguration(config: ManagedEnterpriseConfig | null
   );
 }
 
+interface EnterpriseAvailabilityInput {
+  enforcementRequired?: boolean;
+  priorManagedInferenceConfigured: boolean | null;
+}
+
+export function resolveEnterpriseFailClosed({
+  enforcementRequired,
+  priorManagedInferenceConfigured,
+}: EnterpriseAvailabilityInput): boolean {
+  if (typeof enforcementRequired === "boolean") return enforcementRequired;
+  return priorManagedInferenceConfigured !== false;
+}
+
+function hasAuthoritativeUnmanagedPolicy(accountId: string, authGeneration: number): boolean {
+  const policy = usePolicyStore.getState();
+  return (
+    policy.accountId === accountId &&
+    policy.authGeneration === authGeneration &&
+    policy.status === "unmanaged"
+  );
+}
+
+const KNOWN_UNMANAGED_ENTERPRISE_STATE = {
+  status: "ready",
+  config: null,
+  lastKnownLocalModels: null,
+  lastKnownLocalModelsKnown: true,
+  lastKnownManagedInferenceConfigured: false,
+  error: null,
+  failClosed: false,
+} as const;
+
+function persistKnownUnmanagedPolicy(accountId: string, workspaceId: string): void {
+  writeManagedLocalModelPolicySnapshot(accountId, workspaceId, null, false);
+}
+
+function reconcileKnownUnmanagedEnterpriseState(accountId: string, workspaceId: string): void {
+  persistKnownUnmanagedPolicy(accountId, workspaceId);
+  useEnterpriseIdentityStore.setState(KNOWN_UNMANAGED_ENTERPRISE_STATE);
+}
+
 export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, get) => ({
   accountId: null,
   workspaceId: null,
@@ -124,28 +165,50 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
     const persistedSnapshot = sameIdentity
       ? null
       : readManagedLocalModelPolicySnapshot(accountId, workspaceId);
-    const priorLocalModels = sameIdentity
-      ? current.lastKnownLocalModels
-      : (persistedSnapshot?.localModels ?? null);
-    const priorLocalModelsKnown = sameIdentity
-      ? current.lastKnownLocalModelsKnown
-      : persistedSnapshot !== null;
-    const priorManagedInferenceConfigured = sameIdentity
-      ? current.lastKnownManagedInferenceConfigured
-      : (persistedSnapshot?.managedInferenceConfigured ?? null);
+    const persistedManagedInferenceConfigured =
+      persistedSnapshot?.managedInferenceConfigured ?? null;
+    const authoritativeUnmanagedPolicy = hasAuthoritativeUnmanagedPolicy(accountId, authGeneration);
+    const priorLocalModels = authoritativeUnmanagedPolicy
+      ? null
+      : sameIdentity
+        ? current.lastKnownLocalModels
+        : (persistedSnapshot?.localModels ?? null);
+    const priorLocalModelsKnown = authoritativeUnmanagedPolicy
+      ? true
+      : sameIdentity
+        ? current.lastKnownLocalModelsKnown
+        : persistedSnapshot !== null;
+    const priorManagedInferenceConfigured = authoritativeUnmanagedPolicy
+      ? false
+      : sameIdentity
+        ? current.lastKnownManagedInferenceConfigured
+        : persistedManagedInferenceConfigured;
+    const initialFailClosed = authoritativeUnmanagedPolicy
+      ? false
+      : sameIdentity
+        ? current.failClosed
+        : resolveEnterpriseFailClosed({ priorManagedInferenceConfigured });
+    const preserveSettledStatus =
+      sameIdentity && (current.status === "ready" || current.status === "error");
+    if (authoritativeUnmanagedPolicy) {
+      persistKnownUnmanagedPolicy(accountId, workspaceId);
+    }
     set({
       accountId,
       workspaceId,
       authGeneration,
-      status: sameIdentity && current.config ? "ready" : "loading",
-      config: sameIdentity ? current.config : null,
+      status:
+        authoritativeUnmanagedPolicy || (!sameIdentity && priorManagedInferenceConfigured === false)
+          ? "ready"
+          : preserveSettledStatus
+            ? current.status
+            : "loading",
+      config: authoritativeUnmanagedPolicy ? null : sameIdentity ? current.config : null,
       lastKnownLocalModels: priorLocalModels,
       lastKnownLocalModelsKnown: priorLocalModelsKnown,
       lastKnownManagedInferenceConfigured: priorManagedInferenceConfigured,
-      error: null,
-      failClosed: sameIdentity
-        ? current.failClosed
-        : (persistedSnapshot?.managedInferenceConfigured ?? true),
+      error: preserveSettledStatus && !authoritativeUnmanagedPolicy ? current.error : null,
+      failClosed: initialFailClosed,
     });
 
     const promise = (async () => {
@@ -164,6 +227,10 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
           result.authGeneration !== authGeneration
         ) {
           throw createEnterpriseIdentityError(result);
+        }
+        if (hasAuthoritativeUnmanagedPolicy(accountId, authGeneration)) {
+          reconcileKnownUnmanagedEnterpriseState(accountId, workspaceId);
+          return;
         }
         const localModels = validatedLocalModels(result.config ?? null);
         const managedInferenceConfigured = hasManagedInferenceConfiguration(result.config ?? null);
@@ -184,22 +251,57 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
         });
       } catch (error) {
         if (sequence !== requestSequence) return;
+        if (hasAuthoritativeUnmanagedPolicy(accountId, authGeneration)) {
+          reconcileKnownUnmanagedEnterpriseState(accountId, workspaceId);
+          return;
+        }
         const message = error instanceof Error ? error.message : String(error);
         const enforcementRequired = (error as { enforcementRequired?: boolean })
           .enforcementRequired;
-        const failClosed = typeof enforcementRequired === "boolean" ? enforcementRequired : true;
+        const latest = get();
+        const sameCurrentIdentity =
+          latest.accountId === accountId &&
+          latest.workspaceId === workspaceId &&
+          latest.authGeneration === authGeneration;
+        const effectivePriorLocalModels = sameCurrentIdentity
+          ? latest.lastKnownLocalModels
+          : priorLocalModels;
+        const effectivePriorLocalModelsKnown = sameCurrentIdentity
+          ? latest.lastKnownLocalModelsKnown
+          : priorLocalModelsKnown;
+        const effectivePriorManagedInferenceConfigured = sameCurrentIdentity
+          ? latest.lastKnownManagedInferenceConfigured
+          : priorManagedInferenceConfigured;
+        const failClosed = resolveEnterpriseFailClosed({
+          enforcementRequired,
+          priorManagedInferenceConfigured: effectivePriorManagedInferenceConfigured,
+        });
         if (enforcementRequired === false) {
           writeManagedLocalModelPolicySnapshot(accountId, workspaceId, null, false);
+        } else if (enforcementRequired === true) {
+          writeManagedLocalModelPolicySnapshot(
+            accountId,
+            workspaceId,
+            effectivePriorLocalModels,
+            true
+          );
         }
+        const preserveKnownAvailability =
+          failClosed || effectivePriorManagedInferenceConfigured === false;
         logger.warn("Managed enterprise AI configuration unavailable", { error: message }, "auth");
         set({
           status: "error",
           config: null,
-          lastKnownLocalModels: failClosed ? priorLocalModels : null,
-          lastKnownLocalModelsKnown: failClosed
-            ? priorLocalModelsKnown
+          lastKnownLocalModels: preserveKnownAvailability ? effectivePriorLocalModels : null,
+          lastKnownLocalModelsKnown: preserveKnownAvailability
+            ? effectivePriorLocalModelsKnown
             : enforcementRequired === false,
-          lastKnownManagedInferenceConfigured: failClosed ? priorManagedInferenceConfigured : false,
+          lastKnownManagedInferenceConfigured:
+            enforcementRequired === true
+              ? true
+              : failClosed
+                ? effectivePriorManagedInferenceConfigured
+                : false,
           error: message,
           failClosed,
         });
@@ -235,6 +337,38 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
   },
 }));
 
+usePolicyStore.subscribe((policy) => {
+  if (!policy.accountId || policy.authGeneration == null) {
+    return;
+  }
+  const enterprise = useEnterpriseIdentityStore.getState();
+  if (
+    enterprise.accountId !== policy.accountId ||
+    enterprise.authGeneration !== policy.authGeneration ||
+    !enterprise.workspaceId
+  ) {
+    return;
+  }
+  if (policy.status === "unmanaged") {
+    reconcileKnownUnmanagedEnterpriseState(policy.accountId, enterprise.workspaceId);
+    return;
+  }
+  if (
+    enterprise.lastKnownManagedInferenceConfigured === false &&
+    (policy.status === "loading" || policy.status === "managed" || policy.status === "error")
+  ) {
+    useEnterpriseIdentityStore.setState({
+      status: "loading",
+      config: null,
+      lastKnownLocalModels: null,
+      lastKnownLocalModelsKnown: false,
+      lastKnownManagedInferenceConfigured: null,
+      error: null,
+      failClosed: true,
+    });
+  }
+});
+
 function refreshCurrentManagedIdentity(): void {
   const state = useEnterpriseIdentityStore.getState();
   if (!state.accountId || !state.workspaceId || state.authGeneration == null) return;
@@ -255,11 +389,10 @@ if (typeof window !== "undefined") {
     }
     const currentGeneration = state.config?.generation ?? -1;
     if (snapshot.config && snapshot.config.generation < currentGeneration) return;
-    const failClosed = snapshot.config
-      ? false
-      : typeof snapshot.enforcementRequired === "boolean"
-        ? snapshot.enforcementRequired
-        : true;
+    const failClosed = resolveEnterpriseFailClosed({
+      enforcementRequired: snapshot.config ? false : snapshot.enforcementRequired,
+      priorManagedInferenceConfigured: state.lastKnownManagedInferenceConfigured,
+    });
     let localModels = state.lastKnownLocalModels;
     let localModelsKnown = state.lastKnownLocalModelsKnown;
     let managedInferenceConfigured = state.lastKnownManagedInferenceConfigured;
@@ -293,6 +426,9 @@ if (typeof window !== "undefined") {
       localModelsKnown = true;
       managedInferenceConfigured = false;
       writeManagedLocalModelPolicySnapshot(state.accountId, state.workspaceId, null, false);
+    } else if (snapshot.enforcementRequired === true) {
+      managedInferenceConfigured = true;
+      writeManagedLocalModelPolicySnapshot(state.accountId, state.workspaceId, localModels, true);
     }
     useEnterpriseIdentityStore.setState({
       status: snapshot.config ? "ready" : "error",

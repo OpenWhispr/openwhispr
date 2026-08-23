@@ -588,6 +588,7 @@ class AssemblyAiStreaming {
   cleanup() {
     clearTimeout(this.connectionTimeout);
     this.connectionTimeout = null;
+    this.terminationResolve?.({ text: this.accumulatedText });
 
     this.pendingAudio = [];
     this.pendingAudioBytes = 0;

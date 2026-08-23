@@ -63,14 +63,40 @@ test("dictation realtime exposes a non-finalizing transport abort", async (t) =>
   const manager = await loadManager(t);
   setSettings();
   const calls = [];
-  globalThis.window.electronAPI.dictationStreamingAbort = async () => {
-    calls.push("abort");
+  globalThis.window.electronAPI.dictationStreamingAbort = async (transportId) => {
+    calls.push(transportId);
     return { success: true };
   };
 
-  await manager.getStreamingProvider().abort();
+  await manager.getStreamingProvider().abort("dictation-2");
 
-  assert.deepEqual(calls, ["abort"]);
+  assert.deepEqual(calls, ["dictation-2"]);
+});
+
+test("streaming provider controls retain the owning transport ID", async (t) => {
+  const manager = await loadManager(t);
+  manager.sttConfig = { streamingProvider: "deepgram" };
+  const calls = [];
+  globalThis.window.electronAPI.deepgramStreamingFinalize = (transportId) => {
+    calls.push(["finalize", transportId]);
+  };
+  globalThis.window.electronAPI.deepgramStreamingStop = async (transportId) => {
+    calls.push(["stop", transportId]);
+    return { success: true, text: "done" };
+  };
+  setSettings({
+    cloudTranscriptionProvider: "deepgram",
+    cloudTranscriptionModel: "nova-3",
+  });
+
+  const provider = manager.getStreamingProvider();
+  provider.finalize("deepgram-2");
+  await provider.stop("deepgram-2");
+
+  assert.deepEqual(calls, [
+    ["finalize", "deepgram-2"],
+    ["stop", "deepgram-2"],
+  ]);
 });
 
 test("managed OpenWhispr Cloud still respects its batch configuration", async (t) => {

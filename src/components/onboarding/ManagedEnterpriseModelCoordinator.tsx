@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
 import { useModelDownload } from "../../hooks/useModelDownload";
 import { modelRegistry } from "../../models/ModelRegistry";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { isAgentAllowed, isModeAllowedByPolicy } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
@@ -78,6 +79,12 @@ function emptyInstalledModels(): InstalledModels {
   };
 }
 
+function keepManagedSetupDialogOpen(_open: boolean): void {}
+
+function preventManagedSetupDialogDismissal(event: Event): void {
+  event.preventDefault();
+}
+
 export default function ManagedEnterpriseModelCoordinator({
   showUi = true,
 }: {
@@ -89,6 +96,7 @@ export default function ManagedEnterpriseModelCoordinator({
   const authGeneration = useEnterpriseIdentityStore((state) => state.authGeneration);
   const config = useEnterpriseIdentityStore(selectEffectiveManagedLocalModels);
   const enterpriseStatus = useEnterpriseIdentityStore((state) => state.status);
+  const enterpriseFailClosed = useEnterpriseIdentityStore((state) => state.failClosed);
   const authoritativeLocalModels = useEnterpriseIdentityStore(
     (state) => state.config?.localModels ?? null
   );
@@ -227,9 +235,10 @@ export default function ManagedEnterpriseModelCoordinator({
     reconcileManagedLocalModelSettings({
       ownsReconciliation,
       status: enterpriseStatus,
+      failClosed: enterpriseFailClosed,
       localModels: authoritativeLocalModels,
     });
-  }, [authoritativeLocalModels, enterpriseStatus, ownsReconciliation]);
+  }, [authoritativeLocalModels, enterpriseFailClosed, enterpriseStatus, ownsReconciliation]);
 
   useEffect(() => {
     setInventoryReady(false);
@@ -776,15 +785,21 @@ export default function ManagedEnterpriseModelCoordinator({
 
   if (!needsFocusedSetup) return null;
   return (
-    <div className="onboarding-canvas fixed inset-0 z-[60] flex items-center justify-center bg-black/35 p-6">
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-6 shadow-2xl">
+    <Dialog open={needsFocusedSetup} onOpenChange={keepManagedSetupDialogOpen}>
+      <DialogContent
+        overlayClassName="bg-black/35! backdrop-blur-none!"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col gap-0 overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] p-6 shadow-2xl [&>button]:hidden"
+        onEscapeKeyDown={preventManagedSetupDialogDismissal}
+        onFocusOutside={preventManagedSetupDialogDismissal}
+        onPointerDownOutside={preventManagedSetupDialogDismissal}
+      >
         <div className="text-center">
-          <h1 className="text-xl font-semibold text-[var(--onboarding-text-primary)]">
+          <DialogTitle className="text-xl font-semibold text-[var(--onboarding-text-primary)]">
             {t("managedLocalModels.workspaceSetup.title")}
-          </h1>
-          <p className="mt-2 text-sm text-[var(--onboarding-text-secondary)]">
+          </DialogTitle>
+          <DialogDescription className="mt-2 text-sm text-[var(--onboarding-text-secondary)]">
             {t("managedLocalModels.workspaceSetup.description")}
-          </p>
+          </DialogDescription>
         </div>
         <EnterpriseModelSetupStep
           key={identityKey}
@@ -797,7 +812,7 @@ export default function ManagedEnterpriseModelCoordinator({
           ready={focusedReady}
           onContinue={() => setDismissedIdentity(identityKey)}
         />
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

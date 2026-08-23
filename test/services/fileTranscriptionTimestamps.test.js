@@ -42,14 +42,17 @@ test("timestamps opt-in reaches the BYOK IPC call and segments flow back", async
   };
 
   const direct = await transcribeFile("/tmp/audio.webm", byokConfig(), false, {
+    requestId: "upload-request-id",
     timestamps: true,
   });
   assert.equal(receivedOptions.timestamps, true);
+  assert.equal(receivedOptions.requestId, "upload-request-id");
   assert.deepEqual(direct.segments, segments);
 
   // Without the opt-in the request stays exactly as before.
   await transcribeFile("/tmp/audio.webm", byokConfig(), false);
   assert.equal(receivedOptions.timestamps, undefined);
+  assert.equal(receivedOptions.requestId, undefined);
 
   const withSpeakers = await transcribeFileWithSpeakers(
     "/tmp/audio.webm",

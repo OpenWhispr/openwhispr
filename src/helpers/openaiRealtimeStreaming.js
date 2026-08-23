@@ -47,6 +47,7 @@ class OpenAIRealtimeStreaming {
     this.pendingReject = null;
     this.connectionTimeout = null;
     this.isDisconnecting = false;
+    this._disconnectCommitSettle = null;
     this.audioBytesSent = 0;
     // Subclasses (Tinfoil) override this so logs name the provider actually
     // carrying the audio — a Tinfoil session must never log as OpenAI.
@@ -452,17 +453,23 @@ class OpenAIRealtimeStreaming {
         const prevOnError = this.onError;
 
         await new Promise((resolve) => {
-          const tid = setTimeout(() => {
-            debugLogger.debug(`${this.providerLabel} commit timeout, using accumulated text`);
-            resolve();
-          }, DISCONNECT_TIMEOUT_MS);
+          let settled = false;
+          let tid;
 
           const done = () => {
+            if (settled) return;
+            settled = true;
             clearTimeout(tid);
             this.onFinalTranscript = prevOnFinal;
             this.onError = prevOnError;
+            if (this._disconnectCommitSettle === done) this._disconnectCommitSettle = null;
             resolve();
           };
+          this._disconnectCommitSettle = done;
+          tid = setTimeout(() => {
+            debugLogger.debug(`${this.providerLabel} commit timeout, using accumulated text`);
+            done();
+          }, DISCONNECT_TIMEOUT_MS);
 
           this.onFinalTranscript = (text) => {
             prevOnFinal?.(text);
@@ -488,7 +495,7 @@ class OpenAIRealtimeStreaming {
         });
       }
 
-      this.ws.close();
+      this.ws?.close();
     }
 
     const result = { text: this.getFullTranscript() };
@@ -500,6 +507,8 @@ class OpenAIRealtimeStreaming {
   cleanup() {
     clearTimeout(this.connectionTimeout);
     this.connectionTimeout = null;
+    this._disconnectCommitSettle?.();
+    this._disconnectCommitSettle = null;
     clearTimeout(this._sessionTimer);
     this._sessionTimer = null;
     this.stopKeepAlive();

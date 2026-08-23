@@ -30,6 +30,7 @@ export async function executeTranslationChain({
   runTranslate,
   shouldTranslate,
   translateIsCloud = false,
+  isFatalError = undefined,
   onCleanupError,
   onEmptyTranslate,
   onUnchangedTranslate,
@@ -46,6 +47,7 @@ export async function executeTranslationChain({
       // returned empty text.
       if (cleanupIsCloud) usedCloudReasoning = true;
     } catch (cleanupError) {
+      if (isFatalError?.(cleanupError)) throw cleanupError;
       if (onCleanupError) onCleanupError(cleanupError);
     }
   }

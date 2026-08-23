@@ -10,6 +10,7 @@ import {
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import i18n from "../i18n";
+import type { ManagedRuntimeAuthorizationContext } from "../types/electron";
 
 export interface ManagedLocalTranscriptionRuntimeSettings {
   transcriptionMode?: string;
@@ -24,6 +25,41 @@ export type ManagedLocalTranscriptionRuntimeResolution<
 > =
   | { kind: "ready"; managed: boolean; settings: T }
   | { kind: "error"; code: "MANAGED_CONFIG_UNAVAILABLE" | "POLICY_RESTRICTED"; message: string };
+
+interface ManagedRuntimeTranscriptionRoute {
+  managed: boolean;
+  transcriptionMode: ManagedRuntimeAuthorizationContext["transcriptionMode"];
+  provider: string;
+  model: string | null;
+}
+
+export function captureManagedRuntimeAuthorizationContext({
+  managed,
+  transcriptionMode,
+  provider,
+  model,
+}: ManagedRuntimeTranscriptionRoute): ManagedRuntimeAuthorizationContext {
+  const enterprise = useEnterpriseIdentityStore.getState();
+  const policy = usePolicyStore.getState();
+  const policyRevision =
+    enterprise.accountId &&
+    policy.accountId === enterprise.accountId &&
+    policy.authGeneration === enterprise.authGeneration
+      ? policy.revision
+      : null;
+  return {
+    accountId: enterprise.accountId,
+    workspaceId: enterprise.workspaceId,
+    authGeneration: enterprise.authGeneration,
+    configGeneration: enterprise.config?.generation ?? null,
+    policyRevision,
+    category: "transcription",
+    transcriptionMode,
+    provider,
+    model,
+    managed,
+  };
+}
 
 export function resolveManagedLocalTranscriptionRuntime<
   T extends ManagedLocalTranscriptionRuntimeSettings,

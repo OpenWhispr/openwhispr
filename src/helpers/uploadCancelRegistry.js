@@ -8,8 +8,8 @@ function createUploadCancelRegistry() {
 
   return {
     // Registers one operation. Missing/invalid ids are inert — flows without a
-    // requestId (dictation, voice drafts, warm-ups) get no signal and a no-op
-    // release, so their behavior is untouched.
+    // requestId (legacy callers and warm-ups) get no signal and a no-op release,
+    // so their behavior is untouched.
     register(requestId) {
       if (typeof requestId !== "string" || !requestId) {
         return { signal: undefined, release: () => {} };

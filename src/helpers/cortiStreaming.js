@@ -447,7 +447,10 @@ class CortiStreaming {
   }
 
   async disconnect(closeStream = true) {
-    if (!this.ws) return { text: this.accumulatedText };
+    if (!this.ws) {
+      this.cleanupWarmConnection();
+      return { text: this.accumulatedText };
+    }
 
     this.isDisconnecting = true;
 

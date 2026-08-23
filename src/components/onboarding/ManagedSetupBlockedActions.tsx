@@ -4,7 +4,7 @@ import { Loader2, RotateCcw } from "lucide-react";
 import { signOut } from "../../lib/auth";
 import { Button } from "../ui/button";
 
-function SignOutButton(): JSX.Element {
+export function ManagedSetupSignOutButton(): JSX.Element {
   const { t } = useTranslation();
   return (
     <Button type="button" variant="outline" onClick={() => void signOut()}>
@@ -17,7 +17,7 @@ export function EnterpriseConfigErrorActions({ onRetry }: { onRetry: () => void 
   const { t } = useTranslation();
   return (
     <div className="flex flex-wrap justify-center gap-2">
-      <SignOutButton />
+      <ManagedSetupSignOutButton />
       <Button type="button" onClick={onRetry}>
         <RotateCcw className="mr-1.5 size-3.5" /> {t("common.retry")}
       </Button>
@@ -35,9 +35,16 @@ export function ManagedSetupFooterActions({
   const { t } = useTranslation();
   return (
     <div className="mt-4 flex items-center justify-between gap-2">
-      <SignOutButton />
-      <Button disabled={!ready} onClick={onContinue}>
-        {ready ? t("common.continue") : <Loader2 className="size-4 animate-spin" />}
+      <ManagedSetupSignOutButton />
+      <Button disabled={!ready} onClick={onContinue} aria-busy={!ready}>
+        {ready ? (
+          t("common.continue")
+        ) : (
+          <>
+            <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />
+            {t("common.continue")}
+          </>
+        )}
       </Button>
     </div>
   );

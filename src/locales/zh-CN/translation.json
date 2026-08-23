@@ -201,6 +201,9 @@
       "incompatibleReasoning": "没有与此设备兼容的公司批准 AI 模型。请联系 IT 部门。",
       "downloadCancelled": "公司模型下载已取消。请重新开始下载以继续。"
     },
+    "actions": {
+      "dismissError": "关闭 {{model}} 的下载错误"
+    },
     "attention": {
       "title": "公司模型需要处理"
     },

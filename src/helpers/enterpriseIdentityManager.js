@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const fs = require("fs");
+const { isDeepStrictEqual } = require("util");
 const {
   resolveManagedEnterpriseScope,
   validateManagedEnterpriseEnvelope,
@@ -59,13 +60,21 @@ function readCache(cachePath) {
   }
 }
 
-function writeCache(cachePath, identity, config) {
+function writeCacheEntry(cachePath, identity, entry) {
   const envelope = readCache(cachePath);
   const entries = envelope.entries.filter((entry) => entry?.key !== identity.cacheKey);
-  entries.push({ key: identity.cacheKey, workspaceId: identity.workspaceId, config });
+  entries.push({ key: identity.cacheKey, workspaceId: identity.workspaceId, ...entry });
   fs.writeFileSync(cachePath, JSON.stringify({ version: CONFIG_CACHE_VERSION, entries }), {
     mode: 0o600,
   });
+}
+
+function writeCache(cachePath, identity, config) {
+  writeCacheEntry(cachePath, identity, { config });
+}
+
+function writeUnmanagedVerdict(cachePath, identity) {
+  writeCacheEntry(cachePath, identity, { config: null, enforcementRequired: false });
 }
 
 function cachedConfig(cachePath, identity) {
@@ -73,6 +82,13 @@ function cachedConfig(cachePath, identity) {
     (candidate) => candidate?.key === identity.cacheKey
   );
   return validateManagedEnterpriseEnvelope(entry?.config, identity.workspaceId);
+}
+
+function cachedEnforcementRequired(cachePath, identity) {
+  const entry = readCache(cachePath).entries.find(
+    (candidate) => candidate?.key === identity.cacheKey
+  );
+  return typeof entry?.enforcementRequired === "boolean" ? entry.enforcementRequired : undefined;
 }
 
 function removeCachedConfig(cachePath, identity) {
@@ -122,7 +138,6 @@ function requiresEnforcedManagedAccess(config) {
 function resolveEnforcementRequired(errorCode, prior, knownRequired) {
   if (errorCode === "ENTERPRISE_REQUIRED") return false;
   if (knownRequired || requiresEnforcedManagedAccess(prior)) return true;
-  if (prior) return false;
   return undefined;
 }
 
@@ -157,7 +172,57 @@ function createEnterpriseIdentityManager({
   const cloudCredentials = new Map();
   const cloudCredentialRequests = new Map();
   const enforcedConfigRequired = new Set();
+  const authoritativelyUnmanaged = new Set();
+  const invalidatedCacheEntries = new Set();
+  const authorizationSnapshots = new Map();
   let credentialEpoch = 0;
+  let configRequestEpoch = 0;
+
+  function assertConfigRequestCurrent(epoch) {
+    if (epoch !== configRequestEpoch) {
+      throw new AuthContextError("Managed enterprise request was cleared before completion");
+    }
+  }
+
+  function assertCredentialRequestCurrent(epoch) {
+    if (epoch !== credentialEpoch) {
+      throw Object.assign(
+        new Error("Managed enterprise configuration changed. Retry the request."),
+        { code: "MANAGED_CONFIG_CHANGED" }
+      );
+    }
+  }
+
+  function cachedConfigIfCurrent(identity) {
+    return invalidatedCacheEntries.has(identity.cacheKey)
+      ? null
+      : cachedConfig(cachePath, identity);
+  }
+
+  function cachedEnforcementIfCurrent(identity) {
+    return invalidatedCacheEntries.has(identity.cacheKey)
+      ? undefined
+      : cachedEnforcementRequired(cachePath, identity);
+  }
+
+  function broadcastAuthorizationChange(identity, snapshot) {
+    const previous = authorizationSnapshots.get(identity.cacheKey);
+    const current = {
+      config: snapshot.config ?? null,
+      code: snapshot.code ?? null,
+      ...(typeof snapshot.enforcementRequired === "boolean"
+        ? { enforcementRequired: snapshot.enforcementRequired }
+        : {}),
+    };
+    if (previous && isDeepStrictEqual(previous, current)) return;
+    authorizationSnapshots.set(identity.cacheKey, current);
+    broadcast?.({
+      accountId: identity.accountId,
+      workspaceId: identity.workspaceId,
+      authGeneration: identity.authGeneration,
+      ...current,
+    });
+  }
 
   function clearIdentityCredentials(identity) {
     credentialEpoch += 1;
@@ -174,11 +239,21 @@ function createEnterpriseIdentityManager({
     configs.delete(identity.cacheKey);
     configRequests.delete(identity.cacheKey);
     clearIdentityCredentials(identity);
-    removeCachedConfig(cachePath, identity);
-    broadcast?.({
-      accountId: identity.accountId,
-      workspaceId: identity.workspaceId,
-      authGeneration: identity.authGeneration,
+    if (enforcementRequired === false) {
+      authoritativelyUnmanaged.add(identity.cacheKey);
+      invalidatedCacheEntries.add(identity.cacheKey);
+      try {
+        writeUnmanagedVerdict(cachePath, identity);
+        invalidatedCacheEntries.delete(identity.cacheKey);
+      } catch {
+        // A read-only cache must never prevent the in-memory verdict.
+      }
+    } else {
+      authoritativelyUnmanaged.delete(identity.cacheKey);
+      invalidatedCacheEntries.add(identity.cacheKey);
+      removeCachedConfig(cachePath, identity);
+    }
+    broadcastAuthorizationChange(identity, {
       config: null,
       code,
       ...(typeof enforcementRequired === "boolean" ? { enforcementRequired } : {}),
@@ -272,7 +347,7 @@ function createEnterpriseIdentityManager({
     }
   }
 
-  async function fetchConfig(identity) {
+  async function fetchConfig(identity, requestEpoch) {
     const url = `${identity.apiUrl}/api/workspaces/${encodeURIComponent(
       identity.workspaceId
     )}/enterprise-providers`;
@@ -280,6 +355,7 @@ function createEnterpriseIdentityManager({
       method: "GET",
       headers: requestHeaders(identity),
     });
+    assertConfigRequestCurrent(requestEpoch);
     assertIdentityCurrent(identity);
     if (!response.ok) {
       const detail = await readError(response, `Managed enterprise API error: ${response.status}`);
@@ -296,6 +372,7 @@ function createEnterpriseIdentityManager({
       error.code = "MANAGED_CONFIG_INVALID";
       throw error;
     }
+    assertConfigRequestCurrent(requestEpoch);
     assertIdentityCurrent(identity);
     const config = validateManagedEnterpriseEnvelope(body?.data, identity.workspaceId);
     if (!config) {
@@ -308,22 +385,19 @@ function createEnterpriseIdentityManager({
       clearIdentityCredentials(identity);
     }
     configs.set(identity.cacheKey, { config, refreshedAt: now() });
+    authoritativelyUnmanaged.delete(identity.cacheKey);
+    invalidatedCacheEntries.add(identity.cacheKey);
     if (requiresEnforcedManagedAccess(config)) enforcedConfigRequired.add(identity.cacheKey);
     else enforcedConfigRequired.delete(identity.cacheKey);
     try {
       writeCache(cachePath, identity, config);
+      invalidatedCacheEntries.delete(identity.cacheKey);
     } catch (error) {
       logger?.warn?.("Managed enterprise configuration cache write failed", {
         error: error?.message,
       });
     }
-    broadcast?.({
-      accountId: identity.accountId,
-      workspaceId: identity.workspaceId,
-      authGeneration: identity.authGeneration,
-      config,
-      code: null,
-    });
+    broadcastAuthorizationChange(identity, { config, code: null });
     return { config, status: "network" };
   }
 
@@ -335,10 +409,12 @@ function createEnterpriseIdentityManager({
     if (configRequests.has(identity.cacheKey)) {
       return configRequests.get(identity.cacheKey);
     }
-    const pending = fetchConfig(identity)
+    const requestEpoch = configRequestEpoch;
+    const pending = fetchConfig(identity, requestEpoch)
       .catch((error) => {
+        assertConfigRequestCurrent(requestEpoch);
         if (isAuthorizationError(error) || error?.code === "MANAGED_CONFIG_INVALID") {
-          const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
+          const prior = configs.get(identity.cacheKey)?.config || cachedConfigIfCurrent(identity);
           error.enforcementRequired = resolveEnforcementRequired(
             error?.code,
             prior,
@@ -352,10 +428,16 @@ function createEnterpriseIdentityManager({
         }
         if (!isTransientConfigError(error)) throw error;
         const memory = configs.get(identity.cacheKey)?.config;
-        const disk = memory || cachedConfig(cachePath, identity);
+        const disk = memory || cachedConfigIfCurrent(identity);
         if (disk) {
           configs.set(identity.cacheKey, { config: disk, refreshedAt: 0 });
           return { config: disk, status: "cached" };
+        }
+        if (
+          authoritativelyUnmanaged.has(identity.cacheKey) ||
+          cachedEnforcementIfCurrent(identity) === false
+        ) {
+          return { config: null, status: "known-unmanaged" };
         }
         throw error;
       })
@@ -370,9 +452,19 @@ function createEnterpriseIdentityManager({
 
   async function getConfig(request) {
     let identity;
+    const requestEpoch = configRequestEpoch;
     try {
       identity = captureIdentity(request);
       const resolved = await resolveConfig(identity, Boolean(request.forceRefresh));
+      assertConfigRequestCurrent(requestEpoch);
+      if (resolved.status === "known-unmanaged") {
+        return responseError(
+          "ENTERPRISE_REQUIRED",
+          "An active Enterprise workspace is required",
+          identity,
+          false
+        );
+      }
       return {
         success: true,
         status: resolved.status,
@@ -391,7 +483,7 @@ function createEnterpriseIdentityManager({
     }
   }
 
-  async function fetchAssertion(identity, provider) {
+  async function fetchAssertion(identity, provider, requestEpoch) {
     const url = `${identity.apiUrl}/api/workspaces/${encodeURIComponent(
       identity.workspaceId
     )}/enterprise-providers/${provider}/assertion`;
@@ -400,15 +492,17 @@ function createEnterpriseIdentityManager({
       headers: requestHeaders(identity, true),
       body: "{}",
     });
+    assertCredentialRequestCurrent(requestEpoch);
     assertIdentityCurrent(identity);
     if (!response.ok) {
       const detail = await readError(response, `Managed identity API error: ${response.status}`);
+      assertCredentialRequestCurrent(requestEpoch);
       const error = new Error(detail.message);
       error.code =
         detail.code || (response.status === 401 ? "AUTH_EXPIRED" : "IDENTITY_EXCHANGE_FAILED");
       error.status = response.status;
       if (isAuthorizationError(error)) {
-        const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
+        const prior = configs.get(identity.cacheKey)?.config || cachedConfigIfCurrent(identity);
         error.enforcementRequired = resolveEnforcementRequired(
           error.code,
           prior,
@@ -422,6 +516,7 @@ function createEnterpriseIdentityManager({
       throw error;
     }
     const body = await response.json();
+    assertCredentialRequestCurrent(requestEpoch);
     if (typeof body?.data?.assertion !== "string") {
       throw Object.assign(new Error("Managed identity assertion is malformed"), {
         code: "IDENTITY_EXCHANGE_FAILED",
@@ -443,14 +538,9 @@ function createEnterpriseIdentityManager({
     if (usableCredential(cached)) return cached.value;
     if (cloudCredentialRequests.has(key)) return cloudCredentialRequests.get(key);
     const epoch = credentialEpoch;
-    const pending = create()
+    const pending = create(epoch)
       .then((entry) => {
-        if (epoch !== credentialEpoch) {
-          throw Object.assign(
-            new Error("Managed enterprise configuration changed. Retry the request."),
-            { code: "MANAGED_CONFIG_CHANGED" }
-          );
-        }
+        assertCredentialRequestCurrent(epoch);
         cloudCredentials.set(key, entry);
         return entry.value;
       })
@@ -467,8 +557,8 @@ function createEnterpriseIdentityManager({
     if (record.provider === "bedrock") {
       return {
         credentialProvider: () =>
-          dedupeCredential(key, async () => {
-            const assertion = await fetchAssertion(identity, "bedrock");
+          dedupeCredential(key, async (requestEpoch) => {
+            const assertion = await fetchAssertion(identity, "bedrock", requestEpoch);
             const credentials = await createAwsWebIdentityProvider({
               roleArn: record.config.roleArn,
               roleSessionName: `openwhispr-${identity.workspaceId.slice(0, 8)}`,
@@ -502,8 +592,8 @@ function createEnterpriseIdentityManager({
 
     return {
       tokenProvider: () =>
-        dedupeCredential(key, async () => {
-          const assertion = await fetchAssertion(identity, "azure");
+        dedupeCredential(key, async (requestEpoch) => {
+          const assertion = await fetchAssertion(identity, "azure", requestEpoch);
           const tokenUrl = `https://login.microsoftonline.com/${encodeURIComponent(
             record.config.tenantId
           )}/oauth2/v2.0/token`;
@@ -542,8 +632,10 @@ function createEnterpriseIdentityManager({
   }
 
   async function resolveProvider(request) {
+    const requestEpoch = configRequestEpoch;
     const identity = captureIdentity(request);
     const { config } = await resolveConfig(identity);
+    assertConfigRequestCurrent(requestEpoch);
     const resolution = resolveManagedEnterpriseScope(
       config,
       request.inferenceScope,
@@ -566,12 +658,20 @@ function createEnterpriseIdentityManager({
   }
 
   function clear() {
+    configRequestEpoch += 1;
     credentialEpoch += 1;
+    for (const entry of readCache(cachePath).entries) {
+      if (typeof entry?.key === "string") invalidatedCacheEntries.add(entry.key);
+    }
+    for (const key of configs.keys()) invalidatedCacheEntries.add(key);
+    for (const key of authoritativelyUnmanaged) invalidatedCacheEntries.add(key);
     configs.clear();
     configRequests.clear();
     cloudCredentials.clear();
     cloudCredentialRequests.clear();
     enforcedConfigRequired.clear();
+    authoritativelyUnmanaged.clear();
+    authorizationSnapshots.clear();
     try {
       fs.unlinkSync(cachePath);
     } catch (error) {

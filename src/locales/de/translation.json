@@ -201,6 +201,9 @@
       "incompatibleReasoning": "Kein vom Unternehmen genehmigtes KI-Modell ist mit diesem Gerät kompatibel. Wende dich an die IT.",
       "downloadCancelled": "Der Download des Unternehmensmodells wurde abgebrochen. Starte ihn neu, um fortzufahren."
     },
+    "actions": {
+      "dismissError": "Downloadfehler für {{model}} schließen"
+    },
     "attention": {
       "title": "Unternehmensmodell erfordert Aufmerksamkeit"
     },

@@ -26,13 +26,28 @@ const diarization = { enabled: true, localModelsReady: true, numSpeakers: 2 };
 const gateMocks = {
   "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
   "./settingsStore": "export const getSettings = () => ({});",
-  "./policyStore": "export const usePolicyStore = { getState: () => ({}) };",
+  "./policyStore": `
+    export const usePolicyStore = {
+      getState: () => ({}),
+      subscribe: () => () => {},
+    };
+  `,
   "./policyRules": "export const isTranscriptionContextAllowed = () => true;",
   managedLocalTranscriptionRuntime: `
     export const resolveManagedLocalTranscriptionRuntime = (settings) => ({
       kind: 'ready', managed: false, settings,
     });
     export const isManagedLocalTranscriptionRuntimeAllowed = () => true;
+    export const captureManagedRuntimeAuthorizationContext = ({ managed, provider, model }) => ({
+      accountId: null,
+      workspaceId: null,
+      authGeneration: null,
+      configGeneration: null,
+      category: 'transcription',
+      provider,
+      model,
+      managed,
+    });
   `,
   runtimeAuthorizationBoundary: `
     export const captureRuntimeAuthorizationLease = (_domains, onChanged) => {
@@ -72,11 +87,20 @@ async function waitForQueueSettled(store, timeoutMs = 5000) {
 }
 
 function installUploadElectronAPI(window, { diarizedDurationSeconds }) {
-  const calls = { saveNote: [], updateNote: [], diarize: [], deletedTempFiles: [] };
+  const calls = {
+    saveNote: [],
+    updateNote: [],
+    transcribe: [],
+    diarize: [],
+    deletedTempFiles: [],
+  };
   Object.assign(window.electronAPI, {
-    transcribeAudioFile: async () => ({ success: true, text: "hello from the recording" }),
-    diarizeAudioFile: async (_filePath, options) => {
-      calls.diarize.push(options);
+    transcribeAudioFile: async (_filePath, _options, context) => {
+      calls.transcribe.push(context);
+      return { success: true, text: "hello from the recording" };
+    },
+    diarizeAudioFile: async (_filePath, options, context) => {
+      calls.diarize.push({ options, context });
       return {
         success: true,
         segments: [
@@ -128,10 +152,15 @@ test("a diarized file upload persists the diarization metadata", async (t) => {
 
   // The persisted count is the same one the diarizer was invoked with.
   assert.equal(calls.diarize.length, 1);
-  assert.equal(calls.diarize[0].numSpeakers, 2);
+  assert.equal(calls.diarize[0].options.numSpeakers, 2);
   // The diarizer runs under the same cancellable requestId as the
   // transcription, so one cancel-upload-transcription aborts both.
-  assert.equal(typeof calls.diarize[0].requestId, "string");
+  assert.equal(typeof calls.diarize[0].options.requestId, "string");
+  assert.equal(
+    calls.diarize[0].context,
+    calls.transcribe[0],
+    "parallel transcription and diarization must share one captured authorization context"
+  );
   assert.deepEqual(calls.updateNote, [[7, { diarization_enabled: 1, expected_speaker_count: 2 }]]);
 });
 

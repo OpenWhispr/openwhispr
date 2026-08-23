@@ -308,13 +308,16 @@ export function restoreManagedLocalModelSettings(
 export function reconcileManagedLocalModelSettings({
   ownsReconciliation,
   status,
+  failClosed,
   localModels,
 }: {
   ownsReconciliation: boolean;
   status: "idle" | "loading" | "ready" | "error";
+  failClosed: boolean;
   localModels: ManagedEnterpriseLocalModels | null;
 }): void {
-  if (!ownsReconciliation || status !== "ready") return;
+  const definitiveUnmanaged = status === "error" && !failClosed;
+  if (!ownsReconciliation || (status !== "ready" && !definitiveUnmanaged)) return;
   const unmanagedCategories: ManagedLocalModelCategory[] = [];
   if (!localModels?.transcription.length) unmanagedCategories.push("transcription");
   if (!localModels?.reasoning.length) unmanagedCategories.push("reasoning");

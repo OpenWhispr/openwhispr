@@ -201,6 +201,9 @@
       "incompatibleReasoning": "No company-approved AI model is compatible with this device. Contact IT.",
       "downloadCancelled": "The company model download was cancelled. Restart it to continue."
     },
+    "actions": {
+      "dismissError": "Dismiss download error for {{model}}"
+    },
     "attention": {
       "title": "Company model needs attention"
     },

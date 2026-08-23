@@ -33,6 +33,7 @@ export function buildStreamingSessionOptions({
   language,
   keyterms,
   voiceAgentRequested = false,
+  transportId,
 }) {
   const options = {
     provider: providerName,
@@ -44,6 +45,7 @@ export function buildStreamingSessionOptions({
     environment: settings.cortiEnvironment,
     tenant: settings.cortiTenant,
   };
+  if (transportId) options.transportId = transportId;
   // Tinfoil realtime shows the live preview for normal dictation (#1120), but
   // assistant voice skips it because the Assistant panel owns that surface.
   if (providerName === "tinfoil-realtime" && !voiceAgentRequested) {

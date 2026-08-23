@@ -22,7 +22,7 @@ const defaultMockModules = (settingsKey) => ({
   "/services/ReasoningService":
     "export default class ReasoningService { static cancelAllRequests() {} }",
   "managedLocalTranscriptionRuntime.ts":
-    "export const resolveManagedLocalTranscriptionRuntime = (settings) => ({ kind: 'ready', managed: false, settings }); export const isManagedLocalTranscriptionRuntimeAllowed = (resolution) => resolution.kind === 'ready';",
+    "export const resolveManagedLocalTranscriptionRuntime = (settings) => ({ kind: 'ready', managed: false, settings }); export const isManagedLocalTranscriptionRuntimeAllowed = (resolution) => resolution.kind === 'ready'; export const captureManagedRuntimeAuthorizationContext = (route) => ({ accountId: null, workspaceId: null, authGeneration: null, configGeneration: null, category: 'transcription', ...route });",
   "runtimeAuthorizationBoundary.ts":
     "export const captureRuntimeAuthorizationGuard = () => ({ isCurrent: () => true, assertCurrent() {} }); export const subscribeRuntimeAuthorizationBoundary = () => () => {};",
   "/stores/enterpriseIdentityStore":

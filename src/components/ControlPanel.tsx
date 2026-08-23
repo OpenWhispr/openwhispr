@@ -89,10 +89,13 @@ import { useEnterpriseIdentityStore } from "../stores/enterpriseIdentityStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { canApplyPendingCloudMigration } from "./onboarding/managedLocalModels";
 import {
+  captureManagedRuntimeAuthorizationContext,
   isManagedLocalTranscriptionRuntimeAllowed,
   resolveManagedLocalTranscriptionRuntime,
 } from "../helpers/managedLocalTranscriptionRuntime";
 import { captureRuntimeAuthorizationLease } from "../helpers/runtimeAuthorizationBoundary";
+import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
+import { getTranscriptionProviders } from "../models/ModelRegistry";
 
 const platform = getCachedPlatform();
 
@@ -677,6 +680,41 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         }
         if (runtime.kind === "error") return;
         const effectiveSettings = runtime.settings;
+        const route = resolveTranscriptionRoute({
+          settings: effectiveSettings,
+          providers: getTranscriptionProviders(),
+          request: {
+            effectiveLanguage:
+              effectiveSettings.preferredLanguage === "auto"
+                ? undefined
+                : effectiveSettings.preferredLanguage,
+          },
+        });
+        const contextRoute = effectiveSettings.useLocalWhisper
+          ? {
+              transcriptionMode: "local" as const,
+              provider: effectiveSettings.localTranscriptionProvider,
+              model:
+                effectiveSettings.localTranscriptionProvider === "nvidia"
+                  ? effectiveSettings.parakeetModel
+                  : effectiveSettings.whisperModel,
+            }
+          : effectiveSettings.cloudTranscriptionMode === "openwhispr"
+            ? { transcriptionMode: "openwhispr" as const, provider: "openwhispr", model: null }
+            : route.transport === "proxied" || route.transport === "http-batch"
+              ? {
+                  transcriptionMode:
+                    route.provider === "self-hosted"
+                      ? ("self-hosted" as const)
+                      : ("providers" as const),
+                  provider: route.provider,
+                  model: route.model,
+                }
+              : {
+                  transcriptionMode: effectiveSettings.transcriptionMode,
+                  provider: effectiveSettings.cloudTranscriptionProvider || "openai",
+                  model: effectiveSettings.cloudTranscriptionModel || null,
+                };
         authorization.assertCurrent();
         const result = await window.electronAPI.retryTranscription(
           id,
@@ -697,7 +735,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             remoteTranscriptionUrl: effectiveSettings.remoteTranscriptionUrl,
             remoteTranscriptionModel: effectiveSettings.remoteTranscriptionModel,
           },
-          requestId
+          requestId,
+          captureManagedRuntimeAuthorizationContext({
+            managed: runtime.managed,
+            ...contextRoute,
+          })
         );
         pendingCommit = result.success && result.pendingCommit === true;
         authorization.assertCurrent();

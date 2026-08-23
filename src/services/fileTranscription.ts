@@ -1,7 +1,15 @@
 import { withSessionRefresh } from "../lib/auth";
 import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
-import { resolveManagedLocalTranscriptionRuntime } from "../helpers/managedLocalTranscriptionRuntime";
+import {
+  resolveDiarizationTarget,
+  resolveEffectiveDiarizationModel,
+} from "../helpers/transcriptionDiarizationRoute";
+import {
+  captureManagedRuntimeAuthorizationContext,
+  resolveManagedLocalTranscriptionRuntime,
+} from "../helpers/managedLocalTranscriptionRuntime";
+import type { ManagedRuntimeAuthorizationContext } from "../types/electron";
 
 export interface FileTranscriptionResult {
   success: boolean;
@@ -55,6 +63,22 @@ export interface TranscriptionApiKeys {
   customTranscriptionApiKey?: string;
 }
 
+interface FileTranscriptionOptions {
+  requestId?: string;
+  timestamps?: boolean;
+}
+
+type FileTranscriptionPlan =
+  | { kind: "error"; result: FileTranscriptionResult }
+  | {
+      kind: "local";
+      provider: "whisper" | "nvidia";
+      model: string;
+      authorizationContext: ManagedRuntimeAuthorizationContext;
+    }
+  | { kind: "cloud"; authorizationContext: ManagedRuntimeAuthorizationContext }
+  | { kind: "byok"; authorizationContext: ManagedRuntimeAuthorizationContext };
+
 export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiKeys): string {
   switch (provider) {
     case "openai":
@@ -74,47 +98,59 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
   }
 }
 
-// Single provider dispatch shared by the single-file flow and the batch queue,
-// so BYOK providers receive identical options in both.
-export async function transcribeFile(
-  filePath: string,
+function resolveFileTranscriptionPlan(
   cfg: FileTranscriptionConfig,
-  diarize: boolean,
-  opts: { requestId?: string; timestamps?: boolean } = {}
-): Promise<FileTranscriptionResult> {
+  diarize = false
+): FileTranscriptionPlan {
   const runtime = resolveManagedLocalTranscriptionRuntime(cfg);
   if (runtime.kind === "error") {
-    return { success: false, error: runtime.message, code: runtime.code };
+    return {
+      kind: "error",
+      result: { success: false, error: runtime.message, code: runtime.code },
+    };
   }
   if (runtime.managed) {
     const settings = runtime.settings;
-    return window.electronAPI.transcribeAudioFile(filePath, {
-      provider: settings.localTranscriptionProvider as "whisper" | "nvidia",
-      model:
-        settings.localTranscriptionProvider === "nvidia"
-          ? settings.parakeetModel
-          : settings.whisperModel,
-      requestId: opts.requestId,
-    });
+    const provider = settings.localTranscriptionProvider === "nvidia" ? "nvidia" : "whisper";
+    const model = provider === "nvidia" ? settings.parakeetModel : settings.whisperModel;
+    return {
+      kind: "local",
+      provider,
+      model,
+      authorizationContext: captureManagedRuntimeAuthorizationContext({
+        managed: true,
+        transcriptionMode: "local",
+        provider,
+        model,
+      }),
+    };
   }
   if (cfg.isOpenWhisprCloud) {
-    return withSessionRefresh(async () => {
-      const r = await window.electronAPI.transcribeAudioFileCloud!(filePath, opts);
-      if (!r.success && r.code) {
-        throw Object.assign(new Error(r.error || "Cloud transcription failed"), {
-          code: r.code,
-        });
-      }
-      return r;
-    });
+    return {
+      kind: "cloud",
+      authorizationContext: captureManagedRuntimeAuthorizationContext({
+        managed: false,
+        transcriptionMode: "openwhispr",
+        provider: "openwhispr",
+        model: null,
+      }),
+    };
   }
 
   if (cfg.useLocalWhisper) {
-    return window.electronAPI.transcribeAudioFile(filePath, {
-      provider: cfg.localTranscriptionProvider as "whisper" | "nvidia",
-      model: cfg.localTranscriptionProvider === "nvidia" ? cfg.parakeetModel : cfg.whisperModel,
-      requestId: opts.requestId,
-    });
+    const provider = cfg.localTranscriptionProvider === "nvidia" ? "nvidia" : "whisper";
+    const model = provider === "nvidia" ? cfg.parakeetModel : cfg.whisperModel;
+    return {
+      kind: "local",
+      provider,
+      model,
+      authorizationContext: captureManagedRuntimeAuthorizationContext({
+        managed: false,
+        transcriptionMode: "local",
+        provider,
+        model,
+      }),
+    };
   }
 
   // Pre-flight through the shared resolver: code-carrying errors (incl. the
@@ -136,26 +172,98 @@ export async function transcribeFile(
     request: { effectiveLanguage: cfg.language || undefined },
   });
   if (route.transport === "error") {
-    return { success: false, error: route.message, code: route.code };
+    return {
+      kind: "error",
+      result: { success: false, error: route.message, code: route.code },
+    };
+  }
+  const runtimeRoute =
+    route.transport === "local"
+      ? {
+          provider: cfg.localTranscriptionProvider,
+          model: cfg.localTranscriptionProvider === "nvidia" ? cfg.parakeetModel : cfg.whisperModel,
+        }
+      : route;
+
+  return {
+    kind: "byok",
+    authorizationContext: captureManagedRuntimeAuthorizationContext({
+      managed: false,
+      transcriptionMode: runtimeRoute.provider === "self-hosted" ? "self-hosted" : "providers",
+      provider: runtimeRoute.provider,
+      model: resolveEffectiveDiarizationModel(runtimeRoute, diarize),
+    }),
+  };
+}
+
+async function transcribeFileUsingPlan(
+  filePath: string,
+  cfg: FileTranscriptionConfig,
+  diarize: boolean,
+  opts: FileTranscriptionOptions,
+  plan: Exclude<FileTranscriptionPlan, { kind: "error" }>
+): Promise<FileTranscriptionResult> {
+  if (plan.kind === "local") {
+    return window.electronAPI.transcribeAudioFile(
+      filePath,
+      {
+        provider: plan.provider,
+        model: plan.model,
+        requestId: opts.requestId,
+      },
+      plan.authorizationContext
+    );
+  }
+  if (plan.kind === "cloud") {
+    return withSessionRefresh(async () => {
+      const result = await window.electronAPI.transcribeAudioFileCloud!(
+        filePath,
+        opts,
+        plan.authorizationContext
+      );
+      if (!result.success && result.code) {
+        throw Object.assign(new Error(result.error || "Cloud transcription failed"), {
+          code: result.code,
+        });
+      }
+      return result;
+    });
   }
 
   // Self-hosted fields make the handler route to the configured server
   // (fail-closed on misconfiguration) instead of stale BYOK settings.
-  return window.electronAPI.transcribeAudioFileByok!({
-    filePath,
-    apiKey: cfg.getApiKey(),
-    baseUrl: cfg.cloudTranscriptionBaseUrl,
-    model: cfg.cloudTranscriptionModel,
-    diarize: diarize || undefined,
-    timestamps: opts.timestamps || undefined,
-    provider: cfg.cloudTranscriptionProvider,
-    language: cfg.language,
-    environment: cfg.cortiEnvironment,
-    tenant: cfg.cortiTenant,
-    transcriptionMode: cfg.transcriptionMode,
-    remoteTranscriptionUrl: cfg.remoteTranscriptionUrl,
-    remoteTranscriptionModel: cfg.remoteTranscriptionModel,
-  });
+  return window.electronAPI.transcribeAudioFileByok!(
+    {
+      filePath,
+      requestId: opts.requestId,
+      apiKey: cfg.getApiKey(),
+      baseUrl: cfg.cloudTranscriptionBaseUrl,
+      model: cfg.cloudTranscriptionModel,
+      diarize: diarize || undefined,
+      timestamps: opts.timestamps || undefined,
+      provider: cfg.cloudTranscriptionProvider,
+      language: cfg.language,
+      environment: cfg.cortiEnvironment,
+      tenant: cfg.cortiTenant,
+      transcriptionMode: cfg.transcriptionMode,
+      remoteTranscriptionUrl: cfg.remoteTranscriptionUrl,
+      remoteTranscriptionModel: cfg.remoteTranscriptionModel,
+    },
+    plan.authorizationContext
+  );
+}
+
+// Single provider dispatch shared by the single-file flow and the batch queue,
+// so BYOK providers receive identical options in both.
+export async function transcribeFile(
+  filePath: string,
+  cfg: FileTranscriptionConfig,
+  diarize: boolean,
+  opts: FileTranscriptionOptions = {}
+): Promise<FileTranscriptionResult> {
+  const plan = resolveFileTranscriptionPlan(cfg, diarize);
+  if (plan.kind === "error") return plan.result;
+  return transcribeFileUsingPlan(filePath, cfg, diarize, opts, plan);
 }
 
 // OpenAI/Mistral BYOK handle diarization inside the transcription call itself.
@@ -170,7 +278,10 @@ export function shouldUseByokDiarize(
     !cfg.useLocalWhisper &&
     !cfg.isOpenWhisprCloud &&
     cfg.transcriptionMode !== "self-hosted" &&
-    (cfg.cloudTranscriptionProvider === "openai" || cfg.cloudTranscriptionProvider === "mistral")
+    resolveDiarizationTarget({
+      provider: cfg.cloudTranscriptionProvider,
+      endpoint: cfg.cloudTranscriptionBaseUrl,
+    }) !== null
   );
 }
 
@@ -182,21 +293,29 @@ export async function transcribeFileWithSpeakers(
   cfg: FileTranscriptionConfig,
   diarization: DiarizationSettings,
   durationSeconds?: number | null,
-  opts: { requestId?: string; timestamps?: boolean } = {}
+  opts: FileTranscriptionOptions = {}
 ): Promise<FileTranscriptionResult> {
   const byokDiarize = shouldUseByokDiarize(cfg, diarization.enabled);
+  const plan = resolveFileTranscriptionPlan(cfg, byokDiarize);
+  if (plan.kind === "error") {
+    return { ...plan.result, durationSeconds: durationSeconds || null };
+  }
   const diarizePromise =
     diarization.enabled && diarization.localModelsReady && !byokDiarize
       ? (window.electronAPI
-          .diarizeAudioFile?.(filePath, {
-            numSpeakers: diarization.numSpeakers ?? undefined,
-            requestId: opts.requestId,
-          })
+          .diarizeAudioFile?.(
+            filePath,
+            {
+              numSpeakers: diarization.numSpeakers ?? undefined,
+              requestId: opts.requestId,
+            },
+            plan.authorizationContext
+          )
           .catch(() => null) ?? Promise.resolve(null))
       : Promise.resolve(null);
 
   const [transcribed, diar] = await Promise.all([
-    transcribeFile(filePath, cfg, byokDiarize, opts),
+    transcribeFileUsingPlan(filePath, cfg, byokDiarize, opts, plan),
     diarizePromise,
   ]);
 

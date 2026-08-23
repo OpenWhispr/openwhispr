@@ -109,6 +109,30 @@ test("an already-cancelled authorization never dispatches to Tinfoil", async () 
   assert.equal(called, false);
 });
 
+test("cancellation aborts an in-flight Tinfoil secure fetch", async () => {
+  let receivedSignal;
+  const { transcribeWithTinfoil } = loadTranscription(
+    (_path, init) =>
+      new Promise((_resolve, reject) => {
+        receivedSignal = init.signal;
+        const rejectAbort = () => {
+          const error = new Error("Tinfoil secure fetch aborted");
+          error.name = "AbortError";
+          reject(error);
+        };
+        if (receivedSignal.aborted) rejectAbort();
+        else receivedSignal.addEventListener("abort", rejectAbort, { once: true });
+      })
+  );
+  const controller = new AbortController();
+  const transcription = transcribeWithTinfoil({ ...AUDIO, signal: controller.signal });
+
+  assert.equal(receivedSignal, controller.signal);
+  controller.abort();
+  assert.equal(receivedSignal.aborted, true);
+  await assert.rejects(transcription, { name: "AbortError" });
+});
+
 test("401 surfaces as INVALID_KEY", async () => {
   const { transcribeWithTinfoil } = loadTranscription(async () => ({
     ok: false,

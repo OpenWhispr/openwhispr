@@ -35,16 +35,22 @@ export function isMeetingAutoEndEligible(
 
 export interface MeetingRecordingStopBarrier {
   runStop<T>(operation: () => Promise<T> | T): Promise<T>;
+  runAbort<T>(operation: () => Promise<T> | T): Promise<T>;
   waitForPendingStop(): Promise<unknown>;
 }
 
 export function createMeetingRecordingStopBarrier(): MeetingRecordingStopBarrier {
   let pendingStop: Promise<unknown> | null = null;
+  let pendingAbort: Promise<unknown> | null = null;
 
-  const waitForPendingStop = (): Promise<unknown> => pendingStop ?? Promise.resolve();
+  const waitForPendingStop = (): Promise<unknown> => {
+    if (pendingStop && pendingAbort) return Promise.all([pendingStop, pendingAbort]);
+    return pendingStop ?? pendingAbort ?? Promise.resolve();
+  };
   const runStop = <T>(operation: () => Promise<T> | T): Promise<T> => {
     // Concurrent callers share the in-flight stop's result.
     if (pendingStop) return pendingStop as Promise<T>;
+    if (pendingAbort) return pendingAbort as Promise<T>;
 
     const stopPromise = Promise.resolve().then(operation);
     pendingStop = stopPromise;
@@ -58,8 +64,23 @@ export function createMeetingRecordingStopBarrier(): MeetingRecordingStopBarrier
     );
     return stopPromise;
   };
+  const runAbort = <T>(operation: () => Promise<T> | T): Promise<T> => {
+    if (pendingAbort) return pendingAbort as Promise<T>;
 
-  return { runStop, waitForPendingStop };
+    const abortPromise = Promise.resolve().then(operation);
+    pendingAbort = abortPromise;
+    void abortPromise.then(
+      () => {
+        if (pendingAbort === abortPromise) pendingAbort = null;
+      },
+      () => {
+        if (pendingAbort === abortPromise) pendingAbort = null;
+      }
+    );
+    return abortPromise;
+  };
+
+  return { runAbort, runStop, waitForPendingStop };
 }
 
 export interface MeetingRecordingStartOperation {

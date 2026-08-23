@@ -30,20 +30,35 @@ function deferred() {
 function downloadPlatform() {
   const whisperListeners = new Set();
   const cancellations = [];
+  const downloadRequests = [];
+  let isWhisperDownloading = true;
+  let whisperInventoryReads = 0;
 
   return {
     cancellations,
+    downloadRequests,
+    get whisperInventoryReads() {
+      return whisperInventoryReads;
+    },
+    reset() {
+      isWhisperDownloading = true;
+    },
     electronAPI: {
-      listWhisperModels: async () => ({
-        models: [
-          {
-            model: selection.modelId,
-            downloaded: false,
-            isDownloading: true,
-            downloadProgress: 42,
-          },
-        ],
-      }),
+      listWhisperModels: async () => {
+        whisperInventoryReads += 1;
+        return {
+          models: isWhisperDownloading
+            ? [
+                {
+                  model: selection.modelId,
+                  downloaded: false,
+                  isDownloading: true,
+                  downloadProgress: 42,
+                },
+              ]
+            : [],
+        };
+      },
       listParakeetModels: async () => ({ models: [] }),
       modelGetAll: async () => [],
       onWhisperDownloadProgress(listener) {
@@ -58,8 +73,18 @@ function downloadPlatform() {
       },
       cancelWhisperDownload() {
         const request = deferred();
-        cancellations.push(request);
+        cancellations.push({
+          promise: request.promise,
+          resolve(result) {
+            if (result?.success === true) isWhisperDownloading = false;
+            request.resolve(result);
+          },
+        });
         return request.promise;
+      },
+      downloadWhisperModel(modelId) {
+        downloadRequests.push(modelId);
+        return Promise.resolve({ success: true });
       },
     },
     emitError(error) {
@@ -156,27 +181,72 @@ test("the mounted download tray fences cancellation results to the clicked ident
         };
         export function useSettingsStore() { return state; }
         useSettingsStore.getState = () => state;
+        export function clearMissingLocalModelSelections() {}
       `,
       "/stores/policyStore": `
         export function usePolicyStore(selector) { return selector({}); }
         usePolicyStore.getState = () => ({});
       `,
-      "/stores/policyRules": `export function isAgentAllowed() { return true; }`,
+      "/stores/policyRules": `
+        export function isAgentAllowed() { return true; }
+        export function isModeAllowedByPolicy() { return true; }
+      `,
       "/hooks/modelDownloadCancellation": `
         export function notifyModelDownloadCancellation(modelType, modelId) {
           globalThis.__modelDownloadCancellationNotifications.push({ modelType, modelId });
         }
       `,
+      "/hooks/useModelDownload": `
+        export function useModelDownload({ modelType }) {
+          return {
+            hasHydratedDownloads: true,
+            isDownloading: false,
+            isDownloadingModel() { return false; },
+            async downloadModel(modelId) {
+              if (modelType === "whisper") {
+                await window.electronAPI.downloadWhisperModel(modelId);
+              }
+              return "started";
+            },
+          };
+        }
+      `,
+      "/EnterpriseModelSetupStep": `export default function EnterpriseModelSetupStep() { return null; }`,
+      "/ManagedSetupBlockedActions": `
+        export function EnterpriseConfigErrorActions() { return null; }
+        export function ManagedSetupFooterActions() { return null; }
+      `,
+      "/hooks/useDialogs": `
+        export function useDialogs() { return { showAlertDialog() {} }; }
+      `,
+      "/components/ui/useToast": `
+        export function useToast() { return { toast() {} }; }
+      `,
+      "/hooks/usePolicy": `export function usePolicySnapshot() { return {}; }`,
+      "/stores/enterpriseIdentityStore": `
+        export function selectEffectiveManagedLocalModels(state) { return state.config; }
+        export function useEnterpriseIdentityStore(selector) {
+          return selector(globalThis.__backgroundTrayEnterpriseState);
+        }
+        useEnterpriseIdentityStore.getState = () => globalThis.__backgroundTrayEnterpriseState;
+      `,
+      "/managedLocalModelSettings": `
+        export function enforceManagedLocalModelSettings() {}
+        export function reconcileManagedLocalModelSettings() {}
+      `,
     },
   });
-  const [{ default: BackgroundModelDownloadTray }, pending, managed] = await Promise.all([
+  const [{ default: BackgroundModelDownloadTray }, pending, managed, coordinator] = await Promise.all([
     vite.ssrLoadModule("/components/onboarding/BackgroundModelDownloadTray.tsx"),
     vite.ssrLoadModule("/components/onboarding/pendingLocalModels.ts"),
     vite.ssrLoadModule("/components/onboarding/managedLocalModels.ts"),
+    vite.ssrLoadModule("/components/onboarding/ManagedEnterpriseModelCoordinator.tsx"),
   ]);
+  const ManagedEnterpriseModelCoordinator = coordinator.default;
 
   function seedManagedDownload(identity) {
     storage.clear();
+    downloads.reset();
     globalThis.__modelDownloadCancellationNotifications.length = 0;
     localStorage.setItem("localSetupPending", "true");
     managed.writeManagedLocalModelBinding(identity.accountId, identity.workspaceId, {
@@ -289,7 +359,7 @@ test("the mounted download tray fences cancellation results to the clicked ident
     }
   );
 
-  await t.test("a late result after unmount cannot mutate pending or binding state", async () => {
+  await t.test("a late cancellation success persists the current managed selection after unmount", async () => {
     seedManagedDownload(identityA);
     const { container, root } = await mountTray();
     await React.act(async () => click(cancelButton(container)));
@@ -299,14 +369,11 @@ test("the mounted download tray fences cancellation results to the clicked ident
     downloads.cancellations[3].resolve({ success: true });
     await new Promise((resolve) => setImmediate(resolve));
 
-    assert.deepEqual(pending.readPendingLocalModels().dictation, {
-      ...selection,
-      managedIdentity: identityA,
-    });
+    assert.equal(pending.readPendingLocalModels().dictation, undefined);
     assert.equal(
       managed.readManagedLocalModelBinding(identityA.accountId, identityA.workspaceId)
-        .categoryErrors,
-      undefined
+        .categoryErrors.transcription,
+      managed.MANAGED_LOCAL_MODEL_ERROR_CODES.downloadCancelled
     );
     assert.deepEqual(globalThis.__modelDownloadCancellationNotifications, [
       { modelType: "whisper", modelId: "base" },
@@ -319,11 +386,63 @@ test("the mounted download tray fences cancellation results to the clicked ident
     await React.act(async () => downloads.emitError("network unavailable"));
     assert.match(container.textContent, /network unavailable/);
 
-    await React.act(async () => click(cancelButton(container)));
+    const dismissErrorButton = cancelButton(container);
+    assert.equal(
+      dismissErrorButton.getAttribute("aria-label"),
+      "managedLocalModels.actions.dismissError:Whisper Base"
+    );
+    await React.act(async () => click(dismissErrorButton));
 
     assert.equal(pending.readPendingLocalModels().dictation, undefined);
     assert.equal(downloads.cancellations.length, 4);
     assert.deepEqual(globalThis.__modelDownloadCancellationNotifications, []);
     await React.act(async () => root.unmount());
   });
+
+  await t.test(
+    "a late tray cancellation prevents a successor coordinator from restarting the exact model",
+    async () => {
+      seedManagedDownload(identityA);
+      globalThis.__backgroundTrayEnterpriseState = {
+        ...identityA,
+        status: "ready",
+        failClosed: false,
+        config: { version: identityA.configVersion, transcription: [selection], reasoning: [] },
+      };
+      const { container, root } = await mountTray();
+      const cancellationIndex = downloads.cancellations.length;
+      await React.act(async () => click(cancelButton(container)));
+      assert.equal(downloads.cancellations.length, cancellationIndex + 1);
+      await React.act(async () => root.unmount());
+
+      downloads.cancellations[cancellationIndex].resolve({ success: true });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      assert.equal(pending.readPendingLocalModels().dictation, undefined);
+      assert.equal(
+        managed.readManagedLocalModelBinding(identityA.accountId, identityA.workspaceId)
+          .categoryErrors.transcription,
+        managed.MANAGED_LOCAL_MODEL_ERROR_CODES.downloadCancelled
+      );
+
+      const successorContainer = globalThis.document.createElement("div");
+      testContainer.appendChild(successorContainer);
+      const successorRoot = createRoot(successorContainer);
+      const inventoryReadsBeforeSuccessor = downloads.whisperInventoryReads;
+      await React.act(async () => {
+        successorRoot.render(
+          React.createElement(ManagedEnterpriseModelCoordinator, { showUi: false })
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+      });
+      await waitFor(
+        () => downloads.whisperInventoryReads > inventoryReadsBeforeSuccessor,
+        "the successor coordinator did not reconcile its inventory"
+      );
+
+      assert.deepEqual(downloads.downloadRequests, []);
+      await React.act(async () => successorRoot.unmount());
+      delete globalThis.__backgroundTrayEnterpriseState;
+    }
+  );
 });

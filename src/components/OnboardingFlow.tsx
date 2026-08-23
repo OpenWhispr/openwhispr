@@ -53,7 +53,10 @@ import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pen
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import EnterpriseModelSetupStep from "./onboarding/EnterpriseModelSetupStep";
-import { EnterpriseConfigErrorActions } from "./onboarding/ManagedSetupBlockedActions";
+import {
+  EnterpriseConfigErrorActions,
+  ManagedSetupSignOutButton,
+} from "./onboarding/ManagedSetupBlockedActions";
 import {
   selectEffectiveManagedLocalModels,
   useEnterpriseIdentityStore,
@@ -1145,6 +1148,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     currentStepId === "byok-assistant" ||
     currentStepId === "local-dictation" ||
     currentStepId === "local-assistant";
+  const showsManagedSetupSignOut =
+    isSignedIn &&
+    session.authPath === "account" &&
+    ((currentStepId === "auth" && !enterpriseConfigError) ||
+      (currentStepId === "enterprise-models" && skipSetupChoiceForEnterprise));
   // Choice/provider pages own their forward action, while hotkey/demo pages
   // withhold Continue until their task is complete.
   const showsContinue =
@@ -1158,6 +1166,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       <OnboardingShell
         compact={compact}
         stepKey={currentStepId}
+        footerLeadingAction={showsManagedSetupSignOut ? <ManagedSetupSignOutButton /> : undefined}
         // History is the only Back gate. This preserves the branch's provider
         // escape path and also lets users return from setup choice/languages.
         onBack={hasShellNavigation && session.history.length > 0 ? goBack : undefined}

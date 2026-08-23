@@ -201,6 +201,9 @@
       "incompatibleReasoning": "Aucun modèle d’IA approuvé par l’entreprise n’est compatible avec cet appareil. Contactez le service informatique.",
       "downloadCancelled": "Le téléchargement du modèle d’entreprise a été annulé. Redémarrez-le pour continuer."
     },
+    "actions": {
+      "dismissError": "Fermer l’erreur de téléchargement de {{model}}"
+    },
     "attention": {
       "title": "Le modèle d’entreprise nécessite votre attention"
     },

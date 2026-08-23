@@ -18,9 +18,8 @@ test("managed transcription resolves every renderer runtime scope fail closed", 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-managed-transcription-runtime-",
   });
-  const { resolveManagedLocalTranscriptionRuntime } = await vite.ssrLoadModule(
-    "/helpers/managedLocalTranscriptionRuntime.ts"
-  );
+  const { captureManagedRuntimeAuthorizationContext, resolveManagedLocalTranscriptionRuntime } =
+    await vite.ssrLoadModule("/helpers/managedLocalTranscriptionRuntime.ts");
   const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
     "/stores/enterpriseIdentityStore.ts"
   );
@@ -29,7 +28,14 @@ test("managed transcription resolves every renderer runtime scope fail closed", 
   await i18n.changeLanguage("ja");
   const identity = { accountId: "account-a", workspaceId: "workspace-a", authGeneration: 4 };
 
-  usePolicyStore.setState({ status: "unmanaged", managed: false, policy: null });
+  usePolicyStore.setState({
+    accountId: identity.accountId,
+    authGeneration: identity.authGeneration,
+    revision: 3,
+    status: "unmanaged",
+    managed: false,
+    policy: null,
+  });
   useEnterpriseIdentityStore.setState({
     ...identity,
     status: "error",
@@ -70,7 +76,7 @@ test("managed transcription resolves every renderer runtime scope fail closed", 
   useEnterpriseIdentityStore.setState({
     ...identity,
     status: "ready",
-    config: { localModels },
+    config: { generation: 12, localModels },
     lastKnownLocalModels: localModels,
     lastKnownLocalModelsKnown: true,
     failClosed: false,
@@ -92,6 +98,27 @@ test("managed transcription resolves every renderer runtime scope fail closed", 
       ["local", true, "nvidia", selection.modelId]
     );
   }
+
+  assert.deepEqual(
+    captureManagedRuntimeAuthorizationContext({
+      managed: true,
+      transcriptionMode: "local",
+      provider: "nvidia",
+      model: selection.modelId,
+    }),
+    {
+      accountId: identity.accountId,
+      workspaceId: identity.workspaceId,
+      authGeneration: identity.authGeneration,
+      configGeneration: 12,
+      policyRevision: 3,
+      category: "transcription",
+      transcriptionMode: "local",
+      provider: "nvidia",
+      model: selection.modelId,
+      managed: true,
+    }
+  );
 
   usePolicyStore.setState({
     status: "managed",
@@ -117,4 +144,16 @@ test("managed transcription resolves every renderer runtime scope fail closed", 
     managed: false,
     settings: cloudSettings(),
   });
+
+  useEnterpriseIdentityStore.setState({ accountId: null, workspaceId: null, authGeneration: null });
+  usePolicyStore.setState({ accountId: null, authGeneration: null, revision: 0 });
+  assert.equal(
+    captureManagedRuntimeAuthorizationContext({
+      managed: false,
+      transcriptionMode: "providers",
+      provider: "openai",
+      model: "gpt-4o-mini-transcribe",
+    }).policyRevision,
+    null
+  );
 });

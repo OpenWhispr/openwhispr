@@ -75,6 +75,12 @@ test("owner loss during startup tears down after the deferred start settles", as
       stopCompleted.resolve();
       return { success: true };
     },
+    abort: async () => {
+      captureActive = false;
+      countdownVisible = false;
+      stopCompleted.resolve();
+      return { success: true };
+    },
   });
 
   const startPromise = lifecycle.startSession({
@@ -96,6 +102,46 @@ test("owner loss during startup tears down after the deferred start settles", as
   assert.equal(ownerWebContents.listenerCount("render-process-gone"), 0);
 });
 
+test("owner loss during deferred startup invalidates immediately and never enters graceful stop", async () => {
+  const startDeferred = createDeferred();
+  const ownerWebContents = createOwnerWebContents();
+  const events = [];
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => {
+      events.push(`start:${sessionId}`);
+      await startDeferred.promise;
+      return { success: true, sessionId };
+    },
+    stop: async (sessionId) => {
+      events.push(`stop:${sessionId}`);
+      return { success: true };
+    },
+    abort: async (sessionId) => {
+      events.push(`abort:${sessionId}`);
+      return { success: true };
+    },
+    onAbortRequested: (sessionId) => events.push(`invalidate:${sessionId}`),
+  });
+
+  const starting = lifecycle.startSession({
+    sessionId: "meeting-crash",
+    ownerWebContents,
+    options: {},
+  });
+  await Promise.resolve();
+  ownerWebContents.emit("render-process-gone", {}, { reason: "crashed" });
+
+  assert.deepEqual(events, ["start:meeting-crash", "invalidate:meeting-crash"]);
+  startDeferred.resolve();
+  await starting;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(events, [
+    "start:meeting-crash",
+    "invalidate:meeting-crash",
+    "abort:meeting-crash",
+  ]);
+});
+
 for (const ownerLossEvent of ["destroyed", "render-process-gone"]) {
   test(`${ownerLossEvent} tears down an active session without renderer cooperation`, async () => {
     const stopCompleted = createDeferred();
@@ -109,6 +155,12 @@ for (const ownerLossEvent of ["destroyed", "render-process-gone"]) {
         return { success: true, sessionId };
       },
       stop: async () => {
+        captureActive = false;
+        countdownVisible = false;
+        stopCompleted.resolve();
+        return { success: true };
+      },
+      abort: async () => {
         captureActive = false;
         countdownVisible = false;
         stopCompleted.resolve();
@@ -188,6 +240,52 @@ test("a replacement start waits for a deferred accepted stop to finish", async (
   assert.equal(activeCaptureSessionId, "meeting-2");
 });
 
+test("a replacement is still rejected while the current session is active", async () => {
+  const starts = [];
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => {
+      starts.push(sessionId);
+      return { success: true, sessionId };
+    },
+    stop: async () => ({ success: true }),
+  });
+
+  await lifecycle.startSession({
+    sessionId: "meeting-1",
+    ownerWebContents: createOwnerWebContents(),
+    options: {},
+  });
+  assert.deepEqual(
+    await lifecycle.startSession({
+      sessionId: "meeting-2",
+      ownerWebContents: createOwnerWebContents(),
+      options: {},
+    }),
+    { success: false, error: "Operation in progress" }
+  );
+  assert.deepEqual(starts, ["meeting-1"]);
+});
+
+test("renderer operations require the exact session id and owning web contents", async () => {
+  const ownerWebContents = createOwnerWebContents();
+  const otherWebContents = createOwnerWebContents();
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => ({ success: true, sessionId }),
+    stop: async () => ({ success: true }),
+  });
+
+  await lifecycle.startSession({
+    sessionId: "meeting-owned",
+    ownerWebContents,
+    options: {},
+  });
+
+  assert.equal(lifecycle.isOwnedSession("meeting-owned", ownerWebContents), true);
+  assert.equal(lifecycle.isOwnedSession(undefined, ownerWebContents), false);
+  assert.equal(lifecycle.isOwnedSession("meeting-other", ownerWebContents), false);
+  assert.equal(lifecycle.isOwnedSession("meeting-owned", otherWebContents), false);
+});
+
 test("authorization abort during startup never uses the graceful stop path", async () => {
   const startDeferred = createDeferred();
   const events = [];
@@ -241,4 +339,294 @@ test("authorization abort of an active session never finalizes through stop", as
 
   await lifecycle.abortSession("meeting-1");
   assert.deepEqual(events, ["abort:meeting-1"]);
+});
+
+test("authorization abort immediately overtakes an accepted graceful stop", async () => {
+  const stopStarted = createDeferred();
+  const stopCompletion = createDeferred();
+  const events = [];
+  let abortVisibleToStop = false;
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => ({ success: true, sessionId }),
+    stop: async (sessionId, abortSignal) => {
+      events.push(`stop:${sessionId}`);
+      stopStarted.resolve();
+      await stopCompletion.promise;
+      abortVisibleToStop = abortSignal.aborted;
+      return { success: true, transcript: "stale transcript" };
+    },
+    abort: async (sessionId) => {
+      events.push(`abort:${sessionId}`);
+      return { success: true };
+    },
+    onAbortRequested: (sessionId) => {
+      events.push(`invalidate:${sessionId}`);
+    },
+  });
+  await lifecycle.startSession({
+    sessionId: "meeting-1",
+    ownerWebContents: createOwnerWebContents(),
+    options: {},
+  });
+
+  const stopping = lifecycle.stopSession("meeting-1");
+  await stopStarted.promise;
+  const aborting = lifecycle.abortSession("meeting-1");
+  await Promise.resolve();
+
+  assert.deepEqual(events, ["stop:meeting-1", "invalidate:meeting-1", "abort:meeting-1"]);
+
+  stopCompletion.resolve();
+  assert.deepEqual(await stopping, {
+    success: false,
+    reason: "authorization-changed",
+    code: "AUTHORIZATION_BOUNDARY_CHANGED",
+  });
+  assert.deepEqual(await aborting, { success: true });
+  assert.equal(abortVisibleToStop, true);
+});
+
+test("renderer crash overtakes a deferred graceful flush and never returns its result", async () => {
+  const ownerWebContents = createOwnerWebContents();
+  const flushStarted = createDeferred();
+  const flushCompletion = createDeferred();
+  const events = [];
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => ({ success: true, sessionId }),
+    stop: async (sessionId, abortSignal) => {
+      events.push(`flush:${sessionId}`);
+      flushStarted.resolve();
+      await flushCompletion.promise;
+      return { success: true, transcript: abortSignal.aborted ? "revoked" : "committed" };
+    },
+    abort: async (sessionId) => {
+      events.push(`abort:${sessionId}`);
+      return { success: true };
+    },
+  });
+  await lifecycle.startSession({
+    sessionId: "meeting-crash-flush",
+    ownerWebContents,
+    options: {},
+  });
+
+  const stopping = lifecycle.stopSession("meeting-crash-flush");
+  await flushStarted.promise;
+  ownerWebContents.emit("render-process-gone", {}, { reason: "crashed" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(events, ["flush:meeting-crash-flush", "abort:meeting-crash-flush"]);
+
+  flushCompletion.resolve();
+  assert.deepEqual(await stopping, {
+    success: false,
+    reason: "authorization-changed",
+    code: "AUTHORIZATION_BOUNDARY_CHANGED",
+  });
+});
+
+test("a replacement waits for both an overtaken stop and its authorization abort", async () => {
+  const stopCompletion = createDeferred();
+  const abortCompletion = createDeferred();
+  const events = [];
+  const currentBindings = new Set(["binding-a", "binding-b"]);
+  let activeCaptureSessionId = null;
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => {
+      events.push(`start:${sessionId}`);
+      activeCaptureSessionId = sessionId;
+      return { success: true, sessionId };
+    },
+    stop: async (sessionId) => {
+      events.push(`stop:${sessionId}`);
+      await stopCompletion.promise;
+      if (activeCaptureSessionId === sessionId) activeCaptureSessionId = null;
+      return { success: true };
+    },
+    abort: async (sessionId) => {
+      events.push(`abort:${sessionId}`);
+      await abortCompletion.promise;
+      if (activeCaptureSessionId === sessionId) activeCaptureSessionId = null;
+      return { success: true };
+    },
+    isStartAuthorized: (authorizationBinding) => currentBindings.has(authorizationBinding),
+  });
+
+  await lifecycle.startSession({
+    sessionId: "meeting-1",
+    ownerWebContents: createOwnerWebContents(),
+    options: {},
+    authorizationBinding: "binding-a",
+  });
+  const stopping = lifecycle.stopSession("meeting-1");
+  await Promise.resolve();
+  const aborting = lifecycle.abortSession("meeting-1");
+  await Promise.resolve();
+  const replacement = lifecycle.startSession({
+    sessionId: "meeting-2",
+    ownerWebContents: createOwnerWebContents(),
+    options: {},
+    authorizationBinding: "binding-b",
+  });
+  await Promise.resolve();
+
+  assert.deepEqual(events, ["start:meeting-1", "stop:meeting-1", "abort:meeting-1"]);
+  assert.equal(activeCaptureSessionId, "meeting-1");
+
+  stopCompletion.resolve();
+  await stopping;
+  await Promise.resolve();
+  assert.deepEqual(events, ["start:meeting-1", "stop:meeting-1", "abort:meeting-1"]);
+
+  abortCompletion.resolve();
+  assert.deepEqual(await aborting, { success: true });
+  assert.equal((await replacement).success, true);
+  assert.deepEqual(events, [
+    "start:meeting-1",
+    "stop:meeting-1",
+    "abort:meeting-1",
+    "start:meeting-2",
+  ]);
+  assert.equal(activeCaptureSessionId, "meeting-2");
+});
+
+test("owner loss cancels a queued replacement before any capture can start", async () => {
+  const stopCompletion = createDeferred();
+  const replacementOwner = createOwnerWebContents();
+  const starts = [];
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => {
+      starts.push(sessionId);
+      return { success: true, sessionId };
+    },
+    stop: async () => {
+      await stopCompletion.promise;
+      return { success: true };
+    },
+    abort: async () => ({ success: true }),
+  });
+  await lifecycle.startSession({
+    sessionId: "meeting-active",
+    ownerWebContents: createOwnerWebContents(),
+    options: {},
+  });
+  const stopping = lifecycle.stopSession("meeting-active");
+  await Promise.resolve();
+  const replacement = lifecycle.startSession({
+    sessionId: "meeting-queued-crash",
+    ownerWebContents: replacementOwner,
+    options: {},
+  });
+  replacementOwner.emit("destroyed");
+
+  stopCompletion.resolve();
+  await stopping;
+  await replacement;
+  assert.deepEqual(starts, ["meeting-active"]);
+});
+
+test("a second authorization change cancels a queued replacement for its exact binding", async () => {
+  const stopCompletion = createDeferred();
+  const abortCompletion = createDeferred();
+  const events = [];
+  const currentBindings = new Set(["binding-a", "binding-b"]);
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => {
+      events.push(`start:${sessionId}`);
+      return { success: true, sessionId };
+    },
+    stop: async (sessionId) => {
+      events.push(`stop:${sessionId}`);
+      await stopCompletion.promise;
+      return { success: true };
+    },
+    abort: async (sessionId) => {
+      events.push(`abort:${sessionId}`);
+      await abortCompletion.promise;
+      return { success: true };
+    },
+    isStartAuthorized: (authorizationBinding) => currentBindings.has(authorizationBinding),
+    onAbortRequested: (sessionId) => events.push(`invalidate:${sessionId}`),
+  });
+
+  await lifecycle.startSession({
+    sessionId: "meeting-1",
+    ownerWebContents: createOwnerWebContents(),
+    options: {},
+    authorizationBinding: "binding-a",
+  });
+  const stopping = lifecycle.stopSession("meeting-1");
+  await Promise.resolve();
+  const aborting = lifecycle.abortSession("meeting-1");
+  await Promise.resolve();
+  const replacement = lifecycle.startSession({
+    sessionId: "meeting-2",
+    ownerWebContents: createOwnerWebContents(),
+    options: {},
+    authorizationBinding: "binding-b",
+  });
+  await Promise.resolve();
+
+  currentBindings.delete("binding-b");
+  assert.equal(
+    lifecycle.cancelQueuedSessions((binding) => binding === "binding-b"),
+    1
+  );
+  const repeatedAbort = lifecycle.abortSession();
+
+  stopCompletion.resolve();
+  abortCompletion.resolve();
+  await Promise.all([stopping, aborting, repeatedAbort]);
+  assert.deepEqual(await replacement, {
+    success: false,
+    reason: "authorization-changed",
+    code: "AUTHORIZATION_BOUNDARY_CHANGED",
+  });
+  assert.deepEqual(events, [
+    "start:meeting-1",
+    "stop:meeting-1",
+    "invalidate:meeting-1",
+    "abort:meeting-1",
+  ]);
+});
+
+test("a queued replacement revalidates its binding immediately before start", async () => {
+  const stopCompletion = createDeferred();
+  const starts = [];
+  let bindingCurrent = true;
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => {
+      starts.push(sessionId);
+      return { success: true, sessionId };
+    },
+    stop: async () => {
+      await stopCompletion.promise;
+      return { success: true };
+    },
+    isStartAuthorized: () => bindingCurrent,
+  });
+
+  await lifecycle.startSession({
+    sessionId: "meeting-1",
+    ownerWebContents: createOwnerWebContents(),
+    options: {},
+    authorizationBinding: "binding-a",
+  });
+  const stopping = lifecycle.stopSession("meeting-1");
+  await Promise.resolve();
+  const replacement = lifecycle.startSession({
+    sessionId: "meeting-2",
+    ownerWebContents: createOwnerWebContents(),
+    options: {},
+    authorizationBinding: "binding-b",
+  });
+
+  bindingCurrent = false;
+  stopCompletion.resolve();
+  await stopping;
+  assert.deepEqual(await replacement, {
+    success: false,
+    reason: "authorization-changed",
+    code: "AUTHORIZATION_BOUNDARY_CHANGED",
+  });
+  assert.deepEqual(starts, ["meeting-1"]);
 });

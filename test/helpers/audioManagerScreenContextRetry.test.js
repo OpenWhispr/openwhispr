@@ -127,6 +127,75 @@ test("the text-only retry swaps in the pre-built prompt verbatim", async (t) => 
   assert.deepEqual(prompts, ["BASE PROMPT WITH SUFFIX", "BASE PROMPT"]);
 });
 
+test("a normal screenshot rejection never retries after its operation boundary changes", async (t) => {
+  const { setProcessText, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-sc-retry-transition-test-",
+    settingsKey: "__scRetryTransitionSettings",
+    reasoningKey: "__scRetryTransitionProcessText",
+  });
+
+  let cancelled = false;
+  let dispatches = 0;
+  setProcessText(async () => {
+    dispatches += 1;
+    if (dispatches === 1) {
+      cancelled = true;
+      throw new Error("image too large");
+    }
+    return "text-only retry";
+  });
+
+  const manager = createManager({ onError: () => {} });
+
+  await assert.rejects(
+    () =>
+      manager.processWithReasoningModel(
+        "hello",
+        "gpt-5",
+        "Agent",
+        {
+          systemPrompt: "BASE PROMPT WITH SUFFIX",
+          textOnlySystemPrompt: "BASE PROMPT",
+          screenContext: { mediaType: "image/jpeg", data: "x" },
+        },
+        () => cancelled
+      ),
+    { name: "AbortError" }
+  );
+  assert.equal(dispatches, 1);
+});
+
+test("a changed authorization boundary never retries a rejected screenshot text-only", async (t) => {
+  const { setProcessText, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-sc-retry-authorization-test-",
+    settingsKey: "__scRetryAuthorizationSettings",
+    reasoningKey: "__scRetryAuthorizationProcessText",
+  });
+
+  let dispatches = 0;
+  const boundaryError = Object.assign(new Error("Authorization changed"), {
+    code: "AUTHORIZATION_BOUNDARY_CHANGED",
+    name: "AbortError",
+  });
+  setProcessText(async () => {
+    dispatches += 1;
+    throw boundaryError;
+  });
+
+  const manager = createManager({ onError: () => {} });
+
+  await assert.rejects(
+    () =>
+      manager.processWithReasoningModel("hello", "gpt-5", "Agent", {
+        systemPrompt: "BASE PROMPT WITH SUFFIX",
+        textOnlySystemPrompt: "BASE PROMPT",
+        screenContext: { mediaType: "image/jpeg", data: "x" },
+      }),
+    { code: "AUTHORIZATION_BOUNDARY_CHANGED" }
+  );
+  assert.equal(dispatches, 1);
+});
+
 test("a non-voice-agent recording clears a stale screen capture", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-sc-stale-test-",

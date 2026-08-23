@@ -20,7 +20,13 @@ export async function generateNoteTitle(
       ...config,
     });
     return sanitizeGeneratedTitle(raw);
-  } catch {
+  } catch (error) {
+    if (
+      (error as { code?: string; name?: string }).code === "AUTHORIZATION_BOUNDARY_CHANGED" ||
+      (error as { name?: string }).name === "AbortError"
+    ) {
+      throw error;
+    }
     return "";
   }
 }

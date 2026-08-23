@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import {
+  captureManagedRuntimeAuthorizationContext,
   isManagedLocalTranscriptionRuntimeAllowed,
   resolveManagedLocalTranscriptionRuntime,
 } from "../helpers/managedLocalTranscriptionRuntime";
@@ -51,6 +52,7 @@ import {
 import { persistFinalTranscriptAroundStop } from "../helpers/meetingTranscriptPersistence";
 import {
   captureRuntimeAuthorizationGuard,
+  captureRuntimeAuthorizationLease,
   subscribeRuntimeAuthorizationBoundary,
 } from "../helpers/runtimeAuthorizationBoundary";
 
@@ -149,7 +151,7 @@ const getMeetingTranscriptionRuntime = () => {
   return resolveManagedLocalTranscriptionRuntime(selectResolvedMeetingTranscription(state));
 };
 
-const getMeetingTranscriptionOptions = () => {
+const getMeetingTranscriptionRequest = () => {
   const state = getSettings();
   const runtime = getMeetingTranscriptionRuntime();
   if (runtime.kind === "error") {
@@ -158,7 +160,7 @@ const getMeetingTranscriptionOptions = () => {
   const resolved = runtime.settings;
   const language = getBaseLanguageCode(state.preferredLanguage);
 
-  return resolveMeetingTranscriptionOptions({
+  const options = resolveMeetingTranscriptionOptions({
     transcriptionMode: resolved.transcriptionMode,
     language,
     localProvider: resolved.localTranscriptionProvider,
@@ -172,6 +174,16 @@ const getMeetingTranscriptionOptions = () => {
     cortiTenant: state.cortiTenant,
     keyterms: (state.customDictionary ?? []).filter(Boolean),
   });
+  const local = options.provider === "local";
+  return {
+    options,
+    managedRuntimeContext: captureManagedRuntimeAuthorizationContext({
+      managed: runtime.managed,
+      transcriptionMode: resolved.transcriptionMode,
+      provider: local ? options.localProvider : options.provider,
+      model: local ? options.localModel : (options.model ?? null),
+    }),
+  };
 };
 
 const stopMediaStream = (stream: MediaStream | null) => {
@@ -397,8 +409,10 @@ const disconnectProcessor = async (processor: AudioWorkletNode | null, flush: bo
     } catch {}
   }
 
-  processor.port.onmessage = null;
-  processor.disconnect();
+  try {
+    processor.port.onmessage = null;
+    processor.disconnect();
+  } catch {}
 };
 
 const flushAndDisconnectProcessor = (processor: AudioWorkletNode | null) =>
@@ -421,9 +435,11 @@ let systemStream: MediaStream | null = null;
 let isRecordingFlag = false;
 let isStartingFlag = false;
 let activeRecordingSessionId: string | null = null;
+let activeMeetingCommitToken: string | null = null;
 const meetingRecordingStartCoordinator = createMeetingRecordingStartCoordinator();
 const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
+let preparedMeetingTransportId: string | null = null;
 let segmentsRefValue: TranscriptSegment[] = [];
 let preparePromise: Promise<void> | null = null;
 let authorizationAbortPromise: Promise<void> | null = null;
@@ -708,6 +724,7 @@ async function cleanup({ flushProcessors = true } = {}): Promise<void> {
     pushConfigTimeout = null;
   }
   isPrepared = false;
+  preparedMeetingTransportId = null;
   isRecordingFlag = false;
   isStartingFlag = false;
 }
@@ -720,6 +737,7 @@ function abortForAuthorizationBoundary(): Promise<void> {
     const canceledStart = meetingRecordingStartCoordinator.cancelActiveStart(sessionId);
     activeRecordingSessionId = null;
     isPrepared = false;
+    preparedMeetingTransportId = null;
     isRecordingFlag = false;
     isStartingFlag = false;
     useMeetingRecordingStore.setState({
@@ -732,7 +750,7 @@ function abortForAuthorizationBoundary(): Promise<void> {
       currentMicLevel: 0,
     });
     const mainAbort = window.electronAPI?.meetingTranscriptionAbort?.(sessionId);
-    const cleanupAbort = meetingRecordingStopBarrier.runStop(async () => {
+    const cleanupAbort = meetingRecordingStopBarrier.runAbort(async () => {
       await Promise.all([
         cleanup({ flushProcessors: false }),
         mainAbort?.catch(() => undefined) ?? Promise.resolve(),
@@ -766,13 +784,17 @@ export async function prepareTranscription(): Promise<void> {
   const promise = (async () => {
     try {
       authorization.assertCurrent();
+      const { options, managedRuntimeContext } = getMeetingTranscriptionRequest();
+      const transportId = crypto.randomUUID();
       const result = await window.electronAPI?.meetingTranscriptionPrepare?.(
-        getMeetingTranscriptionOptions()
+        { ...options, transportId },
+        managedRuntimeContext
       );
       authorization.assertCurrent();
 
       if (result?.success) {
         isPrepared = true;
+        preparedMeetingTransportId = transportId;
         logger.info(
           "Meeting transcription prepared",
           { alreadyPrepared: result.alreadyPrepared },
@@ -943,12 +965,17 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       startOperation.markMainStartAttempted();
       authorization.assertCurrent();
-      const mainStartPromise = window.electronAPI?.meetingTranscriptionStart?.({
-        ...getMeetingTranscriptionOptions(),
-        noteId: args.noteId ?? null,
-        sessionId,
-        autoEndEligible: args.autoEndEligible,
-      });
+      const { options, managedRuntimeContext } = getMeetingTranscriptionRequest();
+      const mainStartPromise = window.electronAPI?.meetingTranscriptionStart?.(
+        {
+          ...options,
+          transportId: preparedMeetingTransportId ?? crypto.randomUUID(),
+          noteId: args.noteId ?? null,
+          sessionId,
+          autoEndEligible: args.autoEndEligible,
+        },
+        managedRuntimeContext
+      );
       const micCapturePromise = getMeetingMicConstraints().then(async (constraints) => {
         if (!isCurrentStart()) return null;
         try {
@@ -1031,6 +1058,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         releaseSession();
         return;
       }
+      activeMeetingCommitToken = startResult.commitToken ?? null;
       const systemAudioMode = startResult.systemAudioMode || initialSystemAudioAccess.mode;
       const systemAudioStrategy = startResult.systemAudioStrategy || initialSystemAudioStrategy;
       systemCaptureResult = await ensureRendererSystemAudioCapture({
@@ -1290,7 +1318,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
               return;
             }
             if (socketReady) {
-              window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
+              window.electronAPI?.meetingTranscriptionSend?.(sessionId, chunk, "mic");
               return;
             }
             pendingMicChunks.push(chunk.slice(0));
@@ -1410,7 +1438,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
               return;
             }
             if (socketReady) {
-              window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
+              window.electronAPI?.meetingTranscriptionSend?.(sessionId, chunk, "system");
               return;
             }
             pendingSystemChunks.push(chunk.slice(0));
@@ -1482,11 +1510,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       for (const chunk of pendingMicChunks) {
         if (!authorization.isCurrent()) break;
-        window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
+        window.electronAPI?.meetingTranscriptionSend?.(sessionId, chunk, "mic");
       }
       for (const chunk of pendingSystemChunks) {
         if (!authorization.isCurrent()) break;
-        window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
+        window.electronAPI?.meetingTranscriptionSend?.(sessionId, chunk, "system");
       }
 
       const totalMs = performance.now() - startTime;
@@ -1555,75 +1583,115 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       return { diarizationSessionId: null };
     }
 
-    const sessionId = activeRecordingSessionId;
-    activeRecordingSessionId = null;
-    isRecordingFlag = false;
-    isStartingFlag = false;
-    useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
+    let signalAuthorizationChanged: () => void = () => {};
+    const authorizationChanged = new Promise<void>((resolve) => {
+      signalAuthorizationChanged = resolve;
+    });
+    // The module-wide subscription owns transport teardown; this per-stop lease
+    // supplies monotonic ABA protection and releases any stale persistence wait.
+    const authorization = captureRuntimeAuthorizationLease(
+      "transcription",
+      signalAuthorizationChanged
+    );
+    try {
+      const sessionId = activeRecordingSessionId;
+      let commitToken = activeMeetingCommitToken;
+      activeRecordingSessionId = null;
+      activeMeetingCommitToken = null;
+      isRecordingFlag = false;
+      isStartingFlag = false;
+      useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
 
-    // Persist here, not in a notes-view effect: an auto-end stop can fire while
-    // that view is unmounted, and any view-scoped saver dies with it. (Delayed
-    // diarization results are persisted by the module-level listener below.)
-    const { recordingNoteId, segments: finalSegments } = useMeetingRecordingStore.getState();
-    const persistTranscript = async (transcript: string) => {
-      if (recordingNoteId == null) return;
-      try {
-        await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
-      } catch (err) {
-        logger.error(
-          "Failed to persist final meeting transcript",
-          { error: (err as Error).message, noteId: recordingNoteId },
-          "meeting"
-        );
-      }
-    };
-
-    const diarizationSessionId = await persistFinalTranscriptAroundStop({
-      segments: finalSegments,
-      serializeSegments: serializeTranscriptSegments,
-      persist: persistTranscript,
-      fallbackTranscript: () => useMeetingRecordingStore.getState().transcript,
-      stop: async () => {
-        await cleanup();
-
-        let stoppedDiarizationSessionId: string | null = null;
+      // Persist here, not in a notes-view effect: an auto-end stop can fire while
+      // that view is unmounted, and any view-scoped saver dies with it. (Delayed
+      // diarization results are persisted by the module-level listener below.)
+      const { recordingNoteId, segments: finalSegments } = useMeetingRecordingStore.getState();
+      const persistTranscript = async (transcript: string): Promise<void> => {
+        if (recordingNoteId == null || !commitToken) return;
         try {
-          const result = await window.electronAPI?.meetingTranscriptionStop?.(
-            sessionId ?? undefined
-          );
-          if (result?.diarizationSessionId) {
-            stoppedDiarizationSessionId = result.diarizationSessionId;
-            useMeetingRecordingStore.setState({
-              diarizationSessionId: stoppedDiarizationSessionId,
-            });
-          }
-          if (result?.success && result.transcript) {
-            useMeetingRecordingStore.setState({ transcript: result.transcript });
-          } else if (result?.error) {
-            reportMeetingError(result.error);
-          }
+          const result = await window.electronAPI?.commitMeetingTranscript?.({
+            commitToken,
+            noteId: recordingNoteId,
+            transcript,
+            kind: "final",
+          });
+          if (!result?.success) throw new Error(result?.error || "Meeting commit rejected");
         } catch (err) {
-          reportMeetingError((err as Error).message);
           logger.error(
-            "Meeting transcription stop failed",
-            { error: (err as Error).message },
+            "Failed to persist final meeting transcript",
+            { error: (err as Error).message, noteId: recordingNoteId },
             "meeting"
           );
         }
-        return stoppedDiarizationSessionId;
-      },
-    });
+      };
 
-    useMeetingRecordingStore.setState({
-      micPartial: "",
-      systemPartial: "",
-      systemPartialSpeakerId: null,
-      systemPartialSpeakerName: null,
-      currentMicLevel: 0,
-    });
+      let mainStopTranscript: string | undefined;
+      try {
+        const stopResult = await persistFinalTranscriptAroundStop({
+          segments: finalSegments,
+          serializeSegments: serializeTranscriptSegments,
+          persist: persistTranscript,
+          fallbackTranscript: () =>
+            mainStopTranscript ?? useMeetingRecordingStore.getState().transcript,
+          shouldPersist: (result) => result.shouldPersist,
+          assertAuthorized: authorization.assertCurrent,
+          authorizationChanged,
+          stop: async () => {
+            await cleanup();
 
-    logger.info("Meeting transcription stopped", {}, "meeting");
-    return { diarizationSessionId };
+            let stoppedDiarizationSessionId: string | null = null;
+            let shouldPersist = false;
+            try {
+              const result = await window.electronAPI?.meetingTranscriptionStop?.(
+                sessionId ?? undefined
+              );
+              shouldPersist = result?.success === true && authorization.isCurrent();
+              if (shouldPersist) {
+                commitToken = result?.commitToken ?? commitToken;
+                stoppedDiarizationSessionId = result?.diarizationSessionId ?? null;
+                mainStopTranscript = result?.transcript;
+              } else if (result?.error) {
+                reportMeetingError(result.error);
+              }
+            } catch (err) {
+              reportMeetingError((err as Error).message);
+              logger.error(
+                "Meeting transcription stop failed",
+                { error: (err as Error).message },
+                "meeting"
+              );
+            }
+            return { diarizationSessionId: stoppedDiarizationSessionId, shouldPersist };
+          },
+        });
+
+        authorization.assertCurrent();
+        if (stopResult.diarizationSessionId) {
+          useMeetingRecordingStore.setState({
+            diarizationSessionId: stopResult.diarizationSessionId,
+          });
+        }
+        if (mainStopTranscript) {
+          useMeetingRecordingStore.setState({ transcript: mainStopTranscript });
+        }
+
+        useMeetingRecordingStore.setState({
+          micPartial: "",
+          systemPartial: "",
+          systemPartialSpeakerId: null,
+          systemPartialSpeakerName: null,
+          currentMicLevel: 0,
+        });
+
+        logger.info("Meeting transcription stopped", {}, "meeting");
+        return { diarizationSessionId: stopResult.diarizationSessionId };
+      } catch (error) {
+        if (!authorization.isCurrent()) return { diarizationSessionId: null };
+        throw error;
+      }
+    } finally {
+      authorization.dispose();
+    }
   });
 }
 
@@ -1655,7 +1723,9 @@ export function lockSpeaker(speakerId: string, displayName: string): void {
 }
 
 export function cancelPreparedTranscription(): void {
-  window.electronAPI?.meetingTranscriptionCancel?.();
+  if (preparedMeetingTransportId) {
+    window.electronAPI?.meetingTranscriptionCancel?.(preparedMeetingTransportId);
+  }
 }
 
 if (typeof window !== "undefined") {
@@ -1680,82 +1750,91 @@ if (typeof window !== "undefined") {
   const enqueueDiarizationCompletion = createSerialQueue();
   window.electronAPI?.onMeetingDiarizationComplete?.((data) => {
     enqueueDiarizationCompletion(async () => {
-      const {
-        diarizationSessionId,
-        recordingNoteId,
-        segments: liveSegments,
-      } = useMeetingRecordingStore.getState();
-      const { targetNoteId, isCurrentSession } = resolveDiarizationTarget({
-        payloadNoteId: data?.noteId,
-        payloadSessionId: data?.sessionId,
-        currentSessionId: diarizationSessionId,
-      });
-      if (targetNoteId == null) return;
-
-      // Publishing an empty result clears a waiting editor's spinner without
-      // painting an overlay; anything non-empty is already persisted.
-      const publish = (segments: TranscriptSegment[]) => {
-        if (isCurrentSession) {
-          useMeetingRecordingStore.setState({
-            completedDiarization: { noteId: targetNoteId, segments },
-          });
-        }
-      };
-
-      if (!data?.segments?.length) {
-        publish([]);
-        return;
-      }
-
-      let persisted: NoteItem | null | undefined;
+      const authorization = captureRuntimeAuthorizationLease("transcription", () => {});
       try {
-        persisted = await window.electronAPI?.getNote?.(targetNoteId);
-      } catch (error) {
-        logger.error(
-          "Diarization completion could not read its note",
-          { noteId: targetNoteId, error: (error as Error).message },
-          "meeting"
-        );
-      }
-      // No note means no safe base to merge into, and writing to a deleted one
-      // would resurrect its tombstone in the sidebar, cloud mirror, and vector
-      // index.
-      if (!persisted || persisted.deleted_at) {
-        publish([]);
-        return;
-      }
-
-      const existing = selectBaseSegments({
-        persistedSegments: persisted.transcript
-          ? parseTranscriptSegments(persisted.transcript)
-          : null,
-        liveSegments,
-        recordingNoteId,
-        targetNoteId,
-      });
-      const enriched = mergeTranscriptSegments(
-        existing,
-        data.segments.map((segment, index) => ({
-          ...segment,
-          id: segment.id || `diarized-${index}`,
-        }))
-      );
-
-      try {
-        // Awaited so the next queued completion's getNote is guaranteed to
-        // read this write — without it the ordering depends on db-update-note
-        // staying synchronous ahead of its first await.
-        await window.electronAPI?.updateNote?.(targetNoteId, {
-          transcript: serializeTranscriptSegments(enriched),
+        authorization.assertCurrent();
+        const {
+          diarizationSessionId,
+          recordingNoteId,
+          segments: liveSegments,
+        } = useMeetingRecordingStore.getState();
+        const { targetNoteId, isCurrentSession } = resolveDiarizationTarget({
+          payloadNoteId: data?.noteId,
+          payloadSessionId: data?.sessionId,
+          currentSessionId: diarizationSessionId,
         });
-      } catch (error) {
-        publish([]);
-        throw error;
-      }
-      publish(enriched);
+        if (targetNoteId == null) return;
 
-      if (data.speakerEmbeddings) {
-        await window.electronAPI?.saveNoteSpeakerEmbeddings?.(targetNoteId, data.speakerEmbeddings);
+        // Publishing an empty result clears a waiting editor's spinner without
+        // painting an overlay; anything non-empty is already persisted.
+        const publish = (segments: TranscriptSegment[]) => {
+          if (isCurrentSession) {
+            useMeetingRecordingStore.setState({
+              completedDiarization: { noteId: targetNoteId, segments },
+            });
+          }
+        };
+
+        if (!data?.segments?.length) {
+          publish([]);
+          return;
+        }
+
+        let persisted: NoteItem | null | undefined;
+        try {
+          persisted = await window.electronAPI?.getNote?.(targetNoteId);
+          authorization.assertCurrent();
+        } catch (error) {
+          logger.error(
+            "Diarization completion could not read its note",
+            { noteId: targetNoteId, error: (error as Error).message },
+            "meeting"
+          );
+        }
+        // No note means no safe base to merge into, and writing to a deleted one
+        // would resurrect its tombstone in the sidebar, cloud mirror, and vector
+        // index.
+        if (!persisted || persisted.deleted_at) {
+          publish([]);
+          return;
+        }
+
+        const existing = selectBaseSegments({
+          persistedSegments: persisted.transcript
+            ? parseTranscriptSegments(persisted.transcript)
+            : null,
+          liveSegments,
+          recordingNoteId,
+          targetNoteId,
+        });
+        const enriched = mergeTranscriptSegments(
+          existing,
+          data.segments.map((segment, index) => ({
+            ...segment,
+            id: segment.id || `diarized-${index}`,
+          }))
+        );
+
+        try {
+          // Awaited so the next queued completion's getNote is guaranteed to
+          // read this write — without it the ordering depends on db-update-note
+          // staying synchronous ahead of its first await.
+          authorization.assertCurrent();
+          const result = await window.electronAPI?.commitMeetingTranscript?.({
+            commitToken: data.commitToken,
+            noteId: targetNoteId,
+            transcript: serializeTranscriptSegments(enriched),
+            kind: "diarization",
+            speakerEmbeddings: data.speakerEmbeddings,
+          });
+          if (!result?.success) throw new Error(result?.error || "Meeting commit rejected");
+        } catch (error) {
+          publish([]);
+          throw error;
+        }
+        publish(enriched);
+      } finally {
+        authorization.dispose();
       }
     }).catch((error) => {
       logger.error(

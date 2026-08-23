@@ -6,6 +6,10 @@ import { generateNoteTitle } from "../utils/generateTitle";
 import { buildNoteFormattingOverrides } from "../helpers/noteFormattingOverrides";
 import { tagActionItemOwners, type MentionPerson } from "../utils/mentionMarkdown";
 import type { ActionItem } from "../types/electron";
+import {
+  captureReasoningRuntimeAuthorizationContext,
+  captureRuntimeAuthorizationLease,
+} from "../helpers/runtimeAuthorizationBoundary";
 
 export type ActionProcessingStatus = "idle" | "processing" | "success";
 
@@ -24,9 +28,10 @@ interface ActionProcessingStoreState {
   errorEvents: ActionErrorEvent[];
 }
 
-const cancelledFlags = new Map<number, boolean>();
-const processingFlags = new Map<number, boolean>();
-const successTimers = new Map<number, NodeJS.Timeout>();
+const cancelledRunIds = new Set<number>();
+const processingRunIds = new Map<number, number>();
+const successTimers = new Map<number, { runId: number; timer: NodeJS.Timeout }>();
+let nextRunId = 1;
 
 const IDLE_STATE: NoteActionState = { status: "idle", actionName: null };
 
@@ -48,6 +53,22 @@ function clearNoteState(noteId: number) {
 function pushErrorEvent(event: ActionErrorEvent) {
   const { errorEvents } = useActionProcessingStore.getState();
   useActionProcessingStore.setState({ errorEvents: [...errorEvents, event] });
+}
+
+function isCurrentRun(noteId: number, runId: number): boolean {
+  return processingRunIds.get(noteId) === runId;
+}
+
+function cancelRun(noteId: number, runId: number): void {
+  if (!isCurrentRun(noteId, runId)) return;
+  cancelledRunIds.add(runId);
+  processingRunIds.delete(noteId);
+  const successTimer = successTimers.get(noteId);
+  if (successTimer?.runId === runId) {
+    clearTimeout(successTimer.timer);
+    successTimers.delete(noteId);
+  }
+  clearNoteState(noteId);
 }
 
 export const useActionProcessingStore = create<ActionProcessingStoreState>()(() => ({
@@ -115,7 +136,7 @@ export function runBackgroundAction(
   options: RunActionOptions,
   labels: RunActionLabels
 ): void {
-  if (processingFlags.get(noteId)) return;
+  if (processingRunIds.has(noteId)) return;
 
   const modelId = options.modelId;
   if (!modelId && !options.isCloudMode) {
@@ -131,12 +152,28 @@ export function runBackgroundAction(
     return;
   }
 
-  cancelledFlags.set(noteId, false);
-  processingFlags.set(noteId, true);
+  const runId = nextRunId;
+  nextRunId += 1;
+  processingRunIds.set(noteId, runId);
   setNoteState(noteId, { status: "processing", actionName: action.name });
 
   (async () => {
+    const authorization = captureRuntimeAuthorizationLease("reasoning", () => {
+      cancelRun(noteId, runId);
+    });
     try {
+      authorization.assertCurrent();
+      const authorizationContext = captureReasoningRuntimeAuthorizationContext();
+      const admission = await window.electronAPI.beginActionNoteCommit(
+        noteId,
+        authorizationContext
+      );
+      authorization.assertCurrent();
+      if (!admission.success || !admission.commitToken) {
+        throw Object.assign(new Error(admission.error || labels.actionFailed), {
+          code: admission.code,
+        });
+      }
       const basePrompt = options.isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
       const providerOverrides = buildNoteFormattingOverrides(noteFormatting, options.isCloudMode);
       const systemPrompt = appendDictionarySuffix(
@@ -151,17 +188,26 @@ export function runBackgroundAction(
         ...providerOverrides,
       });
 
-      if (cancelledFlags.get(noteId)) return;
+      authorization.assertCurrent();
+      if (cancelledRunIds.has(runId)) return;
 
       let title: string | undefined;
       if (options.allowTitleGeneration && getSettings().autoGenerateNoteTitle) {
+        authorization.assertCurrent();
         const generated = await generateNoteTitle(enhanced, modelId, providerOverrides);
+        authorization.assertCurrent();
         if (generated) title = generated;
       }
 
-      if (cancelledFlags.get(noteId)) return;
+      authorization.assertCurrent();
+      if (cancelledRunIds.has(runId)) return;
 
-      const updates: Record<string, string> = {
+      const updates: {
+        enhanced_content: string;
+        enhancement_prompt: string;
+        enhanced_at_content_hash: string;
+        title?: string;
+      } = {
         enhanced_content: options.knownPeople?.length
           ? tagActionItemOwners(enhanced, options.knownPeople)
           : enhanced,
@@ -169,38 +215,46 @@ export function runBackgroundAction(
         enhanced_at_content_hash: contentHash,
       };
       if (title) updates.title = title;
-      await window.electronAPI.updateNote(noteId, updates);
+      authorization.assertCurrent();
+      const committed = await window.electronAPI.commitActionNote({
+        commitToken: admission.commitToken,
+        noteId,
+        reasoningSignature: authorizationContext.signature,
+        updates,
+      });
+      if (!committed.success) {
+        throw Object.assign(new Error(committed.error || labels.actionFailed), {
+          code: committed.code,
+        });
+      }
+      authorization.assertCurrent();
 
       setNoteState(noteId, { status: "success", actionName: action.name });
 
       const timer = setTimeout(() => {
-        processingFlags.set(noteId, false);
+        if (!isCurrentRun(noteId, runId) || successTimers.get(noteId)?.runId !== runId) return;
+        processingRunIds.delete(noteId);
         clearNoteState(noteId);
         successTimers.delete(noteId);
       }, 600);
-      successTimers.set(noteId, timer);
+      successTimers.set(noteId, { runId, timer });
     } catch (err) {
-      if (cancelledFlags.get(noteId)) return;
-      processingFlags.set(noteId, false);
+      if (cancelledRunIds.has(runId) || !isCurrentRun(noteId, runId)) return;
+      processingRunIds.delete(noteId);
       clearNoteState(noteId);
       const message = err instanceof Error ? err.message : labels.actionFailed;
       pushErrorEvent({ noteId, message });
     } finally {
-      cancelledFlags.delete(noteId);
+      authorization.dispose();
+      cancelledRunIds.delete(runId);
     }
   })();
 }
 
 /** Soft cancel: the HTTP request continues but the result is discarded. */
 export function cancelAction(noteId: number): void {
-  cancelledFlags.set(noteId, true);
-  processingFlags.set(noteId, false);
-  const timer = successTimers.get(noteId);
-  if (timer) {
-    clearTimeout(timer);
-    successTimers.delete(noteId);
-  }
-  clearNoteState(noteId);
+  const runId = processingRunIds.get(noteId);
+  if (runId != null) cancelRun(noteId, runId);
 }
 
 export function consumeErrorEvents(): ActionErrorEvent[] {
