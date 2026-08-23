@@ -5,7 +5,7 @@
  */
 export function closeAssistantSessionState(state) {
   return {
-    conversationId: state.conversationId ?? null,
+    conversationId: state?.conversationId ?? null,
     pendingCommand: null,
     thinking: false,
     busy: false,
@@ -13,7 +13,8 @@ export function closeAssistantSessionState(state) {
   };
 }
 
-export function resolveAssistantPanelBusy({ agentState, activeToolName, submissionInFlight }) {
+export function resolveAssistantPanelBusy(params) {
+  const { agentState, activeToolName, submissionInFlight } = params || {};
   return Boolean(
     submissionInFlight ||
     activeToolName ||
@@ -36,15 +37,15 @@ export async function restoreAssistantConversation({
   isActive = () => true,
 }) {
   try {
-    await loadConversation(conversationId);
+    await loadConversation?.(conversationId);
     if (!isActive()) return "inactive";
-    onReady();
+    onReady?.();
     return "restored";
   } catch (error) {
     if (!isActive()) return "inactive";
-    onError(error);
-    onReset();
-    onReady();
+    onError?.(error);
+    onReset?.();
+    onReady?.();
     return "reset";
   }
 }

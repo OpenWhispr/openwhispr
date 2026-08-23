@@ -111,3 +111,47 @@ test("failed Assistant history resets before enabling a fresh conversation", asy
   );
   assert.deepEqual(events, ["error", "reset", "ready"]);
 });
+
+test("assistantSessionState helpers handle nullish inputs safely", async () => {
+  const {
+    closeAssistantSessionState,
+    resolveAssistantPanelBusy,
+    restoreAssistantConversation,
+  } = await import("../../src/helpers/assistantSessionState.js");
+
+  assert.deepEqual(closeAssistantSessionState(null), {
+    conversationId: null,
+    pendingCommand: null,
+    thinking: false,
+    busy: false,
+    responseReady: false,
+  });
+  assert.deepEqual(closeAssistantSessionState(undefined), {
+    conversationId: null,
+    pendingCommand: null,
+    thinking: false,
+    busy: false,
+    responseReady: false,
+  });
+
+  assert.equal(resolveAssistantPanelBusy(null), false);
+  assert.equal(resolveAssistantPanelBusy(undefined), false);
+
+  assert.equal(
+    await restoreAssistantConversation({
+      conversationId: 42,
+      loadConversation: async () => {},
+    }),
+    "restored"
+  );
+
+  assert.equal(
+    await restoreAssistantConversation({
+      conversationId: 42,
+      loadConversation: async () => {
+        throw new Error("fail");
+      },
+    }),
+    "reset"
+  );
+});
