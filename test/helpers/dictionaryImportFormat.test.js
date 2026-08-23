@@ -21,3 +21,15 @@ test("import accepts mixed commas and new lines and skips blanks", async () => {
     "Carol",
   ]);
 });
+
+test("import accepts carriage return and CRLF line endings", async () => {
+  const { parseDictionaryImportText } = await load();
+  assert.deepEqual(parseDictionaryImportText("Alice\rBob\rCarol"), ["Alice", "Bob", "Carol"]);
+  assert.deepEqual(parseDictionaryImportText("Alice\r\nBob\r\nCarol"), ["Alice", "Bob", "Carol"]);
+  assert.deepEqual(parseDictionaryImportText("Alice,\r\n Bob\r\n\r\nCarol,\rDave"), [
+    "Alice",
+    "Bob",
+    "Carol",
+    "Dave",
+  ]);
+});

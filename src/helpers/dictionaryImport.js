@@ -7,7 +7,7 @@
  */
 export function parseDictionaryImportText(text) {
   return String(text ?? "")
-    .split(/[,\n]/)
+    .split(/[,\r\n]/)
     .map((w) => w.trim())
     .filter(Boolean);
 }
