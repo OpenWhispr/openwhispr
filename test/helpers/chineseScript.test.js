@@ -14,12 +14,18 @@ test("normalizeChineseScriptPreference defaults unknown values", async () => {
   assert.equal(normalizeChineseScriptPreference(undefined), "as-transcribed");
 });
 
-test("resolveChineseScriptTarget: zh-CN / zh-TW override auto preference", async () => {
+test("resolveChineseScriptTarget: explicit Chinese locale tags override auto preference", async () => {
   const { resolveChineseScriptTarget } = await load();
   assert.equal(resolveChineseScriptTarget("zh-CN", "traditional"), "simplified");
+  assert.equal(resolveChineseScriptTarget("zh-Hans", "traditional"), "simplified");
+  assert.equal(resolveChineseScriptTarget("zh-SG", "traditional"), "simplified");
   assert.equal(resolveChineseScriptTarget("zh-TW", "simplified"), "traditional");
+  assert.equal(resolveChineseScriptTarget("zh-Hant", "simplified"), "traditional");
+  assert.equal(resolveChineseScriptTarget("zh-HK", "simplified"), "traditional");
+  assert.equal(resolveChineseScriptTarget("zh-MO", "simplified"), "traditional");
   assert.equal(resolveChineseScriptTarget("en", "simplified"), null);
 });
+
 
 test("isChineseText distinguishes Chinese from Japanese and Korean", async () => {
   const { isChineseText } = await load();
@@ -50,6 +56,8 @@ test("resolveChineseScriptTarget: auto applies preference only to Chinese text",
   assert.equal(resolveChineseScriptTarget("auto", "simplified", "這是中文"), "simplified");
   assert.equal(resolveChineseScriptTarget("auto", "traditional", "这是中文"), "traditional");
   assert.equal(resolveChineseScriptTarget("auto", "as-transcribed", "这是中文"), null);
+  assert.equal(resolveChineseScriptTarget("zh", "simplified", "这是中文"), "simplified");
+  assert.equal(resolveChineseScriptTarget("zh", "traditional", "这是中文"), "traditional");
   assert.equal(resolveChineseScriptTarget(undefined, "simplified", "这是中文"), "simplified");
   // Japanese, Korean and non-CJK must never be rewritten. See #975.
   assert.equal(resolveChineseScriptTarget("auto", "simplified", "会議の資料"), null);
@@ -59,13 +67,20 @@ test("resolveChineseScriptTarget: auto applies preference only to Chinese text",
   assert.equal(resolveChineseScriptTarget("auto", "simplified", "hello world"), null);
 });
 
-test("resolveChineseScriptTarget: without text only explicit zh-CN / zh-TW apply", async () => {
+test("resolveChineseScriptTarget: without text only explicit locale tags apply", async () => {
   const { resolveChineseScriptTarget } = await load();
   assert.equal(resolveChineseScriptTarget("zh-CN", "as-transcribed"), "simplified");
+  assert.equal(resolveChineseScriptTarget("zh-Hans", "as-transcribed"), "simplified");
+  assert.equal(resolveChineseScriptTarget("zh-SG", "as-transcribed"), "simplified");
   assert.equal(resolveChineseScriptTarget("zh-TW", "as-transcribed"), "traditional");
+  assert.equal(resolveChineseScriptTarget("zh-Hant", "as-transcribed"), "traditional");
+  assert.equal(resolveChineseScriptTarget("zh-HK", "as-transcribed"), "traditional");
+  assert.equal(resolveChineseScriptTarget("zh-MO", "as-transcribed"), "traditional");
+  assert.equal(resolveChineseScriptTarget("zh", "simplified"), null);
   assert.equal(resolveChineseScriptTarget("auto", "simplified"), null);
   assert.equal(resolveChineseScriptTarget("auto", "traditional"), null);
 });
+
 
 test("resolveCleanupLanguage keeps auto until the transcription language is known", async () => {
   const { resolveCleanupLanguage } = await load();

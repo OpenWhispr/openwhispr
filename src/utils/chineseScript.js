@@ -73,12 +73,16 @@ export function isChineseText(text) {
   return SIMPLIFIED_CHINESE_VARIANT_RE.test(text) || TRADITIONAL_CHINESE_VARIANT_RE.test(text);
 }
 
+const SIMPLIFIED_LOCALES = new Set(["zh-CN", "zh-Hans", "zh-SG"]);
+const TRADITIONAL_LOCALES = new Set(["zh-TW", "zh-Hant", "zh-HK", "zh-MO"]);
+
 /**
  * Resolve the script target from preferred language + auto-detect preference.
  *
- * zh-CN / zh-TW are an explicit user assertion and always win. On auto the
- * preference applies only to text that actually looks Chinese — otherwise
- * Japanese and Korean dictation gets rewritten (会議の資料 → 会议の数据).
+ * zh-CN / zh-TW and other explicit Chinese locales are an assertion and always
+ * win. On auto (or generic zh) the preference applies only to text that
+ * actually looks Chinese — otherwise Japanese and Korean dictation gets
+ * rewritten (会議の資料 → 会议の数据).
  *
  * Omit `text` when no transcript exists yet (Whisper prompt building): without
  * it only an explicit language can be trusted, since biasing the prompt toward
@@ -90,10 +94,13 @@ export function isChineseText(text) {
  * @returns {ChineseScriptTarget | null}
  */
 export function resolveChineseScriptTarget(preferredLanguage, chineseScriptPreference, text) {
-  if (preferredLanguage === "zh-CN") return "simplified";
-  if (preferredLanguage === "zh-TW") return "traditional";
+  if (preferredLanguage && SIMPLIFIED_LOCALES.has(preferredLanguage)) return "simplified";
+  if (preferredLanguage && TRADITIONAL_LOCALES.has(preferredLanguage)) return "traditional";
 
-  if ((!preferredLanguage || preferredLanguage === "auto") && isChineseText(text)) {
+  if (
+    (!preferredLanguage || preferredLanguage === "auto" || preferredLanguage === "zh") &&
+    isChineseText(text)
+  ) {
     const preference = normalizeChineseScriptPreference(chineseScriptPreference);
     if (preference === "simplified") return "simplified";
     if (preference === "traditional") return "traditional";
