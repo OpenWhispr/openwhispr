@@ -36,6 +36,7 @@ function canAutoRelabelSpeaker(segment) {
 }
 
 function applySpeakerUpdate(segment, patch, status) {
+  if (!segment || typeof segment !== "object") return segment;
   if (isSpeakerLocked(segment)) {
     segment.speakerStatus = SPEAKER_STATUS.LOCKED;
     segment.speakerLocked = true;
@@ -43,7 +44,9 @@ function applySpeakerUpdate(segment, patch, status) {
     return segment;
   }
 
-  Object.assign(segment, patch);
+  if (patch && typeof patch === "object") {
+    Object.assign(segment, patch);
+  }
 
   segment.speakerStatus = status;
   return segment;
