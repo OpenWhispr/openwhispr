@@ -2,8 +2,52 @@
 // "prepend" mode needs the char before the cursor (read via Accessibility on
 // macOS); "append" mode is the platform-agnostic fallback.
 
-const OPENING_CHARS = new Set([" ", "\t", "\n", "\r", "(", "[", "{", "<", '"', "'", "`", "“", "‘"]);
-const LEADING_PUNCTUATION = new Set([",", ".", "!", "?", ";", ":", ")", "]", "}", "%", "”", "’"]);
+const OPENING_CHARS = new Set([
+  " ",
+  "\t",
+  "\n",
+  "\r",
+  "(",
+  "[",
+  "{",
+  "<",
+  '"',
+  "'",
+  "`",
+  "“",
+  "‘",
+  "（",
+  "【",
+  "《",
+  "「",
+  "『",
+]);
+const LEADING_PUNCTUATION = new Set([
+  ",",
+  ".",
+  "!",
+  "?",
+  ";",
+  ":",
+  ")",
+  "]",
+  "}",
+  "%",
+  "”",
+  "’",
+  "，",
+  "。",
+  "！",
+  "？",
+  "；",
+  "：",
+  "）",
+  "】",
+  "》",
+  "」",
+  "』",
+  "、",
+]);
 
 function applySmartSpacing({ text, mode, precedingChar }) {
   if (typeof text !== "string" || text.length === 0) return text;
@@ -15,7 +59,11 @@ function applySmartSpacing({ text, mode, precedingChar }) {
 function applyPrepend(text, precedingChar) {
   if (precedingChar == null || precedingChar === "") return text;
   if (/^\s/.test(text)) return text;
-  if (OPENING_CHARS.has(precedingChar)) return text;
+  const lastChar =
+    typeof precedingChar === "string" && precedingChar.length > 0
+      ? precedingChar[precedingChar.length - 1]
+      : precedingChar;
+  if (OPENING_CHARS.has(lastChar) || /\s/.test(lastChar)) return text;
   // Don't separate prior text from closing punctuation: "Hello" + ", world".
   if (LEADING_PUNCTUATION.has(text[0])) return text;
   return " " + text;

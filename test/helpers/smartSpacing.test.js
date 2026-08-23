@@ -59,6 +59,30 @@ test("prepend: no space when transcript starts with closing punctuation", () => 
   assert.equal(prepend("; semicolon", "o"), "; semicolon");
   assert.equal(prepend(": colon", "o"), ": colon");
   assert.equal(prepend(") close paren", "o"), ") close paren");
+  assert.equal(prepend("，世界", "好"), "，世界");
+  assert.equal(prepend("。句号", "好"), "。句号");
+  assert.equal(prepend("！感叹", "好"), "！感叹");
+  assert.equal(prepend("？问号", "好"), "？问号");
+  assert.equal(prepend("；分号", "好"), "；分号");
+  assert.equal(prepend("：冒号", "好"), "：冒号");
+  assert.equal(prepend("）右括号", "好"), "）右括号");
+  assert.equal(prepend("】右方括号", "好"), "】右方括号");
+  assert.equal(prepend("》右书名号", "好"), "》右书名号");
+  assert.equal(prepend("、顿号", "好"), "、顿号");
+});
+
+test("prepend: no space after multi-char whitespace or CRLF newlines", () => {
+  assert.equal(prepend("hello", "\r\n"), "hello");
+  assert.equal(prepend("hello", "  "), "hello");
+  assert.equal(prepend("hello", "\t\t"), "hello");
+});
+
+test("prepend: no space after full-width CJK opening brackets", () => {
+  assert.equal(prepend("内容", "（"), "内容");
+  assert.equal(prepend("内容", "【"), "内容");
+  assert.equal(prepend("内容", "《"), "内容");
+  assert.equal(prepend("内容", "「"), "内容");
+  assert.equal(prepend("内容", "『"), "内容");
 });
 
 test("prepend: adds space when preceding char is sentence punctuation (no space yet)", () => {
