@@ -5,13 +5,16 @@
 // 400 on unknown fields) must keep the plain-text request untouched — a
 // missing timestamp is a degraded export, never a failed upload.
 function timestampRequestFields(provider, model) {
-  if (provider === "openai" && model === "whisper-1") {
+  const normProvider = typeof provider === "string" ? provider.trim().toLowerCase() : "";
+  const normModel = typeof model === "string" ? model.trim().toLowerCase() : "";
+
+  if (normProvider === "openai" && normModel === "whisper-1") {
     return { response_format: "verbose_json" };
   }
-  if (provider === "groq") {
+  if (normProvider === "groq") {
     return { response_format: "verbose_json" };
   }
-  if (provider === "mistral") {
+  if (normProvider === "mistral") {
     return { timestamp_granularities: "segment" };
   }
   return null;
@@ -28,10 +31,13 @@ function mapVerboseSegments(responseData) {
   for (const seg of segments) {
     const text = typeof seg?.text === "string" ? seg.text.trim() : "";
     if (!text || !Number.isFinite(seg.start)) continue;
+    const start = Math.max(0, seg.start);
+    const rawEnd = Number.isFinite(seg.end) ? seg.end : start;
+    const end = Math.max(start, rawEnd);
     mapped.push({
       text,
-      start: seg.start,
-      end: Number.isFinite(seg.end) ? seg.end : seg.start,
+      start,
+      end,
     });
   }
   return mapped.length ? mapped : null;
