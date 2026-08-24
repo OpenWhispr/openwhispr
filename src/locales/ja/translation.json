@@ -1305,7 +1305,8 @@
             "専任サポート"
           ],
           "cta": "営業に問い合わせる",
-          "upgradeCta": "Enterpriseにアップグレード"
+          "upgradeCta": "Enterpriseにアップグレード",
+          "askOwner": "{{name}}さんにワークスペースのアップグレードを依頼してください。"
         },
         "currentPlan": "現在のプラン",
         "coveredByWorkspace": "ワークスペースのプランに含まれています",
@@ -2150,7 +2151,7 @@
     "enterpriseCheckout": {
       "title": "Enterpriseにアップグレード",
       "description": "ワークスペース、シート数、請求サイクルを選択してください。支払いはStripe Checkoutで完了します。",
-      "allSubscribed": "所有しているすべてのワークスペースには既に有効なサブスクリプションがあります。既存のワークスペースのプランを変更するには、営業までお問い合わせください。",
+      "allSubscribed": "所有しているワークスペースは既にEnterpriseであるか、ここでは変更できません。プランの変更は営業までお問い合わせください。",
       "workspaceLabel": "ワークスペース",
       "seatsLabel": "シート数",
       "seatsHint_one": "現在{{count}}シート使用中",
@@ -2161,7 +2162,11 @@
         "annual": "年払い"
       },
       "priceNote": "最終的な価格はチェックアウト時に表示されます。",
-      "continueCta": "チェックアウトへ進む"
+      "continueCta": "チェックアウトへ進む",
+      "upgradeDescription": "{{workspace}}を{{plan}}からEnterpriseにアップグレードします。シート数と請求サイクルは引き継がれ、変更は即時に適用されます。",
+      "upgradeCta": "今すぐアップグレード",
+      "upgradedTitle": "Enterpriseにアップグレードしました",
+      "upgradedDescription": "{{workspace}}はEnterpriseになりました。"
     }
   },
   "models": {

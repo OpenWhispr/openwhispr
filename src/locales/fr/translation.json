@@ -1596,7 +1596,8 @@
             "Support dédié"
           ],
           "cta": "Contacter les ventes",
-          "upgradeCta": "Passer à Enterprise"
+          "upgradeCta": "Passer à Enterprise",
+          "askOwner": "Demandez à {{name}} de mettre à niveau votre espace de travail."
         },
         "currentPlan": "Forfait actuel",
         "coveredByWorkspace": "Inclus dans votre plan d'espace de travail",
@@ -2238,7 +2239,7 @@
     "enterpriseCheckout": {
       "title": "Passer à Enterprise",
       "description": "Choisissez l'espace de travail, les sièges et le cycle de facturation. Le paiement s'effectue dans Stripe Checkout.",
-      "allSubscribed": "Tous les espaces de travail que vous possédez ont déjà un abonnement actif. Pour changer le plan d'un espace existant, contactez le service commercial.",
+      "allSubscribed": "Les espaces de travail que vous possédez sont déjà sur Enterprise ou ne peuvent pas être modifiés ici. Pour tout changement de plan, contactez le service commercial.",
       "workspaceLabel": "Espace de travail",
       "seatsLabel": "Sièges",
       "seatsHint_one": "{{count}} siège actuellement utilisé",
@@ -2249,7 +2250,11 @@
         "annual": "Annuel"
       },
       "priceNote": "Le prix final est affiché lors du paiement.",
-      "continueCta": "Continuer vers le paiement"
+      "continueCta": "Continuer vers le paiement",
+      "upgradeDescription": "Passez {{workspace}} de {{plan}} à Enterprise. Les sièges et le cycle de facturation sont conservés ; le changement prend effet immédiatement.",
+      "upgradeCta": "Mettre à niveau",
+      "upgradedTitle": "Mise à niveau effectuée",
+      "upgradedDescription": "{{workspace}} est maintenant sur Enterprise."
     }
   },
   "models": {

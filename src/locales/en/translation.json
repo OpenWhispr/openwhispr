@@ -1596,7 +1596,8 @@
             "Dedicated support"
           ],
           "cta": "Contact Sales",
-          "upgradeCta": "Upgrade to Enterprise"
+          "upgradeCta": "Upgrade to Enterprise",
+          "askOwner": "Ask {{name}} to upgrade your workspace."
         },
         "currentPlan": "Current plan",
         "coveredByWorkspace": "Included with your workspace plan",
@@ -2238,7 +2239,7 @@
     "enterpriseCheckout": {
       "title": "Upgrade to Enterprise",
       "description": "Choose a workspace, seats, and billing cycle. Payment is completed in Stripe Checkout.",
-      "allSubscribed": "All workspaces you own already have an active subscription. To change an existing workspace's plan, contact sales.",
+      "allSubscribed": "The workspaces you own are already on Enterprise or can't be changed here. To make plan changes, contact sales.",
       "workspaceLabel": "Workspace",
       "seatsLabel": "Seats",
       "seatsHint_one": "{{count}} seat currently in use",
@@ -2249,7 +2250,11 @@
         "annual": "Annual"
       },
       "priceNote": "Final pricing is shown at checkout.",
-      "continueCta": "Continue to checkout"
+      "continueCta": "Continue to checkout",
+      "upgradeDescription": "Upgrade {{workspace}} from {{plan}} to Enterprise. Seats and billing cycle carry over; the change takes effect immediately.",
+      "upgradeCta": "Upgrade now",
+      "upgradedTitle": "Upgraded to Enterprise",
+      "upgradedDescription": "{{workspace}} is now on Enterprise."
     }
   },
   "models": {

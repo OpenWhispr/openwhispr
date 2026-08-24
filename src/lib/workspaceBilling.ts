@@ -36,3 +36,39 @@ export function isEnterpriseConsoleAvailable(
     canManageWorkspace(workspace.role)
   );
 }
+
+/**
+ * An owned workspace with a live, entitled Stripe subscription on a lower plan
+ * can upgrade in place (subscription price swap, no new checkout). Manually
+ * provisioned plans have no subscription to update, so they stay sales-led.
+ */
+export function canUpgradeWorkspaceToEnterprise(workspace: WorkspaceBillingState): boolean {
+  return (
+    workspace.role === "owner" &&
+    Boolean(workspace.stripe_subscription_id) &&
+    hasActiveWorkspaceSubscription(workspace) &&
+    workspace.plan !== "enterprise"
+  );
+}
+
+export type EnterpriseTileCta =
+  | { action: "openDialog" }
+  | { action: "createWorkspace" }
+  | { action: "contactSales"; ownerName: string | null };
+
+/**
+ * Which CTA the Enterprise pricing tile leads with: owners get the purchase
+ * dialog, users with no workspace at all get the create-workspace on-ramp,
+ * and members/admins of someone else's workspace are pointed at the owner —
+ * upgrading in-app would otherwise create a workspace they didn't want.
+ */
+export function enterpriseTileCta(
+  workspaces: Array<Pick<Workspace, "id" | "role" | "billing_manager">>,
+  activeWorkspaceId: string | null
+): EnterpriseTileCta {
+  if (workspaces.some((workspace) => workspace.role === "owner")) return { action: "openDialog" };
+  if (workspaces.length === 0) return { action: "createWorkspace" };
+  const target =
+    workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0];
+  return { action: "contactSales", ownerName: target.billing_manager ?? null };
+}

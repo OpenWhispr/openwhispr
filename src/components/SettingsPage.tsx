@@ -127,6 +127,7 @@ import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
+import { enterpriseTileCta } from "../lib/workspaceBilling";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
@@ -1011,8 +1012,10 @@ export default function SettingsPage({
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
   const billingWorkspaces = useWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const [enterpriseCheckoutOpen, setEnterpriseCheckoutOpen] = useState(false);
   const [enterpriseWorkspaceCreateOpen, setEnterpriseWorkspaceCreateOpen] = useState(false);
+  const enterpriseCta = enterpriseTileCta(billingWorkspaces, activeWorkspaceId);
   const coveringWorkspaces = billingWorkspaces.filter((workspace) =>
     usage?.entitledWorkspaceIds?.includes(workspace.id)
   );
@@ -2380,13 +2383,13 @@ export default function SettingsPage({
                           </li>
                         ))}
                       </ul>
-                      {isSignedIn ? (
+                      {isSignedIn && enterpriseCta.action !== "contactSales" ? (
                         <div className="mt-2 space-y-1">
                           <Button
                             size="sm"
                             className="w-full h-6 text-[10px]"
                             onClick={() => {
-                              if (billingWorkspaces.some((w) => w.role === "owner")) {
+                              if (enterpriseCta.action === "openDialog") {
                                 setEnterpriseCheckoutOpen(true);
                               } else {
                                 setEnterpriseWorkspaceCreateOpen(true);
@@ -2408,6 +2411,29 @@ export default function SettingsPage({
                             <Mail size={10} />
                             {t("settingsPage.account.pricing.enterprise.cta")}
                           </Button>
+                        </div>
+                      ) : isSignedIn ? (
+                        <div className="mt-2 space-y-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-6 text-[10px]"
+                            onClick={() =>
+                              window.electronAPI?.openExternal?.(
+                                "https://openwhispr.com/contact-sales"
+                              )
+                            }
+                          >
+                            <Mail size={10} />
+                            {t("settingsPage.account.pricing.enterprise.cta")}
+                          </Button>
+                          {enterpriseCta.action === "contactSales" && enterpriseCta.ownerName && (
+                            <p className="text-[10px] text-muted-foreground text-center">
+                              {t("settingsPage.account.pricing.enterprise.askOwner", {
+                                name: enterpriseCta.ownerName,
+                              })}
+                            </p>
+                          )}
                         </div>
                       ) : (
                         <Button

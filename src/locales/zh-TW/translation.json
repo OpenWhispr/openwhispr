@@ -1325,7 +1325,8 @@
             "專屬支援"
           ],
           "cta": "聯繫銷售",
-          "upgradeCta": "升級至 Enterprise"
+          "upgradeCta": "升級至 Enterprise",
+          "askOwner": "請 {{name}} 升級您的工作區。"
         },
         "currentPlan": "目前方案",
         "coveredByWorkspace": "已包含在您的工作區方案中",
@@ -2150,7 +2151,7 @@
     "enterpriseCheckout": {
       "title": "升級至 Enterprise",
       "description": "選擇工作區、席位數量與計費週期。付款將在 Stripe Checkout 中完成。",
-      "allSubscribed": "您擁有的所有工作區都已有有效的訂閱。如需變更現有工作區的方案，請聯絡銷售團隊。",
+      "allSubscribed": "您擁有的工作區已是 Enterprise 方案或無法在此變更。如需變更方案，請聯絡銷售團隊。",
       "workspaceLabel": "工作區",
       "seatsLabel": "席位",
       "seatsHint_one": "目前已使用 {{count}} 個席位",
@@ -2161,7 +2162,11 @@
         "annual": "按年"
       },
       "priceNote": "最終價格將在結帳時顯示。",
-      "continueCta": "繼續結帳"
+      "continueCta": "繼續結帳",
+      "upgradeDescription": "將 {{workspace}} 從{{plan}}升級至 Enterprise。席位與計費週期維持不變，變更立即生效。",
+      "upgradeCta": "立即升級",
+      "upgradedTitle": "已升級至 Enterprise",
+      "upgradedDescription": "{{workspace}} 現已升級至 Enterprise。"
     }
   },
   "models": {

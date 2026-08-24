@@ -1353,7 +1353,8 @@
             "Soporte dedicado"
           ],
           "cta": "Contactar a ventas",
-          "upgradeCta": "Mejorar a Enterprise"
+          "upgradeCta": "Mejorar a Enterprise",
+          "askOwner": "Pide a {{name}} que actualice tu espacio de trabajo."
         },
         "currentPlan": "Plan actual",
         "coveredByWorkspace": "Incluido en tu plan de espacio de trabajo",
@@ -2198,7 +2199,7 @@
     "enterpriseCheckout": {
       "title": "Mejorar a Enterprise",
       "description": "Elige el espacio de trabajo, los puestos y el ciclo de facturación. El pago se completa en Stripe Checkout.",
-      "allSubscribed": "Todos los espacios de trabajo de tu propiedad ya tienen una suscripción activa. Para cambiar el plan de un espacio existente, contacta con ventas.",
+      "allSubscribed": "Los espacios de trabajo de tu propiedad ya están en Enterprise o no se pueden cambiar aquí. Para cambios de plan, contacta con ventas.",
       "workspaceLabel": "Espacio de trabajo",
       "seatsLabel": "Puestos",
       "seatsHint_one": "{{count}} puesto en uso actualmente",
@@ -2209,7 +2210,11 @@
         "annual": "Anual"
       },
       "priceNote": "El precio final se muestra al pagar.",
-      "continueCta": "Continuar al pago"
+      "continueCta": "Continuar al pago",
+      "upgradeDescription": "Actualiza {{workspace}} de {{plan}} a Enterprise. Los puestos y el ciclo de facturación se mantienen; el cambio se aplica de inmediato.",
+      "upgradeCta": "Actualizar ahora",
+      "upgradedTitle": "Actualizado a Enterprise",
+      "upgradedDescription": "{{workspace}} ahora está en Enterprise."
     }
   },
   "models": {

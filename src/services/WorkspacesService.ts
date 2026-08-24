@@ -14,6 +14,16 @@ export interface SeatPreview {
   currency: string;
 }
 
+export interface EnterpriseUpgradePreview {
+  immediate_amount: number;
+  currency: string;
+  current_price_amount: number | null;
+  new_price_amount: number | null;
+  interval: "monthly" | "annual";
+  quantity: number;
+  next_billing_date: string | null;
+}
+
 async function list(): Promise<Workspace[]> {
   const res = await cloudGet<DataWrap<Workspace[]>>("/api/workspaces");
   return res.data;
@@ -86,6 +96,17 @@ async function previewSeats(workspaceId: string, additionalSeats: number): Promi
   return res.data;
 }
 
+async function previewEnterpriseUpgrade(workspaceId: string): Promise<EnterpriseUpgradePreview> {
+  const res = await cloudPost<DataWrap<EnterpriseUpgradePreview>>(
+    `/api/workspaces/${workspaceId}/billing/preview-upgrade`
+  );
+  return res.data;
+}
+
+async function upgradeToEnterprise(workspaceId: string): Promise<void> {
+  await cloudPost<DataWrap<{ plan: string }>>(`/api/workspaces/${workspaceId}/billing/upgrade`);
+}
+
 async function updateSeats(
   workspaceId: string,
   quantity: number
@@ -147,5 +168,7 @@ export const WorkspacesService = {
   billingCheckout,
   billingPortal,
   previewSeats,
+  previewEnterpriseUpgrade,
+  upgradeToEnterprise,
   updateSeats,
 };

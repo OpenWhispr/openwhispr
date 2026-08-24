@@ -1304,7 +1304,8 @@
             "Suporte dedicado"
           ],
           "cta": "Falar com Vendas",
-          "upgradeCta": "Fazer upgrade para Enterprise"
+          "upgradeCta": "Fazer upgrade para Enterprise",
+          "askOwner": "Peça a {{name}} para fazer o upgrade do seu workspace."
         },
         "currentPlan": "Plano atual",
         "coveredByWorkspace": "Incluído no plano do seu workspace",
@@ -2129,7 +2130,7 @@
     "enterpriseCheckout": {
       "title": "Fazer upgrade para Enterprise",
       "description": "Escolha o workspace, os assentos e o ciclo de cobrança. O pagamento é concluído no Stripe Checkout.",
-      "allSubscribed": "Todos os workspaces que você possui já têm uma assinatura ativa. Para alterar o plano de um workspace existente, fale com vendas.",
+      "allSubscribed": "Os workspaces que você possui já estão no Enterprise ou não podem ser alterados aqui. Para mudanças de plano, fale com vendas.",
       "workspaceLabel": "Workspace",
       "seatsLabel": "Assentos",
       "seatsHint_one": "{{count}} assento em uso no momento",
@@ -2140,7 +2141,11 @@
         "annual": "Anual"
       },
       "priceNote": "O preço final é exibido no checkout.",
-      "continueCta": "Continuar para o checkout"
+      "continueCta": "Continuar para o checkout",
+      "upgradeDescription": "Faça o upgrade de {{workspace}} de {{plan}} para Enterprise. Assentos e ciclo de cobrança são mantidos; a mudança entra em vigor imediatamente.",
+      "upgradeCta": "Fazer upgrade agora",
+      "upgradedTitle": "Upgrade concluído",
+      "upgradedDescription": "{{workspace}} agora está no Enterprise."
     }
   },
   "models": {

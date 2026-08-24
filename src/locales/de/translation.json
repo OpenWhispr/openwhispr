@@ -1596,7 +1596,8 @@
             "Dedizierter Support"
           ],
           "cta": "Vertrieb kontaktieren",
-          "upgradeCta": "Auf Enterprise upgraden"
+          "upgradeCta": "Auf Enterprise upgraden",
+          "askOwner": "Bitte {{name}}, euren Workspace zu upgraden."
         },
         "currentPlan": "Aktueller Tarif",
         "coveredByWorkspace": "In Ihrem Workspace-Tarif enthalten",
@@ -2238,7 +2239,7 @@
     "enterpriseCheckout": {
       "title": "Auf Enterprise upgraden",
       "description": "Workspace, Plätze und Abrechnungszeitraum wählen. Die Zahlung erfolgt im Stripe-Checkout.",
-      "allSubscribed": "Alle Workspaces, die dir gehören, haben bereits ein aktives Abonnement. Um den Plan eines bestehenden Workspace zu ändern, kontaktiere den Vertrieb.",
+      "allSubscribed": "Die Workspaces, die dir gehören, sind bereits auf Enterprise oder können hier nicht geändert werden. Für Plan-Änderungen kontaktiere den Vertrieb.",
       "workspaceLabel": "Workspace",
       "seatsLabel": "Plätze",
       "seatsHint_one": "{{count}} Platz derzeit belegt",
@@ -2249,7 +2250,11 @@
         "annual": "Jährlich"
       },
       "priceNote": "Der endgültige Preis wird beim Checkout angezeigt.",
-      "continueCta": "Weiter zum Checkout"
+      "continueCta": "Weiter zum Checkout",
+      "upgradeDescription": "Upgrade von {{workspace}} von {{plan}} auf Enterprise. Plätze und Abrechnungszeitraum bleiben erhalten; die Änderung gilt sofort.",
+      "upgradeCta": "Jetzt upgraden",
+      "upgradedTitle": "Upgrade auf Enterprise abgeschlossen",
+      "upgradedDescription": "{{workspace}} ist jetzt auf Enterprise."
     }
   },
   "models": {
