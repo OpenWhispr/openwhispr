@@ -49,7 +49,9 @@ function createDb(t) {
   }
 
   try {
-    return new DatabaseManager();
+    const database = new DatabaseManager();
+    database.setActiveAccountId("test-account");
+    return database;
   } catch (error) {
     if (isNativeBindingUnavailable(error)) {
       t.skip("better-sqlite3 native binding is not available for this Node runtime");
@@ -73,6 +75,9 @@ function createTestTeamSpace(db, { name, emoji = null } = {}) {
       emoji,
       (maxOrder?.max_order ?? 0) + 1
     );
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(result.lastInsertRowid, "test-account");
   return { success: true, space: db.getSpace(result.lastInsertRowid) };
 }
 
@@ -699,6 +704,7 @@ test("denied folder delete restores the same notes, speakers, and conversations 
 
   db.db.close();
   db = new DatabaseManager();
+  db.setActiveAccountId("test-account");
   const restored = db.restoreFolderAfterDeniedDelete(folder.id);
   assert.equal(restored.success, true);
   assert.equal(restored.folder.id, folder.id);

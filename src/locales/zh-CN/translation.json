@@ -1584,16 +1584,20 @@
       "wordsRemaining": "剩余 {{remaining}} 个词",
       "deleteAccount": {
         "label": "删除账户",
-        "labelDescription": "永久删除您的账户、所有云端数据和本地数据。此操作无法撤销。",
+        "labelDescription": "永久删除您的账户和个人云端数据。其他本地用户和工作区所有的内容将被保留。",
         "button": "删除我的账户",
         "deleting": "正在删除...",
         "title": "删除您的账户？",
-        "description": "这将永久删除您的 OpenWhispr 账户、所有云端同步笔记和所有本地数据，包括转录、音频录制、下载的模型、日历连接和设置。此操作无法撤销。",
-        "confirmText": "删除所有内容",
+        "description": "这将永久删除您的 OpenWhispr 账户和个人数据。工作区所有的内容及其他本地用户的数据会保留在此设备上。",
+        "confirmText": "删除账户",
+        "eraseDeviceLabel": "同时清除此设备上的所有数据",
+        "eraseDeviceDescription": "删除所有本地用户的笔记和工作区缓存、已下载模型、设置、日历连接、凭据和录音。",
+        "eraseDeviceWarning": "此设备级清除无法撤销，并会影响所有本地用户。",
         "successTitle": "账户已删除",
-        "successDescription": "您的账户和所有数据已被删除。应用将立即重新加载。",
+        "successDescription": "您的账户和个人数据已删除。其他本地用户、工作区、模型和设备设置均已保留。",
+        "partialCleanupDescription": "您的账户已删除，但部分本地清理未能完成。其他用户和工作区所有的内容均已保留。",
         "failedTitle": "删除失败",
-        "failedDescription": "删除您的账户时出错。您的本地数据可能已被部分删除。请重试。"
+        "failedDescription": "无法完成账户删除。未启动设备级清除。请重试。"
       },
       "profile": {
         "name": {

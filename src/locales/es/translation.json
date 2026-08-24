@@ -1632,16 +1632,20 @@
       "wordsRemaining": "{{remaining}} restantes",
       "deleteAccount": {
         "label": "Eliminar cuenta",
-        "labelDescription": "Eliminar permanentemente tu cuenta, todos los datos en la nube y los datos locales. Esta acción no se puede deshacer.",
+        "labelDescription": "Eliminar permanentemente tu cuenta y datos personales en la nube. Se conservan los demás usuarios locales y el contenido de los espacios de trabajo.",
         "button": "Eliminar mi cuenta",
         "deleting": "Eliminando...",
         "title": "¿Eliminar tu cuenta?",
-        "description": "Esto eliminará permanentemente tu cuenta de OpenWhispr, todas las notas sincronizadas en la nube y todos los datos locales, incluyendo transcripciones, grabaciones de audio, modelos descargados, conexiones de calendario y configuraciones. Esta acción no se puede deshacer.",
-        "confirmText": "Eliminar todo",
+        "description": "Esto elimina permanentemente tu cuenta de OpenWhispr y tus datos personales. El contenido de los espacios de trabajo y los datos de otros usuarios locales permanecen en este dispositivo.",
+        "confirmText": "Eliminar cuenta",
+        "eraseDeviceLabel": "Eliminar también todos los datos de este dispositivo",
+        "eraseDeviceDescription": "Elimina las notas y cachés de espacios de todos los usuarios locales, modelos descargados, ajustes, calendarios, credenciales y grabaciones.",
+        "eraseDeviceWarning": "Este borrado de todo el dispositivo no se puede deshacer y afecta a todos los usuarios locales.",
         "successTitle": "Cuenta eliminada",
-        "successDescription": "Tu cuenta y todos los datos han sido eliminados. La aplicación se recargará ahora.",
+        "successDescription": "Tu cuenta y datos personales se eliminaron. Se conservaron los demás usuarios locales, espacios de trabajo, modelos y ajustes del dispositivo.",
+        "partialCleanupDescription": "Tu cuenta se eliminó, pero parte de la limpieza local no pudo finalizar. Se conservaron otros usuarios y el contenido de los espacios de trabajo.",
         "failedTitle": "Error al eliminar",
-        "failedDescription": "Algo salió mal al eliminar tu cuenta. Es posible que tus datos locales se hayan eliminado parcialmente. Inténtalo de nuevo."
+        "failedDescription": "No se pudo completar la eliminación de la cuenta. No se inició ningún borrado de todo el dispositivo. Inténtalo de nuevo."
       },
       "profile": {
         "name": {

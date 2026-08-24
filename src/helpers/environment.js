@@ -502,6 +502,19 @@ class EnvironmentManager {
     require("dotenv").config({ path: envPath });
     return { success: true, path: envPath };
   }
+
+  async clearAllPersistedData() {
+    for (const envVarName of PERSISTED_KEYS) {
+      delete process.env[envVarName];
+    }
+    delete process.env.CUSTOM_REASONING_API_KEY;
+
+    await Promise.all([
+      fsPromises.rm(path.join(app.getPath("userData"), ".env"), { force: true }),
+      fsPromises.rm(this._getSecureKeysDir(), { recursive: true, force: true }),
+    ]);
+    return { success: true };
+  }
 }
 
 // Generate the uniform BYOK key accessors (getOpenAIKey/saveOpenAIKey/…) from

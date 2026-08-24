@@ -185,6 +185,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Space functions
   getSpaces: () => ipcRenderer.invoke("db-get-spaces"),
+  setActiveAccountScope: (accountId, expectedAuthGeneration) =>
+    ipcRenderer.invoke("set-active-account-scope", accountId, expectedAuthGeneration),
+  deleteAccountData: (accountId, expectedAuthGeneration) =>
+    ipcRenderer.invoke("delete-account-data", accountId, expectedAuthGeneration),
   updateSpace: (id, updates) => ipcRenderer.invoke("db-update-space", id, updates),
   purgeSpace: (id, options) => ipcRenderer.invoke("db-purge-space", id, options),
   upsertSpaceFromCloud: (space) => ipcRenderer.invoke("db-upsert-space-from-cloud", space),
