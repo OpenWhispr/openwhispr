@@ -2,6 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   canSelfServeEnterprise,
+  canUpgradeWorkspaceToEnterprise,
+  enterpriseTileCta,
   hasActiveWorkspaceSubscription,
   isEnterpriseConsoleAvailable,
 } = require("../../src/lib/workspaceBilling.ts");
@@ -57,4 +59,42 @@ test("isEnterpriseConsoleAvailable: entitled Enterprise plan for owners and admi
   assert.equal(isEnterpriseConsoleAvailable(enterprise({ status: "past_due" })), false);
   assert.equal(isEnterpriseConsoleAvailable(enterprise({ status: "canceled" })), false);
   assert.equal(isEnterpriseConsoleAvailable(workspace({ plan: "business", role: "owner" })), false);
+});
+
+test("canUpgradeWorkspaceToEnterprise: an owner's live lower-plan subscription, nothing else", () => {
+  const business = (overrides) =>
+    workspace({ plan: "business", stripe_subscription_id: "sub_1", ...overrides });
+  assert.equal(canUpgradeWorkspaceToEnterprise(business()), true);
+  assert.equal(canUpgradeWorkspaceToEnterprise(business({ plan: "pro" })), true);
+  assert.equal(canUpgradeWorkspaceToEnterprise(business({ status: "trialing" })), true);
+  assert.equal(canUpgradeWorkspaceToEnterprise(business({ role: "admin" })), false);
+  assert.equal(canUpgradeWorkspaceToEnterprise(business({ role: "member" })), false);
+  assert.equal(canUpgradeWorkspaceToEnterprise(business({ plan: "enterprise" })), false);
+  assert.equal(canUpgradeWorkspaceToEnterprise(business({ status: "past_due" })), false);
+  assert.equal(canUpgradeWorkspaceToEnterprise(business({ status: "canceled" })), false);
+  // Manually provisioned plans have no subscription to update.
+  assert.equal(canUpgradeWorkspaceToEnterprise(business({ stripe_subscription_id: null })), false);
+});
+
+test("enterpriseTileCta: owners get the dialog, first-timers get create, members get the owner", () => {
+  const ws = (id, role, billing_manager = null) => ({ id, role, billing_manager });
+
+  assert.deepEqual(enterpriseTileCta([ws("a", "member"), ws("b", "owner")], null), {
+    action: "openDialog",
+  });
+  assert.deepEqual(enterpriseTileCta([], null), { action: "createWorkspace" });
+  assert.deepEqual(enterpriseTileCta([ws("a", "admin", "Alice")], null), {
+    action: "contactSales",
+    ownerName: "Alice",
+  });
+  // The active workspace's owner wins over the first one.
+  assert.deepEqual(enterpriseTileCta([ws("a", "member", "Alice"), ws("b", "admin", "Bob")], "b"), {
+    action: "contactSales",
+    ownerName: "Bob",
+  });
+  // Unknown active id falls back to the first workspace; a missing name stays null.
+  assert.deepEqual(enterpriseTileCta([ws("a", "member")], "gone"), {
+    action: "contactSales",
+    ownerName: null,
+  });
 });
