@@ -1076,6 +1076,8 @@ async function startApp() {
     await flushPendingNoteDeepLink();
   }
 
+  await hotkeyManager.hyprlandRegistrationReady;
+
   // Set up voice agent hotkey (dictation routed straight to the dictation
   // agent, bypassing cleanup)
   const voiceAgentHotkeyCallback = () => {
@@ -1157,7 +1159,8 @@ async function startApp() {
       }
       return { success: false, message: result.error };
     } else {
-      hotkeyManager.unregisterSlot("meeting");
+      const removed = await hotkeyManager.unregisterSlot("meeting");
+      if (removed === false) return { success: false };
       environmentManager.saveMeetingKey("");
       windowManager.reconcileNativeKeyListeners();
       return { success: true };

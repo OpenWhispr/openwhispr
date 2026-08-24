@@ -3600,9 +3600,15 @@ class IPCHandlers {
         // On Hyprland Wayland, unregister the keybinding during capture
         if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager) {
           debugLogger.log("[IPC] Unregistering Hyprland keybinding for hotkey capture mode");
-          await hotkeyManager.hyprlandManager.unregisterKeybinding().catch((err) => {
-            debugLogger.warn("[IPC] Failed to unregister Hyprland keybinding:", err.message);
-          });
+          const unregistered = await hotkeyManager.hyprlandManager
+            .unregisterKeybinding()
+            .catch((err) => {
+              debugLogger.warn("[IPC] Failed to unregister Hyprland keybinding:", err.message);
+              return false;
+            });
+          if (!unregistered) {
+            debugLogger.warn("[IPC] Hyprland keybinding remained active during capture");
+          }
         }
       } else {
         // Exiting capture mode - re-register globalShortcut if not already registered
@@ -3687,9 +3693,15 @@ class IPCHandlers {
           debugLogger.log(
             `[IPC] Re-registering slot "${slot}" ("${hotkeys.join(", ")}") after capture mode`
           );
-          await hotkeyManager.registerSlot(slot, hotkeys, info.callback).catch((err) => {
-            debugLogger.warn(`[IPC] Failed to re-register slot "${slot}":`, err.message);
-          });
+          const result = await hotkeyManager
+            .registerSlot(slot, hotkeys, info.callback)
+            .catch((err) => {
+              debugLogger.warn(`[IPC] Failed to re-register slot "${slot}":`, err.message);
+              return { success: false };
+            });
+          if (!result.success) {
+            debugLogger.warn(`[IPC] Slot "${slot}" was not restored after capture`);
+          }
         }
       }
 
@@ -9824,7 +9836,8 @@ class IPCHandlers {
       }
 
       if (!hotkey) {
-        hotkeyManager.unregisterSlot("voiceAgent");
+        const removed = await hotkeyManager.unregisterSlot("voiceAgent");
+        if (removed === false) return { success: false };
         this.environmentManager.saveVoiceAgentKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
         this._notifyHotkeyChanged("");
@@ -9859,7 +9872,8 @@ class IPCHandlers {
       }
 
       if (!hotkey) {
-        hotkeyManager.unregisterSlot("translation");
+        const removed = await hotkeyManager.unregisterSlot("translation");
+        if (removed === false) return { success: false };
         this.environmentManager.saveTranslationKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
         this._notifyHotkeyChanged("");

@@ -7,6 +7,14 @@ const debugLogger = require("./debugLogger");
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
 const DBUS_OBJECT_PATH = "/com/openwhispr/App";
 const DBUS_INTERFACE = "com.openwhispr.App";
+const DBUS_NAME_REQUEST_TIMEOUT_MS = 5000;
+
+const SLOT_TOGGLE_METHOD = {
+  dictation: "Toggle",
+  meeting: "ToggleMeeting",
+  voiceAgent: "ToggleVoiceAgent",
+  translation: "ToggleTranslation",
+};
 
 // Map Electron modifier names to Hyprland modifier names
 const ELECTRON_TO_HYPRLAND_MOD = {
@@ -60,6 +68,14 @@ const MANAGED_HEADER_VARIANTS = new Set([
 
 function isManagedHeaderLine(line) {
   return MANAGED_HEADER_VARIANTS.has(line.trim().replace(/^(#|--)\s*/, ""));
+}
+
+function isManagedBindLine(line, format) {
+  const hasManagedCall = line.includes(
+    `--dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.`
+  );
+  if (!hasManagedCall) return false;
+  return format === "lua" ? /^hl\.bind\s*\(/.test(line) : /^bind(?:t|rt)?\s*=/.test(line);
 }
 
 function buildManagedBindsContent(lines = [], format = "conf") {
@@ -166,12 +182,16 @@ function getDBus() {
 }
 
 class HyprlandShortcutManager {
-  constructor() {
+  constructor({ dbusNameRequestTimeoutMs = DBUS_NAME_REQUEST_TIMEOUT_MS } = {}) {
     this.bus = null;
-    this.callback = null;
+    this.callbacks = {};
     this.isRegistered = false;
-    this.currentBinding = null; // Store the current Hyprland bind string for unbinding
+    this.bindings = {};
+    this.bindingPtt = {};
+    this.desiredBinds = {};
+    this.persistencePending = false;
     this.config = null;
+    this.dbusNameRequestTimeoutMs = dbusNameRequestTimeoutMs;
   }
 
   /**
@@ -208,7 +228,7 @@ class HyprlandShortcutManager {
    * Reuses the same D-Bus service name/path as the GNOME integration.
    */
   async initDBusService(callback) {
-    this.callback = callback;
+    this.callbacks.dictation = callback;
 
     const dbusModule = getDBus();
     if (!dbusModule) {
@@ -220,38 +240,58 @@ class HyprlandShortcutManager {
       // Without a listener, async socket errors (e.g. a stale
       // DBUS_SESSION_BUS_ADDRESS) crash the process as an unhandled
       // "error" event — sessionBus() returns before connecting.
+      let rejectNameRequest;
       this.bus.connection.on("error", (err) => {
         debugLogger.log("[HyprlandShortcut] D-Bus connection error:", err.message);
+        rejectNameRequest?.(err);
       });
-      this.bus.requestName(DBUS_SERVICE_NAME, 0);
-      this.bus.exportInterface(
-        {
-          Toggle: () => {
-            if (this.callback) {
-              this.callback();
-            }
-          },
-          PttDown: () => {
-            if (this.callback) {
-              this.callback(undefined, "down");
-            }
-          },
-          PttUp: () => {
-            if (this.callback) {
-              this.callback(undefined, "up");
-            }
-          },
-        },
-        DBUS_OBJECT_PATH,
-        {
-          name: DBUS_INTERFACE,
-          methods: {
-            Toggle: ["", ""],
-            PttDown: ["", ""],
-            PttUp: ["", ""],
-          },
-        }
-      );
+      const nameReply = await new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (handler, value) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          rejectNameRequest = null;
+          handler(value);
+        };
+        rejectNameRequest = (err) => finish(reject, err);
+        const timeoutId = setTimeout(
+          () => rejectNameRequest?.(new Error("D-Bus name request timed out")),
+          this.dbusNameRequestTimeoutMs
+        );
+        this.bus.requestName(DBUS_SERVICE_NAME, 0, (err, reply) => {
+          if (err) finish(reject, err);
+          else finish(resolve, reply);
+        });
+      });
+      if (nameReply !== 1 && nameReply !== 4) {
+        throw new Error(`D-Bus name request returned ${nameReply}`);
+      }
+
+      const toggleMethods = {};
+      for (const [slot, method] of Object.entries(SLOT_TOGGLE_METHOD)) {
+        toggleMethods[method] = () => {
+          const cb = this.callbacks[slot];
+          if (typeof cb === "function") cb();
+        };
+      }
+      toggleMethods.PttDown = () => {
+        const cb = this.callbacks.dictation;
+        if (typeof cb === "function") cb(undefined, "down");
+      };
+      toggleMethods.PttUp = () => {
+        const cb = this.callbacks.dictation;
+        if (typeof cb === "function") cb(undefined, "up");
+      };
+      this.bus.exportInterface(toggleMethods, DBUS_OBJECT_PATH, {
+        name: DBUS_INTERFACE,
+        methods: Object.fromEntries(
+          [...Object.values(SLOT_TOGGLE_METHOD), "PttDown", "PttUp"].map((method) => [
+            method,
+            ["", ""],
+          ])
+        ),
+      });
 
       debugLogger.log("[HyprlandShortcut] D-Bus service initialized successfully");
       return true;
@@ -270,6 +310,22 @@ class HyprlandShortcutManager {
       return false;
     }
     return VALID_HOTKEY_PATTERN.test(hotkey);
+  }
+
+  static getCanonicalBinding(hotkey) {
+    if (isModifierOnlyHotkey(hotkey)) {
+      const modifiers = hotkey
+        .split("+")
+        .map((part) => ELECTRON_TO_HYPRLAND_MOD[part.trim().toLowerCase()])
+        .filter(Boolean);
+      return `modifier-only:${[...new Set(modifiers)].sort().join("+")}`;
+    }
+
+    const converted = HyprlandShortcutManager.convertToHyprlandFormat(hotkey);
+    if (!converted) return null;
+
+    const modifiers = converted.mods.split(/\s+/).filter(Boolean).sort().join(" ");
+    return `${modifiers}, ${converted.key.toLowerCase()}`;
   }
 
   /**
@@ -350,7 +406,7 @@ class HyprlandShortcutManager {
     };
   }
 
-  _writeBindToConfig(config, bindLines) {
+  _rewriteConfig(config, desiredBinds = this.desiredBinds) {
     fs.mkdirSync(path.dirname(config.bindsPath), { recursive: true });
 
     let content = "";
@@ -360,36 +416,32 @@ class HyprlandShortcutManager {
       if (err.code !== "ENOENT") throw err;
     }
 
-    const lines = content.split("\n").filter((line) => {
+    const userLines = content.split("\n").filter((line) => {
       const trimmed = line.trim();
-      if (!trimmed || isManagedHeaderLine(trimmed)) return false;
+      if (!trimmed) return true;
+      if (isManagedHeaderLine(trimmed)) return false;
       if (trimmed.startsWith("#") || trimmed.startsWith("--")) return true;
-      return !trimmed.includes(DBUS_SERVICE_NAME);
+      return !isManagedBindLine(trimmed, config.format);
     });
 
-    const managedBindLines = Array.isArray(bindLines) ? bindLines : [bindLines];
-    const newContent = buildManagedBindsContent([...lines, ...managedBindLines], config.format);
+    const bindLines = [];
+    for (const slotName of Object.keys(desiredBinds)) {
+      const b = desiredBinds[slotName];
+      if (b.press) bindLines.push(b.press);
+      if (b.release) bindLines.push(b.release);
+    }
 
+    const newContent = buildManagedBindsContent([...userLines, ...bindLines], config.format);
     fs.writeFileSync(config.bindsPath, newContent, "utf-8");
   }
 
-  _removeBindFromConfig(config) {
-    let content = "";
-    try {
-      content = fs.readFileSync(config.bindsPath, "utf-8");
-    } catch (err) {
-      if (err.code === "ENOENT") return;
-      throw err;
+  _persistBinds(config, desiredBinds) {
+    fs.accessSync(config.path, fs.constants.F_OK);
+    this._rewriteConfig(config, desiredBinds);
+    if (!this._ensureSourceInMainConfig(config)) {
+      throw new Error(`Hyprland config not found: ${config.path}`);
     }
-
-    const lines = content.split("\n").filter((line) => {
-      const trimmed = line.trim();
-      if (!trimmed || isManagedHeaderLine(trimmed)) return false;
-      if (trimmed.startsWith("#") || trimmed.startsWith("--")) return true;
-      return !trimmed.includes(DBUS_SERVICE_NAME);
-    });
-
-    fs.writeFileSync(config.bindsPath, buildManagedBindsContent(lines, config.format), "utf-8");
+    this._removeLegacyArtifacts(config);
   }
 
   _ensureSourceInMainConfig(config) {
@@ -440,7 +492,33 @@ class HyprlandShortcutManager {
     const configDir = path.dirname(config.path);
     const legacyConfigPath = path.join(configDir, "hyprland.conf");
     const legacyBindsPath = path.join(configDir, BINDS_FILENAMES.conf);
+    let removeLegacySource = false;
 
+    try {
+      const content = fs.readFileSync(legacyBindsPath, "utf-8");
+      const lines = content.split("\n");
+      const hasManagedArtifacts = lines.some((line) => {
+        const trimmed = line.trim();
+        return isManagedHeaderLine(trimmed) || isManagedBindLine(trimmed, "conf");
+      });
+      if (!hasManagedArtifacts) return;
+
+      const remainingLines = lines.filter((line) => {
+        const trimmed = line.trim();
+        return !isManagedHeaderLine(trimmed) && !isManagedBindLine(trimmed, "conf");
+      });
+      if (remainingLines.join("\n").trim()) {
+        fs.writeFileSync(legacyBindsPath, remainingLines.join("\n"), "utf-8");
+      } else {
+        fs.unlinkSync(legacyBindsPath);
+        removeLegacySource = true;
+      }
+    } catch (err) {
+      if (err.code !== "ENOENT") throw err;
+      return;
+    }
+
+    if (!removeLegacySource) return;
     try {
       const content = fs.readFileSync(legacyConfigPath, "utf-8");
       const newContent = content
@@ -451,15 +529,6 @@ class HyprlandShortcutManager {
         })
         .join("\n");
       if (newContent !== content) fs.writeFileSync(legacyConfigPath, newContent, "utf-8");
-    } catch (err) {
-      if (err.code !== "ENOENT") throw err;
-    }
-
-    try {
-      const content = fs.readFileSync(legacyBindsPath, "utf-8");
-      if (content.includes(MANAGED_HEADER_TEXT[0]) || content.includes(DBUS_SERVICE_NAME)) {
-        fs.unlinkSync(legacyBindsPath);
-      }
     } catch (err) {
       if (err.code !== "ENOENT") throw err;
     }
@@ -526,46 +595,54 @@ class HyprlandShortcutManager {
   }
 
   static getHyprlandConfigStatus() {
-    const mainConfig = getHyprlandConfig().path;
+    const config = getHyprlandConfig();
+    const mainConfig = config.path;
+    const configDir = path.dirname(mainConfig);
     const status = {
       path: mainConfig,
       canWrite: false,
     };
 
     try {
-      fs.accessSync(mainConfig, fs.constants.F_OK);
-      try {
-        fs.accessSync(mainConfig, fs.constants.W_OK);
-        status.canWrite = true;
-      } catch {
-        debugLogger.log("[HyprlandShortcut] Hyprland config is not writable:", mainConfig);
+      fs.accessSync(mainConfig, fs.constants.F_OK | fs.constants.W_OK);
+      if (!fs.statSync(mainConfig).isFile()) {
+        throw new Error(`Hyprland config is not a file: ${mainConfig}`);
       }
-    } catch {
-      debugLogger.log("[HyprlandShortcut] Hyprland config not found:", mainConfig);
+      fs.accessSync(configDir, fs.constants.W_OK);
+      if (fs.existsSync(config.bindsPath)) {
+        fs.accessSync(config.bindsPath, fs.constants.W_OK);
+        if (!fs.statSync(config.bindsPath).isFile()) {
+          throw new Error(`Managed binds path is not a file: ${config.bindsPath}`);
+        }
+      }
+      status.canWrite = true;
+    } catch (err) {
+      debugLogger.log(
+        "[HyprlandShortcut] Hyprland config or managed binds path is not writable:",
+        err.message
+      );
     }
 
     return status;
   }
 
-  /**
-   * Register a keybinding using the runtime API for the active config provider.
-   * The binding executes a dbus-send command that calls our Toggle() method.
-   *
-   * Also writes the bind to a format-specific config file so it survives
-   * `hyprctl reload`.
-   */
-  async registerKeybinding(hotkey, isPushToTalk = false) {
+  async _registerForSlot(hotkey, slotName, callback, isPtt) {
     if (!HyprlandShortcutManager.isHyprland()) {
       debugLogger.log("[HyprlandShortcut] Not running on Hyprland, skipping registration");
       return false;
     }
-
     if (!HyprlandShortcutManager.isValidHotkey(hotkey)) {
       debugLogger.log(`[HyprlandShortcut] Invalid hotkey format: "${hotkey}"`);
       return false;
     }
 
-    if (isPushToTalk && isModifierOnlyHotkey(hotkey)) {
+    const method = SLOT_TOGGLE_METHOD[slotName];
+    if (!method) {
+      debugLogger.log(`[HyprlandShortcut] Unknown slot "${slotName}"`);
+      return false;
+    }
+
+    if (isPtt && isModifierOnlyHotkey(hotkey)) {
       debugLogger.log(
         `[HyprlandShortcut] Modifier-only hotkey "${hotkey}" does not support push-to-talk`
       );
@@ -578,107 +655,165 @@ class HyprlandShortcutManager {
       return false;
     }
 
+    let config;
     try {
-      const config = this._getConfig();
-      const runtimeBinding = config.format === "lua" ? converted.luaKeys : converted.bindKey;
-
-      // First unregister any existing OpenWhispr binding if the hotkey changed.
-      if (this.currentBinding && this.currentBinding !== runtimeBinding) {
-        const unregistered = await this.unregisterKeybinding();
-        if (!unregistered) return false;
+      config = this._getConfig();
+    } catch (err) {
+      debugLogger.log("[HyprlandShortcut] Failed to read Hyprland config:", err.message);
+      return false;
+    }
+    const runtimeBinding = config.format === "lua" ? converted.luaKeys : converted.bindKey;
+    const previousBinding = this.bindings[slotName];
+    const previousIsPtt = this.bindingPtt[slotName] ?? false;
+    if (previousBinding === runtimeBinding && previousIsPtt === isPtt) {
+      if (typeof callback === "function") this.callbacks[slotName] = callback;
+      if (this.persistencePending) {
+        try {
+          this._persistBinds(config, this.desiredBinds);
+          this.persistencePending = false;
+        } catch (err) {
+          debugLogger.log(
+            `[HyprlandShortcut] Keybinding "${hotkey}" is active but still cannot persist:`,
+            err.message
+          );
+        }
       }
+      return true;
+    }
 
-      const pressCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${isPushToTalk ? "PttDown" : "Toggle"}`;
-      const releaseCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.PttUp`;
-
+    const pressCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${isPtt ? "PttDown" : method}`;
+    const releaseCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.PttUp`;
+    const persistedPressBind =
+      config.format === "lua"
+        ? buildLuaBindExpression(
+            converted.luaKeys,
+            pressCommand,
+            isPtt ? "{ transparent = true }" : ""
+          )
+        : `${isPtt ? "bindt" : "bind"} = ${converted.bindKey}, exec, ${pressCommand}`;
+    const persistedReleaseBind = !isPtt
+      ? null
+      : config.format === "lua"
+        ? buildLuaBindExpression(
+            converted.luaKeys,
+            releaseCommand,
+            "{ release = true, transparent = true }"
+          )
+        : `bindrt = ${converted.bindKey}, exec, ${releaseCommand}`;
+    const nextDesiredBinds = {
+      ...this.desiredBinds,
+      [slotName]: { press: persistedPressBind, release: persistedReleaseBind },
+    };
+    try {
       try {
         this._unbindRuntime(config, runtimeBinding);
       } catch (err) {
         debugLogger.log(
-          `[HyprlandShortcut] Pre-bind unbind for "${runtimeBinding}" failed, continuing:`,
+          `[HyprlandShortcut] Pre-bind unbind for "${runtimeBinding}" failed:`,
           err.message
         );
       }
-
-      this._bindRuntime(config, converted, isPushToTalk, pressCommand, releaseCommand);
-
-      this.currentBinding = runtimeBinding;
-      this.isRegistered = true;
-
-      try {
-        const persistedPressBind =
-          config.format === "lua"
-            ? buildLuaBindExpression(
-                converted.luaKeys,
-                pressCommand,
-                isPushToTalk ? "{ transparent = true }" : ""
-              )
-            : `${isPushToTalk ? "bindt" : "bind"} = ${converted.bindKey}, exec, ${pressCommand}`;
-        const persistedReleaseBind = !isPushToTalk
-          ? null
-          : config.format === "lua"
-            ? buildLuaBindExpression(
-                converted.luaKeys,
-                releaseCommand,
-                "{ release = true, transparent = true }"
-              )
-            : `bindrt = ${converted.bindKey}, exec, ${releaseCommand}`;
-        this._writeBindToConfig(config, [persistedPressBind, persistedReleaseBind].filter(Boolean));
-        const mainConfigFound = this._ensureSourceInMainConfig(config);
-        if (mainConfigFound) this._removeLegacyArtifacts(config);
-      } catch (err) {
-        debugLogger.log(
-          "[HyprlandShortcut] Failed to persist keybinding; runtime bind is still active:",
-          err.message
-        );
-      }
-
-      debugLogger.log(
-        `[HyprlandShortcut] Keybinding "${hotkey}" (${runtimeBinding}) registered successfully`
-      );
-      return true;
+      this._bindRuntime(config, converted, isPtt, pressCommand, releaseCommand);
     } catch (err) {
+      if (previousBinding === runtimeBinding) {
+        try {
+          const previousPress = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${previousIsPtt ? "PttDown" : method}`;
+          this._bindRuntime(config, converted, previousIsPtt, previousPress, releaseCommand);
+        } catch {}
+      }
       debugLogger.log("[HyprlandShortcut] Failed to register keybinding:", err.message);
       return false;
     }
+
+    if (previousBinding && previousBinding !== runtimeBinding) {
+      try {
+        this._unbindRuntime(config, previousBinding);
+      } catch (err) {
+        try {
+          this._unbindRuntime(config, runtimeBinding);
+        } catch {}
+        debugLogger.log("[HyprlandShortcut] Failed to replace keybinding:", err.message);
+        return false;
+      }
+    }
+
+    this.bindings[slotName] = runtimeBinding;
+    this.bindingPtt[slotName] = isPtt;
+    this.isRegistered = true;
+    if (typeof callback === "function") this.callbacks[slotName] = callback;
+    this.desiredBinds = nextDesiredBinds;
+    this.persistencePending = true;
+    try {
+      this._persistBinds(config, nextDesiredBinds);
+      this.persistencePending = false;
+    } catch (err) {
+      debugLogger.log(
+        `[HyprlandShortcut] Keybinding "${hotkey}" is active for this session but will not persist:`,
+        err.message
+      );
+    }
+    debugLogger.log(
+      `[HyprlandShortcut] Keybinding "${hotkey}" (${runtimeBinding}) registered for slot "${slotName}"`
+    );
+    return true;
   }
 
-  /**
-   * Update the keybinding to a new hotkey.
-   */
-  async updateKeybinding(hotkey, isPushToTalk = false) {
-    // Just unregister old and register new
+  registerKeybinding(hotkey, isPushToTalk = false) {
+    return this._registerForSlot(hotkey, "dictation", null, isPushToTalk);
+  }
+
+  registerSlotKeybinding(hotkey, slotName, callback) {
+    return this._registerForSlot(hotkey, slotName, callback, false);
+  }
+
+  updateKeybinding(hotkey, isPushToTalk = false) {
     return this.registerKeybinding(hotkey, isPushToTalk);
   }
 
-  /**
-   * Unregister the current keybinding from Hyprland.
-   */
-  async unregisterKeybinding() {
-    if (!this.currentBinding) {
-      this.isRegistered = false;
-      return true;
+  // Unregister one slot, or all slots on teardown.
+  async unregisterKeybinding(slotName) {
+    if (!slotName) {
+      const removals = Object.keys(this.bindings).map((slot) => this.unregisterKeybinding(slot));
+      const success = (await Promise.all(removals)).every(Boolean);
+      if (success) this.isRegistered = false;
+      return success;
     }
 
-    const binding = this.currentBinding;
-    const config = this._getConfig();
-
+    let config;
     try {
-      this._unbindRuntime(config, binding);
+      config = this._getConfig();
     } catch (err) {
-      debugLogger.log(`[HyprlandShortcut] Runtime unbind for "${binding}" failed:`, err.message);
+      debugLogger.log("[HyprlandShortcut] Failed to read Hyprland config:", err.message);
       return false;
     }
 
+    const binding = this.bindings[slotName];
     try {
-      this._removeBindFromConfig(config);
+      if (binding) this._unbindRuntime(config, binding);
     } catch (err) {
-      debugLogger.log("[HyprlandShortcut] Failed to remove persisted keybinding:", err.message);
+      debugLogger.log("[HyprlandShortcut] Failed to unregister keybinding:", err.message);
+      return false;
     }
 
-    debugLogger.log(`[HyprlandShortcut] Keybinding "${binding}" unregistered successfully`);
-    this.currentBinding = null;
-    this.isRegistered = false;
+    const nextDesiredBinds = { ...this.desiredBinds };
+    delete nextDesiredBinds[slotName];
+    this.desiredBinds = nextDesiredBinds;
+    this.persistencePending = true;
+    try {
+      this._persistBinds(config, nextDesiredBinds);
+      this.persistencePending = false;
+    } catch (err) {
+      debugLogger.log(
+        `[HyprlandShortcut] Runtime binding "${slotName}" removed but config was unchanged:`,
+        err.message
+      );
+    }
+
+    delete this.bindings[slotName];
+    delete this.bindingPtt[slotName];
+    if (slotName !== "dictation") delete this.callbacks[slotName];
+    if (Object.keys(this.bindings).length === 0) this.isRegistered = false;
+    debugLogger.log(`[HyprlandShortcut] Keybinding "${slotName}" unregistered successfully`);
     return true;
   }
 

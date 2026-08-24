@@ -16,9 +16,8 @@ const FALLBACK_HOTKEYS = ["F8", "F9", "Control+Shift+Space"];
 // Default hotkey for dictation if no saved value exists
 const DEFAULT_HOTKEY = "Control+Super";
 
-// Slots routed through GNOME native gsettings (not globalShortcut).
-// Temporary slots like "cancel" stay on globalShortcut.
-const GNOME_NATIVE_SLOTS = new Set(["meeting", "voiceAgent", "translation"]);
+// Dictation has a dedicated native path because it also supports push-to-talk.
+const LINUX_NATIVE_TAP_SLOTS = new Set(["meeting", "voiceAgent", "translation"]);
 
 // KDE registration failure reasons — reuse existing i18n keys
 const KDE_FAILURE_REASONS = {
@@ -96,6 +95,8 @@ class HotkeyManager extends EventEmitter {
     this.useGnome = false;
     this.hyprlandManager = null;
     this.useHyprland = false;
+    this.hyprlandInitializationAttempted = false;
+    this.hyprlandRegistrationReady = Promise.resolve();
     this.kdeManager = null;
     this.useKDE = false;
   }
@@ -194,12 +195,11 @@ class HotkeyManager extends EventEmitter {
         }),
       };
     }
-    // GNOME/KDE/Hyprland bind one accelerator per slot, so they use the primary
-    // (first) hotkey; the globalShortcut path below registers the whole list.
+    // Native Linux backends bind only the primary hotkey.
     const hotkey = hotkeys[0];
     if (
       hotkeys.length > 1 &&
-      ((this.useGnome && GNOME_NATIVE_SLOTS.has(slotName)) ||
+      (((this.useGnome || this.useHyprland) && LINUX_NATIVE_TAP_SLOTS.has(slotName)) ||
         (this.useKDE && slotName !== "cancel"))
     ) {
       debugLogger.log(
@@ -208,7 +208,7 @@ class HotkeyManager extends EventEmitter {
     }
 
     // On GNOME (X11 or Wayland), route named slots through native gsettings
-    if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
+    if (this.useGnome && this.gnomeManager && LINUX_NATIVE_TAP_SLOTS.has(slotName)) {
       const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
       if (!gnomeHotkey) {
         debugLogger.log(
@@ -286,6 +286,34 @@ class HotkeyManager extends EventEmitter {
       return { success: true, hotkey };
     }
 
+    if (LINUX_NATIVE_TAP_SLOTS.has(slotName) && this.useHyprland && this.hyprlandManager) {
+      const conflict = this._findSlotConflict(slotName, hotkey);
+      if (conflict) return conflict;
+
+      const success = await this.hyprlandManager.registerSlotKeybinding(hotkey, slotName, callback);
+      if (!success) {
+        return {
+          success: false,
+          error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+        };
+      }
+
+      const slot = this._ensureSlot(slotName);
+      slot.hotkeys = [hotkey];
+      slot.callback = callback;
+      slot.accelerators = [];
+      this.slots.set(slotName, slot);
+      debugLogger.log(`[HotkeyManager] Hyprland slot "${slotName}" set to "${hotkey}"`);
+      return { success: true, hotkey };
+    }
+
+    if (LINUX_NATIVE_TAP_SLOTS.has(slotName) && this.hyprlandInitializationAttempted) {
+      return {
+        success: false,
+        error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+      };
+    }
+
     const result = this.setupShortcuts(hotkeys, callback, slotName, options);
     if (result.success) {
       const slot = this._ensureSlot(slotName);
@@ -313,7 +341,7 @@ class HotkeyManager extends EventEmitter {
     }
 
     // On GNOME, native slots are managed via gsettings, not globalShortcut
-    if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
+    if (this.useGnome && this.gnomeManager && LINUX_NATIVE_TAP_SLOTS.has(slotName)) {
       this.gnomeManager.unregisterKeybinding(slotName).catch((err) => {
         debugLogger.warn(
           `[HotkeyManager] Error unregistering GNOME keybinding for slot "${slotName}":`,
@@ -323,6 +351,24 @@ class HotkeyManager extends EventEmitter {
       slot.hotkeys = [];
       slot.accelerators = [];
       return;
+    }
+
+    if (this.useHyprland && this.hyprlandManager && LINUX_NATIVE_TAP_SLOTS.has(slotName)) {
+      return this.hyprlandManager
+        .unregisterKeybinding(slotName)
+        .then((success) => {
+          if (!success) return false;
+          slot.hotkeys = [];
+          slot.accelerators = [];
+          return true;
+        })
+        .catch((err) => {
+          debugLogger.warn(
+            `[HotkeyManager] Error unregistering Hyprland keybinding for slot "${slotName}":`,
+            err.message
+          );
+          return false;
+        });
     }
 
     // Release what was actually registered; native-listener entries are null.
@@ -686,13 +732,24 @@ class HotkeyManager extends EventEmitter {
       isModifierOnlyHotkey(hotkey)
         ? null
         : normalizeToAccelerator(hotkey);
+    const hyprlandBinding = this.useHyprland
+      ? HyprlandShortcutManager.getCanonicalBinding(hotkey)
+      : null;
 
     for (const [otherSlotName, otherSlot] of this.slots) {
       if (otherSlotName === slotName) continue;
       const otherHotkeys = otherSlot.hotkeys || [];
       const otherAccelerators = otherSlot.accelerators || [];
+      const hasEquivalentHyprlandBinding =
+        hyprlandBinding &&
+        otherHotkeys.some(
+          (otherHotkey) =>
+            HyprlandShortcutManager.getCanonicalBinding(otherHotkey) === hyprlandBinding
+        );
       const match =
-        otherHotkeys.includes(hotkey) || (accelerator && otherAccelerators.includes(accelerator));
+        otherHotkeys.includes(hotkey) ||
+        (accelerator && otherAccelerators.includes(accelerator)) ||
+        hasEquivalentHyprlandBinding;
       if (match) {
         debugLogger.warn(
           `[HotkeyManager] Hotkey "${hotkey}" conflicts with slot "${otherSlotName}"`
@@ -813,6 +870,7 @@ class HotkeyManager extends EventEmitter {
     }
 
     if (isHyprland) {
+      this.hyprlandInitializationAttempted = true;
       if (!HyprlandShortcutManager.isHyprctlAvailable()) {
         debugLogger.log("[HotkeyManager] Hyprland detected but hyprctl not available");
         return false;
@@ -930,7 +988,9 @@ class HotkeyManager extends EventEmitter {
           }
         };
 
-        setTimeout(registerHyprlandHotkey, HOTKEY_REGISTRATION_DELAY_MS);
+        this.hyprlandRegistrationReady = new Promise((resolve) =>
+          setTimeout(resolve, HOTKEY_REGISTRATION_DELAY_MS)
+        ).then(registerHyprlandHotkey);
         this.isInitialized = true;
         return;
       }
