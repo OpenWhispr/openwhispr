@@ -13,7 +13,7 @@ let shortcutCharacter = copyMode ? "c" : "v"
 let fallbackVirtualKey: CGKeyCode = copyMode ? 0x08 : 0x09  // kVK_ANSI_C : kVK_ANSI_V
 let commandModifierState = UInt32(cmdKey) >> 8
 
-func virtualKey(for character: String) -> CGKeyCode? {
+func lookupVirtualKey(for character: String) -> CGKeyCode? {
     guard let inputSource = TISCopyCurrentASCIICapableKeyboardLayoutInputSource()?.takeRetainedValue(),
           let layoutDataPointer = TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData) else {
         return nil
@@ -51,7 +51,7 @@ func virtualKey(for character: String) -> CGKeyCode? {
     }
 }
 
-let virtualKey = virtualKey(for: shortcutCharacter) ?? fallbackVirtualKey
+let virtualKey = lookupVirtualKey(for: shortcutCharacter) ?? fallbackVirtualKey
 
 // Resolved before the keystroke is posted: this is the app that will receive it.
 let target = copyMode ? NSWorkspace.shared.frontmostApplication : nil
