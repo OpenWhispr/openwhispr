@@ -8,7 +8,10 @@ import {
 export const MIN_DISCARDED_DURATION_SECONDS = 1;
 
 export function shouldSaveDiscardedRecording(settings, durationSeconds, policyState = null) {
-  if (!settings) return false;
+  if (!settings || typeof settings !== "object") return false;
+  if (!Number.isFinite(durationSeconds) || durationSeconds < MIN_DISCARDED_DURATION_SECONDS) {
+    return false;
+  }
   const dataRetentionEnabled = policyState
     ? effectiveLocalHistoryEnabled(policyState, settings.dataRetentionEnabled)
     : settings.dataRetentionEnabled;
@@ -18,6 +21,5 @@ export function shouldSaveDiscardedRecording(settings, durationSeconds, policySt
   if (!settings.saveDiscardedTranscriptions) return false;
   if (!dataRetentionEnabled) return false;
   if (!(audioRetentionDays > 0)) return false;
-  if (!(durationSeconds >= MIN_DISCARDED_DURATION_SECONDS)) return false;
   return true;
 }

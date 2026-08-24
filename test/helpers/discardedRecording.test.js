@@ -15,12 +15,16 @@ test("saves when all gates pass and duration >= threshold", async () => {
   assert.equal(shouldSaveDiscardedRecording(base, MIN_DISCARDED_DURATION_SECONDS), true);
 });
 
-test("does not save below the minimum duration", async () => {
+test("does not save below the minimum duration or with non-finite duration", async () => {
   const { shouldSaveDiscardedRecording } = await load();
   assert.equal(shouldSaveDiscardedRecording(base, 0.5), false);
   assert.equal(shouldSaveDiscardedRecording(base, 0), false);
+  assert.equal(shouldSaveDiscardedRecording(base, -5), false);
   assert.equal(shouldSaveDiscardedRecording(base, null), false);
   assert.equal(shouldSaveDiscardedRecording(base, NaN), false);
+  assert.equal(shouldSaveDiscardedRecording(base, Infinity), false);
+  assert.equal(shouldSaveDiscardedRecording(base, -Infinity), false);
+  assert.equal(shouldSaveDiscardedRecording(base, "10"), false);
 });
 
 test("respects each gate", async () => {
@@ -33,10 +37,12 @@ test("respects each gate", async () => {
   assert.equal(shouldSaveDiscardedRecording({ ...base, audioRetentionDays: 0 }, 3), false);
 });
 
-test("handles missing settings", async () => {
+test("handles missing or non-object settings", async () => {
   const { shouldSaveDiscardedRecording } = await load();
   assert.equal(shouldSaveDiscardedRecording(null, 3), false);
   assert.equal(shouldSaveDiscardedRecording(undefined, 3), false);
+  assert.equal(shouldSaveDiscardedRecording("invalid", 3), false);
+  assert.equal(shouldSaveDiscardedRecording(123, 3), false);
 });
 
 test("uses the policy-effective history setting without changing raw settings", async () => {
