@@ -3190,7 +3190,7 @@ class DatabaseManager {
 
         if (noteId != null) {
           note = this.getNote(noteId);
-          if (!note) return null;
+          if (!note || note.deleted_at) return null;
           if (note.folder_id != null) {
             const noteFolder = this._getFolderInAccountScope(note.folder_id);
             if (!noteFolder || noteFolder.deleted_at || noteFolder.space_id !== note.space_id) {
@@ -4633,6 +4633,13 @@ class DatabaseManager {
         hasExplicitCreator || hasLegacyCreator
           ? "excluded.created_by_user_id"
           : "created_by_user_id";
+      const hasExplicitUpdater = Object.prototype.hasOwnProperty.call(
+        cloudNote,
+        "updated_by_user_id"
+      );
+      const updaterUpdate = hasExplicitUpdater
+        ? "excluded.updated_by_user_id"
+        : "updated_by_user_id";
       // Sync must never replace non-empty local content/enhanced_content/
       // transcript with an empty cloud value (#1290, the #938 invariant).
       // The enhancement prompt/hash travel with enhanced_content.
@@ -4668,7 +4675,7 @@ class DatabaseManager {
           calendar_event_id = COALESCE(excluded.calendar_event_id, calendar_event_id),
           diarization_enabled = COALESCE(excluded.diarization_enabled, diarization_enabled),
           expected_speaker_count = COALESCE(excluded.expected_speaker_count, expected_speaker_count),
-          updated_by_user_id = excluded.updated_by_user_id,
+          updated_by_user_id = ${updaterUpdate},
           owner_user_id = COALESCE(excluded.owner_user_id, owner_user_id),
           created_by_user_id = ${creatorUpdate},
           sync_status = 'synced',
@@ -5043,7 +5050,8 @@ class DatabaseManager {
           .prepare(
             `SELECT f.* FROM folders f JOIN spaces s ON s.id = f.space_id
              WHERE f.sync_status = 'pending' AND f.deleted_at IS NULL
-               AND ${accountScope.sql} AND (s.kind = ?${leftTeam})`
+               AND ${accountScope.sql} AND (s.kind = ?${leftTeam})
+             ORDER BY f.space_id, f.name`
           )
           .all(...accountScope.params, spaceKind);
       }
@@ -5051,7 +5059,8 @@ class DatabaseManager {
         .prepare(
           `SELECT f.* FROM folders f
            WHERE f.sync_status = 'pending' AND f.deleted_at IS NULL
-             AND ${accountScope.sql}`
+             AND ${accountScope.sql}
+           ORDER BY f.space_id, f.name`
         )
         .all(...accountScope.params);
     } catch (error) {

@@ -305,7 +305,7 @@ test("getNoteIdsInScope validates vector candidates against the current SQLite s
   );
 });
 
-test("upsertNoteFromCloud round-trips updated_by_user_id", (t) => {
+test("upsertNoteFromCloud preserves omitted and clears explicit-null updated_by_user_id", (t) => {
   const db = createDb(t);
   if (!db) return;
   const privateId = db.getPrivateSpaceId();
@@ -329,13 +329,24 @@ test("upsertNoteFromCloud round-trips updated_by_user_id", (t) => {
   );
   assert.equal(updated.updated_by_user_id, "user-b");
 
-  // A pull without the field must keep the last known editor.
+  const cloudNoteWithoutUpdater = { ...cloudNote };
+  delete cloudNoteWithoutUpdater.updated_by_user_id;
+
+  // Older API responses that omit the field must keep the last known editor.
   const unchanged = db.upsertNoteFromCloud(
-    { ...cloudNote, updated_by_user_id: null, updated_at: "2026-07-03 10:00:00" },
+    { ...cloudNoteWithoutUpdater, updated_at: "2026-07-03 10:00:00" },
     null,
     privateId
   );
   assert.equal(unchanged.updated_by_user_id, "user-b");
+
+  // Explicit null clears attribution after the former user is deleted.
+  const cleared = db.upsertNoteFromCloud(
+    { ...cloudNote, updated_by_user_id: null, updated_at: "2026-07-04 10:00:00" },
+    null,
+    privateId
+  );
+  assert.equal(cleared.updated_by_user_id, null);
 });
 
 // Container conversations die with their container (space purge, folder
