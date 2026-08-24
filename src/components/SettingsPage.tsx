@@ -254,6 +254,9 @@ function GranolaImportSection({
 }) {
   const { t } = useTranslation();
   const [state, setState] = useState<GranolaImportState>({ phase: "idle" });
+  // Guards double-clicks: handlers read stale closure state, so state alone
+  // can't prevent a second dialog/run being started in the same frame.
+  const requestInFlightRef = useRef(false);
 
   const errorDescription = (code?: string) => {
     switch (code) {
@@ -278,60 +281,71 @@ function GranolaImportSection({
   };
 
   const handleChooseFile = async () => {
+    if (requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
     setState({ phase: "picking" });
-    let result:
-      | Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportPickAndPreview>>>
-      | undefined;
     try {
-      result = await window.electronAPI?.granolaImportPickAndPreview?.();
-    } catch {
-      setState({ phase: "idle" });
-      showImportError();
-      return;
+      let result:
+        | Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportPickAndPreview>>>
+        | undefined;
+      try {
+        result = await window.electronAPI?.granolaImportPickAndPreview?.();
+      } catch {
+        setState({ phase: "idle" });
+        showImportError();
+        return;
+      }
+      if (!result || result.canceled) {
+        setState({ phase: "idle" });
+        return;
+      }
+      if (!result.success) {
+        setState({ phase: "idle" });
+        showImportError(result.error);
+        return;
+      }
+      setState({
+        phase: "preview",
+        preview: {
+          total: result.total ?? 0,
+          newCount: result.newCount ?? 0,
+          duplicateCount: result.duplicateCount ?? 0,
+          sampleTitles: result.sampleTitles ?? [],
+          warningCount: result.rowIssueCount ?? 0,
+        },
+      });
+    } finally {
+      requestInFlightRef.current = false;
     }
-    if (!result || result.canceled) {
-      setState({ phase: "idle" });
-      return;
-    }
-    if (!result.success) {
-      setState({ phase: "idle" });
-      showImportError(result.error);
-      return;
-    }
-    setState({
-      phase: "preview",
-      preview: {
-        total: result.total ?? 0,
-        newCount: result.newCount ?? 0,
-        duplicateCount: result.duplicateCount ?? 0,
-        sampleTitles: result.sampleTitles ?? [],
-        warningCount: result.rowIssueCount ?? 0,
-      },
-    });
   };
 
   const handleConfirm = async () => {
-    if (state.phase !== "preview") return;
+    if (state.phase !== "preview" || requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
     setState({ phase: "importing", preview: state.preview });
-    let result:
-      Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportRun>>> | undefined;
     try {
-      result = await window.electronAPI?.granolaImportRun?.();
-    } catch {
-      result = undefined;
-    }
-    if (!result?.success) {
-      setState({ phase: "idle" });
-      showImportError(result?.error);
-      return;
-    }
-    const imported = result.imported ?? 0;
-    setState({ phase: "done", imported, skipped: result.skipped ?? 0 });
-    if (imported > 0) {
-      // One refresh + one batched sync pass — never per-note pushes.
-      void loadFolders();
-      void initializeNotesTree();
-      void syncService.requestSyncAll("manual");
+      let result:
+        Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportRun>>> | undefined;
+      try {
+        result = await window.electronAPI?.granolaImportRun?.();
+      } catch {
+        result = undefined;
+      }
+      if (!result?.success) {
+        setState({ phase: "idle" });
+        showImportError(result?.error);
+        return;
+      }
+      const imported = result.imported ?? 0;
+      setState({ phase: "done", imported, skipped: result.skipped ?? 0 });
+      if (imported > 0) {
+        // One refresh + one batched sync pass — never per-note pushes.
+        void loadFolders();
+        void initializeNotesTree();
+        void syncService.requestSyncAll("manual");
+      }
+    } finally {
+      requestInFlightRef.current = false;
     }
   };
 
@@ -406,8 +420,8 @@ function GranolaImportSection({
             <div className="space-y-2">
               {preview.sampleTitles.length > 0 && (
                 <ul className="text-xs text-muted-foreground space-y-1">
-                  {preview.sampleTitles.map((title) => (
-                    <li key={title} className="truncate">
+                  {preview.sampleTitles.map((title, index) => (
+                    <li key={`${index}-${title}`} className="truncate">
                       {title}
                     </li>
                   ))}

@@ -102,7 +102,7 @@ const normalizeHeader = (header) =>
  *
  * @param {string[]} headerRow
  * @returns {{
- *   mapping: Partial<Record<"id"|"title"|"summary"|"transcript"|"createdAt"|"attendees", number>>,
+ *   mapping: Partial<Record<"id"|"title"|"summary"|"userNotes"|"transcript"|"createdAt"|"attendees", number>>,
  *   unknown: string[],
  *   warnings: Array<{ code: string, detail?: string }>,
  * }}
