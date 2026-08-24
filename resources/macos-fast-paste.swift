@@ -10,7 +10,6 @@ if !AXIsProcessTrusted() {
 // arguments this stays what the paste path expects: ⌘V, no output.
 let copyMode = CommandLine.arguments.contains("--copy")
 let shortcutCharacter = copyMode ? "c" : "v"
-let fallbackVirtualKey: CGKeyCode = copyMode ? 0x08 : 0x09  // kVK_ANSI_C : kVK_ANSI_V
 let commandModifierState = UInt32(cmdKey) >> 8
 
 func lookupVirtualKey(for character: String) -> CGKeyCode? {
@@ -51,7 +50,11 @@ func lookupVirtualKey(for character: String) -> CGKeyCode? {
     }
 }
 
-let virtualKey = lookupVirtualKey(for: shortcutCharacter) ?? fallbackVirtualKey
+// Do not post the old US-ANSI fallback key code: on a non-QWERTY layout it
+// can invoke a different shortcut while still reporting a successful paste.
+guard let virtualKey = lookupVirtualKey(for: shortcutCharacter) else {
+    exit(3)
+}
 
 // Resolved before the keystroke is posted: this is the app that will receive it.
 let target = copyMode ? NSWorkspace.shared.frontmostApplication : nil
