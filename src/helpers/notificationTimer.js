@@ -9,7 +9,8 @@ const CALENDAR_TIMEOUT_MS = 2 * 60 * 1000;
 const MIN_RESUME_MS = 5 * 1000;
 
 function getNotificationTimeoutMs(source) {
-  return source === "calendar" ? CALENDAR_TIMEOUT_MS : DETECTION_TIMEOUT_MS;
+  const normSource = typeof source === "string" ? source.trim().toLowerCase() : "";
+  return normSource === "calendar" ? CALENDAR_TIMEOUT_MS : DETECTION_TIMEOUT_MS;
 }
 
 // Auto-dismiss countdown for the meeting notification overlay, pausable while
@@ -24,7 +25,9 @@ class NotificationDismissTimer {
 
   start(durationMs) {
     this.cancel();
-    this._arm(durationMs);
+    const validDuration =
+      Number.isFinite(durationMs) && durationMs > 0 ? durationMs : DETECTION_TIMEOUT_MS;
+    this._arm(validDuration);
   }
 
   pause() {
@@ -55,7 +58,9 @@ class NotificationDismissTimer {
     this._timer = setTimeout(() => {
       this._timer = null;
       this._deadline = null;
-      this._onTimeout();
+      if (typeof this._onTimeout === "function") {
+        this._onTimeout();
+      }
     }, durationMs);
   }
 }

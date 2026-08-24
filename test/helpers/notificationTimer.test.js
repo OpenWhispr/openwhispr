@@ -111,3 +111,26 @@ test("start replaces a running countdown", (t) => {
   t.mock.timers.tick(1);
   assert.equal(fired, 1);
 });
+
+test("getNotificationTimeoutMs supports case-insensitive and trimmed source names", () => {
+  assert.equal(getNotificationTimeoutMs("Calendar"), 120 * 1000);
+  assert.equal(getNotificationTimeoutMs(" CALENDAR "), 120 * 1000);
+  assert.equal(getNotificationTimeoutMs("detection"), 30 * 1000);
+  assert.equal(getNotificationTimeoutMs(null), 30 * 1000);
+  assert.equal(getNotificationTimeoutMs(undefined), 30 * 1000);
+});
+
+test("NotificationDismissTimer handles invalid duration and missing callback safely", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const noopTimer = new NotificationDismissTimer(null);
+  noopTimer.start(NaN);
+  t.mock.timers.tick(35_000);
+
+  let fired = 0;
+  const timer = new NotificationDismissTimer(() => fired++);
+  timer.start(-100);
+  t.mock.timers.tick(29_999);
+  assert.equal(fired, 0);
+  t.mock.timers.tick(1);
+  assert.equal(fired, 1);
+});
