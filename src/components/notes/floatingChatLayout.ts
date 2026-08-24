@@ -38,10 +38,12 @@ export function observeFloatingChatLayout(
   dependencies: FloatingChatLayoutDependencies = {}
 ): () => void {
   const createResizeObserver =
-    dependencies.createResizeObserver ?? ((callback): ResizeObserverHandle => new ResizeObserver(callback));
+    dependencies.createResizeObserver ??
+    ((callback): ResizeObserverHandle => new ResizeObserver(callback));
   const requestFrame =
     dependencies.requestFrame ?? ((callback): number => requestAnimationFrame(callback));
-  const cancelFrame = dependencies.cancelFrame ?? ((frameId): void => cancelAnimationFrame(frameId));
+  const cancelFrame =
+    dependencies.cancelFrame ?? ((frameId): void => cancelAnimationFrame(frameId));
   let followsBottom = true;
   let frameId: number | null = null;
   let forcePinPending = false;
