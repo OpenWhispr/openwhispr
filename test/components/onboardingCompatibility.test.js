@@ -90,6 +90,27 @@ test("expanded Linux onboarding keeps maximize alongside minimize and close", as
   assert.match(markup, /title="windowControls.close"/);
 });
 
+test("interface language step exposes one selected locale without transcription options", async (t) => {
+  const vite = await createOnboardingRenderer(t);
+  const { default: InterfaceLanguageStep } = await vite.ssrLoadModule(
+    "/components/onboarding/InterfaceLanguageStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(InterfaceLanguageStep, {
+      value: "zh-CN",
+      onChange: noop,
+      label: "Interface language",
+    })
+  );
+
+  assert.match(markup, /role="radiogroup" aria-label="Interface language"/);
+  assert.equal(markup.match(/role="radio"/g)?.length, 10);
+  assert.equal(markup.match(/aria-checked="true"/g)?.length, 1);
+  assert.match(markup, /简体中文/);
+  assert.doesNotMatch(markup, />Auto</);
+});
+
 test("a denied microphone exposes the existing Linux settings recovery", async (t) => {
   const vite = await createOnboardingRenderer(t);
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(

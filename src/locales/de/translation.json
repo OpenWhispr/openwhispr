@@ -189,6 +189,12 @@
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },
+      "interfaceLanguage": {
+        "title": "Wähle deine Oberflächensprache",
+        "titleLineOne": "Wähle deine",
+        "titleLineTwo": "Oberflächensprache",
+        "description": "Dies ändert die Menüs und die Einrichtung von OpenWhispr, nicht die Transkription. Du kannst die Sprache später in den Einstellungen ändern."
+      },
       "languages": {
         "title": "Welche Sprachen sprechen Sie?",
         "titleLineOne": "Welche Sprachen",

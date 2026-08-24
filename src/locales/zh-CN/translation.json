@@ -189,6 +189,12 @@
         "enable": "启用",
         "enabled": "已启用"
       },
+      "interfaceLanguage": {
+        "title": "选择界面语言",
+        "titleLineOne": "选择",
+        "titleLineTwo": "界面语言",
+        "description": "此选项控制 OpenWhispr 的菜单和引导界面，不影响转写语言。你可以稍后在设置中修改。"
+      },
       "languages": {
         "title": "你会说哪些语言？",
         "titleLineOne": "你会说",
