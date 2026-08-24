@@ -109,7 +109,12 @@ import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { startMigration, useMigration } from "../stores/noteStore.js";
+import {
+  startMigration,
+  useMigration,
+  loadFolders,
+  initializeNotesTree,
+} from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import {
@@ -223,6 +228,229 @@ function SectionHeader({
         <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
       )}
       {note && <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{note}</p>}
+    </div>
+  );
+}
+
+interface GranolaImportPreview {
+  total: number;
+  newCount: number;
+  duplicateCount: number;
+  sampleTitles: string[];
+  warningCount: number;
+}
+
+type GranolaImportState =
+  | { phase: "idle" }
+  | { phase: "picking" }
+  | { phase: "preview"; preview: GranolaImportPreview }
+  | { phase: "importing"; preview: GranolaImportPreview }
+  | { phase: "done"; imported: number; skipped: number };
+
+function GranolaImportSection({
+  showAlertDialog,
+}: {
+  showAlertDialog: (options: { title: string; description?: string }) => void;
+}) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<GranolaImportState>({ phase: "idle" });
+
+  const errorDescription = (code?: string) => {
+    switch (code) {
+      case "EMPTY_FILE":
+        return t("settings.granolaImport.error.EMPTY_FILE");
+      case "HEADERS_UNRECOGNIZED":
+        return t("settings.granolaImport.error.HEADERS_UNRECOGNIZED");
+      case "NO_DATA_ROWS":
+        return t("settings.granolaImport.error.NO_DATA_ROWS");
+      case "FILE_TOO_LARGE":
+        return t("settings.granolaImport.error.FILE_TOO_LARGE");
+      default:
+        return t("settings.granolaImport.error.generic");
+    }
+  };
+
+  const showImportError = (code?: string) => {
+    showAlertDialog({
+      title: t("settings.granolaImport.error.title"),
+      description: errorDescription(code),
+    });
+  };
+
+  const handleChooseFile = async () => {
+    setState({ phase: "picking" });
+    let result:
+      | Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportPickAndPreview>>>
+      | undefined;
+    try {
+      result = await window.electronAPI?.granolaImportPickAndPreview?.();
+    } catch {
+      setState({ phase: "idle" });
+      showImportError();
+      return;
+    }
+    if (!result || result.canceled) {
+      setState({ phase: "idle" });
+      return;
+    }
+    if (!result.success) {
+      setState({ phase: "idle" });
+      showImportError(result.error);
+      return;
+    }
+    setState({
+      phase: "preview",
+      preview: {
+        total: result.total ?? 0,
+        newCount: result.newCount ?? 0,
+        duplicateCount: result.duplicateCount ?? 0,
+        sampleTitles: result.sampleTitles ?? [],
+        warningCount: result.rowIssueCount ?? 0,
+      },
+    });
+  };
+
+  const handleConfirm = async () => {
+    if (state.phase !== "preview") return;
+    setState({ phase: "importing", preview: state.preview });
+    let result:
+      Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportRun>>> | undefined;
+    try {
+      result = await window.electronAPI?.granolaImportRun?.();
+    } catch {
+      result = undefined;
+    }
+    if (!result?.success) {
+      setState({ phase: "idle" });
+      showImportError(result?.error);
+      return;
+    }
+    const imported = result.imported ?? 0;
+    setState({ phase: "done", imported, skipped: result.skipped ?? 0 });
+    if (imported > 0) {
+      // One refresh + one batched sync pass — never per-note pushes.
+      void loadFolders();
+      void initializeNotesTree();
+      void syncService.requestSyncAll("manual");
+    }
+  };
+
+  const dialogOpen =
+    state.phase === "preview" || state.phase === "importing" || state.phase === "done";
+  const preview = state.phase === "preview" || state.phase === "importing" ? state.preview : null;
+
+  return (
+    <div>
+      <SectionHeader
+        title={t("settings.granolaImport.title")}
+        description={t("settings.granolaImport.howTo")}
+      />
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settings.granolaImport.title")}
+            description={t("settings.granolaImport.description")}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={state.phase === "picking"}
+              onClick={handleChooseFile}
+            >
+              {state.phase === "picking" ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                t("settings.granolaImport.chooseFile")
+              )}
+            </Button>
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
+
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open && state.phase !== "importing") setState({ phase: "idle" });
+        }}
+      >
+        <DialogContent className="sm:max-w-90">
+          <DialogHeader>
+            <DialogTitle>
+              {state.phase === "done"
+                ? t("settings.granolaImport.done.title")
+                : t("settings.granolaImport.preview.title")}
+            </DialogTitle>
+            {state.phase === "done" ? (
+              <DialogDescription>
+                {t("settings.granolaImport.done.summary", {
+                  imported: state.imported,
+                  skipped: state.skipped,
+                })}
+              </DialogDescription>
+            ) : (
+              preview && (
+                <DialogDescription>
+                  {preview.newCount === 0
+                    ? t("settings.granolaImport.preview.nothingNew")
+                    : t("settings.granolaImport.preview.summary", {
+                        total: preview.total,
+                        newCount: preview.newCount,
+                        duplicateCount: preview.duplicateCount,
+                      })}
+                </DialogDescription>
+              )
+            )}
+          </DialogHeader>
+          {preview && (
+            <div className="space-y-2">
+              {preview.sampleTitles.length > 0 && (
+                <ul className="text-xs text-muted-foreground space-y-1">
+                  {preview.sampleTitles.map((title) => (
+                    <li key={title} className="truncate">
+                      {title}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {preview.warningCount > 0 && (
+                <p className="text-xs text-muted-foreground/80">
+                  {t("settings.granolaImport.preview.warnings", {
+                    warningCount: preview.warningCount,
+                  })}
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            {state.phase === "done" ? (
+              <Button size="sm" onClick={() => setState({ phase: "idle" })}>
+                {t("common.close")}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={state.phase === "importing"}
+                  onClick={() => setState({ phase: "idle" })}
+                >
+                  {t("common.cancel")}
+                </Button>
+                <Button size="sm" disabled={state.phase === "importing"} onClick={handleConfirm}>
+                  {state.phase === "importing" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    t("settings.granolaImport.preview.confirm", {
+                      newCount: preview?.newCount ?? 0,
+                    })
+                  )}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2724,6 +2952,9 @@ export default function SettingsPage({
                 )}
               </SettingsPanel>
             </div>
+
+            {/* Import from Granola */}
+            <GranolaImportSection showAlertDialog={showAlertDialog} />
 
             {/* Floating Icon */}
             <div>

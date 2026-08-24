@@ -25,6 +25,31 @@
         "description": "ノートファイルを再構築できませんでした。機能が有効になっており、フォルダーに書き込み可能であることを確認してください。"
       }
     },
+    "granolaImport": {
+      "title": "Granola からインポート",
+      "description": "Granola の CSV エクスポートから会議ノートをインポート",
+      "howTo": "Granola で Settings → Profile → Export historical data → Generate CSV を実行します。エクスポートは通常数時間以内にメールで届きます。",
+      "chooseFile": "CSV ファイルを選択",
+      "preview": {
+        "title": "Granola からインポート",
+        "summary": "{{total}} 件のノートが見つかりました: 新規 {{newCount}} 件、インポート済み {{duplicateCount}} 件",
+        "warnings": "{{warningCount}} 行に問題があります(スキップ、または日付なしでインポート)",
+        "confirm": "{{newCount}} 件のノートをインポート",
+        "nothingNew": "このファイルのノートはすべてインポート済みです。"
+      },
+      "done": {
+        "title": "インポート完了",
+        "summary": "{{imported}} 件のノートを「Imported」フォルダにインポートし、{{skipped}} 件の重複をスキップしました"
+      },
+      "error": {
+        "title": "インポートに失敗しました",
+        "EMPTY_FILE": "ファイルが空です。",
+        "HEADERS_UNRECOGNIZED": "Granola の CSV エクスポートではないようです。",
+        "NO_DATA_ROWS": "このファイルにはノートが見つかりませんでした。",
+        "FILE_TOO_LARGE": "このファイルは大きすぎてインポートできません。",
+        "generic": "ファイルの読み込み中に問題が発生しました。"
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "話者を識別してラベル付け",

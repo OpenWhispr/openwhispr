@@ -25,6 +25,31 @@
         "description": "無法重建筆記檔案。請確認功能已啟用，且資料夾可寫入。"
       }
     },
+    "granolaImport": {
+      "title": "從 Granola 匯入",
+      "description": "從 Granola 的 CSV 匯出檔案匯入會議筆記",
+      "howTo": "在 Granola 中:Settings → Profile → Export historical data → Generate CSV。匯出檔案會透過電子郵件寄送,通常在幾小時內送達。",
+      "chooseFile": "選擇 CSV 檔案",
+      "preview": {
+        "title": "從 Granola 匯入",
+        "summary": "共找到 {{total}} 則筆記:{{newCount}} 則新筆記,{{duplicateCount}} 則已匯入",
+        "warnings": "{{warningCount}} 列有問題(已略過或匯入時缺少日期)",
+        "confirm": "匯入 {{newCount}} 則筆記",
+        "nothingNew": "此檔案中的筆記皆已匯入。"
+      },
+      "done": {
+        "title": "匯入完成",
+        "summary": "已將 {{imported}} 則筆記匯入「Imported」資料夾,略過 {{skipped}} 則重複項"
+      },
+      "error": {
+        "title": "匯入失敗",
+        "EMPTY_FILE": "檔案是空的。",
+        "HEADERS_UNRECOGNIZED": "這看起來不像 Granola 的 CSV 匯出檔案。",
+        "NO_DATA_ROWS": "此檔案中找不到筆記。",
+        "FILE_TOO_LARGE": "此檔案太大,無法匯入。",
+        "generic": "讀取檔案時發生錯誤。"
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "辨識並標記發言者",

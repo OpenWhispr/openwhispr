@@ -25,6 +25,31 @@
         "description": "Не удалось пересоздать файлы заметок. Убедитесь, что функция включена и в папку можно записывать."
       }
     },
+    "granolaImport": {
+      "title": "Импорт из Granola",
+      "description": "Импорт заметок о встречах из CSV-экспорта Granola",
+      "howTo": "В Granola: Settings → Profile → Export historical data → Generate CSV. Экспорт придёт по электронной почте, обычно в течение нескольких часов.",
+      "chooseFile": "Выбрать CSV-файл",
+      "preview": {
+        "title": "Импорт из Granola",
+        "summary": "Найдено заметок: {{total}}, новых: {{newCount}}, уже импортировано: {{duplicateCount}}",
+        "warnings": "Строк с проблемами: {{warningCount}} (пропущены или импортированы без даты)",
+        "confirm": "Импортировать заметки: {{newCount}}",
+        "nothingNew": "Все заметки из этого файла уже импортированы."
+      },
+      "done": {
+        "title": "Импорт завершён",
+        "summary": "Импортировано заметок в папку «Imported»: {{imported}}, пропущено дубликатов: {{skipped}}"
+      },
+      "error": {
+        "title": "Ошибка импорта",
+        "EMPTY_FILE": "Файл пуст.",
+        "HEADERS_UNRECOGNIZED": "Это не похоже на CSV-экспорт Granola.",
+        "NO_DATA_ROWS": "В этом файле не найдено заметок.",
+        "FILE_TOO_LARGE": "Файл слишком большой для импорта.",
+        "generic": "Не удалось прочитать файл."
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "Распознавать и подписывать участников",

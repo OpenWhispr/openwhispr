@@ -1937,6 +1937,97 @@ class DatabaseManager {
     }
   }
 
+  /**
+   * Bulk-insert externally imported notes (e.g. a Granola CSV export).
+   * Unlike saveNote, rows carry their own client_note_id and original
+   * created_at/updated_at; the UNIQUE client_note_id index makes re-imports
+   * idempotent (duplicates are skipped, never overwritten).
+   */
+  importNotes(rows, { noteType = "meeting", folderName = "Imported" } = {}) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const spaceId = this.getPrivateSpaceId();
+
+      let folderId = null;
+      try {
+        const existing = this.db
+          .prepare("SELECT id FROM folders WHERE name = ? AND space_id = ? AND deleted_at IS NULL")
+          .get(folderName, spaceId);
+        folderId = existing?.id ?? this.createFolder(folderName, spaceId)?.folder?.id ?? null;
+      } catch (folderError) {
+        debugLogger.error(
+          "Import folder resolution failed; importing without a folder",
+          { error: folderError.message },
+          "notes"
+        );
+      }
+
+      const insert = this.db.prepare(`
+        INSERT INTO notes (client_note_id, title, content, note_type, source_file,
+          folder_id, space_id, transcript, participants, sync_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending',
+          COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))
+        ON CONFLICT(client_note_id) DO NOTHING
+      `);
+
+      let imported = 0;
+      let skipped = 0;
+      const noteIds = [];
+      const errors = [];
+      this.db.transaction(() => {
+        for (const row of rows) {
+          try {
+            const result = insert.run(
+              row.clientNoteId,
+              row.title,
+              row.content,
+              noteType,
+              row.sourceFile,
+              folderId,
+              spaceId,
+              row.transcript,
+              row.participants,
+              row.createdAt,
+              row.createdAt
+            );
+            if (result.changes === 1) {
+              imported++;
+              noteIds.push(Number(result.lastInsertRowid));
+            } else {
+              skipped++;
+            }
+          } catch (rowError) {
+            errors.push({ clientNoteId: row.clientNoteId, error: rowError.message });
+          }
+        }
+      })();
+
+      return { success: true, imported, skipped, folderId, noteIds, errors };
+    } catch (error) {
+      debugLogger.error("Error importing notes", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  getExistingClientNoteIds(clientNoteIds) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const existing = [];
+      for (let i = 0; i < clientNoteIds.length; i += 500) {
+        const chunk = clientNoteIds.slice(i, i + 500);
+        const placeholders = chunk.map(() => "?").join(",");
+        const found = this.db
+          .prepare(`SELECT client_note_id FROM notes WHERE client_note_id IN (${placeholders})`)
+          .all(...chunk);
+        existing.push(...found.map((row) => row.client_note_id));
+      }
+      return existing;
+    } catch (error) {
+      debugLogger.error("Error checking client note ids", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
   getNote(id) {
     try {
       if (!this.db) {

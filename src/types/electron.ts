@@ -1248,6 +1248,24 @@ declare global {
       noteFilesRebuild?: () => Promise<{ success: boolean; error?: string }>;
       noteFilesGetDefaultPath?: () => Promise<string>;
       noteFilesPickFolder?: () => Promise<{ canceled: boolean; path?: string }>;
+      granolaImportPickAndPreview?: () => Promise<{
+        canceled: boolean;
+        success?: boolean;
+        error?: string;
+        fileName?: string;
+        total?: number;
+        newCount?: number;
+        duplicateCount?: number;
+        sampleTitles?: string[];
+        rowIssueCount?: number;
+      }>;
+      granolaImportRun?: () => Promise<{
+        success: boolean;
+        error?: string;
+        imported?: number;
+        skipped?: number;
+        errors?: Array<{ clientNoteId: string; error: string }>;
+      }>;
       showNoteFile?: (noteId: number) => Promise<{ success: boolean }>;
       showFolderInExplorer?: (folderName: string) => Promise<{ success: boolean }>;
 

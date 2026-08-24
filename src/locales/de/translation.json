@@ -25,6 +25,31 @@
         "description": "Die Notizdateien konnten nicht neu erstellt werden. Stellen Sie sicher, dass die Funktion aktiviert ist und der Ordner beschreibbar ist."
       }
     },
+    "granolaImport": {
+      "title": "Aus Granola importieren",
+      "description": "Meeting-Notizen aus einem Granola-CSV-Export importieren",
+      "howTo": "In Granola: Settings → Profile → Export historical data → Generate CSV. Der Export wird per E-Mail zugestellt, in der Regel innerhalb weniger Stunden.",
+      "chooseFile": "CSV-Datei auswählen",
+      "preview": {
+        "title": "Aus Granola importieren",
+        "summary": "{{total}} Notizen gefunden: {{newCount}} neu, {{duplicateCount}} bereits importiert",
+        "warnings": "{{warningCount}} Zeilen haben Probleme (übersprungen oder ohne Datum importiert)",
+        "confirm": "{{newCount}} Notizen importieren",
+        "nothingNew": "Alle Notizen in dieser Datei wurden bereits importiert."
+      },
+      "done": {
+        "title": "Import abgeschlossen",
+        "summary": "{{imported}} Notizen in den Ordner „Imported“ importiert, {{skipped}} Duplikate übersprungen"
+      },
+      "error": {
+        "title": "Import fehlgeschlagen",
+        "EMPTY_FILE": "Die Datei ist leer.",
+        "HEADERS_UNRECOGNIZED": "Das sieht nicht wie ein Granola-CSV-Export aus.",
+        "NO_DATA_ROWS": "In dieser Datei wurden keine Notizen gefunden.",
+        "FILE_TOO_LARGE": "Diese Datei ist zu groß zum Importieren.",
+        "generic": "Beim Lesen der Datei ist ein Fehler aufgetreten."
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "Sprecher erkennen und beschriften",

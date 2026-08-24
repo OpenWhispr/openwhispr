@@ -25,6 +25,31 @@
         "description": "无法重建笔记文件。请确保已启用该功能，并且文件夹可写。"
       }
     },
+    "granolaImport": {
+      "title": "从 Granola 导入",
+      "description": "从 Granola 的 CSV 导出文件导入会议笔记",
+      "howTo": "在 Granola 中:Settings → Profile → Export historical data → Generate CSV。导出文件将通过邮件发送,通常在几小时内送达。",
+      "chooseFile": "选择 CSV 文件",
+      "preview": {
+        "title": "从 Granola 导入",
+        "summary": "共找到 {{total}} 条笔记:{{newCount}} 条新笔记,{{duplicateCount}} 条已导入",
+        "warnings": "{{warningCount}} 行存在问题(已跳过或导入时缺少日期)",
+        "confirm": "导入 {{newCount}} 条笔记",
+        "nothingNew": "此文件中的笔记均已导入。"
+      },
+      "done": {
+        "title": "导入完成",
+        "summary": "已将 {{imported}} 条笔记导入到“Imported”文件夹,跳过 {{skipped}} 条重复项"
+      },
+      "error": {
+        "title": "导入失败",
+        "EMPTY_FILE": "文件为空。",
+        "HEADERS_UNRECOGNIZED": "这看起来不像 Granola 的 CSV 导出文件。",
+        "NO_DATA_ROWS": "此文件中未找到笔记。",
+        "FILE_TOO_LARGE": "此文件过大,无法导入。",
+        "generic": "读取文件时出错。"
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "识别并标记发言者",

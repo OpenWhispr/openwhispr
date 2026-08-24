@@ -25,6 +25,31 @@
         "description": "Could not rebuild note files. Make sure the feature is enabled and the folder is writable."
       }
     },
+    "granolaImport": {
+      "title": "Import from Granola",
+      "description": "Import your meeting notes from a Granola CSV export",
+      "howTo": "In Granola: Settings → Profile → Export historical data → Generate CSV. The export is emailed to you, typically within a few hours.",
+      "chooseFile": "Choose CSV file",
+      "preview": {
+        "title": "Import from Granola",
+        "summary": "Found {{total}} notes: {{newCount}} new, {{duplicateCount}} already imported",
+        "warnings": "{{warningCount}} rows have issues (skipped or imported without a date)",
+        "confirm": "Import {{newCount}} notes",
+        "nothingNew": "All notes in this file have already been imported."
+      },
+      "done": {
+        "title": "Import complete",
+        "summary": "Imported {{imported}} notes into the \"Imported\" folder, skipped {{skipped}} duplicates"
+      },
+      "error": {
+        "title": "Import failed",
+        "EMPTY_FILE": "The file is empty.",
+        "HEADERS_UNRECOGNIZED": "This doesn't look like a Granola CSV export.",
+        "NO_DATA_ROWS": "No notes were found in this file.",
+        "FILE_TOO_LARGE": "This file is too large to import.",
+        "generic": "Something went wrong reading the file."
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "Identify and label speakers",

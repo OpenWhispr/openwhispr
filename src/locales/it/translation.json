@@ -25,6 +25,31 @@
         "description": "Impossibile ricostruire i file delle note. Assicurati che la funzione sia abilitata e che la cartella sia scrivibile."
       }
     },
+    "granolaImport": {
+      "title": "Importa da Granola",
+      "description": "Importa le note delle riunioni da un'esportazione CSV di Granola",
+      "howTo": "In Granola: Settings → Profile → Export historical data → Generate CSV. L'esportazione arriva via e-mail, di solito entro poche ore.",
+      "chooseFile": "Scegli file CSV",
+      "preview": {
+        "title": "Importa da Granola",
+        "summary": "Trovate {{total}} note: {{newCount}} nuove, {{duplicateCount}} già importate",
+        "warnings": "{{warningCount}} righe presentano problemi (saltate o importate senza data)",
+        "confirm": "Importa {{newCount}} note",
+        "nothingNew": "Tutte le note di questo file sono già state importate."
+      },
+      "done": {
+        "title": "Importazione completata",
+        "summary": "{{imported}} note importate nella cartella \"Imported\", {{skipped}} duplicati saltati"
+      },
+      "error": {
+        "title": "Importazione non riuscita",
+        "EMPTY_FILE": "Il file è vuoto.",
+        "HEADERS_UNRECOGNIZED": "Questo non sembra un'esportazione CSV di Granola.",
+        "NO_DATA_ROWS": "Nessuna nota trovata in questo file.",
+        "FILE_TOO_LARGE": "Questo file è troppo grande per essere importato.",
+        "generic": "Si è verificato un errore durante la lettura del file."
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "Identifica ed etichetta i partecipanti",
