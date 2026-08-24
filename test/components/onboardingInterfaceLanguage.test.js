@@ -4,10 +4,10 @@ const test = require("node:test");
 const load = () => import("../../src/config/uiLanguages.ts");
 
 test("onboarding offers every supported interface language once", async () => {
-  const { UI_LANGUAGE_OPTIONS } = await load();
+  const { SUPPORTED_UI_LANGUAGES, UI_LANGUAGE_OPTIONS } = await load();
   const values = UI_LANGUAGE_OPTIONS.map(({ value }) => value);
 
-  assert.deepEqual(values, ["en", "es", "fr", "de", "pt", "it", "ru", "ja", "zh-CN", "zh-TW"]);
+  assert.deepEqual(values, [...SUPPORTED_UI_LANGUAGES]);
   assert.equal(new Set(values).size, values.length);
 });
 

@@ -105,8 +105,11 @@ test("interface language step exposes one selected locale without transcription 
   );
 
   assert.match(markup, /role="radiogroup" aria-label="Interface language"/);
-  assert.equal(markup.match(/role="radio"/g)?.length, 10);
-  assert.equal(markup.match(/aria-checked="true"/g)?.length, 1);
+  const radioInputs = markup.match(/<input[^>]*type="radio"[^>]*>/g) ?? [];
+  const names = radioInputs.map((input) => input.match(/name="([^"]+)"/)?.[1]);
+  assert.equal(radioInputs.length, 10);
+  assert.equal(new Set(names).size, 1);
+  assert.equal(radioInputs.filter((input) => input.includes('checked=""')).length, 1);
   assert.match(markup, /简体中文/);
   assert.doesNotMatch(markup, />Auto</);
 });

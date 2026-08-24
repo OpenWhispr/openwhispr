@@ -1,6 +1,6 @@
+import { useId } from "react";
 import { Check } from "lucide-react";
-import { UI_LANGUAGE_OPTIONS } from "../../config/uiLanguages";
-import type { UiLanguage } from "../../i18n";
+import { UI_LANGUAGE_OPTIONS, type UiLanguage } from "../../config/uiLanguages";
 import OnboardingList from "./OnboardingList";
 
 interface InterfaceLanguageStepProps {
@@ -14,20 +14,23 @@ export default function InterfaceLanguageStep({
   onChange,
   label,
 }: InterfaceLanguageStepProps) {
+  const groupName = useId();
+
   return (
     <OnboardingList className="mx-auto mt-5 min-h-0 w-full max-w-md flex-1">
       <div role="radiogroup" aria-label={label}>
         {UI_LANGUAGE_OPTIONS.map((language) => {
           const selected = language.value === value;
           return (
-            <button
-              key={language.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => onChange(language.value)}
-              className="onboarding-list-row w-full text-left"
-            >
+            <label key={language.value} className="onboarding-list-row w-full text-left">
+              <input
+                type="radio"
+                name={groupName}
+                value={language.value}
+                checked={selected}
+                onChange={() => onChange(language.value)}
+                className="peer sr-only"
+              />
               <span className="text-xl leading-none" aria-hidden="true">
                 {language.flag}
               </span>
@@ -38,7 +41,7 @@ export default function InterfaceLanguageStep({
                 {language.label}
               </span>
               <span
-                className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${
+                className={`flex size-5 shrink-0 items-center justify-center rounded-full border peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--onboarding-accent)] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[var(--onboarding-surface)] ${
                   selected
                     ? "border-[var(--onboarding-accent)] bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)]"
                     : "border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]"
@@ -47,7 +50,7 @@ export default function InterfaceLanguageStep({
               >
                 {selected && <Check className="size-3.5" strokeWidth={1.7} />}
               </span>
-            </button>
+            </label>
           );
         })}
       </div>
