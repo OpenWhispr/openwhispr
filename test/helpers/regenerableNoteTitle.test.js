@@ -36,3 +36,12 @@ test("a manually-typed title is preserved (not regenerable)", async () => {
   // even if a calendar event exists, a title that differs from it is user-set
   assert.equal(isRegenerableNoteTitle("My own title", LABELS, "Weekly Team Sync"), false);
 });
+
+test("handles nullish and non-iterable placeholders safely", async () => {
+  const { isRegenerableNoteTitle } = await load();
+  assert.equal(isRegenerableNoteTitle("My Note", null), false);
+  assert.equal(isRegenerableNoteTitle("My Note", undefined), false);
+  assert.equal(isRegenerableNoteTitle("My Note", {}), false);
+  assert.equal(isRegenerableNoteTitle("My Note", 123), false);
+  assert.equal(isRegenerableNoteTitle("Untitled Note", null), true);
+});

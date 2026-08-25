@@ -9,7 +9,12 @@ export function isRegenerableNoteTitle(title, placeholders = [], calendarEventNa
   if (trimmed === "") return true;
 
   const set = new Set(BUILTIN_PLACEHOLDERS);
-  for (const p of placeholders) {
+  const placeholderList =
+    Array.isArray(placeholders) ||
+    (placeholders && typeof placeholders[Symbol.iterator] === "function")
+      ? placeholders
+      : [];
+  for (const p of placeholderList) {
     if (typeof p === "string" && p.trim()) set.add(p.trim().toLowerCase());
   }
   if (set.has(trimmed.toLowerCase())) return true;
