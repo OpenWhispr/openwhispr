@@ -86,7 +86,10 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   // Plain dictation signals processing with the brand-blue Signal glow (comet
   // orbit over a breathing halo) instead of the Beam. Its halo must live
   // outside the Beam wrapper, whose compact preset clips its own overflow.
-  const showSignalGlow = !agentMode && !isUnavailable && showThinkingBeam;
+  // Only the real thinking state glows — lighting the recording entrance too
+  // would read as work already in flight (`beamActive` is that entrance cue,
+  // so it is deliberately ignored here).
+  const showSignalGlow = !agentMode && !isUnavailable && isThinking;
   const isPanel = variant === "panel";
   const collapseToIdentity = collapseToLogo || isThinking;
   const showCompactPill =

@@ -71,10 +71,15 @@ test("thinking and recording keep the same persistent Beam and pill roots", asyn
 test("plain dictation processing signals with the brand Signal glow, not the Beam", async () => {
   const styles = readDictationStyles();
   const agentThinking = await renderPill("thinking", false, "right", { agentMode: true });
+  // The recording entrance's beamActive cue must not light the glow: a glow
+  // on hotkey press reads as work already in flight.
+  const entranceFlourish = await renderPill("recording", false, "right", { beamActive: true });
 
   assert.match(styles, /\.processing-signal-glow\s*\{/);
   assert.match(styles, /:root:not\(\.dark\) \.processing-signal-glow\s*\{/);
   assert.doesNotMatch(agentThinking, /class="processing-signal-glow" data-active/);
+  assert.doesNotMatch(entranceFlourish, /class="processing-signal-glow" data-active/);
+  assert.doesNotMatch(entranceFlourish, /data-active=""/);
 });
 
 test("the pill renders exactly the footprints the native window ladder is sized around", async () => {
