@@ -16,6 +16,9 @@ const SERIES_MASTER_FIELDS =
 // after 7 days so coverage never drops below the app's 7-day lookahead.
 const DELTA_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const DELTA_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// A failed series-master backfill can't be retried via delta (unchanged
+// occurrences are never re-delivered); a short TTL forces an early full sync.
+const BACKFILL_RETRY_TTL_MS = 10 * 60 * 1000;
 const BUFFER_COVERAGE_MS = MAX_BUFFER_MINUTES * 60 * 1000;
 const LOOKBACK_SAFETY_MS = 24 * 60 * 60 * 1000;
 
@@ -227,7 +230,10 @@ class MicrosoftCalendarManager {
       url = data["@odata.nextLink"] || null;
     }
 
-    const events = await this._backfillStrippedOccurrences(items, accountEmail);
+    const events = await this._backfillStrippedOccurrences(items, calendar);
+    if (events.some(isStrippedOccurrence)) {
+      tokenExpiresAt = Math.min(tokenExpiresAt, Date.now() + BACKFILL_RETRY_TTL_MS);
+    }
 
     const toUpsert = [];
     const contactsToUpsert = [];
@@ -269,21 +275,23 @@ class MicrosoftCalendarManager {
   }
 
   // Merges each stripped occurrence with its series master (fetched once per
-  // series); the occurrence's own id/start/end win. A failed master fetch
-  // leaves its occurrences bare instead of failing the calendar's sync;
-  // _syncCalendar decides whether a bare stub may be written.
-  async _backfillStrippedOccurrences(items, accountEmail) {
+  // series, through its calendar — /me/events/{id} 404s for shared calendars);
+  // the occurrence's own id/start/end win. A failed master fetch leaves its
+  // occurrences bare instead of failing the calendar's sync; _syncCalendar
+  // decides whether a bare stub may be written.
+  async _backfillStrippedOccurrences(items, calendar) {
     const masterIds = new Set(
       items.filter(isStrippedOccurrence).map((item) => item.seriesMasterId)
     );
     if (masterIds.size === 0) return items;
 
+    const calendarPath = encodeURIComponent(calendar.id);
     const masters = new Map();
     for (const id of masterIds) {
       try {
         const master = await this._apiGet(
-          `/me/events/${encodeURIComponent(id)}?$select=${SERIES_MASTER_FIELDS}`,
-          accountEmail
+          `/me/calendars/${calendarPath}/events/${encodeURIComponent(id)}?$select=${SERIES_MASTER_FIELDS}`,
+          calendar.account_email
         );
         masters.set(id, master);
       } catch (err) {

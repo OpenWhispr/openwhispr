@@ -546,6 +546,16 @@ class DatabaseManager {
         )
       `);
 
+      // One-time reset (user_version 2): pre-fix builds stored recurring
+      // occurrences untitled when the series-master fetch failed, and delta
+      // never re-delivers them; a forced full sync re-fetches them fixed.
+      if (this.db.pragma("user_version", { simple: true }) < 2) {
+        this.db.exec(
+          "UPDATE microsoft_calendars SET sync_token = NULL, sync_token_expires_at = NULL"
+        );
+        this.db.pragma("user_version = 2");
+      }
+
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS calendar_events (
           id TEXT PRIMARY KEY,
