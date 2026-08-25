@@ -76,6 +76,7 @@ test("a selection edit survives a rejected screenshot via the text-only retry", 
     systemPrompt: "BASE PROMPT SCREEN_SUFFIX_SENTINEL",
     textOnlySystemPrompt: "BASE PROMPT",
     screenContext: { mediaType: "image/jpeg", data: "x" },
+    selectionEditReachable: true,
   });
 
   assert.equal(replacement, "shorter text");

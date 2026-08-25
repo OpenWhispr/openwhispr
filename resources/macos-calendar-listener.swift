@@ -4,7 +4,7 @@
  * Long-running process that reads the local EventKit store and emits
  * line-delimited JSON on stdout: a permission message on launch, then a
  * calendars+events snapshot whenever the store changes, "sync" arrives on
- * stdin, or a 5-minute timer rolls the 7-day window forward.
+ * stdin, or a 5-minute timer rolls the availability cache window forward.
  *
  * Pass --request to prompt for calendar access when it is not determined.
  * macOS reads the usage strings from the TCC "responsible process": the
@@ -23,8 +23,12 @@ import Foundation
 
 let eventStore = EKEventStore()
 let requestAccess = CommandLine.arguments.contains("--request")
-let LOOKAHEAD_DAYS = 7.0
+// One extra day keeps the tool's 7-day horizon covered between snapshots.
+let CACHE_LOOKAHEAD_DAYS = 8.0
 let REFRESH_INTERVAL_SECONDS = 300.0
+// Keep events that may still block availability after the maximum two-hour
+// buffer, plus one snapshot interval of safety.
+let AVAILABILITY_LOOKBACK_SECONDS = (120.0 * 60) + REFRESH_INTERVAL_SECONDS
 
 let isoFormatter: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
@@ -89,6 +93,7 @@ struct EventOut: Encodable {
     let end: String
     let is_all_day: Bool
     let status: String
+    let availability: String
     let organizer_email: String?
     let url: String?
     let location: String?
@@ -169,6 +174,17 @@ func eventStatus(_ status: EKEventStatus) -> String {
     }
 }
 
+func eventAvailability(_ availability: EKEventAvailability) -> String {
+    switch availability {
+    case .free: return "free"
+    case .tentative: return "tentative"
+    case .busy: return "busy"
+    case .unavailable: return "unavailable"
+    case .notSupported: return "unknown"
+    @unknown default: return "unknown"
+    }
+}
+
 let linkDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
 func extractURLs(from text: String?) -> [String] {
@@ -204,6 +220,7 @@ func mapEvent(_ event: EKEvent) -> EventOut? {
         end: isoFormatter.string(from: endDate),
         is_all_day: event.isAllDay,
         status: eventStatus(event.status),
+        availability: eventAvailability(event.availability),
         organizer_email: mailtoEmail(event.organizer?.url),
         url: event.url?.absoluteString,
         location: event.location,
@@ -226,8 +243,9 @@ func emitSnapshot() {
         )
     }
 
-    let start = Date()
-    let end = start.addingTimeInterval(LOOKAHEAD_DAYS * 24 * 60 * 60)
+    let now = Date()
+    let start = now.addingTimeInterval(-AVAILABILITY_LOOKBACK_SECONDS)
+    let end = now.addingTimeInterval(CACHE_LOOKAHEAD_DAYS * 24 * 60 * 60)
     let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: calendars)
     let eventsOut = eventStore.events(matching: predicate).compactMap(mapEvent)
 

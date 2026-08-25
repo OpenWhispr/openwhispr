@@ -774,7 +774,7 @@ export function MeetingTranscriptChat({
       )}
       <div
         ref={scrollRef}
-        className="flex-1 min-h-0 overflow-y-auto px-4 pt-2 pb-24 flex flex-col gap-1.5 agent-chat-scroll"
+        className="flex-1 min-h-0 overflow-y-auto px-4 pt-2 flex flex-col gap-1.5 agent-chat-scroll pb-[var(--floating-inset,96px)]"
       >
         {segments.map((segment, i) => {
           const selfSide = isSelfSide(segment);

@@ -106,13 +106,25 @@ function isAddressedAt(
   return /[.!?…]["')\]]*$/.test(rawWords[index - 1]);
 }
 
-export function detectAgentName(transcript: string, agentName: string, language?: string): boolean {
+interface AgentAddress {
+  /** Index of the first raw word to drop (the cue, when one precedes the name). */
+  start: number;
+  /** Index one past the last raw word of the name. */
+  end: number;
+  /** The words the indices refer to (CJK transcripts are normalized first). */
+  rawWords: string[];
+}
+
+function locateAgentAddress(
+  transcript: string,
+  agentName: string,
+  language?: string
+): AgentAddress | null {
   const name = agentName.trim();
-  if (!name || name.length < 2) return false;
+  if (!name || name.length < 2) return null;
 
   const base = baseLanguageOf(language);
   const localizedCues = (base && LOCALIZED_CUE_SETS.get(base)) || EMPTY_CUES;
-  // Normalization is gated with the cues so non-CJK dictation stays untouched.
   const normalizeCjk = base === "ja" || base === "zh";
   const detectionName = normalizeCjk ? name.normalize("NFC") : name;
   const source = normalizeCjk ? normalizeCjkTranscript(transcript, detectionName) : transcript;
@@ -136,10 +148,36 @@ export function detectAgentName(transcript: string, agentName: string, language?
         levenshteinDistance(joined, nameLower) <= maxEdits &&
         isAddressedAt(i, words, rawWords, localizedCues)
       ) {
-        return true;
+        const cueBefore =
+          i > 0 && (VOCATIVE_CUES.has(words[i - 1]) || localizedCues.has(words[i - 1]));
+        const nameEnd = i + span + 1;
+        const addressEnd = rawWords[nameEnd] === "," ? nameEnd + 1 : nameEnd;
+        return { start: cueBefore ? i - 1 : i, end: addressEnd, rawWords };
       }
     }
   }
 
-  return false;
+  return null;
+}
+
+export function detectAgentName(transcript: string, agentName: string, language?: string): boolean {
+  return locateAgentAddress(transcript, agentName, language) !== null;
+}
+
+/**
+ * Removes the wake-word address ("Hey Aria,") so a panel command reads as the
+ * command itself. Splices the locator's own word list (so CJK normalization
+ * stays consistent); returns the transcript unchanged when no address is
+ * found or when stripping would leave nothing.
+ */
+export function stripAgentAddress(
+  transcript: string,
+  agentName: string,
+  language?: string
+): string {
+  const address = locateAgentAddress(transcript, agentName, language);
+  if (!address) return transcript;
+  const { rawWords, start, end } = address;
+  const remaining = [...rawWords.slice(0, start), ...rawWords.slice(end)].join(" ").trim();
+  return remaining || transcript;
 }

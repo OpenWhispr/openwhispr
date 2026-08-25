@@ -29,8 +29,8 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onInteractOutside, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { overlayClassName?: string }
+>(({ className, children, onInteractOutside, overlayClassName, ...props }, ref) => {
   // With another layer open above this dialog — a popper (Select/Popover/
   // DropdownMenu) or a stacked dialog — an outside click dismisses that
   // layer, never this dialog. Radix defers outside-click dismissal to a
@@ -58,7 +58,7 @@ const DialogContent = React.forwardRef<
 
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         ref={(node) => {
           contentRef.current = node;

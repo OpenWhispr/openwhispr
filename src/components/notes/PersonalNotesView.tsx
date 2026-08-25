@@ -24,6 +24,14 @@ import logger from "../../utils/logger";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
+  buildLlmTranscript,
+  buildMeetingContext,
+  collectKnownPeople,
+  type MeetingIdentity,
+} from "../../utils/llmTranscript";
+import type { MentionPerson } from "../../utils/mentionMarkdown";
+import type { CalendarAttendee } from "../../types/calendar";
+import {
   useNotes,
   useSpaces,
   useFolders,
@@ -74,6 +82,16 @@ import {
 
 function makeContentHash(content: string): string {
   return String(content.length) + "-" + content.slice(0, 50);
+}
+
+function parseNoteParticipants(raw: string | null | undefined): CalendarAttendee[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function draftFromNote(note: NoteItem): NoteEditorDraft {
@@ -211,7 +229,7 @@ export default function PersonalNotesView({
   const isCloudMode = noteFormatting.isCloudMode;
   const effectiveModelId = noteFormatting.modelId;
   const { isComplete: isOnboardingComplete, complete: completeOnboarding } = useNotesOnboarding();
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, user } = useAuth();
   const teamSpacesAvailable = useTeamSpacesCapability(isSignedIn);
   const isTreeLoading = useIsTreeLoading();
   const [structureIntroPending, setStructureIntroPending] = useState(() =>
@@ -748,7 +766,7 @@ export default function PersonalNotesView({
               actionName={actionName}
               actionPicker={
                 <ActionPicker
-                  onRunAction={(action) => {
+                  onRunAction={async (action) => {
                     if (!editorNote) return;
                     const { recordingNoteId: liveNoteId, transcript: liveTranscript } =
                       useMeetingRecordingStore.getState();
@@ -760,17 +778,34 @@ export default function PersonalNotesView({
                     if (!hasNotes && !rawTranscript) return;
 
                     let formattedTranscript = "";
+                    let meetingContext = "";
                     let isMeetingNote = false;
+                    let knownPeople: MentionPerson[] = [];
                     if (rawTranscript) {
                       const segments = parseTranscriptSegments(rawTranscript);
                       if (segments.length > 0) {
                         isMeetingNote = true;
-                        formattedTranscript = segments
-                          .map(
-                            (s) =>
-                              `${s.source === "mic" ? t("notes.speaker.you") : t("notes.speaker.them")}: ${s.text}`
-                          )
-                          .join("\n");
+                        const mappingRows =
+                          (await window.electronAPI
+                            ?.getSpeakerMappings?.(editorNote.id)
+                            .catch(() => [])) || [];
+                        const speakerMappings: Record<string, string> = {};
+                        for (const m of mappingRows) speakerMappings[m.speaker_id] = m.display_name;
+
+                        const identity: MeetingIdentity = {
+                          selfName: user?.name?.trim() || null,
+                          selfEmail: user?.email?.trim() || null,
+                          participants: parseNoteParticipants(editorNote.participants),
+                        };
+                        const selfLabel = identity.selfName || t("notes.speaker.you");
+                        meetingContext = buildMeetingContext(identity, selfLabel);
+                        formattedTranscript = buildLlmTranscript(
+                          segments,
+                          speakerMappings,
+                          selfLabel,
+                          t
+                        );
+                        knownPeople = collectKnownPeople(identity, speakerMappings, segments);
                       }
                       if (!formattedTranscript) {
                         formattedTranscript = rawTranscript;
@@ -779,6 +814,7 @@ export default function PersonalNotesView({
 
                     const parts = [
                       hasNotes ? noteContent : "",
+                      meetingContext,
                       formattedTranscript ? `## Meeting Transcript\n${formattedTranscript}` : "",
                     ]
                       .filter(Boolean)
@@ -787,6 +823,7 @@ export default function PersonalNotesView({
                       isCloudMode,
                       modelId: effectiveModelId,
                       isMeetingNote,
+                      knownPeople,
                       allowTitleGeneration: isRegenerableNoteTitle(
                         editorNote.title,
                         [

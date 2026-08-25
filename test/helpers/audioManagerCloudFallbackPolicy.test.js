@@ -1,43 +1,20 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { loadAudioManager: loadAudioManagerHarness } = require("./harness/audioManager");
 
-// audioManager pulls in the whole renderer graph, so every test here needs the
-// same store/service stubs. `settingsKey` names the globalThis slot each test
-// swaps its settings through, keeping the module cache per-test isolated.
+// The shared harness supplies the renderer-graph stubs; this wrapper adds the
+// no-op instance surface every manager in this suite needs.
 async function loadAudioManager(t, { cachePrefix, settingsKey }) {
-  const { window } = installBrowserGlobals(t);
-  const vite = await createRendererServer(t, {
+  const { window, vite, setSettings, createManager } = await loadAudioManagerHarness(t, {
     cachePrefix,
-    mockModules: {
-      "/utils/logger": "export default { debug() {}, info() {}, warn() {}, error() {} };",
-      "/stores/settingsStore": `
-        export const getSettings = () => globalThis.${settingsKey};
-        export const getEffectiveCleanupModel = () => null;
-        export const isCloudCleanupMode = () => false;
-        export const isCloudDictationAgentMode = () => false;
-        export const isCloudTranslationMode = () => false;
-      `,
-      "/services/ReasoningService": "export default class ReasoningService {};",
-      "/services/SyncService.js": "export const syncService = {};",
-      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
-      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
-    },
+    settingsKey,
   });
-  t.after(() => {
-    delete globalThis[settingsKey];
-  });
-
-  const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
   return {
     window,
     vite,
-    setSettings: (settings) => {
-      globalThis[settingsKey] = settings;
-    },
-    // Prototype-only instance: the constructor wires up media devices we don't need.
+    setSettings,
     createManager: (overrides = {}) =>
-      Object.assign(Object.create(AudioManager.prototype), {
+      createManager({
         getEffectiveSttLanguage: () => "auto",
         getTranscriptionModel: () => "whisper-1",
         getAPIKey: async () => "test-key",

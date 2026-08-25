@@ -651,6 +651,57 @@ test("re-entering providers mode replaces a dormant policy-disallowed provider",
   );
 });
 
+// The STT picker feeds reconcile the browsed tab (browsedCloudProvider ??
+// selectedCloudProvider) while the committed pair stays untouched in the store.
+test("a browsed provider resolves for display without leaking the committed model", async () => {
+  const { reconcileCloudProviderSelection } = await load();
+  const allowedProviders = [
+    { id: "openai", models: [{ id: "whisper-1" }] },
+    { id: "groq", models: [{ id: "whisper-large-v3" }] },
+  ];
+
+  // Browsing an allowed tab: the display lands on the browsed provider with
+  // its own default — the committed model (openai's) never leaks into it.
+  assert.deepEqual(
+    reconcileCloudProviderSelection({
+      selectedProvider: "groq",
+      selectedModel: "whisper-1",
+      allowedProviders,
+      customAllowed: false,
+      hasCustomUrl: false,
+    }),
+    { provider: "groq", model: "whisper-large-v3" }
+  );
+
+  // Browsing the Custom tab is always a valid input (null = no correction);
+  // the caller must echo the browsed input, not the committed pair.
+  assert.equal(
+    reconcileCloudProviderSelection({
+      selectedProvider: "custom",
+      selectedModel: "whisper-1",
+      allowedProviders,
+      customAllowed: true,
+      hasCustomUrl: false,
+    }),
+    null
+  );
+
+  // A browsed provider that policy has since disallowed falls back. The
+  // component can't browse there directly (handleCloudProviderChange guards
+  // providerAllowed); this state is only reachable when policy flips while
+  // the tab is already being browsed.
+  assert.deepEqual(
+    reconcileCloudProviderSelection({
+      selectedProvider: "xai",
+      selectedModel: "whisper-1",
+      allowedProviders,
+      customAllowed: false,
+      hasCustomUrl: false,
+    }),
+    { provider: "openai", model: "whisper-1" }
+  );
+});
+
 test("active control-panel views reroute on their specific policy capability", async () => {
   const { isControlPanelViewAllowed } = await load();
 
@@ -717,4 +768,66 @@ test("cloud-backup resume fires only on a denial-to-grant transition", async () 
   // A periodic refresh that keeps the grant unchanged must not kick a resync.
   assert.equal(cloudBackupResumed(unmanaged, unmanaged), false);
   assert.equal(cloudBackupResumed(managedAllowed, managedAllowed), false);
+});
+
+test("required local models resolve only for managed policies", async () => {
+  const { requiredLocalModelIds } = await load();
+  const required = ["base", "parakeet-tdt-0.6b-v3"];
+  const managed = {
+    status: "managed",
+    policy: { ...policy, requiredLocalModels: required },
+    appVersion: "1.9.0",
+  };
+
+  assert.deepEqual(requiredLocalModelIds(managed), required);
+  for (const status of ["idle", "loading", "unmanaged", "error"]) {
+    assert.deepEqual(requiredLocalModelIds({ status, policy: null, appVersion: null }), [], status);
+  }
+  // Absent field (older server) and empty list both mean nothing is required.
+  assert.deepEqual(requiredLocalModelIds({ status: "managed", policy, appVersion: null }), []);
+  assert.deepEqual(
+    requiredLocalModelIds({
+      status: "managed",
+      policy: { ...policy, requiredLocalModels: [] },
+      appVersion: null,
+    }),
+    []
+  );
+});
+
+test("required local models drop ids the registry does not know, with a warning", async () => {
+  const { requiredLocalModelIds } = await load();
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try {
+    const managed = {
+      status: "managed",
+      policy: {
+        ...policy,
+        requiredLocalModels: ["base", "a-model-from-the-future", "turbo", "base"],
+      },
+      appVersion: null,
+    };
+    // Unknown ids are filtered (forward compat) and duplicates collapse.
+    assert.deepEqual(requiredLocalModelIds(managed), ["base", "turbo"]);
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.equal(
+    warnings.some((line) => line.includes("a-model-from-the-future")),
+    true
+  );
+});
+
+test("missing required models is a pure set difference over disk truth", async () => {
+  const { missingRequiredLocalModels } = await load();
+
+  assert.deepEqual(missingRequiredLocalModels([], []), []);
+  assert.deepEqual(missingRequiredLocalModels(["base"], []), ["base"]);
+  assert.deepEqual(
+    missingRequiredLocalModels(["base", "turbo"], ["turbo", "small"]),
+    ["base"]
+  );
+  assert.deepEqual(missingRequiredLocalModels(["base"], ["base"]), []);
 });
