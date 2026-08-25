@@ -2,7 +2,10 @@ import type { InferenceMode, ShareVisibility } from "../types/electron";
 import type { OrgPolicy, PolicyScope } from "../types/policy";
 import type { SettingsState } from "./settingsStore";
 import { compareAppVersions } from "../utils/version.ts";
-import { getParakeetModels, getValidWhisperModelNames } from "../models/ModelRegistry";
+// The registry JSON directly (like policyValidation.js), NOT ModelRegistry:
+// that module pulls the settings/identity stores, whose module scope needs
+// real browser globals, and this file is imported by node-run sync tests.
+import modelRegistryData from "../models/modelRegistryData.json";
 
 export type PolicyStatus = "idle" | "loading" | "managed" | "unmanaged" | "error";
 
@@ -131,8 +134,8 @@ export function requiredLocalModelIds(state: PolicyDecisionSnapshot): string[] {
   const required = managedPolicy(state)?.requiredLocalModels;
   if (!required?.length) return [];
   const known = new Set<string>([
-    ...getValidWhisperModelNames(),
-    ...Object.keys(getParakeetModels()),
+    ...Object.keys(modelRegistryData.whisperModels),
+    ...Object.keys(modelRegistryData.parakeetModels),
   ]);
   const usable: string[] = [];
   for (const id of required) {
