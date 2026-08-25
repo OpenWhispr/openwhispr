@@ -533,6 +533,17 @@
         "step2": "Apri la console Corti e crea le credenziali API",
         "step3": "Incolla qui sotto Client ID e Secret"
       }
+    },
+    "requiredModels": {
+      "title": "Installa i modelli richiesti",
+      "description": "{{organization}} richiede questi modelli su questo dispositivo prima che tu possa iniziare a dettare.",
+      "genericOrganization": "La tua organizzazione",
+      "installed": "Installato",
+      "queued": "In coda",
+      "failed": {
+        "title": "Un download non è stato completato",
+        "description": "Controlla la connessione e lo spazio libero su disco, poi riprova. Se continua a fallire, contatta il tuo amministratore."
+      }
     }
   },
   "streaming": {
@@ -656,7 +667,12 @@
       "enableButton": "Attiva GPU",
       "dismissButton": "Non ora"
     },
-    "backToNotes": "Torna alle note"
+    "backToNotes": "Torna alle note",
+    "requiredModelsByOrg": {
+      "title": "Modelli richiesti mancanti",
+      "description": "La tua organizzazione richiede questi modelli su questo dispositivo: {{models}}.",
+      "download": "Scarica"
+    }
   },
   "reasoning": {
     "mode": {

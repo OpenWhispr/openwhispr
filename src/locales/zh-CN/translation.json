@@ -533,6 +533,17 @@
         "step2": "打开 Corti 控制台并创建 API 凭据",
         "step3": "在下方粘贴 Client ID 和 Secret"
       }
+    },
+    "requiredModels": {
+      "title": "安装必需的模型",
+      "description": "{{organization}}要求在此设备上安装这些模型后才能开始听写。",
+      "genericOrganization": "您的组织",
+      "installed": "已安装",
+      "queued": "排队中",
+      "failed": {
+        "title": "有一项下载未完成",
+        "description": "请检查网络连接和磁盘剩余空间，然后重试。如果仍然失败，请联系您的管理员。"
+      }
     }
   },
   "streaming": {
@@ -656,7 +667,12 @@
       "enableButton": "启用 GPU",
       "dismissButton": "暂不启用"
     },
-    "backToNotes": "返回笔记"
+    "backToNotes": "返回笔记",
+    "requiredModelsByOrg": {
+      "title": "缺少必需的模型",
+      "description": "您的组织要求在此设备上安装这些模型：{{models}}。",
+      "download": "下载"
+    }
   },
   "reasoning": {
     "mode": {

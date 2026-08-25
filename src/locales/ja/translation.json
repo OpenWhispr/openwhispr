@@ -533,6 +533,17 @@
         "step2": "Corti コンソールで API 認証情報を作成",
         "step3": "Client ID と Secret を下に貼り付け"
       }
+    },
+    "requiredModels": {
+      "title": "必須モデルをインストール",
+      "description": "{{organization}}では、ディクテーションを開始する前にこれらのモデルをこのデバイスにインストールする必要があります。",
+      "genericOrganization": "所属組織",
+      "installed": "インストール済み",
+      "queued": "待機中",
+      "failed": {
+        "title": "ダウンロードが完了しませんでした",
+        "description": "接続とディスクの空き容量を確認して、再試行してください。それでも失敗する場合は、管理者にお問い合わせください。"
+      }
     }
   },
   "streaming": {
@@ -656,7 +667,12 @@
       "enableButton": "GPU を有効化",
       "dismissButton": "後で"
     },
-    "backToNotes": "ノートに戻る"
+    "backToNotes": "ノートに戻る",
+    "requiredModelsByOrg": {
+      "title": "必須モデルがありません",
+      "description": "組織では、このデバイスにこれらのモデルが必要です：{{models}}。",
+      "download": "ダウンロード"
+    }
   },
   "reasoning": {
     "mode": {

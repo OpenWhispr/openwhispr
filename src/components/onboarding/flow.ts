@@ -6,6 +6,7 @@ type OnboardingStorage = Pick<Storage, "setItem" | "removeItem">;
 
 export type OnboardingStepId =
   | "auth"
+  | "required-models"
   | "permissions"
   | "languages"
   | "use-cases"
@@ -37,6 +38,13 @@ export interface OnboardingRouteContext {
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
   agentAllowed: boolean;
+  /**
+   * Org-required local models are missing on disk. Inserts the blocking
+   * "required-models" step right after auth — account path only, since guests
+   * never fetch a policy. Callers latch this once the step is entered so a
+   * mid-download policy refresh can't yank the step from under the user.
+   */
+  requiredModelsPending?: boolean;
   /** A confirmed Enterprise workspace is already provisioned outside onboarding. */
   skipSetupChoice?: boolean;
 }
@@ -60,6 +68,7 @@ const SETUP_ROUTES: Record<Exclude<OnboardingSetupMode, null | "cloud">, Onboard
 // it to clamp backwards instead of jumping to the end of the route.
 const STEP_ORDER: OnboardingStepId[] = [
   "auth",
+  "required-models",
   "permissions",
   "languages",
   "use-cases",
@@ -150,6 +159,10 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
           "notes" as const,
           ...setupChoice,
         ];
+
+  if (context.requiredModelsPending && context.authPath === "account") {
+    route.splice(route.indexOf("auth") + 1, 0, "required-models");
+  }
 
   if (context.setupMode && context.setupMode !== "cloud") {
     route.push(

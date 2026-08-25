@@ -533,6 +533,17 @@
         "step2": "Open the Corti console and create API credentials",
         "step3": "Paste your Client ID and Secret below"
       }
+    },
+    "requiredModels": {
+      "title": "Install required models",
+      "description": "{{organization}} requires these models on this device before you can start dictating.",
+      "genericOrganization": "Your organization",
+      "installed": "Installed",
+      "queued": "Queued",
+      "failed": {
+        "title": "A download didn't finish",
+        "description": "Check your connection and free disk space, then retry. If it keeps failing, contact your administrator."
+      }
     }
   },
   "streaming": {
@@ -656,7 +667,12 @@
       "enableButton": "Enable GPU",
       "dismissButton": "Not now"
     },
-    "backToNotes": "Back to notes"
+    "backToNotes": "Back to notes",
+    "requiredModelsByOrg": {
+      "title": "Required models missing",
+      "description": "Your organization requires these models on this device: {{models}}.",
+      "download": "Download"
+    }
   },
   "reasoning": {
     "mode": {

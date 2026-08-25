@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
 import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
@@ -13,6 +13,7 @@ import DemoStep from "./onboarding/DemoStep";
 import CalendarConnectionsStep from "./onboarding/CalendarConnectionsStep";
 import SetupChoiceStep from "./onboarding/SetupChoiceStep";
 import { ByokProviderStep, LocalModelSetupStep } from "./onboarding/ProviderSetupStep";
+import { RequiredModelDownloadStep } from "./onboarding/RequiredModelDownloadStep";
 import { AlertDialog } from "./ui/dialog";
 import { useAuth } from "../hooks/useAuth";
 import { usePermissions } from "../hooks/usePermissions";
@@ -23,6 +24,7 @@ import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useRequiredLocalModels } from "../hooks/useRequiredLocalModels";
 import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -167,18 +169,54 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     (!workspacesLoaded ||
       (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)));
 
+  const requiredModels = useRequiredLocalModels();
+  // Latched for the session once the step is entered (or resumed at), so a
+  // mid-download policy refresh or the disk check settling can't rebuild the
+  // route out from under the user. Seeded from the persisted session because
+  // relaunching mid-download must resume on the step, not bounce off it while
+  // the disk check is still pending.
+  const requiredModelsLatchRef = useRef(session.currentStepId === "required-models");
+  const requiredModelsPending = requiredModelsLatchRef.current || requiredModels.missing.length > 0;
+
   const route = useMemo(
     () =>
       getOnboardingRoute({
         authPath: session.authPath,
         setupMode: session.setupMode,
         agentAllowed,
+        requiredModelsPending,
         skipSetupChoice: skipSetupChoiceForEnterprise,
       }),
-    [agentAllowed, session.authPath, session.setupMode, skipSetupChoiceForEnterprise]
+    [
+      agentAllowed,
+      requiredModelsPending,
+      session.authPath,
+      session.setupMode,
+      skipSetupChoiceForEnterprise,
+    ]
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
   const compact = COMPACT_STEPS.has(currentStepId);
+
+  useEffect(() => {
+    if (currentStepId === "required-models") requiredModelsLatchRef.current = true;
+  }, [currentStepId]);
+
+  // The auth step lands on "permissions" before the policy and disk checks
+  // settle (AppRouter's policy gate remounts this component mid-transition),
+  // so a persisted session can sit one step past the gate when the pending
+  // flag arrives. Pull the user back — only from permissions, the immediate
+  // post-auth screen, and only before the step was entered this session.
+  useEffect(() => {
+    if (
+      requiredModelsPending &&
+      currentStepId === "permissions" &&
+      !requiredModelsLatchRef.current &&
+      route.includes("required-models")
+    ) {
+      goTo("required-models");
+    }
+  }, [currentStepId, goTo, requiredModelsPending, route]);
 
   useEffect(() => {
     if (session.currentStepId !== currentStepId) {
@@ -418,6 +456,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         authPath: session.authPath,
         setupMode: mode,
         agentAllowed,
+        requiredModelsPending,
       });
       const next = getNextOnboardingStep("setup-choice", nextRoute);
       if (next) goTo(next);
@@ -426,6 +465,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       agentAllowed,
       finalizeOnboarding,
       goTo,
+      requiredModelsPending,
       session.authPath,
       setSelfHostedRequested,
       setSetupMode,
@@ -532,6 +572,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const canContinue = (() => {
     switch (currentStepId) {
+      case "required-models":
+        return !requiredModels.loading && requiredModels.missing.length === 0;
       case "permissions":
         return areRequiredPermissionsMet(permissions.micPermissionGranted);
       case "languages":
@@ -577,6 +619,27 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 setAuthPath("account");
                 goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
               }}
+            />
+          </div>
+        );
+
+      case "required-models":
+        return (
+          <div className="h-full w-full pt-2">
+            <OnboardingStepHeader
+              title={t("onboarding.requiredModels.title")}
+              wideTitle
+              description={t("onboarding.requiredModels.description", {
+                organization:
+                  activeWorkspace?.name ?? t("onboarding.requiredModels.genericOrganization"),
+              })}
+            />
+            <RequiredModelDownloadStep
+              required={requiredModels.required}
+              missing={requiredModels.missing}
+              loading={requiredModels.loading}
+              refresh={requiredModels.refresh}
+              onProceed={() => void continueFromCurrentStep()}
             />
           </div>
         );
@@ -931,7 +994,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         stepKey={currentStepId}
         // History is the only Back gate. This preserves the branch's provider
         // escape path and also lets users return from setup choice/languages.
-        onBack={hasShellNavigation && session.history.length > 0 ? goBack : undefined}
+        // The required-models step is the exception: it is an org-mandated
+        // blocker, so backing out of it (to auth) is suppressed.
+        onBack={
+          hasShellNavigation && session.history.length > 0 && currentStepId !== "required-models"
+            ? goBack
+            : undefined
+        }
         onContinue={showsContinue ? () => void continueFromCurrentStep() : undefined}
         // The demos are practice, not configuration — a mic problem or an
         // unreachable transcription backend must never dead-end setup, so they

@@ -533,6 +533,17 @@
         "step2": "Abre la consola de Corti y crea credenciales de API",
         "step3": "Pega tu Client ID y Secret abajo"
       }
+    },
+    "requiredModels": {
+      "title": "Instala los modelos requeridos",
+      "description": "{{organization}} requiere estos modelos en este dispositivo antes de que puedas empezar a dictar.",
+      "genericOrganization": "Tu organización",
+      "installed": "Instalado",
+      "queued": "En cola",
+      "failed": {
+        "title": "Una descarga no se completó",
+        "description": "Comprueba tu conexión y el espacio libre en disco, y vuelve a intentarlo. Si sigue fallando, contacta a tu administrador."
+      }
     }
   },
   "streaming": {
@@ -656,7 +667,12 @@
       "enableButton": "Activar GPU",
       "dismissButton": "Ahora no"
     },
-    "backToNotes": "Volver a notas"
+    "backToNotes": "Volver a notas",
+    "requiredModelsByOrg": {
+      "title": "Faltan modelos requeridos",
+      "description": "Tu organización requiere estos modelos en este dispositivo: {{models}}.",
+      "download": "Descargar"
+    }
   },
   "reasoning": {
     "mode": {

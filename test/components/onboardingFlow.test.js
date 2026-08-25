@@ -268,3 +268,62 @@ test("progress counts only the guest steps that draw a footer", async () => {
   // An off-route step has no position to report.
   assert.equal(getOnboardingProgress("notes", guestByok), null);
 });
+
+test("required models insert a blocking step right after auth — account path only", async () => {
+  const { getOnboardingRoute } = await load();
+  const route = getOnboardingRoute({
+    authPath: "account",
+    setupMode: null,
+    agentAllowed: true,
+    requiredModelsPending: true,
+  });
+  assert.deepEqual(route.slice(0, 3), ["auth", "required-models", "permissions"]);
+
+  // Guests never fetch a policy, so the gate cannot apply to them.
+  const guest = getOnboardingRoute({
+    authPath: "guest",
+    setupMode: null,
+    agentAllowed: true,
+    requiredModelsPending: true,
+  });
+  assert.equal(guest.includes("required-models"), false);
+
+  // Absent flag (older callers, nothing missing) leaves the route unchanged.
+  const noFlag = getOnboardingRoute({ authPath: "account", setupMode: null, agentAllowed: true });
+  assert.equal(noFlag.includes("required-models"), false);
+});
+
+test("required-models coexists with policy- and enterprise-shortened routes", async () => {
+  const { getOnboardingRoute } = await load();
+  const route = getOnboardingRoute({
+    authPath: "account",
+    setupMode: null,
+    agentAllowed: false,
+    requiredModelsPending: true,
+    skipSetupChoice: true,
+  });
+  assert.deepEqual(route.slice(0, 3), ["auth", "required-models", "permissions"]);
+  assert.equal(route.at(-1), "notes");
+  assert.equal(route.includes("assistant-hotkey"), false);
+});
+
+test("an off-route required-models session clamps to a neighbour step", async () => {
+  const { getOnboardingRoute, reconcileStepWithRoute } = await load();
+  // The session latch normally keeps the step on-route; if a stale session
+  // still names it after the requirement went away across restarts, it must
+  // clamp next to auth/permissions rather than teleport down the route.
+  const route = getOnboardingRoute({ authPath: "account", setupMode: null, agentAllowed: true });
+  assert.ok(["auth", "permissions"].includes(reconcileStepWithRoute("required-models", route)));
+});
+
+test("the required-models step is counted in progress", async () => {
+  const { getOnboardingProgress, getOnboardingRoute } = await load();
+  const route = getOnboardingRoute({
+    authPath: "account",
+    setupMode: null,
+    agentAllowed: true,
+    requiredModelsPending: true,
+  });
+  assert.deepEqual(getOnboardingProgress("required-models", route), { index: 0, total: 10 });
+  assert.deepEqual(getOnboardingProgress("languages", route), { index: 1, total: 10 });
+});

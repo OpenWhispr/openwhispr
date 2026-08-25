@@ -533,6 +533,17 @@
         "step2": "Öffne die Corti-Konsole und erstelle API-Zugangsdaten",
         "step3": "Füge Client-ID und Secret unten ein"
       }
+    },
+    "requiredModels": {
+      "title": "Erforderliche Modelle installieren",
+      "description": "{{organization}} erfordert diese Modelle auf diesem Gerät, bevor Sie mit dem Diktieren beginnen können.",
+      "genericOrganization": "Ihre Organisation",
+      "installed": "Installiert",
+      "queued": "In Warteschlange",
+      "failed": {
+        "title": "Ein Download wurde nicht abgeschlossen",
+        "description": "Prüfen Sie Ihre Verbindung und den freien Speicherplatz und versuchen Sie es erneut. Wenn der Fehler weiterhin auftritt, wenden Sie sich an Ihren Administrator."
+      }
     }
   },
   "streaming": {
@@ -656,7 +667,12 @@
       "enableButton": "GPU aktivieren",
       "dismissButton": "Nicht jetzt"
     },
-    "backToNotes": "Zurück zu Notizen"
+    "backToNotes": "Zurück zu Notizen",
+    "requiredModelsByOrg": {
+      "title": "Erforderliche Modelle fehlen",
+      "description": "Ihre Organisation erfordert diese Modelle auf diesem Gerät: {{models}}.",
+      "download": "Herunterladen"
+    }
   },
   "reasoning": {
     "mode": {
