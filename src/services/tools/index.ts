@@ -7,6 +7,7 @@ import { listFoldersTool } from "./listFoldersTool";
 import { clipboardTool } from "./clipboardTool";
 import { webSearchTool } from "./webSearchTool";
 import { calendarTool } from "./calendarTool";
+import { availabilityTool } from "./availabilityTool";
 import type { ContainerScope } from "../../types/chat";
 
 export { ToolRegistry } from "./ToolRegistry";
@@ -38,6 +39,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
 
   if (settings.calendarConnected) {
     registry.register(calendarTool);
+    registry.register(availabilityTool);
   }
 
   return registry;

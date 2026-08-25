@@ -11,9 +11,10 @@ const SERIES_MASTER_FIELDS =
   "subject,isAllDay,isCancelled,onlineMeeting,onlineMeetingUrl,location,bodyPreview,organizer,attendees";
 
 // Graph's deltaLink permanently encodes the calendarView window it was created
-// with — it never rolls forward. Sync a 14-day window and discard the token
-// after 7 days so coverage never drops below the app's 7-day lookahead.
-const DELTA_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+// with — it never rolls forward. Sync a 31-day window (availability queries
+// cover a month ahead) and discard the token after 7 days so coverage never
+// drops below 24 days.
+const DELTA_WINDOW_MS = 31 * 24 * 60 * 60 * 1000;
 const DELTA_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const RESPONSE_STATUS_BY_GRAPH = {

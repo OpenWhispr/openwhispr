@@ -1137,6 +1137,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   gcalGetUpcomingEvents: (windowMinutes) =>
     ipcRenderer.invoke("gcal-get-upcoming-events", windowMinutes),
   gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),
+  calendarGetEventsInRange: (fromIso, toIso) =>
+    ipcRenderer.invoke("calendar-get-events-in-range", fromIso, toIso),
 
   // Microsoft Calendar
   mcalStartOAuth: () => ipcRenderer.invoke("mcal-start-oauth"),

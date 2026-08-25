@@ -1,3 +1,4 @@
+import type { CalendarEvent } from "./calendar";
 import type { ModelDefinition } from "../models/ModelRegistry";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
@@ -2432,6 +2433,11 @@ declare global {
           attendees: string | null;
         } | null;
       }>;
+      // Cross-provider: returns events from every connected calendar
+      calendarGetEventsInRange?: (
+        fromIso: string,
+        toIso: string
+      ) => Promise<{ success: boolean; events: CalendarEvent[] }>;
 
       // Contacts
       searchContacts: (query: string) => Promise<{

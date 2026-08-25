@@ -574,6 +574,19 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+
+      // One-time reset (user_version 2): Google's syncToken and Graph's
+      // deltaLink permanently encode the sync window they were created with.
+      // The window widened from 7/14 days to 31 for availability queries, so
+      // stored tokens are cleared once to force a full re-sync over the new
+      // range.
+      if (this.db.pragma("user_version", { simple: true }) < 2) {
+        this.db.exec("UPDATE google_calendars SET sync_token = NULL");
+        this.db.exec(
+          "UPDATE microsoft_calendars SET sync_token = NULL, sync_token_expires_at = NULL"
+        );
+        this.db.pragma("user_version = 2");
+      }
       try {
         this.db.exec("ALTER TABLE notes ADD COLUMN participants TEXT");
       } catch (err) {
@@ -3412,6 +3425,26 @@ class DatabaseManager {
         .map(stripDedupeColumn);
     } catch (error) {
       debugLogger.error("Error getting upcoming events", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  // Availability queries need all-day rows (an all-day OOO affects free time),
+  // so unlike getUpcomingEvents this does not filter is_all_day. Overlap
+  // semantics: an event counts when any part of it falls inside the range.
+  getEventsInRange(fromIso, toIso) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          dedupedEventsQuery(
+            "datetime(start_time) < datetime(?) AND datetime(end_time) > datetime(?) AND status IN ('confirmed', 'tentative')"
+          )
+        )
+        .all(toIso, fromIso)
+        .map(stripDedupeColumn);
+    } catch (error) {
+      debugLogger.error("Error getting events in range", { error: error.message }, "gcal");
       throw error;
     }
   }

@@ -163,7 +163,7 @@ class GoogleCalendarManager {
         singleEvents: "true",
         orderBy: "startTime",
         timeMin: new Date().toISOString(),
-        timeMax: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        timeMax: new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString(),
       });
 
     let isFullSync = !calendar.sync_token;

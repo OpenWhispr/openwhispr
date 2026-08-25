@@ -23,7 +23,7 @@ import Foundation
 
 let eventStore = EKEventStore()
 let requestAccess = CommandLine.arguments.contains("--request")
-let LOOKAHEAD_DAYS = 7.0
+let LOOKAHEAD_DAYS = 31.0
 let REFRESH_INTERVAL_SECONDS = 300.0
 
 let isoFormatter: ISO8601DateFormatter = {

@@ -144,3 +144,85 @@ test("tentative Apple events remain visible in upcoming meetings", (t) => {
   );
   db.db.close();
 });
+
+test("getEventsInRange returns overlapping rows, including all-day, and excludes cancelled", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.upsertCalendarEvents([
+    restEvent("google", "g-cal", "inside"),
+    {
+      ...restEvent("google", "g-cal", "day-before"),
+      start_time: "2026-07-21T08:00:00Z",
+      end_time: "2026-07-21T09:00:00Z",
+    },
+    {
+      ...restEvent("google", "g-cal", "spans-range-start"),
+      start_time: "2026-07-22T08:00:00Z",
+      end_time: "2026-07-22T10:30:00Z",
+    },
+    { ...restEvent("google", "g-cal", "cancelled"), status: "cancelled" },
+    {
+      ...restEvent("google", "g-cal", "all-day"),
+      start_time: "2026-07-22",
+      end_time: "2026-07-23",
+      is_all_day: true,
+    },
+  ]);
+
+  const events = db.getEventsInRange("2026-07-22T09:00:00Z", "2026-07-23T00:00:00Z");
+
+  assert.deepEqual(
+    events.map((e) => e.id),
+    ["all-day", "spans-range-start", "inside"]
+  );
+  assert.equal("has_synced" in events[0], false);
+  db.db.close();
+});
+
+test("getEventsInRange collapses the Apple mirror of a REST event", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.upsertCalendarEvents([
+    restEvent("google", "g-cal", "team-sync"),
+    appleEvent("apple-mirror", {
+      summary: "team-sync",
+      start_time: "2026-07-22T10:00:00Z",
+      end_time: "2026-07-22T11:00:00Z",
+    }),
+    appleEvent("apple-only", {
+      start_time: "2026-07-22T14:00:00Z",
+      end_time: "2026-07-22T15:00:00Z",
+    }),
+  ]);
+
+  const events = db.getEventsInRange("2026-07-22T00:00:00Z", "2026-07-23T00:00:00Z");
+
+  assert.deepEqual(
+    events.map((e) => e.id),
+    ["team-sync", "apple-only"]
+  );
+  db.db.close();
+});
+
+test("the sync-token reset migration does not re-run once user_version is stamped", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  assert.equal(db.db.pragma("user_version", { simple: true }), 2);
+  db.db
+    .prepare(
+      "INSERT INTO google_calendars (id, summary, sync_token, account_email) VALUES ('cal', 'Cal', 'token', 'a@b.c')"
+    )
+    .run();
+
+  const reopened = new DatabaseManager();
+  assert.equal(
+    reopened.db.prepare("SELECT sync_token FROM google_calendars WHERE id = 'cal'").get()
+      .sync_token,
+    "token"
+  );
+  reopened.db.close();
+  db.db.close();
+});

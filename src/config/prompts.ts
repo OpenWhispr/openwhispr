@@ -41,10 +41,28 @@ const TOOL_INSTRUCTIONS: Record<string, string> = {
     "Use copy_to_clipboard when the user asks you to copy something to their clipboard.",
   get_calendar_events:
     "Use get_calendar_events to check the user's schedule, upcoming meetings, or calendar events.",
+  get_calendar_availability:
+    "Use get_calendar_availability when the user asks when they are free, wants open time slots, or asks you to suggest or propose meeting times (including in emails or messages you draft). Present the returned slots as natural language in the user's timezone. Days marked unknown are outside the synced window — say the calendar isn't synced that far out instead of guessing.",
 };
+
+// The model has no clock: without this it cannot resolve "tomorrow" or "next
+// Wednesday", or present times in the user's timezone.
+function getDateTimeContext(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const offsetMinutes = -now.getTimezoneOffset();
+  const offsetAbs = Math.abs(offsetMinutes);
+  const offset = `${offsetMinutes < 0 ? "-" : "+"}${pad(Math.floor(offsetAbs / 60))}:${pad(offsetAbs % 60)}`;
+  const local = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}${offset}`;
+  const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return `Current date and time: ${weekday} ${local} (${timeZone}).`;
+}
 
 export function getAgentSystemPrompt(availableTools?: string[], noteContext?: string): string {
   let prompt = resolvePrompt("chatAgent", { agentName: null });
+
+  prompt += "\n\n" + getDateTimeContext();
 
   if (availableTools && availableTools.length > 0) {
     const toolLines = availableTools.map((name) => TOOL_INSTRUCTIONS[name]).filter(Boolean);

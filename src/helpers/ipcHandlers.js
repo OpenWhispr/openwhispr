@@ -9982,6 +9982,17 @@ class IPCHandlers {
       }
     });
 
+    // Cross-provider, like gcal-get-upcoming-events (the gcal- prefix there is
+    // historical) — returns events from every connected calendar, including
+    // all-day rows, for availability computation.
+    ipcMain.handle("calendar-get-events-in-range", async (_event, fromIso, toIso) => {
+      try {
+        return { success: true, events: this.databaseManager.getEventsInRange(fromIso, toIso) };
+      } catch (error) {
+        return { success: false, events: [] };
+      }
+    });
+
     // Microsoft Calendar
     ipcMain.handle("mcal-start-oauth", async () => {
       try {
