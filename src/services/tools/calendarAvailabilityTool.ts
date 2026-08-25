@@ -9,6 +9,9 @@ import type {
 const MINIMUM_SLOT_MINUTES = { minimum: 5, maximum: 480 } as const;
 const BUFFER_MINUTES = { minimum: 0, maximum: 120 } as const;
 const MAX_RESULTS = { minimum: 1, maximum: 20 } as const;
+const DEFAULT_MINIMUM_SLOT_MINUTES = 30;
+const DEFAULT_BUFFER_MINUTES = 0;
+const DEFAULT_MAX_RESULTS = 10;
 const RFC3339_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 const ALLOWED_ARGUMENTS = new Set([
   "start",
@@ -127,10 +130,66 @@ function projectAvailability(value: unknown): CalendarAvailabilityResult | null 
   };
 }
 
+function localizeInstant(
+  instant: string,
+  formatter: Intl.DateTimeFormat
+): { date: string; weekday: string; time: string; timeZoneName: string } {
+  const parts = Object.fromEntries(
+    formatter
+      .formatToParts(new Date(instant))
+      .filter(({ type }) => type !== "literal")
+      .map(({ type, value }) => [type, value])
+  );
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    weekday: parts.weekday,
+    time: `${parts.hour}:${parts.minute} ${parts.dayPeriod}`,
+    timeZoneName: parts.timeZoneName,
+  };
+}
+
+function toModelFacts(
+  availability: CalendarAvailabilityResult,
+  request: CalendarAvailabilityRequest
+): Record<string, unknown> {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: availability.timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "long",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZoneName: "shortOffset",
+  });
+
+  return {
+    type: "calendar_availability_facts",
+    timezone: availability.timezone,
+    query: {
+      start: localizeInstant(availability.range.start, formatter),
+      end: localizeInstant(availability.range.end, formatter),
+      minimumSlotMinutes: request.minimumSlotMinutes ?? DEFAULT_MINIMUM_SLOT_MINUTES,
+      bufferMinutes: request.bufferMinutes ?? DEFAULT_BUFFER_MINUTES,
+      maxResults: request.maxResults ?? DEFAULT_MAX_RESULTS,
+    },
+    slotCount: availability.availableSlots.length,
+    availableSlots: availability.availableSlots.map((slot) => ({
+      start: localizeInstant(slot.start, formatter),
+      end: localizeInstant(slot.end, formatter),
+      durationMinutes: slot.durationMinutes,
+    })),
+    hasMore: availability.hasMore,
+    isEntireRangeFree: availability.isEntireRangeFree,
+    coverage: availability.coverage,
+  };
+}
+
 export const calendarAvailabilityTool: ToolDefinition = {
   name: "get_calendar_availability",
   description:
-    "Find open time slots in the local cache for the user's selected connected calendars within the next seven local calendar days. Returns only busy intervals and available slots, never event titles, attendees, or meeting links.",
+    "Find open time slots in the local cache for the user's selected connected calendars within the next seven local calendar days. Returns authoritative localized slot facts, never event titles, attendees, or meeting links.",
   parameters: {
     type: "object",
     properties: {
@@ -196,7 +255,7 @@ export const calendarAvailabilityTool: ToolDefinition = {
             ? "No scheduled conflicts found in the requested range"
             : `Found ${count} available time slot${count === 1 ? "" : "s"}`;
 
-      return { success: true, data: availability, displayText };
+      return { success: true, data: toModelFacts(availability, request), displayText };
     } catch {
       return failure("Failed to fetch calendar availability");
     }

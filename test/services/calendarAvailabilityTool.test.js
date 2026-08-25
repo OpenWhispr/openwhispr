@@ -107,13 +107,40 @@ test("forwards valid options and strips all event-identifying response fields", 
   assert.deepEqual(result, {
     success: true,
     data: {
-      range: { start: "2026-08-25T03:30:00.000Z", end: "2026-08-25T11:30:00.000Z" },
+      type: "calendar_availability_facts",
       timezone: "Asia/Kolkata",
-      busy: [{ start: "2026-08-25T05:30:00.000Z", end: "2026-08-25T06:00:00.000Z" }],
+      query: {
+        start: {
+          date: "2026-08-25",
+          weekday: "Tuesday",
+          time: "9:00 AM",
+          timeZoneName: "GMT+5:30",
+        },
+        end: {
+          date: "2026-08-25",
+          weekday: "Tuesday",
+          time: "5:00 PM",
+          timeZoneName: "GMT+5:30",
+        },
+        minimumSlotMinutes: 45,
+        bufferMinutes: 10,
+        maxResults: 5,
+      },
+      slotCount: 1,
       availableSlots: [
         {
-          start: "2026-08-25T03:30:00.000Z",
-          end: "2026-08-25T05:30:00.000Z",
+          start: {
+            date: "2026-08-25",
+            weekday: "Tuesday",
+            time: "9:00 AM",
+            timeZoneName: "GMT+5:30",
+          },
+          end: {
+            date: "2026-08-25",
+            weekday: "Tuesday",
+            time: "11:00 AM",
+            timeZoneName: "GMT+5:30",
+          },
           durationMinutes: 120,
         },
       ],
@@ -123,7 +150,104 @@ test("forwards valid options and strips all event-identifying response fields", 
     },
     displayText: "Found 1 available time slot",
   });
-  assert.doesNotMatch(JSON.stringify(result.data), /Ignore|meet\.example|private@example/);
+  assert.doesNotMatch(
+    JSON.stringify(result.data),
+    /Ignore|meet\.example|private@example|busy|T\d{2}:\d{2}:\d{2}.*Z/
+  );
+});
+
+test("returns the observed failing case as exact authoritative local facts", async () => {
+  const { calendarAvailabilityTool } = await loadTool();
+  global.window = {
+    electronAPI: {
+      calendarGetAvailability: async () => ({
+        success: true,
+        availability: availability({
+          range: { start: "2026-08-27T03:30:00.000Z", end: "2026-08-27T12:30:00.000Z" },
+          timezone: "Asia/Calcutta",
+          availableSlots: [
+            {
+              start: "2026-08-27T04:30:00.000Z",
+              end: "2026-08-27T05:30:00.000Z",
+              durationMinutes: 60,
+            },
+            {
+              start: "2026-08-27T06:30:00.000Z",
+              end: "2026-08-27T10:00:00.000Z",
+              durationMinutes: 210,
+            },
+          ],
+        }),
+      }),
+    },
+  };
+
+  const result = await calendarAvailabilityTool.execute({
+    start: "2026-08-27T09:00:00+05:30",
+    end: "2026-08-27T18:00:00+05:30",
+    minimumSlotMinutes: 45,
+  });
+
+  assert.equal(result.data.slotCount, 2);
+  assert.deepEqual(
+    result.data.availableSlots.map(({ start, end, durationMinutes }) => ({
+      start: `${start.weekday} ${start.date} ${start.time}`,
+      end: `${end.weekday} ${end.date} ${end.time}`,
+      durationMinutes,
+    })),
+    [
+      {
+        start: "Thursday 2026-08-27 10:00 AM",
+        end: "Thursday 2026-08-27 11:00 AM",
+        durationMinutes: 60,
+      },
+      {
+        start: "Thursday 2026-08-27 12:00 PM",
+        end: "Thursday 2026-08-27 3:30 PM",
+        durationMinutes: 210,
+      },
+    ]
+  );
+  assert.doesNotMatch(JSON.stringify(result.data), /04:30:00\.000Z|06:30:00\.000Z|"busy"/);
+});
+
+test("localizes each DST boundary independently", async () => {
+  const { calendarAvailabilityTool } = await loadTool();
+  global.window = {
+    electronAPI: {
+      calendarGetAvailability: async () => ({
+        success: true,
+        availability: availability({
+          range: { start: "2026-11-01T05:00:00.000Z", end: "2026-11-01T07:00:00.000Z" },
+          timezone: "America/New_York",
+          availableSlots: [
+            {
+              start: "2026-11-01T05:30:00.000Z",
+              end: "2026-11-01T06:30:00.000Z",
+              durationMinutes: 60,
+            },
+          ],
+        }),
+      }),
+    },
+  };
+
+  const result = await calendarAvailabilityTool.execute({
+    start: "2026-11-01T01:00:00-04:00",
+    end: "2026-11-01T02:00:00-05:00",
+  });
+  const [slot] = result.data.availableSlots;
+
+  assert.deepEqual(
+    {
+      start: slot.start.time,
+      startZone: slot.start.timeZoneName,
+      end: slot.end.time,
+      endZone: slot.end.timeZoneName,
+    },
+    { start: "1:30 AM", startZone: "GMT-4", end: "1:30 AM", endZone: "GMT-5" }
+  );
+  assert.equal(slot.durationMinutes, 60);
 });
 
 test("omits IPC defaults when optional arguments are not supplied", async () => {
@@ -164,6 +288,7 @@ test("does not describe a too-short free range as an available slot", async () =
 
   const result = await calendarAvailabilityTool.execute({ start: START, end: END });
   assert.equal(result.displayText, "No available time slots meet the requested minimum duration");
+  assert.equal(result.data.slotCount, 0);
 });
 
 test("delegates the local-calendar-day horizon to authoritative IPC validation", async () => {
@@ -320,6 +445,7 @@ test("availability prompt context refreshes local time without rebuilding the re
   const second = getAgentSystemPrompt(tools);
 
   assert.match(first, /Use get_calendar_availability when the user asks when they are free/);
+  assert.match(first, /localized date, weekday, times, and duration as authoritative/);
   assert.match(first, /broad multi-day request without daily-hour bounds/);
   assert.match(
     first,
