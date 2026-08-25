@@ -6,6 +6,7 @@ const DragManager = require("./dragManager");
 const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
+const { isAllowedAppNavigation, resolveAppNavigationUrl } = require("./navigationGuard");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
@@ -1089,14 +1090,12 @@ class WindowManager {
     this._onboardingWindowState = null;
 
     this.controlPanelWindow.webContents.on("will-navigate", (event, url) => {
-      const appUrl = DevServerManager.getAppUrl(true);
-      const controlPanelUrl = appUrl.startsWith("http") ? appUrl : `file://${appUrl}`;
+      const appUrl = resolveAppNavigationUrl({
+        devServerUrl: DevServerManager.getAppUrl(true),
+        appFilePath: DevServerManager.getAppFilePath(true)?.path,
+      });
 
-      if (
-        url.startsWith(controlPanelUrl) ||
-        url.startsWith("file://") ||
-        url.startsWith("devtools://")
-      ) {
+      if (isAllowedAppNavigation(url, appUrl)) {
         return;
       }
 
