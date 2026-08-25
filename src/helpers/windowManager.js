@@ -6,7 +6,8 @@ const DragManager = require("./dragManager");
 const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
-const { isAllowedAppNavigation } = require("./navigationGuard");
+const { isAllowedAppNavigation, isExternalBrowserUrl } = require("./navigationGuard");
+const { pathToFileURL } = require("url");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
@@ -20,7 +21,6 @@ const {
 const { DEV_SERVER_PORT } = DevServerManager;
 const AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS = 10_000;
 const DRAG_MOVE_TOLERANCE_PX = 2;
-
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
@@ -1091,14 +1091,21 @@ class WindowManager {
     this._onboardingWindowState = null;
 
     this.controlPanelWindow.webContents.on("will-navigate", (event, url) => {
-      const appUrl = DevServerManager.getAppUrl(true);
+      // getAppUrl() is null in packaged builds; exactly one of the two is set.
+      const appUrl =
+        DevServerManager.getAppUrl(true) ??
+        pathToFileURL(DevServerManager.getAppFilePath(true).path).href;
 
       if (isAllowedAppNavigation(url, appUrl)) {
         return;
       }
 
       event.preventDefault();
-      this.openExternalUrl(url);
+      if (isExternalBrowserUrl(url)) {
+        this.openExternalUrl(url);
+      } else {
+        debugLogger.debug("Blocked untrusted navigation", { url }, "window");
+      }
     });
 
     this.controlPanelWindow.webContents.setWindowOpenHandler(({ url }) => {
