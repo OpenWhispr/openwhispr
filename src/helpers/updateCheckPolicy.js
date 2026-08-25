@@ -3,7 +3,9 @@
 // firewalled machines never surface a connection error dialog (#1605).
 // Only an explicit false disables — missing prefs (renderer sync not arrived
 // yet) keep check-by-default behavior.
-function appUpdatesEnabled({ notificationsEnabled, notifyUpdates } = {}) {
+function appUpdatesEnabled(prefs = {}) {
+  const { notificationsEnabled, notifyUpdates } =
+    prefs && typeof prefs === "object" ? prefs : {};
   return notificationsEnabled !== false && notifyUpdates !== false;
 }
 

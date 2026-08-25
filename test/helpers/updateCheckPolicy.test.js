@@ -25,6 +25,9 @@ test("checks stay enabled by default before renderer prefs arrive", async () => 
   // Same tri-state convention as the other notification prefs: only an
   // explicit false disables; missing prefs keep check-by-default behavior.
   assert.equal(appUpdatesEnabled(undefined), true);
+  assert.equal(appUpdatesEnabled(null), true);
   assert.equal(appUpdatesEnabled({}), true);
+  assert.equal(appUpdatesEnabled("invalid"), true);
+  assert.equal(appUpdatesEnabled(123), true);
   assert.equal(appUpdatesEnabled({ notificationsEnabled: true, notifyUpdates: true }), true);
 });
