@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+const { MAX_AVAILABILITY_HORIZON_DAYS } = require("../../src/helpers/calendarAvailability.js");
+
 const loadTool = () => import("../../src/services/tools/calendarAvailabilityTool.ts");
 
 const START = "2026-08-25T09:00:00+05:30";
@@ -46,7 +48,10 @@ test("declares a strict read-only availability schema", async () => {
   assert.equal(calendarAvailabilityTool.parameters.properties.maxResults.minimum, 1);
   assert.equal(calendarAvailabilityTool.parameters.properties.maxResults.maximum, 20);
   assert.match(calendarAvailabilityTool.parameters.properties.maxResults.description, /default 10/);
-  assert.match(calendarAvailabilityTool.description, /seven local calendar days/);
+  assert.match(
+    calendarAvailabilityTool.description,
+    new RegExp(`${MAX_AVAILABILITY_HORIZON_DAYS} local calendar days`)
+  );
   assert.match(calendarAvailabilityTool.parameters.properties.end.description, /end plus buffer/);
   assert.doesNotMatch(
     calendarAvailabilityTool.parameters.properties.end.description,
@@ -269,6 +274,34 @@ test("omits IPC defaults when optional arguments are not supplied", async () => 
 
   assert.deepEqual(request, { start: START, end: END });
   assert.equal(result.displayText, "No scheduled conflicts found in the requested range");
+});
+
+test("treats explicit null optional arguments as absent", async () => {
+  const { calendarAvailabilityTool } = await loadTool();
+  let request;
+  global.window = {
+    electronAPI: {
+      calendarGetAvailability: async (value) => {
+        request = value;
+        return {
+          success: true,
+          availability: availability({ busy: [], isEntireRangeFree: true }),
+        };
+      },
+    },
+  };
+
+  const result = await calendarAvailabilityTool.execute({
+    start: START,
+    end: END,
+    minimumSlotMinutes: null,
+    bufferMinutes: null,
+    maxResults: null,
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(request, { start: START, end: END });
+  assert.equal(result.data.query.minimumSlotMinutes, 30);
 });
 
 test("does not describe a too-short free range as an available slot", async () => {

@@ -3,6 +3,7 @@ import {
   DEFAULT_BUFFER_MINUTES,
   DEFAULT_MAX_RESULTS,
   DEFAULT_MINIMUM_SLOT_MINUTES,
+  MAX_AVAILABILITY_HORIZON_DAYS,
   MAX_RESULTS_BOUNDS,
   MINIMUM_SLOT_MINUTES_BOUNDS,
   USER_CORRECTABLE_ERRORS,
@@ -49,7 +50,9 @@ function parseRequest(args: Record<string, unknown>): CalendarAvailabilityReques
     ["maxResults", MAX_RESULTS_BOUNDS],
   ] as const) {
     const value = args[key];
-    if (value === undefined) continue;
+    // Models often send explicit null for optional arguments; the service's
+    // ?? defaults treat null as absent, so accept it here too.
+    if (value === undefined || value === null) continue;
     if (
       !Number.isSafeInteger(value) ||
       (value as number) < bounds.minimum ||
@@ -173,8 +176,7 @@ function toModelFacts(
 
 export const calendarAvailabilityTool: ToolDefinition = {
   name: "get_calendar_availability",
-  description:
-    "Find open time slots in the local cache for the user's selected connected calendars within the next seven local calendar days. Returns authoritative localized slot facts, never event titles, attendees, or meeting links.",
+  description: `Find open time slots in the local cache for the user's selected connected calendars within the next ${MAX_AVAILABILITY_HORIZON_DAYS} local calendar days. Returns authoritative localized slot facts, never event titles, attendees, or meeting links.`,
   parameters: {
     type: "object",
     properties: {
@@ -187,8 +189,7 @@ export const calendarAvailabilityTool: ToolDefinition = {
       end: {
         type: "string",
         format: "date-time",
-        description:
-          "Exclusive range end as an RFC3339 timestamp with Z or an explicit UTC offset. The service limits end plus buffer to seven local calendar days from the current time.",
+        description: `Exclusive range end as an RFC3339 timestamp with Z or an explicit UTC offset. The service limits end plus buffer to ${MAX_AVAILABILITY_HORIZON_DAYS} local calendar days from the current time.`,
       },
       minimumSlotMinutes: {
         type: "integer",
