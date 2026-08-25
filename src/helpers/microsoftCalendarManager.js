@@ -35,9 +35,11 @@ const RESPONSE_STATUS_BY_GRAPH = {
 
 // Graph returns "2026-07-20T17:00:00.0000000" — no offset, 7-digit fraction —
 // which SQLite's datetime() cannot parse. Events are requested in UTC
-// (Prefer: outlook.timezone), so trim the fraction and append "Z".
-function normalizeGraphDateTime({ dateTime }) {
-  return `${dateTime.slice(0, 19)}Z`;
+// (Prefer: outlook.timezone), so trim the fraction and append "Z". All-day
+// events come back as midnight in that zone, not as real instants, so keep
+// only the date — date-only rows read as local days, like Google's start.date.
+function normalizeGraphDateTime({ dateTime }, isAllDay = false) {
+  return isAllDay ? dateTime.slice(0, 10) : `${dateTime.slice(0, 19)}Z`;
 }
 
 // calendarView/delta can return recurring-series occurrences as bare
@@ -307,8 +309,8 @@ class MicrosoftCalendarManager {
       calendar_id: calendar.id,
       provider: "microsoft",
       summary: item.subject || null,
-      start_time: normalizeGraphDateTime(item.start),
-      end_time: normalizeGraphDateTime(item.end),
+      start_time: normalizeGraphDateTime(item.start, item.isAllDay),
+      end_time: normalizeGraphDateTime(item.end, item.isAllDay),
       is_all_day: item.isAllDay,
       status: item.isCancelled ? "cancelled" : "confirmed",
       availability_status: AVAILABILITY_STATUS_BY_GRAPH[item.showAs] || "unknown",

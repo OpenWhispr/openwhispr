@@ -30,6 +30,38 @@ test("normalizeGraphDateTime converts Graph timestamps to SQLite-parseable UTC",
   assert.equal(normalizeGraphDateTime({ dateTime: "2026-07-20T17:00:00" }), "2026-07-20T17:00:00Z");
 });
 
+test("normalizeGraphDateTime keeps only the date for all-day events", () => {
+  const { normalizeGraphDateTime } = loadManagerModule();
+
+  assert.equal(
+    normalizeGraphDateTime({ dateTime: "2026-07-22T00:00:00.0000000" }, true),
+    "2026-07-22"
+  );
+});
+
+test("_mapEvent stores all-day events as date-only local calendar days", () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const manager = new MicrosoftCalendarManager({}, {});
+
+  const mapped = manager._mapEvent(
+    {
+      id: "evt-ooo",
+      subject: "Out of office",
+      start: { dateTime: "2026-07-22T00:00:00.0000000" },
+      end: { dateTime: "2026-07-23T00:00:00.0000000" },
+      isAllDay: true,
+      isCancelled: false,
+      showAs: "oof",
+    },
+    { id: "cal-1", account_email: "me@example.com" }
+  );
+
+  assert.equal(mapped.start_time, "2026-07-22");
+  assert.equal(mapped.end_time, "2026-07-23");
+  assert.equal(mapped.is_all_day, true);
+  assert.equal(mapped.availability_status, "unavailable");
+});
+
 test("_mapEvent maps a Graph event to the shared calendar_events shape", () => {
   const MicrosoftCalendarManager = loadManagerModule();
   const manager = new MicrosoftCalendarManager({}, {});
