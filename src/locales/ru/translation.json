@@ -3317,7 +3317,21 @@
       "copiedToClipboard": "Скопировано в буфер обмена",
       "openNote": "Открыть заметку",
       "unknownTool": "Неизвестный инструмент: {{name}}",
-      "invalidArgs": "Недопустимые аргументы инструмента для {{name}}"
+      "invalidArgs": "Недопустимые аргументы инструмента для {{name}}",
+      "draft_emailStatus": "Составление письма..."
+    },
+    "emailDraft": {
+      "title": "Черновик письма",
+      "via": "через {{email}}",
+      "to": "Кому",
+      "cc": "Копия",
+      "subject": "Тема",
+      "send": "Отправить",
+      "sending": "Отправка...",
+      "sent": "Отправлено",
+      "retry": "Повторить",
+      "invalidRecipients": "Введите действительный адрес получателя",
+      "sendFailed": "Не удалось отправить — проверьте подключение Gmail"
     }
   },
   "assistant": {
@@ -3394,11 +3408,24 @@
       "connectFailed": "Ошибка подключения",
       "connectFailedDescription": "При подключении к Calendar.app произошла ошибка. Перезапустите OpenWhispr и попробуйте снова."
     },
+    "gmail": {
+      "title": "Gmail",
+      "optional": "Необязательно",
+      "description": "Отправляйте письма для follow-up, составленные из ваших заметок, прямо из чата.",
+      "connect": "Подключить Gmail",
+      "connected": "Подключено",
+      "disconnect": "Отключить",
+      "disconnectConfirm": "Отключить {{email}}?",
+      "disconnectDescription": "OpenWhispr больше не сможет отправлять письма с этого аккаунта.",
+      "connectFailed": "Ошибка подключения",
+      "connectFailedDescription": "При подключении к Gmail произошла ошибка. Попробуйте снова."
+    },
     "sections": {
       "calendar": "Календарь",
       "api": "API",
       "mcp": "MCP",
-      "cli": "CLI"
+      "cli": "CLI",
+      "email": "Почта"
     },
     "api": {
       "title": "API-ключи",

@@ -3456,7 +3456,21 @@
       "copiedToClipboard": "Copied to your clipboard",
       "openNote": "Open note",
       "unknownTool": "Unknown tool: {{name}}",
-      "invalidArgs": "Invalid tool arguments for {{name}}"
+      "invalidArgs": "Invalid tool arguments for {{name}}",
+      "draft_emailStatus": "Drafting email..."
+    },
+    "emailDraft": {
+      "title": "Email draft",
+      "via": "via {{email}}",
+      "to": "To",
+      "cc": "Cc",
+      "subject": "Subject",
+      "send": "Send",
+      "sending": "Sending...",
+      "sent": "Sent",
+      "retry": "Retry",
+      "invalidRecipients": "Enter a valid recipient address",
+      "sendFailed": "Couldn't send — check your Gmail connection"
     }
   },
   "assistant": {
@@ -3533,11 +3547,24 @@
       "connectFailed": "Connection Failed",
       "connectFailedDescription": "Something went wrong while connecting to Calendar.app. Please restart OpenWhispr and try again."
     },
+    "gmail": {
+      "title": "Gmail",
+      "optional": "Optional",
+      "description": "Send follow-up emails drafted from your notes, right from chat.",
+      "connect": "Connect Gmail",
+      "connected": "Connected",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Disconnect {{email}}?",
+      "disconnectDescription": "OpenWhispr will no longer be able to send emails from this account.",
+      "connectFailed": "Connection Failed",
+      "connectFailedDescription": "Something went wrong while connecting Gmail. Please try again."
+    },
     "sections": {
       "calendar": "Calendar",
       "api": "API",
       "mcp": "MCP",
-      "cli": "CLI"
+      "cli": "CLI",
+      "email": "Email"
     },
     "api": {
       "title": "API keys",

@@ -3291,7 +3291,21 @@
       "copiedToClipboard": "已複製到剪貼簿",
       "openNote": "開啟筆記",
       "unknownTool": "未知工具：{{name}}",
-      "invalidArgs": "{{name}} 的工具參數無效"
+      "invalidArgs": "{{name}} 的工具參數無效",
+      "draft_emailStatus": "正在草擬郵件..."
+    },
+    "emailDraft": {
+      "title": "郵件草稿",
+      "via": "透過 {{email}} 傳送",
+      "to": "收件人",
+      "cc": "副本",
+      "subject": "主旨",
+      "send": "傳送",
+      "sending": "傳送中...",
+      "sent": "已傳送",
+      "retry": "重試",
+      "invalidRecipients": "請輸入有效的收件人地址",
+      "sendFailed": "傳送失敗，請檢查 Gmail 連線"
     }
   },
   "assistant": {
@@ -3368,11 +3382,24 @@
       "connectFailed": "連線失敗",
       "connectFailedDescription": "連線 Calendar.app 時發生錯誤。請重新啟動 OpenWhispr 後再試一次。"
     },
+    "gmail": {
+      "title": "Gmail",
+      "optional": "可選",
+      "description": "直接在聊天中傳送根據筆記草擬的跟進郵件。",
+      "connect": "連接 Gmail",
+      "connected": "已連接",
+      "disconnect": "中斷連接",
+      "disconnectConfirm": "中斷 {{email}} 的連接？",
+      "disconnectDescription": "OpenWhispr 將無法再從此帳戶傳送郵件。",
+      "connectFailed": "連線失敗",
+      "connectFailedDescription": "連線 Gmail 時發生錯誤。請再試一次。"
+    },
     "sections": {
       "calendar": "行事曆",
       "api": "API",
       "mcp": "MCP",
-      "cli": "CLI"
+      "cli": "CLI",
+      "email": "郵件"
     },
     "api": {
       "title": "API 金鑰",

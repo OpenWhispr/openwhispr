@@ -3456,7 +3456,21 @@
       "copiedToClipboard": "Copié dans le presse-papiers",
       "openNote": "Ouvrir la note",
       "unknownTool": "Outil inconnu : {{name}}",
-      "invalidArgs": "Arguments d'outil invalides pour {{name}}"
+      "invalidArgs": "Arguments d'outil invalides pour {{name}}",
+      "draft_emailStatus": "Rédaction de l'e-mail..."
+    },
+    "emailDraft": {
+      "title": "Brouillon d'e-mail",
+      "via": "via {{email}}",
+      "to": "À",
+      "cc": "Cc",
+      "subject": "Objet",
+      "send": "Envoyer",
+      "sending": "Envoi...",
+      "sent": "Envoyé",
+      "retry": "Réessayer",
+      "invalidRecipients": "Saisissez une adresse de destinataire valide",
+      "sendFailed": "Échec de l'envoi — vérifiez votre connexion Gmail"
     }
   },
   "assistant": {
@@ -3533,11 +3547,24 @@
       "connectFailed": "Échec de la connexion",
       "connectFailedDescription": "Une erreur s'est produite lors de la connexion à Calendar.app. Redémarrez OpenWhispr et réessayez."
     },
+    "gmail": {
+      "title": "Gmail",
+      "optional": "Facultatif",
+      "description": "Envoyez des e-mails de suivi rédigés à partir de vos notes, directement depuis le chat.",
+      "connect": "Connecter Gmail",
+      "connected": "Connecté",
+      "disconnect": "Déconnecter",
+      "disconnectConfirm": "Déconnecter {{email}} ?",
+      "disconnectDescription": "OpenWhispr ne pourra plus envoyer d'e-mails depuis ce compte.",
+      "connectFailed": "Échec de la connexion",
+      "connectFailedDescription": "Une erreur s'est produite lors de la connexion à Gmail. Veuillez réessayer."
+    },
     "sections": {
       "calendar": "Calendrier",
       "api": "API",
       "mcp": "MCP",
-      "cli": "CLI"
+      "cli": "CLI",
+      "email": "E-mail"
     },
     "api": {
       "title": "Clés API",

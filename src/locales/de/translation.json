@@ -3456,7 +3456,21 @@
       "copiedToClipboard": "In die Zwischenablage kopiert",
       "openNote": "Notiz öffnen",
       "unknownTool": "Unbekanntes Werkzeug: {{name}}",
-      "invalidArgs": "Ungültige Tool-Argumente für {{name}}"
+      "invalidArgs": "Ungültige Tool-Argumente für {{name}}",
+      "draft_emailStatus": "E-Mail wird entworfen..."
+    },
+    "emailDraft": {
+      "title": "E-Mail-Entwurf",
+      "via": "über {{email}}",
+      "to": "An",
+      "cc": "Cc",
+      "subject": "Betreff",
+      "send": "Senden",
+      "sending": "Wird gesendet...",
+      "sent": "Gesendet",
+      "retry": "Erneut versuchen",
+      "invalidRecipients": "Gib eine gültige Empfängeradresse ein",
+      "sendFailed": "Senden fehlgeschlagen — prüfe deine Gmail-Verbindung"
     }
   },
   "assistant": {
@@ -3533,11 +3547,24 @@
       "connectFailed": "Verbindung fehlgeschlagen",
       "connectFailedDescription": "Beim Verbinden mit Calendar.app ist ein Fehler aufgetreten. Starte OpenWhispr neu und versuche es erneut."
     },
+    "gmail": {
+      "title": "Gmail",
+      "optional": "Optional",
+      "description": "Versende Follow-up-E-Mails aus deinen Notizen direkt im Chat.",
+      "connect": "Gmail verbinden",
+      "connected": "Verbunden",
+      "disconnect": "Trennen",
+      "disconnectConfirm": "{{email}} trennen?",
+      "disconnectDescription": "OpenWhispr kann von diesem Konto keine E-Mails mehr senden.",
+      "connectFailed": "Verbindung fehlgeschlagen",
+      "connectFailedDescription": "Beim Verbinden mit Gmail ist ein Fehler aufgetreten. Bitte versuche es erneut."
+    },
     "sections": {
       "calendar": "Kalender",
       "api": "API",
       "mcp": "MCP",
-      "cli": "CLI"
+      "cli": "CLI",
+      "email": "E-Mail"
     },
     "api": {
       "title": "API-Schlüssel",

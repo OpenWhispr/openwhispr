@@ -24,6 +24,7 @@ import McpIntegrationCard from "./McpIntegrationCard";
 import googleCalendarIcon from "../assets/icons/google-calendar.svg";
 import microsoftCalendarIcon from "../assets/icons/microsoft-calendar.svg";
 import appleCalendarIcon from "../assets/icons/apple-calendar.svg";
+import gmailIcon from "../assets/icons/gmail.svg";
 
 const API_DOCS_URL = "https://docs.openwhispr.com/api/overview";
 
@@ -171,6 +172,9 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
     setMcalPrimaryOnly,
     appleCalendarConnected,
     setAppleCalendarConnected,
+    gmailConnected,
+    gmailEmail,
+    setGmailConnection,
   } = useSettingsStore();
   const [isConnecting, setIsConnecting] = useState(false);
   const [disconnectingEmail, setDisconnectingEmail] = useState<string | null>(null);
@@ -183,6 +187,11 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
   const [appleSourceNames, setAppleSourceNames] = useState<string[]>([]);
   const [confirmAppleDisconnect, setConfirmAppleDisconnect] = useState(false);
   const [appleConnectError, setAppleConnectError] = useState<"denied" | "failed" | null>(null);
+  const [isGmailConnecting, setIsGmailConnecting] = useState(false);
+  const [confirmGmailDisconnect, setConfirmGmailDisconnect] = useState(false);
+  // Hidden until the main process confirms an OAuth client is configured, so
+  // dev/OSS builds without credentials don't show a tile that can only fail.
+  const [gmailConfigured, setGmailConfigured] = useState(false);
   // i18n prefix of the provider whose OAuth flow failed, e.g. "integrations.googleCalendar"
   const [oauthErrorKey, setOauthErrorKey] = useState<string | null>(null);
   const [apiKeysDialogOpen, setApiKeysDialogOpen] = useState(false);
@@ -280,6 +289,25 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
     setAppleSourceNames([]);
   }, [setAppleCalendarConnected]);
 
+  const handleGmailConnect = useCallback(async () => {
+    setIsGmailConnecting(true);
+    try {
+      const result = await window.electronAPI?.gmailStartOAuth?.();
+      if (result?.success && result.email) {
+        setGmailConnection(true, result.email);
+      } else if (!result?.error?.includes("access_denied")) {
+        setOauthErrorKey("integrations.gmail");
+      }
+    } finally {
+      setIsGmailConnecting(false);
+    }
+  }, [setGmailConnection]);
+
+  const handleGmailDisconnect = useCallback(async () => {
+    await window.electronAPI?.gmailDisconnect?.();
+    setGmailConnection(false, null);
+  }, [setGmailConnection]);
+
   const handleDisconnect = useCallback(
     async (email: string) => {
       setDisconnectingEmail(email);
@@ -337,6 +365,18 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
     );
     return () => unsub?.();
   }, [setMcalAccounts]);
+
+  useEffect(() => {
+    window.electronAPI?.gmailGetConnectionStatus?.().then((status) => {
+      if (!status) return;
+      setGmailConfigured(status.configured);
+      setGmailConnection(status.connected, status.email);
+    });
+    const unsub = window.electronAPI?.onGmailConnectionChanged?.((data) => {
+      setGmailConnection(data.connected, data.email);
+    });
+    return () => unsub?.();
+  }, [setGmailConnection]);
 
   useEffect(() => {
     if (!isMac) return;
@@ -428,6 +468,38 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
           )}
         </SettingsPanel>
       </div>
+
+      {gmailConfigured && (
+        <div>
+          <SectionLabel>{t("integrations.sections.email")}</SectionLabel>
+          <SettingsPanel>
+            <ProviderRow
+              icon={gmailIcon}
+              i18nKey="integrations.gmail"
+              connected={gmailConnected}
+              isConnecting={isGmailConnecting}
+              onConnect={handleGmailConnect}
+            />
+            {gmailConnected && gmailEmail && (
+              <SettingsPanelRow>
+                <div className="group flex items-center gap-3 pl-12">
+                  <Mail className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+                  <span className="text-xs text-muted-foreground truncate flex-1">
+                    {gmailEmail}
+                  </span>
+                  <button
+                    onClick={() => setConfirmGmailDisconnect(true)}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                    aria-label={t("integrations.gmail.disconnect")}
+                  >
+                    <Unlink className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </SettingsPanelRow>
+            )}
+          </SettingsPanel>
+        </div>
+      )}
 
       <div>
         <SectionLabel>{t("integrations.sections.api")}</SectionLabel>
@@ -540,6 +612,16 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
         onConfirm={() => {
           if (confirmMsDisconnectEmail) handleMicrosoftDisconnect(confirmMsDisconnectEmail);
         }}
+      />
+
+      <ConfirmDialog
+        open={confirmGmailDisconnect}
+        onOpenChange={setConfirmGmailDisconnect}
+        title={t("integrations.gmail.disconnectConfirm", { email: gmailEmail })}
+        description={t("integrations.gmail.disconnectDescription")}
+        confirmText={t("integrations.gmail.disconnect")}
+        variant="destructive"
+        onConfirm={handleGmailDisconnect}
       />
 
       <ConfirmDialog

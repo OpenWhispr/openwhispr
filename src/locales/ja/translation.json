@@ -3291,7 +3291,21 @@
       "copiedToClipboard": "クリップボードにコピーしました",
       "openNote": "ノートを開く",
       "unknownTool": "不明なツール: {{name}}",
-      "invalidArgs": "{{name}} のツール引数が無効です"
+      "invalidArgs": "{{name}} のツール引数が無効です",
+      "draft_emailStatus": "メールを作成中..."
+    },
+    "emailDraft": {
+      "title": "メールの下書き",
+      "via": "{{email}} から送信",
+      "to": "宛先",
+      "cc": "Cc",
+      "subject": "件名",
+      "send": "送信",
+      "sending": "送信中...",
+      "sent": "送信済み",
+      "retry": "再試行",
+      "invalidRecipients": "有効な宛先アドレスを入力してください",
+      "sendFailed": "送信できませんでした。Gmail の接続を確認してください"
     }
   },
   "assistant": {
@@ -3368,11 +3382,24 @@
       "connectFailed": "接続に失敗しました",
       "connectFailedDescription": "Calendar.app への接続中にエラーが発生しました。OpenWhispr を再起動してもう一度お試しください。"
     },
+    "gmail": {
+      "title": "Gmail",
+      "optional": "任意",
+      "description": "ノートから作成したフォローアップメールをチャットから直接送信します。",
+      "connect": "Gmail に接続",
+      "connected": "接続済み",
+      "disconnect": "切断",
+      "disconnectConfirm": "{{email}} を切断しますか？",
+      "disconnectDescription": "OpenWhispr はこのアカウントからメールを送信できなくなります。",
+      "connectFailed": "接続に失敗しました",
+      "connectFailedDescription": "Gmail への接続中にエラーが発生しました。もう一度お試しください。"
+    },
     "sections": {
       "calendar": "カレンダー",
       "api": "API",
       "mcp": "MCP",
-      "cli": "CLI"
+      "cli": "CLI",
+      "email": "メール"
     },
     "api": {
       "title": "APIキー",

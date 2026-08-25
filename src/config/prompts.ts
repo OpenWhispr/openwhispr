@@ -41,6 +41,8 @@ const TOOL_INSTRUCTIONS: Record<string, string> = {
     "Use copy_to_clipboard when the user asks you to copy something to their clipboard.",
   get_calendar_events:
     "Use get_calendar_events to check the user's schedule, upcoming meetings, or calendar events.",
+  draft_email:
+    "Use draft_email when the user asks you to draft, write, or send an email (such as a follow-up after a meeting). Compose it from the note content and transcript. Use participant emails from the context as recipients; never invent an email address — leave recipients empty when none are known. The draft appears as an editable card the user reviews and sends themselves.",
 };
 
 export function getAgentSystemPrompt(availableTools?: string[], noteContext?: string): string {

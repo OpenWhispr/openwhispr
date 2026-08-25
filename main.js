@@ -289,6 +289,7 @@ const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MicrosoftCalendarManager = require("./src/helpers/microsoftCalendarManager");
 const AppleCalendarManager = require("./src/helpers/appleCalendarManager");
 const CalendarReminderScheduler = require("./src/helpers/calendarReminderScheduler");
+const GmailManager = require("./src/helpers/gmailManager");
 const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
 const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
 const {
@@ -329,6 +330,7 @@ let googleCalendarManager = null;
 let microsoftCalendarManager = null;
 let appleCalendarManager = null;
 let calendarReminderScheduler = null;
+let gmailManager = null;
 let meetingDetectionEngine = null;
 let audioTapManager = null;
 let linuxPortalAudioManager = null;
@@ -464,6 +466,7 @@ function initializeCoreManagers() {
     calendarReminderScheduler
   );
   appleCalendarManager = new AppleCalendarManager(databaseManager, calendarReminderScheduler);
+  gmailManager = new GmailManager(databaseManager);
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
     new MeetingProcessDetector(),
@@ -522,6 +525,7 @@ function initializeCoreManagers() {
     googleCalendarManager,
     microsoftCalendarManager,
     appleCalendarManager,
+    gmailManager,
     meetingDetectionEngine,
     audioTapManager,
     linuxPortalAudioManager,
