@@ -323,7 +323,9 @@ export async function openAdminConsole(): Promise<void> {
     };
     const token = result.token ?? result.data?.token;
     if (token) {
-      url = `${ADMIN_URL}/handoff?token=${encodeURIComponent(token)}`;
+      // The token rides the URL fragment so it never reaches server logs,
+      // proxies, or analytics beacons — the console reads it client-side.
+      url = `${ADMIN_URL}/handoff#token=${encodeURIComponent(token)}`;
     }
   } catch {
     // Fall through to the bare console URL.
