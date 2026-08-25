@@ -38,3 +38,26 @@ test("BYOK mode falls back to the user's own provider", async () => {
     "byok"
   );
 });
+
+test("handles nullish parameters and case-insensitive cloudTranscriptionMode", async () => {
+  const { resolveStreamingFallbackTarget } = await load();
+  assert.equal(resolveStreamingFallbackTarget(), "byok");
+  assert.equal(resolveStreamingFallbackTarget(null), "byok");
+  assert.equal(resolveStreamingFallbackTarget(undefined), "byok");
+  assert.equal(
+    resolveStreamingFallbackTarget({
+      useLocalWhisper: false,
+      cloudTranscriptionMode: "OpenWhispr",
+      isSignedIn: true,
+    }),
+    "cloud"
+  );
+  assert.equal(
+    resolveStreamingFallbackTarget({
+      useLocalWhisper: false,
+      cloudTranscriptionMode: " OPENWHISPR ",
+      isSignedIn: false,
+    }),
+    "skip"
+  );
+});
