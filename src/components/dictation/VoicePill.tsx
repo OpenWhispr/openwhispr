@@ -82,7 +82,11 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   // An idle Agent pill is a resting control, not a progress indicator. Keep
   // its Beam for the active listening/thinking lifecycle only so reopening an
   // Agent surface never looks like work is already in flight.
-  const showBorderBeam = !isUnavailable && (showThinkingBeam || (agentMode && isRecording));
+  const showAgentBeam = agentMode && !isUnavailable && (showThinkingBeam || isRecording);
+  // Plain dictation signals processing with the brand-blue Signal glow (comet
+  // orbit over a breathing halo) instead of the Beam. Its halo must live
+  // outside the Beam wrapper, whose compact preset clips its own overflow.
+  const showSignalGlow = !agentMode && !isUnavailable && showThinkingBeam;
   const isPanel = variant === "panel";
   const collapseToIdentity = collapseToLogo || isThinking;
   const showCompactPill =
@@ -206,24 +210,30 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   );
 
   return (
-    <BorderBeam
-      size="sm"
-      theme={beamTheme}
-      duration={1.6}
-      colorVariant={agentMode ? "ocean" : "colorful"}
-      brightness={agentMode ? 1.35 : 1.3}
-      saturation={agentMode ? 1.35 : undefined}
-      hueRange={agentMode ? 8 : undefined}
-      strength={agentMode ? 0.9 : 0.85}
-      active={showBorderBeam}
-      borderRadius={20}
-      className={cn(
-        "agent-thinking-beam inline-flex rounded-full",
-        isThinking && !agentMode && "plain-dictation-processing-glow"
-      )}
-      data-agent-mode={agentMode || undefined}
-    >
-      {pill}
-    </BorderBeam>
+    <span className="voice-pill-beam-anchor">
+      <span
+        aria-hidden="true"
+        className="processing-signal-glow"
+        data-active={showSignalGlow ? "true" : undefined}
+      >
+        <span className="processing-signal-ring" />
+      </span>
+      <BorderBeam
+        size="sm"
+        theme={beamTheme}
+        duration={1.6}
+        colorVariant="ocean"
+        brightness={1.35}
+        saturation={1.35}
+        hueRange={8}
+        strength={0.9}
+        active={showAgentBeam}
+        borderRadius={20}
+        className="agent-thinking-beam inline-flex rounded-full"
+        data-agent-mode={agentMode || undefined}
+      >
+        {pill}
+      </BorderBeam>
+    </span>
   );
 });

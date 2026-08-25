@@ -240,12 +240,123 @@
   --beam-bloom-opacity: 0.8;
 }
 
-/* Plain dictation contracts to the identity circle while processing. Match
-   the radial bloom's perceived strength to dark mode without strengthening
-   the listening entrance or Agent Mode beam. */
-:root:not(.dark) .agent-thinking-beam.plain-dictation-processing-glow {
-  --beam-stroke-opacity: 6.25;
-  --beam-bloom-opacity: 2.2;
+/* Plain dictation contracts to the identity circle while processing and
+   signals with the Signal glow: a brand-blue comet orbiting a breathing
+   ambient halo. It anchors outside the Beam wrapper because the compact Beam
+   preset clips its own overflow, which would crop the halo. The processing
+   footprint is a fixed circle, so the layers rotate freely. */
+.voice-pill-beam-anchor {
+  position: relative;
+  display: inline-flex;
+  border-radius: 9999px;
+}
+
+.processing-signal-glow {
+  --signal-cyan: #38bdf8;
+  --signal-blue: #2563eb;
+  --signal-indigo: #6366f1;
+  --signal-halo-opacity: 0.65;
+  --signal-comet-opacity: 0.9;
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease-out;
+}
+
+:root:not(.dark) .processing-signal-glow {
+  --signal-halo-opacity: 0.55;
+  --signal-comet-opacity: 0.8;
+}
+
+.processing-signal-glow[data-active="true"] {
+  opacity: 1;
+}
+
+/* Breathing ambient halo — the across-the-room "working" signal. */
+.processing-signal-glow::before {
+  content: "";
+  position: absolute;
+  inset: -18px;
+  border-radius: 9999px;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--signal-blue) 90%, transparent) 25%,
+    color-mix(in srgb, var(--signal-indigo) 65%, transparent) 60%,
+    transparent
+  );
+  filter: blur(16px);
+  opacity: var(--signal-halo-opacity);
+}
+
+/* Soft bloom trailing the comet head. */
+.processing-signal-glow::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 55%,
+    color-mix(in srgb, var(--signal-blue) 70%, transparent) 82%,
+    var(--signal-cyan) 100%
+  );
+  filter: blur(8px);
+  opacity: var(--signal-comet-opacity);
+}
+
+/* Gradient ring whose white-hot head cools through cyan into indigo. */
+.processing-signal-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  padding: 2.5px;
+  background: conic-gradient(
+    from 0deg,
+    color-mix(in srgb, var(--signal-blue) 25%, transparent) 0%,
+    color-mix(in srgb, var(--signal-indigo) 55%, transparent) 45%,
+    var(--signal-blue) 75%,
+    var(--signal-cyan) 94%,
+    #eaf6ff 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+
+/* Animations only run while active so the always-visible idle pill costs
+   nothing; the 220ms fade covers the frozen final frame on exit. */
+.processing-signal-glow[data-active="true"]::before {
+  animation: processing-signal-breathe 1.9s ease-in-out infinite;
+}
+
+.processing-signal-glow[data-active="true"]::after,
+.processing-signal-glow[data-active="true"] .processing-signal-ring {
+  animation: processing-signal-spin 1.6s linear infinite;
+}
+
+@keyframes processing-signal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes processing-signal-breathe {
+  0%,
+  100% {
+    opacity: calc(var(--signal-halo-opacity) * 0.55);
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: var(--signal-halo-opacity);
+    transform: scale(1.05);
+  }
 }
 
 :root:not(.dark) .agent-thinking-beam::before,
@@ -499,6 +610,12 @@
   .agent-thinking-beam[data-active] {
     animation-duration: 1ms, 1ms !important;
     animation-iteration-count: 1, 1 !important;
+  }
+
+  .processing-signal-glow[data-active="true"]::before,
+  .processing-signal-glow[data-active="true"]::after,
+  .processing-signal-glow[data-active="true"] .processing-signal-ring {
+    animation: none;
   }
 
   .inline-response-shimmer {
