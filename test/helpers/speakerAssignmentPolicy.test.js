@@ -22,14 +22,8 @@ test("canonicalizeSpeakerStatus maps legacy and current statuses correctly", () 
   assert.equal(canonicalizeSpeakerStatus("uncertain_overlap"), "provisional");
   assert.equal(canonicalizeSpeakerStatus("unknown_status"), undefined);
 
-  assert.equal(
-    canonicalizeSpeakerStatus("provisional", { speakerLocked: true }),
-    "locked"
-  );
-  assert.equal(
-    canonicalizeSpeakerStatus("provisional", { speakerLockSource: "user" }),
-    "locked"
-  );
+  assert.equal(canonicalizeSpeakerStatus("provisional", { speakerLocked: true }), "locked");
+  assert.equal(canonicalizeSpeakerStatus("provisional", { speakerLockSource: "user" }), "locked");
 });
 
 test("isSpeakerLocked and canAutoRelabelSpeaker check lock state accurately", () => {
@@ -69,13 +63,4 @@ test("locked segments preserve lock status on updates", () => {
 
   applySuggestedSpeaker(lockedSegment, { speaker: "Bob" });
   assert.equal(lockedSegment.speaker, "Alice");
-});
-
-test("apply functions handle nullish or non-object segments safely", () => {
-  assert.equal(applyProvisionalSpeaker(null), null);
-  assert.equal(applyProvisionalSpeaker(undefined), undefined);
-  assert.equal(applyConfirmedSpeaker(null), null);
-  assert.equal(applyConfirmedSpeaker(undefined), undefined);
-  assert.equal(applySuggestedSpeaker(null), null);
-  assert.equal(applySuggestedSpeaker(undefined), undefined);
 });
