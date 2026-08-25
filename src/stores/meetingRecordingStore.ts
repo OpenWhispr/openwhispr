@@ -3,6 +3,7 @@ import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { getStreamingTranscriptionProviders } from "../models/ModelRegistry";
 import { resolveMeetingTranscriptionOptions } from "../helpers/meetingTranscriptionRouting";
+import { captureTranscriptionStartClaim } from "../helpers/managedLocalTranscriptionRuntime";
 import { followsSystemDefaultMic } from "../helpers/micSelectionRecovery";
 import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
@@ -11,7 +12,12 @@ import {
   resolveInitialSpeakerCountOverride,
   resolveParticipantSpeakerCountSync,
 } from "../utils/participants";
-import type { NoteItem, SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
+import type {
+  NoteItem,
+  SystemAudioAccessResult,
+  SystemAudioStrategy,
+  TranscriptionStartClaim,
+} from "../types/electron";
 import type { CalendarAttendee } from "../types/calendar";
 import {
   DEFAULT_SYSTEM_AUDIO_ACCESS,
@@ -137,12 +143,17 @@ const isSegmentWithinIdentificationWindow = (
   );
 };
 
-const getMeetingTranscriptionOptions = () => {
+type MeetingTranscriptionOptions = ReturnType<typeof resolveMeetingTranscriptionOptions>;
+
+const getMeetingTranscriptionRequest = (): {
+  options: MeetingTranscriptionOptions;
+  claim: TranscriptionStartClaim;
+} => {
   const state = getSettings();
   const resolved = selectResolvedMeetingTranscription(state);
   const language = getBaseLanguageCode(state.preferredLanguage);
 
-  return resolveMeetingTranscriptionOptions({
+  const options = resolveMeetingTranscriptionOptions({
     transcriptionMode: resolved.transcriptionMode,
     language,
     localProvider: resolved.localTranscriptionProvider,
@@ -156,6 +167,14 @@ const getMeetingTranscriptionOptions = () => {
     cortiTenant: state.cortiTenant,
     keyterms: (state.customDictionary ?? []).filter(Boolean),
   });
+  const route =
+    options.provider === "local"
+      ? { provider: options.localProvider, model: options.localModel }
+      : { provider: options.provider, model: options.model ?? null };
+  return {
+    options,
+    claim: captureTranscriptionStartClaim(route, state),
+  };
 };
 
 const stopMediaStream = (stream: MediaStream | null) => {
@@ -699,9 +718,8 @@ export async function prepareTranscription(): Promise<void> {
 
   const promise = (async () => {
     try {
-      const result = await window.electronAPI?.meetingTranscriptionPrepare?.(
-        getMeetingTranscriptionOptions()
-      );
+      const { options, claim } = getMeetingTranscriptionRequest();
+      const result = await window.electronAPI?.meetingTranscriptionPrepare?.(options, claim);
 
       if (result?.success) {
         isPrepared = true;
@@ -863,12 +881,16 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         prepareMeetingSystemAudioCapture(initialSystemAudioAccess);
 
       startOperation.markMainStartAttempted();
-      const mainStartPromise = window.electronAPI?.meetingTranscriptionStart?.({
-        ...getMeetingTranscriptionOptions(),
-        noteId: args.noteId ?? null,
-        sessionId,
-        autoEndEligible: args.autoEndEligible,
-      });
+      const transcriptionRequest = getMeetingTranscriptionRequest();
+      const mainStartPromise = window.electronAPI?.meetingTranscriptionStart?.(
+        {
+          ...transcriptionRequest.options,
+          noteId: args.noteId ?? null,
+          sessionId,
+          autoEndEligible: args.autoEndEligible,
+        },
+        transcriptionRequest.claim
+      );
       const micCapturePromise = getMeetingMicConstraints().then(async (constraints) => {
         if (!isCurrentStart()) return null;
         try {

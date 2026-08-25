@@ -1,8 +1,10 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const React = require("react");
+const { createRoot } = require("react-dom/client");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { findElements, installManagedLocalTestDom } = require("./managedLocalTestDom");
 
 const noop = () => {};
 const asyncNoop = async () => {};
@@ -88,6 +90,67 @@ test("expanded Linux onboarding keeps maximize alongside minimize and close", as
   assert.match(markup, /title="windowControls.minimize"/);
   assert.match(markup, /title="windowControls.maximize"/);
   assert.match(markup, /title="windowControls.close"/);
+});
+
+test("step changes remount keyed content without remounting hidden persistent content", async (t) => {
+  const vite = await createOnboardingRenderer(t);
+  globalThis.window.clearInterval = () => {};
+  const { container } = installManagedLocalTestDom(t);
+  const { default: OnboardingShell } = await vite.ssrLoadModule(
+    "/components/onboarding/OnboardingShell.tsx"
+  );
+  let stepMounts = 0;
+  let stepUnmounts = 0;
+  let persistentMounts = 0;
+  let persistentUnmounts = 0;
+  function StepObserver({ label }) {
+    React.useEffect(() => {
+      stepMounts += 1;
+      return () => {
+        stepUnmounts += 1;
+      };
+    }, []);
+    return React.createElement("span", { id: "step-observer" }, label);
+  }
+  function PersistentObserver({ hidden }) {
+    React.useEffect(() => {
+      persistentMounts += 1;
+      return () => {
+        persistentUnmounts += 1;
+      };
+    }, []);
+    return React.createElement("section", { hidden, id: "persistent-observer" }, "observer");
+  }
+  const root = createRoot(container);
+  const renderShell = async (stepKey, hidden) => {
+    await React.act(async () => {
+      root.render(
+        React.createElement(
+          OnboardingShell,
+          {
+            persistentContent: React.createElement(PersistentObserver, { hidden }),
+            stepKey,
+          },
+          React.createElement(StepObserver, { label: stepKey })
+        )
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+    });
+  };
+
+  await renderShell("permissions", false);
+  await renderShell("languages", true);
+
+  const persistent = findElements(
+    container,
+    (element) => element.getAttribute("id") === "persistent-observer"
+  )[0];
+  assert.equal(stepMounts, 2);
+  assert.equal(stepUnmounts, 1);
+  assert.equal(persistentMounts, 1);
+  assert.equal(persistentUnmounts, 0);
+  assert.equal(persistent.getAttribute("hidden"), "");
+  await React.act(async () => root.unmount());
 });
 
 test("a denied microphone exposes the existing Linux settings recovery", async (t) => {

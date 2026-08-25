@@ -179,6 +179,27 @@
     "policyTranscriptionRestricted": "轉錄已被您的組織限制。"
   },
   "onboarding": {
+    "managedLocal": {
+      "title": "設定公司模型",
+      "description": "OpenWhispr 僅使用公司核准的本機模型。",
+      "status": {
+        "installed": "已安裝",
+        "preparing": "正在準備核准的模型…",
+        "ready": "公司模型已就緒",
+        "choose": "選擇核准的模型"
+      },
+      "recovery": { "title": "公司模型設定需要處理" },
+      "compatibility": { "checking": "正在檢查裝置相容性…", "unsupported": "此裝置不支援此模型。" },
+      "errors": {
+        "config": "公司模型設定無法使用。",
+        "capabilityCheck": "無法檢查裝置相容性。請重試。",
+        "reconciliation": "無法完成公司模型設定。請重試。",
+        "cancelled": "模型下載已取消。請重試。",
+        "downloadFailed": "無法下載模型。請重試。",
+        "noCompatibleDictationModel": "沒有與此裝置相容的核准聽寫模型。",
+        "noCompatibleAssistantModel": "沒有與此裝置相容的核准助理模型。"
+      }
+    },
     "rehaul": {
       "permissions": {
         "title": "3 分鐘完成 OpenWhispr 設定",
@@ -3743,6 +3764,9 @@
     "activeTarget": "目前目標語言",
     "removeTarget": "移除{{language}}",
     "maxTargets": "最多 {{max}} 種語言"
+  },
+  "managedLocalModels": {
+    "notice": { "waiting": "正在等待公司模型設定", "managedDescription": "由您的公司管理" }
   },
   "meetingNotification": {
     "title": "偵測到會議",

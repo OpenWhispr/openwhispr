@@ -89,6 +89,8 @@ import DictationTranslationSettings from "./settings/DictationTranslationSetting
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
+import { ManagedLocalModelNotice } from "./settings/ManagedLocalModelNotice";
+import { useManagedLocalModelSelection } from "../hooks/useManagedLocalModelSelection";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
@@ -263,7 +265,7 @@ interface TranscriptionSectionProps {
   }) => void;
 }
 
-function TranscriptionSection({
+export function TranscriptionSection({
   isSignedIn,
   startOnboarding,
   cloudTranscriptionMode,
@@ -294,6 +296,7 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
+  const managedSelection = useManagedLocalModelSelection("dictation");
   const {
     modes: transcriptionModes,
     effectiveMode: effectiveTranscriptionMode,
@@ -373,10 +376,9 @@ function TranscriptionSection({
       (model) => model.id === cloudTranscriptionModel && model.streaming
     )
   );
-  const previewAvailable = supportsLiveTranscriptionPreview(
-    effectiveTranscriptionMode,
-    selectedCloudModelStreams
-  );
+  const previewAvailable =
+    managedSelection !== undefined ||
+    supportsLiveTranscriptionPreview(effectiveTranscriptionMode, selectedCloudModelStreams);
 
   const renderPreviewToggle = () => (
     <SettingsPanel>
@@ -417,6 +419,16 @@ function TranscriptionSection({
       variant="settings"
     />
   );
+
+  if (managedSelection !== undefined) {
+    return (
+      <div className="space-y-4">
+        <ManagedLocalModelNotice selection={managedSelection} />
+        {previewAvailable && renderPreviewToggle()}
+        <GpuDeviceSelector purpose="transcription" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

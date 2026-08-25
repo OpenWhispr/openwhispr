@@ -2,6 +2,7 @@ import type { InferenceProvider } from "./types";
 import { withSessionRefresh } from "../../../lib/auth";
 import { getSettings } from "../../../stores/settingsStore";
 import logger from "../../../utils/logger";
+import { getReasoningStartContext } from "../enterpriseSettings";
 
 export const openwhisprProvider: InferenceProvider = {
   id: "openwhispr",
@@ -28,18 +29,25 @@ export const openwhisprProvider: InferenceProvider = {
         : undefined
       : "cleanup";
 
+    const start = getReasoningStartContext(config);
     const result = await withSessionRefresh(async () => {
-      const res = await window.electronAPI?.cloudReason?.(text, {
-        agentName,
-        customDictionary: ctx.getCustomDictionary(),
-        customPrompt,
-        systemPrompt: config.systemPrompt,
-        requestPurpose: config.requiresAgent ? "agent" : undefined,
-        promptMode,
-        screenContext: config.screenContext,
-        language: config.language || ctx.getPreferredLanguage(),
-        locale: ctx.getUiLanguage(),
-      });
+      const res = await window.electronAPI?.cloudReason?.(
+        text,
+        {
+          agentName,
+          customDictionary: ctx.getCustomDictionary(),
+          customPrompt,
+          systemPrompt: config.systemPrompt,
+          requestPurpose: config.requiresAgent ? "agent" : undefined,
+          promptMode,
+          screenContext: config.screenContext,
+          language: config.language || ctx.getPreferredLanguage(),
+          locale: ctx.getUiLanguage(),
+          inferenceScope: start.route.inferenceScope,
+          setupMode: start.route.setupMode,
+        },
+        start.claim
+      );
 
       if (!res?.success) {
         const err: Error & { code?: string } = new Error(

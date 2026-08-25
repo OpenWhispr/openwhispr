@@ -93,6 +93,19 @@ test("a confirmed enterprise workspace ends the account route at notes", async (
   assert.equal(route.includes("setup-choice"), false);
 });
 
+test("managed local setup inserts a required enterprise-models step before permissions", async () => {
+  const { getOnboardingRoute, reconcileStepWithRoute } = await load();
+  const route = getOnboardingRoute({
+    authPath: "account",
+    setupMode: null,
+    agentAllowed: true,
+    managedLocalSetup: true,
+  });
+  assert.deepEqual(route.slice(0, 3), ["auth", "enterprise-models", "permissions"]);
+  assert.equal(reconcileStepWithRoute("notes", route, "enterprise-models"), "enterprise-models");
+  assert.equal(reconcileStepWithRoute("auth", route, "enterprise-models"), "auth");
+});
+
 test("enterprise workspace entitlement requires a current paid entitlement", async () => {
   const { isEnterpriseWorkspaceEntitled } = await load();
   assert.equal(isEnterpriseWorkspaceEntitled({ plan: "enterprise", status: "active" }), true);

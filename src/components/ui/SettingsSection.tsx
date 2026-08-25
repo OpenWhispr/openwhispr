@@ -162,6 +162,8 @@ export function InferenceModeSelector({
             }`}
           >
             <button
+              type="button"
+              disabled={isDisabled}
               onClick={() => onSelect(mode.id)}
               className={`w-full flex items-center gap-3 text-left cursor-pointer group ${
                 isDisabled ? "opacity-60" : ""

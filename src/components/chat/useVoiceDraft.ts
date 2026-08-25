@@ -54,6 +54,7 @@ export function useVoiceDraft({ onTranscript, onError }: UseVoiceDraftOptions) {
   const discardRef = useRef(false);
 
   const buildConfig = (): FileTranscriptionConfig => ({
+    isSignedIn,
     useLocalWhisper,
     localTranscriptionProvider: localTranscriptionProvider as string,
     whisperModel,

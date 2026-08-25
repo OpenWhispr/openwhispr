@@ -196,3 +196,65 @@ test("accepts dated Azure versions from previously issued managed envelopes", ()
   azure.config.apiVersion = "latest";
   assert.equal(validateManagedEnterpriseEnvelope(envelope([azure]), "workspace-a"), null);
 });
+
+test("accepts approved LLM, Whisper, and NVIDIA local-model envelopes from the shared catalog", () => {
+  for (const selections of [
+    [{ provider: "qwen", model: "qwen3.5-9b-q4_k_m" }],
+    [{ provider: "whisper", model: "base" }],
+    [{ provider: "nvidia", model: "parakeet-tdt-0.6b-v3" }],
+  ]) {
+    const localOnly = { ...envelope([]), localModels: { selections } };
+    assert.deepEqual(validateManagedEnterpriseEnvelope(localOnly, "workspace-a")?.localModels, {
+      selections,
+    });
+  }
+});
+
+test("rejects unknown, duplicate, malformed, and mixed local-model envelopes", () => {
+  const local = (selections) => ({ ...envelope([]), localModels: { selections } });
+  assert.equal(
+    validateManagedEnterpriseEnvelope(
+      local([{ provider: "qwen", model: "not-in-the-catalog" }]),
+      "workspace-a"
+    ),
+    null
+  );
+  assert.equal(
+    validateManagedEnterpriseEnvelope(
+      local([{ provider: "whisper", model: "not-a-whisper-model" }]),
+      "workspace-a"
+    ),
+    null
+  );
+  assert.equal(
+    validateManagedEnterpriseEnvelope(
+      local([{ provider: "nvidia", model: "not-a-parakeet-model" }]),
+      "workspace-a"
+    ),
+    null
+  );
+  assert.equal(
+    validateManagedEnterpriseEnvelope(
+      local([
+        { provider: "qwen", model: "qwen3.5-9b-q4_k_m" },
+        { provider: "qwen", model: "qwen3.5-9b-q4_k_m" },
+      ]),
+      "workspace-a"
+    ),
+    null
+  );
+  assert.equal(
+    validateManagedEnterpriseEnvelope(
+      local([{ provider: "qwen", model: "qwen3.5-9b-q4_k_m", unexpected: true }]),
+      "workspace-a"
+    ),
+    null
+  );
+  assert.equal(
+    validateManagedEnterpriseEnvelope(
+      { ...local([{ provider: "qwen", model: "qwen3.5-9b-q4_k_m" }]), providers: [provider()] },
+      "workspace-a"
+    ),
+    null
+  );
+});

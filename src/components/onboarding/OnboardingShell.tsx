@@ -14,6 +14,8 @@ import onboardingBackgroundDark from "@/assets/onboarding-bg-dark.svg";
 interface OnboardingShellProps {
   compact?: boolean;
   children: ReactNode;
+  /** Mounted outside the keyed step subtree so long-lived observers survive navigation. */
+  persistentContent?: ReactNode;
   onBack?: () => void;
   onContinue?: () => void;
   onSkip?: () => void;
@@ -218,6 +220,7 @@ export function OnboardingStepHeader({
 export default function OnboardingShell({
   compact = false,
   children,
+  persistentContent,
   onBack,
   onContinue,
   onSkip,
@@ -264,7 +267,7 @@ export default function OnboardingShell({
         // otherwise clip with its controls unreachable. The bar itself is hidden
         // (.onboarding-shell-scroll), so on a tall display this is invisible and
         // cannot double up with an inner scroller.
-        className={`onboarding-shell-scroll min-h-0 flex-1 overflow-y-auto ${compact ? "px-0 pb-0" : "px-5 pb-5 pt-8 md:px-8"}`}
+        className={`onboarding-shell-scroll relative min-h-0 flex-1 overflow-y-auto ${compact ? "px-0 pb-0" : "px-5 pb-5 pt-8 md:px-8"}`}
       >
         <div
           // Keyed on the step so React remounts this subtree and the CSS entry
@@ -280,6 +283,7 @@ export default function OnboardingShell({
         >
           {children}
         </div>
+        {persistentContent}
       </div>
 
       {hasFooter && (

@@ -6,6 +6,7 @@ type OnboardingStorage = Pick<Storage, "setItem" | "removeItem">;
 
 export type OnboardingStepId =
   | "auth"
+  | "enterprise-models"
   | "permissions"
   | "languages"
   | "use-cases"
@@ -39,11 +40,11 @@ export interface OnboardingRouteContext {
   agentAllowed: boolean;
   /** A confirmed Enterprise workspace is already provisioned outside onboarding. */
   skipSetupChoice?: boolean;
+  /** Managed local policy must settle before permissions and demos can use inference. */
+  managedLocalSetup?: boolean;
 }
 
-const ACCOUNT_ROUTE: OnboardingStepId[] = [
-  "auth",
-  "permissions",
+const ACCOUNT_ROUTE_AFTER_PERMISSIONS: OnboardingStepId[] = [
   "languages",
   "use-cases",
   "dictation-hotkey",
@@ -60,6 +61,7 @@ const SETUP_ROUTES: Record<Exclude<OnboardingSetupMode, null | "cloud">, Onboard
 // it to clamp backwards instead of jumping to the end of the route.
 const STEP_ORDER: OnboardingStepId[] = [
   "auth",
+  "enterprise-models",
   "permissions",
   "languages",
   "use-cases",
@@ -143,7 +145,10 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
           "setup-choice",
         ] as OnboardingStepId[])
       : [
-          ...ACCOUNT_ROUTE,
+          "auth" as const,
+          ...(context.managedLocalSetup ? (["enterprise-models"] as OnboardingStepId[]) : []),
+          "permissions" as const,
+          ...ACCOUNT_ROUTE_AFTER_PERMISSIONS,
           ...(context.agentAllowed
             ? (["assistant-hotkey", "assistant-demo"] as OnboardingStepId[])
             : []),
@@ -231,16 +236,24 @@ export function migrateLegacyOnboardingStep(value: string | null): OnboardingSte
  */
 export function reconcileStepWithRoute(
   stepId: OnboardingStepId,
-  route: OnboardingStepId[]
+  route: OnboardingStepId[],
+  requiredStep?: OnboardingStepId
 ): OnboardingStepId {
-  if (route.includes(stepId)) return stepId;
   const target = STEP_ORDER.indexOf(stepId);
-  if (target === -1 || route.length === 0) return route[0] ?? "auth";
-  return route.reduce((best, candidate) => {
-    const bestDistance = Math.abs(STEP_ORDER.indexOf(best) - target);
-    const candidateDistance = Math.abs(STEP_ORDER.indexOf(candidate) - target);
-    return candidateDistance < bestDistance ? candidate : best;
-  }, route[0]);
+  const reconciled = route.includes(stepId)
+    ? stepId
+    : target === -1 || route.length === 0
+      ? (route[0] ?? "auth")
+      : route.reduce((best, candidate) => {
+          const bestDistance = Math.abs(STEP_ORDER.indexOf(best) - target);
+          const candidateDistance = Math.abs(STEP_ORDER.indexOf(candidate) - target);
+          return candidateDistance < bestDistance ? candidate : best;
+        }, route[0]);
+  const requiredIndex = requiredStep ? route.indexOf(requiredStep) : -1;
+  if (requiredStep && requiredIndex >= 0 && route.indexOf(reconciled) > requiredIndex) {
+    return requiredStep;
+  }
+  return reconciled;
 }
 
 export function getNextOnboardingStep(

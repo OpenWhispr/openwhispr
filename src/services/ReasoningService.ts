@@ -20,6 +20,13 @@ import { getAIModel } from "./ai/providers";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import type { InferenceScope } from "../config/inferenceScopes";
+import {
+  captureReasoningStartClaim,
+  getReasoningStartContext,
+  resolveManagedReasoningStart,
+  withReasoningStartContext,
+} from "./ai/enterpriseSettings";
+import type { ReasoningStartClaim } from "../types/electron";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
 import {
   canBorrowCleanupCustomKey,
@@ -138,33 +145,65 @@ class ReasoningService extends BaseReasoningService {
     return settings.cleanupMode === "self-hosted" && !!settings.cleanupRemoteUrl?.trim();
   }
 
-  // Managed enterprise access owns the route. Manual self-hosted and BYOK overrides are
-  // dropped so a leftover endpoint or key can never outrank the administrator's provider.
-  private resolveManagedScope<T extends ReasoningConfig, P extends string | undefined>(
+  // Managed access owns the exact route. Endpoint/key overrides are dropped so
+  // stale personal settings cannot outrank the current workspace decision.
+  private resolveReasoningStart<T extends ReasoningConfig>(
     model: string,
-    provider: P,
+    provider: string | undefined,
     config: T,
     fallbackScope: InferenceScope
-  ): { model: string; provider: P; config: T; isManaged: boolean } {
+  ): { model: string; provider: string; config: T; isManaged: boolean } {
+    const settings = getSettings();
     const inferenceScope = config.inferenceScope || fallbackScope;
-    const managed = getManagedScopeResolution(inferenceScope, getSettings().enterpriseSetupMode);
-    if (managed.kind === "error") throw new Error(managed.message);
-    if (managed.kind !== "managed") {
-      return { model, provider, config: { ...config, inferenceScope }, isManaged: false };
-    }
+    const requestedProvider = config.lanUrl ? "lan" : provider?.trim() || "";
+    const resolution = resolveManagedReasoningStart({
+      provider: requestedProvider,
+      model,
+      inferenceScope,
+      setupMode: settings.enterpriseSetupMode,
+      isSignedIn: settings.isSignedIn,
+    });
+    const resolvedConfig = {
+      ...config,
+      inferenceScope,
+      provider: resolution.provider,
+      ...(resolution.managed
+        ? { lanUrl: undefined, baseUrl: undefined, customApiKey: undefined }
+        : {}),
+    } as T;
     return {
-      model: managed.model,
-      provider: managed.provider as P,
-      config: {
-        ...config,
-        inferenceScope,
-        provider: managed.provider,
-        lanUrl: undefined,
-        baseUrl: undefined,
-        customApiKey: undefined,
-      },
-      isManaged: true,
+      model: resolution.model,
+      provider: resolution.provider,
+      config: withReasoningStartContext(resolvedConfig, resolution),
+      isManaged: resolution.managed,
     };
+  }
+
+  private async authorizeRendererReasoningStart(config: ReasoningConfig): Promise<void> {
+    const context = getReasoningStartContext(config);
+    const authorize = window.electronAPI?.authorizeReasoningStart;
+    if (typeof authorize !== "function") {
+      throw Object.assign(new Error("Inference authorization changed. Retry the request."), {
+        code: "AUTHORIZATION_BOUNDARY_CHANGED",
+      });
+    }
+
+    let result: Awaited<ReturnType<typeof authorize>>;
+    try {
+      result = await authorize(context.route, context.claim);
+    } catch {
+      throw Object.assign(new Error("Inference authorization changed. Retry the request."), {
+        code: "AUTHORIZATION_BOUNDARY_CHANGED",
+      });
+    }
+    if (!result || result.success !== true) {
+      const code =
+        result && typeof result.code === "string" ? result.code : "AUTHORIZATION_BOUNDARY_CHANGED";
+      throw Object.assign(
+        new Error(result?.error || "Inference authorization changed. Retry the request."),
+        { code }
+      );
+    }
   }
 
   private async getApiKey(
@@ -439,9 +478,6 @@ class ReasoningService extends BaseReasoningService {
     agentName: string | null = null,
     config: ReasoningConfig = {}
   ): Promise<string> {
-    const managed = this.resolveManagedScope(model, config.provider, config, "dictationCleanup");
-    ({ model, config } = managed);
-    const trimmedModel = model?.trim?.() || "";
     const settings = getSettings();
     const isImplicitCleanup =
       config.provider === undefined && config.baseUrl === undefined && config.lanUrl === undefined;
@@ -453,7 +489,7 @@ class ReasoningService extends BaseReasoningService {
           : settings.cleanupProvider || undefined;
     const isImplicitCustomCleanup =
       isImplicitCleanup && settings.cleanupMode === "providers" && implicitProvider === "custom";
-    const dispatchConfig: ReasoningConfig = isImplicitCleanup
+    const requestedConfig: ReasoningConfig = isImplicitCleanup
       ? {
           ...config,
           provider: implicitProvider,
@@ -463,10 +499,17 @@ class ReasoningService extends BaseReasoningService {
             : config.customApiKey,
         }
       : config;
+    let provider = requestedConfig.provider;
+    ({ model, provider, config } = this.resolveReasoningStart(
+      model,
+      provider,
+      requestedConfig,
+      "dictationCleanup"
+    ));
+    const trimmedModel = model?.trim?.() || "";
+    const dispatchConfig = config;
     const isLanCleanup = !!dispatchConfig.lanUrl || dispatchConfig.provider === "lan";
-    const providerId = isLanCleanup
-      ? "lan"
-      : resolveInferenceProvider(dispatchConfig.provider, trimmedModel);
+    const providerId = isLanCleanup ? "lan" : resolveInferenceProvider(provider, trimmedModel);
     if (!providerId) {
       throw new Error("No reasoning provider selected");
     }
@@ -492,6 +535,12 @@ class ReasoningService extends BaseReasoningService {
 
     const startTime = Date.now();
     try {
+      const isMainCrossing =
+        providerId === "local" ||
+        providerId === "anthropic" ||
+        providerId === "openwhispr" ||
+        isEnterpriseProvider(providerId);
+      if (!isMainCrossing) await this.authorizeRendererReasoningStart(dispatchConfig);
       const result = await handler.call({
         text,
         model: trimmedModel,
@@ -524,6 +573,12 @@ class ReasoningService extends BaseReasoningService {
     provider: string,
     config: ReasoningConfig & { systemPrompt: string }
   ): AsyncGenerator<string, void, unknown> {
+    ({ model, provider, config } = this.resolveReasoningStart(
+      model,
+      provider,
+      config,
+      "chatIntelligence"
+    ));
     const abortController = new AbortController();
     this.streamAbortController = abortController;
     try {
@@ -552,6 +607,8 @@ class ReasoningService extends BaseReasoningService {
     assertAgentSessionAllowedByPolicy(provider, mode);
     const isLocalProvider = route.kind === "local";
     const isLanChat = route.kind === "self-hosted";
+
+    await this.authorizeRendererReasoningStart(config);
 
     let endpoint: string;
     let apiKey = "";
@@ -736,7 +793,7 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig & { systemPrompt: string },
     tools?: Record<string, import("ai").Tool>
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
-    ({ model, provider, config } = this.resolveManagedScope(
+    ({ model, provider, config } = this.resolveReasoningStart(
       model,
       provider,
       config,
@@ -790,6 +847,8 @@ class ReasoningService extends BaseReasoningService {
       return;
     }
 
+    if (!isEnterprise) await this.authorizeRendererReasoningStart(config);
+
     const filterThinkTags =
       (isLocalProvider || isLanChat) && config.disableThinking !== false
         ? createStreamingThinkFilter()
@@ -818,7 +877,12 @@ class ReasoningService extends BaseReasoningService {
     const openrouterDisableThinking = provider === "openrouter" && config.disableThinking === true;
     // Resolving a Tinfoil model refreshes the registry, so read model config after it.
     const aiModel = isEnterprise
-      ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
+      ? createEnterpriseChatModel(
+          provider as EnterpriseProvider,
+          model,
+          config.inferenceScope,
+          getReasoningStartContext(config).claim
+        )
       : await getAIModel(aiProvider, model, apiKey, baseURL, {
           disableThinking: openrouterDisableThinking,
         });
@@ -974,7 +1038,10 @@ class ReasoningService extends BaseReasoningService {
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
       // Press-time screenshot; the server routes to its vision chain when present.
       screenContext?: { data: string; mediaType: string };
-    }
+      inferenceScope: InferenceScope;
+      setupMode: ReturnType<typeof getSettings>["enterpriseSetupMode"];
+    },
+    claim: ReasoningStartClaim
   ): {
     stream: AsyncGenerator<
       {
@@ -998,7 +1065,9 @@ class ReasoningService extends BaseReasoningService {
       arguments?: string;
       finishReason?: string;
     };
-    const queue: Array<StreamEvent | { type: "__error"; error: string } | { type: "__end" }> = [];
+    const queue: Array<
+      StreamEvent | { type: "__error"; error: string; code?: string } | { type: "__end" }
+    > = [];
     let resolve: (() => void) | null = null;
     let cancelled = false;
     let closed = false;
@@ -1014,7 +1083,7 @@ class ReasoningService extends BaseReasoningService {
     });
     const cleanupError = electronAPI?.onAgentStreamError?.((payload) => {
       if (payload.requestId !== requestId || closed || cancelled) return;
-      queue.push({ type: "__error", error: payload.error });
+      queue.push({ type: "__error", error: payload.error, code: payload.code });
       resolve?.();
     });
     const cleanupEnd = electronAPI?.onAgentStreamEnd?.((payload) => {
@@ -1042,7 +1111,7 @@ class ReasoningService extends BaseReasoningService {
     };
     this.activeCloudStream = { requestId, cancel };
 
-    electronAPI?.startAgentStream?.(requestId, messages, opts);
+    electronAPI?.startAgentStream?.(requestId, messages, opts, claim);
 
     const generator = (async function* () {
       try {
@@ -1057,7 +1126,10 @@ class ReasoningService extends BaseReasoningService {
           while (queue.length > 0) {
             const item = queue.shift()!;
             if (item.type === "__end") return;
-            if (item.type === "__error") throw new Error((item as { error: string }).error);
+            if (item.type === "__error") {
+              const streamError = item as { type: "__error"; error: string; code?: string };
+              throw Object.assign(new Error(streamError.error), { code: streamError.code });
+            }
             yield item as StreamEvent;
           }
         }
@@ -1094,6 +1166,17 @@ class ReasoningService extends BaseReasoningService {
     operationGeneration: number
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     assertAgentSessionAllowedByPolicy("openwhispr", "openwhispr");
+    const settings = getSettings();
+    const inferenceScope: InferenceScope = "chatIntelligence";
+    const reasoningStartClaim = captureReasoningStartClaim(
+      {
+        provider: "openwhispr",
+        model: null,
+        inferenceScope,
+        setupMode: settings.enterpriseSetupMode,
+      },
+      settings
+    );
     const operationWasCancelled = (): boolean =>
       operationGeneration !== this.cloudOperationGeneration;
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
@@ -1103,11 +1186,17 @@ class ReasoningService extends BaseReasoningService {
       if (operationWasCancelled()) return;
       // The screenshot rides every step of the tool loop so the model keeps
       // its vision after tool results come back.
-      const ipcStream = this.streamFromIPC(currentMessages, {
-        systemPrompt: config.systemPrompt,
-        tools: config.tools,
-        screenContext: config.screenContext,
-      });
+      const ipcStream = this.streamFromIPC(
+        currentMessages,
+        {
+          systemPrompt: config.systemPrompt,
+          tools: config.tools,
+          screenContext: config.screenContext,
+          inferenceScope,
+          setupMode: settings.enterpriseSetupMode,
+        },
+        reasoningStartClaim
+      );
 
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
 

@@ -1,12 +1,10 @@
 const crypto = require("crypto");
-const fs = require("fs");
 const {
   resolveManagedEnterpriseScope,
   validateManagedEnterpriseEnvelope,
 } = require("./enterpriseManagedConfig.mjs");
 const { AuthContextError } = require("./cloudApiRequest");
 
-const CONFIG_CACHE_VERSION = 1;
 const CONFIG_REFRESH_MS = 5 * 60 * 1000;
 const CREDENTIAL_REFRESH_WINDOW_MS = 60 * 1000;
 const AZURE_SCOPE = "https://cognitiveservices.azure.com/.default";
@@ -27,46 +25,6 @@ function normalizeAuthHeaders(value, token) {
     headers.Authorization = `Bearer ${token}`;
   }
   return headers;
-}
-
-function readCache(cachePath) {
-  if (!fs.existsSync(cachePath)) return { version: CONFIG_CACHE_VERSION, entries: [] };
-  try {
-    const parsed = JSON.parse(fs.readFileSync(cachePath, "utf8"));
-    return parsed?.version === CONFIG_CACHE_VERSION && Array.isArray(parsed.entries)
-      ? parsed
-      : { version: CONFIG_CACHE_VERSION, entries: [] };
-  } catch {
-    return { version: CONFIG_CACHE_VERSION, entries: [] };
-  }
-}
-
-function writeCache(cachePath, identity, config) {
-  const envelope = readCache(cachePath);
-  const entries = envelope.entries.filter((entry) => entry?.key !== identity.cacheKey);
-  entries.push({ key: identity.cacheKey, workspaceId: identity.workspaceId, config });
-  fs.writeFileSync(cachePath, JSON.stringify({ version: CONFIG_CACHE_VERSION, entries }), {
-    mode: 0o600,
-  });
-}
-
-function cachedConfig(cachePath, identity) {
-  const entry = readCache(cachePath).entries.find(
-    (candidate) => candidate?.key === identity.cacheKey
-  );
-  return validateManagedEnterpriseEnvelope(entry?.config, identity.workspaceId);
-}
-
-function removeCachedConfig(cachePath, identity) {
-  const envelope = readCache(cachePath);
-  const entries = envelope.entries.filter((entry) => entry?.key !== identity.cacheKey);
-  try {
-    fs.writeFileSync(cachePath, JSON.stringify({ version: CONFIG_CACHE_VERSION, entries }), {
-      mode: 0o600,
-    });
-  } catch {
-    // A read-only cache must never prevent fail-closed in-memory eviction.
-  }
 }
 
 function isTransientConfigError(error) {
@@ -92,16 +50,6 @@ function isAuthorizationError(error) {
   );
 }
 
-function requiresEnforcedManagedAccess(config) {
-  return Boolean(
-    config?.providers?.some(
-      (record) =>
-        record.mode !== "disabled" &&
-        (record.mode === "managed_required" || !record.allowManualSetup)
-    )
-  );
-}
-
 function responseError(code, error, identity = null, enforcementRequired) {
   return {
     success: false,
@@ -116,7 +64,6 @@ function responseError(code, error, identity = null, enforcementRequired) {
 }
 
 function createEnterpriseIdentityManager({
-  cachePath,
   getApiUrl,
   getAppVersion,
   proxyFetch,
@@ -132,6 +79,7 @@ function createEnterpriseIdentityManager({
   const configRequests = new Map();
   const cloudCredentials = new Map();
   const cloudCredentialRequests = new Map();
+  const definitivelyUnmanaged = new Set();
   let credentialEpoch = 0;
 
   function clearIdentityCredentials(identity) {
@@ -145,11 +93,12 @@ function createEnterpriseIdentityManager({
     }
   }
 
-  function evictIdentity(identity, code, enforcementRequired = false) {
+  function evictIdentity(identity, code, enforcementRequired = true) {
     configs.delete(identity.cacheKey);
     configRequests.delete(identity.cacheKey);
     clearIdentityCredentials(identity);
-    removeCachedConfig(cachePath, identity);
+    if (enforcementRequired === false) definitivelyUnmanaged.add(identity.cacheKey);
+    else definitivelyUnmanaged.delete(identity.cacheKey);
     broadcast?.({
       accountId: identity.accountId,
       workspaceId: identity.workspaceId,
@@ -275,13 +224,7 @@ function createEnterpriseIdentityManager({
       clearIdentityCredentials(identity);
     }
     configs.set(identity.cacheKey, { config, refreshedAt: now() });
-    try {
-      writeCache(cachePath, identity, config);
-    } catch (error) {
-      logger?.warn?.("Managed enterprise configuration cache write failed", {
-        error: error?.message,
-      });
-    }
+    definitivelyUnmanaged.delete(identity.cacheKey);
     broadcast?.({
       accountId: identity.accountId,
       workspaceId: identity.workspaceId,
@@ -297,24 +240,26 @@ function createEnterpriseIdentityManager({
     if (!forceRefresh && current && now() - current.refreshedAt < CONFIG_REFRESH_MS) {
       return { config: current.config, status: "current" };
     }
+    if (!forceRefresh && definitivelyUnmanaged.has(identity.cacheKey)) {
+      return { config: null, status: "current", enforcementRequired: false };
+    }
     if (configRequests.has(identity.cacheKey)) {
       return configRequests.get(identity.cacheKey);
     }
     const pending = fetchConfig(identity)
       .catch((error) => {
         if (isAuthorizationError(error) || error?.code === "MANAGED_CONFIG_INVALID") {
-          const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
-          error.enforcementRequired =
-            error?.code === "ENTERPRISE_REQUIRED" ? false : requiresEnforcedManagedAccess(prior);
+          error.enforcementRequired = error?.code === "ENTERPRISE_REQUIRED" ? false : true;
           evictIdentity(identity, error.code || "MANAGED_CONFIG_FAILED", error.enforcementRequired);
           throw error;
         }
         if (!isTransientConfigError(error)) throw error;
         const memory = configs.get(identity.cacheKey)?.config;
-        const disk = memory || cachedConfig(cachePath, identity);
-        if (disk) {
-          configs.set(identity.cacheKey, { config: disk, refreshedAt: 0 });
-          return { config: disk, status: "cached" };
+        if (memory) {
+          return { config: memory, status: "current" };
+        }
+        if (definitivelyUnmanaged.has(identity.cacheKey)) {
+          return { config: null, status: "current", enforcementRequired: false };
         }
         throw error;
       })
@@ -339,6 +284,7 @@ function createEnterpriseIdentityManager({
         workspaceId: identity.workspaceId,
         authGeneration: identity.authGeneration,
         config: resolved.config,
+        ...(resolved.enforcementRequired === false ? { enforcementRequired: false } : {}),
       };
     } catch (error) {
       return responseError(
@@ -367,9 +313,7 @@ function createEnterpriseIdentityManager({
         detail.code || (response.status === 401 ? "AUTH_EXPIRED" : "IDENTITY_EXCHANGE_FAILED");
       error.status = response.status;
       if (isAuthorizationError(error)) {
-        const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
-        error.enforcementRequired =
-          error.code === "ENTERPRISE_REQUIRED" ? false : requiresEnforcedManagedAccess(prior);
+        error.enforcementRequired = error.code === "ENTERPRISE_REQUIRED" ? false : true;
         evictIdentity(identity, error.code, error.enforcementRequired);
       }
       throw error;
@@ -524,11 +468,7 @@ function createEnterpriseIdentityManager({
     configRequests.clear();
     cloudCredentials.clear();
     cloudCredentialRequests.clear();
-    try {
-      fs.unlinkSync(cachePath);
-    } catch (error) {
-      if (error?.code !== "ENOENT") logger?.warn?.("Managed enterprise cache removal failed");
-    }
+    definitivelyUnmanaged.clear();
   }
 
   return { getConfig, resolveProvider, clear };

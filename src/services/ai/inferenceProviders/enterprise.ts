@@ -5,7 +5,7 @@ import {
   type EnterpriseProvider as EnterpriseProviderId,
 } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
-import { getEnterpriseCallSettings } from "../enterpriseSettings";
+import { getEnterpriseCallSettings, getReasoningStartContext } from "../enterpriseSettings";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import logger from "../../../utils/logger";
 
@@ -27,6 +27,14 @@ export const enterpriseProvider: InferenceProvider = {
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     const { supportsTemperature } = getOpenAiApiConfig(model);
+    const start = getReasoningStartContext(config);
+    const { reasoningStartClaim: _reasoningStartClaim, ...enterpriseCallSettings } =
+      getEnterpriseCallSettings(
+        enterpriseId,
+        config.inferenceScope || "dictationCleanup",
+        model,
+        start.claim
+      );
 
     const startTime = Date.now();
     const result = await window.electronAPI.processEnterpriseReasoning(
@@ -38,8 +46,9 @@ export const enterpriseProvider: InferenceProvider = {
         systemPrompt,
         provider: enterpriseId,
         supportsTemperature,
-        ...getEnterpriseCallSettings(enterpriseId, config.inferenceScope || "dictationCleanup"),
-      }
+        ...enterpriseCallSettings,
+      },
+      start.claim
     );
 
     const processingTimeMs = Date.now() - startTime;
@@ -52,8 +61,10 @@ export const enterpriseProvider: InferenceProvider = {
         error: result.error,
       });
       const enhanced = new Error(result.error || `${enterpriseId} reasoning failed`) as Error & {
+        code?: string;
         retryable?: boolean;
       };
+      enhanced.code = result.code;
       enhanced.retryable = result.retryable ?? false;
       throw enhanced;
     }

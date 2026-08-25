@@ -2,15 +2,23 @@ import React, { Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import App from "./App.jsx";
 import AuthenticationStep from "./components/AuthenticationStep.tsx";
+import { EnterpriseReadinessRecovery } from "./components/EnterpriseReadinessRecovery.tsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
 import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
 import WindowControls from "./components/WindowControls.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
+import ManagedEnterpriseModelCoordinator from "./components/onboarding/ManagedEnterpriseModelCoordinator.tsx";
 import { Card, CardContent } from "./components/ui/card.tsx";
 import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
+import { signOut } from "./lib/auth";
 import { useTheme } from "./hooks/useTheme";
 import { usePolicyStore } from "./stores/policyStore";
+import { useWorkspaceStore } from "./stores/workspaceStore";
+import {
+  shouldWaitForEnterpriseReadiness,
+  useEnterpriseIdentityStore,
+} from "./stores/enterpriseIdentityStore";
 import { isControlPanelWindow } from "./utils/windowContext.ts";
 
 // Either marker means the flow is mid-way: the legacy step key is kept for
@@ -40,13 +48,24 @@ export default function AppRouter() {
 function MainApp() {
   const { isSignedIn, isGracePeriodOnly, isLoaded: authLoaded } = useAuth();
   const policyStatus = usePolicyStore((state) => state.status);
+  const enterpriseStatus = useEnterpriseIdentityStore((state) => state.status);
+  const enterpriseVerdict = useEnterpriseIdentityStore((state) => state.verdict);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const workspacesLoaded = useWorkspaceStore((state) => state.loaded);
+  const workspaceLoadFailed = useWorkspaceStore((state) => state.error);
   const policyResolved =
     !isSignedIn ||
     policyStatus === "managed" ||
     policyStatus === "unmanaged" ||
     policyStatus === "error";
   const isWaitingForPolicyStart = isSignedIn && !policyResolved;
-  const autoSyncReady = authLoaded && policyResolved;
+  const isWaitingForEnterpriseStart = shouldWaitForEnterpriseReadiness(
+    isSignedIn,
+    enterpriseStatus,
+    enterpriseVerdict
+  );
+  const autoSyncReady = authLoaded && policyResolved && !isWaitingForEnterpriseStart;
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
@@ -124,15 +143,32 @@ function MainApp() {
   }, [isControlPanel]);
 
   useEffect(() => {
-    if (!isControlPanel || isLoading || isWaitingForPolicyStart || showOnboarding) return;
+    if (
+      !isControlPanel ||
+      isLoading ||
+      isWaitingForPolicyStart ||
+      isWaitingForEnterpriseStart ||
+      showOnboarding
+    ) {
+      return;
+    }
     // The main process waits for this renderer decision before showing the
     // control panel, preventing a fresh install from flashing at 1200×800
     // before the compact onboarding mode is applied.
     void window.electronAPI?.setOnboardingWindowMode?.("restore");
-  }, [isControlPanel, isLoading, isWaitingForPolicyStart, showOnboarding]);
+  }, [
+    isControlPanel,
+    isLoading,
+    isWaitingForEnterpriseStart,
+    isWaitingForPolicyStart,
+    showOnboarding,
+  ]);
 
   useEffect(() => {
-    if (isLoading || isWaitingForPolicyStart) return;
+    if (isLoading || isWaitingForPolicyStart || isWaitingForEnterpriseStart) {
+      void window.electronAPI?.setOnboardingActive?.(true);
+      return;
+    }
 
     const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
     const normalAppVisible = onboardingCompleted && (!isControlPanel || !showOnboarding);
@@ -140,7 +176,13 @@ function MainApp() {
     // actually committed the normal app may release global hotkeys and popup
     // surfaces; fresh installs and onboarding reloads keep them suppressed.
     void window.electronAPI?.setOnboardingActive?.(!normalAppVisible);
-  }, [isControlPanel, isLoading, isWaitingForPolicyStart, showOnboarding]);
+  }, [
+    isControlPanel,
+    isLoading,
+    isWaitingForEnterpriseStart,
+    isWaitingForPolicyStart,
+    showOnboarding,
+  ]);
 
   const handleOnboardingComplete = (options) => {
     if (options?.openSettings) {
@@ -204,13 +246,34 @@ function MainApp() {
     );
   }
 
+  if (isWaitingForEnterpriseStart) {
+    const selectableWorkspaces =
+      workspacesLoaded && !workspaceLoadFailed && !activeWorkspaceId
+        ? workspaces.map(({ id, name }) => ({ id, name }))
+        : [];
+    return (
+      <EnterpriseReadinessRecovery
+        onRetry={() => void useWorkspaceStore.getState().refresh()}
+        onSelectWorkspace={(workspaceId) =>
+          useWorkspaceStore.getState().setActiveWorkspaceId(workspaceId)
+        }
+        onSignOut={() => void signOut()}
+        workspaces={selectableWorkspaces}
+      />
+    );
+  }
+
   return isControlPanel ? (
     <Suspense fallback={<LoadingFallback />}>
       <ControlPanel initialSettingsSection={postOnboardingSettingsSection} />
       <BackgroundModelDownloadTray />
+      <ManagedEnterpriseModelCoordinator surface="background" showUi />
     </Suspense>
   ) : (
-    <App />
+    <>
+      <App />
+      <ManagedEnterpriseModelCoordinator surface="background" showUi={false} />
+    </>
   );
 }
 

@@ -95,6 +95,8 @@ test("managed enterprise access outranks a leftover self-hosted route", async (t
     workspaceId: "workspace-a",
     authGeneration: 1,
     status: "ready",
+    verdict: "configured",
+    failClosed: false,
     config: managedBedrockConfig(),
     error: null,
   });
@@ -131,7 +133,12 @@ test("managed enterprise access outranks a leftover self-hosted route", async (t
   });
 
   await t.test("without managed access the self-hosted route still wins", async () => {
-    useEnterpriseIdentityStore.setState({ config: null, status: "idle" });
+    useEnterpriseIdentityStore.setState({
+      config: null,
+      status: "error",
+      verdict: "unmanaged",
+      failClosed: false,
+    });
     setPolicy(enterpriseOnly);
     await assert.rejects(
       reasoningService.processText("hi", "", null, {
@@ -168,6 +175,7 @@ test("enterprise call settings cannot omit or bypass a resolved managed route", 
     workspaceId: "workspace-a",
     authGeneration: 1,
     status: "ready",
+    verdict: "configured",
     config: managedBedrockConfig(),
     error: null,
     failClosed: false,
@@ -176,6 +184,17 @@ test("enterprise call settings cannot omit or bypass a resolved managed route", 
   const settings = getEnterpriseCallSettings("azure", "dictationCleanup");
   assert.equal(settings.managedContext.provider, "bedrock");
   assert.equal(settings.managedContext.generation, 1);
+  assert.deepEqual(settings.reasoningStartClaim, {
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+    configGeneration: 1,
+    managed: true,
+    provider: "bedrock",
+    model: MANAGED_MODEL,
+  });
+  assert.equal(settings.inferenceScope, "dictationCleanup");
+  assert.equal(settings.setupMode, "auto");
 
   useEnterpriseIdentityStore.setState({
     status: "error",

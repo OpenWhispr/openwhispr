@@ -179,6 +179,30 @@
     "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione."
   },
   "onboarding": {
+    "managedLocal": {
+      "title": "Configura i modelli aziendali",
+      "description": "OpenWhispr userà solo modelli locali approvati dall’azienda.",
+      "status": {
+        "installed": "Installato",
+        "preparing": "Preparazione dei modelli approvati…",
+        "ready": "I modelli aziendali sono pronti",
+        "choose": "Scegli un modello approvato"
+      },
+      "recovery": { "title": "La configurazione del modello richiede attenzione" },
+      "compatibility": {
+        "checking": "Verifica della compatibilità…",
+        "unsupported": "Questo modello non è supportato su questo dispositivo."
+      },
+      "errors": {
+        "config": "Le impostazioni dei modelli aziendali non sono disponibili.",
+        "capabilityCheck": "Impossibile verificare la compatibilità del dispositivo. Riprova.",
+        "reconciliation": "Impossibile completare la configurazione dei modelli aziendali. Riprova.",
+        "cancelled": "Il download è stato annullato. Riprova.",
+        "downloadFailed": "Impossibile scaricare il modello. Riprova.",
+        "noCompatibleDictationModel": "Nessun modello di dettatura approvato è compatibile.",
+        "noCompatibleAssistantModel": "Nessun modello di assistente approvato è compatibile."
+      }
+    },
     "rehaul": {
       "permissions": {
         "title": "Configura OpenWhispr in 3 minuti",
@@ -3743,6 +3767,12 @@
     "activeTarget": "Lingua di destinazione attiva",
     "removeTarget": "Rimuovi {{language}}",
     "maxTargets": "Fino a {{max}} lingue"
+  },
+  "managedLocalModels": {
+    "notice": {
+      "waiting": "In attesa della configurazione del modello aziendale",
+      "managedDescription": "Gestito dalla tua azienda"
+    }
   },
   "meetingNotification": {
     "title": "Riunione rilevata",

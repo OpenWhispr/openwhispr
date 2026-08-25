@@ -6,6 +6,7 @@ import {
 import type {
   EnterpriseSetupMode,
   ManagedEnterpriseConfig,
+  ManagedEnterpriseLocalModels,
   ManagedEnterpriseScopeResolution,
 } from "../types/enterpriseIdentity";
 import type { InferenceScope } from "../config/inferenceScopes";
@@ -14,12 +15,13 @@ import { resolveManagedEnterpriseScope } from "../helpers/enterpriseManagedConfi
 import { isLlmSelectionAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
 
-interface EnterpriseIdentityState {
+export interface EnterpriseIdentityState {
   accountId: string | null;
   workspaceId: string | null;
   authGeneration: number | null;
   status: "idle" | "loading" | "ready" | "error";
   config: ManagedEnterpriseConfig | null;
+  verdict: "unknown" | "configured" | "unmanaged";
   error: string | null;
   failClosed: boolean;
   refresh: (
@@ -35,12 +37,65 @@ let requestSequence = 0;
 let inFlightKey: string | null = null;
 let inFlightPromise: Promise<void> | null = null;
 
+export function isEnterpriseIdentitySettled(
+  status: EnterpriseIdentityState["status"],
+  verdict: EnterpriseIdentityState["verdict"]
+): boolean {
+  return (
+    (status === "ready" && verdict === "configured") ||
+    (status === "error" && verdict === "unmanaged")
+  );
+}
+
+export function shouldWaitForEnterpriseReadiness(
+  isSignedIn: boolean,
+  status: EnterpriseIdentityState["status"],
+  verdict: EnterpriseIdentityState["verdict"] = "unknown"
+): boolean {
+  return isSignedIn && !isEnterpriseIdentitySettled(status, verdict);
+}
+
+export interface ManagedLocalModelContext {
+  identity: {
+    accountId: string;
+    workspaceId: string;
+    authGeneration: number;
+    configGeneration: number;
+  };
+  localModels: ManagedEnterpriseLocalModels;
+}
+
+export function selectManagedLocalModelContext(
+  state: EnterpriseIdentityState
+): ManagedLocalModelContext | null {
+  if (
+    state.status !== "ready" ||
+    state.verdict !== "configured" ||
+    !state.config?.localModels ||
+    !state.accountId ||
+    !state.workspaceId ||
+    state.authGeneration == null
+  ) {
+    return null;
+  }
+  return {
+    identity: {
+      accountId: state.accountId,
+      workspaceId: state.workspaceId,
+      authGeneration: state.authGeneration,
+      configGeneration: state.config.generation,
+    },
+    localModels: state.config.localModels,
+  };
+}
+
 export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, get) => ({
   accountId: null,
   workspaceId: null,
   authGeneration: null,
   status: "idle",
   config: null,
+  verdict: "unknown",
   error: null,
   failClosed: false,
 
@@ -57,10 +112,11 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
       accountId,
       workspaceId,
       authGeneration,
-      status: sameIdentity && current.config ? "ready" : "loading",
+      status: sameIdentity && current.verdict === "configured" ? "ready" : "loading",
       config: sameIdentity ? current.config : null,
+      verdict: sameIdentity ? current.verdict : "unknown",
       error: null,
-      failClosed: sameIdentity ? current.failClosed : false,
+      failClosed: sameIdentity ? current.failClosed : true,
     });
 
     const promise = (async () => {
@@ -83,10 +139,19 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
             { enforcementRequired: result.enforcementRequired }
           );
         }
+        const config = result.config ?? null;
+        const unmanaged = config === null && result.enforcementRequired === false;
+        if (!config && !unmanaged) {
+          throw Object.assign(
+            new Error(result.error || "Managed enterprise AI configuration is unavailable."),
+            { enforcementRequired: result.enforcementRequired }
+          );
+        }
         set({
-          status: "ready",
-          config: result.config ?? null,
-          error: null,
+          status: unmanaged ? "error" : "ready",
+          config,
+          verdict: unmanaged ? "unmanaged" : "configured",
+          error: unmanaged ? (result.code ?? null) : null,
           failClosed: false,
         });
       } catch (error) {
@@ -98,18 +163,9 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
         set({
           status: "error",
           config: null,
+          verdict: enforcementRequired === false ? "unmanaged" : "unknown",
           error: message,
-          failClosed:
-            typeof enforcementRequired === "boolean"
-              ? enforcementRequired
-              : current.failClosed ||
-                Boolean(
-                  current.config?.providers.some(
-                    (record) =>
-                      record.mode !== "disabled" &&
-                      (record.mode === "managed_required" || !record.allowManualSetup)
-                  )
-                ),
+          failClosed: enforcementRequired !== false,
         });
       } finally {
         if (inFlightKey === key) {
@@ -134,6 +190,7 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
       authGeneration: null,
       status: "idle",
       config: null,
+      verdict: "unknown",
       error: null,
       failClosed: false,
     });
@@ -163,19 +220,13 @@ if (typeof window !== "undefined") {
     useEnterpriseIdentityStore.setState({
       status: snapshot.config ? "ready" : "error",
       config: snapshot.config,
+      verdict: snapshot.config
+        ? "configured"
+        : snapshot.enforcementRequired === false
+          ? "unmanaged"
+          : "unknown",
       error: snapshot.config ? null : snapshot.code,
-      failClosed: snapshot.config
-        ? false
-        : typeof snapshot.enforcementRequired === "boolean"
-          ? snapshot.enforcementRequired
-          : state.failClosed ||
-            Boolean(
-              state.config?.providers.some(
-                (record) =>
-                  record.mode !== "disabled" &&
-                  (record.mode === "managed_required" || !record.allowManualSetup)
-              )
-            ),
+      failClosed: snapshot.config ? false : snapshot.enforcementRequired !== false,
     });
   });
 }

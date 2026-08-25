@@ -10,6 +10,8 @@ import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import type { InferenceMode } from "../../types/electron";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 import { getStreamingTranscriptionProviders } from "../../models/ModelRegistry";
+import { ManagedLocalModelNotice } from "./ManagedLocalModelNotice";
+import { useManagedLocalModelSelection } from "../../hooks/useManagedLocalModelSelection";
 
 const MEETING_BYOK_PROVIDER_IDS = getStreamingTranscriptionProviders().map(
   (provider) => provider.id
@@ -35,6 +37,7 @@ const noop = () => {};
 export function MeetingTranscriptionPanel() {
   const { t } = useTranslation();
   const startOnboarding = useStartOnboarding();
+  const managedSelection = useManagedLocalModelSelection("dictation");
 
   const {
     isSignedIn,
@@ -143,6 +146,15 @@ export function MeetingTranscriptionPanel() {
       variant="settings"
     />
   );
+
+  if (managedSelection !== undefined) {
+    return (
+      <div className="space-y-3">
+        <ManagedLocalModelNotice selection={managedSelection} />
+        <MeetingSpeakerDetectionRow />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">

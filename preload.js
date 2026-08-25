@@ -60,6 +60,15 @@ const registerListener = (channel, handlerFactory) => {
   };
 };
 
+const invokeWithInferenceClaim = (channel, args, claim) =>
+  claim === undefined
+    ? ipcRenderer.invoke(channel, ...args)
+    : ipcRenderer.invoke(channel, ...args, claim);
+const sendWithInferenceClaim = (channel, args, claim) =>
+  claim === undefined
+    ? ipcRenderer.send(channel, ...args)
+    : ipcRenderer.send(channel, ...args, claim);
+
 contextBridge.exposeInMainWorld("electronAPI", {
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
@@ -112,7 +121,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAudioStorageUsage: () => ipcRenderer.invoke("get-audio-storage-usage"),
   deleteAllAudio: () => ipcRenderer.invoke("delete-all-audio"),
   syncRetentionSettings: (settings) => ipcRenderer.send("retention-settings-changed", settings),
-  retryTranscription: (id, settings) => ipcRenderer.invoke("retry-transcription", id, settings),
+  retryTranscription: (id, settings, claim) =>
+    invokeWithInferenceClaim("retry-transcription", [id, settings], claim),
   updateTranscriptionText: (id, text, rawText) =>
     ipcRenderer.invoke("update-transcription-text", id, text, rawText),
   getTranscriptionById: (id) => ipcRenderer.invoke("get-transcription-by-id", id),
@@ -221,8 +231,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Audio file operations
   selectAudioFile: (options) => ipcRenderer.invoke("select-audio-file", options),
   getFileSize: (filePath) => ipcRenderer.invoke("get-file-size", filePath),
-  transcribeAudioFile: (filePath, options) =>
-    ipcRenderer.invoke("transcribe-audio-file", filePath, options),
+  authorizeTranscriptionStart: (route, claim) =>
+    invokeWithInferenceClaim("authorize-transcription-start", [route], claim),
+  transcribeAudioFile: (filePath, options, claim) =>
+    invokeWithInferenceClaim("transcribe-audio-file", [filePath, options], claim),
   getPathForFile: (file) => {
     const filePath = webUtils.getPathForFile(file);
     // Register real dropped-file paths so the main-process audio allowlist accepts them.
@@ -329,8 +341,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteTempAudio: (tempPath) => ipcRenderer.invoke("delete-temp-audio", tempPath),
 
   // Local Whisper functions (whisper.cpp)
-  transcribeLocalWhisper: (audioBlob, options) =>
-    ipcRenderer.invoke("transcribe-local-whisper", audioBlob, options),
+  transcribeLocalWhisper: (audioBlob, options, claim) =>
+    invokeWithInferenceClaim("transcribe-local-whisper", [audioBlob, options], claim),
   checkWhisperInstallation: () => ipcRenderer.invoke("check-whisper-installation"),
   downloadWhisperModel: (modelName) => ipcRenderer.invoke("download-whisper-model", modelName),
   onWhisperDownloadProgress: registerListener("whisper-download-progress"),
@@ -385,8 +397,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   dismissGpuPackMigrationNotice: () => ipcRenderer.invoke("dismiss-gpu-pack-migration-notice"),
 
   // Local Parakeet (NVIDIA) functions
-  transcribeLocalParakeet: (audioBlob, options) =>
-    ipcRenderer.invoke("transcribe-local-parakeet", audioBlob, options),
+  transcribeLocalParakeet: (audioBlob, options, claim) =>
+    invokeWithInferenceClaim("transcribe-local-parakeet", [audioBlob, options], claim),
   checkParakeetInstallation: () => ipcRenderer.invoke("check-parakeet-installation"),
   downloadParakeetModel: (modelName) => ipcRenderer.invoke("download-parakeet-model", modelName),
   onParakeetDownloadProgress: registerListener("parakeet-download-progress"),
@@ -515,17 +527,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setUiLanguage: (language) => ipcRenderer.invoke("set-ui-language", language),
 
   // xAI / Mistral transcription proxies (keys handled by the manifest bridge)
-  proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
-  proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
+  proxyXaiTranscription: (data, claim) =>
+    invokeWithInferenceClaim("proxy-xai-transcription", [data], claim),
+  proxyMistralTranscription: (data, claim) =>
+    invokeWithInferenceClaim("proxy-mistral-transcription", [data], claim),
 
   // Corti API
   getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),
   saveCortiClientId: (key) => ipcRenderer.invoke("save-corti-client-id", key),
   getCortiClientSecret: () => ipcRenderer.invoke("get-corti-client-secret"),
   saveCortiClientSecret: (key) => ipcRenderer.invoke("save-corti-client-secret", key),
-  proxyCortiTranscription: (data) => ipcRenderer.invoke("proxy-corti-transcription", data),
+  proxyCortiTranscription: (data, claim) =>
+    invokeWithInferenceClaim("proxy-corti-transcription", [data], claim),
   getTinfoilChatModels: () => ipcRenderer.invoke("get-tinfoil-chat-models"),
-  proxyTinfoilTranscription: (data) => ipcRenderer.invoke("proxy-tinfoil-transcription", data),
+  proxyTinfoilTranscription: (data, claim) =>
+    invokeWithInferenceClaim("proxy-tinfoil-transcription", [data], claim),
 
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
@@ -575,19 +591,36 @@ contextBridge.exposeInMainWorld("electronAPI", {
   syncStartupPreferences: (prefs) => ipcRenderer.invoke("sync-startup-preferences", prefs),
 
   // Local reasoning
-  processLocalReasoning: (text, modelId, agentName, config) =>
-    ipcRenderer.invoke("process-local-reasoning", text, modelId, agentName, config),
+  authorizeReasoningStart: (route, claim) =>
+    invokeWithInferenceClaim("authorize-reasoning-start", [route], claim),
+  processLocalReasoning: (text, modelId, agentName, config, claim) =>
+    invokeWithInferenceClaim("process-local-reasoning", [text, modelId, agentName, config], claim),
   checkLocalReasoningAvailable: () => ipcRenderer.invoke("check-local-reasoning-available"),
 
   // Anthropic reasoning
-  processAnthropicReasoning: (text, modelId, agentName, config) =>
-    ipcRenderer.invoke("process-anthropic-reasoning", text, modelId, agentName, config),
+  processAnthropicReasoning: (text, modelId, agentName, config, claim) =>
+    invokeWithInferenceClaim(
+      "process-anthropic-reasoning",
+      [text, modelId, agentName, config],
+      claim
+    ),
 
   // Enterprise reasoning (Bedrock, Azure, Vertex) — runs in main process so
   // Node-only SDKs (AWS/Azure/Google credential providers) can resolve.
-  processEnterpriseReasoning: (text, modelId, agentName, config) =>
-    ipcRenderer.invoke("process-enterprise-reasoning", text, modelId, agentName, config),
-  enterpriseStreamStart: (payload) => ipcRenderer.invoke("enterprise-stream-start", payload),
+  processEnterpriseReasoning: (text, modelId, agentName, config, claim) =>
+    invokeWithInferenceClaim(
+      "process-enterprise-reasoning",
+      [text, modelId, agentName, config],
+      claim
+    ),
+  enterpriseStreamStart: (payload) => {
+    const { reasoningStartClaim, ...config } = payload?.config || {};
+    return invokeWithInferenceClaim(
+      "enterprise-stream-start",
+      [{ ...payload, config }],
+      reasoningStartClaim
+    );
+  },
   enterpriseStreamCancel: (streamId) => ipcRenderer.invoke("enterprise-stream-cancel", streamId),
   onEnterpriseStreamPart: registerListener(
     "enterprise-stream-part",
@@ -676,9 +709,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // OpenWhispr Cloud API
   cloudHealthCheck: () => ipcRenderer.invoke("cloud-health-check"),
-  cloudTranscribe: (audioBuffer, opts) => ipcRenderer.invoke("cloud-transcribe", audioBuffer, opts),
+  cloudTranscribe: (audioBuffer, opts, claim) =>
+    invokeWithInferenceClaim("cloud-transcribe", [audioBuffer, opts], claim),
   cancelCloudTranscription: () => ipcRenderer.send("cloud-transcribe-cancel"),
-  cloudReason: (text, opts) => ipcRenderer.invoke("cloud-reason", text, opts),
+  cloudReason: (text, opts, claim) => invokeWithInferenceClaim("cloud-reason", [text, opts], claim),
   cancelCloudReason: () => ipcRenderer.send("cloud-reason-cancel"),
   cloudStreamingUsage: (text, audioDurationSeconds, opts) =>
     ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
@@ -699,11 +733,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getNoteRecordingConfig: () => ipcRenderer.invoke("get-note-recording-config"),
 
   // Cloud audio file transcription
-  transcribeAudioFileCloud: (filePath, options) =>
-    ipcRenderer.invoke("transcribe-audio-file-cloud", filePath, options),
+  transcribeAudioFileCloud: (filePath, options, claim) =>
+    invokeWithInferenceClaim("transcribe-audio-file-cloud", [filePath, options], claim),
   cancelUploadTranscription: (requestId) =>
     ipcRenderer.invoke("cancel-upload-transcription", requestId),
-  transcribeAudioFileByok: (options) => ipcRenderer.invoke("transcribe-audio-file-byok", options),
+  transcribeAudioFileByok: (options, claim) =>
+    invokeWithInferenceClaim("transcribe-audio-file-byok", [options], claim),
   onUploadTranscriptionProgress: registerListener(
     "upload-transcription-progress",
     (callback) => (_event, data) => callback(data)
@@ -715,9 +750,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getReferralInvites: () => ipcRenderer.invoke("get-referral-invites"),
 
   // Assembly AI Streaming
-  assemblyAiStreamingWarmup: (options) =>
-    ipcRenderer.invoke("assemblyai-streaming-warmup", options),
-  assemblyAiStreamingStart: (options) => ipcRenderer.invoke("assemblyai-streaming-start", options),
+  assemblyAiStreamingWarmup: (options, claim) =>
+    invokeWithInferenceClaim("assemblyai-streaming-warmup", [options], claim),
+  assemblyAiStreamingStart: (options, claim) =>
+    invokeWithInferenceClaim("assemblyai-streaming-start", [options], claim),
   assemblyAiStreamingSend: (audioBuffer) =>
     ipcRenderer.send("assemblyai-streaming-send", audioBuffer),
   assemblyAiStreamingForceEndpoint: () => ipcRenderer.send("assemblyai-streaming-force-endpoint"),
@@ -741,8 +777,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Deepgram Streaming
-  deepgramStreamingWarmup: (options) => ipcRenderer.invoke("deepgram-streaming-warmup", options),
-  deepgramStreamingStart: (options) => ipcRenderer.invoke("deepgram-streaming-start", options),
+  deepgramStreamingWarmup: (options, claim) =>
+    invokeWithInferenceClaim("deepgram-streaming-warmup", [options], claim),
+  deepgramStreamingStart: (options, claim) =>
+    invokeWithInferenceClaim("deepgram-streaming-start", [options], claim),
   deepgramStreamingSend: (audioBuffer) => ipcRenderer.send("deepgram-streaming-send", audioBuffer),
   deepgramStreamingFinalize: () => ipcRenderer.send("deepgram-streaming-finalize"),
   deepgramStreamingStop: () => ipcRenderer.invoke("deepgram-streaming-stop"),
@@ -765,8 +803,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Corti streaming (BYOK)
-  cortiStreamingWarmup: (options) => ipcRenderer.invoke("corti-streaming-warmup", options),
-  cortiStreamingStart: (options) => ipcRenderer.invoke("corti-streaming-start", options),
+  cortiStreamingWarmup: (options, claim) =>
+    invokeWithInferenceClaim("corti-streaming-warmup", [options], claim),
+  cortiStreamingStart: (options, claim) =>
+    invokeWithInferenceClaim("corti-streaming-start", [options], claim),
   cortiStreamingSend: (audioBuffer) => ipcRenderer.send("corti-streaming-send", audioBuffer),
   cortiStreamingFinalize: () => ipcRenderer.send("corti-streaming-finalize"),
   cortiStreamingStop: () => ipcRenderer.invoke("corti-streaming-stop"),
@@ -786,10 +826,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Meeting transcription (streaming, dual-channel)
-  meetingTranscriptionPrepare: (options) =>
-    ipcRenderer.invoke("meeting-transcription-prepare", options),
-  meetingTranscriptionStart: (options) =>
-    ipcRenderer.invoke("meeting-transcription-start", options),
+  meetingTranscriptionPrepare: (options, claim) =>
+    invokeWithInferenceClaim("meeting-transcription-prepare", [options], claim),
+  meetingTranscriptionStart: (options, claim) =>
+    invokeWithInferenceClaim("meeting-transcription-start", [options], claim),
   meetingTranscriptionSend: (buffer, source) =>
     ipcRenderer.send("meeting-transcription-send", buffer, source),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
@@ -823,8 +863,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   // Dictation realtime streaming
-  dictationRealtimeWarmup: (options) => ipcRenderer.invoke("dictation-realtime-warmup", options),
-  dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
+  dictationRealtimeWarmup: (options, claim) =>
+    invokeWithInferenceClaim("dictation-realtime-warmup", [options], claim),
+  dictationRealtimeStart: (options, claim) =>
+    invokeWithInferenceClaim("dictation-realtime-start", [options], claim),
   dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
   dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
   onDictationRealtimePartial: registerListener(
@@ -948,7 +990,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   onPreviewHide: registerListener("preview-hide", (callback) => () => callback()),
-  startDictationPreview: (opts) => ipcRenderer.invoke("start-dictation-preview", opts),
+  startDictationPreview: (opts, claim) =>
+    invokeWithInferenceClaim("start-dictation-preview", [opts], claim),
   stopDictationPreview: (opts) => ipcRenderer.invoke("stop-dictation-preview", opts),
   dismissDictationPreview: () => ipcRenderer.invoke("dismiss-dictation-preview"),
   updateDictationPreview: (text) => ipcRenderer.invoke("update-dictation-preview", text),
@@ -959,8 +1002,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
 
   // Agent cloud streaming (event-based for real-time chunks)
-  startAgentStream: (requestId, messages, opts) =>
-    ipcRenderer.send("cloud-agent-stream-start", requestId, messages, opts),
+  startAgentStream: (requestId, messages, opts, claim) =>
+    sendWithInferenceClaim("cloud-agent-stream-start", [requestId, messages, opts], claim),
   cancelAgentStream: (requestId) => ipcRenderer.send("cloud-agent-stream-cancel", requestId),
   onAgentStreamChunk: registerListener(
     "cloud-agent-stream-chunk",

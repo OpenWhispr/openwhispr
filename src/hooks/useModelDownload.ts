@@ -29,6 +29,8 @@ interface UseModelDownloadOptions {
   modelType: ModelType;
   onDownloadComplete?: () => void;
   onModelsCleared?: () => void;
+  onTerminalError?: (modelId: string, error: string) => void;
+  onDownloadCancelled?: (modelId: string) => void;
 }
 
 interface ModelDownloadTerminalEvent {
@@ -75,6 +77,8 @@ export function useModelDownload({
   modelType,
   onDownloadComplete,
   onModelsCleared,
+  onTerminalError,
+  onDownloadCancelled,
 }: UseModelDownloadOptions) {
   const { t } = useTranslation();
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
@@ -97,6 +101,8 @@ export function useModelDownload({
   const showAlertDialogRef = useRef(showAlertDialog);
   const onDownloadCompleteRef = useRef(onDownloadComplete);
   const onModelsClearedRef = useRef(onModelsCleared);
+  const onTerminalErrorRef = useRef(onTerminalError);
+  const onDownloadCancelledRef = useRef(onDownloadCancelled);
 
   useEffect(() => {
     showAlertDialogRef.current = showAlertDialog;
@@ -109,6 +115,14 @@ export function useModelDownload({
   useEffect(() => {
     onModelsClearedRef.current = onModelsCleared;
   }, [onModelsCleared]);
+
+  useEffect(() => {
+    onTerminalErrorRef.current = onTerminalError;
+  }, [onTerminalError]);
+
+  useEffect(() => {
+    onDownloadCancelledRef.current = onDownloadCancelled;
+  }, [onDownloadCancelled]);
 
   useEffect(() => {
     downloadingModelRef.current = downloadingModel;
@@ -225,6 +239,7 @@ export function useModelDownload({
         data.code
       );
       setDownloadError(msg);
+      onTerminalErrorRef.current?.(data.modelId, msg);
       showAlertDialogRef.current({
         title:
           data.code === "EXTRACTION_FAILED"
@@ -449,6 +464,7 @@ export function useModelDownload({
           if (result?.error) {
             const msg = getDownloadErrorMessage(t, result.error, result.code);
             setDownloadError(msg);
+            onTerminalErrorRef.current?.(modelId, msg);
             showAlertDialog({
               title:
                 result.code === "EXTRACTION_FAILED"
@@ -480,6 +496,7 @@ export function useModelDownload({
         ) {
           const msg = getDownloadErrorMessage(t, errorMessage);
           setDownloadError(msg);
+          onTerminalErrorRef.current?.(modelId, msg);
           showAlertDialog({
             title: t("hooks.modelDownload.downloadFailed.title"),
             description: msg,
@@ -580,6 +597,7 @@ export function useModelDownload({
       setIsInstalling(false);
       setDownloadingModel(null);
       setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
+      onDownloadCancelledRef.current?.(downloadingModel);
       onDownloadCompleteRef.current?.();
     }
   }, [downloadingModel, isCancelling, isInstalling, modelType, toast, t]);

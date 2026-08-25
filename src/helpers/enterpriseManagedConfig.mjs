@@ -1,3 +1,5 @@
+import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
+
 const ENTERPRISE_INFERENCE_SCOPES = [
   "dictationCleanup",
   "dictationAgent",
@@ -15,6 +17,49 @@ const AZURE_LEGACY_API_VERSION = /^\d{4}-\d{2}-\d{2}(?:-preview)?$/;
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasExactKeys(value, keys) {
+  return (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === keys.length &&
+    keys.every((key) => Object.hasOwn(value, key))
+  );
+}
+
+function isApprovedLocalModel(selection) {
+  if (!hasExactKeys(selection, ["provider", "model"])) return false;
+  const provider = modelRegistryData.localProviders.find(
+    (candidate) => candidate.id === selection.provider
+  );
+  if (provider?.models.some((model) => model.id === selection.model)) return true;
+  const transcriptionModels =
+    selection.provider === "whisper"
+      ? Object.keys(modelRegistryData.whisperModels)
+      : selection.provider === "nvidia"
+        ? Object.keys(modelRegistryData.parakeetModels)
+        : [];
+  return transcriptionModels.includes(selection.model);
+}
+
+function isValidLocalModels(value) {
+  if (
+    !hasExactKeys(value, ["selections"]) ||
+    !Array.isArray(value.selections) ||
+    value.selections.length === 0
+  ) {
+    return false;
+  }
+  const pairs = new Set();
+  return value.selections.every((selection) => {
+    if (!isApprovedLocalModel(selection)) return false;
+    const key = `${selection.provider}\n${selection.model}`;
+    if (pairs.has(key)) return false;
+    pairs.add(key);
+    return true;
+  });
 }
 
 function isStringMap(value) {
@@ -115,6 +160,12 @@ function validateManagedEnterpriseEnvelope(value, expectedWorkspaceId) {
     return null;
   }
   if (!value.providers.every(isValidProviderConfig)) return null;
+  if (
+    value.localModels !== undefined &&
+    (!isValidLocalModels(value.localModels) || value.providers.length > 0)
+  ) {
+    return null;
+  }
   if (
     value.refreshAfter !== undefined &&
     (typeof value.refreshAfter !== "string" || Number.isNaN(Date.parse(value.refreshAfter)))

@@ -2,7 +2,8 @@ import type { ModelDefinition } from "../models/ModelRegistry";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { OrgPolicy } from "./policy";
-import type { ManagedEnterpriseConfig } from "./enterpriseIdentity";
+import type { EnterpriseSetupMode, ManagedEnterpriseConfig } from "./enterpriseIdentity";
+import type { InferenceScope } from "../config/inferenceScopes";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
@@ -113,6 +114,20 @@ export interface AuthTokenState {
   token: string | null;
   generation: number;
 }
+
+export interface RuntimeIdentityClaim {
+  accountId: string | null;
+  workspaceId: string | null;
+  authGeneration: number | null;
+  configGeneration: number | null;
+  managed: boolean;
+  provider: string;
+  model: string | null;
+}
+
+export type TranscriptionStartClaim = RuntimeIdentityClaim;
+
+export type ReasoningStartClaim = RuntimeIdentityClaim;
 
 export interface AuthTokenMutationResult extends AuthTokenState {
   success: boolean;
@@ -1069,7 +1084,8 @@ declare global {
           remoteTranscriptionType?: SelfHostedType;
           remoteTranscriptionUrl?: string;
           remoteTranscriptionModel?: string;
-        }
+        },
+        claim?: TranscriptionStartClaim
       ) => Promise<{
         success: boolean;
         transcription?: TranscriptionItem;
@@ -1271,6 +1287,10 @@ declare global {
         filePaths?: string[];
       }>;
       getFileSize?: (filePath: string) => Promise<number>;
+      authorizeTranscriptionStart: (
+        route: { provider: string; model: string | null },
+        claim: TranscriptionStartClaim
+      ) => Promise<{ success: boolean; error?: string; code?: string }>;
       transcribeAudioFile: (
         filePath: string,
         options?: {
@@ -1279,7 +1299,8 @@ declare global {
           language?: string;
           requestId?: string;
           [key: string]: unknown;
-        }
+        },
+        claim?: TranscriptionStartClaim
       ) => Promise<{ success: boolean; text?: string; error?: string; code?: string }>;
       getPathForFile: (file: File) => string;
 
@@ -1357,7 +1378,11 @@ declare global {
       // Audio
 
       // Whisper operations (whisper.cpp)
-      transcribeLocalWhisper: (audioBlob: Blob | ArrayBuffer, options?: any) => Promise<any>;
+      transcribeLocalWhisper: (
+        audioBlob: Blob | ArrayBuffer,
+        options?: any,
+        claim?: TranscriptionStartClaim
+      ) => Promise<any>;
       checkWhisperInstallation: () => Promise<WhisperCheckResult>;
       downloadWhisperModel: (modelName: string) => Promise<WhisperModelResult>;
       onWhisperDownloadProgress: (
@@ -1433,7 +1458,8 @@ declare global {
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
         audioBlob: ArrayBuffer,
-        options?: { model?: string }
+        options?: { model?: string },
+        claim?: TranscriptionStartClaim
       ) => Promise<ParakeetTranscriptionResult>;
       checkParakeetInstallation: () => Promise<ParakeetCheckResult>;
       downloadParakeetModel: (modelName: string) => Promise<ParakeetModelResult>;
@@ -1492,12 +1518,22 @@ declare global {
       ) => () => void;
 
       // Local reasoning
+      authorizeReasoningStart: (
+        route: {
+          provider: string;
+          model: string | null;
+          inferenceScope: InferenceScope;
+          setupMode: EnterpriseSetupMode;
+        },
+        claim: ReasoningStartClaim
+      ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       processLocalReasoning: (
         text: string,
         modelId: string,
         agentName: string | null,
-        config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+        config: any,
+        claim?: ReasoningStartClaim
+      ) => Promise<{ success: boolean; text?: string } & PolicyFailureMetadata>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
 
       // Anthropic reasoning
@@ -1505,23 +1541,27 @@ declare global {
         text: string,
         modelId: string,
         agentName: string | null,
-        config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+        config: any,
+        claim?: ReasoningStartClaim
+      ) => Promise<{ success: boolean; text?: string } & PolicyFailureMetadata>;
 
       // Enterprise reasoning (Bedrock, Azure, Vertex)
       processEnterpriseReasoning: (
         text: string,
         modelId: string,
         agentName: string | null,
-        config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string; retryable?: boolean }>;
+        config: any,
+        claim?: ReasoningStartClaim
+      ) => Promise<
+        { success: boolean; text?: string; retryable?: boolean } & PolicyFailureMetadata
+      >;
       enterpriseStreamStart?: (payload: {
         streamId: string;
         provider: string;
         modelId: string;
         config: Record<string, unknown>;
         options: Record<string, unknown>;
-      }) => Promise<{ success: boolean; error?: string }>;
+      }) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       enterpriseStreamCancel?: (streamId: string) => Promise<void>;
       onEnterpriseStreamPart?: (
         callback: (payload: {
@@ -1529,6 +1569,7 @@ declare global {
           part?: unknown;
           done?: boolean;
           error?: string;
+          code?: string;
         }) => void
       ) => () => void;
       listBedrockModels?: (config: Record<string, unknown>) => Promise<{
@@ -1696,21 +1737,27 @@ declare global {
       // xAI API key management
       getXaiKey?: () => Promise<string | null>;
       saveXaiKey?: (key: string) => Promise<void>;
-      proxyXaiTranscription?: (data: {
-        audioBuffer: ArrayBuffer;
-        language?: string;
-        keyterms?: string[];
-      }) => Promise<ProxyTranscriptionResult>;
+      proxyXaiTranscription?: (
+        data: {
+          audioBuffer: ArrayBuffer;
+          language?: string;
+          keyterms?: string[];
+        },
+        claim?: TranscriptionStartClaim
+      ) => Promise<ProxyTranscriptionResult>;
 
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;
-      proxyMistralTranscription: (data: {
-        audioBuffer: ArrayBuffer;
-        model?: string;
-        language?: string;
-        contextBias?: string[];
-      }) => Promise<ProxyTranscriptionResult>;
+      proxyMistralTranscription: (
+        data: {
+          audioBuffer: ArrayBuffer;
+          model?: string;
+          language?: string;
+          contextBias?: string[];
+        },
+        claim?: TranscriptionStartClaim
+      ) => Promise<ProxyTranscriptionResult>;
 
       // Corti credential management
       getCortiClientId?: () => Promise<string | null>;
@@ -1719,20 +1766,26 @@ declare global {
       saveCortiClientSecret?: (key: string) => Promise<void>;
       getCortiKey?: () => Promise<string | null>;
       saveCortiKey?: (key: string) => Promise<void>;
-      proxyCortiTranscription?: (data: {
-        audioBuffer: ArrayBuffer;
-        language: string;
-        environment: string;
-        tenant: string;
-      }) => Promise<ProxyTranscriptionResult>;
+      proxyCortiTranscription?: (
+        data: {
+          audioBuffer: ArrayBuffer;
+          language: string;
+          environment: string;
+          tenant: string;
+        },
+        claim?: TranscriptionStartClaim
+      ) => Promise<ProxyTranscriptionResult>;
       getTinfoilKey?: () => Promise<string | null>;
       saveTinfoilKey?: (key: string) => Promise<void>;
       getTinfoilChatModels?: () => Promise<TinfoilCatalogModel[]>;
-      proxyTinfoilTranscription?: (data: {
-        audioBuffer: ArrayBuffer;
-        language?: string;
-        prompt?: string;
-      }) => Promise<ProxyTranscriptionResult>;
+      proxyTinfoilTranscription?: (
+        data: {
+          audioBuffer: ArrayBuffer;
+          language?: string;
+          prompt?: string;
+        },
+        claim?: TranscriptionStartClaim
+      ) => Promise<ProxyTranscriptionResult>;
 
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
@@ -1786,11 +1839,11 @@ declare global {
         forceRefresh?: boolean
       ) => Promise<{
         success: boolean;
-        status?: "network" | "current" | "cached" | "error";
+        status?: "network" | "current" | "error";
         accountId?: string | null;
         workspaceId?: string | null;
         authGeneration?: number | null;
-        config?: ManagedEnterpriseConfig;
+        config?: ManagedEnterpriseConfig | null;
         code?: string;
         error?: string;
         enforcementRequired?: boolean;
@@ -1915,7 +1968,8 @@ declare global {
       // OpenWhispr Cloud API
       cloudTranscribe?: (
         audioBuffer: ArrayBuffer,
-        opts: { language?: string; prompt?: string; useCase?: string; diarization?: boolean }
+        opts: { language?: string; prompt?: string; useCase?: string; diarization?: boolean },
+        claim?: TranscriptionStartClaim
       ) => Promise<
         {
           success: boolean;
@@ -1941,7 +1995,11 @@ declare global {
           screenContext?: ScreenContextImage;
           language?: string;
           locale?: string;
-        }
+          inferenceScope?: InferenceScope;
+          setupMode?: EnterpriseSetupMode;
+          [key: string]: unknown;
+        },
+        claim?: ReasoningStartClaim
       ) => Promise<{
         success: boolean;
         text?: string;
@@ -2044,7 +2102,8 @@ declare global {
       // Cloud audio file transcription
       transcribeAudioFileCloud?: (
         filePath: string,
-        options?: { requestId?: string }
+        options?: { requestId?: string },
+        claim?: TranscriptionStartClaim
       ) => Promise<
         {
           success: boolean;
@@ -2062,21 +2121,24 @@ declare global {
       ) => () => void;
 
       // BYOK audio file transcription
-      transcribeAudioFileByok?: (options: {
-        filePath: string;
-        apiKey: string;
-        baseUrl: string;
-        model: string;
-        diarize?: boolean;
-        timestamps?: boolean;
-        provider?: string;
-        language?: string;
-        environment?: string;
-        tenant?: string;
-        transcriptionMode?: string;
-        remoteTranscriptionUrl?: string;
-        remoteTranscriptionModel?: string;
-      }) => Promise<{
+      transcribeAudioFileByok?: (
+        options: {
+          filePath: string;
+          apiKey: string;
+          baseUrl: string;
+          model: string;
+          diarize?: boolean;
+          timestamps?: boolean;
+          provider?: string;
+          language?: string;
+          environment?: string;
+          tenant?: string;
+          transcriptionMode?: string;
+          remoteTranscriptionUrl?: string;
+          remoteTranscriptionModel?: string;
+        },
+        claim?: TranscriptionStartClaim
+      ) => Promise<{
         success: boolean;
         text?: string;
         error?: string;
@@ -2095,13 +2157,19 @@ declare global {
       getPendingInvitationToken?: () => Promise<string | null>;
 
       // AssemblyAI Streaming
-      assemblyAiStreamingWarmup?: (options?: { sampleRate?: number; language?: string }) => Promise<
+      assemblyAiStreamingWarmup?: (
+        options?: { sampleRate?: number; language?: string },
+        claim?: TranscriptionStartClaim
+      ) => Promise<
         {
           success: boolean;
           alreadyWarm?: boolean;
         } & PolicyFailureMetadata
       >;
-      assemblyAiStreamingStart?: (options?: { sampleRate?: number; language?: string }) => Promise<
+      assemblyAiStreamingStart?: (
+        options?: { sampleRate?: number; language?: string },
+        claim?: TranscriptionStartClaim
+      ) => Promise<
         {
           success: boolean;
           usedWarmConnection?: boolean;
@@ -2279,17 +2347,23 @@ declare global {
       ) => Promise<ConversationPreview[]>;
 
       // Deepgram Streaming
-      deepgramStreamingWarmup?: (options?: { sampleRate?: number; language?: string }) => Promise<{
+      deepgramStreamingWarmup?: (
+        options?: { sampleRate?: number; language?: string },
+        claim?: TranscriptionStartClaim
+      ) => Promise<{
         success: boolean;
         alreadyWarm?: boolean;
         error?: string;
         code?: string;
       }>;
-      deepgramStreamingStart?: (options?: {
-        sampleRate?: number;
-        language?: string;
-        forceNew?: boolean;
-      }) => Promise<
+      deepgramStreamingStart?: (
+        options?: {
+          sampleRate?: number;
+          language?: string;
+          forceNew?: boolean;
+        },
+        claim?: TranscriptionStartClaim
+      ) => Promise<
         {
           success: boolean;
           usedWarmConnection?: boolean;
@@ -2314,18 +2388,24 @@ declare global {
       ) => () => void;
 
       // Corti streaming (BYOK)
-      cortiStreamingWarmup?: (options?: {
-        environment?: string;
-        tenant?: string;
-        language?: string;
-        keyterms?: string[];
-      }) => Promise<{ success: boolean } & PolicyFailureMetadata>;
-      cortiStreamingStart?: (options?: {
-        environment?: string;
-        tenant?: string;
-        language?: string;
-        keyterms?: string[];
-      }) => Promise<{ success: boolean } & PolicyFailureMetadata>;
+      cortiStreamingWarmup?: (
+        options?: {
+          environment?: string;
+          tenant?: string;
+          language?: string;
+          keyterms?: string[];
+        },
+        claim?: TranscriptionStartClaim
+      ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
+      cortiStreamingStart?: (
+        options?: {
+          environment?: string;
+          tenant?: string;
+          language?: string;
+          keyterms?: string[];
+        },
+        claim?: TranscriptionStartClaim
+      ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       cortiStreamingSend?: (audioBuffer: ArrayBuffer) => void;
       cortiStreamingFinalize?: () => void;
       cortiStreamingStop?: () => Promise<{
@@ -2349,7 +2429,10 @@ declare global {
           systemPrompt?: string;
           tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
           screenContext?: { data: string; mediaType: string };
-        }
+          inferenceScope?: InferenceScope;
+          setupMode?: EnterpriseSetupMode;
+        },
+        claim?: ReasoningStartClaim
       ) => void;
       cancelAgentStream?: (requestId: string) => void;
       onAgentStreamChunk?: (
@@ -2429,19 +2512,25 @@ declare global {
       getMD5Hash: (text: string) => Promise<string>;
 
       // Meeting transcription (streaming, dual-channel)
-      meetingTranscriptionPrepare?: (options: {
-        provider?: string;
-        model?: string;
-        language?: string;
-      }) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
-      meetingTranscriptionStart?: (options: {
-        provider?: string;
-        model?: string;
-        language?: string;
-        noteId?: number | null;
-        sessionId: string;
-        autoEndEligible: boolean;
-      }) => Promise<
+      meetingTranscriptionPrepare?: (
+        options: {
+          provider?: string;
+          model?: string;
+          language?: string;
+        },
+        claim?: TranscriptionStartClaim
+      ) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
+      meetingTranscriptionStart?: (
+        options: {
+          provider?: string;
+          model?: string;
+          language?: string;
+          noteId?: number | null;
+          sessionId: string;
+          autoEndEligible: boolean;
+        },
+        claim?: TranscriptionStartClaim
+      ) => Promise<
         {
           success: boolean;
           sessionId?: string;
@@ -2596,10 +2685,12 @@ declare global {
 
       // Dictation realtime streaming
       dictationRealtimeWarmup?: (
-        options: DictationRealtimeSessionOptions
+        options: DictationRealtimeSessionOptions,
+        claim?: TranscriptionStartClaim
       ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       dictationRealtimeStart?: (
-        options: DictationRealtimeSessionOptions
+        options: DictationRealtimeSessionOptions,
+        claim?: TranscriptionStartClaim
       ) => Promise<{ success: boolean } & PolicyFailureMetadata>;
       dictationRealtimeSend?: (buffer: ArrayBuffer) => void;
       dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
@@ -2716,12 +2807,15 @@ declare global {
       onPreviewHold?: (callback: (payload: { showCleanup: boolean }) => void) => () => void;
       onPreviewResult?: (callback: (payload: { text: string }) => void) => () => void;
       onPreviewHide?: (callback: () => void) => () => void;
-      startDictationPreview?: (opts: {
-        provider: string;
-        model: string;
-        language?: string;
-        display?: boolean;
-      }) => Promise<{ success: boolean }>;
+      startDictationPreview?: (
+        opts: {
+          provider: string;
+          model: string;
+          language?: string;
+          display?: boolean;
+        },
+        claim?: TranscriptionStartClaim
+      ) => Promise<{ success: boolean }>;
       stopDictationPreview?: (opts?: {
         showCleanup?: boolean;
         flushed?: boolean;

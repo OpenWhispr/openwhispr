@@ -1,6 +1,7 @@
 import type { InferenceProvider } from "./types";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import logger from "../../../utils/logger";
+import { getReasoningStartContext } from "../enterpriseSettings";
 
 export const localProvider: InferenceProvider = {
   id: "local",
@@ -16,16 +17,24 @@ export const localProvider: InferenceProvider = {
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
-    const result = await window.electronAPI.processLocalReasoning(userContent, model, agentName, {
-      ...config,
-      systemPrompt,
-    });
+    const start = getReasoningStartContext(config);
+    const result = await window.electronAPI.processLocalReasoning(
+      userContent,
+      model,
+      agentName,
+      {
+        ...config,
+        systemPrompt,
+        setupMode: start.route.setupMode,
+      },
+      start.claim
+    );
 
     const processingTimeMs = Date.now() - startTime;
 
     if (!result.success) {
       logger.logReasoning("LOCAL_ERROR", { model, processingTimeMs, error: result.error });
-      throw new Error(result.error);
+      throw Object.assign(new Error(result.error), { code: result.code });
     }
 
     logger.logReasoning("LOCAL_SUCCESS", {

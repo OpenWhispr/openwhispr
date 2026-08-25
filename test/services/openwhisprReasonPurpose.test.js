@@ -7,10 +7,12 @@ const path = require("node:path");
 test("OpenWhispr reasoning labels only dictation-agent requests for server enforcement", async (t) => {
   const originalWindow = globalThis.window;
   const requests = [];
+  const claims = [];
   globalThis.window = {
     electronAPI: {
-      cloudReason: async (_text, options) => {
+      cloudReason: async (_text, options, claim) => {
         requests.push(options);
+        claims.push(claim);
         return { success: true, text: "result", model: "model", provider: "openwhispr" };
       },
     },
@@ -33,6 +35,9 @@ test("OpenWhispr reasoning labels only dictation-agent requests for server enfor
           if (source.endsWith("/lib/auth")) return "\0reason-purpose-auth";
           if (source.endsWith("/stores/settingsStore")) return "\0reason-purpose-settings";
           if (source.endsWith("/utils/logger")) return "\0reason-purpose-logger";
+          if (source.endsWith("/enterpriseSettings")) {
+            return "\0reason-purpose-enterprise-settings";
+          }
           return null;
         },
         load(id) {
@@ -44,6 +49,9 @@ test("OpenWhispr reasoning labels only dictation-agent requests for server enfor
           }
           if (id === "\0reason-purpose-logger") {
             return "export default { logReasoning() {} };";
+          }
+          if (id === "\0reason-purpose-enterprise-settings") {
+            return "export function getReasoningStartContext(config) { return config.__start; }";
           }
           return null;
         },
@@ -66,23 +74,42 @@ test("OpenWhispr reasoning labels only dictation-agent requests for server enfor
     getPreferredLanguage: () => "en",
     getUiLanguage: () => "en",
   };
+  const claim = {
+    accountId: null,
+    workspaceId: null,
+    authGeneration: null,
+    configGeneration: null,
+    managed: false,
+    provider: "openwhispr",
+    model: null,
+  };
+  const start = {
+    route: {
+      provider: "openwhispr",
+      model: null,
+      inferenceScope: "dictationCleanup",
+      setupMode: "auto",
+    },
+    claim,
+  };
 
   await openwhisprProvider.call({
     text: "do this",
     model: "",
     agentName: "Whisper",
-    config: { systemPrompt: "Act on the request.", requiresAgent: true },
+    config: { systemPrompt: "Act on the request.", requiresAgent: true, __start: start },
     ctx: context,
   });
   await openwhisprProvider.call({
     text: "clean this",
     model: "",
     agentName: "Whisper",
-    config: {},
+    config: { __start: start },
     ctx: context,
   });
 
   assert.equal(requests[0].requestPurpose, "agent");
   assert.equal(requests[1].requestPurpose, undefined);
   assert.equal(requests[1].promptMode, "cleanup");
+  assert.deepEqual(claims, [claim, claim]);
 });

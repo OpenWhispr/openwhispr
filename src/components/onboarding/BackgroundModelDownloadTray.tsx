@@ -13,7 +13,9 @@ import {
   forgetPendingLocalModel,
   getPendingLocalModelAvailability,
   hasPendingLocalModels,
+  markManagedPendingLocalModelCancelled,
   readPendingLocalModels,
+  type ManagedPendingLocalModelSelection,
   type PendingLocalModelKind,
   type PendingLocalModelSelection,
 } from "./pendingLocalModels";
@@ -36,6 +38,28 @@ interface ActiveDownload {
 
 function downloadKey(kind: DownloadKind, id: string) {
   return `${kind}:${id}`;
+}
+
+function isManagedPendingSelection(
+  selection: PendingLocalModelSelection | undefined
+): selection is ManagedPendingLocalModelSelection {
+  return Boolean(selection && "accountId" in selection);
+}
+
+function isSamePendingSelection(
+  current: PendingLocalModelSelection | undefined,
+  expected: PendingLocalModelSelection | undefined
+): boolean {
+  if (!current || !expected) return false;
+  if (current.provider !== expected.provider || current.modelId !== expected.modelId) return false;
+  if (!isManagedPendingSelection(expected)) return !isManagedPendingSelection(current);
+  return (
+    isManagedPendingSelection(current) &&
+    current.accountId === expected.accountId &&
+    current.workspaceId === expected.workspaceId &&
+    current.authGeneration === expected.authGeneration &&
+    current.configGeneration === expected.configGeneration
+  );
 }
 
 // How long a cancelled key swallows in-flight progress events. Long enough for
@@ -63,6 +87,12 @@ function downloadDisplay(download: ActiveDownload) {
 
 function activatePendingLocalModel(kind: PendingLocalModelKind, modelId: string) {
   if (localStorage.getItem("localSetupPending") !== "true") return;
+  const pending = readPendingLocalModels()[kind] as
+    ManagedPendingLocalModelSelection | PendingLocalModelSelection | undefined;
+  // Managed settings are derived from identity-fenced bindings. The coordinator
+  // observes the installed artifact and consumes this entry; the tray must never
+  // rewrite the personal settings underneath that overlay.
+  if (isManagedPendingSelection(pending)) return;
   const selection = consumePendingLocalModel(kind, modelId);
   if (!selection) return;
 
@@ -194,6 +224,29 @@ export default function BackgroundModelDownloadTray() {
         PendingLocalModelSelection,
       ][]) {
         const availability = getPendingLocalModelAvailability(kind, selection, inventory);
+        if (isManagedPendingSelection(selection)) {
+          if (availability === "downloaded") {
+            window.dispatchEvent?.(new Event("openwhispr-managed-local-model-transfer"));
+          } else if (selection.errorCode) {
+            const downloadKind =
+              kind === "assistant"
+                ? "llm"
+                : selection.provider === "nvidia"
+                  ? "parakeet"
+                  : "whisper";
+            active[downloadKey(downloadKind, selection.modelId)] = {
+              id: selection.modelId,
+              kind: downloadKind,
+              percentage: 0,
+              error: t(
+                `onboarding.managedLocal.errors.${
+                  selection.errorCode === "DOWNLOAD_CANCELLED" ? "cancelled" : "downloadFailed"
+                }`
+              ),
+            };
+          }
+          continue;
+        }
         if (availability === "downloaded" && canActivate) {
           activatePendingLocalModel(kind, selection.modelId);
         } else if (availability === "downloaded" || availability === "missing") {
@@ -212,7 +265,7 @@ export default function BackgroundModelDownloadTray() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     // The three progress channels carry the same lifecycle in different field
@@ -300,16 +353,27 @@ export default function BackgroundModelDownloadTray() {
   const cancelDownload = useCallback(async (download: ActiveDownload) => {
     const key = downloadKey(download.kind, download.id);
     const pendingKind = download.kind === "llm" ? "assistant" : "dictation";
+    const pendingAtRequest = readPendingLocalModels()[pendingKind] as
+      ManagedPendingLocalModelSelection | PendingLocalModelSelection | undefined;
 
     // An error row represents a transfer that has already stopped. Its X is a
     // dismiss action, so no cancellation IPC is needed (and would be refused).
     if (download.error) {
+      const currentPending = readPendingLocalModels()[pendingKind];
+      if (
+        isManagedPendingSelection(pendingAtRequest) &&
+        isSamePendingSelection(currentPending, pendingAtRequest)
+      ) {
+        return;
+      }
       setDownloads((current) => {
         const next = { ...current };
         delete next[key];
         return next;
       });
-      forgetPendingLocalModel(pendingKind, download.id);
+      if (isSamePendingSelection(currentPending, pendingAtRequest)) {
+        forgetPendingLocalModel(pendingKind, download.id);
+      }
       return;
     }
 
@@ -341,14 +405,24 @@ export default function BackgroundModelDownloadTray() {
     // download that is still running was stopped.
     if (result?.success !== true) {
       cancelledKeys.current.delete(key);
-      setDownloads((current) => ({ ...current, [key]: download }));
+      const currentPending = readPendingLocalModels()[pendingKind];
+      if (isSamePendingSelection(currentPending, pendingAtRequest)) {
+        setDownloads((current) => ({ ...current, [key]: download }));
+      }
       return;
     }
 
     // Only discard the intended selection once the transfer actually stopped.
     // If cancellation is refused, keeping it lets a finishing installation
     // activate the exact model the user originally chose.
-    forgetPendingLocalModel(pendingKind, download.id);
+    const currentPending = readPendingLocalModels()[pendingKind];
+    if (!isSamePendingSelection(currentPending, pendingAtRequest)) return;
+    if (isManagedPendingSelection(pendingAtRequest)) {
+      markManagedPendingLocalModelCancelled(pendingKind, pendingAtRequest);
+      window.dispatchEvent?.(new Event("openwhispr-managed-local-model-transfer"));
+    } else {
+      forgetPendingLocalModel(pendingKind, download.id);
+    }
   }, []);
 
   const activeDownloads = useMemo(() => Object.values(downloads), [downloads]);

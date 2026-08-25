@@ -51,6 +51,11 @@ import { useOnboardingSession } from "./onboarding/useOnboardingSession";
 import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
+import ManagedEnterpriseModelCoordinator from "./onboarding/ManagedEnterpriseModelCoordinator";
+import {
+  selectManagedLocalModelContext,
+  useEnterpriseIdentityStore,
+} from "../stores/enterpriseIdentityStore";
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
@@ -107,6 +112,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [dictationDemoSuccess, setDictationDemoSuccess] = useState(false);
   const [assistantDemoSuccess, setAssistantDemoSuccess] = useState(false);
   const [stageReady, setStageReady] = useState(false);
+  const [managedStageReady, setManagedStageReady] = useState<boolean | null>(null);
   const [isFinishing, setIsFinishing] = useState(false);
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [permissionAlert, setPermissionAlert] = useState<{
@@ -143,6 +149,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setupMode: session.setupMode,
     activeWorkspace: enterpriseWorkspace,
   });
+  const hasManagedLocalContext = useEnterpriseIdentityStore((state) =>
+    Boolean(selectManagedLocalModelContext(state))
+  );
+  const enterpriseStatus = useEnterpriseIdentityStore((state) => state.status);
+  const enterpriseVerdict = useEnterpriseIdentityStore((state) => state.verdict);
+  const managedLocalSetup =
+    skipSetupChoiceForEnterprise &&
+    enterpriseVerdict !== "unmanaged" &&
+    (enterpriseStatus !== "ready" || hasManagedLocalContext);
+  const managedSetupVisited = session.history.includes("enterprise-models");
+  const managedLocalSetupRequired =
+    managedLocalSetup && (!managedSetupVisited || managedStageReady === false);
 
   useEffect(() => {
     if (
@@ -174,10 +192,21 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         setupMode: session.setupMode,
         agentAllowed,
         skipSetupChoice: skipSetupChoiceForEnterprise,
+        managedLocalSetup,
       }),
-    [agentAllowed, session.authPath, session.setupMode, skipSetupChoiceForEnterprise]
+    [
+      agentAllowed,
+      managedLocalSetup,
+      session.authPath,
+      session.setupMode,
+      skipSetupChoiceForEnterprise,
+    ]
   );
-  const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
+  const currentStepId = reconcileStepWithRoute(
+    session.currentStepId,
+    route,
+    managedLocalSetupRequired ? "enterprise-models" : undefined
+  );
   const compact = COMPACT_STEPS.has(currentStepId);
 
   useEffect(() => {
@@ -334,7 +363,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         // Only preserve a pending download when the completed route still uses
         // local models. A user who walks Back and finishes on Cloud/BYOK must not
         // be switched back to a stale local selection when it completes later.
-        const routeKeepsLocalModels = mode === "local";
+        const routeKeepsLocalModels = mode === "local" || mode === "managed";
         if (routeKeepsLocalModels && (options.localPending || hasPendingLocalModels())) {
           localStorage.setItem("localSetupPending", "true");
         } else {
@@ -371,11 +400,22 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // Enterprise workspace is confirmed. Finish them without writing provider or
   // model settings, just as if Notes had been their final step originally.
   useEffect(() => {
-    if (!skipSetupChoiceForEnterprise || session.currentStepId !== "setup-choice" || isFinishing) {
+    if (
+      !skipSetupChoiceForEnterprise ||
+      managedLocalSetupRequired ||
+      session.currentStepId !== "setup-choice" ||
+      isFinishing
+    ) {
       return;
     }
     void finalizeOnboarding("managed");
-  }, [finalizeOnboarding, isFinishing, session.currentStepId, skipSetupChoiceForEnterprise]);
+  }, [
+    finalizeOnboarding,
+    isFinishing,
+    managedLocalSetupRequired,
+    session.currentStepId,
+    skipSetupChoiceForEnterprise,
+  ]);
 
   const applyReasoningSelectionToAllScopes = useCallback(
     (mode: "byok" | "local") => {
@@ -540,6 +580,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     switch (currentStepId) {
       case "permissions":
         return areRequiredPermissionsMet(permissions.micPermissionGranted);
+      case "enterprise-models":
+        return managedStageReady === true;
       case "languages":
         return settings.spokenLanguages.length > 0;
       case "use-cases":
@@ -613,6 +655,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             onContinue={() => void continueFromCurrentStep()}
           />
         );
+
+      case "enterprise-models":
+        return null;
 
       case "languages":
         return (
@@ -967,6 +1012,31 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         // Label Back only when it is the sole footer action. Unlike the source
         // commit, this branch also has demo Skip, so Back stays icon-only there.
         showBackLabel={!showsContinue && !showsSkip}
+        persistentContent={
+          managedLocalSetup ? (
+            <div
+              hidden={currentStepId !== "enterprise-models"}
+              className="absolute inset-0 px-5 pb-5 pt-8 md:px-8"
+            >
+              <div className="mx-auto flex h-full w-full max-w-6xl justify-center">
+                <div className="h-full w-full pt-2">
+                  <OnboardingStepHeader
+                    title={t("onboarding.managedLocal.title")}
+                    description={t("onboarding.managedLocal.description")}
+                    wideTitle
+                  />
+                  <div className="mt-8">
+                    <ManagedEnterpriseModelCoordinator
+                      surface="onboarding"
+                      showUi={currentStepId === "enterprise-models"}
+                      onReadinessChange={setManagedStageReady}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null
+        }
       >
         {fatalError && (
           <div

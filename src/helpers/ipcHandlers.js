@@ -16,6 +16,7 @@ const {
   isScreenContextBlocked,
 } = require("./workspacePolicyManager");
 const { createEnterpriseIdentityManager } = require("./enterpriseIdentityManager");
+const { authorizeManagedInferenceStart } = require("./managedInferenceAuthorization");
 const { createCloudConfigRequestHandler } = require("./cloudConfigRequest");
 const {
   createPolicyResponseError,
@@ -24,10 +25,18 @@ const {
 } = require("./policyResponseError");
 const { classifyAndLog } = require("./networkErrors");
 const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
-// The renderer's ModelRegistry is not main-loadable; the raw registry data is
-// packaged, and the route resolver only needs {id, baseUrl} per provider.
+// The renderer's ModelRegistry is not main-loadable; packaged registry data is
+// the main process's authoritative source for provider routes and local model ownership.
 const transcriptionProviderBaseUrls = () =>
   require("../models/modelRegistryData.json").transcriptionProviders;
+const localReasoningProviders = () => require("../models/modelRegistryData.json").localProviders;
+const localReasoningProviderForModel = (modelId) =>
+  localReasoningProviders().find(({ models }) => models.some(({ id }) => id === modelId))?.id ??
+  null;
+const isLocalReasoningProvider = (provider) =>
+  localReasoningProviders().some(({ id }) => id === provider);
+const tinfoilBatchTranscriptionModel = () =>
+  transcriptionProviderBaseUrls().find(({ id }) => id === "tinfoil")?.batchModel || null;
 // ipcMain.handle keeps only the message when a promise rejects, dropping custom
 // props — proxy handlers return {error, code, messageKey} so the renderer can
 // rebuild the error.
@@ -545,6 +554,52 @@ async function chunkedCloudTranscribe({
   }
 }
 
+const createEnterpriseIdentityDescriptor = ({
+  accountId,
+  workspaceId,
+  authGeneration,
+  apiUrl,
+  authHeaders,
+}) => {
+  if (
+    typeof accountId !== "string" ||
+    typeof workspaceId !== "string" ||
+    !Number.isInteger(authGeneration)
+  ) {
+    return null;
+  }
+  let apiOrigin;
+  try {
+    apiOrigin = new URL(apiUrl).origin;
+  } catch {
+    return null;
+  }
+  const credentialHash = crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify(
+        Object.entries(authHeaders).sort(([left], [right]) => left.localeCompare(right))
+      )
+    )
+    .digest("hex");
+  return Object.freeze({ accountId, workspaceId, authGeneration, apiOrigin, credentialHash });
+};
+
+const subscribeEnterpriseIdentityInvalidation = ({
+  tokenStore: authTokenStore,
+  clearActiveIdentity,
+  clearConfig,
+  broadcast,
+}) =>
+  authTokenStore.subscribe(({ generation, token }) => {
+    clearActiveIdentity();
+    clearConfig();
+    broadcast("auth-token-state-changed", {
+      generation,
+      hasToken: Boolean(token),
+    });
+  });
+
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
@@ -617,12 +672,11 @@ class IPCHandlers {
     this._logDetectedGpus();
     this.setupHandlers();
     // Lives for the app's lifetime; IPCHandlers has no teardown path.
-    tokenStore.subscribe(({ generation, token }) => {
-      this.enterpriseIdentityManager?.clear();
-      broadcastToWindows("auth-token-state-changed", {
-        generation,
-        hasToken: Boolean(token),
-      });
+    subscribeEnterpriseIdentityInvalidation({
+      tokenStore,
+      clearActiveIdentity: () => this._clearActiveEnterpriseIdentity?.(),
+      clearConfig: () => this.enterpriseIdentityManager?.clear(),
+      broadcast: broadcastToWindows,
     });
 
     if (this.whisperManager?.serverManager) {
@@ -2560,12 +2614,18 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
+    ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}, claim) => {
       const fs = require("fs");
       // Uploads pass a requestId so cancel-upload-transcription can abort the
       // local decode; flows without one (voice drafts) register nothing.
       const { signal, release } = this._uploadCancelRegistry.register(options.requestId);
       try {
+        await authorizeLocalTranscriptionStart(
+          event,
+          claim,
+          options.provider === "nvidia" ? "nvidia" : "whisper",
+          options.model
+        );
         if (typeof filePath !== "string") {
           return { success: false, error: "Invalid file path" };
         }
@@ -2594,7 +2654,7 @@ class IPCHandlers {
           return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
         }
         debugLogger.error("Audio file transcription error", { error: error.message });
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, code: error.code };
       } finally {
         release();
       }
@@ -2740,7 +2800,7 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("transcribe-local-whisper", async (_event, audioBlob, options = {}) => {
+    ipcMain.handle("transcribe-local-whisper", async (event, audioBlob, options = {}, claim) => {
       debugLogger.log("transcribe-local-whisper called", {
         audioBlobType: typeof audioBlob,
         audioBlobSize: audioBlob?.byteLength || audioBlob?.length || 0,
@@ -2748,6 +2808,7 @@ class IPCHandlers {
       });
 
       try {
+        await authorizeLocalTranscriptionStart(event, claim, "whisper", options.model);
         // skipVad: dictionary-echo rescue retries decode VAD-free, since VAD
         // stripping the speech is what turned the transcript into prompt echo.
         const { skipVad, ...requestOptions } = options;
@@ -2769,6 +2830,12 @@ class IPCHandlers {
         return result;
       } catch (error) {
         debugLogger.error("Local Whisper transcription error", error);
+        if (
+          error?.code === "AUTHORIZATION_BOUNDARY_CHANGED" ||
+          error?.code?.startsWith("MANAGED_")
+        ) {
+          return toPolicyFailure(error);
+        }
         const errorMessage = error.message || "Unknown error";
 
         // Return specific error types for better user feedback
@@ -3111,7 +3178,7 @@ class IPCHandlers {
       return this.whisperManager.checkFFmpegAvailability();
     });
 
-    ipcMain.handle("transcribe-local-parakeet", async (_event, audioBlob, options = {}) => {
+    ipcMain.handle("transcribe-local-parakeet", async (event, audioBlob, options = {}, claim) => {
       debugLogger.log("transcribe-local-parakeet called", {
         audioBlobType: typeof audioBlob,
         audioBlobSize: audioBlob?.byteLength || audioBlob?.length || 0,
@@ -3119,6 +3186,7 @@ class IPCHandlers {
       });
 
       try {
+        await authorizeLocalTranscriptionStart(event, claim, "nvidia", options.model);
         const result = await this.parakeetManager.transcribeLocalParakeet(audioBlob, options);
 
         debugLogger.log("Parakeet result", {
@@ -3131,6 +3199,12 @@ class IPCHandlers {
         return result;
       } catch (error) {
         debugLogger.error("Local Parakeet transcription error", error);
+        if (
+          error?.code === "AUTHORIZATION_BOUNDARY_CHANGED" ||
+          error?.code?.startsWith("MANAGED_")
+        ) {
+          return toPolicyFailure(error);
+        }
         const errorMessage = error.message || "Unknown error";
 
         if (errorMessage.includes("sherpa-onnx") && errorMessage.includes("not found")) {
@@ -3895,7 +3969,8 @@ class IPCHandlers {
 
     ipcMain.handle(
       "proxy-xai-transcription",
-      serializeIpcError(async (event, { audioBuffer, language, keyterms }) => {
+      serializeIpcError(async (event, { audioBuffer, language, keyterms }, claim) => {
+        await authorizeTranscriptionStart(event, claim, "xai", "grok-stt");
         const apiKey = this.environmentManager.getXaiKey();
         if (!apiKey) {
           throw new Error("xAI API key not configured");
@@ -3932,7 +4007,9 @@ class IPCHandlers {
 
     ipcMain.handle(
       "proxy-mistral-transcription",
-      serializeIpcError(async (event, { audioBuffer, model, language, contextBias }) => {
+      serializeIpcError(async (event, { audioBuffer, model, language, contextBias }, claim) => {
+        const actualModel = model || "voxtral-mini-latest";
+        await authorizeTranscriptionStart(event, claim, "mistral", actualModel);
         const apiKey = this.environmentManager.getMistralKey();
         if (!apiKey) {
           throw new Error("Mistral API key not configured");
@@ -3941,7 +4018,7 @@ class IPCHandlers {
         const formData = new FormData();
         const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
         formData.append("file", audioBlob, "audio.webm");
-        formData.append("model", model || "voxtral-mini-latest");
+        formData.append("model", actualModel);
         if (language && language !== "auto") {
           formData.append("language", language);
         }
@@ -3986,7 +4063,8 @@ class IPCHandlers {
 
     ipcMain.handle(
       "proxy-corti-transcription",
-      serializeIpcError(async (event, { audioBuffer, language, environment, tenant }) => {
+      serializeIpcError(async (event, { audioBuffer, language, environment, tenant }, claim) => {
+        await authorizeTranscriptionStart(event, claim, "corti", "corti-transcribe");
         const clientId = this.environmentManager.getCortiClientId();
         const clientSecret = this.environmentManager.getCortiClientSecret();
         if (!clientId || !clientSecret) {
@@ -4012,7 +4090,13 @@ class IPCHandlers {
     // Enclave attestation is Node-only, so batch transcription is proxied through main.
     ipcMain.handle(
       "proxy-tinfoil-transcription",
-      serializeIpcError(async (event, { audioBuffer, language, prompt }) => {
+      serializeIpcError(async (event, { audioBuffer, language, prompt }, claim) => {
+        await authorizeTranscriptionStart(
+          event,
+          claim,
+          "tinfoil",
+          tinfoilBatchTranscriptionModel()
+        );
         return await transcribeWithTinfoil({
           audioBuffer: Buffer.from(audioBuffer),
           fileName: "audio.webm",
@@ -4160,7 +4244,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "process-enterprise-reasoning",
-      async (event, text, modelId, _agentName, config) => {
+      async (event, text, modelId, _agentName, config, claim) => {
         const {
           isEnterpriseProvider,
           mapEnterpriseError,
@@ -4171,7 +4255,21 @@ class IPCHandlers {
           if (!isEnterpriseProvider(provider)) {
             throw new Error(`Unsupported enterprise provider: ${provider}`);
           }
-          const runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
+          const authorization = await authorizeReasoningStart(
+            event,
+            claim,
+            provider,
+            modelId,
+            config
+          );
+          const runtime = await resolveAuthorizedEnterpriseReasoningRuntime(
+            event,
+            authorization,
+            claim,
+            provider,
+            modelId,
+            config || {}
+          );
           if (!runtime.model) throw new Error("No model specified for enterprise reasoning");
           validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
 
@@ -4208,6 +4306,7 @@ class IPCHandlers {
           return { success: true, text: (generated || "").trim() };
         } catch (err) {
           debugLogger.error("Enterprise reasoning error:", err);
+          if (err?.code) return toPolicyFailure(err);
           const mapped = mapEnterpriseError(provider, err, config || {});
           return { success: false, error: mapped.message, retryable: mapped.retryable };
         }
@@ -4217,7 +4316,7 @@ class IPCHandlers {
     // Runs doStream for the renderer's enterprise chat model shim; parts are
     // relayed verbatim over enterprise-stream-part, ending with {done}/{error}.
     this.enterpriseStreamAborts = new Map();
-    ipcMain.handle("enterprise-stream-start", async (event, payload) => {
+    ipcMain.handle("enterprise-stream-start", async (event, payload, claim) => {
       const {
         isEnterpriseProvider,
         mapEnterpriseError,
@@ -4244,7 +4343,21 @@ class IPCHandlers {
         if (!streamId || !isEnterpriseProvider(provider)) {
           throw new Error(`Unsupported enterprise provider: ${provider}`);
         }
-        const runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
+        const authorization = await authorizeReasoningStart(
+          event,
+          claim,
+          provider,
+          modelId,
+          config
+        );
+        const runtime = await resolveAuthorizedEnterpriseReasoningRuntime(
+          event,
+          authorization,
+          claim,
+          provider,
+          modelId,
+          config || {}
+        );
         if (!runtime.model) throw new Error("No model specified for enterprise streaming");
         validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
 
@@ -4278,6 +4391,11 @@ class IPCHandlers {
         return { success: true };
       } catch (err) {
         debugLogger.error("Enterprise stream error:", err);
+        if (err?.code) {
+          const failure = toPolicyFailure(err);
+          send({ error: failure.error, code: failure.code });
+          return failure;
+        }
         const mapped = mapEnterpriseError(provider, err, config || {});
         send({ error: mapped.message });
         return { success: false, error: mapped.message };
@@ -4479,20 +4597,38 @@ class IPCHandlers {
       this._syncStartupEnv(setVars, clearVars);
     });
 
-    ipcMain.handle("process-local-reasoning", async (event, text, modelId, _agentName, config) => {
-      try {
-        const LocalReasoningService = require("../services/localReasoningBridge").default;
-        const result = await LocalReasoningService.processText(text, modelId, config);
-        return { success: true, text: result };
-      } catch (error) {
-        return { success: false, error: error.message };
+    ipcMain.handle(
+      "process-local-reasoning",
+      async (event, text, modelId, _agentName, config, claim) => {
+        try {
+          const provider = localReasoningProviderForModel(modelId);
+          if (!provider) {
+            throw Object.assign(new Error("Invalid local reasoning model."), {
+              code: "AUTHORIZATION_BOUNDARY_CHANGED",
+            });
+          }
+          const authorization = await authorizeReasoningStart(
+            event,
+            claim,
+            provider,
+            modelId,
+            config
+          );
+          await assertManagedLocalReasoningArtifactAvailable(authorization);
+          const LocalReasoningService = require("../services/localReasoningBridge").default;
+          const result = await LocalReasoningService.processText(text, modelId, config);
+          return { success: true, text: result };
+        } catch (error) {
+          return toPolicyFailure(error);
+        }
       }
-    });
+    );
 
     ipcMain.handle(
       "process-anthropic-reasoning",
-      async (event, text, modelId, _agentName, config) => {
+      async (event, text, modelId, _agentName, config, claim) => {
         try {
+          await authorizeReasoningStart(event, claim, "anthropic", modelId, config);
           const apiKey = this.environmentManager.getAnthropicKey();
 
           if (!apiKey) {
@@ -4564,7 +4700,7 @@ class IPCHandlers {
           return { success: true, text: data.content[0].text.trim() };
         } catch (error) {
           debugLogger.error("Anthropic reasoning error:", error);
-          return { success: false, error: error.message };
+          return toPolicyFailure(error);
         }
       }
     );
@@ -5262,6 +5398,188 @@ class IPCHandlers {
       broadcast: (snapshot) => broadcastToWindows("managed-enterprise-config-changed", snapshot),
       logger: debugLogger,
     });
+    let activeEnterpriseIdentity = null;
+    let activeEnterpriseIdentityRequestSequence = 0;
+    const clearActiveEnterpriseIdentity = () => {
+      activeEnterpriseIdentityRequestSequence += 1;
+      activeEnterpriseIdentity = null;
+    };
+    this._clearActiveEnterpriseIdentity = clearActiveEnterpriseIdentity;
+    this._getActiveEnterpriseIdentity = () => activeEnterpriseIdentity;
+    const isMainWindowIdentityOwner = (event) =>
+      event.sender === this.windowManager?.mainWindow?.webContents;
+    const identityMatches = (left, right) =>
+      Boolean(
+        left &&
+        right &&
+        left.accountId === right.accountId &&
+        left.workspaceId === right.workspaceId &&
+        left.authGeneration === right.authGeneration &&
+        left.apiOrigin === right.apiOrigin &&
+        left.credentialHash === right.credentialHash
+      );
+    const authorizeInferenceStart = async (event, claim, actualRoute) => {
+      const authBeforeHeaders = tokenStore.getState();
+      const authHeaders = await getAuthHeader(event);
+      const authState = tokenStore.getState();
+      if (
+        authBeforeHeaders.generation !== authState.generation ||
+        authBeforeHeaders.token !== authState.token
+      ) {
+        throw Object.assign(new Error("Inference authorization changed. Retry the request."), {
+          code: "AUTHORIZATION_BOUNDARY_CHANGED",
+        });
+      }
+      const authenticated = Boolean(authState.token || Object.keys(authHeaders).length);
+      const effectiveClaim =
+        claim ??
+        (!authenticated
+          ? {
+              accountId: null,
+              workspaceId: null,
+              authGeneration: null,
+              configGeneration: null,
+              managed: false,
+              provider: actualRoute.provider,
+              model: actualRoute.model ?? null,
+            }
+          : undefined);
+      if (authenticated) {
+        const currentIdentity = createEnterpriseIdentityDescriptor({
+          accountId: effectiveClaim?.accountId,
+          workspaceId: effectiveClaim?.workspaceId,
+          authGeneration: authState.generation,
+          apiUrl: getApiUrl(),
+          authHeaders,
+        });
+        if (!identityMatches(activeEnterpriseIdentity, currentIdentity)) {
+          throw Object.assign(new Error("Inference authorization changed. Retry the request."), {
+            code: "AUTHORIZATION_BOUNDARY_CHANGED",
+          });
+        }
+      }
+      return authorizeManagedInferenceStart({
+        claim: effectiveClaim,
+        actualRoute,
+        authState: {
+          authenticated,
+          token: authState.token,
+          generation: authenticated ? authState.generation : null,
+        },
+        activeIdentity: () => activeEnterpriseIdentity,
+        getConfig: (identity) =>
+          this.enterpriseIdentityManager.getConfig({
+            accountId: identity.accountId,
+            workspaceId: identity.workspaceId,
+            expectedAuthGeneration: identity.authGeneration,
+            authHeaders,
+          }),
+      });
+    };
+    const authorizeTranscriptionStart = (event, claim, provider, model = null) =>
+      authorizeInferenceStart(event, claim, {
+        domain: "transcription",
+        provider,
+        model: model || null,
+      });
+    const authorizeReasoningStart = (event, claim, provider, model, config = {}) =>
+      authorizeInferenceStart(event, claim, {
+        domain: "reasoning",
+        provider,
+        model: model || null,
+        inferenceScope: config.inferenceScope || "dictationCleanup",
+        setupMode: config.setupMode || "auto",
+      });
+    const managedConfigChangedError = () =>
+      Object.assign(new Error("Managed enterprise configuration changed. Retry the request."), {
+        code: "MANAGED_CONFIG_CHANGED",
+      });
+    const assertManagedLocalReasoningArtifactAvailable = async (authorization) => {
+      if (
+        !authorization?.managed ||
+        localReasoningProviderForModel(authorization.model) !== authorization.provider
+      ) {
+        return;
+      }
+      const modelManager = require("./modelManagerBridge").default;
+      try {
+        if (await modelManager.isModelDownloaded(authorization.model)) return;
+      } catch (error) {
+        debugLogger.error("Managed local reasoning artifact check failed", {
+          error: error.message,
+        });
+      }
+      throw Object.assign(new Error("Managed local reasoning model is unavailable."), {
+        code: "MANAGED_LOCAL_MODEL_UNAVAILABLE",
+      });
+    };
+    const assertManagedLocalArtifactAvailable = async (authorization) => {
+      if (!authorization?.managed) return;
+      const { provider, model } = authorization;
+      const manager = provider === "nvidia" ? this.parakeetManager : this.whisperManager;
+      try {
+        const status = await manager.checkModelStatus(model);
+        if (status?.downloaded) return;
+      } catch (error) {
+        debugLogger.error("Managed local transcription artifact check failed", {
+          error: error.message,
+        });
+      }
+      throw Object.assign(new Error("Managed local transcription model is unavailable."), {
+        code: "MANAGED_LOCAL_MODEL_UNAVAILABLE",
+      });
+    };
+    const authorizeLocalTranscriptionStart = async (event, claim, provider, model) => {
+      const authorization = await authorizeTranscriptionStart(event, claim, provider, model);
+      await assertManagedLocalArtifactAvailable(authorization);
+      return authorization;
+    };
+    ipcMain.handle("authorize-transcription-start", async (event, route = {}, claim) => {
+      try {
+        if (typeof route.provider !== "string" || route.provider.length === 0) {
+          return { success: false, error: "Invalid transcription provider" };
+        }
+        const model =
+          typeof route.model === "string" && route.model.length > 0 ? route.model : null;
+        if (route.provider === "whisper" || route.provider === "nvidia") {
+          await authorizeLocalTranscriptionStart(event, claim, route.provider, model);
+        } else {
+          await authorizeTranscriptionStart(event, claim, route.provider, model);
+        }
+        return { success: true };
+      } catch (error) {
+        return toPolicyFailure(error);
+      }
+    });
+    ipcMain.handle("authorize-reasoning-start", async (event, route = {}, claim) => {
+      try {
+        if (typeof route.provider !== "string" || route.provider.length === 0) {
+          throw Object.assign(new Error("Invalid reasoning provider"), {
+            code: "AUTHORIZATION_BOUNDARY_CHANGED",
+          });
+        }
+        let provider = route.provider;
+        if (isLocalReasoningProvider(provider)) {
+          provider = localReasoningProviderForModel(route.model);
+          if (!provider) {
+            throw Object.assign(new Error("Invalid local reasoning model."), {
+              code: "AUTHORIZATION_BOUNDARY_CHANGED",
+            });
+          }
+        }
+        const authorization = await authorizeReasoningStart(
+          event,
+          claim,
+          provider,
+          route.model,
+          route
+        );
+        await assertManagedLocalReasoningArtifactAvailable(authorization);
+        return { success: true };
+      } catch (error) {
+        return toPolicyFailure(error);
+      }
+    });
     const resolveEnterpriseRuntime = async (event, provider, model, config = {}) => {
       const manual = {
         provider,
@@ -5318,6 +5636,39 @@ class IPCHandlers {
         },
       };
     };
+    const resolveAuthorizedEnterpriseReasoningRuntime = async (
+      event,
+      authorization,
+      claim,
+      provider,
+      model,
+      config
+    ) => {
+      if (!authorization.managed) {
+        return resolveEnterpriseRuntime(event, provider, model, {
+          ...config,
+          managedContext: undefined,
+        });
+      }
+      const context = config.managedContext;
+      if (
+        !context ||
+        context.accountId !== claim.accountId ||
+        context.workspaceId !== claim.workspaceId ||
+        context.authGeneration !== claim.authGeneration ||
+        context.generation !== claim.configGeneration ||
+        context.provider !== provider ||
+        context.inferenceScope !== (config.inferenceScope || "dictationCleanup") ||
+        context.setupMode !== (config.setupMode || "auto")
+      ) {
+        throw managedConfigChangedError();
+      }
+      const runtime = await resolveEnterpriseRuntime(event, provider, model, config);
+      if (runtime.provider !== authorization.provider || runtime.model !== authorization.model) {
+        throw managedConfigChangedError();
+      }
+      return runtime;
+    };
     const handleSttConfigRequest = createCloudConfigRequestHandler({
       getApiUrl,
       getAuthHeader,
@@ -5335,7 +5686,7 @@ class IPCHandlers {
       configPath: "note-recording-config",
     });
 
-    ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
+    ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}, claim) => {
       const sender = event.sender;
       const senderId = sender.id;
       const requestId = crypto.randomUUID();
@@ -5343,6 +5694,7 @@ class IPCHandlers {
       const cancelSenderRequests = () => this._cloudTranscriptionRequests.cancelSender(senderId);
       sender.once("destroyed", cancelSenderRequests);
       try {
+        await authorizeTranscriptionStart(event, claim, "openwhispr", null);
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
@@ -5475,7 +5827,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("retry-transcription", async (event, id, settings) => {
+    ipcMain.handle("retry-transcription", async (event, id, settings, claim) => {
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       if (!buffer) return { success: false, error: "Audio file not found" };
       try {
@@ -5505,6 +5857,41 @@ class IPCHandlers {
           if (route.code) err.code = route.code;
           if (route.messageKey) err.messageKey = route.messageKey;
           throw err;
+        }
+
+        const admissionRoute =
+          route.transport === "local"
+            ? settings.localTranscriptionProvider === "nvidia"
+              ? {
+                  provider: "nvidia",
+                  model:
+                    settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3",
+                }
+              : { provider: "whisper", model: settings.whisperModel || null }
+            : settings?.cloudTranscriptionMode === "openwhispr" &&
+                !(route.transport === "http-batch" && route.provider === "self-hosted")
+              ? { provider: "openwhispr", model: null }
+              : {
+                  provider: route.provider,
+                  model:
+                    route.provider === "tinfoil"
+                      ? tinfoilBatchTranscriptionModel()
+                      : route.model || null,
+                };
+        if (route.transport === "local") {
+          await authorizeLocalTranscriptionStart(
+            event,
+            claim,
+            admissionRoute.provider,
+            admissionRoute.model
+          );
+        } else {
+          await authorizeTranscriptionStart(
+            event,
+            claim,
+            admissionRoute.provider,
+            admissionRoute.model
+          );
         }
 
         if (route.transport === "http-batch" && route.provider === "self-hosted") {
@@ -7359,7 +7746,21 @@ class IPCHandlers {
     };
 
     // Pre-warm: fetch tokens + connect WebSockets before user hits record
-    ipcMain.handle("meeting-transcription-prepare", async (event, options = {}) => {
+    ipcMain.handle("meeting-transcription-prepare", async (event, options = {}, claim) => {
+      try {
+        if (options.provider === "local") {
+          await authorizeLocalTranscriptionStart(
+            event,
+            claim,
+            options.localProvider || "whisper",
+            options.localModel
+          );
+        } else {
+          await authorizeTranscriptionStart(event, claim, options.provider, options.model);
+        }
+      } catch (error) {
+        return toPolicyFailure(error);
+      }
       if (meetingTranscriptionPrepareInProgress || meetingTranscriptionStartInProgress) {
         debugLogger.debug("Meeting transcription prepare already in progress, ignoring");
         return { success: false, error: "Operation in progress" };
@@ -7877,7 +8278,21 @@ class IPCHandlers {
       },
     });
 
-    ipcMain.handle("meeting-transcription-start", (event, options = {}) => {
+    ipcMain.handle("meeting-transcription-start", async (event, options = {}, claim) => {
+      try {
+        if (options.provider === "local") {
+          await authorizeLocalTranscriptionStart(
+            event,
+            claim,
+            options.localProvider || "whisper",
+            options.localModel
+          );
+        } else {
+          await authorizeTranscriptionStart(event, claim, options.provider, options.model);
+        }
+      } catch (error) {
+        return toPolicyFailure(error);
+      }
       const sessionId =
         typeof options.sessionId === "string" && options.sessionId.length > 0
           ? options.sessionId
@@ -7912,8 +8327,13 @@ class IPCHandlers {
       return result;
     };
 
-    ipcMain.handle("dictation-realtime-warmup", async (event, options = {}) => {
+    ipcMain.handle("dictation-realtime-warmup", async (event, options = {}, claim) => {
       try {
+        const provider = options.provider || "openai-realtime";
+        const model =
+          options.model ||
+          (provider === "tinfoil-realtime" ? TINFOIL_REALTIME_MODEL : "gpt-4o-mini-transcribe");
+        await authorizeTranscriptionStart(event, claim, provider, model);
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
         return { success: true };
@@ -7922,8 +8342,13 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+    ipcMain.handle("dictation-realtime-start", async (event, options = {}, claim) => {
       try {
+        const provider = options.provider || "openai-realtime";
+        const model =
+          options.model ||
+          (provider === "tinfoil-realtime" ? TINFOIL_REALTIME_MODEL : "gpt-4o-mini-transcribe");
+        await authorizeTranscriptionStart(event, claim, provider, model);
         clearDictationIdleTimer();
         this._dictationPreviewEnabled = !!options.preview;
         if (!this._dictationStreaming?.isConnected) await connectDictationStreaming(event, options);
@@ -7953,7 +8378,16 @@ class IPCHandlers {
 
     ipcMain.handle(
       "start-dictation-preview",
-      async (_event, { provider, model, language, display = true }) => {
+      async (event, { provider, model, language, display = true }, claim) => {
+        try {
+          if (provider === "whisper" || provider === "nvidia") {
+            await authorizeLocalTranscriptionStart(event, claim, provider, model);
+          } else {
+            await authorizeTranscriptionStart(event, claim, provider, model);
+          }
+        } catch (error) {
+          return toPolicyFailure(error);
+        }
         resetDictationPreviewState();
         const gen = dictationPreviewGen;
         dictationPreviewMode = true;
@@ -8132,7 +8566,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("cloud-reason", async (event, text, opts = {}) => {
+    ipcMain.handle("cloud-reason", async (event, text, opts = {}, claim) => {
       const sender = event.sender;
       const senderId = sender.id;
       const requestId = crypto.randomUUID();
@@ -8140,6 +8574,7 @@ class IPCHandlers {
       const cancelSenderRequests = () => this._cloudReasonRequests.cancelSender(senderId);
       sender.once("destroyed", cancelSenderRequests);
       try {
+        await authorizeReasoningStart(event, claim, "openwhispr", null, opts);
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
@@ -8240,7 +8675,7 @@ class IPCHandlers {
       this._cloudReasonRequests.cancelSender(event.sender.id);
     });
 
-    ipcMain.on("cloud-agent-stream-start", async (event, requestId, messages, opts = {}) => {
+    ipcMain.on("cloud-agent-stream-start", async (event, requestId, messages, opts = {}, claim) => {
       if (typeof requestId !== "string" || !requestId.trim()) return;
 
       const sender = event.sender;
@@ -8253,6 +8688,7 @@ class IPCHandlers {
       sender.once("destroyed", cancelSenderRequests);
 
       try {
+        await authorizeReasoningStart(event, claim, "openwhispr", null, opts);
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
@@ -8612,26 +9048,99 @@ class IPCHandlers {
     ipcMain.handle(
       "get-managed-enterprise-config",
       async (event, accountId, workspaceId, expectedAuthGeneration, forceRefresh = false) => {
+        const ownsActiveIdentity = isMainWindowIdentityOwner(event);
+        const requestSequence = ownsActiveIdentity
+          ? ++activeEnterpriseIdentityRequestSequence
+          : null;
+        const authStateBeforeHeaders = tokenStore.getState();
+        let apiOrigin = null;
+        try {
+          apiOrigin = new URL(getApiUrl()).origin;
+        } catch {}
+        const partialCandidate =
+          ownsActiveIdentity &&
+          typeof accountId === "string" &&
+          typeof workspaceId === "string" &&
+          expectedAuthGeneration === authStateBeforeHeaders.generation &&
+          apiOrigin
+            ? { accountId, workspaceId, authGeneration: expectedAuthGeneration, apiOrigin }
+            : null;
+        if (
+          ownsActiveIdentity &&
+          (!partialCandidate ||
+            !activeEnterpriseIdentity ||
+            activeEnterpriseIdentity.accountId !== partialCandidate.accountId ||
+            activeEnterpriseIdentity.workspaceId !== partialCandidate.workspaceId ||
+            activeEnterpriseIdentity.authGeneration !== partialCandidate.authGeneration ||
+            activeEnterpriseIdentity.apiOrigin !== partialCandidate.apiOrigin)
+        ) {
+          activeEnterpriseIdentity = null;
+        }
         const authHeaders = await getAuthHeader(event);
-        return this.enterpriseIdentityManager.getConfig({
+        const authState = tokenStore.getState();
+        const authChanged =
+          authStateBeforeHeaders.generation !== authState.generation ||
+          authStateBeforeHeaders.token !== authState.token ||
+          expectedAuthGeneration !== authState.generation;
+        if (
+          ownsActiveIdentity &&
+          requestSequence === activeEnterpriseIdentityRequestSequence &&
+          authChanged
+        ) {
+          clearActiveEnterpriseIdentity();
+        }
+        const candidateIdentity = partialCandidate
+          ? createEnterpriseIdentityDescriptor({
+              accountId,
+              workspaceId,
+              authGeneration: expectedAuthGeneration,
+              apiUrl: getApiUrl(),
+              authHeaders,
+            })
+          : null;
+        if (
+          ownsActiveIdentity &&
+          activeEnterpriseIdentity &&
+          !identityMatches(activeEnterpriseIdentity, candidateIdentity)
+        ) {
+          activeEnterpriseIdentity = null;
+        }
+        const result = await this.enterpriseIdentityManager.getConfig({
           accountId,
           workspaceId,
           expectedAuthGeneration,
           authHeaders,
           forceRefresh,
         });
+        if (
+          candidateIdentity &&
+          !authChanged &&
+          requestSequence === activeEnterpriseIdentityRequestSequence &&
+          result?.accountId === candidateIdentity.accountId &&
+          result?.workspaceId === candidateIdentity.workspaceId &&
+          result?.authGeneration === candidateIdentity.authGeneration &&
+          ((result.success === true && Boolean(result.config)) ||
+            result.enforcementRequired === false)
+        ) {
+          if (!identityMatches(activeEnterpriseIdentity, candidateIdentity)) {
+            activeEnterpriseIdentity = candidateIdentity;
+          }
+        }
+        return result;
       }
     );
-    ipcMain.handle("clear-managed-enterprise-identity", async () => {
+    ipcMain.handle("clear-managed-enterprise-identity", async (event) => {
+      if (isMainWindowIdentityOwner(event)) clearActiveEnterpriseIdentity();
       this.enterpriseIdentityManager.clear();
     });
 
     ipcMain.handle("get-note-recording-config", handleNoteRecordingConfigRequest);
 
-    ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath, opts = {}) => {
+    ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath, opts = {}, claim) => {
       const requestId = typeof opts?.requestId === "string" ? opts.requestId : null;
       const { signal, release } = this._uploadCancelRegistry.register(requestId);
       try {
+        await authorizeTranscriptionStart(event, claim, "openwhispr", null);
         if (typeof filePath !== "string") {
           return { success: false, error: "Invalid file path" };
         }
@@ -8732,16 +9241,11 @@ class IPCHandlers {
           transcriptionMode,
           remoteTranscriptionUrl,
           remoteTranscriptionModel,
-        }
+        },
+        claim
       ) => {
         const fs = require("fs");
         try {
-          if (typeof filePath !== "string") {
-            return { success: false, error: "Invalid file path" };
-          }
-          const realByok = resolveAllowedAudioPath(filePath);
-          if (!realByok) return { success: false, error: "File path not allowed" };
-
           const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
           const route = resolveTranscriptionRoute({
             settings: {
@@ -8762,6 +9266,16 @@ class IPCHandlers {
           if (route.transport === "error") {
             return { success: false, error: route.message, code: route.code };
           }
+
+          const admissionModel =
+            route.provider === "tinfoil" ? tinfoilBatchTranscriptionModel() : route.model;
+          await authorizeTranscriptionStart(event, claim, route.provider, admissionModel);
+
+          if (typeof filePath !== "string") {
+            return { success: false, error: "Invalid file path" };
+          }
+          const realByok = resolveAllowedAudioPath(filePath);
+          if (!realByok) return { success: false, error: "File path not allowed" };
 
           if (route.transport === "http-batch" && route.provider === "self-hosted") {
             // User's own server, so the 25 MB third-party cap does not apply.
@@ -8946,7 +9460,7 @@ class IPCHandlers {
           return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
         } catch (error) {
           debugLogger.error("BYOK audio file transcription error", { error: error.message });
-          return { success: false, error: error.message };
+          return { success: false, error: error.message, code: error.code };
         }
       }
     );
@@ -9260,8 +9774,9 @@ class IPCHandlers {
       return token;
     };
 
-    ipcMain.handle("assemblyai-streaming-warmup", async (event, options = {}) => {
+    ipcMain.handle("assemblyai-streaming-warmup", async (event, options = {}, claim) => {
       try {
+        await authorizeTranscriptionStart(event, claim, "assemblyai", options.model || null);
         const apiUrl = getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
@@ -9294,7 +9809,7 @@ class IPCHandlers {
 
     let streamingStartInProgress = false;
 
-    ipcMain.handle("assemblyai-streaming-start", async (event, options = {}) => {
+    ipcMain.handle("assemblyai-streaming-start", async (event, options = {}, claim) => {
       if (streamingStartInProgress) {
         debugLogger.debug("Streaming start already in progress, ignoring", {}, "streaming");
         return { success: false, error: "Operation in progress" };
@@ -9302,6 +9817,7 @@ class IPCHandlers {
 
       streamingStartInProgress = true;
       try {
+        await authorizeTranscriptionStart(event, claim, "assemblyai", options.model || null);
         const apiUrl = getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
@@ -9491,8 +10007,9 @@ class IPCHandlers {
       return token;
     };
 
-    ipcMain.handle("deepgram-streaming-warmup", async (event, options = {}) => {
+    ipcMain.handle("deepgram-streaming-warmup", async (event, options = {}, claim) => {
       try {
+        await authorizeTranscriptionStart(event, claim, "deepgram", options.model || null);
         const apiUrl = getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
@@ -9536,7 +10053,7 @@ class IPCHandlers {
     let deepgramStreamingStartInProgress = false;
     let sendDropCount = 0;
 
-    ipcMain.handle("deepgram-streaming-start", async (event, options = {}) => {
+    ipcMain.handle("deepgram-streaming-start", async (event, options = {}, claim) => {
       if (deepgramStreamingStartInProgress) {
         debugLogger.debug(
           "Deepgram streaming start already in progress, ignoring",
@@ -9548,6 +10065,7 @@ class IPCHandlers {
 
       deepgramStreamingStartInProgress = true;
       try {
+        await authorizeTranscriptionStart(event, claim, "deepgram", options.model || null);
         const apiUrl = getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
@@ -9699,8 +10217,14 @@ class IPCHandlers {
       return this.deepgramStreaming.getStatus();
     });
 
-    ipcMain.handle("corti-streaming-warmup", async (_event, options = {}) => {
+    ipcMain.handle("corti-streaming-warmup", async (event, options = {}, claim) => {
       try {
+        await authorizeTranscriptionStart(
+          event,
+          claim,
+          "corti",
+          options.model || "corti-transcribe"
+        );
         if (!this.cortiStreaming) {
           this.cortiStreaming = new CortiStreaming();
         }
@@ -9721,8 +10245,14 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("corti-streaming-start", async (event, options = {}) => {
+    ipcMain.handle("corti-streaming-start", async (event, options = {}, claim) => {
       try {
+        await authorizeTranscriptionStart(
+          event,
+          claim,
+          "corti",
+          options.model || "corti-transcribe"
+        );
         if (!this.cortiStreaming) {
           this.cortiStreaming = new CortiStreaming();
         }
@@ -10910,3 +11440,4 @@ class IPCHandlers {
 }
 
 module.exports = IPCHandlers;
+module.exports.subscribeEnterpriseIdentityInvalidation = subscribeEnterpriseIdentityInvalidation;

@@ -28,6 +28,7 @@ const defaultMockModules = (settingsKey) => ({
 
 async function loadAudioManager(t, { cachePrefix, settingsKey, settings, mockModules = {} } = {}) {
   const { window } = installBrowserGlobals(t);
+  window.electronAPI.authorizeTranscriptionStart = async () => ({ success: true });
   const vite = await createRendererServer(t, {
     cachePrefix,
     mockModules: { ...defaultMockModules(settingsKey), ...mockModules },

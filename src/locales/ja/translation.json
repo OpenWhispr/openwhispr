@@ -179,6 +179,30 @@
     "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。"
   },
   "onboarding": {
+    "managedLocal": {
+      "title": "会社のモデルを設定",
+      "description": "会社が承認したローカルモデルのみを使用します。",
+      "status": {
+        "installed": "インストール済み",
+        "preparing": "承認済みモデルを準備中…",
+        "ready": "会社のモデルを使用できます",
+        "choose": "承認済みモデルを選択"
+      },
+      "recovery": { "title": "会社のモデル設定を確認してください" },
+      "compatibility": {
+        "checking": "デバイスの互換性を確認中…",
+        "unsupported": "このデバイスではこのモデルを使用できません。"
+      },
+      "errors": {
+        "config": "会社のモデル設定を読み込めませんでした。",
+        "capabilityCheck": "デバイスの互換性を確認できませんでした。再試行してください。",
+        "reconciliation": "会社のモデル設定を完了できませんでした。再試行してください。",
+        "cancelled": "モデルのダウンロードがキャンセルされました。再試行してください。",
+        "downloadFailed": "モデルをダウンロードできませんでした。再試行してください。",
+        "noCompatibleDictationModel": "このデバイスで使用できる承認済み音声入力モデルがありません。",
+        "noCompatibleAssistantModel": "このデバイスで使用できる承認済みアシスタントモデルがありません。"
+      }
+    },
     "rehaul": {
       "permissions": {
         "title": "3 分で OpenWhispr を設定",
@@ -3743,6 +3767,12 @@
     "activeTarget": "使用中の翻訳先言語",
     "removeTarget": "{{language}}を削除",
     "maxTargets": "最大{{max}}言語"
+  },
+  "managedLocalModels": {
+    "notice": {
+      "waiting": "会社のモデル設定を待機中",
+      "managedDescription": "会社によって管理されています"
+    }
   },
   "meetingNotification": {
     "title": "会議を検出しました",

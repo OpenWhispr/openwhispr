@@ -1,5 +1,9 @@
 import ReasoningService from "../services/ReasoningService";
 import { PROVIDER_REGISTRY } from "../services/ai/inferenceProviders";
+import {
+  captureReasoningStartClaim,
+  isReasoningAdmissionError,
+} from "../services/ai/enterpriseSettings";
 import logger from "../utils/logger";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
@@ -56,6 +60,10 @@ import {
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import { resolveByokModel, resolveTranscriptionRoute } from "./transcriptionRoute.ts";
+import {
+  captureTranscriptionStartClaim,
+  isTranscriptionAdmissionError,
+} from "./managedLocalTranscriptionRuntime.ts";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isSelfHostedTranscription,
@@ -290,15 +298,57 @@ const isValidApiKey = (key, provider = "openai") => {
 const STREAMING_FINAL_QUIET_MS = 250;
 const STREAMING_FINAL_CEILING_MS = 2000;
 
+const captureTranscriptionClaim = (provider, model = null) =>
+  captureTranscriptionStartClaim({ provider, model: model || null }, getSettings());
+
+const captureOpenWhisprReasoningClaim = () => {
+  const settings = getSettings();
+  return captureReasoningStartClaim(
+    {
+      provider: "openwhispr",
+      model: null,
+      inferenceScope: "dictationCleanup",
+      setupMode: settings.enterpriseSetupMode,
+    },
+    settings
+  );
+};
+
+const failedTranscriptionStartError = (result, fallbackMessage) => {
+  const error = new Error(result?.message || result?.error || fallbackMessage);
+  if (result?.code) error.code = result.code;
+  if (result?.messageKey) error.messageKey = result.messageKey;
+  return error;
+};
+
 // Both realtime providers share the dictation realtime IPC surface and differ
 // only in the token-provider id. Forcing `provider` here (even though
 // buildStreamingSessionOptions already stamps it) is pinned by
 // audioManagerStreamingRouting.test.js: the hardened main-process allowlist
 // fails closed on an options object that lost the tag (#1624).
+const resolveDictationRealtimeModel = (provider, model) =>
+  model ||
+  (provider === "tinfoil-realtime"
+    ? getTranscriptionProvider("tinfoil")?.models.find(({ streaming }) => streaming)?.id ||
+      "voxtral-mini-4b-realtime"
+    : "gpt-4o-mini-transcribe");
+
 const makeDictationRealtimeProvider = (id) => ({
   awaitsFinalTranscript: true,
-  warmup: (opts) => window.electronAPI.dictationRealtimeWarmup({ ...opts, provider: id }),
-  start: (opts) => window.electronAPI.dictationRealtimeStart({ ...opts, provider: id }),
+  warmup: (opts) => {
+    const model = resolveDictationRealtimeModel(id, opts.model);
+    return window.electronAPI.dictationRealtimeWarmup(
+      { ...opts, provider: id, model },
+      captureTranscriptionClaim(id, model)
+    );
+  },
+  start: (opts) => {
+    const model = resolveDictationRealtimeModel(id, opts.model);
+    return window.electronAPI.dictationRealtimeStart(
+      { ...opts, provider: id, model },
+      captureTranscriptionClaim(id, model)
+    );
+  },
   send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
   stop: () => window.electronAPI.dictationRealtimeStop(),
   onPartial: (cb) => window.electronAPI.onDictationRealtimePartial(cb),
@@ -309,8 +359,16 @@ const makeDictationRealtimeProvider = (id) => ({
 
 const STREAMING_PROVIDERS = {
   deepgram: {
-    warmup: (opts) => window.electronAPI.deepgramStreamingWarmup(opts),
-    start: (opts) => window.electronAPI.deepgramStreamingStart(opts),
+    warmup: (opts) =>
+      window.electronAPI.deepgramStreamingWarmup(
+        opts,
+        captureTranscriptionClaim("deepgram", opts.model)
+      ),
+    start: (opts) =>
+      window.electronAPI.deepgramStreamingStart(
+        opts,
+        captureTranscriptionClaim("deepgram", opts.model)
+      ),
     send: (buf) => window.electronAPI.deepgramStreamingSend(buf),
     finalize: () => window.electronAPI.deepgramStreamingFinalize(),
     stop: () => window.electronAPI.deepgramStreamingStop(),
@@ -321,8 +379,16 @@ const STREAMING_PROVIDERS = {
     onSessionEnd: (cb) => window.electronAPI.onDeepgramSessionEnd(cb),
   },
   assemblyai: {
-    warmup: (opts) => window.electronAPI.assemblyAiStreamingWarmup(opts),
-    start: (opts) => window.electronAPI.assemblyAiStreamingStart(opts),
+    warmup: (opts) =>
+      window.electronAPI.assemblyAiStreamingWarmup(
+        opts,
+        captureTranscriptionClaim("assemblyai", opts.model)
+      ),
+    start: (opts) =>
+      window.electronAPI.assemblyAiStreamingStart(
+        opts,
+        captureTranscriptionClaim("assemblyai", opts.model)
+      ),
     send: (buf) => window.electronAPI.assemblyAiStreamingSend(buf),
     finalize: () => window.electronAPI.assemblyAiStreamingForceEndpoint(),
     stop: () => window.electronAPI.assemblyAiStreamingStop(),
@@ -334,8 +400,16 @@ const STREAMING_PROVIDERS = {
   },
   "openai-realtime": makeDictationRealtimeProvider("openai-realtime"),
   corti: {
-    warmup: (opts) => window.electronAPI.cortiStreamingWarmup(opts),
-    start: (opts) => window.electronAPI.cortiStreamingStart(opts),
+    warmup: (opts) =>
+      window.electronAPI.cortiStreamingWarmup(
+        opts,
+        captureTranscriptionClaim("corti", opts.model || "corti-transcribe")
+      ),
+    start: (opts) =>
+      window.electronAPI.cortiStreamingStart(
+        opts,
+        captureTranscriptionClaim("corti", opts.model || "corti-transcribe")
+      ),
     send: (buf) => window.electronAPI.cortiStreamingSend(buf),
     finalize: () => window.electronAPI.cortiStreamingFinalize(),
     stop: () => window.electronAPI.cortiStreamingStop(),
@@ -1278,17 +1352,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const provider = isNvidia ? "nvidia" : "whisper";
           const model = isNvidia ? parakeetModel : whisperModel;
           const language = getBaseLanguageCode(getSettings().preferredLanguage);
-          window.electronAPI?.startDictationPreview?.({
-            provider,
-            model,
-            language,
-            display: shouldDisplayDictationPreview(
-              showTranscriptionPreview,
-              this.voiceAgentRequested
-            ),
-          });
+          const previewResult = await window.electronAPI?.startDictationPreview?.(
+            {
+              provider,
+              model,
+              language,
+              display: shouldDisplayDictationPreview(
+                showTranscriptionPreview,
+                this.voiceAgentRequested
+              ),
+            },
+            captureTranscriptionClaim(provider, model)
+          );
+          if (previewResult && !previewResult.success) {
+            throw failedTranscriptionStartError(previewResult, "Preview transcription failed");
+          }
           this._streamingCommitActive = streamingCommit;
         } catch (e) {
+          if (isTranscriptionAdmissionError(e)) throw e;
           logger.warn("Preview worklet setup failed", { error: e.message }, "audio");
         }
       }
@@ -1960,7 +2041,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
 
       const transcriptionStart = performance.now();
-      let result = await window.electronAPI.transcribeLocalWhisper(arrayBuffer, options);
+      let result = await window.electronAPI.transcribeLocalWhisper(
+        arrayBuffer,
+        options,
+        captureTranscriptionClaim("whisper", model)
+      );
       timings.transcriptionProcessingDurationMs = Math.round(
         performance.now() - transcriptionStart
       );
@@ -1980,11 +2065,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           // typically VAD stripping pause-heavy speech (#1454). Retry once
           // without the prompt and without VAD: real speech comes back as the
           // true transcript, true silence comes back empty.
-          const retry = await window.electronAPI.transcribeLocalWhisper(arrayBuffer, {
-            model: options.model,
-            ...(options.language ? { language: options.language } : {}),
-            skipVad: true,
-          });
+          const retry = await window.electronAPI.transcribeLocalWhisper(
+            arrayBuffer,
+            {
+              model: options.model,
+              ...(options.language ? { language: options.language } : {}),
+              skipVad: true,
+            },
+            captureTranscriptionClaim("whisper", model)
+          );
           if (!retry?.success || !retry.text?.trim() || this.isDictionaryEcho(retry.text)) {
             throw dictionaryEchoError();
           }
@@ -2011,9 +2100,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       } else if (result.success === false && result.message === "No audio detected") {
         throw new Error("No audio detected");
       } else {
-        throw new Error(result.message || result.error || "Local Whisper transcription failed");
+        throw failedTranscriptionStartError(result, "Local Whisper transcription failed");
       }
     } catch (error) {
+      if (isTranscriptionAdmissionError(error)) throw error;
       if (error.selectionEditFatal) {
         throw error;
       }
@@ -2081,7 +2171,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
 
         const transcriptionStart = performance.now();
-        result = await window.electronAPI.transcribeLocalParakeet(arrayBuffer, { model });
+        result = await window.electronAPI.transcribeLocalParakeet(
+          arrayBuffer,
+          { model },
+          captureTranscriptionClaim("nvidia", model)
+        );
         timings.transcriptionProcessingDurationMs = Math.round(
           performance.now() - transcriptionStart
         );
@@ -2117,9 +2211,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       } else if (result.success === false && result.message === "No audio detected") {
         throw new Error("No audio detected");
       } else {
-        throw new Error(result.message || result.error || "Parakeet transcription failed");
+        throw failedTranscriptionStartError(result, "Parakeet transcription failed");
       }
     } catch (error) {
+      if (isTranscriptionAdmissionError(error)) throw error;
       if (error.selectionEditFatal) {
         throw error;
       }
@@ -2326,6 +2421,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         stack: error.stack,
       });
 
+      if (isReasoningAdmissionError(error)) throw error;
+
       // A screenshot the model or transport rejects must not cost the user
       // their command — rerun it text-only, swapping in the pre-built prompt
       // that never had the screen-context suffix. Rebuilding from scratch
@@ -2506,6 +2603,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.pendingSelectionEdit = { sessionId: capture.sessionId };
       return replacement;
     } catch (cause) {
+      if (isReasoningAdmissionError(cause)) throw cause;
       const error = new Error(`Selection edit failed: ${cause.message}`);
       error.code = "SELECTION_EDIT_REASONING_FAILED";
       error.messageKey = "hooks.audioRecording.selectionEditing.reasoningFailed";
@@ -2592,15 +2690,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const runCleanup = async (currentText) => {
       if (cleanup.mode === "cloudReason") {
         const reasonResult = await withSessionRefresh(async () => {
-          const res = await window.electronAPI.cloudReason(currentText, {
-            agentName,
-            promptMode: "cleanup",
-            customDictionary: getDictionaryHintWords(settings),
-            customPrompt: this.getCustomPrompt(),
-            language: this.getCleanupLanguage(settings),
-            locale: settings.uiLanguage || "en",
-            ...(cleanup.meta || {}),
-          });
+          const res = await window.electronAPI.cloudReason(
+            currentText,
+            {
+              agentName,
+              promptMode: "cleanup",
+              customDictionary: getDictionaryHintWords(settings),
+              customPrompt: this.getCustomPrompt(),
+              language: this.getCleanupLanguage(settings),
+              locale: settings.uiLanguage || "en",
+              ...(cleanup.meta || {}),
+              inferenceScope: "dictationCleanup",
+              setupMode: getSettings().enterpriseSetupMode,
+            },
+            captureOpenWhisprReasoningClaim()
+          );
           if (!res.success) {
             const err = new Error(res.error || "Cloud reasoning failed");
             err.code = res.code;
@@ -2638,6 +2742,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         ),
         translateIsCloud: route.config?.provider === "openwhispr",
         onCleanupError: (cleanupError) => {
+          if (isReasoningAdmissionError(cleanupError)) throw cleanupError;
           const { level = "error", channel, extra } = cleanup.log || {};
           logger[level](
             "Cleanup step failed in translation chain, translating raw transcript",
@@ -2806,6 +2911,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       } catch (error) {
         if (error.selectionEditFatal) throw error;
         if (wasCancelled()) return normalizedText;
+        if (isReasoningAdmissionError(error)) throw error;
         logger.logReasoning("REASONING_FAILED", {
           error: error.message,
           stack: error.stack,
@@ -3010,7 +3116,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Use withSessionRefresh to handle AUTH_EXPIRED automatically
     const transcriptionStart = performance.now();
     const result = await withSessionRefresh(async () => {
-      const res = await window.electronAPI.cloudTranscribe(arrayBuffer, opts);
+      const res = await window.electronAPI.cloudTranscribe(
+        arrayBuffer,
+        opts,
+        captureTranscriptionClaim("openwhispr")
+      );
       if (!res.success) {
         const err = new Error(res.error || "Cloud transcription failed");
         err.code = res.code;
@@ -3063,22 +3173,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           if (hasTextContent(reasoned)) processedText = reasoned;
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
           const reasonResult = await withSessionRefresh(async () => {
-            const res = await window.electronAPI.cloudReason(processedText, {
-              agentName,
-              promptMode: "cleanup",
-              customDictionary: getDictionaryHintWords(settings),
-              customPrompt: this.getCustomPrompt(),
-              language: this.getCleanupLanguage(settings),
-              locale: settings.uiLanguage || "en",
-              sttProvider: result.sttProvider,
-              sttModel: result.sttModel,
-              sttProcessingMs: result.sttProcessingMs,
-              sttWordCount: result.sttWordCount,
-              sttLanguage: result.sttLanguage,
-              audioDurationMs: result.audioDurationMs,
-              audioSizeBytes,
-              audioFormat,
-            });
+            const res = await window.electronAPI.cloudReason(
+              processedText,
+              {
+                agentName,
+                promptMode: "cleanup",
+                customDictionary: getDictionaryHintWords(settings),
+                customPrompt: this.getCustomPrompt(),
+                language: this.getCleanupLanguage(settings),
+                locale: settings.uiLanguage || "en",
+                inferenceScope: "dictationCleanup",
+                setupMode: getSettings().enterpriseSetupMode,
+                sttProvider: result.sttProvider,
+                sttModel: result.sttModel,
+                sttProcessingMs: result.sttProcessingMs,
+                sttWordCount: result.sttWordCount,
+                sttLanguage: result.sttLanguage,
+                audioDurationMs: result.audioDurationMs,
+                audioSizeBytes,
+                audioFormat,
+              },
+              captureOpenWhisprReasoningClaim()
+            );
             if (!res.success) {
               const err = new Error(res.error || "Cloud reasoning failed");
               err.code = res.code;
@@ -3134,7 +3250,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       } catch (reasonError) {
         if (reasonError.selectionEditFatal) throw reasonError;
-        if (!wasCancelled()) {
+        const cancelled = wasCancelled();
+        if (isReasoningAdmissionError(reasonError) && !cancelled) throw reasonError;
+        if (!cancelled) {
           logger.error(
             "Cloud reasoning failed, using raw transcription",
             { error: reasonError.message },
@@ -3185,6 +3303,26 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const durationSeconds = metadata.durationSeconds ?? null;
       const model = this.getTranscriptionModel();
       const provider = apiSettings.cloudTranscriptionProvider || "openai";
+      const route = resolveTranscriptionRoute({
+        settings: { ...apiSettings, useLocalWhisper: false },
+        policy: usePolicyStore.getState(),
+        providers: getTranscriptionProviders(),
+        request: { model, effectiveLanguage: language || undefined },
+      });
+      if (route.transport === "error") {
+        const error = new Error(route.message);
+        if (route.code) error.code = route.code;
+        if (route.messageKey) error.messageKey = route.messageKey;
+        throw error;
+      }
+      if (route.transport === "local") {
+        throw new Error("Local transcription must use a local manager");
+      }
+      const admissionModel =
+        route.provider === "tinfoil"
+          ? getBatchTranscriptionModel("tinfoil") || null
+          : route.model || null;
+      const transcriptionModel = admissionModel || model;
 
       logger.debug(
         "Transcription request starting",
@@ -3205,7 +3343,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Dispatch before endpoint resolution (which defaults to OpenAI and would leak
       // the key). Self-hosted wins, so a leftover proxied provider isn't diverted here.
       const proxySpec = PROXY_TRANSCRIPTION_PROVIDERS[provider];
-      if (proxySpec && !isSelfHostedTranscription(apiSettings)) {
+      if (proxySpec && route.transport === "proxied") {
         const call = proxySpec.ipc();
         if (!call) {
           throw new Error(`${proxySpec.displayName} transcription is unavailable in this window`);
@@ -3214,7 +3352,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const result = await call(
           proxySpec.buildPayload({
             audioBuffer: await optimizedAudio.arrayBuffer(),
-            model,
+            model: transcriptionModel,
             language,
             apiSettings,
             dictionaryPrompt: this.getWhisperPrompt(apiSettings),
@@ -3222,7 +3360,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               .map((t) => t.trim().slice(0, 50))
               .filter(Boolean)
               .slice(0, 100),
-          })
+          }),
+          captureTranscriptionClaim(route.provider, admissionModel)
         );
         if (result?.error) {
           const err = new Error(result.error);
@@ -3273,13 +3412,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
 
       formData.append("file", optimizedAudio, `audio.${extension}`);
-      formData.append("model", model);
+      formData.append("model", transcriptionModel);
 
       if (language) {
         formData.append("language", language);
       }
 
-      const endpoint = this.getTranscriptionEndpoint(model);
+      if (route.transport !== "http-batch") {
+        throw new Error(`${route.provider} transcription route is unavailable`);
+      }
+      const endpoint = route.endpoint;
 
       // Groq rejects prompts > 896 chars (incl. when reached via "custom" provider).
       // 890 leaves margin for UTF-16 vs codepoint counting drift.
@@ -3305,7 +3447,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("prompt", dictionaryPrompt);
       }
 
-      const shouldStream = this.shouldStreamTranscription(model, provider);
+      const shouldStream = this.shouldStreamTranscription(transcriptionModel, provider);
       if (shouldStream) {
         formData.append("stream", "true");
       }
@@ -3348,6 +3490,36 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       requestController = new AbortController();
       this._activeTranscriptionAbortController = requestController;
+      const claim = captureTranscriptionClaim(route.provider, admissionModel);
+      const authorizeTranscriptionStart = window.electronAPI.authorizeTranscriptionStart;
+      if (typeof authorizeTranscriptionStart !== "function") {
+        throw Object.assign(new Error("Transcription authorization is unavailable"), {
+          code: "AUTHORIZATION_BOUNDARY_CHANGED",
+        });
+      }
+      let admission;
+      try {
+        admission = await authorizeTranscriptionStart(
+          { provider: route.provider, model: admissionModel },
+          claim
+        );
+      } catch (error) {
+        if (isTranscriptionAdmissionError(error)) throw error;
+        const admissionError = failedTranscriptionStartError(
+          error,
+          "Transcription authorization failed"
+        );
+        admissionError.code = "AUTHORIZATION_BOUNDARY_CHANGED";
+        throw admissionError;
+      }
+      if (admission?.success !== true) {
+        const error = failedTranscriptionStartError(
+          admission,
+          "Transcription authorization failed"
+        );
+        if (!error.code) error.code = "AUTHORIZATION_BOUNDARY_CHANGED";
+        throw error;
+      }
       const response = await fetch(endpoint, {
         method: "POST",
         headers,
@@ -3496,6 +3668,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     } catch (error) {
       if (error.name === "AbortError") throw error;
+      if (isTranscriptionAdmissionError(error)) throw error;
       if (error.selectionEditFatal) {
         throw error;
       }
@@ -3518,7 +3691,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             options.language = language;
           }
 
-          const result = await window.electronAPI.transcribeLocalWhisper(arrayBuffer, options);
+          const result = await window.electronAPI.transcribeLocalWhisper(
+            arrayBuffer,
+            options,
+            captureTranscriptionClaim("whisper", fallbackModel)
+          );
+
+          if (!result.success) {
+            throw failedTranscriptionStartError(result, "Local fallback failed");
+          }
 
           if (result.success && result.text) {
             const text = await this.processTranscription(
@@ -4665,22 +4846,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
           const reasonResult = await withSessionRefresh(async () => {
-            const res = await window.electronAPI.cloudReason(finalText, {
-              agentName,
-              promptMode: "cleanup",
-              customDictionary: getDictionaryHintWords(stSettings),
-              customPrompt: this.getCustomPrompt(),
-              language: this.getCleanupLanguage(stSettings),
-              locale: stSettings.uiLanguage || "en",
-              sttProvider: this.getStreamingProviderName(),
-              sttModel: streamingSttModel,
-              sttProcessingMs: streamingSttProcessingMs,
-              sttWordCount: streamingSttWordCount,
-              sttLanguage: streamingSttLanguage,
-              audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
-              audioSizeBytes: streamingAudioBytesSent || undefined,
-              audioFormat: "linear16",
-            });
+            const res = await window.electronAPI.cloudReason(
+              finalText,
+              {
+                agentName,
+                promptMode: "cleanup",
+                customDictionary: getDictionaryHintWords(stSettings),
+                customPrompt: this.getCustomPrompt(),
+                language: this.getCleanupLanguage(stSettings),
+                locale: stSettings.uiLanguage || "en",
+                inferenceScope: "dictationCleanup",
+                setupMode: getSettings().enterpriseSetupMode,
+                sttProvider: this.getStreamingProviderName(),
+                sttModel: streamingSttModel,
+                sttProcessingMs: streamingSttProcessingMs,
+                sttWordCount: streamingSttWordCount,
+                sttLanguage: streamingSttLanguage,
+                audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
+                audioSizeBytes: streamingAudioBytesSent || undefined,
+                audioFormat: "linear16",
+              },
+              captureOpenWhisprReasoningClaim()
+            );
             if (!res.success) {
               const err = new Error(res.error || "Cloud reasoning failed");
               err.code = res.code;
@@ -4753,6 +4940,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       } catch (reasonError) {
         if (wasCancelled()) return true;
+        if (isReasoningAdmissionError(reasonError)) throw reasonError;
         if (reasonError.selectionEditFatal) {
           this.pendingSelectionEdit = null;
           this.onError?.({

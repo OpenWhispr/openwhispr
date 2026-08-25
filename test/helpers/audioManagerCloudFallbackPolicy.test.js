@@ -54,6 +54,16 @@ const rejectFetch = (message) => () => {
   throw new Error(message);
 };
 
+const guestClaim = (provider, model) => ({
+  accountId: null,
+  workspaceId: null,
+  authGeneration: null,
+  configGeneration: null,
+  managed: false,
+  provider,
+  model,
+});
+
 function buildManagedPolicy(allowedTranscriptionModes) {
   return {
     version: 1,
@@ -142,6 +152,87 @@ test("cloud->local fallback under org policy", async (t) => {
     assert.equal(result.source, "local-fallback");
     assert.equal(localWhisperCalls, 1);
   });
+});
+
+test("managed local admission failure is terminal and never reaches cloud fallback", async (t) => {
+  const { window, vite, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-managed-local-admission-fallback-test-",
+    settingsKey: "__managedLocalAdmissionSettings",
+  });
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  const { rememberManagedLocalModelBinding } = await vite.ssrLoadModule(
+    "/components/onboarding/managedLocalModels.ts"
+  );
+  const identity = {
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 7,
+    configGeneration: 12,
+  };
+  useEnterpriseIdentityStore.setState({
+    accountId: identity.accountId,
+    workspaceId: identity.workspaceId,
+    authGeneration: identity.authGeneration,
+    status: "ready",
+    verdict: "configured",
+    failClosed: false,
+    config: {
+      workspaceId: identity.workspaceId,
+      version: 12,
+      generation: identity.configGeneration,
+      identity: {},
+      providers: [],
+      localModels: { selections: [{ provider: "whisper", model: "small" }] },
+    },
+  });
+  rememberManagedLocalModelBinding({
+    ...identity,
+    category: "dictation",
+    provider: "whisper",
+    model: "small",
+  });
+  setSettings({
+    isSignedIn: true,
+    useLocalWhisper: true,
+    localTranscriptionProvider: "whisper",
+    whisperModel: "small",
+    allowOpenAIFallback: true,
+    cloudTranscriptionProvider: "openai",
+    preferredLanguage: "auto",
+    customDictionary: [],
+  });
+
+  const localCalls = [];
+  window.electronAPI.transcribeLocalWhisper = async (...args) => {
+    localCalls.push(args);
+    return {
+      success: false,
+      error: "Managed local model is unavailable.",
+      code: "MANAGED_LOCAL_MODEL_UNAVAILABLE",
+    };
+  };
+  const fetched = captureFetch(t, rejectFetch("cloud fallback must not run"));
+  const manager = createManager({
+    getEffectiveSttLanguage: () => "auto",
+    getWhisperPrompt: () => null,
+    isDictionaryEcho: () => false,
+  });
+  const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+
+  await assert.rejects(manager.processWithLocalWhisper(audioBlob, "small"), (error) => {
+    assert.equal(error.code, "MANAGED_LOCAL_MODEL_UNAVAILABLE");
+    return true;
+  });
+  assert.equal(localCalls.length, 1);
+  assert.deepEqual(localCalls[0][2], {
+    ...identity,
+    managed: true,
+    provider: "whisper",
+    model: "small",
+  });
+  assert.deepEqual(fetched, []);
 });
 
 test("managed custom transcription never falls through to OpenAI", async (t) => {
@@ -280,6 +371,204 @@ test("unmanaged custom transcription fails closed instead of defaulting to OpenA
   });
 });
 
+test("direct renderer transcription is admitted against its exact route before fetch", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-direct-http-admission-test-",
+    settingsKey: "__directHttpAdmissionSettings",
+  });
+  setSettings({
+    allowLocalFallback: false,
+    cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
+    cloudTranscriptionProvider: "custom",
+    isSignedIn: false,
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+  });
+
+  const events = [];
+  window.electronAPI.authorizeTranscriptionStart = async (route, claim) => {
+    events.push({ type: "admission", route, claim });
+    return { success: true };
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    events.push({ type: "fetch" });
+    return okJson({ text: "direct text" })();
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const manager = createManager({
+    getAPIKey: async () => "custom-key",
+    getTranscriptionModel: () => "whisper-1",
+  });
+  const result = await manager.processWithOpenAIAPI(
+    new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" })
+  );
+
+  assert.equal(result.success, true);
+  assert.deepEqual(events, [
+    {
+      type: "admission",
+      route: { provider: "custom", model: "whisper-1" },
+      claim: {
+        accountId: null,
+        workspaceId: null,
+        authGeneration: null,
+        configGeneration: null,
+        managed: false,
+        provider: "custom",
+        model: "whisper-1",
+      },
+    },
+    { type: "fetch" },
+  ]);
+});
+
+test("direct renderer payload uses the same provider-normalized model as admission", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-direct-http-model-admission-test-",
+    settingsKey: "__directHttpModelAdmissionSettings",
+  });
+  setSettings({
+    allowLocalFallback: false,
+    cloudTranscriptionBaseUrl: "",
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionModel: "voxtral-mini-latest",
+    isSignedIn: false,
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+  });
+
+  let admission;
+  let requestModel;
+  window.electronAPI.authorizeTranscriptionStart = async (route, claim) => {
+    admission = { route, claim };
+    return { success: true };
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_endpoint, init) => {
+    requestModel = init.body.get("model");
+    return okJson({ text: "normalized text" })();
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const manager = createManager({
+    getAPIKey: async () => "openai-key",
+    getTranscriptionModel: () => "voxtral-mini-latest",
+  });
+  await manager.processWithOpenAIAPI(new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" }));
+
+  assert.equal(requestModel, "gpt-4o-mini-transcribe");
+  assert.deepEqual(admission, {
+    route: { provider: "openai", model: "gpt-4o-mini-transcribe" },
+    claim: guestClaim("openai", "gpt-4o-mini-transcribe"),
+  });
+});
+
+test("direct renderer fetch requires an explicit successful admission", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-direct-http-required-admission-test-",
+    settingsKey: "__directHttpRequiredAdmissionSettings",
+  });
+  setSettings({
+    allowLocalFallback: true,
+    cloudTranscriptionBaseUrl: "https://stt.example.com/v1",
+    cloudTranscriptionProvider: "custom",
+    fallbackWhisperModel: "base",
+    isSignedIn: false,
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+  });
+  const manager = createManager({
+    getAPIKey: async () => "custom-key",
+    getTranscriptionModel: () => "whisper-1",
+  });
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    return okJson({ text: "must not dispatch" })();
+  };
+  let localFallbackCalls = 0;
+  window.electronAPI.transcribeLocalWhisper = async () => {
+    localFallbackCalls += 1;
+    return { success: true, text: "must not fall back" };
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const rows = [
+    { name: "missing bridge", bridge: null, expectedCode: "AUTHORIZATION_BOUNDARY_CHANGED" },
+    {
+      name: "undefined response",
+      bridge: async () => undefined,
+      expectedCode: "AUTHORIZATION_BOUNDARY_CHANGED",
+    },
+    {
+      name: "null response",
+      bridge: async () => null,
+      expectedCode: "AUTHORIZATION_BOUNDARY_CHANGED",
+    },
+    {
+      name: "malformed response",
+      bridge: async () => ({}),
+      expectedCode: "AUTHORIZATION_BOUNDARY_CHANGED",
+    },
+    {
+      name: "explicit rejection",
+      bridge: async () => ({
+        success: false,
+        error: "Managed config unavailable",
+        code: "MANAGED_CONFIG_UNAVAILABLE",
+      }),
+      expectedCode: "MANAGED_CONFIG_UNAVAILABLE",
+    },
+    {
+      name: "rejected transport promise",
+      bridge: async () => {
+        throw new Error("IPC transport failed");
+      },
+      expectedCode: "AUTHORIZATION_BOUNDARY_CHANGED",
+    },
+    {
+      name: "rejected coded admission",
+      bridge: async () => {
+        throw Object.assign(new Error("Managed config unavailable"), {
+          code: "MANAGED_CONFIG_UNAVAILABLE",
+          messageKey: "common.managedConfigUnavailable",
+        });
+      },
+      expectedCode: "MANAGED_CONFIG_UNAVAILABLE",
+      expectedMessageKey: "common.managedConfigUnavailable",
+    },
+  ];
+
+  for (const row of rows) {
+    await t.test(row.name, async () => {
+      fetchCalls = 0;
+      localFallbackCalls = 0;
+      if (row.bridge) window.electronAPI.authorizeTranscriptionStart = row.bridge;
+      else delete window.electronAPI.authorizeTranscriptionStart;
+
+      await assert.rejects(
+        manager.processWithOpenAIAPI(new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" })),
+        (error) => {
+          assert.equal(error.code, row.expectedCode);
+          assert.equal(error.messageKey, row.expectedMessageKey);
+          return true;
+        }
+      );
+      assert.equal(fetchCalls, 0, row.name);
+      assert.equal(localFallbackCalls, 0, row.name);
+    });
+  }
+});
+
 test("self-hosted mode is never hijacked by a leftover proxied provider", async (t) => {
   const { window, setSettings, createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-selfhosted-hijack-test-",
@@ -416,8 +705,8 @@ test("proxied providers dispatch through the registry", async (t) => {
     ["xai", "proxyXaiTranscription"],
     ["corti", "proxyCortiTranscription"],
   ]) {
-    window.electronAPI[channel] = async (payload) => {
-      payloads[provider] = payload;
+    window.electronAPI[channel] = async (payload, claim) => {
+      payloads[provider] = { payload, claim };
       return { text: "proxied text" };
     };
   }
@@ -447,15 +736,19 @@ test("proxied providers dispatch through the registry", async (t) => {
       assert.equal(result.success, true);
       assert.equal(result.source, provider);
     }
-    assert.equal(payloads.tinfoil.prompt, dictionary);
+    assert.equal(payloads.tinfoil.payload.prompt, dictionary);
     // contextBias is built from the untruncated dictionary: all 30 terms survive.
-    assert.equal(payloads.mistral.contextBias.length, 30);
-    assert.equal(payloads.mistral.model, "voxtral-mini-latest");
-    assert.deepEqual(payloads.xai.keyterms, ["Alpha", "Beta"]);
-    assert.equal(payloads.xai.language, undefined);
-    assert.equal(payloads.corti.language, "en");
-    assert.equal(payloads.corti.environment, "eu");
-    assert.equal(payloads.corti.tenant, "acme");
+    assert.equal(payloads.mistral.payload.contextBias.length, 30);
+    assert.equal(payloads.mistral.payload.model, "voxtral-mini-latest");
+    assert.deepEqual(payloads.xai.payload.keyterms, ["Alpha", "Beta"]);
+    assert.equal(payloads.xai.payload.language, undefined);
+    assert.equal(payloads.corti.payload.language, "en");
+    assert.equal(payloads.corti.payload.environment, "eu");
+    assert.equal(payloads.corti.payload.tenant, "acme");
+    assert.deepEqual(payloads.tinfoil.claim, guestClaim("tinfoil", "voxtral-small-24b"));
+    assert.deepEqual(payloads.mistral.claim, guestClaim("mistral", "voxtral-mini-latest"));
+    assert.deepEqual(payloads.xai.claim, guestClaim("xai", "grok-stt"));
+    assert.deepEqual(payloads.corti.claim, guestClaim("corti", "corti-transcribe"));
     assert.equal(fetched.length, 0);
   });
 

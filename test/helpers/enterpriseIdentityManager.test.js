@@ -112,7 +112,7 @@ test("deduplicates config and Azure token refreshes while keeping cloud tokens o
   assert.deepEqual(calls, { config: 1, assertion: 1, azure: 1 });
 });
 
-test("authorization failures evict cached config while server failures use it transiently", async (t) => {
+test("authorization failures evict session config while server failures retain it transiently", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const cachePath = path.join(tempDir, "config.json");
@@ -130,14 +130,14 @@ test("authorization failures evict cached config while server failures use it tr
 
   assert.equal((await manager.getConfig(request())).status, "network");
   response = jsonResponse({ error: "Temporarily unavailable" }, 503);
-  assert.equal((await manager.getConfig({ ...request(), forceRefresh: true })).status, "cached");
+  assert.equal((await manager.getConfig({ ...request(), forceRefresh: true })).status, "current");
 
   response = jsonResponse({ error: "Sign in with company SSO", code: "SSO_REQUIRED" }, 403);
   const denied = await manager.getConfig({ ...request(), forceRefresh: true });
   assert.equal(denied.success, false);
   assert.equal(denied.code, "SSO_REQUIRED");
   assert.equal(denied.enforcementRequired, true);
-  assert.deepEqual(JSON.parse(fs.readFileSync(cachePath, "utf8")).entries, []);
+  assert.equal(fs.existsSync(cachePath), false);
 });
 
 test("an Enterprise-plan downgrade clears prior managed enforcement", async (t) => {
@@ -169,7 +169,7 @@ test("an Enterprise-plan downgrade clears prior managed enforcement", async (t) 
   assert.equal(snapshots.at(-1).enforcementRequired, false);
 });
 
-test("a malformed successful config response fails closed instead of using disk cache", async (t) => {
+test("a malformed successful config response fails closed without persisting a disk cache", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const enforcedConfig = managedConfig();
@@ -191,7 +191,7 @@ test("a malformed successful config response fails closed instead of using disk 
   assert.equal(malformed.success, false);
   assert.equal(malformed.code, "MANAGED_CONFIG_INVALID");
   assert.equal(malformed.enforcementRequired, true);
-  assert.deepEqual(JSON.parse(fs.readFileSync(cachePath, "utf8")).entries, []);
+  assert.equal(fs.existsSync(cachePath), false);
 });
 
 test("a first transient failure does not claim that enforcement is disabled", async (t) => {
@@ -210,6 +210,84 @@ test("a first transient failure does not claim that enforcement is disabled", as
   const unavailable = await manager.getConfig(request());
   assert.equal(unavailable.success, false);
   assert.equal(unavailable.enforcementRequired, undefined);
+});
+
+test("cold authorization and malformed failures remain fail-closed", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const responses = [
+    jsonResponse({ error: "Company SSO is required", code: "SSO_REQUIRED" }, 403),
+    jsonResponse({ error: "Session expired", code: "AUTH_EXPIRED" }, 401),
+    new Response("{", { status: 200, headers: { "Content-Type": "application/json" } }),
+  ];
+
+  for (const response of responses) {
+    const manager = createEnterpriseIdentityManager({
+      cachePath: path.join(tempDir, "config.json"),
+      getApiUrl: () => "https://api.example.com",
+      getAppVersion: () => "1.8.1",
+      proxyFetch: async () => response,
+      tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+    });
+    const result = await manager.getConfig(request());
+    assert.equal(result.success, false);
+    assert.notEqual(result.enforcementRequired, false);
+  }
+});
+
+test("an authoritative unmanaged verdict stays available for this manager session", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  let response = jsonResponse(
+    { error: "An active Enterprise workspace is required", code: "ENTERPRISE_REQUIRED" },
+    403
+  );
+  const manager = createEnterpriseIdentityManager({
+    cachePath: path.join(tempDir, "config.json"),
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => response,
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+
+  const unmanaged = await manager.getConfig(request());
+  assert.equal(unmanaged.success, false);
+  assert.equal(unmanaged.enforcementRequired, false);
+
+  response = null;
+  const retained = await manager.getConfig({ ...request(), forceRefresh: true });
+  assert.equal(retained.success, true);
+  assert.equal(retained.status, "current");
+  assert.equal(retained.config, null);
+  assert.equal(retained.enforcementRequired, false);
+});
+
+test("manager recreation never recovers an identity verdict from cachePath", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const cachePath = path.join(tempDir, "config.json");
+  const options = {
+    cachePath,
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.8.1",
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  };
+  const first = createEnterpriseIdentityManager({
+    ...options,
+    proxyFetch: async () => jsonResponse({ data: managedConfig() }),
+  });
+  assert.equal((await first.getConfig(request())).success, true);
+
+  const recreated = createEnterpriseIdentityManager({
+    ...options,
+    proxyFetch: async () => {
+      throw new Error("offline");
+    },
+  });
+  const result = await recreated.getConfig(request());
+  assert.equal(result.success, false);
+  assert.equal(result.enforcementRequired, undefined);
+  assert.equal(fs.existsSync(cachePath), false);
 });
 
 test("a generation change discards old cloud credentials and broadcasts the new envelope", async (t) => {

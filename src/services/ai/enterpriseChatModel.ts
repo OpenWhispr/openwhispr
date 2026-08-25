@@ -6,6 +6,7 @@ import type {
 import type { EnterpriseProvider } from "../../models/ModelRegistry";
 import { getEnterpriseCallSettings } from "./enterpriseSettings";
 import type { InferenceScope } from "../../config/inferenceScopes";
+import type { ReasoningStartClaim } from "../../types/electron";
 
 // Enterprise SDKs (Bedrock/Azure/Vertex) must run in the main process — SigV4
 // signing and CORS rule out renderer fetches. This LanguageModelV3 shim keeps
@@ -42,7 +43,8 @@ function pickSerializableOptions(options: LanguageModelV3CallOptions) {
 export function createEnterpriseChatModel(
   provider: EnterpriseProvider,
   modelId: string,
-  inferenceScope: InferenceScope = "chatIntelligence"
+  inferenceScope: InferenceScope = "chatIntelligence",
+  reasoningStartClaim?: ReasoningStartClaim
 ): LanguageModelV3 {
   return {
     specificationVersion: "v3",
@@ -61,7 +63,12 @@ export function createEnterpriseChatModel(
       }
 
       const streamId = crypto.randomUUID();
-      const config = getEnterpriseCallSettings(provider, inferenceScope);
+      const config = getEnterpriseCallSettings(
+        provider,
+        inferenceScope,
+        modelId,
+        reasoningStartClaim
+      );
       let unsubscribe: (() => void) | undefined;
       const stopListening = () => {
         unsubscribe?.();
@@ -71,17 +78,17 @@ export function createEnterpriseChatModel(
       const stream = new ReadableStream<LanguageModelV3StreamPart>({
         start: (controller) => {
           let settled = false;
-          const fail = (message: string) => {
+          const fail = (message: string, code?: string) => {
             if (settled) return;
             settled = true;
             stopListening();
-            controller.error(new Error(message));
+            controller.error(Object.assign(new Error(message), { code }));
           };
 
           unsubscribe = api.onEnterpriseStreamPart!((payload) => {
             if (payload.streamId !== streamId) return;
             if (payload.error) {
-              fail(payload.error);
+              fail(payload.error, payload.code);
             } else if (payload.done) {
               if (settled) return;
               settled = true;
@@ -104,9 +111,11 @@ export function createEnterpriseChatModel(
             options: pickSerializableOptions(options),
           })
             .then((result) => {
-              if (result && !result.success) fail(result.error || "Enterprise stream failed");
+              if (result && !result.success) {
+                fail(result.error || "Enterprise stream failed", result.code);
+              }
             })
-            .catch((error: Error) => fail(error.message));
+            .catch((error: Error & { code?: string }) => fail(error.message, error.code));
         },
         cancel: () => {
           stopListening();

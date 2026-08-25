@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { useUsage } from "../hooks/useUsage";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import { useSettingsStore } from "../stores/settingsStore";
+import { ManagedLocalModelNotice } from "./settings/ManagedLocalModelNotice";
+import { useManagedLocalModelSelection } from "../hooks/useManagedLocalModelSelection";
 
 interface UpgradePromptProps {
   open: boolean;
@@ -22,6 +24,7 @@ export default function UpgradePrompt({
   const usage = useUsage();
   const { openBillingPortal } = useBillingPortal(usage);
   const isPastDue = usage?.isPastDue ?? false;
+  const managedSelection = useManagedLocalModelSelection("dictation");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -68,27 +71,33 @@ export default function UpgradePrompt({
               disabled={usage?.checkoutLoading}
             />
           )}
-          <OptionCard
-            title={t("upgradePrompt.useApiKey")}
-            description={t("upgradePrompt.useApiKeyDescription")}
-            onClick={() => {
-              const s = useSettingsStore.getState();
-              s.setTranscriptionMode("providers");
-              s.setCloudTranscriptionMode("byok");
-              onOpenChange(false);
-            }}
-          />
-          <OptionCard
-            title={t("upgradePrompt.switchToLocal")}
-            description={t("upgradePrompt.switchToLocalDescription")}
-            onClick={() => {
-              const s = useSettingsStore.getState();
-              s.setTranscriptionMode("local");
-              s.setUseLocalWhisper(true);
-              s.setCloudTranscriptionMode("byok");
-              onOpenChange(false);
-            }}
-          />
+          {managedSelection !== undefined ? (
+            <ManagedLocalModelNotice selection={managedSelection} />
+          ) : (
+            <>
+              <OptionCard
+                title={t("upgradePrompt.useApiKey")}
+                description={t("upgradePrompt.useApiKeyDescription")}
+                onClick={() => {
+                  const s = useSettingsStore.getState();
+                  s.setTranscriptionMode("providers");
+                  s.setCloudTranscriptionMode("byok");
+                  onOpenChange(false);
+                }}
+              />
+              <OptionCard
+                title={t("upgradePrompt.switchToLocal")}
+                description={t("upgradePrompt.switchToLocalDescription")}
+                onClick={() => {
+                  const s = useSettingsStore.getState();
+                  s.setTranscriptionMode("local");
+                  s.setUseLocalWhisper(true);
+                  s.setCloudTranscriptionMode("byok");
+                  onOpenChange(false);
+                }}
+              />
+            </>
+          )}
         </div>
 
         <p className="text-xs text-muted-foreground/60 text-center">

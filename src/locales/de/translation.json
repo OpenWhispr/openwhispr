@@ -179,6 +179,30 @@
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt."
   },
   "onboarding": {
+    "managedLocal": {
+      "title": "Unternehmensmodelle einrichten",
+      "description": "OpenWhispr verwendet nur lokal genehmigte Modelle.",
+      "status": {
+        "installed": "Installiert",
+        "preparing": "Genehmigte Modelle werden vorbereitet…",
+        "ready": "Unternehmensmodelle sind bereit",
+        "choose": "Genehmigtes Modell auswählen"
+      },
+      "recovery": { "title": "Die Einrichtung des Unternehmensmodells erfordert Aufmerksamkeit" },
+      "compatibility": {
+        "checking": "Gerätekompatibilität wird geprüft…",
+        "unsupported": "Dieses Modell wird auf diesem Gerät nicht unterstützt."
+      },
+      "errors": {
+        "config": "Unternehmensmodelleinstellungen sind nicht verfügbar.",
+        "capabilityCheck": "Die Gerätekompatibilität konnte nicht geprüft werden. Versuchen Sie es erneut.",
+        "reconciliation": "Die Einrichtung der Unternehmensmodelle konnte nicht abgeschlossen werden. Versuchen Sie es erneut.",
+        "cancelled": "Der Modelldownload wurde abgebrochen. Versuchen Sie es erneut.",
+        "downloadFailed": "Das Modell konnte nicht heruntergeladen werden. Versuchen Sie es erneut.",
+        "noCompatibleDictationModel": "Kein genehmigtes Diktiermodell ist mit diesem Gerät kompatibel.",
+        "noCompatibleAssistantModel": "Kein genehmigtes Assistentenmodell ist mit diesem Gerät kompatibel."
+      }
+    },
     "rehaul": {
       "permissions": {
         "title": "OpenWhispr in 3 Minuten einrichten",
@@ -3743,6 +3767,12 @@
     "activeTarget": "Aktive Zielsprache",
     "removeTarget": "{{language}} entfernen",
     "maxTargets": "Bis zu {{max}} Sprachen"
+  },
+  "managedLocalModels": {
+    "notice": {
+      "waiting": "Warten auf die Einrichtung des Unternehmensmodells",
+      "managedDescription": "Von Ihrem Unternehmen verwaltet"
+    }
   },
   "meetingNotification": {
     "title": "Meeting erkannt",

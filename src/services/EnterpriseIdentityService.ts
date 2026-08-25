@@ -2,11 +2,11 @@ import type { ManagedEnterpriseConfig } from "../types/enterpriseIdentity";
 
 export interface ManagedEnterpriseConfigResult {
   success: boolean;
-  status?: "network" | "current" | "cached" | "error";
+  status?: "network" | "current" | "error";
   accountId?: string | null;
   workspaceId?: string | null;
   authGeneration?: number | null;
-  config?: ManagedEnterpriseConfig;
+  config?: ManagedEnterpriseConfig | null;
   code?: string;
   error?: string;
   enforcementRequired?: boolean;

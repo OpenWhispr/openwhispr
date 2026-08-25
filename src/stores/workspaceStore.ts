@@ -4,6 +4,7 @@ import { WorkspacesService } from "../services/WorkspacesService";
 import logger from "../utils/logger";
 import { usePolicyStore } from "./policyStore";
 import { useEnterpriseIdentityStore } from "./enterpriseIdentityStore";
+import { installActiveWorkspaceSync } from "./activeWorkspaceSync";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -169,3 +170,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 }));
+
+if (typeof window !== "undefined") {
+  installActiveWorkspaceSync((workspaceId) => {
+    useWorkspaceStore.getState().setActiveWorkspaceId(workspaceId);
+  });
+}

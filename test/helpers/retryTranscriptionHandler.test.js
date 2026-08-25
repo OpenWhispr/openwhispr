@@ -65,6 +65,12 @@ let cortiBehavior = async () => ({ text: "corti text" });
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
   if (parent?.filename === handlersModulePath) {
+    if (request === "./tokenStore") {
+      return {
+        get: () => null,
+        getState: () => ({ token: null, generation: 0 }),
+      };
+    }
     if (request === "./cortiTranscription") {
       return {
         transcribeAudio: async (opts) => {
@@ -143,7 +149,7 @@ test.after(() => {
   Module._load = originalLoad;
 });
 
-const invoke = (settings, id = 7) => retryHandler({ sender: {} }, id, settings);
+const invoke = (settings, id = 7, claim) => retryHandler({ sender: {} }, id, settings, claim);
 
 test("retry: corti routes to the corti client, never OpenAI", async () => {
   fetches.length = 0;
@@ -161,6 +167,36 @@ test("retry: corti routes to the corti client, never OpenAI", async () => {
   assert.equal(cortiCalls[0].tenant, "acme");
   assert.equal(cortiCalls[0].language, "en");
   assert.equal(fetches.length, 0, "corti retry must not touch HTTP endpoints");
+});
+
+test("retry: Tinfoil admission uses its fixed batch model", async () => {
+  const settings = {
+    cloudTranscriptionProvider: "tinfoil",
+    cloudTranscriptionModel: "voxtral-mini-4b-realtime",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+    preferredLanguage: "auto",
+  };
+  const guestClaim = (model) => ({
+    accountId: null,
+    workspaceId: null,
+    authGeneration: null,
+    configGeneration: null,
+    managed: false,
+    provider: "tinfoil",
+    model,
+  });
+  const before = tinfoilCalls.length;
+
+  const stale = await invoke(settings, 7, guestClaim(null));
+  assert.equal(stale.success, false);
+  assert.equal(stale.code, "AUTHORIZATION_BOUNDARY_CHANGED");
+  assert.equal(tinfoilCalls.length, before);
+
+  const current = await invoke(settings, 7, guestClaim("voxtral-small-24b"));
+  assert.equal(current.success, true);
+  assert.equal(tinfoilCalls.length, before + 1);
+  tinfoilCalls.length = before;
 });
 
 test("retry: custom misconfiguration fails closed with a coded error", async () => {

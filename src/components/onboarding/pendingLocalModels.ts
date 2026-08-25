@@ -3,6 +3,7 @@ import type {
   ParakeetModelResult,
   WhisperModelResult,
 } from "../../types/electron";
+import type { ManagedLocalModelIdentity } from "./managedLocalModels";
 
 export const PENDING_LOCAL_MODELS_KEY = "pendingLocalModelSelectionsV1";
 
@@ -11,6 +12,12 @@ export type PendingLocalModelKind = "dictation" | "assistant";
 export interface PendingLocalModelSelection {
   provider: string;
   modelId: string;
+}
+
+export interface ManagedPendingLocalModelSelection
+  extends PendingLocalModelSelection, ManagedLocalModelIdentity {
+  transferState: "downloading" | "missing";
+  errorCode?: "DOWNLOAD_CANCELLED" | "DOWNLOAD_FAILED";
 }
 
 export type PendingLocalModelSelections = Partial<
@@ -68,6 +75,63 @@ export function forgetPendingLocalModel(kind: PendingLocalModelKind, modelId?: s
   if (modelId && selections[kind]?.modelId !== modelId) return;
   delete selections[kind];
   writePendingLocalModels(selections);
+}
+
+function isExactManagedPendingSelection(
+  selection: PendingLocalModelSelection | undefined,
+  expected: Omit<ManagedPendingLocalModelSelection, "transferState">
+): selection is ManagedPendingLocalModelSelection {
+  if (!selection) return false;
+  const candidate = selection as Partial<ManagedPendingLocalModelSelection>;
+  return (
+    candidate.provider === expected.provider &&
+    candidate.modelId === expected.modelId &&
+    candidate.accountId === expected.accountId &&
+    candidate.workspaceId === expected.workspaceId &&
+    candidate.authGeneration === expected.authGeneration &&
+    candidate.configGeneration === expected.configGeneration
+  );
+}
+
+/** Managed downloads use the established pending-selection key with an exact session fence. */
+export function rememberManagedPendingLocalModel(
+  kind: PendingLocalModelKind,
+  selection: ManagedPendingLocalModelSelection
+): void {
+  rememberPendingLocalModel(kind, selection);
+}
+
+export function consumeManagedPendingLocalModel(
+  kind: PendingLocalModelKind,
+  expected: ManagedPendingLocalModelSelection
+): ManagedPendingLocalModelSelection | null {
+  const selection = readManagedPendingLocalModel(kind, expected);
+  if (!selection) return null;
+  const selections = readPendingLocalModels();
+  delete selections[kind];
+  writePendingLocalModels(selections);
+  return selection;
+}
+
+export function readManagedPendingLocalModel(
+  kind: PendingLocalModelKind,
+  expected: Omit<ManagedPendingLocalModelSelection, "transferState">
+): ManagedPendingLocalModelSelection | null {
+  const selection = readPendingLocalModels()[kind];
+  return isExactManagedPendingSelection(selection, expected) ? selection : null;
+}
+
+export function markManagedPendingLocalModelCancelled(
+  kind: PendingLocalModelKind,
+  selection: PendingLocalModelSelection | undefined
+): boolean {
+  if (!selection || !("accountId" in selection)) return false;
+  rememberManagedPendingLocalModel(kind, {
+    ...(selection as ManagedPendingLocalModelSelection),
+    transferState: "missing",
+    errorCode: "DOWNLOAD_CANCELLED",
+  });
+  return true;
 }
 
 /** Drops every remembered selection, e.g. when onboarding ends on another mode. */

@@ -9,10 +9,13 @@ import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import SelfHostedPanel from "../SelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
+import { ManagedLocalModelNotice } from "./ManagedLocalModelNotice";
+import { useManagedLocalModelSelection } from "../../hooks/useManagedLocalModelSelection";
 
 export function UploadTranscriptionPanel() {
   const { t } = useTranslation();
   const startOnboarding = useStartOnboarding();
+  const managedSelection = useManagedLocalModelSelection("dictation");
 
   const {
     isSignedIn,
@@ -121,6 +124,10 @@ export function UploadTranscriptionPanel() {
       variant="settings"
     />
   );
+
+  if (managedSelection !== undefined) {
+    return <ManagedLocalModelNotice selection={managedSelection} />;
+  }
 
   return (
     <div className="space-y-3">

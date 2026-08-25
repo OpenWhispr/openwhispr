@@ -7,6 +7,7 @@ import {
   LLM_POLICY_PROVIDER_IDS,
   useSettingsStore,
   selectPolicyEffectiveSettings,
+  selectManagedLocalEffectiveSettings,
   selectResolvedLLMConfig,
   setResolvedLLMConfig,
 } from "../../stores/settingsStore";
@@ -30,6 +31,8 @@ import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
 import { resetOnboardingProgress } from "../onboarding/flow";
+import { ManagedLocalModelNotice } from "./ManagedLocalModelNotice";
+import { useManagedLocalModelSelection } from "../../hooks/useManagedLocalModelSelection";
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",
@@ -62,9 +65,13 @@ export default function InferenceConfigEditor({
   const policyState = usePolicySnapshot();
   const config = useSettingsStore(
     useShallow((settings) =>
-      selectResolvedLLMConfig(selectPolicyEffectiveSettings(settings, policyState), scope)
+      selectResolvedLLMConfig(
+        selectManagedLocalEffectiveSettings(selectPolicyEffectiveSettings(settings, policyState)),
+        scope
+      )
     )
   );
+  const managedLocalSelection = useManagedLocalModelSelection("assistant");
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
   const enterpriseSetupMode = useSettingsStore((s) => s.enterpriseSetupMode);
   const setEnterpriseSetupMode = useSettingsStore((s) => s.setEnterpriseSetupMode);
@@ -179,6 +186,26 @@ export default function InferenceConfigEditor({
         config.provider === "openrouter" ||
         !!getCloudModel(config.model)?.supportsThinking)) ||
     (effectiveMode === "local" && !!getLocalModel(config.model)?.supportsThinking);
+  const thinkingControl = showThinkingToggle ? (
+    <div className="flex items-start justify-between gap-3 pt-1">
+      <div className="flex-1 min-w-0">
+        <h4 className="text-sm font-medium text-foreground">
+          {t("reasoning.disableThinking.label")}
+        </h4>
+        <p className="text-xs text-muted-foreground">{t("reasoning.disableThinking.help")}</p>
+      </div>
+      <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
+    </div>
+  ) : null;
+
+  if (managedLocalSelection !== undefined) {
+    return (
+      <div className="space-y-3">
+        <ManagedLocalModelNotice selection={managedLocalSelection} />
+        {thinkingControl}
+      </div>
+    );
+  }
 
   if (managed.kind === "error") {
     return (
@@ -286,17 +313,7 @@ export default function InferenceConfigEditor({
         />
       )}
 
-      {showThinkingToggle && (
-        <div className="flex items-start justify-between gap-3 pt-1">
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-medium text-foreground">
-              {t("reasoning.disableThinking.label")}
-            </h4>
-            <p className="text-xs text-muted-foreground">{t("reasoning.disableThinking.help")}</p>
-          </div>
-          <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
-        </div>
-      )}
+      {thinkingControl}
 
       {effectiveMode === "enterprise" && (
         <EnterpriseSection

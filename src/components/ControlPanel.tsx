@@ -85,6 +85,10 @@ import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
+import { captureTranscriptionStartClaim } from "../helpers/managedLocalTranscriptionRuntime";
+import { isReasoningAdmissionError } from "../services/ai/enterpriseSettings";
+import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
+import { getBatchTranscriptionModel, getTranscriptionProviders } from "../models/ModelRegistry";
 
 const platform = getCachedPlatform();
 
@@ -632,7 +636,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           toast({ title: t("common.managedByOrg"), variant: "default" });
           return;
         }
-        const result = await window.electronAPI.retryTranscription(id, {
+        const retrySettings = {
           useLocalWhisper: s.useLocalWhisper,
           localTranscriptionProvider: s.localTranscriptionProvider,
           cloudTranscriptionMode: s.cloudTranscriptionMode,
@@ -648,7 +652,47 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           remoteTranscriptionType: s.remoteTranscriptionType,
           remoteTranscriptionUrl: s.remoteTranscriptionUrl,
           remoteTranscriptionModel: s.remoteTranscriptionModel,
+        };
+        const language =
+          s.preferredLanguage && s.preferredLanguage !== "auto"
+            ? s.preferredLanguage.split("-")[0]
+            : undefined;
+        const resolvedRoute = resolveTranscriptionRoute({
+          settings: retrySettings,
+          providers: getTranscriptionProviders(),
+          request: { effectiveLanguage: language },
         });
+        let route: { provider: string; model: string | null };
+        if (resolvedRoute.transport === "local") {
+          route =
+            s.localTranscriptionProvider === "nvidia"
+              ? {
+                  provider: "nvidia",
+                  model: s.parakeetModel || "parakeet-tdt-0.6b-v3",
+                }
+              : { provider: "whisper", model: s.whisperModel || null };
+        } else if (
+          s.transcriptionMode !== "self-hosted" &&
+          s.cloudTranscriptionMode === "openwhispr"
+        ) {
+          route = { provider: "openwhispr", model: null };
+        } else {
+          if (resolvedRoute.transport === "error") {
+            throw Object.assign(new Error(resolvedRoute.message), {
+              code: resolvedRoute.code,
+              messageKey: resolvedRoute.messageKey,
+            });
+          }
+          route = {
+            provider: resolvedRoute.provider,
+            model:
+              resolvedRoute.provider === "tinfoil"
+                ? getBatchTranscriptionModel("tinfoil") || null
+                : resolvedRoute.model || null,
+          };
+        }
+        const claim = captureTranscriptionStartClaim(route, s);
+        const result = await window.electronAPI.retryTranscription(id, retrySettings, claim);
         if (result.success && result.transcription) {
           const rawText = result.transcription.text;
           let finalTranscription = result.transcription;
@@ -688,12 +732,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     settings.translationSourceLanguage,
                     settings.translationTargetLanguage
                   ),
-                  onCleanupError: (cleanupError: Error) =>
+                  onCleanupError: (cleanupError: Error) => {
+                    if (isReasoningAdmissionError(cleanupError)) throw cleanupError;
                     logger.warn(
                       "Cleanup step failed in translation chain, translating raw transcript",
                       { error: cleanupError.message },
                       "transcription"
-                    ),
+                    );
+                  },
                   onEmptyTranslate: () =>
                     logger.warn(
                       "Translation step returned empty text, keeping previous text",
@@ -722,7 +768,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 // Translation disabled/unreachable since recording — fall through to cleanup.
                 handledTranslation = false;
               }
-            } catch {
+            } catch (error) {
+              if (isReasoningAdmissionError(error)) throw error;
               // Reasoning failed — keep the raw STT result
             }
           }
@@ -755,7 +802,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   }
                 }
               }
-            } catch {
+            } catch (error) {
+              if (isReasoningAdmissionError(error)) throw error;
               // Reasoning failed — keep the raw STT result
             }
           }

@@ -2,6 +2,7 @@ import type { InferenceProvider } from "./types";
 import { getCloudModel } from "../../../models/ModelRegistry";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import logger from "../../../utils/logger";
+import { getReasoningStartContext } from "../enterpriseSettings";
 
 export const anthropicProvider: InferenceProvider = {
   id: "anthropic",
@@ -21,6 +22,7 @@ export const anthropicProvider: InferenceProvider = {
     // Claude models from Opus 4.7 onward reject `temperature` with a 400, so
     // unknown models default to omitting it, which every model accepts.
     const supportsTemperature = getCloudModel(model)?.supportsTemperature ?? false;
+    const start = getReasoningStartContext(config);
     const result = await window.electronAPI.processAnthropicReasoning(
       userContent,
       model,
@@ -29,14 +31,16 @@ export const anthropicProvider: InferenceProvider = {
         ...config,
         systemPrompt,
         supportsTemperature,
-      }
+        setupMode: start.route.setupMode,
+      },
+      start.claim
     );
 
     const processingTimeMs = Date.now() - startTime;
 
     if (!result.success) {
       logger.logReasoning("ANTHROPIC_ERROR", { model, processingTimeMs, error: result.error });
-      throw new Error(result.error);
+      throw Object.assign(new Error(result.error), { code: result.code });
     }
 
     logger.logReasoning("ANTHROPIC_SUCCESS", {

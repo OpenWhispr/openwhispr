@@ -50,7 +50,15 @@ import type {
 } from "../hooks/useSettings";
 import type { Snippet } from "../utils/snippets";
 import type { EnterpriseSetupMode } from "../types/enterpriseIdentity";
-import { getManagedScopeResolution } from "./enterpriseIdentityStore";
+import {
+  getManagedScopeResolution,
+  selectManagedLocalModelContext,
+  useEnterpriseIdentityStore,
+} from "./enterpriseIdentityStore";
+import {
+  isCurrentManagedLocalModelBinding,
+  readManagedLocalModelBinding,
+} from "../components/onboarding/managedLocalModels";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -2800,8 +2808,102 @@ export function selectPolicyEffectiveSettings(
   return effective;
 }
 
+const MANAGED_LOCAL_TRANSCRIPTION_KEYS = [
+  {
+    mode: "transcriptionMode",
+    useLocal: "useLocalWhisper",
+    provider: "localTranscriptionProvider",
+    whisperModel: "whisperModel",
+    nvidiaModel: "parakeetModel",
+  },
+  {
+    mode: "meetingTranscriptionMode",
+    useLocal: "meetingUseLocalWhisper",
+    provider: "meetingLocalTranscriptionProvider",
+    whisperModel: "meetingWhisperModel",
+    nvidiaModel: "meetingParakeetModel",
+  },
+  {
+    mode: "uploadTranscriptionMode",
+    useLocal: "uploadUseLocalWhisper",
+    provider: "uploadLocalTranscriptionProvider",
+    whisperModel: "uploadWhisperModel",
+    nvidiaModel: "uploadParakeetModel",
+  },
+] as const;
+
+const MANAGED_LOCAL_LLM_SCOPES: readonly InferenceScope[] = [
+  "dictationCleanup",
+  "dictationAgent",
+  "noteFormatting",
+  "chatIntelligence",
+  "dictationTranslation",
+];
+
+/**
+ * Adds the current identity-scoped local route after policy selection. This is
+ * deliberately an effective-only copy: stored personal settings are never a
+ * source of managed setup state and therefore need no restoration lifecycle.
+ */
+export function selectManagedLocalEffectiveSettings(state: SettingsState): SettingsState {
+  const context = selectManagedLocalModelContext(useEnterpriseIdentityStore.getState());
+  if (!context) return state;
+
+  const effective = { ...state };
+  const writable = effective as unknown as Record<string, unknown>;
+  const dictationSelections = context.localModels.selections.filter(
+    (selection) => selection.provider === "whisper" || selection.provider === "nvidia"
+  );
+  const dictationBinding = readManagedLocalModelBinding(context.identity, "dictation");
+  if (
+    isCurrentManagedLocalModelBinding(
+      dictationBinding,
+      context.identity,
+      "dictation",
+      dictationSelections
+    ) &&
+    (dictationBinding.provider === "whisper" || dictationBinding.provider === "nvidia")
+  ) {
+    for (const keys of MANAGED_LOCAL_TRANSCRIPTION_KEYS) {
+      writable[keys.mode] = "local";
+      writable[keys.useLocal] = true;
+      writable[keys.provider] = dictationBinding.provider;
+      writable[dictationBinding.provider === "nvidia" ? keys.nvidiaModel : keys.whisperModel] =
+        dictationBinding.model;
+    }
+  }
+
+  const assistantSelections = context.localModels.selections.filter(
+    (selection) => selection.provider !== "whisper" && selection.provider !== "nvidia"
+  );
+  const assistantBinding = readManagedLocalModelBinding(context.identity, "assistant");
+  if (
+    !isCurrentManagedLocalModelBinding(
+      assistantBinding,
+      context.identity,
+      "assistant",
+      assistantSelections
+    )
+  ) {
+    return effective;
+  }
+  for (const scope of MANAGED_LOCAL_LLM_SCOPES) {
+    const keys: InferenceScopeStoreKeys = INFERENCE_SCOPES[scope].storeKeys;
+    writable[keys.mode] = "local";
+    writable[keys.provider] = assistantBinding.provider;
+    writable[keys.model] = assistantBinding.model;
+    if (keys.cloudMode) writable[keys.cloudMode] = "byok";
+    if (keys.cloudBaseUrl) writable[keys.cloudBaseUrl] = "";
+    if (keys.remoteUrl) writable[keys.remoteUrl] = "";
+    if (keys.customApiKey) writable[keys.customApiKey] = "";
+  }
+  return effective;
+}
+
 export function getSettings(): SettingsState {
-  return selectPolicyEffectiveSettings(useSettingsStore.getState(), usePolicyStore.getState());
+  return selectManagedLocalEffectiveSettings(
+    selectPolicyEffectiveSettings(useSettingsStore.getState(), usePolicyStore.getState())
+  );
 }
 
 /**

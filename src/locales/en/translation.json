@@ -179,6 +179,30 @@
     "policyTranscriptionRestricted": "Transcription is restricted by your organization."
   },
   "onboarding": {
+    "managedLocal": {
+      "title": "Set up your company models",
+      "description": "OpenWhispr will use only local models approved by your company.",
+      "status": {
+        "installed": "Installed",
+        "preparing": "Preparing approved models…",
+        "ready": "Company models are ready",
+        "choose": "Choose an approved model"
+      },
+      "recovery": { "title": "Company model setup needs attention" },
+      "compatibility": {
+        "checking": "Checking device compatibility…",
+        "unsupported": "This model is not supported on this device."
+      },
+      "errors": {
+        "config": "Company model settings are unavailable.",
+        "capabilityCheck": "Device compatibility could not be checked. Retry to continue.",
+        "reconciliation": "Company model setup could not be completed. Retry to continue.",
+        "cancelled": "The model download was cancelled. Retry to continue.",
+        "downloadFailed": "The model could not be downloaded. Retry to continue.",
+        "noCompatibleDictationModel": "No approved dictation model is compatible with this device.",
+        "noCompatibleAssistantModel": "No approved assistant model is compatible with this device."
+      }
+    },
     "rehaul": {
       "permissions": {
         "title": "Set up OpenWhispr in 3 minutes",
@@ -3743,6 +3767,12 @@
     "activeTarget": "Active target language",
     "removeTarget": "Remove {{language}}",
     "maxTargets": "Up to {{max}} languages"
+  },
+  "managedLocalModels": {
+    "notice": {
+      "waiting": "Waiting for company model setup",
+      "managedDescription": "Managed by your company"
+    }
   },
   "meetingNotification": {
     "title": "Meeting detected",

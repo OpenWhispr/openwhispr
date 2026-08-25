@@ -469,6 +469,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const buildTranscriptionConfig = (): FileTranscriptionConfig => ({
+    isSignedIn,
     useLocalWhisper,
     localTranscriptionProvider: localTranscriptionProvider as string,
     whisperModel,

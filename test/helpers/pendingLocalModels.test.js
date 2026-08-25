@@ -87,3 +87,34 @@ test("pending local model availability distinguishes active, installed, and orph
   );
   assert.equal(getPendingLocalModelAvailability("dictation", dictation, {}), "unknown");
 });
+
+test("managed pending selections reject stale identity, configuration, category, and model completions", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  const identity = {
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 7,
+    configGeneration: 12,
+  };
+  const selection = {
+    provider: "qwen",
+    modelId: "qwen3.5-9b-q4_k_m",
+    transferState: "downloading",
+    ...identity,
+  };
+
+  pending.rememberManagedPendingLocalModel("assistant", selection);
+  assert.equal(pending.consumeManagedPendingLocalModel("dictation", selection), null);
+  for (const stale of [
+    { ...selection, workspaceId: "workspace-b" },
+    { ...selection, accountId: "account-b" },
+    { ...selection, authGeneration: 8 },
+    { ...selection, configGeneration: 13 },
+    { ...selection, provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" },
+  ]) {
+    assert.equal(pending.consumeManagedPendingLocalModel("assistant", stale), null);
+  }
+  assert.deepEqual(pending.consumeManagedPendingLocalModel("assistant", selection), selection);
+  assert.equal(pending.hasPendingLocalModels(), false);
+});

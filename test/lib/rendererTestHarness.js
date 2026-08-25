@@ -13,8 +13,15 @@ function installBrowserGlobals(t, { initialStorage = {}, window: windowProps = {
     setItem: (key, value) => values.set(key, String(value)),
     removeItem: (key) => values.delete(key),
     clear: () => values.clear(),
+    key: (index) => [...values.keys()][index] ?? null,
+    get length() {
+      return values.size;
+    },
   };
   globalThis.localStorage = storage;
+  const defaultElectronAPI = {
+    authorizeReasoningStart: async () => ({ success: true }),
+  };
   globalThis.window = {
     innerWidth: 1200,
     localStorage: storage,
@@ -23,8 +30,11 @@ function installBrowserGlobals(t, { initialStorage = {}, window: windowProps = {
     setInterval() {
       return 1;
     },
-    electronAPI: {},
     ...windowProps,
+    electronAPI: {
+      ...defaultElectronAPI,
+      ...(windowProps.electronAPI || {}),
+    },
   };
   t.after(() => {
     if (originalWindow === undefined) delete globalThis.window;
