@@ -6,7 +6,6 @@ export interface GoogleCalendar {
   is_selected: number;
   is_primary: number;
   sync_token: string | null;
-  sync_token_expires_at: number | null;
 }
 
 export type CalendarResponseStatus = "needsAction" | "declined" | "tentative" | "accepted";

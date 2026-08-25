@@ -123,7 +123,7 @@ const {
   getMeetingConnectionKey,
 } = require("./meetingStreamingProviders");
 const { fetchRealtimeTokenForProvider } = require("./realtimeTokenProviders");
-const { getFreshCalendarAvailability } = require("./calendarAvailabilityService");
+const { getCalendarAvailability } = require("./calendarAvailabilityService");
 
 // Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
 // streaming providers must be told the true PCM rate or they misread the audio.
@@ -9901,7 +9901,7 @@ class IPCHandlers {
       try {
         return {
           success: true,
-          availability: await getFreshCalendarAvailability({
+          availability: getCalendarAvailability({
             request,
             databaseManager: this.databaseManager,
             calendarProviders: [

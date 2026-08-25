@@ -43,19 +43,14 @@ function redirect(res, params) {
   res.end();
 }
 
-// Runs a PKCE auth-code flow through an ephemeral loopback server:
+// Runs a PKCE auth-code flow through an ephemeral 127.0.0.1 server:
 // - buildAuthUrl(redirectUri, state, codeChallenge) → provider authorize URL
 // - handleCallback(code, redirectUri, codeVerifier) → resolves the flow result;
 //   called once with a state-validated code, throws (OAuthFlowError for a
 //   specific callback-page code) to reject.
 // - errorParam — query-param name for the hosted desktop-callback page
 //   (e.g. "gcal_error"); the success param is derived from the same prefix.
-function runOAuthLoopbackFlow({
-  buildAuthUrl,
-  handleCallback,
-  errorParam,
-  loopbackHostname = "127.0.0.1",
-}) {
+function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
   const connectedParam = errorParam.replace(/_error$/, "_connected");
 
   return new Promise((resolve, reject) => {
@@ -74,7 +69,7 @@ function runOAuthLoopbackFlow({
       }
 
       try {
-        const url = new URL(req.url, `http://${loopbackHostname}`);
+        const url = new URL(req.url, `http://127.0.0.1`);
         const returnedState = url.searchParams.get("state");
         const code = url.searchParams.get("code");
         const error = url.searchParams.get("error");
@@ -102,7 +97,7 @@ function runOAuthLoopbackFlow({
         }
 
         callbackClaimed = true;
-        const redirectUri = `http://${loopbackHostname}:${server.address().port}`;
+        const redirectUri = `http://127.0.0.1:${server.address().port}`;
         const result = await handleCallback(code, redirectUri, codeVerifier);
 
         redirect(res, { [connectedParam]: "true" });
@@ -123,9 +118,9 @@ function runOAuthLoopbackFlow({
       server.close();
     };
 
-    server.listen(0, loopbackHostname, () => {
+    server.listen(0, "127.0.0.1", () => {
       const port = server.address().port;
-      const redirectUri = `http://${loopbackHostname}:${port}`;
+      const redirectUri = `http://127.0.0.1:${port}`;
       shell.openExternal(buildAuthUrl(redirectUri, state, codeChallenge));
     });
 

@@ -25,11 +25,10 @@ let eventStore = EKEventStore()
 let requestAccess = CommandLine.arguments.contains("--request")
 // One extra day keeps the tool's 7-day horizon covered between snapshots.
 let CACHE_LOOKAHEAD_DAYS = 8.0
-// Include a day of safety beyond the maximum post-event buffer. The helper
-// snapshot is taken after the IPC request begins, so an exact 120-minute
-// boundary could otherwise omit an event while a refresh is in flight.
-let AVAILABILITY_LOOKBACK_SECONDS = (24.0 * 60 * 60) + (120.0 * 60)
 let REFRESH_INTERVAL_SECONDS = 300.0
+// Keep events that may still block availability after the maximum two-hour
+// buffer, plus one snapshot interval of safety.
+let AVAILABILITY_LOOKBACK_SECONDS = (120.0 * 60) + REFRESH_INTERVAL_SECONDS
 
 let isoFormatter: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
