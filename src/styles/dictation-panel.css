@@ -255,8 +255,8 @@
   --signal-cyan: #38bdf8;
   --signal-blue: #2563eb;
   --signal-indigo: #6366f1;
-  --signal-halo-opacity: 0.65;
-  --signal-comet-opacity: 0.9;
+  --signal-halo-opacity: 0.8;
+  --signal-comet-opacity: 0.95;
   position: absolute;
   inset: 0;
   border-radius: 9999px;
@@ -266,27 +266,30 @@
 }
 
 :root:not(.dark) .processing-signal-glow {
-  --signal-halo-opacity: 0.55;
-  --signal-comet-opacity: 0.8;
+  --signal-halo-opacity: 0.7;
+  --signal-comet-opacity: 0.85;
 }
 
 .processing-signal-glow[data-active="true"] {
   opacity: 1;
 }
 
-/* Breathing ambient halo — the across-the-room "working" signal. */
+/* Breathing ambient halo. The pill docks 4px from the native window's edges
+   and the transparent overlay window must stay minimal (it captures clicks
+   across its whole rect), so the halo is a tight corona: anything wider gets
+   hard-clipped at the window bounds on the docked sides. */
 .processing-signal-glow::before {
   content: "";
   position: absolute;
-  inset: -18px;
+  inset: -4px;
   border-radius: 9999px;
   background: radial-gradient(
     closest-side,
-    color-mix(in srgb, var(--signal-blue) 90%, transparent) 25%,
-    color-mix(in srgb, var(--signal-indigo) 65%, transparent) 60%,
+    color-mix(in srgb, var(--signal-blue) 90%, transparent) 45%,
+    color-mix(in srgb, var(--signal-indigo) 70%, transparent) 75%,
     transparent
   );
-  filter: blur(16px);
+  filter: blur(5px);
   opacity: var(--signal-halo-opacity);
 }
 
@@ -294,7 +297,7 @@
 .processing-signal-glow::after {
   content: "";
   position: absolute;
-  inset: -10px;
+  inset: -4px;
   border-radius: 9999px;
   background: conic-gradient(
     from 0deg,
@@ -302,7 +305,7 @@
     color-mix(in srgb, var(--signal-blue) 70%, transparent) 82%,
     var(--signal-cyan) 100%
   );
-  filter: blur(8px);
+  filter: blur(4px);
   opacity: var(--signal-comet-opacity);
 }
 
