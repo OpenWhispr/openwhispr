@@ -288,13 +288,18 @@ export default function App() {
     phase: listeningEntrancePhase,
   });
   const isCompactPill = isRecording ? listeningEntrance.compactPill : voiceActivity.compactPill;
+  // The native window grows during the entrance's static thinking hold, not
+  // when the pill starts its width transition: a setBounds landing mid
+  // animation forces compositor work that visibly stutters the expansion, and
+  // the growing pill can clip against the old bounds if the resize IPC lags.
+  const windowFitsCompactPill = isRecording || voiceActivity.compactPill;
 
   const { dictationErrorPillHandoffActive } = useMainWindowSizeOwner({
     requestMainWindowSize,
     dictationErrorActionCount,
     toastCount,
     isCommandMenuOpen,
-    isCompactPill,
+    isCompactPill: windowFitsCompactPill,
     assistantOpen: assistant.open,
     assistantMounted: assistant.mounted,
     assistantOpenRef,
