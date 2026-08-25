@@ -45,9 +45,13 @@ test("calculates privacy-safe availability from connected provider caches", () =
     clock: () => NOW,
   });
 
-  assert.deepEqual(result.busy, [
-    { start: "2026-08-25T08:45:00.000Z", end: "2026-08-25T10:15:00.000Z" },
+  // Busy intervals never cross IPC — only the free slots they carve out do.
+  assert.equal("busy" in result, false);
+  assert.deepEqual(result.availableSlots, [
+    { start: "2026-08-25T07:00:00.000Z", end: "2026-08-25T08:45:00.000Z", durationMinutes: 105 },
+    { start: "2026-08-25T10:15:00.000Z", end: "2026-08-25T12:00:00.000Z", durationMinutes: 105 },
   ]);
+  assert.equal(result.isEntireRangeFree, false);
   assert.deepEqual(result.coverage, { source: "local-calendar-cache", lookaheadDays: 7 });
   // The seeded title, attendee email, and meeting link all contain "private".
   assert.doesNotMatch(JSON.stringify(result), /private/i);

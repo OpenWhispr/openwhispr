@@ -35,7 +35,9 @@ function getCalendarAvailability({
     queryEnd,
     connectedProviders.map(({ provider }) => provider)
   );
-  const availability = calculateCalendarAvailability(events, normalized, now);
+  // Busy intervals stay in the main process: they carry buffer padding and the
+  // renderer tool only surfaces free-slot facts to the model.
+  const { busy: _busy, ...availability } = calculateCalendarAvailability(events, normalized, now);
 
   return {
     range: { start: normalized.start, end: normalized.end },

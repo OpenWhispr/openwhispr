@@ -51,7 +51,6 @@ export interface CalendarAvailabilityResult {
   range: CalendarAvailabilityInterval;
   timezone: string;
   isEntireRangeFree: boolean;
-  busy: CalendarAvailabilityInterval[];
   availableSlots: CalendarAvailabilitySlot[];
   hasMore: boolean;
   coverage: {

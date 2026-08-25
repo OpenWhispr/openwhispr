@@ -6,6 +6,12 @@ const DEFAULT_BUFFER_MINUTES = 0;
 const DEFAULT_MAX_RESULTS = 10;
 const MAX_BUFFER_MINUTES = 120;
 
+// Shared with the renderer tool's JSON schema (calendarAvailabilityTool.ts) so
+// the advertised bounds can never drift from what validation enforces.
+const MINIMUM_SLOT_MINUTES_BOUNDS = Object.freeze({ minimum: 5, maximum: 480 });
+const BUFFER_MINUTES_BOUNDS = Object.freeze({ minimum: 0, maximum: MAX_BUFFER_MINUTES });
+const MAX_RESULTS_BOUNDS = Object.freeze({ minimum: 1, maximum: 20 });
+
 const REQUEST_KEYS = new Set(["start", "end", "minimumSlotMinutes", "bufferMinutes", "maxResults"]);
 
 // Time/connection-dependent failures the renderer tool relays verbatim so
@@ -77,9 +83,9 @@ function isPlainObject(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
-function validateIntegerOption(value, name, min, max) {
-  if (!Number.isSafeInteger(value) || value < min || value > max) {
-    throw new RangeError(`${name} must be an integer between ${min} and ${max}`);
+function validateIntegerOption(value, name, { minimum, maximum }) {
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new RangeError(`${name} must be an integer between ${minimum} and ${maximum}`);
   }
   return value;
 }
@@ -114,20 +120,17 @@ function validateCalendarAvailabilityRequest(request, now = new Date()) {
   const minimumSlotMinutes = validateIntegerOption(
     request.minimumSlotMinutes ?? DEFAULT_MINIMUM_SLOT_MINUTES,
     "minimumSlotMinutes",
-    5,
-    480
+    MINIMUM_SLOT_MINUTES_BOUNDS
   );
   const bufferMinutes = validateIntegerOption(
     request.bufferMinutes ?? DEFAULT_BUFFER_MINUTES,
     "bufferMinutes",
-    0,
-    MAX_BUFFER_MINUTES
+    BUFFER_MINUTES_BOUNDS
   );
   const maxResults = validateIntegerOption(
     request.maxResults ?? DEFAULT_MAX_RESULTS,
     "maxResults",
-    1,
-    20
+    MAX_RESULTS_BOUNDS
   );
 
   if (endMs <= requestedStartMs) throw new RangeError("end must be after start");
@@ -269,6 +272,12 @@ module.exports = {
   MAX_AVAILABILITY_HORIZON_DAYS,
   MAX_BUFFER_MINUTES,
   PAST_START_TOLERANCE_MS,
+  DEFAULT_MINIMUM_SLOT_MINUTES,
+  DEFAULT_BUFFER_MINUTES,
+  DEFAULT_MAX_RESULTS,
+  MINIMUM_SLOT_MINUTES_BOUNDS,
+  BUFFER_MINUTES_BOUNDS,
+  MAX_RESULTS_BOUNDS,
   USER_CORRECTABLE_ERRORS,
   isExplicitOffsetRfc3339,
   parseEventTime,

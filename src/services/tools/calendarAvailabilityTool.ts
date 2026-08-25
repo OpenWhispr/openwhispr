@@ -1,3 +1,13 @@
+import {
+  BUFFER_MINUTES_BOUNDS,
+  DEFAULT_BUFFER_MINUTES,
+  DEFAULT_MAX_RESULTS,
+  DEFAULT_MINIMUM_SLOT_MINUTES,
+  MAX_RESULTS_BOUNDS,
+  MINIMUM_SLOT_MINUTES_BOUNDS,
+  USER_CORRECTABLE_ERRORS,
+  isExplicitOffsetRfc3339,
+} from "../../helpers/calendarAvailability";
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
 import type {
   CalendarAvailabilityInterval,
@@ -6,13 +16,6 @@ import type {
   CalendarAvailabilitySlot,
 } from "../../types/calendar";
 
-const MINIMUM_SLOT_MINUTES = { minimum: 5, maximum: 480 } as const;
-const BUFFER_MINUTES = { minimum: 0, maximum: 120 } as const;
-const MAX_RESULTS = { minimum: 1, maximum: 20 } as const;
-const DEFAULT_MINIMUM_SLOT_MINUTES = 30;
-const DEFAULT_BUFFER_MINUTES = 0;
-const DEFAULT_MAX_RESULTS = 10;
-const RFC3339_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 const ALLOWED_ARGUMENTS = new Set([
   "start",
   "end",
@@ -22,12 +25,7 @@ const ALLOWED_ARGUMENTS = new Set([
 ]);
 
 // Only these known validation messages are relayed; all other IPC errors stay generic.
-const RELAYED_ERRORS = new Set([
-  "start cannot be more than 5 minutes in the past",
-  "end plus buffer cannot extend beyond 7 local calendar days from now",
-  "end must be after the current time",
-  "No calendar is connected",
-]);
+const RELAYED_ERRORS = new Set<string>(Object.values(USER_CORRECTABLE_ERRORS));
 
 const failure = (displayText: string): ToolResult => ({
   success: false,
@@ -41,18 +39,14 @@ function parseRequest(args: Record<string, unknown>): CalendarAvailabilityReques
 
   const start = typeof args.start === "string" ? args.start.trim() : "";
   const end = typeof args.end === "string" ? args.end.trim() : "";
-  if (!RFC3339_WITH_OFFSET.test(start) || !RFC3339_WITH_OFFSET.test(end)) return null;
-
-  const startMs = Date.parse(start);
-  const endMs = Date.parse(end);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
-  if (startMs >= endMs) return null;
+  if (!isExplicitOffsetRfc3339(start) || !isExplicitOffsetRfc3339(end)) return null;
+  if (Date.parse(start) >= Date.parse(end)) return null;
 
   const request: CalendarAvailabilityRequest = { start, end };
   for (const [key, bounds] of [
-    ["minimumSlotMinutes", MINIMUM_SLOT_MINUTES],
-    ["bufferMinutes", BUFFER_MINUTES],
-    ["maxResults", MAX_RESULTS],
+    ["minimumSlotMinutes", MINIMUM_SLOT_MINUTES_BOUNDS],
+    ["bufferMinutes", BUFFER_MINUTES_BOUNDS],
+    ["maxResults", MAX_RESULTS_BOUNDS],
   ] as const) {
     const value = args[key];
     if (value === undefined) continue;
@@ -94,19 +88,11 @@ function projectAvailability(value: unknown): CalendarAvailabilityResult | null 
     !payload.timezone ||
     typeof payload.hasMore !== "boolean" ||
     typeof payload.isEntireRangeFree !== "boolean" ||
-    !Array.isArray(payload.busy) ||
     !Array.isArray(payload.availableSlots) ||
     !Number.isSafeInteger(lookaheadDays) ||
     (lookaheadDays as number) < 1
   ) {
     return null;
-  }
-
-  const busy: CalendarAvailabilityInterval[] = [];
-  for (const item of payload.busy) {
-    const interval = toInterval(item);
-    if (!interval) return null;
-    busy.push(interval);
   }
 
   const availableSlots: CalendarAvailabilitySlot[] = [];
@@ -122,7 +108,6 @@ function projectAvailability(value: unknown): CalendarAvailabilityResult | null 
   return {
     range,
     timezone: payload.timezone,
-    busy,
     availableSlots,
     hasMore: payload.hasMore,
     isEntireRangeFree: payload.isEntireRangeFree,
@@ -207,18 +192,18 @@ export const calendarAvailabilityTool: ToolDefinition = {
       },
       minimumSlotMinutes: {
         type: "integer",
-        ...MINIMUM_SLOT_MINUTES,
-        description: "Minimum duration of a returned free slot in minutes (default 30).",
+        ...MINIMUM_SLOT_MINUTES_BOUNDS,
+        description: `Minimum duration of a returned free slot in minutes (default ${DEFAULT_MINIMUM_SLOT_MINUTES}).`,
       },
       bufferMinutes: {
         type: "integer",
-        ...BUFFER_MINUTES,
-        description: "Minutes to reserve before and after each busy interval (default 0).",
+        ...BUFFER_MINUTES_BOUNDS,
+        description: `Minutes to reserve before and after each busy interval (default ${DEFAULT_BUFFER_MINUTES}).`,
       },
       maxResults: {
         type: "integer",
-        ...MAX_RESULTS,
-        description: "Maximum number of available slots to return (default 10).",
+        ...MAX_RESULTS_BOUNDS,
+        description: `Maximum number of available slots to return (default ${DEFAULT_MAX_RESULTS}).`,
       },
     },
     required: ["start", "end"],
