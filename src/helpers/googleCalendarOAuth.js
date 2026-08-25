@@ -19,7 +19,7 @@ class GoogleCalendarOAuth {
     return process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
   }
 
-  startOAuthFlow() {
+  startOAuthFlow({ shouldPersist = () => true } = {}) {
     return runOAuthLoopbackFlow({
       errorParam: "gcal_error",
       buildAuthUrl: (redirectUri, state, codeChallenge) => {
@@ -60,6 +60,13 @@ class GoogleCalendarOAuth {
           throw new OAuthFlowError(
             "no_email",
             "Could not extract email from Google OAuth response"
+          );
+        }
+
+        if (!shouldPersist()) {
+          throw new OAuthFlowError(
+            "connection_cancelled",
+            "Google Calendar connection was cancelled"
           );
         }
 
@@ -115,13 +122,17 @@ class GoogleCalendarOAuth {
       }
 
       const newExpiresAt = Date.now() + refreshed.expires_in * 1000;
-      this.databaseManager.saveGoogleTokens({
-        google_email: tokens.google_email,
-        access_token: refreshed.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_at: newExpiresAt,
-        scope: tokens.scope,
-      });
+      const update = this.databaseManager.updateGoogleTokensAfterRefresh(
+        {
+          google_email: tokens.google_email,
+          access_token: refreshed.access_token,
+          refresh_token: tokens.refresh_token,
+          expires_at: newExpiresAt,
+          scope: tokens.scope,
+        },
+        tokens.refresh_token
+      );
+      if (!update.success) throw new Error("Google account disconnected during token refresh");
 
       return refreshed.access_token;
     }

@@ -20,7 +20,7 @@ class MicrosoftCalendarOAuth {
     return process.env.MICROSOFT_CALENDAR_CLIENT_ID;
   }
 
-  startOAuthFlow() {
+  startOAuthFlow({ shouldPersist = () => true } = {}) {
     if (!this.getClientId()) {
       // Fail fast instead of opening the browser on a client_id=undefined URL
       // and hanging until the loopback flow times out.
@@ -28,6 +28,9 @@ class MicrosoftCalendarOAuth {
     }
     return runOAuthLoopbackFlow({
       errorParam: "mcal_error",
+      // Entra desktop registrations match ephemeral ports for localhost.
+      // A random 127.0.0.1 port is not equivalent to the registered URI.
+      loopbackHostname: "localhost",
       buildAuthUrl: (redirectUri, state, codeChallenge) => {
         const params = new URLSearchParams({
           client_id: this.getClientId(),
@@ -58,6 +61,13 @@ class MicrosoftCalendarOAuth {
           throw new OAuthFlowError(
             "no_email",
             "Could not extract email from Microsoft OAuth response"
+          );
+        }
+
+        if (!shouldPersist()) {
+          throw new OAuthFlowError(
+            "connection_cancelled",
+            "Microsoft Calendar connection was cancelled"
           );
         }
 
@@ -118,12 +128,22 @@ class MicrosoftCalendarOAuth {
       throw new Error(`Token refresh failed: ${refreshed.error_description || refreshed.error}`);
     }
 
-    // Persist the rotated refresh token or the old one stops working within 24h.
-    this._saveTokens(tokens.microsoft_email, {
-      ...refreshed,
-      refresh_token: refreshed.refresh_token || tokens.refresh_token,
-      scope: refreshed.scope || tokens.scope,
-    });
+    // Persist the rotated refresh token or the old one stops working within
+    // 24h, but only if this exact account row still exists. A disconnect or a
+    // newer reconnect must win over this in-flight network response.
+    const update = this.databaseManager.updateMicrosoftTokensAfterRefresh(
+      {
+        microsoft_email: tokens.microsoft_email,
+        access_token: refreshed.access_token,
+        refresh_token: refreshed.refresh_token || tokens.refresh_token,
+        expires_at: Date.now() + refreshed.expires_in * 1000,
+        scope: refreshed.scope || tokens.scope,
+      },
+      tokens.refresh_token
+    );
+    if (!update.success) {
+      throw new Error("Microsoft account disconnected during token refresh");
+    }
 
     return refreshed.access_token;
   }
