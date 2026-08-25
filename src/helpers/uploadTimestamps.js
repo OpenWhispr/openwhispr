@@ -5,16 +5,13 @@
 // 400 on unknown fields) must keep the plain-text request untouched — a
 // missing timestamp is a degraded export, never a failed upload.
 function timestampRequestFields(provider, model) {
-  const normProvider = typeof provider === "string" ? provider.trim().toLowerCase() : "";
-  const normModel = typeof model === "string" ? model.trim().toLowerCase() : "";
-
-  if (normProvider === "openai" && normModel === "whisper-1") {
+  if (provider === "openai" && model === "whisper-1") {
     return { response_format: "verbose_json" };
   }
-  if (normProvider === "groq") {
+  if (provider === "groq") {
     return { response_format: "verbose_json" };
   }
-  if (normProvider === "mistral") {
+  if (provider === "mistral") {
     return { timestamp_granularities: "segment" };
   }
   return null;

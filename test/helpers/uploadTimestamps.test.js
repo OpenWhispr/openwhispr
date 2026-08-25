@@ -67,18 +67,6 @@ test("malformed verbose segments are dropped, never thrown", () => {
   ]);
 });
 
-test("timestamp fields support case-insensitive and trimmed provider names", () => {
-  assert.deepEqual(timestampRequestFields("OpenAI", "whisper-1"), {
-    response_format: "verbose_json",
-  });
-  assert.deepEqual(timestampRequestFields(" GROQ ", "whisper-large-v3"), {
-    response_format: "verbose_json",
-  });
-  assert.deepEqual(timestampRequestFields("Mistral", "voxtral-mini-latest"), {
-    timestamp_granularities: "segment",
-  });
-});
-
 test("verbose segments clamp negative start timestamps and inverted end timestamps", () => {
   const mapped = mapVerboseSegments({
     segments: [
