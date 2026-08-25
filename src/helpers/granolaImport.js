@@ -272,16 +272,18 @@ export function deterministicUuid(key) {
 const NAME_EMAIL_RE = /^(.*?)\s*<([^<>\s]+@[^<>\s]+)>$/;
 const BARE_EMAIL_RE = /^\S+@\S+\.\S+$/;
 
+// Consumers of notes.participants require an email (e.g. SpeakerPicker reads
+// p.email unguarded), so name-only tokens are dropped rather than emitted.
 const parseAttendees = (cell) =>
   String(cell ?? "")
     .split(/[,;\n]/)
     .map((token) => token.trim())
     .filter(Boolean)
-    .map((token) => {
+    .flatMap((token) => {
       const named = token.match(NAME_EMAIL_RE);
-      if (named) return { displayName: named[1] || named[2], email: named[2] };
-      if (BARE_EMAIL_RE.test(token)) return { displayName: token, email: token };
-      return { displayName: token };
+      if (named) return [{ displayName: named[1] || named[2], email: named[2] }];
+      if (BARE_EMAIL_RE.test(token)) return [{ displayName: token, email: token }];
+      return [];
     });
 
 /**

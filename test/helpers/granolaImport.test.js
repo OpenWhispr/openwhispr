@@ -313,9 +313,9 @@ test("parseGranolaCsv maps a full export into insert-ready notes", async () => {
   assert.equal(first.content, "- Discussed roadmap\n- Next steps");
   assert.equal(first.createdAt, "2026-07-15 14:30:00");
   assert.equal(first.sourceFile, "granola:doc1");
+  // "Bob" has no email, so he is dropped: participants consumers require one.
   assert.deepEqual(JSON.parse(first.participants), [
     { displayName: "Alice", email: "alice@x.com" },
-    { displayName: "Bob" },
   ]);
 
   const segments = JSON.parse(first.transcript);
