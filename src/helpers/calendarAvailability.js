@@ -1,22 +1,25 @@
+// ESM like meetingJoinUrl.js: this module is shared with the renderer, where
+// Vite only handles ESM source files; main-process CJS callers load it via
+// Node's require(esm) with module-syntax detection.
 const MINUTE_MS = 60 * 1000;
-const MAX_AVAILABILITY_HORIZON_DAYS = 7;
-const PAST_START_TOLERANCE_MS = 5 * MINUTE_MS;
-const DEFAULT_MINIMUM_SLOT_MINUTES = 30;
-const DEFAULT_BUFFER_MINUTES = 0;
-const DEFAULT_MAX_RESULTS = 10;
-const MAX_BUFFER_MINUTES = 120;
+export const MAX_AVAILABILITY_HORIZON_DAYS = 7;
+export const PAST_START_TOLERANCE_MS = 5 * MINUTE_MS;
+export const DEFAULT_MINIMUM_SLOT_MINUTES = 30;
+export const DEFAULT_BUFFER_MINUTES = 0;
+export const DEFAULT_MAX_RESULTS = 10;
+export const MAX_BUFFER_MINUTES = 120;
 
 // Shared with the renderer tool's JSON schema (calendarAvailabilityTool.ts) so
 // the advertised bounds can never drift from what validation enforces.
-const MINIMUM_SLOT_MINUTES_BOUNDS = Object.freeze({ minimum: 5, maximum: 480 });
-const BUFFER_MINUTES_BOUNDS = Object.freeze({ minimum: 0, maximum: MAX_BUFFER_MINUTES });
-const MAX_RESULTS_BOUNDS = Object.freeze({ minimum: 1, maximum: 20 });
+export const MINIMUM_SLOT_MINUTES_BOUNDS = Object.freeze({ minimum: 5, maximum: 480 });
+export const BUFFER_MINUTES_BOUNDS = Object.freeze({ minimum: 0, maximum: MAX_BUFFER_MINUTES });
+export const MAX_RESULTS_BOUNDS = Object.freeze({ minimum: 1, maximum: 20 });
 
 const REQUEST_KEYS = new Set(["start", "end", "minimumSlotMinutes", "bufferMinutes", "maxResults"]);
 
 // Time/connection-dependent failures the renderer tool relays verbatim so
 // the model can correct the request; every other error stays generic.
-const USER_CORRECTABLE_ERRORS = Object.freeze({
+export const USER_CORRECTABLE_ERRORS = Object.freeze({
   startTooFarInPast: "start cannot be more than 5 minutes in the past",
   endBeyondHorizon: `end plus buffer cannot extend beyond ${MAX_AVAILABILITY_HORIZON_DAYS} local calendar days from now`,
   endNotAfterNow: "end must be after the current time",
@@ -40,7 +43,7 @@ function hasValidDateParts(year, month, day) {
   return month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth(year, month);
 }
 
-function isExplicitOffsetRfc3339(value) {
+export function isExplicitOffsetRfc3339(value) {
   if (typeof value !== "string") return false;
   const match = RFC3339_WITH_OFFSET_PATTERN.exec(value);
   if (!match) return false;
@@ -96,7 +99,7 @@ function getLocalAvailabilityHorizonMs(now) {
   return horizon.getTime();
 }
 
-function validateCalendarAvailabilityRequest(request, now = new Date()) {
+export function validateCalendarAvailabilityRequest(request, now = new Date()) {
   if (!isPlainObject(request)) {
     throw new TypeError("Calendar availability request must be a plain object");
   }
@@ -167,7 +170,7 @@ function parseLocalDateOnly(value) {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-function parseEventTime(value, isAllDay) {
+export function parseEventTime(value, isAllDay) {
   if (typeof value !== "string") return null;
   if (isAllDay && DATE_ONLY_PATTERN.test(value)) return parseLocalDateOnly(value);
   const timestamp = Date.parse(value);
@@ -211,9 +214,11 @@ function toIsoInterval(startMs, endMs) {
   };
 }
 
-function calculateCalendarAvailability(events, request, now = new Date()) {
+// Expects a request already normalized by validateCalendarAvailabilityRequest,
+// so callers that validated up front (calendarAvailabilityService.js needs the
+// normalized window to query the cache first) don't pay for a second pass.
+export function computeCalendarAvailability(events, normalizedRequest) {
   if (!Array.isArray(events)) throw new TypeError("events must be an array");
-  const normalizedRequest = validateCalendarAvailabilityRequest(request, now);
   const windowStartMs = Date.parse(normalizedRequest.start);
   const windowEndMs = Date.parse(normalizedRequest.end);
   const bufferMs = normalizedRequest.bufferMinutes * MINUTE_MS;
@@ -268,19 +273,6 @@ function calculateCalendarAvailability(events, request, now = new Date()) {
   };
 }
 
-module.exports = {
-  MAX_AVAILABILITY_HORIZON_DAYS,
-  MAX_BUFFER_MINUTES,
-  PAST_START_TOLERANCE_MS,
-  DEFAULT_MINIMUM_SLOT_MINUTES,
-  DEFAULT_BUFFER_MINUTES,
-  DEFAULT_MAX_RESULTS,
-  MINIMUM_SLOT_MINUTES_BOUNDS,
-  BUFFER_MINUTES_BOUNDS,
-  MAX_RESULTS_BOUNDS,
-  USER_CORRECTABLE_ERRORS,
-  isExplicitOffsetRfc3339,
-  parseEventTime,
-  validateCalendarAvailabilityRequest,
-  calculateCalendarAvailability,
-};
+export function calculateCalendarAvailability(events, request, now = new Date()) {
+  return computeCalendarAvailability(events, validateCalendarAvailabilityRequest(request, now));
+}

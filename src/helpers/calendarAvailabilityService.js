@@ -2,7 +2,7 @@ const {
   MAX_AVAILABILITY_HORIZON_DAYS,
   USER_CORRECTABLE_ERRORS,
   validateCalendarAvailabilityRequest,
-  calculateCalendarAvailability,
+  computeCalendarAvailability,
 } = require("./calendarAvailability");
 
 function connectedCalendarProviders(calendarProviders) {
@@ -37,7 +37,7 @@ function getCalendarAvailability({
   );
   // Busy intervals stay in the main process: they carry buffer padding and the
   // renderer tool only surfaces free-slot facts to the model.
-  const { busy: _busy, ...availability } = calculateCalendarAvailability(events, normalized, now);
+  const { busy: _busy, ...availability } = computeCalendarAvailability(events, normalized);
 
   return {
     range: { start: normalized.start, end: normalized.end },
