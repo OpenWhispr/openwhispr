@@ -76,22 +76,54 @@ test("canUpgradeWorkspaceToEnterprise: an owner's live lower-plan subscription, 
   assert.equal(canUpgradeWorkspaceToEnterprise(business({ stripe_subscription_id: null })), false);
 });
 
-test("enterpriseTileCta: owners get the dialog, first-timers get create, members get the owner", () => {
-  const ws = (id, role, billing_manager = null) => ({ id, role, billing_manager });
+test("enterpriseTileCta: eligible owners get the dialog, first-timers get create, members get the owner", () => {
+  const ws = (id, role, overrides = {}) => ({
+    id,
+    role,
+    billing_manager: null,
+    plan: "free",
+    status: "active",
+    stripe_subscription_id: null,
+    ...overrides,
+  });
 
+  // Owner with a checkout-eligible (unsubscribed) workspace → dialog.
   assert.deepEqual(enterpriseTileCta([ws("a", "member"), ws("b", "owner")], null), {
     action: "openDialog",
   });
+  // Owner with an upgradeable Business subscription → dialog.
+  assert.deepEqual(
+    enterpriseTileCta(
+      [ws("a", "owner", { plan: "business", stripe_subscription_id: "sub_1" })],
+      null
+    ),
+    { action: "openDialog" }
+  );
+  // Owner whose only workspace is already Enterprise → contact sales, and no
+  // ask-owner hint (they are the owner).
+  assert.deepEqual(
+    enterpriseTileCta(
+      [ws("a", "owner", { plan: "enterprise", stripe_subscription_id: "sub_1" })],
+      null
+    ),
+    { action: "contactSales", ownerName: null }
+  );
   assert.deepEqual(enterpriseTileCta([], null), { action: "createWorkspace" });
-  assert.deepEqual(enterpriseTileCta([ws("a", "admin", "Alice")], null), {
+  assert.deepEqual(enterpriseTileCta([ws("a", "admin", { billing_manager: "Alice" })], null), {
     action: "contactSales",
     ownerName: "Alice",
   });
   // The active workspace's owner wins over the first one.
-  assert.deepEqual(enterpriseTileCta([ws("a", "member", "Alice"), ws("b", "admin", "Bob")], "b"), {
-    action: "contactSales",
-    ownerName: "Bob",
-  });
+  assert.deepEqual(
+    enterpriseTileCta(
+      [
+        ws("a", "member", { billing_manager: "Alice" }),
+        ws("b", "admin", { billing_manager: "Bob" }),
+      ],
+      "b"
+    ),
+    { action: "contactSales", ownerName: "Bob" }
+  );
   // Unknown active id falls back to the first workspace; a missing name stays null.
   assert.deepEqual(enterpriseTileCta([ws("a", "member")], "gone"), {
     action: "contactSales",

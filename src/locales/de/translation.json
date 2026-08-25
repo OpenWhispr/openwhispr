@@ -2249,6 +2249,14 @@
         "monthly": "Monatlich",
         "annual": "Jährlich"
       },
+      "proratedCharge": "Anteiliger Betrag",
+      "prorationNote": "Die anteilige Differenz wird der nächsten Rechnung hinzugefügt.",
+      "errors": {
+        "previewFailed": "Upgrade-Vorschau konnte nicht geladen werden.",
+        "alreadyEnterprise": "Dieser Workspace ist bereits auf Enterprise.",
+        "subscriptionInactive": "Das Abonnement dieses Workspace ist nicht aktiv. Zahlungsdaten aktualisieren und erneut versuchen.",
+        "priceNotConfigured": "Enterprise-Preise sind derzeit nicht verfügbar. Bitte den Vertrieb kontaktieren."
+      },
       "priceNote": "Der endgültige Preis wird beim Checkout angezeigt.",
       "continueCta": "Weiter zum Checkout",
       "upgradeDescription": "Upgrade von {{workspace}} von {{plan}} auf Enterprise. Plätze und Abrechnungszeitraum bleiben erhalten; die Änderung gilt sofort.",

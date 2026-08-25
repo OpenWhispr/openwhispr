@@ -2140,6 +2140,14 @@
         "monthly": "Mensal",
         "annual": "Anual"
       },
+      "proratedCharge": "Cobrança proporcional",
+      "prorationNote": "A diferença proporcional é adicionada à sua próxima fatura.",
+      "errors": {
+        "previewFailed": "Não foi possível carregar a prévia do upgrade.",
+        "alreadyEnterprise": "Este espaço de trabalho já está no Enterprise.",
+        "subscriptionInactive": "A assinatura deste espaço de trabalho não está ativa. Atualize os dados de cobrança e tente novamente.",
+        "priceNotConfigured": "Os preços do Enterprise não estão disponíveis no momento. Fale com a equipe de vendas."
+      },
       "priceNote": "O preço final é exibido no checkout.",
       "continueCta": "Continuar para o checkout",
       "upgradeDescription": "Faça o upgrade de {{workspace}} de {{plan}} para Enterprise. Assentos e ciclo de cobrança são mantidos; a mudança entra em vigor imediatamente.",

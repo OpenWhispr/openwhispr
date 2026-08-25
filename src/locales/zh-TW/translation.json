@@ -2161,6 +2161,14 @@
         "monthly": "按月",
         "annual": "按年"
       },
+      "proratedCharge": "按比例費用",
+      "prorationNote": "按比例計算的差額將計入下一張帳單。",
+      "errors": {
+        "previewFailed": "無法載入升級預覽。",
+        "alreadyEnterprise": "該工作區已在 Enterprise 方案中。",
+        "subscriptionInactive": "該工作區的訂閱未啟用。請更新帳單資訊後重試。",
+        "priceNotConfigured": "Enterprise 價格暫不可用。請聯絡銷售。"
+      },
       "priceNote": "最終價格將在結帳時顯示。",
       "continueCta": "繼續結帳",
       "upgradeDescription": "將 {{workspace}} 從{{plan}}升級至 Enterprise。席位與計費週期維持不變，變更立即生效。",

@@ -127,7 +127,7 @@ import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
-import { enterpriseTileCta } from "../lib/workspaceBilling";
+import { enterpriseTileCta, type EnterpriseTileCta } from "../lib/workspaceBilling";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
@@ -1013,9 +1013,15 @@ export default function SettingsPage({
   const usage = useUsage();
   const billingWorkspaces = useWorkspaceStore((s) => s.workspaces);
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const billingWorkspacesLoaded = useWorkspaceStore((s) => s.loaded);
   const [enterpriseCheckoutOpen, setEnterpriseCheckoutOpen] = useState(false);
   const [enterpriseWorkspaceCreateOpen, setEnterpriseWorkspaceCreateOpen] = useState(false);
-  const enterpriseCta = enterpriseTileCta(billingWorkspaces, activeWorkspaceId);
+  // Until the store resolves, an empty list would make enterpriseTileCta answer
+  // "createWorkspace" for everyone — including members who must never be routed
+  // into creating a workspace. Fall back to contact sales for that window.
+  const enterpriseCta: EnterpriseTileCta = billingWorkspacesLoaded
+    ? enterpriseTileCta(billingWorkspaces, activeWorkspaceId)
+    : { action: "contactSales", ownerName: null };
   const coveringWorkspaces = billingWorkspaces.filter((workspace) =>
     usage?.entitledWorkspaceIds?.includes(workspace.id)
   );

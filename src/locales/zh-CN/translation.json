@@ -2161,6 +2161,14 @@
         "monthly": "按月",
         "annual": "按年"
       },
+      "proratedCharge": "按比例费用",
+      "prorationNote": "按比例计算的差额将计入下一张账单。",
+      "errors": {
+        "previewFailed": "无法加载升级预览。",
+        "alreadyEnterprise": "该工作区已在 Enterprise 计划中。",
+        "subscriptionInactive": "该工作区的订阅未激活。请更新账单信息后重试。",
+        "priceNotConfigured": "Enterprise 价格暂不可用。请联系销售。"
+      },
       "priceNote": "最终价格将在结账时显示。",
       "continueCta": "继续结账",
       "upgradeDescription": "将 {{workspace}} 从{{plan}}升级到 Enterprise。席位和计费周期保持不变，更改立即生效。",

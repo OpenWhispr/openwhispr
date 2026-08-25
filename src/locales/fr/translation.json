@@ -2249,6 +2249,14 @@
         "monthly": "Mensuel",
         "annual": "Annuel"
       },
+      "proratedCharge": "Montant au prorata",
+      "prorationNote": "La différence au prorata est ajoutée à votre prochaine facture.",
+      "errors": {
+        "previewFailed": "Impossible de charger l'aperçu de la mise à niveau.",
+        "alreadyEnterprise": "Cet espace de travail est déjà sur Enterprise.",
+        "subscriptionInactive": "L'abonnement de cet espace de travail n'est pas actif. Mettez à jour vos informations de facturation et réessayez.",
+        "priceNotConfigured": "Les tarifs Enterprise ne sont pas disponibles pour le moment. Veuillez contacter le service commercial."
+      },
       "priceNote": "Le prix final est affiché lors du paiement.",
       "continueCta": "Continuer vers le paiement",
       "upgradeDescription": "Passez {{workspace}} de {{plan}} à Enterprise. Les sièges et le cycle de facturation sont conservés ; le changement prend effet immédiatement.",

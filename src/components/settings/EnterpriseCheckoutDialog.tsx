@@ -14,6 +14,7 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { useToast } from "../ui/useToast";
+import { CloudApiError } from "../../services/cloudApi";
 import { WorkspacesService, type EnterpriseUpgradePreview } from "../../services/WorkspacesService";
 import { useBillingRefreshOnReturn } from "../../hooks/useBillingRefreshOnReturn";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -22,10 +23,26 @@ import {
   canUpgradeWorkspaceToEnterprise,
 } from "../../lib/workspaceBilling";
 import { formatAmount } from "../../utils/formatAmount";
+import { openExternalLink } from "../../utils/externalLinks";
 import type { Workspace } from "../../types/electron";
 
 const SEAT_LIMIT = 500;
 const CONTACT_SALES_URL = "https://openwhispr.com/contact-sales";
+
+// The API's coded billing refusals, localized; uncoded errors fall back to
+// the server's own message.
+const BILLING_ERROR_KEYS: Record<string, string> = {
+  workspace_already_enterprise: "settingsPage.enterpriseCheckout.errors.alreadyEnterprise",
+  workspace_subscription_inactive: "settingsPage.enterpriseCheckout.errors.subscriptionInactive",
+  price_not_configured: "settingsPage.enterpriseCheckout.errors.priceNotConfigured",
+};
+
+function billingErrorMessage(error: unknown, t: ReturnType<typeof useTranslation>["t"]): string {
+  const key =
+    error instanceof CloudApiError && error.code ? BILLING_ERROR_KEYS[error.code] : undefined;
+  if (key) return t(key);
+  return error instanceof Error && error.message ? error.message : t("common.unknownError");
+}
 
 interface Props {
   open: boolean;
@@ -63,6 +80,8 @@ export default function EnterpriseCheckoutDialog({
   const [submitting, setSubmitting] = useState(false);
   const [upgradePreview, setUpgradePreview] = useState<EnterpriseUpgradePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
 
   const selected = eligible.find((w) => w.id === workspaceId) ?? eligible[0] ?? null;
   const isUpgrade = selected !== null && canUpgradeWorkspaceToEnterprise(selected);
@@ -82,11 +101,21 @@ export default function EnterpriseCheckoutDialog({
   // Reset the seat count whenever the effective workspace changes.
   useEffect(() => {
     setSeats(seatsInUse);
-  }, [selected?.id, seatsInUse]);
+    // seatsInUse is read, not watched: a store refresh landing mid-dialog must
+    // not clobber a seat count the user already typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
+
+  // If a refresh raises the occupancy floor, lift the count to stay valid —
+  // never lower a higher value the user chose.
+  useEffect(() => {
+    setSeats((current) => Math.max(current, seatsInUse));
+  }, [seatsInUse]);
 
   const selectedId = selected?.id ?? null;
   useEffect(() => {
     setUpgradePreview(null);
+    setPreviewError(null);
     if (!open || !isUpgrade || !selectedId) return;
     let stale = false;
     setPreviewLoading(true);
@@ -95,12 +124,7 @@ export default function EnterpriseCheckoutDialog({
         if (!stale) setUpgradePreview(preview);
       })
       .catch((error: unknown) => {
-        if (stale) return;
-        toast({
-          title: t("common.error"),
-          description: error instanceof Error ? error.message : t("common.unknownError"),
-          variant: "destructive",
-        });
+        if (!stale) setPreviewError(billingErrorMessage(error, t));
       })
       .finally(() => {
         if (!stale) setPreviewLoading(false);
@@ -108,26 +132,25 @@ export default function EnterpriseCheckoutDialog({
     return () => {
       stale = true;
     };
-  }, [open, isUpgrade, selectedId, toast, t]);
+  }, [open, isUpgrade, selectedId, previewAttempt, t]);
 
   const seatsValid = Number.isInteger(seats) && seats >= seatsInUse && seats <= SEAT_LIMIT;
 
   async function handleCheckout() {
-    if (!selected || !seatsValid) return;
+    if (submitting || !selected || !seatsValid) return;
     setSubmitting(true);
     try {
       const url = await WorkspacesService.billingCheckout(selected.id, billingInterval, {
         tier: "enterprise",
         additionalSeats: seats - seatsInUse,
       });
-      if (window.electronAPI?.openExternal) await window.electronAPI.openExternal(url);
-      else window.open(url, "_blank");
+      openExternalLink(url);
       armRefreshOnReturn();
       onOpenChange(false);
     } catch (error) {
       toast({
         title: t("common.error"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
+        description: billingErrorMessage(error, t),
         variant: "destructive",
       });
     } finally {
@@ -136,7 +159,7 @@ export default function EnterpriseCheckoutDialog({
   }
 
   async function handleUpgrade() {
-    if (!selected) return;
+    if (submitting || !selected) return;
     setSubmitting(true);
     try {
       await WorkspacesService.upgradeToEnterprise(selected.id);
@@ -152,7 +175,7 @@ export default function EnterpriseCheckoutDialog({
     } catch (error) {
       toast({
         title: t("common.error"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
+        description: billingErrorMessage(error, t),
         variant: "destructive",
       });
     } finally {
@@ -207,31 +230,51 @@ export default function EnterpriseCheckoutDialog({
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 </div>
               ) : upgradePreview ? (
-                <div className="rounded-lg border border-border/50 divide-y divide-border/40">
-                  <div className="flex justify-between px-3 py-2 text-xs">
-                    <span className="text-muted-foreground">
-                      {t("settingsPage.unifiedBilling.confirmSeats.chargeToday")}
-                    </span>
-                    <span className="font-medium">
-                      {formatAmount(upgradePreview.immediate_amount, upgradePreview.currency)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between px-3 py-2 text-xs">
-                    <span className="text-muted-foreground">
-                      {t("settingsPage.enterpriseCheckout.seatsLabel")}
-                    </span>
-                    <span className="font-medium">{upgradePreview.quantity}</span>
-                  </div>
-                  {upgradePreview.next_billing_date && (
+                <>
+                  <div className="rounded-lg border border-border/50 divide-y divide-border/40">
                     <div className="flex justify-between px-3 py-2 text-xs">
                       <span className="text-muted-foreground">
-                        {t("settingsPage.workspace.billing.nextInvoice")}
+                        {t("settingsPage.enterpriseCheckout.proratedCharge")}
                       </span>
                       <span className="font-medium">
-                        {new Date(upgradePreview.next_billing_date).toLocaleDateString()}
+                        {formatAmount(upgradePreview.prorated_amount, upgradePreview.currency)}
                       </span>
                     </div>
-                  )}
+                    <div className="flex justify-between px-3 py-2 text-xs">
+                      <span className="text-muted-foreground">
+                        {t("settingsPage.enterpriseCheckout.seatsLabel")}
+                      </span>
+                      <span className="font-medium">{upgradePreview.quantity}</span>
+                    </div>
+                    {upgradePreview.next_billing_date && (
+                      <div className="flex justify-between px-3 py-2 text-xs">
+                        <span className="text-muted-foreground">
+                          {t("settingsPage.workspace.billing.nextInvoice")}
+                        </span>
+                        <span className="font-medium">
+                          {new Date(upgradePreview.next_billing_date).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t("settingsPage.enterpriseCheckout.prorationNote")}
+                  </p>
+                </>
+              ) : previewError ? (
+                <div className="space-y-2 rounded-lg border border-border/50 px-3 py-3">
+                  <p className="text-xs font-medium">
+                    {t("settingsPage.enterpriseCheckout.errors.previewFailed")}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">{previewError}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPreviewAttempt((attempt) => attempt + 1)}
+                  >
+                    {t("common.retry")}
+                  </Button>
                 </div>
               ) : null
             ) : (
@@ -282,7 +325,12 @@ export default function EnterpriseCheckoutDialog({
         ) : null}
 
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={submitting}
+            onClick={() => onOpenChange(false)}
+          >
             {t("common.cancel")}
           </Button>
           {eligible.length > 0 ? (

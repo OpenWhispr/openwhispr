@@ -2249,6 +2249,14 @@
         "monthly": "Monthly",
         "annual": "Annual"
       },
+      "proratedCharge": "Prorated charge",
+      "prorationNote": "The prorated difference is added to your next invoice.",
+      "errors": {
+        "previewFailed": "Couldn't load the upgrade preview.",
+        "alreadyEnterprise": "This workspace is already on Enterprise.",
+        "subscriptionInactive": "This workspace's subscription isn't active. Update your billing details and try again.",
+        "priceNotConfigured": "Enterprise pricing isn't available right now. Please contact sales."
+      },
       "priceNote": "Final pricing is shown at checkout.",
       "continueCta": "Continue to checkout",
       "upgradeDescription": "Upgrade {{workspace}} from {{plan}} to Enterprise. Seats and billing cycle carry over; the change takes effect immediately.",

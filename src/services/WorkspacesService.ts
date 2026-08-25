@@ -15,7 +15,9 @@ export interface SeatPreview {
 }
 
 export interface EnterpriseUpgradePreview {
-  immediate_amount: number;
+  // Prorated difference in cents, collected on the next invoice (Stripe
+  // create_prorations), not charged at confirmation time.
+  prorated_amount: number;
   currency: string;
   current_price_amount: number | null;
   new_price_amount: number | null;

@@ -57,17 +57,34 @@ export type EnterpriseTileCta =
   | { action: "contactSales"; ownerName: string | null };
 
 /**
- * Which CTA the Enterprise pricing tile leads with: owners get the purchase
- * dialog, users with no workspace at all get the create-workspace on-ramp,
- * and members/admins of someone else's workspace are pointed at the owner —
- * upgrading in-app would otherwise create a workspace they didn't want.
+ * Which CTA the Enterprise pricing tile leads with: owners of a workspace the
+ * dialog can actually serve (fresh checkout or in-place upgrade) get the
+ * purchase dialog, users with no workspace at all get the create-workspace
+ * on-ramp, and members/admins of someone else's workspace are pointed at the
+ * owner — upgrading in-app would otherwise create a workspace they didn't
+ * want. Owners whose workspaces are all ineligible (e.g. already Enterprise)
+ * get plain contact sales: they are the decision makers, so no ask-owner hint.
  */
 export function enterpriseTileCta(
-  workspaces: Array<Pick<Workspace, "id" | "role" | "billing_manager">>,
+  workspaces: Array<
+    Pick<
+      Workspace,
+      "id" | "role" | "billing_manager" | "plan" | "status" | "stripe_subscription_id"
+    >
+  >,
   activeWorkspaceId: string | null
 ): EnterpriseTileCta {
-  if (workspaces.some((workspace) => workspace.role === "owner")) return { action: "openDialog" };
+  if (
+    workspaces.some(
+      (workspace) => canSelfServeEnterprise(workspace) || canUpgradeWorkspaceToEnterprise(workspace)
+    )
+  ) {
+    return { action: "openDialog" };
+  }
   if (workspaces.length === 0) return { action: "createWorkspace" };
+  if (workspaces.some((workspace) => workspace.role === "owner")) {
+    return { action: "contactSales", ownerName: null };
+  }
   const target =
     workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? workspaces[0];
   return { action: "contactSales", ownerName: target.billing_manager ?? null };

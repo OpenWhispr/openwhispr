@@ -2209,6 +2209,14 @@
         "monthly": "Mensual",
         "annual": "Anual"
       },
+      "proratedCharge": "Cargo prorrateado",
+      "prorationNote": "La diferencia prorrateada se añade a tu próxima factura.",
+      "errors": {
+        "previewFailed": "No se pudo cargar la vista previa de la mejora.",
+        "alreadyEnterprise": "Este espacio de trabajo ya está en Enterprise.",
+        "subscriptionInactive": "La suscripción de este espacio de trabajo no está activa. Actualiza tus datos de facturación e inténtalo de nuevo.",
+        "priceNotConfigured": "Los precios de Enterprise no están disponibles ahora mismo. Contacta con ventas."
+      },
       "priceNote": "El precio final se muestra al pagar.",
       "continueCta": "Continuar al pago",
       "upgradeDescription": "Actualiza {{workspace}} de {{plan}} a Enterprise. Los puestos y el ciclo de facturación se mantienen; el cambio se aplica de inmediato.",

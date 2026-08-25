@@ -2161,6 +2161,14 @@
         "monthly": "月払い",
         "annual": "年払い"
       },
+      "proratedCharge": "日割り料金",
+      "prorationNote": "日割り計算された差額は次回の請求書に追加されます。",
+      "errors": {
+        "previewFailed": "アップグレードのプレビューを読み込めませんでした。",
+        "alreadyEnterprise": "このワークスペースはすでに Enterprise プランです。",
+        "subscriptionInactive": "このワークスペースのサブスクリプションが有効ではありません。請求情報を更新して再度お試しください。",
+        "priceNotConfigured": "Enterprise の料金は現在ご利用いただけません。営業までお問い合わせください。"
+      },
       "priceNote": "最終的な価格はチェックアウト時に表示されます。",
       "continueCta": "チェックアウトへ進む",
       "upgradeDescription": "{{workspace}}を{{plan}}からEnterpriseにアップグレードします。シート数と請求サイクルは引き継がれ、変更は即時に適用されます。",

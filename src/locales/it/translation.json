@@ -2161,6 +2161,14 @@
         "monthly": "Mensile",
         "annual": "Annuale"
       },
+      "proratedCharge": "Addebito proporzionale",
+      "prorationNote": "La differenza proporzionale viene aggiunta alla prossima fattura.",
+      "errors": {
+        "previewFailed": "Impossibile caricare l'anteprima dell'upgrade.",
+        "alreadyEnterprise": "Questo workspace è già su Enterprise.",
+        "subscriptionInactive": "L'abbonamento di questo workspace non è attivo. Aggiorna i dati di fatturazione e riprova.",
+        "priceNotConfigured": "I prezzi Enterprise non sono al momento disponibili. Contatta il team vendite."
+      },
       "priceNote": "Il prezzo finale viene mostrato al momento del pagamento.",
       "continueCta": "Continua al pagamento",
       "upgradeDescription": "Aggiorna {{workspace}} da {{plan}} a Enterprise. Posti e ciclo di fatturazione restano invariati; la modifica ha effetto immediato.",

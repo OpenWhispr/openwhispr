@@ -64,7 +64,7 @@ test("billingCheckout omits additional_seats when the buyer keeps current occupa
 
 test("previewEnterpriseUpgrade posts no body and returns the preview unchanged", async (t) => {
   const preview = {
-    immediate_amount: 12300,
+    prorated_amount: 12300,
     currency: "usd",
     current_price_amount: 1500,
     new_price_amount: 3000,
