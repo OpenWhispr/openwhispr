@@ -43,10 +43,14 @@ test("rejects 255 bytes (just under the threshold)", async () => {
   });
 });
 
-test("treats missing / undefined args as unusable (defensive, does not throw)", async () => {
+test("treats missing / undefined / null args as unusable (defensive, does not throw)", async () => {
   const { evaluateFinishedRecording } = await load();
   assert.deepEqual(evaluateFinishedRecording(), { usable: false, reason: "no-audio-data" });
+  assert.deepEqual(evaluateFinishedRecording(null), { usable: false, reason: "no-audio-data" });
+  assert.deepEqual(evaluateFinishedRecording(undefined), { usable: false, reason: "no-audio-data" });
   assert.deepEqual(evaluateFinishedRecording({}), { usable: false, reason: "no-audio-data" });
+  assert.deepEqual(evaluateFinishedRecording("invalid"), { usable: false, reason: "no-audio-data" });
+  assert.deepEqual(evaluateFinishedRecording(123), { usable: false, reason: "no-audio-data" });
   assert.deepEqual(evaluateFinishedRecording({ receivedAudioData: true }), {
     usable: false,
     reason: "empty-container",
