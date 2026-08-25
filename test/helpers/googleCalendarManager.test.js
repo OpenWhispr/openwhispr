@@ -133,6 +133,7 @@ test("_syncCalendar preserves incremental sync parameters across pages", async (
     id: "cal-1",
     account_email: "test@example.com",
     sync_token: "sync-token-previous",
+    sync_token_expires_at: Date.now() + 60_000,
   });
 
   assert.equal(apiCalls.length, 2);
@@ -143,6 +144,83 @@ test("_syncCalendar preserves incremental sync parameters across pages", async (
   assert.equal(secondPageParams.get("singleEvents"), "true");
   assert.equal(secondPageParams.get("syncToken"), "sync-token-previous");
   assert.equal(secondPageParams.get("pageToken"), "token-page-2");
+});
+
+test("_syncCalendar discards an expired sync token and re-runs a full window sync", async () => {
+  const GoogleCalendarManager = loadManagerModule();
+
+  let savedToken = null;
+  const databaseManager = {
+    getGoogleAccounts: () => [],
+    removeStaleCalendarEvents: () => {},
+    upsertCalendarEvents: () => {},
+    removeCalendarEvents: () => {},
+    updateCalendarSyncToken: (calendarId, syncToken, expiresAt) => {
+      savedToken = { calendarId, syncToken, expiresAt };
+    },
+    upsertContacts: () => {},
+  };
+  const reminderScheduler = { scheduleNextMeeting: () => {}, reset: () => {} };
+  const manager = new GoogleCalendarManager(databaseManager, null, reminderScheduler);
+
+  const apiCalls = [];
+  manager._apiGet = async (path) => {
+    apiCalls.push(path);
+    return { items: [], nextSyncToken: "sync-token-fresh" };
+  };
+
+  const before = Date.now();
+  await manager._syncCalendar({
+    id: "cal-1",
+    account_email: "test@example.com",
+    sync_token: "sync-token-stale",
+    sync_token_expires_at: before - 1,
+  });
+
+  const params = new URL(apiCalls[0], "https://www.googleapis.com").searchParams;
+  assert.equal(params.get("syncToken"), null, "expired token must not be reused");
+  assert.ok(params.get("timeMin"), "full sync should send a fresh window");
+  assert.ok(params.get("timeMax"), "full sync should send a fresh window");
+  assert.equal(savedToken.syncToken, "sync-token-fresh");
+  assert.ok(
+    savedToken.expiresAt >= before + 23 * 60 * 60 * 1000,
+    "new token should carry a fresh expiry"
+  );
+});
+
+test("_syncCalendar keeps the stored expiry when an incremental sync reuses the token", async () => {
+  const GoogleCalendarManager = loadManagerModule();
+
+  let savedToken = null;
+  const databaseManager = {
+    getGoogleAccounts: () => [],
+    removeStaleCalendarEvents: () => {},
+    upsertCalendarEvents: () => {},
+    removeCalendarEvents: () => {},
+    updateCalendarSyncToken: (calendarId, syncToken, expiresAt) => {
+      savedToken = { calendarId, syncToken, expiresAt };
+    },
+    upsertContacts: () => {},
+  };
+  const reminderScheduler = { scheduleNextMeeting: () => {}, reset: () => {} };
+  const manager = new GoogleCalendarManager(databaseManager, null, reminderScheduler);
+
+  manager._apiGet = async () => ({ items: [], nextSyncToken: "sync-token-next" });
+
+  const storedExpiry = Date.now() + 60_000;
+  await manager._syncCalendar({
+    id: "cal-1",
+    account_email: "test@example.com",
+    sync_token: "sync-token-previous",
+    sync_token_expires_at: storedExpiry,
+  });
+
+  assert.equal(savedToken.syncToken, "sync-token-next");
+  assert.equal(
+    savedToken.expiresAt,
+    storedExpiry,
+    "incremental sync must not extend the pinned window's expiry"
+  );
 });
 
 test("_syncCalendar preserves meeting links from Google event location and description", async () => {

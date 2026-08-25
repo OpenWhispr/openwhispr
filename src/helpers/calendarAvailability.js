@@ -7,6 +7,15 @@ const DEFAULT_MAX_RESULTS = 10;
 const MAX_BUFFER_MINUTES = 120;
 
 const REQUEST_KEYS = new Set(["start", "end", "minimumSlotMinutes", "bufferMinutes", "maxResults"]);
+
+// Time/connection-dependent failures the renderer tool relays verbatim so
+// the model can correct the request; every other error stays generic.
+const USER_CORRECTABLE_ERRORS = Object.freeze({
+  startTooFarInPast: "start cannot be more than 5 minutes in the past",
+  endBeyondHorizon: `end plus buffer cannot extend beyond ${MAX_AVAILABILITY_HORIZON_DAYS} local calendar days from now`,
+  endNotAfterNow: "end must be after the current time",
+  noCalendarConnected: "No calendar is connected",
+});
 const RFC3339_WITH_OFFSET_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):(\d{2}))$/;
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -123,16 +132,14 @@ function validateCalendarAvailabilityRequest(request, now = new Date()) {
 
   if (endMs <= requestedStartMs) throw new RangeError("end must be after start");
   if (requestedStartMs < nowMs - PAST_START_TOLERANCE_MS) {
-    throw new RangeError("start cannot be more than 5 minutes in the past");
+    throw new RangeError(USER_CORRECTABLE_ERRORS.startTooFarInPast);
   }
   if (endMs + bufferMinutes * MINUTE_MS > getLocalAvailabilityHorizonMs(now)) {
-    throw new RangeError(
-      `end plus buffer cannot extend beyond ${MAX_AVAILABILITY_HORIZON_DAYS} local calendar days from now`
-    );
+    throw new RangeError(USER_CORRECTABLE_ERRORS.endBeyondHorizon);
   }
 
   const startMs = Math.max(requestedStartMs, nowMs);
-  if (endMs <= startMs) throw new RangeError("end must be after the current time");
+  if (endMs <= startMs) throw new RangeError(USER_CORRECTABLE_ERRORS.endNotAfterNow);
 
   return {
     start: new Date(startMs).toISOString(),
@@ -262,7 +269,9 @@ module.exports = {
   MAX_AVAILABILITY_HORIZON_DAYS,
   MAX_BUFFER_MINUTES,
   PAST_START_TOLERANCE_MS,
+  USER_CORRECTABLE_ERRORS,
   isExplicitOffsetRfc3339,
+  parseEventTime,
   validateCalendarAvailabilityRequest,
   calculateCalendarAvailability,
 };

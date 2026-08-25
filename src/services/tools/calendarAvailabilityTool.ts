@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import { USER_CORRECTABLE_ERRORS } from "../../helpers/calendarAvailability";
 import type {
   CalendarAvailabilityInterval,
   CalendarAvailabilityRequest,
@@ -10,7 +11,6 @@ const MINIMUM_SLOT_MINUTES = { minimum: 5, maximum: 480 } as const;
 const BUFFER_MINUTES = { minimum: 0, maximum: 120 } as const;
 const MAX_RESULTS = { minimum: 1, maximum: 20 } as const;
 const RFC3339_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
-const IANA_TIME_ZONE = /^[A-Za-z0-9._+-]+(?:\/[A-Za-z0-9._+-]+)*$/;
 const ALLOWED_ARGUMENTS = new Set([
   "start",
   "end",
@@ -18,6 +18,9 @@ const ALLOWED_ARGUMENTS = new Set([
   "bufferMinutes",
   "maxResults",
 ]);
+
+// Only these known validation messages are relayed; all other IPC errors stay generic.
+const RELAYED_ERRORS = new Set<string>(Object.values(USER_CORRECTABLE_ERRORS));
 
 const failure = (displayText: string): ToolResult => ({
   success: false,
@@ -59,84 +62,64 @@ function parseRequest(args: Record<string, unknown>): CalendarAvailabilityReques
   return request;
 }
 
-function sanitizeInterval(value: unknown): CalendarAvailabilityInterval | null {
+function toInterval(value: unknown): CalendarAvailabilityInterval | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const interval = value as Record<string, unknown>;
-  if (typeof interval.start !== "string" || typeof interval.end !== "string") return null;
-  if (!RFC3339_WITH_OFFSET.test(interval.start) || !RFC3339_WITH_OFFSET.test(interval.end)) {
-    return null;
-  }
-  const startMs = Date.parse(interval.start);
-  const endMs = Date.parse(interval.end);
+  const { start, end } = value as Record<string, unknown>;
+  if (typeof start !== "string" || typeof end !== "string") return null;
+  const startMs = Date.parse(start);
+  const endMs = Date.parse(end);
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs >= endMs) return null;
-  return { start: interval.start, end: interval.end };
+  return { start, end };
 }
 
-function isIanaTimeZone(value: string): boolean {
-  if (!value || value.length > 128 || !IANA_TIME_ZONE.test(value)) return false;
-  try {
-    new Intl.DateTimeFormat("en", { timeZone: value }).format();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function sanitizeAvailability(value: unknown): CalendarAvailabilityResult | null {
+// Projects the IPC payload onto known privacy-safe fields; anything malformed fails closed.
+function projectAvailability(value: unknown): CalendarAvailabilityResult | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const availability = value as Record<string, unknown>;
-  if (!Array.isArray(availability.busy) || !Array.isArray(availability.availableSlots)) return null;
-  if (
-    typeof availability.hasMore !== "boolean" ||
-    typeof availability.isEntireRangeFree !== "boolean"
-  ) {
-    return null;
-  }
-
-  const range = sanitizeInterval(availability.range);
-  const timezone = typeof availability.timezone === "string" ? availability.timezone.trim() : "";
-  const coverage = availability.coverage;
+  const payload = value as Record<string, unknown>;
+  const range = toInterval(payload.range);
+  const lookaheadDays =
+    payload.coverage && typeof payload.coverage === "object"
+      ? (payload.coverage as Record<string, unknown>).lookaheadDays
+      : null;
   if (
     !range ||
-    !isIanaTimeZone(timezone) ||
-    !coverage ||
-    typeof coverage !== "object" ||
-    Array.isArray(coverage)
-  ) {
-    return null;
-  }
-  const coverageRecord = coverage as Record<string, unknown>;
-  if (
-    coverageRecord.source !== "local-calendar-cache" ||
-    !Number.isSafeInteger(coverageRecord.lookaheadDays) ||
-    (coverageRecord.lookaheadDays as number) < 1
+    typeof payload.timezone !== "string" ||
+    !payload.timezone ||
+    typeof payload.hasMore !== "boolean" ||
+    typeof payload.isEntireRangeFree !== "boolean" ||
+    !Array.isArray(payload.busy) ||
+    !Array.isArray(payload.availableSlots) ||
+    !Number.isSafeInteger(lookaheadDays) ||
+    (lookaheadDays as number) < 1
   ) {
     return null;
   }
 
-  const busy = availability.busy.map(sanitizeInterval);
-  if (busy.some((interval) => interval === null)) return null;
+  const busy: CalendarAvailabilityInterval[] = [];
+  for (const item of payload.busy) {
+    const interval = toInterval(item);
+    if (!interval) return null;
+    busy.push(interval);
+  }
 
-  const availableSlots = availability.availableSlots.map((value) => {
-    const interval = sanitizeInterval(value);
-    if (!interval || !value || typeof value !== "object" || Array.isArray(value)) return null;
-    const durationMinutes = (value as Record<string, unknown>).durationMinutes;
-    if (!Number.isSafeInteger(durationMinutes) || (durationMinutes as number) < 1) return null;
-    return { ...interval, durationMinutes: durationMinutes as number };
-  });
-  if (availableSlots.some((slot) => slot === null)) return null;
+  const availableSlots: CalendarAvailabilitySlot[] = [];
+  for (const item of payload.availableSlots) {
+    const interval = toInterval(item);
+    const durationMinutes = (item as Record<string, unknown> | null)?.durationMinutes;
+    if (!interval || !Number.isSafeInteger(durationMinutes) || (durationMinutes as number) < 1) {
+      return null;
+    }
+    availableSlots.push({ ...interval, durationMinutes: durationMinutes as number });
+  }
 
   return {
     range,
-    timezone,
-    busy: busy as CalendarAvailabilityInterval[],
-    availableSlots: availableSlots as CalendarAvailabilitySlot[],
-    hasMore: availability.hasMore,
-    isEntireRangeFree: availability.isEntireRangeFree,
-    coverage: {
-      source: "local-calendar-cache",
-      lookaheadDays: coverageRecord.lookaheadDays as number,
-    },
+    timezone: payload.timezone,
+    busy,
+    availableSlots,
+    hasMore: payload.hasMore,
+    isEntireRangeFree: payload.isEntireRangeFree,
+    coverage: { source: "local-calendar-cache", lookaheadDays: lookaheadDays as number },
   };
 }
 
@@ -193,9 +176,12 @@ export const calendarAvailabilityTool: ToolDefinition = {
 
     try {
       const response = await getAvailability(request);
-      if (!response?.success) return failure("Failed to fetch calendar availability");
+      if (!response?.success) {
+        const error = response && response.success === false ? response.error : "";
+        return failure(RELAYED_ERRORS.has(error) ? error : "Failed to fetch calendar availability");
+      }
 
-      const availability = sanitizeAvailability(response.availability);
+      const availability = projectAvailability(response.availability);
       if (!availability) return failure("Failed to fetch calendar availability");
 
       const count = availability.availableSlots.length;

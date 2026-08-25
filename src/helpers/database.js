@@ -5,6 +5,7 @@ const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
+const { parseEventTime } = require("./calendarAvailability");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -107,15 +108,6 @@ const SELECTED_CALENDAR_EVENT_FILTER = `(
     SELECT 1 FROM apple_calendars WHERE apple_calendars.id = calendar_events.calendar_id
   ))
 )`;
-
-function parseCalendarEventTime(value, isAllDay) {
-  if (typeof value !== "string") return NaN;
-  if (isAllDay && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [year, month, day] = value.split("-").map(Number);
-    return new Date(year, month - 1, day).getTime();
-  }
-  return Date.parse(value);
-}
 
 class DatabaseManager {
   constructor() {
@@ -501,6 +493,7 @@ class DatabaseManager {
           background_color TEXT,
           is_selected INTEGER NOT NULL DEFAULT 1,
           sync_token TEXT,
+          sync_token_expires_at INTEGER,
           account_email TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -508,6 +501,12 @@ class DatabaseManager {
 
       try {
         this.db.exec("ALTER TABLE google_calendars ADD COLUMN account_email TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
+      try {
+        this.db.exec("ALTER TABLE google_calendars ADD COLUMN sync_token_expires_at INTEGER");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
@@ -588,7 +587,9 @@ class DatabaseManager {
       if (availabilitySchemaChanged) {
         // Existing incremental tokens will not resend unchanged free/declined
         // events, so rebuild both REST caches once with the new semantics.
-        this.db.prepare("UPDATE google_calendars SET sync_token = NULL").run();
+        this.db
+          .prepare("UPDATE google_calendars SET sync_token = NULL, sync_token_expires_at = NULL")
+          .run();
         this.db
           .prepare("UPDATE microsoft_calendars SET sync_token = NULL, sync_token_expires_at = NULL")
           .run();
@@ -3489,8 +3490,8 @@ class DatabaseManager {
 
       return events.filter((event) => {
         const isAllDay = event.is_all_day === true || event.is_all_day === 1;
-        const eventStart = parseCalendarEventTime(event.start_time, isAllDay);
-        const eventEnd = parseCalendarEventTime(event.end_time, isAllDay);
+        const eventStart = parseEventTime(event.start_time, isAllDay);
+        const eventEnd = parseEventTime(event.end_time, isAllDay);
         return (
           Number.isFinite(eventStart) &&
           Number.isFinite(eventEnd) &&
@@ -3586,12 +3587,14 @@ class DatabaseManager {
     }
   }
 
-  updateCalendarSyncToken(calendarId, syncToken) {
+  updateCalendarSyncToken(calendarId, syncToken, expiresAt) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       this.db
-        .prepare("UPDATE google_calendars SET sync_token = ? WHERE id = ?")
-        .run(syncToken, calendarId);
+        .prepare(
+          "UPDATE google_calendars SET sync_token = ?, sync_token_expires_at = ? WHERE id = ?"
+        )
+        .run(syncToken, expiresAt, calendarId);
       return { success: true };
     } catch (error) {
       debugLogger.error("Error updating sync token", { error: error.message }, "gcal");

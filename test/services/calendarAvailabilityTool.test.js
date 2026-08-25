@@ -260,6 +260,21 @@ test("fails generically without exposing IPC or provider errors", async () => {
   );
 });
 
+test("relays only the time- and connection-dependent validation errors", async () => {
+  const { calendarAvailabilityTool } = await loadTool();
+  const { USER_CORRECTABLE_ERRORS } = require("../../src/helpers/calendarAvailability");
+
+  for (const message of Object.values(USER_CORRECTABLE_ERRORS)) {
+    global.window = {
+      electronAPI: {
+        calendarGetAvailability: async () => ({ success: false, error: message }),
+      },
+    };
+    const result = await calendarAvailabilityTool.execute({ start: START, end: END });
+    assert.deepEqual(result, { success: false, data: null, displayText: message });
+  }
+});
+
 test("fails closed when IPC returns a malformed availability payload", async () => {
   const { calendarAvailabilityTool } = await loadTool();
   global.window = {

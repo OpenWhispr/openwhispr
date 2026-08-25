@@ -141,6 +141,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **googleCalendarManager.js**: Google Calendar sync (REST, OAuth via `googleCalendarOAuth.js`)
   - 10s socket timeout on API requests
   - Incremental sync via `syncToken`; full re-sync on 410 prunes stale events (note-linked rows retained)
+  - Sync tokens pin the `timeMin`/`timeMax` window of the full sync that created them (incremental syncs never roll it forward), so tokens are discarded after 1 day to keep the 9-day lookahead covering the availability tool's 7-day horizon
 - **microsoftCalendarManager.js**: Microsoft Calendar sync via Graph API (OAuth via `microsoftCalendarOAuth.js`)
   - `calendarView/delta` incremental sync over a 14-day window; delta token discarded after 7 days (Graph delta links never roll their window forward)
   - Delta can return recurring-series occurrences as bare stubs (no subject/attendees/meeting link); they're backfilled from their series master, one `GET /me/events/{id}` per series

@@ -233,3 +233,17 @@ test("availability range query treats date-only all-day events as local dates", 
   );
   db.db.close();
 });
+
+test("google sync token persists alongside its expiry", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCalendar(db, "google", "google-calendar");
+
+  const expiresAt = Date.parse("2026-07-23T10:00:00Z");
+  db.updateCalendarSyncToken("google-calendar", "sync-token", expiresAt);
+
+  const calendar = db.getGoogleCalendars().find((row) => row.id === "google-calendar");
+  assert.equal(calendar.sync_token, "sync-token");
+  assert.equal(calendar.sync_token_expires_at, expiresAt);
+  db.db.close();
+});

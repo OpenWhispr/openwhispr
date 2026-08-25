@@ -9,7 +9,11 @@ const { broadcastToWindows } = require("./windowBroadcast");
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 const BUFFER_COVERAGE_MS = MAX_BUFFER_MINUTES * 60 * 1000;
 const ALL_DAY_TIMEZONE_PADDING_MS = 48 * 60 * 60 * 1000;
-const SYNC_LOOKAHEAD_MS = 8 * 24 * 60 * 60 * 1000;
+
+// Sync tokens pin the full sync's timeMin/timeMax window, so discard them
+// after a day to keep the lookahead covering the 7-day availability horizon.
+const SYNC_LOOKAHEAD_MS = 9 * 24 * 60 * 60 * 1000;
+const SYNC_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const GOOGLE_RESPONSE_STATUSES = new Set(["accepted", "declined", "tentative", "needsAction"]);
 
 class GoogleCalendarManager {
@@ -175,7 +179,13 @@ class GoogleCalendarManager {
         ).toISOString(),
       });
 
-    let isFullSync = !calendar.sync_token;
+    const hasFreshToken = Boolean(
+      calendar.sync_token && calendar.sync_token_expires_at > Date.now()
+    );
+    let isFullSync = !hasFreshToken;
+    let tokenExpiresAt = hasFreshToken
+      ? calendar.sync_token_expires_at
+      : Date.now() + SYNC_TOKEN_TTL_MS;
     let baseParams = isFullSync
       ? buildFullParams()
       : new URLSearchParams({
@@ -200,6 +210,7 @@ class GoogleCalendarManager {
         // 410 Gone means syncToken is invalid; fall back to full sync
         if (err.statusCode === 410 && !pageToken && !isFullSync) {
           isFullSync = true;
+          tokenExpiresAt = Date.now() + SYNC_TOKEN_TTL_MS;
           baseParams = buildFullParams();
           continue;
         }
@@ -278,7 +289,9 @@ class GoogleCalendarManager {
     }
     if (toUpsert.length > 0) this.databaseManager.upsertCalendarEvents(toUpsert);
     if (toRemove.length > 0) this.databaseManager.removeCalendarEvents(toRemove);
-    if (nextSyncToken) this.databaseManager.updateCalendarSyncToken(calendar.id, nextSyncToken);
+    if (nextSyncToken) {
+      this.databaseManager.updateCalendarSyncToken(calendar.id, nextSyncToken, tokenExpiresAt);
+    }
     if (contactsToUpsert.length > 0) this.databaseManager.upsertContacts(contactsToUpsert);
   }
 

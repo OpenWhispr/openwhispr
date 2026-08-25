@@ -1,5 +1,6 @@
 const {
   MAX_AVAILABILITY_HORIZON_DAYS,
+  USER_CORRECTABLE_ERRORS,
   validateCalendarAvailabilityRequest,
   calculateCalendarAvailability,
 } = require("./calendarAvailability");
@@ -20,7 +21,9 @@ function getCalendarAvailability({
   const now = clock();
   const normalized = validateCalendarAvailabilityRequest(request, now);
   const connectedProviders = connectedCalendarProviders(calendarProviders);
-  if (connectedProviders.length === 0) throw new Error("No calendar is connected");
+  if (connectedProviders.length === 0) {
+    throw new Error(USER_CORRECTABLE_ERRORS.noCalendarConnected);
+  }
 
   const endMs = Date.parse(normalized.end);
   const startMs = Date.parse(normalized.start);
