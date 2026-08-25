@@ -1,5 +1,4 @@
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
-import { USER_CORRECTABLE_ERRORS } from "../../helpers/calendarAvailability";
 import type {
   CalendarAvailabilityInterval,
   CalendarAvailabilityRequest,
@@ -20,7 +19,12 @@ const ALLOWED_ARGUMENTS = new Set([
 ]);
 
 // Only these known validation messages are relayed; all other IPC errors stay generic.
-const RELAYED_ERRORS = new Set<string>(Object.values(USER_CORRECTABLE_ERRORS));
+const RELAYED_ERRORS = new Set([
+  "start cannot be more than 5 minutes in the past",
+  "end plus buffer cannot extend beyond 7 local calendar days from now",
+  "end must be after the current time",
+  "No calendar is connected",
+]);
 
 const failure = (displayText: string): ToolResult => ({
   success: false,
