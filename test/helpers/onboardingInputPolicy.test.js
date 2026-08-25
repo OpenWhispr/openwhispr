@@ -27,3 +27,11 @@ test("unknown demo kinds fail closed while onboarding is active", () => {
   assert.equal(isOnboardingInputAllowed(true, "unknown", "dictation"), false);
   assert.equal(isOnboardingInputAllowed(true, undefined, "assistant"), false);
 });
+
+test("supports case-insensitive and trimmed demo and input kinds", () => {
+  assert.equal(isOnboardingInputAllowed(true, "Dictation", "dictation"), true);
+  assert.equal(isOnboardingInputAllowed(true, " DICTATION ", "dictation"), true);
+  assert.equal(isOnboardingInputAllowed(true, "Assistant", " assistant "), true);
+  assert.equal(isOnboardingInputAllowed(true, "ASSISTANT", "assistant"), true);
+  assert.equal(isOnboardingInputAllowed(true, " Dictation ", "assistant"), false);
+});
