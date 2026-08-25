@@ -2,7 +2,10 @@ const CHUNK_SIZE = 5;
 const CHUNK_OVERLAP = 2;
 
 function chunkConversation(title, messages) {
-  const relevant = messages.filter((m) => m.role !== "system");
+  const messageList = Array.isArray(messages) ? messages : [];
+  const relevant = messageList.filter(
+    (m) => m && typeof m === "object" && m.role !== "system"
+  );
   if (relevant.length === 0) return [];
 
   if (relevant.length <= CHUNK_SIZE) {
@@ -19,8 +22,17 @@ function chunkConversation(title, messages) {
 }
 
 function formatChunkText(title, messages) {
-  const body = messages.map((m) => `${m.role}: ${m.content}`).join("\n");
-  return `${title}\n${body}`.slice(0, 1500);
+  const safeTitle = typeof title === "string" ? title.trim() : "";
+  const messageList = Array.isArray(messages) ? messages : [];
+  const body = messageList
+    .map((m) => {
+      const role = typeof m?.role === "string" ? m.role : "user";
+      const content = typeof m?.content === "string" ? m.content : "";
+      return `${role}: ${content}`;
+    })
+    .join("\n");
+  const header = safeTitle ? `${safeTitle}\n` : "";
+  return `${header}${body}`.slice(0, 1500);
 }
 
 module.exports = { chunkConversation };
