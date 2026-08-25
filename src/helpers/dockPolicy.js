@@ -10,7 +10,8 @@
 
 // Whether the Dock icon should be visible right now.
 // Returns null off macOS, where there is no Dock to act on.
-export function resolveDockVisibility({ platform, controlPanelVisible }) {
+export function resolveDockVisibility(params = {}) {
+  const { platform, controlPanelVisible } = params || {};
   if (platform !== "darwin") return null;
   return !!controlPanelVisible;
 }

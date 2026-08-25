@@ -27,3 +27,12 @@ test("there is no Dock to act on outside macOS", async () => {
     assert.equal(resolveDockVisibility({ platform, controlPanelVisible: true }), null);
   }
 });
+
+test("handles nullish and missing parameter safely", async () => {
+  const { resolveDockVisibility } = await load();
+
+  assert.equal(resolveDockVisibility(), null);
+  assert.equal(resolveDockVisibility(null), null);
+  assert.equal(resolveDockVisibility(undefined), null);
+  assert.equal(resolveDockVisibility({}), null);
+});
