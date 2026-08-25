@@ -7,6 +7,7 @@ import { listFoldersTool } from "./listFoldersTool";
 import { clipboardTool } from "./clipboardTool";
 import { webSearchTool } from "./webSearchTool";
 import { calendarTool } from "./calendarTool";
+import { createDraftEmailTool } from "./draftEmailTool";
 import type { ContainerScope } from "../../types/chat";
 
 export { ToolRegistry } from "./ToolRegistry";
@@ -19,6 +20,8 @@ interface ToolRegistrySettings {
   /** Pins search_notes to a container (overview chat); the LLM cannot widen it. */
   searchScope?: ContainerScope;
   webSearchEnabled: boolean;
+  /** Connected Gmail address; empty/absent disables draft_email. */
+  gmailEmail?: string;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -38,6 +41,10 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
 
   if (settings.calendarConnected) {
     registry.register(calendarTool);
+  }
+
+  if (settings.gmailEmail) {
+    registry.register(createDraftEmailTool(settings.gmailEmail));
   }
 
   return registry;

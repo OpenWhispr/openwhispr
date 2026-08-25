@@ -903,11 +903,18 @@ class ReasoningService extends BaseReasoningService {
           const output = chunk.output;
           const displayText =
             typeof output === "string" ? output : output?.error ? String(output.error) : "Done";
+          // Mirror the cloud path: successful object outputs become metadata so
+          // tool-result cards (note cards, email drafts) render on BYOK/local too.
+          const metadata =
+            output && typeof output === "object" && !("error" in output)
+              ? (output as Record<string, unknown> | Array<Record<string, unknown>>)
+              : undefined;
           yield {
             type: "tool_result",
             callId: chunk.toolCallId,
             toolName: chunk.toolName,
             displayText,
+            ...(metadata ? { metadata } : {}),
           };
         } else if (chunk.type === "abort") {
           canFlushFilteredText = false;

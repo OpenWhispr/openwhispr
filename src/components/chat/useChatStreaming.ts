@@ -271,7 +271,8 @@ export function useChatStreaming({
         const calendarConnected =
           settings.gcalConnected || settings.mcalConnected || settings.appleCalendarConnected;
         const webSearchEnabled = isWebSearchAllowed(usePolicyStore.getState());
-        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}`;
+        const gmailEmail = settings.gmailConnected ? settings.gmailEmail : "";
+        const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${gmailEmail}`;
         if (toolRegistryRef.current?.key === cacheKey) {
           registry = toolRegistryRef.current.registry;
         } else {
@@ -281,6 +282,7 @@ export function useChatStreaming({
             cloudBackupEnabled: settings.cloudBackupEnabled,
             searchScope: scope,
             webSearchEnabled,
+            gmailEmail,
           });
           toolRegistryRef.current = { key: cacheKey, registry };
         }

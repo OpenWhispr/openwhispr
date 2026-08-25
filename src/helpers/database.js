@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
+const secretCrypto = require("./secretCrypto");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { app } = require("electron");
@@ -495,6 +496,19 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS gmail_tokens (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          gmail_email TEXT NOT NULL UNIQUE,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          scope TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS microsoft_calendar_tokens (
@@ -3155,6 +3169,37 @@ class DatabaseManager {
     }
   }
 
+  // Patches one tool call's metadata inside a persisted assistant message
+  // (e.g. marking an email draft as sent). The LIKE narrows candidates; the
+  // JSON parse confirms the match.
+  updateAgentToolCallMetadata(toolCallId, patch) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const rows = this.db
+        .prepare("SELECT id, metadata FROM agent_messages WHERE metadata LIKE ? ORDER BY id DESC")
+        .all(`%${toolCallId}%`);
+      for (const row of rows) {
+        let metadata;
+        try {
+          metadata = JSON.parse(row.metadata);
+        } catch {
+          continue;
+        }
+        const toolCall = metadata.toolCalls?.find((tc) => tc.id === toolCallId);
+        if (!toolCall?.metadata || Array.isArray(toolCall.metadata)) continue;
+        Object.assign(toolCall.metadata, patch);
+        this.db
+          .prepare("UPDATE agent_messages SET metadata = ? WHERE id = ?")
+          .run(JSON.stringify(metadata), row.id);
+        return { success: true };
+      }
+      return { success: false };
+    } catch (error) {
+      debugLogger.error("Error updating agent tool call", { error: error.message }, "database");
+      return { success: false };
+    }
+  }
+
   getAllGoogleTokens() {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -3211,6 +3256,98 @@ class DatabaseManager {
       return { success: true };
     } catch (error) {
       debugLogger.error("Error deleting Google tokens", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  // A Gmail refresh token can send mail as the user, so unlike the calendar
+  // tables these columns are encrypted at rest via secretCrypto. The "enc:"
+  // prefix keeps reads working when no encryption backend exists (Linux
+  // without a keyring), where the value is stored plaintext.
+  _encryptGmailToken(value) {
+    if (!secretCrypto.isAvailable()) return value;
+    return `enc:${secretCrypto.encrypt(value).toString("base64")}`;
+  }
+
+  _decryptGmailToken(value) {
+    if (!value?.startsWith("enc:")) return value;
+    return secretCrypto.decrypt(Buffer.from(value.slice(4), "base64")).value;
+  }
+
+  _decryptGmailTokenRow(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      access_token: this._decryptGmailToken(row.access_token),
+      refresh_token: this._decryptGmailToken(row.refresh_token),
+    };
+  }
+
+  saveGmailTokens(tokens) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      // Single-account integration: dropping rows for any other email keeps a
+      // re-connect with a different account from leaving two senders behind.
+      this.db.transaction(() => {
+        this.db.prepare("DELETE FROM gmail_tokens WHERE gmail_email != ?").run(tokens.gmail_email);
+        this.db
+          .prepare(
+            `INSERT INTO gmail_tokens (gmail_email, access_token, refresh_token, expires_at, scope)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(gmail_email) DO UPDATE SET
+               access_token = excluded.access_token,
+               refresh_token = excluded.refresh_token,
+               expires_at = excluded.expires_at,
+               scope = excluded.scope,
+               updated_at = CURRENT_TIMESTAMP`
+          )
+          .run(
+            tokens.gmail_email,
+            this._encryptGmailToken(tokens.access_token),
+            this._encryptGmailToken(tokens.refresh_token),
+            tokens.expires_at,
+            tokens.scope
+          );
+      })();
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error saving Gmail tokens", { error: error.message }, "gmail");
+      throw error;
+    }
+  }
+
+  getGmailTokens() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this._decryptGmailTokenRow(
+        this.db.prepare("SELECT * FROM gmail_tokens LIMIT 1").get() || null
+      );
+    } catch (error) {
+      debugLogger.error("Error getting Gmail tokens", { error: error.message }, "gmail");
+      throw error;
+    }
+  }
+
+  getAllGmailTokens() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare("SELECT * FROM gmail_tokens")
+        .all()
+        .map((row) => this._decryptGmailTokenRow(row));
+    } catch (error) {
+      debugLogger.error("Error getting all Gmail tokens", { error: error.message }, "gmail");
+      throw error;
+    }
+  }
+
+  deleteGmailTokens() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db.prepare("DELETE FROM gmail_tokens").run();
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error deleting Gmail tokens", { error: error.message }, "gmail");
       throw error;
     }
   }

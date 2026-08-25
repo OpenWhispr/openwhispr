@@ -564,6 +564,7 @@ class IPCHandlers {
     this.googleCalendarManager = managers.googleCalendarManager;
     this.microsoftCalendarManager = managers.microsoftCalendarManager;
     this.appleCalendarManager = managers.appleCalendarManager;
+    this.gmailManager = managers.gmailManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
@@ -2046,6 +2047,10 @@ class IPCHandlers {
       }
     );
 
+    ipcMain.handle("db-update-agent-tool-call", async (event, toolCallId, patch) => {
+      return this.databaseManager.updateAgentToolCallMetadata(toolCallId, patch);
+    });
+
     ipcMain.handle("db-get-agent-messages", async (event, conversationId) => {
       return this.databaseManager.getAgentMessages(conversationId);
     });
@@ -3433,6 +3438,11 @@ class IPCHandlers {
         await this.googleCalendarManager?.revokeAllTokens();
       } catch (e) {
         errors.push(`GCal revoke: ${e.message}`);
+      }
+      try {
+        await this.gmailManager?.revokeAllTokens();
+      } catch (e) {
+        errors.push(`Gmail revoke: ${e.message}`);
       }
 
       // Close DB connection before deleting the file
@@ -10057,6 +10067,45 @@ class IPCHandlers {
           "acal"
         );
         return { connected: false, sourceNames: [] };
+      }
+    });
+
+    // Gmail (send-only)
+    ipcMain.handle("gmail-start-oauth", async () => {
+      try {
+        return await this.gmailManager.startOAuth();
+      } catch (error) {
+        debugLogger.error("Gmail OAuth failed", { error: error.message }, "gmail");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("gmail-disconnect", async () => {
+      try {
+        this.gmailManager.disconnect();
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Gmail disconnect failed", { error: error.message }, "gmail");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("gmail-get-connection-status", async () => {
+      try {
+        return this.gmailManager.getConnectionStatus();
+      } catch (error) {
+        debugLogger.error("Gmail connection status failed", { error: error.message }, "gmail");
+        return { connected: false, email: null, configured: false };
+      }
+    });
+
+    ipcMain.handle("gmail-send-email", async (_event, draft) => {
+      try {
+        const result = await this.gmailManager.sendEmail(draft);
+        return { success: true, ...result };
+      } catch (error) {
+        debugLogger.error("Gmail send failed", { error: error.message }, "gmail");
+        return { success: false, error: error.message };
       }
     });
 

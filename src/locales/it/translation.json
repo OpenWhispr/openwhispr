@@ -3291,7 +3291,21 @@
       "copiedToClipboard": "Copiato negli appunti",
       "openNote": "Apri nota",
       "unknownTool": "Strumento sconosciuto: {{name}}",
-      "invalidArgs": "Argomenti dello strumento non validi per {{name}}"
+      "invalidArgs": "Argomenti dello strumento non validi per {{name}}",
+      "draft_emailStatus": "Stesura dell'email..."
+    },
+    "emailDraft": {
+      "title": "Bozza email",
+      "via": "via {{email}}",
+      "to": "A",
+      "cc": "Cc",
+      "subject": "Oggetto",
+      "send": "Invia",
+      "sending": "Invio...",
+      "sent": "Inviata",
+      "retry": "Riprova",
+      "invalidRecipients": "Inserisci un indirizzo destinatario valido",
+      "sendFailed": "Invio non riuscito: controlla la connessione a Gmail"
     }
   },
   "assistant": {
@@ -3368,11 +3382,24 @@
       "connectFailed": "Connessione non riuscita",
       "connectFailedDescription": "Si è verificato un errore durante la connessione a Calendar.app. Riavvia OpenWhispr e riprova."
     },
+    "gmail": {
+      "title": "Gmail",
+      "optional": "Opzionale",
+      "description": "Invia email di follow-up create dalle tue note, direttamente dalla chat.",
+      "connect": "Collega Gmail",
+      "connected": "Connesso",
+      "disconnect": "Disconnetti",
+      "disconnectConfirm": "Disconnettere {{email}}?",
+      "disconnectDescription": "OpenWhispr non potrà più inviare email da questo account.",
+      "connectFailed": "Connessione non riuscita",
+      "connectFailedDescription": "Si è verificato un errore durante la connessione a Gmail. Riprova."
+    },
     "sections": {
       "calendar": "Calendario",
       "api": "API",
       "mcp": "MCP",
-      "cli": "CLI"
+      "cli": "CLI",
+      "email": "Email"
     },
     "api": {
       "title": "Chiavi API",

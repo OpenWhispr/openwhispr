@@ -10,6 +10,8 @@ interface UseEmbeddedChatOptions {
   noteTitle: string;
   noteContent: string;
   noteTranscript?: string;
+  /** Raw participants JSON from the note row (CalendarAttendee[]). */
+  noteParticipants?: string | null;
 }
 
 interface NoteConversationItem {
@@ -37,6 +39,7 @@ export function useEmbeddedChat({
   noteTitle,
   noteContent,
   noteTranscript,
+  noteParticipants,
 }: UseEmbeddedChatOptions): UseEmbeddedChatReturn {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [noteConversations, setNoteConversations] = useState<NoteConversationItem[]>([]);
@@ -50,19 +53,34 @@ export function useEmbeddedChat({
     },
   });
 
-  const noteContext = useMemo(
-    () =>
-      [
-        `Note ID: ${noteId}`,
-        folderId != null ? `Folder ID: ${folderId}` : "",
-        `Title: ${noteTitle}`,
-        `Content:\n${noteContent}`,
-        noteTranscript ? `\nTranscript:\n${noteTranscript}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    [folderId, noteContent, noteId, noteTitle, noteTranscript]
-  );
+  const noteContext = useMemo(() => {
+    let participants = "";
+    if (noteParticipants) {
+      try {
+        const parsed: Array<{ email?: string; displayName?: string | null; self?: boolean }> =
+          JSON.parse(noteParticipants);
+        const lines = parsed
+          .filter((p) => p.email)
+          .map(
+            (p) =>
+              `- ${p.displayName ? `${p.displayName} <${p.email}>` : p.email}${p.self ? " (me)" : ""}`
+          );
+        if (lines.length > 0) participants = `Participants:\n${lines.join("\n")}`;
+      } catch {
+        /* omit malformed participants */
+      }
+    }
+    return [
+      `Note ID: ${noteId}`,
+      folderId != null ? `Folder ID: ${folderId}` : "",
+      `Title: ${noteTitle}`,
+      `Content:\n${noteContent}`,
+      participants,
+      noteTranscript ? `\nTranscript:\n${noteTranscript}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }, [folderId, noteContent, noteId, noteParticipants, noteTitle, noteTranscript]);
 
   const streaming = useChatStreaming({
     messages: persistence.messages,

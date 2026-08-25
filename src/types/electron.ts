@@ -109,6 +109,12 @@ export type ProxyTranscriptionResult =
   | { text: string; model?: string; error?: undefined }
   | { error: string; code?: string; messageKey?: string; text?: undefined };
 
+export interface GmailConnectionStatus {
+  connected: boolean;
+  email: string | null;
+  configured: boolean;
+}
+
 export interface AuthTokenState {
   token: string | null;
   generation: number;
@@ -2267,6 +2273,10 @@ declare global {
         metadata?: string;
         created_at: string;
       } | null>;
+      updateAgentToolCall?: (
+        toolCallId: string,
+        patch: Record<string, unknown>
+      ) => Promise<{ success: boolean }>;
       getAgentMessages?: (conversationId: number) => Promise<
         Array<{
           id: number;
@@ -2648,6 +2658,18 @@ declare global {
         callback: (data: { connected: boolean; sourceNames: string[] }) => void
       ) => () => void;
       onAcalEventsSynced?: (callback: (data: any) => void) => () => void;
+
+      // Gmail (send-only)
+      gmailStartOAuth?: () => Promise<{ success: boolean; email?: string; error?: string }>;
+      gmailDisconnect?: () => Promise<{ success: boolean; error?: string }>;
+      gmailGetConnectionStatus?: () => Promise<GmailConnectionStatus>;
+      gmailSendEmail?: (draft: {
+        to: string[];
+        cc?: string[];
+        subject: string;
+        body: string;
+      }) => Promise<{ success: boolean; messageId?: string; error?: string }>;
+      onGmailConnectionChanged?: (callback: (data: GmailConnectionStatus) => void) => () => void;
 
       meetingDetectionGetPreferences?: () => Promise<{ success: boolean; preferences?: any }>;
       meetingDetectionSetPreferences?: (

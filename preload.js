@@ -989,6 +989,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-update-agent-conversation-title", id, title),
   addAgentMessage: (conversationId, role, content, metadata) =>
     ipcRenderer.invoke("db-add-agent-message", conversationId, role, content, metadata),
+  updateAgentToolCall: (toolCallId, patch) =>
+    ipcRenderer.invoke("db-update-agent-tool-call", toolCallId, patch),
   getAgentMessages: (conversationId) => ipcRenderer.invoke("db-get-agent-messages", conversationId),
   getAgentConversationsWithPreview: (limit, offset, includeArchived) =>
     ipcRenderer.invoke("db-get-agent-conversations-with-preview", limit, offset, includeArchived),
@@ -1150,6 +1152,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   acalGetConnectionStatus: () => ipcRenderer.invoke("acal-get-connection-status"),
   openCalendarPrivacySettings: () => ipcRenderer.invoke("open-calendar-privacy-settings"),
 
+  // Gmail (send-only)
+  gmailStartOAuth: () => ipcRenderer.invoke("gmail-start-oauth"),
+  gmailDisconnect: () => ipcRenderer.invoke("gmail-disconnect"),
+  gmailGetConnectionStatus: () => ipcRenderer.invoke("gmail-get-connection-status"),
+  gmailSendEmail: (draft) => ipcRenderer.invoke("gmail-send-email", draft),
+
   // Contacts
   searchContacts: (query) => ipcRenderer.invoke("search-contacts", query),
   upsertContact: (contact) => ipcRenderer.invoke("upsert-contact", contact),
@@ -1182,6 +1190,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onAcalEventsSynced: registerListener(
     "acal-events-synced",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Gmail event listeners
+  onGmailConnectionChanged: registerListener(
+    "gmail-connection-changed",
     (callback) => (_event, data) => callback(data)
   ),
 
