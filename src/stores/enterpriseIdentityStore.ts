@@ -34,6 +34,7 @@ interface EnterpriseIdentityState {
 let requestSequence = 0;
 let inFlightKey: string | null = null;
 let inFlightPromise: Promise<void> | null = null;
+let lifecycleListenersReady = false;
 
 export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, get) => ({
   accountId: null,
@@ -45,6 +46,7 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
   failClosed: false,
 
   refresh: (accountId, workspaceId, authGeneration, forceRefresh = false) => {
+    ensureLifecycleListeners();
     const key = `${accountId}:${workspaceId}:${authGeneration}:${forceRefresh ? "force" : "normal"}`;
     if (inFlightKey === key && inFlightPromise) return inFlightPromise;
     const sequence = ++requestSequence;
@@ -146,7 +148,13 @@ function refreshCurrentManagedIdentity(): void {
   void state.refresh(state.accountId, state.workspaceId, state.authGeneration, true);
 }
 
-if (typeof window !== "undefined") {
+// Bound on first refresh() rather than at module load: the listeners no-op
+// until an identity is resolved, and test harnesses import this store with
+// partial window stubs that lack setInterval (same pattern as
+// ensurePolicyLifecycleListeners in policyStore).
+function ensureLifecycleListeners(): void {
+  if (lifecycleListenersReady || typeof window === "undefined") return;
+  lifecycleListenersReady = true;
   window.addEventListener("focus", refreshCurrentManagedIdentity);
   window.setInterval(refreshCurrentManagedIdentity, 5 * 60 * 1000);
   window.electronAPI?.onManagedEnterpriseConfigChanged?.((snapshot) => {
