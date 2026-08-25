@@ -327,3 +327,26 @@ test("the required-models step is counted in progress", async () => {
   assert.deepEqual(getOnboardingProgress("required-models", route), { index: 0, total: 10 });
   assert.deepEqual(getOnboardingProgress("languages", route), { index: 1, total: 10 });
 });
+
+test("the tray suppression predicate matches only an active required-models session", async () => {
+  const { createOnboardingSession, isRequiredModelsOnboardingStepActive } = await load();
+
+  assert.equal(isRequiredModelsOnboardingStepActive(null), false);
+  assert.equal(isRequiredModelsOnboardingStepActive("not json"), false);
+
+  const session = createOnboardingSession();
+  assert.equal(isRequiredModelsOnboardingStepActive(JSON.stringify(session)), false);
+  assert.equal(
+    isRequiredModelsOnboardingStepActive(
+      JSON.stringify({ ...session, currentStepId: "required-models" })
+    ),
+    true
+  );
+  // A completed/cleared session (the post-onboarding state) never suppresses.
+  assert.equal(
+    isRequiredModelsOnboardingStepActive(
+      JSON.stringify({ ...session, currentStepId: "permissions" })
+    ),
+    false
+  );
+});

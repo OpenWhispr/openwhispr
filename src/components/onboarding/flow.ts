@@ -223,6 +223,17 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
   }
 }
 
+/**
+ * True while a persisted onboarding session sits on the blocking
+ * required-models step. The background download tray uses this to keep its
+ * hands off downloads that step owns: a tray row would duplicate the step's
+ * own progress pill, and the tray's cancel cannot stick — the step
+ * auto-restarts org-mandated downloads.
+ */
+export function isRequiredModelsOnboardingStepActive(sessionValue: string | null): boolean {
+  return parseOnboardingSession(sessionValue)?.currentStepId === "required-models";
+}
+
 export function migrateLegacyOnboardingStep(value: string | null): OnboardingStepId {
   if (!value) return "auth";
   if (isOnboardingStepId(value)) return value;
