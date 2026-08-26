@@ -2048,8 +2048,8 @@
         "availableDescription": "Use {{provider}} without managing credentials.",
         "useManaged": "Use managed"
       },
-      "localLlmVramTtl": {
-        "label": "Local LLM VRAM TTL (Minutes)",
+      "localModelIdleTimeout": {
+        "label": "Unload Local Model After (Minutes)",
         "help": "0 means always keep in memory."
       }
     },

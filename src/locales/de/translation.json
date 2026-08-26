@@ -2048,7 +2048,7 @@
         "availableDescription": "{{provider}} ohne Verwaltung von Anmeldedaten nutzen.",
         "useManaged": "Verwaltet nutzen"
       },
-      "localLlmVramTtl": {
+      "localModelIdleTimeout": {
         "label": "Local LLM VRAM TTL (Minutes)",
         "help": "0 means always keep in memory."
       }

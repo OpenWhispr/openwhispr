@@ -67,10 +67,10 @@ export default function InferenceConfigEditor({
     )
   );
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
-  const localLlmVramTtl = useSettingsStore((s) => s.localLlmVramTtl);
-  const setLocalLlmVramTtl = useSettingsStore((s) => s.setLocalLlmVramTtl);
-  const [ttlInput, setTtlInput] = useState(String(localLlmVramTtl));
-  useEffect(() => setTtlInput(String(localLlmVramTtl)), [localLlmVramTtl]);
+  const localModelIdleTimeout = useSettingsStore((s) => s.localModelIdleTimeout);
+  const setlocalModelIdleTimeout = useSettingsStore((s) => s.setlocalModelIdleTimeout);
+  const [ttlInput, setTtlInput] = useState(String(localModelIdleTimeout));
+  useEffect(() => setTtlInput(String(localModelIdleTimeout)), [localModelIdleTimeout]);
   const enterpriseSetupMode = useSettingsStore((s) => s.enterpriseSetupMode);
   const setEnterpriseSetupMode = useSettingsStore((s) => s.setEnterpriseSetupMode);
   const managed = useManagedScopeResolution(scope, enterpriseSetupMode);
@@ -278,10 +278,10 @@ export default function InferenceConfigEditor({
           <div className="flex items-start justify-between gap-3 pt-1">
             <div className="flex-1 min-w-0">
               <h4 className="text-sm font-medium text-foreground">
-                {t("settingsPage.aiModels.localLlmVramTtl.label", "Local LLM VRAM TTL (Minutes)")}
+                {t("settingsPage.aiModels.localModelIdleTimeout.label", "Local LLM VRAM TTL (Minutes)")}
               </h4>
               <p className="text-xs text-muted-foreground">
-                {t("settingsPage.aiModels.localLlmVramTtl.help", "0 means always keep in memory.")}
+                {t("settingsPage.aiModels.localModelIdleTimeout.help", "0 means always keep in memory.")}
               </p>
             </div>
             <Input
@@ -292,9 +292,9 @@ export default function InferenceConfigEditor({
               onBlur={(e) => {
                 const val = parseInt(e.target.value, 10);
                 if (!isNaN(val) && val >= 0) {
-                  setLocalLlmVramTtl(val);
+                  setlocalModelIdleTimeout(val);
                 } else {
-                  setTtlInput(String(localLlmVramTtl));
+                  setTtlInput(String(localModelIdleTimeout));
                 }
               }}
               className="w-24"

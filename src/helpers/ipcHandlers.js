@@ -4826,7 +4826,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("llama-server-update-ttl", async (event, ttlMinutes) => {
+    ipcMain.handle("llama-server-update-idle-timeout", async (event, ttlMinutes) => {
       try {
         const modelManager = require("./modelManagerBridge").default;
         modelManager.updateServerTtl(ttlMinutes);

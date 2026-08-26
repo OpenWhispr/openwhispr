@@ -1759,7 +1759,7 @@
         "availableDescription": "Usa {{provider}} senza gestire credenziali.",
         "useManaged": "Usa la versione gestita"
       },
-      "localLlmVramTtl": {
+      "localModelIdleTimeout": {
         "label": "Local LLM VRAM TTL (Minutes)",
         "help": "0 means always keep in memory."
       }

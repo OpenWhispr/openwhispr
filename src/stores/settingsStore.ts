@@ -657,8 +657,8 @@ export interface SettingsState
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
 
-  localLlmVramTtl: number;
-  setLocalLlmVramTtl: (value: number) => void;
+  localModelIdleTimeout: number;
+  setlocalModelIdleTimeout: (value: number) => void;
 
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
@@ -1238,7 +1238,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   cortiEnvironment: readString("cortiEnvironment", "us"),
-  localLlmVramTtl: readNumber("localLlmVramTtl", 5),
+  localModelIdleTimeout: readNumber("localModelIdleTimeout", 5),
   cortiTenant: readString("cortiTenant", "base"),
   customDictionary: readStringArray("customDictionary", []),
   snippets: (() => {
@@ -1526,9 +1526,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
 
-  setLocalLlmVramTtl: (value: number) => {
-    if (isBrowser) localStorage.setItem("localLlmVramTtl", String(value));
-    set({ localLlmVramTtl: value });
+  setlocalModelIdleTimeout: (value: number) => {
+    if (isBrowser) localStorage.setItem("localModelIdleTimeout", String(value));
+    set({ localModelIdleTimeout: value });
     if (window.electronAPI?.llamaServerUpdateTtl) {
       window.electronAPI.llamaServerUpdateTtl(value).catch((err) => {
         logger.warn(
@@ -3062,14 +3062,14 @@ export async function initializeSettings(): Promise<void> {
       );
     }
     
-    // Push the initial local LLM VRAM TTL to the main process
+    // Push the initial local model idle timeout to the main process
     try {
       if (window.electronAPI?.llamaServerUpdateTtl) {
-        await window.electronAPI.llamaServerUpdateTtl(useSettingsStore.getState().localLlmVramTtl);
+        await window.electronAPI.llamaServerUpdateTtl(useSettingsStore.getState().localModelIdleTimeout);
       }
     } catch (err) {
       logger.warn(
-        "Failed to push localLlmVramTtl to main process on startup",
+        "Failed to push localModelIdleTimeout to main process on startup",
         { error: (err as Error).message },
         "settings"
       );
