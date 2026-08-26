@@ -1464,8 +1464,9 @@ class WindowManager {
     if (!new Set(["compact", "expanded", "restore"]).has(mode)) return false;
     if (mode !== "restore" && (win.isFullScreen() || win.isMaximized())) {
       // Entering onboarding from a maximized/fullscreen control panel must not
-      // refuse: refusing leaves the native chrome (traffic lights, resize) on a
-      // window whose flow assumes it is locked to the canonical bounds.
+      // refuse: each mode is applied at its canonical centered bounds, which
+      // only take effect from a normal window state. Both modes stay
+      // maximizable, so the user can simply maximize again afterwards.
       if (win.isFullScreen()) win.setFullScreen(false);
       if (win.isMaximized()) win.unmaximize();
     }

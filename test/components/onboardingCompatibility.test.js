@@ -61,37 +61,31 @@ const systemAudio = {
   request: async () => false,
 };
 
-test("compact Linux onboarding exposes minimize, maximize, and close controls", async (t) => {
+test("Linux onboarding exposes labelled minimize, maximize, and close controls in both modes", async (t) => {
   const vite = await createOnboardingRenderer(t);
   const { default: OnboardingShell } = await vite.ssrLoadModule(
     "/components/onboarding/OnboardingShell.tsx"
   );
 
-  const markup = renderToStaticMarkup(
-    React.createElement(OnboardingShell, { compact: true }, React.createElement("div"))
-  );
+  for (const compact of [true, false]) {
+    const mode = compact ? "compact" : "expanded";
+    const markup = renderToStaticMarkup(
+      React.createElement(OnboardingShell, { compact }, React.createElement("div"))
+    );
 
-  assert.match(markup, /title="windowControls.minimize"/);
-  assert.match(markup, /title="windowControls.maximize"/);
-  assert.match(markup, /title="windowControls.close"/);
-  assert.match(markup, /aria-label="windowControls.minimize"/);
-  assert.match(markup, /aria-label="windowControls.maximize"/);
-  assert.match(markup, /aria-label="windowControls.close"/);
-});
-
-test("expanded Linux onboarding keeps maximize alongside minimize and close", async (t) => {
-  const vite = await createOnboardingRenderer(t);
-  const { default: OnboardingShell } = await vite.ssrLoadModule(
-    "/components/onboarding/OnboardingShell.tsx"
-  );
-
-  const markup = renderToStaticMarkup(
-    React.createElement(OnboardingShell, null, React.createElement("div"))
-  );
-
-  assert.match(markup, /title="windowControls.minimize"/);
-  assert.match(markup, /title="windowControls.maximize"/);
-  assert.match(markup, /title="windowControls.close"/);
+    for (const control of ["minimize", "maximize", "close"]) {
+      assert.match(
+        markup,
+        new RegExp(`title="windowControls\\.${control}"`),
+        `${mode} ${control} title`
+      );
+      assert.match(
+        markup,
+        new RegExp(`aria-label="windowControls\\.${control}"`),
+        `${mode} ${control} aria-label`
+      );
+    }
+  }
 });
 
 test("a denied microphone exposes the existing Linux settings recovery", async (t) => {

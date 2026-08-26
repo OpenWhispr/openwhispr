@@ -1,9 +1,10 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { OnboardingProgressState } from "./flow";
 import { Copy, Minus, Square, Undo2, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { useTranslation } from "react-i18next";
 import { getPlatform } from "../../utils/platform";
+import { useWindowControls } from "../../hooks/useWindowControls";
 // Imported (not referenced by path) so Vite fingerprints it and it resolves
 // under the packaged app's file:// origin. See .onboarding-compact-hero.
 import heroDither from "@/assets/onboarding-hero-dither.webp";
@@ -43,53 +44,13 @@ interface CompactOnboardingFrameProps {
 
 /**
  * Window controls for the frameless window on Windows and Linux — macOS uses
- * its native traffic lights. Close hides to the tray; the persisted session
- * resumes the flow on reopen, so this is never a way to lose progress.
+ * its native traffic lights, so OnboardingShell skips rendering this there.
+ * Close hides to the tray; the persisted session resumes the flow on reopen,
+ * so this is never a way to lose progress.
  */
 function OnboardingWindowControls() {
   const { t } = useTranslation();
-  const [isMaximized, setIsMaximized] = useState(false);
-  const platform = getPlatform();
-
-  useEffect(() => {
-    if (platform === "darwin") return;
-    let mounted = true;
-    const syncIsMaximized = async (): Promise<void> => {
-      try {
-        const maximized = await window.electronAPI?.windowIsMaximized?.();
-        if (mounted) setIsMaximized(Boolean(maximized));
-      } catch {}
-    };
-
-    void syncIsMaximized();
-    const intervalId = window.setInterval(syncIsMaximized, 1000);
-    return () => {
-      mounted = false;
-      window.clearInterval(intervalId);
-    };
-  }, [platform]);
-
-  const handleMinimize = async (): Promise<void> => {
-    try {
-      await window.electronAPI?.windowMinimize?.();
-    } catch {}
-  };
-
-  const handleMaximize = async (): Promise<void> => {
-    try {
-      await window.electronAPI?.windowMaximize?.();
-      const maximized = await window.electronAPI?.windowIsMaximized?.();
-      setIsMaximized(Boolean(maximized));
-    } catch {}
-  };
-
-  const handleClose = async (): Promise<void> => {
-    try {
-      await window.electronAPI?.windowClose?.();
-    } catch {}
-  };
-
-  if (platform === "darwin") return null;
+  const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
   const minimizeLabel = t("windowControls.minimize");
   const maximizeLabel = t(isMaximized ? "windowControls.restore" : "windowControls.maximize");
@@ -104,7 +65,7 @@ function OnboardingWindowControls() {
     >
       <button
         type="button"
-        onClick={handleMinimize}
+        onClick={minimize}
         title={minimizeLabel}
         aria-label={minimizeLabel}
         className={buttonClass}
@@ -113,7 +74,7 @@ function OnboardingWindowControls() {
       </button>
       <button
         type="button"
-        onClick={handleMaximize}
+        onClick={toggleMaximize}
         title={maximizeLabel}
         aria-label={maximizeLabel}
         className={buttonClass}
@@ -126,7 +87,7 @@ function OnboardingWindowControls() {
       </button>
       <button
         type="button"
-        onClick={handleClose}
+        onClick={close}
         title={closeLabel}
         aria-label={closeLabel}
         className={buttonClass}
@@ -253,7 +214,7 @@ export default function OnboardingShell({
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         aria-hidden="true"
       />
-      <OnboardingWindowControls />
+      {getPlatform() !== "darwin" && <OnboardingWindowControls />}
 
       <div
         // Normally nothing scrolls here: each step sizes itself to the window and
