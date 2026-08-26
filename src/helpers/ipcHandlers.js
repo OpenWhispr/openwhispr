@@ -1865,6 +1865,11 @@ class IPCHandlers {
         for (const noteId of result.noteIds ?? []) {
           this._asyncVectorDelete(noteId);
         }
+        // Other accounts' notes were released to the space root; their mirror
+        // files leave with the folder directory, so rewrite the live ones.
+        for (const note of result.relocatedNotes ?? []) {
+          if (!note.deleted_at) this._asyncMirrorWrite(note);
+        }
         setImmediate(() => {
           broadcastToWindows("folder-deleted", { id });
           if (folderName) this._mirrorDeleteFolderIfUnshared(folderName);
@@ -2266,6 +2271,11 @@ class IPCHandlers {
       if (result?.success) {
         for (const noteId of result.noteIds ?? []) {
           this._asyncVectorDelete(noteId);
+        }
+        // Other accounts' notes were released to the space root; their mirror
+        // files leave with the folder directory, so rewrite the live ones.
+        for (const note of result.relocatedNotes ?? []) {
+          if (!note.deleted_at) this._asyncMirrorWrite(note);
         }
         setImmediate(() => {
           broadcastToWindows("folder-deleted", { id });

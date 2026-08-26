@@ -138,6 +138,36 @@ class DatabaseManager {
     );
   }
 
+  // Child notes owned by another local account are invisible to the active
+  // scope, so a folder removal must release them to the space root — never
+  // delete them (or their conversations, speaker rows, or cloud tombstones)
+  // with the folder. Run this before any statement that targets the folder's
+  // children, so plain `folder_id = ?` filters only ever see in-scope rows.
+  _releaseOutOfScopeChildNotes(folderId) {
+    const accountScope = this._accountScopeCondition("notes");
+    const outOfScopeIds = this.db
+      .prepare(
+        `SELECT id FROM notes
+         WHERE folder_id = ? AND id NOT IN (
+           SELECT id FROM notes WHERE folder_id = ? AND ${accountScope.sql}
+         )`
+      )
+      .all(folderId, folderId, ...accountScope.params)
+      .map((row) => row.id);
+    if (outOfScopeIds.length === 0) return [];
+    const placeholders = outOfScopeIds.map(() => "?").join(", ");
+    this.db
+      .prepare(
+        `UPDATE notes
+         SET folder_id = NULL, sync_status = 'pending', updated_at = datetime('now')
+         WHERE id IN (${placeholders})`
+      )
+      .run(...outOfScopeIds);
+    return this.db
+      .prepare(`SELECT * FROM notes WHERE id IN (${placeholders})`)
+      .all(...outOfScopeIds);
+  }
+
   _releaseActiveSpaceMembershipIfShared(spaceId) {
     if (!this.activeAccountId) return false;
     const otherMembership = this.db
@@ -2431,11 +2461,14 @@ class DatabaseManager {
       if (folder.is_default) return { success: false, error: "Cannot delete default folders" };
       const allChildNotes = "SELECT id FROM notes WHERE folder_id = ?";
       const childNotes = `${allChildNotes} AND deleted_at IS NULL`;
+      const accountScope = this._accountScopeCondition("notes");
       const noteIds = this.db
-        .prepare(childNotes)
-        .all(id)
+        .prepare(`${childNotes} AND ${accountScope.sql}`)
+        .all(id, ...accountScope.params)
         .map((row) => row.id);
+      let relocatedNotes = [];
       this.db.transaction(() => {
+        relocatedNotes = this._releaseOutOfScopeChildNotes(id);
         if (!folder.cloud_id) {
           // There is no server operation to deny. Local-only folders can
           // finalize immediately, including their local-only child content.
@@ -2535,7 +2568,7 @@ class DatabaseManager {
           )
           .run(id);
       })();
-      return { success: true, id, noteIds };
+      return { success: true, id, noteIds, relocatedNotes };
     } catch (error) {
       debugLogger.error("Error deleting folder", { error: error.message }, "notes");
       throw error;
@@ -5217,11 +5250,14 @@ class DatabaseManager {
         "SELECT entity_id FROM optimistic_folder_delete_rows WHERE folder_id = ? AND entity_type = 'note'";
       const heldConversations =
         "SELECT entity_id FROM optimistic_folder_delete_rows WHERE folder_id = ? AND entity_type = 'conversation'";
+      const accountScope = this._accountScopeCondition("notes");
       const noteIds = this.db
-        .prepare(childNotes)
-        .all(id)
+        .prepare(`${childNotes} AND ${accountScope.sql}`)
+        .all(id, ...accountScope.params)
         .map((row) => row.id);
+      let relocatedNotes = [];
       const result = this.db.transaction(() => {
+        relocatedNotes = this._releaseOutOfScopeChildNotes(id);
         // Note chats normally have note_id only. Retire them while the child
         // rows still identify which chats belong to this folder cleanup, then
         // handle independently folder-scoped conversations.
@@ -5265,7 +5301,13 @@ class DatabaseManager {
         this.db.prepare("DELETE FROM optimistic_folder_delete_rows WHERE folder_id = ?").run(id);
         return deleted;
       })();
-      return { success: result.changes > 0, id, noteIds, name: folder?.name ?? null };
+      return {
+        success: result.changes > 0,
+        id,
+        noteIds,
+        relocatedNotes,
+        name: folder?.name ?? null,
+      };
     } catch (error) {
       debugLogger.error("Error hard deleting folder", { error: error.message }, "database");
       throw error;
