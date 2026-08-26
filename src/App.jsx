@@ -248,8 +248,9 @@ export default function App() {
     }
   }, [isAssistantVoice, isProcessing, assistantOpenRef, beginAssistantThinking]);
 
+  const voicePillIsRecording = isRecording && (!assistant.mounted || isAssistantVoice);
   const voiceActivity = resolveVoiceActivityPresentation({
-    isRecording,
+    isRecording: voicePillIsRecording,
     // Mic warm-up is an acknowledged press, not work on a transcript. Keeping
     // isPreparing out of the thinking state leaves the press on the pulsing
     // "processing" mic-state pill instead of lighting the glow at hotkey time.
@@ -259,7 +260,7 @@ export default function App() {
   });
   const [listeningEntrancePhase, setListeningEntrancePhase] = useState("idle");
   useLayoutEffect(() => {
-    if (!isRecording) {
+    if (!voicePillIsRecording) {
       setListeningEntrancePhase("idle");
       return;
     }
@@ -284,17 +285,19 @@ export default function App() {
       clearTimeout(settledTimer);
       clearTimeout(waveformTimer);
     };
-  }, [isRecording]);
+  }, [voicePillIsRecording]);
   const listeningEntrance = resolveListeningEntrancePresentation({
-    isRecording,
+    isRecording: voicePillIsRecording,
     phase: listeningEntrancePhase,
   });
-  const isCompactPill = isRecording ? listeningEntrance.compactPill : voiceActivity.compactPill;
+  const isCompactPill = voicePillIsRecording
+    ? listeningEntrance.compactPill
+    : voiceActivity.compactPill;
   // The native window grows during the entrance's static thinking hold, not
   // when the pill starts its width transition: a setBounds landing mid
   // animation forces compositor work that visibly stutters the expansion, and
   // the growing pill can clip against the old bounds if the resize IPC lags.
-  const windowFitsCompactPill = isRecording || voiceActivity.compactPill;
+  const windowFitsCompactPill = voicePillIsRecording || voiceActivity.compactPill;
 
   const { dictationErrorPillHandoffActive } = useMainWindowSizeOwner({
     requestMainWindowSize,

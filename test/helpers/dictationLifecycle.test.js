@@ -6,6 +6,7 @@ const {
   normalizeDictationLifecycle,
   shouldIgnoreDictationHotkey,
   isDictationRecording,
+  resolveAgentDictationPillState,
   shouldBlockDictationWhilePanelOpen,
 } = require("../../src/helpers/dictationLifecycle");
 
@@ -25,6 +26,25 @@ test("unknown lifecycle input fails closed to idle", () => {
   assert.equal(normalizeDictationLifecycle("starting-a-new-recording"), DICTATION_LIFECYCLE.IDLE);
   assert.equal(shouldIgnoreDictationHotkey(undefined), false);
   assert.equal(isDictationRecording({}), false);
+});
+
+test("the Agent companion mirrors only ordinary dictation lifecycle", () => {
+  assert.deepEqual(resolveAgentDictationPillState("recording", "dictation"), {
+    lifecycle: "recording",
+    interactive: true,
+  });
+  assert.deepEqual(resolveAgentDictationPillState("processing", "dictation"), {
+    lifecycle: "processing",
+    interactive: true,
+  });
+  assert.deepEqual(resolveAgentDictationPillState("recording", "assistant"), {
+    lifecycle: "idle",
+    interactive: false,
+  });
+  assert.deepEqual(resolveAgentDictationPillState("processing", "translation"), {
+    lifecycle: "idle",
+    interactive: false,
+  });
 });
 
 test("regular dictation remains available while the assistant panel is open", () => {

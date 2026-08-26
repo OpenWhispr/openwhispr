@@ -42,9 +42,9 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       WindowPositionUtil: {
         setupAlwaysOnTop: () => undefined,
         clampToWorkArea: (b) => b,
-        getMainWindowPosition: (_display, _size, position) => {
+        getMainWindowPosition: (_display, size, position) => {
           requestedMainWindowPositions.push(position);
-          return { x: 0, y: 0 };
+          return { x: 0, y: 0, ...size };
         },
         getNotificationPosition: () => ({ x: 0, y: 0 }),
       },
@@ -108,8 +108,113 @@ test("the Agent companion follows the edge opposite the panel", () => {
 
   manager.positionAgentDictationPill();
 
-  assert.deepEqual(positions, [{ x: 0, y: 0 }]);
+  assert.deepEqual(positions, [{ x: 0, y: 0, width: 96, height: 96 }]);
   assert.deepEqual(requestedMainWindowPositions, ["bottom-left"]);
+});
+
+test("the companion grows for Live Transcript and returns to its pill footprint", () => {
+  const manager = new WindowManager();
+  let bounds = { x: 0, y: 0, width: 96, height: 96 };
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1000, y: 100, width: 400, height: 600 }),
+  };
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    getBounds: () => bounds,
+    setBounds: (nextBounds) => {
+      bounds = nextBounds;
+    },
+  };
+
+  const expanded = manager.resizeAgentDictationPillToContent(240);
+  const collapsed = manager.resizeAgentDictationPillToContent(null);
+
+  assert.equal(expanded.success, true);
+  assert.deepEqual(expanded.bounds, { x: 0, y: 0, width: 466, height: 240 });
+  assert.equal(collapsed.success, true);
+  assert.deepEqual(collapsed.bounds, { x: 0, y: 0, width: 96, height: 96 });
+});
+
+test("the Agent companion ignores Agent voice lifecycle and mirrors plain dictation", () => {
+  const manager = new WindowManager();
+  const messages = [];
+  manager._agentDictationPillReady = true;
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel, payload) => messages.push({ channel, payload }) },
+  };
+
+  manager.setDictationLifecycleState("recording", "assistant");
+  manager.setDictationLifecycleState("recording", "dictation");
+
+  assert.deepEqual(messages, [
+    {
+      channel: "agent-dictation-pill-state-changed",
+      payload: { lifecycle: "idle", interactive: false, horizontalDirection: "left" },
+    },
+    {
+      channel: "agent-dictation-pill-state-changed",
+      payload: { lifecycle: "recording", interactive: true, horizontalDirection: "left" },
+    },
+  ]);
+});
+
+test("the companion receives live audio levels only for ordinary dictation", () => {
+  const manager = new WindowManager();
+  const messages = [];
+  manager._assistantPanelOpen = true;
+  manager._agentDictationPillReady = true;
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel, payload) => messages.push({ channel, payload }) },
+  };
+
+  manager.setDictationLifecycleState("recording", "dictation");
+  messages.length = 0;
+  manager.setDictationAudioLevel(0.42);
+  manager.setDictationLifecycleState("recording", "assistant");
+  manager.setDictationAudioLevel(0.9);
+
+  assert.deepEqual(messages, [
+    { channel: "agent-dictation-pill-audio-level-changed", payload: 0.42 },
+    {
+      channel: "agent-dictation-pill-state-changed",
+      payload: { lifecycle: "idle", interactive: false, horizontalDirection: "left" },
+    },
+  ]);
+});
+
+test("live transcript events are mirrored to the companion only for plain dictation", async () => {
+  const manager = new WindowManager();
+  const mainMessages = [];
+  const companionMessages = [];
+  manager.setOnboardingActive(false);
+  manager._assistantPanelOpen = true;
+  manager._agentDictationPillReady = true;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    showInactive: () => undefined,
+    webContents: { send: (channel, payload) => mainMessages.push({ channel, payload }) },
+  };
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    webContents: {
+      send: (channel, payload) => companionMessages.push({ channel, payload }),
+    },
+  };
+  manager.enforceMainWindowOnTop = () => undefined;
+
+  manager._dictationInputKind = "assistant";
+  await manager.showTranscriptionPreview("agent");
+  manager._dictationInputKind = "dictation";
+  await manager.showTranscriptionPreview("plain");
+
+  assert.deepEqual(mainMessages, [
+    { channel: "preview-text", payload: "agent" },
+    { channel: "preview-text", payload: "plain" },
+  ]);
+  assert.deepEqual(companionMessages, [{ channel: "preview-text", payload: "plain" }]);
 });
 
 test("opening the assistant panel surfaces a hidden pill window before focusing it", () => {

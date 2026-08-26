@@ -1534,7 +1534,7 @@ class IPCHandlers {
     // in the dictation renderer. Only confirmed renderer state may change the
     // main-process recording gate; raw key presses are merely requests and can
     // be declined while a transcript is still being finalized.
-    ipcMain.on("dictation-lifecycle-state-changed", (event, state) => {
+    ipcMain.on("dictation-lifecycle-state-changed", (event, state, inputKind) => {
       const dictationWindow = this.windowManager.mainWindow;
       if (
         !dictationWindow ||
@@ -1543,7 +1543,19 @@ class IPCHandlers {
       ) {
         return;
       }
-      this.windowManager.setDictationLifecycleState(state);
+      this.windowManager.setDictationLifecycleState(state, inputKind);
+    });
+
+    ipcMain.on("dictation-audio-level-changed", (event, level) => {
+      const dictationWindow = this.windowManager.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return;
+      }
+      this.windowManager.setDictationAudioLevel(level);
     });
 
     // Dictionary handlers
@@ -4975,7 +4987,14 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-agent-dictation-pill-state", (event) => {
-      return isAgentDictationPill(event) ? this.windowManager.getDictationLifecycleState() : "idle";
+      return isAgentDictationPill(event)
+        ? this.windowManager.getAgentDictationPillState()
+        : { lifecycle: "idle", interactive: false, horizontalDirection: "left" };
+    });
+
+    ipcMain.handle("resize-agent-dictation-pill-to-content", (event, surfaceHeight = null) => {
+      if (!isAgentDictationPill(event)) return { success: false };
+      return this.windowManager.resizeAgentDictationPillToContent(surfaceHeight);
     });
 
     ipcMain.handle("open-calendar-privacy-settings", () => openSystemSettings("calendars"));

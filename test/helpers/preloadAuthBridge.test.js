@@ -105,6 +105,30 @@ test("assistant busy state is forwarded to the main-process hotkey guard", async
   assert.deepEqual(invocations, [["set-assistant-panel-busy", true]]);
 });
 
+test("dictation lifecycle and audio levels preserve companion routing metadata", () => {
+  const { api, sends } = loadPreloadApi();
+
+  api.dictationLifecycleStateChanged("recording", "assistant");
+  api.dictationAudioLevelChanged(0.42);
+
+  assert.deepEqual(sends, [
+    ["dictation-lifecycle-state-changed", "recording", "assistant"],
+    ["dictation-audio-level-changed", 0.42],
+  ]);
+});
+
+test("the Agent companion owns only its scoped resize bridge", async () => {
+  const { api, invocations } = loadPreloadApi();
+
+  await api.resizeAgentDictationPillToContent(240);
+  await api.resizeAgentDictationPillToContent(null);
+
+  assert.deepEqual(invocations, [
+    ["resize-agent-dictation-pill-to-content", 240],
+    ["resize-agent-dictation-pill-to-content", null],
+  ]);
+});
+
 test("agent streaming forwards correlated start and cancel messages", () => {
   const { api, sends } = loadPreloadApi();
   const messages = [{ role: "user", content: "hello" }];

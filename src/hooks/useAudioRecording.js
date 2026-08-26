@@ -29,6 +29,7 @@ const SELECTION_EDIT_DETAIL_KEY_BY_CODE = {
   session_expired: "expired",
   paste_failed: "pasteFailed",
 };
+const COMPANION_AUDIO_LEVEL_INTERVAL_MS = 80;
 
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
@@ -262,9 +263,15 @@ export const useAudioRecording = (toast, options = {}) => {
     audioManagerRef.current = new AudioManager();
 
     const reportLifecycle = (state) => {
-      if (reportedLifecycleRef.current === state) return;
-      reportedLifecycleRef.current = state;
-      window.electronAPI?.dictationLifecycleStateChanged?.(state);
+      const inputKind = audioManagerRef.current?.voiceAgentRequested
+        ? "assistant"
+        : audioManagerRef.current?.translationRequested
+          ? "translation"
+          : "dictation";
+      const signature = `${state}:${inputKind}`;
+      if (reportedLifecycleRef.current === signature) return;
+      reportedLifecycleRef.current = signature;
+      window.electronAPI?.dictationLifecycleStateChanged?.(state, inputKind);
     };
     // Reset stale main-process state after a renderer reload or crash recovery.
     reportLifecycle("idle");
@@ -731,6 +738,18 @@ export const useAudioRecording = (toast, options = {}) => {
     () => audioManagerRef.current?.getRecordingAudioLevel() ?? null,
     []
   );
+
+  useEffect(() => {
+    if (!isRecording || isAssistantVoice) return undefined;
+
+    const reportAudioLevel = () => {
+      const level = getAudioLevel();
+      if (level !== null) window.electronAPI?.dictationAudioLevelChanged?.(level);
+    };
+    reportAudioLevel();
+    const interval = setInterval(reportAudioLevel, COMPANION_AUDIO_LEVEL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [getAudioLevel, isAssistantVoice, isRecording]);
 
   const toggleListening = async ({
     voiceAgentRequested = false,

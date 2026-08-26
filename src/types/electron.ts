@@ -965,12 +965,31 @@ declare global {
       onPrepareDictation?: (callback: () => void) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
-      dictationLifecycleStateChanged: (state: "idle" | "recording" | "processing") => void;
+      dictationLifecycleStateChanged: (
+        state: "idle" | "recording" | "processing",
+        inputKind?: "dictation" | "assistant" | "translation"
+      ) => void;
+      dictationAudioLevelChanged?: (level: number) => void;
       toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
-      getAgentDictationPillState?: () => Promise<"idle" | "recording" | "processing">;
+      getAgentDictationPillState?: () => Promise<{
+        lifecycle: "idle" | "recording" | "processing";
+        interactive: boolean;
+        horizontalDirection: "left" | "right";
+      }>;
+      resizeAgentDictationPillToContent?: (surfaceHeight: number | null) => Promise<{
+        success: boolean;
+        changed?: boolean;
+        bounds?: { x: number; y: number; width: number; height: number };
+        message?: string;
+      }>;
       onAgentDictationPillStateChanged?: (
-        callback: (state: "idle" | "recording" | "processing") => void
+        callback: (state: {
+          lifecycle: "idle" | "recording" | "processing";
+          interactive: boolean;
+          horizontalDirection: "left" | "right";
+        }) => void
       ) => () => void;
+      onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
 
       // STT config
       getSttConfig?: () => Promise<

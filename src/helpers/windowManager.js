@@ -15,7 +15,10 @@ const { i18nMain } = require("./i18nMain");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
 const {
   DICTATION_LIFECYCLE,
+  DICTATION_INPUT_KIND,
   normalizeDictationLifecycle,
+  normalizeDictationInputKind,
+  resolveAgentDictationPillState,
   shouldIgnoreDictationHotkey,
   isDictationRecording,
   shouldBlockDictationWhilePanelOpen,
@@ -23,7 +26,6 @@ const {
 const { DEV_SERVER_PORT } = DevServerManager;
 const AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS = 10_000;
 const DRAG_MOVE_TOLERANCE_PX = 2;
-const AGENT_DICTATION_PILL_SIZE = Object.freeze({ width: 124, height: 64 });
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
@@ -38,6 +40,7 @@ const {
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
+const AGENT_DICTATION_PILL_SIZE = Object.freeze({ ...WINDOW_SIZES.BASE });
 const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
 const { ONBOARDING_DEMO_KINDS, isOnboardingInputAllowed } = require("./onboardingInputPolicy");
 
@@ -60,6 +63,8 @@ class WindowManager {
     this.notificationWindow = null;
     this.agentDictationPillWindow = null;
     this._agentDictationPillReady = false;
+    this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
+    this._agentDictationPillHorizontalDirection = "left";
     this._notificationLoadTimeout = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
       if (this.meetingDetectionEngine) {
@@ -91,6 +96,7 @@ class WindowManager {
     this._activeHorizontalDirection = null;
     this._isDictatingToggle = false;
     this._dictationLifecycleState = DICTATION_LIFECYCLE.IDLE;
+    this._dictationInputKind = DICTATION_INPUT_KIND.DICTATION;
     this._assistantPanelOpen = false;
     this._assistantPanelBusy = false;
     this._pendingMeetingNoteNavigation = null;
@@ -845,21 +851,53 @@ class WindowManager {
     }
   }
 
-  setDictationLifecycleState(state) {
+  setDictationLifecycleState(state, inputKind = DICTATION_INPUT_KIND.DICTATION) {
     const nextState = normalizeDictationLifecycle(state);
-    if (nextState === this._dictationLifecycleState) return;
+    const nextInputKind = normalizeDictationInputKind(inputKind);
+    if (nextState === this._dictationLifecycleState && nextInputKind === this._dictationInputKind) {
+      return;
+    }
 
     this._dictationLifecycleState = nextState;
+    this._dictationInputKind = nextInputKind;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
+    this._sendAgentDictationPillState();
+  }
+
+  _sendAgentDictationPillState() {
     const pillWindow = this.agentDictationPillWindow;
-    if (pillWindow && !pillWindow.isDestroyed()) {
-      pillWindow.webContents.send("agent-dictation-pill-state-changed", nextState);
-    }
+    if (!pillWindow || pillWindow.isDestroyed() || !this._agentDictationPillReady) return;
+    pillWindow.webContents.send(
+      "agent-dictation-pill-state-changed",
+      this.getAgentDictationPillState()
+    );
   }
 
   getDictationLifecycleState() {
     return this._dictationLifecycleState;
+  }
+
+  getAgentDictationPillState() {
+    return {
+      ...resolveAgentDictationPillState(this._dictationLifecycleState, this._dictationInputKind),
+      horizontalDirection: this._agentDictationPillHorizontalDirection,
+    };
+  }
+
+  setDictationAudioLevel(level) {
+    if (
+      !this._assistantPanelOpen ||
+      this._dictationLifecycleState !== DICTATION_LIFECYCLE.RECORDING ||
+      this._dictationInputKind !== DICTATION_INPUT_KIND.DICTATION
+    ) {
+      return;
+    }
+    const numericLevel = Number(level);
+    if (!Number.isFinite(numericLevel)) return;
+    const pillWindow = this.agentDictationPillWindow;
+    if (!pillWindow || pillWindow.isDestroyed() || !this._agentDictationPillReady) return;
+    pillWindow.webContents.send("agent-dictation-pill-audio-level-changed", numericLevel);
   }
 
   isDictationProcessing() {
@@ -1233,10 +1271,20 @@ class WindowManager {
     await this.loadWindowContent(this.controlPanelWindow, true);
   }
 
+  _sendAgentDictationPreview(channel, payload) {
+    if (!this._assistantPanelOpen || this._dictationInputKind !== DICTATION_INPUT_KIND.DICTATION) {
+      return;
+    }
+    const pillWindow = this.agentDictationPillWindow;
+    if (!pillWindow || pillWindow.isDestroyed() || !this._agentDictationPillReady) return;
+    pillWindow.webContents.send(channel, payload);
+  }
+
   async showTranscriptionPreview(text) {
     if (this._onboardingActive) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("preview-text", text);
+    this._sendAgentDictationPreview("preview-text", text);
     this.mainWindow.showInactive();
     this.enforceMainWindowOnTop();
   }
@@ -1245,26 +1293,35 @@ class WindowManager {
     if (this._onboardingActive) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("preview-append", text);
+    this._sendAgentDictationPreview("preview-append", text);
   }
 
   holdTranscriptionPreview(options = {}) {
     if (this._onboardingActive) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
-    this.mainWindow.webContents.send("preview-hold", {
+    const payload = {
       showCleanup: !!options.showCleanup,
-    });
+    };
+    this.mainWindow.webContents.send("preview-hold", payload);
+    this._sendAgentDictationPreview("preview-hold", payload);
   }
 
   completeTranscriptionPreview(text) {
     if (this._onboardingActive) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
-    this.mainWindow.webContents.send("preview-result", { text });
+    const payload = { text };
+    this.mainWindow.webContents.send("preview-result", payload);
+    this._sendAgentDictationPreview("preview-result", payload);
     this.enforceMainWindowOnTop();
   }
 
   hideTranscriptionPreview() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("preview-hide");
+    const pillWindow = this.agentDictationPillWindow;
+    if (pillWindow && !pillWindow.isDestroyed() && this._agentDictationPillReady) {
+      pillWindow.webContents.send("preview-hide");
+    }
   }
 
   // The display the user is working on is the one showing the app being dictated
@@ -1614,9 +1671,38 @@ class WindowManager {
       this._panelStartPosition
     );
     const oppositeEdge = mainSide === "right" ? "bottom-left" : "bottom-right";
+    const horizontalDirection = oppositeEdge === "bottom-left" ? "left" : "right";
+    const directionChanged = horizontalDirection !== this._agentDictationPillHorizontalDirection;
+    this._agentDictationPillHorizontalDirection = horizontalDirection;
     pillWindow.setBounds(
-      WindowPositionUtil.getMainWindowPosition(display, AGENT_DICTATION_PILL_SIZE, oppositeEdge)
+      WindowPositionUtil.getMainWindowPosition(display, this._agentDictationPillSize, oppositeEdge)
     );
+    if (directionChanged) this._sendAgentDictationPillState();
+  }
+
+  resizeAgentDictationPillToContent(surfaceHeight = null) {
+    const pillWindow = this.agentDictationPillWindow;
+    if (
+      !pillWindow ||
+      pillWindow.isDestroyed() ||
+      !this.mainWindow ||
+      this.mainWindow.isDestroyed()
+    ) {
+      return { success: false, message: "Window not available" };
+    }
+
+    const mainBounds = this.mainWindow.getBounds();
+    const display = screen.getDisplayMatching(mainBounds);
+    const nextSize =
+      surfaceHeight === null
+        ? AGENT_DICTATION_PILL_SIZE
+        : fitAssistantContentWindowToWorkArea(surfaceHeight, display.workArea || display.bounds);
+    const currentBounds = pillWindow.getBounds();
+    const changed =
+      currentBounds.width !== nextSize.width || currentBounds.height !== nextSize.height;
+    this._agentDictationPillSize = nextSize;
+    this.positionAgentDictationPill();
+    return { success: true, bounds: pillWindow.getBounds(), changed };
   }
 
   showAgentDictationPill() {
@@ -1631,19 +1717,18 @@ class WindowManager {
       });
       this.agentDictationPillWindow = pillWindow;
       this._agentDictationPillReady = false;
+      this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
 
       pillWindow.on("closed", () => {
         if (this.agentDictationPillWindow !== pillWindow) return;
         this.agentDictationPillWindow = null;
         this._agentDictationPillReady = false;
+        this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
       });
       pillWindow.webContents.on("did-finish-load", () => {
         if (this.agentDictationPillWindow !== pillWindow) return;
         this._agentDictationPillReady = true;
-        pillWindow.webContents.send(
-          "agent-dictation-pill-state-changed",
-          this._dictationLifecycleState
-        );
+        this._sendAgentDictationPillState();
         this.showAgentDictationPill();
       });
 
@@ -1675,7 +1760,11 @@ class WindowManager {
 
   hideAgentDictationPill() {
     const pillWindow = this.agentDictationPillWindow;
-    if (pillWindow && !pillWindow.isDestroyed() && pillWindow.isVisible()) pillWindow.hide();
+    if (!pillWindow || pillWindow.isDestroyed()) return;
+    if (pillWindow.isVisible()) pillWindow.hide();
+    if (this._agentDictationPillReady) pillWindow.webContents.send("preview-hide");
+    this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
+    this.positionAgentDictationPill();
   }
 
   isDictationPanelVisible() {

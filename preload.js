@@ -90,13 +90,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
-  dictationLifecycleStateChanged: (state) =>
-    ipcRenderer.send("dictation-lifecycle-state-changed", state),
+  dictationLifecycleStateChanged: (state, inputKind) =>
+    ipcRenderer.send("dictation-lifecycle-state-changed", state, inputKind),
+  dictationAudioLevelChanged: (level) =>
+    ipcRenderer.send("dictation-audio-level-changed", level),
   toggleAgentPanelDictation: () => ipcRenderer.invoke("toggle-agent-panel-dictation"),
   getAgentDictationPillState: () => ipcRenderer.invoke("get-agent-dictation-pill-state"),
+  resizeAgentDictationPillToContent: (surfaceHeight) =>
+    ipcRenderer.invoke("resize-agent-dictation-pill-to-content", surfaceHeight),
   onAgentDictationPillStateChanged: registerListener(
     "agent-dictation-pill-state-changed",
     (callback) => (_event, state) => callback(state)
+  ),
+  onAgentDictationPillAudioLevelChanged: registerListener(
+    "agent-dictation-pill-audio-level-changed",
+    (callback) => (_event, level) => callback(level)
   ),
 
   // Database functions
