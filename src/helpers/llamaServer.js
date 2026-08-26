@@ -34,6 +34,7 @@ class LlamaServerManager {
     this.startupPromise = null;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
+    this.shuttingDown = false;
     this.idleTimeoutMs = 5 * 60 * 1000;
     this.cachedServerBinaryPaths = null;
     this.activeBackend = null;
