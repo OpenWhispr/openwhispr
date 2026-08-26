@@ -1613,6 +1613,7 @@ declare global {
         modelId: string
       ) => Promise<{ success: boolean; port?: number; error?: string }>;
       llamaServerStop: () => Promise<{ success: boolean; error?: string }>;
+      llamaServerUpdateTtl: (ttlMinutes: number) => Promise<{ success: boolean }>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;

@@ -657,6 +657,9 @@ export interface SettingsState
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
 
+  localLlmVramTtl: number;
+  setLocalLlmVramTtl: (value: number) => void;
+
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
   meetingWhisperModel: string;
@@ -1235,6 +1238,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   cortiEnvironment: readString("cortiEnvironment", "us"),
+  localLlmVramTtl: readNumber("localLlmVramTtl", 5),
   cortiTenant: readString("cortiTenant", "base"),
   customDictionary: readStringArray("customDictionary", []),
   snippets: (() => {
@@ -1521,6 +1525,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
+
+  setLocalLlmVramTtl: (value: number) => {
+    if (isBrowser) localStorage.setItem("localLlmVramTtl", String(value));
+    set({ localLlmVramTtl: value });
+    if (window.electronAPI?.llamaServerUpdateTtl) {
+      window.electronAPI.llamaServerUpdateTtl(value);
+    }
+  },
 
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
     mode: InferenceMode
@@ -3039,6 +3051,19 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to hydrate secrets from main process",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+    
+    // Push the initial local LLM VRAM TTL to the main process
+    try {
+      if (window.electronAPI.llamaServerUpdateTtl) {
+        window.electronAPI.llamaServerUpdateTtl(useSettingsStore.getState().localLlmVramTtl);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to push localLlmVramTtl to main process on startup",
         { error: (err as Error).message },
         "settings"
       );

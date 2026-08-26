@@ -29,6 +29,7 @@ import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore"
 import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { resetOnboardingProgress } from "../onboarding/flow";
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
@@ -66,6 +67,8 @@ export default function InferenceConfigEditor({
     )
   );
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const localLlmVramTtl = useSettingsStore((s) => s.localLlmVramTtl);
+  const setLocalLlmVramTtl = useSettingsStore((s) => s.setLocalLlmVramTtl);
   const enterpriseSetupMode = useSettingsStore((s) => s.enterpriseSetupMode);
   const setEnterpriseSetupMode = useSettingsStore((s) => s.setEnterpriseSetupMode);
   const managed = useManagedScopeResolution(scope, enterpriseSetupMode);
@@ -267,7 +270,28 @@ export default function InferenceConfigEditor({
       <InferenceModeSelector modes={modes} activeMode={effectiveMode} onSelect={handleModeSelect} />
 
       {effectiveMode === "providers" && renderModelSelector("cloud")}
-      {effectiveMode === "local" && renderModelSelector("local")}
+      {effectiveMode === "local" && (
+        <>
+          {renderModelSelector("local")}
+          <div className="flex items-start justify-between gap-3 pt-1">
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-medium text-foreground">
+                {t("settingsPage.aiModels.localLlmVramTtl.label", "Local LLM VRAM TTL (Minutes)")}
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                {t("settingsPage.aiModels.localLlmVramTtl.help", "0 means always keep in memory.")}
+              </p>
+            </div>
+            <Input
+              type="number"
+              min="0"
+              value={localLlmVramTtl}
+              onChange={(e) => setLocalLlmVramTtl(parseInt(e.target.value, 10) || 0)}
+              className="w-24"
+            />
+          </div>
+        </>
+      )}
 
       {effectiveMode === "self-hosted" && (
         <OpenAICompatiblePanel
