@@ -165,7 +165,7 @@
         "accessibilityDescription": "Cola o texto no app ativo.",
         "systemAudioTitle": "Áudio do Sistema",
         "systemAudioDescription": "Captura o áudio de outros apps.",
-        "screenContextDescription": "Anexa uma captura da tela ativa.",
+        "screenContextDescription": "Permite que o assistente de voz veja sua tela. Nunca é salvo.",
         "enable": "Ativar",
         "enabled": "Ativado"
       },
