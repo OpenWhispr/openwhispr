@@ -9,7 +9,7 @@ import {
   updateLastSignInTime,
   type SocialProvider,
 } from "../lib/auth";
-import { OPENWHISPR_API_URL } from "../config/constants";
+import { discoverEmailAuth } from "../lib/emailAuthDiscovery";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "lucide-react";
@@ -32,6 +32,11 @@ type SsoDiscovery = {
   domain: string;
   exists: boolean;
 };
+
+const EXISTING_ACCOUNT_ERROR_CODES = new Set([
+  "USER_ALREADY_EXISTS",
+  "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
+]);
 
 function ProviderTile({
   label,
@@ -228,25 +233,7 @@ export default function AuthenticationStep({
     setError(null);
 
     try {
-      if (!OPENWHISPR_API_URL) {
-        setAuthMode("sign-up");
-        return;
-      }
-
-      const response = await fetch(`${OPENWHISPR_API_URL}/api/check-user`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
-      });
-
-      if (!response.ok) {
-        throw new Error(t("auth.errors.failedUserCheck"));
-      }
-
-      const data = (await response.json().catch(() => ({}))) as {
-        exists?: boolean;
-        sso?: { available?: boolean; required?: boolean; domain?: string };
-      };
+      const data = await discoverEmailAuth(email, AUTH_URL);
       if (data.sso?.available) {
         const discovery = {
           required: data.sso.required === true,
@@ -298,6 +285,7 @@ export default function AuthenticationStep({
           if (result.error) {
             needsVerificationRef.current = false;
             if (
+              EXISTING_ACCOUNT_ERROR_CODES.has(result.error.code || "") ||
               errorMessageIncludes(result.error.message, ["already exists", "already registered"])
             ) {
               setAuthMode("sign-in");
