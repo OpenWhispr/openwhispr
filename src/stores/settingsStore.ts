@@ -658,7 +658,7 @@ export interface SettingsState
   cleanupRemoteUrl: string;
 
   localModelIdleTimeout: number;
-  setlocalModelIdleTimeout: (value: number) => void;
+  setLocalModelIdleTimeout: (value: number) => void;
 
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
@@ -1526,7 +1526,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
 
-  setlocalModelIdleTimeout: (value: number) => {
+  setLocalModelIdleTimeout: (value: number) => {
     if (isBrowser) localStorage.setItem("localModelIdleTimeout", String(value));
     set({ localModelIdleTimeout: value });
     if (window.electronAPI?.llamaServerUpdateTtl) {

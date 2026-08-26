@@ -68,7 +68,7 @@ export default function InferenceConfigEditor({
   );
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
   const localModelIdleTimeout = useSettingsStore((s) => s.localModelIdleTimeout);
-  const setlocalModelIdleTimeout = useSettingsStore((s) => s.setlocalModelIdleTimeout);
+  const setLocalModelIdleTimeout = useSettingsStore((s) => s.setLocalModelIdleTimeout);
   const [ttlInput, setTtlInput] = useState(String(localModelIdleTimeout));
   useEffect(() => setTtlInput(String(localModelIdleTimeout)), [localModelIdleTimeout]);
   const enterpriseSetupMode = useSettingsStore((s) => s.enterpriseSetupMode);
@@ -278,7 +278,7 @@ export default function InferenceConfigEditor({
           <div className="flex items-start justify-between gap-3 pt-1">
             <div className="flex-1 min-w-0">
               <h4 className="text-sm font-medium text-foreground">
-                {t("settingsPage.aiModels.localModelIdleTimeout.label", "Local LLM VRAM TTL (Minutes)")}
+                {t("settingsPage.aiModels.localModelIdleTimeout.label", "Unload Local Model After (Minutes)")}
               </h4>
               <p className="text-xs text-muted-foreground">
                 {t("settingsPage.aiModels.localModelIdleTimeout.help", "0 means always keep in memory.")}
@@ -292,7 +292,7 @@ export default function InferenceConfigEditor({
               onBlur={(e) => {
                 const val = parseInt(e.target.value, 10);
                 if (!isNaN(val) && val >= 0) {
-                  setlocalModelIdleTimeout(val);
+                  setLocalModelIdleTimeout(val);
                 } else {
                   setTtlInput(String(localModelIdleTimeout));
                 }
