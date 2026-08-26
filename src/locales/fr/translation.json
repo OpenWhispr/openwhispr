@@ -186,6 +186,7 @@
         "accessibilityDescription": "Colle le texte dans votre application active.",
         "systemAudioTitle": "Audio Système",
         "systemAudioDescription": "Capture l’audio d’autres applications.",
+        "screenContextDescription": "Joint une capture de votre écran actif.",
         "enable": "Activer",
         "enabled": "Activé"
       },

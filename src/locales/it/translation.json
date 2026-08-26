@@ -186,6 +186,7 @@
         "accessibilityDescription": "Incolla il testo nell’app attiva.",
         "systemAudioTitle": "Audio di Sistema",
         "systemAudioDescription": "Acquisisce l’audio da altre app.",
+        "screenContextDescription": "Allega uno screenshot dello schermo attivo.",
         "enable": "Attiva",
         "enabled": "Attivato"
       },

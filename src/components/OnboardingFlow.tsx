@@ -18,6 +18,7 @@ import { AlertDialog } from "./ui/dialog";
 import { useAuth } from "../hooks/useAuth";
 import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
+import { useScreenRecordingPermission } from "../hooks/useScreenRecordingPermission";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -26,7 +27,7 @@ import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useRequiredLocalModels } from "../hooks/useRequiredLocalModels";
 import { usePolicyStore } from "../stores/policyStore";
-import { isAgentAllowed } from "../stores/policyRules";
+import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import { formatHotkeyInstruction } from "./onboarding/hotkeyPresentation";
@@ -77,6 +78,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
   const agentAllowed = usePolicyStore(isAgentAllowed);
+  const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
   const settings = useSettings();
   const settingsStore = useSettingsStore();
   const {
@@ -121,6 +123,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setPermissionAlert({ title: dialog.title, description: dialog.description })
   );
   const systemAudio = useSystemAudioPermission();
+  const {
+    granted: screenRecordingGranted,
+    supported: screenRecordingSupported,
+    needsRelaunch: screenRecordingNeedsRelaunch,
+    request: requestScreenRecordingAccess,
+  } = useScreenRecordingPermission();
   const { supportsPushToTalk, pushToTalkUnavailableReason } = useHotkeyModeInfo(
     "onboarding",
     dictationHotkey
@@ -168,6 +176,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     session.authPath === "account" &&
     (!workspacesLoaded ||
       (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)));
+
+  const enableScreenContext = useCallback(async () => {
+    settingsStore.setVoiceAgentScreenContext(true);
+    void window.electronAPI?.setScreenContextEnabled?.(true);
+    return requestScreenRecordingAccess();
+  }, [requestScreenRecordingAccess, settingsStore]);
 
   const requiredModels = useRequiredLocalModels();
   // Latched for the session once the step is entered (or resumed at), so a
@@ -649,6 +663,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           <CompactPermissionsStep
             permissions={permissions}
             systemAudio={systemAudio}
+            screenContext={
+              agentAllowed && screenContextAllowed
+                ? {
+                    enabled: settingsStore.voiceAgentScreenContext,
+                    granted: screenRecordingGranted,
+                    supported: screenRecordingSupported,
+                    needsRelaunch: screenRecordingNeedsRelaunch,
+                    request: enableScreenContext,
+                  }
+                : undefined
+            }
             onContinue={() => void continueFromCurrentStep()}
           />
         );

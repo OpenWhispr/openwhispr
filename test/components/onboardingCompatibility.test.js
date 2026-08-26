@@ -7,9 +7,9 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 const noop = () => {};
 const asyncNoop = async () => {};
 
-async function createOnboardingRenderer(t) {
+async function createOnboardingRenderer(t, platform = "linux") {
   installBrowserGlobals(t, {
-    window: { electronAPI: { getPlatform: () => "linux" } },
+    window: { electronAPI: { getPlatform: () => platform } },
   });
   return createRendererServer(t, {
     cachePrefix: "openwhispr-onboarding-compatibility-",
@@ -27,9 +27,10 @@ async function createOnboardingRenderer(t) {
       "onboarding-permission-microphone.webp": `export default "microphone.webp";`,
       "onboarding-permission-accessibility.webp": `export default "accessibility.webp";`,
       "onboarding-permission-system-audio.webp": `export default "system-audio.webp";`,
+      "onboarding-permission-screen-context.svg": `export default "screen-context.svg";`,
       "/utils/platform": `
-        export function getPlatform() { return "linux"; }
-        export function getCachedPlatform() { return "linux"; }
+        export function getPlatform() { return "${platform}"; }
+        export function getCachedPlatform() { return "${platform}"; }
       `,
     },
   });
@@ -58,6 +59,14 @@ const systemAudio = {
   granted: false,
   mode: "portal",
   supportsOnboardingGrant: false,
+  request: async () => false,
+};
+
+const screenContext = {
+  enabled: false,
+  granted: false,
+  supported: true,
+  needsRelaunch: false,
   request: async () => false,
 };
 
@@ -135,4 +144,83 @@ test("Linux onboarding shows paste-tool installation and recheck guidance", asyn
 
   assert.match(markup, /sudo apt install xdotool/);
   assert.match(markup, />pasteToolsInfo.recheck<\/button>/);
+});
+
+test("macOS onboarding offers optional Screen Context setup", async (t) => {
+  const vite = await createOnboardingRenderer(t, "darwin");
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(CompactPermissionsStep, {
+      permissions: permissions(),
+      systemAudio,
+      screenContext,
+      onContinue: noop,
+    })
+  );
+
+  assert.match(markup, /dictationAgent\.screenContext\.title/);
+  assert.match(markup, /screen-context\.svg/);
+  assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
+});
+
+test("macOS onboarding shows the Screen Context relaunch guidance when needed", async (t) => {
+  const vite = await createOnboardingRenderer(t, "darwin");
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(CompactPermissionsStep, {
+      permissions: permissions(),
+      systemAudio,
+      screenContext: {
+        ...screenContext,
+        enabled: true,
+        granted: true,
+        needsRelaunch: true,
+      },
+      onContinue: noop,
+    })
+  );
+
+  assert.match(markup, /dictationAgent\.screenContext\.relaunchHint/);
+  assert.match(markup, />onboarding\.rehaul\.permissions\.enabled<\/button>/);
+});
+
+test("macOS onboarding omits Screen Context when policy does not offer it", async (t) => {
+  const vite = await createOnboardingRenderer(t, "darwin");
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(CompactPermissionsStep, {
+      permissions: permissions(),
+      systemAudio,
+      onContinue: noop,
+    })
+  );
+
+  assert.doesNotMatch(markup, /dictationAgent\.screenContext\.title/);
+});
+
+test("Linux onboarding does not show the macOS Screen Context permission", async (t) => {
+  const vite = await createOnboardingRenderer(t);
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(CompactPermissionsStep, {
+      permissions: permissions(),
+      systemAudio,
+      screenContext,
+      onContinue: noop,
+    })
+  );
+
+  assert.doesNotMatch(markup, /dictationAgent\.screenContext\.title/);
 });
