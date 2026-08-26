@@ -170,6 +170,7 @@ interface SettingsPageProps {
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
   { value: "en", label: "English", flag: "🇺🇸" },
+  { value: "ar", label: "العربية", flag: "🇦🇪" },
   { value: "es", label: "Español", flag: "🇪🇸" },
   { value: "fr", label: "Français", flag: "🇫🇷" },
   { value: "de", label: "Deutsch", flag: "🇩🇪" },

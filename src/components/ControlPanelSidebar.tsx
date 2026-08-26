@@ -201,7 +201,7 @@ export default function ControlPanelSidebar({
                 localStorage.setItem("upgradeProDismissed", "true");
               }}
               aria-label={t("common.dismiss")}
-              className="absolute top-2 right-2 p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="absolute top-2 end-2 p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
               <X size={12} />
             </button>

@@ -964,7 +964,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           style={{ width: sidebarCollapsed || isSidePanelLayout ? 0 : SIDEBAR_WIDTH_PX }}
         />
         <div
-          className={`absolute inset-y-0 left-0 z-30 transition-transform duration-300 ease-out${
+          className={`absolute inset-y-0 start-0 z-30 transition-transform duration-300 ease-out${
             sidebarCollapsed && sidebarPeek && !isSidePanelLayout
               ? " shadow-[10px_0_40px_-18px_rgba(0,0,0,0.2)]"
               : ""
@@ -973,6 +973,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             transform:
               !isSidePanelLayout && (!sidebarCollapsed || sidebarPeek)
                 ? "translateX(0)"
+                : document.documentElement.dir === "rtl"
+                ? "translateX(100%)"
                 : "translateX(-100%)",
           }}
           onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
@@ -1024,14 +1026,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           >
             {isSidePanelLayout && (
               <div
-                className={platform === "darwin" ? "ml-[84px] mt-[16px]" : "ml-2"}
+                className={platform === "darwin" ? "ms-[84px] mt-[16px]" : "ms-2"}
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
                 <Button
                   variant="outline-flat"
                   size="sm"
                   onClick={handleExitMeetingMode}
-                  className="h-7 px-2.5 pl-1.5 gap-1"
+                  className="h-7 px-2.5 ps-1.5 gap-1"
                 >
                   <ChevronLeft size={14} strokeWidth={1.8} />
                   {t("controlPanel.backToNotes")}
@@ -1040,7 +1042,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
             <div className="flex-1" />
             {platform !== "darwin" && (
-              <div className="pr-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+              <div className="pe-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
                 <WindowControls />
               </div>
             )}
@@ -1228,7 +1230,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         {!isSidePanelLayout && (
           <div
             className={`absolute z-40 flex h-10 items-center ${
-              platform === "darwin" ? "left-21 top-2" : "left-2 top-0"
+              platform === "darwin" ? "start-[84px] top-2" : "start-2 top-0"
             }`}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}

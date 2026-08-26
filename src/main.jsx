@@ -18,6 +18,11 @@ import "@fontsource-variable/inter/opsz.css";
 import "@fontsource-variable/caveat";
 import "./index.css";
 
+i18n.on('languageChanged', (lng) => {
+  document.documentElement.dir = i18n.dir(lng);
+});
+document.documentElement.dir = i18n.dir(i18n.language);
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
