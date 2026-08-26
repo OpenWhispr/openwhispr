@@ -2521,6 +2521,9 @@ declare global {
       ) => () => void;
       onMeetingTranscriptionError?: (callback: (error: string) => void) => () => void;
       onMeetingTranscriptionFatalError?: (callback: (error: string) => void) => () => void;
+      onMeetingSystemAudioSilent?: (
+        callback: (data: { systemAudioStrategy: SystemAudioStrategy }) => void
+      ) => () => void;
 
       // Speaker diarization
       downloadDiarizationModels?: () => Promise<{ success: boolean; error?: string }>;

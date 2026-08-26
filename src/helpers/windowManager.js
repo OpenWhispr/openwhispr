@@ -1,5 +1,7 @@
-const { app, screen, BrowserWindow, shell, dialog } = require("electron");
+const { app, screen, BrowserWindow, dialog } = require("electron");
 const debugLogger = require("./debugLogger");
+// Aliased: this class has an openExternalUrl method wrapping the helper.
+const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
 const HotkeyManager = require("./hotkeyManager");
 const { isGlobeLikeHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
@@ -1062,7 +1064,7 @@ class WindowManager {
   }
 
   openExternalUrl(url, showError = true) {
-    shell.openExternal(url).catch((error) => {
+    openUrlInExternalBrowser(url).catch((error) => {
       if (showError) {
         dialog.showErrorBox(
           i18nMain.t("dialog.openLink.title"),

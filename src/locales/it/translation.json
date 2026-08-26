@@ -2906,7 +2906,11 @@
       "description": "Trascrizioni e riassunti strutturati",
       "back": "Indietro",
       "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione.",
-      "autoEnded": "La registrazione si è interrotta automaticamente al termine della riunione."
+      "autoEnded": "La registrazione si è interrotta automaticamente al termine della riunione.",
+      "systemAudioSilent": {
+        "title": "Nessun audio della riunione rilevato finora",
+        "description": "Finora solo il tuo microfono ha captato suoni. Sei in una videochiamata? Verifica che l'audio della riunione venga riprodotto su questo computer e non sia disattivato. Stai registrando di persona? Puoi ignorare questo avviso: il tuo microfono cattura la stanza."
+      }
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",

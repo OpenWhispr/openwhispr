@@ -3117,7 +3117,11 @@
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "back": "Zurück",
       "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt.",
-      "autoEnded": "Die Aufnahme wurde nach dem Ende des Meetings automatisch beendet."
+      "autoEnded": "Die Aufnahme wurde nach dem Ende des Meetings automatisch beendet.",
+      "systemAudioSilent": {
+        "title": "Noch kein Meeting-Ton erkannt",
+        "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
+      }
     },
     "meetingPill": {
       "returnToNote": "Zurück zur Aufnahme",

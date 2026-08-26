@@ -2906,7 +2906,11 @@
       "description": "Transcrições e resumos estruturados",
       "back": "Voltar",
       "restrictedByOrg": "A transcrição de reuniões está restrita pela sua organização.",
-      "autoEnded": "A gravação parou automaticamente após o fim da reunião."
+      "autoEnded": "A gravação parou automaticamente após o fim da reunião.",
+      "systemAudioSilent": {
+        "title": "Nenhum áudio da reunião detectado até agora",
+        "description": "Até agora, apenas o seu microfone captou som. Está em uma videochamada? Verifique se o áudio da reunião está sendo reproduzido neste computador e não está silenciado. Está gravando presencialmente? Você pode ignorar este aviso: seu microfone capta o ambiente."
+      }
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",

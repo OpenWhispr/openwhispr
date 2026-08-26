@@ -3117,7 +3117,11 @@
       "description": "Transcriptions et résumés structurés",
       "back": "Retour",
       "restrictedByOrg": "La transcription des réunions est restreinte par votre organisation.",
-      "autoEnded": "L'enregistrement s'est arrêté automatiquement à la fin de votre réunion."
+      "autoEnded": "L'enregistrement s'est arrêté automatiquement à la fin de votre réunion.",
+      "systemAudioSilent": {
+        "title": "Aucun son de réunion détecté pour le moment",
+        "description": "Seul votre microphone a capté du son jusqu'à présent. Vous êtes en visioconférence ? Vérifiez que le son de la réunion est diffusé sur cet ordinateur et qu'il n'est pas coupé. Vous enregistrez en présentiel ? Vous pouvez ignorer ce message : votre microphone capte la salle."
+      }
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",

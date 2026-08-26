@@ -2906,7 +2906,11 @@
       "description": "转录与结构化摘要",
       "back": "返回",
       "restrictedByOrg": "会议转录已被您的组织限制。",
-      "autoEnded": "会议结束后，录音已自动停止。"
+      "autoEnded": "会议结束后，录音已自动停止。",
+      "systemAudioSilent": {
+        "title": "尚未检测到会议音频",
+        "description": "到目前为止，只有您的麦克风采集到声音。正在进行视频通话？请检查会议音频是否正在此电脑上播放且未被静音。正在进行现场录音？您可以忽略此提示——您的麦克风会采集房间内的声音。"
+      }
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
