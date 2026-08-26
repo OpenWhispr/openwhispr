@@ -134,6 +134,7 @@ class SelectionManager {
             id: match[1],
             windowClass: result.stdout.match(/^WINDOW_CLASS (.+)$/m)?.[1]?.trim() || null,
             exeName: result.stdout.match(/^EXE_NAME (.+)$/m)?.[1]?.trim() || null,
+            isTerminal: /^IS_TERMINAL true$/m.test(result.stdout),
           }
         : null;
     }
@@ -328,8 +329,9 @@ class SelectionManager {
       return { status: "selected", text: result.text, target: { kind: "mac-pid", pid } };
     }
     if (result.state === "none") {
+      const editable = result.editable && !(await this._isTerminalPid(pid));
       return {
-        status: result.editable ? "editable" : "none",
+        status: editable ? "editable" : "none",
         target: { kind: "mac-pid", pid },
       };
     }
@@ -389,7 +391,14 @@ class SelectionManager {
       const match = result.stdout.match(/COPY_OK\s+(\S+)/);
       return { success: !!match, target: match ? { kind: "win-hwnd", id: match[1] } : null };
     }, expectedTarget);
-    return this._markEditableCaret(capture, capture.target || expectedTarget);
+    // The copy reports only the HWND; a same-window expectedTarget (verified by
+    // _captureViaClipboard) carries the exe/class identity the terminal and
+    // line-copy checks need, so keep it on the target a caret session stores.
+    const target =
+      capture.target && expectedTarget
+        ? { ...expectedTarget, ...capture.target }
+        : capture.target || expectedTarget;
+    return this._markEditableCaret(capture, target);
   }
 
   async _readLinuxSelection(expectedTarget) {
@@ -477,8 +486,38 @@ class SelectionManager {
 
   async _markEditableCaret(capture, target) {
     if (capture.status !== "none" || !target) return capture;
+    // Generated text pasted into a shell executes on its embedded newlines, so
+    // a terminal target never becomes a caret destination — the same rule the
+    // selection paths apply.
+    if (this._isTerminalTarget(capture.target, target)) return capture;
     const editable = await this.textEditMonitor?.isFocusedEditable?.(target);
     return editable ? { status: "editable", target } : capture;
+  }
+
+  _isTerminalTarget(...targets) {
+    return targets.some(
+      (target) =>
+        target?.isTerminal === true ||
+        this.clipboardManager.isTerminalSignature?.(this._targetSignature(target))
+    );
+  }
+
+  // macOS AX targets carry only a pid; resolve the executable path so terminal
+  // apps can be recognized before their empty prompt reads as a writable caret.
+  async _isTerminalPid(pid) {
+    if (!this.clipboardManager.isTerminalSignature) return false;
+    const executablePath = await this._readMacExecutablePath(pid);
+    if (!executablePath) return false;
+    // Match the bundle and executable names, not the whole path — segments
+    // like "/System/" would collide with short signatures such as "st".
+    const bundleName = executablePath.match(/\/([^/]+)\.app\//)?.[1] ?? "";
+    const executableName = executablePath.split("/").pop() ?? "";
+    return this.clipboardManager.isTerminalSignature(`${bundleName} ${executableName}`);
+  }
+
+  async _readMacExecutablePath(pid) {
+    const result = await runSpawn("ps", ["-p", String(pid), "-o", "comm="], { timeout: 500 });
+    return result.success ? result.stdout.trim() : "";
   }
 
   async _readLinuxAtspiSelection(binary, expectedTarget) {
@@ -622,13 +661,15 @@ class SelectionManager {
     return { status: "selected", text: copiedText, target: copyResult.target };
   }
 
+  _targetSignature(target) {
+    return `${target?.exeName || ""} ${target?.windowClass || ""} ${target?.appName || ""}`.trim();
+  }
+
   // Windows and Linux name the app in the target captured before the copy;
   // macOS learns it from the copy helper's own report, so both are checked.
   _isLineCopyEditor(...targets) {
     const signature = targets
-      .map((target) =>
-        `${target?.exeName || ""} ${target?.windowClass || ""} ${target?.appName || ""}`.trim()
-      )
+      .map((target) => this._targetSignature(target))
       .join(" ")
       .toLowerCase();
     if (!signature.trim()) return false;

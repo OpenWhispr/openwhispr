@@ -113,6 +113,52 @@ test("does not paste an assistant response after the captured caret target chang
   assert.equal(pastes.length, 0);
 });
 
+// Generated text pasted into a shell executes on its embedded newlines, so a
+// terminal's empty prompt must never read as a writable caret.
+test("a macOS terminal's empty prompt never becomes a caret delivery target", async () => {
+  const { manager } = makeHarness({ selections: [{ state: "none", editable: true }] });
+  manager.clipboardManager.isTerminalSignature = (signature) =>
+    signature.toLowerCase().includes("iterm");
+  manager._readMacExecutablePath = async () => "/Applications/iTerm.app/Contents/MacOS/iTerm2";
+
+  assert.equal((await manager.captureSelectedText()).status, "none");
+});
+
+test("a terminal-flagged target is refused as a caret destination without probing", async () => {
+  const probes = [];
+  const manager = new SelectionManager({
+    clipboardManager: {
+      isTerminalSignature: (signature) => signature.toLowerCase().includes("terminal"),
+    },
+    textEditMonitor: {
+      isFocusedEditable: async (target) => {
+        probes.push(target);
+        return true;
+      },
+    },
+    platform: "win32",
+    now: () => 1000,
+  });
+  const flagged = { kind: "win-hwnd", id: "1A", isTerminal: true };
+  const byExeName = { kind: "win-hwnd", id: "2B", exeName: "WindowsTerminal.exe" };
+  const editor = { kind: "win-hwnd", id: "3C", exeName: "notepad.exe" };
+
+  assert.equal(
+    (await manager._markEditableCaret({ status: "none", target: flagged }, flagged)).status,
+    "none"
+  );
+  assert.equal(
+    (await manager._markEditableCaret({ status: "none", target: byExeName }, byExeName)).status,
+    "none"
+  );
+  assert.equal(probes.length, 0);
+  assert.equal(
+    (await manager._markEditableCaret({ status: "none", target: editor }, editor)).status,
+    "editable"
+  );
+  assert.equal(probes.length, 1);
+});
+
 test("treats a clipboard-only fallback as a failed targeted paste", async () => {
   const { manager, pastes } = makeHarness({
     selections: [
