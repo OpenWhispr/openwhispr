@@ -61,7 +61,7 @@ const systemAudio = {
   request: async () => false,
 };
 
-test("compact Linux onboarding keeps minimize and close controls", async (t) => {
+test("compact Linux onboarding exposes minimize, maximize, and close controls", async (t) => {
   const vite = await createOnboardingRenderer(t);
   const { default: OnboardingShell } = await vite.ssrLoadModule(
     "/components/onboarding/OnboardingShell.tsx"
@@ -72,7 +72,11 @@ test("compact Linux onboarding keeps minimize and close controls", async (t) => 
   );
 
   assert.match(markup, /title="windowControls.minimize"/);
+  assert.match(markup, /title="windowControls.maximize"/);
   assert.match(markup, /title="windowControls.close"/);
+  assert.match(markup, /aria-label="windowControls.minimize"/);
+  assert.match(markup, /aria-label="windowControls.maximize"/);
+  assert.match(markup, /aria-label="windowControls.close"/);
 });
 
 test("expanded Linux onboarding keeps maximize alongside minimize and close", async (t) => {

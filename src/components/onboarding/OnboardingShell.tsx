@@ -42,21 +42,17 @@ interface CompactOnboardingFrameProps {
 }
 
 /**
- * Minimise/close for the frameless window on Windows and Linux — macOS shows
- * its native traffic lights instead (the window manager keeps them visible on
- * the expanded scaffold). Close hides to the tray; the persisted session
+ * Window controls for the frameless window on Windows and Linux — macOS uses
+ * its native traffic lights. Close hides to the tray; the persisted session
  * resumes the flow on reopen, so this is never a way to lose progress.
- *
- * Compact keeps only minimise/close because its fixed card cannot resize.
- * Expanded adds maximize/restore alongside them.
  */
-function OnboardingWindowControls({ compact }: { compact: boolean }) {
+function OnboardingWindowControls() {
   const { t } = useTranslation();
   const [isMaximized, setIsMaximized] = useState(false);
   const platform = getPlatform();
 
   useEffect(() => {
-    if (compact || platform === "darwin") return;
+    if (platform === "darwin") return;
     let mounted = true;
     const syncIsMaximized = async (): Promise<void> => {
       try {
@@ -71,7 +67,7 @@ function OnboardingWindowControls({ compact }: { compact: boolean }) {
       mounted = false;
       window.clearInterval(intervalId);
     };
-  }, [compact, platform]);
+  }, [platform]);
 
   const handleMinimize = async (): Promise<void> => {
     try {
@@ -95,6 +91,9 @@ function OnboardingWindowControls({ compact }: { compact: boolean }) {
 
   if (platform === "darwin") return null;
 
+  const minimizeLabel = t("windowControls.minimize");
+  const maximizeLabel = t(isMaximized ? "windowControls.restore" : "windowControls.maximize");
+  const closeLabel = t("windowControls.close");
   const buttonClass =
     "inline-flex size-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary)] focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]";
 
@@ -106,29 +105,30 @@ function OnboardingWindowControls({ compact }: { compact: boolean }) {
       <button
         type="button"
         onClick={handleMinimize}
-        title={t("windowControls.minimize")}
+        title={minimizeLabel}
+        aria-label={minimizeLabel}
         className={buttonClass}
       >
         <Minus className="size-4" aria-hidden="true" />
       </button>
-      {!compact && (
-        <button
-          type="button"
-          onClick={handleMaximize}
-          title={t(isMaximized ? "windowControls.restore" : "windowControls.maximize")}
-          className={buttonClass}
-        >
-          {isMaximized ? (
-            <Copy className="size-4" aria-hidden="true" />
-          ) : (
-            <Square className="size-3.5" aria-hidden="true" />
-          )}
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={handleMaximize}
+        title={maximizeLabel}
+        aria-label={maximizeLabel}
+        className={buttonClass}
+      >
+        {isMaximized ? (
+          <Copy className="size-4" aria-hidden="true" />
+        ) : (
+          <Square className="size-3.5" aria-hidden="true" />
+        )}
+      </button>
       <button
         type="button"
         onClick={handleClose}
-        title={t("windowControls.close")}
+        title={closeLabel}
+        aria-label={closeLabel}
         className={buttonClass}
       >
         <X className="size-4" aria-hidden="true" />
@@ -253,7 +253,7 @@ export default function OnboardingShell({
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         aria-hidden="true"
       />
-      <OnboardingWindowControls compact={compact} />
+      <OnboardingWindowControls />
 
       <div
         // Normally nothing scrolls here: each step sizes itself to the window and

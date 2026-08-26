@@ -1434,14 +1434,14 @@ class WindowManager {
     dockManager.setControlPanelVisible(true);
   }
 
-  // Compact onboarding stays fixed-size; expanded onboarding can resize and
-  // maximize. Both modes remain minimizable and closable so a frameless window
-  // never traps the user in setup.
+  // Compact onboarding starts at smaller bounds, but both modes expose the
+  // complete window-control contract so a frameless window never traps the
+  // user in setup.
   _applyOnboardingWindowChrome(win, mode) {
     const expanded = mode === "expanded";
-    win.setResizable(expanded);
+    win.setResizable(true);
     win.setMinimizable(true);
-    win.setMaximizable(expanded);
+    win.setMaximizable(true);
     win.setClosable(true);
     win.setFullScreenable(false);
     // Floor at the mode's canonical size so no step renders below the bounds
@@ -1454,7 +1454,7 @@ class WindowManager {
       Math.min(floor.height, workArea.height)
     );
     if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
-      win.setWindowButtonVisibility(expanded);
+      win.setWindowButtonVisibility(true);
     }
   }
 
