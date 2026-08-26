@@ -174,10 +174,6 @@ export function useAssistantPanel({
     mountedRef.current = mounted;
   }, [mounted]);
 
-  // The chat reports content, an error, or nothing at all; whichever it is,
-  // the thinking flourish and main-process busy gate must end. A response
-  // delivered to a verified external caret can return directly to the pill;
-  // every failed or non-delivery outcome stays visible in the panel.
   const handleCommandSettled = useCallback(
     (id, { showPanel = true } = {}) => {
       if (id !== commandIdRef.current) return;

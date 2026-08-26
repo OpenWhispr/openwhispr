@@ -462,10 +462,6 @@ export const useAudioRecording = (toast, options = {}) => {
             if (localStorage.getItem("onboardingCompleted") !== "true") {
               window.electronAPI?.hideDictationPreview?.();
             } else {
-              // The directive's transcript is the command to send. A verified
-              // writable caret carries an opaque main-process delivery session;
-              // all other standalone commands remain panel-first and copy the
-              // completed answer for the user to paste manually.
               window.electronAPI?.hideDictationPreview?.();
               const { screenContext, transcript, selectedContext, deliverySessionId } =
                 result.assistantConversation;

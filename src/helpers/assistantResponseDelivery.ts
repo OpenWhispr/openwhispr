@@ -55,9 +55,7 @@ async function copyAssistantResponse(
   try {
     const result = await electronAPI?.writeClipboard?.(content);
     if (result?.success === true) return true;
-  } catch {
-    // Fall through to the browser clipboard API.
-  }
+  } catch {}
 
   try {
     await clipboard?.writeText(content);
@@ -82,10 +80,7 @@ export async function deliverAssistantResponse(
         allowClipboardFallback: delivery.allowClipboardFallback,
       });
       if (result?.success === true) return { pasted: true, copied: false };
-    } catch {
-      // The target can disappear while the model is responding. Preserve the
-      // answer on the clipboard below and leave it visible in the panel.
-    }
+    } catch {}
   }
 
   return {

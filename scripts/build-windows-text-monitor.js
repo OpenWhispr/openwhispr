@@ -2,11 +2,6 @@
 /**
  * Ensures the Windows text monitor binary is available.
  *
- * Strategy:
- * 1. If binary exists and is up-to-date, do nothing
- * 2. Try to compile locally so source changes are picked up in Windows builds
- * 3. Fall back to downloading a prebuilt binary if local compilation is unavailable
- *
  * This allows developers without a C compiler to still build the app.
  */
 

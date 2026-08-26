@@ -9,10 +9,6 @@ const MAX_SELECTION_EDIT_CODE_POINTS = 6000;
 // re-verifying — the accepted cost of failing closed rather than pasting blind.
 const COPY_TIMEOUT_MS = 1200;
 const CLIPBOARD_POLL_MS = 20;
-// The AT-SPI desktop scan takes ~600ms idle on KDE Wayland and over 1s under
-// recording-start load or through Flatpak's xdg-dbus-proxy; a tighter timeout
-// kills the probe with the target already on stdout and the capture loses its
-// safe in-place selection-edit route.
 const ATSPI_TARGET_TIMEOUT_MS = 2000;
 
 // Editors that copy the whole current line when Ctrl+C (⌘C on macOS) lands with
@@ -410,10 +406,6 @@ class SelectionManager {
     if (expectedTarget && !this._sameTarget(target, expectedTarget)) {
       return { status: "target_changed" };
     }
-    // Replacement text typed into a shell executes on its embedded newlines,
-    // so a terminal selection reads as no selection and the command opens in
-    // the Assistant panel. AT-SPI targets carry no window class here; the
-    // helper binary applies the same rule.
     if (this.clipboardManager.isLinuxTerminalWindowClass?.(target.windowClass)) {
       return { status: "none", target };
     }

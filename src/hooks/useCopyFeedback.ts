@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/**
- * Copies `text` to the clipboard (native bridge first, web API fallback) and
- * latches `copied` for `resetMs`. A caller can also confirm a clipboard write
- * it performed elsewhere; matching the copied text keeps that feedback stable
- * if the final response and confirmation arrive in the same render cycle.
- */
 export function useCopyFeedback(
   text: string,
   { resetMs = 1800 }: { resetMs?: number } = {}

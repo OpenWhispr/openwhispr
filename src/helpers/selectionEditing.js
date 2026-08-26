@@ -22,9 +22,6 @@ export function buildSelectionEditUserPrompt(spokenInstruction, selectedText) {
   });
 }
 
-// Codes meaning "this target can never report a selection", as opposed to "a
-// selection may exist and the read failed". They fall back to the Assistant
-// panel because an unverified target must never receive generated text.
 const STANDALONE_CAPTURE_CODES = new Set([
   "target_unavailable",
   "copy_helper_unavailable",
