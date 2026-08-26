@@ -186,6 +186,7 @@
         "accessibilityDescription": "Вставляет текст в активное приложение.",
         "systemAudioTitle": "Системное аудио",
         "systemAudioDescription": "Записывает звук из других приложений.",
+        "screenContextDescription": "Позволяет голосовому помощнику видеть ваш экран. Никогда не сохраняется.",
         "enable": "Включить",
         "enabled": "Включено"
       },

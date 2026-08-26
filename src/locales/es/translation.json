@@ -186,6 +186,7 @@
         "accessibilityDescription": "Pega texto en tu aplicación activa.",
         "systemAudioTitle": "Audio del Sistema",
         "systemAudioDescription": "Captura audio de otras aplicaciones.",
+        "screenContextDescription": "Permite que tu asistente de voz vea tu pantalla. Nunca se guarda.",
         "enable": "Activar",
         "enabled": "Activado"
       },

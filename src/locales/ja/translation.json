@@ -186,6 +186,7 @@
         "accessibilityDescription": "アクティブなアプリにテキストを貼り付けます。",
         "systemAudioTitle": "システムオーディオ",
         "systemAudioDescription": "ほかのアプリの音声を取り込みます。",
+        "screenContextDescription": "音声アシスタントが作業中の画面を確認できます。保存はされません。",
         "enable": "有効にする",
         "enabled": "有効"
       },

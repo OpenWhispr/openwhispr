@@ -186,6 +186,7 @@
         "accessibilityDescription": "Incolla il testo nell’app attiva.",
         "systemAudioTitle": "Audio di Sistema",
         "systemAudioDescription": "Acquisisce l’audio da altre app.",
+        "screenContextDescription": "Consente all’assistente vocale di vedere lo schermo. Mai salvato.",
         "enable": "Attiva",
         "enabled": "Attivato"
       },

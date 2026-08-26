@@ -186,6 +186,7 @@
         "accessibilityDescription": "將文字貼到目前的 App。",
         "systemAudioTitle": "系統音訊",
         "systemAudioDescription": "擷取其他 App 的音訊。",
+        "screenContextDescription": "讓語音助理查看目前螢幕，絕不儲存。",
         "enable": "啟用",
         "enabled": "已啟用"
       },
