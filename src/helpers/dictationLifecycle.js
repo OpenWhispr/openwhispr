@@ -47,7 +47,11 @@ function shouldBlockDictationWhilePanelOpen({
   assistantPanelBusy = false,
   inputKind = "dictation",
 }) {
-  if (inputKind === "dictation") return false;
+  // Plain dictation renders on the opposite-edge companion pill, which only
+  // exists while the panel is open. A busy assistant that has not opened its
+  // panel yet (the pre-open thinking flourish) leaves no surface that could
+  // show the recording, so plain dictation stays blocked for that window.
+  if (inputKind === "dictation") return assistantPanelBusy && !assistantPanelOpen;
   if (assistantPanelBusy) return true;
   if (!assistantPanelOpen) return false;
   return inputKind !== "assistant";

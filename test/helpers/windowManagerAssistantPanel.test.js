@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const requestedMainWindowPositions = [];
+const createdBrowserWindows = [];
 
 // Same stub set as windowManagerMeetingNotification.test.js: WindowManager
 // pulls in electron + sibling managers at require time.
@@ -11,7 +12,21 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     return {
       app: { on: () => undefined },
       screen: { getPrimaryDisplay: () => ({}), getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } }), getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } }) },
-      BrowserWindow: class {},
+      BrowserWindow: class FakeBrowserWindow {
+        constructor(options) {
+          this.options = options;
+          this.protectionCalls = [];
+          this.webContents = { on: () => undefined, send: () => undefined };
+          createdBrowserWindows.push(this);
+        }
+        on() {}
+        setContentProtection(value) { this.protectionCalls.push(value); }
+        setIgnoreMouseEvents() {}
+        loadFile() { return Promise.resolve(); }
+        loadURL() { return Promise.resolve(); }
+        isDestroyed() { return false; }
+        close() {}
+      },
       shell: {},
       dialog: {},
     };
@@ -209,6 +224,34 @@ test("the companion toggles macOS click-through with hover interactivity", () =>
     { ignore: false, opts: undefined },
     { ignore: true, opts: { forward: true } },
   ]);
+});
+
+test("the Agent companion window is created content-protected", () => {
+  createdBrowserWindows.length = 0;
+  const manager = new WindowManager();
+  manager._assistantPanelOpen = true;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1000, y: 100, width: 400, height: 600 }),
+  };
+
+  manager.showAgentDictationPill();
+
+  assert.equal(createdBrowserWindows.length, 1);
+  assert.deepEqual(createdBrowserWindows[0].protectionCalls, [true]);
+});
+
+test("the companion cancel control routes through the dictation renderer", () => {
+  const manager = new WindowManager();
+  const channels = [];
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel) => channels.push(channel) },
+  };
+
+  manager.sendCancelActiveDictation();
+
+  assert.deepEqual(channels, ["cancel-dictation"]);
 });
 
 test("live transcript events are mirrored to the companion only for plain dictation", async () => {

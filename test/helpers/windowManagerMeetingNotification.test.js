@@ -238,11 +238,15 @@ test("a busy Assistant blocks its voice hotkey before native side effects", () =
   manager._assistantPanelBusy = true;
 
   manager.sendToggleVoiceAgent();
+  // Before the panel opens there is no companion pill to show a plain
+  // recording either, so the busy state blocks ordinary dictation too.
+  manager.sendToggleDictation();
 
   assert.equal(showCount, 0);
   assert.equal(prepareCount, 0);
   assert.deepEqual(rendererChannels, []);
 
+  manager._assistantPanelOpen = true;
   manager.sendToggleDictation();
 
   assert.equal(showCount, 1);
@@ -257,7 +261,7 @@ test("a busy Assistant blocks its voice hotkey before native side effects", () =
   assert.deepEqual(rendererChannels, ["toggle-dictation", "toggle-voice-agent"]);
 });
 
-test("a busy Assistant leaves ordinary push-to-talk dictation available", () => {
+test("push-to-talk dictation follows the companion pill's availability", () => {
   const manager = createNormalWindowManager();
   const rendererChannels = [];
   let showCount = 0;
@@ -278,6 +282,15 @@ test("a busy Assistant leaves ordinary push-to-talk dictation available", () => 
     showCount += 1;
   };
 
+  // Busy without an open panel: no surface could show the recording.
+  manager.sendPrepareDictation();
+  manager.sendStartDictation();
+
+  assert.equal(showCount, 0);
+  assert.deepEqual(rendererChannels, []);
+
+  // The open panel brings the companion pill, so PTT dictation flows again.
+  manager._assistantPanelOpen = true;
   manager.sendPrepareDictation();
   manager.sendStartDictation();
 

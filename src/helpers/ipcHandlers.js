@@ -4986,6 +4986,12 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("cancel-agent-panel-dictation", (event) => {
+      if (!isAgentDictationPill(event)) return { success: false };
+      this.windowManager.sendCancelActiveDictation();
+      return { success: true };
+    });
+
     ipcMain.handle("get-agent-dictation-pill-state", (event) => {
       return isAgentDictationPill(event)
         ? this.windowManager.getAgentDictationPillState()

@@ -964,6 +964,7 @@ declare global {
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (callback: () => void) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
+      onCancelDictation?: (callback: () => void) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (
         state: "idle" | "recording" | "processing",
@@ -971,6 +972,7 @@ declare global {
       ) => void;
       dictationAudioLevelChanged?: (level: number) => void;
       toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
+      cancelAgentPanelDictation?: () => Promise<{ success: boolean }>;
       getAgentDictationPillState?: () => Promise<{
         lifecycle: "idle" | "recording" | "processing";
         interactive: boolean;

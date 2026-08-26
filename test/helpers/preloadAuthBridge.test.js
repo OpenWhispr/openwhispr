@@ -123,11 +123,13 @@ test("the Agent companion owns only its scoped window bridges", async () => {
   await api.resizeAgentDictationPillToContent(240);
   await api.resizeAgentDictationPillToContent(null);
   await api.setAgentDictationPillInteractivity(true);
+  await api.cancelAgentPanelDictation();
 
   assert.deepEqual(invocations, [
     ["resize-agent-dictation-pill-to-content", 240],
     ["resize-agent-dictation-pill-to-content", null],
     ["set-agent-dictation-pill-interactivity", true],
+    ["cancel-agent-panel-dictation"],
   ]);
 });
 

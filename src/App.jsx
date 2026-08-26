@@ -249,10 +249,12 @@ export default function App() {
     }
   }, [isAssistantVoice, isProcessing, assistantOpenRef, beginAssistantThinking]);
 
-  // While the Agent panel owns the shared surface, plain dictation renders on
-  // the opposite-edge companion pill — neither its recording nor its
-  // processing may animate the footer pill here.
-  const voicePillOwnsActivity = !assistant.mounted || isAssistantVoice;
+  // While the Agent panel is open, plain dictation renders on the
+  // opposite-edge companion pill — neither its recording nor its processing
+  // may animate the footer pill here. A panel that is merely mounted (its
+  // close animation, the pre-open thinking flourish) has no companion, so
+  // the main pill keeps owning those visuals or the recording shows nowhere.
+  const voicePillOwnsActivity = !assistant.open || isAssistantVoice;
   const voicePillIsRecording = isRecording && voicePillOwnsActivity;
   const voiceActivity = resolveVoiceActivityPresentation({
     isRecording: voicePillIsRecording,
@@ -333,6 +335,16 @@ export default function App() {
     });
     return () => unsubscribe?.();
   }, [cancelRecording]);
+
+  // The Agent companion pill's cancel button routes here: only this renderer
+  // owns the recording, so it decides what "cancel" means at arrival time.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onCancelDictation?.(() => {
+      if (isRecording || isPreparing) cancelRecording();
+      else if (isProcessing) cancelProcessing();
+    });
+    return () => unsubscribe?.();
+  }, [isRecording, isPreparing, isProcessing, cancelRecording, cancelProcessing]);
 
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {

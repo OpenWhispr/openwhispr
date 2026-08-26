@@ -984,6 +984,17 @@ class WindowManager {
     }
   }
 
+  // Unlike sendCancelDictation (a silent input reset: preparation and
+  // recording only), this also cancels a transcript still processing. The
+  // companion pill's cancel control lives in another window, but only the
+  // main window's renderer owns the recording state, so it decides what
+  // "cancel" means at arrival time.
+  sendCancelActiveDictation() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("cancel-dictation");
+    }
+  }
+
   getActivationMode() {
     return this._cachedActivationMode;
   }
@@ -1713,6 +1724,9 @@ class WindowManager {
       this.agentDictationPillWindow = pillWindow;
       this._agentDictationPillReady = false;
       this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
+      // The companion exists only while the content-protected Agent panel is
+      // open; keep it out of screen shares along with the panel it accompanies.
+      pillWindow.setContentProtection(true);
       this._applyAgentDictationPillClickThrough(pillWindow, true);
 
       pillWindow.on("closed", () => {

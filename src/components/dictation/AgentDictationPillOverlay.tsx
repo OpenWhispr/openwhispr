@@ -6,6 +6,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useListeningEntrancePhase } from "../../hooks/useListeningEntrancePhase";
 import { useLiveTranscriptPanel } from "../../hooks/useLiveTranscriptPanel";
@@ -145,11 +146,12 @@ export default function AgentDictationPillOverlay() {
   // The shared rule (a mounted transcript locks the pill except while
   // recording) comes from the tested helper; the companion additionally
   // requires main-process consent and no transcript still processing.
-  const { pillInteractive: surfaceInteractive } = resolveVoicePillInteraction({
+  const { pillInteractive: surfaceInteractive, cancelVisible } = resolveVoicePillInteraction({
     assistantMounted: false,
     liveTranscriptMounted: liveTranscript.mounted,
     isRecording,
     isProcessing,
+    isHovered: hovered,
   });
   const pillInteractive = companionState.interactive && !isProcessing && surfaceInteractive;
   const label = isRecording
@@ -184,22 +186,40 @@ export default function AgentDictationPillOverlay() {
         }}
         onMouseLeave={() => setHovered(false)}
       >
-        <VoicePill
-          variant={liveTranscript.open ? "panel" : "floating"}
-          state={state}
-          expanded={!liveTranscript.open && expanded}
-          collapseToLogo={listeningEntrance.collapseToLogo}
-          waveformVisible={listeningEntrance.waveformVisible}
-          waveformOnlyWhileRecording={liveTranscript.mounted}
-          integratedWithPanel={liveTranscript.open}
-          showExpandChevron={canReopenLiveTranscript && hovered}
-          getAudioLevel={getAudioLevel}
-          horizontalDirection={horizontalDirection}
-          role={pillInteractive ? "button" : "status"}
-          aria-label={label}
-          aria-disabled={!pillInteractive}
-          onClick={activatePill}
-        />
+        <div className="relative flex items-center gap-2">
+          <VoicePill
+            variant={liveTranscript.open ? "panel" : "floating"}
+            state={state}
+            expanded={!liveTranscript.open && expanded}
+            collapseToLogo={listeningEntrance.collapseToLogo}
+            waveformVisible={listeningEntrance.waveformVisible}
+            waveformOnlyWhileRecording={liveTranscript.mounted}
+            integratedWithPanel={liveTranscript.open}
+            showExpandChevron={canReopenLiveTranscript && hovered}
+            getAudioLevel={getAudioLevel}
+            horizontalDirection={horizontalDirection}
+            role={pillInteractive ? "button" : "status"}
+            aria-label={label}
+            aria-disabled={!pillInteractive}
+            onClick={activatePill}
+          />
+          {cancelVisible && (
+            <button
+              type="button"
+              aria-label={
+                isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
+              }
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                void window.electronAPI.cancelAgentPanelDictation?.();
+              }}
+              className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/55 bg-surface-2 text-muted-foreground shadow-sm transition-colors hover:bg-surface-3 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <X size={13} strokeWidth={2.5} aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
 
       <VoiceModePanelCore

@@ -741,11 +741,14 @@ export const useAudioRecording = (toast, options = {}) => {
   );
 
   useEffect(() => {
-    // The companion pill only exists while the Agent panel is open — with the
-    // panel closed there is nobody to mirror levels to, so skip the IPC.
-    if (!isRecording || isAssistantVoice || !assistantOpenRef?.current) return undefined;
+    if (!isRecording || isAssistantVoice) return undefined;
 
     const reportAudioLevel = () => {
+      // The companion pill only exists while the Agent panel is open — with
+      // the panel closed there is nobody to mirror levels to, so skip the
+      // IPC. Checked per tick, not once: the panel can open mid-recording and
+      // a ref change never re-runs this effect.
+      if (!assistantOpenRef?.current) return;
       const level = getAudioLevel();
       if (level !== null) window.electronAPI?.dictationAudioLevelChanged?.(level);
     };

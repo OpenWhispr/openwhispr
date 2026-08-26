@@ -58,6 +58,27 @@ test("regular dictation remains available while the assistant panel is open", ()
   );
 });
 
+test("regular dictation is blocked while a busy assistant has not opened its panel", () => {
+  // The companion pill only exists once the panel opens; before that, a busy
+  // assistant suppresses the main pill too, so a recording would be invisible.
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: false,
+      assistantPanelBusy: true,
+      inputKind: "dictation",
+    }),
+    true
+  );
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: false,
+      assistantPanelBusy: false,
+      inputKind: "dictation",
+    }),
+    false
+  );
+});
+
 test("the assistant hotkey can still record an in-panel follow-up", () => {
   assert.equal(
     shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: true, inputKind: "assistant" }),
