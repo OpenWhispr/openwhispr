@@ -1001,7 +1001,7 @@
     "emailStep": {
       "checkingEmail": "メールアドレスを確認しています...",
       "continueWithEmail": "メールで続ける",
-      "continueWithoutAccount": "アカウントなしで OpenWhispr を使う",
+      "continueWithoutAccount": "アカウントなしで続ける",
       "emailLabel": "メールアドレス",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "別のメールアドレスを使用"

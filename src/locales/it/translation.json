@@ -1001,7 +1001,7 @@
     "emailStep": {
       "checkingEmail": "Verifica dell'e-mail in corso...",
       "continueWithEmail": "Continua con l'e-mail",
-      "continueWithoutAccount": "Usa OpenWhispr senza account",
+      "continueWithoutAccount": "Continua senza account",
       "emailLabel": "E-mail",
       "emailPlaceholder": "tu@esempio.com",
       "useDifferentEmail": "Usa un'altra e-mail"

@@ -1000,7 +1000,7 @@
     "emailStep": {
       "checkingEmail": "正在檢查您的電子郵件...",
       "continueWithEmail": "使用電子郵件繼續",
-      "continueWithoutAccount": "無需帳號使用 OpenWhispr",
+      "continueWithoutAccount": "無需帳號，繼續使用",
       "emailLabel": "電子郵件",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "使用其他電子郵件"

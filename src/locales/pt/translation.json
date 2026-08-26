@@ -980,7 +980,7 @@
     "emailStep": {
       "checkingEmail": "Verificando seu e-mail...",
       "continueWithEmail": "Continuar com e-mail",
-      "continueWithoutAccount": "Usar o OpenWhispr sem conta",
+      "continueWithoutAccount": "Continuar sem conta",
       "emailLabel": "E-mail",
       "emailPlaceholder": "voce@exemplo.com",
       "useDifferentEmail": "Usar outro e-mail"

@@ -1000,7 +1000,7 @@
     "emailStep": {
       "checkingEmail": "Checking your email...",
       "continueWithEmail": "Continue with email",
-      "continueWithoutAccount": "Use OpenWhispr without an account",
+      "continueWithoutAccount": "Continue without an account",
       "emailLabel": "Email",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "Use a different email"
