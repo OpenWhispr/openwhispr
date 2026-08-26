@@ -207,7 +207,32 @@ test("macOS onboarding omits Screen Context when policy does not offer it", asyn
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.title/);
 });
 
-test("Linux onboarding does not show the macOS Screen Context permission", async (t) => {
+test("Windows onboarding offers Screen Context as a permissionless opt-in", async (t) => {
+  const vite = await createOnboardingRenderer(t, "win32");
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(CompactPermissionsStep, {
+      permissions: permissions(),
+      systemAudio,
+      screenContext: {
+        ...screenContext,
+        enabled: true,
+        granted: true,
+      },
+      onContinue: noop,
+    })
+  );
+
+  assert.match(markup, /dictationAgent\.screenContext\.title/);
+  assert.match(markup, /screen-context\.svg/);
+  assert.match(markup, />onboarding\.rehaul\.permissions\.enabled<\/button>/);
+  assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
+});
+
+test("Linux onboarding does not show Screen Context", async (t) => {
   const vite = await createOnboardingRenderer(t);
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
     "/components/onboarding/CompactPermissionsStep.tsx"

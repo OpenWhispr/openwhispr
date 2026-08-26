@@ -123,6 +123,7 @@ export default function CompactPermissionsStep({
   // showing those rows there is either a no-op button or a dead disabled one.
   const showAccessibility = platform === "darwin";
   const showSystemAudio = platform === "darwin";
+  const showScreenContext = platform === "darwin" || platform === "win32";
   const showLinuxPasteGuidance =
     platform === "linux" &&
     permissions.pasteToolsInfo !== null &&
@@ -208,7 +209,7 @@ export default function CompactPermissionsStep({
               />
             </>
           )}
-          {platform === "darwin" && screenContext && (
+          {showScreenContext && screenContext && (
             <>
               <div className="h-px bg-[var(--onboarding-surface-tertiary)]" />
               <PermissionRow
