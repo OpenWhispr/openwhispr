@@ -155,6 +155,12 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
   await submitEmail(newAccount);
   assert.equal(newAccount.values[AUTH_MODE_INDEX], "sign-up");
 
+  const missingEndpoint = createHarness({ [EMAIL_INDEX]: "user@selfhosted.example" });
+  missingEndpoint.discoveryResult = null;
+  await submitEmail(missingEndpoint);
+  assert.equal(missingEndpoint.values[AUTH_MODE_INDEX], "sign-up");
+  assert.equal(missingEndpoint.values[ERROR_INDEX], null);
+
   const unavailableDiscovery = createHarness({ [EMAIL_INDEX]: "user@example.com" });
   unavailableDiscovery.discoveryError = new Error("offline");
   await submitEmail(unavailableDiscovery);

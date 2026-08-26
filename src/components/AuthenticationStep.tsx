@@ -234,6 +234,12 @@ export default function AuthenticationStep({
 
     try {
       const data = await discoverEmailAuth(email, AUTH_URL);
+      if (!data) {
+        // No discovery endpoint on this auth server — default to sign-up; an
+        // existing email is still caught by the duplicate check at sign-up.
+        setAuthMode("sign-up");
+        return;
+      }
       if (data.sso?.available) {
         const discovery = {
           required: data.sso.required,

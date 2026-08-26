@@ -14,32 +14,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseEmailAuthDiscovery(value: unknown): EmailAuthDiscovery {
+  // Only `exists` is load-bearing (it routes between sign-in and sign-up), so
+  // only it is validated strictly. The sso block is advisory: a missing or
+  // malformed one falls back to the plain email flow instead of blocking auth.
   if (!isRecord(value) || typeof value.exists !== "boolean") {
     throw new Error(INVALID_DISCOVERY_RESPONSE);
   }
 
-  if (value.sso === undefined) {
+  const sso = value.sso;
+  if (!isRecord(sso) || sso.available !== true) {
     return { exists: value.exists };
   }
-
-  const sso = value.sso;
-  if (
-    !isRecord(sso) ||
-    typeof sso.available !== "boolean" ||
-    typeof sso.required !== "boolean" ||
-    (sso.domain !== undefined && typeof sso.domain !== "string")
-  ) {
-    throw new Error(INVALID_DISCOVERY_RESPONSE);
-  }
-
-  const domain = typeof sso.domain === "string" ? sso.domain : undefined;
 
   return {
     exists: value.exists,
     sso: {
-      available: sso.available,
-      required: sso.required,
-      ...(domain === undefined ? {} : { domain }),
+      available: true,
+      required: sso.required === true,
+      ...(typeof sso.domain === "string" ? { domain: sso.domain } : {}),
     },
   };
 }
@@ -47,12 +39,18 @@ function parseEmailAuthDiscovery(value: unknown): EmailAuthDiscovery {
 export async function discoverEmailAuth(
   email: string,
   authUrl: string
-): Promise<EmailAuthDiscovery> {
+): Promise<EmailAuthDiscovery | null> {
   const response = await fetch(`${authUrl}/api/check-user`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: email.trim() }),
   });
+
+  // A self-hosted auth server may not implement /api/check-user; report that
+  // as "discovery unavailable" so the caller can fall back instead of erroring.
+  if (response.status === 404) {
+    return null;
+  }
 
   if (!response.ok) {
     throw new Error(`Email account discovery failed with status ${response.status}`);

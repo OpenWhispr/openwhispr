@@ -45,18 +45,42 @@ test("email discovery accepts the legacy response without SSO metadata", async (
   });
 });
 
+test("email discovery treats the sso block as advisory", async (t) => {
+  const lenientCases = [
+    [
+      { exists: true, sso: { available: true } },
+      { exists: true, sso: { available: true, required: false } },
+    ],
+    [
+      { exists: true, sso: { available: true, required: "no", domain: 42 } },
+      { exists: true, sso: { available: true, required: false } },
+    ],
+    [{ exists: false, sso: { available: false } }, { exists: false }],
+    [{ exists: true, sso: null }, { exists: true }],
+  ];
+  installFetch(t, async () => new Response(JSON.stringify(lenientCases[0][0])));
+  for (const [payload, expected] of lenientCases) {
+    global.fetch = async () => new Response(JSON.stringify(payload));
+    assert.deepEqual(
+      await discoverEmailAuth("user@example.com", "https://auth.example.test"),
+      expected
+    );
+  }
+});
+
+test("email discovery reports a missing endpoint as unavailable", async (t) => {
+  installFetch(t, async () => new Response("not found", { status: 404 }));
+
+  assert.equal(await discoverEmailAuth("user@example.com", "https://auth.example.test"), null);
+});
+
 test("email discovery rejects failed and malformed responses", async (t) => {
   installFetch(t, async () => new Response("service unavailable", { status: 503 }));
   await assert.rejects(discoverEmailAuth("user@example.com", "https://auth.example.test"), {
     message: "Email account discovery failed with status 503",
   });
 
-  const invalidPayloads = [
-    {},
-    { exists: "yes" },
-    { exists: true, sso: null },
-    { exists: true, sso: { available: true, required: "no" } },
-  ];
+  const invalidPayloads = [{}, { exists: "yes" }];
   for (const payload of invalidPayloads) {
     global.fetch = async () => new Response(JSON.stringify(payload));
     await assert.rejects(discoverEmailAuth("user@example.com", "https://auth.example.test"), {
