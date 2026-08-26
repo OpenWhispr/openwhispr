@@ -36,20 +36,27 @@ function parseAttendees(event: CalendarEvent): CalendarAttendee[] {
   }
 }
 
+function formatTime(locale: string, value: string): string {
+  return new Date(value).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+}
+
 function formatTimeRange(locale: string, startTime: string, endTime: string): string {
-  const format = (value: string) =>
-    new Date(value).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
-  return `${format(startTime)} – ${format(endTime)}`;
+  return `${formatTime(locale, startTime)} – ${formatTime(locale, endTime)}`;
 }
 
 interface DayGroup {
   key: string;
   date: Date;
   isToday: boolean;
+  isTomorrow: boolean;
   items: CalendarEvent[];
 }
 
 function groupEventsByDay(events: CalendarEvent[], now: Date): DayGroup[] {
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowKey = tomorrow.toDateString();
+
   const groups: DayGroup[] = [];
   const byKey = new Map<string, DayGroup>();
   for (const event of events) {
@@ -58,7 +65,13 @@ function groupEventsByDay(events: CalendarEvent[], now: Date): DayGroup[] {
     const key = date.toDateString();
     let group = byKey.get(key);
     if (!group) {
-      group = { key, date, isToday: key === now.toDateString(), items: [] };
+      group = {
+        key,
+        date,
+        isToday: key === now.toDateString(),
+        isTomorrow: key === tomorrowKey,
+        items: [],
+      };
       byKey.set(key, group);
       groups.push(group);
     }
@@ -67,7 +80,13 @@ function groupEventsByDay(events: CalendarEvent[], now: Date): DayGroup[] {
   // Surface "today" even when it has nothing scheduled, so the list always
   // answers "what's next today?" at a glance.
   if (groups.length > 0 && !groups.some((g) => g.isToday)) {
-    groups.unshift({ key: now.toDateString(), date: now, isToday: true, items: [] });
+    groups.unshift({
+      key: now.toDateString(),
+      date: now,
+      isToday: true,
+      isTomorrow: false,
+      items: [],
+    });
   }
   return groups;
 }
@@ -96,7 +115,7 @@ function AttendeePopover({
       <PopoverTrigger asChild>
         <button
           aria-label={`${attendees.length} ${t("notes.participants.attendees")}`}
-          className="flex shrink-0 items-center -space-x-1.5 rounded-full pt-0.5 outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring/40"
+          className="flex items-center -space-x-1.5 self-start rounded-full outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring/40"
         >
           {attendees.slice(0, 3).map((a) => (
             <PersonAvatar
@@ -114,7 +133,7 @@ function AttendeePopover({
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 p-0">
+      <PopoverContent align="start" className="w-72 p-0">
         <div className="border-b border-border/50 px-3 py-2.5">
           <p className="text-xs font-medium leading-snug text-foreground">
             {event.summary || t("upcoming.untitledEvent")}
@@ -173,28 +192,11 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
   return (
     <div
       className={cn(
-        "group/event border-l-2 pl-2.5",
-        isNow ? "border-green-500/60" : "border-primary/25"
+        "group/event flex items-center gap-2.5 rounded-lg border bg-card/50 px-3 py-2.5 dark:bg-surface-2/60",
+        isNow ? "border-green-500/40" : "border-border/40 dark:border-border-subtle/60"
       )}
     >
-      <div className="flex items-start gap-2">
-        <p className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-foreground line-clamp-2">
-          {event.summary || t("upcoming.untitledEvent")}
-        </p>
-        {attendees.length > 1 ? (
-          <AttendeePopover
-            event={event}
-            attendees={attendees}
-            timeRange={timeRange}
-            joinUrl={joinUrl}
-          />
-        ) : event.attendees_count > 1 ? (
-          <span className="shrink-0 pt-0.5 text-[11px] tabular-nums text-muted-foreground/70">
-            +{event.attendees_count - 1}
-          </span>
-        ) : null}
-      </div>
-      <div className="mt-1 flex items-center justify-between gap-2">
+      <div className="flex w-[54px] shrink-0 flex-col">
         {isNow ? (
           <span className="flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
@@ -206,58 +208,87 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
             </span>
           </span>
         ) : (
-          <span className="text-[11px] tabular-nums text-muted-foreground">{timeRange}</span>
+          <>
+            <span className="text-xs font-semibold tabular-nums text-foreground">
+              {formatTime(i18n.language, event.start_time)}
+            </span>
+            <span className="text-[10px] tabular-nums text-muted-foreground">
+              {formatTime(i18n.language, event.end_time)}
+            </span>
+          </>
         )}
-        <Button
-          size="sm"
-          variant={isNow ? "default" : "ghost"}
-          onClick={startNotes}
-          className={cn(
-            "h-6 min-w-0 gap-1 px-2 text-[11px] font-medium",
-            !isNow &&
-              "text-muted-foreground opacity-0 transition-opacity duration-150 hover:text-foreground focus-visible:opacity-100 group-hover/event:opacity-100"
-          )}
-        >
-          {joinUrl ? (
-            <Video size={11} className="shrink-0" />
-          ) : (
-            <Mic size={11} className="shrink-0" />
-          )}
-          <span className="truncate">
-            {joinUrl ? t("upcoming.joinAndTakeNotes") : t("upcoming.takeNotes")}
-          </span>
-        </Button>
       </div>
+      <div className="w-px self-stretch bg-border" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p className="truncate text-[13px] font-medium leading-snug text-foreground">
+          {event.summary || t("upcoming.untitledEvent")}
+        </p>
+        {attendees.length > 1 ? (
+          <AttendeePopover
+            event={event}
+            attendees={attendees}
+            timeRange={timeRange}
+            joinUrl={joinUrl}
+          />
+        ) : event.attendees_count > 1 ? (
+          <span className="text-[11px] tabular-nums text-muted-foreground/70">
+            +{event.attendees_count - 1}
+          </span>
+        ) : null}
+      </div>
+      <Button
+        size="sm"
+        variant={isNow ? "default" : "ghost"}
+        onClick={startNotes}
+        className={cn(
+          "h-6 min-w-0 shrink-0 gap-1 px-2 text-[11px] font-medium",
+          !isNow &&
+            "text-muted-foreground opacity-0 transition-opacity duration-150 hover:text-foreground focus-visible:opacity-100 group-hover/event:opacity-100"
+        )}
+      >
+        {joinUrl ? (
+          <Video size={11} className="shrink-0" />
+        ) : (
+          <Mic size={11} className="shrink-0" />
+        )}
+        <span className="truncate">
+          {joinUrl ? t("upcoming.joinAndTakeNotes") : t("upcoming.takeNotes")}
+        </span>
+      </Button>
     </div>
   );
 }
 
-function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEvent) => boolean }) {
+function DaySection({
+  group,
+  isNowFn,
+}: {
+  group: DayGroup;
+  isNowFn: (e: CalendarEvent) => boolean;
+}) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
 
   return (
-    <div className="rounded-lg border border-border/40 bg-card/50 px-3 py-2.5 dark:border-border-subtle/60 dark:bg-surface-2/60">
-      <div className="flex items-center gap-2 pb-2">
-        <span className="text-[22px] font-semibold leading-none tabular-nums text-foreground">
-          {group.date.getDate()}
+    <div>
+      <div className="flex items-center gap-1 px-0.5 pb-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {group.isToday
+            ? t("calendar.today")
+            : group.isTomorrow
+              ? t("calendar.tomorrow")
+              : group.date.toLocaleDateString(locale, {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                })}
         </span>
-        <div className="flex flex-col justify-center">
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium leading-tight text-foreground">
-            {group.date.toLocaleDateString(locale, { month: "long" })}
-            {group.isToday && <span className="h-1 w-1 rounded-full bg-red-500" />}
-          </span>
-          <span className="text-[10px] leading-tight text-muted-foreground">
-            {group.date.toLocaleDateString(locale, { weekday: "short" })}
-          </span>
-        </div>
+        {group.isToday && <span className="h-1 w-1 rounded-full bg-red-500" />}
       </div>
       {group.items.length === 0 ? (
-        <div className="border-l-2 border-border/40 pl-2.5 text-xs text-muted-foreground/60">
-          {t("upcoming.noEventsToday")}
-        </div>
+        <p className="px-0.5 text-xs text-muted-foreground/60">{t("upcoming.noEventsToday")}</p>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-1.5">
           {group.items.map((event) => (
             <EventRow key={event.id} event={event} isNow={isNowFn(event)} />
           ))}
@@ -310,7 +341,12 @@ export default function UpcomingMeetings({
   };
 
   return (
-    <div className="w-64 sticky top-0 self-start max-h-screen overflow-y-auto">
+    // Single sticky owner for the sidebar. The scrollport sits below the
+    // control panel's h-10 titlebar, so the height cap is 100vh minus the
+    // titlebar (2.5rem), the top-4 offset, and a matching bottom inset
+    // (1rem each) — max-h-screen would put the bottom of the inner scroll
+    // area past the window edge, making the last items unreachable.
+    <div className="w-64 sticky top-4 max-h-[calc(100vh-4.5rem)] overflow-y-auto">
       {/* Header */}
       <div className="flex items-center gap-1.5 pb-2.5">
         <Calendar size={12} className="text-muted-foreground" />
@@ -373,9 +409,9 @@ export default function UpcomingMeetings({
 
       {/* Day cards */}
       {!isLoading && isConnected && groupedEvents.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-4">
           {groupedEvents.map((group) => (
-            <DayCard key={group.key} group={group} isNowFn={isNowFn} />
+            <DaySection key={group.key} group={group} isNowFn={isNowFn} />
           ))}
         </div>
       )}
