@@ -232,9 +232,9 @@
 }
 
 /* The Signal glow: a comet orbiting a breathing ambient halo around the
-   pill. Plain dictation lights it while processing; Agent Mode carries it
-   through listening and thinking in the agent's purple. */
-.voice-pill-beam-anchor {
+   pill. Both identities light it for the thinking state only — brand blue
+   for dictation processing, the agent's purple for agent thinking. */
+.voice-pill-glow-anchor {
   position: relative;
   display: inline-flex;
   border-radius: 9999px;
@@ -281,10 +281,9 @@
   opacity: 1;
 }
 
-/* Breathing ambient halo. The pill docks 4px from the native window's edges
-   and the transparent overlay window must stay minimal (it captures clicks
-   across its whole rect), so the halo is a tight corona: anything wider gets
-   hard-clipped at the window bounds on the docked sides. */
+/* Breathing ambient halo, sized to stay inside the pill's 12px dock inset
+   (see WINDOW_SIZES in windowConfig.js) so it never hard-clips at the native
+   window bounds. */
 .processing-signal-glow::before {
   content: "";
   position: absolute;

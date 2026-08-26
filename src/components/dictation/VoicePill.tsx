@@ -197,7 +197,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   );
 
   return (
-    <span className="voice-pill-beam-anchor">
+    <span className="voice-pill-glow-anchor">
       <span
         aria-hidden="true"
         className="processing-signal-glow"

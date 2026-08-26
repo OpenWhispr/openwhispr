@@ -32,7 +32,7 @@ const pillFootprints = async () => {
 
 const renderPill = async (state, expanded, horizontalDirection = "right", overrides = {}) => {
   const { VoicePill } = await import("../../src/components/dictation/VoicePill.tsx");
-  const markup = renderStatic(VoicePill, {
+  return renderStatic(VoicePill, {
     variant: "floating",
     state,
     expanded,
@@ -40,15 +40,6 @@ const renderPill = async (state, expanded, horizontalDirection = "right", overri
     getAudioLevel: () => 0,
     ...overrides,
   });
-  // BorderBeam may emit <style> blocks anywhere in its output; strip them all
-  // so assertions target only the rendered DOM structure. Re-run until stable:
-  // a removal can splice the surrounding text into a new <style ...> match.
-  let stripped = markup;
-  for (let previous = ""; previous !== stripped;) {
-    previous = stripped;
-    stripped = stripped.replace(/<style[^>]*>[\s\S]*?<\/style>/g, "");
-  }
-  return stripped;
 };
 
 test("thinking and recording keep the same persistent glow and pill roots", async () => {
@@ -56,7 +47,7 @@ test("thinking and recording keep the same persistent glow and pill roots", asyn
   const recording = await renderPill("recording", true);
 
   for (const markup of [thinking, recording]) {
-    assert.match(markup, /^<span class="voice-pill-beam-anchor"/);
+    assert.match(markup, /^<span class="voice-pill-glow-anchor"/);
     assert.match(markup, /class="processing-signal-glow"/);
     assert.match(markup, /voice-pill-control/);
   }
@@ -76,7 +67,10 @@ test("one Signal glow serves both identities: blue processing, purple agent", as
 
   assert.match(styles, /\.processing-signal-glow\s*\{/);
   assert.match(styles, /:root:not\(\.dark\) \.processing-signal-glow\s*\{/);
-  assert.match(agentThinking, /class="processing-signal-glow" data-active="true" data-agent="true"/);
+  assert.match(
+    agentThinking,
+    /class="processing-signal-glow" data-active="true" data-agent="true"/
+  );
   assert.doesNotMatch(agentListening, /data-active/);
 });
 
@@ -276,7 +270,10 @@ test("Agent thinking keeps the purple glow on the same persistent pill root", as
     agentMode: true,
   });
 
-  assert.match(agentThinking, /class="processing-signal-glow" data-active="true" data-agent="true"/);
+  assert.match(
+    agentThinking,
+    /class="processing-signal-glow" data-active="true" data-agent="true"/
+  );
   assert.match(agentThinking, /<div [^>]*data-agent-mode="true"/);
   assert.match(agentThinking, /data-agent-beam-active="true"/);
 });
