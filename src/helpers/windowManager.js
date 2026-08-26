@@ -800,15 +800,30 @@ class WindowManager {
     return this._isOnboardingInputAllowed("meeting");
   }
 
+  _isAgentDictationPillAvailable() {
+    const pillWindow = this.agentDictationPillWindow;
+    return Boolean(pillWindow && !pillWindow.isDestroyed() && this._agentDictationPillReady);
+  }
+
+  _shouldBlockDictationInput(inputKind) {
+    const blocked = shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: this._assistantPanelOpen,
+      assistantPanelBusy: this._assistantPanelBusy,
+      inputKind,
+      companionAvailable: this._isAgentDictationPillAvailable(),
+    });
+    // A dictation press that lost to a missing companion re-kicks its load
+    // (a companion mid-load is left alone), so the surface can come back and
+    // the next press can land.
+    if (blocked && this._assistantPanelOpen && inputKind === DICTATION_INPUT_KIND.DICTATION) {
+      this.showAgentDictationPill();
+    }
+    return blocked;
+  }
+
   _sendDictationToggle(channel, inputKind) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
-    if (
-      shouldBlockDictationWhilePanelOpen({
-        assistantPanelOpen: this._assistantPanelOpen,
-        assistantPanelBusy: this._assistantPanelBusy,
-        inputKind,
-      })
-    ) {
+    if (this._shouldBlockDictationInput(inputKind)) {
       return;
     }
     if (this.hotkeyManager.isInListeningMode()) {
@@ -914,13 +929,7 @@ class WindowManager {
 
   sendStartDictation() {
     if (!this._isOnboardingInputAllowed("dictation")) return;
-    if (
-      shouldBlockDictationWhilePanelOpen({
-        assistantPanelOpen: this._assistantPanelOpen,
-        assistantPanelBusy: this._assistantPanelBusy,
-        inputKind: "dictation",
-      })
-    ) {
+    if (this._shouldBlockDictationInput("dictation")) {
       return;
     }
     if (this.hotkeyManager.isInListeningMode()) {
@@ -948,13 +957,7 @@ class WindowManager {
 
   sendPrepareDictation({ inputKind = "dictation" } = {}) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
-    if (
-      shouldBlockDictationWhilePanelOpen({
-        assistantPanelOpen: this._assistantPanelOpen,
-        assistantPanelBusy: this._assistantPanelBusy,
-        inputKind,
-      })
-    ) {
+    if (this._shouldBlockDictationInput(inputKind)) {
       return;
     }
     if (this.hotkeyManager.isInListeningMode()) {

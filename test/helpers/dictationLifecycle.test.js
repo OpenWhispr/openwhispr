@@ -53,6 +53,31 @@ test("regular dictation remains available while the assistant panel is open", ()
       assistantPanelOpen: true,
       assistantPanelBusy: true,
       inputKind: "dictation",
+      companionAvailable: true,
+    }),
+    false
+  );
+});
+
+test("regular dictation is blocked while the open panel lacks a live companion", () => {
+  // The open panel hands plain dictation's visuals to the companion pill; if
+  // that window is still loading or its load failed, the recording would be
+  // invisible, so it must not start.
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: true,
+      inputKind: "dictation",
+      companionAvailable: false,
+    }),
+    true
+  );
+  // With the panel closed the main pill owns the visuals; companion
+  // availability is irrelevant.
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: false,
+      inputKind: "dictation",
+      companionAvailable: false,
     }),
     false
   );

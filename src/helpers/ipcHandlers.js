@@ -4980,14 +4980,25 @@ class IPCHandlers {
       return pillWindow && !pillWindow.isDestroyed() && event.sender === pillWindow.webContents;
     };
 
+    // The pill disables its own controls when an assistant or translation
+    // capture owns the lifecycle, but that state travels by IPC — a click can
+    // race it. Re-check here so a stale pill can never toggle or cancel a
+    // recording it does not own.
+    const isAgentDictationPillInteractive = () =>
+      this.windowManager.getAgentDictationPillState().interactive;
+
     ipcMain.handle("toggle-agent-panel-dictation", (event) => {
-      if (!isAgentDictationPill(event)) return { success: false };
+      if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
+        return { success: false };
+      }
       this.windowManager.sendToggleDictation();
       return { success: true };
     });
 
     ipcMain.handle("cancel-agent-panel-dictation", (event) => {
-      if (!isAgentDictationPill(event)) return { success: false };
+      if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
+        return { success: false };
+      }
       this.windowManager.sendCancelActiveDictation();
       return { success: true };
     });

@@ -246,12 +246,30 @@ test("a busy Assistant blocks its voice hotkey before native side effects", () =
   assert.equal(prepareCount, 0);
   assert.deepEqual(rendererChannels, []);
 
+  // The open panel alone is not enough: until the companion window is live,
+  // a recording would still be invisible, so the press only re-kicks its load.
   manager._assistantPanelOpen = true;
+  let pillShowCalls = 0;
+  manager.showAgentDictationPill = () => {
+    pillShowCalls += 1;
+  };
+  manager.sendToggleDictation();
+
+  assert.equal(showCount, 0);
+  assert.deepEqual(rendererChannels, []);
+  assert.equal(pillShowCalls, 1);
+
+  manager._agentDictationPillReady = true;
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    webContents: { send: () => undefined },
+  };
   manager.sendToggleDictation();
 
   assert.equal(showCount, 1);
   assert.equal(prepareCount, 1);
   assert.deepEqual(rendererChannels, ["toggle-dictation"]);
+  assert.equal(pillShowCalls, 1);
 
   manager._assistantPanelBusy = false;
   manager.sendToggleVoiceAgent();
@@ -289,8 +307,26 @@ test("push-to-talk dictation follows the companion pill's availability", () => {
   assert.equal(showCount, 0);
   assert.deepEqual(rendererChannels, []);
 
-  // The open panel brings the companion pill, so PTT dictation flows again.
+  // An open panel whose companion window is not live yet keeps PTT dictation
+  // blocked; each press re-kicks the companion load.
   manager._assistantPanelOpen = true;
+  let pillShowCalls = 0;
+  manager.showAgentDictationPill = () => {
+    pillShowCalls += 1;
+  };
+  manager.sendPrepareDictation();
+  manager.sendStartDictation();
+
+  assert.equal(showCount, 0);
+  assert.deepEqual(rendererChannels, []);
+  assert.equal(pillShowCalls, 2);
+
+  // With a live companion pill, PTT dictation flows again.
+  manager._agentDictationPillReady = true;
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    webContents: { send: () => undefined },
+  };
   manager.sendPrepareDictation();
   manager.sendStartDictation();
 

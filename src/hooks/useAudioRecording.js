@@ -728,12 +728,12 @@ export const useAudioRecording = (toast, options = {}) => {
     return false;
   }, []);
 
-  const cancelProcessing = () => {
+  const cancelProcessing = useCallback(() => {
     if (audioManagerRef.current) {
       return audioManagerRef.current.cancelProcessing();
     }
     return false;
-  };
+  }, []);
 
   const getAudioLevel = useCallback(
     () => audioManagerRef.current?.getRecordingAudioLevel() ?? null,
