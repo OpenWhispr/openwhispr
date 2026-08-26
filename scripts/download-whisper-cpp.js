@@ -158,6 +158,17 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
   }
 }
 
+async function downloadAllBinaries(release, isForce, download = downloadBinary) {
+  let allSucceeded = true;
+
+  for (const platformArch of Object.keys(BINARIES)) {
+    const succeeded = await download(platformArch, BINARIES[platformArch], release, isForce);
+    if (!succeeded) allSucceeded = false;
+  }
+
+  return allSucceeded;
+}
+
 async function main() {
   console.log(`\n[whisper-server] Using pinned version: ${WHISPER_CPP_TAG}`);
   const release = await getRelease();
@@ -200,9 +211,8 @@ async function main() {
     }
   } else {
     console.log("Downloading binaries for all platforms:");
-    for (const platformArch of Object.keys(BINARIES)) {
-      await downloadBinary(platformArch, BINARIES[platformArch], release, args.isForce);
-    }
+    const allSucceeded = await downloadAllBinaries(release, args.isForce);
+    if (!allSucceeded) process.exitCode = 1;
   }
 
   console.log("\n---");
@@ -224,4 +234,4 @@ if (require.main === module) {
   main().catch(console.error);
 }
 
-module.exports = { BINARIES, WHISPER_CPP_TAG, isCompleteInstall };
+module.exports = { BINARIES, WHISPER_CPP_TAG, downloadAllBinaries, isCompleteInstall };

@@ -428,6 +428,21 @@ test("legacy migration: lib-free pack is moved, lib-carrying packs are cleared f
   assert.equal(vulkan.isDownloaded(), true);
 });
 
+test("legacy migration: win32 Vulkan 0.0.9 is migrated without forcing a re-download", () => {
+  const { migrateLegacyBinDir } = GpuBinaryManager;
+  const manager = new WhisperVulkanManager();
+  const windowsAsset = manager.config.assets["win32-x64"];
+  manager._getAssetConfig = () => windowsAsset;
+
+  const binRoot = path.join(userDataDir, "bin");
+  fs.mkdirSync(binRoot, { recursive: true });
+  fs.writeFileSync(path.join(binRoot, windowsAsset.outputName), "binary");
+
+  assert.deepEqual(migrateLegacyBinDir([manager]), []);
+  assert.equal(manager.isDownloaded(), true);
+  assert.ok(fs.existsSync(path.join(manager.binDir, windowsAsset.outputName)));
+});
+
 test("orphan detection: enabled flag with no pack on disk is reported for the notice", () => {
   const { detectOrphanedGpuPacks } = GpuBinaryManager;
   const packs = [

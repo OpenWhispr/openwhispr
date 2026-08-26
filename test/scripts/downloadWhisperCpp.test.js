@@ -12,6 +12,7 @@ const {
 const {
   BINARIES,
   WHISPER_CPP_TAG,
+  downloadAllBinaries,
   isCompleteInstall,
 } = require("../../scripts/download-whisper-cpp");
 
@@ -32,6 +33,17 @@ test("win32 whisper-server config extracts DLL companions from the release zip",
 test("whisper-cpp pin is a release whose win32 zips bundle the MSVC runtime DLLs", () => {
   // 0.0.8 and 0.0.9 ship a bare exe; 0.0.10 is the first tag with the DLLs.
   assert.equal(WHISPER_CPP_TAG, "0.0.10");
+});
+
+test("all-platform mode reports failure after attempting every configured download", async () => {
+  const attempts = [];
+  const download = async (platformArch) => {
+    attempts.push(platformArch);
+    return platformArch !== "win32-x64";
+  };
+
+  assert.equal(await downloadAllBinaries({ assets: [] }, false, download), false);
+  assert.deepEqual(attempts, Object.keys(BINARIES));
 });
 
 test("cached win32 install is complete only for the current tag with every required DLL", () => {

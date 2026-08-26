@@ -331,8 +331,7 @@ function matchesPattern(filename, pattern) {
 }
 
 function findLibrariesInDir(dir, pattern, options = {}, currentDepth = 0) {
-  const normalizedOptions = typeof options === "number" ? { maxDepth: options } : options;
-  const { maxDepth = 5, ignoreReadErrors = false } = normalizedOptions;
+  const { maxDepth = 5, ignoreReadErrors = false } = options;
   if (currentDepth >= maxDepth) return [];
 
   const results = [];
@@ -348,7 +347,7 @@ function findLibrariesInDir(dir, pattern, options = {}, currentDepth = 0) {
     const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      results.push(...findLibrariesInDir(fullPath, pattern, normalizedOptions, currentDepth + 1));
+      results.push(...findLibrariesInDir(fullPath, pattern, options, currentDepth + 1));
     } else if (matchesPattern(entry.name, pattern)) {
       results.push(fullPath);
     }
