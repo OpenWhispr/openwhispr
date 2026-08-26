@@ -25,6 +25,31 @@
         "description": "無法重建筆記檔案。請確認功能已啟用，且資料夾可寫入。"
       }
     },
+    "granolaImport": {
+      "title": "從 Granola 匯入",
+      "description": "從 Granola 的 CSV 匯出檔案匯入會議筆記",
+      "howTo": "在 Granola 中:Settings → Profile → Export historical data → Generate CSV。匯出檔案會透過電子郵件寄送,通常在幾小時內送達。",
+      "chooseFile": "選擇 CSV 檔案",
+      "preview": {
+        "title": "從 Granola 匯入",
+        "summary": "共找到 {{total}} 則筆記:{{newCount}} 則新筆記,{{duplicateCount}} 則已匯入",
+        "warnings": "{{warningCount}} 列有問題(已略過或匯入時缺少日期)",
+        "confirm": "匯入 {{newCount}} 則筆記",
+        "nothingNew": "此檔案中的筆記皆已匯入。"
+      },
+      "done": {
+        "title": "匯入完成",
+        "summary": "已將 {{imported}} 則筆記匯入「Imported」資料夾,略過 {{skipped}} 則重複項"
+      },
+      "error": {
+        "title": "匯入失敗",
+        "EMPTY_FILE": "檔案是空的。",
+        "HEADERS_UNRECOGNIZED": "這看起來不像 Granola 的 CSV 匯出檔案。",
+        "NO_DATA_ROWS": "此檔案中找不到筆記。",
+        "FILE_TOO_LARGE": "此檔案太大,無法匯入。",
+        "generic": "讀取檔案時發生錯誤。"
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "辨識並標記發言者",
@@ -186,6 +211,7 @@
         "accessibilityDescription": "將文字貼到目前的 App。",
         "systemAudioTitle": "系統音訊",
         "systemAudioDescription": "擷取其他 App 的音訊。",
+        "screenContextDescription": "讓語音助理查看目前螢幕，絕不儲存。",
         "enable": "啟用",
         "enabled": "已啟用"
       },
@@ -533,6 +559,17 @@
         "step2": "開啟 Corti 控制台並建立 API 憑證",
         "step3": "在下方貼上 Client ID 和 Secret"
       }
+    },
+    "requiredModels": {
+      "title": "安裝必要的模型",
+      "description": "{{organization}}要求在此裝置上安裝這些模型後才能開始聽寫。",
+      "genericOrganization": "您的組織",
+      "installed": "已安裝",
+      "queued": "排隊中",
+      "failed": {
+        "title": "有一項下載未完成",
+        "description": "請檢查網路連線與磁碟剩餘空間，然後重試。如果仍然失敗，請聯絡您的管理員。"
+      }
     }
   },
   "streaming": {
@@ -656,7 +693,12 @@
       "enableButton": "啟用 GPU",
       "dismissButton": "暫時不要"
     },
-    "backToNotes": "返回筆記"
+    "backToNotes": "返回筆記",
+    "requiredModelsByOrg": {
+      "title": "缺少必要的模型",
+      "description": "您的組織要求在此裝置上安裝這些模型：{{models}}。",
+      "download": "下載"
+    }
   },
   "reasoning": {
     "mode": {
@@ -984,7 +1026,7 @@
     "emailStep": {
       "checkingEmail": "正在檢查您的電子郵件...",
       "continueWithEmail": "使用電子郵件繼續",
-      "continueWithoutAccount": "無需帳號使用 OpenWhispr",
+      "continueWithoutAccount": "無需帳號，繼續使用",
       "emailLabel": "電子郵件",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "使用其他電子郵件"
@@ -1555,7 +1597,9 @@
             "SSO 與合規",
             "專屬支援"
           ],
-          "cta": "聯繫銷售"
+          "cta": "聯繫銷售",
+          "upgradeCta": "升級至 Enterprise",
+          "askOwner": "請 {{name}} 升級您的工作區。"
         },
         "currentPlan": "目前方案",
         "coveredByWorkspace": "已包含在您的工作區方案中",
@@ -2377,7 +2421,40 @@
             "admin": "工作區管理員"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise 主控台",
+        "description": "在網頁上管理 SSO、政策與成員",
+        "open": "開啟主控台"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "升級至 Enterprise",
+      "description": "選擇工作區、席位數量與計費週期。付款將在 Stripe Checkout 中完成。",
+      "allSubscribed": "您擁有的工作區已是 Enterprise 方案或無法在此變更。如需變更方案，請聯絡銷售團隊。",
+      "workspaceLabel": "工作區",
+      "seatsLabel": "席位",
+      "seatsHint_one": "目前已使用 {{count}} 個席位",
+      "seatsHint_other": "目前已使用 {{count}} 個席位",
+      "intervalLabel": "計費週期",
+      "interval": {
+        "monthly": "按月",
+        "annual": "按年"
+      },
+      "proratedCharge": "按比例費用",
+      "prorationNote": "按比例計算的差額將計入下一張帳單。",
+      "errors": {
+        "previewFailed": "無法載入升級預覽。",
+        "alreadyEnterprise": "該工作區已在 Enterprise 方案中。",
+        "subscriptionInactive": "該工作區的訂閱未啟用。請更新帳單資訊後重試。",
+        "priceNotConfigured": "Enterprise 價格暫不可用。請聯絡銷售。"
+      },
+      "priceNote": "最終價格將在結帳時顯示。",
+      "continueCta": "繼續結帳",
+      "upgradeDescription": "將 {{workspace}} 從{{plan}}升級至 Enterprise。席位與計費週期維持不變，變更立即生效。",
+      "upgradeCta": "立即升級",
+      "upgradedTitle": "已升級至 Enterprise",
+      "upgradedDescription": "{{workspace}} 現已升級至 Enterprise。"
     }
   },
   "models": {
@@ -2858,7 +2935,11 @@
       "description": "轉錄與結構化摘要",
       "back": "返回",
       "restrictedByOrg": "會議轉錄已被您的組織限制。",
-      "autoEnded": "會議結束後，錄音已自動停止。"
+      "autoEnded": "會議結束後，錄音已自動停止。",
+      "systemAudioSilent": {
+        "title": "尚未偵測到會議音訊",
+        "description": "到目前為止，只有您的麥克風收到聲音。正在進行視訊通話？請檢查會議音訊是否正在此電腦上播放且未被靜音。正在進行現場錄音？您可以忽略此提示——您的麥克風會收錄房間內的聲音。"
+      }
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",
@@ -3285,10 +3366,12 @@
       "copy_to_clipboardName": "複製到剪貼簿",
       "web_searchName": "網頁搜尋",
       "get_calendar_eventsName": "取得行事曆事件",
+      "get_calendar_availabilityName": "查看可用時段",
       "search_notesStatus": "正在搜尋筆記...",
       "web_searchStatus": "正在搜尋網頁...",
       "copy_to_clipboardStatus": "正在複製到剪貼簿...",
       "get_calendar_eventsStatus": "正在查看行事曆...",
+      "get_calendar_availabilityStatus": "正在查看可用時段...",
       "get_noteStatus": "正在讀取筆記...",
       "create_noteStatus": "正在建立筆記...",
       "update_noteStatus": "正在更新筆記...",

@@ -168,7 +168,6 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
   if (!isRecording) {
     return {
       activeState: null,
-      beamActive: null,
       collapseToLogo: false,
       compactPill: false,
       waveformVisible: true,
@@ -182,7 +181,6 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
       // waveform can sample audio while hidden and its reveal changes opacity
       // only; it never remounts or changes the pill's layout.
       activeState: "recording",
-      beamActive: true,
       collapseToLogo: true,
       compactPill: false,
       waveformVisible: false,
@@ -195,7 +193,6 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
     // reveal, so the presentation must not change between them.
     return {
       activeState: "recording",
-      beamActive: false,
       collapseToLogo: false,
       compactPill: true,
       waveformVisible: false,
@@ -204,7 +201,6 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
 
   return {
     activeState: "recording",
-    beamActive: false,
     collapseToLogo: false,
     compactPill: true,
     waveformVisible: true,

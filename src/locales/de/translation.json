@@ -25,6 +25,31 @@
         "description": "Die Notizdateien konnten nicht neu erstellt werden. Stellen Sie sicher, dass die Funktion aktiviert ist und der Ordner beschreibbar ist."
       }
     },
+    "granolaImport": {
+      "title": "Aus Granola importieren",
+      "description": "Meeting-Notizen aus einem Granola-CSV-Export importieren",
+      "howTo": "In Granola: Settings → Profile → Export historical data → Generate CSV. Der Export wird per E-Mail zugestellt, in der Regel innerhalb weniger Stunden.",
+      "chooseFile": "CSV-Datei auswählen",
+      "preview": {
+        "title": "Aus Granola importieren",
+        "summary": "{{total}} Notizen gefunden: {{newCount}} neu, {{duplicateCount}} bereits importiert",
+        "warnings": "{{warningCount}} Zeilen haben Probleme (übersprungen oder ohne Datum importiert)",
+        "confirm": "{{newCount}} Notizen importieren",
+        "nothingNew": "Alle Notizen in dieser Datei wurden bereits importiert."
+      },
+      "done": {
+        "title": "Import abgeschlossen",
+        "summary": "{{imported}} Notizen in den Ordner „Imported“ importiert, {{skipped}} Duplikate übersprungen"
+      },
+      "error": {
+        "title": "Import fehlgeschlagen",
+        "EMPTY_FILE": "Die Datei ist leer.",
+        "HEADERS_UNRECOGNIZED": "Das sieht nicht wie ein Granola-CSV-Export aus.",
+        "NO_DATA_ROWS": "In dieser Datei wurden keine Notizen gefunden.",
+        "FILE_TOO_LARGE": "Diese Datei ist zu groß zum Importieren.",
+        "generic": "Beim Lesen der Datei ist ein Fehler aufgetreten."
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "Sprecher erkennen und beschriften",
@@ -186,6 +211,7 @@
         "accessibilityDescription": "Fügt Text in deine aktive App ein.",
         "systemAudioTitle": "Systemaudio",
         "systemAudioDescription": "Nimmt Audio aus anderen Apps auf.",
+        "screenContextDescription": "Lässt deinen Sprachassistenten deinen Bildschirm sehen. Wird nie gespeichert.",
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },
@@ -533,6 +559,17 @@
         "step2": "Öffne die Corti-Konsole und erstelle API-Zugangsdaten",
         "step3": "Füge Client-ID und Secret unten ein"
       }
+    },
+    "requiredModels": {
+      "title": "Erforderliche Modelle installieren",
+      "description": "{{organization}} erfordert diese Modelle auf diesem Gerät, bevor Sie mit dem Diktieren beginnen können.",
+      "genericOrganization": "Ihre Organisation",
+      "installed": "Installiert",
+      "queued": "In Warteschlange",
+      "failed": {
+        "title": "Ein Download wurde nicht abgeschlossen",
+        "description": "Prüfen Sie Ihre Verbindung und den freien Speicherplatz und versuchen Sie es erneut. Wenn der Fehler weiterhin auftritt, wenden Sie sich an Ihren Administrator."
+      }
     }
   },
   "streaming": {
@@ -656,7 +693,12 @@
       "enableButton": "GPU aktivieren",
       "dismissButton": "Nicht jetzt"
     },
-    "backToNotes": "Zurück zu Notizen"
+    "backToNotes": "Zurück zu Notizen",
+    "requiredModelsByOrg": {
+      "title": "Erforderliche Modelle fehlen",
+      "description": "Ihre Organisation erfordert diese Modelle auf diesem Gerät: {{models}}.",
+      "download": "Herunterladen"
+    }
   },
   "reasoning": {
     "mode": {
@@ -984,7 +1026,7 @@
     "emailStep": {
       "checkingEmail": "E-Mail-Adresse wird überprüft...",
       "continueWithEmail": "Weiter mit E-Mail",
-      "continueWithoutAccount": "OpenWhispr ohne Konto nutzen",
+      "continueWithoutAccount": "Ohne Konto fortfahren",
       "emailLabel": "E-Mail",
       "emailPlaceholder": "sie@beispiel.de",
       "useDifferentEmail": "Andere E-Mail-Adresse verwenden"
@@ -1676,6 +1718,11 @@
             "admin": "Workspace-Administrator"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise-Konsole",
+        "description": "SSO, Richtlinien und Mitglieder im Web verwalten",
+        "open": "Konsole öffnen"
       }
     },
     "unifiedBilling": {
@@ -1820,7 +1867,9 @@
             "SSO & Compliance",
             "Dedizierter Support"
           ],
-          "cta": "Vertrieb kontaktieren"
+          "cta": "Vertrieb kontaktieren",
+          "upgradeCta": "Auf Enterprise upgraden",
+          "askOwner": "Bitte {{name}}, euren Workspace zu upgraden."
         },
         "currentPlan": "Aktueller Tarif",
         "coveredByWorkspace": "In Ihrem Workspace-Tarif enthalten",
@@ -2467,6 +2516,34 @@
       "endpointUrl": "Endpunkt-URL",
       "serverUrl": "Server-URL",
       "apiKeyOptional": "API-Schlüssel (optional)"
+    },
+    "enterpriseCheckout": {
+      "title": "Auf Enterprise upgraden",
+      "description": "Workspace, Plätze und Abrechnungszeitraum wählen. Die Zahlung erfolgt im Stripe-Checkout.",
+      "allSubscribed": "Die Workspaces, die dir gehören, sind bereits auf Enterprise oder können hier nicht geändert werden. Für Plan-Änderungen kontaktiere den Vertrieb.",
+      "workspaceLabel": "Workspace",
+      "seatsLabel": "Plätze",
+      "seatsHint_one": "{{count}} Platz derzeit belegt",
+      "seatsHint_other": "{{count}} Plätze derzeit belegt",
+      "intervalLabel": "Abrechnungszeitraum",
+      "interval": {
+        "monthly": "Monatlich",
+        "annual": "Jährlich"
+      },
+      "proratedCharge": "Anteiliger Betrag",
+      "prorationNote": "Die anteilige Differenz wird der nächsten Rechnung hinzugefügt.",
+      "errors": {
+        "previewFailed": "Upgrade-Vorschau konnte nicht geladen werden.",
+        "alreadyEnterprise": "Dieser Workspace ist bereits auf Enterprise.",
+        "subscriptionInactive": "Das Abonnement dieses Workspace ist nicht aktiv. Zahlungsdaten aktualisieren und erneut versuchen.",
+        "priceNotConfigured": "Enterprise-Preise sind derzeit nicht verfügbar. Bitte den Vertrieb kontaktieren."
+      },
+      "priceNote": "Der endgültige Preis wird beim Checkout angezeigt.",
+      "continueCta": "Weiter zum Checkout",
+      "upgradeDescription": "Upgrade von {{workspace}} von {{plan}} auf Enterprise. Plätze und Abrechnungszeitraum bleiben erhalten; die Änderung gilt sofort.",
+      "upgradeCta": "Jetzt upgraden",
+      "upgradedTitle": "Upgrade auf Enterprise abgeschlossen",
+      "upgradedDescription": "{{workspace}} ist jetzt auf Enterprise."
     }
   },
   "models": {
@@ -3069,7 +3146,11 @@
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "back": "Zurück",
       "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt.",
-      "autoEnded": "Die Aufnahme wurde nach dem Ende des Meetings automatisch beendet."
+      "autoEnded": "Die Aufnahme wurde nach dem Ende des Meetings automatisch beendet.",
+      "systemAudioSilent": {
+        "title": "Noch kein Meeting-Ton erkannt",
+        "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
+      }
     },
     "meetingPill": {
       "returnToNote": "Zurück zur Aufnahme",
@@ -3450,10 +3531,12 @@
       "copy_to_clipboardName": "In die Zwischenablage kopieren",
       "web_searchName": "Websuche",
       "get_calendar_eventsName": "Kalendertermine abrufen",
+      "get_calendar_availabilityName": "Verfügbarkeit prüfen",
       "search_notesStatus": "Notizen werden durchsucht...",
       "web_searchStatus": "Websuche...",
       "copy_to_clipboardStatus": "In Zwischenablage kopieren...",
       "get_calendar_eventsStatus": "Kalender wird geprüft...",
+      "get_calendar_availabilityStatus": "Verfügbarkeit wird geprüft...",
       "get_noteStatus": "Notiz wird gelesen...",
       "create_noteStatus": "Notiz wird erstellt...",
       "update_noteStatus": "Notiz wird aktualisiert...",

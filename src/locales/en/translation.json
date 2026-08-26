@@ -25,6 +25,31 @@
         "description": "Could not rebuild note files. Make sure the feature is enabled and the folder is writable."
       }
     },
+    "granolaImport": {
+      "title": "Import from Granola",
+      "description": "Import your meeting notes from a Granola CSV export",
+      "howTo": "In Granola: Settings → Profile → Export historical data → Generate CSV. The export is emailed to you, typically within a few hours.",
+      "chooseFile": "Choose CSV file",
+      "preview": {
+        "title": "Import from Granola",
+        "summary": "Found {{total}} notes: {{newCount}} new, {{duplicateCount}} already imported",
+        "warnings": "{{warningCount}} rows have issues (skipped or imported without a date)",
+        "confirm": "Import {{newCount}} notes",
+        "nothingNew": "All notes in this file have already been imported."
+      },
+      "done": {
+        "title": "Import complete",
+        "summary": "Imported {{imported}} notes into the \"Imported\" folder, skipped {{skipped}} duplicates"
+      },
+      "error": {
+        "title": "Import failed",
+        "EMPTY_FILE": "The file is empty.",
+        "HEADERS_UNRECOGNIZED": "This doesn't look like a Granola CSV export.",
+        "NO_DATA_ROWS": "No notes were found in this file.",
+        "FILE_TOO_LARGE": "This file is too large to import.",
+        "generic": "Something went wrong reading the file."
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "Identify and label speakers",
@@ -186,6 +211,7 @@
         "accessibilityDescription": "Pastes text into your active app.",
         "systemAudioTitle": "System Audio",
         "systemAudioDescription": "Captures audio from other apps.",
+        "screenContextDescription": "Lets your voice assistant see your screen. Never stored.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -533,6 +559,17 @@
         "step2": "Open the Corti console and create API credentials",
         "step3": "Paste your Client ID and Secret below"
       }
+    },
+    "requiredModels": {
+      "title": "Install required models",
+      "description": "{{organization}} requires these models on this device before you can start dictating.",
+      "genericOrganization": "Your organization",
+      "installed": "Installed",
+      "queued": "Queued",
+      "failed": {
+        "title": "A download didn't finish",
+        "description": "Check your connection and free disk space, then retry. If it keeps failing, contact your administrator."
+      }
     }
   },
   "streaming": {
@@ -656,7 +693,12 @@
       "enableButton": "Enable GPU",
       "dismissButton": "Not now"
     },
-    "backToNotes": "Back to notes"
+    "backToNotes": "Back to notes",
+    "requiredModelsByOrg": {
+      "title": "Required models missing",
+      "description": "Your organization requires these models on this device: {{models}}.",
+      "download": "Download"
+    }
   },
   "reasoning": {
     "mode": {
@@ -984,7 +1026,7 @@
     "emailStep": {
       "checkingEmail": "Checking your email...",
       "continueWithEmail": "Continue with email",
-      "continueWithoutAccount": "Use OpenWhispr without an account",
+      "continueWithoutAccount": "Continue without an account",
       "emailLabel": "Email",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "Use a different email"
@@ -1676,6 +1718,11 @@
             "admin": "Workspace admin"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise console",
+        "description": "Manage SSO, policies, and members on the web",
+        "open": "Open console"
       }
     },
     "unifiedBilling": {
@@ -1820,7 +1867,9 @@
             "SSO & compliance",
             "Dedicated support"
           ],
-          "cta": "Contact Sales"
+          "cta": "Contact Sales",
+          "upgradeCta": "Upgrade to Enterprise",
+          "askOwner": "Ask {{name}} to upgrade your workspace."
         },
         "currentPlan": "Current plan",
         "coveredByWorkspace": "Included with your workspace plan",
@@ -2467,6 +2516,34 @@
       "endpointUrl": "Endpoint URL",
       "serverUrl": "Server URL",
       "apiKeyOptional": "API Key (optional)"
+    },
+    "enterpriseCheckout": {
+      "title": "Upgrade to Enterprise",
+      "description": "Choose a workspace, seats, and billing cycle. Payment is completed in Stripe Checkout.",
+      "allSubscribed": "The workspaces you own are already on Enterprise or can't be changed here. To make plan changes, contact sales.",
+      "workspaceLabel": "Workspace",
+      "seatsLabel": "Seats",
+      "seatsHint_one": "{{count}} seat currently in use",
+      "seatsHint_other": "{{count}} seats currently in use",
+      "intervalLabel": "Billing cycle",
+      "interval": {
+        "monthly": "Monthly",
+        "annual": "Annual"
+      },
+      "proratedCharge": "Prorated charge",
+      "prorationNote": "The prorated difference is added to your next invoice.",
+      "errors": {
+        "previewFailed": "Couldn't load the upgrade preview.",
+        "alreadyEnterprise": "This workspace is already on Enterprise.",
+        "subscriptionInactive": "This workspace's subscription isn't active. Update your billing details and try again.",
+        "priceNotConfigured": "Enterprise pricing isn't available right now. Please contact sales."
+      },
+      "priceNote": "Final pricing is shown at checkout.",
+      "continueCta": "Continue to checkout",
+      "upgradeDescription": "Upgrade {{workspace}} from {{plan}} to Enterprise. Seats and billing cycle carry over; the change takes effect immediately.",
+      "upgradeCta": "Upgrade now",
+      "upgradedTitle": "Upgraded to Enterprise",
+      "upgradedDescription": "{{workspace}} is now on Enterprise."
     }
   },
   "models": {
@@ -3069,7 +3146,11 @@
       "description": "Transcriptions & structured summaries",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
-      "autoEnded": "Recording stopped automatically after your meeting ended."
+      "autoEnded": "Recording stopped automatically after your meeting ended.",
+      "systemAudioSilent": {
+        "title": "No meeting audio detected yet",
+        "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
+      }
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
@@ -3450,10 +3531,12 @@
       "copy_to_clipboardName": "Copy to clipboard",
       "web_searchName": "Web search",
       "get_calendar_eventsName": "Get calendar events",
+      "get_calendar_availabilityName": "Check calendar availability",
       "search_notesStatus": "Searching notes...",
       "web_searchStatus": "Searching the web...",
       "copy_to_clipboardStatus": "Copying to clipboard...",
       "get_calendar_eventsStatus": "Checking calendar...",
+      "get_calendar_availabilityStatus": "Checking availability...",
       "get_noteStatus": "Reading note...",
       "create_noteStatus": "Creating note...",
       "update_noteStatus": "Updating note...",
