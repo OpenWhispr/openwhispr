@@ -1744,6 +1744,18 @@ class WindowManager {
         this._sendAgentDictationPillState();
         this.showAgentDictationPill();
       });
+      pillWindow.webContents.on("render-process-gone", (_event, details) => {
+        if (this.agentDictationPillWindow !== pillWindow) return;
+        debugLogger.warn(
+          "Agent dictation pill renderer gone; closing so the next press recreates it",
+          { reason: details?.reason },
+          "window"
+        );
+        // Readiness must drop immediately: with a dead renderer the fail-closed
+        // dictation gate would otherwise approve recordings nobody can see.
+        this._agentDictationPillReady = false;
+        if (!pillWindow.isDestroyed()) pillWindow.close();
+      });
 
       const loadPromise =
         process.env.NODE_ENV === "development"

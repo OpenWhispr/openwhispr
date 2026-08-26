@@ -16,16 +16,32 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
         constructor(options) {
           this.options = options;
           this.protectionCalls = [];
-          this.webContents = { on: () => undefined, send: () => undefined };
+          this.closeCalls = 0;
+          this.setBoundsCalls = 0;
+          this.visible = false;
+          this.bounds = { x: 0, y: 0, width: 0, height: 0 };
+          this.windowListeners = new Map();
+          this.sent = [];
+          this.webContentsListeners = new Map();
+          this.webContents = {
+            on: (event, listener) => this.webContentsListeners.set(event, listener),
+            send: (channel, payload) => this.sent.push({ channel, payload }),
+          };
           createdBrowserWindows.push(this);
         }
-        on() {}
+        on(event, listener) { this.windowListeners.set(event, listener); }
         setContentProtection(value) { this.protectionCalls.push(value); }
         setIgnoreMouseEvents() {}
         loadFile() { return Promise.resolve(); }
         loadURL() { return Promise.resolve(); }
         isDestroyed() { return false; }
-        close() {}
+        close() { this.closeCalls += 1; this.windowListeners.get("closed")?.(); }
+        getBounds() { return this.bounds; }
+        setBounds(nextBounds) { this.bounds = nextBounds; this.setBoundsCalls += 1; }
+        isVisible() { return this.visible; }
+        showInactive() { this.visible = true; }
+        hide() { this.visible = false; }
+        moveTop() {}
       },
       shell: {},
       dialog: {},
@@ -427,4 +443,51 @@ test("a real drag marks the pill as manually positioned", async () => {
   bounds = { x: 120, y: 40, width: 96, height: 96 };
   await manager.stopWindowDrag();
   assert.equal(manager._mainWindowPlacementCoordinator._hasManualPosition, true);
+});
+
+test("did-finish-load marks the companion ready, pushes state, and shows it", () => {
+  createdBrowserWindows.length = 0;
+  const manager = new WindowManager();
+  manager._assistantPanelOpen = true;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1000, y: 100, width: 400, height: 600 }),
+  };
+
+  manager.showAgentDictationPill();
+  const pill = createdBrowserWindows[0];
+  assert.equal(manager._agentDictationPillReady, false);
+
+  pill.webContentsListeners.get("did-finish-load")();
+
+  assert.equal(manager._agentDictationPillReady, true);
+  assert.deepEqual(pill.sent, [
+    {
+      channel: "agent-dictation-pill-state-changed",
+      payload: { lifecycle: "idle", interactive: true, horizontalDirection: "left" },
+    },
+  ]);
+  assert.equal(pill.visible, true);
+});
+
+test("a crashed companion renderer drops readiness and closes for recreation", () => {
+  createdBrowserWindows.length = 0;
+  const manager = new WindowManager();
+  manager._assistantPanelOpen = true;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1000, y: 100, width: 400, height: 600 }),
+  };
+
+  manager.showAgentDictationPill();
+  const pill = createdBrowserWindows[0];
+  pill.webContentsListeners.get("did-finish-load")();
+  assert.equal(manager._agentDictationPillReady, true);
+
+  pill.webContentsListeners.get("render-process-gone")(null, { reason: "crashed" });
+
+  assert.equal(manager._agentDictationPillReady, false);
+  assert.equal(pill.closeCalls, 1);
+  assert.equal(manager.agentDictationPillWindow, null);
+  assert.equal(manager._isAgentDictationPillAvailable(), false);
 });
