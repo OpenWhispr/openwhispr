@@ -16,3 +16,12 @@ test("streaming LLM requests keep their fixed 60-second timeout", async () => {
   assert.equal(typeof getLlmRequestTimeoutSeconds, "function");
   assert.equal(getLlmRequestTimeoutSeconds({ streaming: true }), 60);
 });
+
+test("handles nullish and invalid parameters safely", async () => {
+  const { getLlmRequestTimeoutSeconds } = await load();
+
+  assert.equal(getLlmRequestTimeoutSeconds(null), 30);
+  assert.equal(getLlmRequestTimeoutSeconds(undefined), 30);
+  assert.equal(getLlmRequestTimeoutSeconds("invalid"), 30);
+  assert.equal(getLlmRequestTimeoutSeconds(123), 30);
+});
