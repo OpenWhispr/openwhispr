@@ -4,7 +4,7 @@ import { ChevronUp } from "lucide-react";
 import { cn } from "../lib/utils";
 import { PillWaveform } from "./PillWaveform";
 import { VoiceIdentityIcon } from "./VoiceIdentityIcon";
-import { WAVEFORM_BAR_COUNT } from "./waveformMath";
+import { RESTING_WAVE_SILHOUETTE, WAVEFORM_BAR_COUNT } from "./waveformMath";
 import {
   LISTENING_ENTRANCE_TIMING,
   VOICE_PILL_FOOTPRINT,
@@ -31,10 +31,6 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
 }
 
 const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms cubic-bezier(0.2, 0, 0, 1)`;
-// A pronounced eleven-bar rhythm keeps rounded short bars readable while tall
-// peaks use nearly the full lane. The same silhouette and footprint is shared
-// by dictation, Agent Mode, and Live Transcript.
-const RESTING_WAVE_SILHOUETTE = [6, 12, 5, 9, 7, 22, 18, 5, 20, 12, 17];
 // Sized from WAVEFORM_BAR_COUNT so a bar-count change can never silently
 // desync the resting silhouette from the live waveform's footprint.
 const RESTING_WAVE_HEIGHTS = Array.from(

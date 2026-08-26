@@ -215,7 +215,7 @@ test("an interactive voice pill is keyboard focusable", async () => {
 
 test("the waveform uses foreground contrast, rounded caps, and a pronounced height range", async () => {
   const recording = await renderPill("recording", true);
-  const { WAVEFORM_BAR_MIN_PX, WAVEFORM_BAR_MAX_PX, resolveWaveformBarHeight } =
+  const { WAVEFORM_BAR_MIN_PX, WAVEFORM_BAR_MAX_PX, WAVEFORM_SLOT_WEIGHTS, resolveWaveformBarHeight } =
     await import("../../src/components/dictation/waveformMath.ts");
 
   assert.match(recording, /relative shrink-0 overflow-hidden text-foreground/);
@@ -228,6 +228,10 @@ test("the waveform uses foreground contrast, rounded caps, and a pronounced heig
   assert.equal(resolveWaveformBarHeight(0), WAVEFORM_BAR_MIN_PX);
   assert.equal(resolveWaveformBarHeight(1), WAVEFORM_BAR_MAX_PX);
   assert.ok(resolveWaveformBarHeight(0.15) > 20);
+  // Live bars keep the silhouette's tall/short alternation: the slot weights
+  // must span from full-lane peaks down to pronounced short bars.
+  assert.equal(Math.max(...WAVEFORM_SLOT_WEIGHTS), 1);
+  assert.ok(Math.min(...WAVEFORM_SLOT_WEIGHTS) < 0.3);
 });
 
 test("Live Transcript hands visual border ownership to the shared panel", async () => {

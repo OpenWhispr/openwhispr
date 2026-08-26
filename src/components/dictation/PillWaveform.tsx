@@ -1,6 +1,11 @@
 import React, { useEffect, useRef } from "react";
 import { cn } from "../lib/utils";
-import { resolveWaveformBarHeight, WAVEFORM_BAR_COUNT, WAVEFORM_BAR_MIN_PX } from "./waveformMath";
+import {
+  resolveWaveformBarHeight,
+  WAVEFORM_BAR_COUNT,
+  WAVEFORM_BAR_MIN_PX,
+  WAVEFORM_SLOT_WEIGHTS,
+} from "./waveformMath";
 
 interface PillWaveformProps {
   /** Returns the current input level (0..~1) or null when no signal source exists. */
@@ -48,7 +53,7 @@ export function PillWaveform({ getLevel, active, className }: PillWaveformProps)
         levels.push(Math.max(level === null ? 0 : level, previous * 0.6));
         for (let i = 0; i < levels.length; i++) {
           const bar = barRefs.current[i];
-          if (bar) bar.style.height = `${resolveWaveformBarHeight(levels[i])}px`;
+          if (bar) bar.style.height = `${resolveWaveformBarHeight(levels[i], WAVEFORM_SLOT_WEIGHTS[i])}px`;
         }
       }
       frame = requestAnimationFrame(paint);
