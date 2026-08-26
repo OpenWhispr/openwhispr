@@ -2140,12 +2140,17 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const spaceId = this.getPrivateSpaceId();
+      const accountId = this._accountIdForSpace(spaceId);
 
       let folderId = null;
       try {
+        const folderScope = this._accountScopeCondition("folders");
         const existing = this.db
-          .prepare("SELECT id FROM folders WHERE name = ? AND space_id = ? AND deleted_at IS NULL")
-          .get(folderName, spaceId);
+          .prepare(
+            `SELECT id FROM folders
+             WHERE name = ? AND space_id = ? AND deleted_at IS NULL AND ${folderScope.sql}`
+          )
+          .get(folderName, spaceId, ...folderScope.params);
         folderId = existing?.id ?? this.createFolder(folderName, spaceId)?.folder?.id ?? null;
       } catch (folderError) {
         debugLogger.error(
@@ -2157,8 +2162,8 @@ class DatabaseManager {
 
       const insert = this.db.prepare(`
         INSERT INTO notes (client_note_id, title, content, note_type, source_file,
-          folder_id, space_id, transcript, participants, sync_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending',
+          folder_id, space_id, account_id, transcript, participants, sync_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending',
           COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))
         ON CONFLICT(client_note_id) DO NOTHING
       `);
@@ -2178,6 +2183,7 @@ class DatabaseManager {
               row.sourceFile,
               folderId,
               spaceId,
+              accountId,
               row.transcript,
               row.participants,
               row.createdAt,

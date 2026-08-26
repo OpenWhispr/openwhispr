@@ -55,9 +55,13 @@ function createDatabaseManager() {
       cloud_id TEXT,
       sync_status TEXT NOT NULL DEFAULT 'synced',
       account_id TEXT,
+      transcript TEXT,
+      participants TEXT,
       deleted_at TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE UNIQUE INDEX idx_notes_client_note_id ON notes(client_note_id);
     CREATE TABLE agent_conversations (
       id INTEGER PRIMARY KEY,
       note_id INTEGER,
@@ -447,4 +451,67 @@ test("hard folder deletion preserves other accounts' notes, tombstones included"
     ]
   );
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM folders").get().count, 0);
+});
+
+function importRow(clientNoteId, title) {
+  return {
+    clientNoteId,
+    title,
+    content: "",
+    sourceFile: null,
+    transcript: null,
+    participants: null,
+    createdAt: null,
+  };
+}
+
+test("imported notes carry the active account and never land in another account's folder", (t) => {
+  const { manager, sqlite } = createDatabaseManager();
+  t.after(() => sqlite.close());
+  installTransactionShim(sqlite);
+  sqlite.exec(
+    "INSERT INTO folders (id, name, space_id, account_id) VALUES (20, 'Imported', 1, 'account-b')"
+  );
+  manager.setActiveAccountId("account-a");
+
+  const result = manager.importNotes([importRow("import-1", "Imported note")]);
+
+  assert.equal(result.success, true);
+  assert.equal(result.imported, 1);
+  const note = sqlite
+    .prepare("SELECT account_id, folder_id, space_id FROM notes WHERE client_note_id = 'import-1'")
+    .get();
+  assert.equal(note.account_id, "account-a");
+  assert.equal(note.space_id, 1);
+  assert.notEqual(note.folder_id, 20);
+  const folder = sqlite
+    .prepare("SELECT name, account_id FROM folders WHERE id = ?")
+    .get(note.folder_id);
+  assert.deepEqual({ ...folder }, { name: "Imported", account_id: "account-a" });
+
+  const again = manager.importNotes([importRow("import-2", "Second import")]);
+  assert.equal(again.folderId, note.folder_id);
+});
+
+test("a guest import stays device-owned and cannot reuse an account's folder", (t) => {
+  const { manager, sqlite } = createDatabaseManager();
+  t.after(() => sqlite.close());
+  installTransactionShim(sqlite);
+  sqlite.exec(
+    "INSERT INTO folders (id, name, space_id, account_id) VALUES (20, 'Imported', 1, 'account-b')"
+  );
+  manager.setActiveAccountId(null);
+
+  const result = manager.importNotes([importRow("import-guest", "Guest import")]);
+
+  assert.equal(result.imported, 1);
+  const note = sqlite
+    .prepare("SELECT account_id, folder_id FROM notes WHERE client_note_id = 'import-guest'")
+    .get();
+  assert.equal(note.account_id, null);
+  assert.notEqual(note.folder_id, 20);
+  const folder = sqlite
+    .prepare("SELECT name, account_id FROM folders WHERE id = ?")
+    .get(note.folder_id);
+  assert.deepEqual({ ...folder }, { name: "Imported", account_id: null });
 });
