@@ -32,6 +32,18 @@ func writeTextOutput(_ prefix: String, _ value: String) {
 }
 
 func isEditableTextElement(_ element: AXUIElement) -> Bool {
+    // A live selection means an editable verdict would let generated text
+    // paste over the user's highlighted text (--editable-target mode probes
+    // an element whose selection state the caller could not read itself).
+    var selectedTextValue: AnyObject?
+    if AXUIElementCopyAttributeValue(
+        element,
+        kAXSelectedTextAttribute as CFString,
+        &selectedTextValue
+    ) == .success, let selectedText = selectedTextValue as? String, !selectedText.isEmpty {
+        return false
+    }
+
     var enabledValue: AnyObject?
     if AXUIElementCopyAttributeValue(
         element,

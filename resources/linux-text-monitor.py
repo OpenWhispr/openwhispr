@@ -111,6 +111,21 @@ def main():
             )
         except Exception:
             editable = False
+        # A live selection means an EDITABLE verdict would let generated text
+        # paste over the user's highlighted text. This is the authoritative
+        # check: the caller's clipboard-based capture cannot see a selection
+        # whose text already matches the clipboard.
+        if editable:
+            try:
+                text_iface = focused.get_text_iface()
+                if text_iface:
+                    for i in range(text_iface.get_n_selections()):
+                        selection = text_iface.get_selection(i)
+                        if selection and selection.end_offset > selection.start_offset:
+                            editable = False
+                            break
+            except Exception:
+                pass
         print("EDITABLE" if editable else "NOT_EDITABLE", flush=True)
         sys.exit(0)
 

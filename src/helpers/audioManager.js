@@ -770,9 +770,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   // Kicked off at voice-agent recording start, alongside the screenshot, so the
-  // read resolves while the user is still speaking.
+  // read resolves while the user is still speaking. The editable-caret probe
+  // only matters when auto-paste could deliver to that caret, so the flag
+  // spares the main process a binary spawn otherwise.
   beginSelectionCapture() {
-    this.selectionCapturePromise = window.electronAPI?.captureSelectedText?.() ?? null;
+    this.selectionCapturePromise =
+      window.electronAPI?.captureSelectedText?.({
+        probeEditable: Boolean(getSettings().autoPasteEnabled),
+      }) ?? null;
     // Marks the stored promise handled without consuming it: a failure nobody is
     // awaiting yet must not surface as an unhandled rejection, and the awaiting
     // caller must still see the original error.
@@ -782,7 +787,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   consumeSelectionCapture() {
     const pending = this.selectionCapturePromise;
     this.selectionCapturePromise = null;
-    return pending ?? window.electronAPI?.captureSelectedText?.();
+    return (
+      pending ??
+      window.electronAPI?.captureSelectedText?.({
+        probeEditable: Boolean(getSettings().autoPasteEnabled),
+      })
+    );
   }
 
   async consumeScreenContext() {

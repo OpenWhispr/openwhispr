@@ -2603,11 +2603,13 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("capture-selected-text", async () => {
+    ipcMain.handle("capture-selected-text", async (event, options = {}) => {
       if (!this.selectionManager) {
         return { status: "unavailable", code: "selection_manager_unavailable" };
       }
-      return this.selectionManager.captureSelectedText();
+      return this.selectionManager.captureSelectedText({
+        probeEditable: options.probeEditable === true,
+      });
     });
 
     ipcMain.handle("replace-selected-text", async (event, sessionId, text, options = {}) => {

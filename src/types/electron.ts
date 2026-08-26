@@ -924,7 +924,7 @@ declare global {
           allowClipboardFallback?: boolean;
         }
       ) => Promise<void>;
-      captureSelectedText?: () => Promise<
+      captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
             sessionId: string;

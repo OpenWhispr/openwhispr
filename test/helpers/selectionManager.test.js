@@ -73,10 +73,19 @@ test("captures an exact selection in an opaque session", async () => {
 
 test("captures a verified writable caret in an opaque delivery session", async () => {
   const { manager } = makeHarness({ selections: [{ state: "none", editable: true }] });
-  const result = await manager.captureSelectedText();
+  const result = await manager.captureSelectedText({ probeEditable: true });
 
   assert.equal(result.status, "editable");
   assert.ok(result.sessionId);
+});
+
+test("the editable probe only runs when the capture requests it", async () => {
+  const { manager } = makeHarness({ selections: [{ state: "none", editable: true }] });
+  manager._isTerminalPid = async () => {
+    throw new Error("must not resolve terminal identity without probeEditable");
+  };
+
+  assert.equal((await manager.captureSelectedText()).status, "none");
 });
 
 test("pastes an assistant response only while the captured caret target is still editable", async () => {
@@ -86,7 +95,7 @@ test("pastes an assistant response only while the captured caret target is still
       { state: "none", editable: true },
     ],
   });
-  const capture = await manager.captureSelectedText();
+  const capture = await manager.captureSelectedText({ probeEditable: true });
   const result = await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response", {
     restoreClipboard: true,
   });
@@ -104,7 +113,7 @@ test("does not paste an assistant response after the captured caret target chang
       { state: "selected", text: "new selection" },
     ],
   });
-  const capture = await manager.captureSelectedText();
+  const capture = await manager.captureSelectedText({ probeEditable: true });
 
   assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
     success: false,
@@ -121,7 +130,7 @@ test("a macOS terminal's empty prompt never becomes a caret delivery target", as
     signature.toLowerCase().includes("iterm");
   manager._readMacExecutablePath = async () => "/Applications/iTerm.app/Contents/MacOS/iTerm2";
 
-  assert.equal((await manager.captureSelectedText()).status, "none");
+  assert.equal((await manager.captureSelectedText({ probeEditable: true })).status, "none");
 });
 
 test("a terminal-flagged target is refused as a caret destination without probing", async () => {
@@ -144,16 +153,17 @@ test("a terminal-flagged target is refused as a caret destination without probin
   const editor = { kind: "win-hwnd", id: "3C", exeName: "notepad.exe" };
 
   assert.equal(
-    (await manager._markEditableCaret({ status: "none", target: flagged }, flagged)).status,
+    (await manager._markEditableCaret({ status: "none", target: flagged }, flagged, true)).status,
     "none"
   );
   assert.equal(
-    (await manager._markEditableCaret({ status: "none", target: byExeName }, byExeName)).status,
+    (await manager._markEditableCaret({ status: "none", target: byExeName }, byExeName, true))
+      .status,
     "none"
   );
   assert.equal(probes.length, 0);
   assert.equal(
-    (await manager._markEditableCaret({ status: "none", target: editor }, editor)).status,
+    (await manager._markEditableCaret({ status: "none", target: editor }, editor, true)).status,
     "editable"
   );
   assert.equal(probes.length, 1);
@@ -167,7 +177,7 @@ test("treats a clipboard-only fallback as a failed targeted paste", async () => 
     ],
     pasteResult: { restoreComplete: Promise.resolve(), pasted: false },
   });
-  const capture = await manager.captureSelectedText();
+  const capture = await manager.captureSelectedText({ probeEditable: true });
 
   assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
     success: false,

@@ -10,7 +10,7 @@
  *   INITIAL_VALUE_B64:<base64> - Initial text field value (multiline)
  *   CHANGED:<text>        - Text field value after a change
  *   CHANGED_B64:<base64>  - Text field value after a change (multiline)
- *   EDITABLE              - Focused element is writable (--probe-editable)
+ *   EDITABLE              - Focused element is writable with no live selection (--probe-editable)
  *   NOT_EDITABLE          - Focused element is not safely writable
  *   NO_ELEMENT            - Could not get focused element
  *   NO_VALUE              - Focused element has no text value
@@ -137,6 +137,45 @@ static int text_pattern_is_writable(IUIAutomationTextPattern *tp) {
     return writable;
 }
 
+/* A live selection means an EDITABLE verdict would let generated text paste
+ * over the user's highlighted text, so the probe must refuse it. This is the
+ * authoritative check: the caller's clipboard-based capture cannot see a
+ * selection whose text already matches the clipboard. */
+static int text_pattern_has_selection(IUIAutomationTextPattern *tp) {
+    IUIAutomationTextRangeArray *ranges = NULL;
+    if (FAILED(IUIAutomationTextPattern_GetSelection(tp, &ranges)) || !ranges) return 0;
+
+    int has_selection = 0;
+    int length = 0;
+    IUIAutomationTextRangeArray_get_Length(ranges, &length);
+    for (int i = 0; i < length && !has_selection; i++) {
+        IUIAutomationTextRange *range = NULL;
+        if (FAILED(IUIAutomationTextRangeArray_GetElement(ranges, i, &range)) || !range) continue;
+        BSTR text = NULL;
+        if (SUCCEEDED(IUIAutomationTextRange_GetText(range, 1, &text)) && text) {
+            has_selection = text[0] != L'\0';
+            SysFreeString(text);
+        }
+        IUIAutomationTextRange_Release(range);
+    }
+    IUIAutomationTextRangeArray_Release(ranges);
+    return has_selection;
+}
+
+/* An element without a Text pattern cannot report its selection; the verdict
+ * stands because the copy-based capture works normally for those controls. */
+static int focused_has_selection(IUIAutomationElement *focused) {
+    IUIAutomationTextPattern *tp = NULL;
+    HRESULT hr = IUIAutomationElement_GetCurrentPatternAs(
+        focused, UIA_TextPatternId,
+        &IID_IUIAutomationTextPattern, (void **)&tp
+    );
+    if (FAILED(hr) || !tp) return 0;
+    int has_selection = text_pattern_has_selection(tp);
+    IUIAutomationTextPattern_Release(tp);
+    return has_selection;
+}
+
 int main(int argc, char **argv) {
     signal(SIGTERM, signal_handler);
     signal(SIGINT, signal_handler);
@@ -209,7 +248,8 @@ int main(int argc, char **argv) {
             &isReadOnly
         );
         int editable = isEnabled && isKeyboardFocusable && !isPassword &&
-            SUCCEEDED(readOnlyResult) && !isReadOnly;
+            SUCCEEDED(readOnlyResult) && !isReadOnly &&
+            !focused_has_selection(focused);
         printf("%s\n", editable ? "EDITABLE" : "NOT_EDITABLE");
         fflush(stdout);
         IUIAutomationValuePattern_Release(valuePattern);
@@ -247,6 +287,7 @@ int main(int argc, char **argv) {
                 IUIAutomationElement_get_CurrentControlType(focused, &controlType);
                 int editable = isEnabled && isKeyboardFocusable && !isPassword &&
                     text_pattern_is_writable(textPattern) &&
+                    !text_pattern_has_selection(textPattern) &&
                     (controlType == UIA_EditControlTypeId ||
                      controlType == UIA_DocumentControlTypeId);
                 printf("%s\n", editable ? "EDITABLE" : "NOT_EDITABLE");

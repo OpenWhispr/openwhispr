@@ -155,7 +155,10 @@ class SelectionManager {
     return this.lastTarget?.kind === "win-hwnd" ? this.lastTarget.id : null;
   }
 
-  async captureSelectedText() {
+  async captureSelectedText(options = {}) {
+    // The caller knows whether a caret capture could ever be used (auto-paste
+    // on); without it the probe's binary spawn would be pure waste.
+    const probeEditable = options.probeEditable === true;
     return this.clipboardManager.runClipboardOperation(async () => {
       // captureTarget() fires on every toggle press, including stop. Fast
       // cloud transcription can get here before the stop-press probe lands
@@ -173,7 +176,7 @@ class SelectionManager {
       if (!expectedTarget) {
         return { status: "unavailable", code: "target_unavailable" };
       }
-      const capture = await this._readCurrentSelection(expectedTarget);
+      const capture = await this._readCurrentSelection(expectedTarget, { probeEditable });
       if (capture.status === "editable") {
         const sessionId = crypto.randomUUID();
         this.sessions.set(sessionId, {
@@ -268,7 +271,7 @@ class SelectionManager {
         return { success: false, code: "session_expired" };
       }
 
-      const current = await this._readCurrentSelection(session.target);
+      const current = await this._readCurrentSelection(session.target, { probeEditable: true });
       if (current.status !== "editable") {
         return { success: false, code: "target_changed" };
       }
@@ -303,15 +306,15 @@ class SelectionManager {
       return this._readMacSelection(expectedTarget, options);
     }
     if (this.platform === "win32") {
-      return this._readWindowsSelection(expectedTarget);
+      return this._readWindowsSelection(expectedTarget, options);
     }
     if (this.platform === "linux") {
-      return this._readLinuxSelection(expectedTarget);
+      return this._readLinuxSelection(expectedTarget, options);
     }
     return { status: "unavailable", code: "unsupported_platform" };
   }
 
-  async _readMacSelection(expectedTarget, { activate = false } = {}) {
+  async _readMacSelection(expectedTarget, { activate = false, probeEditable = false } = {}) {
     const pid = expectedTarget?.pid || this.textEditMonitor?.lastTargetPid;
     if (!pid || !this.textEditMonitor?.getSelectedText) {
       return { status: "unavailable", code: "target_unavailable" };
@@ -329,7 +332,7 @@ class SelectionManager {
       return { status: "selected", text: result.text, target: { kind: "mac-pid", pid } };
     }
     if (result.state === "none") {
-      const editable = result.editable && !(await this._isTerminalPid(pid));
+      const editable = probeEditable && result.editable && !(await this._isTerminalPid(pid));
       return {
         status: editable ? "editable" : "none",
         target: { kind: "mac-pid", pid },
@@ -339,10 +342,10 @@ class SelectionManager {
     // never resolve a focused element, so the read above cannot tell a selection
     // from an empty field. A synthetic copy still can — the same route Windows
     // and Linux take by default.
-    return this._readMacSelectionViaClipboard(pid, expectedTarget);
+    return this._readMacSelectionViaClipboard(pid, expectedTarget, probeEditable);
   }
 
-  async _readMacSelectionViaClipboard(pid, expectedTarget) {
+  async _readMacSelectionViaClipboard(pid, expectedTarget, probeEditable) {
     const binary = this.clipboardManager.resolveFastPasteBinary?.();
     if (!binary) return { status: "unavailable", code: "accessibility_unavailable" };
 
@@ -374,14 +377,14 @@ class SelectionManager {
     ) {
       return { status: "none", target: capture.target };
     }
-    return this._markEditableCaret(capture, capture.target || expectedTarget);
+    return this._markEditableCaret(capture, capture.target || expectedTarget, probeEditable);
   }
 
   _runCopyHelper(binary, args) {
     return runSpawn(binary, args, { timeout: COPY_TIMEOUT_MS });
   }
 
-  async _readWindowsSelection(expectedTarget) {
+  async _readWindowsSelection(expectedTarget, { probeEditable = false } = {}) {
     const binary = this.clipboardManager.resolveWindowsFastPasteBinary();
     if (!binary) return { status: "unavailable", code: "copy_helper_unavailable" };
 
@@ -398,10 +401,10 @@ class SelectionManager {
       capture.target && expectedTarget
         ? { ...expectedTarget, ...capture.target }
         : capture.target || expectedTarget;
-    return this._markEditableCaret(capture, target);
+    return this._markEditableCaret(capture, target, probeEditable);
   }
 
-  async _readLinuxSelection(expectedTarget) {
+  async _readLinuxSelection(expectedTarget, { probeEditable = false } = {}) {
     const target = await this._getLinuxTarget();
     if (!target) return { status: "unavailable", code: "target_unavailable" };
     if (expectedTarget && !this._sameTarget(target, expectedTarget)) {
@@ -418,7 +421,11 @@ class SelectionManager {
     const binary = this.clipboardManager.resolveLinuxFastPasteBinary();
     if (target.kind === "atspi-pid") {
       const capture = await this._readLinuxAtspiSelection(binary, expectedTarget || target);
-      return this._markEditableCaret(capture, capture.target || expectedTarget || target);
+      return this._markEditableCaret(
+        capture,
+        capture.target || expectedTarget || target,
+        probeEditable
+      );
     }
 
     const capture = await this._captureViaClipboard(async () => {
@@ -481,11 +488,15 @@ class SelectionManager {
       }
       return { success: false };
     }, expectedTarget || target);
-    return this._markEditableCaret(capture, capture.target || expectedTarget || target);
+    return this._markEditableCaret(
+      capture,
+      capture.target || expectedTarget || target,
+      probeEditable
+    );
   }
 
-  async _markEditableCaret(capture, target) {
-    if (capture.status !== "none" || !target) return capture;
+  async _markEditableCaret(capture, target, probeEditable) {
+    if (!probeEditable || capture.status !== "none" || !target) return capture;
     // Generated text pasted into a shell executes on its embedded newlines, so
     // a terminal target never becomes a caret destination — the same rule the
     // selection paths apply.
@@ -619,8 +630,10 @@ class SelectionManager {
     // A clipboard side the sentinel write didn't reach (KDE desyncs X11 from
     // Wayland) still holds pre-copy content; snapshot it so stale text can't
     // be mistaken for the copied selection. Known limitation: a clipboard that
-    // already held exactly the selected text reads as "no selection", and the
-    // command falls back to the Assistant panel.
+    // already held exactly the selected text reads as "no selection". The
+    // command then falls back to the Assistant panel — never to a caret paste,
+    // because the editable probe reads the focused element's own selection
+    // state and refuses a field with a live selection.
     const baseline = new Set([...beforeWrite, ...this.clipboardManager._readClipboardTextAll()]);
 
     const copyResult = await sendCopy();

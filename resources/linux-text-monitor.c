@@ -10,7 +10,7 @@
  *   INITIAL_VALUE_B64:<base64> - Initial text field value (multiline)
  *   CHANGED:<text>        - Text field value after a change
  *   CHANGED_B64:<base64>  - Text field value after a change (multiline)
- *   EDITABLE              - Focused element is writable (--probe-editable)
+ *   EDITABLE              - Focused element is writable with no live selection (--probe-editable)
  *   NOT_EDITABLE          - Focused element is not safely writable
  *   NO_ELEMENT            - Could not get focused element
  *   NO_VALUE              - Focused element has no text value
@@ -215,6 +215,24 @@ int main(int argc, char **argv) {
             atspi_state_set_contains(states, ATSPI_STATE_FOCUSABLE) &&
             !atspi_state_set_contains(states, ATSPI_STATE_PROTECTED);
         if (states) g_object_unref(states);
+        /* A live selection means an EDITABLE verdict would let generated text
+         * paste over the user's highlighted text. This is the authoritative
+         * check: the caller's clipboard-based capture cannot see a selection
+         * whose text already matches the clipboard. */
+        if (editable) {
+            AtspiText *probe_text = atspi_accessible_get_text_iface(focused);
+            if (probe_text) {
+                gint n_selections = atspi_text_get_n_selections(probe_text, NULL);
+                for (gint i = 0; i < n_selections && editable; i++) {
+                    AtspiRange *selection = atspi_text_get_selection(probe_text, i, NULL);
+                    if (selection) {
+                        if (selection->end_offset > selection->start_offset) editable = 0;
+                        g_free(selection);
+                    }
+                }
+                g_object_unref(probe_text);
+            }
+        }
         printf("%s\n", editable ? "EDITABLE" : "NOT_EDITABLE");
         fflush(stdout);
         g_object_unref(focused);
