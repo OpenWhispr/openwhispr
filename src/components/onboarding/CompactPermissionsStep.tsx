@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import microphoneIcon from "@/assets/onboarding-permission-microphone.webp";
 import accessibilityIcon from "@/assets/onboarding-permission-accessibility.webp";
 import systemAudioIcon from "@/assets/onboarding-permission-system-audio.webp";
-import screenContextIcon from "@/assets/onboarding-permission-screen-context.svg";
+import screenContextIcon from "@/assets/onboarding-permission-screen-context.webp";
 import type { UsePermissionsReturn } from "../../hooks/usePermissions";
 import type { SystemAudioAccessResult } from "../../types/electron";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
@@ -28,7 +28,6 @@ interface CompactPermissionsStepProps {
   screenContext?: {
     enabled: boolean;
     granted: boolean;
-    supported: boolean;
     needsRelaunch: boolean;
     request: () => Promise<boolean>;
   };
@@ -217,7 +216,6 @@ export default function CompactPermissionsStep({
                 description={t("onboarding.rehaul.permissions.screenContextDescription")}
                 granted={screenContext.enabled && screenContext.granted}
                 busy={busyPermission === "screen-context"}
-                disabled={!screenContext.supported}
                 iconSrc={screenContextIcon}
                 onRequest={() => request("screen-context", screenContext.request)}
               />

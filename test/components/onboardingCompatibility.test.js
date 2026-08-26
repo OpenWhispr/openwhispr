@@ -27,7 +27,7 @@ async function createOnboardingRenderer(t, platform = "linux") {
       "onboarding-permission-microphone.webp": `export default "microphone.webp";`,
       "onboarding-permission-accessibility.webp": `export default "accessibility.webp";`,
       "onboarding-permission-system-audio.webp": `export default "system-audio.webp";`,
-      "onboarding-permission-screen-context.svg": `export default "screen-context.svg";`,
+      "onboarding-permission-screen-context.webp": `export default "screen-context.webp";`,
       "/utils/platform": `
         export function getPlatform() { return "${platform}"; }
         export function getCachedPlatform() { return "${platform}"; }
@@ -65,7 +65,6 @@ const systemAudio = {
 const screenContext = {
   enabled: false,
   granted: false,
-  supported: true,
   needsRelaunch: false,
   request: async () => false,
 };
@@ -162,7 +161,7 @@ test("macOS onboarding offers optional Screen Context setup", async (t) => {
   );
 
   assert.match(markup, /dictationAgent\.screenContext\.title/);
-  assert.match(markup, /screen-context\.svg/);
+  assert.match(markup, /screen-context\.webp/);
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
 });
 
@@ -190,7 +189,7 @@ test("macOS onboarding shows the Screen Context relaunch guidance when needed", 
   assert.match(markup, />onboarding\.rehaul\.permissions\.enabled<\/button>/);
 });
 
-test("macOS onboarding omits Screen Context when policy does not offer it", async (t) => {
+test("macOS onboarding omits Screen Context when the flow does not offer it", async (t) => {
   const vite = await createOnboardingRenderer(t, "darwin");
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
     "/components/onboarding/CompactPermissionsStep.tsx"
@@ -227,7 +226,7 @@ test("Windows onboarding offers Screen Context as a permissionless opt-in", asyn
   );
 
   assert.match(markup, /dictationAgent\.screenContext\.title/);
-  assert.match(markup, /screen-context\.svg/);
+  assert.match(markup, /screen-context\.webp/);
   assert.match(markup, />onboarding\.rehaul\.permissions\.enabled<\/button>/);
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
 });

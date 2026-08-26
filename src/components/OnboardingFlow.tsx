@@ -125,7 +125,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const systemAudio = useSystemAudioPermission();
   const {
     granted: screenRecordingGranted,
-    supported: screenRecordingSupported,
     needsRelaunch: screenRecordingNeedsRelaunch,
     request: requestScreenRecordingAccess,
   } = useScreenRecordingPermission();
@@ -177,11 +176,37 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     (!workspacesLoaded ||
       (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)));
 
-  const enableScreenContext = useCallback(async () => {
+  // The setting turns on only once the permission is actually granted, so an
+  // Enable click whose System Settings grant is abandoned can't leave screen
+  // context armed to activate silently on some later grant.
+  const [screenContextRequested, setScreenContextRequested] = useState(false);
+
+  const applyScreenContext = useCallback(() => {
     settingsStore.setVoiceAgentScreenContext(true);
+    // Keeps the dictation overlay out of its own screenshots.
     void window.electronAPI?.setScreenContextEnabled?.(true);
-    return requestScreenRecordingAccess();
-  }, [requestScreenRecordingAccess, settingsStore]);
+  }, [settingsStore]);
+
+  const enableScreenContext = useCallback(async () => {
+    setScreenContextRequested(true);
+    const granted = await requestScreenRecordingAccess();
+    if (granted) applyScreenContext();
+    return granted;
+  }, [applyScreenContext, requestScreenRecordingAccess]);
+
+  // macOS grants Screen Recording in System Settings, outside the app; the
+  // permission hook re-checks on window focus. When the grant lands, complete
+  // the opt-in the Enable click started — within this session only.
+  useEffect(() => {
+    if (!screenContextRequested || !screenRecordingGranted) return;
+    if (settingsStore.voiceAgentScreenContext) return;
+    applyScreenContext();
+  }, [
+    screenContextRequested,
+    screenRecordingGranted,
+    settingsStore.voiceAgentScreenContext,
+    applyScreenContext,
+  ]);
 
   const requiredModels = useRequiredLocalModels();
   // Latched for the session once the step is entered (or resumed at), so a
@@ -668,7 +693,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 ? {
                     enabled: settingsStore.voiceAgentScreenContext,
                     granted: screenRecordingGranted,
-                    supported: screenRecordingSupported,
                     needsRelaunch: screenRecordingNeedsRelaunch,
                     request: enableScreenContext,
                   }
