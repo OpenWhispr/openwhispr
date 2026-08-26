@@ -54,3 +54,13 @@ test("honors a custom ttlMs argument", () => {
   assert.equal(isMicWarm(1000, 2000, 1000), false);
   assert.equal(isMicWarm(1000, 2001, 1000), false);
 });
+
+test("defaults now to current timestamp and handles non-finite inputs", () => {
+  const now = Date.now();
+  assert.equal(isMicWarm(now), true);
+  assert.equal(isMicWarm(now - 1000), true);
+  assert.equal(isMicWarm(now - 10000), false);
+  assert.equal(isMicWarm(1000, NaN), false);
+  assert.equal(isMicWarm(1000, Infinity), false);
+  assert.equal(isMicWarm(1000, 2000, NaN), false);
+});
