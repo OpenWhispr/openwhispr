@@ -1746,9 +1746,14 @@ class WindowManager {
       });
       pillWindow.webContents.on("render-process-gone", (_event, details) => {
         if (this.agentDictationPillWindow !== pillWindow) return;
+        // "clean-exit" is benign teardown already handled by the `closed`
+        // listener below; tear down on every other reason (a blocklist, not
+        // an allowlist) so an abnormal reason we don't yet have a name for
+        // still fails closed instead of leaving a dead renderer marked ready.
+        if (details?.reason === "clean-exit") return;
         debugLogger.warn(
           "Agent dictation pill renderer gone; closing so the next press recreates it",
-          { reason: details?.reason },
+          { reason: details?.reason, exitCode: details?.exitCode },
           "window"
         );
         // Readiness must drop immediately: with a dead renderer the fail-closed

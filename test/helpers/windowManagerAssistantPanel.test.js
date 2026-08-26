@@ -491,3 +491,24 @@ test("a crashed companion renderer drops readiness and closes for recreation", (
   assert.equal(manager.agentDictationPillWindow, null);
   assert.equal(manager._isAgentDictationPillAvailable(), false);
 });
+
+test("a clean-exit companion renderer teardown leaves readiness untouched", () => {
+  createdBrowserWindows.length = 0;
+  const manager = new WindowManager();
+  manager._assistantPanelOpen = true;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1000, y: 100, width: 400, height: 600 }),
+  };
+
+  manager.showAgentDictationPill();
+  const pill = createdBrowserWindows[0];
+  pill.webContentsListeners.get("did-finish-load")();
+  assert.equal(manager._agentDictationPillReady, true);
+
+  pill.webContentsListeners.get("render-process-gone")(null, { reason: "clean-exit" });
+
+  assert.equal(manager._agentDictationPillReady, true);
+  assert.equal(pill.closeCalls, 0);
+  assert.equal(manager.agentDictationPillWindow, pill);
+});
