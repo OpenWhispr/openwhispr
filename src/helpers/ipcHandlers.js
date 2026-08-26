@@ -7305,7 +7305,8 @@ class IPCHandlers {
 
     // One-shot: system capture is active but nothing audible has arrived by the
     // deadline, so tell the meeting window the remote side may be missing from
-    // the transcript. If audio shows up later the renderer toast auto-dismisses.
+    // the transcript. Audio arriving before the deadline cancels it outright;
+    // the toast itself is time-boxed by the renderer, not by later audio.
     const armMeetingSystemAudioSilenceTimer = (win, systemAudioStrategy) => {
       clearMeetingSystemAudioSilenceTimer();
       meetingSystemAudioSilenceTimer = setTimeout(() => {

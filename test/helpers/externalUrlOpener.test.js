@@ -159,9 +159,14 @@ test("invalid URLs reject without launching anything", async () => {
   assert.equal(openExternalCalls.length, 0);
 });
 
-test("explorer.exe spawn failure rejects instead of crashing the process", async () => {
-  const { openExternalUrl } = loadOpener({ spawnOutcome: "error" });
+test("an unspawnable explorer.exe still opens the link, in-process", async () => {
+  const { openExternalUrl, spawnCalls, openExternalCalls } = loadOpener({ spawnOutcome: "error" });
   setPlatform("win32");
 
-  await assert.rejects(openExternalUrl("https://example.com/join"), /spawn failed/);
+  await openExternalUrl("https://example.com/join");
+
+  // Degraded capture (the browser may land inside the excluded process tree)
+  // beats a Join button that does nothing on shell-less Windows images.
+  assert.equal(spawnCalls.length, 1);
+  assert.deepEqual(openExternalCalls, ["https://example.com/join"]);
 });

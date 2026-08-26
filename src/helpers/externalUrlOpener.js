@@ -1,6 +1,7 @@
 const { shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
+const debugLogger = require("./debugLogger");
 
 // On Windows, shell.openExternal runs ShellExecuteExW inside the Electron main
 // process, so a cold-started default browser (and any meeting client it
@@ -16,16 +17,28 @@ async function openExternalUrl(url) {
   const { protocol, href } = new URL(url);
   if (process.platform === "win32" && (protocol === "http:" || protocol === "https:")) {
     const explorerPath = path.win32.join(process.env.SystemRoot || "C:\\Windows", "explorer.exe");
-    return new Promise((resolve, reject) => {
-      const child = spawn(explorerPath, [href], {
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
+    try {
+      await new Promise((resolve, reject) => {
+        const child = spawn(explorerPath, [href], {
+          detached: true,
+          stdio: "ignore",
+          windowsHide: true,
+        });
+        child.once("error", reject);
+        child.once("spawn", resolve);
+        child.unref();
       });
-      child.once("error", reject);
-      child.once("spawn", resolve);
-      child.unref();
-    });
+      return;
+    } catch (error) {
+      // No spawnable shell (relocated SystemRoot, LTSC/Server images, execution
+      // policy). Degraded system-audio capture beats a link that never opens,
+      // so fall through to the direct open rather than failing the click.
+      debugLogger.warn(
+        "explorer.exe launch failed, opening URL in-process",
+        { error: error.message },
+        "window"
+      );
+    }
   }
   return shell.openExternal(url);
 }
