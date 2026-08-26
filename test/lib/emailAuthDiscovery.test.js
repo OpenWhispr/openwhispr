@@ -11,7 +11,7 @@ function installFetch(t, implementation) {
   });
 }
 
-test("email discovery uses the auth origin and preserves SSO routing", async (t) => {
+test("email discovery preserves the auth base URL and SSO routing", async (t) => {
   let request;
   installFetch(t, async (input, init) => {
     request = { input, init };
@@ -28,7 +28,7 @@ test("email discovery uses the auth origin and preserves SSO routing", async (t)
     "https://auth.example.test/custom/path"
   );
 
-  assert.equal(String(request.input), "https://auth.example.test/api/check-user");
+  assert.equal(String(request.input), "https://auth.example.test/custom/path/api/check-user");
   assert.equal(request.init.method, "POST");
   assert.deepEqual(JSON.parse(request.init.body), { email: "returning@example.com" });
   assert.deepEqual(result, {

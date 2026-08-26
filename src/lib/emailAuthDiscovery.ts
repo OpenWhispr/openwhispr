@@ -48,7 +48,7 @@ export async function discoverEmailAuth(
   email: string,
   authUrl: string
 ): Promise<EmailAuthDiscovery> {
-  const response = await fetch(new URL("/api/check-user", authUrl), {
+  const response = await fetch(`${authUrl}/api/check-user`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: email.trim() }),

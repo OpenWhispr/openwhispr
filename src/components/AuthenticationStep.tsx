@@ -236,9 +236,9 @@ export default function AuthenticationStep({
       const data = await discoverEmailAuth(email, AUTH_URL);
       if (data.sso?.available) {
         const discovery = {
-          required: data.sso.required === true,
+          required: data.sso.required,
           domain: data.sso.domain || email.trim().split("@")[1] || "your organization",
-          exists: data.exists === true,
+          exists: data.exists,
         };
         setSsoDiscovery(discovery);
         if (discovery.required) await startSSOSignIn(email);
