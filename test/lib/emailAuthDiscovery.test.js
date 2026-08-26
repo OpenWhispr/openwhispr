@@ -58,9 +58,10 @@ test("email discovery treats the sso block as advisory", async (t) => {
     [{ exists: false, sso: { available: false } }, { exists: false }],
     [{ exists: true, sso: null }, { exists: true }],
   ];
-  installFetch(t, async () => new Response(JSON.stringify(lenientCases[0][0])));
-  for (const [payload, expected] of lenientCases) {
-    global.fetch = async () => new Response(JSON.stringify(payload));
+  let payload;
+  installFetch(t, async () => new Response(JSON.stringify(payload)));
+  for (const [response, expected] of lenientCases) {
+    payload = response;
     assert.deepEqual(
       await discoverEmailAuth("user@example.com", "https://auth.example.test"),
       expected
