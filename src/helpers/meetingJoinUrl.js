@@ -37,14 +37,19 @@ function isMeetingUrl(value) {
 }
 
 export function getMeetingJoinUrl(event) {
-  if (!event) return null;
-  const hangoutLink = event.hangout_link?.trim();
+  if (!event || typeof event !== "object") return null;
+  const hangoutLink =
+    typeof event.hangout_link === "string" ? event.hangout_link.trim() : "";
   if (hangoutLink) return hangoutLink;
   if (!event.conference_data) return null;
   try {
-    const data = JSON.parse(event.conference_data);
-    const uri = data?.entryPoints
-      ?.find((ep) => ep.entryPointType === "video" && ep.uri?.trim())
+    const data =
+      typeof event.conference_data === "string"
+        ? JSON.parse(event.conference_data)
+        : event.conference_data;
+    const entryPoints = Array.isArray(data?.entryPoints) ? data.entryPoints : [];
+    const uri = entryPoints
+      .find((ep) => ep?.entryPointType === "video" && typeof ep?.uri === "string" && ep.uri.trim())
       ?.uri?.trim();
     return uri || null;
   } catch {

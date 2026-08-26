@@ -165,3 +165,17 @@ test("getMeetingJoinUrl trims hangout_link and skips whitespace-only links", asy
   };
   assert.equal(getMeetingJoinUrl(eventWithWhitespaceOnly), "https://zoom.us/j/123");
 });
+
+test("getMeetingJoinUrl handles pre-parsed conference_data objects and primitive events", async () => {
+  const { getMeetingJoinUrl } = await load();
+
+  const eventWithObjectData = {
+    conference_data: {
+      entryPoints: [{ entryPointType: "video", uri: "https://zoom.us/j/123" }],
+    },
+  };
+  assert.equal(getMeetingJoinUrl(eventWithObjectData), "https://zoom.us/j/123");
+  assert.equal(getMeetingJoinUrl("not an object"), null);
+  assert.equal(getMeetingJoinUrl(123), null);
+  assert.equal(getMeetingJoinUrl(true), null);
+});
