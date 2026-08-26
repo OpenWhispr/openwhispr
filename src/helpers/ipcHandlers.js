@@ -6182,9 +6182,8 @@ class IPCHandlers {
       return replayed;
     };
 
-    // Both meeting sockets share the base connect options; the per-source
-    // additions label the stream for field logs and give the system channel
-    // its more sensitive VAD threshold (see MEETING_SYSTEM_VAD_THRESHOLD).
+    // Labels the socket for field logs and, for system, swaps in the more
+    // sensitive threshold (see MEETING_SYSTEM_VAD_THRESHOLD).
     const withMeetingSourceConnectOpts = (connectOpts, source) => ({
       ...connectOpts,
       streamLabel: source,

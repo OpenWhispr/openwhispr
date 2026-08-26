@@ -8,9 +8,8 @@ const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
 const KEEPALIVE_INTERVAL_MS = 15000;
 // OpenAI Realtime sessions die at 60 minutes; reconnect proactively before that.
 const SESSION_PREEMPT_MS = 55 * 60 * 1000;
-// Raised from 0.3 to keep mic ambient noise from opening turns (#630). Callers
-// with a clean channel (system loopback, whose noise floor is digital silence)
-// pass a lower vadThreshold so quiet remote speech still trips the server VAD.
+// Raised from 0.3 to keep mic ambient noise from opening turns (#630); callers
+// on a cleaner channel pass their own vadThreshold.
 const DEFAULT_VAD_THRESHOLD = 0.6;
 
 // A socket factory does network work before the socket exists, so the dial
@@ -383,16 +382,14 @@ class OpenAIRealtimeStreaming {
     }
   }
 
-  // With no label (dictation) this returns the metadata untouched, keeping
-  // single-socket log output identical to before labels existed.
+  // Unlabelled sockets (dictation) keep their pre-label log shape exactly.
   _logContext(extra) {
     if (this.streamLabel == null) return extra;
     return { stream: this.streamLabel, ...extra };
   }
 
-  // First 3 events then every 50th (the throttle shape used for audio-chunk
-  // logs in ipcHandlers): a normal meeting produces hundreds of VAD events,
-  // and ZERO of these lines over a whole meeting means server VAD never fired.
+  // Throttled to first-3-then-every-50th: a normal meeting produces hundreds of
+  // these, so ZERO over a whole meeting means server VAD never fired.
   _logVadEvent(type) {
     this._vadEventCount++;
     if (this._vadEventCount <= 3 || this._vadEventCount % 50 === 0) {
