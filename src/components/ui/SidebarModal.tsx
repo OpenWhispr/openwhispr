@@ -163,7 +163,7 @@ export default function SidebarModal<T extends string>({
                               data-section-id={item.id}
                               onClick={() => onSectionChange(item.id)}
                               title={isCompact ? item.label : undefined}
-                              className={`group relative w-full flex items-center text-left text-xs rounded-md transition-colors duration-100 outline-none ${
+                              className={`group relative w-full flex items-center text-start text-xs rounded-md transition-colors duration-100 outline-none ${
                                 isCompact ? "justify-center px-0 py-2" : "gap-2 px-2 py-1.5"
                               } ${
                                 isActive
@@ -187,14 +187,14 @@ export default function SidebarModal<T extends string>({
                                   </span>
                                   {renderBadge(item)}
                                   {item.shortcut && !item.badge && (
-                                    <kbd className="ml-auto text-xs text-muted-foreground/25 font-mono shrink-0">
+                                    <kbd className="ms-auto text-xs text-muted-foreground/25 font-mono shrink-0">
                                       {item.shortcut}
                                     </kbd>
                                   )}
                                 </>
                               )}
                               {isCompact && item.badgeVariant === "dot" && (
-                                <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                                <span className="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
                               )}
                             </button>
                           );

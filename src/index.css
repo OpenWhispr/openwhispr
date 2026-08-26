@@ -1737,7 +1737,7 @@ a:hover {
   content: attr(data-placeholder);
   color: oklch(0.5 0 0 / 0.2);
   pointer-events: none;
-  float: left;
+  float: inline-start;
   height: 0;
 }
 
@@ -1766,3 +1766,5 @@ a:hover {
 .dark .rich-text-editor-content p.is-editor-empty:first-child::before {
   color: oklch(0.7 0 0 / 0.2);
 }
+
+[dir="rtl"] .rich-text-editor-content p.is-editor-empty:first-child::before { float: right !important; }
