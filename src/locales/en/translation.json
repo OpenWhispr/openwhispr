@@ -3117,7 +3117,11 @@
       "description": "Transcriptions & structured summaries",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
-      "autoEnded": "Recording stopped automatically after your meeting ended."
+      "autoEnded": "Recording stopped automatically after your meeting ended.",
+      "systemAudioSilent": {
+        "title": "No meeting audio detected yet",
+        "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
+      }
     },
     "meetingPill": {
       "returnToNote": "Return to recording",

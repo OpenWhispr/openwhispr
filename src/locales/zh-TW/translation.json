@@ -2906,7 +2906,11 @@
       "description": "轉錄與結構化摘要",
       "back": "返回",
       "restrictedByOrg": "會議轉錄已被您的組織限制。",
-      "autoEnded": "會議結束後，錄音已自動停止。"
+      "autoEnded": "會議結束後，錄音已自動停止。",
+      "systemAudioSilent": {
+        "title": "尚未偵測到會議音訊",
+        "description": "到目前為止，只有您的麥克風收到聲音。正在進行視訊通話？請檢查會議音訊是否正在此電腦上播放且未被靜音。正在進行現場錄音？您可以忽略此提示——您的麥克風會收錄房間內的聲音。"
+      }
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",
