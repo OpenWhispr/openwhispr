@@ -5,9 +5,8 @@ const path = require("node:path");
 
 const read = (relativePath) => fs.readFileSync(path.join(__dirname, "../..", relativePath), "utf8");
 
-// The offline scope-restore design (docs/superpowers/specs/
-// 2026-08-26-offline-account-scope-restore-design.md) hangs off wiring
-// points that unit tests cannot reach; pin them at the source level.
+// The offline scope-restore behavior hangs off wiring points that unit
+// tests cannot reach; pin them at the source level.
 test("scope handler evaluates requests through the binding policy and persists validated bindings", () => {
   const source = read("src/helpers/ipcHandlers.js");
   const handler = source.match(

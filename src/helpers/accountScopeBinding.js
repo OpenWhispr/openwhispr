@@ -3,7 +3,7 @@
 // for the credential still on disk. The sha256 token fingerprint makes the
 // file self-verifying: a rotated or replaced bearer no longer matches, so a
 // stale binding degrades to "no restore", never to restoring the wrong
-// account. Design: docs/superpowers/specs/2026-08-26-offline-account-scope-restore-design.md
+// account.
 const { app } = require("electron");
 const crypto = require("crypto");
 const fs = require("fs");
