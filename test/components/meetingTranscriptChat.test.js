@@ -2,14 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { createElement } = require("react");
-const { renderToStaticMarkup } = require("react-dom/server");
 const i18next = require("i18next");
 const { initReactI18next } = require("react-i18next");
-
-// tsx resolves tsconfig from the cwd, where none sets the automatic JSX runtime,
-// so compiled .tsx uses the classic transform and needs a global React.
-globalThis.React = require("react");
+const { renderStatic } = require("../helpers/harness/reactSsr");
 
 const SEGMENTS = [
   { id: "s1", text: "hello from mic", source: "mic", timestamp: 1 },
@@ -29,9 +24,7 @@ async function renderChat(props) {
     });
   }
   const mod = await import("../../src/components/notes/MeetingTranscriptChat.tsx");
-  return renderToStaticMarkup(
-    createElement(mod.MeetingTranscriptChat, { segments: SEGMENTS, ...props })
-  );
+  return renderStatic(mod.MeetingTranscriptChat, { segments: SEGMENTS, ...props });
 }
 
 test("rows resolve speaker labels through the live mappings", async () => {

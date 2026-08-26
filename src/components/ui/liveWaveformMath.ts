@@ -1,16 +1,18 @@
+// Bars express loudness through scaleY + layer opacity, never height or
+// background-color: a per-sample layout or paint write every 150ms is the CPU
+// regression this replaces (an animated background-color also retriggers the
+// global `*` background-color transition in index.css). Each bar stacks a
+// uniform quiet layer under a gradient-hued active layer, and a sample
+// cross-fades between them to reproduce the old visuals exactly.
 export const WAVE_MAX_PX = 20;
-export const WAVE_MIN_PX = 2;
+const WAVE_MIN_PX = 2;
 const WAVE_QUIET_NORM = 0.14;
 const WAVE_QUIET_OPACITY = 0.35;
 
-// Below the quiet threshold every bar shows the same faint periwinkle,
-// regardless of its position in the gradient.
+// The gradient's periwinkle end, shown uniformly by every quiet bar.
 export const WAVE_QUIET_COLOR = "rgb(143,170,255)";
 
-// Periwinkle (#8FAAFF) → orange (#FFA23E) across the strip. The color is fixed
-// per bar; loudness is expressed through scaleY + layer opacity so a sample
-// never touches layout or paint (an animated background-color would retrigger
-// the global * background-color transition in index.css every 150ms).
+// Periwinkle (#8FAAFF) → orange (#FFA23E) across the strip, fixed per bar.
 export function waveBarColor(index: number, count: number): string {
   const t = count > 1 ? index / (count - 1) : 0;
   const r = Math.round(143 + 112 * t);
@@ -19,12 +21,8 @@ export function waveBarColor(index: number, count: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
-// Compositor-only per-sample visual: bars sit vertically centered (items-center),
-// so the default center transform origin keeps the symmetric look scaleY had
-// to preserve from the old animated height. Each bar stacks a uniform quiet
-// layer under its gradient-hued active layer; a sample cross-fades between
-// them, so quiet bars keep the old uniform rgba(143,170,255,0.35) look while
-// active bars keep the old gradient hue at the 0.55 + 0.45 * norm alpha curve.
+// Bars are vertically centered, so scaleY's default center origin reproduces
+// the symmetric growth the old animated height had.
 export function waveBarVisual(norm: number): {
   scaleY: number;
   quietOpacity: number;

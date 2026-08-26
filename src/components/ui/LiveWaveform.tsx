@@ -17,9 +17,7 @@ const WAVE_MIN_AUTO_BARS = 16;
 const WAVE_PEAK_FLOOR = 0.01;
 const WAVE_PEAK_DECAY = 0.99;
 
-// Quiet bars are one uniform faint periwinkle; active bars take their gradient
-// hue. Cross-fading two static-color layers keeps every per-tick write
-// compositor-only (see liveWaveformMath.ts).
+// The cross-faded quiet/active pair behind every bar (see liveWaveformMath.ts).
 const WAVE_LAYER_CLASS =
   "absolute inset-0 rounded-full transition-opacity duration-150 ease-out motion-reduce:transition-none";
 
@@ -45,6 +43,11 @@ export function LiveWaveform({
   const [autoCount, setAutoCount] = useState(DEFAULT_BAR_COUNT);
 
   const count = bars === "auto" ? autoCount : bars;
+  // Read through a ref inside the sampler: in "auto" mode a resize drag can
+  // change the count faster than WAVE_SAMPLE_MS, and a count dependency would
+  // restart the interval each time so it never ticks.
+  const countRef = useRef(count);
+  countRef.current = count;
 
   useEffect(() => {
     if (bars !== "auto") return;
@@ -64,17 +67,18 @@ export function LiveWaveform({
       const level = readLevel();
       peakRef.current = Math.max(level, peakRef.current * WAVE_PEAK_DECAY, WAVE_PEAK_FLOOR);
       const norm = Math.min(1, level / peakRef.current);
+      const barCount = countRef.current;
       const levels = levelsRef.current;
       levels.push(norm);
-      if (levels.length > count) levels.splice(0, levels.length - count);
-      for (let i = 0; i < count; i++) {
+      if (levels.length > barCount) levels.splice(0, levels.length - barCount);
+      for (let i = 0; i < barCount; i++) {
         const bar = barRefs.current[i];
         const quiet = quietRefs.current[i];
         const active = activeRefs.current[i];
         if (!bar || !quiet || !active) continue;
         // History is right-aligned: bars without a sample yet rest at minimum.
         const { scaleY, quietOpacity, activeOpacity } = waveBarVisual(
-          levels[levels.length - count + i] ?? 0
+          levels[levels.length - barCount + i] ?? 0
         );
         bar.style.transform = `scaleY(${scaleY})`;
         quiet.style.opacity = String(quietOpacity);
@@ -82,7 +86,7 @@ export function LiveWaveform({
       }
     }, WAVE_SAMPLE_MS);
     return () => clearInterval(id);
-  }, [readLevel, count]);
+  }, [readLevel]);
 
   return (
     <div ref={containerRef} className={cn("flex items-center gap-0.5 h-5", className)}>

@@ -45,3 +45,15 @@ test("idle state keeps the liquid-glass capsule", async (t) => {
   assert.ok(html.includes("backdrop-blur-xl"));
   assert.ok(html.includes("backdrop-saturate-150"));
 });
+
+test("the ask capsule never transitions its surface between the two states", async (t) => {
+  // transition-all would tween backdrop-filter and background-color for 500ms
+  // on every recording start and stop, re-paying the cost this change removes.
+  for (const isRecording of [false, true]) {
+    const html = await renderBottomBar(t, { isRecording });
+    assert.ok(
+      html.includes("transition-[max-width,opacity,padding,border-color,box-shadow]"),
+      `capsule transition is property-scoped (isRecording=${isRecording})`
+    );
+  }
+});

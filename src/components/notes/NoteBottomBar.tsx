@@ -200,7 +200,10 @@ export default function NoteBottomBar({
             "flex-1 min-w-0 flex items-center h-11 gap-2 rounded-full",
             isRecording ? RECORDING_SURFACE : GLASS_SURFACE,
             "border",
-            "transition-all duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+            // Named properties, not transition-all: the surface swap below must
+            // land instantly, or every recording start/stop tweens
+            // backdrop-filter for 500ms — the exact cost being removed.
+            "transition-[max-width,opacity,padding,border-color,box-shadow] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
             hideInput
               ? "max-w-0 opacity-0 pl-0 pr-0 border-transparent shadow-none pointer-events-none"
               : "max-w-[600px] opacity-100 pl-4 pr-1.5",

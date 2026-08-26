@@ -574,8 +574,7 @@ class WhisperServerManager extends EventEmitter {
     // Track what this server actually runs, not what start() was asked for:
     // the GPU-failure fallback and the one-shot Vulkan pin restart re-enter
     // _doStart with corrected flags, and the guard in start() must no-op on
-    // the next request with the same resolved flags instead of restart-looping
-    // (after a fallback, WHISPER_GPU_FAILED makes new requests resolve to CPU).
+    // the next request with the same resolved flags instead of restart-looping.
     this.gpuSignature = getGpuSignature({
       useCuda: usingCuda,
       useVulkan: usingVulkan,

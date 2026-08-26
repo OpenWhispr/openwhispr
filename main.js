@@ -1245,11 +1245,9 @@ async function startApp() {
 
   const QdrantManager = require("./src/helpers/qdrantManager");
   qdrantManager = new QdrantManager();
-  // A successful unhealthy-restart can bring the sidecar back on a new port;
-  // re-run the post-start wiring below so vectorIndex points at the fresh
-  // process. Must not throw: the emit runs inside the restart path, whose
+  // Must not throw: this also runs inside the unhealthy-restart path, whose
   // catch would stop the replacement sidecar.
-  qdrantManager.on("restarted", (port) => {
+  const wireVectorIndex = (port) => {
     try {
       const vectorIndex = require("./src/helpers/vectorIndex");
       vectorIndex.init(port);
@@ -1257,31 +1255,20 @@ async function startApp() {
         .ensureCollection()
         .then(() => ipcHandlers?.drainPendingVectorPurges())
         .catch((err) => {
-          debugLogger.debug("Qdrant post-restart collection setup error (non-fatal)", {
-            error: err.message,
-          });
+          debugLogger.debug("Qdrant collection setup error (non-fatal)", { error: err.message });
         });
     } catch (err) {
-      debugLogger.debug("Qdrant post-restart rewire error (non-fatal)", { error: err.message });
+      debugLogger.debug("Qdrant rewire error (non-fatal)", { error: err.message });
     }
-  });
+  };
+  // A successful unhealthy-restart can bring the sidecar back on a new port.
+  qdrantManager.on("restarted", wireVectorIndex);
   sidecarRegistry.register("qdrant", () => qdrantManager.stop());
   if (qdrantManager.isAvailable()) {
     qdrantManager
       .start()
       .then(() => {
-        if (qdrantManager.isReady()) {
-          const vectorIndex = require("./src/helpers/vectorIndex");
-          vectorIndex.init(qdrantManager.getPort());
-          vectorIndex
-            .ensureCollection()
-            .then(() => ipcHandlers?.drainPendingVectorPurges())
-            .catch((err) => {
-              debugLogger.debug("Qdrant collection setup error (non-fatal)", {
-                error: err.message,
-              });
-            });
-        }
+        if (qdrantManager.isReady()) wireVectorIndex(qdrantManager.getPort());
       })
       .catch((err) => {
         debugLogger.debug("Qdrant startup error (non-fatal)", { error: err.message });

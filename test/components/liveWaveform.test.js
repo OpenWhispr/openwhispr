@@ -1,11 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createElement } = require("react");
-const { renderToStaticMarkup } = require("react-dom/server");
-
-// tsx resolves tsconfig from the cwd, where none sets the automatic JSX runtime,
-// so compiled .tsx uses the classic transform and needs a global React.
-globalThis.React = require("react");
+const { renderStatic } = require("../helpers/harness/reactSsr");
 
 const loadMath = () => import("../../src/components/ui/liveWaveformMath.ts");
 const loadComponent = () => import("../../src/components/ui/LiveWaveform.tsx");
@@ -42,7 +37,7 @@ test("per-sample visuals keep the old height/alpha curve as scaleY + layer opaci
 test("bars render with static colors and compositor-only animated properties", async () => {
   const { LiveWaveform } = await loadComponent();
 
-  const html = renderToStaticMarkup(createElement(LiveWaveform, { readLevel: () => 0, bars: 5 }));
+  const html = renderStatic(LiveWaveform, { readLevel: () => 0, bars: 5 });
 
   // Five bars at the rest scale, each with a fixed layout height.
   assert.equal(html.split("scaleY(0.1)").length - 1, 5);
