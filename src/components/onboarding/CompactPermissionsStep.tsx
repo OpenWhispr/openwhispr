@@ -3,8 +3,9 @@ import { createPortal } from "react-dom";
 import { CircleCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 // Imported (not referenced by path) so Vite fingerprints them and they resolve
-// under the packaged app's file:// origin. Authored at 88px = 2x the 44px slot,
-// with their rounded corners baked in as transparency.
+// under the packaged app's file:// origin. Authored at 88px (2x the original
+// 44px slot; the row has since tightened to a 40px slot), with their rounded
+// corners baked in as transparency.
 import microphoneIcon from "@/assets/onboarding-permission-microphone.webp";
 import accessibilityIcon from "@/assets/onboarding-permission-accessibility.webp";
 import systemAudioIcon from "@/assets/onboarding-permission-system-audio.webp";
