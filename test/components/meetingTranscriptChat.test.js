@@ -66,6 +66,23 @@ test("a mapped profile without an email offers the add-contact affordance", asyn
   assert.ok(!withEmail.includes("Add contact"));
 });
 
+test("a long transcript renders only a window of rows, each animating at most once", async () => {
+  const many = Array.from({ length: 500 }, (_, i) => ({
+    id: `m${i}`,
+    text: `line ${i}`,
+    source: "system",
+    timestamp: i,
+    speaker: `speaker_${i % 3}`,
+  }));
+  const html = await renderChat({ segments: many });
+
+  const rendered = html.split("data-index=").length - 1;
+  assert.ok(rendered > 0, "the first screenful renders before the scroller is measured");
+  assert.ok(rendered < 60, `expected a window, got ${rendered} of 500 rows`);
+  // A remounting row must not replay its entrance while the list scrolls.
+  assert.ok(html.split("agent-message-in").length - 1 <= 1);
+});
+
 test("live partials render alongside the settled rows", async () => {
   const html = await renderChat({ micPartial: "still talking" });
   assert.ok(html.includes("still talking"));
