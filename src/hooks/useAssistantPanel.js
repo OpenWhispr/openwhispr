@@ -133,13 +133,17 @@ export function useAssistantPanel({
   const handleCommand = useCallback(
     (command) => {
       commandIdRef.current += 1;
+      // A follow-up spoken into an open panel stays panel-first: its answer is
+      // already streaming into a visible conversation, and delivering it to
+      // the external caret would snap that surface away mid-read.
+      const delivery = openRef.current ? null : (command.delivery ?? null);
       beginThinking();
       setPendingCommand({
         id: commandIdRef.current,
         text: command.text,
         attachment: command.attachment ?? null,
         selectedContext: command.selectedContext ?? null,
-        delivery: command.delivery ?? null,
+        delivery,
       });
     },
     [beginThinking]

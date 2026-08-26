@@ -751,3 +751,48 @@ test("a caret-delivered command returns the hidden Assistant to the idle pill", 
   assert.equal(assistant.open, false);
   assert.equal(assistant.thinking, false);
 });
+
+test("a follow-up into an open panel strips caret delivery and stays panel-first", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-followup-delivery-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { createRoot } = require("react-dom/client");
+  let assistant;
+
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  const delivery = {
+    mode: "paste",
+    sessionId: "caret-session",
+    restoreClipboard: true,
+    allowClipboardFallback: false,
+  };
+
+  assistant.openRef.current = true;
+  await React.act(async () => {
+    assistant.handleCommand({ text: "draft a reply", attachment: null, selectedContext: null, delivery });
+  });
+  assert.equal(assistant.pendingCommand.delivery, null);
+
+  assistant.openRef.current = false;
+  await React.act(async () => {
+    assistant.handleCommand({ text: "draft a reply", attachment: null, selectedContext: null, delivery });
+  });
+  assert.deepEqual(assistant.pendingCommand.delivery, delivery);
+});
