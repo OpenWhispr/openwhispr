@@ -3,7 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
-import { useDismissGuard } from "./dismissGuard";
+import { useDismissGuard } from "./useDismissGuard";
 
 const Dialog = DialogPrimitive.Root;
 

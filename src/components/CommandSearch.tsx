@@ -13,7 +13,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { cn } from "./lib/utils";
-import { useDismissGuard } from "./ui/dismissGuard";
+import { useDismissGuard } from "./ui/useDismissGuard";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -324,7 +324,7 @@ export default function CommandSearch({
           ref={registerContent}
           onInteractOutside={(e) => {
             // The filter dropdown makes this panel inert while it is open, so
-            // the click that closes it lands on the overlay — see dismissGuard.
+            // the click that closes it lands on the overlay — see useDismissGuard.
             if (shouldBlockDismiss(e)) e.preventDefault();
           }}
           className={cn(

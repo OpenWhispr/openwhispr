@@ -1,12 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-// tsx resolves tsconfig from the cwd, where none sets the automatic JSX runtime,
-// so compiled .tsx uses the classic transform and needs a global React.
-globalThis.React = require("react");
-
 async function loadGuard() {
-  const mod = await import("../../src/components/ui/dismissGuard.ts");
+  const mod = await import("../../src/components/ui/useDismissGuard.ts");
   return mod.hasLayerAbove ?? mod.default.hasLayerAbove;
 }
 

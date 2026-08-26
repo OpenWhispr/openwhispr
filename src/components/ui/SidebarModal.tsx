@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { SettingsLayoutProvider } from "./useSettingsLayout";
-import { useDismissGuard } from "./dismissGuard";
+import { useDismissGuard } from "./useDismissGuard";
 
 export interface SidebarItem<T extends string> {
   id: T;
