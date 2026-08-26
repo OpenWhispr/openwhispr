@@ -47,6 +47,12 @@ function isValidPolicyShape(policy) {
     (policy.dataRetention?.audioRetentionMaxDays === null ||
       (Number.isSafeInteger(policy.dataRetention?.audioRetentionMaxDays) &&
         policy.dataRetention.audioRetentionMaxDays > 0)) &&
+    // Shape-only on purpose: a future model id added server-side must not make
+    // an older app discard the entire managed policy. Unknown ids are filtered
+    // at enforcement time instead (see policyRules.requiredLocalModelIds).
+    (policy.requiredLocalModels === undefined ||
+      (Array.isArray(policy.requiredLocalModels) &&
+        policy.requiredLocalModels.every((item) => typeof item === "string"))) &&
     (policy.minAppVersion === null || isCanonicalAppVersion(policy.minAppVersion))
   );
 }

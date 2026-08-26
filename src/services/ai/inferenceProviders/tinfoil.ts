@@ -4,9 +4,8 @@ import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { applyChatCompletionsParams, isTruncatedFinishReason } from "../chatRequestBody";
 import { getTinfoilChatClient } from "../tinfoilClient";
+import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
-
-const REQUEST_TIMEOUT_MS = 30_000;
 
 export const tinfoilProvider: InferenceProvider = {
   id: "tinfoil",
@@ -40,12 +39,12 @@ export const tinfoilProvider: InferenceProvider = {
     const requestBody: Record<string, unknown> = { model, messages };
     applyChatCompletionsParams(requestBody, { model, provider: "tinfoil", config, maxTokens });
 
-    // 30s per attempt like sibling providers; SDK-internal retries off so
-    // withRetry stays the single retry layer.
+    // Keep SDK-internal retries off so withRetry stays the single retry layer.
+    const timeoutMs = getLlmRequestTimeoutSeconds() * 1000;
     const response = await withRetry(
       () =>
         client.chat.completions.create(requestBody as any, {
-          timeout: REQUEST_TIMEOUT_MS,
+          timeout: timeoutMs,
           maxRetries: 0,
         }),
       createApiRetryStrategy()

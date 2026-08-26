@@ -158,3 +158,42 @@ test("missing byok keys throw configuration errors, not token errors", async () 
     );
   }
 });
+
+test('wire bodies: dictation posts the bare {"streams":1}; meetings post model+language+streams', async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  const wire = [];
+  const cloudDeps = deps({
+    postServerToken: async (path, body) => {
+      // JSON.stringify drops undefined keys exactly like the real fetch does.
+      wire.push({ path, json: JSON.stringify(body) });
+      return { clientSecret: "cs-single", clientSecrets: ["cs-a", "cs-b"] };
+    },
+  });
+
+  // Dictation: ipcHandlers' connectDictationStreaming passes only { mode, provider }.
+  await fetchRealtimeTokenForProvider("openai-realtime", cloudDeps, { mode: "openwhispr" });
+  // Meeting with system audio.
+  await fetchRealtimeTokenForProvider(
+    "openai-realtime",
+    cloudDeps,
+    { mode: "openwhispr", model: "gpt-4o-mini-transcribe", language: "en" },
+    { streams: 2 }
+  );
+  // Meeting whose system audio is unsupported (connectRealtimeStreaming's single-stream
+  // branch) — still carries model+language; streams defaults to 1.
+  await fetchRealtimeTokenForProvider(
+    "openai-realtime",
+    cloudDeps,
+    { mode: "openwhispr", model: "gpt-4o-mini-transcribe", language: undefined },
+    { streams: 1 }
+  );
+
+  assert.deepEqual(wire, [
+    { path: "/api/openai-realtime-token", json: '{"streams":1}' },
+    {
+      path: "/api/openai-realtime-token",
+      json: '{"model":"gpt-4o-mini-transcribe","language":"en","streams":2}',
+    },
+    { path: "/api/openai-realtime-token", json: '{"model":"gpt-4o-mini-transcribe","streams":1}' },
+  ]);
+});

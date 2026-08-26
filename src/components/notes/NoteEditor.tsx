@@ -23,6 +23,7 @@ import {
   resolveNotePermission,
   type NoteAclState,
 } from "../../lib/notePermissions";
+import { ownsNote } from "../../lib/spacePermissions";
 import SpaceMembersDialog from "./SpaceMembersDialog";
 import {
   useShareCacheEntry,
@@ -59,6 +60,7 @@ import NoteBottomBar from "./NoteBottomBar";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import { normalizeDbDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
+import { collectKnownPeople } from "../../utils/llmTranscript";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
@@ -67,6 +69,7 @@ import {
 } from "../../utils/transcriptSpeakerState";
 import NoteParticipants from "./NoteParticipants";
 import type { CalendarAttendee } from "../../types/calendar";
+import { observeFloatingChatLayout } from "./floatingChatLayout";
 
 const CHIP_BUTTON_CLASS =
   "inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-md border border-border/70 dark:border-white/25 text-foreground/50 dark:text-foreground/35 hover:text-foreground/60 hover:border-border/60 hover:bg-foreground/3 dark:hover:text-foreground/40 dark:hover:border-white/10 dark:hover:bg-white/3 transition-all duration-150 cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
@@ -259,6 +262,7 @@ export default function NoteEditor({
     cachedPermission: shareCache?.access?.my_permission,
     aclState,
     isTeamNote,
+    locallyOwned: ownsNote(note, user?.id),
   });
   const shareCapabilities = noteCapabilities(notePermission);
   const canShare =
@@ -399,6 +403,20 @@ export default function NoteEditor({
       return [];
     }
   }, [note.participants]);
+
+  const mentionPeople = useMemo(
+    () =>
+      collectKnownPeople(
+        {
+          selfName: user?.name?.trim() || null,
+          selfEmail: user?.email?.trim() || null,
+          participants: parsedParticipants,
+        },
+        speakerMappings,
+        displaySegments
+      ),
+    [user?.name, user?.email, parsedParticipants, speakerMappings, displaySegments]
+  );
 
   const refreshSpeakerProfiles = useCallback(() => {
     window.electronAPI?.getSpeakerProfiles?.().then((profiles) => {
@@ -698,6 +716,34 @@ export default function NoteEditor({
     }
     prevRecordingRef.current = isRecording;
   }, [isRecording, scheduleUiUpdate]);
+
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+
+  const getActiveScroller = useCallback((root: HTMLDivElement): HTMLElement | null => {
+    const candidates = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))].filter(
+      (el) => el.scrollHeight - el.clientHeight > 2
+    );
+    if (!candidates.length) return null;
+    return candidates.reduce((a, b) =>
+      b.scrollHeight - b.clientHeight > a.scrollHeight - a.clientHeight ? b : a
+    );
+  }, []);
+
+  const floatingChatPanelRef = useCallback(
+    (panel: HTMLDivElement | null): (() => void) | undefined => {
+      const container = panel?.parentElement;
+      const contentRoot = contentScrollRef.current;
+      if (!panel || !container || !contentRoot) return undefined;
+
+      return observeFloatingChatLayout({
+        panel,
+        container,
+        contentRoot,
+        getActiveScroller: (): HTMLElement | null => getActiveScroller(contentRoot),
+      });
+    },
+    [getActiveScroller]
+  );
 
   const handleContentChange = useCallback(
     (newValue: string) => {
@@ -1133,7 +1179,7 @@ export default function NoteEditor({
         )}
 
         <div className="flex-1 relative min-h-0">
-          <div className="h-full overflow-y-auto">
+          <div ref={contentScrollRef} className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
@@ -1178,6 +1224,7 @@ export default function NoteEditor({
                 value={enhancement.content}
                 onChange={handleEnhancedChange}
                 disabled={!canEditNote}
+                mentionPeople={mentionPeople}
               />
             ) : (
               <RichTextEditor
@@ -1186,6 +1233,7 @@ export default function NoteEditor({
                 editorRef={editorRef}
                 placeholder={t("notes.editor.startWriting")}
                 disabled={!canEditNote || actionProcessingState === "processing"}
+                mentionPeople={mentionPeople}
               />
             )}
           </div>
@@ -1226,6 +1274,7 @@ export default function NoteEditor({
           {chatMode === "floating" && (
             <EmbeddedChat
               mode="floating"
+              floatingPanelRef={floatingChatPanelRef}
               onModeChange={setChatMode}
               messages={embeddedChat.messages}
               agentState={embeddedChat.agentState}

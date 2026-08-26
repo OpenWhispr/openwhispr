@@ -22,10 +22,6 @@ export function buildSelectionEditUserPrompt(spokenInstruction, selectedText) {
   });
 }
 
-// Codes meaning "this target can never report a selection", as opposed to "a
-// selection may exist and the read failed". They fall back to typing at the
-// cursor — the Voice Agent's behavior before selection editing existed — because
-// losing in-place editing is acceptable where losing the command is not.
 const STANDALONE_CAPTURE_CODES = new Set([
   "target_unavailable",
   "copy_helper_unavailable",
@@ -37,6 +33,7 @@ const STANDALONE_CAPTURE_CODES = new Set([
 ]);
 
 export function getSelectionCaptureDisposition(capture) {
+  if (capture?.status === "editable") return "caret";
   if (!capture || capture.status === "none") return "standalone";
   if (capture.status === "selected") return "selection";
   if (capture.status === "unavailable" && STANDALONE_CAPTURE_CODES.has(capture.code)) {
@@ -46,11 +43,11 @@ export function getSelectionCaptureDisposition(capture) {
 }
 
 export function extractSelectionEditReplacement(result, completionMarker) {
-  if (typeof result !== "string" || !completionMarker || !result.endsWith(completionMarker)) {
+  if (typeof result !== "string" || (completionMarker && !result.endsWith(completionMarker))) {
     throw new Error("Model output was incomplete before the selection edit completed");
   }
 
-  const replacement = result.slice(0, -completionMarker.length);
+  const replacement = completionMarker ? result.slice(0, -completionMarker.length) : result;
   if (replacement.trim().length === 0) {
     throw new Error("Model returned an empty selection edit");
   }

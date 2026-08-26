@@ -4,6 +4,7 @@ import type {
   SpaceItem,
   TranscriptionItem,
   ConversationPreview,
+  ConversationCreateSnapshot,
 } from "../types/electron";
 import { NotesService, type CloudNote } from "./NotesService.js";
 import { ConversationsService } from "./ConversationsService.js";
@@ -147,6 +148,24 @@ const PURGED_SPACE_GUARD_LOCK = "openwhispr-purged-spaces";
 const NOTE_UPDATE_404_KEY = "noteUpdate404Counts";
 const FOLDER_UPDATE_404_KEY = "folderUpdate404Counts";
 
+interface ConversationCreateSource {
+  client_conversation_id?: string | null;
+  title: string;
+  updated_at: string;
+  messages: readonly unknown[];
+}
+
+function conversationCreateSnapshot(
+  conversation: ConversationCreateSource
+): ConversationCreateSnapshot {
+  return {
+    client_conversation_id: conversation.client_conversation_id ?? null,
+    title: conversation.title,
+    updated_at: conversation.updated_at,
+    message_count: conversation.messages.length,
+  };
+}
+
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   try {
     const raw = localStorage.getItem(PURGED_SPACE_GUARD_KEY);
@@ -161,8 +180,7 @@ function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   }
 }
 
-// Call BEFORE purgeSpace, from every purge path (sync revocation, sign-out,
-// and the UI's delete-space flow).
+// Call BEFORE purgeSpace from revocation and UI delete-space flows.
 export async function markSpacePurged(
   cloudSpaceId: string,
   reason: PurgedSpaceReason
@@ -279,21 +297,18 @@ export class SyncService {
     localStorage.setItem("teamSpacesCapability.probedAt", new Date().toISOString());
   }
 
-  // Sign-out leaves no team content behind: purge every team space locally and
-  // forget the capability probe + team cursors so the next account re-probes
-  // and backfills from scratch. Never throws — a failed purge must not block
-  // signing out.
+  // Sign-out clears account-scoped renderer/session state without deleting
+  // workspace-owned rows. The main-process account scope hides those rows as
+  // soon as the bearer token is cleared.
   async purgeTeamSpacesForSignOut(): Promise<void> {
-    // Wait for the sync lock: an in-flight pass (often in another window)
-    // still holds a pre-purge space map, and its remaining rows would
-    // re-insert team content after the purge — unreachable by any later
-    // cleanup once the guard entries below are gone.
+    // Wait for the sync lock so an in-flight pass cannot repopulate renderer
+    // state after this account boundary has been cleared.
     try {
-      await navigator.locks.request(SYNC_ALL_LOCK, () => this.purgeAllTeamSpaces());
+      await navigator.locks.request(SYNC_ALL_LOCK, () => this.clearTeamSpaceSessionState());
     } catch (err) {
-      console.error("Sign-out purge could not take the sync lock:", err);
-      // Never block sign-out: purge unfenced rather than not at all.
-      await this.purgeAllTeamSpaces();
+      console.error("Sign-out cleanup could not take the sync lock:", err);
+      // Never block sign-out: clear session state even if the lock failed.
+      await this.clearTeamSpaceSessionState();
     }
   }
 
@@ -306,15 +321,13 @@ export class SyncService {
     let purgedCount = 0;
     await navigator.locks.request(SYNC_ALL_LOCK, async () => {
       await assertAuthGenerationCurrent(authGeneration);
-      let localSpaces = (await window.electronAPI.getSpaces?.()) ?? [];
-      const localTeamSpaces = localSpaces.filter((space) => space.kind === "team");
-      if (localTeamSpaces.length === 0) {
-        await assertAuthGenerationCurrent(authGeneration);
-        return;
-      }
-
       const remoteSpaces = await SpacesService.mySpacesForAuthValidation(authGeneration);
       await assertAuthGenerationCurrent(authGeneration);
+      await prunePurgedSpaceIds(new Set(remoteSpaces.map((space) => space.id)));
+      await upsertCloudSpaces(remoteSpaces);
+      await assertAuthGenerationCurrent(authGeneration);
+      let localSpaces = (await window.electronAPI.getSpaces?.()) ?? [];
+      const localTeamSpaces = localSpaces.filter((space) => space.kind === "team");
       const initial = partitionLocalTeamSpaces(localTeamSpaces, remoteSpaces);
       for (const space of initial.unproven) {
         await assertAuthGenerationCurrent(authGeneration);
@@ -348,30 +361,12 @@ export class SyncService {
     return purgedCount;
   }
 
-  private async purgeAllTeamSpaces(): Promise<void> {
-    try {
-      const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
-      for (const space of spaces) {
-        if (space.kind !== "team") continue;
-        try {
-          // "revoked", not "deleted": the whole guard key is removed once the
-          // sign-out purge completes, and if that removal ever fails a revoked
-          // entry self-heals on the next pass instead of locking the space out.
-          if (space.cloud_space_id) await markSpacePurged(space.cloud_space_id, "revoked");
-          await window.electronAPI.purgeSpace?.(space.id, { mode: "destructive" });
-        } catch (err) {
-          console.error(`Purging space ${space.id} on sign-out failed:`, err);
-        }
-      }
-    } catch (err) {
-      console.error("Team space purge on sign-out failed:", err);
-    }
+  private async clearTeamSpaceSessionState(): Promise<void> {
     clearTeamSpacesCapability();
     localStorage.removeItem("teamSpacesCapability.probedAt");
     localStorage.removeItem("lastSyncedAt.notes.team");
     localStorage.removeItem("lastSyncedAt.folders.team");
-    // The guard protected any pass still in flight during the purge; drop it
-    // so the next account (possibly a member of the same spaces) starts clean.
+    // The next account must establish its own remote membership view.
     localStorage.removeItem(PURGED_SPACE_GUARD_KEY);
     // Pre-spaces guard key; stale entries are meaningless now.
     localStorage.removeItem("purgedTeamIds");
@@ -878,6 +873,27 @@ export class SyncService {
     return synced?.cloud_id ?? null;
   }
 
+  private async acknowledgeConversationCreate(
+    localId: number,
+    snapshot: ConversationCreateSnapshot,
+    cloudId: string
+  ): Promise<void> {
+    const result = await window.electronAPI.acknowledgeConversationCreate?.(
+      localId,
+      snapshot,
+      cloudId
+    );
+    if (!result?.success) return;
+
+    const shouldDeleteCreate =
+      result.outcome === "changed" ||
+      result.outcome === "orphaned" ||
+      (result.outcome === "already-linked" && result.cloud_id !== cloudId);
+    if (shouldDeleteCreate) {
+      await ConversationsService.delete(cloudId);
+    }
+  }
+
   private async pushConversation(id: number): Promise<void> {
     const full = await window.electronAPI.getAgentConversation?.(id);
     if (!full) return;
@@ -885,8 +901,9 @@ export class SyncService {
     if (full.cloud_id) {
       await ConversationsService.update(full.cloud_id, { title: full.title });
     } else {
+      const snapshot = conversationCreateSnapshot(full);
       const cloud = await ConversationsService.create({
-        client_conversation_id: String(full.id),
+        client_conversation_id: full.client_conversation_id ?? String(full.id),
         title: full.title,
         created_at: full.created_at,
         updated_at: full.updated_at,
@@ -900,12 +917,7 @@ export class SyncService {
             : null,
         })),
       });
-      const linked = await window.electronAPI.markConversationSynced?.(full.id, cloud.id);
-      if (linked?.success === false) {
-        // The local row was purged while POST was in flight. It cannot carry a
-        // delete tombstone, so retire the orphaned cloud row immediately.
-        await ConversationsService.delete(cloud.id);
-      }
+      await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id);
     }
   }
 
@@ -2053,11 +2065,12 @@ export class SyncService {
       try {
         const full = await window.electronAPI.getAgentConversation?.(conv.id);
         if (!full) continue;
+        const snapshot = conversationCreateSnapshot(full);
         const cloudConv = await ConversationsService.create({
-          client_conversation_id: conv.client_conversation_id ?? String(conv.id),
-          title: conv.title,
-          created_at: conv.created_at,
-          updated_at: conv.updated_at,
+          client_conversation_id: full.client_conversation_id ?? String(full.id),
+          title: full.title,
+          created_at: full.created_at,
+          updated_at: full.updated_at,
           messages: full.messages.map((m) => ({
             role: m.role,
             content: m.content,
@@ -2068,10 +2081,7 @@ export class SyncService {
               : null,
           })),
         });
-        const linked = await window.electronAPI.markConversationSynced?.(conv.id, cloudConv.id);
-        if (linked?.success === false) {
-          await ConversationsService.delete(cloudConv.id);
-        }
+        await this.acknowledgeConversationCreate(full.id, snapshot, cloudConv.id);
       } catch (err) {
         console.error("Conversation sync failed:", err);
       }

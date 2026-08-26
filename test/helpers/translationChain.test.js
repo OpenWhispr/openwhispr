@@ -81,6 +81,51 @@ test("cleanup throws: onCleanupError fires, translate runs on original text", as
   assert.equal(result.text, "translated(raw)");
 });
 
+test("cleanup returns whitespace-only: text unchanged, translate still runs", async () => {
+  const { executeTranslationChain } = await load();
+
+  const result = await executeTranslationChain(
+    makeOpts({
+      runCleanup: async () => "   ",
+      runTranslate: async (currentText) => `translated(${currentText})`,
+    })
+  );
+
+  assert.equal(result.text, "translated(raw)");
+});
+
+test("translate returns whitespace-only: onEmptyTranslate fires, cleaned text kept", async () => {
+  const { executeTranslationChain } = await load();
+  let emptyCalled = false;
+
+  const result = await executeTranslationChain(
+    makeOpts({
+      runCleanup: async () => "cleaned",
+      runTranslate: async () => "\u00a0",
+      onEmptyTranslate: () => {
+        emptyCalled = true;
+      },
+    })
+  );
+
+  assert.equal(emptyCalled, true);
+  assert.equal(result.text, "cleaned");
+});
+
+test("shouldTranslate false: whitespace-only cleanup keeps the original text", async () => {
+  const { executeTranslationChain } = await load();
+
+  const result = await executeTranslationChain(
+    makeOpts({
+      text: "hello world",
+      shouldTranslate: false,
+      runCleanup: async () => "   ",
+    })
+  );
+
+  assert.equal(result.text, "hello world");
+});
+
 test("cleanup returns empty: text unchanged, translate still runs", async () => {
   const { executeTranslationChain } = await load();
 
@@ -301,6 +346,8 @@ test("resolveTranslatedText: empty chain result keeps processedText", async () =
   const { resolveTranslatedText } = await load();
 
   assert.equal(resolveTranslatedText("raw dictation", { text: "" }), "raw dictation");
+  assert.equal(resolveTranslatedText("raw dictation", { text: "   " }), "raw dictation");
+  assert.equal(resolveTranslatedText("raw dictation", { text: "\u00a0" }), "raw dictation");
   assert.equal(resolveTranslatedText("raw dictation", { text: null }), "raw dictation");
   assert.equal(resolveTranslatedText("raw dictation", {}), "raw dictation");
 });
@@ -363,4 +410,17 @@ test("translated: false when the translate step is skipped", async () => {
   );
   assert.equal(result.translated, false);
   assert.equal(result.text, "raw");
+});
+
+// Guard shared with the agent/cleanup call sites (audioManager, ControlPanel history
+// retry): whitespace-only reasoning output must never replace existing text (#1616).
+test("hasTextContent: true only for strings with non-whitespace content", async () => {
+  const { hasTextContent } = await load();
+
+  assert.equal(hasTextContent("cleaned text"), true);
+  assert.equal(hasTextContent("  padded  "), true);
+  assert.equal(hasTextContent(""), false);
+  assert.equal(hasTextContent("   \n\t  "), false);
+  assert.equal(hasTextContent(null), false);
+  assert.equal(hasTextContent(undefined), false);
 });

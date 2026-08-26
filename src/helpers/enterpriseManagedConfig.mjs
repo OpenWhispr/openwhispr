@@ -81,8 +81,7 @@ function isValidProviderConfig(record) {
 
   if (record.provider === "bedrock") {
     const partition = typeof config.roleArn === "string" ? config.roleArn.split(":")[1] : null;
-    const isGovRegion =
-      typeof config.region === "string" && config.region.startsWith("us-gov-");
+    const isGovRegion = typeof config.region === "string" && config.region.startsWith("us-gov-");
     return (
       AWS_ROLE_ARN.test(config.roleArn) &&
       AWS_REGION.test(config.region) &&

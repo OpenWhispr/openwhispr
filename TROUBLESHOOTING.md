@@ -116,10 +116,16 @@
    - Debian/Ubuntu: `sudo apt install wl-clipboard`
    - Fedora/RHEL: `sudo dnf install wl-clipboard`
    - Arch: `sudo pacman -S wl-clipboard`
-2. Ensure a paste tool is installed (`xdotool` recommended, or `wtype` for Sway/Hyprland, or `ydotool` with daemon)
+2. OpenWhispr chooses a compositor-specific paste method:
+   - Hyprland: `wtype`, then `hyprctl dispatch sendshortcut`
+   - Sway and other wlroots compositors: `wtype`
+   - GNOME and KDE Plasma: the RemoteDesktop keyboard portal
+   - `ydotool` is a fallback and requires the `ydotoold` daemon
 3. Restart OpenWhispr after installing
 
 OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → renderer `navigator.clipboard` → X11 fallback.
+
+On GNOME and KDE, the first automatic paste can show a remote-interaction permission dialog. Approval is remembered in `~/.cache/openwhispr/portal-paste-token`; revoking permission or invalidating that token makes the prompt return. If automatic paste fails, the transcription remains in the clipboard for manual paste.
 
 ### Linux System Audio PipeWire Issues
 
@@ -159,17 +165,18 @@ OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → rende
 3. Ensure your meeting app (Zoom, Teams, FaceTime) is running — process detection looks for known meeting applications
 4. If auto-detection fails, you can manually start recording from the in-app meeting prompt (an always-on-top overlay card — it works even with Focus/Do Not Disturb on and never appears in screen shares)
 
-### Agent Mode Issues
+### Voice Assistant Issues
 
-**Symptoms:** Agent overlay not appearing, no AI responses, streaming errors
+**Symptoms:** Assistant panel not appearing, no AI responses, streaming errors
 
 **Fix:**
 
-1. Ensure Agent Mode is enabled in Settings → Agent Mode
+1. Check your chat model under Settings → AI Models → Chat (the panel runs on the chat scope); the Voice Assistant toggle only gates in-place selection edits
 2. Check that you have a valid API key for your selected provider
-3. Verify the agent hotkey doesn't conflict with other global shortcuts
-4. For local models: ensure the model is downloaded and llama-server is running
-5. For Metal OOM on macOS: try a smaller local model
+3. Verify the Voice Assistant hotkey doesn't conflict with other global shortcuts
+4. Remember there is no separate assistant window. Press the Voice Assistant hotkey (or use the pill) and speak: highlighted text is edited in place; with auto-paste enabled, an answer pastes at a focused writable cursor. Without a writable cursor—or if the target changes while the answer is generated—OpenWhispr leaves the field untouched, opens the floating panel attached to the dictation pill, and copies the completed answer to the clipboard for manual paste
+5. For local models: ensure the model is downloaded and llama-server is running
+6. For Metal OOM on macOS: try a smaller local model
 
 ### Windows-Specific Issues
 

@@ -5,61 +5,49 @@ const assert = require("node:assert/strict");
 // user. Before #1547 it shared the genuine-silence branch, which suppressed both
 // the toast and saveFailedTranscription, so a whole utterance vanished with no
 // feedback and no way to retry it.
-const runCatch = (error, manager) => {
+//
+// The dictionary-echo and genuine-silence branches are exercised against the
+// REAL processAudio in audioManagerNoAudioLifecycle.test.js; this mirror covers
+// only the remaining branch (a real failure) and must track the source's catch
+// block in processAudio (src/helpers/audioManager.js).
+const settleFailure = (error, manager) => {
+  let noAudioDetected = false;
   if (error.code === "DICTIONARY_ECHO") {
-    manager.onNoAudio?.();
+    noAudioDetected = true;
     if (manager.lastAudioBlob) {
       manager.saveFailedTranscription(error.message, error.code, {});
     }
-  } else if (error.message !== "No audio detected") {
+  } else if (error.message === "No audio detected") {
+    noAudioDetected = true;
+  } else {
     manager.onError?.({ description: error.message });
     if (manager.lastAudioBlob) {
       manager.saveFailedTranscription(error.message, error.code || null, {});
     }
   }
+  manager.onStateChange?.({ isRecording: false, isProcessing: false });
+  if (noAudioDetected) manager.onNoAudio?.();
 };
 
 const makeManager = () => {
-  const calls = { noAudio: 0, errors: [], saved: [] };
+  const calls = { noAudio: 0, errors: [], saved: [], order: [] };
   return {
     calls,
     lastAudioBlob: {},
-    onNoAudio: () => calls.noAudio++,
+    onStateChange: () => calls.order.push("idle"),
+    onNoAudio: () => {
+      calls.noAudio++;
+      calls.order.push("no-audio");
+    },
     onError: (payload) => calls.errors.push(payload),
     saveFailedTranscription: (message, code) => calls.saved.push({ message, code }),
   };
 };
 
-test("a discarded dictionary echo toasts and keeps the recording", async () => {
-  const { DICTIONARY_ECHO_CODE } = await import("../../src/utils/dictionaryEchoFilter.js");
-  const manager = makeManager();
-  const error = new Error("No audio detected");
-  error.code = DICTIONARY_ECHO_CODE;
-
-  runCatch(error, manager);
-
-  assert.equal(manager.calls.noAudio, 1);
-  assert.deepEqual(manager.calls.saved, [
-    { message: "No audio detected", code: DICTIONARY_ECHO_CODE },
-  ]);
-  // Not the destructive "Transcription Error" toast — this is a soft outcome.
-  assert.deepEqual(manager.calls.errors, []);
-});
-
-test("genuine silence stays silent — main already toasts that path", () => {
-  const manager = makeManager();
-
-  runCatch(new Error("No audio detected"), manager);
-
-  assert.equal(manager.calls.noAudio, 0);
-  assert.deepEqual(manager.calls.saved, []);
-  assert.deepEqual(manager.calls.errors, []);
-});
-
 test("a real failure still reports an error and saves for retry", () => {
   const manager = makeManager();
 
-  runCatch(new Error("Groq returned 500"), manager);
+  settleFailure(new Error("Groq returned 500"), manager);
 
   assert.equal(manager.calls.noAudio, 0);
   assert.equal(manager.calls.errors.length, 1);

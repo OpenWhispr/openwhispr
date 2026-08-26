@@ -15,6 +15,9 @@ export interface FileTranscriptionResult {
   // Measured duration of the source audio, for persisting as
   // audio_duration_seconds. Only transcribeFileWithSpeakers sets it.
   durationSeconds?: number | null;
+  // Segment-level timing from BYOK providers that support it (opts.timestamps
+  // or BYOK diarization). Absent whenever the provider returned text only.
+  segments?: Array<{ text: string; start: number; end: number; speaker?: string }>;
 }
 
 export interface DiarizationSettings {
@@ -42,13 +45,41 @@ export interface FileTranscriptionConfig {
   remoteTranscriptionModel?: string;
 }
 
+export interface TranscriptionApiKeys {
+  openaiApiKey: string;
+  groqApiKey: string;
+  xaiApiKey: string;
+  mistralApiKey: string;
+  tinfoilApiKey: string;
+  customTranscriptionApiKey?: string;
+}
+
+export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiKeys): string {
+  switch (provider) {
+    case "openai":
+      return keys.openaiApiKey;
+    case "groq":
+      return keys.groqApiKey;
+    case "xai":
+      return keys.xaiApiKey;
+    case "mistral":
+      return keys.mistralApiKey;
+    case "tinfoil":
+      return keys.tinfoilApiKey;
+    case "custom":
+      return keys.customTranscriptionApiKey || "";
+    default:
+      return "";
+  }
+}
+
 // Single provider dispatch shared by the single-file flow and the batch queue,
 // so BYOK providers receive identical options in both.
 export async function transcribeFile(
   filePath: string,
   cfg: FileTranscriptionConfig,
   diarize: boolean,
-  opts: { requestId?: string } = {}
+  opts: { requestId?: string; timestamps?: boolean } = {}
 ): Promise<FileTranscriptionResult> {
   if (cfg.isOpenWhisprCloud) {
     return withSessionRefresh(async () => {
@@ -66,6 +97,7 @@ export async function transcribeFile(
     return window.electronAPI.transcribeAudioFile(filePath, {
       provider: cfg.localTranscriptionProvider as "whisper" | "nvidia",
       model: cfg.localTranscriptionProvider === "nvidia" ? cfg.parakeetModel : cfg.whisperModel,
+      requestId: opts.requestId,
     });
   }
 
@@ -99,6 +131,7 @@ export async function transcribeFile(
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,
+    timestamps: opts.timestamps || undefined,
     provider: cfg.cloudTranscriptionProvider,
     language: cfg.language,
     environment: cfg.cortiEnvironment,
@@ -133,7 +166,7 @@ export async function transcribeFileWithSpeakers(
   cfg: FileTranscriptionConfig,
   diarization: DiarizationSettings,
   durationSeconds?: number | null,
-  opts: { requestId?: string } = {}
+  opts: { requestId?: string; timestamps?: boolean } = {}
 ): Promise<FileTranscriptionResult> {
   const byokDiarize = shouldUseByokDiarize(cfg, diarization.enabled);
   const diarizePromise =
@@ -141,6 +174,7 @@ export async function transcribeFileWithSpeakers(
       ? (window.electronAPI
           .diarizeAudioFile?.(filePath, {
             numSpeakers: diarization.numSpeakers ?? undefined,
+            requestId: opts.requestId,
           })
           .catch(() => null) ?? Promise.resolve(null))
       : Promise.resolve(null);

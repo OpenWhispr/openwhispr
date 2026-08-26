@@ -10,6 +10,7 @@ const {
   gracefulStopProcess,
 } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
+const { createAbortError } = require("./abortError");
 const sidecarPidFile = require("./sidecarPidFile");
 const { parseOfflineMessage, createOnlineAccumulator } = require("./parakeetWsResult");
 const { pcm16ToFloat32 } = require("../utils/audioUtils");
@@ -253,24 +254,30 @@ class ParakeetWsServer {
     }
   }
 
-  transcribe(samplesBuffer, sampleRate) {
+  // signal is optional; dictation and warm-up flows never pass one.
+  transcribe(samplesBuffer, sampleRate, { signal } = {}) {
     if (!this.ready || !this.process) {
       throw new Error("parakeet-ws server is not running");
     }
 
     if (this.modelRuntime === "online") {
-      return this._transcribeOnline(samplesBuffer);
+      return this._transcribeOnline(samplesBuffer, signal);
     }
 
-    return this._transcribeOffline(samplesBuffer, sampleRate);
+    return this._transcribeOffline(samplesBuffer, sampleRate, signal);
   }
 
-  _transcribeOffline(samplesBuffer, sampleRate) {
+  _transcribeOffline(samplesBuffer, sampleRate, signal) {
     const timeoutMs = computeTranscriptionTimeoutMs(
       samplesBuffer.length / FLOAT32_BYTES_PER_SAMPLE / sampleRate
     );
 
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(createAbortError("parakeet-ws transcription cancelled"));
+        return;
+      }
+
       const startTime = Date.now();
       let result = "";
 
@@ -282,6 +289,17 @@ class ParakeetWsServer {
       }, timeoutMs);
 
       const ws = new WebSocket(`ws://127.0.0.1:${this.port}`);
+
+      // Closing the socket drops this request; the server finishes its
+      // in-flight decode of the segment on its own (bounded by the 15s cap).
+      const onAbort = () => {
+        clearTimeout(timeout);
+        try {
+          ws.close();
+        } catch {}
+        reject(createAbortError("parakeet-ws transcription cancelled"));
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
 
       ws.on("open", () => {
         // sherpa-onnx offline WS binary protocol:
@@ -310,6 +328,7 @@ class ParakeetWsServer {
 
       ws.on("close", (code) => {
         clearTimeout(timeout);
+        signal?.removeEventListener("abort", onAbort);
         const elapsed = Date.now() - startTime;
 
         // The offline server always sends one result message (even for silence),
@@ -331,13 +350,16 @@ class ParakeetWsServer {
 
       ws.on("error", (error) => {
         clearTimeout(timeout);
+        signal?.removeEventListener("abort", onAbort);
         reject(new Error(`parakeet-ws transcription failed: ${error.message}`));
       });
     });
   }
 
   // samplesBuffer must already be 16kHz float32.
-  async _transcribeOnline(samplesBuffer) {
+  async _transcribeOnline(samplesBuffer, signal) {
+    if (signal?.aborted) throw createAbortError("parakeet-ws transcription cancelled");
+
     const startTime = Date.now();
     let streamError = null;
     let timedOut = false;
@@ -365,9 +387,12 @@ class ParakeetWsServer {
       },
       Math.max(TRANSCRIPTION_TIMEOUT_FLOOR_MS, audioSeconds * ONLINE_TIMEOUT_PER_AUDIO_SECOND_MS)
     );
+    const onAbort = () => stream.abort();
+    signal?.addEventListener("abort", onAbort, { once: true });
     try {
       const idleTimeoutMs = Math.max(ONLINE_FINISH_IDLE_TIMEOUT_MS, audioSeconds * 500);
       const { text, truncated } = await stream.finish({ idleTimeoutMs });
+      if (signal?.aborted) throw createAbortError("parakeet-ws transcription cancelled");
       if (timedOut) throw new Error("parakeet-ws transcription timed out");
       if (streamError) {
         throw new Error(`parakeet-ws transcription failed: ${streamError.message}`);
@@ -383,6 +408,7 @@ class ParakeetWsServer {
       return truncated ? { text, elapsed, truncated } : { text, elapsed };
     } finally {
       clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
     }
   }
 
