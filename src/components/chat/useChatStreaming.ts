@@ -499,6 +499,13 @@ export function useChatStreaming({
               message.id === assistantId ? { ...message, isStreaming: false } : message
             )
           );
+          // An unmount mid-stream (page navigation) keeps the partial reply in
+          // history so the saved conversation matches what the user last saw; a
+          // cancel drops it. Neither may run the per-request delivery hook.
+          if (!cancelled() && fullContent.trim().length > 0) {
+            const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
+            onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
+          }
           return;
         }
 

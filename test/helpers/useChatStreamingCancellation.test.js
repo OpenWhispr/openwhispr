@@ -45,7 +45,7 @@ const EMPTY_RESPONSE_TEXT = JSON.parse(
   fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
 ).agentMode.chat.emptyResponse;
 
-async function renderChatStreaming(t, { electronAPI = {}, settings = {} } = {}) {
+async function renderChatStreaming(t, { electronAPI = {}, settings = {}, onStreamComplete } = {}) {
   installBrowserGlobals(t, { window: { electronAPI } });
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-cancellation-test-",
@@ -99,6 +99,7 @@ async function renderChatStreaming(t, { electronAPI = {}, settings = {} } = {}) 
     captured = useChatStreaming({
       messages,
       setMessages,
+      onStreamComplete,
       onResponseContent: () => {
         responseContentCalls += 1;
       },
@@ -235,7 +236,12 @@ test("cancelling before any token arrives never shows the empty-response fallbac
     return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
   };
 
-  const { captured, getMessages } = await renderChatStreaming(t);
+  let streamCompleteCalls = 0;
+  const { captured, getMessages } = await renderChatStreaming(t, {
+    onStreamComplete: () => {
+      streamCompleteCalls += 1;
+    },
+  });
 
   let completionCalls = 0;
   const sendPromise = captured.sendToAI("hello", [], {
@@ -261,6 +267,7 @@ test("cancelling before any token arrives never shows the empty-response fallbac
   assert.equal(message.content, "");
   assert.equal(message.isStreaming, false);
   assert.equal(completionCalls, 0, "a cancelled request must never deliver a response");
+  assert.equal(streamCompleteCalls, 0, "a cancelled request must never persist a partial reply");
 });
 
 test("cancelling a tool-ineligible raw stream after reading starts shows no error", async (t) => {
