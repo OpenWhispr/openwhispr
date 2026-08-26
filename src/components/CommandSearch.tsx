@@ -13,6 +13,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { cn } from "./lib/utils";
+import { useDismissGuard } from "./ui/useDismissGuard";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -313,12 +314,19 @@ export default function CommandSearch({
   }, [selectedIndex]);
 
   const hasResults = flatItems.length > 0;
+  const { registerContent, shouldBlockDismiss } = useDismissGuard<HTMLDivElement>();
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
+          ref={registerContent}
+          onInteractOutside={(e) => {
+            // The filter dropdown makes this panel inert while it is open, so
+            // the click that closes it lands on the overlay — see useDismissGuard.
+            if (shouldBlockDismiss(e)) e.preventDefault();
+          }}
           className={cn(
             "fixed left-[50%] top-[18%] z-50 w-full max-w-xl translate-x-[-50%]",
             "rounded-xl border border-border/60 bg-card shadow-2xl overflow-hidden",
