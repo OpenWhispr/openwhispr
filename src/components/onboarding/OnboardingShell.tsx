@@ -211,7 +211,7 @@ export default function OnboardingShell({
           z-50. */}
       <div
         className="absolute inset-x-0 top-0 z-50 h-12"
-        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+        style={{ WebkitAppRegion: "drag" } as CSSProperties}
         aria-hidden="true"
       />
       {getPlatform() !== "darwin" && <OnboardingWindowControls />}
@@ -339,7 +339,7 @@ export function CompactOnboardingFrame({
           {
             "--onboarding-hero-dither-light": `url(${heroDither})`,
             "--onboarding-hero-dither-dark": `url(${heroDitherDark})`,
-          } as React.CSSProperties
+          } as CSSProperties
         }
       />
       {showBrandMark && (
