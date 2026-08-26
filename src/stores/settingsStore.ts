@@ -1530,7 +1530,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) localStorage.setItem("localLlmVramTtl", String(value));
     set({ localLlmVramTtl: value });
     if (window.electronAPI?.llamaServerUpdateTtl) {
-      window.electronAPI.llamaServerUpdateTtl(value);
+      window.electronAPI.llamaServerUpdateTtl(value).catch((err) => {
+        logger.warn(
+          "Failed to sync VRAM TTL to main process",
+          { error: (err as Error).message },
+          "settings"
+        );
+      });
     }
   },
 
@@ -3058,8 +3064,8 @@ export async function initializeSettings(): Promise<void> {
     
     // Push the initial local LLM VRAM TTL to the main process
     try {
-      if (window.electronAPI.llamaServerUpdateTtl) {
-        window.electronAPI.llamaServerUpdateTtl(useSettingsStore.getState().localLlmVramTtl);
+      if (window.electronAPI?.llamaServerUpdateTtl) {
+        await window.electronAPI.llamaServerUpdateTtl(useSettingsStore.getState().localLlmVramTtl);
       }
     } catch (err) {
       logger.warn(

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "lucide-react";
@@ -69,6 +69,8 @@ export default function InferenceConfigEditor({
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
   const localLlmVramTtl = useSettingsStore((s) => s.localLlmVramTtl);
   const setLocalLlmVramTtl = useSettingsStore((s) => s.setLocalLlmVramTtl);
+  const [ttlInput, setTtlInput] = useState(String(localLlmVramTtl));
+  useEffect(() => setTtlInput(String(localLlmVramTtl)), [localLlmVramTtl]);
   const enterpriseSetupMode = useSettingsStore((s) => s.enterpriseSetupMode);
   const setEnterpriseSetupMode = useSettingsStore((s) => s.setEnterpriseSetupMode);
   const managed = useManagedScopeResolution(scope, enterpriseSetupMode);
@@ -285,8 +287,16 @@ export default function InferenceConfigEditor({
             <Input
               type="number"
               min="0"
-              value={localLlmVramTtl}
-              onChange={(e) => setLocalLlmVramTtl(parseInt(e.target.value, 10) || 0)}
+              value={ttlInput}
+              onChange={(e) => setTtlInput(e.target.value)}
+              onBlur={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val) && val >= 0) {
+                  setLocalLlmVramTtl(val);
+                } else {
+                  setTtlInput(String(localLlmVramTtl));
+                }
+              }}
               className="w-24"
             />
           </div>

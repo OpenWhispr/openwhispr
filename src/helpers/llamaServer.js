@@ -34,7 +34,6 @@ class LlamaServerManager {
     this.startupPromise = null;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
-    this.shuttingDown = false;
     this.idleTimeoutMs = 5 * 60 * 1000;
     this.cachedServerBinaryPaths = null;
     this.activeBackend = null;
@@ -42,7 +41,14 @@ class LlamaServerManager {
   }
 
   setIdleTimeout(minutes) {
-    this.idleTimeoutMs = minutes * 60 * 1000;
+    let safeMinutes = Number(minutes);
+    if (!Number.isFinite(safeMinutes) || safeMinutes < 0) {
+      safeMinutes = 5; // fallback
+    } else if (safeMinutes > 35000) {
+      safeMinutes = 35000; // clamp to prevent setTimeout overflow (max 2,147,483,647 ms)
+    }
+
+    this.idleTimeoutMs = safeMinutes * 60 * 1000;
     if (this.process) {
       if (this.idleTimeoutMs === 0) {
         this.clearIdleTimer();

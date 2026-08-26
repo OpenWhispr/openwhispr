@@ -1762,6 +1762,10 @@
         "availableTitle": "Доступна настройка организации",
         "availableDescription": "Используйте {{provider}} без управления учётными данными.",
         "useManaged": "Использовать управляемый"
+      },
+      "localLlmVramTtl": {
+        "label": "Local LLM VRAM TTL (Minutes)",
+        "help": "0 means always keep in memory."
       }
     },
     "developer": {
@@ -3880,4 +3884,4 @@
       "keep": "Продолжить запись"
     }
   }
-}
+}\n

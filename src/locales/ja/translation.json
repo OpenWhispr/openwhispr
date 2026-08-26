@@ -1758,6 +1758,10 @@
         "availableTitle": "組織の設定が利用できます",
         "availableDescription": "認証情報を管理せずに {{provider}} を使用できます。",
         "useManaged": "マネージドを使用"
+      },
+      "localLlmVramTtl": {
+        "label": "Local LLM VRAM TTL (Minutes)",
+        "help": "0 means always keep in memory."
       }
     },
     "developer": {
@@ -3850,4 +3854,4 @@
       "keep": "録音を続ける"
     }
   }
-}
+}\n
