@@ -38,6 +38,30 @@ test("recording again merges and dedupes instead of overwriting", () => {
   assert.deepEqual(notice.read(), { packs: ["CUDA whisper", "Vulkan llama"] });
 });
 
+test("recordOnce fires each pack's notice only once, surviving a dismissal", () => {
+  notice.recordOnce(["CUDA whisper"]);
+  assert.deepEqual(notice.read(), { packs: ["CUDA whisper"] });
+
+  // Toast shown and dismissed; the pack is still missing on the next launch
+  notice.clear();
+  notice.recordOnce(["CUDA whisper"]);
+  assert.equal(notice.read(), null);
+
+  // A pack orphaned later still gets its one notice
+  notice.recordOnce(["CUDA whisper", "Vulkan whisper"]);
+  assert.deepEqual(notice.read(), { packs: ["Vulkan whisper"] });
+});
+
+test("recordOnce does not re-record a pack already noticed via record", () => {
+  notice.record(["CUDA whisper"]);
+  notice.recordOnce(["CUDA whisper"]);
+  assert.deepEqual(notice.read(), { packs: ["CUDA whisper"] });
+
+  notice.clear();
+  notice.recordOnce(["CUDA whisper"]);
+  assert.equal(notice.read(), null);
+});
+
 test("empty recordings and corrupt sentinels read as no notice", () => {
   notice.record([]);
   assert.equal(notice.read(), null);
