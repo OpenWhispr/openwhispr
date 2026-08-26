@@ -98,6 +98,39 @@ test("append: handles empty transcript", () => {
   assert.equal(append(""), "");
 });
 
+test("append: no trailing space after CJK ideographs", () => {
+  assert.equal(append("你好"), "你好");
+  assert.equal(append("日本語"), "日本語");
+});
+
+test("append: no trailing space after kana", () => {
+  assert.equal(append("こんにちは"), "こんにちは");
+  assert.equal(append("カタカナ"), "カタカナ");
+});
+
+test("append: no trailing space after full-width punctuation", () => {
+  assert.equal(append("你好。"), "你好。");
+  assert.equal(append("すごい！"), "すごい！");
+  assert.equal(append("何？"), "何？");
+  assert.equal(append("はい、"), "はい、");
+  assert.equal(append("「引用」"), "「引用」");
+  assert.equal(append("（括弧）"), "（括弧）");
+});
+
+test("append: no trailing space after halfwidth CJK punctuation and vertical forms", () => {
+  assert.equal(append("ﾃｽﾄ｡"), "ﾃｽﾄ｡");
+  assert.equal(append("你好︒"), "你好︒");
+});
+
+test("append: last character decides for mixed-script text", () => {
+  assert.equal(append("hello 你好"), "hello 你好");
+  assert.equal(append("你好 hello"), "你好 hello ");
+});
+
+test("append: keeps trailing space after Hangul (Korean uses word spacing)", () => {
+  assert.equal(append("안녕하세요"), "안녕하세요 ");
+});
+
 test("returns text unchanged for unknown mode", () => {
   assert.equal(applySmartSpacing({ text: "hello", mode: "noop" }), "hello");
 });

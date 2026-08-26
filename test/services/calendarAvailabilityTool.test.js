@@ -28,7 +28,7 @@ function availability(overrides = {}) {
     ],
     hasMore: false,
     isEntireRangeFree: false,
-    coverage: { source: "local-calendar-cache", lookaheadDays: 7 },
+    coverage: { source: "local-calendar-cache", lookaheadDays: 31 },
     ...overrides,
   };
 }
@@ -151,7 +151,7 @@ test("forwards valid options and strips all event-identifying response fields", 
       ],
       hasMore: false,
       isEntireRangeFree: false,
-      coverage: { source: "local-calendar-cache", lookaheadDays: 7 },
+      coverage: { source: "local-calendar-cache", lookaheadDays: 31 },
     },
     displayText: "Found 1 available time slot",
   });

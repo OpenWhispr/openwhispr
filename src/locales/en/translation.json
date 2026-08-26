@@ -186,6 +186,7 @@
         "accessibilityDescription": "Pastes text into your active app.",
         "systemAudioTitle": "System Audio",
         "systemAudioDescription": "Captures audio from other apps.",
+        "screenContextDescription": "Lets your voice assistant see your screen. Never stored.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -1000,7 +1001,7 @@
     "emailStep": {
       "checkingEmail": "Checking your email...",
       "continueWithEmail": "Continue with email",
-      "continueWithoutAccount": "Use OpenWhispr without an account",
+      "continueWithoutAccount": "Continue without an account",
       "emailLabel": "Email",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "Use a different email"
@@ -1692,6 +1693,11 @@
             "admin": "Workspace admin"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise console",
+        "description": "Manage SSO, policies, and members on the web",
+        "open": "Open console"
       }
     },
     "unifiedBilling": {
@@ -1836,7 +1842,9 @@
             "SSO & compliance",
             "Dedicated support"
           ],
-          "cta": "Contact Sales"
+          "cta": "Contact Sales",
+          "upgradeCta": "Upgrade to Enterprise",
+          "askOwner": "Ask {{name}} to upgrade your workspace."
         },
         "currentPlan": "Current plan",
         "coveredByWorkspace": "Included with your workspace plan",
@@ -2479,6 +2487,34 @@
       "endpointUrl": "Endpoint URL",
       "serverUrl": "Server URL",
       "apiKeyOptional": "API Key (optional)"
+    },
+    "enterpriseCheckout": {
+      "title": "Upgrade to Enterprise",
+      "description": "Choose a workspace, seats, and billing cycle. Payment is completed in Stripe Checkout.",
+      "allSubscribed": "The workspaces you own are already on Enterprise or can't be changed here. To make plan changes, contact sales.",
+      "workspaceLabel": "Workspace",
+      "seatsLabel": "Seats",
+      "seatsHint_one": "{{count}} seat currently in use",
+      "seatsHint_other": "{{count}} seats currently in use",
+      "intervalLabel": "Billing cycle",
+      "interval": {
+        "monthly": "Monthly",
+        "annual": "Annual"
+      },
+      "proratedCharge": "Prorated charge",
+      "prorationNote": "The prorated difference is added to your next invoice.",
+      "errors": {
+        "previewFailed": "Couldn't load the upgrade preview.",
+        "alreadyEnterprise": "This workspace is already on Enterprise.",
+        "subscriptionInactive": "This workspace's subscription isn't active. Update your billing details and try again.",
+        "priceNotConfigured": "Enterprise pricing isn't available right now. Please contact sales."
+      },
+      "priceNote": "Final pricing is shown at checkout.",
+      "continueCta": "Continue to checkout",
+      "upgradeDescription": "Upgrade {{workspace}} from {{plan}} to Enterprise. Seats and billing cycle carry over; the change takes effect immediately.",
+      "upgradeCta": "Upgrade now",
+      "upgradedTitle": "Upgraded to Enterprise",
+      "upgradedDescription": "{{workspace}} is now on Enterprise."
     }
   },
   "models": {

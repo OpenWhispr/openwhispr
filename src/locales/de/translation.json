@@ -186,6 +186,7 @@
         "accessibilityDescription": "Fügt Text in deine aktive App ein.",
         "systemAudioTitle": "Systemaudio",
         "systemAudioDescription": "Nimmt Audio aus anderen Apps auf.",
+        "screenContextDescription": "Lässt deinen Sprachassistenten deinen Bildschirm sehen. Wird nie gespeichert.",
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },
@@ -1000,7 +1001,7 @@
     "emailStep": {
       "checkingEmail": "E-Mail-Adresse wird überprüft...",
       "continueWithEmail": "Weiter mit E-Mail",
-      "continueWithoutAccount": "OpenWhispr ohne Konto nutzen",
+      "continueWithoutAccount": "Ohne Konto fortfahren",
       "emailLabel": "E-Mail",
       "emailPlaceholder": "sie@beispiel.de",
       "useDifferentEmail": "Andere E-Mail-Adresse verwenden"
@@ -1692,6 +1693,11 @@
             "admin": "Workspace-Administrator"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise-Konsole",
+        "description": "SSO, Richtlinien und Mitglieder im Web verwalten",
+        "open": "Konsole öffnen"
       }
     },
     "unifiedBilling": {
@@ -1836,7 +1842,9 @@
             "SSO & Compliance",
             "Dedizierter Support"
           ],
-          "cta": "Vertrieb kontaktieren"
+          "cta": "Vertrieb kontaktieren",
+          "upgradeCta": "Auf Enterprise upgraden",
+          "askOwner": "Bitte {{name}}, euren Workspace zu upgraden."
         },
         "currentPlan": "Aktueller Tarif",
         "coveredByWorkspace": "In Ihrem Workspace-Tarif enthalten",
@@ -2479,6 +2487,34 @@
       "endpointUrl": "Endpunkt-URL",
       "serverUrl": "Server-URL",
       "apiKeyOptional": "API-Schlüssel (optional)"
+    },
+    "enterpriseCheckout": {
+      "title": "Auf Enterprise upgraden",
+      "description": "Workspace, Plätze und Abrechnungszeitraum wählen. Die Zahlung erfolgt im Stripe-Checkout.",
+      "allSubscribed": "Die Workspaces, die dir gehören, sind bereits auf Enterprise oder können hier nicht geändert werden. Für Plan-Änderungen kontaktiere den Vertrieb.",
+      "workspaceLabel": "Workspace",
+      "seatsLabel": "Plätze",
+      "seatsHint_one": "{{count}} Platz derzeit belegt",
+      "seatsHint_other": "{{count}} Plätze derzeit belegt",
+      "intervalLabel": "Abrechnungszeitraum",
+      "interval": {
+        "monthly": "Monatlich",
+        "annual": "Jährlich"
+      },
+      "proratedCharge": "Anteiliger Betrag",
+      "prorationNote": "Die anteilige Differenz wird der nächsten Rechnung hinzugefügt.",
+      "errors": {
+        "previewFailed": "Upgrade-Vorschau konnte nicht geladen werden.",
+        "alreadyEnterprise": "Dieser Workspace ist bereits auf Enterprise.",
+        "subscriptionInactive": "Das Abonnement dieses Workspace ist nicht aktiv. Zahlungsdaten aktualisieren und erneut versuchen.",
+        "priceNotConfigured": "Enterprise-Preise sind derzeit nicht verfügbar. Bitte den Vertrieb kontaktieren."
+      },
+      "priceNote": "Der endgültige Preis wird beim Checkout angezeigt.",
+      "continueCta": "Weiter zum Checkout",
+      "upgradeDescription": "Upgrade von {{workspace}} von {{plan}} auf Enterprise. Plätze und Abrechnungszeitraum bleiben erhalten; die Änderung gilt sofort.",
+      "upgradeCta": "Jetzt upgraden",
+      "upgradedTitle": "Upgrade auf Enterprise abgeschlossen",
+      "upgradedDescription": "{{workspace}} ist jetzt auf Enterprise."
     }
   },
   "models": {

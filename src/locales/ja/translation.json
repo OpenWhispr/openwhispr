@@ -186,6 +186,7 @@
         "accessibilityDescription": "アクティブなアプリにテキストを貼り付けます。",
         "systemAudioTitle": "システムオーディオ",
         "systemAudioDescription": "ほかのアプリの音声を取り込みます。",
+        "screenContextDescription": "音声アシスタントが作業中の画面を確認できます。保存はされません。",
         "enable": "有効にする",
         "enabled": "有効"
       },
@@ -1001,7 +1002,7 @@
     "emailStep": {
       "checkingEmail": "メールアドレスを確認しています...",
       "continueWithEmail": "メールで続ける",
-      "continueWithoutAccount": "アカウントなしで OpenWhispr を使う",
+      "continueWithoutAccount": "アカウントなしで続ける",
       "emailLabel": "メールアドレス",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "別のメールアドレスを使用"
@@ -1552,7 +1553,9 @@
             "SSO とコンプライアンス",
             "専任サポート"
           ],
-          "cta": "営業に問い合わせる"
+          "cta": "営業に問い合わせる",
+          "upgradeCta": "Enterpriseにアップグレード",
+          "askOwner": "{{name}}さんにワークスペースのアップグレードを依頼してください。"
         },
         "currentPlan": "現在のプラン",
         "coveredByWorkspace": "ワークスペースのプランに含まれています",
@@ -2389,7 +2392,40 @@
             "admin": "ワークスペース管理者"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterpriseコンソール",
+        "description": "SSO、ポリシー、メンバーをウェブで管理",
+        "open": "コンソールを開く"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "Enterpriseにアップグレード",
+      "description": "ワークスペース、シート数、請求サイクルを選択してください。支払いはStripe Checkoutで完了します。",
+      "allSubscribed": "所有しているワークスペースは既にEnterpriseであるか、ここでは変更できません。プランの変更は営業までお問い合わせください。",
+      "workspaceLabel": "ワークスペース",
+      "seatsLabel": "シート数",
+      "seatsHint_one": "現在{{count}}シート使用中",
+      "seatsHint_other": "現在{{count}}シート使用中",
+      "intervalLabel": "請求サイクル",
+      "interval": {
+        "monthly": "月払い",
+        "annual": "年払い"
+      },
+      "proratedCharge": "日割り料金",
+      "prorationNote": "日割り計算された差額は次回の請求書に追加されます。",
+      "errors": {
+        "previewFailed": "アップグレードのプレビューを読み込めませんでした。",
+        "alreadyEnterprise": "このワークスペースはすでに Enterprise プランです。",
+        "subscriptionInactive": "このワークスペースのサブスクリプションが有効ではありません。請求情報を更新して再度お試しください。",
+        "priceNotConfigured": "Enterprise の料金は現在ご利用いただけません。営業までお問い合わせください。"
+      },
+      "priceNote": "最終的な価格はチェックアウト時に表示されます。",
+      "continueCta": "チェックアウトへ進む",
+      "upgradeDescription": "{{workspace}}を{{plan}}からEnterpriseにアップグレードします。シート数と請求サイクルは引き継がれ、変更は即時に適用されます。",
+      "upgradeCta": "今すぐアップグレード",
+      "upgradedTitle": "Enterpriseにアップグレードしました",
+      "upgradedDescription": "{{workspace}}はEnterpriseになりました。"
     }
   },
   "models": {

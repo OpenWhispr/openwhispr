@@ -2,7 +2,7 @@
 // Vite only handles ESM source files; main-process CJS callers load it via
 // Node's require(esm) with module-syntax detection.
 const MINUTE_MS = 60 * 1000;
-export const MAX_AVAILABILITY_HORIZON_DAYS = 7;
+export const MAX_AVAILABILITY_HORIZON_DAYS = 31;
 export const PAST_START_TOLERANCE_MS = 5 * MINUTE_MS;
 export const DEFAULT_MINIMUM_SLOT_MINUTES = 30;
 export const DEFAULT_BUFFER_MINUTES = 0;

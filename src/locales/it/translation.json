@@ -186,6 +186,7 @@
         "accessibilityDescription": "Incolla il testo nell’app attiva.",
         "systemAudioTitle": "Audio di Sistema",
         "systemAudioDescription": "Acquisisce l’audio da altre app.",
+        "screenContextDescription": "Consente all’assistente vocale di vedere lo schermo. Mai salvato.",
         "enable": "Attiva",
         "enabled": "Attivato"
       },
@@ -1001,7 +1002,7 @@
     "emailStep": {
       "checkingEmail": "Verifica dell'e-mail in corso...",
       "continueWithEmail": "Continua con l'e-mail",
-      "continueWithoutAccount": "Usa OpenWhispr senza account",
+      "continueWithoutAccount": "Continua senza account",
       "emailLabel": "E-mail",
       "emailPlaceholder": "tu@esempio.com",
       "useDifferentEmail": "Usa un'altra e-mail"
@@ -1571,7 +1572,9 @@
             "SSO e conformità",
             "Supporto dedicato"
           ],
-          "cta": "Contatta le vendite"
+          "cta": "Contatta le vendite",
+          "upgradeCta": "Passa a Enterprise",
+          "askOwner": "Chiedi a {{name}} di eseguire l'upgrade del tuo spazio di lavoro."
         },
         "currentPlan": "Piano attuale",
         "coveredByWorkspace": "Incluso nel piano della tua area di lavoro",
@@ -2389,7 +2392,40 @@
             "admin": "Amministratore dell'area di lavoro"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Console Enterprise",
+        "description": "Gestisci SSO, policy e membri dal web",
+        "open": "Apri console"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "Passa a Enterprise",
+      "description": "Scegli lo spazio di lavoro, i posti e il ciclo di fatturazione. Il pagamento viene completato in Stripe Checkout.",
+      "allSubscribed": "Gli spazi di lavoro di tua proprietà sono già su Enterprise o non possono essere modificati qui. Per cambiare piano, contatta il team vendite.",
+      "workspaceLabel": "Spazio di lavoro",
+      "seatsLabel": "Posti",
+      "seatsHint_one": "{{count}} posto attualmente in uso",
+      "seatsHint_other": "{{count}} posti attualmente in uso",
+      "intervalLabel": "Ciclo di fatturazione",
+      "interval": {
+        "monthly": "Mensile",
+        "annual": "Annuale"
+      },
+      "proratedCharge": "Addebito proporzionale",
+      "prorationNote": "La differenza proporzionale viene aggiunta alla prossima fattura.",
+      "errors": {
+        "previewFailed": "Impossibile caricare l'anteprima dell'upgrade.",
+        "alreadyEnterprise": "Questo workspace è già su Enterprise.",
+        "subscriptionInactive": "L'abbonamento di questo workspace non è attivo. Aggiorna i dati di fatturazione e riprova.",
+        "priceNotConfigured": "I prezzi Enterprise non sono al momento disponibili. Contatta il team vendite."
+      },
+      "priceNote": "Il prezzo finale viene mostrato al momento del pagamento.",
+      "continueCta": "Continua al pagamento",
+      "upgradeDescription": "Aggiorna {{workspace}} da {{plan}} a Enterprise. Posti e ciclo di fatturazione restano invariati; la modifica ha effetto immediato.",
+      "upgradeCta": "Esegui l'upgrade",
+      "upgradedTitle": "Upgrade completato",
+      "upgradedDescription": "{{workspace}} è ora su Enterprise."
     }
   },
   "models": {
