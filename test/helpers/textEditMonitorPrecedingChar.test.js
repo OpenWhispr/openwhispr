@@ -109,6 +109,26 @@ test("getSelectedText skips the native binary for a cached PID", darwinOnly, asy
   assert.deepEqual(await m.getSelectedText(42), { state: "none" });
 });
 
+test("getSelectedText identifies an empty writable field", darwinOnly, async () => {
+  const m = new TextEditMonitor();
+  m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", 'echo "EDITABLE_NONE:"'] });
+
+  assert.deepEqual(await m.getSelectedText(42), { state: "none", editable: true });
+});
+
+test("isFocusedEditable accepts only an explicit native editable verdict", darwinOnly, async () => {
+  const editable = new TextEditMonitor();
+  editable.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", 'echo "EDITABLE"'] });
+  const readOnly = new TextEditMonitor();
+  readOnly.resolveBinary = () => ({
+    command: "/bin/sh",
+    args: ["-c", 'echo "NOT_EDITABLE"'],
+  });
+
+  assert.equal(await editable.isFocusedEditable({ kind: "mac-pid", pid: 42 }), true);
+  assert.equal(await readOnly.isFocusedEditable({ kind: "mac-pid", pid: 42 }), false);
+});
+
 test("a non--25212 native failure is not cached", darwinOnly, async () => {
   const m = new TextEditMonitor();
   m.resolveBinary = () => ({

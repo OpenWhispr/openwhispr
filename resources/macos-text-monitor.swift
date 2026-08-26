@@ -31,6 +31,53 @@ func writeTextOutput(_ prefix: String, _ value: String) {
     writeOutput("\(prefix):\(truncated)")
 }
 
+func isEditableTextElement(_ element: AXUIElement) -> Bool {
+    var enabledValue: AnyObject?
+    if AXUIElementCopyAttributeValue(
+        element,
+        kAXEnabledAttribute as CFString,
+        &enabledValue
+    ) == .success, let enabled = enabledValue as? Bool, !enabled {
+        return false
+    }
+
+    var subroleValue: AnyObject?
+    if AXUIElementCopyAttributeValue(
+        element,
+        kAXSubroleAttribute as CFString,
+        &subroleValue
+    ) == .success, subroleValue as? String == "AXSecureTextField" {
+        return false
+    }
+
+    var roleValue: AnyObject?
+    guard AXUIElementCopyAttributeValue(
+        element,
+        kAXRoleAttribute as CFString,
+        &roleValue
+    ) == .success, let role = roleValue as? String,
+          ["AXTextField", "AXTextArea", "AXComboBox"].contains(role)
+    else {
+        return false
+    }
+
+    var settable = DarwinBoolean(false)
+    if AXUIElementIsAttributeSettable(
+        element,
+        kAXValueAttribute as CFString,
+        &settable
+    ) == .success, settable.boolValue {
+        return true
+    }
+
+    settable = DarwinBoolean(false)
+    return AXUIElementIsAttributeSettable(
+        element,
+        kAXSelectedTextAttribute as CFString,
+        &settable
+    ) == .success && settable.boolValue
+}
+
 func readCurrentValue() -> String? {
     guard let element = monitoredElement else { return nil }
     var value: AnyObject?
@@ -52,17 +99,20 @@ func observerCallback(
 
 // Usage: macos-text-monitor <pid>
 //        macos-text-monitor --selected-text <pid>
+//        macos-text-monitor --editable-target <pid>
 //        macos-text-monitor --window-bounds <pid>
 let selectionReadMode = CommandLine.arguments.count >= 3 &&
     CommandLine.arguments[1] == "--selected-text"
+let editableTargetMode = CommandLine.arguments.count >= 3 &&
+    CommandLine.arguments[1] == "--editable-target"
 let windowBoundsMode = CommandLine.arguments.count >= 3 &&
     CommandLine.arguments[1] == "--window-bounds"
-let pidArgumentIndex = selectionReadMode || windowBoundsMode ? 2 : 1
+let pidArgumentIndex = selectionReadMode || editableTargetMode || windowBoundsMode ? 2 : 1
 
 guard CommandLine.arguments.count > pidArgumentIndex,
       let targetPid = Int32(CommandLine.arguments[pidArgumentIndex]),
       targetPid > 0 else {
-    writeError("Usage: macos-text-monitor [--selected-text|--window-bounds] <pid>")
+    writeError("Usage: macos-text-monitor [--selected-text|--editable-target|--window-bounds] <pid>")
     writeOutput("NO_ELEMENT")
     exit(1)
 }
@@ -106,7 +156,7 @@ if windowBoundsMode {
 // spawned via execFile, which keeps stdin open without writing — blocking on
 // readLine there would hang until the caller's timeout kills the process.
 var originalText = ""
-if !selectionReadMode, let line = readLine(strippingNewline: true) {
+if !selectionReadMode && !editableTargetMode, let line = readLine(strippingNewline: true) {
     originalText = line
 }
 
@@ -144,6 +194,11 @@ guard let resolvedElement = focusedElement else {
     exit(1)
 }
 
+if editableTargetMode {
+    writeOutput(isEditableTextElement(resolvedElement) ? "EDITABLE" : "NOT_EDITABLE")
+    exit(0)
+}
+
 // Selection capture is a short-lived, read-only mode used before an AI edit.
 // It deliberately uses the same AX client as the monitor so a packaged app's
 // trusted native helper does not need to rely on System Events automation.
@@ -157,7 +212,7 @@ if selectionReadMode {
 
     if selectionResult == .success, let selection = selectionValue as? String {
         if selection.isEmpty {
-            writeOutput("NONE:")
+            writeOutput(isEditableTextElement(resolvedElement) ? "EDITABLE_NONE:" : "NONE:")
         } else {
             writeTextOutput("SELECTED", selection)
         }

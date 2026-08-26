@@ -174,7 +174,7 @@ On GNOME and KDE, the first automatic paste can show a remote-interaction permis
 1. Check your chat model under Settings → AI Models → Chat (the panel runs on the chat scope); the Voice Assistant toggle only gates in-place selection edits
 2. Check that you have a valid API key for your selected provider
 3. Verify the Voice Assistant hotkey doesn't conflict with other global shortcuts
-4. Remember there is no separate assistant window — answers open in a floating panel attached to the dictation pill. Press the Voice Assistant hotkey (or use the pill) and speak; if text is highlighted it is edited in place instead of opening the panel
+4. Remember there is no separate assistant window. Press the Voice Assistant hotkey (or use the pill) and speak: highlighted text is edited in place; with auto-paste enabled, an answer pastes at a focused writable cursor; otherwise it opens in the floating panel attached to the dictation pill. If the target field changes while the answer is generated, OpenWhispr leaves it untouched and opens the panel instead
 5. For local models: ensure the model is downloaded and llama-server is running
 6. For Metal OOM on macOS: try a smaller local model
 

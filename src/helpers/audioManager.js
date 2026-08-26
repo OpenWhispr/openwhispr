@@ -2356,8 +2356,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // the chat's tools and memory once transcription completes; nothing types
   // at the cursor. The transcript flows back as the result text so history
   // and previews stay truthful.
-  _bankAssistantDirective(transcript, config, selectedContext) {
+  _bankAssistantDirective(transcript, config, options = {}) {
     if (!this.isProcessing) return;
+    const { selectedContext, deliverySessionId } = options || {};
     this.pendingAssistantConversation = {
       transcript,
       // resolveReasoningRoute mirrors an attached screenContext into
@@ -2366,6 +2367,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // the image (the panel re-decides against the chat scope's model).
       screenContext: config?.rawScreenContext ?? null,
       ...(selectedContext ? { selectedContext } : {}),
+      ...(deliverySessionId ? { deliverySessionId } : {}),
     };
   }
 
@@ -2385,13 +2387,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   // Panel-first commands skip the dictation-agent model, so the org policy
   // guard that protected that model must run here instead.
-  _bankPanelAgentCommand(text, agentName, config, selectedContext, selectedText) {
+  _bankPanelAgentCommand(
+    text,
+    agentName,
+    config,
+    { selectedContext, selectedText, deliverySessionId } = {}
+  ) {
     this.assertAgentAllowedByPolicy();
     const command = this.voiceAgentRequested
       ? text
       : stripAgentAddress(text, agentName, resolveWakeWordLanguage(getSettings()));
     const transcript = selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
-    this._bankAssistantDirective(transcript, config, selectedContext);
+    this._bankAssistantDirective(transcript, config, { selectedContext, deliverySessionId });
     return text;
   }
 
@@ -2403,7 +2410,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // target. Keep it on the existing panel-first route and leave the
       // external selection replacement path completely untouched.
       this.selectionCapturePromise = null;
-      return this._bankPanelAgentCommand(text, agentName, config, assistantSelectionContext);
+      return this._bankPanelAgentCommand(text, agentName, config, {
+        selectedContext: assistantSelectionContext,
+      });
     }
 
     let capture;
@@ -2422,19 +2431,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (wasCancelled()) return text;
 
     const captureDisposition = getSelectionCaptureDisposition(capture);
+    const deliverySessionId =
+      captureDisposition === "caret" && getSettings().autoPasteEnabled
+        ? capture.sessionId
+        : undefined;
 
     if (!config?.selectionEditReachable) {
       // No in-place editor: the panel never types, so only a readable
       // selection is quoted; every other capture sends the plain command.
-      return this._bankPanelAgentCommand(
-        text,
-        agentName,
-        config,
-        undefined,
-        captureDisposition === "selection" && typeof capture?.text === "string"
-          ? capture.text
-          : undefined
-      );
+      return this._bankPanelAgentCommand(text, agentName, config, {
+        selectedText:
+          captureDisposition === "selection" && typeof capture?.text === "string"
+            ? capture.text
+            : undefined,
+        deliverySessionId,
+      });
     }
 
     if (capture?.status === "too_large") {
@@ -2450,8 +2461,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw error;
     }
 
-    if (captureDisposition === "standalone") {
-      return this._bankPanelAgentCommand(text, agentName, config);
+    if (captureDisposition === "standalone" || captureDisposition === "caret") {
+      return this._bankPanelAgentCommand(text, agentName, config, { deliverySessionId });
     }
 
     if (capture?.status !== "selected") {

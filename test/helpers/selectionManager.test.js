@@ -27,7 +27,11 @@ function loadSelectionManager({ spawn } = {}) {
 
 const SelectionManager = loadSelectionManager();
 
-function makeHarness({ selections = ["original"], now = () => 1000 } = {}) {
+function makeHarness({
+  selections = ["original"],
+  now = () => 1000,
+  pasteResult = { restoreComplete: Promise.resolve() },
+} = {}) {
   const reads = [...selections];
   const pastes = [];
   const textEditMonitor = {
@@ -37,6 +41,7 @@ function makeHarness({ selections = ["original"], now = () => 1000 } = {}) {
       const value = reads.shift();
       if (value === undefined) return { state: "unavailable" };
       if (value === null) return { state: "none" };
+      if (typeof value === "object") return value;
       return { state: "selected", text: value };
     },
   };
@@ -44,7 +49,7 @@ function makeHarness({ selections = ["original"], now = () => 1000 } = {}) {
     runClipboardOperation: (operation) => operation(),
     _pasteText: async (text, options) => {
       pastes.push({ text, options });
-      return { restoreComplete: Promise.resolve() };
+      return pasteResult;
     },
   };
   const manager = new SelectionManager({
@@ -64,6 +69,65 @@ test("captures an exact selection in an opaque session", async () => {
   assert.equal(result.text, "first\nsecond 😀");
   assert.equal(result.characterCount, 14);
   assert.ok(result.sessionId);
+});
+
+test("captures a verified writable caret in an opaque delivery session", async () => {
+  const { manager } = makeHarness({ selections: [{ state: "none", editable: true }] });
+  const result = await manager.captureSelectedText();
+
+  assert.equal(result.status, "editable");
+  assert.ok(result.sessionId);
+});
+
+test("pastes an assistant response only while the captured caret target is still editable", async () => {
+  const { manager, pastes } = makeHarness({
+    selections: [
+      { state: "none", editable: true },
+      { state: "none", editable: true },
+    ],
+  });
+  const capture = await manager.captureSelectedText();
+  const result = await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response", {
+    restoreClipboard: true,
+  });
+
+  assert.deepEqual(result, { success: true });
+  assert.equal(pastes.length, 1);
+  assert.equal(pastes[0].text, "Agent response");
+  assert.equal(pastes[0].options.restoreClipboard, true);
+});
+
+test("does not paste an assistant response after the captured caret target changes", async () => {
+  const { manager, pastes } = makeHarness({
+    selections: [
+      { state: "none", editable: true },
+      { state: "selected", text: "new selection" },
+    ],
+  });
+  const capture = await manager.captureSelectedText();
+
+  assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
+    success: false,
+    code: "target_changed",
+  });
+  assert.equal(pastes.length, 0);
+});
+
+test("treats a clipboard-only fallback as a failed targeted paste", async () => {
+  const { manager, pastes } = makeHarness({
+    selections: [
+      { state: "none", editable: true },
+      { state: "none", editable: true },
+    ],
+    pasteResult: { restoreComplete: Promise.resolve(), pasted: false },
+  });
+  const capture = await manager.captureSelectedText();
+
+  assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
+    success: false,
+    code: "paste_failed",
+  });
+  assert.equal(pastes.length, 1);
 });
 
 test("replaces only when target and exact selection still match", async () => {
@@ -370,6 +434,33 @@ test("getWinTargetHwnd is null without a capture or with a non-Windows target", 
   assert.equal(await manager.getWinTargetHwnd(), null);
 });
 
+test("caret delivery pins the captured Windows HWND into the paste helper", async () => {
+  const pastes = [];
+  const manager = new SelectionManager({
+    clipboardManager: {
+      runClipboardOperation: (operation) => operation(),
+      _pasteText: async (text, options) => {
+        pastes.push({ text, options });
+        return { restoreComplete: Promise.resolve() };
+      },
+    },
+    textEditMonitor: {},
+    platform: "win32",
+    now: () => 1000,
+  });
+  manager.sessions.set("caret-session", {
+    kind: "caret",
+    target: { kind: "win-hwnd", id: "00001A2B" },
+    expiresAt: 2000,
+  });
+  manager._readCurrentSelection = async () => ({ status: "editable" });
+
+  assert.deepEqual(await manager.pasteAtCapturedTarget("caret-session", "Agent response"), {
+    success: true,
+  });
+  assert.equal(pastes[0].options.targetWindow, "00001A2B");
+});
+
 // Replacement text typed into a shell executes on its embedded newlines, so a
 // terminal target must read as no selection (standalone dictation), not as an
 // editable selection.
@@ -380,7 +471,7 @@ test("a terminal target reads as no selection", async () => {
   };
   const manager = new SelectionManager({
     clipboardManager,
-    textEditMonitor: {},
+    textEditMonitor: { isFocusedEditable: async () => true },
     platform: "linux",
     now: () => 1000,
   });

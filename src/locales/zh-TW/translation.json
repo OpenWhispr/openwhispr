@@ -453,7 +453,7 @@
       "title": "語音助理設定",
       "description": "一鍵喚起你的 AI 助理",
       "hotkey": "快捷鍵",
-      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。如果有選取的文字，{{agentName}} 會編輯並取代所選內容；否則回答會在懸浮面板中開啟。無需先說「Hey {{agentName}}」。",
+      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。如果有選取的文字，{{agentName}} 會編輯並取代它。如果可編輯文字欄位已取得焦點，回答會貼到游標處；否則會在懸浮面板中開啟。無需先說「Hey {{agentName}}」。",
       "test": "試試看",
       "testInstruction": "選取下方的範例文字，按下 {{hotkey}} 並說「把它改短一點」——編輯結果會直接出現在文字框裡",
       "testSetHotkey": "在上方設定快捷鍵即可試用",
@@ -1662,7 +1662,7 @@
       },
       "examplesTitle": "範例",
       "helper": "選個簡短、自然、好說的名字",
-      "howItWorksDescription": "當你說「Hey {{agentName}}」加上一個指令時，回答會在浮動助理面板中開啟。如果有選取的文字，該文字會傳送到你設定的語音助理模型，並安全地取代為結果。",
+      "howItWorksDescription": "當你說「Hey {{agentName}}」加上一個指令時，選取的文字會安全地取代為結果。啟用自動貼上後，如果可編輯文字欄位已取得焦點，回答會貼到游標處；否則會在浮動助理面板中開啟。",
       "howItWorksTitle": "運作方式",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1826,7 +1826,7 @@
       },
       "voiceAgentHotkey": {
         "title": "語音助理快捷鍵",
-        "description": "說出指令，助理會在懸浮面板中回答，並可使用你的筆記、行事曆和網頁工具。先選取文字即可就地編輯。"
+        "description": "說出指令，助理會使用你的筆記、行事曆和網頁工具。回答會貼到已聚焦的可編輯游標處、取代選取文字，或在懸浮面板中開啟。"
       },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",

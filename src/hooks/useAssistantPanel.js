@@ -139,6 +139,7 @@ export function useAssistantPanel({
         text: command.text,
         attachment: command.attachment ?? null,
         selectedContext: command.selectedContext ?? null,
+        delivery: command.delivery ?? null,
       });
     },
     [beginThinking]
@@ -170,14 +171,23 @@ export function useAssistantPanel({
   }, [mounted]);
 
   // The chat reports content, an error, or nothing at all; whichever it is,
-  // the thinking flourish must end and the panel must be visible so the
-  // outcome can be seen and the main-process busy gate releases.
+  // the thinking flourish and main-process busy gate must end. A response
+  // delivered to a verified external caret can return directly to the pill;
+  // every failed or non-delivery outcome stays visible in the panel.
   const handleCommandSettled = useCallback(
-    (id) => {
+    (id, { showPanel = true } = {}) => {
       if (id !== commandIdRef.current) return;
       if (!mountedRef.current || closingRef.current) return;
       setThinking(false);
-      void openPanel();
+      if (showPanel) {
+        void openPanel();
+        return;
+      }
+      openRef.current = false;
+      setOpen(false);
+      setBusy(false);
+      setResponseReady(false);
+      setMounted(false);
     },
     [openPanel]
   );

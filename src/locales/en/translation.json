@@ -453,7 +453,7 @@
       "title": "Voice Assistant Setup",
       "description": "Talk to your AI assistant with a single keypress",
       "hotkey": "Hotkey",
-      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. If text is highlighted, {{agentName}} edits and replaces that selection; otherwise the answer opens in a floating panel. No need to say “Hey {{agentName}}” first.",
+      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. If text is highlighted, {{agentName}} edits and replaces it. If a writable text field is focused, the answer is pasted at the cursor; otherwise it opens in a floating panel. No need to say “Hey {{agentName}}” first.",
       "test": "Try it",
       "testInstruction": "Select the sample text below, then press {{hotkey}} and say “make this shorter” — the edit lands right in the text box",
       "testSetHotkey": "Set a hotkey above to try it",
@@ -1951,7 +1951,7 @@
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
-      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the answer opens in the floating assistant panel. If text is highlighted, that text is sent to your configured Voice Assistant model and safely replaced with the result.",
+      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, highlighted text is safely replaced with the result. With auto-paste enabled, an answer pastes at a focused writable cursor; otherwise it opens in the floating assistant panel.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
@@ -2115,7 +2115,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Voice Assistant Hotkey",
-        "description": "Speak a command and the assistant answers in a floating panel with your notes, calendar, and web tools. Select text first to edit it in place."
+        "description": "Speak a command and the assistant uses your notes, calendar, and web tools. Its answer pastes at a focused writable cursor, replaces selected text, or opens in the floating panel."
       },
       "microphone": {
         "description": "Select which input device to use for dictation",

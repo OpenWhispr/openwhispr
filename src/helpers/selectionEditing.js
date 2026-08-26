@@ -23,9 +23,8 @@ export function buildSelectionEditUserPrompt(spokenInstruction, selectedText) {
 }
 
 // Codes meaning "this target can never report a selection", as opposed to "a
-// selection may exist and the read failed". They fall back to typing at the
-// cursor — the Voice Agent's behavior before selection editing existed — because
-// losing in-place editing is acceptable where losing the command is not.
+// selection may exist and the read failed". They fall back to the Assistant
+// panel because an unverified target must never receive generated text.
 const STANDALONE_CAPTURE_CODES = new Set([
   "target_unavailable",
   "copy_helper_unavailable",
@@ -37,6 +36,7 @@ const STANDALONE_CAPTURE_CODES = new Set([
 ]);
 
 export function getSelectionCaptureDisposition(capture) {
+  if (capture?.status === "editable") return "caret";
   if (!capture || capture.status === "none") return "standalone";
   if (capture.status === "selected") return "selection";
   if (capture.status === "unavailable" && STANDALONE_CAPTURE_CODES.has(capture.code)) {

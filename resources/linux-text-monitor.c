@@ -10,6 +10,8 @@
  *   INITIAL_VALUE_B64:<base64> - Initial text field value (multiline)
  *   CHANGED:<text>        - Text field value after a change
  *   CHANGED_B64:<base64>  - Text field value after a change (multiline)
+ *   EDITABLE              - Focused element is writable (--probe-editable)
+ *   NOT_EDITABLE          - Focused element is not safely writable
  *   NO_ELEMENT            - Could not get focused element
  *   NO_VALUE              - Focused element has no text value
  *
@@ -148,13 +150,15 @@ static char *read_text_value(AtspiText *text_iface) {
     return value;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     signal(SIGTERM, signal_handler);
     signal(SIGINT, signal_handler);
 
+    int probe_editable = argc >= 2 && strcmp(argv[1], "--probe-editable") == 0;
+
     /* Read original text from stdin (consume but don't use) */
     char stdin_buf[4096];
-    if (fgets(stdin_buf, sizeof(stdin_buf), stdin)) {
+    if (!probe_editable && fgets(stdin_buf, sizeof(stdin_buf), stdin)) {
         /* consumed */
     }
 
@@ -201,6 +205,20 @@ int main(void) {
         printf("NO_ELEMENT\n");
         fflush(stdout);
         return 1;
+    }
+
+    if (probe_editable) {
+        AtspiStateSet *states = atspi_accessible_get_state_set(focused);
+        int editable = states &&
+            atspi_state_set_contains(states, ATSPI_STATE_EDITABLE) &&
+            atspi_state_set_contains(states, ATSPI_STATE_ENABLED) &&
+            atspi_state_set_contains(states, ATSPI_STATE_FOCUSABLE) &&
+            !atspi_state_set_contains(states, ATSPI_STATE_PROTECTED);
+        if (states) g_object_unref(states);
+        printf("%s\n", editable ? "EDITABLE" : "NOT_EDITABLE");
+        fflush(stdout);
+        g_object_unref(focused);
+        return 0;
     }
 
     /* Get the Text interface */

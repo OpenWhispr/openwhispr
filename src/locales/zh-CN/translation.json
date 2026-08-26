@@ -453,7 +453,7 @@
       "title": "语音助手设置",
       "description": "一键唤起你的 AI 助手",
       "hotkey": "快捷键",
-      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。如果有选中的文本，{{agentName}} 会编辑并替换所选内容；否则回答会在悬浮面板中打开。无需先说“Hey {{agentName}}”。",
+      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。如果有选中的文本，{{agentName}} 会编辑并替换它。如果可编辑文本框已获得焦点，回答会粘贴到光标处；否则会在悬浮面板中打开。无需先说“Hey {{agentName}}”。",
       "test": "试一试",
       "testInstruction": "选中下方的示例文本，按下 {{hotkey}} 并说“把它改短一点”——编辑结果会直接出现在文本框里",
       "testSetHotkey": "在上方设置快捷键即可试用",
@@ -1662,7 +1662,7 @@
       },
       "examplesTitle": "示例",
       "helper": "选一个简短、说起来自然的名字",
-      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，回答会在悬浮助手面板中打开。如果有选中的文本，该文本会发送到你配置的语音助手模型，并安全地替换为结果。",
+      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，选中的文本会安全地替换为结果。启用自动粘贴后，如果可编辑文本框已获得焦点，回答会粘贴到光标处；否则会在悬浮助手面板中打开。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1826,7 +1826,7 @@
       },
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",
-        "description": "说出指令，助手会在悬浮面板中回答，并可使用你的笔记、日历和网页工具。先选中文本即可就地编辑。"
+        "description": "说出指令，助手会使用你的笔记、日历和网页工具。回答会粘贴到已聚焦的可编辑光标处、替换选中文本，或在悬浮面板中打开。"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",

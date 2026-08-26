@@ -453,7 +453,7 @@
       "title": "Configuration de l'assistant vocal",
       "description": "Parlez à votre assistant IA d'une simple touche",
       "hotkey": "Raccourci",
-      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». Si du texte est surligné, {{agentName}} modifie et remplace cette sélection ; sinon, la réponse s'ouvre dans un panneau flottant. Pas besoin de dire « Hey {{agentName}} » d'abord.",
+      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». Si du texte est surligné, {{agentName}} le modifie et le remplace. Si un champ de texte modifiable est actif, la réponse est collée au curseur ; sinon, elle s'ouvre dans un panneau flottant. Pas besoin de dire « Hey {{agentName}} » d'abord.",
       "test": "Essayer",
       "testInstruction": "Sélectionnez le texte d'exemple ci-dessous, appuyez sur {{hotkey}} et dites « raccourcis ce texte » — la modification apparaît directement dans la zone de texte",
       "testSetHotkey": "Définissez un raccourci ci-dessus pour l'essayer",
@@ -1951,7 +1951,7 @@
       },
       "examplesTitle": "Exemples",
       "helper": "Choisissez un nom court et naturel à prononcer",
-      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, la réponse s'ouvre dans le panneau flottant de l'assistant. Si du texte est surligné, ce texte est envoyé à votre modèle d'Assistant vocal configuré et remplacé en toute sécurité par le résultat.",
+      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, le texte surligné est remplacé en toute sécurité par le résultat. Si le collage automatique est activé, la réponse est collée au curseur d'un champ modifiable actif ; sinon, elle s'ouvre dans le panneau flottant de l'assistant.",
       "howItWorksTitle": "Comment ça marche",
       "instructionMode": "Instruction",
       "placeholder": "ex. Jarvis, Nova, Atlas...",
@@ -2115,7 +2115,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'assistant vocal",
-        "description": "Dites une commande et l'assistant répond dans un panneau flottant avec vos notes, votre calendrier et des outils web. Sélectionnez d'abord du texte pour le modifier sur place."
+        "description": "Dites une commande et l'assistant utilise vos notes, votre calendrier et les outils web. La réponse est collée à un curseur modifiable actif, remplace le texte sélectionné ou s'ouvre dans le panneau flottant."
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",

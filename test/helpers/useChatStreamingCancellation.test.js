@@ -129,13 +129,49 @@ test("a genuine empty completion still shows the empty-response fallback", async
     });
   };
 
+  let completionCalls = 0;
   const { captured, getMessages } = await renderChatStreaming(t);
 
-  await captured.sendToAI("hello", []);
+  await captured.sendToAI("hello", [], {
+    suppressResponseContent: true,
+    onComplete: () => {
+      completionCalls += 1;
+    },
+  });
 
   const [message] = getMessages();
   assert.equal(message.content, EMPTY_RESPONSE_TEXT);
   assert.equal(message.isStreaming, false);
+  assert.equal(completionCalls, 0);
+});
+
+test("a completed response runs its request delivery hook without opening response content", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  globalThis.fetch = async () => {
+    const contentEvent = `data: ${JSON.stringify(
+      createOpenAiChunk({ content: "Agent answer" })
+    )}\n\n`;
+    const finishEvent = `data: ${JSON.stringify(createOpenAiChunk({}, "stop"))}\n\n`;
+    return new Response(`${contentEvent}${finishEvent}data: [DONE]\n\n`, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  const completions = [];
+  const { captured, getResponseContentCalls } = await renderChatStreaming(t);
+
+  await captured.sendToAI("hello", [], {
+    suppressResponseContent: true,
+    onComplete: (result) => completions.push(result),
+  });
+
+  assert.equal(getResponseContentCalls(), 0);
+  assert.equal(completions.length, 1);
+  assert.equal(completions[0].content, "Agent answer");
 });
 
 test("cancelling during RAG setup does not start an assistant reply", async (t) => {
@@ -201,7 +237,12 @@ test("cancelling before any token arrives never shows the empty-response fallbac
 
   const { captured, getMessages } = await renderChatStreaming(t);
 
-  const sendPromise = captured.sendToAI("hello", []);
+  let completionCalls = 0;
+  const sendPromise = captured.sendToAI("hello", [], {
+    onComplete: () => {
+      completionCalls += 1;
+    },
+  });
 
   const waitForMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
   for (let i = 0; i < 50 && !fetchStarted; i++) await waitForMicrotasks();
@@ -219,6 +260,7 @@ test("cancelling before any token arrives never shows the empty-response fallbac
   assert.notEqual(message.content, EMPTY_RESPONSE_TEXT);
   assert.equal(message.content, "");
   assert.equal(message.isStreaming, false);
+  assert.equal(completionCalls, 0, "a cancelled request must never deliver a response");
 });
 
 test("cancelling a tool-ineligible raw stream after reading starts shows no error", async (t) => {

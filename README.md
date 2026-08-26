@@ -45,7 +45,7 @@ OpenWhispr turns your voice into text, notes, and actions from your desktop. Pre
 - **Voice dictation** — global hotkey to dictate into any app with automatic pasting
 - **Dictation translation** — dedicated hotkey to dictate in one language and paste the text in another
 - **AI agent** — talk to GPT-5, Claude, Gemini, Groq, Tinfoil, OpenRouter, or local models with a named voice assistant
-- **Voice Assistant hotkey** — dedicated hotkey that sends what you say straight to your AI assistant as a command, no wake word needed and no cleanup pass; the answer streams into a floating assistant panel, highlighted text is edited in place, and you can opt in to sending a screenshot of your current screen as context
+- **Voice Assistant hotkey** — dedicated hotkey that sends what you say straight to your AI assistant as a command, no wake word needed and no cleanup pass; highlighted text is edited in place, answers paste at a focused text cursor when auto-paste is enabled, and all other answers stream into a floating panel. You can also opt in to sending a screenshot of your current screen as context
 - **Meeting transcription** — auto-detect Zoom, Teams, and FaceTime calls with live speaker diarization, voice fingerprinting, and Google, Microsoft, or Apple Calendar integration
 - **Local speaker diarization** — on-device speaker labelling with voice fingerprint recognition across meetings, no cloud required
 - **Notes** — create, organize, and search notes with folders, semantic search, cloud sync, and AI actions

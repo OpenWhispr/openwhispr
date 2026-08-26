@@ -432,7 +432,7 @@
       "title": "Configuração do assistente de voz",
       "description": "Fale com seu assistente de IA com um único atalho",
       "hotkey": "Atalho",
-      "howItWorks": "Pressione a tecla e diga o que quer — por exemplo, “escreva uma breve nota de agradecimento”. Se houver texto destacado, {{agentName}} edita e substitui essa seleção; caso contrário, a resposta abre em um painel flutuante. Não precisa dizer “Hey {{agentName}}” antes.",
+      "howItWorks": "Pressione a tecla e diga o que quer — por exemplo, “escreva uma breve nota de agradecimento”. Se houver texto destacado, {{agentName}} o edita e substitui. Se um campo de texto editável estiver em foco, a resposta é colada no cursor; caso contrário, abre em um painel flutuante. Não precisa dizer “Hey {{agentName}}” antes.",
       "test": "Experimente",
       "testInstruction": "Selecione o texto de exemplo abaixo, pressione {{hotkey}} e diga “deixe isso mais curto” — a edição aparece direto na caixa de texto",
       "testSetHotkey": "Defina um atalho acima para experimentar",
@@ -1641,7 +1641,7 @@
       },
       "examplesTitle": "Exemplos",
       "helper": "Escolha algo curto e natural de se dizer em voz alta",
-      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, a resposta abre no painel flutuante do assistente. Se houver texto destacado, esse texto é enviado ao seu modelo de Assistente de voz configurado e substituído com segurança pelo resultado.",
+      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, o texto destacado é substituído com segurança pelo resultado. Com a colagem automática ativada, a resposta é colada no cursor de um campo editável em foco; caso contrário, abre no painel flutuante do assistente.",
       "howItWorksTitle": "Como funciona",
       "instructionMode": "Instrução",
       "placeholder": "ex.: Jarvis, Nova, Atlas...",
@@ -1805,7 +1805,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Atalho do assistente de voz",
-        "description": "Diga um comando e o assistente responde em um painel flutuante com suas notas, calendário e ferramentas web. Selecione texto primeiro para editá-lo no lugar."
+        "description": "Diga um comando e o assistente usa suas notas, calendário e ferramentas web. A resposta é colada em um cursor editável em foco, substitui o texto selecionado ou abre no painel flutuante."
       },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",

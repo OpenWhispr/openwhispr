@@ -453,7 +453,7 @@
       "title": "Configurazione dell'assistente vocale",
       "description": "Parla con il tuo assistente IA con un solo tasto",
       "hotkey": "Scorciatoia",
-      "howItWorks": "Premi il tasto e di' cosa vuoi — ad esempio “scrivi un breve messaggio di ringraziamento”. Se c'è del testo evidenziato, {{agentName}} modifica e sostituisce quella selezione; altrimenti la risposta si apre in un pannello flottante. Non serve dire prima “Hey {{agentName}}”.",
+      "howItWorks": "Premi il tasto e di' cosa vuoi — ad esempio “scrivi un breve messaggio di ringraziamento”. Se c'è del testo evidenziato, {{agentName}} lo modifica e sostituisce. Se è attivo un campo di testo modificabile, la risposta viene incollata al cursore; altrimenti si apre in un pannello flottante. Non serve dire prima “Hey {{agentName}}”.",
       "test": "Provalo",
       "testInstruction": "Seleziona il testo di esempio qui sotto, premi {{hotkey}} e di' «rendilo più corto» — la modifica arriva direttamente nella casella di testo",
       "testSetHotkey": "Imposta una scorciatoia sopra per provarlo",
@@ -1662,7 +1662,7 @@
       },
       "examplesTitle": "Esempi",
       "helper": "Scegli qualcosa di breve e naturale da dire ad alta voce",
-      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, la risposta si apre nel pannello flottante dell'assistente. Se c'è del testo evidenziato, quel testo viene inviato al tuo modello di Assistente vocale configurato e sostituito in sicurezza con il risultato.",
+      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, il testo evidenziato viene sostituito in sicurezza con il risultato. Con l'incolla automatico attivo, la risposta viene incollata al cursore di un campo modificabile attivo; altrimenti si apre nel pannello flottante dell'assistente.",
       "howItWorksTitle": "Come funziona",
       "instructionMode": "Istruzione",
       "placeholder": "es. Jarvis, Nova, Atlas...",
@@ -1826,7 +1826,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Scorciatoia dell'assistente vocale",
-        "description": "Pronuncia un comando e l'assistente risponde in un pannello flottante con le tue note, il calendario e gli strumenti web. Seleziona prima del testo per modificarlo sul posto."
+        "description": "Pronuncia un comando e l'assistente usa le tue note, il calendario e gli strumenti web. La risposta viene incollata a un cursore modificabile attivo, sostituisce il testo selezionato o si apre nel pannello flottante."
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",

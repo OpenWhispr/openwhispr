@@ -65,11 +65,14 @@ def _emit_text(prefix, value):
 
 
 def main():
+    probe_editable = len(sys.argv) >= 2 and sys.argv[1] == "--probe-editable"
+
     # Read original text from stdin (consume but don't use in this binary)
-    try:
-        sys.stdin.readline()
-    except Exception:
-        pass
+    if not probe_editable:
+        try:
+            sys.stdin.readline()
+        except Exception:
+            pass
 
     if not HAS_ATSPI:
         print("NO_ELEMENT", flush=True)
@@ -96,6 +99,20 @@ def main():
     if focused is None:
         print("NO_ELEMENT", flush=True)
         sys.exit(1)
+
+    if probe_editable:
+        try:
+            states = focused.get_state_set()
+            editable = (
+                states.contains(Atspi.StateType.EDITABLE)
+                and states.contains(Atspi.StateType.ENABLED)
+                and states.contains(Atspi.StateType.FOCUSABLE)
+                and not states.contains(Atspi.StateType.PROTECTED)
+            )
+        except Exception:
+            editable = False
+        print("EDITABLE" if editable else "NOT_EDITABLE", flush=True)
+        sys.exit(0)
 
     # Check if the element supports the Text interface
     try:

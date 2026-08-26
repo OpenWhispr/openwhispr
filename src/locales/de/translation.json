@@ -453,7 +453,7 @@
       "title": "Sprachassistent-Einrichtung",
       "description": "Sprechen Sie mit Ihrem KI-Assistenten per Tastendruck",
       "hotkey": "Hotkey",
-      "howItWorks": "Drücken Sie die Taste und sagen Sie, was Sie möchten — zum Beispiel „schreibe eine kurze Dankesnachricht“. Ist Text markiert, bearbeitet und ersetzt {{agentName}} diese Auswahl; andernfalls öffnet sich die Antwort in einem schwebenden Panel. Sie müssen nicht zuerst „Hey {{agentName}}“ sagen.",
+      "howItWorks": "Drücken Sie die Taste und sagen Sie, was Sie möchten — zum Beispiel „schreibe eine kurze Dankesnachricht“. Ist Text markiert, bearbeitet und ersetzt {{agentName}} ihn. Ist ein beschreibbares Textfeld fokussiert, wird die Antwort am Cursor eingefügt; andernfalls öffnet sie sich in einem schwebenden Panel. Sie müssen nicht zuerst „Hey {{agentName}}“ sagen.",
       "test": "Ausprobieren",
       "testInstruction": "Markiere unten den Beispieltext, drücke {{hotkey}} und sage „mach das kürzer“ — die Änderung landet direkt im Textfeld",
       "testSetHotkey": "Lege oben einen Hotkey fest, um es auszuprobieren",
@@ -1951,7 +1951,7 @@
       },
       "examplesTitle": "Beispiele",
       "helper": "Wählen Sie etwas Kurzes und Natürliches zum Aussprechen",
-      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, öffnet sich die Antwort im schwebenden Assistenten-Panel. Ist Text markiert, wird dieser Text an Ihr konfiguriertes Sprachassistenten-Modell gesendet und sicher durch das Ergebnis ersetzt.",
+      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, wird markierter Text sicher durch das Ergebnis ersetzt. Bei aktiviertem automatischen Einfügen landet die Antwort am Cursor eines fokussierten beschreibbaren Textfelds; andernfalls öffnet sie sich im schwebenden Assistenten-Panel.",
       "howItWorksTitle": "So funktioniert es",
       "instructionMode": "Anweisung",
       "placeholder": "z. B. Jarvis, Nova, Atlas...",
@@ -2115,7 +2115,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Sprachassistent-Hotkey",
-        "description": "Sprechen Sie einen Befehl und der Assistent antwortet in einem schwebenden Panel — mit Ihren Notizen, Ihrem Kalender und Web-Tools. Markieren Sie zuerst Text, um ihn direkt zu bearbeiten."
+        "description": "Sprechen Sie einen Befehl und der Assistent nutzt Ihre Notizen, Ihren Kalender und Web-Tools. Die Antwort wird am fokussierten beschreibbaren Cursor eingefügt, ersetzt markierten Text oder öffnet sich im schwebenden Panel."
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",

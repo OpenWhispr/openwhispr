@@ -39,6 +39,11 @@ export interface AssistantCommand {
   text: string;
   attachment: ChatImageAttachment | null;
   selectedContext: AgentSelectionContext | null;
+  delivery: {
+    sessionId: string;
+    restoreClipboard: boolean;
+    allowClipboardFallback: boolean;
+  } | null;
 }
 
 type AssistantFooterPhase =
@@ -49,7 +54,7 @@ interface AssistantPanelProps {
   pendingCommand: AssistantCommand | null;
   onCommandConsumed: (id: number) => void;
   onCommandDiscarded: (id: number) => void;
-  onCommandSettled: (id: number) => void;
+  onCommandSettled: (id: number, options?: { showPanel?: boolean }) => void;
   /** Conversation to resume when reopening the panel; null starts fresh on first message. */
   initialConversationId: number | null;
   onConversationIdChange: (id: number | null) => void;
@@ -106,7 +111,7 @@ export function AssistantPanel({
     messages,
     setMessages,
     onStreamComplete: (_assistantId, content, toolCalls) => {
-      persistence.saveAssistantMessage(content, toolCalls);
+      void persistence.saveAssistantMessage(content, toolCalls);
     },
     onResponseContent,
   });
@@ -171,6 +176,8 @@ export function AssistantPanel({
     }
     consumedCommandIdRef.current = pendingCommand.id;
     const commandId = pendingCommand.id;
+    const delivery = pendingCommand.delivery;
+    let responseDelivered = false;
     if (pendingCommand.selectedContext) {
       setSelectedContext(null);
       onSelectionContextChange(null);
@@ -178,6 +185,24 @@ export function AssistantPanel({
     void sendMessage(pendingCommand.text, {
       attachment: pendingCommand.attachment ?? undefined,
       selectedContext: pendingCommand.selectedContext ?? undefined,
+      suppressResponseContent: Boolean(delivery),
+      onComplete: delivery
+        ? async ({ content }) => {
+            try {
+              const result = await window.electronAPI?.pasteAtCapturedTarget?.(
+                delivery.sessionId,
+                content,
+                {
+                  restoreClipboard: delivery.restoreClipboard,
+                  allowClipboardFallback: delivery.allowClipboardFallback,
+                }
+              );
+              responseDelivered = result?.success === true;
+            } catch {
+              responseDelivered = false;
+            }
+          }
+        : undefined,
     })
       .then((sent) => {
         if (sent) {
@@ -206,7 +231,7 @@ export function AssistantPanel({
           },
         ]);
       })
-      .finally(() => onCommandSettled(commandId));
+      .finally(() => onCommandSettled(commandId, { showPanel: !responseDelivered }));
   }, [
     historyReady,
     submissionInFlight,

@@ -932,6 +932,10 @@ declare global {
             characterCount: number;
           }
         | {
+            status: "editable";
+            sessionId: string;
+          }
+        | {
             status: "none" | "unavailable" | "target_changed" | "too_large";
             code?: string;
             characterCount?: number;
@@ -950,6 +954,20 @@ declare global {
           | "target_changed"
           | "selection_unavailable"
           | "selection_changed"
+          | "paste_failed"
+          | "selection_manager_unavailable";
+        error?: string;
+      }>;
+      pasteAtCapturedTarget?: (
+        sessionId: string,
+        text: string,
+        options?: { restoreClipboard?: boolean; allowClipboardFallback?: boolean }
+      ) => Promise<{
+        success: boolean;
+        code?:
+          | "invalid_replacement"
+          | "session_expired"
+          | "target_changed"
           | "paste_failed"
           | "selection_manager_unavailable";
         error?: string;

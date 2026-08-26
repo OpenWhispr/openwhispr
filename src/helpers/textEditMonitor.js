@@ -249,6 +249,10 @@ class TextEditMonitor extends EventEmitter {
           { timeout: timeoutMs },
           (error, stdout, stderr) => {
             const output = stdout.replace(/\n$/, "");
+            if (output === "EDITABLE_NONE:") {
+              resolve({ state: "none", editable: true });
+              return;
+            }
             if (output === "NONE:") {
               resolve({ state: "none" });
               return;
@@ -310,7 +314,9 @@ class TextEditMonitor extends EventEmitter {
         }
 
         const output = stdout.replace(/\n$/, "");
-        if (output === "NONE:") {
+        if (output === "EDITABLE_NONE:") {
+          resolve({ state: "none", editable: true });
+        } else if (output === "NONE:") {
           resolve({ state: "none" });
         } else if (output.startsWith("SELECTED:")) {
           resolve({ state: "selected", text: output.slice("SELECTED:".length) });
@@ -319,6 +325,26 @@ class TextEditMonitor extends EventEmitter {
         }
       }
     );
+  }
+
+  async isFocusedEditable(target, timeoutMs = 1000) {
+    const resolved = this.resolveBinary();
+    if (!resolved) return false;
+
+    let args;
+    if (process.platform === "darwin") {
+      const pid = target?.kind === "mac-pid" ? target.pid : this.lastTargetPid;
+      if (!pid) return false;
+      args = [...resolved.args, "--editable-target", String(pid)];
+    } else {
+      args = [...resolved.args, "--probe-editable"];
+    }
+
+    return new Promise((resolve) => {
+      execFile(resolved.command, args, { timeout: timeoutMs }, (error, stdout) => {
+        resolve(!error && stdout.trim() === "EDITABLE");
+      });
+    });
   }
 
   /**

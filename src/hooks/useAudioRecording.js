@@ -461,19 +461,26 @@ export const useAudioRecording = (toast, options = {}) => {
             if (localStorage.getItem("onboardingCompleted") !== "true") {
               window.electronAPI?.hideDictationPreview?.();
             } else {
-              // Panel-first: the command streams into the assistant panel;
-              // nothing types at the cursor and nothing lands in the clipboard.
-              // The directive's transcript is the command to send — it carries
-              // the quoted selection when the selection-without-editor fallback
-              // routed a highlighted passage here.
+              // The directive's transcript is the command to send. A verified
+              // writable caret carries an opaque main-process delivery session;
+              // all other standalone commands remain panel-first.
               window.electronAPI?.hideDictationPreview?.();
-              const { screenContext, transcript, selectedContext } = result.assistantConversation;
+              const { screenContext, transcript, selectedContext, deliverySessionId } =
+                result.assistantConversation;
+              const { keepTranscriptionInClipboard } = getSettings();
               onAssistantCommandRef.current?.({
                 text: expandSnippets(transcript, getSettings().snippets),
                 attachment: screenContext
                   ? { image: screenContext.data, mediaType: screenContext.mediaType }
                   : null,
                 selectedContext: selectedContext ?? null,
+                delivery: deliverySessionId
+                  ? {
+                      sessionId: deliverySessionId,
+                      restoreClipboard: !keepTranscriptionInClipboard,
+                      allowClipboardFallback: isAccessibilitySkipped(),
+                    }
+                  : null,
               });
             }
           } else {
