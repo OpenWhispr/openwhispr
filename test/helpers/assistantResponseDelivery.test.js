@@ -1,51 +1,30 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-test("Auto-Paste copies an Assistant response when no writable input is selected", async () => {
-  const { createAssistantResponseDelivery, deliverAssistantResponse } =
-    await import("../../src/helpers/assistantResponseDelivery.ts");
-  const writes = [];
-  const delivery = createAssistantResponseDelivery({
-    autoPasteEnabled: true,
-    deliverySessionId: undefined,
-    restoreClipboard: true,
-    allowClipboardFallback: false,
-  });
+const deliveryModule = import("../../src/helpers/assistantResponseDelivery.ts");
+const RESPONSE = "Agent answer";
+const PASTE_OPTIONS = {
+  restoreClipboard: true,
+  allowClipboardFallback: false,
+};
+const PASTE_DELIVERY = {
+  mode: "paste",
+  sessionId: "caret-session",
+  ...PASTE_OPTIONS,
+};
 
-  assert.deepEqual(delivery, { mode: "clipboard" });
-  assert.deepEqual(
-    await deliverAssistantResponse(delivery, "Agent answer", {
-      electronAPI: {
-        async writeClipboard(text) {
-          writes.push(text);
-          return { success: true };
-        },
-      },
-      clipboard: { async writeText() {} },
-    }),
-    { pasted: false, copied: true }
-  );
-  assert.deepEqual(writes, ["Agent answer"]);
-});
-
-test("a captured Assistant target receives the response without replacing the clipboard", async () => {
-  const { createAssistantResponseDelivery, deliverAssistantResponse } =
-    await import("../../src/helpers/assistantResponseDelivery.ts");
+function createDeliveryHarness(pasteSuccess) {
   const pastes = [];
   const writes = [];
-  const delivery = createAssistantResponseDelivery({
-    autoPasteEnabled: true,
-    deliverySessionId: "caret-session",
-    restoreClipboard: true,
-    allowClipboardFallback: false,
-  });
 
-  assert.deepEqual(
-    await deliverAssistantResponse(delivery, "Agent answer", {
+  return {
+    pastes,
+    writes,
+    dependencies: {
       electronAPI: {
         async pasteAtCapturedTarget(sessionId, text, options) {
           pastes.push({ sessionId, text, options });
-          return { success: true };
+          return { success: pasteSuccess };
         },
         async writeClipboard(text) {
           writes.push(text);
@@ -53,59 +32,53 @@ test("a captured Assistant target receives the response without replacing the cl
         },
       },
       clipboard: { async writeText() {} },
-    }),
-    { pasted: true, copied: false }
-  );
+    },
+  };
+}
+
+test("Assistant delivery mode follows Auto-Paste and target state", async () => {
+  const { createAssistantResponseDelivery } = await deliveryModule;
+  const createDelivery = (autoPasteEnabled, deliverySessionId) =>
+    createAssistantResponseDelivery({
+      autoPasteEnabled,
+      deliverySessionId,
+      ...PASTE_OPTIONS,
+    });
+
+  assert.equal(createDelivery(false), null);
+  assert.deepEqual(createDelivery(true), { mode: "clipboard" });
+  assert.deepEqual(createDelivery(true, "caret-session"), PASTE_DELIVERY);
+});
+
+test("a captured Assistant target receives the response without replacing the clipboard", async () => {
+  const { deliverAssistantResponse } = await deliveryModule;
+  const { dependencies, pastes, writes } = createDeliveryHarness(true);
+
+  assert.deepEqual(await deliverAssistantResponse(PASTE_DELIVERY, RESPONSE, dependencies), {
+    pasted: true,
+    copied: false,
+  });
   assert.deepEqual(pastes, [
     {
       sessionId: "caret-session",
-      text: "Agent answer",
-      options: { restoreClipboard: true, allowClipboardFallback: false },
+      text: RESPONSE,
+      options: PASTE_OPTIONS,
     },
   ]);
   assert.deepEqual(writes, []);
 });
 
-test("a lost Assistant target falls back to copying the completed response", async () => {
-  const { createAssistantResponseDelivery, deliverAssistantResponse } =
-    await import("../../src/helpers/assistantResponseDelivery.ts");
-  const writes = [];
-  const delivery = createAssistantResponseDelivery({
-    autoPasteEnabled: true,
-    deliverySessionId: "caret-session",
-    restoreClipboard: true,
-    allowClipboardFallback: false,
-  });
+test("no Assistant target and a lost target both copy the completed response", async () => {
+  const { deliverAssistantResponse } = await deliveryModule;
 
-  assert.deepEqual(
-    await deliverAssistantResponse(delivery, "Agent answer", {
-      electronAPI: {
-        async pasteAtCapturedTarget() {
-          return { success: false };
-        },
-        async writeClipboard(text) {
-          writes.push(text);
-          return { success: true };
-        },
-      },
-      clipboard: { async writeText() {} },
-    }),
-    { pasted: false, copied: true }
-  );
-  assert.deepEqual(writes, ["Agent answer"]);
-});
+  for (const delivery of [{ mode: "clipboard" }, PASTE_DELIVERY]) {
+    const { dependencies, writes } = createDeliveryHarness(false);
 
-test("disabling Auto-Paste leaves Assistant delivery panel-only", async () => {
-  const { createAssistantResponseDelivery } =
-    await import("../../src/helpers/assistantResponseDelivery.ts");
-
-  assert.equal(
-    createAssistantResponseDelivery({
-      autoPasteEnabled: false,
-      deliverySessionId: undefined,
-      restoreClipboard: true,
-      allowClipboardFallback: false,
-    }),
-    null
-  );
+    assert.deepEqual(
+      await deliverAssistantResponse(delivery, RESPONSE, dependencies),
+      { pasted: false, copied: true },
+      delivery.mode
+    );
+    assert.deepEqual(writes, [RESPONSE], delivery.mode);
+  }
 });
