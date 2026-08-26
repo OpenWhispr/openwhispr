@@ -7,7 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Uploaded and URL-ingested notes remember their speaker detection.** A note created through Upload ran speaker detection but stored none of it — the note now records that diarization ran, the speaker count you chose, and the audio duration, so it behaves like a meeting note when you record into it or resolve participants. An upload with speaker detection off writes nothing, preserving your global speaker setting. Present since upload speaker detection shipped in 1.7.6. (#1610)
+## [1.9.0] - 2026-08-24
+
+The chat agent and the voice agent become one Voice Assistant behind a redesigned dictation pill, guided setup is rebuilt end to end, and the notes surface gets a design pass with @mention tagging and real speaker identity in meeting notes. Meetings you forget to stop now end themselves. Linux gains push-to-talk on Wayland, Windows pastes back into the window you dictated into, and local transcription stops thanking you for watching.
+
+### Voice Assistant
+
+- **One assistant, one entry point.** The separate always-on-top chat window is gone. The dictation pill is now the only surface: speak a standalone command and the answer streams into a floating panel with the chat's full toolset — notes search and editing, calendar, web search, clipboard, and memory when you're signed in — with conversations saved and resumable. Highlighted text is still edited in place. (#1597)
+- **A pill that shows what it's doing.** An idle orb that grows into a recording capsule with a live, level-driven waveform and an in-capsule cancel, then a processing state that never changes shape mid-cycle. Dragging the pill no longer walks it across the screen as it resizes. (#1597)
+- **Your dictionary reaches the assistant.** Custom-dictionary words are injected into every assistant conversation, so replies come back using your names and jargon. (#1597)
+- **Follow-ups without reopening.** Type into the panel or press the hotkey again to speak into the same conversation; Esc collapses it and cancels anything in flight; Copy takes the answer in one click. (#1597)
+- **Wake words work in your language.** "Ehi Jarvis", "Привет, Jarvis", "ねぇ Jarvis" — localized vocative cues now count as addressing your agent, not just the English ones. (#1604, thanks @xAlcahest)
+- **Selection edits no longer fail on a missing completion marker.** (#1587, thanks @hsusul)
+- **Assistant conversations survive the cloud migration.** (#1772, thanks @hsusul)
+
+### Onboarding
+
+- **Guided setup, rebuilt.** A new versioned flow walks through sign-in, permissions, language, use cases, hotkey capture, live dictation and assistant demos, and calendar connection — then branches into guided OpenWhispr Cloud, bring-your-own-key, local-model, or enterprise setup, with provider validation and models downloading in the background. Demo recordings are isolated from the rest of the app, so the floating pill and global hotkeys stay out of the way while you're being shown around. (#1670)
+- **Signing back in looks like signing up.** The returning-user screen uses the same compact authentication shell as onboarding instead of a form embedded in a full-size control panel. (#1763)
+
+### Notes
+
+- **A design pass over the notes surface.** A shared gradient send and mic identity across every input, a voice-reactive recording pill with an elapsed timer, and a translucent "liquid glass" bottom bar that note content scrolls under. The ask input stays mounted and animates as the chat panel opens instead of blinking out. (#1651)
+- **Voice notes straight into chat.** The chat input's mic records with a full-width live waveform, timer, and cancel; the recording runs through the normal transcription pipeline (any provider, no cleanup pass) and lands in the input for you to review before sending. (#1651)
+- **@mention the people in your notes.** Typing `@` opens a picker fed by your account, meeting attendees, and known speakers; chips render with an avatar and round-trip through Markdown as readable links. Generated action items tag their owner automatically. (#1741)
+- **Create a note inside a folder.** Folder rows get the same hover "+" that space rows already had, instead of making you create the note elsewhere and move it. (#1650)
+- **Timestamped transcripts and SRT export for uploads.** Audio uploaded or ingested from a URL and transcribed through your own OpenAI, Groq, or Mistral key now keeps segment-level timestamps, so the Transcript tab and SRT/TXT/JSON/MD export light up for upload notes. (#1727)
+- **Cancelling an upload actually stops it.** Cancel used to reset only the UI while local transcription and diarization kept burning CPU to the end of the file. (#1728)
+- **The chat panel no longer covers what you're reading.** Opening it reserves scroll space and reveals the bottom of the note instead of forcing a manual scroll. (#1769, thanks @IdrisGit)
+- **Uploaded notes remember their speaker detection.** A note created through Upload ran speaker detection but stored none of it — it now records that diarization ran, the speaker count you chose, and the audio duration, so it behaves like a meeting note when you record into it or resolve participants. Present since upload speaker detection shipped in 1.7.6. (#1610)
+- **Generated titles lose their quotes.** Curly quotes, guillemets, and stacked wrappers are peeled off; apostrophes inside the title stay. (#1640, thanks @hsusul)
+- **Mirrored Markdown files stay inside your mirror folder.** A folder named with `..` could write note files outside it. (#1773, thanks @hsusul)
+- **A line break in a title no longer destroys a note's metadata.** Control characters are escaped in mirrored frontmatter instead of invalidating the whole block. (#1646, thanks @hsusul)
+- **One undeletable file no longer strands the rest.** Deleting a note whose mirror file is open in another editor now cleans up everything else. (#1649, thanks @hsusul)
+- **Future timestamps show a date instead of "now".** (#1768, thanks @hsusul)
+- **The share dialog reads email domains correctly.** Padded addresses and `Name <addr>` forms no longer make a personal Gmail look like a company domain. (#1683, thanks @hsusul)
+- **The unused workspace short name is gone from settings.** (#1660)
+
+### Meetings & speakers
+
+- **Forgotten recordings end themselves.** When the call is over — the meeting app releases your microphone, or both audio channels go quiet, or the app exits — a 60-second countdown starts, cancellable with **Keep recording**, and the card tells you which signal fired. Remote voices still playing defer the countdown, so a quiet-but-live meeting is never cut short. (#1494)
+- **Meeting notes know who is who.** Every transcript line carries its resolved speaker name and the mic track carries your own name, a Meeting Context block names the note owner and invited participants, and the prompt is forbidden from inventing identities — so notes stop assuming you're whoever got named in conversation. (#1741)
+- **In-person meetings get speaker labels.** Recordings with everyone in the room and no call ended with zero diarized segments, because only the (silent) system-audio channel was ever diarized. Those sessions now diarize the microphone track. (#1726)
+- **Windows system-audio capture is re-checked at meeting start.** One early probe failure used to pin the whole session to the browser fallback. (#1474, thanks @stantheman0128)
+
+### Calendar
+
+- **Recurring Outlook meetings have names again.** Microsoft's delta sync can return occurrences as bare stubs, which showed up as "Untitled Event"; they're now backfilled from the series master. (#1665)
+- **Personal time blocks stop prompting you to record.** Focus time, reminders, and "lunch" — events with no attendees and no meeting link — no longer fire the meeting overlay, on Google, Microsoft, and Apple Calendar alike. (#1615, #1696, thanks @IdrisGit)
+- **Join recognizes more meeting links.** Zoom webinars and personal links, and Teams `/meet/` URLs. (#1692, thanks @hsusul)
+- **All-day events sit on the right day.** West of UTC they landed on yesterday's card in Coming up. (#1742)
+- **A mismatched sign-in fails immediately** instead of leaving Connect spinning for two minutes. (#1753, thanks @hsusul)
+- **Coming up, redesigned.** Day cards with a today marker, per-event accent, an attendee avatar stack with RSVP state, and a "Join & take notes" button. (#1741)
+
+### Speech to text
+
+- **Dictation works again on the default realtime model.** Since 1.8.2, every dictation configured for OpenAI realtime transcription failed with `Unsupported realtime token provider: undefined`. Provider routing now has a single source of truth. (#1631)
+- **Local transcription stops thanking you for watching.** whisper.cpp's anti-hallucination thresholds are now sent on every request — the values the reporter measured cut hallucinated tails from 2.25% to 0.06% across 4,814 real dictations. (#1723)
+- **Your phone is no longer mistaken for your microphone.** A phone offered through Continuity was classified as a built-in mic and auto-selected over the real one, producing empty transcripts. (#1515, thanks @xpipko)
+- **Parakeet is offered only where it can run.** Its bundled ONNX runtime needs macOS 15.5; older Macs now fall back safely instead of loading an incompatible native library. (#1720)
+- **The preview closes when you didn't say anything.** It used to stick in the cleanup state. (#1667, thanks @IdrisGit)
+
+### GPU acceleration
+
+- **1.8.3's multi-GPU regression is fixed.** Vulkan pins to the discrete GPU instead of defaulting to integrated graphics, NVIDIA detection finds `nvidia-smi` off PATH, and packs cleared during the upgrade are announced rather than silently deleted. (#1609)
+- **A downloaded pack is used, with or without the env flag.** A pack on disk now implies intent; the flag became an explicit opt-out instead of a required opt-in that could silently fall back to CPU forever. (#1724)
+- **The GPU banner only appears when cleanup actually runs locally.** Cloud-cleanup users saw "GPU acceleration available" on every launch, forever. (#1591)
+
+### AI models & routing
+
+- **Retired cloud models are gone.** Groq's shut-down Qwen and Llama models and Tinfoil's replaced Kimi model no longer sit in the picker returning `model_not_found`, and the canary suites that should have caught it can now actually fail. (#1722)
+- **A working Gemini Flash Lite again.** Google retired `gemini-2.5-flash-lite` for new API keys; Gemini 3.5 and 3.1 Flash Lite are in the registry, so cleanup doesn't have to run on a heavier model. (#1702, thanks @xAlcahest)
+- **gpt-oss on Tinfoil works.** Every request on all five LLM surfaces returned a 400 over an unsupported reasoning-effort value. (#1611)
+- **Request parameters have one source of truth.** Token-limit names, temperature support, and reasoning-effort values are now declared per provider and model family instead of being duplicated across five transports — the recurring cause of a new provider-and-model combination breaking in production. Local model parameters and their canaries got the same treatment. (#1620, #1714)
+- **A blank model reply never eats your dictation.** Whitespace-only cleanup, agent, or chain output preserves the spoken text on every route. (#1618, #1645, thanks @hsusul)
+- **Thinking tags stop leaking into your text.** Nested `<think>` blocks are stripped correctly, streamed or not, so stray tags stop landing in titles and notes. (#1619, #1644, thanks @hsusul)
+- **Browsing provider tabs no longer switches your model.** The provider-and-model pair commits only when you click a model. (#1288, thanks @IdrisGit)
+- **Transient failures back off instead of failing.** HTTP 408 joins 429 in the retry strategy, and flaky DNS and broken pipes are reported as the network errors they are. (#1734, #1682, thanks @hsusul)
+- **Snippets and dictionary hints can't crash a dictation.** An empty or missing list threw and dropped the paste. (#1672, #1708, thanks @hsusul)
+- **Your agent's name is matched case-insensitively in the dictionary.** (#1639, thanks @hsusul)
+
+### Linux
+
+- **Push-to-talk on Wayland.** Hold-to-dictate now works on Hyprland, KDE, and GNOME 48+, which previously only delivered a single toggle with no press or release. (#1738, thanks @IdrisGit)
+- **Hyprland's Lua config is supported.** On Hyprland 0.55+ (and Omarchy), shortcuts persisted only to the deprecated `hyprland.conf` and vanished on reload. (#1664, thanks @IdrisGit)
+- **Auto-paste works on non-QWERTY layouts.** Compositor-native symbolic shortcuts and keysyms replace hardcoded keycodes, and dictated text stays on the clipboard when automatic paste can't land. (#1525, thanks @IdrisGit)
+- **Punctuation hotkeys bind on GNOME and KDE.** `Control+,` and friends silently failed to register. (#1658, #1752, thanks @hsusul)
+- **Ptyxis and GNOME Console paste correctly**, like the other terminals. (#1659, thanks @hsusul)
+- **Paste stops stalling on KDE.** A stale desktop-portal session cost up to 19 seconds on every paste until restart; failures are now remembered and skipped. (#1629)
+- **Sway overlays keep your text field focused**, so auto-paste lands. (#1718)
+
+### Windows
+
+- **Dictation pastes into the window you recorded from.** If another window took the foreground while transcription ran, the text went there instead; the captured target is now restored first. (#1725)
+- **Packaged builds stop printing logs to the terminal.** Use `--console-logs` if you want them. (#1719)
+- **Whisper models work under non-ASCII and redirected profiles.** A CJK or Cyrillic user name crashed the local transcription server; a redirected `USERPROFILE` hid downloaded models. (#1514, #1721, thanks @stantheman0128)
+
+### Elsewhere
+
+- **Turning off App updates turns off update checks.** The toggle used to gate only the popup, so firewalled machines still got network attempts on every launch and error dialogs when Settings opened. (#1662, thanks @AdityaPainuli)
+- **A wedged background service can't spin forever.** The reaper now escalates to SIGKILL and verifies the process actually died, instead of clearing its record after one ignored signal and spawning another alongside it. (#1626)
+- **Chinese UI for `zh-Hans` and `zh-Hant` system locales.** Those tags fell back to English. (#1691, thanks @hsusul)
 
 ## [1.8.3] - 2026-08-12
 

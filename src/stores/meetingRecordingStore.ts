@@ -99,6 +99,8 @@ interface MeetingRecordingState {
   error: string | null;
   /** Bumped on every error report so identical repeated errors still re-notify. */
   errorNonce: number;
+  /** Latched once per recording when main reports the system-audio tap has produced only silence. */
+  systemAudioSilentWarning: boolean;
   currentMicLevel: number;
   micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
   windowWidth: number;
@@ -412,6 +414,7 @@ let systemPartialSpeakerIdValue: string | null = null;
 let recentSystemSpeaker: RecentSystemSpeaker | null = null;
 let speakerLocks: Map<string, string> = new Map();
 let pushConfigTimeout: ReturnType<typeof setTimeout> | null = null;
+let sessionSystemAudioActive = false;
 
 export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   isRecording: false,
@@ -433,6 +436,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   userTouchedStepper: false,
   error: null,
   errorNonce: 0,
+  systemAudioSilentWarning: false,
   currentMicLevel: 0,
   micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
@@ -688,6 +692,7 @@ async function cleanup(): Promise<void> {
   isPrepared = false;
   isRecordingFlag = false;
   isStartingFlag = false;
+  sessionSystemAudioActive = false;
 }
 
 export async function prepareTranscription(): Promise<void> {
@@ -788,6 +793,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     recentSystemSpeaker = null;
     speakerLocks = locks;
     systemPartialSpeakerIdValue = null;
+    sessionSystemAudioActive = false;
 
     useMeetingRecordingStore.setState({
       isRecording: true,
@@ -810,6 +816,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       diarizationSessionId: null,
       completedDiarization: null,
       error: null,
+      systemAudioSilentWarning: false,
       micCaptureStatus: "inactive",
     });
 
@@ -1158,6 +1165,22 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       });
       if (fatalErrorCleanup) ipcCleanups.push(fatalErrorCleanup);
 
+      // One-shot from main (~45s in) when the system tap has streamed only
+      // silence; main never emits it for mic-only sessions, but gate on this
+      // session's own system-audio state anyway.
+      const systemAudioSilentCleanup = window.electronAPI?.onMeetingSystemAudioSilent?.((data) => {
+        if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+        if (!sessionSystemAudioActive) return;
+        if (useMeetingRecordingStore.getState().systemAudioSilentWarning) return;
+        logger.warn(
+          "Meeting system audio has produced only silence",
+          { systemAudioStrategy: data?.systemAudioStrategy },
+          "meeting"
+        );
+        useMeetingRecordingStore.setState({ systemAudioSilentWarning: true });
+      });
+      if (systemAudioSilentCleanup) ipcCleanups.push(systemAudioSilentCleanup);
+
       // Main re-derives the expected count when participants are added mid-meeting
       // (never for a count set explicitly via the stepper — main skips those).
       const speakerConfigCleanup = window.electronAPI?.onMeetingSessionSpeakerConfigUpdated?.(
@@ -1355,6 +1378,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       }
 
       const systemAudioAvailable = systemAudioHandledInMain || systemStream !== null;
+      sessionSystemAudioActive = systemAudioAvailable;
       try {
         const availabilityResult =
           await window.electronAPI?.meetingTranscriptionSetSystemAudioAvailable?.(
@@ -1438,6 +1462,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemPartial: "",
       systemPartialSpeakerId: null,
       systemPartialSpeakerName: null,
+      systemAudioSilentWarning: false,
       currentMicLevel: 0,
     });
     return { diarizationSessionId: null };
@@ -1523,6 +1548,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemPartial: "",
       systemPartialSpeakerId: null,
       systemPartialSpeakerName: null,
+      systemAudioSilentWarning: false,
       currentMicLevel: 0,
     });
 

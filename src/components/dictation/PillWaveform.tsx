@@ -10,7 +10,11 @@ interface PillWaveformProps {
   className?: string;
 }
 
-const SAMPLE_INTERVAL_MS = 60;
+// Syllables run ~140-250ms; sampling much faster than that lands neighboring
+// bars inside the same syllable, which reads as a fluid ridge. 80ms spacing
+// lets adjacent bars straddle syllable onsets and gaps, so the real signal
+// itself supplies the bar-to-bar variance.
+const SAMPLE_INTERVAL_MS = 80;
 
 /**
  * Level-driven waveform: bars scroll right-to-left with the live input signal.

@@ -1,5 +1,5 @@
-const { shell } = require("electron");
 const debugLogger = require("./debugLogger");
+const { openExternalUrl } = require("./externalUrlOpener");
 const { getMeetingJoinUrl } = require("./meetingJoinUrl");
 const createMeetingAutoEndController = require("./meetingAutoEndController");
 const { createMeetingAudioActivityMonitor } = require("./meetingAudioActivityMonitor");
@@ -477,15 +477,13 @@ class MeetingDetectionEngine {
         if (action === "join") {
           const joinUrl = getMeetingJoinUrl(detection.event);
           if (joinUrl) {
-            shell
-              .openExternal(joinUrl)
-              .catch((error) =>
-                debugLogger.error(
-                  "Failed to open meeting link",
-                  { error: error.message, joinUrl },
-                  "meeting"
-                )
-              );
+            openExternalUrl(joinUrl).catch((error) =>
+              debugLogger.error(
+                "Failed to open meeting link",
+                { error: error.message, joinUrl },
+                "meeting"
+              )
+            );
           }
         }
 

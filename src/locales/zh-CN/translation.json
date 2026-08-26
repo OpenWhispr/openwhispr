@@ -186,6 +186,7 @@
         "accessibilityDescription": "将文本粘贴到当前应用。",
         "systemAudioTitle": "系统音频",
         "systemAudioDescription": "捕获其他应用的音频。",
+        "screenContextDescription": "让语音助手查看当前屏幕，绝不保存。",
         "enable": "启用",
         "enabled": "已启用"
       },
@@ -533,6 +534,17 @@
         "step2": "打开 Corti 控制台并创建 API 凭据",
         "step3": "在下方粘贴 Client ID 和 Secret"
       }
+    },
+    "requiredModels": {
+      "title": "安装必需的模型",
+      "description": "{{organization}}要求在此设备上安装这些模型后才能开始听写。",
+      "genericOrganization": "您的组织",
+      "installed": "已安装",
+      "queued": "排队中",
+      "failed": {
+        "title": "有一项下载未完成",
+        "description": "请检查网络连接和磁盘剩余空间，然后重试。如果仍然失败，请联系您的管理员。"
+      }
     }
   },
   "streaming": {
@@ -656,7 +668,12 @@
       "enableButton": "启用 GPU",
       "dismissButton": "暂不启用"
     },
-    "backToNotes": "返回笔记"
+    "backToNotes": "返回笔记",
+    "requiredModelsByOrg": {
+      "title": "缺少必需的模型",
+      "description": "您的组织要求在此设备上安装这些模型：{{models}}。",
+      "download": "下载"
+    }
   },
   "reasoning": {
     "mode": {
@@ -984,7 +1001,7 @@
     "emailStep": {
       "checkingEmail": "正在检查您的邮箱...",
       "continueWithEmail": "使用邮箱继续",
-      "continueWithoutAccount": "无需账户使用 OpenWhispr",
+      "continueWithoutAccount": "无需账户，继续使用",
       "emailLabel": "邮箱",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "使用其他邮箱"
@@ -1555,7 +1572,9 @@
             "SSO 与合规",
             "专属支持"
           ],
-          "cta": "联系销售"
+          "cta": "联系销售",
+          "upgradeCta": "升级到 Enterprise",
+          "askOwner": "请 {{name}} 升级您的工作区。"
         },
         "currentPlan": "当前套餐",
         "coveredByWorkspace": "已包含在您的工作区套餐中",
@@ -2373,7 +2392,40 @@
             "admin": "工作区管理员"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise 控制台",
+        "description": "在网页端管理 SSO、策略和成员",
+        "open": "打开控制台"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "升级到 Enterprise",
+      "description": "选择工作区、席位数量和计费周期。付款将在 Stripe Checkout 中完成。",
+      "allSubscribed": "您拥有的工作区已在 Enterprise 方案或无法在此更改。如需更改方案，请联系销售。",
+      "workspaceLabel": "工作区",
+      "seatsLabel": "席位",
+      "seatsHint_one": "当前已使用 {{count}} 个席位",
+      "seatsHint_other": "当前已使用 {{count}} 个席位",
+      "intervalLabel": "计费周期",
+      "interval": {
+        "monthly": "按月",
+        "annual": "按年"
+      },
+      "proratedCharge": "按比例费用",
+      "prorationNote": "按比例计算的差额将计入下一张账单。",
+      "errors": {
+        "previewFailed": "无法加载升级预览。",
+        "alreadyEnterprise": "该工作区已在 Enterprise 计划中。",
+        "subscriptionInactive": "该工作区的订阅未激活。请更新账单信息后重试。",
+        "priceNotConfigured": "Enterprise 价格暂不可用。请联系销售。"
+      },
+      "priceNote": "最终价格将在结账时显示。",
+      "continueCta": "继续结账",
+      "upgradeDescription": "将 {{workspace}} 从{{plan}}升级到 Enterprise。席位和计费周期保持不变，更改立即生效。",
+      "upgradeCta": "立即升级",
+      "upgradedTitle": "已升级到 Enterprise",
+      "upgradedDescription": "{{workspace}} 现已升级到 Enterprise。"
     }
   },
   "models": {
@@ -2854,7 +2906,11 @@
       "description": "转录与结构化摘要",
       "back": "返回",
       "restrictedByOrg": "会议转录已被您的组织限制。",
-      "autoEnded": "会议结束后，录音已自动停止。"
+      "autoEnded": "会议结束后，录音已自动停止。",
+      "systemAudioSilent": {
+        "title": "尚未检测到会议音频",
+        "description": "到目前为止，只有您的麦克风采集到声音。正在进行视频通话？请检查会议音频是否正在此电脑上播放且未被静音。正在进行现场录音？您可以忽略此提示——您的麦克风会采集房间内的声音。"
+      }
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
@@ -3281,10 +3337,12 @@
       "copy_to_clipboardName": "复制到剪贴板",
       "web_searchName": "网页搜索",
       "get_calendar_eventsName": "获取日历事件",
+      "get_calendar_availabilityName": "查看空闲时间",
       "search_notesStatus": "正在搜索笔记...",
       "web_searchStatus": "正在搜索网页...",
       "copy_to_clipboardStatus": "正在复制到剪贴板...",
       "get_calendar_eventsStatus": "正在查看日历...",
+      "get_calendar_availabilityStatus": "正在查看空闲时间...",
       "get_noteStatus": "正在读取笔记...",
       "create_noteStatus": "正在创建笔记...",
       "update_noteStatus": "正在更新笔记...",
