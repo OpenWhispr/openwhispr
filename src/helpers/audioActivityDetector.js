@@ -12,6 +12,9 @@ const SUSTAINED_THRESHOLD_CHECKS = 2;
 const SUSTAINED_EVENT_DRIVEN_MS = 2 * 1000;
 const COOLDOWN_MS = 5 * 60 * 1000;
 const INACTIVE_RESET_MS = 60 * 1000;
+// PipeWire/PulseAudio emit 'change' subscribe events several times a second on
+// cork/volume churn, and every reconcile forks a pactl subprocess.
+const LINUX_RECONCILE_MIN_SPACING_MS = 1000;
 const EXEC_OPTS = { timeout: 5000, encoding: "utf8" };
 
 class AudioActivityDetector extends EventEmitter {
@@ -42,6 +45,8 @@ class AudioActivityDetector extends EventEmitter {
     this._linuxOwnershipRequest = 0;
     this._linuxReconcileQueued = false;
     this._linuxReconcileRunning = false;
+    this._linuxReconcileTimer = null;
+    this._linuxLastReconcileAt = 0;
     this._pidScopedCapability = false;
     this._externalMicReliable = false;
     this._externalMicActive = false;
@@ -169,6 +174,8 @@ class AudioActivityDetector extends EventEmitter {
     this._lastKnownMicState = false;
     this._clearCooldownReevalTimer();
     this._linuxOwnershipRequest++;
+    this._linuxReconcileQueued = false;
+    this._clearLinuxReconcileTimer();
     this._pidScopedCapability = false;
     this._externalMicReliable = false;
     this._externalMicActive = false;
@@ -454,28 +461,58 @@ class AudioActivityDetector extends EventEmitter {
   }
 
   // Bursts of subscribe events coalesce into at most one running and one queued
-  // reconcile instead of spawning a `pactl list` subprocess per line.
+  // reconcile instead of spawning a `pactl list` subprocess per line, and
+  // successive reconciles stay LINUX_RECONCILE_MIN_SPACING_MS apart: the first
+  // event after quiet reconciles immediately, and a trailing reconcile always
+  // follows the last event of a burst so no state change is dropped.
   _queueLinuxReconcile() {
     if (this._linuxReconcileQueued) return;
     this._linuxReconcileQueued = true;
-    if (this._linuxReconcileRunning) return;
+    if (this._linuxReconcileRunning || this._linuxReconcileTimer) return;
+    this._scheduleQueuedLinuxReconcile();
+  }
 
+  _scheduleQueuedLinuxReconcile() {
+    const waitMs = this._linuxLastReconcileAt + LINUX_RECONCILE_MIN_SPACING_MS - Date.now();
+    if (waitMs <= 0) {
+      this._runQueuedLinuxReconcile();
+      return;
+    }
+    this._linuxReconcileTimer = setTimeout(() => {
+      this._linuxReconcileTimer = null;
+      this._runQueuedLinuxReconcile();
+    }, waitMs);
+  }
+
+  _runQueuedLinuxReconcile() {
     this._linuxReconcileRunning = true;
     void (async () => {
       try {
-        while (this._linuxReconcileQueued && this._running && this._listenerProcess) {
-          this._linuxReconcileQueued = false;
+        this._linuxReconcileQueued = false;
+        if (this._running && this._listenerProcess) {
           await this._reconcileLinuxSourceOutputs(this._startGeneration);
         }
       } finally {
-        this._linuxReconcileQueued = false;
         this._linuxReconcileRunning = false;
+        if (this._linuxReconcileQueued && this._running && this._listenerProcess) {
+          this._scheduleQueuedLinuxReconcile();
+        } else {
+          this._linuxReconcileQueued = false;
+        }
       }
     })();
   }
 
+  _clearLinuxReconcileTimer() {
+    if (this._linuxReconcileTimer) {
+      clearTimeout(this._linuxReconcileTimer);
+      this._linuxReconcileTimer = null;
+    }
+  }
+
   async _reconcileLinuxSourceOutputs(generation) {
     const request = ++this._linuxOwnershipRequest;
+    this._linuxLastReconcileAt = Date.now();
 
     try {
       const { stdout } = await execAsync("pactl --format=json list source-outputs", EXEC_OPTS);
