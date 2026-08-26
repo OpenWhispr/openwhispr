@@ -150,7 +150,7 @@ test("compact onboarding stays fixed-size but remains minimizable and closable",
   });
 });
 
-test("native Linux push-to-talk keeps only the dictation low-level listener", () => {
+test("native Linux push-to-talk keeps only the dictation low-level listener", async () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { value: "linux", configurable: true });
 
@@ -158,13 +158,14 @@ test("native Linux push-to-talk keeps only the dictation low-level listener", ()
     const manager = new WindowManager();
     let reconciledKeys = null;
     manager.mainWindow = { isDestroyed: () => false };
-    manager.setActivationModeCache("push");
     manager.hotkeyManager = {
+      setActivationMode: async () => true,
       isInListeningMode: () => false,
       isUsingNativeShortcut: () => true,
       getNativeListenerKeys: () => ["Control+Space", "Control+Shift+Space"],
       slotHasHotkey: (slot, key) => slot === "dictation" && key === "Control+Space",
     };
+    await manager.setActivationModeCache("push");
     manager.linuxKeyManager = {
       setKeys: (keys) => {
         reconciledKeys = keys;

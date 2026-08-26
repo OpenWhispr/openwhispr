@@ -23,6 +23,7 @@ import type {
   WhisperDownloadProgressData,
 } from "../../types/electron";
 import { mergeHydratedDownloads } from "./localDownloadState";
+import { ONBOARDING_SESSION_KEY, isRequiredModelsOnboardingStepActive } from "./flow";
 
 type DownloadKind = "whisper" | "parakeet" | "llm";
 
@@ -226,6 +227,17 @@ export default function BackgroundModelDownloadTray() {
       percentage: number | undefined;
       error?: string;
     }) => {
+      // The required-models onboarding step owns its downloads: it renders its
+      // own per-row progress, and cancelling from here cannot stick because the
+      // step auto-restarts org-mandated downloads. Suppress row creation while
+      // that step is active; completions still pass so any pre-existing row
+      // (a resumed local-setup download) can clear and activate normally.
+      if (
+        event.type !== "complete" &&
+        isRequiredModelsOnboardingStepActive(localStorage.getItem(ONBOARDING_SESSION_KEY))
+      ) {
+        return;
+      }
       const key = downloadKey(event.kind, event.id);
       const cancelledAt = cancelledKeys.current.get(key);
       if (cancelledAt !== undefined && event.type !== "complete") {

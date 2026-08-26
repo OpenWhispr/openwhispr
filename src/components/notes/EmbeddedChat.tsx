@@ -8,6 +8,7 @@ import type { Message, AgentState } from "../chat/types";
 import { setActiveNoteId, setActiveFolderId } from "../../stores/noteStore";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { ConversationPicker } from "./ConversationPicker";
+import { FLOATING_CHAT_MAX_HEIGHT_CSS } from "./floatingChatLayout";
 
 export type EmbeddedChatMode = "hidden" | "floating" | "sidebar";
 
@@ -22,6 +23,8 @@ interface EmbeddedChatProps {
   activeConversationId?: number | null;
   onSwitchConversation?: (id: number) => void;
   onNewChat?: () => void;
+  /** Floating panel ref; NoteEditor reserves scroll space with it. */
+  floatingPanelRef?: React.Ref<HTMLDivElement>;
 }
 
 function EmptyState() {
@@ -46,6 +49,7 @@ export default function EmbeddedChat({
   activeConversationId,
   onSwitchConversation,
   onNewChat,
+  floatingPanelRef,
 }: EmbeddedChatProps) {
   const { t } = useTranslation();
 
@@ -143,9 +147,11 @@ export default function EmbeddedChat({
   if (mode === "floating") {
     return (
       <div
+        ref={floatingPanelRef}
+        style={{ maxHeight: FLOATING_CHAT_MAX_HEIGHT_CSS }}
         className={cn(
           "absolute bottom-4 left-5 right-5 z-20 mx-auto max-w-[600px]",
-          "max-h-[calc(100%-2rem)] min-h-50",
+          "min-h-50",
           "flex flex-col",
           "bg-background/95 dark:bg-surface-2/95",
           "border border-black/15 dark:border-white/18",

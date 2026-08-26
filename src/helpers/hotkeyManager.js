@@ -259,7 +259,12 @@ class HotkeyManager extends EventEmitter {
     if (this.useKDE && this.kdeManager && slotName !== "cancel") {
       this.unregisterSlot(slotName);
 
-      const result = await this.kdeManager.registerKeybinding(hotkey, slotName, callback);
+      const result = await this.kdeManager.registerKeybinding(
+        hotkey,
+        slotName,
+        callback,
+        slotName === "dictation" && this.activationMode === "push"
+      );
       if (result !== true) {
         const reason =
           KDE_FAILURE_REASONS[result]?.(hotkey) ||
@@ -379,6 +384,89 @@ class HotkeyManager extends EventEmitter {
       }
     }
     return keys;
+  }
+
+  supportsPushToTalk(hotkey = this.currentHotkey) {
+    if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
+      return false;
+    }
+    if (this.useGnome && this.gnomeManager?.supportsPushToTalk) {
+      return this.gnomeManager.supportsPushToTalk();
+    }
+    return true;
+  }
+
+  getPushToTalkUnavailableReason(hotkey = this.currentHotkey) {
+    if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
+      return i18nMain.t("hotkey.errors.osReserved", { hotkey });
+    }
+    return i18nMain.t("windows.pttUnavailable");
+  }
+
+  async setActivationMode(mode) {
+    const nextMode = mode === "push" ? "push" : "tap";
+    const previousMode = this.activationMode === "push" ? "push" : "tap";
+    if (this.activationMode === nextMode) return true;
+
+    const hotkey = this.currentHotkey;
+    const callback = this.hotkeyCallback;
+    if (nextMode === "push" && !this.supportsPushToTalk(hotkey)) {
+      if (hotkey) {
+        this.notifyHotkeyFailure(hotkey, {
+          error: this.getPushToTalkUnavailableReason(hotkey),
+        });
+      }
+      return false;
+    }
+
+    let success = true;
+    try {
+      if (this.useGnome && this.gnomeManager && hotkey && callback) {
+        success = await this.registerGnomeDictationHotkey(hotkey, callback, nextMode);
+      } else if (this.useHyprland && this.hyprlandManager && hotkey) {
+        success = await this.hyprlandManager.updateKeybinding(hotkey, nextMode === "push");
+        if (!success) {
+          await this.hyprlandManager.updateKeybinding(hotkey, previousMode === "push");
+        }
+      }
+    } catch (err) {
+      debugLogger.warn("[HotkeyManager] Failed to change activation mode:", err.message);
+      success = false;
+    }
+
+    if (
+      !success &&
+      previousMode === "push" &&
+      nextMode === "tap" &&
+      this.useGnome &&
+      this.gnomeManager &&
+      hotkey &&
+      callback
+    ) {
+      try {
+        const restored = await this.registerGnomeDictationHotkey(hotkey, callback, "push");
+        if (!restored) {
+          debugLogger.warn("[HotkeyManager] Could not restore GNOME push-to-talk binding");
+        }
+      } catch (err) {
+        debugLogger.warn(
+          "[HotkeyManager] Error restoring GNOME push-to-talk binding:",
+          err.message
+        );
+      }
+    }
+
+    if (!success) {
+      if (hotkey) {
+        this.notifyHotkeyFailure(hotkey, {
+          error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+        });
+      }
+      return false;
+    }
+
+    this.activationMode = nextMode;
+    return true;
   }
 
   // Which mouse buttons the macOS listener must swallow for these slots, and
@@ -656,8 +744,10 @@ class HotkeyManager extends EventEmitter {
 
       const dbusOk = await this.gnomeManager.initDBusService(callback);
       if (dbusOk) {
+        const portalOk = await this.gnomeManager.initGlobalShortcutsPortal();
         this.useGnome = true;
         this.hotkeyCallback = callback;
+        debugLogger.log("[HotkeyManager] GNOME Global Shortcuts portal:", portalOk);
         return true;
       }
     } catch (err) {
@@ -667,6 +757,17 @@ class HotkeyManager extends EventEmitter {
     }
 
     return false;
+  }
+
+  async registerGnomeDictationHotkey(hotkey, callback, mode = this.activationMode) {
+    if (mode === "push") {
+      if (isModifierOnlyHotkey(hotkey)) return false;
+      return this.gnomeManager.registerPushToTalk(hotkey, callback);
+    }
+
+    await this.gnomeManager.unregisterPushToTalk();
+    const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
+    return this.gnomeManager.registerKeybinding(gnomeHotkey);
   }
 
   async initializeKDEShortcuts(callback) {
@@ -756,18 +857,15 @@ class HotkeyManager extends EventEmitter {
           try {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
-            const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
-
-            const success = await this.gnomeManager.registerKeybinding(gnomeHotkey);
+            const success = await this.registerGnomeDictationHotkey(hotkey, callback);
             if (success) {
               this.currentHotkey = hotkey;
               this.notifyActiveHotkey(hotkey);
               debugLogger.log(`[HotkeyManager] GNOME hotkey "${hotkey}" registered successfully`);
             } else {
-              const ok = await this.tryNativeFallbacks(hotkey, "GNOME", async (fb) => {
-                const fbGnome = GnomeShortcutManager.convertToGnomeFormat(fb);
-                return this.gnomeManager.registerKeybinding(fbGnome);
-              });
+              const ok = await this.tryNativeFallbacks(hotkey, "GNOME", (fb) =>
+                this.registerGnomeDictationHotkey(fb, callback)
+              );
               if (!ok) {
                 this.useGnome = false;
                 this.loadSavedHotkeyOrDefault(mainWindow, callback);
@@ -803,7 +901,10 @@ class HotkeyManager extends EventEmitter {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
 
-            const success = await this.hyprlandManager.registerKeybinding(hotkey);
+            const success = await this.hyprlandManager.registerKeybinding(
+              hotkey,
+              this.activationMode === "push"
+            );
             if (success) {
               this.currentHotkey = hotkey;
               this.notifyActiveHotkey(hotkey);
@@ -812,7 +913,7 @@ class HotkeyManager extends EventEmitter {
               );
             } else {
               const ok = await this.tryNativeFallbacks(hotkey, "Hyprland", (fb) =>
-                this.hyprlandManager.registerKeybinding(fb)
+                this.hyprlandManager.registerKeybinding(fb, this.activationMode === "push")
               );
               if (!ok) {
                 this.useHyprland = false;
@@ -845,7 +946,12 @@ class HotkeyManager extends EventEmitter {
           try {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
-            const result = await this.kdeManager.registerKeybinding(hotkey, "dictation", callback);
+            const result = await this.kdeManager.registerKeybinding(
+              hotkey,
+              "dictation",
+              callback,
+              this.activationMode === "push"
+            );
             if (result === true) {
               this.currentHotkey = hotkey;
               this.notifyActiveHotkey(hotkey);
@@ -853,7 +959,7 @@ class HotkeyManager extends EventEmitter {
             } else if (result === "conflict" || result === "modifier-only") {
               const ok = await this.tryNativeFallbacks(hotkey, "KDE", (fb) =>
                 this.kdeManager
-                  .registerKeybinding(fb, "dictation", callback)
+                  .registerKeybinding(fb, "dictation", callback, this.activationMode === "push")
                   .then((r) => r === true)
               );
               if (!ok) {
@@ -1167,6 +1273,13 @@ class HotkeyManager extends EventEmitter {
       // DE backends bind one accelerator per slot; extras stay in storage.
       const primary = hotkeys[0];
 
+      if (this.activationMode === "push" && !this.supportsPushToTalk(primary)) {
+        return {
+          success: false,
+          message: this.getPushToTalkUnavailableReason(primary),
+        };
+      }
+
       for (const hotkey of hotkeys) {
         const conflict = this._findSlotConflict("dictation", hotkey);
         if (conflict) {
@@ -1176,8 +1289,7 @@ class HotkeyManager extends EventEmitter {
 
       if (this.useGnome && this.gnomeManager) {
         debugLogger.log(`[HotkeyManager] Updating GNOME hotkey to "${primary}"`);
-        const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(primary);
-        const success = await this.gnomeManager.updateKeybinding(gnomeHotkey);
+        const success = await this.registerGnomeDictationHotkey(primary, callback);
         if (!success) {
           return {
             success: false,
@@ -1200,7 +1312,10 @@ class HotkeyManager extends EventEmitter {
 
       if (this.useHyprland && this.hyprlandManager) {
         debugLogger.log(`[HotkeyManager] Updating Hyprland hotkey to "${primary}"`);
-        const success = await this.hyprlandManager.updateKeybinding(primary);
+        const success = await this.hyprlandManager.updateKeybinding(
+          primary,
+          this.activationMode === "push"
+        );
         if (!success) {
           return {
             success: false,
@@ -1225,13 +1340,19 @@ class HotkeyManager extends EventEmitter {
         debugLogger.log(`[HotkeyManager] Updating KDE hotkey to "${primary}"`);
         const previousHotkey = this.currentHotkey;
         await this.kdeManager.unregisterKeybinding("dictation");
-        const result = await this.kdeManager.registerKeybinding(primary, "dictation", callback);
+        const result = await this.kdeManager.registerKeybinding(
+          primary,
+          "dictation",
+          callback,
+          this.activationMode === "push"
+        );
         if (result !== true) {
           if (previousHotkey) {
             const restored = await this.kdeManager.registerKeybinding(
               previousHotkey,
               "dictation",
-              callback
+              callback,
+              this.activationMode === "push"
             );
             if (restored === true) {
               debugLogger.log(`[HotkeyManager] Restored previous KDE hotkey "${previousHotkey}"`);
@@ -1298,7 +1419,9 @@ class HotkeyManager extends EventEmitter {
           );
         });
       }
-      this.gnomeManager.close();
+      void this.gnomeManager.close().catch((err) => {
+        debugLogger.warn("[HotkeyManager] Error closing GNOME shortcut manager:", err.message);
+      });
       this.gnomeManager = null;
       this.useGnome = false;
     }

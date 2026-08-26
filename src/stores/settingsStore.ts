@@ -54,7 +54,10 @@ import { getManagedScopeResolution } from "./enterpriseIdentityStore";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
-const isBrowser = typeof window !== "undefined";
+// Requires localStorage as well as window: the module-scope migrations below
+// dereference the bare localStorage global, and test harnesses import this
+// store with partial window stubs that don't define it.
+const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
 
 export const TRANSCRIPTION_POLICY_PROVIDER_IDS = [
   ...modelRegistryData.transcriptionProviders.map((provider) => provider.id),

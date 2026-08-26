@@ -2,6 +2,10 @@ import type { InferenceMode, ShareVisibility } from "../types/electron";
 import type { OrgPolicy, PolicyScope } from "../types/policy";
 import type { SettingsState } from "./settingsStore";
 import { compareAppVersions } from "../utils/version.ts";
+// The registry JSON directly (like policyValidation.js), NOT ModelRegistry:
+// that module pulls the settings/identity stores, whose module scope needs
+// real browser globals, and this file is imported by node-run sync tests.
+import modelRegistryData from "../models/modelRegistryData.json";
 
 export type PolicyStatus = "idle" | "loading" | "managed" | "unmanaged" | "error";
 
@@ -115,6 +119,43 @@ export function isWebSearchAllowed(state: PolicyDecisionSnapshot): boolean {
  */
 export function isScreenContextAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.screenContextEnabled !== false);
+}
+
+const warnedUnknownRequiredModelIds = new Set<string>();
+
+/**
+ * Model ids the org requires on disk, filtered to ids this build's registry
+ * knows how to download. Unknown ids (a newer server) are dropped with a
+ * warning instead of failing the policy — minAppVersion is the enforcement
+ * backstop. Fail-open for idle/loading/unmanaged/error: this field only ever
+ * adds work for managed users, so an unresolved policy requires nothing yet.
+ */
+export function requiredLocalModelIds(state: PolicyDecisionSnapshot): string[] {
+  const required = managedPolicy(state)?.requiredLocalModels;
+  if (!required?.length) return [];
+  const known = new Set<string>([
+    ...Object.keys(modelRegistryData.whisperModels),
+    ...Object.keys(modelRegistryData.parakeetModels),
+  ]);
+  const usable: string[] = [];
+  for (const id of required) {
+    if (known.has(id)) {
+      if (!usable.includes(id)) usable.push(id);
+    } else if (!warnedUnknownRequiredModelIds.has(id)) {
+      warnedUnknownRequiredModelIds.add(id);
+      console.warn(`[policy] Ignoring unknown required local model id: ${id}`);
+    }
+  }
+  return usable;
+}
+
+/** Required ids not yet on disk. Disk truth (installed ids) comes from the caller. */
+export function missingRequiredLocalModels(
+  required: readonly string[],
+  installedIds: readonly string[]
+): string[] {
+  const installed = new Set(installedIds);
+  return required.filter((id) => !installed.has(id));
 }
 
 /** Whether cloud backup/sync is allowed. */

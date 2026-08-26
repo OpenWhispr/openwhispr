@@ -52,8 +52,9 @@ export function createApiRetryStrategy() {
       const status = error?.status ?? error?.response?.status;
       if (typeof status !== "number") return true;
 
-      // 4xx are deterministic rejections; only rate limits and server faults can clear on retry.
-      return status === 429 || (status >= 500 && status < 600);
+      // Most 4xx are deterministic rejections. 408 is a request timeout and 429 is
+      // a rate limit; both can clear on retry, as can 5xx server faults.
+      return status === 408 || status === 429 || (status >= 500 && status < 600);
     },
   };
 }
