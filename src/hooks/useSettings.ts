@@ -64,9 +64,11 @@ export interface HotkeySettings {
 export interface OnboardingSettings {
   onboardingUseCases: string[];
   onboardingUseCaseNote: string;
+  spokenLanguages: string[];
 }
 
 export interface MicrophoneSettings {
+  microphoneSelectionMode: "system" | "built-in" | "specific";
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
   selectedMicDeviceLabel: string;
@@ -105,7 +107,6 @@ export interface ThemeSettings {
 export interface ChatAgentSettings {
   chatAgentModel: string;
   chatAgentProvider: string;
-  chatAgentKey: string;
   chatAgentCloudMode: string;
   chatAgentMode: InferenceMode;
   chatAgentCloudBaseUrl: string;
@@ -264,8 +265,6 @@ function useSettingsInternal() {
     remoteTranscriptionModel: store.remoteTranscriptionModel,
     cleanupMode: store.cleanupMode,
     cleanupRemoteUrl: store.cleanupRemoteUrl,
-    llmRequestTimeoutSeconds: store.llmRequestTimeoutSeconds,
-    setLlmRequestTimeoutSeconds: store.setLlmRequestTimeoutSeconds,
     customDictionary: store.customDictionary,
     snippets: store.snippets,
     setSnippets: store.setSnippets,
@@ -335,6 +334,8 @@ function useSettingsInternal() {
     setOnboardingUseCases: store.setOnboardingUseCases,
     onboardingUseCaseNote: store.onboardingUseCaseNote,
     setOnboardingUseCaseNote: store.setOnboardingUseCaseNote,
+    spokenLanguages: store.spokenLanguages,
+    setSpokenLanguages: store.setSpokenLanguages,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
@@ -356,10 +357,12 @@ function useSettingsInternal() {
     setStartMinimized: store.setStartMinimized,
     panelStartPosition: store.panelStartPosition,
     setPanelStartPosition: store.setPanelStartPosition,
+    microphoneSelectionMode: store.microphoneSelectionMode,
     preferBuiltInMic: store.preferBuiltInMic,
     selectedMicDeviceId: store.selectedMicDeviceId,
     selectedMicDeviceLabel: store.selectedMicDeviceLabel,
     micWarmHoldSeconds: store.micWarmHoldSeconds,
+    setMicrophoneSelectionMode: store.setMicrophoneSelectionMode,
     setPreferBuiltInMic: store.setPreferBuiltInMic,
     setSelectedMicDevice: store.setSelectedMicDevice,
     setMicWarmHoldSeconds: store.setMicWarmHoldSeconds,

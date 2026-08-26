@@ -41,6 +41,13 @@ export interface OrgPolicy {
     localHistoryMode: LocalHistoryMode;
     cloudBackupAllowed: boolean;
   };
+  /**
+   * Model ids (whisper/parakeet registry keys) members must download.
+   * Absent on servers that predate the field; absent/empty means none.
+   * Validated shape-only so future server-side ids can't invalidate the
+   * policy — unknown ids are filtered at enforcement time.
+   */
+  requiredLocalModels?: string[];
   minAppVersion: string | null;
 }
 

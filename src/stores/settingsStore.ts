@@ -54,7 +54,10 @@ import { getManagedScopeResolution } from "./enterpriseIdentityStore";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
-const isBrowser = typeof window !== "undefined";
+// Requires localStorage as well as window: the module-scope migrations below
+// dereference the bare localStorage global, and test harnesses import this
+// store with partial window stubs that don't define it.
+const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
 
 export const TRANSCRIPTION_POLICY_PROVIDER_IDS = [
   ...modelRegistryData.transcriptionProviders.map((provider) => provider.id),
@@ -191,6 +194,26 @@ function readStringArray(key: string, fallback: string[]): string[] {
   }
 }
 
+type MicrophoneSelectionMode = "system" | "built-in" | "specific";
+
+function migrateMicrophoneSelectionMode() {
+  if (!isBrowser) return;
+  const current = localStorage.getItem("microphoneSelectionMode");
+  if (current === "system" || current === "built-in" || current === "specific") return;
+
+  const selectedDeviceId = localStorage.getItem("selectedMicDeviceId") || "";
+  const legacyBuiltIn = localStorage.getItem("preferBuiltInMic");
+  const mode: MicrophoneSelectionMode =
+    legacyBuiltIn === "true"
+      ? "built-in"
+      : selectedDeviceId && selectedDeviceId !== "default"
+        ? "specific"
+        : "system";
+  localStorage.setItem("microphoneSelectionMode", mode);
+}
+
+migrateMicrophoneSelectionMode();
+
 // One-time migration for legacy `meetingFollows{Transcription,Reasoning}` flags.
 // When the flag was true (the default), meeting/note recordings inherited the
 // main dictation/intelligence settings. We've removed the toggle; copy the
@@ -260,7 +283,6 @@ const BOOLEAN_SETTINGS = new Set([
   "floatingIconAutoHide",
   "startMinimized",
   "meetingProcessDetection",
-  "meetingAutoEndEnabled",
   "speakerDiarizationEnabled",
   "dictationSileroEnabled",
   "noteRecordingSileroEnabled",
@@ -292,6 +314,7 @@ const ARRAY_SETTINGS = new Set([
   "gcalAccounts",
   "mcalAccounts",
   "onboardingUseCases",
+  "spokenLanguages",
   "translationTargets",
 ]);
 
@@ -299,7 +322,6 @@ const NUMERIC_SETTINGS = new Set([
   "micWarmHoldSeconds",
   "audioRetentionDays",
   "transcriptRetentionDays",
-  "llmRequestTimeoutSeconds",
   "whisperVadThreshold",
   "whisperVadMinSpeechDurationMs",
   "whisperVadMinSilenceDurationMs",
@@ -538,7 +560,6 @@ const LLM_SCOPE_KEY_PAIRS: ReadonlyArray<[string, string]> = [
   ["agentModel", "chatAgentModel"],
   ["cloudAgentMode", "chatAgentCloudMode"],
   ["remoteAgentUrl", "chatAgentRemoteUrl"],
-  ["agentKey", "chatAgentKey"],
 ];
 
 function migrateLLMScopeKeys() {
@@ -612,7 +633,6 @@ export interface SettingsState
   mcalPrimaryOnly: boolean;
   appleCalendarConnected: boolean;
   meetingProcessDetection: boolean;
-  meetingAutoEndEnabled: boolean;
   speakerDiarizationEnabled: boolean;
   dictationSileroEnabled: boolean;
   noteRecordingSileroEnabled: boolean;
@@ -636,10 +656,6 @@ export interface SettingsState
   remoteTranscriptionModel: string;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
-  // Abort timeout for LLM requests (cleanup, note formatting, agent tool calls,
-  // self-hosted LAN calls), in seconds. Clamped to a sane range at the point of
-  // use, and floored at 60s for streaming — see src/helpers/llmRequestTimeout.js.
-  llmRequestTimeoutSeconds: number;
 
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
@@ -742,7 +758,6 @@ export interface SettingsState
   setRemoteTranscriptionModel: (model: string) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
-  setLlmRequestTimeoutSeconds: (seconds: number) => void;
 
   setMeetingTranscriptionMode: (mode: InferenceMode) => void;
   setMeetingUseLocalWhisper: (value: boolean) => void;
@@ -889,9 +904,11 @@ export interface SettingsState
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
+  setSpokenLanguages: (languages: string[]) => void;
   setActivationMode: (mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
+  setMicrophoneSelectionMode: (mode: MicrophoneSelectionMode) => void;
   setSelectedMicDevice: (deviceId: string, label: string) => void;
   setMicWarmHoldSeconds: (seconds: number) => void;
 
@@ -916,7 +933,6 @@ export interface SettingsState
   setMcalPrimaryOnly: (value: boolean) => void;
   setAppleCalendarConnected: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
-  setMeetingAutoEndEnabled: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
   setDictationSileroEnabled: (value: boolean) => void;
   setNoteRecordingSileroEnabled: (value: boolean) => void;
@@ -937,7 +953,6 @@ export interface SettingsState
 
   setChatAgentModel: (value: string) => void;
   setChatAgentProvider: (value: string) => void;
-  setChatAgentKey: (key: string) => Promise<boolean>;
   setChatAgentCloudMode: (value: string) => void;
   setChatAgentMode: (mode: InferenceMode) => void;
   setChatAgentCloudBaseUrl: (value: string) => void;
@@ -1003,7 +1018,7 @@ function createNumberSetter(key: string) {
 // being persisted. Rolls back to the previous key if registration fails.
 // Resolves to false on failure so optimistic UIs (HotkeyListInput) can revert.
 function createRegisteredHotkeySetter(
-  key: "chatAgentKey" | "voiceAgentKey" | "translationKey",
+  key: "voiceAgentKey" | "translationKey",
   label: string,
   getRegisterFn: () =>
     ((hotkey: string) => Promise<{ success: boolean; message: string }>) | undefined,
@@ -1281,13 +1296,20 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   translationKey: readString("translationKey", ""),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
   onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
+  spokenLanguages: readStringArray("spokenLanguages", []),
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     "tap" | "push",
 
-  preferBuiltInMic: readBoolean("preferBuiltInMic", true),
+  microphoneSelectionMode: (() => {
+    const mode = readString("microphoneSelectionMode", "system");
+    return (
+      mode === "built-in" || mode === "specific" ? mode : "system"
+    ) as MicrophoneSelectionMode;
+  })(),
+  preferBuiltInMic: readBoolean("preferBuiltInMic", false),
   selectedMicDeviceId: readString("selectedMicDeviceId", ""),
   selectedMicDeviceLabel: readString("selectedMicDeviceLabel", ""),
   micWarmHoldSeconds: snapMicWarmHold(readNumber("micWarmHoldSeconds", 0)),
@@ -1342,7 +1364,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   mcalPrimaryOnly: readBoolean("mcalPrimaryOnly", true),
   appleCalendarConnected: readBoolean("appleCalendarConnected", false),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
-  meetingAutoEndEnabled: readBoolean("meetingAutoEndEnabled", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
   // Off by default: VAD on pause-heavy dictations can strip the speech and make
   // Whisper hallucinate the dictionary prompt as the transcript (#1454).
@@ -1403,7 +1424,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return "openwhispr" as InferenceMode;
   })(),
   cleanupRemoteUrl: readString("cleanupRemoteUrl", ""),
-  llmRequestTimeoutSeconds: readNumber("llmRequestTimeoutSeconds", 30),
 
   meetingTranscriptionMode: (() => {
     const v = readString("meetingTranscriptionMode", "openwhispr");
@@ -1501,7 +1521,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
-  setLlmRequestTimeoutSeconds: createNumberSetter("llmRequestTimeoutSeconds"),
 
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
     mode: InferenceMode
@@ -1574,7 +1593,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   chatAgentModel: readString("chatAgentModel", "openai/gpt-oss-120b"),
   chatAgentProvider: readString("chatAgentProvider", "groq"),
-  chatAgentKey: readString("chatAgentKey", ""),
   chatAgentCloudMode: readString("chatAgentCloudMode", "openwhispr"),
   chatAgentMode: (() => {
     const v = readString("chatAgentMode", "openwhispr");
@@ -2008,6 +2026,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setOnboardingUseCaseNote: createStringSetter("onboardingUseCaseNote"),
 
+  setSpokenLanguages: (languages: string[]) => {
+    if (isBrowser) localStorage.setItem("spokenLanguages", JSON.stringify(languages));
+    set({ spokenLanguages: languages });
+  },
+
   setActivationMode: (mode: "tap" | "push") => {
     if (isBrowser) localStorage.setItem("activationMode", mode);
     set({ activationMode: mode });
@@ -2016,7 +2039,24 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
   },
 
-  setPreferBuiltInMic: createBooleanSetter("preferBuiltInMic"),
+  setPreferBuiltInMic: (value: boolean) => {
+    const mode: MicrophoneSelectionMode = value ? "built-in" : "system";
+    if (isBrowser) {
+      localStorage.setItem("preferBuiltInMic", String(value));
+      localStorage.setItem("microphoneSelectionMode", mode);
+    }
+    set({ preferBuiltInMic: value, microphoneSelectionMode: mode });
+  },
+  setMicrophoneSelectionMode: (mode: MicrophoneSelectionMode) => {
+    const normalized: MicrophoneSelectionMode =
+      mode === "built-in" || mode === "specific" ? mode : "system";
+    const preferBuiltInMic = normalized === "built-in";
+    if (isBrowser) {
+      localStorage.setItem("microphoneSelectionMode", normalized);
+      localStorage.setItem("preferBuiltInMic", String(preferBuiltInMic));
+    }
+    set({ microphoneSelectionMode: normalized, preferBuiltInMic });
+  },
   setSelectedMicDevice: (deviceId: string, label: string) => {
     if (isBrowser) {
       localStorage.setItem("selectedMicDeviceLabel", label);
@@ -2103,14 +2143,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setAppleCalendarConnected: createBooleanSetter("appleCalendarConnected"),
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
-  setMeetingAutoEndEnabled: (value: boolean) => {
-    if (isBrowser) localStorage.setItem("meetingAutoEndEnabled", String(value));
-    useSettingsStore.setState({ meetingAutoEndEnabled: value });
-    // Takes effect immediately — a live countdown is dismissed when turned off.
-    if (isBrowser) {
-      window.electronAPI?.meetingDetectionSetPreferences?.({ autoEnd: value });
-    }
-  },
   setSpeakerDiarizationEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("speakerDiarizationEnabled", String(value));
     useSettingsStore.setState({ speakerDiarizationEnabled: value });
@@ -2209,12 +2241,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setChatAgentModel: createStringSetter("chatAgentModel"),
   setChatAgentProvider: createStringSetter("chatAgentProvider"),
-  setChatAgentKey: createRegisteredHotkeySetter(
-    "chatAgentKey",
-    "chat agent hotkey",
-    () => window.electronAPI?.updateAgentHotkey,
-    (key) => window.electronAPI?.saveAgentKey?.(key)
-  ),
   setChatAgentCloudMode: createStringSetter("chatAgentCloudMode"),
   setChatAgentMode: createStringSetter("chatAgentMode") as (mode: InferenceMode) => void,
   setChatAgentCloudBaseUrl: createStringSetter("chatAgentCloudBaseUrl"),
@@ -2318,19 +2344,30 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   // one provider so PHI never reaches a second LLM (e.g. Corti for medical providers).
   setCloudReasoningForAllScopes: (settings: Partial<CleanupSettings>) => {
     const s = useSettingsStore.getState();
+    // Onboarding routes every scope to the local runtime or the enterprise
+    // provider by passing "local"/"enterprise" as cleanupCloudMode. Those are
+    // InferenceModes of their own, not cloud routings — deriveReasoningMode
+    // collapses everything non-byok to "openwhispr", which would misroute
+    // privacy-local and manual-enterprise setups to the managed cloud. Map them
+    // straight through and keep them out of the *CloudMode fields, which only
+    // ever hold real cloud routings ("openwhispr"/"byok").
+    const requestedCloudMode = settings.cleanupCloudMode ?? s.cleanupCloudMode;
+    const isDirectMode = requestedCloudMode === "local" || requestedCloudMode === "enterprise";
     // Derive the mode from the incoming patch (falling back to current state) so
     // the helper patches are the single source of truth for every scope's mode.
-    const mode = deriveReasoningMode(
-      settings.cleanupCloudMode ?? s.cleanupCloudMode,
-      settings.cleanupProvider ?? s.cleanupProvider
-    );
+    const mode = isDirectMode
+      ? requestedCloudMode
+      : deriveReasoningMode(requestedCloudMode, settings.cleanupProvider ?? s.cleanupProvider);
     const {
       dictationCleanup,
       noteFormatting,
       dictationAgent,
       chatIntelligence,
       dictationTranslation,
-    } = buildReasoningScopePatches(settings, mode);
+    } = buildReasoningScopePatches(
+      isDirectMode ? { ...settings, cleanupCloudMode: undefined } : settings,
+      mode
+    );
     s.updateCleanupSettings(dictationCleanup);
     s.setCleanupMode(dictationCleanup.cleanupMode);
     // Each Settings tab selects on its own mode field, so set the mode for every
@@ -2382,7 +2419,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.chatAgentModel !== undefined) s.setChatAgentModel(settings.chatAgentModel);
     if (settings.chatAgentProvider !== undefined)
       s.setChatAgentProvider(settings.chatAgentProvider);
-    if (settings.chatAgentKey !== undefined) s.setChatAgentKey(settings.chatAgentKey);
     if (settings.chatAgentCloudMode !== undefined)
       s.setChatAgentCloudMode(settings.chatAgentCloudMode);
   },
@@ -3042,20 +3078,6 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    // Sync chat agent hotkey from main process
-    try {
-      const envKey = await window.electronAPI.getAgentKey?.();
-      if (envKey && envKey !== state.chatAgentKey) {
-        createStringSetter("chatAgentKey")(envKey);
-      }
-    } catch (err) {
-      logger.warn(
-        "Failed to sync chat agent hotkey on startup",
-        { error: (err as Error).message },
-        "settings"
-      );
-    }
-
     // Sync voice agent hotkey from main process
     try {
       const envKey = await window.electronAPI.getVoiceAgentKey?.();
@@ -3176,7 +3198,6 @@ export async function initializeSettings(): Promise<void> {
       const currentState = useSettingsStore.getState();
       await window.electronAPI.meetingDetectionSetPreferences?.({
         processDetection: currentState.meetingProcessDetection,
-        autoEnd: currentState.meetingAutoEndEnabled,
       });
     } catch (err) {
       logger.warn(

@@ -10,6 +10,8 @@
  *   INITIAL_VALUE_B64:<base64> - Initial text field value (multiline)
  *   CHANGED:<text>        - Text field value after a change
  *   CHANGED_B64:<base64>  - Text field value after a change (multiline)
+ *   EDITABLE              - Focused element is writable with no live selection (--probe-editable)
+ *   NOT_EDITABLE          - Focused element is not safely writable
  *   NO_ELEMENT            - Could not get focused element
  *   NO_VALUE              - Focused element has no text value
  *
@@ -148,13 +150,15 @@ static char *read_text_value(AtspiText *text_iface) {
     return value;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     signal(SIGTERM, signal_handler);
     signal(SIGINT, signal_handler);
 
+    int probe_editable = argc >= 2 && strcmp(argv[1], "--probe-editable") == 0;
+
     /* Read original text from stdin (consume but don't use) */
     char stdin_buf[4096];
-    if (fgets(stdin_buf, sizeof(stdin_buf), stdin)) {
+    if (!probe_editable && fgets(stdin_buf, sizeof(stdin_buf), stdin)) {
         /* consumed */
     }
 
@@ -201,6 +205,45 @@ int main(void) {
         printf("NO_ELEMENT\n");
         fflush(stdout);
         return 1;
+    }
+
+    if (probe_editable) {
+        AtspiStateSet *states = atspi_accessible_get_state_set(focused);
+        int editable = states &&
+            atspi_state_set_contains(states, ATSPI_STATE_EDITABLE) &&
+            atspi_state_set_contains(states, ATSPI_STATE_ENABLED) &&
+            atspi_state_set_contains(states, ATSPI_STATE_FOCUSABLE) &&
+            !atspi_state_set_contains(states, ATSPI_STATE_PROTECTED);
+        if (states) g_object_unref(states);
+        /* A shell prompt must never read as a writable caret: pasted newlines
+         * execute. VTE and Qt terminals expose ATSPI_ROLE_TERMINAL; the caller
+         * separately refuses terminals by executable name. */
+        if (editable &&
+            atspi_accessible_get_role(focused, NULL) == ATSPI_ROLE_TERMINAL) {
+            editable = 0;
+        }
+        /* A live selection means an EDITABLE verdict would let generated text
+         * paste over the user's highlighted text. This is the authoritative
+         * check: the caller's clipboard-based capture cannot see a selection
+         * whose text already matches the clipboard. */
+        if (editable) {
+            AtspiText *probe_text = atspi_accessible_get_text_iface(focused);
+            if (probe_text) {
+                gint n_selections = atspi_text_get_n_selections(probe_text, NULL);
+                for (gint i = 0; i < n_selections && editable; i++) {
+                    AtspiRange *selection = atspi_text_get_selection(probe_text, i, NULL);
+                    if (selection) {
+                        if (selection->end_offset > selection->start_offset) editable = 0;
+                        g_free(selection);
+                    }
+                }
+                g_object_unref(probe_text);
+            }
+        }
+        printf("%s\n", editable ? "EDITABLE" : "NOT_EDITABLE");
+        fflush(stdout);
+        g_object_unref(focused);
+        return 0;
     }
 
     /* Get the Text interface */
