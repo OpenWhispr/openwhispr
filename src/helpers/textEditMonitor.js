@@ -340,10 +340,34 @@ class TextEditMonitor extends EventEmitter {
       args = [...resolved.args, "--probe-editable"];
     }
 
+    // The verdict is the first output line. A stale binary that predates the
+    // probe flag falls into monitor mode instead: it blocks reading stdin,
+    // then emits its monitor output and keeps running — closing stdin and
+    // resolving on that first line keeps the stale case a fast "not editable"
+    // rather than a hang until the timeout.
     return new Promise((resolve) => {
-      execFile(resolved.command, args, { timeout: timeoutMs }, (error, stdout) => {
-        resolve(!error && stdout.trim() === "EDITABLE");
+      const child = spawn(resolved.command, args, { stdio: ["pipe", "pipe", "ignore"] });
+      let buffered = "";
+      let settled = false;
+      const settle = (verdict) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          child.kill();
+        } catch {}
+        resolve(verdict);
+      };
+      const timer = setTimeout(() => settle(false), timeoutMs);
+      child.stdin.on("error", () => {});
+      child.stdin.end();
+      child.stdout.on("data", (data) => {
+        buffered += data.toString();
+        const newline = buffered.indexOf("\n");
+        if (newline !== -1) settle(buffered.slice(0, newline).trim() === "EDITABLE");
       });
+      child.on("error", () => settle(false));
+      child.on("close", () => settle(buffered.trim() === "EDITABLE"));
     });
   }
 
