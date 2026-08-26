@@ -33,21 +33,24 @@ import {
   resolveAssistantPanelBusy,
   restoreAssistantConversation,
 } from "../../helpers/assistantSessionState";
+import {
+  deliverAssistantResponse,
+  type AssistantResponseDelivery,
+} from "../../helpers/assistantResponseDelivery";
 
 export interface AssistantCommand {
   id: number;
   text: string;
   attachment: ChatImageAttachment | null;
   selectedContext: AgentSelectionContext | null;
-  delivery: {
-    sessionId: string;
-    restoreClipboard: boolean;
-    allowClipboardFallback: boolean;
-  } | null;
+  delivery: AssistantResponseDelivery | null;
 }
 
 type AssistantFooterPhase =
   "pill" | "pill-entering" | "pill-exiting" | "actions-entering" | "actions" | "actions-exiting";
+
+const MANUAL_COPY_FEEDBACK_MS = 1800;
+const AUTO_COPY_FEEDBACK_MS = 6000;
 
 interface AssistantPanelProps {
   /** Voice command waiting to be sent into the conversation (consumed on mount and on change). */
@@ -132,6 +135,17 @@ export function AssistantPanel({
     createConversation,
     onSendingChange: setSubmissionInFlight,
   });
+  const latestAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
+  const responseContent = latestAssistantMessage?.content ?? "";
+  const {
+    copied,
+    copy: handleCopy,
+    confirmCopied,
+  } = useCopyFeedback(responseContent, {
+    resetMs: MANUAL_COPY_FEEDBACK_MS,
+  });
 
   useEffect(() => {
     onConversationIdChange(persistence.conversationId);
@@ -177,6 +191,7 @@ export function AssistantPanel({
     consumedCommandIdRef.current = pendingCommand.id;
     const commandId = pendingCommand.id;
     const delivery = pendingCommand.delivery;
+    const targetsCapturedInput = delivery?.mode === "paste";
     let responseDelivered = false;
     if (pendingCommand.selectedContext) {
       setSelectedContext(null);
@@ -185,22 +200,12 @@ export function AssistantPanel({
     void sendMessage(pendingCommand.text, {
       attachment: pendingCommand.attachment ?? undefined,
       selectedContext: pendingCommand.selectedContext ?? undefined,
-      suppressResponseContent: Boolean(delivery),
+      suppressResponseContent: targetsCapturedInput,
       onComplete: delivery
         ? async ({ content }) => {
-            try {
-              const result = await window.electronAPI?.pasteAtCapturedTarget?.(
-                delivery.sessionId,
-                content,
-                {
-                  restoreClipboard: delivery.restoreClipboard,
-                  allowClipboardFallback: delivery.allowClipboardFallback,
-                }
-              );
-              responseDelivered = result?.success === true;
-            } catch {
-              responseDelivered = false;
-            }
+            const result = await deliverAssistantResponse(delivery, content);
+            responseDelivered = result.pasted;
+            if (result.copied) confirmCopied(content, AUTO_COPY_FEEDBACK_MS);
           }
         : undefined,
     })
@@ -240,6 +245,7 @@ export function AssistantPanel({
     onCommandDiscarded,
     onCommandSettled,
     onSelectionContextChange,
+    confirmCopied,
     sendMessage,
     setMessages,
     t,
@@ -270,10 +276,6 @@ export function AssistantPanel({
     return () => onBusyChange(false);
   }, [isBusy, onBusyChange]);
 
-  const latestAssistantMessage = [...messages]
-    .reverse()
-    .find((message) => message.role === "assistant");
-  const responseContent = latestAssistantMessage?.content ?? "";
   const displayedResponseRef = useRef("");
   if (responseContent) displayedResponseRef.current = responseContent;
   const displayedResponse = responseContent || displayedResponseRef.current;
@@ -288,7 +290,6 @@ export function AssistantPanel({
     voiceState,
     requestPending: thinking || pendingCommand != null,
   });
-  const { copied, copy: handleCopy } = useCopyFeedback(responseContent, { resetMs: 1800 });
   const responseSelectionRootRef = useRef<HTMLDivElement | null>(null);
   const [selectedContext, setSelectedContext] = useState<AgentSelectionContext | null>(null);
 

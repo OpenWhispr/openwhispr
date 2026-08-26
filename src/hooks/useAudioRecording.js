@@ -20,6 +20,7 @@ import {
 } from "../utils/transcriptionPreview";
 import { canStartDictation } from "../utils/dictationReadiness";
 import { waitForVisualFrames } from "../utils/visualFrame";
+import { createAssistantResponseDelivery } from "../helpers/assistantResponseDelivery";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -463,24 +464,24 @@ export const useAudioRecording = (toast, options = {}) => {
             } else {
               // The directive's transcript is the command to send. A verified
               // writable caret carries an opaque main-process delivery session;
-              // all other standalone commands remain panel-first.
+              // all other standalone commands remain panel-first and copy the
+              // completed answer for the user to paste manually.
               window.electronAPI?.hideDictationPreview?.();
               const { screenContext, transcript, selectedContext, deliverySessionId } =
                 result.assistantConversation;
-              const { keepTranscriptionInClipboard } = getSettings();
+              const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
               onAssistantCommandRef.current?.({
                 text: expandSnippets(transcript, getSettings().snippets),
                 attachment: screenContext
                   ? { image: screenContext.data, mediaType: screenContext.mediaType }
                   : null,
                 selectedContext: selectedContext ?? null,
-                delivery: deliverySessionId
-                  ? {
-                      sessionId: deliverySessionId,
-                      restoreClipboard: !keepTranscriptionInClipboard,
-                      allowClipboardFallback: isAccessibilitySkipped(),
-                    }
-                  : null,
+                delivery: createAssistantResponseDelivery({
+                  autoPasteEnabled,
+                  deliverySessionId,
+                  restoreClipboard: !keepTranscriptionInClipboard,
+                  allowClipboardFallback: isAccessibilitySkipped(),
+                }),
               });
             }
           } else {

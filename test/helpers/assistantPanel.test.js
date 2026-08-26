@@ -286,7 +286,9 @@ async function renderAssistantPanel(
         export function useWindowDrag() { return { handleMouseDown() {}, handleMouseUp() {} }; }
       `,
       "/hooks/useCopyFeedback": `
-        export function useCopyFeedback() { return { copied: false, async copy() {} }; }
+        export function useCopyFeedback() {
+          return { copied: false, async copy() {}, confirmCopied() {} };
+        }
       `,
       "/stores/settingsStore": `
         const state = { voiceAgentKey: [] };
@@ -448,7 +450,9 @@ test("starting a new conversation clears the displayed response and parent conte
         export function useWindowDrag() { return { handleMouseDown() {}, handleMouseUp() {} }; }
       `,
       "/hooks/useCopyFeedback": `
-        export function useCopyFeedback() { return { copied: false, async copy() {} }; }
+        export function useCopyFeedback() {
+          return { copied: false, async copy() {}, confirmCopied() {} };
+        }
       `,
       "/stores/settingsStore": `
         const state = { voiceAgentKey: [] };
@@ -603,6 +607,40 @@ test("the Assistant uses its localized fallback for an unknown active tool", asy
   assert.doesNotMatch(markup, />Unregistered tool</);
 });
 
+test("an automatic clipboard delivery keeps the shared Copy button confirmed for six seconds", async (t) => {
+  let root = null;
+  const originalSetTimeout = globalThis.setTimeout;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    globalThis.setTimeout = originalSetTimeout;
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const scheduledDelays = [];
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-copy-feedback-test-",
+  });
+  const { useCopyFeedback } = await vite.ssrLoadModule("/hooks/useCopyFeedback.ts");
+  const { createRoot } = require("react-dom/client");
+  let copyFeedback;
+
+  function Harness() {
+    copyFeedback = useCopyFeedback("Agent answer");
+    return React.createElement("button", null, copyFeedback.copied ? "Copied" : "Copy");
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  globalThis.setTimeout = (callback, delay, ...args) => {
+    scheduledDelays.push(delay);
+    return originalSetTimeout(callback, delay, ...args);
+  };
+  await React.act(async () => copyFeedback.confirmCopied("Agent answer", 6000));
+
+  assert.equal(container.textContent, "Copied");
+  assert.ok(scheduledDelays.includes(6000));
+});
+
 test("a failed Assistant resize releases its open claim so opening can retry", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
@@ -695,7 +733,12 @@ test("a caret-delivered command returns the hidden Assistant to the idle pill", 
       text: "draft a reply",
       attachment: null,
       selectedContext: null,
-      delivery: { sessionId: "caret-session" },
+      delivery: {
+        mode: "paste",
+        sessionId: "caret-session",
+        restoreClipboard: true,
+        allowClipboardFallback: false,
+      },
     });
   });
   assert.equal(assistant.mounted, true);
