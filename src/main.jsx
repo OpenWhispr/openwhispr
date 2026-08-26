@@ -18,9 +18,10 @@ import "@fontsource-variable/inter/opsz.css";
 import "@fontsource-variable/caveat";
 import "./index.css";
 
-i18n.on('languageChanged', (lng) => {
+const handleLanguageChanged = (lng) => {
   document.documentElement.dir = i18n.dir(lng);
-});
+};
+i18n.on('languageChanged', handleLanguageChanged);
 document.documentElement.dir = i18n.dir(i18n.language);
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
@@ -42,5 +43,8 @@ root.render(
 );
 
 if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    i18n.off('languageChanged', handleLanguageChanged);
+  });
   import.meta.hot.accept();
 }
