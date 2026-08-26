@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
+import { RequiredModelsBanner } from "./RequiredModelsBanner";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useHotkey } from "../hooks/useHotkey";
@@ -1099,6 +1100,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 </div>
               </div>
             )}
+            <RequiredModelsBanner />
             {usage?.isPastDue && activeView === "home" && (
               <div className="max-w-3xl mx-auto w-full mb-3">
                 <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">

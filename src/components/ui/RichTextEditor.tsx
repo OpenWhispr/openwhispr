@@ -120,7 +120,12 @@ export function RichTextEditor({
     <div className={cn("relative w-full h-full", className)} onClick={handleClick}>
       <EditorContent
         editor={editor}
-        className={cn("h-full overflow-y-auto", disabled && "pointer-events-none opacity-70")}
+        className={cn(
+          "h-full overflow-y-auto",
+          disabled && "pointer-events-none opacity-70",
+          // Reserved by an ancestor via --floating-inset; 0 elsewhere.
+          "pb-[var(--floating-inset,0px)]"
+        )}
       />
     </div>
   );

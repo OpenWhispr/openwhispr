@@ -6,6 +6,8 @@ const DragManager = require("./dragManager");
 const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
+const { isAllowedAppNavigation, isExternalBrowserUrl } = require("./navigationGuard");
+const { pathToFileURL } = require("url");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
@@ -496,9 +498,9 @@ class WindowManager {
     let lastToggleTime = 0;
     const DEBOUNCE_MS = 150;
 
-    // globalShortcut registrations pass the hotkey that fired; native-shortcut
-    // backends invoke the callback bare (their slot holds only the primary).
-    return async (triggeredHotkey) => {
+    // globalShortcut registrations pass the hotkey that fired; native shortcuts
+    // use down/up phases and resolve their primary hotkey from the active slot.
+    return async (triggeredHotkey, phase) => {
       if (this.hotkeyManager.isInListeningMode()) {
         return;
       }
@@ -508,6 +510,16 @@ class WindowManager {
 
       const activationMode = this.getActivationMode();
       const currentHotkey = triggeredHotkey || this.hotkeyManager.getCurrentHotkey?.();
+
+      if (process.platform === "linux" && activationMode === "push") {
+        if (phase === "down") {
+          this.startWindowsPushToTalk(currentHotkey);
+        } else if (phase === "up") {
+          this.handleWindowsPushKeyUp(currentHotkey);
+        }
+        return;
+      }
+      if (phase === "up") return;
 
       if (
         process.platform === "darwin" &&
@@ -681,16 +693,24 @@ class WindowManager {
     }
 
     const MIN_HOLD_DURATION_MS = 150;
+    const MAX_PUSH_DURATION_MS = 300000;
     const downTime = Date.now();
 
     this.showDictationPanel({ reposition: true });
     this.sendPrepareDictation();
+
+    const safetyTimeoutId = setTimeout(() => {
+      if (!this.winPushState || this.winPushState.downTime !== downTime) return;
+      debugLogger.warn("Native PTT safety timeout", undefined, "ptt");
+      this.handleWindowsPushKeyUp();
+    }, MAX_PUSH_DURATION_MS);
 
     this.winPushState = {
       active: true,
       key,
       downTime,
       isRecording: false,
+      safetyTimeoutId,
     };
 
     setTimeout(() => {
@@ -713,6 +733,10 @@ class WindowManager {
     }
     if (key && this.winPushState.key && key !== this.winPushState.key) {
       return;
+    }
+
+    if (this.winPushState.safetyTimeoutId) {
+      clearTimeout(this.winPushState.safetyTimeoutId);
     }
 
     const wasRecording = this.winPushState.isRecording;
@@ -900,8 +924,12 @@ class WindowManager {
     return this._cachedActivationMode;
   }
 
-  setActivationModeCache(mode) {
-    this._cachedActivationMode = mode === "push" ? "push" : "tap";
+  async setActivationModeCache(mode) {
+    const nextMode = mode === "push" ? "push" : "tap";
+    const success = await this.hotkeyManager.setActivationMode(nextMode);
+    if (!success) return false;
+    this._cachedActivationMode = nextMode;
+    return true;
   }
 
   /**
@@ -914,10 +942,9 @@ class WindowManager {
     if (this.hotkeyManager.isInListeningMode()) return;
     const activationMode = this.getActivationMode();
     const nativeListenerKeys = this.hotkeyManager.getNativeListenerKeys(activationMode);
-    // GNOME/KDE/Hyprland native shortcuts are press-only. They replace the
-    // low-level listener in tap mode, but push-to-talk still needs raw dictation
-    // key-down/key-up events; createHotkeyCallback ignores the native press in
-    // that mode, so keeping only this slot cannot double-fire.
+    // Native desktop shortcuts replace the low-level listener in tap mode. In
+    // push mode, keep the dictation listener as a release-event fallback; the
+    // push state machine makes duplicate backend and low-level phases harmless.
     const keys = this.hotkeyManager.isUsingNativeShortcut()
       ? activationMode === "push"
         ? nativeListenerKeys.filter((key) => this.hotkeyManager.slotHasHotkey("dictation", key))
@@ -1064,19 +1091,21 @@ class WindowManager {
     this._onboardingWindowState = null;
 
     this.controlPanelWindow.webContents.on("will-navigate", (event, url) => {
-      const appUrl = DevServerManager.getAppUrl(true);
-      const controlPanelUrl = appUrl.startsWith("http") ? appUrl : `file://${appUrl}`;
+      // getAppUrl() is null in packaged builds; exactly one of the two is set.
+      const appUrl =
+        DevServerManager.getAppUrl(true) ??
+        pathToFileURL(DevServerManager.getAppFilePath(true).path).href;
 
-      if (
-        url.startsWith(controlPanelUrl) ||
-        url.startsWith("file://") ||
-        url.startsWith("devtools://")
-      ) {
+      if (isAllowedAppNavigation(url, appUrl)) {
         return;
       }
 
       event.preventDefault();
-      this.openExternalUrl(url);
+      if (isExternalBrowserUrl(url)) {
+        this.openExternalUrl(url);
+      } else {
+        debugLogger.debug("Blocked untrusted navigation", { url }, "window");
+      }
     });
 
     this.controlPanelWindow.webContents.setWindowOpenHandler(({ url }) => {

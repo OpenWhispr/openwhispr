@@ -105,3 +105,35 @@ test("history groups zone-less SQLite timestamps as UTC near a local day boundar
     else process.env.TZ = previousTimezone;
   }
 });
+
+test("normalizeDbDate returns Invalid Date for nullish, non-string, or empty input", async () => {
+  const { normalizeDbDate } = await load();
+  assert.ok(Number.isNaN(normalizeDbDate(null).getTime()));
+  assert.ok(Number.isNaN(normalizeDbDate(undefined).getTime()));
+  assert.ok(Number.isNaN(normalizeDbDate("").getTime()));
+  assert.ok(Number.isNaN(normalizeDbDate("   ").getTime()));
+  assert.ok(Number.isNaN(normalizeDbDate(123).getTime()));
+});
+
+test("formatDateGroup returns empty string for nullish or invalid date input", async () => {
+  const { formatDateGroup } = await load();
+  assert.equal(formatDateGroup(null, t), "");
+  assert.equal(formatDateGroup(undefined, t), "");
+  assert.equal(formatDateGroup("", t), "");
+  assert.equal(formatDateGroup("   ", t), "");
+  assert.equal(formatDateGroup("not-a-date", t), "");
+  assert.equal(formatDateGroup(new Date(NaN), t), "");
+});
+
+test("formatShortDate and formatRelativeTime return empty string for nullish or invalid input", async () => {
+  const { formatShortDate, formatRelativeTime } = await load();
+  assert.equal(formatShortDate(null), "");
+  assert.equal(formatShortDate(undefined), "");
+  assert.equal(formatShortDate(""), "");
+  assert.equal(formatShortDate("invalid"), "");
+
+  assert.equal(formatRelativeTime(null, t), "");
+  assert.equal(formatRelativeTime(undefined, t), "");
+  assert.equal(formatRelativeTime("", t), "");
+  assert.equal(formatRelativeTime("invalid", t), "");
+});

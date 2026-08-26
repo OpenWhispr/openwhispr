@@ -65,6 +65,33 @@ test("rejects a malformed screenContextEnabled", () => {
   }
 });
 
+test("accepts requiredLocalModels as an optional string list", () => {
+  for (const value of [[], ["base"], ["base", "parakeet-tdt-0.6b-v3"]]) {
+    const policy = validPolicy();
+    policy.requiredLocalModels = value;
+    assert.equal(isValidPolicyShape(policy), true, JSON.stringify(value));
+  }
+
+  // Servers that predate the field omit it — the old-server contract.
+  assert.equal(isValidPolicyShape(validPolicy()), true);
+});
+
+test("accepts unknown-but-string required model ids — shape-only forward compat", () => {
+  // A future model id added server-side must not make this build discard the
+  // entire managed policy; enforcement filters unknown ids instead.
+  const policy = validPolicy();
+  policy.requiredLocalModels = ["a-model-from-the-future"];
+  assert.equal(isValidPolicyShape(policy), true);
+});
+
+test("rejects a malformed requiredLocalModels", () => {
+  for (const value of ["base", [42], [null], [{ id: "base" }], {}]) {
+    const policy = validPolicy();
+    policy.requiredLocalModels = value;
+    assert.equal(isValidPolicyShape(policy), false, JSON.stringify(value));
+  }
+});
+
 test("tolerates the server-only memoryEnabled flag", () => {
   // The API gates Mem0 agent memory itself and the app never reads the field,
   // so its presence must not invalidate an otherwise valid policy.

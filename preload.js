@@ -454,7 +454,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cleanupApp: () => ipcRenderer.invoke("cleanup-app"),
   updateHotkey: (hotkey) => ipcRenderer.invoke("update-hotkey", hotkey),
   setHotkeyListeningMode: (enabled) => ipcRenderer.invoke("set-hotkey-listening-mode", enabled),
-  getHotkeyModeInfo: () => ipcRenderer.invoke("get-hotkey-mode-info"),
+  getHotkeyModeInfo: (hotkey) => ipcRenderer.invoke("get-hotkey-mode-info", hotkey),
   getHyprlandConfigStatus: () => ipcRenderer.invoke("get-hyprland-config-status"),
   startWindowDrag: () => ipcRenderer.invoke("start-window-drag"),
   stopWindowDrag: () => ipcRenderer.invoke("stop-window-drag"),
@@ -1086,6 +1086,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-get-conversation-by-client-id", clientId),
   upsertConversationFromCloud: (cloudConv, messages) =>
     ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages),
+  acknowledgeConversationCreate: (id, snapshot, cloudId) =>
+    ipcRenderer.invoke("db-acknowledge-conversation-create", id, snapshot, cloudId),
   markConversationSynced: (id, cloudId) =>
     ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId),
   hardDeleteConversation: (id) => ipcRenderer.invoke("db-hard-delete-conversation", id),
@@ -1142,6 +1144,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   gcalSyncEvents: () => ipcRenderer.invoke("gcal-sync-events"),
   gcalGetUpcomingEvents: (windowMinutes) =>
     ipcRenderer.invoke("gcal-get-upcoming-events", windowMinutes),
+  calendarGetAvailability: (request) => ipcRenderer.invoke("calendar-get-availability", request),
   gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),
 
   // Microsoft Calendar

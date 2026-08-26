@@ -4,6 +4,7 @@ import type {
   SpaceItem,
   TranscriptionItem,
   ConversationPreview,
+  ConversationCreateSnapshot,
 } from "../types/electron";
 import { NotesService, type CloudNote } from "./NotesService.js";
 import { ConversationsService } from "./ConversationsService.js";
@@ -146,6 +147,24 @@ const PURGED_SPACE_GUARD_LOCK = "openwhispr-purged-spaces";
 // written only inside the SYNC_ALL_LOCK pass, so it needs no lock of its own.
 const NOTE_UPDATE_404_KEY = "noteUpdate404Counts";
 const FOLDER_UPDATE_404_KEY = "folderUpdate404Counts";
+
+interface ConversationCreateSource {
+  client_conversation_id?: string | null;
+  title: string;
+  updated_at: string;
+  messages: readonly unknown[];
+}
+
+function conversationCreateSnapshot(
+  conversation: ConversationCreateSource
+): ConversationCreateSnapshot {
+  return {
+    client_conversation_id: conversation.client_conversation_id ?? null,
+    title: conversation.title,
+    updated_at: conversation.updated_at,
+    message_count: conversation.messages.length,
+  };
+}
 
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   try {
@@ -878,6 +897,27 @@ export class SyncService {
     return synced?.cloud_id ?? null;
   }
 
+  private async acknowledgeConversationCreate(
+    localId: number,
+    snapshot: ConversationCreateSnapshot,
+    cloudId: string
+  ): Promise<void> {
+    const result = await window.electronAPI.acknowledgeConversationCreate?.(
+      localId,
+      snapshot,
+      cloudId
+    );
+    if (!result?.success) return;
+
+    const shouldDeleteCreate =
+      result.outcome === "changed" ||
+      result.outcome === "orphaned" ||
+      (result.outcome === "already-linked" && result.cloud_id !== cloudId);
+    if (shouldDeleteCreate) {
+      await ConversationsService.delete(cloudId);
+    }
+  }
+
   private async pushConversation(id: number): Promise<void> {
     const full = await window.electronAPI.getAgentConversation?.(id);
     if (!full) return;
@@ -885,8 +925,9 @@ export class SyncService {
     if (full.cloud_id) {
       await ConversationsService.update(full.cloud_id, { title: full.title });
     } else {
+      const snapshot = conversationCreateSnapshot(full);
       const cloud = await ConversationsService.create({
-        client_conversation_id: String(full.id),
+        client_conversation_id: full.client_conversation_id ?? String(full.id),
         title: full.title,
         created_at: full.created_at,
         updated_at: full.updated_at,
@@ -900,12 +941,7 @@ export class SyncService {
             : null,
         })),
       });
-      const linked = await window.electronAPI.markConversationSynced?.(full.id, cloud.id);
-      if (linked?.success === false) {
-        // The local row was purged while POST was in flight. It cannot carry a
-        // delete tombstone, so retire the orphaned cloud row immediately.
-        await ConversationsService.delete(cloud.id);
-      }
+      await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id);
     }
   }
 
@@ -2053,11 +2089,12 @@ export class SyncService {
       try {
         const full = await window.electronAPI.getAgentConversation?.(conv.id);
         if (!full) continue;
+        const snapshot = conversationCreateSnapshot(full);
         const cloudConv = await ConversationsService.create({
-          client_conversation_id: conv.client_conversation_id ?? String(conv.id),
-          title: conv.title,
-          created_at: conv.created_at,
-          updated_at: conv.updated_at,
+          client_conversation_id: full.client_conversation_id ?? String(full.id),
+          title: full.title,
+          created_at: full.created_at,
+          updated_at: full.updated_at,
           messages: full.messages.map((m) => ({
             role: m.role,
             content: m.content,
@@ -2068,10 +2105,7 @@ export class SyncService {
               : null,
           })),
         });
-        const linked = await window.electronAPI.markConversationSynced?.(conv.id, cloudConv.id);
-        if (linked?.success === false) {
-          await ConversationsService.delete(cloudConv.id);
-        }
+        await this.acknowledgeConversationCreate(full.id, snapshot, cloudConv.id);
       } catch (err) {
         console.error("Conversation sync failed:", err);
       }

@@ -14,6 +14,18 @@ export interface SeatPreview {
   currency: string;
 }
 
+export interface EnterpriseUpgradePreview {
+  // Prorated difference in cents, collected on the next invoice (Stripe
+  // create_prorations), not charged at confirmation time.
+  prorated_amount: number;
+  currency: string;
+  current_price_amount: number | null;
+  new_price_amount: number | null;
+  interval: "monthly" | "annual";
+  quantity: number;
+  next_billing_date: string | null;
+}
+
 async function list(): Promise<Workspace[]> {
   const res = await cloudGet<DataWrap<Workspace[]>>("/api/workspaces");
   return res.data;
@@ -52,11 +64,16 @@ async function removeMember(workspaceId: string, userId: string): Promise<void> 
 
 async function billingCheckout(
   workspaceId: string,
-  interval: "monthly" | "annual" = "monthly"
+  interval: "monthly" | "annual" = "monthly",
+  options?: { tier?: "business" | "enterprise"; additionalSeats?: number }
 ): Promise<string> {
   const res = await cloudPost<DataWrap<{ url: string }>>(
     `/api/workspaces/${workspaceId}/billing/checkout`,
-    { interval }
+    {
+      interval,
+      ...(options?.tier ? { tier: options.tier } : {}),
+      ...(options?.additionalSeats ? { additional_seats: options.additionalSeats } : {}),
+    }
   );
   return res.data.url;
 }
@@ -76,6 +93,17 @@ async function previewSeats(workspaceId: string, additionalSeats: number): Promi
     }
   );
   return res.data;
+}
+
+async function previewEnterpriseUpgrade(workspaceId: string): Promise<EnterpriseUpgradePreview> {
+  const res = await cloudPost<DataWrap<EnterpriseUpgradePreview>>(
+    `/api/workspaces/${workspaceId}/billing/preview-upgrade`
+  );
+  return res.data;
+}
+
+async function upgradeToEnterprise(workspaceId: string): Promise<void> {
+  await cloudPost<DataWrap<{ plan: string }>>(`/api/workspaces/${workspaceId}/billing/upgrade`);
 }
 
 async function updateSeats(
@@ -139,5 +167,7 @@ export const WorkspacesService = {
   billingCheckout,
   billingPortal,
   previewSeats,
+  previewEnterpriseUpgrade,
+  upgradeToEnterprise,
   updateSeats,
 };

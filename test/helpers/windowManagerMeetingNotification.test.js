@@ -135,18 +135,26 @@ function installFakeTimers() {
   let nextTimerId = 1;
   const timers = new Map();
 
-  global.setTimeout = (callback) => {
+  global.setTimeout = (callback, delay = 0) => {
     const timerId = nextTimerId;
     nextTimerId += 1;
-    timers.set(timerId, callback);
+    timers.set(timerId, { callback, delay });
     return timerId;
   };
   global.clearTimeout = (timerId) => timers.delete(timerId);
 
   return {
     pendingCount: () => timers.size,
+    pendingDelays: () => [...timers.values()].map(({ delay }) => delay),
+    runDelay: (delay) => {
+      for (const [timerId, timer] of [...timers]) {
+        if (timer.delay !== delay) continue;
+        timers.delete(timerId);
+        timer.callback();
+      }
+    },
     runAll: () => {
-      for (const [timerId, callback] of [...timers]) {
+      for (const [timerId, { callback }] of [...timers]) {
         timers.delete(timerId);
         callback();
       }
@@ -160,6 +168,47 @@ function installFakeTimers() {
 
 test.beforeEach(() => {
   createdWindows.length = 0;
+});
+
+test("native push-to-talk force-stops after the safety timeout", () => {
+  const timers = installFakeTimers();
+  const manager = createNormalWindowManager();
+  let starts = 0;
+  let stops = 0;
+  manager.showDictationPanel = () => undefined;
+  manager.hideDictationPanel = () => undefined;
+  manager.sendPrepareDictation = () => undefined;
+  manager.sendCancelDictationPreparation = () => undefined;
+  manager.sendStartDictation = () => {
+    starts += 1;
+  };
+  manager.sendStopDictation = () => {
+    stops += 1;
+  };
+
+  try {
+    manager.startWindowsPushToTalk("F8");
+    assert.deepEqual(
+      timers.pendingDelays().sort((left, right) => left - right),
+      [150, 300000]
+    );
+
+    timers.runDelay(150);
+    assert.equal(starts, 1);
+    timers.runDelay(300000);
+    assert.equal(stops, 1);
+    assert.equal(manager.winPushState, null);
+  } finally {
+    timers.restore();
+  }
+});
+
+test("a failed activation-mode change preserves the cached mode", async () => {
+  const manager = createNormalWindowManager();
+  manager.hotkeyManager.setActivationMode = async () => false;
+
+  assert.equal(await manager.setActivationModeCache("push"), false);
+  assert.equal(manager.getActivationMode(), "tap");
 });
 
 test("a busy Assistant blocks its voice hotkey before native side effects", () => {

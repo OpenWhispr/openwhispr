@@ -3,6 +3,7 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { OrgPolicy } from "./policy";
 import type { ManagedEnterpriseConfig } from "./enterpriseIdentity";
+import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./calendar";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
@@ -861,6 +862,19 @@ export interface ConversationPreview {
   last_message_role?: "user" | "assistant" | "system" | null;
 }
 
+export interface ConversationCreateSnapshot {
+  client_conversation_id?: string | null;
+  title: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export interface ConversationCreateAckResult {
+  success: boolean;
+  outcome: "synced" | "changed" | "already-linked" | "delete-pending" | "orphaned" | "unresolved";
+  cloud_id?: string | null;
+}
+
 export type OnboardingDemoKind = "dictation" | "assistant";
 export type OnboardingDemoStatus = "listening" | "processing" | "partial" | "success" | "error";
 export interface OnboardingDemoEvent {
@@ -1640,11 +1654,13 @@ declare global {
       // Hotkey management
       updateHotkey: (key: string) => Promise<{ success: boolean; message: string }>;
       setHotkeyListeningMode?: (enabled: boolean) => Promise<{ success: boolean }>;
-      getHotkeyModeInfo?: () => Promise<{
+      getHotkeyModeInfo?: (hotkey?: string) => Promise<{
         isUsingGnome: boolean;
         isUsingHyprland: boolean;
+        isUsingKDE: boolean;
         isUsingNativeShortcut: boolean;
         supportsPushToTalk: boolean;
+        pushToTalkUnavailableReason: string | null;
       }>;
       getHyprlandConfigStatus?: () => Promise<{ canWrite: boolean; path: string } | null>;
 
@@ -2230,7 +2246,8 @@ declare global {
         id: number;
         title: string;
         archived_at?: string;
-        cloud_id?: string;
+        cloud_id?: string | null;
+        client_conversation_id?: string | null;
         created_at: string;
         updated_at: string;
         messages: Array<{
@@ -2411,6 +2428,12 @@ declare global {
       gcalGetUpcomingEvents?: (
         windowMinutes?: number
       ) => Promise<{ success: boolean; events: any[] }>;
+      calendarGetAvailability?: (
+        request: CalendarAvailabilityRequest
+      ) => Promise<
+        | { success: true; availability: CalendarAvailabilityResult }
+        | { success: false; error: string }
+      >;
       gcalGetEvent?: (eventId: string) => Promise<{
         success: boolean;
         event: {
@@ -2820,6 +2843,11 @@ declare global {
         cloudConv: Record<string, unknown>,
         messages: Array<Record<string, unknown>>
       ) => Promise<void>;
+      acknowledgeConversationCreate?: (
+        id: number,
+        snapshot: ConversationCreateSnapshot,
+        cloudId: string
+      ) => Promise<ConversationCreateAckResult | undefined>;
       markConversationSynced?: (
         id: number,
         cloudId: string
