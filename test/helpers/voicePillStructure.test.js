@@ -70,14 +70,14 @@ test("thinking and recording keep the same persistent glow and pill roots", asyn
 test("one Signal glow serves both identities: blue processing, purple agent", async () => {
   const styles = readDictationStyles();
   const agentThinking = await renderPill("thinking", false, "right", { agentMode: true });
-  // The recording entrance's beamActive cue must not light the glow: a glow
-  // on hotkey press reads as work already in flight.
-  const entranceFlourish = await renderPill("recording", false, "right", { beamActive: true });
+  // Listening must not glow in either identity: a glow before any transcript
+  // exists reads as work already in flight.
+  const agentListening = await renderPill("recording", false, "right", { agentMode: true });
 
   assert.match(styles, /\.processing-signal-glow\s*\{/);
   assert.match(styles, /:root:not\(\.dark\) \.processing-signal-glow\s*\{/);
   assert.match(agentThinking, /class="processing-signal-glow" data-active="true" data-agent="true"/);
-  assert.doesNotMatch(entranceFlourish, /data-active/);
+  assert.doesNotMatch(agentListening, /data-active/);
 });
 
 test("the pill renders exactly the footprints the native window ladder is sized around", async () => {
@@ -120,7 +120,7 @@ test("an idle Agent panel starts with the normal pill and expands only while lis
   assert.doesNotMatch(idleAgent, footprint.recording);
   assert.doesNotMatch(idleAgent, /data-active/);
   assert.match(listeningAgent, footprint.recording);
-  assert.match(listeningAgent, /class="processing-signal-glow" data-active="true" data-agent="true"/);
+  assert.doesNotMatch(listeningAgent, /data-active/);
 });
 
 test("the waveform stays to the right of the identity across docks and voice modes", async () => {
@@ -256,7 +256,10 @@ test("Agent Mode uses the supplied mark, a purple perimeter glow, and a neutral 
   assert.match(styles, /\.processing-signal-glow\[data-agent="true"\]\s*\{/);
   assert.match(styles, /--signal-core: #8787ff/);
   assert.doesNotMatch(styles, /agent-waveform-background|agent-waveform-highlight/);
-  assert.match(agentRecording, /class="processing-signal-glow" data-active="true" data-agent="true"/);
+  // Listening stays glow-free; the purple Signal glow is reserved for the
+  // post-recording thinking state so "hearing you" and "working" read apart.
+  assert.match(agentRecording, /class="processing-signal-glow" data-agent="true"/);
+  assert.doesNotMatch(agentRecording, /data-active/);
   assert.match(agentRecording, /data-agent-mode="true"/);
   assert.match(agentRecording, /voice-identity-final-agent/);
   assert.ok(agentRecording.includes(`d="${AGENT_MODE_PATH}"`));

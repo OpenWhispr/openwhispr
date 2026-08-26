@@ -278,7 +278,6 @@ test("listening entrance starts in the thinking circle before expanding", async 
   const { resolveListeningEntrancePresentation } = await load();
   assert.deepEqual(resolveListeningEntrancePresentation({ isRecording: true, phase: "idle" }), {
     activeState: "recording",
-    beamActive: true,
     collapseToLogo: true,
     compactPill: false,
     waveformVisible: false,
@@ -291,7 +290,6 @@ test("listening entrance expands before revealing the waveform", async () => {
     resolveListeningEntrancePresentation({ isRecording: true, phase: "expanding" }),
     {
       activeState: "recording",
-      beamActive: false,
       collapseToLogo: false,
       compactPill: true,
       waveformVisible: false,
@@ -312,7 +310,6 @@ test("listening entrance settles at full width before revealing the waveform", a
 
   assert.deepEqual(settled, {
     activeState: "recording",
-    beamActive: false,
     collapseToLogo: false,
     compactPill: true,
     waveformVisible: false,
@@ -412,7 +409,6 @@ test("stopping during the entrance cancels the staged recording presentation", a
     resolveListeningEntrancePresentation({ isRecording: false, phase: "expanding" }),
     {
       activeState: null,
-      beamActive: null,
       collapseToLogo: false,
       compactPill: false,
       waveformVisible: true,

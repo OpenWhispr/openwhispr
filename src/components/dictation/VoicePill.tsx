@@ -18,7 +18,6 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   getAudioLevel: () => number | null;
   expanded?: boolean;
   collapseToLogo?: boolean;
-  beamActive?: boolean;
   waveformVisible?: boolean;
   waveformOnlyWhileRecording?: boolean;
   integratedWithPanel?: boolean;
@@ -53,7 +52,6 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     getAudioLevel,
     expanded = false,
     collapseToLogo = false,
-    beamActive,
     waveformVisible = true,
     waveformOnlyWhileRecording = false,
     integratedWithPanel = false,
@@ -70,17 +68,12 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isRecording = state === "recording";
   const isProcessing = state === "processing";
   const isThinking = state === "thinking";
-  const showThinkingBeam = beamActive ?? isThinking;
   const isUnavailable = state === "unavailable";
   // One Signal glow (comet orbit over a breathing halo) serves both
-  // identities; only the palette differs. Plain dictation glows for the real
-  // thinking state alone — lighting the recording entrance too would read as
-  // work already in flight, so its `beamActive` cue is deliberately ignored.
-  // Agent Mode keeps its established listening + thinking lifecycle; an idle
-  // Agent pill is a resting control, so reopening an Agent surface never
-  // looks like work is already in flight.
-  const showSignalGlow =
-    !isUnavailable && (agentMode ? showThinkingBeam || isRecording : isThinking);
+  // identities; only the palette differs. It lights for the real thinking
+  // state alone — glowing during the entrance or while listening would read
+  // as work already in flight before any transcript exists.
+  const showSignalGlow = !isUnavailable && isThinking;
   const isPanel = variant === "panel";
   const collapseToIdentity = collapseToLogo || isThinking;
   const showCompactPill =
@@ -115,7 +108,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       data-horizontal-direction={horizontalDirection}
       data-integrated-with-panel={integratedWithPanel || undefined}
       data-agent-mode={agentMode || undefined}
-      data-agent-beam-active={(agentMode && showThinkingBeam) || undefined}
+      data-agent-beam-active={(agentMode && isThinking) || undefined}
       data-expand-chevron={showExpandChevron || undefined}
       {...props}
     >

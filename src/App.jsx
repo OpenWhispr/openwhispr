@@ -587,7 +587,6 @@ export default function App() {
               collapseToLogo={
                 listeningEntrance.collapseToLogo || assistantFooter.collapsePillToLogo
               }
-              beamActive={listeningEntrance.beamActive ?? undefined}
               waveformVisible={listeningEntrance.waveformVisible}
               waveformOnlyWhileRecording={anyPanelMounted}
               integratedWithPanel={liveTranscript.open}
