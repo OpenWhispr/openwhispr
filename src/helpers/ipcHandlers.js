@@ -3605,6 +3605,7 @@ class IPCHandlers {
           "managed-enterprise-config.json",
           "globe-preference-state.json",
           ".system-audio-permission",
+          "account-scope-binding.json",
         ]) {
           fs.rmSync(path.join(app.getPath("userData"), fileName), { force: true });
         }
