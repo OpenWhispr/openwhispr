@@ -4997,6 +4997,12 @@ class IPCHandlers {
       return this.windowManager.resizeAgentDictationPillToContent(surfaceHeight);
     });
 
+    ipcMain.handle("set-agent-dictation-pill-interactivity", (event, interactive) => {
+      if (!isAgentDictationPill(event)) return { success: false };
+      this.windowManager.setAgentDictationPillInteractivity(Boolean(interactive));
+      return { success: true };
+    });
+
     ipcMain.handle("open-calendar-privacy-settings", () => openSystemSettings("calendars"));
 
     ipcMain.handle("show-emoji-panel", () => {

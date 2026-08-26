@@ -7,14 +7,15 @@ import {
   type CSSProperties,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { useListeningEntrancePhase } from "../../hooks/useListeningEntrancePhase";
 import { useLiveTranscriptPanel } from "../../hooks/useLiveTranscriptPanel";
 import {
-  getListeningEntranceTimeline,
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   resolveListeningEntrancePresentation,
   resolveLiveTranscriptEntrancePresentation,
   resolveVoiceActivityPresentation,
   resolveVoicePillDock,
+  resolveVoicePillInteraction,
   shouldOfferLiveTranscriptReopen,
 } from "../../helpers/voicePillPresentation";
 import { LiveTranscriptPanel, type LiveTranscriptPhase } from "./LiveTranscriptPanel";
@@ -41,7 +42,6 @@ export default function AgentDictationPillOverlay() {
   const { t } = useTranslation();
   const [companionState, setCompanionState] = useState(DEFAULT_STATE);
   const [hovered, setHovered] = useState(false);
-  const [listeningEntrancePhase, setListeningEntrancePhase] = useState("idle");
   const audioLevelRef = useRef<number | null>(null);
   const assistantOpenRef = useRef(false);
 
@@ -95,32 +95,16 @@ export default function AgentDictationPillOverlay() {
     }
   }, [closeLiveTranscript, companionState.interactive, liveTranscriptMounted]);
 
-  useLayoutEffect(() => {
-    if (!isRecording) {
-      setListeningEntrancePhase("idle");
-      audioLevelRef.current = null;
-      return undefined;
-    }
+  // The window is click-through (macOS) until something needs real clicks:
+  // the hovered pill, or the Live Transcript surface with its controls.
+  const captureMouseEvents = hovered || liveTranscriptMounted;
+  useEffect(() => {
+    void window.electronAPI.setAgentDictationPillInteractivity?.(captureMouseEvents);
+  }, [captureMouseEvents]);
 
-    setListeningEntrancePhase("thinking");
-    const timeline = getListeningEntranceTimeline();
-    const expansionTimer = setTimeout(
-      () => setListeningEntrancePhase("expanding"),
-      timeline.expandAtMs
-    );
-    const settledTimer = setTimeout(
-      () => setListeningEntrancePhase("settled"),
-      timeline.settleAtMs
-    );
-    const waveformTimer = setTimeout(
-      () => setListeningEntrancePhase("waveform"),
-      timeline.waveformAtMs
-    );
-    return () => {
-      clearTimeout(expansionTimer);
-      clearTimeout(settledTimer);
-      clearTimeout(waveformTimer);
-    };
+  const listeningEntrancePhase = useListeningEntrancePhase(isRecording);
+  useLayoutEffect(() => {
+    if (!isRecording) audioLevelRef.current = null;
   }, [isRecording]);
 
   const listeningEntrance = resolveListeningEntrancePresentation({
@@ -158,8 +142,16 @@ export default function AgentDictationPillOverlay() {
     voiceActivity.activeState ||
     (hovered && companionState.interactive ? "hover" : "idle")) as VoicePillState;
   const expanded = isRecording ? listeningEntrance.compactPill : voiceActivity.compactPill;
-  const pillInteractive =
-    companionState.interactive && !isProcessing && (!liveTranscript.mounted || isRecording);
+  // The shared rule (a mounted transcript locks the pill except while
+  // recording) comes from the tested helper; the companion additionally
+  // requires main-process consent and no transcript still processing.
+  const { pillInteractive: surfaceInteractive } = resolveVoicePillInteraction({
+    assistantMounted: false,
+    liveTranscriptMounted: liveTranscript.mounted,
+    isRecording,
+    isProcessing,
+  });
+  const pillInteractive = companionState.interactive && !isProcessing && surfaceInteractive;
   const label = isRecording
     ? t("app.mic.recording")
     : isProcessing

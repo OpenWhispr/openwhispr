@@ -185,6 +185,32 @@ test("the companion receives live audio levels only for ordinary dictation", () 
   ]);
 });
 
+test("the companion toggles macOS click-through with hover interactivity", () => {
+  const manager = new WindowManager();
+  const ignoreCalls = [];
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    setIgnoreMouseEvents: (ignore, opts) => ignoreCalls.push({ ignore, opts }),
+  };
+
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  try {
+    manager.setAgentDictationPillInteractivity(true);
+    manager.setAgentDictationPillInteractivity(false);
+    // Windows/Linux keep normal hit-testing (forward is unreliable/ignored).
+    Object.defineProperty(process, "platform", { value: "linux" });
+    manager.setAgentDictationPillInteractivity(false);
+  } finally {
+    Object.defineProperty(process, "platform", originalPlatform);
+  }
+
+  assert.deepEqual(ignoreCalls, [
+    { ignore: false, opts: undefined },
+    { ignore: true, opts: { forward: true } },
+  ]);
+});
+
 test("live transcript events are mirrored to the companion only for plain dictation", async () => {
   const manager = new WindowManager();
   const mainMessages = [];

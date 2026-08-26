@@ -874,10 +874,6 @@ class WindowManager {
     );
   }
 
-  getDictationLifecycleState() {
-    return this._dictationLifecycleState;
-  }
-
   getAgentDictationPillState() {
     return {
       ...resolveAgentDictationPillState(this._dictationLifecycleState, this._dictationInputKind),
@@ -1713,11 +1709,11 @@ class WindowManager {
       pillWindow = new BrowserWindow({
         ...NOTIFICATION_WINDOW_CONFIG,
         ...AGENT_DICTATION_PILL_SIZE,
-        acceptsFirstMouse: true,
       });
       this.agentDictationPillWindow = pillWindow;
       this._agentDictationPillReady = false;
       this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
+      this._applyAgentDictationPillClickThrough(pillWindow, true);
 
       pillWindow.on("closed", () => {
         if (this.agentDictationPillWindow !== pillWindow) return;
@@ -1763,8 +1759,29 @@ class WindowManager {
     if (!pillWindow || pillWindow.isDestroyed()) return;
     if (pillWindow.isVisible()) pillWindow.hide();
     if (this._agentDictationPillReady) pillWindow.webContents.send("preview-hide");
+    // A hover-captured window never sees its mouseleave once hidden; reset so
+    // the next show cannot start out swallowing clicks under stale capture.
+    this._applyAgentDictationPillClickThrough(pillWindow, true);
     this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
     this.positionAgentDictationPill();
+  }
+
+  setAgentDictationPillInteractivity(interactive) {
+    const pillWindow = this.agentDictationPillWindow;
+    if (!pillWindow || pillWindow.isDestroyed()) return;
+    this._applyAgentDictationPillClickThrough(pillWindow, !interactive);
+  }
+
+  // Like the dictation pill and meeting notification, the companion is
+  // click-through on macOS so its transparent bounds never swallow clicks
+  // meant for the app beneath; hovering re-captures via IPC. Windows
+  // forwarding is unreliable for floating panels and Linux ignores `forward`
+  // (one hover-out would strand the pill unreachable, #1456), so both keep
+  // normal hit-testing.
+  _applyAgentDictationPillClickThrough(pillWindow, clickThrough) {
+    if (process.platform !== "darwin") return;
+    if (clickThrough) pillWindow.setIgnoreMouseEvents(true, { forward: true });
+    else pillWindow.setIgnoreMouseEvents(false);
   }
 
   isDictationPanelVisible() {

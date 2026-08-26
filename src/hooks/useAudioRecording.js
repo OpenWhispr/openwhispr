@@ -64,6 +64,7 @@ export const useAudioRecording = (toast, options = {}) => {
     getAssistantSelectionContext,
     onShowTranscript,
     onDemoEvent,
+    assistantOpenRef,
   } = options;
 
   useEffect(() => {
@@ -740,7 +741,9 @@ export const useAudioRecording = (toast, options = {}) => {
   );
 
   useEffect(() => {
-    if (!isRecording || isAssistantVoice) return undefined;
+    // The companion pill only exists while the Agent panel is open — with the
+    // panel closed there is nobody to mirror levels to, so skip the IPC.
+    if (!isRecording || isAssistantVoice || !assistantOpenRef?.current) return undefined;
 
     const reportAudioLevel = () => {
       const level = getAudioLevel();
@@ -749,7 +752,7 @@ export const useAudioRecording = (toast, options = {}) => {
     reportAudioLevel();
     const interval = setInterval(reportAudioLevel, COMPANION_AUDIO_LEVEL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [getAudioLevel, isAssistantVoice, isRecording]);
+  }, [assistantOpenRef, getAudioLevel, isAssistantVoice, isRecording]);
 
   const toggleListening = async ({
     voiceAgentRequested = false,

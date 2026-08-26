@@ -11,6 +11,7 @@ import { useAssistantPanel } from "./hooks/useAssistantPanel";
 import { useLiveTranscriptPanel } from "./hooks/useLiveTranscriptPanel";
 import { useMainWindowSizeOwner } from "./hooks/useMainWindowSizeOwner";
 import { useMainProcessNotifications } from "./hooks/useMainProcessNotifications";
+import { useListeningEntrancePhase } from "./hooks/useListeningEntrancePhase";
 import { useWindowResizeCompensation } from "./hooks/useWindowResizeCompensation";
 import { useSettingsStore } from "./stores/settingsStore";
 import { isAgentAllowed } from "./stores/policyRules";
@@ -24,7 +25,6 @@ import { PillCommandMenu } from "./components/dictation/PillCommandMenu";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
-  getListeningEntranceTimeline,
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   resolveLiveTranscriptEntrancePresentation,
   resolveAssistantFooterPresentation,
@@ -196,6 +196,7 @@ export default function App() {
     onDictationError: handleDictationError,
     getAssistantSelectionContext: assistant.getSelectionContext,
     onShowTranscript: (text) => liveTranscriptApiRef.current?.showFinalText(text),
+    assistantOpenRef,
   });
   const isVisuallyProcessing = isProcessing || isPreparing || isStopping;
 
@@ -248,44 +249,21 @@ export default function App() {
     }
   }, [isAssistantVoice, isProcessing, assistantOpenRef, beginAssistantThinking]);
 
-  const voicePillIsRecording = isRecording && (!assistant.mounted || isAssistantVoice);
+  // While the Agent panel owns the shared surface, plain dictation renders on
+  // the opposite-edge companion pill — neither its recording nor its
+  // processing may animate the footer pill here.
+  const voicePillOwnsActivity = !assistant.mounted || isAssistantVoice;
+  const voicePillIsRecording = isRecording && voicePillOwnsActivity;
   const voiceActivity = resolveVoiceActivityPresentation({
     isRecording: voicePillIsRecording,
     // Mic warm-up is an acknowledged press, not work on a transcript. Keeping
     // isPreparing out of the thinking state leaves the press on the pulsing
     // "processing" mic-state pill instead of lighting the glow at hotkey time.
-    isProcessing: isProcessing || isStopping,
+    isProcessing: (isProcessing || isStopping) && voicePillOwnsActivity,
     isAssistantVoice,
     assistantThinking: assistant.thinking || assistant.busy,
   });
-  const [listeningEntrancePhase, setListeningEntrancePhase] = useState("idle");
-  useLayoutEffect(() => {
-    if (!voicePillIsRecording) {
-      setListeningEntrancePhase("idle");
-      return;
-    }
-
-    setListeningEntrancePhase("thinking");
-    const timeline = getListeningEntranceTimeline();
-    const expansionTimer = setTimeout(
-      () => setListeningEntrancePhase("expanding"),
-      timeline.expandAtMs
-    );
-    const settledTimer = setTimeout(
-      () => setListeningEntrancePhase("settled"),
-      timeline.settleAtMs
-    );
-    const waveformTimer = setTimeout(
-      () => setListeningEntrancePhase("waveform"),
-      timeline.waveformAtMs
-    );
-
-    return () => {
-      clearTimeout(expansionTimer);
-      clearTimeout(settledTimer);
-      clearTimeout(waveformTimer);
-    };
-  }, [voicePillIsRecording]);
+  const listeningEntrancePhase = useListeningEntrancePhase(voicePillIsRecording);
   const listeningEntrance = resolveListeningEntrancePresentation({
     isRecording: voicePillIsRecording,
     phase: listeningEntrancePhase,

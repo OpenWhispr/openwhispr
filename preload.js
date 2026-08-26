@@ -98,6 +98,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAgentDictationPillState: () => ipcRenderer.invoke("get-agent-dictation-pill-state"),
   resizeAgentDictationPillToContent: (surfaceHeight) =>
     ipcRenderer.invoke("resize-agent-dictation-pill-to-content", surfaceHeight),
+  setAgentDictationPillInteractivity: (interactive) =>
+    ipcRenderer.invoke("set-agent-dictation-pill-interactivity", interactive),
   onAgentDictationPillStateChanged: registerListener(
     "agent-dictation-pill-state-changed",
     (callback) => (_event, state) => callback(state)

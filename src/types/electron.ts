@@ -982,6 +982,7 @@ declare global {
         bounds?: { x: number; y: number; width: number; height: number };
         message?: string;
       }>;
+      setAgentDictationPillInteractivity?: (interactive: boolean) => Promise<{ success: boolean }>;
       onAgentDictationPillStateChanged?: (
         callback: (state: {
           lifecycle: "idle" | "recording" | "processing";
