@@ -60,7 +60,7 @@ import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
-import { eligibleGpuOffers, type GpuOffers } from "../utils/gpuBannerPolicy";
+import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
 import {
   setActiveNoteId,
   setActiveFolderId,
@@ -157,10 +157,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     folderId: number;
     event: any;
   } | null>(null);
-  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<GpuOffers>({
-    transcription: false,
-    intelligence: null,
-  });
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
   );
@@ -221,6 +217,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       };
     })
   );
+  const gpuAccelAvailable = useGpuBannerAvailability({
+    settings: gpuBannerSettings,
+    agentAllowedByPolicy,
+    dismissed: gpuBannerDismissed,
+    settingsOpen: showSettings,
+    platform,
+  });
 
   const {
     confirmDialog,
@@ -406,43 +409,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     localStorage.removeItem("pendingCloudMigration");
     setShowCloudMigrationBanner(true);
   }, [authLoaded, isSignedIn, setUseLocalWhisper, setCloudTranscriptionMode]);
-
-  useEffect(() => {
-    if (platform === "darwin" || gpuBannerDismissed) return;
-    const offers = eligibleGpuOffers({ ...gpuBannerSettings, agentAllowedByPolicy });
-    // A run that loses its settings mid-probe must not publish: switching to a
-    // cloud mode resolves with no IPC at all, so an older local-mode run would
-    // otherwise land last and re-raise the banner for the rest of the session.
-    let cancelled = false;
-    const detect = async () => {
-      const results: GpuOffers = { transcription: false, intelligence: null };
-      if (offers.transcription) {
-        try {
-          const status = await window.electronAPI?.getCudaWhisperStatus?.();
-          if (status?.gpuInfo.hasNvidiaGpu && status.gpuInfo.cudaSupported) {
-            if (!status.downloaded) results.transcription = true;
-          } else {
-            const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
-            if (vulkan?.vulkan.available && !vulkan.downloaded) results.transcription = true;
-          }
-        } catch {}
-      }
-      if (offers.intelligence) {
-        try {
-          const [gpu, vulkan] = await Promise.all([
-            window.electronAPI?.detectVulkanGpu?.(),
-            window.electronAPI?.getLlamaVulkanStatus?.(),
-          ]);
-          if (gpu?.available && !vulkan?.downloaded) results.intelligence = offers.intelligence;
-        } catch {}
-      }
-      if (!cancelled) setGpuAccelAvailable(results);
-    };
-    detect();
-    return () => {
-      cancelled = true;
-    };
-  }, [gpuBannerSettings, agentAllowedByPolicy, gpuBannerDismissed]);
 
   useEffect(() => {
     const drain = async () => {

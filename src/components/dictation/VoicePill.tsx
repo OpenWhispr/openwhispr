@@ -1,10 +1,9 @@
 import { forwardRef, type HTMLAttributes } from "react";
-import { BorderBeam, type BorderBeamTheme } from "border-beam";
 import { ChevronUp } from "lucide-react";
 import { cn } from "../lib/utils";
 import { PillWaveform } from "./PillWaveform";
 import { VoiceIdentityIcon } from "./VoiceIdentityIcon";
-import { WAVEFORM_BAR_COUNT } from "./waveformMath";
+import { RESTING_WAVE_SILHOUETTE, WAVEFORM_BAR_COUNT } from "./waveformMath";
 import {
   LISTENING_ENTRANCE_TIMING,
   VOICE_PILL_FOOTPRINT,
@@ -19,22 +18,16 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   getAudioLevel: () => number | null;
   expanded?: boolean;
   collapseToLogo?: boolean;
-  beamActive?: boolean;
   waveformVisible?: boolean;
   waveformOnlyWhileRecording?: boolean;
   integratedWithPanel?: boolean;
   agentMode?: boolean;
-  beamTheme?: BorderBeamTheme;
   showExpandChevron?: boolean;
   isDragging?: boolean;
   horizontalDirection?: "left" | "right";
 }
 
 const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms cubic-bezier(0.2, 0, 0, 1)`;
-// A pronounced eleven-bar rhythm keeps rounded short bars readable while tall
-// peaks use nearly the full lane. The same silhouette and footprint is shared
-// by dictation, Agent Mode, and Live Transcript.
-const RESTING_WAVE_SILHOUETTE = [6, 12, 5, 9, 7, 22, 18, 5, 20, 12, 17];
 // Sized from WAVEFORM_BAR_COUNT so a bar-count change can never silently
 // desync the resting silhouette from the live waveform's footprint.
 const RESTING_WAVE_HEIGHTS = Array.from(
@@ -59,12 +52,10 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     getAudioLevel,
     expanded = false,
     collapseToLogo = false,
-    beamActive,
     waveformVisible = true,
     waveformOnlyWhileRecording = false,
     integratedWithPanel = false,
     agentMode = false,
-    beamTheme = "auto",
     showExpandChevron = false,
     isDragging = false,
     horizontalDirection = "right",
@@ -77,12 +68,12 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isRecording = state === "recording";
   const isProcessing = state === "processing";
   const isThinking = state === "thinking";
-  const showThinkingBeam = beamActive ?? isThinking;
   const isUnavailable = state === "unavailable";
-  // An idle Agent pill is a resting control, not a progress indicator. Keep
-  // its Beam for the active listening/thinking lifecycle only so reopening an
-  // Agent surface never looks like work is already in flight.
-  const showBorderBeam = !isUnavailable && (showThinkingBeam || (agentMode && isRecording));
+  // One Signal glow (comet orbit over a breathing halo) serves both
+  // identities; only the palette differs. It lights for the real thinking
+  // state alone — glowing during the entrance or while listening would read
+  // as work already in flight before any transcript exists.
+  const showSignalGlow = !isUnavailable && isThinking;
   const isPanel = variant === "panel";
   const collapseToIdentity = collapseToLogo || isThinking;
   const showCompactPill =
@@ -117,7 +108,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       data-horizontal-direction={horizontalDirection}
       data-integrated-with-panel={integratedWithPanel || undefined}
       data-agent-mode={agentMode || undefined}
-      data-agent-beam-active={(agentMode && showThinkingBeam) || undefined}
+      data-agent-beam-active={(agentMode && isThinking) || undefined}
       data-expand-chevron={showExpandChevron || undefined}
       {...props}
     >
@@ -206,24 +197,16 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   );
 
   return (
-    <BorderBeam
-      size="sm"
-      theme={beamTheme}
-      duration={1.6}
-      colorVariant={agentMode ? "ocean" : "colorful"}
-      brightness={agentMode ? 1.35 : 1.3}
-      saturation={agentMode ? 1.35 : undefined}
-      hueRange={agentMode ? 8 : undefined}
-      strength={agentMode ? 0.9 : 0.85}
-      active={showBorderBeam}
-      borderRadius={20}
-      className={cn(
-        "agent-thinking-beam inline-flex rounded-full",
-        isThinking && !agentMode && "plain-dictation-processing-glow"
-      )}
-      data-agent-mode={agentMode || undefined}
-    >
+    <span className="voice-pill-glow-anchor">
+      <span
+        aria-hidden="true"
+        className="processing-signal-glow"
+        data-active={showSignalGlow ? "true" : undefined}
+        data-agent={agentMode || undefined}
+      >
+        <span className="processing-signal-ring" />
+      </span>
       {pill}
-    </BorderBeam>
+    </span>
   );
 });

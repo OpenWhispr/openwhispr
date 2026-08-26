@@ -535,6 +535,13 @@ export const useAudioRecording = (toast, options = {}) => {
               },
               "streaming"
             );
+            // The text has landed at the cursor; a preview lingering with the
+            // final transcript after the paste reads as a stray surface. A
+            // failed paste keeps the final flash so the transcript stays
+            // visible somewhere.
+            if (pasteSucceeded) {
+              window.electronAPI?.hideDictationPreview?.();
+            }
           } else if (keepTranscriptionInClipboard && !result.assistantConversation) {
             await navigator.clipboard.writeText(result.text);
           }

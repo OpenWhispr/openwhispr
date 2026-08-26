@@ -68,7 +68,6 @@ export default function App() {
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
-  const beamTheme = useSettingsStore((s) => s.theme);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
   const [voiceHorizontalDirection, setVoiceHorizontalDirection] = useState(() =>
     resolveVoiceHorizontalDirection(panelStartPosition)
@@ -251,7 +250,10 @@ export default function App() {
 
   const voiceActivity = resolveVoiceActivityPresentation({
     isRecording,
-    isProcessing: isVisuallyProcessing,
+    // Mic warm-up is an acknowledged press, not work on a transcript. Keeping
+    // isPreparing out of the thinking state leaves the press on the pulsing
+    // "processing" mic-state pill instead of lighting the glow at hotkey time.
+    isProcessing: isProcessing || isStopping,
     isAssistantVoice,
     assistantThinking: assistant.thinking || assistant.busy,
   });
@@ -288,13 +290,18 @@ export default function App() {
     phase: listeningEntrancePhase,
   });
   const isCompactPill = isRecording ? listeningEntrance.compactPill : voiceActivity.compactPill;
+  // The native window grows during the entrance's static thinking hold, not
+  // when the pill starts its width transition: a setBounds landing mid
+  // animation forces compositor work that visibly stutters the expansion, and
+  // the growing pill can clip against the old bounds if the resize IPC lags.
+  const windowFitsCompactPill = isRecording || voiceActivity.compactPill;
 
   const { dictationErrorPillHandoffActive } = useMainWindowSizeOwner({
     requestMainWindowSize,
     dictationErrorActionCount,
     toastCount,
     isCommandMenuOpen,
-    isCompactPill,
+    isCompactPill: windowFitsCompactPill,
     assistantOpen: assistant.open,
     assistantMounted: assistant.mounted,
     assistantOpenRef,
@@ -580,12 +587,10 @@ export default function App() {
               collapseToLogo={
                 listeningEntrance.collapseToLogo || assistantFooter.collapsePillToLogo
               }
-              beamActive={listeningEntrance.beamActive ?? undefined}
               waveformVisible={listeningEntrance.waveformVisible}
               waveformOnlyWhileRecording={anyPanelMounted}
               integratedWithPanel={liveTranscript.open}
               agentMode={agentModeActive}
-              beamTheme={beamTheme}
               showExpandChevron={canReopenLiveTranscript && isHovered}
               getAudioLevel={getAudioLevel}
               isDragging={isDragging}

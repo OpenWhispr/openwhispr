@@ -394,6 +394,7 @@ class WhisperManager {
       vadEnabled,
       vadConfig,
       signal: options.signal,
+      skipDecoderThresholds: options.skipDecoderThresholds === true,
     });
   }
 
@@ -462,6 +463,7 @@ class WhisperManager {
       language,
       initialPrompt,
       signal: options.signal,
+      skipDecoderThresholds: options.skipDecoderThresholds,
     });
     const elapsed = Date.now() - startTime;
 
