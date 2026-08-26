@@ -1,6 +1,7 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import App from "./App.jsx";
+import AgentDictationPillOverlay from "./components/dictation/AgentDictationPillOverlay.tsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
 import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
 import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
@@ -31,6 +32,10 @@ export default function AppRouter() {
 
   if (params.includes("update-notification=true")) {
     return <UpdateNotificationOverlay />;
+  }
+
+  if (params.includes("agent-dictation-pill=true")) {
+    return <AgentDictationPillOverlay />;
   }
 
   return <MainApp />;

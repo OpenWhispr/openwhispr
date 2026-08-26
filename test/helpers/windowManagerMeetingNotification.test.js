@@ -243,15 +243,21 @@ test("a busy Assistant blocks its voice hotkey before native side effects", () =
   assert.equal(prepareCount, 0);
   assert.deepEqual(rendererChannels, []);
 
-  manager._assistantPanelBusy = false;
-  manager.sendToggleVoiceAgent();
+  manager.sendToggleDictation();
 
   assert.equal(showCount, 1);
   assert.equal(prepareCount, 1);
-  assert.deepEqual(rendererChannels, ["toggle-voice-agent"]);
+  assert.deepEqual(rendererChannels, ["toggle-dictation"]);
+
+  manager._assistantPanelBusy = false;
+  manager.sendToggleVoiceAgent();
+
+  assert.equal(showCount, 2);
+  assert.equal(prepareCount, 2);
+  assert.deepEqual(rendererChannels, ["toggle-dictation", "toggle-voice-agent"]);
 });
 
-test("a busy Assistant blocks direct push-to-talk prepare and start paths", () => {
+test("a busy Assistant leaves ordinary push-to-talk dictation available", () => {
   const manager = createNormalWindowManager();
   const rendererChannels = [];
   let showCount = 0;
@@ -275,8 +281,8 @@ test("a busy Assistant blocks direct push-to-talk prepare and start paths", () =
   manager.sendPrepareDictation();
   manager.sendStartDictation();
 
-  assert.equal(showCount, 0);
-  assert.deepEqual(rendererChannels, []);
+  assert.equal(showCount, 1);
+  assert.deepEqual(rendererChannels, ["prepare-dictation", "start-dictation"]);
 });
 
 test("window manager starts fail-closed and suppresses normal-app popup surfaces", async () => {

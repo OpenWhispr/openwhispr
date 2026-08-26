@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const requestedMainWindowPositions = [];
 
 // Same stub set as windowManagerMeetingNotification.test.js: WindowManager
 // pulls in electron + sibling managers at require time.
@@ -38,7 +39,15 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
         COMPACT: { width: 480, height: 624 },
         EXPANDED: { width: 1000, height: 740 },
       },
-      WindowPositionUtil: { setupAlwaysOnTop: () => undefined, clampToWorkArea: (b) => b, getMainWindowPosition: () => ({ x: 0, y: 0 }), getNotificationPosition: () => ({ x: 0, y: 0 }) },
+      WindowPositionUtil: {
+        setupAlwaysOnTop: () => undefined,
+        clampToWorkArea: (b) => b,
+        getMainWindowPosition: (_display, _size, position) => {
+          requestedMainWindowPositions.push(position);
+          return { x: 0, y: 0 };
+        },
+        getNotificationPosition: () => ({ x: 0, y: 0 }),
+      },
       fitAssistantWindowToWorkArea: (s) => s,
       fitAssistantContentWindowToWorkArea: (h) => ({ width: 466, height: h }),
       fitDictationErrorWindowToWorkArea: (s) => s,
@@ -79,8 +88,29 @@ function makeManager(windowState) {
   manager.mainWindow = fake.window;
   manager.enforceMainWindowOnTop = () => undefined;
   manager._notifyMainWindowHorizontalDirection = () => undefined;
+  manager.showAgentDictationPill = () => undefined;
+  manager.hideAgentDictationPill = () => undefined;
   return { manager, calls: fake.calls };
 }
+
+test("the Agent companion follows the edge opposite the panel", () => {
+  requestedMainWindowPositions.length = 0;
+  const manager = new WindowManager();
+  const positions = [];
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1000, y: 100, width: 400, height: 600 }),
+  };
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    setBounds: (bounds) => positions.push(bounds),
+  };
+
+  manager.positionAgentDictationPill();
+
+  assert.deepEqual(positions, [{ x: 0, y: 0 }]);
+  assert.deepEqual(requestedMainWindowPositions, ["bottom-left"]);
+});
 
 test("opening the assistant panel surfaces a hidden pill window before focusing it", () => {
   const { manager, calls } = makeManager({ visible: false });

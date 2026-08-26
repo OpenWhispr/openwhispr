@@ -966,6 +966,11 @@ declare global {
       onCancelDictationPreparation?: (callback: () => void) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (state: "idle" | "recording" | "processing") => void;
+      toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
+      getAgentDictationPillState?: () => Promise<"idle" | "recording" | "processing">;
+      onAgentDictationPillStateChanged?: (
+        callback: (state: "idle" | "recording" | "processing") => void
+      ) => () => void;
 
       // STT config
       getSttConfig?: () => Promise<

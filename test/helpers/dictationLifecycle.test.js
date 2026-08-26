@@ -27,16 +27,20 @@ test("unknown lifecycle input fails closed to idle", () => {
   assert.equal(isDictationRecording({}), false);
 });
 
-test("regular dictation is blocked while the assistant panel is open", () => {
+test("regular dictation remains available while the assistant panel is open", () => {
   assert.equal(
-    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: true, voiceAgentRequested: false }),
-    true
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: true,
+      assistantPanelBusy: true,
+      inputKind: "dictation",
+    }),
+    false
   );
 });
 
 test("the assistant hotkey can still record an in-panel follow-up", () => {
   assert.equal(
-    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: true, voiceAgentRequested: true }),
+    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: true, inputKind: "assistant" }),
     false
   );
 });
@@ -46,7 +50,7 @@ test("the assistant hotkey is blocked while the open panel is busy", () => {
     shouldBlockDictationWhilePanelOpen({
       assistantPanelOpen: true,
       assistantPanelBusy: true,
-      voiceAgentRequested: true,
+      inputKind: "assistant",
     }),
     true
   );
@@ -57,15 +61,19 @@ test("the assistant hotkey is blocked while an initial response thinks before th
     shouldBlockDictationWhilePanelOpen({
       assistantPanelOpen: false,
       assistantPanelBusy: true,
-      voiceAgentRequested: true,
+      inputKind: "assistant",
     }),
     true
   );
 });
 
-test("regular dictation resumes after the assistant panel closes", () => {
+test("translation remains blocked while the assistant panel owns the shared surface", () => {
   assert.equal(
-    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: false, voiceAgentRequested: false }),
+    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: true, inputKind: "translation" }),
+    true
+  );
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: false, inputKind: "translation" }),
     false
   );
 });

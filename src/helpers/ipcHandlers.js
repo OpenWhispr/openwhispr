@@ -4963,6 +4963,21 @@ class IPCHandlers {
       return { success: true };
     });
 
+    const isAgentDictationPill = (event) => {
+      const pillWindow = this.windowManager?.agentDictationPillWindow;
+      return pillWindow && !pillWindow.isDestroyed() && event.sender === pillWindow.webContents;
+    };
+
+    ipcMain.handle("toggle-agent-panel-dictation", (event) => {
+      if (!isAgentDictationPill(event)) return { success: false };
+      this.windowManager.sendToggleDictation();
+      return { success: true };
+    });
+
+    ipcMain.handle("get-agent-dictation-pill-state", (event) => {
+      return isAgentDictationPill(event) ? this.windowManager.getDictationLifecycleState() : "idle";
+    });
+
     ipcMain.handle("open-calendar-privacy-settings", () => openSystemSettings("calendars"));
 
     ipcMain.handle("show-emoji-panel", () => {

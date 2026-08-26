@@ -23,6 +23,7 @@ const {
 const { DEV_SERVER_PORT } = DevServerManager;
 const AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS = 10_000;
 const DRAG_MOVE_TOLERANCE_PX = 2;
+const AGENT_DICTATION_PILL_SIZE = Object.freeze({ width: 124, height: 64 });
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
@@ -57,6 +58,8 @@ class WindowManager {
     // teardown path (id-matched end, onboarding exit, control panel closed).
     this.onOnboardingDemoTeardown = null;
     this.notificationWindow = null;
+    this.agentDictationPillWindow = null;
+    this._agentDictationPillReady = false;
     this._notificationLoadTimeout = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
       if (this.meetingDetectionEngine) {
@@ -191,6 +194,8 @@ class WindowManager {
       }
       this.enforceMainWindowOnTop();
     }
+    if (this._assistantPanelOpen) this.showAgentDictationPill();
+    else this.hideAgentDictationPill();
     this._updateMainContentProtection();
   }
 
@@ -791,12 +796,11 @@ class WindowManager {
 
   _sendDictationToggle(channel, inputKind) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
-    const voiceAgentRequested = channel === "toggle-voice-agent";
     if (
       shouldBlockDictationWhilePanelOpen({
         assistantPanelOpen: this._assistantPanelOpen,
         assistantPanelBusy: this._assistantPanelBusy,
-        voiceAgentRequested,
+        inputKind,
       })
     ) {
       return;
@@ -835,7 +839,7 @@ class WindowManager {
       // toggle's own kind so the pre-warm survives the assistant demo, whose
       // gate rejects "dictation".
       if (isStarting) {
-        this.sendPrepareDictation({ inputKind, voiceAgentRequested });
+        this.sendPrepareDictation({ inputKind });
       }
       this.mainWindow.webContents.send(channel);
     }
@@ -848,6 +852,14 @@ class WindowManager {
     this._dictationLifecycleState = nextState;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
+    const pillWindow = this.agentDictationPillWindow;
+    if (pillWindow && !pillWindow.isDestroyed()) {
+      pillWindow.webContents.send("agent-dictation-pill-state-changed", nextState);
+    }
+  }
+
+  getDictationLifecycleState() {
+    return this._dictationLifecycleState;
   }
 
   isDictationProcessing() {
@@ -872,6 +884,7 @@ class WindowManager {
       shouldBlockDictationWhilePanelOpen({
         assistantPanelOpen: this._assistantPanelOpen,
         assistantPanelBusy: this._assistantPanelBusy,
+        inputKind: "dictation",
       })
     ) {
       return;
@@ -891,9 +904,6 @@ class WindowManager {
   }
 
   sendStopDictation() {
-    if (shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: this._assistantPanelOpen })) {
-      return;
-    }
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
@@ -902,13 +912,13 @@ class WindowManager {
     }
   }
 
-  sendPrepareDictation({ inputKind = "dictation", voiceAgentRequested = false } = {}) {
+  sendPrepareDictation({ inputKind = "dictation" } = {}) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
     if (
       shouldBlockDictationWhilePanelOpen({
         assistantPanelOpen: this._assistantPanelOpen,
         assistantPanelBusy: this._assistantPanelBusy,
-        voiceAgentRequested,
+        inputKind,
       })
     ) {
       return;
@@ -1585,6 +1595,89 @@ class WindowManager {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.hide();
   }
 
+  positionAgentDictationPill() {
+    const pillWindow = this.agentDictationPillWindow;
+    if (
+      !pillWindow ||
+      pillWindow.isDestroyed() ||
+      !this.mainWindow ||
+      this.mainWindow.isDestroyed()
+    ) {
+      return;
+    }
+
+    const mainBounds = this.mainWindow.getBounds();
+    const display = screen.getDisplayMatching(mainBounds);
+    const mainSide = resolveHorizontalWindowDirection(
+      mainBounds,
+      display,
+      this._panelStartPosition
+    );
+    const oppositeEdge = mainSide === "right" ? "bottom-left" : "bottom-right";
+    pillWindow.setBounds(
+      WindowPositionUtil.getMainWindowPosition(display, AGENT_DICTATION_PILL_SIZE, oppositeEdge)
+    );
+  }
+
+  showAgentDictationPill() {
+    if (!this._assistantPanelOpen || !this.mainWindow || this.mainWindow.isDestroyed()) return;
+
+    let pillWindow = this.agentDictationPillWindow;
+    if (!pillWindow || pillWindow.isDestroyed()) {
+      pillWindow = new BrowserWindow({
+        ...NOTIFICATION_WINDOW_CONFIG,
+        ...AGENT_DICTATION_PILL_SIZE,
+        acceptsFirstMouse: true,
+      });
+      this.agentDictationPillWindow = pillWindow;
+      this._agentDictationPillReady = false;
+
+      pillWindow.on("closed", () => {
+        if (this.agentDictationPillWindow !== pillWindow) return;
+        this.agentDictationPillWindow = null;
+        this._agentDictationPillReady = false;
+      });
+      pillWindow.webContents.on("did-finish-load", () => {
+        if (this.agentDictationPillWindow !== pillWindow) return;
+        this._agentDictationPillReady = true;
+        pillWindow.webContents.send(
+          "agent-dictation-pill-state-changed",
+          this._dictationLifecycleState
+        );
+        this.showAgentDictationPill();
+      });
+
+      const loadPromise =
+        process.env.NODE_ENV === "development"
+          ? DevServerManager.waitForDevServer().then(() =>
+              pillWindow.loadURL(`${DevServerManager.DEV_SERVER_URL}?agent-dictation-pill=true`)
+            )
+          : (() => {
+              const fileInfo = DevServerManager.getAppFilePath(false);
+              if (!fileInfo) return Promise.reject(new Error("Failed to get app file path"));
+              return pillWindow.loadFile(fileInfo.path, {
+                query: { ...fileInfo.query, "agent-dictation-pill": "true" },
+              });
+            })();
+      void loadPromise.catch((error) => {
+        debugLogger.warn("Failed to load Agent dictation pill", { error: error.message }, "window");
+        if (!pillWindow.isDestroyed()) pillWindow.close();
+      });
+      return;
+    }
+
+    if (!this._agentDictationPillReady) return;
+    this.positionAgentDictationPill();
+    WindowPositionUtil.setupAlwaysOnTop(pillWindow);
+    if (!pillWindow.isVisible()) pillWindow.showInactive();
+    pillWindow.moveTop?.();
+  }
+
+  hideAgentDictationPill() {
+    const pillWindow = this.agentDictationPillWindow;
+    if (pillWindow && !pillWindow.isDestroyed() && pillWindow.isVisible()) pillWindow.hide();
+  }
+
   isDictationPanelVisible() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return false;
@@ -1624,14 +1717,20 @@ class WindowManager {
 
     this.mainWindow.on("show", () => {
       this.enforceMainWindowOnTop();
+      if (this._assistantPanelOpen) this.showAgentDictationPill();
     });
 
     this.mainWindow.on("focus", () => {
       this.enforceMainWindowOnTop();
+      if (this._assistantPanelOpen) this.showAgentDictationPill();
     });
+
+    this.mainWindow.on("move", () => this.positionAgentDictationPill());
 
     this.mainWindow.on("closed", () => {
       this.dragManager.cleanup();
+      const pillWindow = this.agentDictationPillWindow;
+      if (pillWindow && !pillWindow.isDestroyed()) pillWindow.close();
       this.mainWindow = null;
     });
   }
