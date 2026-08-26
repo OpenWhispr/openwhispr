@@ -186,6 +186,7 @@
         "accessibilityDescription": "將文字貼到目前的 App。",
         "systemAudioTitle": "系統音訊",
         "systemAudioDescription": "擷取其他 App 的音訊。",
+        "screenContextDescription": "讓語音助理查看目前螢幕，絕不儲存。",
         "enable": "啟用",
         "enabled": "已啟用"
       },
@@ -1000,7 +1001,7 @@
     "emailStep": {
       "checkingEmail": "正在檢查您的電子郵件...",
       "continueWithEmail": "使用電子郵件繼續",
-      "continueWithoutAccount": "無需帳號使用 OpenWhispr",
+      "continueWithoutAccount": "無需帳號，繼續使用",
       "emailLabel": "電子郵件",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "使用其他電子郵件"
@@ -1571,7 +1572,9 @@
             "SSO 與合規",
             "專屬支援"
           ],
-          "cta": "聯繫銷售"
+          "cta": "聯繫銷售",
+          "upgradeCta": "升級至 Enterprise",
+          "askOwner": "請 {{name}} 升級您的工作區。"
         },
         "currentPlan": "目前方案",
         "coveredByWorkspace": "已包含在您的工作區方案中",
@@ -2389,7 +2392,40 @@
             "admin": "工作區管理員"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise 主控台",
+        "description": "在網頁上管理 SSO、政策與成員",
+        "open": "開啟主控台"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "升級至 Enterprise",
+      "description": "選擇工作區、席位數量與計費週期。付款將在 Stripe Checkout 中完成。",
+      "allSubscribed": "您擁有的工作區已是 Enterprise 方案或無法在此變更。如需變更方案，請聯絡銷售團隊。",
+      "workspaceLabel": "工作區",
+      "seatsLabel": "席位",
+      "seatsHint_one": "目前已使用 {{count}} 個席位",
+      "seatsHint_other": "目前已使用 {{count}} 個席位",
+      "intervalLabel": "計費週期",
+      "interval": {
+        "monthly": "按月",
+        "annual": "按年"
+      },
+      "proratedCharge": "按比例費用",
+      "prorationNote": "按比例計算的差額將計入下一張帳單。",
+      "errors": {
+        "previewFailed": "無法載入升級預覽。",
+        "alreadyEnterprise": "該工作區已在 Enterprise 方案中。",
+        "subscriptionInactive": "該工作區的訂閱未啟用。請更新帳單資訊後重試。",
+        "priceNotConfigured": "Enterprise 價格暫不可用。請聯絡銷售。"
+      },
+      "priceNote": "最終價格將在結帳時顯示。",
+      "continueCta": "繼續結帳",
+      "upgradeDescription": "將 {{workspace}} 從{{plan}}升級至 Enterprise。席位與計費週期維持不變，變更立即生效。",
+      "upgradeCta": "立即升級",
+      "upgradedTitle": "已升級至 Enterprise",
+      "upgradedDescription": "{{workspace}} 現已升級至 Enterprise。"
     }
   },
   "models": {

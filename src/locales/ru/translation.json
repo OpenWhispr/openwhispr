@@ -186,6 +186,7 @@
         "accessibilityDescription": "Вставляет текст в активное приложение.",
         "systemAudioTitle": "Системное аудио",
         "systemAudioDescription": "Записывает звук из других приложений.",
+        "screenContextDescription": "Позволяет голосовому помощнику видеть ваш экран. Никогда не сохраняется.",
         "enable": "Включить",
         "enabled": "Включено"
       },
@@ -1000,7 +1001,7 @@
     "emailStep": {
       "checkingEmail": "Проверяем адрес электронной почты...",
       "continueWithEmail": "Продолжить с электронной почтой",
-      "continueWithoutAccount": "Использовать OpenWhispr без аккаунта",
+      "continueWithoutAccount": "Продолжить без аккаунта",
       "emailLabel": "Электронная почта",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "Использовать другой адрес"
@@ -1575,7 +1576,9 @@
             "SSO и соответствие требованиям",
             "Выделенная поддержка"
           ],
-          "cta": "Связаться с отделом продаж"
+          "cta": "Связаться с отделом продаж",
+          "upgradeCta": "Перейти на Enterprise",
+          "askOwner": "Попросите {{name}} обновить план вашего рабочего пространства."
         },
         "currentPlan": "Текущий тариф",
         "coveredByWorkspace": "Включено в тариф вашего рабочего пространства",
@@ -2403,7 +2406,42 @@
             "admin": "Администратор рабочего пространства"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Консоль Enterprise",
+        "description": "Управляйте SSO, политиками и участниками через веб",
+        "open": "Открыть консоль"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "Перейти на Enterprise",
+      "description": "Выберите рабочее пространство, количество мест и период оплаты. Оплата выполняется в Stripe Checkout.",
+      "allSubscribed": "Ваши рабочие пространства уже на плане Enterprise или их нельзя изменить здесь. Для изменения плана свяжитесь с отделом продаж.",
+      "workspaceLabel": "Рабочее пространство",
+      "seatsLabel": "Места",
+      "seatsHint_one": "Сейчас используется {{count}} место",
+      "seatsHint_few": "Сейчас используется {{count}} места",
+      "seatsHint_many": "Сейчас используется {{count}} мест",
+      "seatsHint_other": "Сейчас используется {{count}} места",
+      "intervalLabel": "Период оплаты",
+      "interval": {
+        "monthly": "Ежемесячно",
+        "annual": "Ежегодно"
+      },
+      "proratedCharge": "Пропорциональная плата",
+      "prorationNote": "Пропорциональная разница будет добавлена к следующему счету.",
+      "errors": {
+        "previewFailed": "Не удалось загрузить предварительный расчет обновления.",
+        "alreadyEnterprise": "Это рабочее пространство уже на плане Enterprise.",
+        "subscriptionInactive": "Подписка этого рабочего пространства неактивна. Обновите платежные данные и попробуйте снова.",
+        "priceNotConfigured": "Цены Enterprise сейчас недоступны. Свяжитесь с отделом продаж."
+      },
+      "priceNote": "Итоговая цена отображается при оформлении.",
+      "continueCta": "Перейти к оплате",
+      "upgradeDescription": "Обновите {{workspace}} с плана {{plan}} до Enterprise. Количество мест и период оплаты сохраняются; изменение вступает в силу сразу.",
+      "upgradeCta": "Обновить сейчас",
+      "upgradedTitle": "План обновлён до Enterprise",
+      "upgradedDescription": "{{workspace}} теперь на плане Enterprise."
     }
   },
   "models": {

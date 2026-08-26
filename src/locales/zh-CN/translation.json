@@ -186,6 +186,7 @@
         "accessibilityDescription": "将文本粘贴到当前应用。",
         "systemAudioTitle": "系统音频",
         "systemAudioDescription": "捕获其他应用的音频。",
+        "screenContextDescription": "让语音助手查看当前屏幕，绝不保存。",
         "enable": "启用",
         "enabled": "已启用"
       },
@@ -1000,7 +1001,7 @@
     "emailStep": {
       "checkingEmail": "正在检查您的邮箱...",
       "continueWithEmail": "使用邮箱继续",
-      "continueWithoutAccount": "无需账户使用 OpenWhispr",
+      "continueWithoutAccount": "无需账户，继续使用",
       "emailLabel": "邮箱",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "使用其他邮箱"
@@ -1571,7 +1572,9 @@
             "SSO 与合规",
             "专属支持"
           ],
-          "cta": "联系销售"
+          "cta": "联系销售",
+          "upgradeCta": "升级到 Enterprise",
+          "askOwner": "请 {{name}} 升级您的工作区。"
         },
         "currentPlan": "当前套餐",
         "coveredByWorkspace": "已包含在您的工作区套餐中",
@@ -2389,7 +2392,40 @@
             "admin": "工作区管理员"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise 控制台",
+        "description": "在网页端管理 SSO、策略和成员",
+        "open": "打开控制台"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "升级到 Enterprise",
+      "description": "选择工作区、席位数量和计费周期。付款将在 Stripe Checkout 中完成。",
+      "allSubscribed": "您拥有的工作区已在 Enterprise 方案或无法在此更改。如需更改方案，请联系销售。",
+      "workspaceLabel": "工作区",
+      "seatsLabel": "席位",
+      "seatsHint_one": "当前已使用 {{count}} 个席位",
+      "seatsHint_other": "当前已使用 {{count}} 个席位",
+      "intervalLabel": "计费周期",
+      "interval": {
+        "monthly": "按月",
+        "annual": "按年"
+      },
+      "proratedCharge": "按比例费用",
+      "prorationNote": "按比例计算的差额将计入下一张账单。",
+      "errors": {
+        "previewFailed": "无法加载升级预览。",
+        "alreadyEnterprise": "该工作区已在 Enterprise 计划中。",
+        "subscriptionInactive": "该工作区的订阅未激活。请更新账单信息后重试。",
+        "priceNotConfigured": "Enterprise 价格暂不可用。请联系销售。"
+      },
+      "priceNote": "最终价格将在结账时显示。",
+      "continueCta": "继续结账",
+      "upgradeDescription": "将 {{workspace}} 从{{plan}}升级到 Enterprise。席位和计费周期保持不变，更改立即生效。",
+      "upgradeCta": "立即升级",
+      "upgradedTitle": "已升级到 Enterprise",
+      "upgradedDescription": "{{workspace}} 现已升级到 Enterprise。"
     }
   },
   "models": {
