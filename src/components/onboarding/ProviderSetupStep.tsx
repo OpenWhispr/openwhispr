@@ -130,7 +130,7 @@ function StepSecondaryAction({
 }
 
 /** The card each setup mode's step renders into. Top margin is per call site. */
-const SETUP_CARD_CLASS =
+export const SETUP_CARD_CLASS =
   "mx-auto w-full max-w-[22rem] rounded-[1.125rem] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 py-4 text-[var(--onboarding-text-primary)]";
 
 /** The field trigger. Call sites that can be disabled add the disabled: variants. */

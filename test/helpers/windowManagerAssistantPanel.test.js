@@ -112,7 +112,7 @@ test("hideDictationPanel refuses while an assistant command is busy or the panel
   assert.deepEqual(calls, ["hide"]);
 });
 
-test("compact onboarding stays fixed-size but remains minimizable and closable", () => {
+test("compact onboarding exposes the complete window-control contract", () => {
   const manager = new WindowManager();
   const state = {};
   const win = {
@@ -141,13 +141,41 @@ test("compact onboarding stays fixed-size but remains minimizable and closable",
   manager._applyOnboardingWindowChrome(win, "compact");
 
   assert.deepEqual(state, {
-    resizable: false,
+    resizable: true,
     minimizable: true,
-    maximizable: false,
+    maximizable: true,
     closable: true,
     fullScreenable: false,
     minimumSize: { width: 480, height: 624 },
   });
+});
+
+test("compact macOS onboarding shows the native traffic lights", () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+
+  try {
+    const manager = new WindowManager();
+    let buttonsVisible = false;
+    const win = {
+      getBounds: () => ({ x: 0, y: 0, width: 480, height: 624 }),
+      setResizable: () => undefined,
+      setMinimizable: () => undefined,
+      setMaximizable: () => undefined,
+      setClosable: () => undefined,
+      setFullScreenable: () => undefined,
+      setMinimumSize: () => undefined,
+      setWindowButtonVisibility: (visible) => {
+        buttonsVisible = visible;
+      },
+    };
+
+    manager._applyOnboardingWindowChrome(win, "compact");
+
+    assert.equal(buttonsVisible, true);
+  } finally {
+    Object.defineProperty(process, "platform", originalPlatform);
+  }
 });
 
 test("native Linux push-to-talk keeps only the dictation low-level listener", async () => {

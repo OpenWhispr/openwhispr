@@ -284,7 +284,8 @@ const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
-const { migrateLegacyBinDir } = require("./src/helpers/gpuBinaryManager");
+const { migrateLegacyBinDir, detectOrphanedGpuPacks } = require("./src/helpers/gpuBinaryManager");
+const { resetWhisperGpuFailureOnUpgrade } = require("./src/helpers/whisperGpuUpgradeReset");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MicrosoftCalendarManager = require("./src/helpers/microsoftCalendarManager");
 const AppleCalendarManager = require("./src/helpers/appleCalendarManager");
@@ -438,15 +439,28 @@ function initializeCoreManagers() {
     // Heal installs from before GPU packs got per-pack directories; must run
     // before startup pre-warm resolves any GPU binary path.
     const LlamaVulkanManager = require("./src/helpers/llamaVulkanManager");
+    const llamaVulkanManager = new LlamaVulkanManager();
     const clearedPacks = migrateLegacyBinDir([
       whisperCudaManager,
       whisperVulkanManager,
-      new LlamaVulkanManager(),
+      llamaVulkanManager,
     ]);
     if (clearedPacks.length > 0) {
       // No window exists yet — persist the notice; a control panel window
       // shows it as a toast and clears it. See #1606.
       require("./src/helpers/gpuPackMigrationNotice").record(clearedPacks);
+    }
+    // The 1.8.3 migration deleted lib-carrying packs without recording that
+    // notice, leaving those users on a silent CPU fallback: an enabled flag
+    // with no pack on disk only happens via such data loss. recordOnce gates
+    // each pack to one notice so a dismissed toast doesn't return every launch.
+    const orphanedPacks = detectOrphanedGpuPacks([
+      { manager: whisperCudaManager, enabledEnvVar: "WHISPER_CUDA_ENABLED" },
+      { manager: whisperVulkanManager, enabledEnvVar: "WHISPER_VULKAN_ENABLED" },
+      { manager: llamaVulkanManager, enabledEnvVar: "LLAMA_VULKAN_ENABLED" },
+    ]);
+    if (orphanedPacks.length > 0) {
+      require("./src/helpers/gpuPackMigrationNotice").recordOnce(orphanedPacks);
     }
     // Lets every server start resolve its GPU backend from installed packs
     whisperManager.setGpuBinaryManagers({ cuda: whisperCudaManager, vulkan: whisperVulkanManager });
@@ -961,6 +975,9 @@ async function startApp() {
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
   await environmentManager.init();
+  // After any upgrade the GPU gets one fresh attempt: clear the remembered
+  // failure before the whisper pre-warm below resolves its GPU backend.
+  resetWhisperGpuFailureOnUpgrade(environmentManager);
   registerSidecars();
   startAuthBridgeServer();
 
@@ -1228,23 +1245,30 @@ async function startApp() {
 
   const QdrantManager = require("./src/helpers/qdrantManager");
   qdrantManager = new QdrantManager();
+  // Must not throw: this also runs inside the unhealthy-restart path, whose
+  // catch would stop the replacement sidecar.
+  const wireVectorIndex = (port) => {
+    try {
+      const vectorIndex = require("./src/helpers/vectorIndex");
+      vectorIndex.init(port);
+      vectorIndex
+        .ensureCollection()
+        .then(() => ipcHandlers?.drainPendingVectorPurges())
+        .catch((err) => {
+          debugLogger.debug("Qdrant collection setup error (non-fatal)", { error: err.message });
+        });
+    } catch (err) {
+      debugLogger.debug("Qdrant rewire error (non-fatal)", { error: err.message });
+    }
+  };
+  // A successful unhealthy-restart can bring the sidecar back on a new port.
+  qdrantManager.on("restarted", wireVectorIndex);
   sidecarRegistry.register("qdrant", () => qdrantManager.stop());
   if (qdrantManager.isAvailable()) {
     qdrantManager
       .start()
       .then(() => {
-        if (qdrantManager.isReady()) {
-          const vectorIndex = require("./src/helpers/vectorIndex");
-          vectorIndex.init(qdrantManager.getPort());
-          vectorIndex
-            .ensureCollection()
-            .then(() => ipcHandlers?.drainPendingVectorPurges())
-            .catch((err) => {
-              debugLogger.debug("Qdrant collection setup error (non-fatal)", {
-                error: err.message,
-              });
-            });
-        }
+        if (qdrantManager.isReady()) wireVectorIndex(qdrantManager.getPort());
       })
       .catch((err) => {
         debugLogger.debug("Qdrant startup error (non-fatal)", { error: err.message });

@@ -123,6 +123,7 @@ const {
   getMeetingConnectionKey,
 } = require("./meetingStreamingProviders");
 const { fetchRealtimeTokenForProvider } = require("./realtimeTokenProviders");
+const { getCalendarAvailability } = require("./calendarAvailabilityService");
 
 // Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
 // streaming providers must be told the true PCM rate or they misread the audio.
@@ -6904,6 +6905,11 @@ class IPCHandlers {
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: meetingLocalModel,
             language: meetingLocalLanguage,
+            // Keep whisper.cpp's default decoder thresholds on this continuous
+            // load: the raised #1458 values multiply temperature-fallback
+            // re-decodes, and meeting chunks already have RMS-gate, VAD, and
+            // holdback/dedup hallucination protection.
+            skipDecoderThresholds: true,
             ...vadOptions,
           });
         }
@@ -9893,6 +9899,34 @@ class IPCHandlers {
         this._activeRecordingPipeline = null;
       }
       return { success: true };
+    });
+
+    // Provider-neutral availability over the shared calendar cache.
+    ipcMain.handle("calendar-get-availability", async (_event, request) => {
+      try {
+        return {
+          success: true,
+          availability: getCalendarAvailability({
+            request,
+            databaseManager: this.databaseManager,
+            calendarProviders: [
+              { provider: "google", manager: this.googleCalendarManager },
+              { provider: "microsoft", manager: this.microsoftCalendarManager },
+              { provider: "apple", manager: this.appleCalendarManager },
+            ],
+          }),
+        };
+      } catch (error) {
+        debugLogger.warn(
+          "Calendar availability request failed",
+          { error: error instanceof Error ? error.message : String(error) },
+          "calendar"
+        );
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to check calendar availability",
+        };
+      }
     });
 
     // Google Calendar

@@ -9,6 +9,8 @@ const { FOCUS_SYNC_THROTTLE_MS } = require("./calendarSyncInterval");
 const BINARY_NAME = "macos-calendar-listener";
 const HELPER_RESTART_BASE_MS = 1000;
 const HELPER_RESTART_MAX_MS = 30 * 1000;
+const AVAILABILITY_STATUSES = new Set(["free", "tentative", "busy", "unavailable", "unknown"]);
+const RESPONSE_STATUSES = new Set(["accepted", "declined", "tentative", "needsAction"]);
 
 // Reads the local EventKit store (all accounts Calendar.app aggregates) via a
 // bundled Swift helper that pushes calendars+events snapshots as line-delimited
@@ -301,6 +303,7 @@ class AppleCalendarManager {
 
   _mapEvent(event) {
     const attendees = event.attendees || [];
+    const selfResponseStatus = attendees.find((attendee) => attendee.self === true)?.status;
     return {
       id: event.id,
       calendar_id: event.calendar_id,
@@ -310,6 +313,12 @@ class AppleCalendarManager {
       end_time: event.end,
       is_all_day: event.is_all_day,
       status: event.status,
+      availability_status: AVAILABILITY_STATUSES.has(event.availability)
+        ? event.availability
+        : "unknown",
+      self_response_status: RESPONSE_STATUSES.has(selfResponseStatus)
+        ? selfResponseStatus
+        : "unknown",
       hangout_link:
         extractMeetingUrl([event.url, event.location, ...(event.notes_urls || [])]) ??
         // Generic fallback only for the event's own URL field
