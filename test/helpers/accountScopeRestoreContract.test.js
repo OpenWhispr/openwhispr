@@ -37,3 +37,13 @@ test("clearing the bearer token also clears the persisted scope binding", () => 
   assert.ok(subscription[1].includes("setActiveAccountId(null)"));
   assert.ok(subscription[1].includes("accountScopeBinding.clear()"));
 });
+
+test("boot restores the validated scope before any main-process consumer constructs", () => {
+  const source = read("main.js");
+  const bootWindow = source.match(
+    /databaseManager = new DatabaseManager\(\);([\s\S]*?)new IPCHandlers\(/
+  );
+  assert.ok(bootWindow, "DatabaseManager constructs before IPCHandlers");
+  assert.ok(bootWindow[1].includes("resolveBootAccountScope"));
+  assert.ok(bootWindow[1].includes("databaseManager.setActiveAccountId(bootAccountId)"));
+});
