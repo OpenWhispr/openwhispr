@@ -27,8 +27,10 @@ export default function MeetingRecordingMount(): null {
   const isTranscribing = useMeetingRecordingStore((s) => s.isTranscribing);
   const error = useMeetingRecordingStore((s) => s.error);
   const errorNonce = useMeetingRecordingStore((s) => s.errorNonce);
+  const systemAudioSilentWarning = useMeetingRecordingStore((s) => s.systemAudioSilentWarning);
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
   const wasMicUnavailable = useRef(false);
+  const wasSystemAudioSilent = useRef(false);
 
   useEffect(() => {
     primeMeetingWorklet();
@@ -89,6 +91,22 @@ export default function MeetingRecordingMount(): null {
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.
   }, [error, errorNonce, toast, t]);
+
+  // The store latches this once per recording; the ref keeps dependency
+  // changes (e.g. a language switch recreating `t`) from re-firing the toast.
+  useEffect(() => {
+    if (!systemAudioSilentWarning) {
+      wasSystemAudioSilent.current = false;
+      return;
+    }
+    if (wasSystemAudioSilent.current) return;
+    wasSystemAudioSilent.current = true;
+    toast({
+      title: t("notes.meeting.systemAudioSilent.title"),
+      description: t("notes.meeting.systemAudioSilent.description"),
+      duration: 8000,
+    });
+  }, [systemAudioSilentWarning, toast, t]);
 
   useEffect(() => {
     if (micCaptureStatus === "unavailable" && !wasMicUnavailable.current) {

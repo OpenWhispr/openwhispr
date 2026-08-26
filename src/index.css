@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Dictation window feature styles (voice pill, assistant/live-transcript panels). */
+@import "./styles/dictation-panel.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -13,6 +15,8 @@
   --color-muted-foreground: #525252;
   --color-accent: oklch(0.55 0.22 285);
   --color-accent-foreground: #ffffff;
+  /* Agent Mode identity, sourced from the supplied sparkle/leaf mark. */
+  --color-agent-brand: #8787ff;
   --color-destructive: #dc2626;
   --color-destructive-foreground: #ffffff;
   --color-border: #e5e5e5;
@@ -46,6 +50,15 @@
 }
 
 :root {
+  /* Easing. The built-in CSS curves are too weak to read as intentional, so
+     onboarding motion uses --onboarding-ease-out for anything entering or
+     exiting (starts fast, so the user sees movement at the moment they are
+     watching most closely). Never ease-in on UI: it delays the first frame and
+     reads as sluggish at the same duration. Scoped name on purpose: a bare
+     --ease-out here overrides Tailwind's @layer theme variable of the same
+     name and silently retimes every `ease-out` utility app-wide. */
+  --onboarding-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
   /* Typography */
   --font-family-sans:
     "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
@@ -186,16 +199,582 @@
   body:has(.meeting-notification-window) #root {
     background: transparent;
   }
+
+  /* The control panel window is transparent (windowConfig.js), so the page backing
+     is cleared here rather than filled. The compact frame owns the complete
+     480x576 surface, including its rounded corners. */
+  body:has(.onboarding-canvas.compact),
+  body:has(.onboarding-canvas.compact) #root {
+    background: transparent;
+  }
+
+  .dictation-window {
+    --window-resize-compensation-x: 0px;
+    --window-resize-compensation-y: 0px;
+    position: fixed;
+    inset: 0;
+    transform: translate3d(
+      var(--window-resize-compensation-x),
+      var(--window-resize-compensation-y),
+      0
+    );
+  }
+}
+
+/* Fade-only entry, for reduced motion. Something still marks the arrival of new
+   content — which is comprehension, not decoration — it just does not travel. */
+@keyframes reduced-motion-fade-in {
+  from {
+    opacity: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Reduced motion means fewer and gentler animations, not none. Movement is what
+     triggers vestibular discomfort, so transforms go; opacity and colour changes
+     carry meaning (this appeared, that is now active, this is loading) and stay at
+     their normal speed. Overriding transition-property rather than duration is
+     what makes that split: transform simply drops off the list. */
   *,
   *::before,
   *::after {
+    transition-property:
+      opacity, color, background-color, border-color, fill, stroke, box-shadow, filter !important;
+    /* Keyframes are killed wholesale because most of them move; the ones worth
+       keeping are re-declared below as fades. */
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
   }
+
+  /* Onboarding entries keep their cue, minus the 8px travel. */
+  .onboarding-step-enter,
+  .onboarding-stagger > * {
+    animation: reduced-motion-fade-in 200ms ease both !important;
+  }
+
+  /* Press feedback is movement by definition; without a transition it would snap.
+     The hover and active colour changes still confirm the press. */
+  .onboarding-pressable:active {
+    transform: none;
+  }
+}
+
+/* Font stack and design tokens apply to the onboarding canvas AND to the whole
+   document while onboarding is mounted. The second selector is what covers
+   portalled UI: Radix renders select/popover/tooltip content into document.body,
+   outside the canvas, so scoping to .onboarding-canvas alone left every dropdown
+   on the app's default stack with none of these tokens. Only the typography and
+   tokens are shared — the canvas keeps its own painted background below. */
+.onboarding-canvas,
+body:has(.onboarding-canvas) {
+  /* Inter is prepended rather than replacing the stack: the woff2 files are
+     subset by unicode-range and carry no CJK, so zh-CN/zh-TW/ja glyphs must still
+     fall through to the original fonts. Overriding the variable as well covers
+     descendants that re-declare font-family from it. */
+  --font-family-sans:
+    "Inter Variable", "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family-sans);
+  font-optical-sizing: auto;
+
+  /* Onboarding design tokens, straight from the Figma library. The accent is
+     #4079ED, which is close to but NOT Tailwind's blue-500 (#3b82f6) — bind
+     these rather than re-typing the literals. */
+  --onboarding-accent: #4079ed;
+  --onboarding-accent-foreground: #ffffff;
+  /* Hover on a filled accent means "darker" on light and "lighter" on dark, so the
+     mix target is a token rather than a literal `black` in the utility class. */
+  --onboarding-accent-hover: color-mix(in srgb, var(--onboarding-accent) 88%, black);
+  --onboarding-text-primary: #000000;
+  --onboarding-text-secondary: #656565;
+  --onboarding-text-tertiary: #969393;
+  --onboarding-control-border: #e3e3e3;
+  /* The page/card fill everything else sits on. Split from surface-secondary so
+     the dark theme can move the base without dragging the filled greys with it. */
+  --onboarding-surface: #ffffff;
+  /* light/surface-secondary and light/surface-tertiary: the two filled greys the
+     onboarding frames use (capture surfaces and the inline hint pills). */
+  --onboarding-surface-secondary: #f7f7f7;
+  --onboarding-surface-tertiary: #e6e6e6;
+  /* Hover step above the base surface (ghost rows, outline buttons) and above
+     surface-tertiary (the neutral "Enable" pill). */
+  --onboarding-surface-hover: #fafafa;
+  --onboarding-surface-tertiary-hover: #d4d4d4;
+  /* The row hover slab, which is a fill painted *behind* a row's content rather
+     than a control's own background — so it needs more separation from the base
+     surface than surface-hover gives a bordered button, and it gets its own token
+     instead of leaning on that one. */
+  --onboarding-row-hover: #f5f5f5;
+  /* Inverted HUD: keycaps and the dictation pill preview, which are near-black on
+     light and have to lift off the background rather than sink into it on dark. */
+  --onboarding-inverse-surface: #0a0a0a;
+  --onboarding-inverse-surface-secondary: #262626;
+  --onboarding-inverse-text: #ffffff;
+  /* Status. Kept separate from the accent so a failed provider test never reads
+     as a brand colour. */
+  --onboarding-link: #2563eb;
+  --onboarding-danger: #ef4444;
+  --onboarding-success: #22c55e;
+  /* Keycap. The cap is lit from above, so it needs its own top/bottom pair rather
+     than reusing the surface tokens: in dark it has to sit *above* the page fill
+     while still reading as a physical key. */
+  --onboarding-keycap-top: #ffffff;
+  --onboarding-keycap-bottom: #f5f5f5;
+  --onboarding-keycap-bevel: #ffffff;
+  --onboarding-keycap-shadow: #0a0a0a;
+  /* Provider marks ship as full-colour SVGs; the onboarding rows want them
+     monochrome. brightness(0) collapses to black, so dark has to invert after. */
+  --onboarding-mark-monochrome: grayscale(1) brightness(0);
+  /* Dialog scrim. A 20% black veil separates a sheet from a white page; over a
+     near-black one it does nothing, so dark leans on it harder. */
+  --onboarding-scrim: rgb(0 0 0 / 0.2);
+}
+
+/* Dark theme. Only the tokens move — every onboarding component binds to them, so
+   there are no `dark:` variants scattered through the step components.
+   Both selectors are needed for the same reason the light block has two: the
+   canvas itself may be the .dark element, and Radix portals render outside it. */
+.dark .onboarding-canvas,
+.dark:has(.onboarding-canvas),
+body.dark:has(.onboarding-canvas) {
+  /* Lifted off #4079ED: the Figma accent is tuned against white and goes muddy on
+     a near-black surface, so dark takes the same hue a few steps brighter to hold
+     the 4.5:1 it has in light. */
+  --onboarding-accent: #6f9bf5;
+  /* White, same as light: a filled brand CTA reads as the brand in both themes,
+     and flipping its label to near-black made the dark-mode buttons look like a
+     different component. */
+  --onboarding-accent-foreground: #ffffff;
+  --onboarding-accent-hover: color-mix(in srgb, var(--onboarding-accent) 88%, white);
+  --onboarding-text-primary: #f5f5f5;
+  --onboarding-text-secondary: #a1a1a1;
+  --onboarding-text-tertiary: #7c7c7c;
+  --onboarding-control-border: #2e2e2e;
+  --onboarding-surface: #141414;
+  --onboarding-surface-secondary: #1c1c1c;
+  --onboarding-surface-tertiary: #292929;
+  --onboarding-surface-hover: #202020;
+  --onboarding-surface-tertiary-hover: #363636;
+  --onboarding-row-hover: #202020;
+  /* The HUD inverts: on dark it is the one thing that gets *lighter* than the
+     page, or the keycaps disappear into it. */
+  --onboarding-inverse-surface: #f5f5f5;
+  --onboarding-inverse-surface-secondary: #d4d4d4;
+  --onboarding-inverse-text: #0a0a0a;
+  --onboarding-link: #7ba6f7;
+  --onboarding-danger: #f87171;
+  --onboarding-success: #4ade80;
+  --onboarding-keycap-top: #3a3a3a;
+  --onboarding-keycap-bottom: #262626;
+  --onboarding-keycap-bevel: #4d4d4d;
+  --onboarding-keycap-shadow: #000000;
+  --onboarding-mark-monochrome: grayscale(1) brightness(0) invert(1);
+  --onboarding-scrim: rgb(0 0 0 / 0.55);
+}
+
+/* Authentication also appears in the control-panel sign-in dialog. Give that
+   embedded version the same semantic names without applying onboarding's page
+   chrome or overriding the dialog's existing theme. */
+.onboarding-embedded-auth {
+  --onboarding-accent: var(--color-primary);
+  --onboarding-accent-foreground: var(--color-primary-foreground);
+  --onboarding-text-primary: var(--color-foreground);
+  --onboarding-text-secondary: var(--color-muted-foreground);
+  --onboarding-text-tertiary: color-mix(in srgb, var(--color-muted-foreground) 75%, transparent);
+  --onboarding-control-border: var(--color-border);
+  --onboarding-surface: var(--color-background);
+  --onboarding-surface-secondary: var(--color-muted);
+  --onboarding-surface-tertiary: var(--color-secondary);
+  --onboarding-surface-hover: var(--color-surface-1);
+  --onboarding-inverse-surface: var(--color-foreground);
+  --onboarding-inverse-text: var(--color-background);
+}
+
+/* Remaps the app-wide shadcn tokens onto the onboarding palette, so any shared
+   ui/ primitive dropped into a step (Button, Input, Select) picks up the
+   onboarding theme instead of the control panel's. Bound to the --onboarding-*
+   tokens rather than literals, so the .dark block above is the only place the
+   theme is described twice. */
+.onboarding-canvas {
+  --color-background: var(--onboarding-surface);
+  --color-foreground: var(--onboarding-text-primary);
+  --color-card: var(--onboarding-surface);
+  --color-card-foreground: var(--onboarding-text-primary);
+  --color-muted: var(--onboarding-surface-secondary);
+  --color-muted-foreground: var(--onboarding-text-secondary);
+  --color-border: var(--onboarding-control-border);
+  --color-primary: var(--onboarding-accent);
+  --color-primary-foreground: var(--onboarding-accent-foreground);
+  --color-ring: var(--onboarding-accent);
+  background-color: var(--onboarding-surface);
+  /* Supplied full-width artwork replaces the generated corner washes. Keeping
+     its natural aspect ratio preserves the authored violet-to-blue composition
+     while the surface token fills the transparent lower portion of the panel. */
+  background-image: var(--onboarding-background-light);
+  background-position: top center;
+  background-repeat: no-repeat;
+  background-size: 100% auto;
+  color: var(--onboarding-text-primary);
+}
+
+.dark .onboarding-canvas,
+.dark.onboarding-canvas {
+  background-image: var(--onboarding-background-dark);
+}
+
+/* Nested list surface + rows, per Figma "Onboarding / Frame 37".
+   The row rule is the important part and applies to every list of this shape:
+   dividers sit on TOP of each row except the first, and the first and last rows
+   drop their outer padding so the group sits flush inside the container's own
+   padding instead of doubling it up and reading as extra space. */
+/* Card and section headings: 18/140% semibold, normal tracking, per the Figma
+   frames. This has to be a class: the global h1–h6 rule below sets line-height
+   1.15 and -0.025em letter-spacing as plain CSS, which outranks Tailwind's
+   leading-* and tracking-* utilities, so a utility on the element is silently
+   ignored. */
+.onboarding-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: normal;
+}
+
+/* Step entry. Onboarding is seen once, which is the one place delight is worth
+   spending on — a step change is an occasional, deliberate transition, not a
+   keyboard action. 8px is enough to read as arrival without feeling like travel;
+   `both` holds the start frame so there is no flash of the end state. */
+@keyframes onboarding-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.onboarding-step-enter {
+  animation: onboarding-step-in 320ms var(--onboarding-ease-out) both;
+}
+
+/* Staggered children, for the step bodies that are a row or column of peers (the
+   setup cards, the permission rows). 45ms apart: long enough to cascade, short
+   enough that the last item is in under 200ms. Decorative only — nothing waits on
+   it, and every item is interactive from the first frame. */
+.onboarding-stagger > * {
+  animation: onboarding-step-in 300ms var(--onboarding-ease-out) both;
+}
+
+.onboarding-stagger > *:nth-child(1) {
+  animation-delay: 40ms;
+}
+
+.onboarding-stagger > *:nth-child(2) {
+  animation-delay: 85ms;
+}
+
+.onboarding-stagger > *:nth-child(3) {
+  animation-delay: 130ms;
+}
+
+.onboarding-stagger > *:nth-child(4) {
+  animation-delay: 175ms;
+}
+
+/* Press feedback. A pressable that does not move on press reads as not having
+   registered the press. 0.97 and 160ms is under the threshold where it becomes a
+   visible animation rather than just tactile. transform only — it is the one
+   property besides opacity that skips layout and paint. */
+.onboarding-pressable {
+  /* Both properties named explicitly, never `all`. The press uses --onboarding-ease-out so
+     the scale is felt immediately; hover fills use plain `ease`, which is the
+     right curve for a colour change that has no direction. Declaring colours here
+     too means these elements do not also need transition-colors, which would
+     overwrite transition-property and silently drop the press. */
+  transition:
+    transform 160ms var(--onboarding-ease-out),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.onboarding-pressable:active {
+  transform: scale(0.97);
+}
+
+.onboarding-list {
+  /* Column so the scroll child can absorb leftover height (flex-1) when the
+     caller doesn't cap it — that's what keeps the list from overflowing its step
+     and getting clipped when chips are added above it. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--onboarding-control-border);
+  border-radius: 16px;
+  background-color: var(--onboarding-surface);
+  /* Clip to the radius, or the scroll child's square box lets its scrollbar and
+     any full-bleed row paint outside the rounded corners. `clip` rather than
+     `hidden`: it honours the radius without turning this into a scroll
+     container of its own. */
+  overflow: clip;
+  /* No padding of its own. All of it lives on the scroll child, so it scrolls
+     away with the rows: static padding out here leaves a gap below a
+     part-scrolled row, which makes the clipped edge read as a flat cut floating
+     above blank space instead of content passing under the border. */
+  padding: 0;
+}
+
+/* The scroll lives on this inner element, never on .onboarding-list itself — a
+   scrollbar on the bordered box sits hard against its 16px corner radius, which
+   clips the ends of the thumb. */
+.onboarding-list-scroll {
+  position: relative;
+  overflow-y: auto;
+  /* Nothing in a list should ever scroll sideways. */
+  overflow-x: hidden;
+  /* Reserve the gutter so rows don't reflow the moment the list overflows. */
+  scrollbar-gutter: stable;
+  /* 8px block + the row's own 12px lands the end rows' content 20px from the
+     edge at rest, and scrolls out of the way once the list moves. 4px inline is
+     the hover slab's breathing room; the scrollbar sits outside it, flush to the
+     border. */
+  padding: 6px 4px;
+}
+
+/* Figma "Rectangle 45": a true 5px pill. Faking an inset with a transparent
+   border + background-clip distorts the pill ends, so don't. */
+.onboarding-list-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+/* Hold the thumb clear of the container's 16px corner arcs, so clipping never
+   shaves its ends. */
+.onboarding-list-scroll::-webkit-scrollbar-track {
+  margin-block: 14px;
+  background: transparent;
+}
+
+.onboarding-list-scroll::-webkit-scrollbar-thumb {
+  border-radius: 39px;
+  background-color: var(--onboarding-control-border);
+}
+
+/* The dropdown sheet (Figma "Onboarding / Frame 16") is the same list surface at
+   a smaller size, down to Rectangle 45's 5px thumb. Radix owns the scroll on its
+   viewport — the content box is overflow-hidden — so the scrollbar has to be
+   addressed through that child, which is also why this can't be a Tailwind class
+   on the panel itself. */
+.onboarding-select-panel [data-radix-select-viewport]::-webkit-scrollbar {
+  width: 5px;
+}
+
+.onboarding-select-panel [data-radix-select-viewport]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.onboarding-select-panel [data-radix-select-viewport]::-webkit-scrollbar-thumb {
+  border-radius: 39px;
+  background-color: var(--onboarding-control-border);
+}
+
+/* Dropdown rows are the same shape as .onboarding-list-row, so they get the same
+   hover: a rounded slab that replaces the rules it touches, rather than a square
+   full-bleed band whose corners fight the panel's 17px radius and whose edges get
+   crossed by the dividers.
+
+   Why this is CSS and not Tailwind on the item: the base SelectItem's
+   `hover:bg-muted` / `dark:hover:bg-primary/8` resolve against the app's own
+   palette, which is a different scale from the onboarding one and moves
+   independently of it. Those are neutralised on the item (see SELECT_ITEM_CLASS)
+   and the fill is bound to --onboarding-row-hover here instead, the same token
+   .onboarding-list-row uses.
+
+   Radix Select sets data-highlighted for pointer hover and keyboard nav alike, so
+   one selector covers both and the two can never light up at once. */
+.onboarding-select-item {
+  --onboarding-row-inset: 6px;
+  position: relative;
+  /* Stacking context, so the slab's z-index: -1 lands behind the row's content
+     but still above the panel's own fill. */
+  z-index: 1;
+  /* Painted gradient rather than a border, so the rule stops short of the row
+     edges and lines up with the label instead of spanning the slab's full width. */
+  background-image: linear-gradient(
+    to right,
+    transparent 0 var(--onboarding-row-inset),
+    var(--onboarding-control-border) var(--onboarding-row-inset)
+      calc(100% - var(--onboarding-row-inset)),
+    transparent calc(100% - var(--onboarding-row-inset)) 100%
+  );
+  background-repeat: no-repeat;
+  background-position: top left;
+  background-size: 100% 1px;
+}
+
+.onboarding-select-item:first-child {
+  background-image: none;
+}
+
+.onboarding-select-item::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: 12px;
+  background-color: var(--onboarding-row-hover);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.onboarding-select-item[data-highlighted]::before {
+  opacity: 1;
+}
+
+/* The slab replaces the dividers it touches — its own, and the next row's. */
+.onboarding-select-item[data-highlighted],
+.onboarding-select-item[data-highlighted] + .onboarding-select-item {
+  background-image: none;
+}
+
+.onboarding-list-row {
+  --onboarding-row-inset: 12px;
+  position: relative;
+  /* Stacking context, so the hover slab's z-index: -1 lands behind the row's
+     content but still above the list's white background. */
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-block: 10px;
+  /* Indents the content inside the full-width hover slab, which is what gives
+     the slab room around the checkbox. With the scroller's 4px, content lands
+     16px from the border as specced. */
+  padding-inline: var(--onboarding-row-inset);
+  /* The divider is a painted gradient rather than a border so it can stop short
+     of the row edges and line up with the content; a border would span the whole
+     padding box and run wider than the text. */
+  background-image: linear-gradient(
+    to right,
+    transparent 0 var(--onboarding-row-inset),
+    var(--onboarding-control-border) var(--onboarding-row-inset)
+      calc(100% - var(--onboarding-row-inset)),
+    transparent calc(100% - var(--onboarding-row-inset)) 100%
+  );
+  background-repeat: no-repeat;
+  background-position: top left;
+  background-size: 100% 1px;
+}
+
+/* Only the divider goes; the padding stays, or the first row's hover slab would
+   be shorter than every other row's. */
+.onboarding-list-row:first-child {
+  background-image: none;
+}
+
+/* Hover highlight. inset-inline is 0 on purpose: the row's padding is what keeps
+   the checkbox clear of the slab edge. Bleeding the slab outwards instead counts
+   as horizontal overflow and summons a horizontal scrollbar. */
+.onboarding-list-row::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: 12px;
+  background-color: var(--onboarding-row-hover);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .onboarding-list-row:hover::before {
+    opacity: 1;
+  }
+}
+
+/* The slab replaces the dividers it touches — its own, and the next row's. */
+@media (hover: hover) and (pointer: fine) {
+  .onboarding-list-row:hover,
+  .onboarding-list-row:hover + .onboarding-list-row {
+    background-image: none;
+  }
+}
+
+.onboarding-canvas.compact {
+  background-color: var(--onboarding-surface);
+  background-image: none;
+}
+
+/* The indigo-to-white hero ramp is a baked Bayer 16x16 ordered dither (2px
+   cells, 5 steps along the ramp) rather than a CSS gradient plus a dot grid.
+   The ramp is purely vertical, so one Bayer period — 16 cells at 2px = 32px —
+   tiles horizontally with no seam, and the whole strip costs ~250 bytes.
+   background-size pins it to 1 image px per CSS px so the cells stay square;
+   image-rendering keeps them hard-edged on fractional device pixel ratios
+   instead of resampling the dither into mush. The background-image URL is set
+   inline from an imported asset (see CompactOnboardingFrame) so Vite
+   fingerprints it and it resolves under the packaged file:// origin — which is
+   also why the theme swap reads two inline custom properties instead of naming
+   the files here. The strips are 32px-wide Bayer-dither gradients, one per
+   theme, baked into src/assets/onboarding-hero-dither{,-dark}.webp. */
+.onboarding-compact-hero {
+  background-image: var(--onboarding-hero-dither-light);
+  background-repeat: repeat-x;
+  background-size: 32px 100%;
+  image-rendering: pixelated;
+}
+
+/* The dark strip resolves into --onboarding-surface rather than white, so it has
+   to be a separate asset — a filter or blend on the light one would take the
+   indigo with it. */
+.dark .onboarding-compact-hero {
+  background-image: var(--onboarding-hero-dither-dark);
+}
+
+/* The classic typing indicator: each dot hops and brightens in turn, so with a
+   per-dot delay the wave travels left to right across the pill. The rest state
+   is a fully opaque dot, which is what the reduced-motion block above leaves on
+   screen once it clamps the duration. */
+@keyframes onboarding-typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.45;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+.onboarding-typing-dot {
+  animation: onboarding-typing-dot 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* The UA stylesheet gives <kbd> a monospace family; onboarding is on Inter, so
+   every keycap and inline key has to opt back in to the inherited stack. */
+.onboarding-canvas kbd,
+body:has(.onboarding-canvas) kbd {
+  font-family: inherit;
+}
+
+.onboarding-keycap {
+  /* Light from above: a near-white top rolling into neutral-100 reads as a
+     physical cap, where a single flat fill reads as a grey box. */
+  background-image: linear-gradient(
+    to bottom,
+    var(--onboarding-keycap-top),
+    var(--onboarding-keycap-bottom)
+  );
+  border-color: var(--onboarding-control-border);
+  box-shadow:
+    /* top bevel */
+    inset 0 1px 0 var(--onboarding-keycap-bevel),
+    /* the cap's side wall — 2px, not 3px, so it reads as a key rather than a slab */ 0 2px 0
+      var(--onboarding-control-border),
+    /* contact shadow, then a wider ambient one */ 0 3px 4px
+      color-mix(in oklch, var(--onboarding-keycap-shadow) 5%, transparent),
+    0 8px 16px color-mix(in oklch, var(--onboarding-keycap-shadow) 7%, transparent);
 }
 
 /* OpenWhispr Brand Typography */
@@ -211,8 +790,11 @@
 }
 
 .brand-script {
-  font-family: var(--font-family-sans);
-  font-style: italic;
+  /* Figma binds this to Caveat Regular 400. Self-hosted like Inter so it works
+     offline; Snell Roundhand stays as the fallback for the same handwritten feel
+     if the face ever fails to load. Not italic — Caveat is already slanted. */
+  font-family: "Caveat Variable", "Snell Roundhand", "Segoe Script", cursive;
+  font-weight: 400;
 }
 
 h1,
@@ -230,6 +812,95 @@ h6 {
 h1 {
   font-size: 2.5rem;
   font-weight: 700;
+}
+
+.onboarding-display-title {
+  font-size: 2rem; /* 32px */
+  font-weight: 500; /* Inter Medium */
+  line-height: 1.2; /* 120% */
+  /* No letter-spacing on purpose. Inter's opsz build already tightens the
+     letterforms at display sizes via font-optical-sizing: auto, so manual
+     negative tracking stacked on top of that read as cramped. */
+}
+
+/* The compact first-run steps (auth + permissions, per COMPACT_STEPS in
+   OnboardingFlow.tsx) intentionally keep their existing 32px scale. Exception:
+   CompactPermissionsStep overrides its title to 30px (text-3xl!) so all four
+   permission rows fit the authored 480×624 window without scrolling. */
+.onboarding-canvas.compact .onboarding-display-title {
+  font-size: 2rem; /* 32px */
+}
+
+/* Scoped to .onboarding-canvas because AuthenticationStep also renders outside
+   onboarding (SignInDialog), where the --onboarding-*
+   tokens are undefined and these !important rules would paint invisible inputs.
+   Outside the canvas the Input component's default skin wins instead. */
+.onboarding-canvas .onboarding-light-input,
+.onboarding-canvas .onboarding-light-input:hover,
+.onboarding-canvas .onboarding-light-input:focus-visible {
+  border-color: transparent !important;
+  background-color: var(--onboarding-surface-secondary) !important;
+  color: var(--onboarding-text-primary) !important;
+}
+
+.onboarding-canvas .onboarding-light-input::placeholder {
+  color: var(--onboarding-text-tertiary);
+}
+
+.onboarding-canvas .onboarding-light-input.onboarding-light-input-bordered {
+  /* Design-system surface stroke. This rule is !important and more specific
+     than a utility class, so a Tailwind border-* on the element cannot win —
+     the token has to be bound here. All four call sites are onboarding. */
+  border-color: var(--onboarding-control-border) !important;
+  background-color: var(--onboarding-surface) !important;
+}
+
+/* Auth fields use the same visible stroke as the rest of onboarding while
+   retaining the raised input fill shown in the compact authentication frames. */
+.onboarding-canvas .onboarding-light-input.onboarding-auth-input,
+.onboarding-canvas .onboarding-light-input.onboarding-auth-input:hover,
+.onboarding-canvas .onboarding-light-input.onboarding-auth-input:focus-visible {
+  border-color: var(--onboarding-control-border) !important;
+  background-color: var(--onboarding-surface-secondary) !important;
+}
+
+.onboarding-provider-input,
+.onboarding-provider-input:hover,
+.onboarding-provider-input:focus-visible,
+.onboarding-provider-input:disabled {
+  border-color: var(--onboarding-control-border) !important;
+  background-color: var(--onboarding-surface-secondary) !important;
+  color: var(--onboarding-text-primary) !important;
+  opacity: 1 !important;
+}
+
+.onboarding-provider-input::placeholder {
+  color: var(--onboarding-text-secondary) !important;
+}
+
+.onboarding-provider-icon-monochrome {
+  filter: var(--onboarding-mark-monochrome) !important;
+}
+
+/* Scrolls without a bar that occupies layout width. A classic scrollbar reserves
+   a gutter in Chromium, so rows in a scrolling list end short of the edge while an
+   identical non-scrolling list fills it — the two read as different widths. Note
+   .onboarding-list-scroll deliberately does the opposite and shows a 5px thumb,
+   because Figma specs one there. */
+.onboarding-scroll-hidden {
+  scrollbar-width: none;
+}
+
+.onboarding-scroll-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+.onboarding-shell-scroll {
+  scrollbar-width: none;
+}
+
+.onboarding-shell-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 /* Modern Button Styling - handled by button component */
@@ -414,6 +1085,15 @@ a:hover {
   }
   to {
     width: 0%;
+  }
+}
+
+@keyframes toast-border-progress {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 1;
   }
 }
 
@@ -801,16 +1481,6 @@ a:hover {
 }
 
 ::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-/* ---- Agent Overlay ---- */
-
-body:has(.agent-overlay-window) {
-  background: transparent;
-}
-
-body:has(.agent-overlay-window) #root {
   background: transparent;
 }
 

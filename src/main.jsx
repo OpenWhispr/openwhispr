@@ -10,6 +10,12 @@ import { ToastProvider } from "./components/ui/Toast.tsx";
 import { SettingsProvider } from "./hooks/useSettings";
 
 import i18n from "./i18n";
+// Self-hosted so it works offline and makes no network call — the "opsz" build
+// carries Inter's optical-size axis, so large display text picks up the Inter
+// Display shaping automatically. Declaring the face is global; only the
+// onboarding surfaces actually ask for it (see .onboarding-canvas in index.css).
+import "@fontsource-variable/inter/opsz.css";
+import "@fontsource-variable/caveat";
 import "./index.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root"));

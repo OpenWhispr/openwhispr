@@ -202,10 +202,14 @@ export const usePolicyStore = create<PolicyState>()((set, get) => {
       const previous = get();
       const sameIdentity =
         previous.accountId === accountId && previous.authGeneration === authGeneration;
-      const preserveResolvedPolicy =
-        sameIdentity && (previous.status === "managed" || previous.status === "unmanaged");
+      // Keep every settled state visible while refreshing the same account.
+      // In particular, replacing `error` with `loading` makes AppRouter unmount
+      // onboarding; the remounted useAuth then starts another refresh and can
+      // create an error -> loading -> error loop while the service is offline.
+      const preserveSettledPolicy =
+        sameIdentity && previous.status !== "idle" && previous.status !== "loading";
       const sequence = ++fetchSequence;
-      if (!preserveResolvedPolicy) {
+      if (!preserveSettledPolicy) {
         set({
           accountId,
           authGeneration,

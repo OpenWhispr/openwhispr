@@ -9,8 +9,18 @@ const { app } = require("electron");
 // be lost if the user quit first. See #1606.
 const SENTINEL_FILENAME = ".gpu-pack-migration-notice";
 
+// Launch-time orphan detection (detectOrphanedGpuPacks) finds the same
+// missing pack every launch until the user re-downloads it — including after
+// they saw the toast, dismissed it, and chose not to. This marker limits each
+// pack to one detection-driven notice.
+const FLAGGED_FILENAME = ".gpu-pack-orphan-flagged";
+
 function getSentinelPath() {
   return path.join(app.getPath("userData"), SENTINEL_FILENAME);
+}
+
+function getFlaggedPath() {
+  return path.join(app.getPath("userData"), FLAGGED_FILENAME);
 }
 
 function record(packNames) {
@@ -33,10 +43,26 @@ function read() {
   }
 }
 
+function recordOnce(packNames) {
+  let flagged = [];
+  try {
+    const { packs } = JSON.parse(fs.readFileSync(getFlaggedPath(), "utf8"));
+    if (Array.isArray(packs)) flagged = packs;
+  } catch {}
+  const unseen = (packNames || []).filter((name) => !flagged.includes(name));
+  if (unseen.length === 0) return;
+  record(unseen);
+  try {
+    fs.writeFileSync(getFlaggedPath(), JSON.stringify({ packs: [...flagged, ...unseen] }));
+  } catch {
+    // Best-effort: the user may be notified again next launch.
+  }
+}
+
 function clear() {
   try {
     fs.unlinkSync(getSentinelPath());
   } catch {}
 }
 
-module.exports = { record, read, clear };
+module.exports = { record, recordOnce, read, clear };

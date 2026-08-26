@@ -1,5 +1,5 @@
-const { shell } = require("electron");
 const debugLogger = require("./debugLogger");
+const { openExternalUrl } = require("./externalUrlOpener");
 const { getMeetingJoinUrl } = require("./meetingJoinUrl");
 const createMeetingAutoEndController = require("./meetingAutoEndController");
 const { createMeetingAudioActivityMonitor } = require("./meetingAudioActivityMonitor");
@@ -48,7 +48,7 @@ class MeetingDetectionEngine {
     this.windowManager = windowManager;
     this.databaseManager = databaseManager;
     this.activeDetections = new Map();
-    this.preferences = { processDetection: true, audioDetection: true, autoEnd: true };
+    this.preferences = { processDetection: true, audioDetection: true };
     this._userRecording = false;
     this._meetingModeActive = false;
     this._notificationQueue = [];
@@ -176,8 +176,7 @@ class MeetingDetectionEngine {
   _isAutoEndWanted() {
     return (
       this._recordingSession?.autoEndEligible === true &&
-      this._recordingSession.systemAudioAvailable === true &&
-      this.preferences.autoEnd !== false
+      this._recordingSession.systemAudioAvailable === true
     );
   }
 
@@ -478,19 +477,31 @@ class MeetingDetectionEngine {
         if (action === "join") {
           const joinUrl = getMeetingJoinUrl(detection.event);
           if (joinUrl) {
-            shell
-              .openExternal(joinUrl)
-              .catch((error) =>
-                debugLogger.error(
-                  "Failed to open meeting link",
-                  { error: error.message, joinUrl },
-                  "meeting"
-                )
-              );
+            openExternalUrl(joinUrl).catch((error) =>
+              debugLogger.error(
+                "Failed to open meeting link",
+                { error: error.message, joinUrl },
+                "meeting"
+              )
+            );
           }
         }
 
         const eventSummary = detection.event?.summary || "New note";
+
+        const isRealEvent =
+          detection.event?.calendar_id &&
+          detection.event.calendar_id !== "__detected__" &&
+          detection.event.calendar_id !== "__manual__";
+
+        if (
+          isRealEvent &&
+          (await this._resumeExistingEventNote(detection.event, "calendar-join"))
+        ) {
+          this._meetingModeActive = true;
+          this.audioActivityDetector.resetPrompt();
+          return;
+        }
 
         const noteResult = this.databaseManager.saveNote(eventSummary, "", "meeting");
         const meetingsFolder = this.databaseManager.getMeetingsFolder();
@@ -507,11 +518,6 @@ class MeetingDetectionEngine {
         this._meetingModeActive = true;
 
         broadcastToWindows("note-added", noteResult.note);
-
-        const isRealEvent =
-          detection.event?.calendar_id &&
-          detection.event.calendar_id !== "__detected__" &&
-          detection.event.calendar_id !== "__manual__";
 
         if (isRealEvent) {
           const calEvent = this.databaseManager.getCalendarEventById(detection.event.id);
@@ -588,6 +594,24 @@ class MeetingDetectionEngine {
     });
   }
 
+  /** Navigates to the note already linked to a calendar event, if any. */
+  async _resumeExistingEventNote(event, trigger) {
+    const existingNote = this.databaseManager.getNoteByCalendarEventId(event.id);
+    if (!existingNote?.id) return false;
+    debugLogger.info(
+      "Reusing existing note for calendar meeting",
+      { eventId: event.id, noteId: existingNote.id, trigger },
+      "meeting"
+    );
+    await this.windowManager.queueMeetingNoteNavigation({
+      noteId: existingNote.id,
+      folderId: existingNote.folder_id ?? this.databaseManager.getMeetingsFolder()?.id,
+      event,
+      trigger,
+    });
+    return true;
+  }
+
   async joinCalendarMeeting(eventId, trigger = "calendar-join") {
     this._meetingModeActive = true;
     debugLogger.info("Joining calendar meeting", { eventId, trigger }, "meeting");
@@ -596,6 +620,11 @@ class MeetingDetectionEngine {
     if (!calEvent) {
       debugLogger.error("Calendar event not found", { eventId }, "meeting");
       this._meetingModeActive = false;
+      return;
+    }
+
+    // Joining the same event twice resumes its note instead of creating a duplicate.
+    if (await this._resumeExistingEventNote(calEvent, trigger)) {
       return;
     }
 
@@ -713,17 +742,11 @@ class MeetingDetectionEngine {
 
   setPreferences(prefs) {
     debugLogger.info("Updating detection preferences", prefs, "meeting");
-    const autoEndWasWanted = this._isAutoEndWanted();
-    Object.assign(this.preferences, prefs);
-    const autoEndWanted = this._isAutoEndWanted();
-
-    // Toggling auto-end mid-recording takes effect immediately: off dismisses
-    // any visible countdown (the recording itself continues); on arms a fresh
-    // session from the current mic-ownership state.
-    if (autoEndWasWanted && !autoEndWanted) {
-      this._deactivateAutoEnd();
-    } else if (!autoEndWasWanted && autoEndWanted && this._recordingSession) {
-      void this._activateAutoEnd(this._recordingSession.sessionId);
+    if (typeof prefs?.processDetection === "boolean") {
+      this.preferences.processDetection = prefs.processDetection;
+    }
+    if (typeof prefs?.audioDetection === "boolean") {
+      this.preferences.audioDetection = prefs.audioDetection;
     }
 
     this._syncMeetingProcessDetector();

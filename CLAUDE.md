@@ -2,6 +2,10 @@
 
 This document provides comprehensive technical details about the OpenWhispr project architecture for AI assistants working on the codebase.
 
+## Response Style
+
+Keep responses focused, brief, and concise. Keep disclaimers and caveats short, and spend most of the response on the main answer. When asked to explain something, give a high-level summary unless an in-depth explanation is specifically requested.
+
 ## Project Overview
 
 OpenWhispr is an Electron-based desktop dictation application that uses whisper.cpp for speech-to-text transcription. It supports both local (privacy-focused) and cloud (OpenAI API) processing modes.
@@ -69,7 +73,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **dragManager.js**: Window dragging functionality
 - **environment.js**: Environment variable and OpenAI API management
 - **hotkeyManager.js**: Global hotkey registration and management
-  - Named hotkey slots: `dictation`, `agent` (chat agent overlay), `voiceAgent` (dictation routed straight to the dictation agent), `meeting`
+  - Named hotkey slots: `dictation`, `voiceAgent` (voice assistant — dictation routed to the assistant panel), `translation`, `meeting`
   - Handles platform-specific defaults (GLOBE on macOS, Control+Super on Windows/Linux)
   - Auto-fallback to F8/F9 if default hotkey is unavailable
   - Notifies renderer via IPC when hotkey registration fails
@@ -137,9 +141,10 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **googleCalendarManager.js**: Google Calendar sync (REST, OAuth via `googleCalendarOAuth.js`)
   - 10s socket timeout on API requests
   - Incremental sync via `syncToken`; full re-sync on 410 prunes stale events (note-linked rows retained)
+  - Sync tokens pin the `timeMin`/`timeMax` window of the full sync that created them (incremental syncs never roll it forward), so tokens are discarded after 1 day to keep the 33-day lookahead covering the availability tool's 31-day horizon
 - **microsoftCalendarManager.js**: Microsoft Calendar sync via Graph API (OAuth via `microsoftCalendarOAuth.js`)
-  - `calendarView/delta` incremental sync over a 14-day window; delta token discarded after 7 days (Graph delta links never roll their window forward)
-  - Delta can return recurring-series occurrences as bare stubs (no subject/attendees/meeting link); they're backfilled from their series master, one `GET /me/events/{id}` per series
+  - `calendarView/delta` incremental sync over a 38-day window; delta token discarded after 7 days (Graph delta links never roll their window forward)
+  - Delta can return recurring-series occurrences as bare stubs (no subject/attendees/meeting link); they're backfilled from their series master, one `GET /me/calendars/{calendarId}/events/{id}` per series (calendar-scoped: `/me/events/{id}` 404s for shared calendars). A failed backfill shortens the delta token TTL to 10 min so an early full sync retries instead of leaving untitled blocks
   - Full re-sync (410 or expired token) prunes stale events like Google
 - **appleCalendarManager.js**: Apple Calendar (EventKit) via the `macos-calendar-listener` Swift helper — macOS only, snapshot-push over stdout, no tokens ("connected" = `apple_calendars` has rows)
 - **calendarReminderScheduler.js**: Provider-agnostic meeting reminder scheduling over the shared `calendar_events` table (provider-scoped reset keys, so one provider's disconnect doesn't re-fire another's reminders)
@@ -163,7 +168,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 
 - **App.jsx**: Main dictation interface with recording states
 - **ControlPanel.tsx**: Settings, history, model management UI
-- **OnboardingFlow.tsx**: 8-step first-time setup wizard
+- **OnboardingFlow.tsx**: First-time setup wizard over a versioned, route-based step machine (`src/components/onboarding/flow.ts`; session persisted in `onboardingSessionV2`). Routes vary by auth path (account vs guest), policy (agent allowed), and setup mode (cloud / BYOK / local / enterprise); step components live in `src/components/onboarding/`
 - **PostMigrationOnboarding.tsx**: One-time modal for users returning from the pre-Gizmo bundle ID; reuses `PermissionsSection` to walk through re-granting Microphone, Accessibility, and System Audio. Triggered by `postMigrationDetector.js` (see Helper Modules)
 - **SettingsPage.tsx**: Comprehensive settings interface
 - **WhisperModelPicker.tsx**: Model selection and download UI
@@ -172,6 +177,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 ### React Hooks (src/hooks/)
 
 - **useAudioRecording.js**: MediaRecorder API wrapper with error handling
+- **useAssistantPanel.js**: Assistant panel lifecycle (open/close choreography, thinking flourish, footer phases, pending voice commands, conversation session boundaries)
+- **useLiveTranscriptPanel.js**: Live transcript panel lifecycle (entrance choreography, buffered text scheduler, measure-then-reveal resize pipeline, preview IPC wiring)
+- **useMainWindowSizeOwner.js**: Single owner of the main window size ladder (panel > menu > toast > pill > base) and the dictation-error pill handoff
+- **useWindowResizeCompensation.js**: Masks split native setBounds frames via CSS-variable counter-translation
+- **useMainProcessNotifications.tsx**: Main-process notifications (hotkey fallback, GPU fallback, learned corrections) as toasts
 - **useClipboard.ts**: Clipboard operations hook
 - **useDialogs.ts**: Electron dialog integration
 - **useHotkey.js**: Hotkey state management
@@ -354,7 +364,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 - User names their agent during onboarding (step 6/8)
 - Name stored in localStorage and database
 - ReasoningService detects "Hey [AgentName]" patterns
-- AI processes command and removes agent reference from output
+- Standalone wake-word commands stream into the assistant panel (the address is stripped first, `stripAgentAddress`); a highlighted selection is edited in place by the dictation agent
 - Supports multiple AI providers (all models defined in `src/models/modelRegistryData.json`):
   - **OpenAI** (Responses API):
     - GPT-5.5 (`gpt-5.5`) - Latest flagship frontier model, 1M context
@@ -640,15 +650,17 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 - Exponential backoff on consecutive failures: 2min → 4min → 8min → cap 30min
 - Reset to normal 2min interval on any successful sync
 
-### 17. Voice Agent Hotkey
+### 17. Voice Assistant Hotkey
 
-A dedicated global hotkey that starts a dictation whose transcript is sent straight to the dictation agent as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. Separate from the chat agent hotkey (`CHAT_AGENT_KEY`), which toggles the agent overlay window.
+A dedicated global hotkey that starts a dictation whose transcript is sent straight to the voice assistant as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. Standalone commands never type at the cursor: the answer streams into a floating assistant panel attached to the dictation pill (there is no separate assistant window). The pill window is content-protected while the panel is open (the panel never appears in screen shares).
 
 **Flow**:
 
-1. Hotkey pressed → `voiceAgent` slot callback in `main.js` → `windowManager.sendToggleVoiceAgent()` → `toggle-voice-agent` IPC to the main window
+1. Hotkey pressed → `voiceAgent` slot callback in `main.js` → `windowManager.sendToggleVoiceAgent()` → `toggle-voice-agent` IPC to the main window → recording capsule appears
 2. `useAudioRecording.js` starts a recording with `audioManager.setVoiceAgentRequested(true)` (any other start resets it to `false`)
-3. On transcription, `resolveReasoningRoute` consults `resolveDictationRouteKind()` (`src/helpers/dictationRouting.js`): a voice agent recording always takes the agent route; if the dictation agent is disabled or has no model, the raw transcript is returned — it never falls back to cleanup
+3. On transcription, `resolveReasoningRoute` consults `resolveDictationRouteKind()` (`src/helpers/dictationRouting.js`): a voice assistant recording always takes the agent route and never falls back to cleanup. The dictation agent's reachability only gates selection edits — a selection with the dictation agent unconfigured routes to the panel with the selected text quoted instead of editing in place
+4. Standalone commands (no text selected) stream into the assistant panel (`src/components/dictation/AssistantPanel.tsx`) through the chat pipeline: chat tools (notes search/create/update, calendar, web search, clipboard), RAG memory, and the custom dictionary injected into the system prompt. Conversations persist in the `agent_conversations` table and are browsable from the ControlPanel chat
+5. Selection edits are unchanged: highlighted text goes through the `dictationAgent` scope and is safely replaced in place — it never opens the panel
 
 **Storage & IPC**:
 
@@ -656,25 +668,27 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 - IPC handlers: `update-voice-agent-hotkey`, `get-voice-agent-key`
 - Hotkey slot: `voiceAgent` (tap-to-toggle; GNOME-native slot via `ToggleVoiceAgent` D-Bus method, KDE via KGlobalAccel, otherwise `globalShortcut`)
 
+**Panel**:
+
+- Esc collapses the panel; a Copy button copies the answer; a follow-up input takes typed questions. Esc while the command is still thinking cancels it; a command whose stream ends without content settles as `agentMode.chat.emptyResponse`
+- Pressing the hotkey again while the panel is open records a follow-up into the same conversation
+
 **UI**:
 
-- Settings → Hotkeys → "Voice Agent Hotkey" (with cross-slot conflict validation)
+- Settings → Hotkeys → "Voice Assistant Hotkey" (with cross-slot conflict validation)
 - Onboarding: optional step right after the dictation hotkey (activation) step
-- Requires the dictation agent to be enabled (Settings → AI Models) for the agent route to apply
+- Panel conversations run on the `chatIntelligence` scope (the chat's brain); in-place selection edits require the dictation agent (Settings → AI Models) and its `dictationAgent`/`dictationAgentVision` scopes
 
 **Screen Context (opt-in)**:
 
-When "Share screen context" is enabled (Settings → AI Models → Voice Agent → Screen Context, store key `voiceAgentScreenContext`, default off), each voice-agent recording start captures the display the cursor is on and attaches it to the agent request as a base64 JPEG (long edge ≤ 1568 px).
+When "Share screen context" is enabled (Settings → AI Models → Voice Assistant → Screen Context, store key `voiceAgentScreenContext`, default off), each voice-assistant recording start captures the display the cursor is on and attaches it to the request as a base64 JPEG (long edge ≤ 1568 px).
 
 - Capture: `src/helpers/screenContextCapture.js` (main process; `screen.getCursorScreenPoint` + `desktopCapturer`). macOS requires the Screen Recording TCC permission (`useScreenRecordingPermission` hook + `PermissionCard` in `DictationAgentSettings`); Windows/Linux X11 need no permission; Linux Wayland is unsupported (capture silently skipped)
 - Encoding: `encodeWithinBudget()` walks a JPEG quality ladder (82 → 70 → 55), then falls back to a 1024 px resize, keeping the payload under `MAX_ENCODED_BYTES` (1.5 MB ≈ 2.05M base64 chars, inside the API's 2.8M cap). Each rung re-encodes the original bitmap, so quality drops never compound. A screen that still won't fit is dropped
-- Trigger: `useAudioRecording.js` calls `audioManager.beginScreenContextCapture()` at voice-agent start (fire-and-forget); `consumeScreenContext()` (3s guard) is awaited when the reasoning route is built. The dictation overlay gets `setContentProtection` while the setting is on so the pill never appears in captures
-- Routing: `resolveAgentImageTarget()` (`src/helpers/dictationRouting.js`) decides attach/drop. An optional vision override (`dictationAgentVision` inference scope, gated by `useDictationAgentVisionModel`, cloud/BYOK modes only) routes screenshot-carrying requests to a dedicated model; otherwise the base model gets the image only when its provider client is image-wired (`supportsImages` on the `InferenceProvider`) and the model has `supportsVision` in `modelRegistryData.json` (cloud mode defers to the server). Dropping the image never fails the dictation
-- Prompt: `appendScreenContextSuffix()` adds the `screenContextSuffix` prompts key only when an image is attached
-- Image-wired clients: `openai` (Responses `input_image` / Chat `image_url`, also `custom`/`openrouter`), `anthropic` (base64 content block via `process-anthropic-reasoning`), `gemini` (`inlineData`), `openwhispr` (forwards `screenContext` + `promptMode: "agent"` to `/api/reason`; the server routes to its `REASONING_VISION_*` model chain)
-- IPC: `capture-screen-context`, `check-screen-recording-access`, `request-screen-recording-access`, `open-screen-recording-settings`, `screen-context-set-enabled`
+- Trigger: `useAudioRecording.js` calls `audioManager.beginScreenContextCapture()` at recording start (fire-and-forget); `consumeScreenContext()` (3s guard) is awaited when the request is built. The dictation overlay gets `setContentProtection` while the setting is on so the pill never appears in captures
+- Routing: the press-time screenshot is re-decided against the model that will actually answer. On BYOK, it attaches only when the chat model's provider client is image-wired (`supportsImages` on the `InferenceProvider`) and the model has `supportsVision` in `modelRegistryData.json`; on OpenWhispr Cloud, attachment is pending API vision routing for the chat path. Dropping the image never fails the command
 - Privacy: screenshots live only in renderer memory for one request — never written to disk, stored in history, or logged (loggers emit `hasScreenContext` booleans only)
-- Failure UX: a rejected screenshot is retried once text-only from `processWithReasoningModel()` (swapping in the pre-built `textOnlySystemPrompt`, so selection-edit instructions and the completion marker survive the retry) and reported via a non-destructive `SCREEN_CONTEXT_SKIPPED` toast, so an image problem never costs the user their command. Only if that retry also fails does the "Agent Unavailable" toast (`AGENT_REASONING_FAILED`) fire and the raw transcript get pasted
+- IPC: `capture-screen-context`, `check-screen-recording-access`, `request-screen-recording-access`, `open-screen-recording-settings`, `screen-context-set-enabled`
 
 **Tests**: `test/helpers/dictationRouting.test.js`, `test/helpers/screenContextCapture.test.js` (run with `node --test`)
 
@@ -715,6 +729,26 @@ const { t } = useTranslation();
 3. Keep `{{variable}}` interpolation syntax for dynamic values
 4. Do NOT translate: brand names (OpenWhispr, Pro), technical terms (Markdown, Signal ID), format names (MP3, WAV), AI system prompts
 5. Group keys by feature area (e.g., `notes.editor.*`, `referral.toasts.*`)
+
+### Image and Icon Assets — REQUIRED
+
+Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`). Vector provider/brand marks live in `src/assets/icons/`.
+
+**Rules**:
+
+1. **Always `import` the asset**; never write a literal path like `/assets/foo.webp`. Packaged builds load the renderer from a `file://` origin, so root-relative paths resolve to nothing. Importing lets Vite fingerprint the file and rewrite the URL:
+
+   ```tsx
+   import microphoneIcon from "@/assets/onboarding-permission-microphone.webp";
+   <img src={microphoneIcon} ... />;
+   ```
+
+2. **WebP, lossless** for UI art with hard edges or alpha — `cwebp -lossless -z 9 -alpha_q 100 in.png -o out.webp` (roughly 40–55% smaller than PNG). Reserve lossy for photographic art.
+3. **Author at 2x the CSS slot** and no larger (a 44px slot gets an 88px asset). Retina-sharp without paying for pixels that get downscaled away.
+4. **Bake rounded corners into the artwork as transparency** rather than adding a CSS `rounded-*` on the `<img>` — CSS rounding on top of already-rounded art clips the corners twice.
+5. **Decorative images take `alt=""` plus `aria-hidden="true"`.** Most icons sit beside a visible label that already names them (e.g. the permission rows), so a descriptive `alt` makes screen readers announce the same thing twice. Only write real `alt` text when the image is the _only_ source of that information.
+6. **Always set explicit `width`/`height`** matching the CSS size, to reserve layout space before decode. Add `decoding="async"` and `draggable={false}` (in Electron a draggable image can be dragged out of the window).
+7. **Assets under 4 KB are inlined** by Vite as base64 data URIs, so they will not appear in `dist/assets/`. Grep the JS chunks for `data:image/webp;base64,` before concluding an asset went missing.
 
 ### Adding New Features
 

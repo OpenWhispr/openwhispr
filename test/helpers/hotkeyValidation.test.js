@@ -87,6 +87,26 @@ test("two-modifier combos without a base key are valid", async () => {
   assert.equal(validateHotkey("Control+Super", "linux").valid, true);
 });
 
+test("modifier-only chords are Windows/Linux only — macOS cannot register them", async () => {
+  const { validateHotkey } = await load();
+
+  const mac = validateHotkey("Control+Alt", "darwin");
+  assert.equal(mac.valid, false);
+  assert.equal(mac.errorCode, "MODIFIER_ONLY_UNSUPPORTED");
+  // Adding a real key is what makes it registrable on macOS.
+  assert.equal(validateHotkey("Control+Alt+Space", "darwin").valid, true);
+});
+
+test("Fn combinations are rejected because only standalone Globe has a native path", async () => {
+  const { validateHotkey } = await load();
+
+  for (const platform of ["darwin", "win32", "linux"]) {
+    const result = validateHotkey("Fn+A", platform);
+    assert.equal(result.valid, false, platform);
+    assert.equal(result.errorCode, "FN_COMBINATION_UNSUPPORTED", platform);
+  }
+});
+
 test("duplicates are detected after normalization, so Ctrl+K collides with a stored Control+K", async () => {
   const { validateHotkey } = await load();
 

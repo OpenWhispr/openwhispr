@@ -18,6 +18,8 @@ interface ChatInputProps {
   onCancel?: () => void;
   autoFocus?: boolean;
   placeholder?: string;
+  /** Overrides the default wrapper padding (compact hosts like the assistant panel). */
+  className?: string;
   /** Offer a mic when the input is empty; recordings transcribe into the input. */
   voiceDraft?: boolean;
 }
@@ -57,6 +59,7 @@ export function ChatInput({
   onCancel,
   autoFocus = false,
   placeholder,
+  className,
   voiceDraft = false,
 }: ChatInputProps) {
   const { t } = useTranslation();
@@ -111,7 +114,7 @@ export function ChatInput({
   }, [isIdle]);
 
   return (
-    <div className="shrink-0 px-3 pb-3 pt-1">
+    <div className={cn("shrink-0", className ?? "px-3 pb-3 pt-1")}>
       <div
         className={cn(
           "flex items-center gap-2 min-h-11 pl-4 pr-1.5 rounded-full",
@@ -126,7 +129,11 @@ export function ChatInput({
           <>
             <RecordingIndicator />
             <span className="text-[12px] text-foreground/80 truncate flex-1">
-              {partialTranscript || t("agentMode.input.listening")}
+              {/* A live transcript's informative part is its tail — show the
+                  latest words once the line fills instead of a frozen start. */}
+              {partialTranscript.length > 60
+                ? `…${partialTranscript.slice(-60)}`
+                : partialTranscript || t("agentMode.input.listening")}
             </span>
           </>
         )}
@@ -210,7 +217,10 @@ export function ChatInput({
             />
             {isBusy && onCancel ? (
               <button
+                type="button"
                 onClick={onCancel}
+                aria-label={t("common.cancel")}
+                title={t("common.cancel")}
                 className={cn(
                   "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
                   "text-muted-foreground/60 hover:text-foreground hover:bg-foreground/8",

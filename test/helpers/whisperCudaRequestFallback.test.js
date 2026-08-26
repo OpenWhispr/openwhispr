@@ -604,6 +604,68 @@ test("rejects immediately for a CPU server without waiting for process exit", as
   assert.equal(fallbackEvents, 0);
 });
 
+test("an aborted request rejects with AbortError and never triggers CPU fallback", async (t) => {
+  let manager;
+  const controller = new AbortController();
+  const gotRequest = createDeferred();
+
+  const { server, port } = await startServer(() => {
+    // Hold the request open and simulate the crash-like state that would arm
+    // the fallback path if the abort were treated as a connection error.
+    manager.process = null;
+    gotRequest.resolve();
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: true });
+
+  let startCalled = false;
+  manager.start = async () => {
+    startCalled = true;
+  };
+
+  let fallbackEvents = 0;
+  manager.on("cuda-fallback", () => {
+    fallbackEvents += 1;
+  });
+
+  const pending = assert.rejects(
+    () => manager.transcribe(Buffer.from("audio"), { signal: controller.signal }),
+    (err) => {
+      assert.equal(err.name, "AbortError");
+      return true;
+    }
+  );
+  await gotRequest.promise;
+  controller.abort();
+  await pending;
+
+  assert.equal(startCalled, false, "a cancel must never restart the server");
+  assert.equal(fallbackEvents, 0);
+});
+
+test("a pre-aborted signal rejects before any request is sent", async (t) => {
+  let requestCount = 0;
+  const { server, port } = await startServer(() => {
+    requestCount += 1;
+  });
+  t.after(() => server.close());
+
+  const manager = createManager(port, { useCuda: false });
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(
+    () => manager.transcribe(Buffer.from("audio"), { signal: controller.signal }),
+    (err) => {
+      assert.equal(err.name, "AbortError");
+      return true;
+    }
+  );
+
+  assert.equal(requestCount, 0);
+});
+
 test("does not fall back after an intentional stop", async (t) => {
   let manager;
   let requestCount = 0;

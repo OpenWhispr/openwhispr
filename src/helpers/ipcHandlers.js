@@ -4,7 +4,9 @@ const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
 const { broadcastToWindows } = require("./windowBroadcast");
+const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
@@ -22,6 +24,7 @@ const {
   toPolicyFailure,
 } = require("./policyResponseError");
 const { classifyAndLog } = require("./networkErrors");
+const { resolveSystemDefaultMicrophone } = require("./systemDefaultMicrophone");
 // The renderer's ModelRegistry is not main-loadable; the raw registry data is
 // packaged, and the route resolver only needs {id, baseUrl} per provider.
 const transcriptionProviderBaseUrls = () =>
@@ -50,7 +53,6 @@ const diarizationHost = (endpoint) => {
 };
 const { resolveLocalServerNeeds } = require("./localServerPolicy");
 const autoStart = require("./autoStart");
-const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
@@ -58,11 +60,14 @@ const DeepgramStreaming = require("./deepgramStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
+const { ONBOARDING_DEMO_KINDS } = require("./onboardingInputPolicy");
+const { focusWindowsHotkeyCaptureWindow } = require("./hotkeyCaptureFocus");
 const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const AudioStorageManager = require("./audioStorage");
+const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
 const { registerMeetingAutoEndKeepHandler } = require("./meetingAutoEndKeep");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
@@ -75,7 +80,13 @@ const {
   selectRacingMicEntryIndices,
   partitionOverlappingPendingMicFinals,
 } = require("./meetingMicHoldback");
-const { computeChunkStats, resolveMicChunkAction } = require("./meetingMicGate");
+const {
+  computeChunkStats,
+  resolveMicChunkAction,
+  MEETING_MIC_SILENCE_RMS,
+  MEETING_MIC_SILENCE_PEAK,
+} = require("./meetingMicGate");
+const { resolveDiarizationInput } = require("./meetingDiarizationInput");
 const { applySmartSpacing } = require("./smartSpacing");
 const { applyAutoLearnSetting } = require("./autoLearnSetting");
 const {
@@ -113,11 +124,18 @@ const {
   getMeetingConnectionKey,
 } = require("./meetingStreamingProviders");
 const { fetchRealtimeTokenForProvider } = require("./realtimeTokenProviders");
+const { getCalendarAvailability } = require("./calendarAvailabilityService");
 
 // Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
 // streaming providers must be told the true PCM rate or they misread the audio.
 const MEETING_STREAM_SAMPLE_RATE = 24000;
 const MEETING_RECONNECT_BUFFER_MAX_BYTES = MEETING_STREAM_SAMPLE_RATE * 2 * 30;
+// The realtime clients default to a 0.6 server-VAD threshold, raised in #630 to
+// keep mic ambient noise from opening turns. The system loopback channel's noise
+// floor is digital silence, so it keeps the original, more sensitive threshold —
+// at 0.6 quiet remote speech may never trip the VAD and the whole channel
+// transcribes to nothing.
+const MEETING_SYSTEM_VAD_THRESHOLD = 0.3;
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
@@ -142,6 +160,8 @@ const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 const { createAbortError } = require("./abortError");
+const { testProviderConnection } = require("./providerConnectionTest");
+const { createUploadCancelRegistry } = require("./uploadCancelRegistry");
 const { applyOpenWhisprOriginHeader } = require("./sessionHeaders");
 const {
   CLOUD_UPLOAD_TIMEOUT_MS,
@@ -207,6 +227,7 @@ const {
   mergeSpeakersWithText,
   formatSpeakerTranscript,
 } = require("./speakerMerge");
+const { timestampRequestFields, mapVerboseSegments } = require("./uploadTimestamps");
 
 // Canonicalize allowed dirs so realpath'd inputs match on macOS (/var -> /private/var).
 // Deliberately narrow: user-picked paths anywhere else are approved individually via
@@ -559,9 +580,13 @@ class IPCHandlers {
     this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
-    // requestId -> AbortController for in-flight audio-upload transcriptions,
-    // so a cancel can abort the exact job.
-    this._uploadTranscriptionControllers = new Map();
+    // requestId -> AbortControllers for in-flight audio-upload work (cloud
+    // upload, or local transcription + diarization sharing one id), so a
+    // cancel can abort the exact job.
+    this._uploadCancelRegistry = createUploadCancelRegistry();
+    this._agentStreamRequests = new AgentStreamRequestRegistry();
+    this._cloudReasonRequests = new AgentStreamRequestRegistry();
+    this._cloudTranscriptionRequests = new AgentStreamRequestRegistry();
     // webContents id -> its release listener, for renderers holding the mic open.
     this._micHoldSenders = new Map();
     this.assemblyAiStreaming = null;
@@ -579,6 +604,7 @@ class IPCHandlers {
     this._autoLearnLatestData = null;
     this._textEditHandler = null;
     this._activeRecordingPipeline = null;
+    this._onboardingDemoSession = null;
     this.audioStorageManager = new AudioStorageManager();
     this._retentionCleanupInterval = null;
     this._retentionSettings = { ...DEFAULT_RETENTION_SETTINGS }; // Synced from renderer
@@ -1107,7 +1133,15 @@ class IPCHandlers {
         set: Object.keys(setVars),
         cleared: clearVars.filter((k) => !process.env[k]),
       });
-      this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+      // A swallowed .env write failure here left GPU enablement flags silently
+      // out of sync with the packs on disk (#1340) — log which keys were lost.
+      this.environmentManager.saveAllKeysToEnvFile().catch((err) => {
+        debugLogger.error("Failed to persist startup env vars to .env", {
+          set: Object.keys(setVars),
+          clearRequested: clearVars,
+          error: err.message,
+        });
+      });
     }
   }
 
@@ -1128,6 +1162,121 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
+      this.windowManager.setOnboardingWindowMode(mode)
+    );
+
+    // WindowManager owns every teardown path for a demo (id-matched end,
+    // onboarding-set-active(false), control panel closed); without this hook a
+    // renderer crash mid-demo would leave the session set and broadcast every
+    // later dictation's transcripts on onboarding-demo-event forever.
+    this.windowManager.onOnboardingDemoTeardown = () => {
+      this._onboardingDemoSession = null;
+    };
+
+    ipcMain.handle("onboarding-set-active", (_event, active) => {
+      if (typeof active !== "boolean") return false;
+      return this.windowManager.setOnboardingActive(active);
+    });
+
+    ipcMain.handle("onboarding-demo-begin", (_event, session) => {
+      if (
+        !session ||
+        typeof session.id !== "string" ||
+        session.id.length > 128 ||
+        !ONBOARDING_DEMO_KINDS.has(session.kind)
+      ) {
+        return false;
+      }
+      this._onboardingDemoSession = {
+        id: session.id,
+        kind: session.kind,
+        startedAt: Date.now(),
+      };
+      return this.windowManager.beginOnboardingDemo(session.kind);
+    });
+
+    ipcMain.handle("onboarding-demo-end", (_event, id) => {
+      if (this._onboardingDemoSession?.id === id) {
+        // Session cleanup rides on the teardown hook above.
+        this.windowManager.endOnboardingDemo();
+      }
+      return true;
+    });
+
+    ipcMain.handle("onboarding-demo-stop", (_event, id) => {
+      if (this._onboardingDemoSession?.id !== id) return false;
+      return this.windowManager.stopOnboardingDemoRecording();
+    });
+
+    ipcMain.handle("onboarding-demo-publish", (_event, event) => {
+      const session = this._onboardingDemoSession;
+      if (!session || !event || event.kind !== session.kind) return false;
+      if (!["listening", "processing", "partial", "success", "error"].includes(event.status)) {
+        return false;
+      }
+      const text = typeof event.text === "string" ? event.text.slice(0, 20000) : undefined;
+      const message = typeof event.message === "string" ? event.message.slice(0, 500) : undefined;
+      broadcastToWindows("onboarding-demo-event", {
+        demoId: session.id,
+        kind: session.kind,
+        status: event.status,
+        text,
+        message,
+      });
+      return true;
+    });
+
+    ipcMain.handle("test-provider-connection", async (_event, config) => {
+      if (config?.provider === "corti" && config?.scope === "transcription") {
+        try {
+          const clientId = String(config.clientId || "").trim();
+          const clientSecret = String(config.clientSecret || "").trim();
+          if (clientId && clientSecret) {
+            await getCortiToken({
+              environment: config.environment || "us",
+              tenant: String(config.tenant || "").trim() || "base",
+              clientId,
+              clientSecret,
+            });
+          } else {
+            await this._mintStoredCortiToken({
+              environment: config.environment,
+              tenant: config.tenant,
+            });
+          }
+          return { success: true };
+        } catch (error) {
+          // errorCode is the machine-readable field the renderer maps to i18n;
+          // the English string stays for logs/back-compat. Only a response
+          // Corti actually sent counts as a rejection (getCortiToken prefixes
+          // those); a fetch that never reached it is a network problem, and
+          // reporting it as "credentials rejected" sends the user to re-type a
+          // key that was never the issue.
+          if (error?.name === "AbortError") {
+            return {
+              success: false,
+              errorCode: "timeout",
+              error: "The connection test timed out.",
+            };
+          }
+          if (!/^(Corti authentication failed|Invalid Corti)/.test(error?.message || "")) {
+            return {
+              success: false,
+              errorCode: "network",
+              error: "The provider could not be reached.",
+            };
+          }
+          return {
+            success: false,
+            errorCode: "credentialsRejected",
+            error: "Corti rejected these credentials.",
+          };
+        }
+      }
+      return testProviderConnection(config);
+    });
+
     ipcMain.handle("window-minimize", () => {
       if (this.windowManager.controlPanelWindow) {
         this.windowManager.controlPanelWindow.minimize();
@@ -1171,7 +1320,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("show-dictation-panel", () => {
-      this.windowManager.showDictationPanel();
+      this.windowManager.showDictationPanel({ reposition: true });
     });
 
     ipcMain.handle("capture-dictation-target", async () => {
@@ -1192,6 +1341,10 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("get-main-window-horizontal-direction", () => {
+      return this.windowManager.getMainWindowHorizontalDirection();
+    });
+
     ipcMain.handle("set-notification-interactivity", (event, interactive) => {
       this.windowManager.setNotificationInteractivity(event.sender, Boolean(interactive));
       return { success: true };
@@ -1199,6 +1352,14 @@ class IPCHandlers {
 
     ipcMain.handle("resize-main-window", (event, sizeKey) => {
       return this.windowManager.resizeMainWindow(sizeKey);
+    });
+
+    ipcMain.handle("resize-assistant-window-to-content", (event, surfaceHeight) => {
+      return this.windowManager.resizeAssistantWindowToContent(surfaceHeight);
+    });
+
+    ipcMain.handle("resize-dictation-error-window-to-content", (event, surfaceHeight) => {
+      return this.windowManager.resizeDictationErrorWindowToContent(surfaceHeight);
     });
 
     for (const k of BYOK_API_KEYS) {
@@ -1366,6 +1527,22 @@ class IPCHandlers {
       event.sender.on("destroyed", release);
       event.sender.on("did-finish-load", release);
       this.meetingDetectionEngine?.setMicWarmHold(true);
+    });
+
+    // Hotkey handlers run in main, while AudioManager owns the real lifecycle
+    // in the dictation renderer. Only confirmed renderer state may change the
+    // main-process recording gate; raw key presses are merely requests and can
+    // be declined while a transcript is still being finalized.
+    ipcMain.on("dictation-lifecycle-state-changed", (event, state) => {
+      const dictationWindow = this.windowManager.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return;
+      }
+      this.windowManager.setDictationLifecycleState(state);
     });
 
     // Dictionary handlers
@@ -2123,6 +2300,9 @@ class IPCHandlers {
     ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages) =>
       this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
     );
+    ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
+      this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
+    );
     ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
       this.databaseManager.markConversationSynced(id, cloudId)
     );
@@ -2392,6 +2572,9 @@ class IPCHandlers {
 
     ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
       const fs = require("fs");
+      // Uploads pass a requestId so cancel-upload-transcription can abort the
+      // local decode; flows without one (voice drafts) register nothing.
+      const { signal, release } = this._uploadCancelRegistry.register(options.requestId);
       try {
         if (typeof filePath !== "string") {
           return { success: false, error: "Invalid file path" };
@@ -2400,18 +2583,30 @@ class IPCHandlers {
         if (!real) return { success: false, error: "File path not allowed" };
         const audioBuffer = fs.readFileSync(real);
         if (options.provider === "nvidia") {
-          const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
+          const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, {
+            ...options,
+            signal,
+          });
           return result;
         }
         const vadOptions = this._resolveWhisperVadOptions("noteRecording");
         const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, {
           ...options,
           ...vadOptions,
+          signal,
         });
         return result;
       } catch (error) {
+        if (error?.name === "AbortError" || signal?.aborted) {
+          debugLogger.debug("Local audio file transcription cancelled", {
+            requestId: options.requestId,
+          });
+          return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+        }
         debugLogger.error("Audio file transcription error", { error: error.message });
         return { success: false, error: error.message };
+      } finally {
+        release();
       }
     });
 
@@ -2434,6 +2629,14 @@ class IPCHandlers {
     });
 
     ipcMain.handle("paste-text", async (event, text, options) => {
+      // An onboarding demo already puts the transcript in its own textarea from
+      // the demo event, and that textarea is what has focus — pasting on top of
+      // it appends the same sentence a second time. Reported as success because
+      // nothing failed and the caller would otherwise toast a paste error.
+      if (this.windowManager?.isOnboardingDemoActive()) {
+        return { success: true };
+      }
+
       const mainWindow = this.windowManager?.mainWindow;
       const targetPid = this.textEditMonitor?.lastTargetPid || null;
 
@@ -2461,9 +2664,19 @@ class IPCHandlers {
       // too slow for the paste hot path.
       const textToPaste = applySmartSpacing({ text, mode: "append" });
 
+      // Windows: restore the foreground window captured at record start so the
+      // paste lands in the field the user was dictating into, not wherever focus
+      // drifted during transcription (#859). macOS handles this via
+      // activateTargetPid above; Linux re-detects the target inside pasteLinux.
+      const targetWindow =
+        process.platform === "win32"
+          ? ((await this.selectionManager?.getWinTargetHwnd?.()) ?? null)
+          : null;
+
       await this.clipboardManager.pasteText(textToPaste, {
         ...options,
         webContents: event.sender,
+        targetWindow,
       });
       debugLogger.debug("[AutoLearn] Paste completed", {
         autoLearnEnabled: this._autoLearnEnabled,
@@ -2513,7 +2726,7 @@ class IPCHandlers {
 
     // Voice drafts (chat input): persist a recorded buffer so the file-based
     // transcription pipeline (all providers) can consume it, then delete it.
-    ipcMain.handle("save-temp-audio", async (event, buffer) => {
+    ipcMain.handle("save-temp-audio", async (_event, buffer) => {
       const tempPath = path.join(
         os.tmpdir(),
         `ow-voice-draft-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.webm`
@@ -2522,7 +2735,7 @@ class IPCHandlers {
       return { success: true, path: tempPath };
     });
 
-    ipcMain.handle("delete-temp-audio", async (event, tempPath) => {
+    ipcMain.handle("delete-temp-audio", async (_event, tempPath) => {
       // Only files this handler family created are deletable.
       const resolved = path.resolve(tempPath);
       const validPrefix = path.join(os.tmpdir(), "ow-voice-draft-");
@@ -2537,7 +2750,7 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("transcribe-local-whisper", async (event, audioBlob, options = {}) => {
+    ipcMain.handle("transcribe-local-whisper", async (_event, audioBlob, options = {}) => {
       debugLogger.log("transcribe-local-whisper called", {
         audioBlobType: typeof audioBlob,
         audioBlobSize: audioBlob?.byteLength || audioBlob?.length || 0,
@@ -2562,12 +2775,6 @@ class IPCHandlers {
           message: result.message,
           error: result.error,
         });
-
-        // Check if no audio was detected and send appropriate event
-        if (!result.success && result.message === "No audio detected") {
-          debugLogger.log("Sending no-audio-detected event to renderer");
-          event.sender.send("no-audio-detected");
-        }
 
         return result;
       } catch (error) {
@@ -2914,7 +3121,7 @@ class IPCHandlers {
       return this.whisperManager.checkFFmpegAvailability();
     });
 
-    ipcMain.handle("transcribe-local-parakeet", async (event, audioBlob, options = {}) => {
+    ipcMain.handle("transcribe-local-parakeet", async (_event, audioBlob, options = {}) => {
       debugLogger.log("transcribe-local-parakeet called", {
         audioBlobType: typeof audioBlob,
         audioBlobSize: audioBlob?.byteLength || audioBlob?.length || 0,
@@ -2930,11 +3137,6 @@ class IPCHandlers {
           message: result.message,
           error: result.error,
         });
-
-        if (!result.success && result.message === "No audio detected") {
-          debugLogger.log("Sending no-audio-detected event to renderer");
-          event.sender.send("no-audio-detected");
-        }
 
         return result;
       } catch (error) {
@@ -2952,6 +3154,13 @@ class IPCHandlers {
           return {
             success: false,
             error: "model_not_found",
+            message: errorMessage,
+          };
+        }
+        if (error.code === PARAKEET_UNSUPPORTED_OS_CODE) {
+          return {
+            success: false,
+            error: error.code,
             message: errorMessage,
           };
         }
@@ -3089,6 +3298,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("diarize-audio-file", async (event, filePath, options = {}) => {
+      // Registered under the same requestId as the upload's transcription, so
+      // one cancel kills both the decode and the diarization child process.
+      const { signal, release } = this._uploadCancelRegistry.register(options.requestId);
       try {
         if (!this.diarizationManager) {
           return { success: false, error: "Diarization not available" };
@@ -3117,12 +3329,22 @@ class IPCHandlers {
 
         try {
           await convertToWav(filePath, wavPath, { sampleRate: 16000, channels: 1 });
+          if (signal?.aborted) {
+            return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+          }
           // Auto-clustering over-splits long single-mic audio at the 0.55
           // default, so the threshold ramps with duration unless pinned.
           const durationSeconds = fs.statSync(wavPath).size / PCM16_MONO_16K_BYTES_PER_SECOND;
           const threshold = resolveClusterThreshold(durationSeconds, options.threshold);
 
-          let segments = await this.diarizationManager.diarize(wavPath, { numSpeakers, threshold });
+          let segments = await this.diarizationManager.diarize(wavPath, {
+            numSpeakers,
+            threshold,
+            signal,
+          });
+          if (signal?.aborted) {
+            return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+          }
           // The meeting path caps clusters via its expectation resolver; this
           // path fed raw sherpa output to the merge, which is how a 2-person
           // voice memo surfaced 46 speakers.
@@ -3140,8 +3362,14 @@ class IPCHandlers {
           } catch {}
         }
       } catch (error) {
+        if (error?.name === "AbortError" || signal?.aborted) {
+          debugLogger.debug("Diarization cancelled", { requestId: options.requestId });
+          return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
+        }
         debugLogger.error("Diarization error", { error: error.message });
         return { success: false, error: error.message };
+      } finally {
+        release();
       }
     });
 
@@ -3299,6 +3527,15 @@ class IPCHandlers {
     });
 
     ipcMain.handle("set-hotkey-listening-mode", async (event, enabled) => {
+      if (enabled) {
+        const captureWindow = BrowserWindow.fromWebContents(event.sender);
+        // Only the control panel owns editable hotkey fields. Refocusing the
+        // sender before the idempotence check also repairs a stale capture-mode
+        // flag after Windows has moved foreground focus to another window.
+        if (captureWindow === this.windowManager.controlPanelWindow) {
+          focusWindowsHotkeyCaptureWindow(captureWindow);
+        }
+      }
       if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
       this._hotkeyCaptureMode = enabled;
       this.windowManager.setHotkeyListeningMode(enabled);
@@ -3356,6 +3593,7 @@ class IPCHandlers {
 
         // On GNOME, unregister all native keybindings during capture
         if (hotkeyManager.isUsingGnome() && hotkeyManager.gnomeManager) {
+          await hotkeyManager.gnomeManager.unregisterPushToTalk();
           for (const slot of [...hotkeyManager.gnomeManager.registeredSlots]) {
             debugLogger.log(
               `[IPC] Unregistering GNOME keybinding (slot "${slot}") for capture mode`
@@ -3386,7 +3624,7 @@ class IPCHandlers {
           // may hold several).
           for (const hk of hotkeyManager.getSlotHotkeys("dictation")) {
             if (!hk || usesNativeListener(hk)) continue;
-            const accelerator = hk.startsWith("Fn+") ? hk.slice(3) : hk;
+            const accelerator = hk;
             if (!globalShortcut.isRegistered(accelerator)) {
               debugLogger.log(
                 `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
@@ -3408,11 +3646,13 @@ class IPCHandlers {
 
         // On GNOME, re-register the keybinding with the effective hotkey
         if (hotkeyManager.isUsingGnome() && hotkeyManager.gnomeManager && effectiveHotkey) {
-          const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(effectiveHotkey);
           debugLogger.log(
-            `[IPC] Re-registering GNOME keybinding "${gnomeHotkey}" after capture mode`
+            `[IPC] Re-registering GNOME keybinding "${effectiveHotkey}" after capture mode`
           );
-          await hotkeyManager.gnomeManager.registerKeybinding(gnomeHotkey);
+          await hotkeyManager.registerGnomeDictationHotkey(
+            effectiveHotkey,
+            this.windowManager.createHotkeyCallback()
+          );
         }
 
         // On Hyprland Wayland, re-register the keybinding with the effective hotkey
@@ -3420,7 +3660,10 @@ class IPCHandlers {
           debugLogger.log(
             `[IPC] Re-registering Hyprland keybinding "${effectiveHotkey}" after capture mode`
           );
-          await hotkeyManager.hyprlandManager.registerKeybinding(effectiveHotkey);
+          await hotkeyManager.hyprlandManager.registerKeybinding(
+            effectiveHotkey,
+            this.windowManager.getActivationMode() === "push"
+          );
         }
 
         // On KDE (X11 or Wayland), re-register the keybinding with the effective hotkey
@@ -3432,7 +3675,8 @@ class IPCHandlers {
           const result = await hotkeyManager.kdeManager.registerKeybinding(
             effectiveHotkey,
             "dictation",
-            callback
+            callback,
+            this.windowManager.getActivationMode() === "push"
           );
           if (result !== true) {
             debugLogger.warn(
@@ -3459,11 +3703,18 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("get-hotkey-mode-info", async () => {
+    ipcMain.handle("get-hotkey-mode-info", async (_event, requestedHotkey) => {
+      const hotkeyManager = this.windowManager.hotkeyManager;
+      const hotkey =
+        typeof requestedHotkey === "string" && requestedHotkey.trim()
+          ? requestedHotkey.split(",")[0].trim()
+          : hotkeyManager.getCurrentHotkey();
       const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
       const supportsPushToTalk =
         process.platform === "linux"
-          ? this.linuxKeyManager?.isAvailable?.() === true
+          ? isUsingNativeShortcut
+            ? hotkeyManager.supportsPushToTalk(hotkey)
+            : this.linuxKeyManager?.isAvailable?.() === true
           : !isUsingNativeShortcut;
 
       return {
@@ -3472,6 +3723,9 @@ class IPCHandlers {
         isUsingKDE: this.windowManager.isUsingKDEHotkeys(),
         isUsingNativeShortcut,
         supportsPushToTalk,
+        pushToTalkUnavailableReason: supportsPushToTalk
+          ? null
+          : hotkeyManager.getPushToTalkUnavailableReason(hotkey),
       };
     });
 
@@ -3507,7 +3761,7 @@ class IPCHandlers {
         if (!["http:", "https:", "mailto:"].includes(protocol)) {
           return { success: false, error: `Blocked URL scheme: ${protocol}` };
         }
-        await shell.openExternal(url);
+        await openExternalUrl(url);
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -4604,6 +4858,9 @@ class IPCHandlers {
 
     ipcMain.handle("open-microphone-settings", () => openSystemSettings("microphone"));
     ipcMain.handle("open-sound-input-settings", () => openSystemSettings("sound"));
+    ipcMain.handle("get-system-default-microphone", (_event, options = {}) =>
+      resolveSystemDefaultMicrophone({ refresh: options?.refresh === true })
+    );
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
     ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
     ipcMain.handle("open-screen-recording-settings", () => openSystemSettings("screenRecording"));
@@ -4668,13 +4925,40 @@ class IPCHandlers {
       return screenContextCapture.getAccessResult();
     });
 
-    // Keeps the dictation overlay out of its own screenshots (and screen
-    // shares) while the screen-context feature is enabled.
+    // Preserve the renderer setting while app-wide content protection is
+    // temporarily disabled for screen recording.
     ipcMain.handle("screen-context-set-enabled", (event, enabled) => {
-      const mainWindow = this.windowManager?.mainWindow;
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setContentProtection(Boolean(enabled));
+      this.windowManager?.setScreenContextProtection(enabled);
+      return { success: true };
+    });
+
+    // Panel open: window becomes focusable so follow-up keyboard input works.
+    // Only the dictation renderer may flip main-window focusability.
+    ipcMain.handle("set-assistant-panel-open", (event, open) => {
+      const dictationWindow = this.windowManager?.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return { success: false, error: "Not the dictation window" };
       }
+      this.windowManager.setAssistantPanelOpen(open);
+      return { success: true };
+    });
+
+    // Busy state is enforced in the main process so a hotkey cannot trigger
+    // native capture side effects before the renderer has a chance to reject it.
+    ipcMain.handle("set-assistant-panel-busy", (event, busy) => {
+      const dictationWindow = this.windowManager?.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return { success: false, error: "Not the dictation window" };
+      }
+      this.windowManager.setAssistantPanelBusy(busy);
       return { success: true };
     });
 
@@ -5079,6 +5363,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
+      const sender = event.sender;
+      const senderId = sender.id;
+      const requestId = crypto.randomUUID();
+      const controller = this._cloudTranscriptionRequests.begin(senderId, requestId);
+      const cancelSenderRequests = () => this._cloudTranscriptionRequests.cancelSender(senderId);
+      sender.once("destroyed", cancelSenderRequests);
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -5109,6 +5399,7 @@ class IPCHandlers {
             apiUrl,
             policyHeaders: withPolicyHeaders(authHeader),
             multipartFields,
+            signal: controller.signal,
           });
           const sum = (field) => responses.reduce((s, r) => s + (r?.[field] || 0), 0);
           return {
@@ -5137,7 +5428,10 @@ class IPCHandlers {
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
         const data = await postMultipart(url, body, boundary, withPolicyHeaders(authHeader), {
-          signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+          ]),
           session: getInlineCloudUploadSession(),
         });
 
@@ -5164,9 +5458,19 @@ class IPCHandlers {
           audioDurationMs: result.audioDurationMs,
         };
       } catch (error) {
+        if (controller.signal.aborted) {
+          return { success: false, error: "Cancelled", code: "TRANSCRIPTION_CANCELLED" };
+        }
         debugLogger.error("Cloud transcription error", { error: error.message }, "cloud-api");
         return toPolicyFailure(error);
+      } finally {
+        sender.removeListener("destroyed", cancelSenderRequests);
+        this._cloudTranscriptionRequests.complete(senderId, requestId, controller);
       }
+    });
+
+    ipcMain.on("cloud-transcribe-cancel", (event) => {
+      this._cloudTranscriptionRequests.cancelSender(event.sender.id);
     });
 
     ipcMain.handle("cloud-health-check", async () => {
@@ -5665,17 +5969,42 @@ class IPCHandlers {
     };
 
     const captureMeetingDiarizationState = async () => {
-      const diarizationPcmPath = meetingDiarizationPath;
+      const systemPcmPath = meetingDiarizationPath;
+      const systemStartedAt = meetingDiarizationStartedAt;
+      const micPcmPath = meetingMicDiarizationPath;
+      const micStartedAt = meetingMicDiarizationStartedAt;
+      const systemAudioHeard = meetingSystemAudioHeard;
       const diarizationSegments = meetingDiarizationSegments;
-      const diarizationStartedAt = meetingDiarizationStartedAt;
       if (meetingDiarizationStream) {
         await new Promise((resolve) => meetingDiarizationStream.end(resolve));
         meetingDiarizationStream = null;
       }
+      if (meetingMicDiarizationStream) {
+        await new Promise((resolve) => meetingMicDiarizationStream.end(resolve));
+        meetingMicDiarizationStream = null;
+      }
       meetingDiarizationPath = null;
       meetingDiarizationStartedAt = null;
+      meetingMicDiarizationPath = null;
+      meetingMicDiarizationStartedAt = null;
+      meetingSystemAudioHeard = false;
       meetingDiarizationSegments = [];
-      return { diarizationPcmPath, diarizationSegments, diarizationStartedAt };
+      const { pcmPath, startedAt, diarizedSource, cleanupPcmPaths } = resolveDiarizationInput({
+        systemPcmPath,
+        micPcmPath,
+        systemAudioHeard,
+        systemStartedAt,
+        micStartedAt,
+      });
+      for (const stalePath of cleanupPcmPaths) {
+        fs.unlink(stalePath, () => {});
+      }
+      return {
+        diarizationPcmPath: pcmPath,
+        diarizationSegments,
+        diarizationStartedAt: startedAt,
+        diarizedSource,
+      };
     };
 
     const attachMeetingStreamingHandlers = (streaming, win, source) => {
@@ -5853,6 +6182,14 @@ class IPCHandlers {
       return replayed;
     };
 
+    // Labels the socket for field logs and, for system, swaps in the more
+    // sensitive threshold (see MEETING_SYSTEM_VAD_THRESHOLD).
+    const withMeetingSourceConnectOpts = (connectOpts, source) => ({
+      ...connectOpts,
+      streamLabel: source,
+      ...(source === "system" ? { vadThreshold: MEETING_SYSTEM_VAD_THRESHOLD } : {}),
+    });
+
     const reconnectMeetingStreams = ({ restoreOldOnFailure = false } = {}) => {
       if (meetingReconnectPromise) return meetingReconnectPromise;
 
@@ -5911,16 +6248,26 @@ class IPCHandlers {
           if (newSystem) {
             const secrets = await fetchRealtimeToken(tokenEvent, options, { streams: 2 });
             pairs = [
-              { streaming: newMic, secret: secrets[0] },
-              { streaming: newSystem, secret: secrets[1] },
+              { streaming: newMic, secret: secrets[0], source: "mic" },
+              { streaming: newSystem, secret: secrets[1], source: "system" },
             ];
           } else {
-            pairs = [{ streaming: newMic, secret: await fetchRealtimeToken(tokenEvent, options) }];
+            pairs = [
+              {
+                streaming: newMic,
+                secret: await fetchRealtimeToken(tokenEvent, options),
+                source: "mic",
+              },
+            ];
           }
 
           await Promise.all(
-            pairs.map(({ streaming, secret }) =>
-              streaming.connect({ apiKey: secret, token: secret, ...connectOpts })
+            pairs.map(({ streaming, secret, source }) =>
+              streaming.connect({
+                apiKey: secret,
+                token: secret,
+                ...withMeetingSourceConnectOpts(connectOpts, source),
+              })
             )
           );
 
@@ -6131,8 +6478,12 @@ class IPCHandlers {
 
       try {
         await Promise.all(
-          pairs.map(({ ref, secret }) =>
-            this[ref].connect({ apiKey: secret, token: secret, ...connectOpts })
+          pairs.map(({ ref, secret, source }) =>
+            this[ref].connect({
+              apiKey: secret,
+              token: secret,
+              ...withMeetingSourceConnectOpts(connectOpts, source),
+            })
           )
         );
         if (pairs.some(({ ref }) => !this[ref]?.isConnected)) {
@@ -6156,7 +6507,9 @@ class IPCHandlers {
     const MEETING_STARTUP_WARMUP_MS = 1500;
     const MEETING_MIC_BLEED_LOOKBACK_MS = 500;
     const MEETING_MIC_STATS_LOG_LIMIT = 200;
+    const MEETING_SYSTEM_AUDIO_SILENCE_WARNING_MS = 45000;
     let meetingMicStatsLogCount = 0;
+    let meetingSystemAudioSilenceTimer = null;
     let meetingStartedAt = null;
     let meetingSendCounts = { mic: 0, system: 0 };
     const meetingEchoLeakDetector = new MeetingEchoLeakDetector();
@@ -6175,6 +6528,12 @@ class IPCHandlers {
     let meetingDiarizationStream = null;
     let meetingDiarizationPath = null;
     let meetingDiarizationStartedAt = null;
+    // Parallel raw mic capture so an in-person session (no audible system
+    // audio) can be diarized; dropped as soon as the session proves to be a call.
+    let meetingMicDiarizationStream = null;
+    let meetingMicDiarizationPath = null;
+    let meetingMicDiarizationStartedAt = null;
+    let meetingSystemAudioHeard = false;
     let meetingDiarizationSegments = [];
     let meetingLiveSpeakerActive = false;
     let meetingLiveSpeakerState = null;
@@ -6302,6 +6661,18 @@ class IPCHandlers {
             peak: peak.toFixed(4),
             systemSpeaking,
             zeroed: outbound !== buffer,
+          });
+        }
+      } else if (source === "system" && buffer.length >= 2) {
+        // System chunks stream verbatim (no gate), so a periodic level readout
+        // is the only way field logs can tell real audio from capture silence.
+        const chunkCount = meetingSendCounts.system + 1;
+        if (chunkCount === 1 || chunkCount % 200 === 0) {
+          const { rms, peak } = computeChunkStats(buffer);
+          debugLogger.debug("Meeting system audio stats", {
+            rms: rms.toFixed(4),
+            peak: peak.toFixed(4),
+            chunkCount,
           });
         }
       }
@@ -6577,6 +6948,11 @@ class IPCHandlers {
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: meetingLocalModel,
             language: meetingLocalLanguage,
+            // Keep whisper.cpp's default decoder thresholds on this continuous
+            // load: the raised #1458 values multiply temperature-fallback
+            // re-decodes, and meeting chunks already have RMS-gate, VAD, and
+            // holdback/dedup hallucination protection.
+            skipDecoderThresholds: true,
             ...vadOptions,
           });
         }
@@ -6717,6 +7093,18 @@ class IPCHandlers {
       }
     };
 
+    const dropMeetingMicDiarizationCapture = () => {
+      if (meetingMicDiarizationStream) {
+        meetingMicDiarizationStream.end();
+        meetingMicDiarizationStream = null;
+      }
+      if (meetingMicDiarizationPath) {
+        fs.unlink(meetingMicDiarizationPath, () => {});
+        meetingMicDiarizationPath = null;
+      }
+      meetingMicDiarizationStartedAt = null;
+    };
+
     const resetMeetingLocalState = () => {
       if (meetingLocalTimer) {
         clearInterval(meetingLocalTimer);
@@ -6744,6 +7132,8 @@ class IPCHandlers {
         meetingDiarizationPath = null;
       }
       meetingDiarizationStartedAt = null;
+      dropMeetingMicDiarizationCapture();
+      meetingSystemAudioHeard = false;
       meetingDiarizationSegments = [];
       meetingLocalWin = null;
       meetingLocalTranscript = "";
@@ -6773,6 +7163,19 @@ class IPCHandlers {
     let dictationPreviewDisplay = true;
     // Bumped on every reset so async preview work can detect a stale session.
     let dictationPreviewGen = 0;
+    // Cloud partials can arrive faster than the preview window is created. Keep
+    // preview updates, completion, and dismissal ordered so a late partial can
+    // never overwrite the final result or reopen a dismissed window.
+    let dictationPreviewOperation = Promise.resolve();
+
+    const queueDictationPreviewOperation = (operation) => {
+      const result = dictationPreviewOperation.catch(() => {}).then(operation);
+      dictationPreviewOperation = result.then(
+        () => undefined,
+        () => undefined
+      );
+      return result;
+    };
 
     const resetDictationPreviewState = ({ preserveSession = false } = {}) => {
       dictationPreviewGen++;
@@ -6897,7 +7300,35 @@ class IPCHandlers {
       return results;
     };
 
+    const clearMeetingSystemAudioSilenceTimer = () => {
+      if (meetingSystemAudioSilenceTimer) {
+        clearTimeout(meetingSystemAudioSilenceTimer);
+        meetingSystemAudioSilenceTimer = null;
+      }
+    };
+
+    // One-shot: system capture is active but nothing audible has arrived by the
+    // deadline, so tell the meeting window the remote side may be missing from
+    // the transcript. Audio arriving before the deadline cancels it outright;
+    // the toast itself is time-boxed by the renderer, not by later audio.
+    const armMeetingSystemAudioSilenceTimer = (win, systemAudioStrategy) => {
+      clearMeetingSystemAudioSilenceTimer();
+      meetingSystemAudioSilenceTimer = setTimeout(() => {
+        meetingSystemAudioSilenceTimer = null;
+        if (meetingSystemAudioHeard) return;
+        debugLogger.debug(
+          "Meeting system audio still silent past warning window",
+          { systemAudioStrategy, timeoutMs: MEETING_SYSTEM_AUDIO_SILENCE_WARNING_MS },
+          "meeting"
+        );
+        if (win && !win.isDestroyed()) {
+          win.webContents.send("meeting-system-audio-silent", { systemAudioStrategy });
+        }
+      }, MEETING_SYSTEM_AUDIO_SILENCE_WARNING_MS);
+    };
+
     const rollbackMeetingTranscriptionStart = async () => {
+      clearMeetingSystemAudioSilenceTimer();
       if (this.audioTapManager) {
         await this.audioTapManager.stop().catch(() => {});
       }
@@ -6953,6 +7384,14 @@ class IPCHandlers {
     };
 
     const connectDictationStreaming = async (event, options) => {
+      // Older renderers did not label the OpenAI dictation adapter. Dictation
+      // realtime was OpenAI-only before Tinfoil support, so preserve that
+      // established default while requiring new adapters to be explicit.
+      options = {
+        ...options,
+        provider: options?.provider || "openai-realtime",
+      };
+
       if (this._dictationConnectPromise) {
         await this._dictationConnectPromise.catch(() => {});
       }
@@ -7114,6 +7553,12 @@ class IPCHandlers {
           // Auto-end stays fail-safe until the renderer confirms a real source.
           systemAudioAvailable: false,
         });
+        // Arms on any active system-audio strategy — capture follows platform
+        // capability, not call detection — so the warning copy also covers
+        // in-person recordings where a silent system tap is expected.
+        if (result.systemAudioStrategy && result.systemAudioStrategy !== "unsupported") {
+          armMeetingSystemAudioSilenceTimer(meetingConnectionWin, result.systemAudioStrategy);
+        }
         return { ...result, sessionId: recordingSessionId };
       };
 
@@ -7262,11 +7707,39 @@ class IPCHandlers {
           meetingDiarizationStartedAt = receivedAt;
         }
         meetingDiarizationStream.write(outboundBuffer);
+
+        if (!meetingSystemAudioHeard) {
+          const { rms, peak } = computeChunkStats(outboundBuffer);
+          if (rms >= MEETING_MIC_SILENCE_RMS || peak >= MEETING_MIC_SILENCE_PEAK) {
+            // A call is audibly underway: diarization stays on the system
+            // channel, so stop paying the mic capture's disk cost.
+            meetingSystemAudioHeard = true;
+            dropMeetingMicDiarizationCapture();
+          }
+        }
+
         dispatchMeetingAudioBuffer(outboundBuffer, "system");
         return;
       }
 
       if (source === "mic") {
+        // Until the session proves to be a call (audible system audio), keep a
+        // raw mic capture so an in-person recording can be diarized. Written
+        // pre-AEC/pre-gate so the timeline stays continuous, like the system
+        // capture above.
+        if (!meetingSystemAudioHeard) {
+          if (!meetingMicDiarizationStream) {
+            const receivedAt = Date.now();
+            meetingMicDiarizationPath = path.join(
+              os.tmpdir(),
+              `ow-diarize-raw-mic-${receivedAt}.pcm`
+            );
+            meetingMicDiarizationStream = fs.createWriteStream(meetingMicDiarizationPath);
+            meetingMicDiarizationStartedAt = receivedAt;
+          }
+          meetingMicDiarizationStream.write(outboundBuffer);
+        }
+
         if (processMeetingMicWithAec(outboundBuffer)) {
           return;
         }
@@ -7407,6 +7880,7 @@ class IPCHandlers {
         return { success: false, reason: "stale-session" };
       }
       this.meetingDetectionEngine?.setUserRecording(false);
+      clearMeetingSystemAudioSilenceTimer();
       try {
         if (this.audioTapManager) {
           await this.audioTapManager.stop();
@@ -7437,7 +7911,7 @@ class IPCHandlers {
             debugLogger.error("Local meeting final transcription failed", { error: err.message });
           }
           flushPendingMicFinals(true);
-          const { diarizationPcmPath, diarizationSegments, diarizationStartedAt } =
+          const { diarizationPcmPath, diarizationSegments, diarizationStartedAt, diarizedSource } =
             await captureMeetingDiarizationState();
           const transcript =
             buildOrderedTranscriptText(diarizationSegments) || meetingLocalTranscript;
@@ -7455,14 +7929,15 @@ class IPCHandlers {
             diarizationWin,
             liveSpeakerState,
             sessionSpeakerConfigSnapshot,
-            noteIdSnapshot
+            noteIdSnapshot,
+            diarizedSource
           );
 
           return { success: true, transcript, diarizationSessionId };
         }
 
         const results = await disconnectMeetingStreaming({ flushPending: true });
-        const { diarizationPcmPath, diarizationSegments, diarizationStartedAt } =
+        const { diarizationPcmPath, diarizationSegments, diarizationStartedAt, diarizedSource } =
           await captureMeetingDiarizationState();
         const transcript =
           buildOrderedTranscriptText(diarizationSegments) ||
@@ -7481,7 +7956,8 @@ class IPCHandlers {
           diarizationWin,
           liveSpeakerState,
           sessionSpeakerConfigSnapshot,
-          noteIdSnapshot
+          noteIdSnapshot,
+          diarizedSource
         );
 
         return { success: true, transcript, diarizationSessionId };
@@ -7660,37 +8136,51 @@ class IPCHandlers {
       dictationPreviewBuffer.push(pcm);
     });
 
-    ipcMain.handle("dismiss-dictation-preview", async () => {
-      resetDictationPreviewState();
-      this.windowManager.hideTranscriptionPreview();
-      return { success: true };
-    });
-
-    ipcMain.handle("complete-dictation-preview", async (_event, { text } = {}) => {
-      if (!dictationPreviewSessionActive) {
-        return { success: true };
-      }
-      if (typeof text === "string" && text.trim()) {
-        this.windowManager.completeTranscriptionPreview(text);
-      } else {
+    ipcMain.handle("dismiss-dictation-preview", () =>
+      queueDictationPreviewOperation(async () => {
         resetDictationPreviewState();
         this.windowManager.hideTranscriptionPreview();
-      }
-      return { success: true };
-    });
+        return { success: true };
+      })
+    );
 
-    ipcMain.handle("hide-dictation-preview", async () => {
-      resetDictationPreviewState();
-      this.windowManager.hideTranscriptionPreview();
-      return { success: true };
-    });
+    ipcMain.handle("update-dictation-preview", (_event, text) =>
+      queueDictationPreviewOperation(async () => {
+        if (typeof text !== "string" || !text.trim()) {
+          return { success: true };
+        }
+        if (!dictationPreviewSessionActive) {
+          resetDictationPreviewState();
+          dictationPreviewSessionActive = true;
+          dictationPreviewDisplay = true;
+        }
+        await this.windowManager.showTranscriptionPreview(text);
+        return { success: true };
+      })
+    );
 
-    ipcMain.handle("resize-transcription-preview-window", async (_event, width, height) => {
-      if (!dictationPreviewSessionActive) {
-        return { success: false, error: "Preview session not active" };
-      }
-      return this.windowManager.resizeTranscriptionPreview(width, height);
-    });
+    ipcMain.handle("complete-dictation-preview", (_event, { text } = {}) =>
+      queueDictationPreviewOperation(async () => {
+        if (!dictationPreviewSessionActive) {
+          return { success: true };
+        }
+        if (typeof text === "string" && text.trim()) {
+          this.windowManager.completeTranscriptionPreview(text);
+        } else {
+          resetDictationPreviewState();
+          this.windowManager.hideTranscriptionPreview();
+        }
+        return { success: true };
+      })
+    );
+
+    ipcMain.handle("hide-dictation-preview", () =>
+      queueDictationPreviewOperation(async () => {
+        resetDictationPreviewState();
+        this.windowManager.hideTranscriptionPreview();
+        return { success: true };
+      })
+    );
 
     ipcMain.handle("stop-dictation-preview", async (_event, options = {}) => {
       if (!dictationPreviewMode && !dictationPreviewSessionActive) {
@@ -7746,6 +8236,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("cloud-reason", async (event, text, opts = {}) => {
+      const sender = event.sender;
+      const senderId = sender.id;
+      const requestId = crypto.randomUUID();
+      const controller = this._cloudReasonRequests.begin(senderId, requestId);
+      const cancelSenderRequests = () => this._cloudReasonRequests.cancelSender(senderId);
+      sender.once("destroyed", cancelSenderRequests);
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -7766,6 +8262,7 @@ class IPCHandlers {
 
         const response = await proxyFetch(`${apiUrl}/api/reason`, {
           method: "POST",
+          signal: controller.signal,
           headers: withPolicyHeaders({
             "Content-Type": "application/json",
             ...authHeader,
@@ -7831,12 +8328,33 @@ class IPCHandlers {
           screenContextApplied: data.screenContextApplied,
         };
       } catch (error) {
+        if (controller.signal.aborted) {
+          return { success: false, error: "Cancelled", code: "REASON_CANCELLED" };
+        }
         debugLogger.error("Cloud reasoning error:", error);
         return toPolicyFailure(error);
+      } finally {
+        sender.removeListener("destroyed", cancelSenderRequests);
+        this._cloudReasonRequests.complete(senderId, requestId, controller);
       }
     });
 
-    ipcMain.on("cloud-agent-stream-start", async (event, messages, opts = {}) => {
+    ipcMain.on("cloud-reason-cancel", (event) => {
+      this._cloudReasonRequests.cancelSender(event.sender.id);
+    });
+
+    ipcMain.on("cloud-agent-stream-start", async (event, requestId, messages, opts = {}) => {
+      if (typeof requestId !== "string" || !requestId.trim()) return;
+
+      const sender = event.sender;
+      const senderId = sender.id;
+      const controller = this._agentStreamRequests.begin(senderId, requestId);
+      const cancelSenderRequests = () => this._agentStreamRequests.cancelSender(senderId);
+      const sendToRenderer = (channel, payload) => {
+        if (!sender.isDestroyed()) sender.send(channel, payload);
+      };
+      sender.once("destroyed", cancelSenderRequests);
+
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -7854,17 +8372,22 @@ class IPCHandlers {
             messages,
             systemPrompt: opts.systemPrompt,
             tools: opts.tools,
+            ...(opts.screenContext ? { screenContext: opts.screenContext } : {}),
             sessionId: this.sessionId,
             clientType: "desktop",
             appVersion: app.getVersion(),
           }),
+          signal: controller.signal,
         });
 
         if (!response.ok) {
           const error = await readPolicyResponseError(response, `API error: ${response.status}`);
           if (response.status === 401 && !error.code) error.code = "AUTH_EXPIRED";
           if (response.status === 503 && !error.code) error.code = "SERVER_ERROR";
-          event.sender.send("cloud-agent-stream-error", toPolicyFailure(error));
+          sendToRenderer("cloud-agent-stream-error", {
+            requestId,
+            ...toPolicyFailure(error),
+          });
           return;
         }
 
@@ -7884,7 +8407,10 @@ class IPCHandlers {
             for (const line of lines) {
               if (!line.trim()) continue;
               try {
-                event.sender.send("cloud-agent-stream-chunk", JSON.parse(line));
+                sendToRenderer("cloud-agent-stream-chunk", {
+                  requestId,
+                  chunk: JSON.parse(line),
+                });
               } catch {
                 // skip malformed NDJSON line
               }
@@ -7892,7 +8418,10 @@ class IPCHandlers {
           }
           if (buffer.trim()) {
             try {
-              event.sender.send("cloud-agent-stream-chunk", JSON.parse(buffer));
+              sendToRenderer("cloud-agent-stream-chunk", {
+                requestId,
+                chunk: JSON.parse(buffer),
+              });
             } catch {
               // skip malformed remainder
             }
@@ -7901,11 +8430,26 @@ class IPCHandlers {
           reader.releaseLock();
         }
 
-        event.sender.send("cloud-agent-stream-end");
+        sendToRenderer("cloud-agent-stream-end", { requestId });
       } catch (error) {
+        if (controller.signal.aborted) {
+          sendToRenderer("cloud-agent-stream-end", { requestId });
+          return;
+        }
         debugLogger.error("Cloud agent stream error:", error);
-        event.sender.send("cloud-agent-stream-error", toPolicyFailure(error));
+        sendToRenderer("cloud-agent-stream-error", {
+          requestId,
+          ...toPolicyFailure(error),
+        });
+      } finally {
+        sender.removeListener("destroyed", cancelSenderRequests);
+        this._agentStreamRequests.complete(senderId, requestId, controller);
       }
+    });
+
+    ipcMain.on("cloud-agent-stream-cancel", (event, requestId) => {
+      if (typeof requestId !== "string" || !requestId.trim()) return;
+      this._agentStreamRequests.cancel(event.sender.id, requestId);
     });
 
     ipcMain.handle("agent-open-note", async (_event, noteId) => {
@@ -8189,8 +8733,7 @@ class IPCHandlers {
 
     ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath, opts = {}) => {
       const requestId = typeof opts?.requestId === "string" ? opts.requestId : null;
-      const controller = new AbortController();
-      if (requestId) this._uploadTranscriptionControllers.set(requestId, controller);
+      const { signal, release } = this._uploadCancelRegistry.register(requestId);
       try {
         if (typeof filePath !== "string") {
           return { success: false, error: "Invalid file path" };
@@ -8225,7 +8768,7 @@ class IPCHandlers {
             policyHeaders: withPolicyHeaders(authHeader),
             multipartFields,
             onProgress: (payload) => event.sender.send("upload-transcription-progress", payload),
-            signal: controller.signal,
+            signal,
           });
           return {
             success: true,
@@ -8248,7 +8791,7 @@ class IPCHandlers {
         const url = new URL(`${apiUrl}/api/transcribe`);
         const data = await postMultipart(url, body, boundary, withPolicyHeaders(authHeader), {
           signal: AbortSignal.any([
-            controller.signal,
+            ...(signal ? [signal] : []),
             AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
           ]),
           session: getInlineCloudUploadSession(),
@@ -8257,23 +8800,21 @@ class IPCHandlers {
 
         return { success: true, text: result.text };
       } catch (error) {
-        if (controller.signal.aborted) {
+        if (signal?.aborted) {
           debugLogger.debug("Cloud audio file transcription cancelled", { requestId });
           return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
         }
         debugLogger.error("Cloud audio file transcription error", { error: error.message });
         return toPolicyFailure(error);
       } finally {
-        if (requestId) this._uploadTranscriptionControllers.delete(requestId);
+        release();
       }
     });
 
-    // Unknown ids are a no-op: providers other than OpenWhispr cloud don't
-    // register a controller, and the renderer fires this for every cancel.
+    // Unknown ids are a no-op: BYOK providers don't register a controller,
+    // and the renderer fires this for every cancel.
     ipcMain.handle("cancel-upload-transcription", async (_event, requestId) => {
-      const controller = this._uploadTranscriptionControllers.get(requestId);
-      controller?.abort();
-      return { success: !!controller };
+      return { success: this._uploadCancelRegistry.cancel(requestId) > 0 };
     });
 
     ipcMain.handle(
@@ -8286,6 +8827,7 @@ class IPCHandlers {
           baseUrl,
           model,
           diarize,
+          timestamps,
           provider,
           language,
           environment,
@@ -8431,6 +8973,11 @@ class IPCHandlers {
                 { provider: route.provider, endpoint: route.endpoint }
               );
             }
+          } else if (timestamps) {
+            // Providers/models that don't support the request keep the
+            // plain-text request untouched (helper returns null).
+            const fields = timestampRequestFields(route.provider, route.model);
+            if (fields) Object.assign(multipartFields, fields);
           }
 
           const { body, boundary } = buildMultipartBody(
@@ -8476,26 +9023,30 @@ class IPCHandlers {
                   `[${s.speaker}] ${formatDiarTime(s.start)} - ${formatDiarTime(s.end)}\n${s.text}`
               )
               .join("\n\n");
-            return { success: true, text: formatted, diarized: true };
+            return { success: true, text: formatted, diarized: true, segments };
           }
 
           if (diarize && data.data?.segments) {
-            const segments = data.data.segments || [];
+            const segments = (data.data.segments || []).map((s) => ({
+              speaker: s.speaker || "Speaker ?",
+              text: s.text || "",
+              start: s.start || 0,
+              end: s.end || 0,
+            }));
             const formatted = segments
-              .map((s) => {
-                const speaker = s.speaker || "Speaker ?";
-                const start = formatDiarTime(s.start || 0);
-                const end = formatDiarTime(s.end || 0);
-                return `[${speaker}] ${start} - ${end}\n${s.text || ""}`;
-              })
+              .map(
+                (s) =>
+                  `[${s.speaker}] ${formatDiarTime(s.start)} - ${formatDiarTime(s.end)}\n${s.text}`
+              )
               .join("\n\n");
-            return { success: true, text: formatted, diarized: true };
+            return { success: true, text: formatted, diarized: true, segments };
           }
 
           if (diarize) {
             debugLogger.warn("BYOK diarization requested but provider returned no speaker data");
           }
-          return { success: true, text: data.data.text };
+          const segments = timestamps ? mapVerboseSegments(data.data) : null;
+          return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
         } catch (error) {
           debugLogger.error("BYOK audio file transcription error", { error: error.message });
           return { success: false, error: error.message };
@@ -9343,37 +9894,6 @@ class IPCHandlers {
     });
 
     // Agent mode handlers
-    ipcMain.handle("update-agent-hotkey", async (_event, hotkey) => {
-      const hotkeyManager = this.windowManager.hotkeyManager;
-      const agentCallback = this.windowManager._agentHotkeyCallback;
-      if (!agentCallback) {
-        return { success: false, message: "Agent hotkey callback not initialized" };
-      }
-
-      if (!hotkey) {
-        hotkeyManager.unregisterSlot("agent");
-        this.environmentManager.saveAgentKey?.("");
-        this.windowManager.reconcileNativeKeyListeners();
-        this._notifyHotkeyChanged("");
-        return { success: true, message: "Agent hotkey cleared" };
-      }
-
-      const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback, {
-        atomic: true,
-      });
-      this.windowManager.reconcileNativeKeyListeners();
-      if (result.success) {
-        this.environmentManager.saveAgentKey?.(hotkey);
-        this._notifyHotkeyChanged(hotkey);
-        return { success: true, message: `Agent hotkey updated to: ${hotkey}` };
-      }
-
-      return {
-        success: false,
-        message: result.error || `Failed to update agent hotkey to: ${hotkey}`,
-      };
-    });
-
     ipcMain.handle("update-voice-agent-hotkey", async (_event, hotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
@@ -9444,38 +9964,6 @@ class IPCHandlers {
       return this.environmentManager.getTranslationKey?.() || "";
     });
 
-    ipcMain.handle("get-agent-key", async () => {
-      return this.environmentManager.getAgentKey?.() || "";
-    });
-
-    ipcMain.handle("save-agent-key", async (_event, key) => {
-      return this.environmentManager.saveAgentKey?.(key) || { success: true };
-    });
-
-    ipcMain.handle("toggle-agent-overlay", async () => {
-      this.windowManager.toggleAgentOverlay();
-      return { success: true };
-    });
-
-    ipcMain.handle("hide-agent-overlay", async () => {
-      this.windowManager.hideAgentOverlay();
-      return { success: true };
-    });
-
-    ipcMain.handle("resize-agent-window", async (_event, width, height) => {
-      this.windowManager.resizeAgentWindow(width, height);
-      return { success: true };
-    });
-
-    ipcMain.handle("get-agent-window-bounds", async () => {
-      return this.windowManager.getAgentWindowBounds();
-    });
-
-    ipcMain.handle("set-agent-window-bounds", async (_event, x, y, width, height) => {
-      this.windowManager.setAgentWindowBounds(x, y, width, height);
-      return { success: true };
-    });
-
     ipcMain.handle("acquire-recording-lock", async (_event, pipeline) => {
       if (this._activeRecordingPipeline && this._activeRecordingPipeline !== pipeline) {
         return { success: false, holder: this._activeRecordingPipeline };
@@ -9489,6 +9977,34 @@ class IPCHandlers {
         this._activeRecordingPipeline = null;
       }
       return { success: true };
+    });
+
+    // Provider-neutral availability over the shared calendar cache.
+    ipcMain.handle("calendar-get-availability", async (_event, request) => {
+      try {
+        return {
+          success: true,
+          availability: getCalendarAvailability({
+            request,
+            databaseManager: this.databaseManager,
+            calendarProviders: [
+              { provider: "google", manager: this.googleCalendarManager },
+              { provider: "microsoft", manager: this.microsoftCalendarManager },
+              { provider: "apple", manager: this.appleCalendarManager },
+            ],
+          }),
+        };
+      } catch (error) {
+        debugLogger.warn(
+          "Calendar availability request failed",
+          { error: error instanceof Error ? error.message : String(error) },
+          "calendar"
+        );
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to check calendar availability",
+        };
+      }
     });
 
     // Google Calendar
@@ -10251,7 +10767,7 @@ class IPCHandlers {
     return reconciledSpeakers;
   }
 
-  _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
+  _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds, diarizedSource }) {
     // Only a count the user set explicitly outranks the note: participants added
     // mid-meeting postdate the config snapshot taken at recording start.
     let expectedTotal = sessionConfig?.explicit ? sessionConfig.expectedCount : null;
@@ -10264,15 +10780,24 @@ class IPCHandlers {
       }
     }
 
+    // Diarizing the mic track (in-person session) means the user is one of the
+    // diarized voices, so the expected total applies without the -1 the
+    // system-audio branches use.
+    const micMode = diarizedSource === "mic";
+
     if (expectedTotal) {
       const total = Math.min(expectedTotal, MAX_SPEAKER_COUNT);
-      const numSpeakers = Math.max(1, total - 1);
+      const numSpeakers = micMode ? total : Math.max(1, total - 1);
       return { numSpeakers, cap: numSpeakers };
     }
 
     if (observedSpeakerIds.size >= 2) {
       const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
       return { numSpeakers, cap: numSpeakers };
+    }
+
+    if (micMode) {
+      return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
     }
 
     // Only system audio reaches the diarizer (the mic track is "you"), so the cap
@@ -10288,7 +10813,8 @@ class IPCHandlers {
     win,
     liveSpeakerState = null,
     sessionConfig = null,
-    noteId = null
+    noteId = null,
+    diarizedSource = "system"
   ) {
     const send = (payload) => {
       if (win && !win.isDestroyed()) {
@@ -10333,6 +10859,7 @@ class IPCHandlers {
           sessionConfig,
           noteId,
           observedSpeakerIds,
+          diarizedSource,
         });
         let diarizationSegments = await this.diarizationManager.diarize(
           tmpWav,
@@ -10347,7 +10874,7 @@ class IPCHandlers {
 
         const startMs =
           (Number.isFinite(audioStartedAt) && audioStartedAt) ||
-          transcriptSegments.find((segment) => segment.source === "system")?.timestamp ||
+          transcriptSegments.find((segment) => segment.source === diarizedSource)?.timestamp ||
           transcriptSegments[0]?.timestamp ||
           0;
         const isEpochMs = startMs > 1e9;
@@ -10363,7 +10890,8 @@ class IPCHandlers {
 
         const enrichedSegments = this.diarizationManager.mergeWithTranscript(
           normalized,
-          diarizationSegments
+          diarizationSegments,
+          { diarizedSource }
         );
 
         const speakerSet = new Set(diarizationSegments.map((d) => d.speaker));
@@ -10374,10 +10902,15 @@ class IPCHandlers {
           sIdx++;
         }
 
+        // Mirrors the mic-mode single-cluster softening in mergeWithTranscript:
+        // every segment stays "you", so persisting an embedding keyed to a
+        // cluster id that owns no segments would leave the note inconsistent.
+        const micSingleClusterSoftened = diarizedSource === "mic" && speakerSet.size === 1;
+
         let speakerEmbeddingsMap = null;
         const speakerEmb = require("./speakerEmbeddings");
         try {
-          if (speakerEmb.isAvailable() && tmpWav) {
+          if (!micSingleClusterSoftened && speakerEmb.isAvailable() && tmpWav) {
             const speakerIds = [...new Set(diarizationSegments.map((s) => s.speaker))];
             speakerEmbeddingsMap = {};
 

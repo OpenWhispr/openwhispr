@@ -25,6 +25,63 @@ var inputDevices: [AudioDeviceID] = []
 var previouslyAggregateActive = false
 var signalSources: [DispatchSourceSignal] = []
 
+func stringProperty(
+    _ objectID: AudioObjectID,
+    selector: AudioObjectPropertySelector,
+    scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+) -> String? {
+    var address = AudioObjectPropertyAddress(
+        mSelector: selector,
+        mScope: scope,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    var value: CFString?
+    var dataSize = UInt32(MemoryLayout<CFString?>.size)
+    let status = withUnsafeMutablePointer(to: &value) { pointer in
+        AudioObjectGetPropertyData(objectID, &address, 0, nil, &dataSize, pointer)
+    }
+    return status == noErr ? value as String? : nil
+}
+
+func printDefaultInputDevice() -> Int32 {
+    let systemObject = AudioObjectID(kAudioObjectSystemObject)
+    var address = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultInputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    var deviceID = AudioDeviceID(kAudioObjectUnknown)
+    var dataSize = UInt32(MemoryLayout<AudioDeviceID>.size)
+    let status = AudioObjectGetPropertyData(
+        systemObject,
+        &address,
+        0,
+        nil,
+        &dataSize,
+        &deviceID
+    )
+    guard status == noErr, deviceID != kAudioObjectUnknown else {
+        emitError("Failed to resolve the default input device: \(status)")
+        return 1
+    }
+
+    guard let name = stringProperty(deviceID, selector: kAudioObjectPropertyName), !name.isEmpty else {
+        emitError("Default input device has no readable name")
+        return 1
+    }
+    let uid = stringProperty(deviceID, selector: kAudioDevicePropertyDeviceUID) ?? ""
+    let payload: [String: String] = ["name": name, "id": uid]
+    guard
+        let data = try? JSONSerialization.data(withJSONObject: payload),
+        let json = String(data: data, encoding: .utf8)
+    else {
+        emitError("Failed to encode the default input device")
+        return 1
+    }
+    emit(json)
+    return 0
+}
+
 func emit(_ message: String) {
     print(message)
     fflush(stdout)
@@ -483,6 +540,10 @@ func setupSignalHandlers() {
         source.resume()
         signalSources.append(source)
     }
+}
+
+if CommandLine.arguments.contains("--print-default-input") {
+    exit(printDefaultInputDevice())
 }
 
 setupSignalHandlers()

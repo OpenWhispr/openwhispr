@@ -94,6 +94,7 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
+import { resetOnboardingProgress } from "./onboarding/flow";
 import type {
   ChineseScriptPreference,
   GpuDevice,
@@ -132,9 +133,14 @@ import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
+import { enterpriseTileCta, type EnterpriseTileCta } from "../lib/workspaceBilling";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
+import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
+import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
+import { getTranscriptionProvider } from "../models/ModelRegistry";
+import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
 export type SettingsSectionType =
   | "account"
@@ -355,14 +361,24 @@ function TranscriptionSection({
   };
 
   const handleLocalModelSelect = useCallback(
-    (modelId: string) => {
-      if (localTranscriptionProvider === "nvidia") {
+    (modelId: string, providerId?: string) => {
+      if (providerId === "nvidia" || (!providerId && localTranscriptionProvider === "nvidia")) {
         setParakeetModel(modelId);
       } else {
         setWhisperModel(modelId);
       }
     },
     [localTranscriptionProvider, setParakeetModel, setWhisperModel]
+  );
+
+  const selectedCloudModelStreams = Boolean(
+    getTranscriptionProvider(cloudTranscriptionProvider)?.models.some(
+      (model) => model.id === cloudTranscriptionModel && model.streaming
+    )
+  );
+  const previewAvailable = supportsLiveTranscriptionPreview(
+    effectiveTranscriptionMode,
+    selectedCloudModelStreams
   );
 
   const renderPreviewToggle = () => (
@@ -414,12 +430,8 @@ function TranscriptionSection({
       />
 
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {effectiveTranscriptionMode === "local" && (
-        <>
-          {renderTranscriptionPicker("local")}
-          {renderPreviewToggle()}
-        </>
-      )}
+      {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+      {previewAvailable && renderPreviewToggle()}
 
       {effectiveTranscriptionMode === "self-hosted" && (
         <SelfHostedPanel
@@ -807,11 +819,11 @@ export default function SettingsPage({
     dictationKey,
     activationMode,
     setActivationMode,
-    preferBuiltInMic,
+    microphoneSelectionMode,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
     micWarmHoldSeconds,
-    setPreferBuiltInMic,
+    setMicrophoneSelectionMode,
     setSelectedMicDevice,
     setMicWarmHoldSeconds,
     setUseLocalWhisper,
@@ -901,8 +913,6 @@ export default function SettingsPage({
     setWhisperVadSamplesOverlap,
   } = useSettings();
 
-  const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
-  const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
@@ -1040,6 +1050,16 @@ export default function SettingsPage({
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
   const billingWorkspaces = useWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const billingWorkspacesLoaded = useWorkspaceStore((s) => s.loaded);
+  const [enterpriseCheckoutOpen, setEnterpriseCheckoutOpen] = useState(false);
+  const [enterpriseWorkspaceCreateOpen, setEnterpriseWorkspaceCreateOpen] = useState(false);
+  // Until the store resolves, an empty list would make enterpriseTileCta answer
+  // "createWorkspace" for everyone — including members who must never be routed
+  // into creating a workspace. Fall back to contact sales for that window.
+  const enterpriseCta: EnterpriseTileCta = billingWorkspacesLoaded
+    ? enterpriseTileCta(billingWorkspaces, activeWorkspaceId)
+    : { action: "contactSales", ownerName: null };
   const coveringWorkspaces = billingWorkspaces.filter((workspace) =>
     usage?.entitledWorkspaceIds?.includes(workspace.id)
   );
@@ -1085,7 +1105,10 @@ export default function SettingsPage({
 
   const meetingRegisterFn = useCallback(async (hotkey: string) => {
     const result = await window.electronAPI?.registerMeetingHotkey?.(hotkey);
-    return result ?? { success: false, message: "Electron API unavailable" };
+    // No `message`: useHotkeyRegistration falls back to the translated
+    // hooks.hotkeyRegistration.errors.couldNotRegister, and that string is what
+    // gets shown in a toast. An English literal here would surface untranslated.
+    return result ?? { success: false };
   }, []);
 
   const { registerHotkey: registerMeetingHotkey, isRegistering: isMeetingHotkeyRegistering } =
@@ -1127,13 +1150,12 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [meetingKey, chatAgentKey, voiceAgentKey, translationKey, t]
+    [meetingKey, voiceAgentKey, translationKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -1142,28 +1164,12 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.hotkey.title": dictationKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, chatAgentKey, voiceAgentKey, translationKey, t]
-  );
-
-  const validateChatAgentHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
-          "settingsPage.general.translationHotkey.title": translationKey,
-        },
-        t
-      ),
-    [dictationKey, meetingKey, voiceAgentKey, translationKey, t]
+    [dictationKey, voiceAgentKey, translationKey, t]
   );
 
   const validateVoiceAgentHotkey = useCallback(
@@ -1173,12 +1179,11 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, translationKey, t]
+    [dictationKey, meetingKey, translationKey, t]
   );
 
   const validateTranslationHotkey = useCallback(
@@ -1188,16 +1193,20 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, voiceAgentKey, t]
+    [dictationKey, meetingKey, voiceAgentKey, t]
   );
 
-  const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
-    useHotkeyModeInfo("settings");
+  const {
+    isUsingNativeShortcut,
+    isUsingHyprland,
+    hyprlandConfigStatus,
+    supportsPushToTalk,
+    pushToTalkUnavailableReason,
+  } = useHotkeyModeInfo("settings", dictationKey);
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -1306,12 +1315,6 @@ export default function SettingsPage({
       clearTimeout(timer);
     };
   }, [checkWhisperInstallation, getAppVersion]);
-
-  useEffect(() => {
-    if (isUsingNativeShortcut && !supportsPushToTalk) {
-      setActivationMode("tap");
-    }
-  }, [isUsingNativeShortcut, supportsPushToTalk, setActivationMode]);
 
   useEffect(() => {
     const loadEffectiveDefaultHotkey = async () => {
@@ -1466,8 +1469,7 @@ export default function SettingsPage({
 
   const startOnboarding = useCallback(() => {
     localStorage.setItem("pendingCloudMigration", "true");
-    localStorage.setItem("onboardingCurrentStep", "0");
-    localStorage.removeItem("onboardingCompleted");
+    resetOnboardingProgress(localStorage);
     window.location.reload();
   }, []);
 
@@ -2389,17 +2391,73 @@ export default function SettingsPage({
                           </li>
                         ))}
                       </ul>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                        onClick={() =>
-                          window.electronAPI?.openExternal?.("https://openwhispr.com/contact-sales")
-                        }
-                      >
-                        <Mail size={10} />
-                        {t("settingsPage.account.pricing.enterprise.cta")}
-                      </Button>
+                      {isSignedIn && enterpriseCta.action !== "contactSales" ? (
+                        <div className="mt-2 space-y-1">
+                          <Button
+                            size="sm"
+                            className="w-full h-6 text-[10px]"
+                            onClick={() => {
+                              if (enterpriseCta.action === "openDialog") {
+                                setEnterpriseCheckoutOpen(true);
+                              } else {
+                                setEnterpriseWorkspaceCreateOpen(true);
+                              }
+                            }}
+                          >
+                            {t("settingsPage.account.pricing.enterprise.upgradeCta")}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full h-6 text-[10px] text-muted-foreground"
+                            onClick={() =>
+                              window.electronAPI?.openExternal?.(
+                                "https://openwhispr.com/contact-sales"
+                              )
+                            }
+                          >
+                            <Mail size={10} />
+                            {t("settingsPage.account.pricing.enterprise.cta")}
+                          </Button>
+                        </div>
+                      ) : isSignedIn ? (
+                        <div className="mt-2 space-y-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-6 text-[10px]"
+                            onClick={() =>
+                              window.electronAPI?.openExternal?.(
+                                "https://openwhispr.com/contact-sales"
+                              )
+                            }
+                          >
+                            <Mail size={10} />
+                            {t("settingsPage.account.pricing.enterprise.cta")}
+                          </Button>
+                          {enterpriseCta.action === "contactSales" && enterpriseCta.ownerName && (
+                            <p className="text-[10px] text-muted-foreground text-center">
+                              {t("settingsPage.account.pricing.enterprise.askOwner", {
+                                name: enterpriseCta.ownerName,
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                          onClick={() =>
+                            window.electronAPI?.openExternal?.(
+                              "https://openwhispr.com/contact-sales"
+                            )
+                          }
+                        >
+                          <Mail size={10} />
+                          {t("settingsPage.account.pricing.enterprise.cta")}
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -2489,6 +2547,18 @@ export default function SettingsPage({
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
+
+                  <EnterpriseCheckoutDialog
+                    open={enterpriseCheckoutOpen}
+                    onOpenChange={setEnterpriseCheckoutOpen}
+                    workspaces={billingWorkspaces}
+                    onRefreshEntitlement={usage?.refetch}
+                  />
+                  <CreateWorkspaceDialog
+                    open={enterpriseWorkspaceCreateOpen}
+                    onOpenChange={setEnterpriseWorkspaceCreateOpen}
+                    onCreated={() => setEnterpriseCheckoutOpen(true)}
+                  />
                 </div>
               </>
             ) : (
@@ -2908,11 +2978,11 @@ export default function SettingsPage({
               <SettingsPanel>
                 <SettingsPanelRow>
                   <MicrophoneSettings
-                    preferBuiltInMic={preferBuiltInMic}
+                    microphoneSelectionMode={microphoneSelectionMode}
                     selectedMicDeviceId={selectedMicDeviceId}
                     selectedMicDeviceLabel={selectedMicDeviceLabel}
                     micWarmHoldSeconds={micWarmHoldSeconds}
-                    onPreferBuiltInChange={setPreferBuiltInMic}
+                    onSelectionModeChange={setMicrophoneSelectionMode}
                     onDeviceSelect={setSelectedMicDevice}
                     onMicWarmHoldSecondsChange={setMicWarmHoldSeconds}
                   />
@@ -3497,7 +3567,15 @@ EOF`,
                       <span className="text-xs text-muted-foreground/80">
                         {t("settingsPage.general.hotkey.activationMode")}
                       </span>
-                      <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+                      <ActivationModeSelector
+                        value={activationMode}
+                        onChange={setActivationMode}
+                        pushDisabledReason={
+                          !supportsPushToTalk
+                            ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
+                            : undefined
+                        }
+                      />
                     </div>
                     {getCachedPlatform() === "linux" && activationMode === "push" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
@@ -3600,28 +3678,6 @@ EOF`,
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
-
-            {/* Chat Agent Hotkey */}
-            {agentAllowedByPolicy && (
-              <div>
-                <SectionHeader
-                  title={t("agentMode.settings.hotkey")}
-                  description={t("agentMode.settings.hotkeyDescription")}
-                />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <HotkeyListInput
-                      value={chatAgentKey}
-                      onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
-                      onClear={() => commitAgentHotkey(setChatAgentKey, "")}
-                      validate={validateChatAgentHotkey}
-                      disabled={isAgentHotkeyCommitting}
-                      maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
-                    />
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </div>
-            )}
           </div>
         );
 
