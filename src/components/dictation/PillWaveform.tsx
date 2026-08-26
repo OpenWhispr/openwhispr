@@ -40,8 +40,12 @@ export function PillWaveform({ getLevel, active, className }: PillWaveformProps)
         lastSample = now;
         const level = getLevel();
         const levels = levelsRef.current;
+        const previous = levels[levels.length - 1] ?? 0;
         levels.shift();
-        levels.push(level === null ? 0 : level);
+        // Peak-decay envelope: inter-word gaps fall away over a few samples
+        // instead of snapping to a flat floor, so the wave keeps its rhythm
+        // through natural speech pauses.
+        levels.push(Math.max(level === null ? 0 : level, previous * 0.6));
         for (let i = 0; i < levels.length; i++) {
           const bar = barRefs.current[i];
           if (bar) bar.style.height = `${resolveWaveformBarHeight(levels[i])}px`;

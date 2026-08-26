@@ -251,7 +251,10 @@ export default function App() {
 
   const voiceActivity = resolveVoiceActivityPresentation({
     isRecording,
-    isProcessing: isVisuallyProcessing,
+    // Mic warm-up is an acknowledged press, not work on a transcript. Keeping
+    // isPreparing out of the thinking state leaves the press on the pulsing
+    // "processing" mic-state pill instead of lighting the glow at hotkey time.
+    isProcessing: isProcessing || isStopping,
     isAssistantVoice,
     assistantThinking: assistant.thinking || assistant.busy,
   });
