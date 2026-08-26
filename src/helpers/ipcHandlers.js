@@ -9,6 +9,7 @@ const { broadcastToWindows } = require("./windowBroadcast");
 const { resolveFailedGpuBackends } = require("./whisper");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
+const accountScopeBinding = require("./accountScopeBinding");
 const { createCloudApiRequestHandler } = require("./cloudApiRequest");
 const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
 const {
@@ -619,7 +620,10 @@ class IPCHandlers {
     // Lives for the app's lifetime; IPCHandlers has no teardown path.
     tokenStore.subscribe(({ generation, token }) => {
       this.enterpriseIdentityManager?.clear();
-      if (!token) this.databaseManager.setActiveAccountId(null);
+      if (!token) {
+        this.databaseManager.setActiveAccountId(null);
+        accountScopeBinding.clear();
+      }
       broadcastToWindows("auth-token-state-changed", {
         generation,
         hasToken: Boolean(token),
@@ -1916,20 +1920,26 @@ class IPCHandlers {
     });
 
     ipcMain.handle("set-active-account-scope", async (_event, accountId, expectedGeneration) => {
-      if (accountId !== null && (typeof accountId !== "string" || accountId.trim().length === 0)) {
-        return { success: false, code: "INVALID_ACCOUNT", error: "Invalid account scope" };
-      }
-      if (accountId !== null) {
-        const state = tokenStore.getState();
-        if (!state.token || state.generation !== expectedGeneration) {
-          return {
-            success: false,
-            code: "AUTH_CONTEXT_CHANGED",
-            error: "Authentication context changed before account scoping",
-          };
-        }
+      const state = tokenStore.getState();
+      const verdict = accountScopeBinding.evaluateScopeRequest({
+        accountId,
+        expectedGeneration,
+        token: state.token,
+        generation: state.generation,
+      });
+      if (!verdict.ok) {
+        return {
+          success: false,
+          code: verdict.code,
+          error:
+            verdict.code === "INVALID_ACCOUNT"
+              ? "Invalid account scope"
+              : "Authentication context changed before account scoping",
+        };
       }
       this.databaseManager.setActiveAccountId(accountId);
+      if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
+      else accountScopeBinding.clear();
       return { success: true };
     });
 
