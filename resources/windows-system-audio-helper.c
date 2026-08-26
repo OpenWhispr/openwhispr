@@ -1,16 +1,24 @@
 /**
  * Windows System Audio Helper
  *
- * Captures system audio for meeting transcription via WASAPI process
- * loopback (VAD\Process_Loopback, Windows 10 2004+). Runs in EXCLUDE mode
- * against OpenWhispr's own process tree, so it hears every application on
- * every render endpoint — independent of the default output device — while
- * never re-capturing OpenWhispr's own sounds.
+ * Captures system audio for meeting transcription via WASAPI.
+ *
+ * Two capture modes:
+ *   endpoint-loopback (default):
+ *     Captures from the default render endpoint after mixing. Hears all
+ *     applications including those using WASAPI exclusive mode (MS Teams,
+ *     Zoom, etc.). Captures from the default output device only.
+ *
+ *   process-loopback (Windows 10 2004+):
+ *     Captures via VAD\Process_Loopback in EXCLUDE mode against
+ *     OpenWhispr's own process tree. Hears every application on every
+ *     render endpoint, but cannot capture exclusive-mode streams.
  *
  * Commands:
  *   windows-system-audio-helper.exe probe
- *     Prints a single JSON capability object to stdout and exits.
- *   windows-system-audio-helper.exe start [--exclude-pid N] [--sample-rate N]
+ *     Prints a JSON capability object to stdout and exits.
+ *   windows-system-audio-helper.exe start [--mode endpoint-loopback|process-loopback]
+ *                                          [--exclude-pid N] [--sample-rate N]
  *     Streams raw PCM (mono, 16-bit signed little-endian, --sample-rate Hz,
  *     default 24000) to stdout. Emits line-delimited JSON events to stderr:
  *       {"type":"start"} once capture is running,
@@ -41,13 +49,16 @@
 
 /* The SDK declares these WASAPI IIDs via MIDL_INTERFACE for C++ __uuidof
  * only — no import library defines them and <initguid.h> skips them in C —
- * so they must be defined in-source to link. */
+ * so they must be defined in-source to link.  MinGW headers already provide
+ * these GUIDs, so skip on MinGW. */
+#ifndef __MINGW32__
 DEFINE_GUID(IID_IAudioClient,
     0x1cb9ad4c, 0xdbfa, 0x4c32, 0xb1, 0x78, 0xc2, 0xf5, 0x68, 0xa7, 0x03, 0xb2);
 DEFINE_GUID(IID_IAudioCaptureClient,
     0xc8adbd64, 0xe71e, 0x48a0, 0xa4, 0xde, 0x18, 0x5c, 0x39, 0x5c, 0xd3, 0x17);
 DEFINE_GUID(IID_IActivateAudioInterfaceCompletionHandler,
     0x41d949ab, 0x9862, 0x444a, 0x80, 0xf6, 0xc2, 0x61, 0x33, 0x4d, 0xa5, 0xeb);
+#endif
 
 #if defined(__has_include)
 #if __has_include(<audioclientactivationparams.h>)
@@ -130,14 +141,19 @@ static void emit_event(const char *type, const char *code, const char *format, .
     fflush(stderr);
 }
 
-static void emit_probe_result(BOOL ok, const char *error, HRESULT hr)
+static void emit_probe_result(BOOL ok, const char *error, HRESULT hr,
+                               BOOL supportsEndpoint, BOOL supportsProcess)
 {
     if (ok) {
         printf("{\"ok\":true,\"supportsSystemAudio\":true,\"supportsNativeCapture\":true,"
-               "\"source\":\"wasapi-process-loopback\"}\n");
+               "\"supportsEndpointLoopback\":%s,\"supportsProcessLoopback\":%s,"
+               "\"source\":\"wasapi-endpoint-loopback\"}\n",
+               supportsEndpoint ? "true" : "false",
+               supportsProcess ? "true" : "false");
     } else {
         printf("{\"ok\":false,\"supportsSystemAudio\":false,\"supportsNativeCapture\":false,"
-               "\"source\":\"wasapi-process-loopback\",\"error\":\"%s (hr=0x%08lx)\"}\n",
+               "\"supportsEndpointLoopback\":false,\"supportsProcessLoopback\":false,"
+               "\"source\":\"wasapi-endpoint-loopback\",\"error\":\"%s (hr=0x%08lx)\"}\n",
                error, (unsigned long)hr);
     }
     fflush(stdout);
@@ -329,6 +345,75 @@ static HRESULT activate_process_loopback(
 }
 
 /* ========================================================================
+ * Endpoint-loopback activation (captures from default render device)
+ * ======================================================================== */
+
+static HRESULT activate_endpoint_loopback(
+    UINT32 sampleRate, IAudioClient **outClient, const char **outErrorCode)
+{
+    IMMDeviceEnumerator *enumerator = NULL;
+    IMMDevice *device = NULL;
+    IAudioClient *audioClient = NULL;
+    WAVEFORMATEX targetFormat;
+    HRESULT hr;
+
+    *outClient = NULL;
+    *outErrorCode = "activation_failed";
+
+    hr = CoCreateInstance(
+        &CLSID_MMDeviceEnumerator, NULL, CLSCTX_ALL,
+        &IID_IMMDeviceEnumerator, (void **)&enumerator);
+    if (FAILED(hr)) {
+        *outErrorCode = "enumerator_failed";
+        return hr;
+    }
+
+    hr = IMMDeviceEnumerator_GetDefaultAudioEndpoint(
+        enumerator, eRender, eConsole, &device);
+    IMMDeviceEnumerator_Release(enumerator);
+    if (FAILED(hr)) {
+        *outErrorCode = "no_default_device";
+        return hr;
+    }
+
+    hr = IMMDevice_Activate(device, &IID_IAudioClient, CLSCTX_ALL, NULL, (void **)&audioClient);
+    IMMDevice_Release(device);
+    if (FAILED(hr)) {
+        *outErrorCode = "client_activate_failed";
+        return hr;
+    }
+
+    /* Build target format (stereo, target sample rate). AUTOCONVERTPCM
+     * resamples from the device's native mix format if needed. */
+    ZeroMemory(&targetFormat, sizeof(targetFormat));
+    targetFormat.wFormatTag = WAVE_FORMAT_PCM;
+    targetFormat.nChannels = CAPTURE_CHANNELS;
+    targetFormat.nSamplesPerSec = sampleRate;
+    targetFormat.wBitsPerSample = BYTES_PER_SAMPLE * 8;
+    targetFormat.nBlockAlign = CAPTURE_CHANNELS * BYTES_PER_SAMPLE;
+    targetFormat.nAvgBytesPerSec = sampleRate * targetFormat.nBlockAlign;
+
+    hr = IAudioClient_Initialize(
+        audioClient,
+        AUDCLNT_SHAREMODE_SHARED,
+        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
+            AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
+        BUFFER_DURATION_HNS,
+        0,
+        &targetFormat,
+        NULL);
+
+    if (FAILED(hr)) {
+        IAudioClient_Release(audioClient);
+        *outErrorCode = "initialize_failed";
+        return hr;
+    }
+
+    *outClient = audioClient;
+    return S_OK;
+}
+
+/* ========================================================================
  * Capture loop
  * ======================================================================== */
 
@@ -357,7 +442,7 @@ static BOOL write_silence(size_t frames)
     return TRUE;
 }
 
-static int run_capture(DWORD excludePid, UINT32 sampleRate)
+static int run_capture(DWORD excludePid, UINT32 sampleRate, int mode_endpoint)
 {
     IAudioClient *audioClient = NULL;
     IAudioCaptureClient *captureClient = NULL;
@@ -371,9 +456,13 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
     HRESULT hr;
     int exitCode = 0;
 
-    hr = activate_process_loopback(excludePid, sampleRate, &audioClient, &errorCode);
+    if (mode_endpoint) {
+        hr = activate_endpoint_loopback(sampleRate, &audioClient, &errorCode);
+    } else {
+        hr = activate_process_loopback(excludePid, sampleRate, &audioClient, &errorCode);
+    }
     if (FAILED(hr)) {
-        emit_event("error", errorCode, "Process loopback activation failed (hr=0x%08lx)",
+        emit_event("error", errorCode, "Loopback activation failed (hr=0x%08lx)",
                    (unsigned long)hr);
         return 2;
     }
@@ -536,19 +625,25 @@ done:
 
 static int run_probe(void)
 {
-    IAudioClient *audioClient = NULL;
+    IAudioClient *endpointClient = NULL;
+    IAudioClient *processClient = NULL;
     const char *errorCode = NULL;
-    HRESULT hr;
+    HRESULT hrEndpoint, hrProcess;
 
-    hr = activate_process_loopback(GetCurrentProcessId(), DEFAULT_SAMPLE_RATE, &audioClient,
-                                   &errorCode);
-    if (FAILED(hr)) {
-        emit_probe_result(FALSE, errorCode, hr);
-        return 0;
+    hrEndpoint = activate_endpoint_loopback(DEFAULT_SAMPLE_RATE, &endpointClient, &errorCode);
+    if (SUCCEEDED(hrEndpoint)) {
+        IAudioClient_Release(endpointClient);
     }
 
-    IAudioClient_Release(audioClient);
-    emit_probe_result(TRUE, NULL, S_OK);
+    hrProcess = activate_process_loopback(GetCurrentProcessId(), DEFAULT_SAMPLE_RATE,
+                                           &processClient, &errorCode);
+    if (SUCCEEDED(hrProcess)) {
+        IAudioClient_Release(processClient);
+    }
+
+    BOOL ok = SUCCEEDED(hrEndpoint) || SUCCEEDED(hrProcess);
+    const char *error = SUCCEEDED(hrEndpoint) ? NULL : errorCode;
+    emit_probe_result(ok, error, hrEndpoint, SUCCEEDED(hrEndpoint), SUCCEEDED(hrProcess));
     return 0;
 }
 
@@ -582,12 +677,14 @@ int main(int argc, char *argv[])
     const char *command = argc > 1 ? argv[1] : NULL;
     DWORD excludePid = GetCurrentProcessId();
     UINT32 sampleRate = DEFAULT_SAMPLE_RATE;
+    int mode_endpoint = 1; /* default to endpoint-loopback */
     HRESULT hr;
     int exitCode;
     int i;
 
     if (!command || (strcmp(command, "probe") != 0 && strcmp(command, "start") != 0)) {
         fprintf(stderr, "Usage: windows-system-audio-helper <probe|start> "
+                        "[--mode endpoint-loopback|process-loopback] "
                         "[--exclude-pid N] [--sample-rate N]\n");
         return 1;
     }
@@ -597,6 +694,16 @@ int main(int argc, char *argv[])
             excludePid = (DWORD)strtoul(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--sample-rate") == 0) {
             sampleRate = (UINT32)strtoul(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--mode") == 0) {
+            i++;
+            if (strcmp(argv[i], "process-loopback") == 0) {
+                mode_endpoint = 0;
+            } else if (strcmp(argv[i], "endpoint-loopback") == 0) {
+                mode_endpoint = 1;
+            } else {
+                fprintf(stderr, "Unknown mode: %s\n", argv[i]);
+                return 1;
+            }
         }
     }
     if (excludePid == 0 || sampleRate == 0) {
@@ -607,7 +714,7 @@ int main(int argc, char *argv[])
     hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
     if (FAILED(hr)) {
         if (strcmp(command, "probe") == 0) {
-            emit_probe_result(FALSE, "com_init_failed", hr);
+            emit_probe_result(FALSE, "com_init_failed", hr, FALSE, FALSE);
             return 0;
         }
         emit_event("error", "com_init_failed", "COM initialization failed (hr=0x%08lx)",
@@ -626,7 +733,7 @@ int main(int argc, char *argv[])
         } else {
             emit_event("warning", "stdin_monitor_failed", "Parent-death detection unavailable");
         }
-        exitCode = run_capture(excludePid, sampleRate);
+        exitCode = run_capture(excludePid, sampleRate, mode_endpoint);
     }
 
     CoUninitialize();

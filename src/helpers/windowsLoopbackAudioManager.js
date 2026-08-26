@@ -116,7 +116,7 @@ class WindowsLoopbackAudioManager {
     return /activation_timeout/i.test(capability.error || "");
   }
 
-  async start({ onChunk, onError, onWarning } = {}) {
+  async start({ onChunk, onError, onWarning, mode = "endpoint-loopback" } = {}) {
     const capability = await this.getCapability();
     if (!capability.available) {
       throw new Error(capability.error || "Windows system audio helper is unavailable.");
@@ -132,11 +132,17 @@ class WindowsLoopbackAudioManager {
     const binaryPath = this.resolveBinary();
     const args = [
       "start",
-      "--exclude-pid",
-      String(process.pid),
+      "--mode",
+      mode,
       "--sample-rate",
       String(SAMPLE_RATE),
     ];
+
+    // Only pass --exclude-pid for process-loopback mode (endpoint-loopback
+    // captures from the default render device after mixing, no PID exclusion needed).
+    if (mode === "process-loopback") {
+      args.push("--exclude-pid", String(process.pid));
+    }
 
     // stdin stays piped so the helper can detect parent death via EOF.
     const child = spawn(binaryPath, args, {
@@ -289,6 +295,8 @@ class WindowsLoopbackAudioManager {
         available: false,
         supportsNativeCapture: false,
         supportsSystemAudio: false,
+        supportsEndpointLoopback: false,
+        supportsProcessLoopback: false,
         error: "Windows system audio helper binary not found.",
         probeTransient: true,
       };
@@ -297,12 +305,16 @@ class WindowsLoopbackAudioManager {
     // Thrown errors (spawn failure, probe timeout) are handled by
     // getCapability's catch, which logs them and caches them transiently.
     const result = await this._runJsonCommand(["probe"], PROBE_TIMEOUT_MS);
-    const supportsNativeCapture = !!result?.supportsNativeCapture;
+    const supportsEndpointLoopback = !!result?.supportsEndpointLoopback;
+    const supportsProcessLoopback = !!result?.supportsProcessLoopback;
+    const supportsNativeCapture = supportsEndpointLoopback || supportsProcessLoopback;
     const supportsSystemAudio = result?.supportsSystemAudio !== false;
     return {
       available: !!result?.ok && supportsSystemAudio && supportsNativeCapture,
       supportsNativeCapture,
       supportsSystemAudio,
+      supportsEndpointLoopback,
+      supportsProcessLoopback,
       error: typeof result?.error === "string" ? result.error : null,
     };
   }
