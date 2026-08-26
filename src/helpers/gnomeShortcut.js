@@ -1,5 +1,6 @@
 const { execFileSync } = require("child_process");
 const debugLogger = require("./debugLogger");
+const GnomeGlobalShortcutsPortal = require("./gnomeGlobalShortcutsPortal");
 
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
 const DBUS_OBJECT_PATH = "/com/openwhispr/App";
@@ -11,17 +12,13 @@ const SLOT_CONFIG = {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr/",
     name: "OpenWhispr Toggle",
   },
-  agent: {
-    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-agent/",
-    name: "OpenWhispr Agent",
-  },
   meeting: {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-meeting/",
     name: "OpenWhispr Meeting",
   },
   voiceAgent: {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-voice-agent/",
-    name: "OpenWhispr Voice Agent",
+    name: "OpenWhispr Voice Assistant",
   },
   translation: {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-translation/",
@@ -30,6 +27,15 @@ const SLOT_CONFIG = {
 };
 
 const KEYBINDING_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
+const PORTAL_MODIFIER_NAMES = new Set([
+  "commandorcontrol",
+  "control",
+  "ctrl",
+  "alt",
+  "shift",
+  "super",
+  "meta",
+]);
 
 // Valid pattern for GNOME shortcut format using X11 keysym names (case-sensitive).
 // Modifiers are case-insensitive (GTK normalizes them), keysyms are exact.
@@ -129,10 +135,10 @@ class GnomeShortcutManager {
   constructor() {
     this.bus = null;
     this.dictationCallback = null;
-    this.agentCallback = null;
     this.meetingCallback = null;
     this.voiceAgentCallback = null;
     this.translationCallback = null;
+    this.globalShortcutsPortal = new GnomeGlobalShortcutsPortal();
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
   }
@@ -150,16 +156,6 @@ class GnomeShortcutManager {
     return process.env.XDG_SESSION_TYPE === "wayland";
   }
 
-  /**
-   * Set or update the agent callback after initial D-Bus service initialisation.
-   * This supports the case where the dictation hotkey is set up first and the
-   * agent callback is only available later (after agent window creation).
-   */
-  setAgentCallback(callback) {
-    this.agentCallback = callback;
-    debugLogger.log("[GnomeShortcut] Agent callback registered");
-  }
-
   setMeetingCallback(callback) {
     this.meetingCallback = callback;
     debugLogger.log("[GnomeShortcut] Meeting callback registered");
@@ -173,6 +169,34 @@ class GnomeShortcutManager {
   setTranslationCallback(callback) {
     this.translationCallback = callback;
     debugLogger.log("[GnomeShortcut] Translation callback registered");
+  }
+
+  // Older builds persisted a gsettings keybinding for the removed chat-agent
+  // slot; its dbus-send command targets a method this app no longer exports,
+  // so the entry errors silently forever and squats its key. Prune it once.
+  removeRetiredAgentKeybinding() {
+    const retiredPath =
+      "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-agent/";
+    try {
+      const existing = this.getExistingKeybindings();
+      if (!existing.includes(retiredPath)) return;
+      const remaining = existing.filter((p) => p !== retiredPath);
+      const bindingsStr = remaining.length ? "['" + remaining.join("', '") + "']" : "[]";
+      execFileSync(
+        "gsettings",
+        ["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", bindingsStr],
+        { stdio: "pipe" }
+      );
+      execFileSync("gsettings", ["reset-recursively", `${KEYBINDING_SCHEMA}:${retiredPath}`], {
+        stdio: "pipe",
+      });
+      debugLogger.log("[GnomeShortcut] Removed retired chat-agent keybinding");
+    } catch (err) {
+      debugLogger.log(
+        "[GnomeShortcut] Failed to remove retired chat-agent keybinding:",
+        err.message
+      );
+    }
   }
 
   async initDBusService(dictationCallback) {
@@ -199,11 +223,6 @@ class GnomeShortcutManager {
               this.dictationCallback();
             }
           },
-          ToggleAgent: () => {
-            if (this.agentCallback) {
-              this.agentCallback();
-            }
-          },
           ToggleMeeting: () => {
             if (this.meetingCallback) {
               this.meetingCallback();
@@ -225,7 +244,6 @@ class GnomeShortcutManager {
           name: DBUS_INTERFACE,
           methods: {
             Toggle: ["", ""],
-            ToggleAgent: ["", ""],
             ToggleMeeting: ["", ""],
             ToggleVoiceAgent: ["", ""],
             ToggleTranslation: ["", ""],
@@ -234,6 +252,7 @@ class GnomeShortcutManager {
       );
 
       debugLogger.log("[GnomeShortcut] D-Bus service initialized successfully");
+      this.removeRetiredAgentKeybinding();
       return true;
     } catch (err) {
       debugLogger.log("[GnomeShortcut] Failed to initialize D-Bus service:", err.message);
@@ -243,6 +262,34 @@ class GnomeShortcutManager {
       }
       return false;
     }
+  }
+
+  async initGlobalShortcutsPortal() {
+    return this.globalShortcutsPortal.init();
+  }
+
+  supportsPushToTalk() {
+    return this.globalShortcutsPortal.isAvailable();
+  }
+
+  async registerPushToTalk(hotkey, callback) {
+    const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
+    if (!preferredTrigger) return false;
+
+    await this.unregisterKeybinding("dictation");
+    const registered = await this.globalShortcutsPortal.registerKeybinding(
+      preferredTrigger,
+      callback
+    );
+    if (!registered) {
+      const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
+      await this.registerKeybinding(tapShortcut, "dictation");
+    }
+    return registered;
+  }
+
+  async unregisterPushToTalk() {
+    await this.globalShortcutsPortal.unregisterKeybinding();
   }
 
   static isValidShortcut(shortcut) {
@@ -269,7 +316,6 @@ class GnomeShortcutManager {
 
     const SLOT_DBUS_METHOD = {
       dictation: "Toggle",
-      agent: "ToggleAgent",
       meeting: "ToggleMeeting",
       voiceAgent: "ToggleVoiceAgent",
       translation: "ToggleTranslation",
@@ -338,46 +384,6 @@ class GnomeShortcutManager {
     } catch (err) {
       debugLogger.log(
         `[GnomeShortcut] Failed to register keybinding for slot "${slotName}":`,
-        err.message
-      );
-      return false;
-    }
-  }
-
-  async updateKeybinding(shortcut, slotName = "dictation") {
-    if (!this.registeredSlots.has(slotName)) {
-      return this.registerKeybinding(shortcut, slotName);
-    }
-
-    if (!GnomeShortcutManager.isValidShortcut(shortcut)) {
-      debugLogger.log(
-        `[GnomeShortcut] Invalid shortcut format for update: "${shortcut}" (slot "${slotName}")`
-      );
-      return false;
-    }
-
-    const { path: keybindingPath } = getSlotConfig(slotName);
-
-    try {
-      const existing = this.getExistingKeybindings();
-      const conflict = this.findConflictingBinding(shortcut, existing, keybindingPath);
-      if (conflict) {
-        debugLogger.log(
-          `[GnomeShortcut] Shortcut conflict on update — "${shortcut}" already used by "${conflict}"`
-        );
-        return false;
-      }
-
-      execFileSync(
-        "gsettings",
-        ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding", shortcut],
-        { stdio: "pipe" }
-      );
-      debugLogger.log(`[GnomeShortcut] Keybinding updated to "${shortcut}" for slot "${slotName}"`);
-      return true;
-    } catch (err) {
-      debugLogger.log(
-        `[GnomeShortcut] Failed to update keybinding for slot "${slotName}":`,
         err.message
       );
       return false;
@@ -536,7 +542,51 @@ class GnomeShortcutManager {
     return modifiers + gnomeKey;
   }
 
-  close() {
+  static convertToPortalFormat(hotkey) {
+    if (!hotkey || typeof hotkey !== "string") return "";
+
+    const parts = hotkey
+      .split("+")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (
+      parts.length === 0 ||
+      parts.every((part) => PORTAL_MODIFIER_NAMES.has(part.toLowerCase()))
+    ) {
+      return "";
+    }
+
+    const key = parts.pop();
+    const keyLower = key.toLowerCase();
+    const modifiers = parts
+      .map((modifier) => {
+        const name = modifier.toLowerCase();
+        if (name === "commandorcontrol" || name === "control" || name === "ctrl") return "CTRL";
+        if (name === "alt") return "ALT";
+        if (name === "shift") return "SHIFT";
+        if (name === "super" || name === "meta") return "LOGO";
+        return "";
+      })
+      .filter(Boolean);
+
+    let portalKey;
+    if (key === "`" || keyLower === "backquote") {
+      portalKey = "grave";
+    } else if (key === " ") {
+      portalKey = "space";
+    } else if (ELECTRON_TO_GNOME_KEY_MAP[keyLower]) {
+      portalKey = ELECTRON_TO_GNOME_KEY_MAP[keyLower];
+    } else if (/^F\d+$/i.test(key)) {
+      portalKey = key.toUpperCase();
+    } else {
+      portalKey = keyLower;
+    }
+
+    return [...modifiers, portalKey].join("+");
+  }
+
+  async close() {
+    await this.globalShortcutsPortal.close();
     if (this.bus) {
       this.bus.connection.end();
       this.bus = null;

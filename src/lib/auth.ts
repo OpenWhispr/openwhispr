@@ -1,6 +1,5 @@
 import { createAuthClient } from "better-auth/react";
 import { ssoClient } from "@better-auth/sso/client";
-import { OPENWHISPR_API_URL } from "../config/constants";
 import { openExternalLink } from "../utils/externalLinks";
 import {
   authContextFetch,
@@ -132,28 +131,6 @@ export function getGracePeriodRemainingMs(): number {
   return Math.max(0, GRACE_PERIOD_MS - Math.max(0, Date.now() - startedAt));
 }
 
-export async function deleteAccount(): Promise<{ error?: Error }> {
-  if (!OPENWHISPR_API_URL) {
-    return { error: new Error("API not configured") };
-  }
-
-  try {
-    const res = await fetch(`${OPENWHISPR_API_URL}/api/auth/delete-account`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to delete account");
-    }
-
-    return {};
-  } catch (error) {
-    return { error: error instanceof Error ? error : new Error("Failed to delete account") };
-  }
-}
-
 export async function signOut(): Promise<void> {
   credentialAccountCache = null;
   try {
@@ -250,10 +227,13 @@ export async function signInWithSSO(email: string): Promise<{ error?: Error }> {
 
 export async function requestPasswordReset(email: string): Promise<{ error?: Error }> {
   try {
-    await authClient.requestPasswordReset({
+    const { error } = await authClient.requestPasswordReset({
       email: email.trim(),
       redirectTo: "https://openwhispr.com/reset-password",
     });
+    if (error) {
+      return { error: toAuthActionError(error, "Failed to send reset email") };
+    }
     return {};
   } catch (error) {
     return { error: error instanceof Error ? error : new Error("Failed to send reset email") };
@@ -301,6 +281,36 @@ export async function changePassword(params: {
   } catch (error) {
     return { error: toAuthActionError(error, "Failed to change password") };
   }
+}
+
+export const ADMIN_URL = import.meta.env.VITE_ADMIN_URL || "https://admin.openwhispr.com";
+
+/**
+ * Open the enterprise admin console signed in: the desktop session lives in
+ * the app (bearer token), not the user's browser, so a single-use short-lived
+ * token carries it across. Verification on the console's /handoff page sets
+ * the cross-subdomain session cookie. If token generation fails for any
+ * reason, fall back to the bare console URL and let the user sign in there.
+ */
+export async function openAdminConsole(): Promise<void> {
+  let url = ADMIN_URL;
+  try {
+    // The generated $fetch types don't discriminate on `throw`, and the
+    // payload arrives bare or under `data` depending on the client version.
+    const result = (await authClient.$fetch("/one-time-token/generate", { throw: true })) as {
+      token?: string;
+      data?: { token?: string } | null;
+    };
+    const token = result.token ?? result.data?.token;
+    if (token) {
+      // The token rides the URL fragment so it never reaches server logs,
+      // proxies, or analytics beacons — the console reads it client-side.
+      url = `${ADMIN_URL}/handoff#token=${encodeURIComponent(token)}`;
+    }
+  } catch {
+    // Fall through to the bare console URL.
+  }
+  openExternalLink(url);
 }
 
 // Cache only successful results; errors fail open without being cached. Cleared

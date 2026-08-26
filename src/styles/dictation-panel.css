@@ -1,0 +1,637 @@
+/* Dictation window feature styles: the voice pill, its identity morph, the
+   expanding assistant / live-transcript panels, and their motion. Imported by
+   index.css ahead of its own rules; nothing here shares selectors with the
+   app-wide styles that remain there. */
+
+/* Shared pill-to-panel surface. Each mode chooses the pill corner it grows from. */
+.expanding-panel-surface {
+  clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 108px) round 24px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    clip-path 280ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 140ms ease-out,
+    transform 280ms cubic-bezier(0.2, 0, 0, 1);
+  will-change: clip-path, opacity, transform;
+}
+
+.expanding-panel-anchor-bottom-right {
+  transform: translate(4px, 4px);
+  transform-origin: bottom right;
+}
+
+.expanding-panel-anchor-bottom-left {
+  clip-path: inset(calc(100% - 52px) calc(100% - 108px) 0 0 round 24px);
+  transform: translate(-4px, 4px);
+  transform-origin: bottom left;
+}
+
+.expanding-panel-surface-open {
+  clip-path: inset(0 round 24px);
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+/* Agent close first fades its complex inner tree while the surface is still
+   geometrically stable. The following pill-to-surface contraction can then be
+   composited as a simple layer instead of repainting markdown, controls, and
+   shimmer descendants inside a changing clip on every frame. */
+.expanding-panel-surface[data-panel-mode="assistant"] > * {
+  transition: opacity 100ms ease-out;
+}
+
+.expanding-panel-surface[data-panel-mode="assistant"][data-panel-closing="true"] > * {
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Live Transcript stages its empty surface before buffered text becomes visible. */
+.expanding-panel-surface[data-panel-mode="live-transcript"] {
+  --live-transcript-footer-height: 4rem;
+  --live-transcript-speaking-pill-width: 5.75rem;
+  --live-transcript-speaking-pill-height: 2.25rem;
+  --live-transcript-footer-inline-padding: 1rem;
+  --live-transcript-encapsulated-width: calc(
+    var(--live-transcript-speaking-pill-width) + var(--live-transcript-footer-inline-padding) +
+      var(--live-transcript-footer-inline-padding)
+  );
+  transition:
+    height 180ms cubic-bezier(0.2, 0, 0, 1),
+    clip-path var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    opacity 140ms ease-out,
+    transform var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1);
+  border-color: transparent;
+}
+
+/* The panel border begins exactly on top of the waveform pill, then becomes
+   the single border for the held capsule, footer, and content surface. The
+   control itself turns headless at the same handoff, so two outlines never
+   compete during the horizontal expansion. */
+.expanding-panel-surface[data-panel-mode="live-transcript"]::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  width: var(--live-transcript-speaking-pill-width);
+  height: var(--live-transcript-speaking-pill-height);
+  right: var(--live-transcript-footer-inline-padding);
+  bottom: calc(
+    (var(--live-transcript-footer-height) - var(--live-transcript-speaking-pill-height)) / 2
+  );
+  border: 1px solid var(--color-border-hover);
+  border-radius: 9999px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    width var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    height var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    right var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    bottom var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    border-radius var(--live-transcript-stage-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    border-color 180ms ease-out,
+    opacity 140ms ease-out;
+}
+
+.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-direction="left"]::before {
+  right: auto;
+  left: var(--live-transcript-footer-inline-padding);
+  transition-property: width, height, left, bottom, border-radius, border-color, opacity;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"]::before {
+  opacity: 1;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"]::before {
+  width: var(--live-transcript-encapsulated-width);
+  height: var(--live-transcript-footer-height);
+  right: 0;
+  bottom: 0;
+  border-radius: 24px;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"][data-panel-direction="left"]::before {
+  right: auto;
+  left: 0;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="footer"]::before {
+  width: 100%;
+  height: var(--live-transcript-footer-height);
+  right: 0;
+  bottom: 0;
+  border-color: color-mix(in oklch, var(--color-border) 50%, transparent);
+  border-radius: 24px;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="footer"][data-panel-direction="left"]::before {
+  right: auto;
+  left: 0;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="content"]::before {
+  width: 100%;
+  height: 100%;
+  right: 0;
+  bottom: 0;
+  border-color: color-mix(in oklch, var(--color-border) 50%, transparent);
+  border-radius: 24px;
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="content"][data-panel-direction="left"]::before {
+  right: auto;
+  left: 0;
+}
+
+.voice-pill-control[data-integrated-with-panel="true"] {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* The SVG geometry itself moves between identities: the listening ring opens
+   into the leaf contour, while its bars bend into the leaf spine and spark. */
+.voice-identity-svg {
+  color: inherit;
+}
+
+.voice-identity-icon[data-agent-mode="true"] .voice-identity-svg {
+  color: var(--color-agent-brand);
+}
+
+.voice-identity-final-agent {
+  color: var(--color-agent-brand);
+}
+
+/* Agent response controls and the persistent pill share the footer anchor.
+   Right-origin sessions retreat right and grow leftward; left-origin sessions
+   mirror the same choreography without swapping DOM order mid-transition. */
+.assistant-response-actions,
+.assistant-pill-presence {
+  --assistant-footer-shift: 0.875rem;
+  --assistant-footer-origin: right center;
+  transform-origin: var(--assistant-footer-origin);
+}
+
+.assistant-response-actions[data-horizontal-direction="left"],
+.assistant-pill-presence[data-horizontal-direction="left"] {
+  --assistant-footer-shift: -0.875rem;
+  --assistant-footer-origin: left center;
+}
+
+.assistant-response-actions[data-assistant-footer-phase="actions-entering"] {
+  pointer-events: none;
+  animation: assistant-footer-enter var(--assistant-actions-entrance-duration, 220ms)
+    cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.assistant-response-actions[data-assistant-footer-phase="actions-exiting"] {
+  pointer-events: none;
+  animation: assistant-footer-retreat var(--assistant-actions-retreat-duration, 220ms)
+    cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.assistant-pill-presence[data-assistant-footer-phase="pill-entering"] {
+  animation: assistant-footer-enter var(--assistant-pill-entrance-duration, 180ms)
+    cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.assistant-pill-presence[data-assistant-footer-phase="pill-exiting"] {
+  pointer-events: none;
+  animation: assistant-footer-retreat var(--assistant-pill-retreat-duration, 180ms)
+    cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes assistant-footer-enter {
+  from {
+    opacity: 0;
+    transform: translateX(var(--assistant-footer-shift)) scale(0.68);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes assistant-footer-retreat {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(var(--assistant-footer-shift)) scale(0.68);
+  }
+}
+
+.voice-pill-control[data-agent-beam-active="true"] {
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 1px color-mix(in oklch, var(--color-agent-brand) 28%, transparent),
+    0 0 10px color-mix(in oklch, var(--color-agent-brand) 18%, transparent);
+}
+
+/* The Signal glow: a comet orbiting a breathing ambient halo around the
+   pill. Both identities light it for the thinking state only — brand blue
+   for dictation processing, the agent's purple for agent thinking. */
+.voice-pill-glow-anchor {
+  position: relative;
+  display: inline-flex;
+  border-radius: 9999px;
+}
+
+/* The orbit animates the conic gradients' start angle instead of rotating
+   the layers, so the same glow tracks the circular thinking pill and the
+   expanded recording capsule alike. */
+@property --signal-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: true;
+}
+
+.processing-signal-glow {
+  --signal-bright: #38bdf8;
+  --signal-core: #2563eb;
+  --signal-deep: #6366f1;
+  --signal-head: #eaf6ff;
+  --signal-halo-opacity: 0.8;
+  --signal-comet-opacity: 0.95;
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease-out;
+}
+
+/* Agent Mode keeps the identical glow in its purple identity. */
+.processing-signal-glow[data-agent="true"] {
+  --signal-bright: #a78bfa;
+  --signal-core: #8787ff;
+  --signal-deep: #7c3aed;
+  --signal-head: #f2edff;
+}
+
+:root:not(.dark) .processing-signal-glow {
+  --signal-halo-opacity: 0.7;
+  --signal-comet-opacity: 0.85;
+}
+
+.processing-signal-glow[data-active="true"] {
+  opacity: 1;
+}
+
+/* Breathing ambient halo, sized to stay inside the pill's 12px dock inset
+   (see WINDOW_SIZES in windowConfig.js) so it never hard-clips at the native
+   window bounds. */
+.processing-signal-glow::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--signal-core) 90%, transparent) 45%,
+    color-mix(in srgb, var(--signal-deep) 70%, transparent) 75%,
+    transparent
+  );
+  filter: blur(5px);
+  opacity: var(--signal-halo-opacity);
+}
+
+/* Soft bloom trailing the comet head. */
+.processing-signal-glow::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from var(--signal-angle),
+    transparent 0 55%,
+    color-mix(in srgb, var(--signal-core) 70%, transparent) 82%,
+    var(--signal-bright) 100%
+  );
+  filter: blur(4px);
+  opacity: var(--signal-comet-opacity);
+}
+
+/* Gradient ring whose white-hot head cools through the bright hue into the
+   deep tail. */
+.processing-signal-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  padding: 2.5px;
+  background: conic-gradient(
+    from var(--signal-angle),
+    color-mix(in srgb, var(--signal-core) 25%, transparent) 0%,
+    color-mix(in srgb, var(--signal-deep) 55%, transparent) 45%,
+    var(--signal-core) 75%,
+    var(--signal-bright) 94%,
+    var(--signal-head) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+
+/* Animations only run while active so the always-visible idle pill costs
+   nothing; the 220ms fade covers the frozen final frame on exit. */
+.processing-signal-glow[data-active="true"]::before {
+  animation: processing-signal-breathe 1.9s ease-in-out infinite;
+}
+
+.processing-signal-glow[data-active="true"] {
+  animation: processing-signal-spin 1.6s linear infinite;
+}
+
+@keyframes processing-signal-spin {
+  to {
+    --signal-angle: 360deg;
+  }
+}
+
+@keyframes processing-signal-breathe {
+  0%,
+  100% {
+    opacity: calc(var(--signal-halo-opacity) * 0.55);
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: var(--signal-halo-opacity);
+    transform: scale(1.05);
+  }
+}
+
+.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"] {
+  --live-transcript-stage-duration: var(--live-transcript-encapsulation-duration, 180ms);
+}
+
+.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-stage="footer"],
+.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-stage="content"] {
+  --live-transcript-stage-duration: var(--live-transcript-horizontal-duration, 320ms);
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"] {
+  clip-path: inset(
+    calc(100% - var(--live-transcript-footer-height)) 0 0
+      calc(100% - var(--live-transcript-encapsulated-width)) round 24px
+  );
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"][data-panel-direction="left"] {
+  clip-path: inset(
+    calc(100% - var(--live-transcript-footer-height))
+      calc(100% - var(--live-transcript-encapsulated-width)) 0 0 round 24px
+  );
+}
+
+.expanding-panel-surface-open[data-panel-mode="live-transcript"][data-panel-stage="footer"] {
+  clip-path: inset(calc(100% - var(--live-transcript-footer-height)) 0 0 0 round 24px);
+}
+
+/* One interpolable coordinate system lets the speaking pill genuinely travel
+   from any resting dock into either panel footer; no left/right auto jump. */
+.voice-pill-position {
+  transition:
+    left var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    bottom var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
+    transform var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1);
+  will-change: left, bottom, transform;
+}
+
+/* Floating docks keep the pill 12px inside the window so the Signal glow's
+   halo and the hover tooltip have click-through headroom instead of clipping
+   at the window bounds. Sized with WINDOW_SIZES in windowConfig.js — change
+   together. */
+.voice-pill-position-bottom-right {
+  bottom: 0.75rem;
+  left: calc(100% - 0.75rem);
+  transform: translateX(-100%);
+}
+
+.voice-pill-position-bottom-left {
+  bottom: 0.75rem;
+  left: 0.75rem;
+  transform: none;
+}
+
+.voice-pill-position-center {
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.voice-pill-position-assistant-bottom-right {
+  bottom: 1.75rem;
+  left: calc(100% - 1.75rem);
+  transform: translateX(-100%);
+}
+
+.voice-pill-position-assistant-bottom-left {
+  bottom: 1.75rem;
+  left: 1.75rem;
+  transform: none;
+}
+
+.voice-pill-position-live-transcript-bottom-left {
+  bottom: 1.625rem;
+  left: 1.75rem;
+  transform: none;
+}
+
+.voice-pill-position-live-transcript-encapsulated-bottom-right {
+  bottom: 1.625rem;
+  left: calc(100% - 1.75rem);
+  transform: translateX(-100%);
+}
+
+.voice-pill-position-live-transcript-encapsulated-bottom-left {
+  bottom: 1.625rem;
+  left: 1.75rem;
+  transform: none;
+}
+
+.inline-response-shimmer {
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--color-foreground) 62%, transparent) 0%,
+    var(--color-foreground) 42%,
+    color-mix(in oklch, var(--color-foreground) 62%, transparent) 76%
+  );
+  background-position: 160% 0;
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* Background-clipped text must be repainted when its background moves. A
+     stepped sweep preserves the shimmer while reducing that work from every
+     display frame to a small, bounded number of paints per cycle. */
+  animation: inline-response-shimmer 2.2s steps(24, end) infinite;
+}
+
+@keyframes inline-response-shimmer {
+  to {
+    background-position: -120% 0;
+  }
+}
+
+/* Let the retained answer recede before the surface sweep begins. The filter
+   transitions once and then stays still; only the lightweight sweep repeats. */
+.assistant-response-content {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity 260ms ease-out,
+    filter 260ms ease-out;
+}
+
+.assistant-response-content-updating {
+  opacity: 0.42;
+  filter: blur(4px);
+  transition:
+    opacity 480ms ease-in-out,
+    filter 480ms ease-in-out;
+  will-change: opacity, filter;
+}
+
+.assistant-content-area-shimmer {
+  background: color-mix(in oklch, var(--color-surface-1) 58%, transparent);
+  animation: assistant-content-area-enter 260ms ease-out 220ms both;
+}
+
+.assistant-content-area-shimmer::after {
+  position: absolute;
+  inset-block: 0;
+  left: -60%;
+  width: 60%;
+  content: "";
+  background: linear-gradient(
+    100deg,
+    transparent 18%,
+    color-mix(in oklch, var(--color-surface-3) 44%, transparent) 50%,
+    transparent 82%
+  );
+  transform: translateX(0);
+  animation: assistant-content-area-sweep 2.1s cubic-bezier(0.4, 0, 0.2, 1) 440ms infinite both;
+  will-change: transform;
+}
+
+.assistant-tool-invocation {
+  animation: assistant-content-area-enter 180ms ease-out both;
+}
+
+.assistant-tool-invocation-status {
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklch, var(--color-foreground) 5%, transparent),
+    var(--shadow-card);
+}
+
+.assistant-tool-invocation-pulse::after {
+  position: absolute;
+  inset: -4px;
+  border: 1px solid color-mix(in oklch, var(--color-agent-brand) 58%, transparent);
+  border-radius: inherit;
+  content: "";
+  animation: assistant-tool-invocation-pulse 1.8s ease-out infinite;
+}
+
+.assistant-tool-invocation-verb {
+  animation: assistant-tool-invocation-verb-enter 200ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@keyframes assistant-tool-invocation-pulse {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.55);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes assistant-tool-invocation-verb-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes assistant-content-area-enter {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes assistant-content-area-sweep {
+  0% {
+    transform: translateX(0);
+  }
+  68%,
+  100% {
+    transform: translateX(270%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expanding-panel-surface {
+    transition-duration: 1ms;
+  }
+
+  .expanding-panel-surface[data-panel-mode="live-transcript"]::before,
+  .voice-pill-control[data-integrated-with-panel="true"] {
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .assistant-response-actions,
+  .assistant-pill-presence {
+    animation-duration: 1ms !important;
+  }
+
+  .processing-signal-glow[data-active="true"],
+  .processing-signal-glow[data-active="true"]::before {
+    animation: none;
+  }
+
+  .inline-response-shimmer {
+    animation: none;
+    color: var(--color-foreground);
+    -webkit-text-fill-color: currentColor;
+  }
+
+  .assistant-content-area-shimmer::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .assistant-content-area-shimmer {
+    animation: none;
+  }
+
+  .assistant-tool-invocation,
+  .assistant-tool-invocation-verb,
+  .assistant-tool-invocation-pulse::after {
+    animation: none;
+  }
+
+  .assistant-response-content {
+    transition: opacity 1ms;
+  }
+
+  .assistant-response-content-updating {
+    filter: none;
+  }
+}

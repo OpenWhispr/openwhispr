@@ -315,5 +315,21 @@ function migrateLegacyBinDir(managers) {
   return clearedPacks;
 }
 
+// An enabled flag with no pack on disk is only reachable via data loss (the
+// 1.8.3 migrateLegacyBinDir deleted lib-carrying packs without recording a
+// notice): the flag is only set after a completed download, and intentional
+// deletes clear it. Returns the affected pack names for the re-download
+// notice; callers must gate re-recording (gpuPackMigrationNotice.recordOnce)
+// so a dismissed notice doesn't return every launch.
+function detectOrphanedGpuPacks(packs) {
+  return packs
+    .filter(
+      ({ manager, enabledEnvVar }) =>
+        process.env[enabledEnvVar] === "true" && manager.isSupported() && !manager.isDownloaded()
+    )
+    .map(({ manager }) => manager.config.name);
+}
+
 module.exports = GpuBinaryManager;
 module.exports.migrateLegacyBinDir = migrateLegacyBinDir;
+module.exports.detectOrphanedGpuPacks = detectOrphanedGpuPacks;

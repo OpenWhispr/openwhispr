@@ -3,11 +3,8 @@ import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { getStreamingTranscriptionProviders } from "../models/ModelRegistry";
 import { resolveMeetingTranscriptionOptions } from "../helpers/meetingTranscriptionRouting";
-import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
-import {
-  followsSystemDefaultMic,
-  reconcileSavedMicSelection,
-} from "../helpers/micSelectionRecovery";
+import { followsSystemDefaultMic } from "../helpers/micSelectionRecovery";
+import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
 import {
@@ -102,6 +99,8 @@ interface MeetingRecordingState {
   error: string | null;
   /** Bumped on every error report so identical repeated errors still re-notify. */
   errorNonce: number;
+  /** Latched once per recording when main reports the system-audio tap has produced only silence. */
+  systemAudioSilentWarning: boolean;
   currentMicLevel: number;
   micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
   windowWidth: number;
@@ -295,57 +294,33 @@ export const primeMeetingWorklet = () => {
   getMeetingWorkletBlobUrl();
 };
 
-const getMeetingMicConstraints = async (): Promise<MediaStreamConstraints> => {
-  const { preferBuiltInMic, selectedMicDeviceId, selectedMicDeviceLabel } = getSettings();
-
-  if (preferBuiltInMic) {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const builtInMic = devices.find(
-        (device) => device.kind === "audioinput" && isBuiltInMicrophone(device.label)
-      );
-
-      if (builtInMic?.deviceId) {
-        return {
-          audio: {
-            deviceId: { exact: builtInMic.deviceId },
-            ...MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
-          },
-        };
-      }
-    } catch (err) {
+const getMeetingMicConstraints = async (
+  refreshSystemDefault = false
+): Promise<MediaStreamConstraints> => {
+  try {
+    const resolution = await resolvePreferredMicrophone({
+      settings: getSettings(),
+      refreshSystemDefault,
+    });
+    if (resolution.device?.deviceId) {
       logger.debug(
-        "Failed to enumerate microphones for meeting transcription",
-        { error: (err as Error).message },
+        "Resolved meeting microphone input",
+        { mode: resolution.mode, status: resolution.status, label: resolution.device.label },
         "meeting"
       );
+      return {
+        audio: {
+          deviceId: { exact: resolution.device.deviceId },
+          ...MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
+        },
+      };
     }
-  }
-
-  if (selectedMicDeviceId && selectedMicDeviceId !== "default") {
-    let resolvedDeviceId = selectedMicDeviceId;
-
-    try {
-      const reconciled = await reconcileSavedMicSelection(
-        selectedMicDeviceId,
-        selectedMicDeviceLabel,
-        "meeting"
-      );
-      resolvedDeviceId = reconciled.deviceId;
-    } catch (err) {
-      logger.debug(
-        "Failed to reconcile selected microphone for meeting transcription",
-        { error: (err as Error).message },
-        "meeting"
-      );
-    }
-
-    return {
-      audio: {
-        deviceId: { exact: resolvedDeviceId },
-        ...MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
-      },
-    };
+  } catch (err) {
+    logger.debug(
+      "Failed to resolve microphone for meeting transcription",
+      { error: (err as Error).message },
+      "meeting"
+    );
   }
 
   return { audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS };
@@ -439,6 +414,7 @@ let systemPartialSpeakerIdValue: string | null = null;
 let recentSystemSpeaker: RecentSystemSpeaker | null = null;
 let speakerLocks: Map<string, string> = new Map();
 let pushConfigTimeout: ReturnType<typeof setTimeout> | null = null;
+let sessionSystemAudioActive = false;
 
 export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   isRecording: false,
@@ -460,6 +436,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   userTouchedStepper: false,
   error: null,
   errorNonce: 0,
+  systemAudioSilentWarning: false,
   currentMicLevel: 0,
   micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
@@ -715,6 +692,7 @@ async function cleanup(): Promise<void> {
   isPrepared = false;
   isRecordingFlag = false;
   isStartingFlag = false;
+  sessionSystemAudioActive = false;
 }
 
 export async function prepareTranscription(): Promise<void> {
@@ -815,6 +793,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     recentSystemSpeaker = null;
     speakerLocks = locks;
     systemPartialSpeakerIdValue = null;
+    sessionSystemAudioActive = false;
 
     useMeetingRecordingStore.setState({
       isRecording: true,
@@ -837,6 +816,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       diarizationSessionId: null,
       completedDiarization: null,
       error: null,
+      systemAudioSilentWarning: false,
       micCaptureStatus: "inactive",
     });
 
@@ -1185,6 +1165,22 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       });
       if (fatalErrorCleanup) ipcCleanups.push(fatalErrorCleanup);
 
+      // One-shot from main (~45s in) when the system tap has streamed only
+      // silence; main never emits it for mic-only sessions, but gate on this
+      // session's own system-audio state anyway.
+      const systemAudioSilentCleanup = window.electronAPI?.onMeetingSystemAudioSilent?.((data) => {
+        if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+        if (!sessionSystemAudioActive) return;
+        if (useMeetingRecordingStore.getState().systemAudioSilentWarning) return;
+        logger.warn(
+          "Meeting system audio has produced only silence",
+          { systemAudioStrategy: data?.systemAudioStrategy },
+          "meeting"
+        );
+        useMeetingRecordingStore.setState({ systemAudioSilentWarning: true });
+      });
+      if (systemAudioSilentCleanup) ipcCleanups.push(systemAudioSilentCleanup);
+
       // Main re-derives the expected count when participants are added mid-meeting
       // (never for a count set explicitly via the stepper — main skips those).
       const speakerConfigCleanup = window.electronAPI?.onMeetingSessionSpeakerConfigUpdated?.(
@@ -1277,9 +1273,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         }
         micRecovery = new ActiveMicRecoveryController({
           mediaDevices: navigator.mediaDevices,
-          acquire: async () => {
+          acquire: async (reason) => {
             try {
-              return await navigator.mediaDevices.getUserMedia(await getMeetingMicConstraints());
+              return await navigator.mediaDevices.getUserMedia(
+                await getMeetingMicConstraints(
+                  reason === "devicechange" || reason === "devicechange-ended"
+                )
+              );
             } catch {
               return navigator.mediaDevices.getUserMedia({
                 audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
@@ -1378,6 +1378,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       }
 
       const systemAudioAvailable = systemAudioHandledInMain || systemStream !== null;
+      sessionSystemAudioActive = systemAudioAvailable;
       try {
         const availabilityResult =
           await window.electronAPI?.meetingTranscriptionSetSystemAudioAvailable?.(
@@ -1461,6 +1462,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemPartial: "",
       systemPartialSpeakerId: null,
       systemPartialSpeakerName: null,
+      systemAudioSilentWarning: false,
       currentMicLevel: 0,
     });
     return { diarizationSessionId: null };
@@ -1546,6 +1548,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemPartial: "",
       systemPartialSpeakerId: null,
       systemPartialSpeakerName: null,
+      systemAudioSilentWarning: false,
       currentMicLevel: 0,
     });
 

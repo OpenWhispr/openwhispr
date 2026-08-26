@@ -77,7 +77,6 @@ async function loadAudioManager(t) {
     },
     createManager: () =>
       Object.assign(Object.create(AudioManager.prototype), {
-        skipReasoning: false,
         voiceAgentRequested: false,
         translationRequested: false,
         isDictionaryEcho: () => false,
