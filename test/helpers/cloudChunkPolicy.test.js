@@ -331,3 +331,22 @@ test("double-release does not mint extra capacity", async () => {
   r1();
   (await second)();
 });
+
+test("cloudChunkPolicy helpers handle nullish inputs safely", () => {
+  assert.equal(isTransientChunkError(null), true);
+  assert.equal(isTransientChunkError(undefined), true);
+  assert.equal(isNetworkLevelFailure(null), true);
+  assert.equal(isNetworkLevelFailure(undefined), true);
+  assert.deepEqual(summarizeChunkResults(null), {
+    responses: [],
+    failedChunks: 0,
+    silentChunks: 0,
+  });
+  assert.deepEqual(summarizeChunkResults(undefined), {
+    responses: [],
+    failedChunks: 0,
+    silentChunks: 0,
+  });
+  assert.equal(assembleChunkTranscript(null, 10, 100), "");
+  assert.equal(assembleChunkTranscript(undefined, 10, 100), "");
+});

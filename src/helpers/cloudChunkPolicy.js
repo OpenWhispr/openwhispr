@@ -53,6 +53,7 @@ const FATAL_CHUNK_CODES = new Set(["AUTH_EXPIRED", "LIMIT_REACHED"]);
 const NON_RETRYABLE_CHUNK_CODES = new Set([...FATAL_CHUNK_CODES, "NO_SPEECH_DETECTED"]);
 
 function isTransientChunkError(err) {
+  if (!err || typeof err !== "object") return true;
   if (NON_RETRYABLE_CHUNK_CODES.has(err.code)) return false;
   return !err.statusCode || err.statusCode >= 500;
 }
@@ -62,7 +63,7 @@ function isTransientChunkError(err) {
 // before the next attempt. Errors carrying a statusCode or a business code
 // prove the connection works.
 function isNetworkLevelFailure(err, { timedOut = false } = {}) {
-  return timedOut || (!err.statusCode && !err.code);
+  return timedOut || (!err?.statusCode && !err?.code);
 }
 
 // Fatal TLS alerts and HTTP/2/QUIC protocol errors poison every stream on the
@@ -99,7 +100,12 @@ function summarizeChunkResults(results) {
   let failedChunks = 0;
   let silentChunks = 0;
 
-  for (const result of results) {
+  const list =
+    Array.isArray(results) || (results && typeof results[Symbol.iterator] === "function")
+      ? results
+      : [];
+
+  for (const result of list) {
     if (result == null) {
       failedChunks++;
     } else if (result === SILENT_CHUNK) {
@@ -119,6 +125,7 @@ function summarizeChunkResults(results) {
 // marker is read by users and pasted by dictation, so it is localized like the
 // [Speaker N] labels in transcriptFormatter.
 function assembleChunkTranscript(results, segmentDurationSeconds, totalDurationSeconds) {
+  if (!Array.isArray(results)) return "";
   const pieces = [];
   for (let i = 0; i < results.length; i++) {
     if (results[i] === SILENT_CHUNK) continue;
