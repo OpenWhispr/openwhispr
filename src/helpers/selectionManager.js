@@ -493,6 +493,10 @@ class SelectionManager {
     // a terminal target never becomes a caret destination — the same rule the
     // selection paths apply.
     if (this._isTerminalTarget(capture.target, target)) return capture;
+    // AT-SPI targets carry only a pid — nothing for the signature check above
+    // to match — so resolve the executable name before a Wayland terminal's
+    // empty prompt can read as a writable caret.
+    if (target.kind === "atspi-pid" && (await this._isTerminalPid(target.id))) return capture;
     const editable = await this.textEditMonitor?.isFocusedEditable?.(target);
     return editable ? { status: "editable", target } : capture;
   }
@@ -505,11 +509,13 @@ class SelectionManager {
     );
   }
 
-  // macOS AX targets carry only a pid; resolve the executable path so terminal
-  // apps can be recognized before their empty prompt reads as a writable caret.
+  // macOS AX and Linux AT-SPI targets carry only a pid; resolve the executable
+  // so terminal apps can be recognized before their empty prompt reads as a
+  // writable caret. macOS `ps` reports a full path, Linux the bare comm name —
+  // the parsing below degrades to the bare name unchanged.
   async _isTerminalPid(pid) {
     if (!this.clipboardManager.isTerminalSignature) return false;
-    const executablePath = await this._readMacExecutablePath(pid);
+    const executablePath = await this._readExecutablePath(pid);
     if (!executablePath) return false;
     // Match the bundle and executable names, not the whole path — segments
     // like "/System/" would collide with short signatures such as "st".
@@ -518,7 +524,7 @@ class SelectionManager {
     return this.clipboardManager.isTerminalSignature(`${bundleName} ${executableName}`);
   }
 
-  async _readMacExecutablePath(pid) {
+  async _readExecutablePath(pid) {
     const result = await runSpawn("ps", ["-p", String(pid), "-o", "comm="], { timeout: 500 });
     return result.success ? result.stdout.trim() : "";
   }

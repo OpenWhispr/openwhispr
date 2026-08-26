@@ -111,6 +111,15 @@ def main():
             )
         except Exception:
             editable = False
+        # A shell prompt must never read as a writable caret: pasted newlines
+        # execute. VTE and Qt terminals expose the TERMINAL role; the caller
+        # separately refuses terminals by executable name.
+        if editable:
+            try:
+                if focused.get_role() == Atspi.Role.TERMINAL:
+                    editable = False
+            except Exception:
+                pass
         # A live selection means an EDITABLE verdict would let generated text
         # paste over the user's highlighted text. This is the authoritative
         # check: the caller's clipboard-based capture cannot see a selection

@@ -128,7 +128,7 @@ test("a macOS terminal's empty prompt never becomes a caret delivery target", as
   const { manager } = makeHarness({ selections: [{ state: "none", editable: true }] });
   manager.clipboardManager.isTerminalSignature = (signature) =>
     signature.toLowerCase().includes("iterm");
-  manager._readMacExecutablePath = async () => "/Applications/iTerm.app/Contents/MacOS/iTerm2";
+  manager._readExecutablePath = async () => "/Applications/iTerm.app/Contents/MacOS/iTerm2";
 
   assert.equal((await manager.captureSelectedText({ probeEditable: true })).status, "none");
 });
@@ -162,6 +162,42 @@ test("a terminal-flagged target is refused as a caret destination without probin
     "none"
   );
   assert.equal(probes.length, 0);
+  assert.equal(
+    (await manager._markEditableCaret({ status: "none", target: editor }, editor, true)).status,
+    "editable"
+  );
+  assert.equal(probes.length, 1);
+});
+
+// AT-SPI targets carry only a pid — no window class or exe name for the
+// signature check — so the executable name must be resolved before a Wayland
+// terminal's empty prompt can read as a writable caret.
+test("a Linux AT-SPI terminal pid never becomes a caret delivery target", async () => {
+  const probes = [];
+  const executableByPid = { 4321: "gnome-terminal-", 8765: "gedit" };
+  const manager = new SelectionManager({
+    clipboardManager: {
+      isTerminalSignature: (signature) => signature.toLowerCase().includes("gnome-terminal"),
+    },
+    textEditMonitor: {
+      isFocusedEditable: async (target) => {
+        probes.push(target);
+        return true;
+      },
+    },
+    platform: "linux",
+    now: () => 1000,
+  });
+  manager._readExecutablePath = async (pid) => executableByPid[pid] ?? "";
+  const terminal = { kind: "atspi-pid", id: "4321" };
+  const editor = { kind: "atspi-pid", id: "8765" };
+
+  assert.equal(
+    (await manager._markEditableCaret({ status: "none", target: terminal }, terminal, true))
+      .status,
+    "none"
+  );
+  assert.equal(probes.length, 0, "a terminal pid must be refused without probing");
   assert.equal(
     (await manager._markEditableCaret({ status: "none", target: editor }, editor, true)).status,
     "editable"

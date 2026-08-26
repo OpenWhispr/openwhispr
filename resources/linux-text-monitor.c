@@ -215,6 +215,13 @@ int main(int argc, char **argv) {
             atspi_state_set_contains(states, ATSPI_STATE_FOCUSABLE) &&
             !atspi_state_set_contains(states, ATSPI_STATE_PROTECTED);
         if (states) g_object_unref(states);
+        /* A shell prompt must never read as a writable caret: pasted newlines
+         * execute. VTE and Qt terminals expose ATSPI_ROLE_TERMINAL; the caller
+         * separately refuses terminals by executable name. */
+        if (editable &&
+            atspi_accessible_get_role(focused, NULL) == ATSPI_ROLE_TERMINAL) {
+            editable = 0;
+        }
         /* A live selection means an EDITABLE verdict would let generated text
          * paste over the user's highlighted text. This is the authoritative
          * check: the caller's clipboard-based capture cannot see a selection
