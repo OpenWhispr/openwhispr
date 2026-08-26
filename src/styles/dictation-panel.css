@@ -406,20 +406,24 @@
   will-change: left, bottom, transform;
 }
 
+/* Floating docks keep the pill 12px inside the window so the Signal glow's
+   halo and the hover tooltip have click-through headroom instead of clipping
+   at the window bounds. Sized with WINDOW_SIZES in windowConfig.js — change
+   together. */
 .voice-pill-position-bottom-right {
-  bottom: 0.25rem;
-  left: calc(100% - 0.25rem);
+  bottom: 0.75rem;
+  left: calc(100% - 0.75rem);
   transform: translateX(-100%);
 }
 
 .voice-pill-position-bottom-left {
-  bottom: 0.25rem;
-  left: 0.25rem;
+  bottom: 0.75rem;
+  left: 0.75rem;
   transform: none;
 }
 
 .voice-pill-position-center {
-  bottom: 0.25rem;
+  bottom: 0.75rem;
   left: 50%;
   transform: translateX(-50%);
 }

@@ -1,4 +1,4 @@
-const { app, screen, BrowserWindow, shell, dialog } = require("electron");
+const { app, screen, BrowserWindow, shell, dialog, ipcMain } = require("electron");
 const debugLogger = require("./debugLogger");
 const HotkeyManager = require("./hotkeyManager");
 const { isGlobeLikeHotkey } = HotkeyManager;
@@ -40,6 +40,7 @@ class WindowManager {
   constructor() {
     this.mainWindow = null;
     this.controlPanelWindow = null;
+    this._resizeMaskTokenCounter = 0;
     this._controlPanelVisibilityTimer = null;
     this._onboardingRestoreBounds = null;
     this._onboardingWindowMode = null;
@@ -289,13 +290,30 @@ class WindowManager {
 
   async _prepareRendererForMainWindowResize(bounds, anchor) {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
-    this.mainWindow.webContents.send("main-window-will-resize", { bounds, anchor });
 
-    // Give the renderer one frame to install screen-space anchor compensation
-    // before setBounds reaches the OS compositor. Without this handshake,
-    // Windows and macOS can paint the new viewport size one frame before the
+    // The renderer must install screen-space anchor compensation before
+    // setBounds reaches the OS compositor. Without this handshake, Windows
+    // and macOS can paint the new viewport size one frame before the
     // corresponding window position, which visibly kicks the pill or panel.
-    await new Promise((resolve) => setTimeout(resolve, 24));
+    // A fixed sleep loses that race whenever the renderer is mid-task (an
+    // entrance commit, mic warm-up), so wait for its explicit ack; the
+    // timeout only covers an unresponsive or torn-down renderer.
+    const token = ++this._resizeMaskTokenCounter;
+    const ackPromise = new Promise((resolve) => {
+      const listener = (_event, ackToken) => {
+        if (ackToken !== token) return;
+        ipcMain.removeListener("main-window-resize-mask-ready", listener);
+        clearTimeout(timeout);
+        resolve();
+      };
+      const timeout = setTimeout(() => {
+        ipcMain.removeListener("main-window-resize-mask-ready", listener);
+        resolve();
+      }, 60);
+      ipcMain.on("main-window-resize-mask-ready", listener);
+    });
+    this.mainWindow.webContents.send("main-window-will-resize", { bounds, anchor, token });
+    await ackPromise;
   }
 
   _enqueueMainWindowMutation(run) {
