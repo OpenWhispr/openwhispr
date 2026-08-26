@@ -186,6 +186,7 @@
         "accessibilityDescription": "Pega texto en tu aplicación activa.",
         "systemAudioTitle": "Audio del Sistema",
         "systemAudioDescription": "Captura audio de otras aplicaciones.",
+        "screenContextDescription": "Permite que tu asistente de voz vea tu pantalla. Nunca se guarda.",
         "enable": "Activar",
         "enabled": "Activado"
       },
@@ -533,6 +534,17 @@
         "step2": "Abre la consola de Corti y crea credenciales de API",
         "step3": "Pega tu Client ID y Secret abajo"
       }
+    },
+    "requiredModels": {
+      "title": "Instala los modelos requeridos",
+      "description": "{{organization}} requiere estos modelos en este dispositivo antes de que puedas empezar a dictar.",
+      "genericOrganization": "Tu organización",
+      "installed": "Instalado",
+      "queued": "En cola",
+      "failed": {
+        "title": "Una descarga no se completó",
+        "description": "Comprueba tu conexión y el espacio libre en disco, y vuelve a intentarlo. Si sigue fallando, contacta a tu administrador."
+      }
     }
   },
   "streaming": {
@@ -656,7 +668,12 @@
       "enableButton": "Activar GPU",
       "dismissButton": "Ahora no"
     },
-    "backToNotes": "Volver a notas"
+    "backToNotes": "Volver a notas",
+    "requiredModelsByOrg": {
+      "title": "Faltan modelos requeridos",
+      "description": "Tu organización requiere estos modelos en este dispositivo: {{models}}.",
+      "download": "Descargar"
+    }
   },
   "reasoning": {
     "mode": {
@@ -984,7 +1001,7 @@
     "emailStep": {
       "checkingEmail": "Comprobando tu correo...",
       "continueWithEmail": "Continuar con correo electrónico",
-      "continueWithoutAccount": "Usar OpenWhispr sin cuenta",
+      "continueWithoutAccount": "Continuar sin cuenta",
       "emailLabel": "Correo electrónico",
       "emailPlaceholder": "tu@ejemplo.com",
       "useDifferentEmail": "Usar otro correo electrónico"
@@ -1584,7 +1601,9 @@
             "SSO y cumplimiento normativo",
             "Soporte dedicado"
           ],
-          "cta": "Contactar a ventas"
+          "cta": "Contactar a ventas",
+          "upgradeCta": "Mejorar a Enterprise",
+          "askOwner": "Pide a {{name}} que actualice tu espacio de trabajo."
         },
         "currentPlan": "Plan actual",
         "coveredByWorkspace": "Incluido en tu plan de espacio de trabajo",
@@ -2421,7 +2440,40 @@
             "admin": "Administrador del espacio de trabajo"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Consola Enterprise",
+        "description": "Gestiona SSO, políticas y miembros desde la web",
+        "open": "Abrir consola"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "Mejorar a Enterprise",
+      "description": "Elige el espacio de trabajo, los puestos y el ciclo de facturación. El pago se completa en Stripe Checkout.",
+      "allSubscribed": "Los espacios de trabajo de tu propiedad ya están en Enterprise o no se pueden cambiar aquí. Para cambios de plan, contacta con ventas.",
+      "workspaceLabel": "Espacio de trabajo",
+      "seatsLabel": "Puestos",
+      "seatsHint_one": "{{count}} puesto en uso actualmente",
+      "seatsHint_other": "{{count}} puestos en uso actualmente",
+      "intervalLabel": "Ciclo de facturación",
+      "interval": {
+        "monthly": "Mensual",
+        "annual": "Anual"
+      },
+      "proratedCharge": "Cargo prorrateado",
+      "prorationNote": "La diferencia prorrateada se añade a tu próxima factura.",
+      "errors": {
+        "previewFailed": "No se pudo cargar la vista previa de la mejora.",
+        "alreadyEnterprise": "Este espacio de trabajo ya está en Enterprise.",
+        "subscriptionInactive": "La suscripción de este espacio de trabajo no está activa. Actualiza tus datos de facturación e inténtalo de nuevo.",
+        "priceNotConfigured": "Los precios de Enterprise no están disponibles ahora mismo. Contacta con ventas."
+      },
+      "priceNote": "El precio final se muestra al pagar.",
+      "continueCta": "Continuar al pago",
+      "upgradeDescription": "Actualiza {{workspace}} de {{plan}} a Enterprise. Los puestos y el ciclo de facturación se mantienen; el cambio se aplica de inmediato.",
+      "upgradeCta": "Actualizar ahora",
+      "upgradedTitle": "Actualizado a Enterprise",
+      "upgradedDescription": "{{workspace}} ahora está en Enterprise."
     }
   },
   "models": {
@@ -3329,10 +3381,12 @@
       "copy_to_clipboardName": "Copiar al portapapeles",
       "web_searchName": "Buscar en la web",
       "get_calendar_eventsName": "Obtener eventos del calendario",
+      "get_calendar_availabilityName": "Consultar disponibilidad",
       "search_notesStatus": "Buscando notas...",
       "web_searchStatus": "Buscando en la web...",
       "copy_to_clipboardStatus": "Copiando al portapapeles...",
       "get_calendar_eventsStatus": "Consultando calendario...",
+      "get_calendar_availabilityStatus": "Consultando disponibilidad...",
       "get_noteStatus": "Leyendo nota...",
       "create_noteStatus": "Creando nota...",
       "update_noteStatus": "Actualizando nota...",

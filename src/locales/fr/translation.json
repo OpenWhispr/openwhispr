@@ -186,6 +186,7 @@
         "accessibilityDescription": "Colle le texte dans votre application active.",
         "systemAudioTitle": "Audio Système",
         "systemAudioDescription": "Capture l’audio d’autres applications.",
+        "screenContextDescription": "Permet à votre assistant vocal de voir votre écran. Jamais enregistré.",
         "enable": "Activer",
         "enabled": "Activé"
       },
@@ -533,6 +534,17 @@
         "step2": "Ouvrez la console Corti et créez des identifiants API",
         "step3": "Collez votre Client ID et votre Secret ci-dessous"
       }
+    },
+    "requiredModels": {
+      "title": "Installez les modèles requis",
+      "description": "{{organization}} exige ces modèles sur cet appareil avant que vous puissiez commencer la dictée.",
+      "genericOrganization": "Votre organisation",
+      "installed": "Installé",
+      "queued": "En attente",
+      "failed": {
+        "title": "Un téléchargement ne s'est pas terminé",
+        "description": "Vérifiez votre connexion et l'espace disque disponible, puis réessayez. Si le problème persiste, contactez votre administrateur."
+      }
     }
   },
   "streaming": {
@@ -656,7 +668,12 @@
       "enableButton": "Activer le GPU",
       "dismissButton": "Pas maintenant"
     },
-    "backToNotes": "Retour aux notes"
+    "backToNotes": "Retour aux notes",
+    "requiredModelsByOrg": {
+      "title": "Modèles requis manquants",
+      "description": "Votre organisation exige ces modèles sur cet appareil : {{models}}.",
+      "download": "Télécharger"
+    }
   },
   "reasoning": {
     "mode": {
@@ -984,7 +1001,7 @@
     "emailStep": {
       "checkingEmail": "Vérification de votre adresse e-mail...",
       "continueWithEmail": "Continuer avec l'e-mail",
-      "continueWithoutAccount": "Utiliser OpenWhispr sans compte",
+      "continueWithoutAccount": "Continuer sans compte",
       "emailLabel": "Adresse e-mail",
       "emailPlaceholder": "vous@exemple.com",
       "useDifferentEmail": "Utiliser une autre adresse e-mail"
@@ -1676,6 +1693,11 @@
             "admin": "Administrateur de l'espace"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Console Enterprise",
+        "description": "Gérez le SSO, les politiques et les membres sur le web",
+        "open": "Ouvrir la console"
       }
     },
     "unifiedBilling": {
@@ -1820,7 +1842,9 @@
             "SSO et conformité",
             "Support dédié"
           ],
-          "cta": "Contacter les ventes"
+          "cta": "Contacter les ventes",
+          "upgradeCta": "Passer à Enterprise",
+          "askOwner": "Demandez à {{name}} de mettre à niveau votre espace de travail."
         },
         "currentPlan": "Forfait actuel",
         "coveredByWorkspace": "Inclus dans votre plan d'espace de travail",
@@ -2463,6 +2487,34 @@
       "endpointUrl": "URL du point d'accès",
       "serverUrl": "URL du serveur",
       "apiKeyOptional": "Clé API (facultative)"
+    },
+    "enterpriseCheckout": {
+      "title": "Passer à Enterprise",
+      "description": "Choisissez l'espace de travail, les sièges et le cycle de facturation. Le paiement s'effectue dans Stripe Checkout.",
+      "allSubscribed": "Les espaces de travail que vous possédez sont déjà sur Enterprise ou ne peuvent pas être modifiés ici. Pour tout changement de plan, contactez le service commercial.",
+      "workspaceLabel": "Espace de travail",
+      "seatsLabel": "Sièges",
+      "seatsHint_one": "{{count}} siège actuellement utilisé",
+      "seatsHint_other": "{{count}} sièges actuellement utilisés",
+      "intervalLabel": "Cycle de facturation",
+      "interval": {
+        "monthly": "Mensuel",
+        "annual": "Annuel"
+      },
+      "proratedCharge": "Montant au prorata",
+      "prorationNote": "La différence au prorata est ajoutée à votre prochaine facture.",
+      "errors": {
+        "previewFailed": "Impossible de charger l'aperçu de la mise à niveau.",
+        "alreadyEnterprise": "Cet espace de travail est déjà sur Enterprise.",
+        "subscriptionInactive": "L'abonnement de cet espace de travail n'est pas actif. Mettez à jour vos informations de facturation et réessayez.",
+        "priceNotConfigured": "Les tarifs Enterprise ne sont pas disponibles pour le moment. Veuillez contacter le service commercial."
+      },
+      "priceNote": "Le prix final est affiché lors du paiement.",
+      "continueCta": "Continuer vers le paiement",
+      "upgradeDescription": "Passez {{workspace}} de {{plan}} à Enterprise. Les sièges et le cycle de facturation sont conservés ; le changement prend effet immédiatement.",
+      "upgradeCta": "Mettre à niveau",
+      "upgradedTitle": "Mise à niveau effectuée",
+      "upgradedDescription": "{{workspace}} est maintenant sur Enterprise."
     }
   },
   "models": {
@@ -3446,10 +3498,12 @@
       "copy_to_clipboardName": "Copier dans le presse-papiers",
       "web_searchName": "Rechercher sur le web",
       "get_calendar_eventsName": "Obtenir les événements du calendrier",
+      "get_calendar_availabilityName": "Vérifier les disponibilités",
       "search_notesStatus": "Recherche de notes...",
       "web_searchStatus": "Recherche sur le web...",
       "copy_to_clipboardStatus": "Copie dans le presse-papiers...",
       "get_calendar_eventsStatus": "Vérification du calendrier...",
+      "get_calendar_availabilityStatus": "Vérification des disponibilités...",
       "get_noteStatus": "Lecture de la note...",
       "create_noteStatus": "Création de la note...",
       "update_noteStatus": "Mise à jour de la note...",

@@ -36,7 +36,9 @@ function isPrivateHost(hostname: string): boolean {
   }
 
   const isIPv6 = h.includes(":");
-  if (isIPv6 && (h.startsWith("fe80") || h.startsWith("fc") || h.startsWith("fd"))) return true;
+  // Link-local is fe80::/10 (fe80–febf), not only the fe80 hextet. Same rule as
+  // isPrivateIp in urlAudioDownloader.js. Unique local is fc00::/7 (fc/fd).
+  if (isIPv6 && (/^fe[89ab]/.test(h) || h.startsWith("fc") || h.startsWith("fd"))) return true;
   if (h.endsWith(".local")) return true;
   // Tailscale MagicDNS — resolves to CGNAT (100.64/10) addresses reachable
   // only inside the user's own tailnet.

@@ -3,6 +3,7 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { OrgPolicy } from "./policy";
 import type { ManagedEnterpriseConfig } from "./enterpriseIdentity";
+import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./calendar";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
@@ -2421,6 +2422,12 @@ declare global {
       gcalGetUpcomingEvents?: (
         windowMinutes?: number
       ) => Promise<{ success: boolean; events: any[] }>;
+      calendarGetAvailability?: (
+        request: CalendarAvailabilityRequest
+      ) => Promise<
+        | { success: true; availability: CalendarAvailabilityResult }
+        | { success: false; error: string }
+      >;
       gcalGetEvent?: (eventId: string) => Promise<{
         success: boolean;
         event: {

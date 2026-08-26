@@ -6,6 +6,8 @@ const DragManager = require("./dragManager");
 const MainWindowPlacementCoordinator = require("./mainWindowPlacementCoordinator");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
+const { isAllowedAppNavigation, isExternalBrowserUrl } = require("./navigationGuard");
+const { pathToFileURL } = require("url");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
@@ -1089,19 +1091,21 @@ class WindowManager {
     this._onboardingWindowState = null;
 
     this.controlPanelWindow.webContents.on("will-navigate", (event, url) => {
-      const appUrl = DevServerManager.getAppUrl(true);
-      const controlPanelUrl = appUrl.startsWith("http") ? appUrl : `file://${appUrl}`;
+      // getAppUrl() is null in packaged builds; exactly one of the two is set.
+      const appUrl =
+        DevServerManager.getAppUrl(true) ??
+        pathToFileURL(DevServerManager.getAppFilePath(true).path).href;
 
-      if (
-        url.startsWith(controlPanelUrl) ||
-        url.startsWith("file://") ||
-        url.startsWith("devtools://")
-      ) {
+      if (isAllowedAppNavigation(url, appUrl)) {
         return;
       }
 
       event.preventDefault();
-      this.openExternalUrl(url);
+      if (isExternalBrowserUrl(url)) {
+        this.openExternalUrl(url);
+      } else {
+        debugLogger.debug("Blocked untrusted navigation", { url }, "window");
+      }
     });
 
     this.controlPanelWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -1430,14 +1434,14 @@ class WindowManager {
     dockManager.setControlPanelVisible(true);
   }
 
-  // Compact onboarding stays fixed-size; expanded onboarding can resize and
-  // maximize. Both modes remain minimizable and closable so a frameless window
-  // never traps the user in setup.
+  // Compact onboarding starts at smaller bounds, but both modes expose the
+  // complete window-control contract so a frameless window never traps the
+  // user in setup.
   _applyOnboardingWindowChrome(win, mode) {
     const expanded = mode === "expanded";
-    win.setResizable(expanded);
+    win.setResizable(true);
     win.setMinimizable(true);
-    win.setMaximizable(expanded);
+    win.setMaximizable(true);
     win.setClosable(true);
     win.setFullScreenable(false);
     // Floor at the mode's canonical size so no step renders below the bounds
@@ -1450,7 +1454,7 @@ class WindowManager {
       Math.min(floor.height, workArea.height)
     );
     if (process.platform === "darwin" && typeof win.setWindowButtonVisibility === "function") {
-      win.setWindowButtonVisibility(expanded);
+      win.setWindowButtonVisibility(true);
     }
   }
 
@@ -1460,8 +1464,9 @@ class WindowManager {
     if (!new Set(["compact", "expanded", "restore"]).has(mode)) return false;
     if (mode !== "restore" && (win.isFullScreen() || win.isMaximized())) {
       // Entering onboarding from a maximized/fullscreen control panel must not
-      // refuse: refusing leaves the native chrome (traffic lights, resize) on a
-      // window whose flow assumes it is locked to the canonical bounds.
+      // refuse: each mode is applied at its canonical centered bounds, which
+      // only take effect from a normal window state. Both modes stay
+      // maximizable, so the user can simply maximize again afterwards.
       if (win.isFullScreen()) win.setFullScreen(false);
       if (win.isMaximized()) win.unmaximize();
     }
