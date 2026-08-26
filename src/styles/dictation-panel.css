@@ -231,30 +231,29 @@
     0 0 10px color-mix(in oklch, var(--color-agent-brand) 18%, transparent);
 }
 
-/* The Beam package's compact light preset is deliberately faint. Keep its
-   darker light-theme palette visible against our pale surfaces without
-   changing the established dark-mode treatment. */
-:root:not(.dark) .agent-thinking-beam {
-  --beam-stroke-opacity: 5;
-  --beam-inner-opacity: 1.1;
-  --beam-bloom-opacity: 0.8;
-}
-
-/* Plain dictation contracts to the identity circle while processing and
-   signals with the Signal glow: a brand-blue comet orbiting a breathing
-   ambient halo. It anchors outside the Beam wrapper because the compact Beam
-   preset clips its own overflow, which would crop the halo. The processing
-   footprint is a fixed circle, so the layers rotate freely. */
+/* The Signal glow: a comet orbiting a breathing ambient halo around the
+   pill. Plain dictation lights it while processing; Agent Mode carries it
+   through listening and thinking in the agent's purple. */
 .voice-pill-beam-anchor {
   position: relative;
   display: inline-flex;
   border-radius: 9999px;
 }
 
+/* The orbit animates the conic gradients' start angle instead of rotating
+   the layers, so the same glow tracks the circular thinking pill and the
+   expanded recording capsule alike. */
+@property --signal-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: true;
+}
+
 .processing-signal-glow {
-  --signal-cyan: #38bdf8;
-  --signal-blue: #2563eb;
-  --signal-indigo: #6366f1;
+  --signal-bright: #38bdf8;
+  --signal-core: #2563eb;
+  --signal-deep: #6366f1;
+  --signal-head: #eaf6ff;
   --signal-halo-opacity: 0.8;
   --signal-comet-opacity: 0.95;
   position: absolute;
@@ -263,6 +262,14 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 220ms ease-out;
+}
+
+/* Agent Mode keeps the identical glow in its purple identity. */
+.processing-signal-glow[data-agent="true"] {
+  --signal-bright: #a78bfa;
+  --signal-core: #8787ff;
+  --signal-deep: #7c3aed;
+  --signal-head: #f2edff;
 }
 
 :root:not(.dark) .processing-signal-glow {
@@ -285,8 +292,8 @@
   border-radius: 9999px;
   background: radial-gradient(
     closest-side,
-    color-mix(in srgb, var(--signal-blue) 90%, transparent) 45%,
-    color-mix(in srgb, var(--signal-indigo) 70%, transparent) 75%,
+    color-mix(in srgb, var(--signal-core) 90%, transparent) 45%,
+    color-mix(in srgb, var(--signal-deep) 70%, transparent) 75%,
     transparent
   );
   filter: blur(5px);
@@ -300,28 +307,29 @@
   inset: -4px;
   border-radius: 9999px;
   background: conic-gradient(
-    from 0deg,
+    from var(--signal-angle),
     transparent 0 55%,
-    color-mix(in srgb, var(--signal-blue) 70%, transparent) 82%,
-    var(--signal-cyan) 100%
+    color-mix(in srgb, var(--signal-core) 70%, transparent) 82%,
+    var(--signal-bright) 100%
   );
   filter: blur(4px);
   opacity: var(--signal-comet-opacity);
 }
 
-/* Gradient ring whose white-hot head cools through cyan into indigo. */
+/* Gradient ring whose white-hot head cools through the bright hue into the
+   deep tail. */
 .processing-signal-ring {
   position: absolute;
   inset: -2px;
   border-radius: 9999px;
   padding: 2.5px;
   background: conic-gradient(
-    from 0deg,
-    color-mix(in srgb, var(--signal-blue) 25%, transparent) 0%,
-    color-mix(in srgb, var(--signal-indigo) 55%, transparent) 45%,
-    var(--signal-blue) 75%,
-    var(--signal-cyan) 94%,
-    #eaf6ff 100%
+    from var(--signal-angle),
+    color-mix(in srgb, var(--signal-core) 25%, transparent) 0%,
+    color-mix(in srgb, var(--signal-deep) 55%, transparent) 45%,
+    var(--signal-core) 75%,
+    var(--signal-bright) 94%,
+    var(--signal-head) 100%
   );
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
@@ -339,14 +347,13 @@
   animation: processing-signal-breathe 1.9s ease-in-out infinite;
 }
 
-.processing-signal-glow[data-active="true"]::after,
-.processing-signal-glow[data-active="true"] .processing-signal-ring {
+.processing-signal-glow[data-active="true"] {
   animation: processing-signal-spin 1.6s linear infinite;
 }
 
 @keyframes processing-signal-spin {
   to {
-    transform: rotate(360deg);
+    --signal-angle: 360deg;
   }
 }
 
@@ -360,25 +367,6 @@
     opacity: var(--signal-halo-opacity);
     transform: scale(1.05);
   }
-}
-
-:root:not(.dark) .agent-thinking-beam::before,
-:root:not(.dark) .agent-thinking-beam::after,
-:root:not(.dark) .agent-thinking-beam [data-beam-bloom] {
-  mix-blend-mode: multiply;
-}
-
-:root:not(.dark) .agent-thinking-beam[data-agent-mode="true"] {
-  --beam-stroke-opacity: 5.25;
-  --beam-inner-opacity: 0;
-  --beam-bloom-opacity: 0;
-}
-
-.agent-thinking-beam[data-agent-mode="true"] {
-  --beam-hue-base: 18deg;
-  --beam-stroke-opacity: 1.18;
-  --beam-inner-opacity: 0;
-  --beam-bloom-opacity: 0;
 }
 
 .expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"] {
@@ -610,14 +598,8 @@
     animation-duration: 1ms !important;
   }
 
-  .agent-thinking-beam[data-active] {
-    animation-duration: 1ms, 1ms !important;
-    animation-iteration-count: 1, 1 !important;
-  }
-
-  .processing-signal-glow[data-active="true"]::before,
-  .processing-signal-glow[data-active="true"]::after,
-  .processing-signal-glow[data-active="true"] .processing-signal-ring {
+  .processing-signal-glow[data-active="true"],
+  .processing-signal-glow[data-active="true"]::before {
     animation: none;
   }
 

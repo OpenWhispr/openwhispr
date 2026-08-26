@@ -1,11 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { cn } from "../lib/utils";
-import {
-  resolveWaveformBarHeight,
-  WAVEFORM_BAR_COUNT,
-  WAVEFORM_BAR_MIN_PX,
-  WAVEFORM_SLOT_WEIGHTS,
-} from "./waveformMath";
+import { resolveWaveformBarHeight, WAVEFORM_BAR_COUNT, WAVEFORM_BAR_MIN_PX } from "./waveformMath";
 
 interface PillWaveformProps {
   /** Returns the current input level (0..~1) or null when no signal source exists. */
@@ -15,7 +10,11 @@ interface PillWaveformProps {
   className?: string;
 }
 
-const SAMPLE_INTERVAL_MS = 60;
+// Syllables run ~140-250ms; sampling much faster than that lands neighboring
+// bars inside the same syllable, which reads as a fluid ridge. 80ms spacing
+// lets adjacent bars straddle syllable onsets and gaps, so the real signal
+// itself supplies the bar-to-bar variance.
+const SAMPLE_INTERVAL_MS = 80;
 
 /**
  * Level-driven waveform: bars scroll right-to-left with the live input signal.
@@ -45,15 +44,11 @@ export function PillWaveform({ getLevel, active, className }: PillWaveformProps)
         lastSample = now;
         const level = getLevel();
         const levels = levelsRef.current;
-        const previous = levels[levels.length - 1] ?? 0;
         levels.shift();
-        // Peak-decay envelope: inter-word gaps fall away over a few samples
-        // instead of snapping to a flat floor, so the wave keeps its rhythm
-        // through natural speech pauses.
-        levels.push(Math.max(level === null ? 0 : level, previous * 0.6));
+        levels.push(level === null ? 0 : level);
         for (let i = 0; i < levels.length; i++) {
           const bar = barRefs.current[i];
-          if (bar) bar.style.height = `${resolveWaveformBarHeight(levels[i], WAVEFORM_SLOT_WEIGHTS[i])}px`;
+          if (bar) bar.style.height = `${resolveWaveformBarHeight(levels[i])}px`;
         }
       }
       frame = requestAnimationFrame(paint);

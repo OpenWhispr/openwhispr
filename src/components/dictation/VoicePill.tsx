@@ -1,5 +1,4 @@
 import { forwardRef, type HTMLAttributes } from "react";
-import { BorderBeam, type BorderBeamTheme } from "border-beam";
 import { ChevronUp } from "lucide-react";
 import { cn } from "../lib/utils";
 import { PillWaveform } from "./PillWaveform";
@@ -24,7 +23,6 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   waveformOnlyWhileRecording?: boolean;
   integratedWithPanel?: boolean;
   agentMode?: boolean;
-  beamTheme?: BorderBeamTheme;
   showExpandChevron?: boolean;
   isDragging?: boolean;
   horizontalDirection?: "left" | "right";
@@ -60,7 +58,6 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     waveformOnlyWhileRecording = false,
     integratedWithPanel = false,
     agentMode = false,
-    beamTheme = "auto",
     showExpandChevron = false,
     isDragging = false,
     horizontalDirection = "right",
@@ -75,17 +72,15 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isThinking = state === "thinking";
   const showThinkingBeam = beamActive ?? isThinking;
   const isUnavailable = state === "unavailable";
-  // An idle Agent pill is a resting control, not a progress indicator. Keep
-  // its Beam for the active listening/thinking lifecycle only so reopening an
-  // Agent surface never looks like work is already in flight.
-  const showAgentBeam = agentMode && !isUnavailable && (showThinkingBeam || isRecording);
-  // Plain dictation signals processing with the brand-blue Signal glow (comet
-  // orbit over a breathing halo) instead of the Beam. Its halo must live
-  // outside the Beam wrapper, whose compact preset clips its own overflow.
-  // Only the real thinking state glows — lighting the recording entrance too
-  // would read as work already in flight (`beamActive` is that entrance cue,
-  // so it is deliberately ignored here).
-  const showSignalGlow = !agentMode && !isUnavailable && isThinking;
+  // One Signal glow (comet orbit over a breathing halo) serves both
+  // identities; only the palette differs. Plain dictation glows for the real
+  // thinking state alone — lighting the recording entrance too would read as
+  // work already in flight, so its `beamActive` cue is deliberately ignored.
+  // Agent Mode keeps its established listening + thinking lifecycle; an idle
+  // Agent pill is a resting control, so reopening an Agent surface never
+  // looks like work is already in flight.
+  const showSignalGlow =
+    !isUnavailable && (agentMode ? showThinkingBeam || isRecording : isThinking);
   const isPanel = variant === "panel";
   const collapseToIdentity = collapseToLogo || isThinking;
   const showCompactPill =
@@ -214,25 +209,11 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         aria-hidden="true"
         className="processing-signal-glow"
         data-active={showSignalGlow ? "true" : undefined}
+        data-agent={agentMode || undefined}
       >
         <span className="processing-signal-ring" />
       </span>
-      <BorderBeam
-        size="sm"
-        theme={beamTheme}
-        duration={1.6}
-        colorVariant="ocean"
-        brightness={1.35}
-        saturation={1.35}
-        hueRange={8}
-        strength={0.9}
-        active={showAgentBeam}
-        borderRadius={20}
-        className="agent-thinking-beam inline-flex rounded-full"
-        data-agent-mode={agentMode || undefined}
-      >
-        {pill}
-      </BorderBeam>
+      {pill}
     </span>
   );
 });
