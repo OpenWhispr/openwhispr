@@ -38,6 +38,12 @@ test("Ptyxis and GNOME Console window classes are terminals", () => {
   assert.equal(clipboard.isLinuxTerminalWindowClass("kgx"), true);
 });
 
+test("COSMIC Terminal window classes are terminals", () => {
+  const clipboard = new ClipboardManager();
+  assert.equal(clipboard.isLinuxTerminalWindowClass("com.system76.CosmicTerm"), true);
+  assert.equal(clipboard.isLinuxTerminalWindowClass("cosmic-term"), true);
+});
+
 test("existing terminals still match", () => {
   const clipboard = new ClipboardManager();
   assert.equal(clipboard.isLinuxTerminalWindowClass("kitty"), true);

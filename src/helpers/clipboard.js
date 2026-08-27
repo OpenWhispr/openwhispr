@@ -60,6 +60,8 @@ const LINUX_TERMINAL_CLASSES = [
   "ptyxis",
   "kgx",
   "org.gnome.console",
+  "cosmicterm",
+  "cosmic-term",
 ];
 
 // macOS reports localized app names rather than window classes, and iTerm2 has
