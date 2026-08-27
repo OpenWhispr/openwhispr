@@ -2575,6 +2575,7 @@
         "groq_whisper_large_v3": "Hochpräzise Spracherkennung",
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
+        "gemini_3_5_transcribe": "Googles Gemini-Spracherkennung",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
         "tinfoil_voxtral": "Nachweisbar private Transkription"

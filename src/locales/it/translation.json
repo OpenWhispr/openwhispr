@@ -2482,6 +2482,7 @@
         "groq_whisper_large_v3_turbo": "Velocità 216x in tempo reale",
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
+        "gemini_3_5_transcribe": "Riconoscimento vocale Gemini di Google",
         "corti_transcribe": "Trascrizione medica di livello clinico",
         "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI",
         "tinfoil_voxtral": "Trascrizione verificabilmente privata"

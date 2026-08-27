@@ -374,6 +374,16 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       return payload;
     },
   },
+  gemini: {
+    displayName: "Gemini",
+    ipc: () => window.electronAPI?.proxyGeminiTranscription,
+    buildPayload: ({ audioBuffer, model, language, keyterms }) => ({
+      audioBuffer,
+      model,
+      language,
+      keyterms: keyterms.length > 0 ? keyterms : undefined,
+    }),
+  },
   xai: {
     displayName: "xAI",
     ipc: () => window.electronAPI?.proxyXaiTranscription,
@@ -2251,6 +2261,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!apiKey?.trim()) {
         const err = new Error(
           "Tinfoil API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "gemini") {
+      apiKey = s.geminiApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getGeminiKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "Gemini API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
         throw err;

@@ -253,6 +253,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    geminiApiKey,
     tinfoilApiKey,
     customTranscriptionApiKey,
   } = apiKeys;
@@ -406,6 +407,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 groqApiKey,
                 xaiApiKey,
                 mistralApiKey,
+                geminiApiKey,
                 tinfoilApiKey,
                 customTranscriptionApiKey,
               })
@@ -443,6 +445,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    geminiApiKey,
     tinfoilApiKey,
     customTranscriptionApiKey,
     cortiClientId,

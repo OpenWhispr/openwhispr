@@ -2498,6 +2498,7 @@
         "groq_whisper_large_v3_turbo": "Скорость в 216 раз быстрее реального времени",
         "groq_whisper_large_v3": "Модель Large v3, быстрая и точная",
         "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция",
+        "gemini_3_5_transcribe": "Распознавание речи Gemini от Google",
         "corti_transcribe": "Медицинская транскрипция клинического уровня",
         "xai_grok_stt": "Высокоточное распознавание речи от xAI",
         "tinfoil_voxtral": "Проверяемо приватная транскрипция"

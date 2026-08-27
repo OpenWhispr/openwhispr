@@ -221,6 +221,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "groq", name: "Groq" },
   { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
+  { id: "gemini", name: "Gemini" },
   { id: "corti", name: "Corti" },
   { id: "tinfoil", name: "Tinfoil" },
   { id: "custom", name: "Custom" },
@@ -232,6 +233,7 @@ interface ProviderCredentialField {
     | "groqApiKey"
     | "xaiApiKey"
     | "mistralApiKey"
+    | "geminiApiKey"
     | "cortiClientId"
     | "cortiClientSecret"
     | "cortiEnvironment"
@@ -262,6 +264,10 @@ const PROVIDER_CREDENTIALS: Record<
   mistral: {
     consoleUrl: "https://console.mistral.ai/api-keys",
     fields: [{ key: "mistralApiKey", input: "secret" }],
+  },
+  gemini: {
+    consoleUrl: "https://aistudio.google.com/apikey",
+    fields: [{ key: "geminiApiKey", input: "secret" }],
   },
   corti: {
     consoleUrl: "https://www.corti.ai/?utm_source=referral&utm_content=&utm_campaign=openwhispr",
@@ -365,6 +371,8 @@ export default function TranscriptionModelPicker({
   const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
+  const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
@@ -922,6 +930,7 @@ export default function TranscriptionModelPicker({
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    geminiApiKey,
     cortiClientId,
     cortiClientSecret,
     cortiEnvironment,
@@ -933,6 +942,7 @@ export default function TranscriptionModelPicker({
     groqApiKey: setGroqApiKey,
     xaiApiKey: setXaiApiKey,
     mistralApiKey: setMistralApiKey,
+    geminiApiKey: setGeminiApiKey,
     cortiClientId: setCortiClientId,
     cortiClientSecret: setCortiClientSecret,
     cortiEnvironment: setCortiEnvironment,

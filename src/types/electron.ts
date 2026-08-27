@@ -1785,6 +1785,12 @@ declare global {
       // Gemini API key management
       getGeminiKey: () => Promise<string | null>;
       saveGeminiKey: (key: string) => Promise<void>;
+      proxyGeminiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<ProxyTranscriptionResult>;
 
       // Groq API key management
       getGroqKey: () => Promise<string | null>;

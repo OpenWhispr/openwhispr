@@ -68,6 +68,7 @@ const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
+const { transcribeWithGemini } = require("./geminiTranscription");
 const AudioStorageManager = require("./audioStorage");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
@@ -4233,6 +4234,22 @@ class IPCHandlers {
       })
     );
 
+    // Gemini's Interactions API takes JSON with inline base64 audio, not
+    // OpenAI-compatible multipart, so batch transcription is proxied through main.
+    ipcMain.handle(
+      "proxy-gemini-transcription",
+      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }) => {
+        return await transcribeWithGemini({
+          audioBuffer: Buffer.from(audioBuffer),
+          model,
+          contentType: "audio/webm",
+          language,
+          keyterms,
+          apiKey: this.environmentManager.getGeminiKey(),
+        });
+      })
+    );
+
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -5881,6 +5898,17 @@ class IPCHandlers {
             language: route.language,
           });
           if (text) result = { text, source: "corti", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "gemini") {
+          // Gemini's Interactions API takes JSON with inline base64 audio, so
+          // it can't use the generic multipart fetch below.
+          const { text } = await transcribeWithGemini({
+            audioBuffer: buffer,
+            model: route.model,
+            contentType: "audio/webm",
+            language: route.language,
+            apiKey: this.environmentManager.getGeminiKey(),
+          });
+          if (text) result = { text, source: "gemini", model: route.model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
           // directly; everything else consumes the route endpoint as-is.
@@ -9119,9 +9147,10 @@ class IPCHandlers {
 
           const fileSize = fs.statSync(realByok).size;
           if (route.sizeCapBytes && fileSize > route.sizeCapBytes) {
+            const capMb = Math.floor(route.sizeCapBytes / (1024 * 1024));
             return {
               success: false,
-              error: "File too large. Maximum size for bring-your-own-key is 25 MB.",
+              error: `File too large. Maximum size for bring-your-own-key is ${capMb} MB.`,
             };
           }
 
@@ -9151,6 +9180,18 @@ class IPCHandlers {
               contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
               language: route.language,
               apiKey: this.environmentManager.getTinfoilKey(),
+            });
+            return { success: true, text };
+          }
+
+          if (route.transport === "proxied" && route.provider === "gemini") {
+            const ext = path.extname(realByok).toLowerCase().replace(".", "");
+            const { text } = await transcribeWithGemini({
+              audioBuffer: fs.readFileSync(realByok),
+              model: route.model,
+              contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+              language: route.language,
+              apiKey: apiKey || this.environmentManager.getGeminiKey(),
             });
             return { success: true, text };
           }
