@@ -1,4 +1,5 @@
-import type { NoteItem } from "../types/electron";
+import type { StartRecordingArgs, TranscriptSegment } from "../stores/meetingRecordingStore";
+import type { MeetingAutoEndRestartRequest, NoteItem } from "../types/electron";
 
 export function createMeetingRecordingSessionId(
   randomUUID: () => string = () => crypto.randomUUID()
@@ -15,16 +16,64 @@ export function canStopMeetingRecordingSession(
 
 export function requestMeetingRecordingAutoEnd(
   payload: { sessionId?: unknown } | null | undefined,
-  stopRecording: (sessionId: string) => unknown,
+  stopRecording: (sessionId: string) => Promise<{ stopped: boolean }> | { stopped: boolean },
+  onStopped: (sessionId: string) => Promise<unknown> | unknown,
   onError: (error: unknown, sessionId: string) => void
 ): boolean {
   const sessionId = payload?.sessionId;
   if (typeof sessionId !== "string" || sessionId.trim().length === 0) return false;
 
-  // A rejected stop means the recording is still running while main already
-  // considers the countdown expired — surface it instead of swallowing it.
-  void Promise.resolve(stopRecording(sessionId)).catch((error) => onError(error, sessionId));
+  void Promise.resolve(stopRecording(sessionId))
+    .then((result) => (result.stopped ? onStopped(sessionId) : undefined))
+    .catch((error) => onError(error, sessionId));
   return true;
+}
+
+interface MeetingAutoEndRestartState {
+  recordingNoteId: number | null;
+  recordingNoteTitle: string | null;
+  recordingFolderId: number | null;
+  sessionDiarizationEnabled: boolean;
+  sessionExpectedCount: number;
+  userTouchedStepper: boolean;
+  segments: TranscriptSegment[];
+}
+
+export interface MeetingAutoEndRestartContext {
+  sessionId: string;
+  args: StartRecordingArgs;
+}
+
+export function createMeetingAutoEndRestartContext(
+  sessionId: string,
+  activeSessionId: string | null,
+  state: MeetingAutoEndRestartState
+): MeetingAutoEndRestartContext | null {
+  if (activeSessionId !== sessionId) return null;
+
+  return {
+    sessionId,
+    args: {
+      noteId: state.recordingNoteId,
+      noteTitle: state.recordingNoteTitle,
+      folderId: state.recordingFolderId,
+      seedSegments: state.segments,
+      diarizationEnabled: state.sessionDiarizationEnabled,
+      expectedCount: state.sessionExpectedCount,
+      expectedCountIsExplicit: state.userTouchedStepper,
+      autoEndEligible: true,
+    },
+  };
+}
+
+export function getMeetingAutoEndRestartArgs(
+  request: MeetingAutoEndRestartRequest,
+  context: MeetingAutoEndRestartContext | null,
+  activeSessionId: string | null,
+  latestSegments: TranscriptSegment[]
+): StartRecordingArgs | null {
+  if (!context || context.sessionId !== request.sessionId || activeSessionId !== null) return null;
+  return { ...context.args, seedSegments: latestSegments };
 }
 
 export function isMeetingAutoEndEligible(

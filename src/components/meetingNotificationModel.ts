@@ -15,9 +15,9 @@ interface AutoEndPresentation {
   titleKey: "meetingNotification.autoEnd.title";
   bodyKey: AutoEndBodyKey;
   bodyValues: { seconds: number };
-  actionKey: "meetingNotification.autoEnd.keep";
-  action: "keep";
-  dismissible: false;
+  actionKey: "meetingNotification.autoEnd.restart";
+  action: "restart";
+  dismissible: true;
   allowTitleWrap: true;
 }
 
@@ -46,9 +46,9 @@ export function getMeetingNotificationPresentation(
       bodyKey:
         AUTO_END_BODY_KEYS[data.reason ?? "mic-released"] ?? AUTO_END_BODY_KEYS["mic-released"],
       bodyValues: { seconds: secondsRemaining },
-      actionKey: "meetingNotification.autoEnd.keep",
-      action: "keep",
-      dismissible: false,
+      actionKey: "meetingNotification.autoEnd.restart",
+      action: "restart",
+      dismissible: true,
       allowTitleWrap: true,
     };
   }

@@ -3146,7 +3146,6 @@
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "back": "Zurück",
       "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt.",
-      "autoEnded": "Die Aufnahme wurde nach dem Ende des Meetings automatisch beendet.",
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
@@ -3841,13 +3840,13 @@
     "start": "Notizen aufnehmen",
     "join": "Beitreten & transkribieren",
     "autoEnd": {
-      "title": "Das Meeting könnte beendet sein",
+      "title": "Meeting-Aufnahme beendet",
       "body": {
-        "micReleased": "Keine andere App nutzt Ihr Mikrofon. Die Aufnahme stoppt in {{seconds}} s.",
-        "silence": "Kein Ton erkannt. Die Aufnahme stoppt in {{seconds}} s.",
-        "processExit": "Ihre Meeting-App wurde geschlossen. Die Aufnahme stoppt in {{seconds}} s."
+        "micReleased": "Keine andere App nutzt Ihr Mikrofon, daher wurde die Aufnahme automatisch beendet. Neustart innerhalb von {{seconds}} s.",
+        "silence": "Es wurde kein Ton erkannt, daher wurde die Aufnahme automatisch beendet. Neustart innerhalb von {{seconds}} s.",
+        "processExit": "Ihre Meeting-App wurde geschlossen, daher wurde die Aufnahme automatisch beendet. Neustart innerhalb von {{seconds}} s."
       },
-      "keep": "Aufnahme fortsetzen"
+      "restart": "Aufnahme neu starten"
     }
   }
 }

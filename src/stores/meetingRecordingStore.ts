@@ -1448,6 +1448,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
 export interface StopRecordingResult {
   diarizationSessionId: string | null;
+  stopped: boolean;
 }
 
 export async function stopRecording(expectedSessionId?: string): Promise<StopRecordingResult> {
@@ -1465,23 +1466,23 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemAudioSilentWarning: false,
       currentMicLevel: 0,
     });
-    return { diarizationSessionId: null };
+    return { diarizationSessionId: null, stopped: false };
   }
 
   await meetingRecordingStopBarrier.waitForPendingStop();
   if (!canStopMeetingRecordingSession(activeRecordingSessionId, expectedSessionId)) {
-    return { diarizationSessionId: null };
+    return { diarizationSessionId: null, stopped: false };
   }
   if (!isRecordingFlag) {
-    return { diarizationSessionId: null };
+    return { diarizationSessionId: null, stopped: false };
   }
 
   return meetingRecordingStopBarrier.runStop(async () => {
     if (!canStopMeetingRecordingSession(activeRecordingSessionId, expectedSessionId)) {
-      return { diarizationSessionId: null };
+      return { diarizationSessionId: null, stopped: false };
     }
     if (!isRecordingFlag) {
-      return { diarizationSessionId: null };
+      return { diarizationSessionId: null, stopped: false };
     }
 
     const sessionId = activeRecordingSessionId;
@@ -1507,6 +1508,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       }
     };
 
+    let stopCompleted = false;
     const diarizationSessionId = await persistFinalTranscriptAroundStop({
       segments: finalSegments,
       serializeSegments: serializeTranscriptSegments,
@@ -1528,6 +1530,9 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
           }
           if (result?.success && result.transcript) {
             useMeetingRecordingStore.setState({ transcript: result.transcript });
+          }
+          if (result?.success) {
+            stopCompleted = true;
           } else if (result?.error) {
             reportMeetingError(result.error);
           }
@@ -1553,7 +1558,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     });
 
     logger.info("Meeting transcription stopped", {}, "meeting");
-    return { diarizationSessionId };
+    return { diarizationSessionId, stopped: stopCompleted };
   });
 }
 

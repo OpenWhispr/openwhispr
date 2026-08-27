@@ -3146,7 +3146,6 @@
       "description": "Transcriptions et résumés structurés",
       "back": "Retour",
       "restrictedByOrg": "La transcription des réunions est restreinte par votre organisation.",
-      "autoEnded": "L'enregistrement s'est arrêté automatiquement à la fin de votre réunion.",
       "systemAudioSilent": {
         "title": "Aucun son de réunion détecté pour le moment",
         "description": "Seul votre microphone a capté du son jusqu'à présent. Vous êtes en visioconférence ? Vérifiez que le son de la réunion est diffusé sur cet ordinateur et qu'il n'est pas coupé. Vous enregistrez en présentiel ? Vous pouvez ignorer ce message : votre microphone capte la salle."
@@ -3841,13 +3840,13 @@
     "start": "Prendre des notes",
     "join": "Rejoindre et transcrire",
     "autoEnd": {
-      "title": "La réunion est peut-être terminée",
+      "title": "L’enregistrement de la réunion est terminé",
       "body": {
-        "micReleased": "Aucune autre app n'utilise votre micro. L'enregistrement s'arrêtera dans {{seconds}}s.",
-        "silence": "Aucun son détecté. L'enregistrement s'arrêtera dans {{seconds}}s.",
-        "processExit": "Votre app de réunion s'est fermée. L'enregistrement s'arrêtera dans {{seconds}}s."
+        "micReleased": "Aucune autre app n’utilise votre micro, donc l’enregistrement s’est arrêté automatiquement. Redémarrez-le dans les {{seconds}} s.",
+        "silence": "Aucun son n’a été détecté, donc l’enregistrement s’est arrêté automatiquement. Redémarrez-le dans les {{seconds}} s.",
+        "processExit": "Votre app de réunion s’est fermée, donc l’enregistrement s’est arrêté automatiquement. Redémarrez-le dans les {{seconds}} s."
       },
-      "keep": "Continuer l’enregistrement"
+      "restart": "Redémarrer l’enregistrement"
     }
   }
 }

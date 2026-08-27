@@ -3146,7 +3146,6 @@
       "description": "Transcriptions & structured summaries",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
-      "autoEnded": "Recording stopped automatically after your meeting ended.",
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",
         "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
@@ -3841,13 +3840,13 @@
     "start": "Take notes",
     "join": "Join & transcribe",
     "autoEnd": {
-      "title": "Meeting may have ended",
+      "title": "Meeting recording ended",
       "body": {
-        "micReleased": "No other app is using your microphone. Recording will stop in {{seconds}}s.",
-        "silence": "No audio detected. Recording will stop in {{seconds}}s.",
-        "processExit": "Your meeting app closed. Recording will stop in {{seconds}}s."
+        "micReleased": "No other app is using your microphone, so recording stopped automatically. Restart within {{seconds}}s.",
+        "silence": "No audio was detected, so recording stopped automatically. Restart within {{seconds}}s.",
+        "processExit": "Your meeting app closed, so recording stopped automatically. Restart within {{seconds}}s."
       },
-      "keep": "Keep recording"
+      "restart": "Restart recording"
     }
   }
 }

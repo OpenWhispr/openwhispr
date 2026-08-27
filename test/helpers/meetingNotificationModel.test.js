@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/components/meetingNotificationModel.ts");
 
-test("auto-end presentation has countdown copy, Keep action, and no dismissal", async () => {
+test("auto-end presentation has countdown copy, Restart action, and dismissal", async () => {
   const { getMeetingNotificationPresentation } = await load();
 
   assert.deepEqual(
@@ -15,9 +15,9 @@ test("auto-end presentation has countdown copy, Keep action, and no dismissal", 
       titleKey: "meetingNotification.autoEnd.title",
       bodyKey: "meetingNotification.autoEnd.body.micReleased",
       bodyValues: { seconds: 30 },
-      actionKey: "meetingNotification.autoEnd.keep",
-      action: "keep",
-      dismissible: false,
+      actionKey: "meetingNotification.autoEnd.restart",
+      action: "restart",
+      dismissible: true,
       allowTitleWrap: true,
     }
   );

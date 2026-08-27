@@ -43,10 +43,14 @@ export default function MeetingNotificationOverlay() {
     [data]
   );
 
-  const keepRecording = useCallback(() => {
-    if (data?.kind !== "auto-end") return;
-    void window.electronAPI?.meetingAutoEndKeep?.(data.sessionId);
-  }, [data]);
+  const respondToAutoEnd = useCallback(
+    (action: "restart" | "dismiss") => {
+      if (data?.kind !== "auto-end") return;
+      setIsVisible(false);
+      void window.electronAPI?.meetingAutoEndRespond?.(data.sessionId, action);
+    },
+    [data]
+  );
 
   const handleMouseEnter = useCallback(() => {
     setIsHovered(true);
@@ -65,7 +69,11 @@ export default function MeetingNotificationOverlay() {
       ? t(presentation.bodyKey, presentation.bodyValues)
       : t(presentation.bodyKey);
   const handleAction =
-    presentation.action === "keep" ? keepRecording : () => respond(presentation.action);
+    presentation.action === "restart"
+      ? () => respondToAutoEnd("restart")
+      : () => respond(presentation.action);
+  const handleDismiss =
+    data?.kind === "auto-end" ? () => respondToAutoEnd("dismiss") : () => respond("dismiss");
 
   return (
     <div className="meeting-notification-window w-full h-full bg-transparent p-3">
@@ -74,7 +82,7 @@ export default function MeetingNotificationOverlay() {
         body={body}
         startLabel={t(presentation.actionKey)}
         onStart={handleAction}
-        onDismiss={presentation.dismissible ? () => respond("dismiss") : undefined}
+        onDismiss={presentation.dismissible ? handleDismiss : undefined}
         closeVisible={isHovered}
         allowTitleWrap={presentation.allowTitleWrap}
         onMouseEnter={handleMouseEnter}

@@ -35,24 +35,41 @@ test("accepts legacy stops but rejects an expected ID for another active session
   assert.equal(canStopMeetingRecordingSession(null, "meeting-1"), false);
 });
 
-test("auto-end stop requests forward only a valid expected session ID", async () => {
+test("auto-end stop requests acknowledge only a completed scoped stop", async () => {
   const { requestMeetingRecordingAutoEnd } = await load();
   const requestedSessions = [];
+  const completedSessions = [];
   const errors = [];
   const stopRecording = async (sessionId) => {
     requestedSessions.push(sessionId);
+    return { stopped: sessionId === "meeting-2" };
   };
+  const onStopped = (sessionId) => completedSessions.push(sessionId);
   const onError = (error, sessionId) => errors.push({ error, sessionId });
 
   assert.equal(
-    requestMeetingRecordingAutoEnd({ sessionId: "meeting-2" }, stopRecording, onError),
+    requestMeetingRecordingAutoEnd(
+      { sessionId: "meeting-2" },
+      stopRecording,
+      onStopped,
+      onError
+    ),
     true
   );
-  assert.equal(requestMeetingRecordingAutoEnd({ sessionId: "" }, stopRecording, onError), false);
-  assert.equal(requestMeetingRecordingAutoEnd(null, stopRecording, onError), false);
+  assert.equal(
+    requestMeetingRecordingAutoEnd({ sessionId: "meeting-1" }, stopRecording, onStopped, onError),
+    true
+  );
+  assert.equal(
+    requestMeetingRecordingAutoEnd({ sessionId: "" }, stopRecording, onStopped, onError),
+    false
+  );
+  assert.equal(requestMeetingRecordingAutoEnd(null, stopRecording, onStopped, onError), false);
+  await Promise.resolve();
   await Promise.resolve();
 
-  assert.deepEqual(requestedSessions, ["meeting-2"]);
+  assert.deepEqual(requestedSessions, ["meeting-2", "meeting-1"]);
+  assert.deepEqual(completedSessions, ["meeting-2"]);
   assert.deepEqual(errors, []);
 });
 
@@ -65,8 +82,11 @@ test("a rejected auto-end stop is reported instead of swallowed", async () => {
   };
 
   assert.equal(
-    requestMeetingRecordingAutoEnd({ sessionId: "meeting-2" }, stopRecording, (error, sessionId) =>
-      errors.push({ error, sessionId })
+    requestMeetingRecordingAutoEnd(
+      { sessionId: "meeting-2" },
+      stopRecording,
+      () => undefined,
+      (error, sessionId) => errors.push({ error, sessionId })
     ),
     true
   );
@@ -74,6 +94,94 @@ test("a rejected auto-end stop is reported instead of swallowed", async () => {
   await Promise.resolve();
 
   assert.deepEqual(errors, [{ error: stopFailure, sessionId: "meeting-2" }]);
+});
+
+test("restart context preserves note identity and session speaker settings", async () => {
+  const { createMeetingAutoEndRestartContext } = await load();
+  const seedSegments = [{ id: "segment-1", text: "Hello", source: "mic" }];
+
+  assert.deepEqual(
+    createMeetingAutoEndRestartContext("meeting-2", "meeting-2", {
+      recordingNoteId: 42,
+      recordingNoteTitle: "Planning",
+      recordingFolderId: 8,
+      sessionDiarizationEnabled: false,
+      sessionExpectedCount: 5,
+      userTouchedStepper: true,
+      segments: seedSegments,
+    }),
+    {
+      sessionId: "meeting-2",
+      args: {
+        noteId: 42,
+        noteTitle: "Planning",
+        folderId: 8,
+        seedSegments,
+        diarizationEnabled: false,
+        expectedCount: 5,
+        expectedCountIsExplicit: true,
+        autoEndEligible: true,
+      },
+    }
+  );
+  assert.equal(
+    createMeetingAutoEndRestartContext("meeting-1", "meeting-2", {
+      recordingNoteId: 42,
+      recordingNoteTitle: "Planning",
+      recordingFolderId: 8,
+      sessionDiarizationEnabled: true,
+      sessionExpectedCount: 2,
+      userTouchedStepper: false,
+      segments: [],
+    }),
+    null
+  );
+});
+
+test("restart args use the latest segments and reject stale or active sessions", async () => {
+  const { getMeetingAutoEndRestartArgs } = await load();
+  const context = {
+    sessionId: "meeting-2",
+    args: {
+      noteId: 42,
+      noteTitle: "Planning",
+      folderId: 8,
+      seedSegments: [{ id: "old", text: "Old", source: "mic" }],
+      diarizationEnabled: true,
+      expectedCount: 3,
+      expectedCountIsExplicit: false,
+      autoEndEligible: true,
+    },
+  };
+  const latestSegments = [{ id: "latest", text: "Latest", source: "system" }];
+
+  assert.deepEqual(
+    getMeetingAutoEndRestartArgs(
+      { sessionId: "meeting-2" },
+      context,
+      null,
+      latestSegments
+    ),
+    { ...context.args, seedSegments: latestSegments }
+  );
+  assert.equal(
+    getMeetingAutoEndRestartArgs(
+      { sessionId: "meeting-1" },
+      context,
+      null,
+      latestSegments
+    ),
+    null
+  );
+  assert.equal(
+    getMeetingAutoEndRestartArgs(
+      { sessionId: "meeting-2" },
+      context,
+      "meeting-3",
+      latestSegments
+    ),
+    null
+  );
 });
 
 test("only meeting notes are eligible for automatic ending", async () => {

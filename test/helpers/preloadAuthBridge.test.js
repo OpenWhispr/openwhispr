@@ -101,12 +101,25 @@ test("meeting auto-end listener strips the event and can unsubscribe", () => {
   assert.equal(listeners.has("meeting-auto-end-requested"), false);
 });
 
-test("meeting auto-end keep forwards the recording session ID", async () => {
-  const { api, invocations } = loadPreloadApi();
+test("meeting auto-end lifecycle bridges completion, overlay responses, and restart", async () => {
+  const { api, invocations, listeners } = loadPreloadApi();
+  const restartPayload = { sessionId: "meeting-2" };
+  let receivedRestart;
+  const unsubscribe = api.onMeetingAutoEndRestartRequested((request) => {
+    receivedRestart = request;
+  });
 
-  await api.meetingAutoEndKeep("meeting-2");
+  await api.meetingAutoEndCompleted("meeting-2");
+  await api.meetingAutoEndRespond("meeting-2", "restart");
+  listeners.get("meeting-auto-end-restart-requested")?.({ sender: "ipc" }, restartPayload);
 
-  assert.deepEqual(invocations, [["meeting-auto-end-keep", "meeting-2"]]);
+  assert.deepEqual(invocations, [
+    ["meeting-auto-end-completed", "meeting-2"],
+    ["meeting-auto-end-respond", "meeting-2", "restart"],
+  ]);
+  assert.equal(receivedRestart, restartPayload);
+  unsubscribe();
+  assert.equal(listeners.has("meeting-auto-end-restart-requested"), false);
 });
 
 test("assistant busy state is forwarded to the main-process hotkey guard", async () => {

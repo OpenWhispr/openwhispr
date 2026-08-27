@@ -68,8 +68,9 @@ class WindowManager {
     this._agentDictationPillScreenListener = null;
     this._notificationLoadTimeout = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
+      const notification = this._pendingNotificationData;
       if (this.meetingDetectionEngine) {
-        this.meetingDetectionEngine.handleNotificationTimeout();
+        this.meetingDetectionEngine.handleNotificationTimeout(notification);
       }
       this.dismissMeetingNotification();
     });
@@ -243,14 +244,13 @@ class WindowManager {
     // begin with, so on Linux leave the hit-testing alone and move the
     // countdown alone.
     const togglesClickThrough = process.platform !== "linux";
-    // Hovering means the user is reading or about to click — the auto-dismiss
-    // countdown must not close the card under their pointer.
+    const hasFixedExpiry = this._pendingNotificationData?.kind === "auto-end";
     if (interactive) {
       if (togglesClickThrough) win.setIgnoreMouseEvents(false);
-      this._notificationDismissTimer.pause();
+      if (!hasFixedExpiry) this._notificationDismissTimer.pause();
     } else {
       if (togglesClickThrough) win.setIgnoreMouseEvents(true, { forward: true });
-      this._notificationDismissTimer.resume();
+      if (!hasFixedExpiry) this._notificationDismissTimer.resume();
     }
   }
 
@@ -1918,13 +1918,20 @@ class WindowManager {
     }
   }
 
-  async showMeetingNotification(promptData, { autoDismiss = true } = {}) {
+  async showMeetingNotification(promptData, { autoDismiss = true, autoDismissAt = null } = {}) {
     if (this._onboardingActive) return false;
     if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
       const previousWindow = this.notificationWindow;
+      const replacedAutoEndSessionId =
+        this._pendingNotificationData?.kind === "auto-end"
+          ? this._pendingNotificationData.sessionId
+          : null;
       this.notificationWindow = null;
       this._pendingNotificationData = null;
       previousWindow.close();
+      if (replacedAutoEndSessionId) {
+        this.meetingDetectionEngine?.handleAutoEndNotificationClosed?.(replacedAutoEndSessionId);
+      }
     }
     this._notificationDismissTimer.cancel();
     if (this._notificationLoadTimeout) {
@@ -1951,7 +1958,7 @@ class WindowManager {
     // after the replacement already took over the reference and the countdown.
     win.on("closed", () => {
       if (this.notificationWindow !== win) return;
-      const unavailableAutoEndSessionId =
+      const closedAutoEndSessionId =
         this._pendingNotificationData?.kind === "auto-end"
           ? this._pendingNotificationData.sessionId
           : null;
@@ -1966,10 +1973,8 @@ class WindowManager {
         clearTimeout(this._notificationReadyFallback);
         this._notificationReadyFallback = null;
       }
-      if (unavailableAutoEndSessionId) {
-        this.meetingDetectionEngine?.handleAutoEndNotificationUnavailable?.(
-          unavailableAutoEndSessionId
-        );
+      if (closedAutoEndSessionId) {
+        this.meetingDetectionEngine?.handleAutoEndNotificationClosed?.(closedAutoEndSessionId);
       }
     });
 
@@ -2043,11 +2048,14 @@ class WindowManager {
     }, 3000);
     this._notificationReadyFallback = readyFallback;
 
-    // The auto-end countdown is owned by its controller — it stays until kept,
-    // canceled by fresh activity, or expired — so it never auto-dismisses.
     if (autoDismiss) {
-      this._notificationDismissTimer.start(getNotificationTimeoutMs(promptData.source));
+      this._notificationDismissTimer.start(
+        autoDismissAt === null
+          ? getNotificationTimeoutMs(promptData.source)
+          : Math.max(0, autoDismissAt - Date.now())
+      );
     }
+    return true;
   }
 
   // Only the window that loaded the prompt may reveal it: a stale window's late
@@ -2085,14 +2093,14 @@ class WindowManager {
     if (win && !win.isDestroyed()) win.close();
   }
 
-  showMeetingAutoEndCountdown({ sessionId, expiresAt, reason }) {
+  showMeetingAutoEndNotification({ sessionId, expiresAt, reason }) {
     return this.showMeetingNotification(
       { kind: "auto-end", sessionId, expiresAt, reason },
-      { autoDismiss: false }
+      { autoDismissAt: expiresAt }
     );
   }
 
-  dismissMeetingAutoEndCountdown(sessionId) {
+  dismissMeetingAutoEndNotification(sessionId) {
     if (
       this._pendingNotificationData?.kind !== "auto-end" ||
       this._pendingNotificationData.sessionId !== sessionId
@@ -2100,6 +2108,11 @@ class WindowManager {
       return;
     }
     this.dismissMeetingNotification();
+  }
+
+  isMeetingNotificationSender(sender) {
+    const win = this.notificationWindow;
+    return !!win && !win.isDestroyed() && win.webContents === sender;
   }
 
   async showUpdateNotification(info) {

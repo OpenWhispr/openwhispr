@@ -102,6 +102,18 @@ export interface MeetingAutoEndRequest {
   reason?: MeetingAutoEndReason;
 }
 
+export type MeetingAutoEndAction = "restart" | "dismiss";
+
+export interface MeetingAutoEndRestartRequest {
+  sessionId: string;
+}
+
+export interface MeetingAutoEndLifecycleResult {
+  success: boolean;
+  reason?: "invalid-session" | "invalid-action" | "stale-session";
+  error?: string;
+}
+
 /**
  * Proxied-transcription IPC results. `ipcMain.handle` drops custom error props on
  * rejection, so these handlers resolve with a serialized error instead of throwing.
@@ -2787,11 +2799,14 @@ declare global {
       onMeetingAutoEndRequested?: (
         callback: (request: MeetingAutoEndRequest) => void
       ) => () => void;
-      meetingAutoEndKeep?: (sessionId: string) => Promise<{
-        success: boolean;
-        reason?: "invalid-session" | "stale-session";
-        error?: string;
-      }>;
+      meetingAutoEndCompleted?: (sessionId: string) => Promise<MeetingAutoEndLifecycleResult>;
+      meetingAutoEndRespond?: (
+        sessionId: string,
+        action: MeetingAutoEndAction
+      ) => Promise<MeetingAutoEndLifecycleResult>;
+      onMeetingAutoEndRestartRequested?: (
+        callback: (request: MeetingAutoEndRestartRequest) => void
+      ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (

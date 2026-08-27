@@ -42,7 +42,9 @@ test("auto-end dimensions fit every supported localized title, body, and action"
         (/\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}/u.test(character) ? 2 : 1),
       0
     );
-  const longestActionColumns = Math.max(...translations.map(({ keep }) => displayColumns(keep)));
+  const longestActionColumns = Math.max(
+    ...translations.map(({ restart }) => displayColumns(restart))
+  );
 
   // Reserve the card's outer padding, icon/gaps, and the full non-wrapping action.
   const actionWidth = longestActionColumns * 6 + 20;

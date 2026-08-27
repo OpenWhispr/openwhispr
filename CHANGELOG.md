@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Meetings
+
+- **Meeting recordings stop as soon as the call ends.** The existing microphone, silence, and meeting-app signals now stop recording immediately instead of starting another countdown. A 30-second recovery card lets you restart the same note with its existing transcript and speaker settings.
+
 ### Data safety
 
 - **Deleting one account no longer erases another account's local content.** Account deletion now removes only that account's private notes and folders, preserves workspace-owned spaces and content with former-user attribution cleared, and leaves downloaded models and device settings intact. A separate unchecked option erases all app data from the device when leaving OpenWhispr permanently.

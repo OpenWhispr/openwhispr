@@ -7,6 +7,7 @@ const { broadcastToWindows } = require("./windowBroadcast");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
 const AUTO_END_TICK_MS = 1000;
+const AUTO_END_RESTART_WINDOW_MS = 30_000;
 
 const PLACEHOLDER_PREFIX = { __detected__: "detected", __manual__: "manual" };
 
@@ -54,6 +55,7 @@ class MeetingDetectionEngine {
     this._notificationQueue = [];
     this._postRecordingCooldown = null;
     this._recordingSession = null;
+    this._pendingAutoEnd = null;
     this._now = now;
     this._setInterval = setInterval;
     this._clearInterval = clearInterval;
@@ -71,26 +73,6 @@ class MeetingDetectionEngine {
     });
     this._autoEndController = createAutoEndController({
       now,
-      onCountdown: (countdown) => {
-        debugLogger.info("Meeting auto-end countdown started", countdown, "meeting");
-        Promise.resolve(this.windowManager.showMeetingAutoEndCountdown?.(countdown)).catch(
-          (error) => {
-            debugLogger.error(
-              "Failed to show meeting auto-end countdown",
-              { error: error?.message },
-              "meeting"
-            );
-            this.handleAutoEndNotificationUnavailable(countdown.sessionId);
-          }
-        );
-      },
-      onCountdownCanceled: (sessionId) => {
-        debugLogger.info("Meeting auto-end countdown canceled", { sessionId }, "meeting");
-        this.windowManager.dismissMeetingAutoEndCountdown?.(sessionId);
-      },
-      onCountdownExpired: (sessionId) => {
-        this.windowManager.dismissMeetingAutoEndCountdown?.(sessionId);
-      },
       onStop: (sessionId, reason) => this._requestRecordingStop(sessionId, reason),
     });
     this._bindListeners();
@@ -150,21 +132,121 @@ class MeetingDetectionEngine {
     if (!session || session.sessionId !== sessionId) return;
 
     debugLogger.info(
-      "Meeting auto-end countdown expired, requesting stop",
+      "Meeting end detected, requesting automatic stop",
       { sessionId, reason },
       "meeting"
     );
     const ownerWebContents = session.ownerWebContents;
     if (!ownerWebContents || ownerWebContents.isDestroyed?.()) return;
+    this._clearAutoEndRecovery();
+    this._pendingAutoEnd = {
+      sessionId,
+      reason,
+      ownerWebContents,
+      expiresAt: null,
+    };
     try {
       ownerWebContents.send("meeting-auto-end-requested", { sessionId, reason });
     } catch (error) {
+      this._pendingAutoEnd = null;
       debugLogger.error(
         "Failed to request meeting auto-end from recording renderer",
         { error: error?.message, sessionId },
         "meeting"
       );
     }
+  }
+
+  _clearAutoEndRecovery({ dismiss = true } = {}) {
+    const pending = this._pendingAutoEnd;
+    this._pendingAutoEnd = null;
+    if (dismiss && pending?.expiresAt != null) {
+      this.windowManager.dismissMeetingAutoEndNotification?.(pending.sessionId);
+    }
+  }
+
+  async completeAutoEndSession(sessionId, ownerWebContents) {
+    const pending = this._pendingAutoEnd;
+    if (
+      !pending ||
+      pending.sessionId !== sessionId ||
+      pending.ownerWebContents !== ownerWebContents ||
+      pending.expiresAt !== null ||
+      this._recordingSession !== null ||
+      ownerWebContents?.isDestroyed?.()
+    ) {
+      return false;
+    }
+
+    const expiresAt = this._now() + AUTO_END_RESTART_WINDOW_MS;
+    pending.expiresAt = expiresAt;
+    try {
+      const shown = await this.windowManager.showMeetingAutoEndNotification?.({
+        sessionId,
+        reason: pending.reason,
+        expiresAt,
+      });
+      if (this._pendingAutoEnd !== pending) return false;
+      if (shown === false) {
+        this._clearAutoEndRecovery({ dismiss: false });
+        return false;
+      }
+      debugLogger.info(
+        "Meeting recording auto-ended; restart window shown",
+        { sessionId, reason: pending.reason, expiresAt },
+        "meeting"
+      );
+      return true;
+    } catch (error) {
+      if (this._pendingAutoEnd === pending) {
+        this._clearAutoEndRecovery({ dismiss: false });
+      }
+      debugLogger.error(
+        "Failed to show meeting auto-end recovery notification",
+        { error: error?.message, sessionId },
+        "meeting"
+      );
+      return false;
+    }
+  }
+
+  respondToAutoEndNotification(sessionId, action, responderWebContents) {
+    if (
+      (action !== "restart" && action !== "dismiss") ||
+      !this.windowManager.isMeetingNotificationSender?.(responderWebContents)
+    ) {
+      return false;
+    }
+
+    const pending = this._pendingAutoEnd;
+    if (!pending || pending.sessionId !== sessionId || pending.expiresAt === null) return false;
+    if (this._now() >= pending.expiresAt || this._recordingSession !== null) {
+      this._clearAutoEndRecovery();
+      return false;
+    }
+
+    const ownerWebContents = pending.ownerWebContents;
+    this._clearAutoEndRecovery();
+    if (action === "dismiss") return true;
+    if (!ownerWebContents || ownerWebContents.isDestroyed?.()) return false;
+
+    try {
+      ownerWebContents.send("meeting-auto-end-restart-requested", { sessionId });
+      return true;
+    } catch (error) {
+      debugLogger.error(
+        "Failed to request meeting recording restart",
+        { error: error?.message, sessionId },
+        "meeting"
+      );
+      return false;
+    }
+  }
+
+  handleAutoEndNotificationClosed(sessionId) {
+    if (this._pendingAutoEnd?.sessionId !== sessionId) return false;
+    this._clearAutoEndRecovery({ dismiss: false });
+    return true;
   }
 
   // Hot path — called for every meeting PCM chunk of both channels.
@@ -254,6 +336,7 @@ class MeetingDetectionEngine {
     ownerWebContents,
     systemAudioAvailable = false,
   }) {
+    this._clearAutoEndRecovery();
     if (this._recordingSession) this._deactivateAutoEnd();
 
     this._recordingSession = {
@@ -329,31 +412,6 @@ class MeetingDetectionEngine {
     return true;
   }
 
-  keepRecordingSession(sessionId) {
-    const session = this._recordingSession;
-    if (!this._autoEndActive || !session || session.sessionId !== sessionId) return false;
-
-    const kept = this._autoEndController.keepRecording(sessionId) === true;
-    debugLogger.info(
-      kept ? "Auto-end paused — user kept recording" : "Keep request lost to expired countdown",
-      { sessionId },
-      "meeting"
-    );
-    return kept;
-  }
-
-  handleAutoEndNotificationUnavailable(sessionId) {
-    const suppressed = this._autoEndController.handleCountdownUnavailable(sessionId) === true;
-    if (suppressed) {
-      debugLogger.warn(
-        "Meeting auto-end suppressed because its countdown was unavailable",
-        { sessionId },
-        "meeting"
-      );
-    }
-    return suppressed;
-  }
-
   // Calendar reminders enter the same pipeline as mic detections, so they share
   // the recording gates, queueing, cooldowns, and the overlay window.
   handleCalendarReminder(event) {
@@ -393,8 +451,8 @@ class MeetingDetectionEngine {
 
     // _userRecording is shared with dictation, so a dictation ending mid-meeting
     // clears it while the recording is still live; the tracked session is the
-    // gate that cannot be reset from outside. A prompt shown then would replace
-    // a visible auto-end countdown card and let the countdown run on unseen.
+    // gate that cannot be reset from outside. A prompt shown then could replace
+    // the recording UI while the tracked recording is still active.
     if (this._userRecording || this._postRecordingCooldown || this._recordingSession) {
       debugLogger.info("Detection queued — user is recording", { detectionId, source }, "meeting");
       this._notificationQueue.push({ source, key, data });
@@ -657,7 +715,12 @@ class MeetingDetectionEngine {
     });
   }
 
-  handleNotificationTimeout() {
+  handleNotificationTimeout(notification = null) {
+    if (notification?.kind === "auto-end") {
+      this.handleAutoEndNotificationClosed(notification.sessionId);
+      return;
+    }
+
     // Expiring unanswered is not a decline, so no dismissal cooldown starts:
     // the detector's hasPrompted flag already keeps the ongoing call from
     // re-prompting, while a call starting right after the timeout still
@@ -765,6 +828,7 @@ class MeetingDetectionEngine {
 
   stop() {
     debugLogger.info("Meeting detection engine stopped", {}, "meeting");
+    this._clearAutoEndRecovery();
     this._deactivateAutoEnd();
     this._recordingSession = null;
     this.meetingProcessDetector.stop();

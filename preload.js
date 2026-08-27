@@ -1246,7 +1246,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-auto-end-requested",
     (callback) => (_event, data) => callback(data)
   ),
-  meetingAutoEndKeep: (sessionId) => ipcRenderer.invoke("meeting-auto-end-keep", sessionId),
+  meetingAutoEndCompleted: (sessionId) =>
+    ipcRenderer.invoke("meeting-auto-end-completed", sessionId),
+  meetingAutoEndRespond: (sessionId, action) =>
+    ipcRenderer.invoke("meeting-auto-end-respond", sessionId, action),
+  onMeetingAutoEndRestartRequested: registerListener(
+    "meeting-auto-end-restart-requested",
+    (callback) => (_event, data) => callback(data)
+  ),
   getMeetingNotificationData: () => ipcRenderer.invoke("get-meeting-notification-data"),
   meetingNotificationReady: () => ipcRenderer.invoke("meeting-notification-ready"),
   meetingNotificationRespond: (detectionId, action) =>
