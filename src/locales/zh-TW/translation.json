@@ -2539,7 +2539,8 @@
         "tinfoil_voxtral": "可驗證的私密轉錄",
         "deepgram_nova_3": "Deepgram 最精準的即時模型",
         "assemblyai_universal_streaming_english": "不會變動的即時轉錄（英文）",
-        "assemblyai_universal_streaming_multilingual": "不會變動的即時轉錄（多語言）"
+        "assemblyai_universal_streaming_multilingual": "不會變動的即時轉錄（多語言）",
+        "assemblyai_universal_3_5_pro": "最高精度即時轉錄，支援 18 種語言"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",

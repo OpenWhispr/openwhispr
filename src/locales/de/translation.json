@@ -2632,7 +2632,8 @@
         "tinfoil_voxtral": "Nachweisbar private Transkription",
         "deepgram_nova_3": "Deepgrams genauestes Echtzeitmodell",
         "assemblyai_universal_streaming_english": "Unveränderliche Echtzeit-Transkripte, Englisch",
-        "assemblyai_universal_streaming_multilingual": "Unveränderliche Echtzeit-Transkripte, mehrsprachig"
+        "assemblyai_universal_streaming_multilingual": "Unveränderliche Echtzeit-Transkripte, mehrsprachig",
+        "assemblyai_universal_3_5_pro": "Höchste Genauigkeit in Echtzeit, 18 Sprachen"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",

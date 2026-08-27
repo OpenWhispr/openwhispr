@@ -36,6 +36,7 @@ class AssemblyAiStreaming {
     this.warmConnectionReady = false;
     this.warmConnectionOptions = null;
     this.warmSessionId = null;
+    this.requestedModel = null;
     this.rewarmAttempts = 0;
     this.rewarmTimer = null;
     this.keepAliveInterval = null;
@@ -54,6 +55,7 @@ class AssemblyAiStreaming {
       format_turns: "true",
       token: options.token,
     });
+    this.requestedModel = options.model || null;
     if (options.model) {
       params.set("speech_model", options.model);
     }
@@ -410,6 +412,19 @@ class AssemblyAiStreaming {
           this.isConnected = true;
           clearTimeout(this.connectionTimeout);
           debugLogger.debug("AssemblyAI session started", { sessionId: this.sessionId });
+          // AssemblyAI ignores unrecognized query params instead of rejecting them,
+          // so a bad speech_model silently downgrades the session.
+          if (
+            message.configuration?.model &&
+            this.requestedModel &&
+            message.configuration.model !== this.requestedModel
+          ) {
+            debugLogger.warn(
+              "AssemblyAI applied a different speech model than requested",
+              { requested: this.requestedModel, applied: message.configuration.model },
+              "transcription"
+            );
+          }
           if (this.pendingResolve) {
             this.pendingResolve();
             this.pendingResolve = null;

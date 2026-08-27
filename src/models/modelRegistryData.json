@@ -343,6 +343,13 @@
       "baseUrl": "https://api.assemblyai.com/v2",
       "models": [
         {
+          "id": "universal-3-5-pro",
+          "name": "Universal-3.5 Pro",
+          "description": "Highest accuracy realtime, 18 languages",
+          "descriptionKey": "models.descriptions.transcription.assemblyai_universal_3_5_pro",
+          "streaming": true
+        },
+        {
           "id": "universal-streaming-english",
           "name": "Universal Streaming (English)",
           "description": "Immutable realtime transcripts, English",

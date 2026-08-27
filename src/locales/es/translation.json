@@ -2587,7 +2587,8 @@
         "tinfoil_voxtral": "Transcripción verificablemente privada",
         "deepgram_nova_3": "El modelo en tiempo real más preciso de Deepgram",
         "assemblyai_universal_streaming_english": "Transcripciones en tiempo real inmutables, en inglés",
-        "assemblyai_universal_streaming_multilingual": "Transcripciones en tiempo real inmutables, multilingües"
+        "assemblyai_universal_streaming_multilingual": "Transcripciones en tiempo real inmutables, multilingües",
+        "assemblyai_universal_3_5_pro": "Máxima precisión en tiempo real, 18 idiomas"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",
