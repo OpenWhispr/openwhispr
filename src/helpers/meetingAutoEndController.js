@@ -7,8 +7,9 @@ const FAST_SILENCE_MS = 10_000;
 // flap emits MIC_STOP and MIC_START in one reconcile pass, an app rebuilds its
 // input unit when screen share starts, and an app that drops the mic on mute
 // looks identical to one that left the call. Without a dwell time each of those
-// ends a live recording, and the stop is irreversible.
-const OWNERSHIP_CONFIRM_MS = 15_000;
+// ends a live recording, and the stop is irreversible. A flap has no gap at all,
+// so a few seconds absorbs it while keeping the stop prompt.
+const OWNERSHIP_CONFIRM_MS = 5_000;
 // An external mic hold shorter than this (Siri, a permission prompt, the Sound
 // settings input meter) is incidental — it must not arm the mic-ignoring
 // ownership path on what is really an in-person recording.
