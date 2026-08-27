@@ -11,15 +11,18 @@ const CLOUD_CHAT_PROVIDERS = new Set([
 
 // Resolve Chat from Chat-owned settings only. In particular, this must never
 // consult Dictation Cleanup's mode or endpoint.
-export function resolveChatRoute({ provider, lanUrl, customApiKey, isEnterpriseProvider = false }) {
+export function resolveChatRoute(settings = {}) {
+  const { provider, lanUrl, customApiKey, isEnterpriseProvider = false } =
+    settings && typeof settings === "object" ? settings : {};
+
   // An explicit self-hosted URL is the caller's declared route — it wins even
   // over a stale enterprise provider id left in settings.
-  const baseUrl = lanUrl?.trim() || "";
+  const baseUrl = typeof lanUrl === "string" ? lanUrl.trim() : "";
   if (baseUrl) {
     return {
       kind: "self-hosted",
       baseUrl,
-      apiKey: customApiKey?.trim() || "",
+      apiKey: typeof customApiKey === "string" ? customApiKey.trim() : "",
     };
   }
 
@@ -27,7 +30,8 @@ export function resolveChatRoute({ provider, lanUrl, customApiKey, isEnterpriseP
     return { kind: "enterprise", baseUrl: "", apiKey: "" };
   }
 
-  if (!CLOUD_CHAT_PROVIDERS.has(provider)) {
+  const normalizedProvider = typeof provider === "string" ? provider.trim().toLowerCase() : "";
+  if (!CLOUD_CHAT_PROVIDERS.has(normalizedProvider)) {
     return { kind: "local", baseUrl: "", apiKey: "" };
   }
 

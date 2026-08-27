@@ -74,3 +74,14 @@ test("blank Chat LAN URL does not activate self-hosted routing", async () => {
 
   assert.equal(route.kind, "provider");
 });
+
+test("handles nullish settings and normalizes provider casing and whitespace", async () => {
+  const { resolveChatRoute } = await load();
+
+  assert.deepEqual(resolveChatRoute(), { kind: "local", baseUrl: "", apiKey: "" });
+  assert.deepEqual(resolveChatRoute(null), { kind: "local", baseUrl: "", apiKey: "" });
+  assert.equal(resolveChatRoute({ provider: "OpenAI" }).kind, "provider");
+  assert.equal(resolveChatRoute({ provider: " Anthropic " }).kind, "provider");
+  assert.equal(resolveChatRoute({ provider: "GROQ" }).kind, "provider");
+  assert.equal(resolveChatRoute({ lanUrl: 123 }).kind, "local");
+});
