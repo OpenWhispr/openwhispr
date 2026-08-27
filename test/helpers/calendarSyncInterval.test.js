@@ -79,3 +79,17 @@ test("focus syncs are throttled to one per window", async () => {
   await flushPromises();
   runner.stop();
 });
+
+test("handles missing or nullish options safely", () => {
+  const runnerNoOpts = new CalendarSyncInterval(() => Promise.resolve());
+  assert.ok(runnerNoOpts._getInterval() > 0);
+  runnerNoOpts.stop();
+
+  const runnerNullOpts = new CalendarSyncInterval(() => Promise.resolve(), null);
+  assert.ok(runnerNullOpts._getInterval() > 0);
+  runnerNullOpts.stop();
+
+  const runnerEmptyOpts = new CalendarSyncInterval(() => Promise.resolve(), {});
+  assert.ok(runnerEmptyOpts._getInterval() > 0);
+  runnerEmptyOpts.stop();
+});
