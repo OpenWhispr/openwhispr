@@ -126,6 +126,8 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
 const WindowManager = require("../../src/helpers/windowManager");
 Module._load = originalLoad;
 
+const notificationWindowFor = (index) => createdWindows[index];
+
 function createNormalWindowManager() {
   const manager = new WindowManager();
   manager.setOnboardingActive(false);
@@ -615,6 +617,79 @@ test("a stale ready callback cannot show the replacement notification window", a
     manager.showNotificationWindow(secondWindow.webContents);
     assert.equal(secondWindow.showCount, 1);
   } finally {
+    manager.dismissMeetingNotification();
+    timers.restore();
+  }
+});
+
+test("an auto-end notification dismissed while loading reports that it was not shown", async () => {
+  const manager = createNormalWindowManager();
+
+  const showPromise = manager.showMeetingAutoEndNotification({
+    sessionId: "meeting-1",
+    expiresAt: Date.now() + 30_000,
+    reason: "silence",
+  });
+  manager.dismissMeetingNotification();
+  createdWindows[0].loadDeferred.resolve();
+
+  assert.equal(await showPromise, false);
+});
+
+test("an auto-end notification whose load fails after dismissal reports that it was not shown", async () => {
+  const manager = createNormalWindowManager();
+
+  const showPromise = manager.showMeetingAutoEndNotification({
+    sessionId: "meeting-1",
+    expiresAt: Date.now() + 30_000,
+    reason: "silence",
+  });
+  manager.dismissMeetingNotification();
+  createdWindows[0].loadDeferred.reject(new Error("load failed"));
+
+  assert.equal(await showPromise, false);
+});
+
+// The engine flushes its queued detections when an expiring restart offer
+// releases them, so a prompt raised from the timeout handler must outlive the
+// dismissal that closes the expired card.
+test("a notification raised from the timeout handler survives the dismissal that follows", async () => {
+  const timers = installFakeTimers();
+  const manager = createNormalWindowManager();
+  const originalDateNow = Date.now;
+  let now = 40_000;
+  Date.now = () => now;
+  let replacementPromise = null;
+  manager.meetingDetectionEngine = {
+    handleNotificationTimeout: () => {
+      replacementPromise = manager.showMeetingNotification(
+        { kind: "detection", detectionId: "calendar:next", source: "calendar" },
+        { autoDismiss: false }
+      );
+    },
+    handleAutoEndNotificationClosed: () => undefined,
+  };
+
+  const showPromise = manager.showMeetingAutoEndNotification({
+    kind: "auto-end",
+    sessionId: "meeting-1",
+    expiresAt: 70_000,
+    reason: "silence",
+  });
+
+  try {
+    notificationWindowFor(0).loadDeferred.resolve();
+    await showPromise;
+
+    timers.runDelay(30_000);
+    notificationWindowFor(1).loadDeferred.resolve();
+    await replacementPromise;
+
+    assert.equal(createdWindows.length, 2);
+    assert.equal(notificationWindowFor(1).isDestroyed(), false);
+    assert.equal(manager.notificationWindow, notificationWindowFor(1));
+  } finally {
+    Date.now = originalDateNow;
     manager.dismissMeetingNotification();
     timers.restore();
   }

@@ -69,10 +69,13 @@ class WindowManager {
     this._notificationLoadTimeout = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
       const notification = this._pendingNotificationData;
+      // Dismiss first: an expiring restart offer lets the engine flush the
+      // detections it was holding, and a prompt raised from that handler must
+      // not be closed by this dismissal.
+      this.dismissMeetingNotification();
       if (this.meetingDetectionEngine) {
         this.meetingDetectionEngine.handleNotificationTimeout(notification);
       }
-      this.dismissMeetingNotification();
     });
     this.updateNotificationWindow = null;
     this._pendingUpdateNotificationData = null;
@@ -1930,7 +1933,9 @@ class WindowManager {
       this._pendingNotificationData = null;
       previousWindow.close();
       if (replacedAutoEndSessionId) {
-        this.meetingDetectionEngine?.handleAutoEndNotificationClosed?.(replacedAutoEndSessionId);
+        this.meetingDetectionEngine?.handleAutoEndNotificationClosed?.(replacedAutoEndSessionId, {
+          flushQueued: false,
+        });
       }
     }
     this._notificationDismissTimer.cancel();
@@ -2022,8 +2027,9 @@ class WindowManager {
         await loadPromise;
       }
     } catch (error) {
-      // A load aborted by our own replacement or dismissal is not a failure.
-      if (this.notificationWindow !== win) return;
+      // A load aborted by our own replacement or dismissal is not a failure —
+      // but the caller must still learn the notification never appeared.
+      if (this.notificationWindow !== win) return false;
       this.dismissMeetingNotification();
       throw error;
     } finally {
@@ -2032,7 +2038,7 @@ class WindowManager {
         this._notificationLoadTimeout = null;
       }
     }
-    if (this.notificationWindow !== win) return;
+    if (this.notificationWindow !== win) return false;
     if (this._onboardingActive) {
       this.dismissMeetingNotification();
       return false;

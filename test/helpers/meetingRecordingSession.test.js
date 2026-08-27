@@ -44,7 +44,7 @@ test("auto-end stop requests acknowledge only a completed scoped stop", async ()
     requestedSessions.push(sessionId);
     return { stopped: sessionId === "meeting-2" };
   };
-  const onStopped = (sessionId) => completedSessions.push(sessionId);
+  const onStopped = (sessionId, stopped) => completedSessions.push({ sessionId, stopped });
   const onError = (error, sessionId) => errors.push({ error, sessionId });
 
   assert.equal(
@@ -69,7 +69,12 @@ test("auto-end stop requests acknowledge only a completed scoped stop", async ()
   await Promise.resolve();
 
   assert.deepEqual(requestedSessions, ["meeting-2", "meeting-1"]);
-  assert.deepEqual(completedSessions, ["meeting-2"]);
+  // Both settle: the caller must learn about a stop that completed without a
+  // persisted result, or an auto-end ends the recording with no feedback.
+  assert.deepEqual(completedSessions, [
+    { sessionId: "meeting-2", stopped: true },
+    { sessionId: "meeting-1", stopped: false },
+  ]);
   assert.deepEqual(errors, []);
 });
 
@@ -434,4 +439,65 @@ test("main-start rejection releases cancellation and replacement after one scope
 
   assert.equal(scopedStopCount, 1);
   assert.deepEqual(events, ["main-start:meeting-1", "main-stop:meeting-1", "capture:meeting-2"]);
+});
+
+const parseSegments = (raw) => JSON.parse(raw);
+
+test("restart seeds from the note's persisted transcript, not the stale live segments", async () => {
+  const { resolveMeetingAutoEndRestartSeed } = await load();
+  const diarized = [{ id: "a", text: "hello", speaker: "Ada" }];
+  const stale = [{ id: "a", text: "hello", speaker: null }];
+
+  const result = resolveMeetingAutoEndRestartSeed(
+    7,
+    { transcript: JSON.stringify(diarized), deleted_at: null },
+    parseSegments,
+    stale
+  );
+
+  assert.deepEqual(result, { ok: true, seedSegments: diarized });
+});
+
+test("restart refuses a note that was deleted during the restart window", async () => {
+  const { resolveMeetingAutoEndRestartSeed } = await load();
+
+  assert.deepEqual(
+    resolveMeetingAutoEndRestartSeed(
+      7,
+      { transcript: "[]", deleted_at: "2026-08-27T00:00:00Z" },
+      parseSegments,
+      []
+    ),
+    { ok: false, reason: "note-missing" }
+  );
+});
+
+test("restart refuses a note that no longer exists", async () => {
+  const { resolveMeetingAutoEndRestartSeed } = await load();
+
+  assert.deepEqual(resolveMeetingAutoEndRestartSeed(7, null, parseSegments, []), {
+    ok: false,
+    reason: "note-missing",
+  });
+});
+
+test("restart without a note keeps the live segments it captured", async () => {
+  const { resolveMeetingAutoEndRestartSeed } = await load();
+  const live = [{ id: "a", text: "hello" }];
+
+  assert.deepEqual(resolveMeetingAutoEndRestartSeed(null, null, parseSegments, live), {
+    ok: true,
+    seedSegments: live,
+  });
+});
+
+test("restart starts empty when the note has no transcript yet", async () => {
+  const { resolveMeetingAutoEndRestartSeed } = await load();
+
+  assert.deepEqual(
+    resolveMeetingAutoEndRestartSeed(7, { transcript: "", deleted_at: null }, parseSegments, [
+      { id: "a", text: "stale" },
+    ]),
+    { ok: true, seedSegments: [] }
+  );
 });

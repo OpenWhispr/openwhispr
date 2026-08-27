@@ -2,6 +2,13 @@
 const SILENCE_WINDOW_MS = 60_000;
 // Fallback mode after the tracked meeting app exits — a much stronger signal.
 const FAST_SILENCE_MS = 10_000;
+// A mic release must stay uncontradicted this long before it stops a recording.
+// The OS reports a release for things that are not the call ending: a device
+// flap emits MIC_STOP and MIC_START in one reconcile pass, an app rebuilds its
+// input unit when screen share starts, and an app that drops the mic on mute
+// looks identical to one that left the call. Without a dwell time each of those
+// ends a live recording, and the stop is irreversible.
+const OWNERSHIP_CONFIRM_MS = 15_000;
 // An external mic hold shorter than this (Siri, a permission prompt, the Sound
 // settings input meter) is incidental — it must not arm the mic-ignoring
 // ownership path on what is really an in-person recording.
@@ -12,10 +19,11 @@ const TICK_GAP_MS = 5_000;
 
 // Two evidence sources decide "the meeting is over":
 //
-//   ownership — an external app held the mic and released it. Stop only while
-//     the SYSTEM channel is also quiet (remote voices still playing means the
-//     call is live, e.g. an app that releases the mic on mute). The mic channel
-//     is deliberately ignored here so room noise after the call cannot mask it.
+//   ownership — an external app held the mic and released it. Stop only once the
+//     release has held for OWNERSHIP_CONFIRM_MS with the SYSTEM channel also
+//     quiet throughout (remote voices still playing means the call is live, e.g.
+//     an app that releases the mic on mute). The mic channel is deliberately
+//     ignored here so room noise after the call cannot mask the end.
 //   fallback — ownership is unreliable, or no external app ever held the mic
 //     this session. Both channels quiet for the silence window stops; a tracked
 //     meeting app exiting shortens the window.
@@ -36,6 +44,7 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
     if (gap > TICK_GAP_MS && session) {
       session.quietSince = nowMs;
       session.fastArmAt = null;
+      session.ownershipQuietSince = null;
       if (session.externalMicActive) {
         // Ownership observed before sleep is stale. Count it again from wake so
         // a release delivered with the first resumed poll cannot stop at once.
@@ -58,8 +67,25 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
     if (!session || !session.eligible || session.stopped) return;
     const nowMs = now();
 
+    // A session the user explicitly restarted carries a grace period: they have
+    // just told us the meeting is still live, so hold every stop path and keep
+    // the quiet clocks reset, so the grace expiring cannot stop instantly.
+    if (nowMs < session.suppressUntil) {
+      session.quietSince = nowMs;
+      session.fastArmAt = null;
+      session.ownershipQuietSince = null;
+      return;
+    }
+
     if (session.mode === "ownership") {
-      if (!session.externalMicActive && !session.systemActive) stop("mic-released");
+      // Any contradicting evidence — the mic coming back, or remote audio
+      // resuming — restarts the window rather than merely deferring the stop.
+      if (session.externalMicActive || session.systemActive) {
+        session.ownershipQuietSince = null;
+        return;
+      }
+      if (session.ownershipQuietSince === null) session.ownershipQuietSince = nowMs;
+      if (nowMs - session.ownershipQuietSince >= OWNERSHIP_CONFIRM_MS) stop("mic-released");
       return;
     }
 
@@ -79,6 +105,7 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
     externalMicActive,
     micActive = false,
     systemActive = false,
+    suppressUntil = 0,
   }) => {
     const nowMs = now();
     lastSeenAt = nowMs;
@@ -93,6 +120,8 @@ const createMeetingAutoEndController = ({ now = Date.now, onStop }) => {
       systemActive,
       quietSince: nowMs,
       fastArmAt: null,
+      ownershipQuietSince: null,
+      suppressUntil,
       stopped: false,
     };
     evaluate();
@@ -180,4 +209,5 @@ module.exports = createMeetingAutoEndController;
 module.exports.SILENCE_WINDOW_MS = SILENCE_WINDOW_MS;
 module.exports.FAST_SILENCE_MS = FAST_SILENCE_MS;
 module.exports.OWNERSHIP_MIN_ACTIVE_MS = OWNERSHIP_MIN_ACTIVE_MS;
+module.exports.OWNERSHIP_CONFIRM_MS = OWNERSHIP_CONFIRM_MS;
 module.exports.TICK_GAP_MS = TICK_GAP_MS;

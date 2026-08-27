@@ -17,14 +17,17 @@ export function canStopMeetingRecordingSession(
 export function requestMeetingRecordingAutoEnd(
   payload: { sessionId?: unknown } | null | undefined,
   stopRecording: (sessionId: string) => Promise<{ stopped: boolean }> | { stopped: boolean },
-  onStopped: (sessionId: string) => Promise<unknown> | unknown,
+  // Always called once the stop settles. `stopped` is false when the recording
+  // ended without a persisted result — the caller still has to tell the user,
+  // because no restart card will be offered for it.
+  onStopSettled: (sessionId: string, stopped: boolean) => Promise<unknown> | unknown,
   onError: (error: unknown, sessionId: string) => void
 ): boolean {
   const sessionId = payload?.sessionId;
   if (typeof sessionId !== "string" || sessionId.trim().length === 0) return false;
 
   void Promise.resolve(stopRecording(sessionId))
-    .then((result) => (result.stopped ? onStopped(sessionId) : undefined))
+    .then((result) => onStopSettled(sessionId, result.stopped))
     .catch((error) => onError(error, sessionId));
   return true;
 }
@@ -74,6 +77,27 @@ export function getMeetingAutoEndRestartArgs(
 ): StartRecordingArgs | null {
   if (!context || context.sessionId !== request.sessionId || activeSessionId !== null) return null;
   return { ...context.args, seedSegments: latestSegments };
+}
+
+type MeetingAutoEndRestartNote = Pick<NoteItem, "transcript" | "deleted_at">;
+
+export type MeetingAutoEndRestartSeed =
+  { ok: true; seedSegments: TranscriptSegment[] } | { ok: false; reason: "note-missing" };
+
+// The live segments the renderer holds are the pre-diarization copy: background
+// speaker identification writes its enrichment to the note, never back into the
+// store. Reseeding from the store would overwrite those labels at the next stop,
+// so the note is the source of truth — and reading it is also what catches a
+// note deleted during the restart window, which must not be resurrected.
+export function resolveMeetingAutoEndRestartSeed(
+  noteId: number | null,
+  note: MeetingAutoEndRestartNote | null | undefined,
+  parseSegments: (transcript: string) => TranscriptSegment[],
+  liveSegments: TranscriptSegment[]
+): MeetingAutoEndRestartSeed {
+  if (noteId == null) return { ok: true, seedSegments: liveSegments };
+  if (!note || note.deleted_at) return { ok: false, reason: "note-missing" };
+  return { ok: true, seedSegments: note.transcript ? parseSegments(note.transcript) : [] };
 }
 
 export function isMeetingAutoEndEligible(

@@ -17,11 +17,12 @@ const MeetingDetectionEngine = require("../../src/helpers/meetingDetectionEngine
 const createMeetingAutoEndController = require("../../src/helpers/meetingAutoEndController");
 Module._load = originalLoad;
 
-const { SILENCE_WINDOW_MS, FAST_SILENCE_MS, OWNERSHIP_MIN_ACTIVE_MS } =
+const { SILENCE_WINDOW_MS, FAST_SILENCE_MS, OWNERSHIP_MIN_ACTIVE_MS, OWNERSHIP_CONFIRM_MS } =
   createMeetingAutoEndController;
 
 const TICK_MS = 1000;
-const RESTART_WINDOW_MS = 30_000;
+const { AUTO_END_RESTART_WINDOW_MS: RESTART_WINDOW_MS, AUTO_END_RESTART_GRACE_MS } =
+  MeetingDetectionEngine;
 
 const createClock = () => {
   let now = 10_000;
@@ -175,6 +176,7 @@ async function triggerOwnershipStop(engineHarness, ownerWebContents) {
   });
   engineHarness.clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   engineHarness.micState(true, false);
+  engineHarness.clock.advance(OWNERSHIP_CONFIRM_MS);
 }
 
 test("detection prompts retain their existing payload with a detection discriminator", () => {
@@ -260,6 +262,7 @@ test("does not arm auto-end until system audio capture is confirmed", async () =
   );
   harness.clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
   harness.micState(true, false);
+  harness.clock.advance(OWNERSHIP_CONFIRM_MS);
 
   assert.deepEqual(messages, [
     {
@@ -304,7 +307,11 @@ test("system activity from meeting chunks defers ownership stop until quiet", as
   harness.clock.advance(TICK_MS);
   assert.deepEqual(messages, []);
 
-  harness.clock.advance(5 * TICK_MS);
+  // Still inside the confirm window even once the system tail expires.
+  harness.clock.advance(OWNERSHIP_CONFIRM_MS - TICK_MS);
+  assert.deepEqual(messages, []);
+
+  harness.clock.advance(5 * TICK_MS + OWNERSHIP_CONFIRM_MS);
   assert.equal(messages.length, 1);
   assert.equal(messages[0].payload.reason, "mic-released");
   harness.engine.stop();
@@ -721,4 +728,169 @@ test("meeting mode still suppresses prompts while a detection-started recording 
 
   assert.equal(shownNotifications.length, 0);
   engine.stop();
+});
+
+test("an explicit restart grants the new session a grace period before auto-end can fire again", async () => {
+  const harness = createEngine();
+  const messages = [];
+  const ownerWebContents = harness.owner(messages);
+  await triggerOwnershipStop(harness, ownerWebContents);
+  harness.engine.endRecordingSession("meeting-1");
+  await harness.engine.completeAutoEndSession("meeting-1", ownerWebContents);
+  assert.equal(
+    harness.engine.respondToAutoEndNotification(
+      "meeting-1",
+      "restart",
+      harness.overlayWebContents
+    ),
+    true
+  );
+
+  messages.length = 0;
+  harness.audioActivityDetector.externalMicState = {
+    reliable: true,
+    externalMicActive: false,
+  };
+  await harness.engine.beginRecordingSession({
+    sessionId: "meeting-2",
+    autoEndEligible: true,
+    ownerWebContents,
+    systemAudioAvailable: true,
+  });
+
+  // The user just said the meeting is still live; silence alone must not
+  // immediately undo that.
+  harness.clock.advance(AUTO_END_RESTART_GRACE_MS - TICK_MS);
+  assert.deepEqual(messages, []);
+
+  harness.clock.advance(SILENCE_WINDOW_MS + TICK_MS);
+  assert.deepEqual(messages, [
+    {
+      channel: "meeting-auto-end-requested",
+      payload: { sessionId: "meeting-2", reason: "silence" },
+    },
+  ]);
+  harness.engine.stop();
+});
+
+test("the restart grace is single-use and does not leak into an unrelated later recording", async () => {
+  const harness = createEngine();
+  const messages = [];
+  const ownerWebContents = harness.owner(messages);
+  await triggerOwnershipStop(harness, ownerWebContents);
+  harness.engine.endRecordingSession("meeting-1");
+  await harness.engine.completeAutoEndSession("meeting-1", ownerWebContents);
+  harness.engine.respondToAutoEndNotification(
+    "meeting-1",
+    "restart",
+    harness.overlayWebContents
+  );
+
+  harness.audioActivityDetector.externalMicState = {
+    reliable: true,
+    externalMicActive: false,
+  };
+  await harness.engine.beginRecordingSession({
+    sessionId: "meeting-2",
+    autoEndEligible: true,
+    ownerWebContents,
+    systemAudioAvailable: true,
+  });
+  harness.engine.endRecordingSession("meeting-2");
+
+  messages.length = 0;
+  await harness.engine.beginRecordingSession({
+    sessionId: "meeting-3",
+    autoEndEligible: true,
+    ownerWebContents,
+    systemAudioAvailable: true,
+  });
+  harness.clock.advance(SILENCE_WINDOW_MS + TICK_MS);
+  assert.deepEqual(messages, [
+    {
+      channel: "meeting-auto-end-requested",
+      payload: { sessionId: "meeting-3", reason: "silence" },
+    },
+  ]);
+  harness.engine.stop();
+});
+
+test("a queued detection cannot replace a live restart offer", async () => {
+  const harness = createEngine();
+  const messages = [];
+  const ownerWebContents = harness.owner(messages);
+  await triggerOwnershipStop(harness, ownerWebContents);
+
+  // A back-to-back meeting reminder arriving mid-recording is queued, not shown.
+  harness.engine.handleCalendarReminder({
+    id: "calendar-next",
+    summary: "Next call",
+    start_time: new Date(harness.clock.now()).toISOString(),
+  });
+  assert.deepEqual(harness.shownNotifications, []);
+
+  harness.engine.endRecordingSession("meeting-1");
+  harness.engine.setUserRecording(false);
+  await harness.engine.completeAutoEndSession("meeting-1", ownerWebContents);
+  assert.equal(harness.autoEndNotifications.length, 1);
+
+  // What the post-recording cooldown does when it fires 2.5s after the stop.
+  harness.engine._flushNotificationQueue();
+  assert.deepEqual(harness.shownNotifications, []);
+  assert.equal(
+    harness.engine.respondToAutoEndNotification(
+      "meeting-1",
+      "restart",
+      harness.overlayWebContents
+    ),
+    true
+  );
+  harness.engine.stop();
+});
+
+test("a detection queued behind a restart offer is delivered once the offer resolves", async () => {
+  const harness = createEngine();
+  const messages = [];
+  const ownerWebContents = harness.owner(messages);
+  await triggerOwnershipStop(harness, ownerWebContents);
+
+  harness.engine.handleCalendarReminder({
+    id: "calendar-next",
+    summary: "Next call",
+    start_time: new Date(harness.clock.now()).toISOString(),
+  });
+  harness.engine.endRecordingSession("meeting-1");
+  harness.engine.setUserRecording(false);
+  await harness.engine.completeAutoEndSession("meeting-1", ownerWebContents);
+  harness.engine._flushNotificationQueue();
+  assert.deepEqual(harness.shownNotifications, []);
+
+  harness.engine.respondToAutoEndNotification(
+    "meeting-1",
+    "dismiss",
+    harness.overlayWebContents
+  );
+
+  assert.equal(harness.shownNotifications.length, 1);
+  assert.equal(harness.shownNotifications[0].detectionId, "calendar:calendar-next");
+  harness.engine.stop();
+});
+
+test("a recovery notice that does not report success invalidates the restart offer", async () => {
+  const harness = createEngine({ showMeetingAutoEndNotification: async () => undefined });
+  const messages = [];
+  const ownerWebContents = harness.owner(messages);
+  await triggerOwnershipStop(harness, ownerWebContents);
+  harness.engine.endRecordingSession("meeting-1");
+
+  assert.equal(await harness.engine.completeAutoEndSession("meeting-1", ownerWebContents), false);
+  assert.equal(
+    harness.engine.respondToAutoEndNotification(
+      "meeting-1",
+      "restart",
+      harness.overlayWebContents
+    ),
+    false
+  );
+  harness.engine.stop();
 });

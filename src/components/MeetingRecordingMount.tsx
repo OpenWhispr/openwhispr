@@ -13,8 +13,10 @@ import {
   createMeetingAutoEndRestartContext,
   getMeetingAutoEndRestartArgs,
   requestMeetingRecordingAutoEnd,
+  resolveMeetingAutoEndRestartSeed,
   type MeetingAutoEndRestartContext,
 } from "../helpers/meetingRecordingSession";
+import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
 import { serializeTranscriptSegments } from "../utils/transcriptSpeakerState";
 import logger from "../utils/logger";
 
@@ -38,6 +40,23 @@ export default function MeetingRecordingMount(): null {
   const wasMicUnavailable = useRef(false);
   const wasSystemAudioSilent = useRef(false);
   const pendingAutoEndRestart = useRef<MeetingAutoEndRestartContext | null>(null);
+  // The auto-end listeners are registered once, so they cannot close over `t`
+  // or `toast` directly without pinning the language they mounted with.
+  const notifyAutoEnded = useRef<() => void>(() => {});
+  const notifyRestartFailed = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    notifyAutoEnded.current = () => {
+      toast({ title: t("notes.meeting.title"), description: t("notes.meeting.autoEnded") });
+    };
+    notifyRestartFailed.current = () => {
+      toast({
+        title: t("notes.meeting.title"),
+        description: t("notes.meeting.restartFailed"),
+        variant: "destructive",
+      });
+    };
+  }, [toast, t]);
 
   useEffect(() => {
     primeMeetingWorklet();
@@ -55,29 +74,29 @@ export default function MeetingRecordingMount(): null {
       requestMeetingRecordingAutoEnd(
         request,
         stopRecording,
-        (sessionId) => {
-          pendingAutoEndRestart.current = {
-            ...restartContext,
-            args: {
-              ...restartContext.args,
-              seedSegments: useMeetingRecordingStore.getState().segments,
-            },
+        (sessionId, stopped) => {
+          // Every path that ends the recording without offering a restart card
+          // has to say so, or the recording just disappears.
+          const abandonRestart = () => {
+            if (pendingAutoEndRestart.current?.sessionId === sessionId) {
+              pendingAutoEndRestart.current = null;
+            }
+            notifyAutoEnded.current();
           };
+
           const completion = window.electronAPI?.meetingAutoEndCompleted;
-          if (!completion) {
-            pendingAutoEndRestart.current = null;
+          if (!stopped || !completion) {
+            abandonRestart();
             return;
           }
+
+          pendingAutoEndRestart.current = restartContext;
           void completion(sessionId)
             .then((result) => {
-              if (!result.success && pendingAutoEndRestart.current?.sessionId === sessionId) {
-                pendingAutoEndRestart.current = null;
-              }
+              if (!result.success) abandonRestart();
             })
             .catch((error) => {
-              if (pendingAutoEndRestart.current?.sessionId === sessionId) {
-                pendingAutoEndRestart.current = null;
-              }
+              abandonRestart();
               logger.error(
                 "Meeting auto-end completion acknowledgment failed",
                 { error: error instanceof Error ? error.message : String(error), sessionId },
@@ -110,12 +129,34 @@ export default function MeetingRecordingMount(): null {
       }
 
       pendingAutoEndRestart.current = null;
-      void startRecording(restartArgs).catch((error) => {
+      void (async () => {
+        const note =
+          restartArgs.noteId == null
+            ? null
+            : await window.electronAPI?.getNote?.(restartArgs.noteId);
+        const seed = resolveMeetingAutoEndRestartSeed(
+          restartArgs.noteId,
+          note,
+          parseTranscriptSegments,
+          restartArgs.seedSegments ?? []
+        );
+        if (!seed.ok) {
+          logger.error(
+            "Meeting recording restart skipped — its note is gone",
+            { noteId: restartArgs.noteId },
+            "meeting"
+          );
+          notifyRestartFailed.current();
+          return;
+        }
+        await startRecording({ ...restartArgs, seedSegments: seed.seedSegments });
+      })().catch((error) => {
         logger.error(
           "Meeting recording restart failed",
           { error: error instanceof Error ? error.message : String(error) },
           "meeting"
         );
+        notifyRestartFailed.current();
       });
     });
 

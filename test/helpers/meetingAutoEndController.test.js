@@ -6,6 +6,7 @@ const {
   SILENCE_WINDOW_MS,
   FAST_SILENCE_MS,
   OWNERSHIP_MIN_ACTIVE_MS,
+  OWNERSHIP_CONFIRM_MS,
   TICK_GAP_MS,
 } = createMeetingAutoEndController;
 
@@ -55,13 +56,51 @@ const micAcquired = (controller, sessionId = "s1") =>
 const audio = (controller, micActive, systemActive, sessionId = "s1") =>
   controller.handleAudioActivity({ sessionId, micActive, systemActive });
 
-test("ownership: a qualifying mic release stops immediately", () => {
+test("ownership: a qualifying mic release stops after the confirm window", () => {
   const harness = createHarness();
   beginOwnership(harness.controller);
   harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
 
   micReleased(harness.controller);
+  assert.deepEqual(harness.stops, []);
+  harness.runFor(OWNERSHIP_CONFIRM_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
 
+  harness.runFor(TICK_MS);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
+});
+
+// A device flap (Bluetooth reconnect, input-device switch, an app rebuilding
+// its input unit for screen share) emits MIC_STOP then MIC_START in the same
+// reconcile pass, with no time between them.
+test("ownership: a mic release immediately followed by a re-acquire keeps recording", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+
+  micReleased(harness.controller);
+  micAcquired(harness.controller);
+
+  harness.runFor(4 * OWNERSHIP_CONFIRM_MS);
+  assert.deepEqual(harness.stops, []);
+});
+
+test("ownership: remote audio during the confirm window restarts it", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+
+  micReleased(harness.controller);
+  harness.runFor(OWNERSHIP_CONFIRM_MS - TICK_MS);
+  audio(harness.controller, false, true);
+  harness.runFor(4 * OWNERSHIP_CONFIRM_MS);
+  assert.deepEqual(harness.stops, []);
+
+  audio(harness.controller, false, false);
+  harness.runFor(OWNERSHIP_CONFIRM_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
+
+  harness.runFor(TICK_MS);
   assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });
 
@@ -76,6 +115,7 @@ test("ownership: remote audio defers stopping until the system channel goes quie
   assert.deepEqual(harness.stops, []);
 
   audio(harness.controller, false, false);
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
   assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });
 
@@ -86,6 +126,7 @@ test("ownership: mic-channel activity does not mask a qualifying release", () =>
   audio(harness.controller, true, false);
 
   micReleased(harness.controller);
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
 
   assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });
@@ -202,6 +243,7 @@ test("mode transitions: fresh ownership switches fallback into ownership mode", 
   assert.deepEqual(harness.stops, []);
 
   micReleased(harness.controller);
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
   assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });
 
@@ -278,6 +320,7 @@ test("lifecycle: a stop fires once and later inputs are ignored", () => {
   beginOwnership(harness.controller);
   harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
   micReleased(harness.controller);
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
 
   micAcquired(harness.controller);
   micReleased(harness.controller);
@@ -326,5 +369,6 @@ test("initial state: an already-audible system channel defers ownership stop", (
   assert.deepEqual(harness.stops, []);
 
   audio(harness.controller, false, false);
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
   assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
 });

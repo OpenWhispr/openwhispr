@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import type { MeetingNotificationData } from "../types/electron";
+import type { MeetingAutoEndAction, MeetingNotificationData } from "../types/electron";
 import { MeetingNotificationCard } from "./MeetingNotificationCard";
 import {
   getMeetingNotificationPresentation,
@@ -44,10 +44,14 @@ export default function MeetingNotificationOverlay() {
   );
 
   const respondToAutoEnd = useCallback(
-    (action: "restart" | "dismiss") => {
+    async (action: MeetingAutoEndAction) => {
       if (data?.kind !== "auto-end") return;
       setIsVisible(false);
-      void window.electronAPI?.meetingAutoEndRespond?.(data.sessionId, action);
+      const result = await window.electronAPI?.meetingAutoEndRespond?.(data.sessionId, action);
+      // Main closes this window when it accepts the response. A rejection (the
+      // window expired, or a replacement took the offer) leaves it open, so put
+      // the card back instead of stranding an invisible, unclickable overlay.
+      if (result && !result.success) setIsVisible(true);
     },
     [data]
   );
@@ -70,10 +74,10 @@ export default function MeetingNotificationOverlay() {
       : t(presentation.bodyKey);
   const handleAction =
     presentation.action === "restart"
-      ? () => respondToAutoEnd("restart")
+      ? () => void respondToAutoEnd("restart")
       : () => respond(presentation.action);
   const handleDismiss =
-    data?.kind === "auto-end" ? () => respondToAutoEnd("dismiss") : () => respond("dismiss");
+    data?.kind === "auto-end" ? () => void respondToAutoEnd("dismiss") : () => respond("dismiss");
 
   return (
     <div className="meeting-notification-window w-full h-full bg-transparent p-3">

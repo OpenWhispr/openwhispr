@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Meetings
 
-- **Meeting recordings stop as soon as the call ends.** The existing microphone, silence, and meeting-app signals now stop recording immediately instead of starting another countdown. A 30-second recovery card lets you restart the same note with its existing transcript and speaker settings.
+- **Meeting recordings stop as soon as the call ends.** The microphone, silence, and meeting-app signals no longer open a 60-second **Keep recording** countdown first, so recordings now end about a minute sooner than before. A microphone release still waits 15 seconds of continued quiet before it counts, so a headset reconnecting or an app that drops the mic on mute cannot cut a live call short. A 30-second card then offers to restart the same note — keeping its transcript, folder, and speaker settings — and restarting holds auto-end off for five minutes. (#1898)
 
 ### Data safety
 
