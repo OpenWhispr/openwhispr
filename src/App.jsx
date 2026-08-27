@@ -259,10 +259,11 @@ export default function App() {
 
   // While the Agent panel is open, plain dictation renders on the
   // opposite-edge companion pill — neither its recording nor its processing
-  // may animate the footer pill here. A panel that is merely mounted (its
-  // close animation, the pre-open thinking flourish) has no companion, so
-  // the main pill keeps owning those visuals or the recording shows nowhere.
-  const voicePillOwnsActivity = !assistant.open || isAssistantVoice;
+  // may animate the footer pill here. Ownership returns at close INTENT
+  // (assistant.closing), not at fade completion: beginClose hides the
+  // companion immediately, so waiting for the fade would leave a running
+  // recording with no visual owner for the fade duration.
+  const voicePillOwnsActivity = !assistant.open || assistant.closing || isAssistantVoice;
   const voicePillIsRecording = isRecording && voicePillOwnsActivity;
   const voiceActivity = resolveVoiceActivityPresentation({
     isRecording: voicePillIsRecording,
