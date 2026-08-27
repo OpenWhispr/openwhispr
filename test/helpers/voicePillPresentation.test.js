@@ -620,3 +620,44 @@ test("an Agent follow-up keeps the existing response modal open while thinking",
     thinking: true,
   });
 });
+
+test("a collapsed transcript stays reopenable while its result is processing", async () => {
+  const { resolveCompanionPillInteractive } = await load();
+
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: true,
+      surfaceInteractive: true,
+      isProcessing: true,
+      canReopenLiveTranscript: true,
+    }),
+    true
+  );
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: true,
+      surfaceInteractive: true,
+      isProcessing: true,
+      canReopenLiveTranscript: false,
+    }),
+    false
+  );
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: false,
+      surfaceInteractive: true,
+      isProcessing: false,
+      canReopenLiveTranscript: true,
+    }),
+    false
+  );
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: true,
+      surfaceInteractive: false,
+      isProcessing: false,
+      canReopenLiveTranscript: false,
+    }),
+    false
+  );
+});

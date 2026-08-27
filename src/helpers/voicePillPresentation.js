@@ -318,6 +318,21 @@ export function resolveVoicePillInteraction({
   };
 }
 
+// The companion pill defers to the main process's interactivity verdict and
+// keeps toggle clicks away from a transcript still processing — except to
+// reopen a manually collapsed transcript, which must stay reachable until the
+// final text lands (activatePill routes the reopen before any toggle).
+export function resolveCompanionPillInteractive({
+  mainProcessInteractive,
+  surfaceInteractive,
+  isProcessing,
+  canReopenLiveTranscript,
+}) {
+  if (!mainProcessInteractive || !surfaceInteractive) return false;
+  if (!isProcessing) return true;
+  return Boolean(canReopenLiveTranscript);
+}
+
 export function shouldActivateVoicePill({
   hasDragged,
   liveTranscriptMounted,

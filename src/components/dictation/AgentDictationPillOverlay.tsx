@@ -12,6 +12,7 @@ import { useListeningEntrancePhase } from "../../hooks/useListeningEntrancePhase
 import { useLiveTranscriptPanel } from "../../hooks/useLiveTranscriptPanel";
 import {
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
+  resolveCompanionPillInteractive,
   resolveListeningEntrancePresentation,
   resolveLiveTranscriptEntrancePresentation,
   resolveVoiceActivityPresentation,
@@ -158,7 +159,12 @@ export default function AgentDictationPillOverlay() {
     isProcessing,
     isHovered: hovered,
   });
-  const pillInteractive = companionState.interactive && !isProcessing && surfaceInteractive;
+  const pillInteractive = resolveCompanionPillInteractive({
+    mainProcessInteractive: companionState.interactive,
+    surfaceInteractive,
+    isProcessing,
+    canReopenLiveTranscript,
+  });
   const label = isRecording
     ? t("app.mic.recording")
     : isProcessing || isPreparing
