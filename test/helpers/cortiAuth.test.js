@@ -63,3 +63,27 @@ test("the token request carries an abort signal and surfaces AbortError", async 
   );
   assert.ok(seenSignal instanceof AbortSignal);
 });
+
+test("rejects invalid or nullish tenant names and normalizes environment casing", async () => {
+  await assert.rejects(
+    getCortiToken({ environment: "eu", tenant: null, clientId: "t", clientSecret: "s" }),
+    /Invalid Corti tenant name/
+  );
+  await assert.rejects(
+    getCortiToken({ environment: "eu", tenant: undefined, clientId: "t", clientSecret: "s" }),
+    /Invalid Corti tenant name/
+  );
+  await assert.rejects(
+    getCortiToken(null),
+    /Invalid Corti environment/
+  );
+
+  const { fetchImpl } = makeFetch(["token-eu"]);
+  assert.equal(
+    await getCortiToken(
+      { environment: " EU ", tenant: " acme ", clientId: "case-check", clientSecret: "s" },
+      fetchImpl
+    ),
+    "token-eu"
+  );
+});

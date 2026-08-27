@@ -12,16 +12,21 @@ const TOKEN_FETCH_TIMEOUT_MS = 12_000;
 const tokenCache = new Map();
 
 function assertValidTarget(environment, tenant) {
-  if (!CORTI_ENVIRONMENTS.has(environment)) {
+  if (typeof environment !== "string" || !CORTI_ENVIRONMENTS.has(environment.trim().toLowerCase())) {
     throw new Error(`Invalid Corti environment: ${environment}`);
   }
-  if (!TENANT_PATTERN.test(tenant)) {
+  if (typeof tenant !== "string" || !TENANT_PATTERN.test(tenant.trim())) {
     throw new Error("Invalid Corti tenant name");
   }
 }
 
-async function getCortiToken({ environment, tenant, clientId, clientSecret }, fetchImpl) {
+async function getCortiToken(credentials = {}, fetchImpl) {
+  const { environment, tenant, clientId, clientSecret } =
+    credentials && typeof credentials === "object" ? credentials : {};
   assertValidTarget(environment, tenant);
+
+  const normalizedEnv = environment.trim().toLowerCase();
+  const normalizedTenant = tenant.trim();
 
   // The secret is part of the key (digested, never stored raw) so edited
   // credentials always re-authenticate; a key without it makes a connection
@@ -30,7 +35,7 @@ async function getCortiToken({ environment, tenant, clientId, clientSecret }, fe
     .update(clientSecret ?? "")
     .digest("hex")
     .slice(0, 16);
-  const cacheKey = `${environment}/${tenant}/${clientId}/${secretDigest}`;
+  const cacheKey = `${normalizedEnv}/${normalizedTenant}/${clientId}/${secretDigest}`;
   const cached = tokenCache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
     return cached.value;
@@ -41,7 +46,7 @@ async function getCortiToken({ environment, tenant, clientId, clientSecret }, fe
   const timeoutHandle = setTimeout(() => controller.abort(), TOKEN_FETCH_TIMEOUT_MS);
   try {
     const response = await doFetch(
-      `https://auth.${environment}.corti.app/realms/${tenant}/protocol/openid-connect/token`,
+      `https://auth.${normalizedEnv}.corti.app/realms/${normalizedTenant}/protocol/openid-connect/token`,
       {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
