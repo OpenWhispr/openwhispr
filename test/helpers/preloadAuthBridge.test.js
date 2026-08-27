@@ -194,3 +194,15 @@ test("agent streaming listeners strip Electron events and preserve correlation",
   assert.equal(listeners.has("cloud-agent-stream-error"), false);
   assert.equal(listeners.has("cloud-agent-stream-end"), false);
 });
+
+test("prepare-dictation forwards the input kind without the Electron event", () => {
+  const { api, listeners } = loadPreloadApi();
+  const received = [];
+  const dispose = api.onPrepareDictation((options) => received.push(options));
+
+  listeners.get("prepare-dictation")?.({ senderId: 1 }, { inputKind: "assistant" });
+
+  dispose();
+  assert.deepEqual(received, [{ inputKind: "assistant" }]);
+  assert.equal(listeners.has("prepare-dictation"), false);
+});

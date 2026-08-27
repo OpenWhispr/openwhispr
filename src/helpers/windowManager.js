@@ -967,7 +967,7 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send("prepare-dictation");
+      this.mainWindow.webContents.send("prepare-dictation", { inputKind });
     }
   }
 

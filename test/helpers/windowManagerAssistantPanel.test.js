@@ -512,3 +512,41 @@ test("a clean-exit companion renderer teardown leaves readiness untouched", () =
   assert.equal(pill.closeCalls, 0);
   assert.equal(manager.agentDictationPillWindow, pill);
 });
+
+test("prepare-dictation carries the toggle's input kind to the renderer", () => {
+  const manager = new WindowManager();
+  manager.setOnboardingActive(false);
+  manager.hotkeyManager = { isInListeningMode: () => false };
+  const sent = [];
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
+  };
+
+  manager.sendPrepareDictation({ inputKind: "assistant" });
+  manager.sendPrepareDictation();
+
+  assert.deepEqual(sent, [
+    { channel: "prepare-dictation", payload: { inputKind: "assistant" } },
+    { channel: "prepare-dictation", payload: { inputKind: "dictation" } },
+  ]);
+});
+
+test("mic preparation reaches the companion as its own lifecycle", () => {
+  const manager = new WindowManager();
+  const messages = [];
+  manager._agentDictationPillReady = true;
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel, payload) => messages.push({ channel, payload }) },
+  };
+
+  manager.setDictationLifecycleState("preparing", "dictation");
+
+  assert.deepEqual(messages, [
+    {
+      channel: "agent-dictation-pill-state-changed",
+      payload: { lifecycle: "preparing", interactive: true, horizontalDirection: "left" },
+    },
+  ]);
+});

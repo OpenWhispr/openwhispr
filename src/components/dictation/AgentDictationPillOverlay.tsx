@@ -24,7 +24,7 @@ import { VoiceModePanelCore, type VoiceModePanelStage } from "./VoiceModePanelCo
 import { VoicePill, type VoicePillState } from "./VoicePill";
 import "../../styles/agent-dictation-pill.css";
 
-type DictationLifecycle = "idle" | "recording" | "processing";
+type DictationLifecycle = "idle" | "preparing" | "recording" | "processing";
 type HorizontalDirection = "left" | "right";
 type CompanionState = {
   lifecycle: DictationLifecycle;
@@ -74,6 +74,7 @@ export default function AgentDictationPillOverlay() {
   );
   const isRecording = companionState.lifecycle === "recording";
   const isProcessing = companionState.lifecycle === "processing";
+  const isPreparing = companionState.lifecycle === "preparing";
   const liveTranscript = useLiveTranscriptPanel({
     resizeToContent,
     assistantOpenRef,
@@ -141,7 +142,11 @@ export default function AgentDictationPillOverlay() {
       : LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs;
   const state = (listeningEntrance.activeState ||
     voiceActivity.activeState ||
-    (hovered && companionState.interactive ? "hover" : "idle")) as VoicePillState;
+    (isPreparing
+      ? "processing"
+      : hovered && companionState.interactive
+        ? "hover"
+        : "idle")) as VoicePillState;
   const expanded = isRecording ? listeningEntrance.compactPill : voiceActivity.compactPill;
   // The shared rule (a mounted transcript locks the pill except while
   // recording) comes from the tested helper; the companion additionally
@@ -156,7 +161,7 @@ export default function AgentDictationPillOverlay() {
   const pillInteractive = companionState.interactive && !isProcessing && surfaceInteractive;
   const label = isRecording
     ? t("app.mic.recording")
-    : isProcessing
+    : isProcessing || isPreparing
       ? t("app.mic.processing")
       : canReopenLiveTranscript
         ? t("transcriptionPreview.label")

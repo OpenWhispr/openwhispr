@@ -962,19 +962,21 @@ declare global {
       onToggleTranslation?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
-      onPrepareDictation?: (callback: () => void) => () => void;
+      onPrepareDictation?: (
+        callback: (options?: { inputKind?: "dictation" | "assistant" | "translation" }) => void
+      ) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
       onCancelDictation?: (callback: () => void) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (
-        state: "idle" | "recording" | "processing",
+        state: "idle" | "preparing" | "recording" | "processing",
         inputKind?: "dictation" | "assistant" | "translation"
       ) => void;
       dictationAudioLevelChanged?: (level: number) => void;
       toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
       cancelAgentPanelDictation?: () => Promise<{ success: boolean }>;
       getAgentDictationPillState?: () => Promise<{
-        lifecycle: "idle" | "recording" | "processing";
+        lifecycle: "idle" | "preparing" | "recording" | "processing";
         interactive: boolean;
         horizontalDirection: "left" | "right";
       }>;
@@ -987,7 +989,7 @@ declare global {
       setAgentDictationPillInteractivity?: (interactive: boolean) => Promise<{ success: boolean }>;
       onAgentDictationPillStateChanged?: (
         callback: (state: {
-          lifecycle: "idle" | "recording" | "processing";
+          lifecycle: "idle" | "preparing" | "recording" | "processing";
           interactive: boolean;
           horizontalDirection: "left" | "right";
         }) => void

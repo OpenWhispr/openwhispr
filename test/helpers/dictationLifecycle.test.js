@@ -143,3 +143,21 @@ test("translation remains blocked while the assistant panel owns the shared surf
     false
   );
 });
+
+test("mic preparation is a first-class lifecycle mirrored only for ordinary dictation", () => {
+  assert.equal(normalizeDictationLifecycle("preparing"), "preparing");
+  assert.equal(shouldIgnoreDictationHotkey("preparing"), false);
+  assert.equal(isDictationRecording("preparing"), false);
+  assert.deepEqual(resolveAgentDictationPillState("preparing", "dictation"), {
+    lifecycle: "preparing",
+    interactive: true,
+  });
+  assert.deepEqual(resolveAgentDictationPillState("preparing", "assistant"), {
+    lifecycle: "idle",
+    interactive: false,
+  });
+  assert.deepEqual(resolveAgentDictationPillState("preparing", "translation"), {
+    lifecycle: "idle",
+    interactive: false,
+  });
+});

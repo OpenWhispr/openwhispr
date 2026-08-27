@@ -1,5 +1,6 @@
 const DICTATION_LIFECYCLE = Object.freeze({
   IDLE: "idle",
+  PREPARING: "preparing",
   RECORDING: "recording",
   PROCESSING: "processing",
 });
