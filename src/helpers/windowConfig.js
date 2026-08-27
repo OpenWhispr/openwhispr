@@ -273,8 +273,8 @@ const NOTIFICATION_WINDOW_CONFIG = {
 };
 
 const AUTO_END_NOTIFICATION_WINDOW_SIZE = {
-  width: 620,
-  height: 116,
+  width: 480,
+  height: 128,
 };
 
 function getMeetingNotificationWindowSize(promptData) {

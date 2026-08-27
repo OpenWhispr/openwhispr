@@ -20,10 +20,12 @@ test("auto-end uses a larger positioned window while detection keeps its existin
 
   assert.deepEqual(detectionSize, { width: 392, height: 92 });
   assert.deepEqual(autoEndSize, AUTO_END_NOTIFICATION_WINDOW_SIZE);
-  assert.ok(autoEndSize.width >= 620);
-  assert.ok(autoEndSize.height >= 116);
+  // Wider than a detection prompt because of the countdown copy and the Restart
+  // action, but not so wide that a single line runs the width of the screen.
+  assert.ok(autoEndSize.width > detectionSize.width);
+  assert.ok(autoEndSize.width <= 480);
   assert.deepEqual(WindowPositionUtil.getNotificationPosition(display, autoEndSize), {
-    x: 864,
+    x: 1004,
     y: 66,
     width: autoEndSize.width,
     height: autoEndSize.height,
