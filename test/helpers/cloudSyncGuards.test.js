@@ -138,3 +138,24 @@ test("note create payloads never send a stale optimistic-concurrency base", asyn
   assert.equal(payload.content, localNote.content);
   assert.equal(payload.folder_id, "cloud-folder-3");
 });
+
+test("normalizeTimestamp handles Date, number timestamps, and nullish values safely", async () => {
+  const { normalizeTimestamp } = await load();
+
+  assert.equal(normalizeTimestamp(null), "");
+  assert.equal(normalizeTimestamp(undefined), "");
+  assert.equal(normalizeTimestamp(1724600000000), new Date(1724600000000).toISOString());
+  const d = new Date("2026-08-25T12:00:00.000Z");
+  assert.equal(normalizeTimestamp(d), d.toISOString());
+  assert.equal(normalizeTimestamp(true), "");
+  assert.equal(normalizeTimestamp({}), "");
+});
+
+test("buildNoteUpdatePayload and buildNoteCreatePayload handle nullish notes safely", async () => {
+  const { buildNoteUpdatePayload, buildNoteCreatePayload } = await load();
+
+  assert.doesNotThrow(() => buildNoteUpdatePayload(null));
+  assert.doesNotThrow(() => buildNoteCreatePayload(null));
+  assert.equal(buildNoteUpdatePayload(null).folder_id, null);
+  assert.equal(buildNoteCreatePayload(null).folder_id, null);
+});

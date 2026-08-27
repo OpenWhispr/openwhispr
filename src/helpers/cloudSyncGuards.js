@@ -7,6 +7,13 @@
 // sub-second cloud value at the same instant ('Z' > '.').
 export function normalizeTimestamp(value) {
   if (!value) return "";
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value).toISOString();
+  }
+  if (typeof value !== "string") return "";
   const iso = value.replace(" ", "T").replace(/Z$/, "");
   return (/\.\d+$/.test(iso) ? iso : `${iso}.000`) + "Z";
 }
@@ -26,26 +33,27 @@ export function isCloudEntryNewer(cloudUpdatedAt, localUpdatedAt) {
 // sends it. `cloudFolderId` is the note's folder already mapped to its cloud
 // id (null when folderless or unmapped).
 export function buildNoteUpdatePayload(note, cloudFolderId) {
+  const safeNote = note && typeof note === "object" ? note : {};
   return {
-    title: note.title,
-    content: note.content,
-    enhanced_content: note.enhanced_content,
-    enhancement_prompt: note.enhancement_prompt,
-    enhanced_at_content_hash: note.enhanced_at_content_hash,
-    note_type: note.note_type,
-    source_file: note.source_file,
-    audio_duration_seconds: note.audio_duration_seconds,
-    transcript: note.transcript,
-    participants: note.participants,
-    calendar_event_id: note.calendar_event_id,
-    diarization_enabled: note.diarization_enabled,
-    expected_speaker_count: note.expected_speaker_count,
+    title: safeNote.title,
+    content: safeNote.content,
+    enhanced_content: safeNote.enhanced_content,
+    enhancement_prompt: safeNote.enhancement_prompt,
+    enhanced_at_content_hash: safeNote.enhanced_at_content_hash,
+    note_type: safeNote.note_type,
+    source_file: safeNote.source_file,
+    audio_duration_seconds: safeNote.audio_duration_seconds,
+    transcript: safeNote.transcript,
+    participants: safeNote.participants,
+    calendar_event_id: safeNote.calendar_event_id,
+    diarization_enabled: safeNote.diarization_enabled,
+    expected_speaker_count: safeNote.expected_speaker_count,
     folder_id: cloudFolderId ?? null,
-    updated_at: note.updated_at,
+    updated_at: safeNote.updated_at,
     // The server revision this device last acked; the server 409s when a newer
     // write landed since. Omitted for pre-guard rows (null base), which keeps
     // the legacy last-write-wins contract for them.
-    ...(note.cloud_updated_at ? { base_updated_at: note.cloud_updated_at } : {}),
+    ...(safeNote.cloud_updated_at ? { base_updated_at: safeNote.cloud_updated_at } : {}),
   };
 }
 
