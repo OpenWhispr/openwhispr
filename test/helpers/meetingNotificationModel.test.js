@@ -64,6 +64,81 @@ test("detection presentation preserves event title, join action, and dismissal",
   );
 });
 
+test("a horizontal meeting notification swipe past one quarter of the card dismisses", async () => {
+  const { getMeetingNotificationSwipeOutcome } = await load();
+
+  assert.equal(
+    getMeetingNotificationSwipeOutcome({
+      dismissible: true,
+      horizontalDelta: 100,
+      verticalDelta: 10,
+      horizontalVelocity: 0.1,
+      cardWidth: 392,
+    }),
+    "dismiss"
+  );
+});
+
+test("non-dismissible meeting notifications ignore horizontal swipes", async () => {
+  const { getMeetingNotificationSwipeOutcome } = await load();
+
+  assert.equal(
+    getMeetingNotificationSwipeOutcome({
+      dismissible: false,
+      horizontalDelta: 300,
+      verticalDelta: 0,
+      horizontalVelocity: 2,
+      cardWidth: 620,
+    }),
+    "ignore"
+  );
+});
+
+test("vertical meeting notification gestures are ignored", async () => {
+  const { getMeetingNotificationSwipeOutcome } = await load();
+
+  assert.equal(
+    getMeetingNotificationSwipeOutcome({
+      dismissible: true,
+      horizontalDelta: 80,
+      verticalDelta: 120,
+      horizontalVelocity: 1,
+      cardWidth: 392,
+    }),
+    "ignore"
+  );
+});
+
+test("a short horizontal meeting notification swipe resets", async () => {
+  const { getMeetingNotificationSwipeOutcome } = await load();
+
+  assert.equal(
+    getMeetingNotificationSwipeOutcome({
+      dismissible: true,
+      horizontalDelta: 60,
+      verticalDelta: 4,
+      horizontalVelocity: 0.2,
+      cardWidth: 392,
+    }),
+    "reset"
+  );
+});
+
+test("a short fast meeting notification flick dismisses", async () => {
+  const { getMeetingNotificationSwipeOutcome } = await load();
+
+  assert.equal(
+    getMeetingNotificationSwipeOutcome({
+      dismissible: true,
+      horizontalDelta: -30,
+      verticalDelta: 2,
+      horizontalVelocity: -0.9,
+      cardWidth: 392,
+    }),
+    "dismiss"
+  );
+});
+
 test("countdown rounds up and emits updated seconds until expiration", async () => {
   const { subscribeMeetingAutoEndCountdown } = await load();
   let now = 10_000;

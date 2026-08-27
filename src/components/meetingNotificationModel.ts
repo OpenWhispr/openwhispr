@@ -36,6 +36,37 @@ interface DetectionPresentation {
 
 export type MeetingNotificationPresentation = AutoEndPresentation | DetectionPresentation;
 
+interface MeetingNotificationSwipeSample {
+  dismissible: boolean;
+  horizontalDelta: number;
+  verticalDelta: number;
+  horizontalVelocity: number;
+  cardWidth: number;
+}
+
+export type MeetingNotificationSwipeOutcome = "dismiss" | "ignore" | "reset";
+
+const SWIPE_MAX_DISTANCE_PX = 96;
+const SWIPE_DISTANCE_RATIO = 0.25;
+const SWIPE_MIN_FLING_DISTANCE_PX = 24;
+const SWIPE_MIN_FLING_VELOCITY_PX_PER_MS = 0.75;
+
+export function getMeetingNotificationSwipeOutcome(
+  sample: MeetingNotificationSwipeSample
+): MeetingNotificationSwipeOutcome {
+  if (!sample.dismissible) return "ignore";
+  if (Math.abs(sample.verticalDelta) >= Math.abs(sample.horizontalDelta)) return "ignore";
+  const horizontalDistance = Math.abs(sample.horizontalDelta);
+  const distanceThreshold = Math.min(
+    SWIPE_MAX_DISTANCE_PX,
+    sample.cardWidth * SWIPE_DISTANCE_RATIO
+  );
+  const isFling =
+    horizontalDistance >= SWIPE_MIN_FLING_DISTANCE_PX &&
+    Math.abs(sample.horizontalVelocity) >= SWIPE_MIN_FLING_VELOCITY_PX_PER_MS;
+  return horizontalDistance >= distanceThreshold || isFling ? "dismiss" : "reset";
+}
+
 export function getMeetingNotificationPresentation(
   data: MeetingNotificationData | null,
   secondsRemaining: number
