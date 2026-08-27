@@ -45,10 +45,13 @@ test("posts JSON with the key header to the Interactions endpoint", async () => 
   assert.equal(result.model, "gemini-3.5-transcribe");
 });
 
-test("defaults model and mime type, and omits generation_config when empty", async () => {
+test("defaults the model and omits generation_config when empty", async () => {
   const { fetchImpl, calls } = makeFetch({ status: "completed", output_text: "ok" });
 
-  await transcribeWithGemini({ audioBuffer: AUDIO, language: "auto", apiKey: "k" }, fetchImpl);
+  await transcribeWithGemini(
+    { audioBuffer: AUDIO, contentType: "audio/webm", language: "auto", apiKey: "k" },
+    fetchImpl
+  );
 
   const body = requestBody(calls);
   assert.equal(body.model, "gemini-3.5-transcribe");

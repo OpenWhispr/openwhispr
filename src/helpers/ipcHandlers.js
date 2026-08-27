@@ -5901,6 +5901,11 @@ class IPCHandlers {
         } else if (route.transport === "proxied" && route.provider === "gemini") {
           // Gemini's Interactions API takes JSON with inline base64 audio, so
           // it can't use the generic multipart fetch below.
+          if (route.sizeCapBytes && buffer.byteLength > route.sizeCapBytes) {
+            throw new Error(
+              `File too large. Maximum size for Gemini is ${Math.floor(route.sizeCapBytes / (1024 * 1024))} MB.`
+            );
+          }
           const { text } = await transcribeWithGemini({
             audioBuffer: buffer,
             model: route.model,
@@ -9186,11 +9191,12 @@ class IPCHandlers {
 
           if (route.transport === "proxied" && route.provider === "gemini") {
             const ext = path.extname(realByok).toLowerCase().replace(".", "");
+            // Deliberately no language hint — same rationale as the multipart
+            // branch below, and Gemini's language_codes is a hard constraint.
             const { text } = await transcribeWithGemini({
               audioBuffer: fs.readFileSync(realByok),
               model: route.model,
               contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
-              language: route.language,
               apiKey: apiKey || this.environmentManager.getGeminiKey(),
             });
             return { success: true, text };

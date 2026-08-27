@@ -33,6 +33,10 @@ const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 // request cap; base64 inflates 4/3, so cap the raw audio lower.
 const GEMINI_FILE_SIZE_LIMIT = 14 * 1024 * 1024;
 
+export function byokFileSizeLimit(provider: string): number {
+  return provider === "gemini" ? GEMINI_FILE_SIZE_LIMIT : BYOK_FILE_SIZE_LIMIT;
+}
+
 const CUSTOM_ENDPOINT_INVALID_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.customEndpointInvalid";
 

@@ -49,8 +49,10 @@ async function transcribeWithGemini(
     input: [
       {
         type: "audio",
-        data: Buffer.from(audioBuffer).toString("base64"),
-        mime_type: GEMINI_MIME_TYPES[contentType] || contentType || "audio/webm",
+        data: (Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer)).toString(
+          "base64"
+        ),
+        mime_type: GEMINI_MIME_TYPES[contentType] || contentType,
       },
     ],
   };

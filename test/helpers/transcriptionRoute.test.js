@@ -126,6 +126,12 @@ test("proxied providers carry their quirks as route data", async () => {
   );
 });
 
+test("byokFileSizeLimit matches the per-provider route caps", async () => {
+  const { byokFileSizeLimit } = await load();
+  assert.equal(byokFileSizeLimit("gemini"), 14 * 1024 * 1024);
+  assert.equal(byokFileSizeLimit("openai"), 25 * 1024 * 1024);
+});
+
 test("custom requires a configured secure endpoint (empty, sentinel, garbage all fail)", async () => {
   const { resolveTranscriptionRoute } = await load();
   for (const cloudTranscriptionBaseUrl of [
