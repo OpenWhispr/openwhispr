@@ -541,7 +541,7 @@ class ModelManager {
     this.currentServerModelId = null;
   }
 
-  updateServerTtl(ttlMinutes) {
+  updateServerIdleTimeout(ttlMinutes) {
     if (this.serverManager.setIdleTimeout) {
       this.serverManager.setIdleTimeout(ttlMinutes);
     }

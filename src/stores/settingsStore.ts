@@ -1529,8 +1529,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setLocalModelIdleTimeout: (value: number) => {
     if (isBrowser) localStorage.setItem("localModelIdleTimeout", String(value));
     set({ localModelIdleTimeout: value });
-    if (window.electronAPI?.llamaServerUpdateTtl) {
-      window.electronAPI.llamaServerUpdateTtl(value).catch((err) => {
+    if (window.electronAPI?.llamaServerUpdateIdleTimeout) {
+      window.electronAPI.llamaServerUpdateIdleTimeout(value).catch((err) => {
         logger.warn(
           "Failed to sync VRAM TTL to main process",
           { error: (err as Error).message },
@@ -3064,8 +3064,8 @@ export async function initializeSettings(): Promise<void> {
     
     // Push the initial local model idle timeout to the main process
     try {
-      if (window.electronAPI?.llamaServerUpdateTtl) {
-        await window.electronAPI.llamaServerUpdateTtl(useSettingsStore.getState().localModelIdleTimeout);
+      if (window.electronAPI?.llamaServerUpdateIdleTimeout) {
+        await window.electronAPI.llamaServerUpdateIdleTimeout(useSettingsStore.getState().localModelIdleTimeout);
       }
     } catch (err) {
       logger.warn(
