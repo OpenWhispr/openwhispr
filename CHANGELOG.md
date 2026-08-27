@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Meetings
+
+- **Meeting prompts swipe away like desktop notifications.** A horizontal pointer swipe of 80px in either direction dismisses a meeting card — detection, calendar reminder, or the auto-end restart offer — taking the same path as its close button. Swipes that start on an action button are ignored.
+
 ## [1.9.1] - 2026-08-27
 
 Meeting recordings now stop the moment the call does, with a short window to pick the same note back up. Gemini joins the bring-your-own-key transcription providers, Granola users can import their back catalogue, and the dictation pill gets a brand-blue processing glow plus a companion surface for Agent mode. Account deletion no longer reaches across accounts, and 1.9.0's recording-time CPU regression — along with the GPU packs 1.8.3 quietly deleted — is repaired.

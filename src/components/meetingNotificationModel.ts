@@ -36,6 +36,15 @@ interface DetectionPresentation {
 
 export type MeetingNotificationPresentation = AutoEndPresentation | DetectionPresentation;
 
+const MEETING_NOTIFICATION_SWIPE_DISTANCE_PX = 80;
+
+export function shouldDismissMeetingNotificationSwipe(
+  dismissible: boolean,
+  horizontalDistance: number
+): boolean {
+  return dismissible && Math.abs(horizontalDistance) >= MEETING_NOTIFICATION_SWIPE_DISTANCE_PX;
+}
+
 export function getMeetingNotificationPresentation(
   data: MeetingNotificationData | null,
   secondsRemaining: number
