@@ -483,9 +483,11 @@ export default function App() {
   // the classic bordered circle stays (with the same emergence motion).
   const [cancelSkinActive, setCancelSkinActive] = useState(false);
   const cancelFused = !liveTranscript.open;
-  // isCompactPill tracks the pill's rendered footprint through the entrance
-  // phases (logo-collapsed thinking renders 40×40 even while recording), so
-  // the skin's pill geometry always matches what is actually on screen.
+  // isCompactPill tracks the pill's footprint through the entrance phases
+  // (logo-collapsed thinking renders 40×40 even while recording). These are
+  // targets, not rendered sizes: the pill transitions between footprints over
+  // GROW_TRANSITION, and the skin tweens its geometry to match
+  // (usePillFootprintTween in LiquidCancelButton).
   const cancelPillFootprint = isCompactPill
     ? VOICE_PILL_FOOTPRINT.recording
     : VOICE_PILL_FOOTPRINT.idle;

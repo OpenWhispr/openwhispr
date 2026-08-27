@@ -31,6 +31,31 @@ test("swallowed cancel (t=0) leaves the pill outline untouched", async () => {
   assert.ok(Math.abs(minX) < 1.5, `minX ${minX} should sit at 0`);
 });
 
+test("swallowed cancel stays pill-shaped at in-between footprints", async () => {
+  const { traceFusedOutline, emergenceBlend } = await import(
+    "../../src/components/dictation/liquidFusion.ts"
+  );
+  // The skin tweens through these while the pill's own width/height
+  // transition runs (40×40 idle ⇄ 98×36 recording), so the t=0 tangency must
+  // hold for every in-between capsule, not just the resting footprints.
+  for (const pill of [
+    { w: 55, h: 39 },
+    { w: 69, h: 38 },
+    { w: 84, h: 37 },
+  ]) {
+    const out = traceFusedOutline(
+      { pill, circle: { cx: pill.w - R, cy: pill.h / 2, r: R } },
+      { k: emergenceBlend(0) }
+    );
+    assert.equal(out.loops, 1, `pill ${pill.w}×${pill.h} should trace one loop`);
+    const pts = pathPoints(out.d);
+    const maxX = Math.max(...pts.map((p) => p.x));
+    const minX = Math.min(...pts.map((p) => p.x));
+    assert.ok(Math.abs(maxX - pill.w) < 1.5, `maxX ${maxX} should sit at the pill edge ${pill.w}`);
+    assert.ok(Math.abs(minX) < 1.5, `minX ${minX} should sit at 0`);
+  }
+});
+
 test("resting cancel (t=1) stays fused to the pill by a single neck", async () => {
   const { traceFusedOutline, emergenceBlend } = await import(
     "../../src/components/dictation/liquidFusion.ts"

@@ -3,7 +3,10 @@ import { X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { emergenceBlend, traceFusedOutline } from "./liquidFusion";
 import type { VoicePillState } from "./VoicePill";
-import { VOICE_PILL_STATE_STROKE } from "../../helpers/voicePillPresentation";
+import {
+  LISTENING_ENTRANCE_TIMING,
+  VOICE_PILL_STATE_STROKE,
+} from "../../helpers/voicePillPresentation";
 
 // Sizing shared with WINDOW_SIZES.RECORDING's fit comment in windowConfig.js.
 const CANCEL_BUTTON_SIZE = 28;
@@ -57,12 +60,50 @@ function useCancelEmergence(visible: boolean): number {
   return t;
 }
 
+/** Chases the pill footprint contract with the pill's own width/height
+ *  transition (VoicePill's GROW_TRANSITION: expansionMs on the house curve),
+ *  so the skin never snaps while the real pill is mid-flight between
+ *  footprints — the entrance's logo hold → compact expansion and the
+ *  compact → thinking collapse at stop. It keeps chasing even while the skin
+ *  is hidden so an emergence that starts mid-flight picks up the pill's
+ *  current in-between size. Reduced motion snaps: the global reduced-motion
+ *  rule drops width/height from transition-property, so the pill snaps too. */
+function usePillFootprintTween(width: number, height: number): { w: number; h: number } {
+  const [size, setSize] = useState({ w: width, h: height });
+  const raf = useRef(0);
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
+
+  useEffect(() => {
+    const from = sizeRef.current;
+    if (from.w === width && from.h === height) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+      setSize({ w: width, h: height });
+      return;
+    }
+    let start = 0;
+    const step = (now: number) => {
+      if (!start) start = now;
+      const p = Math.min(1, (now - start) / LISTENING_ENTRANCE_TIMING.expansionMs);
+      const e = houseEase(p);
+      setSize({ w: from.w + (width - from.w) * e, h: from.h + (height - from.h) * e });
+      if (p < 1) raf.current = requestAnimationFrame(step);
+    };
+    raf.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf.current);
+  }, [width, height]);
+
+  return size;
+}
+
 interface LiquidCancelButtonProps {
   visible: boolean;
   /** Fused mode draws the liquid skin and the pill goes headless; plain mode
    *  (inside the Live Transcript panel, where the pill is already headless)
    *  keeps the classic bordered circle and only animates scale/fade. */
   fused: boolean;
+  /** Footprint targets, not rendered sizes: the pill transitions between the
+   *  footprints and the skin tweens its geometry to match (usePillFootprintTween). */
   pillWidth: number;
   pillHeight: number;
   /** The pill state the skin replaces; its stroke must match the pill's own
@@ -87,6 +128,7 @@ export function LiquidCancelButton({
 }: LiquidCancelButtonProps) {
   // The 60fps emergence lives here so only this leaf re-renders per frame.
   const t = useCancelEmergence(visible);
+  const pillSize = usePillFootprintTween(pillWidth, pillHeight);
   const skinActive = fused && t > 0;
   const notifyRef = useRef(onFusedSkinChange);
   notifyRef.current = onFusedSkinChange;
@@ -101,16 +143,16 @@ export function LiquidCancelButton({
     if (!fused || t <= 0) return null;
     return traceFusedOutline(
       {
-        pill: { w: pillWidth, h: pillHeight },
+        pill: { w: pillSize.w, h: pillSize.h },
         circle: {
-          cx: pillWidth + slotWidth - CANCEL_BUTTON_SIZE / 2,
-          cy: pillHeight / 2,
+          cx: pillSize.w + slotWidth - CANCEL_BUTTON_SIZE / 2,
+          cy: pillSize.h / 2,
           r: CANCEL_BUTTON_SIZE / 2,
         },
       },
       { k: emergenceBlend(t) }
     );
-  }, [fused, t, pillWidth, pillHeight, slotWidth]);
+  }, [fused, t, pillSize, slotWidth]);
 
   if (t <= 0) return null;
 
@@ -125,8 +167,8 @@ export function LiquidCancelButton({
           className="liquid-cancel-skin absolute"
           viewBox={`${outline.minX} ${outline.minY} ${outline.width} ${outline.height}`}
           style={{
-            left: outline.minX - pillWidth,
-            top: outline.minY - (pillHeight - CANCEL_BUTTON_SIZE) / 2,
+            left: outline.minX - pillSize.w,
+            top: outline.minY - (pillSize.h - CANCEL_BUTTON_SIZE) / 2,
             width: outline.width,
             height: outline.height,
             zIndex: -1,

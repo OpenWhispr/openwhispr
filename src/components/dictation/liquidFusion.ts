@@ -114,6 +114,10 @@ function lerpEdge(x0: number, y0: number, v0: number, x1: number, y1: number, v1
 }
 
 function stitch(segs: [Pt, Pt][], cell: number): Pt[][] {
+  // Matching endpoints are computed identically by adjacent cells, so this
+  // bucket rounding only absorbs float noise. eps must stay well below the
+  // narrowest contour-to-contour clearance (the smin neck), or two passing
+  // branches could stitch into one garbled loop — revisit if k/cell change.
   const eps = cell * 0.5;
   const key = (p: Pt) => `${Math.round(p.x / eps)},${Math.round(p.y / eps)}`;
   const map = new Map<string, { seg: number; end: 0 | 1 }[]>();
