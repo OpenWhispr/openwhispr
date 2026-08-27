@@ -671,6 +671,7 @@ export default function App() {
             fused={cancelFused}
             pillWidth={cancelPillFootprint.width}
             pillHeight={cancelPillFootprint.height}
+            pillState={commonPillState}
             ariaLabel={
               isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
             }

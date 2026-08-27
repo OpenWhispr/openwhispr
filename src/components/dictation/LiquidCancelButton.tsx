@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { emergenceBlend, traceFusedOutline } from "./liquidFusion";
+import type { VoicePillState } from "./VoicePill";
+import { VOICE_PILL_STATE_STROKE } from "../../helpers/voicePillPresentation";
 
 // Sizing shared with WINDOW_SIZES.RECORDING's fit comment in windowConfig.js.
 const CANCEL_BUTTON_SIZE = 28;
@@ -63,6 +65,9 @@ interface LiquidCancelButtonProps {
   fused: boolean;
   pillWidth: number;
   pillHeight: number;
+  /** The pill state the skin replaces; its stroke must match the pill's own
+   *  border (processing/thinking wear a softer border than recording). */
+  pillState: VoicePillState;
   ariaLabel: string;
   onCancel: () => void;
   /** Fires when the fused skin starts/stops owning the pill surface, so the
@@ -75,6 +80,7 @@ export function LiquidCancelButton({
   fused,
   pillWidth,
   pillHeight,
+  pillState,
   ariaLabel,
   onCancel,
   onFusedSkinChange,
@@ -129,7 +135,7 @@ export function LiquidCancelButton({
           <path
             d={outline.d}
             fill="var(--color-surface-1)"
-            stroke="var(--color-border-hover)"
+            stroke={VOICE_PILL_STATE_STROKE[pillState]}
             strokeWidth="1"
           />
         </svg>

@@ -13,6 +13,19 @@ export const VOICE_PILL_FOOTPRINT = Object.freeze({
   recording: Object.freeze({ width: 98, height: 36 }),
 });
 
+// SVG stroke equivalents of VoicePill's STATE_APPEARANCE border classes, for
+// the liquid cancel skin that replaces the pill's chrome while fused. Every
+// state the skin can appear over shares bg-surface-1, so only the stroke
+// varies — change together with STATE_APPEARANCE in VoicePill.tsx.
+export const VOICE_PILL_STATE_STROKE = Object.freeze({
+  idle: "var(--color-border-hover)",
+  hover: "var(--color-border-hover)",
+  recording: "var(--color-border-hover)",
+  processing: "color-mix(in oklab, var(--color-border) 60%, transparent)",
+  thinking: "color-mix(in oklab, var(--color-border) 60%, transparent)",
+  unavailable: "color-mix(in oklab, var(--color-border) 60%, transparent)",
+});
+
 export const LISTENING_ENTRANCE_TIMING = Object.freeze({
   // Give the Beam enough time to read as an intentional thinking state before
   // the persistent control begins changing shape.
