@@ -333,6 +333,21 @@ export function resolveCompanionPillInteractive({
   return Boolean(canReopenLiveTranscript);
 }
 
+// Final Agent actions own the footer, so the pill node stays mounted but
+// hidden until the panel finishes closing. Live activity handed back at close
+// INTENT is the exception: the companion hides on that same tick, so keeping
+// the pill hidden until the fade completes would leave a running recording
+// with no visible owner at all.
+export function shouldSuppressPillForAssistantActions({
+  assistantOpen,
+  footerPillVisible,
+  assistantClosing,
+  hasLiveActivity,
+}) {
+  if (!assistantOpen || footerPillVisible) return false;
+  return !(assistantClosing && hasLiveActivity);
+}
+
 export function shouldActivateVoicePill({
   hasDragged,
   liveTranscriptMounted,

@@ -38,6 +38,7 @@ import {
   isVoicePillActivationKey,
   shouldActivateVoicePill,
   shouldOfferLiveTranscriptReopen,
+  shouldSuppressPillForAssistantActions,
 } from "./helpers/voicePillPresentation";
 
 const formatPillHotkeyLabel = (value) =>
@@ -265,12 +266,13 @@ export default function App() {
   // recording with no visual owner for the fade duration.
   const voicePillOwnsActivity = !assistant.open || assistant.closing || isAssistantVoice;
   const voicePillIsRecording = isRecording && voicePillOwnsActivity;
+  const voicePillIsProcessing = (isProcessing || isStopping) && voicePillOwnsActivity;
   const voiceActivity = resolveVoiceActivityPresentation({
     isRecording: voicePillIsRecording,
     // Mic warm-up is an acknowledged press, not work on a transcript. Keeping
     // isPreparing out of the thinking state leaves the press on the pulsing
     // "processing" mic-state pill instead of lighting the glow at hotkey time.
-    isProcessing: (isProcessing || isStopping) && voicePillOwnsActivity,
+    isProcessing: voicePillIsProcessing,
     isAssistantVoice,
     assistantThinking: assistant.thinking || assistant.busy,
   });
@@ -537,7 +539,12 @@ export default function App() {
   // Keep one pill DOM node alive while final Agent actions own the footer. On
   // close it can fade and travel from the panel dock instead of mounting at
   // the resting dock halfway through the surface contraction.
-  const assistantActionsSuppressPill = assistant.open && !assistantFooter.pillVisible;
+  const assistantActionsSuppressPill = shouldSuppressPillForAssistantActions({
+    assistantOpen: assistant.open,
+    footerPillVisible: assistantFooter.pillVisible,
+    assistantClosing: assistant.closing,
+    hasLiveActivity: voicePillIsRecording || voicePillIsProcessing,
+  });
   const pillVisuallySuppressed = dictationErrorSuppressesPill || assistantActionsSuppressPill;
   const pillInteractionSuppressed = pillVisuallySuppressed || assistant.closing;
 
