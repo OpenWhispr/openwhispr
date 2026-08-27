@@ -165,6 +165,7 @@ export interface NoteItem {
   // team notes mirrored before ownership shipped (the UI fails closed on
   // those until the owner backfill fills them).
   owner_user_id?: string | null;
+  created_by_user_id?: string | null;
   // Last cloud editor; only populated on cloud pull (local edits don't set it).
   updated_by_user_id?: string | null;
   // Server updated_at this device last acked (push response or pull); echoed
@@ -924,12 +925,16 @@ declare global {
           allowClipboardFallback?: boolean;
         }
       ) => Promise<void>;
-      captureSelectedText?: () => Promise<
+      captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
             sessionId: string;
             text: string;
             characterCount: number;
+          }
+        | {
+            status: "editable";
+            sessionId: string;
           }
         | {
             status: "none" | "unavailable" | "target_changed" | "too_large";
@@ -950,6 +955,20 @@ declare global {
           | "target_changed"
           | "selection_unavailable"
           | "selection_changed"
+          | "paste_failed"
+          | "selection_manager_unavailable";
+        error?: string;
+      }>;
+      pasteAtCapturedTarget?: (
+        sessionId: string,
+        text: string,
+        options?: { restoreClipboard?: boolean; allowClipboardFallback?: boolean }
+      ) => Promise<{
+        success: boolean;
+        code?:
+          | "invalid_replacement"
+          | "session_expired"
+          | "target_changed"
           | "paste_failed"
           | "selection_manager_unavailable";
         error?: string;
@@ -1241,6 +1260,20 @@ declare global {
 
       // Space operations
       getSpaces?: () => Promise<SpaceItem[]>;
+      setActiveAccountScope?: (
+        accountId: string | null,
+        expectedAuthGeneration?: number
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      deleteAccountData?: (
+        accountId: string,
+        expectedAuthGeneration: number
+      ) => Promise<{
+        success: boolean;
+        code?: string;
+        error?: string;
+        deletedNoteIds?: number[];
+        deletedFolderIds?: number[];
+      }>;
       updateSpace?: (
         id: number,
         updates: { name?: string; emoji?: string | null }
@@ -1261,6 +1294,7 @@ declare global {
         relocatedNotes?: NoteItem[];
         relocatedCount?: number;
         relocatedTitles?: string[];
+        preservedForOtherAccounts?: boolean;
       }>;
       upsertSpaceFromCloud?: (space: Record<string, unknown>) => Promise<SpaceItem>;
       setSpaceSyncStatus?: (

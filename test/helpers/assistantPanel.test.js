@@ -286,7 +286,9 @@ async function renderAssistantPanel(
         export function useWindowDrag() { return { handleMouseDown() {}, handleMouseUp() {} }; }
       `,
       "/hooks/useCopyFeedback": `
-        export function useCopyFeedback() { return { copied: false, async copy() {} }; }
+        export function useCopyFeedback() {
+          return { copied: false, async copy() {}, confirmCopied() {} };
+        }
       `,
       "/stores/settingsStore": `
         const state = { voiceAgentKey: [] };
@@ -448,7 +450,9 @@ test("starting a new conversation clears the displayed response and parent conte
         export function useWindowDrag() { return { handleMouseDown() {}, handleMouseUp() {} }; }
       `,
       "/hooks/useCopyFeedback": `
-        export function useCopyFeedback() { return { copied: false, async copy() {} }; }
+        export function useCopyFeedback() {
+          return { copied: false, async copy() {}, confirmCopied() {} };
+        }
       `,
       "/stores/settingsStore": `
         const state = { voiceAgentKey: [] };
@@ -603,6 +607,40 @@ test("the Assistant uses its localized fallback for an unknown active tool", asy
   assert.doesNotMatch(markup, />Unregistered tool</);
 });
 
+test("an automatic clipboard delivery keeps the shared Copy button confirmed for six seconds", async (t) => {
+  let root = null;
+  const originalSetTimeout = globalThis.setTimeout;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+    globalThis.setTimeout = originalSetTimeout;
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const scheduledDelays = [];
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-copy-feedback-test-",
+  });
+  const { useCopyFeedback } = await vite.ssrLoadModule("/hooks/useCopyFeedback.ts");
+  const { createRoot } = require("react-dom/client");
+  let copyFeedback;
+
+  function Harness() {
+    copyFeedback = useCopyFeedback("Agent answer");
+    return React.createElement("button", null, copyFeedback.copied ? "Copied" : "Copy");
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  globalThis.setTimeout = (callback, delay, ...args) => {
+    scheduledDelays.push(delay);
+    return originalSetTimeout(callback, delay, ...args);
+  };
+  await React.act(async () => copyFeedback.confirmCopied("Agent answer", 6000));
+
+  assert.equal(container.textContent, "Copied");
+  assert.ok(scheduledDelays.includes(6000));
+});
+
 test("a failed Assistant resize releases its open claim so opening can retry", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
@@ -663,4 +701,98 @@ test("a failed live-transcript resize releases its open claim so opening can ret
 
   assert.equal(resizeCalls, 2);
   assert.equal(liveTranscript.openRef.current, false);
+});
+
+test("a caret-delivered command returns the hidden Assistant to the idle pill", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-caret-settlement-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { createRoot } = require("react-dom/client");
+  let assistant;
+
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => {
+    assistant.handleCommand({
+      text: "draft a reply",
+      attachment: null,
+      selectedContext: null,
+      delivery: {
+        mode: "paste",
+        sessionId: "caret-session",
+        restoreClipboard: true,
+        allowClipboardFallback: false,
+      },
+    });
+  });
+  assert.equal(assistant.mounted, true);
+  assert.equal(assistant.open, false);
+
+  await React.act(async () => {
+    assistant.handleCommandSettled(1, { showPanel: false });
+  });
+  assert.equal(assistant.mounted, false);
+  assert.equal(assistant.open, false);
+  assert.equal(assistant.thinking, false);
+});
+
+test("a follow-up into an open panel strips caret delivery and stays panel-first", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-followup-delivery-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { createRoot } = require("react-dom/client");
+  let assistant;
+
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  const delivery = {
+    mode: "paste",
+    sessionId: "caret-session",
+    restoreClipboard: true,
+    allowClipboardFallback: false,
+  };
+
+  assistant.openRef.current = true;
+  await React.act(async () => {
+    assistant.handleCommand({ text: "draft a reply", attachment: null, selectedContext: null, delivery });
+  });
+  assert.equal(assistant.pendingCommand.delivery, null);
+
+  assistant.openRef.current = false;
+  await React.act(async () => {
+    assistant.handleCommand({ text: "draft a reply", attachment: null, selectedContext: null, delivery });
+  });
+  assert.deepEqual(assistant.pendingCommand.delivery, delivery);
 });

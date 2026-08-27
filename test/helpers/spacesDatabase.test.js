@@ -49,7 +49,9 @@ function createDb(t) {
   }
 
   try {
-    return new DatabaseManager();
+    const database = new DatabaseManager();
+    database.setActiveAccountId("test-account");
+    return database;
   } catch (error) {
     if (isNativeBindingUnavailable(error)) {
       t.skip("better-sqlite3 native binding is not available for this Node runtime");
@@ -68,6 +70,9 @@ function createTestTeamSpace(db, { name, emoji = null } = {}) {
       "INSERT INTO spaces (client_space_id, kind, name, emoji, sort_order) VALUES (?, 'team', ?, ?, ?)"
     )
     .run(`test-team-space-${++nextTestTeamSpaceId}`, name, emoji, (maxOrder?.max_order ?? 0) + 1);
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(result.lastInsertRowid, "test-account");
   return { success: true, space: db.getSpace(result.lastInsertRowid) };
 }
 
@@ -100,7 +105,8 @@ test("spaces migration is idempotent across launches", (t) => {
     .all()
     .map((row) => row.name);
   assert.ok(indexes.includes("idx_folders_client_folder_id"));
-  assert.ok(indexes.includes("idx_folders_space_name"));
+  assert.ok(indexes.includes("idx_folders_space_legacy_name"));
+  assert.ok(indexes.includes("idx_folders_space_account_name"));
 
   const privates = db2.db
     .prepare("SELECT COUNT(*) as count FROM spaces WHERE kind = 'private'")

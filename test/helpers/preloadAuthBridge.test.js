@@ -56,6 +56,18 @@ test("auth token-state listener strips the Electron event object", () => {
   assert.equal(listeners.has("auth-token-state-changed"), false);
 });
 
+test("account ownership operations forward the account and credential generation", async () => {
+  const { api, invocations } = loadPreloadApi();
+
+  await api.setActiveAccountScope("account-a", 7);
+  await api.deleteAccountData("account-a", 7);
+
+  assert.deepEqual(invocations, [
+    ["set-active-account-scope", "account-a", 7],
+    ["delete-account-data", "account-a", 7],
+  ]);
+});
+
 test("meeting stop forwards the optional expected recording session ID", async () => {
   const { api, invocations } = loadPreloadApi();
 

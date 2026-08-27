@@ -1,6 +1,5 @@
 import { createAuthClient } from "better-auth/react";
 import { ssoClient } from "@better-auth/sso/client";
-import { OPENWHISPR_API_URL } from "../config/constants";
 import { openExternalLink } from "../utils/externalLinks";
 import {
   authContextFetch,
@@ -130,28 +129,6 @@ export function getGracePeriodRemainingMs(): number {
   const startedAt = getLastSignInTime();
   if (!startedAt) return 0;
   return Math.max(0, GRACE_PERIOD_MS - Math.max(0, Date.now() - startedAt));
-}
-
-export async function deleteAccount(): Promise<{ error?: Error }> {
-  if (!OPENWHISPR_API_URL) {
-    return { error: new Error("API not configured") };
-  }
-
-  try {
-    const res = await fetch(`${OPENWHISPR_API_URL}/api/auth/delete-account`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Failed to delete account");
-    }
-
-    return {};
-  } catch (error) {
-    return { error: error instanceof Error ? error : new Error("Failed to delete account") };
-  }
 }
 
 export async function signOut(): Promise<void> {

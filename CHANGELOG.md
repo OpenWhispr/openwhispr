@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Data safety
+
+- **Deleting one account no longer erases another account's local content.** Account deletion now removes only that account's private notes and folders, preserves workspace-owned spaces and content with former-user attribution cleared, and leaves downloaded models and device settings intact. A separate unchecked option erases all app data from the device when leaving OpenWhispr permanently.
+
 ## [1.9.0] - 2026-08-24
 
 The chat agent and the voice agent become one Voice Assistant behind a redesigned dictation pill, guided setup is rebuilt end to end, and the notes surface gets a design pass with @mention tagging and real speaker identity in meeting notes. Meetings you forget to stop now end themselves. Linux gains push-to-talk on Wayland, Windows pastes back into the window you dictated into, and local transcription stops thanking you for watching.
@@ -14,6 +18,7 @@ The chat agent and the voice agent become one Voice Assistant behind a redesigne
 ### Voice Assistant
 
 - **One assistant, one entry point.** The separate always-on-top chat window is gone. The dictation pill is now the only surface: speak a standalone command and the answer streams into a floating panel with the chat's full toolset — notes search and editing, calendar, web search, clipboard, and memory when you're signed in — with conversations saved and resumable. Highlighted text is still edited in place. (#1597)
+- **Answers return to the focused field.** With auto-paste enabled, standalone Voice Assistant answers now paste at a verified writable cursor. Without a writable cursor—or if the target changes while the answer is generated—the completed answer stays safely in the floating panel and is copied to the clipboard for manual paste; the existing Copy button confirms the automatic copy for six seconds. Empty or cancelled responses do not change the clipboard. (#1859)
 - **A pill that shows what it's doing.** An idle orb that grows into a recording capsule with a live, level-driven waveform and an in-capsule cancel, then a processing state that never changes shape mid-cycle. Dragging the pill no longer walks it across the screen as it resizes. (#1597)
 - **Your dictionary reaches the assistant.** Custom-dictionary words are injected into every assistant conversation, so replies come back using your names and jargon. (#1597)
 - **Follow-ups without reopening.** Type into the panel or press the hotkey again to speak into the same conversation; Esc collapses it and cancels anything in flight; Copy takes the answer in one click. (#1597)

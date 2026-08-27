@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  tests:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,8 +34,15 @@ jobs:
       - name: Build better-sqlite3 for the runner's node
         # --ignore-scripts skips the native build; DB-backed tests silently
         # skip without it. This job is the only test gate on push to main.
+        # Guarded like the test step below, or the rebuild is skipped and the
+        # suite then fails REQUIRE_DB_TESTS on a missing binding instead.
+        if: ${{ !cancelled() }}
         run: npm rebuild better-sqlite3
       - name: Run tests
+        # The gates above fail on drift that has nothing to do with the suite —
+        # a stray format nit, a missing locale key, a fresh advisory. Without
+        # this, main goes untested for as long as the drift stands (#1735).
+        if: ${{ !cancelled() }}
         run: npm test
         env:
           # keeps require("electron") from throwing when postinstall was skipped
@@ -44,7 +51,7 @@ jobs:
           REQUIRE_DB_TESTS: "1"
 
   build-linux:
-    needs: tests
+    needs: quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -135,7 +142,7 @@ jobs:
           retention-days: 7
 
   build-windows:
-    needs: tests
+    needs: quality
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -251,7 +258,7 @@ jobs:
           retention-days: 7
 
   build-macos:
-    needs: tests
+    needs: quality
     runs-on: macos-latest
     strategy:
       fail-fast: false

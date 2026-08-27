@@ -503,6 +503,19 @@ class EnvironmentManager {
     return { success: true, path: envPath };
   }
 
+  async clearAllPersistedData() {
+    for (const envVarName of PERSISTED_KEYS) {
+      delete process.env[envVarName];
+    }
+    delete process.env.CUSTOM_REASONING_API_KEY;
+
+    await Promise.all([
+      fsPromises.rm(path.join(app.getPath("userData"), ".env"), { force: true }),
+      fsPromises.rm(this._getSecureKeysDir(), { recursive: true, force: true }),
+    ]);
+    return { success: true };
+  }
+
   // Removes a single key's line from .env, preserving every other line
   // verbatim. saveAllKeysToEnvFile() would instead regenerate the file from
   // PERSISTED_KEYS, dropping hand-added lines (e.g. OPENWHISPR_LOG_LEVEL) and

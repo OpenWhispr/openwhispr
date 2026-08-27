@@ -7,6 +7,7 @@ import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
+import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
 import {
   isAgentAllowed,
   isScreenContextAllowed,
@@ -21,6 +22,7 @@ import {
 import { canStartDictation } from "../utils/dictationReadiness";
 import { waitForVisualFrames } from "../utils/visualFrame";
 import { resolveLifecycleInputKind } from "../helpers/dictationRouting";
+import { createAssistantResponseDelivery } from "../helpers/assistantResponseDelivery";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -185,11 +187,21 @@ export const useAudioRecording = (toast, options = {}) => {
           audioManagerRef.current.beginSelectionCapture();
         }
 
-        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
+        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready).
+        // Await it only when it can change the start decision (signed-in
+        // OpenWhispr-cloud streaming); for local STT or a signed-out session the
+        // fetch stalls on auth resolution and would delay the mic open (#1673).
         if (!audioManagerRef.current.sttConfig) {
-          const config = await window.electronAPI.getSttConfig?.();
-          if (config?.success) {
-            audioManagerRef.current.setSttConfig(config);
+          const configFetch = (async () => {
+            const config = await window.electronAPI.getSttConfig?.();
+            if (config?.success) {
+              audioManagerRef.current.setSttConfig(config);
+            }
+          })().catch((error) => {
+            logger.warn("STT config fetch failed", { error: error?.message });
+          });
+          if (needsSttConfigBeforeStart(getSettings())) {
+            await configFetch;
           }
         }
 
@@ -489,19 +501,22 @@ export const useAudioRecording = (toast, options = {}) => {
             if (localStorage.getItem("onboardingCompleted") !== "true") {
               window.electronAPI?.hideDictationPreview?.();
             } else {
-              // Panel-first: the command streams into the assistant panel;
-              // nothing types at the cursor and nothing lands in the clipboard.
-              // The directive's transcript is the command to send — it carries
-              // the quoted selection when the selection-without-editor fallback
-              // routed a highlighted passage here.
               window.electronAPI?.hideDictationPreview?.();
-              const { screenContext, transcript, selectedContext } = result.assistantConversation;
+              const { screenContext, transcript, selectedContext, deliverySessionId } =
+                result.assistantConversation;
+              const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
               onAssistantCommandRef.current?.({
                 text: expandSnippets(transcript, getSettings().snippets),
                 attachment: screenContext
                   ? { image: screenContext.data, mediaType: screenContext.mediaType }
                   : null,
                 selectedContext: selectedContext ?? null,
+                delivery: createAssistantResponseDelivery({
+                  autoPasteEnabled,
+                  deliverySessionId,
+                  restoreClipboard: !keepTranscriptionInClipboard,
+                  allowClipboardFallback: isAccessibilitySkipped(),
+                }),
               });
             }
           } else {

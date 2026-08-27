@@ -37,7 +37,10 @@ import {
   Languages,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
+import { AUTH_URL, signOut } from "../lib/auth";
+import { deleteAccount } from "../lib/accountDeletionRequest";
+import { executeAccountDeletion } from "../lib/accountDeletionFlow";
+import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
@@ -1692,6 +1695,8 @@ export default function SettingsPage({
   });
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
+  const [eraseDeviceData, setEraseDeviceData] = useState(false);
   const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(usage);
   const [billingState, setBillingState] = useState<Record<string, boolean>>({
     pro: true,
@@ -1781,8 +1786,8 @@ export default function SettingsPage({
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
     try {
-      // Team content is membership-scoped, not account data: drop it locally
-      // before the session ends (never blocks sign-out).
+      // Clear account-scoped renderer/session state before ending the session.
+      // Workspace-owned rows remain cached behind their membership boundary.
       await syncService.purgeTeamSpacesForSignOut();
       await signOut();
       window.location.reload();
@@ -1798,47 +1803,65 @@ export default function SettingsPage({
   }, [showAlertDialog, t]);
 
   const handleDeleteAccount = useCallback(() => {
-    showConfirmDialog({
-      title: t("settingsPage.account.deleteAccount.title"),
-      description: t("settingsPage.account.deleteAccount.description"),
-      onConfirm: async () => {
-        setIsDeletingAccount(true);
-        try {
-          // Best-effort cloud cleanup (needs session cookies before sign-out)
-          try {
-            const { NotesService } = await import("../services/NotesService");
-            await NotesService.deleteAll();
-          } catch {}
+    setEraseDeviceData(false);
+    setIsDeleteAccountDialogOpen(true);
+  }, []);
 
-          const result = await deleteAccount();
-          if (result.error) {
-            logger.error("Server account deletion failed", result.error, "auth");
-          }
+  const confirmDeleteAccount = useCallback(async () => {
+    const accountId = user?.id;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) {
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.failedTitle"),
+        description: t("settingsPage.account.deleteAccount.failedDescription"),
+      });
+      return;
+    }
 
-          try {
-            await signOut();
-          } catch {}
-          await window.electronAPI?.cleanupApp();
+    setIsDeletingAccount(true);
+    try {
+      const result = await executeAccountDeletion({
+        eraseDeviceData,
+        dependencies: {
+          deleteRemoteAccount: deleteAccount,
+          deleteLocalAccountData: async () => {
+            const cleanup = await window.electronAPI?.deleteAccountData?.(
+              accountId,
+              authGeneration
+            );
+            if (!cleanup?.success) {
+              throw new Error(cleanup?.error ?? "Could not remove local account data");
+            }
+          },
+          clearWorkspaceSessionState: () => syncService.purgeTeamSpacesForSignOut(),
+          signOut,
+          eraseDeviceData: async () => {
+            const cleanup = await window.electronAPI?.cleanupApp();
+            if (!cleanup?.success) {
+              throw new Error(cleanup?.errors?.join(", ") || "Could not erase device data");
+            }
+          },
+        },
+      });
 
-          showAlertDialog({
-            title: t("settingsPage.account.deleteAccount.successTitle"),
-            description: t("settingsPage.account.deleteAccount.successDescription"),
-          });
-          setTimeout(() => window.location.reload(), 1000);
-        } catch (error) {
-          logger.error("Account deletion failed", error, "auth");
-          showAlertDialog({
-            title: t("settingsPage.account.deleteAccount.failedTitle"),
-            description: t("settingsPage.account.deleteAccount.failedDescription"),
-          });
-        } finally {
-          setIsDeletingAccount(false);
-        }
-      },
-      variant: "destructive",
-      confirmText: t("settingsPage.account.deleteAccount.confirmText"),
-    });
-  }, [showConfirmDialog, showAlertDialog, t]);
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.successTitle"),
+        description:
+          result.localCleanupFailures.length > 0
+            ? t("settingsPage.account.deleteAccount.partialCleanupDescription")
+            : t("settingsPage.account.deleteAccount.successDescription"),
+      });
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (error) {
+      logger.error("Account deletion failed", error, "auth");
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.failedTitle"),
+        description: t("settingsPage.account.deleteAccount.failedDescription"),
+      });
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  }, [eraseDeviceData, showAlertDialog, t, user?.id]);
 
   const renderWhisperVadSettings = () => (
     <div>
@@ -4550,6 +4573,42 @@ EOF`,
         confirmText={confirmDialog.confirmText}
         cancelText={confirmDialog.cancelText}
       />
+
+      <ConfirmDialog
+        open={isDeleteAccountDialogOpen}
+        onOpenChange={(open) => {
+          setIsDeleteAccountDialogOpen(open);
+          if (!open) setEraseDeviceData(false);
+        }}
+        title={t("settingsPage.account.deleteAccount.title")}
+        description={t("settingsPage.account.deleteAccount.description")}
+        onConfirm={() => void confirmDeleteAccount()}
+        variant="destructive"
+        confirmText={t("settingsPage.account.deleteAccount.confirmText")}
+        confirmDisabled={isDeletingAccount}
+      >
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-border accent-destructive"
+            checked={eraseDeviceData}
+            onChange={(event) => setEraseDeviceData(event.target.checked)}
+          />
+          <span className="space-y-1">
+            <span className="block text-sm font-medium">
+              {t("settingsPage.account.deleteAccount.eraseDeviceLabel")}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {t("settingsPage.account.deleteAccount.eraseDeviceDescription")}
+            </span>
+            {eraseDeviceData && (
+              <span className="block text-xs font-medium text-destructive">
+                {t("settingsPage.account.deleteAccount.eraseDeviceWarning")}
+              </span>
+            )}
+          </span>
+        </label>
+      </ConfirmDialog>
 
       <AlertDialog
         open={alertDialog.open}

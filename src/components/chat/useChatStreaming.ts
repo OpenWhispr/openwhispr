@@ -79,6 +79,14 @@ export interface SendToAIOptions {
   attachment?: ChatImageAttachment;
   /** Agent-response selection attached to this request without changing chat history. */
   selectedContext?: AgentSelectionContext;
+  /** Keeps a caret-destined voice response in the compact pill while it streams. */
+  suppressResponseContent?: boolean;
+  /** Per-request completion hook used to deliver a finished voice response. */
+  onComplete?: (result: {
+    assistantId: string;
+    content: string;
+    toolCalls?: ToolCallInfo[];
+  }) => void | Promise<void>;
 }
 
 export interface ChatStreaming {
@@ -184,8 +192,16 @@ export function useChatStreaming({
   }, [messages]);
 
   const sendGenerationRef = useRef(0);
+  // Generation stamped by the most recent cancel issued while still mounted
+  // (Esc, a Stop button). The unmount cleanup below flips mountedRef off
+  // before routing through cancelStream, so it never stamps this — which is
+  // how sendToAI tells a user's cancel from an unmount mid-stream.
+  const explicitCancelGenerationRef = useRef(0);
   const cancelStream = useCallback(() => {
     sendGenerationRef.current += 1;
+    if (mountedRef.current) {
+      explicitCancelGenerationRef.current = sendGenerationRef.current;
+    }
     ReasoningService.cancelActiveStream();
     setAgentState("idle");
     clearToolActivity();
@@ -214,7 +230,7 @@ export function useChatStreaming({
       const announceResponse = () => {
         if (responseAnnounced) return;
         responseAnnounced = true;
-        onResponseContent?.();
+        if (!options?.suppressResponseContent) onResponseContent?.();
       };
       const settings = getSettings();
       const chatConfig = selectResolvedLLMConfig(settings, "chatIntelligence");
@@ -485,6 +501,26 @@ export function useChatStreaming({
           }
         }
 
+        if (cancelled() || !mountedRef.current) {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId ? { ...message, isStreaming: false } : message
+            )
+          );
+          // An unmount mid-stream (page navigation) keeps the partial reply in
+          // history so the saved conversation matches what the user last saw;
+          // an explicit cancel drops it. The unmount cleanup cancels too, so
+          // cancelled() alone cannot tell the two apart. Neither path may run
+          // the per-request delivery hook.
+          const explicitlyCancelled = explicitCancelGenerationRef.current > sendGeneration;
+          if (!explicitlyCancelled && fullContent.trim().length > 0) {
+            const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
+            onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
+          }
+          return;
+        }
+
+        const hasDeliverableContent = fullContent.trim().length > 0;
         if (!responseAnnounced && !cancelled()) {
           // The stream ended without a visible token or tool call (think-only
           // local model, empty completion). Show that as a reply so every
@@ -503,6 +539,13 @@ export function useChatStreaming({
 
         const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
         onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
+        if (hasDeliverableContent) {
+          await options?.onComplete?.({
+            assistantId,
+            content: fullContent,
+            toolCalls: finalMsg?.toolCalls,
+          });
+        }
       } catch (error) {
         if (cancelled()) {
           setMessages((prev) =>

@@ -478,7 +478,7 @@
       "title": "Configuración del asistente de voz",
       "description": "Habla con tu asistente de IA con una sola pulsación",
       "hotkey": "Atajo",
-      "howItWorks": "Pulsa la tecla y di lo que quieres, por ejemplo «escribe una breve nota de agradecimiento». Si hay texto resaltado, {{agentName}} edita y reemplaza esa selección; si no, la respuesta se abre en un panel flotante. No hace falta decir «Hey {{agentName}}» antes.",
+      "howItWorks": "Pulsa la tecla y di lo que quieres, por ejemplo «escribe una breve nota de agradecimiento». Si hay texto resaltado, {{agentName}} lo edita y reemplaza. Si un campo de texto editable tiene el foco, la respuesta se pega en el cursor; si no, se abre en un panel flotante. No hace falta decir «Hey {{agentName}}» antes.",
       "test": "Pruébalo",
       "testInstruction": "Selecciona el texto de ejemplo de abajo, pulsa {{hotkey}} y di «hazlo más corto»: la edición aparece directamente en el cuadro de texto",
       "testSetHotkey": "Configura un atajo arriba para probarlo",
@@ -1676,16 +1676,20 @@
       "wordsRemaining": "{{remaining}} restantes",
       "deleteAccount": {
         "label": "Eliminar cuenta",
-        "labelDescription": "Eliminar permanentemente tu cuenta, todos los datos en la nube y los datos locales. Esta acción no se puede deshacer.",
+        "labelDescription": "Eliminar permanentemente tu cuenta y datos personales en la nube. Se conservan los demás usuarios locales y el contenido de los espacios de trabajo.",
         "button": "Eliminar mi cuenta",
         "deleting": "Eliminando...",
         "title": "¿Eliminar tu cuenta?",
-        "description": "Esto eliminará permanentemente tu cuenta de OpenWhispr, todas las notas sincronizadas en la nube y todos los datos locales, incluyendo transcripciones, grabaciones de audio, modelos descargados, conexiones de calendario y configuraciones. Esta acción no se puede deshacer.",
-        "confirmText": "Eliminar todo",
+        "description": "Esto elimina permanentemente tu cuenta de OpenWhispr y tus datos personales. El contenido de los espacios de trabajo y los datos de otros usuarios locales permanecen en este dispositivo.",
+        "confirmText": "Eliminar cuenta",
+        "eraseDeviceLabel": "Eliminar también todos los datos de este dispositivo",
+        "eraseDeviceDescription": "Elimina las notas y cachés de espacios de todos los usuarios locales, modelos descargados, ajustes, calendarios, credenciales y grabaciones.",
+        "eraseDeviceWarning": "Este borrado de todo el dispositivo no se puede deshacer y afecta a todos los usuarios locales.",
         "successTitle": "Cuenta eliminada",
-        "successDescription": "Tu cuenta y todos los datos han sido eliminados. La aplicación se recargará ahora.",
+        "successDescription": "Tu cuenta y datos personales se eliminaron. Se conservaron los demás usuarios locales, espacios de trabajo, modelos y ajustes del dispositivo.",
+        "partialCleanupDescription": "Tu cuenta se eliminó, pero parte de la limpieza local no pudo finalizar. Se conservaron otros usuarios y el contenido de los espacios de trabajo.",
         "failedTitle": "Error al eliminar",
-        "failedDescription": "Algo salió mal al eliminar tu cuenta. Es posible que tus datos locales se hayan eliminado parcialmente. Inténtalo de nuevo."
+        "failedDescription": "No se pudo completar la eliminación de la cuenta. No se inició ningún borrado de todo el dispositivo. Inténtalo de nuevo."
       },
       "profile": {
         "name": {
@@ -1735,7 +1739,7 @@
       },
       "examplesTitle": "Ejemplos",
       "helper": "Elige algo corto y natural para decir en voz alta",
-      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, la respuesta se abre en el panel flotante del asistente. Si hay texto resaltado, ese texto se envía a tu modelo de Asistente de voz configurado y se reemplaza de forma segura por el resultado.",
+      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, el texto resaltado se reemplaza de forma segura por el resultado. Con el pegado automático activado, la respuesta se pega en el cursor de un campo editable con foco; si no, se abre en el panel flotante del asistente.",
       "howItWorksTitle": "Cómo funciona",
       "instructionMode": "Instrucción",
       "placeholder": "p. ej. Jarvis, Nova, Atlas...",
@@ -1899,7 +1903,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Atajo del asistente de voz",
-        "description": "Di un comando y el asistente responde en un panel flotante con tus notas, calendario y herramientas web. Selecciona texto primero para editarlo en su lugar."
+        "description": "Di un comando y el asistente usa tus notas, calendario y herramientas web. La respuesta se pega en un cursor editable con foco, reemplaza el texto seleccionado o se abre en el panel flotante."
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",

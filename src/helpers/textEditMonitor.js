@@ -218,6 +218,10 @@ class TextEditMonitor extends EventEmitter {
           { timeout: timeoutMs },
           (error, stdout, stderr) => {
             const output = stdout.replace(/\n$/, "");
+            if (output === "EDITABLE_NONE:") {
+              resolve({ state: "none", editable: true });
+              return;
+            }
             if (output === "NONE:") {
               resolve({ state: "none" });
               return;
@@ -278,6 +282,9 @@ class TextEditMonitor extends EventEmitter {
           return;
         }
 
+        // The AppleScript never reports an editable caret (only the native
+        // binary emits EDITABLE_NONE:), so this fallback can read selections
+        // but never produce a caret delivery target — panel-first by design.
         const output = stdout.replace(/\n$/, "");
         if (output === "NONE:") {
           resolve({ state: "none" });
@@ -288,6 +295,50 @@ class TextEditMonitor extends EventEmitter {
         }
       }
     );
+  }
+
+  async isFocusedEditable(target, timeoutMs = 1000) {
+    const resolved = this.resolveBinary();
+    if (!resolved) return false;
+
+    let args;
+    if (process.platform === "darwin") {
+      const pid = target?.kind === "mac-pid" ? target.pid : this.lastTargetPid;
+      if (!pid) return false;
+      args = [...resolved.args, "--editable-target", String(pid)];
+    } else {
+      args = [...resolved.args, "--probe-editable"];
+    }
+
+    // The verdict is the first output line. A stale binary that predates the
+    // probe flag falls into monitor mode instead: it blocks reading stdin,
+    // then emits its monitor output and keeps running — closing stdin and
+    // resolving on that first line keeps the stale case a fast "not editable"
+    // rather than a hang until the timeout.
+    return new Promise((resolve) => {
+      const child = spawn(resolved.command, args, { stdio: ["pipe", "pipe", "ignore"] });
+      let buffered = "";
+      let settled = false;
+      const settle = (verdict) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          child.kill();
+        } catch {}
+        resolve(verdict);
+      };
+      const timer = setTimeout(() => settle(false), timeoutMs);
+      child.stdin.on("error", () => {});
+      child.stdin.end();
+      child.stdout.on("data", (data) => {
+        buffered += data.toString();
+        const newline = buffered.indexOf("\n");
+        if (newline !== -1) settle(buffered.slice(0, newline).trim() === "EDITABLE");
+      });
+      child.on("error", () => settle(false));
+      child.on("close", () => settle(buffered.trim() === "EDITABLE"));
+    });
   }
 
   /**

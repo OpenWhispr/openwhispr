@@ -478,7 +478,7 @@
       "title": "Sprachassistent-Einrichtung",
       "description": "Sprechen Sie mit Ihrem KI-Assistenten per Tastendruck",
       "hotkey": "Hotkey",
-      "howItWorks": "Drücken Sie die Taste und sagen Sie, was Sie möchten — zum Beispiel „schreibe eine kurze Dankesnachricht“. Ist Text markiert, bearbeitet und ersetzt {{agentName}} diese Auswahl; andernfalls öffnet sich die Antwort in einem schwebenden Panel. Sie müssen nicht zuerst „Hey {{agentName}}“ sagen.",
+      "howItWorks": "Drücken Sie die Taste und sagen Sie, was Sie möchten — zum Beispiel „schreibe eine kurze Dankesnachricht“. Ist Text markiert, bearbeitet und ersetzt {{agentName}} ihn. Ist ein beschreibbares Textfeld fokussiert, wird die Antwort am Cursor eingefügt; andernfalls öffnet sie sich in einem schwebenden Panel. Sie müssen nicht zuerst „Hey {{agentName}}“ sagen.",
       "test": "Ausprobieren",
       "testInstruction": "Markiere unten den Beispieltext, drücke {{hotkey}} und sage „mach das kürzer“ — die Änderung landet direkt im Textfeld",
       "testSetHotkey": "Lege oben einen Hotkey fest, um es auszuprobieren",
@@ -1917,16 +1917,20 @@
       "wordsRemaining": "{{remaining}} verbleibend",
       "deleteAccount": {
         "label": "Konto löschen",
-        "labelDescription": "Konto, alle Cloud-Daten und lokale Daten dauerhaft löschen. Diese Aktion kann nicht rückgängig gemacht werden.",
+        "labelDescription": "Konto und persönliche Cloud-Daten dauerhaft löschen. Andere lokale Benutzer und Arbeitsbereichsdaten bleiben erhalten.",
         "button": "Mein Konto löschen",
         "deleting": "Wird gelöscht...",
         "title": "Konto löschen?",
-        "description": "Dies löscht dauerhaft Ihr OpenWhispr-Konto, alle in der Cloud synchronisierten Notizen und alle lokalen Daten, einschließlich Transkriptionen, Audioaufnahmen, heruntergeladene Modelle, Kalenderverbindungen und Einstellungen. Diese Aktion kann nicht rückgängig gemacht werden.",
-        "confirmText": "Alles löschen",
+        "description": "Dies löscht dauerhaft Ihr OpenWhispr-Konto und Ihre persönlichen Daten. Arbeitsbereichsdaten und Daten anderer lokaler Benutzer bleiben auf diesem Gerät erhalten.",
+        "confirmText": "Konto löschen",
+        "eraseDeviceLabel": "Auch alle Daten von diesem Gerät löschen",
+        "eraseDeviceDescription": "Löscht Notizen und Arbeitsbereichscaches aller lokalen Benutzer, heruntergeladene Modelle, Einstellungen, Kalenderverbindungen, Anmeldedaten und Aufnahmen.",
+        "eraseDeviceWarning": "Diese geräteweite Löschung kann nicht rückgängig gemacht werden und betrifft alle lokalen Benutzer.",
         "successTitle": "Konto gelöscht",
-        "successDescription": "Ihr Konto und alle Daten wurden gelöscht. Die App wird jetzt neu geladen.",
+        "successDescription": "Ihr Konto und Ihre persönlichen Daten wurden gelöscht. Andere lokale Benutzer, Arbeitsbereiche, Modelle und Geräteeinstellungen blieben erhalten.",
+        "partialCleanupDescription": "Ihr Konto wurde gelöscht, aber ein Teil der lokalen Bereinigung konnte nicht abgeschlossen werden. Andere Benutzer und Arbeitsbereichsdaten blieben erhalten.",
         "failedTitle": "Löschung fehlgeschlagen",
-        "failedDescription": "Beim Löschen Ihres Kontos ist ein Fehler aufgetreten. Ihre lokalen Daten wurden möglicherweise teilweise entfernt. Bitte versuchen Sie es erneut."
+        "failedDescription": "Die Kontolöschung konnte nicht abgeschlossen werden. Es wurde keine geräteweite Löschung gestartet. Bitte versuchen Sie es erneut."
       },
       "profile": {
         "name": {
@@ -1976,7 +1980,7 @@
       },
       "examplesTitle": "Beispiele",
       "helper": "Wählen Sie etwas Kurzes und Natürliches zum Aussprechen",
-      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, öffnet sich die Antwort im schwebenden Assistenten-Panel. Ist Text markiert, wird dieser Text an Ihr konfiguriertes Sprachassistenten-Modell gesendet und sicher durch das Ergebnis ersetzt.",
+      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, wird markierter Text sicher durch das Ergebnis ersetzt. Bei aktiviertem automatischen Einfügen landet die Antwort am Cursor eines fokussierten beschreibbaren Textfelds; andernfalls öffnet sie sich im schwebenden Assistenten-Panel.",
       "howItWorksTitle": "So funktioniert es",
       "instructionMode": "Anweisung",
       "placeholder": "z. B. Jarvis, Nova, Atlas...",
@@ -2140,7 +2144,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Sprachassistent-Hotkey",
-        "description": "Sprechen Sie einen Befehl und der Assistent antwortet in einem schwebenden Panel — mit Ihren Notizen, Ihrem Kalender und Web-Tools. Markieren Sie zuerst Text, um ihn direkt zu bearbeiten."
+        "description": "Sprechen Sie einen Befehl und der Assistent nutzt Ihre Notizen, Ihren Kalender und Web-Tools. Die Antwort wird am fokussierten beschreibbaren Cursor eingefügt, ersetzt markierten Text oder öffnet sich im schwebenden Panel."
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",

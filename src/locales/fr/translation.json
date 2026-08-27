@@ -478,7 +478,7 @@
       "title": "Configuration de l'assistant vocal",
       "description": "Parlez à votre assistant IA d'une simple touche",
       "hotkey": "Raccourci",
-      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». Si du texte est surligné, {{agentName}} modifie et remplace cette sélection ; sinon, la réponse s'ouvre dans un panneau flottant. Pas besoin de dire « Hey {{agentName}} » d'abord.",
+      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». Si du texte est surligné, {{agentName}} le modifie et le remplace. Si un champ de texte modifiable est actif, la réponse est collée au curseur ; sinon, elle s'ouvre dans un panneau flottant. Pas besoin de dire « Hey {{agentName}} » d'abord.",
       "test": "Essayer",
       "testInstruction": "Sélectionnez le texte d'exemple ci-dessous, appuyez sur {{hotkey}} et dites « raccourcis ce texte » — la modification apparaît directement dans la zone de texte",
       "testSetHotkey": "Définissez un raccourci ci-dessus pour l'essayer",
@@ -1917,16 +1917,20 @@
       "wordsRemaining": "{{remaining}} restants",
       "deleteAccount": {
         "label": "Supprimer le compte",
-        "labelDescription": "Supprimer définitivement votre compte, toutes les données cloud et les données locales. Cette action est irréversible.",
+        "labelDescription": "Supprimer définitivement votre compte et vos données cloud personnelles. Les autres utilisateurs locaux et le contenu des espaces de travail sont conservés.",
         "button": "Supprimer mon compte",
         "deleting": "Suppression...",
         "title": "Supprimer votre compte ?",
-        "description": "Cela supprimera définitivement votre compte OpenWhispr, toutes les notes synchronisées dans le cloud et toutes les données locales, y compris les transcriptions, les enregistrements audio, les modèles téléchargés, les connexions de calendrier et les paramètres. Cette action est irréversible.",
-        "confirmText": "Tout supprimer",
+        "description": "Cela supprime définitivement votre compte OpenWhispr et vos données personnelles. Le contenu des espaces de travail et les données des autres utilisateurs locaux restent sur cet appareil.",
+        "confirmText": "Supprimer le compte",
+        "eraseDeviceLabel": "Effacer aussi toutes les données de cet appareil",
+        "eraseDeviceDescription": "Supprime les notes et caches d’espaces de tous les utilisateurs locaux, les modèles téléchargés, paramètres, calendriers, identifiants et enregistrements.",
+        "eraseDeviceWarning": "Cet effacement de l’appareil est irréversible et affecte tous les utilisateurs locaux.",
         "successTitle": "Compte supprimé",
-        "successDescription": "Votre compte et toutes les données ont été supprimés. L'application va maintenant se recharger.",
+        "successDescription": "Votre compte et vos données personnelles ont été supprimés. Les autres utilisateurs locaux, espaces de travail, modèles et paramètres ont été conservés.",
+        "partialCleanupDescription": "Votre compte a été supprimé, mais une partie du nettoyage local n’a pas pu aboutir. Les autres utilisateurs et le contenu des espaces de travail ont été conservés.",
         "failedTitle": "Échec de la suppression",
-        "failedDescription": "Une erreur s'est produite lors de la suppression de votre compte. Vos données locales ont peut-être été partiellement supprimées. Veuillez réessayer."
+        "failedDescription": "La suppression du compte n’a pas pu aboutir. Aucun effacement global de l’appareil n’a été lancé. Veuillez réessayer."
       },
       "profile": {
         "name": {
@@ -1976,7 +1980,7 @@
       },
       "examplesTitle": "Exemples",
       "helper": "Choisissez un nom court et naturel à prononcer",
-      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, la réponse s'ouvre dans le panneau flottant de l'assistant. Si du texte est surligné, ce texte est envoyé à votre modèle d'Assistant vocal configuré et remplacé en toute sécurité par le résultat.",
+      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, le texte surligné est remplacé en toute sécurité par le résultat. Si le collage automatique est activé, la réponse est collée au curseur d'un champ modifiable actif ; sinon, elle s'ouvre dans le panneau flottant de l'assistant.",
       "howItWorksTitle": "Comment ça marche",
       "instructionMode": "Instruction",
       "placeholder": "ex. Jarvis, Nova, Atlas...",
@@ -2140,7 +2144,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'assistant vocal",
-        "description": "Dites une commande et l'assistant répond dans un panneau flottant avec vos notes, votre calendrier et des outils web. Sélectionnez d'abord du texte pour le modifier sur place."
+        "description": "Dites une commande et l'assistant utilise vos notes, votre calendrier et les outils web. La réponse est collée à un curseur modifiable actif, remplace le texte sélectionné ou s'ouvre dans le panneau flottant."
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",

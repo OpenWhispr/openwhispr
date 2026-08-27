@@ -478,7 +478,7 @@
       "title": "Voice Assistant Setup",
       "description": "Talk to your AI assistant with a single keypress",
       "hotkey": "Hotkey",
-      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. If text is highlighted, {{agentName}} edits and replaces that selection; otherwise the answer opens in a floating panel. No need to say “Hey {{agentName}}” first.",
+      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. If text is highlighted, {{agentName}} edits and replaces it. If a writable text field is focused, the answer is pasted at the cursor; otherwise it opens in a floating panel. No need to say “Hey {{agentName}}” first.",
       "test": "Try it",
       "testInstruction": "Select the sample text below, then press {{hotkey}} and say “make this shorter” — the edit lands right in the text box",
       "testSetHotkey": "Set a hotkey above to try it",
@@ -1917,16 +1917,20 @@
       "wordsRemaining": "{{remaining}} remaining",
       "deleteAccount": {
         "label": "Delete Account",
-        "labelDescription": "Permanently delete your account, all cloud data, and local data. This action cannot be undone.",
+        "labelDescription": "Permanently delete your account and personal cloud data. Other local users and workspace-owned content are preserved.",
         "button": "Delete My Account",
         "deleting": "Deleting...",
         "title": "Delete Your Account?",
-        "description": "This will permanently delete your OpenWhispr account, all cloud-synced notes, and all local data including transcriptions, audio recordings, downloaded models, calendar connections, and settings. This action cannot be undone.",
-        "confirmText": "Delete Everything",
+        "description": "This permanently deletes your OpenWhispr account and personal data. Workspace-owned content and data belonging to other local users stay on this device.",
+        "confirmText": "Delete Account",
+        "eraseDeviceLabel": "Also erase all data from this device",
+        "eraseDeviceDescription": "Deletes every local user's notes and workspace cache, downloaded models, settings, calendar connections, credentials, and recordings.",
+        "eraseDeviceWarning": "This device-wide erasure cannot be undone and affects every local user.",
         "successTitle": "Account Deleted",
-        "successDescription": "Your account and all data have been deleted. The app will now reload.",
+        "successDescription": "Your account and personal data were deleted. Other local users, workspaces, models, and device settings were preserved.",
+        "partialCleanupDescription": "Your account was deleted, but some local cleanup could not finish. Other users and workspace-owned content were preserved.",
         "failedTitle": "Deletion Failed",
-        "failedDescription": "Something went wrong deleting your account. Your local data may have been partially removed. Please try again."
+        "failedDescription": "Account deletion could not complete. No device-wide erasure was started. Please try again."
       },
       "profile": {
         "name": {
@@ -1976,7 +1980,7 @@
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
-      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the answer opens in the floating assistant panel. If text is highlighted, that text is sent to your configured Voice Assistant model and safely replaced with the result.",
+      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, highlighted text is safely replaced with the result. With auto-paste enabled, an answer pastes at a focused writable cursor; otherwise it opens in the floating assistant panel.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
@@ -2140,7 +2144,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Voice Assistant Hotkey",
-        "description": "Speak a command and the assistant answers in a floating panel with your notes, calendar, and web tools. Select text first to edit it in place."
+        "description": "Speak a command and the assistant uses your notes, calendar, and web tools. Its answer pastes at a focused writable cursor, replaces selected text, or opens in the floating panel."
       },
       "microphone": {
         "description": "Select which input device to use for dictation",

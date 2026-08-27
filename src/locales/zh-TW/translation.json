@@ -478,7 +478,7 @@
       "title": "語音助理設定",
       "description": "一鍵喚起你的 AI 助理",
       "hotkey": "快捷鍵",
-      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。如果有選取的文字，{{agentName}} 會編輯並取代所選內容；否則回答會在懸浮面板中開啟。無需先說「Hey {{agentName}}」。",
+      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。如果有選取的文字，{{agentName}} 會編輯並取代它。如果可編輯文字欄位已取得焦點，回答會貼到游標處；否則會在懸浮面板中開啟。無需先說「Hey {{agentName}}」。",
       "test": "試試看",
       "testInstruction": "選取下方的範例文字，按下 {{hotkey}} 並說「把它改短一點」——編輯結果會直接出現在文字框裡",
       "testSetHotkey": "在上方設定快捷鍵即可試用",
@@ -1628,16 +1628,20 @@
       "wordsRemaining": "剩餘 {{remaining}} 字",
       "deleteAccount": {
         "label": "刪除帳戶",
-        "labelDescription": "永久刪除您的帳戶、所有雲端資料和本地資料。此操作無法復原。",
+        "labelDescription": "永久刪除您的帳戶和個人雲端資料。其他本地使用者和工作區擁有的內容將被保留。",
         "button": "刪除我的帳戶",
         "deleting": "正在刪除...",
         "title": "刪除您的帳戶？",
-        "description": "這將永久刪除您的 OpenWhispr 帳戶、所有雲端同步筆記和所有本地資料，包括轉錄、音訊錄製、下載的模型、行事曆連線和設定。此操作無法復原。",
-        "confirmText": "刪除所有內容",
+        "description": "這將永久刪除您的 OpenWhispr 帳戶和個人資料。工作區擁有的內容及其他本地使用者的資料會保留在此裝置上。",
+        "confirmText": "刪除帳戶",
+        "eraseDeviceLabel": "同時清除此裝置上的所有資料",
+        "eraseDeviceDescription": "刪除所有本地使用者的筆記和工作區快取、已下載模型、設定、行事曆連線、憑證和錄音。",
+        "eraseDeviceWarning": "此裝置級清除無法復原，並會影響所有本地使用者。",
         "successTitle": "帳戶已刪除",
-        "successDescription": "您的帳戶和所有資料已被刪除。應用程式將立即重新載入。",
+        "successDescription": "您的帳戶和個人資料已刪除。其他本地使用者、工作區、模型和裝置設定均已保留。",
+        "partialCleanupDescription": "您的帳戶已刪除，但部分本地清理未能完成。其他使用者和工作區擁有的內容均已保留。",
         "failedTitle": "刪除失敗",
-        "failedDescription": "刪除您的帳戶時發生錯誤。您的本地資料可能已被部分刪除。請重試。"
+        "failedDescription": "無法完成帳戶刪除。未啟動裝置級清除。請重試。"
       },
       "profile": {
         "name": {
@@ -1687,7 +1691,7 @@
       },
       "examplesTitle": "範例",
       "helper": "選個簡短、自然、好說的名字",
-      "howItWorksDescription": "當你說「Hey {{agentName}}」加上一個指令時，回答會在浮動助理面板中開啟。如果有選取的文字，該文字會傳送到你設定的語音助理模型，並安全地取代為結果。",
+      "howItWorksDescription": "當你說「Hey {{agentName}}」加上一個指令時，選取的文字會安全地取代為結果。啟用自動貼上後，如果可編輯文字欄位已取得焦點，回答會貼到游標處；否則會在浮動助理面板中開啟。",
       "howItWorksTitle": "運作方式",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1851,7 +1855,7 @@
       },
       "voiceAgentHotkey": {
         "title": "語音助理快捷鍵",
-        "description": "說出指令，助理會在懸浮面板中回答，並可使用你的筆記、行事曆和網頁工具。先選取文字即可就地編輯。"
+        "description": "說出指令，助理會使用你的筆記、行事曆和網頁工具。回答會貼到已聚焦的可編輯游標處、取代選取文字，或在懸浮面板中開啟。"
       },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",
