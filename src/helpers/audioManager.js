@@ -4065,6 +4065,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return !!(isSignedInOverride ?? s.isSignedIn);
     }
 
+    // Deepgram and AssemblyAI (BYOK) stream over their own WSS and have no batch
+    // endpoint at all — transcriptionRoute fails those closed — so gate on the
+    // key instead of letting them fall through to the HTTP path.
+    if (s.cloudTranscriptionMode === "byok") {
+      if (s.cloudTranscriptionProvider === "deepgram") return !!s.deepgramApiKey;
+      if (s.cloudTranscriptionProvider === "assemblyai") return !!s.assemblyaiApiKey;
+    }
+
     // The managed-cloud bootstrap only controls OpenWhispr Cloud. A user's
     // BYOK realtime model must not be downgraded because managed dictation is
     // configured for batch processing.

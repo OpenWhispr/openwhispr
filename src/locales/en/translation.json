@@ -905,7 +905,8 @@
         "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text.",
         "managedTranscriptionUnavailable": "Managed transcription is not available right now. Try again in a moment.",
         "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
-        "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator."
+        "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator.",
+        "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries."
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",
@@ -2628,7 +2629,10 @@
         "gemini_3_5_transcribe_live": "Realtime streaming speech-to-text",
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
-        "tinfoil_voxtral": "Verifiably private transcription"
+        "tinfoil_voxtral": "Verifiably private transcription",
+        "deepgram_nova_3": "Deepgram's most accurate realtime model",
+        "assemblyai_universal_streaming_english": "Immutable realtime transcripts, English",
+        "assemblyai_universal_streaming_multilingual": "Immutable realtime transcripts, multilingual"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",

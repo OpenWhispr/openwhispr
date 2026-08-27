@@ -1039,6 +1039,8 @@ export interface SettingsState
   setCortiClientSecret: (key: string) => void;
   setCortiApiKey: (key: string) => void;
   setTinfoilApiKey: (key: string) => void;
+  setDeepgramApiKey: (key: string) => void;
+  setAssemblyaiApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
 
@@ -1277,6 +1279,8 @@ const SECRET_IPC_SAVERS = {
   cortiClientSecret: "saveCortiClientSecret",
   cortiApiKey: "saveCortiKey",
   tinfoil: "saveTinfoilKey",
+  deepgram: "saveDeepgramKey",
+  assemblyai: "saveAssemblyAIKey",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
   noteFormattingCustom: "saveNoteFormattingCustomKey",
@@ -1324,6 +1328,8 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "cortiClientSecret",
   "cortiApiKey",
   "tinfoilApiKey",
+  "deepgramApiKey",
+  "assemblyaiApiKey",
   "customTranscriptionApiKey",
   "customReasoningApiKey",
   "cleanupCustomApiKey",
@@ -1451,6 +1457,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cortiClientSecret: "",
   cortiApiKey: "",
   tinfoilApiKey: "",
+  deepgramApiKey: "",
+  assemblyaiApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -2091,6 +2099,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
   setTinfoilApiKey: createSecretSetter("tinfoilApiKey", "tinfoil", "tinfoil"),
+  // STT-only, so there is no ReasoningService key cache to invalidate.
+  setDeepgramApiKey: createSecretSetter("deepgramApiKey", "deepgram"),
+  setAssemblyaiApiKey: createSecretSetter("assemblyaiApiKey", "assemblyai"),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -2605,6 +2616,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
     if (keys.cortiApiKey !== undefined) s.setCortiApiKey(keys.cortiApiKey);
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
+    if (keys.deepgramApiKey !== undefined) s.setDeepgramApiKey(keys.deepgramApiKey);
+    if (keys.assemblyaiApiKey !== undefined) s.setAssemblyaiApiKey(keys.assemblyaiApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
@@ -3146,6 +3159,8 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken,
         azureApiKey,
         vertexApiKey,
+        deepgram,
+        assemblyai,
       ] = await Promise.all([
         window.electronAPI.getOpenAIKey?.(),
         window.electronAPI.getAnthropicKey?.(),
@@ -3170,6 +3185,8 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getBedrockSessionToken?.(),
         window.electronAPI.getAzureApiKey?.(),
         window.electronAPI.getVertexApiKey?.(),
+        window.electronAPI.getDeepgramKey?.(),
+        window.electronAPI.getAssemblyAIKey?.(),
       ]);
 
       useSettingsStore.setState({
@@ -3202,6 +3219,8 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken: bedrockSessionToken || "",
         azureApiKey: azureApiKey || "",
         vertexApiKey: vertexApiKey || "",
+        deepgramApiKey: deepgram || "",
+        assemblyaiApiKey: assemblyai || "",
       });
 
       if (!localStorage.getItem("enterpriseSetupMode")) {

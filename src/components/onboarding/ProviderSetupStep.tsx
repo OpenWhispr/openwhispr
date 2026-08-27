@@ -210,6 +210,10 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
       return { value: store.tinfoilApiKey, set: store.setTinfoilApiKey };
     case "corti":
       return { value: store.cortiApiKey, set: store.setCortiApiKey };
+    case "deepgram":
+      return { value: store.deepgramApiKey, set: store.setDeepgramApiKey };
+    case "assemblyai":
+      return { value: store.assemblyaiApiKey, set: store.setAssemblyaiApiKey };
     default:
       return { value: "", set: (_value: string) => undefined };
   }

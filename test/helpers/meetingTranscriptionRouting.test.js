@@ -21,6 +21,11 @@ const byokProviders = [
   },
   { id: "corti", models: [{ id: "corti-transcribe" }] },
   { id: "tinfoil", models: [{ id: "voxtral-mini-4b-realtime" }] },
+  { id: "deepgram", models: [{ id: "nova-3", default: true }] },
+  {
+    id: "assemblyai",
+    models: [{ id: "universal-streaming-english", default: true }],
+  },
 ];
 
 const baseOptions = {
@@ -52,6 +57,20 @@ test("providers mode routes Tinfoil through its realtime client", async () => {
     mode: "byok",
     language: "en",
   });
+});
+
+test("BYOK Deepgram and AssemblyAI route to their own realtime clients", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  for (const [selectedProvider, model] of [
+    ["deepgram", "nova-3"],
+    ["assemblyai", "universal-streaming-english"],
+  ]) {
+    assert.deepEqual(
+      resolveMeetingTranscriptionOptions({ ...baseOptions, selectedProvider, selectedModel: "" }),
+      { provider: `${selectedProvider}-realtime`, model, mode: "byok", language: "en" }
+    );
+  }
 });
 
 test("BYOK OpenAI never downgrades to managed cloud when its key is unavailable", async () => {

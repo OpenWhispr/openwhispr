@@ -905,7 +905,8 @@
         "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text.",
         "managedTranscriptionUnavailable": "Die verwaltete Transkription ist derzeit nicht verfügbar. Versuchen Sie es gleich noch einmal.",
         "managedRouteInvalid": "Die verwaltete Transkription konnte aufgrund einer Konfigurationsabweichung nicht gestartet werden. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
-        "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator."
+        "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator.",
+        "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
@@ -2628,7 +2629,10 @@
         "gemini_3_5_transcribe_live": "Spracherkennung per Echtzeit-Streaming",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
-        "tinfoil_voxtral": "Nachweisbar private Transkription"
+        "tinfoil_voxtral": "Nachweisbar private Transkription",
+        "deepgram_nova_3": "Deepgrams genauestes Echtzeitmodell",
+        "assemblyai_universal_streaming_english": "Unveränderliche Echtzeit-Transkripte, Englisch",
+        "assemblyai_universal_streaming_multilingual": "Unveränderliche Echtzeit-Transkripte, mehrsprachig"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",

@@ -905,7 +905,8 @@
         "customEndpointInvalid": "Votre point de terminaison de transcription personnalisé n'est pas configuré ou son URL est invalide. Mettez-le à jour dans Réglages → Parole en texte.",
         "managedTranscriptionUnavailable": "La transcription gérée n'est pas disponible pour le moment. Réessayez dans un instant.",
         "managedRouteInvalid": "La transcription gérée n'a pas pu démarrer en raison d'une incohérence de configuration. Réessayez ou contactez votre administrateur.",
-        "managedAuthRejected": "Les identifiants de transcription gérée de votre organisation ont été refusés. Contactez votre administrateur."
+        "managedAuthRejected": "Les identifiants de transcription gérée de votre organisation ont été refusés. Contactez votre administrateur.",
+        "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives."
       },
       "translationFallback": {
         "unreachableTitle": "Traduction indisponible",
@@ -2628,7 +2629,10 @@
         "gemini_3_5_transcribe_live": "Reconnaissance vocale en streaming temps réel",
         "corti_transcribe": "Transcription médicale de qualité clinique",
         "xai_grok_stt": "Reconnaissance vocale haute précision par xAI",
-        "tinfoil_voxtral": "Transcription vérifiablement privée"
+        "tinfoil_voxtral": "Transcription vérifiablement privée",
+        "deepgram_nova_3": "Le modèle temps réel le plus précis de Deepgram",
+        "assemblyai_universal_streaming_english": "Transcriptions temps réel immuables, anglais",
+        "assemblyai_universal_streaming_multilingual": "Transcriptions temps réel immuables, multilingues"
       },
       "cloud": {
         "openai_gpt_5_2": "Modèle de raisonnement performant",

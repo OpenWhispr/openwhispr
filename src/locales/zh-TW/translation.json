@@ -905,7 +905,8 @@
         "customEndpointInvalid": "自訂轉錄端點未設定或其 URL 無效。請在「設定 → 語音轉文字」中更新。",
         "managedTranscriptionUnavailable": "託管轉錄目前無法使用。請稍候再試。",
         "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
-        "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。"
+        "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。",
+        "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。"
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
@@ -2535,7 +2536,10 @@
         "gemini_3_5_transcribe_live": "即時串流語音轉文字",
         "corti_transcribe": "臨床級醫療轉錄",
         "xai_grok_stt": "xAI 高精度語音辨識",
-        "tinfoil_voxtral": "可驗證的私密轉錄"
+        "tinfoil_voxtral": "可驗證的私密轉錄",
+        "deepgram_nova_3": "Deepgram 最精準的即時模型",
+        "assemblyai_universal_streaming_english": "不會變動的即時轉錄（英文）",
+        "assemblyai_universal_streaming_multilingual": "不會變動的即時轉錄（多語言）"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",

@@ -160,6 +160,37 @@ test("custom requires a configured secure endpoint (empty, sentinel, garbage all
   assert.deepEqual(localhost.auth, { scheme: "bearer", keyRef: "custom" });
 });
 
+// The pre-guard fall-through returned an OpenAI http-batch route with
+// keyRef "openai" for any unrecognised provider, so selecting a realtime-only
+// provider and then uploading or retrying would have POSTed the user's audio to
+// api.openai.com under their OpenAI key.
+test("realtime-only providers fail closed instead of falling through to OpenAI", async () => {
+  const { STREAMING_ONLY_PROVIDERS } = await load();
+  assert.ok(STREAMING_ONLY_PROVIDERS.size > 0);
+
+  for (const provider of STREAMING_ONLY_PROVIDERS) {
+    for (const model of [undefined, "nova-3", "gpt-4o-mini-transcribe"]) {
+      const route = await resolve({
+        cloudTranscriptionProvider: provider,
+        cloudTranscriptionModel: model,
+      });
+      assert.equal(route.transport, "error", `${provider} must not produce a batch route`);
+      assert.equal(route.code, "STREAMING_ONLY_PROVIDER", provider);
+      assert.equal(
+        route.messageKey,
+        "hooks.audioRecording.errorDescriptions.streamingOnlyProvider"
+      );
+      assert.equal(route.provider, undefined, provider);
+      assert.equal(route.endpoint, undefined, provider);
+      assert.equal(
+        JSON.stringify(route).includes("openai.com"),
+        false,
+        `${provider} route leaked an OpenAI endpoint`
+      );
+    }
+  }
+});
+
 test("a custom URL pointing at Tinfoil's host must use the attested proxy", async () => {
   const route = await resolve(
     {

@@ -120,6 +120,32 @@ test("Gemini streaming needs a streaming model, plus a key (byok) or an account 
   assert.equal(manager.shouldUseStreaming(), false);
 });
 
+test("deepgram/assemblyai byok stream on the key alone, never on the batch path", async (t) => {
+  const manager = await loadManager(t);
+  // Batch dictation would otherwise win here; these providers have no batch route.
+  manager.sttConfig = { dictation: { mode: "batch" } };
+
+  for (const [provider, keyField, model] of [
+    ["deepgram", "deepgramApiKey", "nova-3"],
+    ["assemblyai", "assemblyaiApiKey", "universal-streaming-english"],
+  ]) {
+    setSettings({
+      cloudTranscriptionProvider: provider,
+      cloudTranscriptionModel: model,
+      [keyField]: "stt-test",
+    });
+    assert.equal(manager.shouldUseStreaming(), true, provider);
+    assert.equal(manager.getStreamingProviderName(), provider);
+
+    setSettings({
+      cloudTranscriptionProvider: provider,
+      cloudTranscriptionModel: model,
+      [keyField]: "",
+    });
+    assert.equal(manager.shouldUseStreaming(), false, `${provider} without a key`);
+  }
+});
+
 test("managed OpenWhispr Cloud still respects its batch configuration", async (t) => {
   const manager = await loadManager(t);
   manager.sttConfig = { dictation: { mode: "batch" } };

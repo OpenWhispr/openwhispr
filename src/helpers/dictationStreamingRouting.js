@@ -32,6 +32,14 @@ export function resolveStreamingProviderName({ settings, context, sttConfig }) {
   ) {
     return "gemini";
   }
+  // Deepgram and AssemblyAI have no batch endpoint, so BYOK selection alone
+  // routes them, and their renderer channel name is the bare provider id. Ahead
+  // of the REALTIME_MODELS check so a stale OpenAI model id in settings can't
+  // hijack the provider, matching the tinfoil/corti precedent above.
+  if (settings.cloudTranscriptionMode === "byok") {
+    if (settings.cloudTranscriptionProvider === "deepgram") return "deepgram";
+    if (settings.cloudTranscriptionProvider === "assemblyai") return "assemblyai";
+  }
   if (REALTIME_MODELS.has(settings.cloudTranscriptionModel)) {
     return "openai-realtime";
   }

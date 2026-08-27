@@ -884,7 +884,8 @@
         "customEndpointInvalid": "Seu endpoint de transcrição personalizado não está configurado ou a URL é inválida. Atualize-o em Configurações → Fala para texto.",
         "managedTranscriptionUnavailable": "A transcrição gerenciada não está disponível no momento. Tente novamente em instantes.",
         "managedRouteInvalid": "A transcrição gerenciada não pôde ser iniciada devido a uma incompatibilidade de configuração. Tente novamente ou entre em contato com o administrador.",
-        "managedAuthRejected": "As credenciais de transcrição gerenciada da sua organização foram rejeitadas. Entre em contato com o administrador."
+        "managedAuthRejected": "As credenciais de transcrição gerenciada da sua organização foram rejeitadas. Entre em contato com o administrador.",
+        "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas."
       },
       "translationFallback": {
         "unreachableTitle": "Tradução indisponível",
@@ -2514,7 +2515,10 @@
         "gemini_3_5_transcribe_live": "Fala para texto em streaming em tempo real",
         "corti_transcribe": "Transcrição médica de nível clínico",
         "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI",
-        "tinfoil_voxtral": "Transcrição verificavelmente privada"
+        "tinfoil_voxtral": "Transcrição verificavelmente privada",
+        "deepgram_nova_3": "O modelo em tempo real mais preciso da Deepgram",
+        "assemblyai_universal_streaming_english": "Transcrições em tempo real imutáveis, em inglês",
+        "assemblyai_universal_streaming_multilingual": "Transcrições em tempo real imutáveis, multilíngues"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo forte de raciocínio",

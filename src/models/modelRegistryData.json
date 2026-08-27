@@ -322,6 +322,41 @@
           "streaming": true
         }
       ]
+    },
+    {
+      "id": "deepgram",
+      "name": "Deepgram",
+      "baseUrl": "https://api.deepgram.com/v1",
+      "models": [
+        {
+          "id": "nova-3",
+          "name": "Nova-3",
+          "description": "Deepgram's most accurate realtime model",
+          "descriptionKey": "models.descriptions.transcription.deepgram_nova_3",
+          "streaming": true
+        }
+      ]
+    },
+    {
+      "id": "assemblyai",
+      "name": "AssemblyAI",
+      "baseUrl": "https://api.assemblyai.com/v2",
+      "models": [
+        {
+          "id": "universal-streaming-english",
+          "name": "Universal Streaming (English)",
+          "description": "Immutable realtime transcripts, English",
+          "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_english",
+          "streaming": true
+        },
+        {
+          "id": "universal-streaming-multilingual",
+          "name": "Universal Streaming (Multilingual)",
+          "description": "Immutable realtime transcripts, multilingual",
+          "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_multilingual",
+          "streaming": true
+        }
+      ]
     }
   ],
   "cloudProviders": [
