@@ -65,6 +65,7 @@ class WindowManager {
     this._agentDictationPillReady = false;
     this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
     this._agentDictationPillHorizontalDirection = "left";
+    this._agentDictationPillScreenListener = null;
     this._notificationLoadTimeout = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
       if (this.meetingDetectionEngine) {
@@ -1734,6 +1735,16 @@ class WindowManager {
       this.agentDictationPillWindow = pillWindow;
       this._agentDictationPillReady = false;
       this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
+      // Registered lazily with the first companion window (screen.on in the
+      // constructor would fire before `screen` is usable in some test/boot orders)
+      // and kept for the app's lifetime; positionAgentDictationPill no-ops safely
+      // when no pill exists.
+      if (!this._agentDictationPillScreenListener) {
+        this._agentDictationPillScreenListener = () => this.positionAgentDictationPill();
+        screen.on("display-metrics-changed", this._agentDictationPillScreenListener);
+        screen.on("display-added", this._agentDictationPillScreenListener);
+        screen.on("display-removed", this._agentDictationPillScreenListener);
+      }
       // The companion exists only while the content-protected Agent panel is
       // open; keep it out of screen shares along with the panel it accompanies.
       pillWindow.setContentProtection(true);

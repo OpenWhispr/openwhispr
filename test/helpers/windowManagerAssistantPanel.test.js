@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const requestedMainWindowPositions = [];
 const createdBrowserWindows = [];
+const screenListeners = [];
 
 // Same stub set as windowManagerMeetingNotification.test.js: WindowManager
 // pulls in electron + sibling managers at require time.
@@ -11,7 +12,12 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   if (request === "electron") {
     return {
       app: { on: () => undefined },
-      screen: { getPrimaryDisplay: () => ({}), getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } }), getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } }) },
+      screen: {
+        getPrimaryDisplay: () => ({}),
+        getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } }),
+        getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } }),
+        on: (event, listener) => screenListeners.push({ event, listener }),
+      },
       BrowserWindow: class FakeBrowserWindow {
         constructor(options) {
           this.options = options;
@@ -569,4 +575,30 @@ test("error-recovery transcripts mirror to the companion only for plain dictatio
   assert.deepEqual(messages, [
     { channel: "agent-dictation-pill-final-transcript", payload: "plain" },
   ]);
+});
+
+test("display changes reposition the companion pill", () => {
+  createdBrowserWindows.length = 0;
+  screenListeners.length = 0;
+  const manager = new WindowManager();
+  manager._assistantPanelOpen = true;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1000, y: 100, width: 400, height: 600 }),
+  };
+
+  manager.showAgentDictationPill();
+  const pill = createdBrowserWindows[0];
+  pill.webContentsListeners.get("did-finish-load")();
+  const boundsCallsBefore = pill.setBoundsCalls;
+
+  const metricsListener = screenListeners.find((entry) => entry.event === "display-metrics-changed");
+  assert.ok(metricsListener, "display-metrics-changed listener registered");
+  metricsListener.listener();
+
+  assert.equal(pill.setBoundsCalls, boundsCallsBefore + 1);
+  assert.deepEqual(
+    screenListeners.map((entry) => entry.event).sort(),
+    ["display-added", "display-metrics-changed", "display-removed"]
+  );
 });
