@@ -4,13 +4,18 @@ const { getMeetingJoinUrl } = require("./meetingJoinUrl");
 const MEETING_REMINDER_LEAD_MS = 60 * 1000;
 
 function notificationKey(event) {
-  return `${event.provider || "google"}:${event.id}`;
+  if (!event || typeof event !== "object") return ":";
+  return `${event.provider || "google"}:${event.id || ""}`;
 }
 
 // A solo event with no invitees and no meeting link is a time block (focus
 // time, a personal reminder), not a meeting — every provider syncs those.
 function isReminderEligible(event) {
-  return event.attendees_count > 0 || getMeetingJoinUrl(event);
+  if (!event || typeof event !== "object") return false;
+  return (
+    (typeof event.attendees_count === "number" && event.attendees_count > 0) ||
+    Boolean(getMeetingJoinUrl(event))
+  );
 }
 
 // Provider-agnostic meeting reminder scheduling. Reads only the shared
@@ -31,9 +36,14 @@ class CalendarReminderScheduler {
       this.nextMeetingTimer = null;
     }
 
-    const upcoming = this.databaseManager.getUpcomingEvents(1440);
+    const upcoming = Array.isArray(this.databaseManager?.getUpcomingEvents?.(1440))
+      ? this.databaseManager.getUpcomingEvents(1440)
+      : [];
     const next = upcoming.find(
-      (event) => isReminderEligible(event) && !this.notifiedMeetings.has(notificationKey(event))
+      (event) =>
+        Boolean(event) &&
+        isReminderEligible(event) &&
+        !this.notifiedMeetings.has(notificationKey(event))
     );
     if (!next) return;
 
@@ -54,12 +64,15 @@ class CalendarReminderScheduler {
       return;
     }
 
-    const events = this.databaseManager.getActiveEvents();
+    const events = Array.isArray(this.databaseManager?.getActiveEvents?.())
+      ? this.databaseManager.getActiveEvents()
+      : [];
+    const upcomingEvents = Array.isArray(this.databaseManager?.getUpcomingEvents?.(1))
+      ? this.databaseManager.getUpcomingEvents(1)
+      : [];
     const stillExists =
-      events.some((e) => notificationKey(e) === notificationKey(event)) ||
-      this.databaseManager
-        .getUpcomingEvents(1)
-        .some((e) => notificationKey(e) === notificationKey(event));
+      events.some((e) => Boolean(e) && notificationKey(e) === notificationKey(event)) ||
+      upcomingEvents.some((e) => Boolean(e) && notificationKey(e) === notificationKey(event));
 
     if (!stillExists) {
       this.scheduleNextMeeting();
@@ -111,10 +124,15 @@ class CalendarReminderScheduler {
     if (!this.activeMeeting || this.activeMeeting.provider !== provider) return;
 
     const key = notificationKey(this.activeMeeting);
-    const currentEvent = [
-      ...this.databaseManager.getActiveEvents(),
-      ...this.databaseManager.getUpcomingEvents(1),
-    ].find((event) => notificationKey(event) === key);
+    const activeEvents = Array.isArray(this.databaseManager?.getActiveEvents?.())
+      ? this.databaseManager.getActiveEvents()
+      : [];
+    const upcomingEvents = Array.isArray(this.databaseManager?.getUpcomingEvents?.(1))
+      ? this.databaseManager.getUpcomingEvents(1)
+      : [];
+    const currentEvent = [...activeEvents, ...upcomingEvents].find(
+      (event) => Boolean(event) && notificationKey(event) === key
+    );
 
     if (!currentEvent) {
       this.activeMeeting = null;
@@ -172,7 +190,7 @@ class CalendarReminderScheduler {
     }
 
     const prefix = `${provider}:`;
-    for (const key of this.notifiedMeetings) {
+    for (const key of Array.from(this.notifiedMeetings)) {
       if (key.startsWith(prefix)) this.notifiedMeetings.delete(key);
     }
 

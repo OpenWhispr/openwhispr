@@ -190,3 +190,25 @@ test("resetting a provider re-arms the next meeting timer for upcoming events", 
 
   scheduler.stop();
 });
+
+test("handles nullish or malformed events in upcoming events gracefully", () => {
+  const futureEvent = {
+    id: "meeting-valid",
+    provider: "google",
+    summary: "Valid meeting",
+    start_time: new Date(Date.now() + 600_000).toISOString(),
+    end_time: new Date(Date.now() + 1200_000).toISOString(),
+    attendees_count: 1,
+  };
+  const databaseManager = {
+    getUpcomingEvents: () => [null, undefined, {}, futureEvent],
+    getActiveEvents: () => [null, undefined],
+  };
+  const scheduler = new CalendarReminderScheduler(databaseManager);
+
+  assert.doesNotThrow(() => scheduler.scheduleNextMeeting());
+  assert.notEqual(scheduler.nextMeetingTimer, null);
+
+  assert.doesNotThrow(() => scheduler.reset("google"));
+  scheduler.stop();
+});
