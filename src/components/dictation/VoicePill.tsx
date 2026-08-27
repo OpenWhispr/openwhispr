@@ -42,6 +42,9 @@ const RESTING_WAVE_HEIGHTS = Array.from(
 // insets (VOICE_PILL_FOOTPRINT in voicePillPresentation.js).
 const COMPACT_CONTENT_GAP_PX = 6;
 
+// Mirrored by .liquid-cancel-skin[data-pill-state] in dictation-panel.css,
+// which redraws this chrome while the cancel skin owns the fused surface —
+// change together.
 const STATE_APPEARANCE: Record<VoicePillState, string> = {
   idle: "border-border-hover bg-surface-1 text-muted-foreground dark:border-border/50",
   hover: "border-border-hover bg-surface-3 text-foreground",

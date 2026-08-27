@@ -244,6 +244,35 @@
   pointer-events: none;
 }
 
+/* The skin's chrome mirrors VoicePill's STATE_APPEARANCE border/background
+   classes for every state it can replace — change together. Hover matters: a
+   de-fusing skin lingers over a hovered pill for its 280ms collapse, and
+   hover is the one state on surface-3. Fill and stroke transition at the
+   pill's own 220ms so a state flip under the skin (recording → thinking)
+   shades over instead of popping. */
+.liquid-cancel-skin path {
+  fill: var(--color-surface-1);
+  stroke: var(--color-border-hover);
+  transition:
+    fill 220ms ease-out,
+    stroke 220ms ease-out;
+}
+
+.liquid-cancel-skin[data-pill-state="hover"] path {
+  fill: var(--color-surface-3);
+}
+
+.liquid-cancel-skin[data-pill-state="processing"] path,
+.liquid-cancel-skin[data-pill-state="thinking"] path,
+.liquid-cancel-skin[data-pill-state="unavailable"] path {
+  stroke: color-mix(in oklab, var(--color-border) 60%, transparent);
+}
+
+/* The idle pill's dark-theme border is softer (dark:border-border/50). */
+.dark .liquid-cancel-skin[data-pill-state="idle"] path {
+  stroke: color-mix(in oklab, var(--color-border) 50%, transparent);
+}
+
 /* Match the pill's shadow-card, which only exists in dark theme. */
 .dark .liquid-cancel-skin {
   filter: drop-shadow(0 1px 3px oklch(0 0 0 / 0.2));

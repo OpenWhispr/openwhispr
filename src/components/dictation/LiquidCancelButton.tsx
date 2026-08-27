@@ -3,10 +3,7 @@ import { X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { emergenceBlend, traceFusedOutline } from "./liquidFusion";
 import type { VoicePillState } from "./VoicePill";
-import {
-  LISTENING_ENTRANCE_TIMING,
-  VOICE_PILL_STATE_STROKE,
-} from "../../helpers/voicePillPresentation";
+import { LISTENING_ENTRANCE_TIMING } from "../../helpers/voicePillPresentation";
 
 // Sizing shared with WINDOW_SIZES.RECORDING's fit comment in windowConfig.js.
 const CANCEL_BUTTON_SIZE = 28;
@@ -106,8 +103,8 @@ interface LiquidCancelButtonProps {
    *  footprints and the skin tweens its geometry to match (usePillFootprintTween). */
   pillWidth: number;
   pillHeight: number;
-  /** The pill state the skin replaces; its stroke must match the pill's own
-   *  border (processing/thinking wear a softer border than recording). */
+  /** The pill state the skin replaces; keys the skin's stroke/fill to the
+   *  pill's own chrome via .liquid-cancel-skin[data-pill-state] CSS. */
   pillState: VoicePillState;
   ariaLabel: string;
   onCancel: () => void;
@@ -165,6 +162,7 @@ export function LiquidCancelButton({
         <svg
           aria-hidden="true"
           className="liquid-cancel-skin absolute"
+          data-pill-state={pillState}
           viewBox={`${outline.minX} ${outline.minY} ${outline.width} ${outline.height}`}
           style={{
             left: outline.minX - pillSize.w,
@@ -174,12 +172,7 @@ export function LiquidCancelButton({
             zIndex: -1,
           }}
         >
-          <path
-            d={outline.d}
-            fill="var(--color-surface-1)"
-            stroke={VOICE_PILL_STATE_STROKE[pillState]}
-            strokeWidth="1"
-          />
+          <path d={outline.d} strokeWidth="1" />
         </svg>
       )}
       <button
