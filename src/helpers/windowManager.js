@@ -819,6 +819,14 @@ class WindowManager {
     if (blocked && this._assistantPanelOpen && inputKind === DICTATION_INPUT_KIND.DICTATION) {
       this.showAgentDictationPill();
     }
+    // Fail-closed by design: while the companion is recreating after a crash
+    // (blocked && !companionAvailable above), a blocked "dictation" press
+    // could actually be a STOP of an already-running recording, not a start —
+    // this blanket block doesn't distinguish them. That costs the user one
+    // extra press with a hot mic (Escape/the cancel hotkey still work in the
+    // meantime). If that gap ever needs closing, a future reader should
+    // consider letting the press through when `this._isDictatingToggle` is
+    // already true, rather than loosening the block for starts too.
     return blocked;
   }
 

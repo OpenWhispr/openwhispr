@@ -236,6 +236,15 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!recordingStarted) {
           setIsPreparing(false);
           setIsAssistantVoice(false);
+          // Covers every exit above that never started a recording — the
+          // policy-block early return, the mic-open failure, a stale
+          // preparation generation, etc. Without this, a failed start leaves
+          // the main process (and the companion pill) stuck reporting
+          // "preparing" forever, since startRecording's failure path only
+          // fires onError, never the onStateChange that normally reports
+          // "idle". The signature dedup makes this a no-op when
+          // onStateChange already reported it first.
+          if (reportedLifecycleRef.current?.startsWith("preparing:")) reportLifecycle("idle");
         }
       }
     },
