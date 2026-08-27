@@ -141,6 +141,47 @@ test("audio: buffered frames flush in order, then stream as base64 PCM frames", 
   });
 });
 
+test("audio: a dictation shorter than the handshake still reaches the wire", async () => {
+  await withServer(async ({ streaming, received }) => {
+    // Every frame arrives before setupComplete and no frame follows it, so the
+    // only drain opportunity is readiness itself.
+    streaming.beginConnecting();
+    streaming.sendAudio(Buffer.alloc(1600, 7));
+    streaming.sendAudio(Buffer.alloc(1600, 8));
+
+    await streaming.connect({ token: "t", mode: "byok" });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    assert.deepEqual(
+      audioFrames(received).map(
+        (frame) => Buffer.from(frame.realtimeInput.audio.data, "base64")[0]
+      ),
+      [7, 8]
+    );
+    assert.equal(streaming.audioBytesSent, 3200);
+
+    await streaming.disconnect();
+    assert.equal(
+      received.filter((message) => message.realtimeInput?.audioStreamEnd).length,
+      1,
+      "the turn must still be closed"
+    );
+  });
+});
+
+test("setup: a non-Gemini model id never reaches the wire", async () => {
+  const streaming = new GeminiLiveStreaming();
+  // Managed dictation carries the BYOK default, which is an OpenAI id.
+  assert.equal(
+    streaming.buildSetupMessage({ model: "gpt-4o-mini-transcribe" }).setup.model,
+    "models/gemini-3.5-transcribe-live"
+  );
+  assert.equal(
+    streaming.buildSetupMessage({ model: "gemini-3.5-transcribe-live" }).setup.model,
+    "models/gemini-3.5-transcribe-live"
+  );
+});
+
 test("audio: cold-start buffering is bounded at three seconds of PCM", async () => {
   const streaming = new GeminiLiveStreaming();
   streaming.beginConnecting();

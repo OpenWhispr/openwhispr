@@ -12,6 +12,11 @@ const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
 const MAX_CUSTOM_VOCABULARY = 100;
 const GEMINI_LIVE_MODEL = "gemini-3.5-transcribe-live";
 
+// In managed mode the model comes from the BYOK-shaped settings, which still
+// hold another provider's id, so anything but a Gemini id is ignored.
+const resolveLiveModel = (model) =>
+  model && model.startsWith("gemini-") ? model : GEMINI_LIVE_MODEL;
+
 const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage";
 
 // The two Live methods are auth-disjoint: BidiGenerateContent accepts only
@@ -103,7 +108,7 @@ class GeminiLiveStreaming {
 
     return {
       setup: {
-        model: `models/${model || GEMINI_LIVE_MODEL}`,
+        model: `models/${resolveLiveModel(model)}`,
         generationConfig: { responseModalities: ["TEXT"] },
         inputAudioTranscription,
       },
@@ -126,7 +131,7 @@ class GeminiLiveStreaming {
     if (!this.bufferingAudio) this.beginConnecting();
     this.completedSegments = [];
     this.audioBytesSent = 0;
-    this.currentModel = options.model || GEMINI_LIVE_MODEL;
+    this.currentModel = resolveLiveModel(options.model);
     this._connectionLossNotified = false;
     this._audioStreamEndSent = false;
 
@@ -245,6 +250,9 @@ class GeminiLiveStreaming {
     this.connectionTimeout = null;
     this.startKeepAlive();
     debugLogger.debug("Gemini Live setup complete", { model: this.currentModel });
+    // A dictation shorter than the handshake leaves every frame in the buffer,
+    // and sendAudio never runs again to drain it.
+    this._flushColdStartBuffer();
     if (this.pendingResolve) {
       this.pendingResolve();
       this.pendingResolve = null;
@@ -341,20 +349,22 @@ class GeminiLiveStreaming {
       return false;
     }
 
-    if (this.coldStartBuffer.length > 0) {
-      debugLogger.debug("Gemini Live flushing cold-start buffer", {
-        chunks: this.coldStartBuffer.length,
-        bytes: this.coldStartBufferSize,
-      });
-      for (const buffered of this.coldStartBuffer) {
-        this._sendAudioFrame(buffered);
-      }
-      this.coldStartBuffer = [];
-      this.coldStartBufferSize = 0;
-    }
-
+    this._flushColdStartBuffer();
     this._sendAudioFrame(Buffer.from(pcmBuffer));
     return true;
+  }
+
+  _flushColdStartBuffer() {
+    if (this.coldStartBuffer.length === 0) return;
+    debugLogger.debug("Gemini Live flushing cold-start buffer", {
+      chunks: this.coldStartBuffer.length,
+      bytes: this.coldStartBufferSize,
+    });
+    for (const buffered of this.coldStartBuffer) {
+      this._sendAudioFrame(buffered);
+    }
+    this.coldStartBuffer = [];
+    this.coldStartBufferSize = 0;
   }
 
   // Gemini has no mid-stream finalize: audioStreamEnd ends the turn, and the
@@ -379,6 +389,10 @@ class GeminiLiveStreaming {
     if (!this.ws) return this._takeTranscript();
 
     this.isDisconnecting = true;
+
+    if (closeStream && this.ws.readyState === WebSocket.OPEN && this.isConnected) {
+      this._flushColdStartBuffer();
+    }
 
     if (closeStream && this.ws.readyState === WebSocket.OPEN && this.audioBytesSent > 0) {
       const awaitingTurnEnd = !this._audioStreamEndSent;
