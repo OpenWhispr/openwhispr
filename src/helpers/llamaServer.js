@@ -671,6 +671,7 @@ class LlamaServerManager {
     this.draftModelPath = null;
     this.activeDraftModelPath = null;
     this.activeBackend = null;
+    this.shuttingDown = false;
   }
 
   getStatus() {
