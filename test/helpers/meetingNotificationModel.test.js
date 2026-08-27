@@ -64,20 +64,6 @@ test("detection presentation preserves event title, join action, and dismissal",
   );
 });
 
-test("a dismissible meeting notification closes after an 80px horizontal swipe", async () => {
-  const { shouldDismissMeetingNotificationSwipe } = await load();
-
-  assert.equal(shouldDismissMeetingNotificationSwipe(true, 80), true);
-  assert.equal(shouldDismissMeetingNotificationSwipe(true, -80), true);
-  assert.equal(shouldDismissMeetingNotificationSwipe(true, 79), false);
-});
-
-test("non-dismissible meeting notifications ignore horizontal swipes", async () => {
-  const { shouldDismissMeetingNotificationSwipe } = await load();
-
-  assert.equal(shouldDismissMeetingNotificationSwipe(false, 200), false);
-});
-
 test("countdown rounds up and emits updated seconds until expiration", async () => {
   const { subscribeMeetingAutoEndCountdown } = await load();
   let now = 10_000;

@@ -51,7 +51,6 @@ The chat agent and the voice agent become one Voice Assistant behind a redesigne
 
 ### Meetings & speakers
 
-- **Meeting reminders swipe away like desktop notifications.** A horizontal pointer swipe now dismisses meeting-detected and calendar reminder cards, while the **Keep recording** countdown remains protected.
 - **Forgotten recordings end themselves.** When the call is over — the meeting app releases your microphone, or both audio channels go quiet, or the app exits — a 60-second countdown starts, cancellable with **Keep recording**, and the card tells you which signal fired. Remote voices still playing defer the countdown, so a quiet-but-live meeting is never cut short. (#1494)
 - **Meeting notes know who is who.** Every transcript line carries its resolved speaker name and the mic track carries your own name, a Meeting Context block names the note owner and invited participants, and the prompt is forbidden from inventing identities — so notes stop assuming you're whoever got named in conversation. (#1741)
 - **In-person meetings get speaker labels.** Recordings with everyone in the room and no call ended with zero diarized segments, because only the (silent) system-audio channel was ever diarized. Those sessions now diarize the microphone track. (#1726)
