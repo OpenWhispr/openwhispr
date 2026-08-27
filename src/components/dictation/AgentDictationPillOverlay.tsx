@@ -86,6 +86,15 @@ export default function AgentDictationPillOverlay() {
   });
   const { close: closeLiveTranscript, mounted: liveTranscriptMounted } = liveTranscript;
 
+  const { showFinalText } = liveTranscript;
+  useEffect(
+    () =>
+      window.electronAPI.onAgentDictationPillFinalTranscript?.((text) => {
+        showFinalText(text);
+      }),
+    [showFinalText]
+  );
+
   useEffect(() => {
     if (!liveTranscriptMounted) {
       void window.electronAPI.resizeAgentDictationPillToContent?.(null);

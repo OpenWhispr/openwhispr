@@ -550,3 +550,23 @@ test("mic preparation reaches the companion as its own lifecycle", () => {
     },
   ]);
 });
+
+test("error-recovery transcripts mirror to the companion only for plain dictation", () => {
+  const manager = new WindowManager();
+  const messages = [];
+  manager._assistantPanelOpen = true;
+  manager._agentDictationPillReady = true;
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel, payload) => messages.push({ channel, payload }) },
+  };
+
+  manager._dictationInputKind = "assistant";
+  manager.showAgentDictationFinalTranscript("agent");
+  manager._dictationInputKind = "dictation";
+  manager.showAgentDictationFinalTranscript("plain");
+
+  assert.deepEqual(messages, [
+    { channel: "agent-dictation-pill-final-transcript", payload: "plain" },
+  ]);
+});

@@ -113,6 +113,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "agent-dictation-pill-audio-level-changed",
     (callback) => (_event, level) => callback(level)
   ),
+  showAgentDictationFinalTranscript: (text) =>
+    ipcRenderer.send("show-agent-dictation-final-transcript", text),
+  onAgentDictationPillFinalTranscript: registerListener(
+    "agent-dictation-pill-final-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>

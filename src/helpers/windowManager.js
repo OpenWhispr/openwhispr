@@ -1325,6 +1325,13 @@ class WindowManager {
     this.enforceMainWindowOnTop();
   }
 
+  // A recoverable dictation error's "View Transcript" action has no surface in
+  // the main window while the Agent panel owns it (openPanel refuses under
+  // assistantOpenRef), so the recovered text shows on the companion instead.
+  showAgentDictationFinalTranscript(text) {
+    this._sendAgentDictationPreview("agent-dictation-pill-final-transcript", text);
+  }
+
   hideTranscriptionPreview() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("preview-hide");

@@ -995,6 +995,8 @@ declare global {
         }) => void
       ) => () => void;
       onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
+      showAgentDictationFinalTranscript?: (text: string) => void;
+      onAgentDictationPillFinalTranscript?: (callback: (text: string) => void) => () => void;
 
       // STT config
       getSttConfig?: () => Promise<

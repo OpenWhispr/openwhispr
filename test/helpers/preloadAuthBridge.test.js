@@ -118,12 +118,13 @@ test("dictation lifecycle and audio levels preserve companion routing metadata",
 });
 
 test("the Agent companion owns only its scoped window bridges", async () => {
-  const { api, invocations } = loadPreloadApi();
+  const { api, invocations, sends } = loadPreloadApi();
 
   await api.resizeAgentDictationPillToContent(240);
   await api.resizeAgentDictationPillToContent(null);
   await api.setAgentDictationPillInteractivity(true);
   await api.cancelAgentPanelDictation();
+  api.showAgentDictationFinalTranscript("recovered text");
 
   assert.deepEqual(invocations, [
     ["resize-agent-dictation-pill-to-content", 240],
@@ -131,6 +132,10 @@ test("the Agent companion owns only its scoped window bridges", async () => {
     ["set-agent-dictation-pill-interactivity", true],
     ["cancel-agent-panel-dictation"],
   ]);
+  assert.deepEqual(
+    sends.filter(([channel]) => channel === "show-agent-dictation-final-transcript"),
+    [["show-agent-dictation-final-transcript", "recovered text"]]
+  );
 });
 
 test("agent streaming forwards correlated start and cancel messages", () => {

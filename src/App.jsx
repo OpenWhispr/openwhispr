@@ -195,7 +195,15 @@ export default function App() {
     dismissDictationError,
     onDictationError: handleDictationError,
     getAssistantSelectionContext: assistant.getSelectionContext,
-    onShowTranscript: (text) => liveTranscriptApiRef.current?.showFinalText(text),
+    onShowTranscript: (text) => {
+      // While the Agent panel is open the main window's transcript is suppressed
+      // (openPanel refuses under assistantOpenRef); the companion hosts it instead.
+      if (assistantOpenRef.current) {
+        window.electronAPI?.showAgentDictationFinalTranscript?.(text);
+        return;
+      }
+      liveTranscriptApiRef.current?.showFinalText(text);
+    },
     assistantOpenRef,
   });
   const isVisuallyProcessing = isProcessing || isPreparing || isStopping;

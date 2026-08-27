@@ -1546,6 +1546,19 @@ class IPCHandlers {
       this.windowManager.setDictationLifecycleState(state, inputKind);
     });
 
+    ipcMain.on("show-agent-dictation-final-transcript", (event, text) => {
+      const dictationWindow = this.windowManager.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return;
+      }
+      if (typeof text !== "string" || !text.trim()) return;
+      this.windowManager.showAgentDictationFinalTranscript(text);
+    });
+
     ipcMain.on("dictation-audio-level-changed", (event, level) => {
       const dictationWindow = this.windowManager.mainWindow;
       if (
