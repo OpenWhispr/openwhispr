@@ -14,7 +14,7 @@ import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
 import {
   getTranscriptionProviders,
-  getStreamingTranscriptionProviders,
+  getMeetingStreamingTranscriptionProviders,
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
   PARAKEET_MODEL_INFO,
@@ -463,8 +463,11 @@ export default function TranscriptionModelPicker({
     (providerId: string) => isProviderAllowedByPolicy(policyState, "transcription", providerId),
     [policyState]
   );
+  // streamingOnly is Note Recording's picker, so it offers the streaming
+  // providers note recording can actually run — not every streaming provider.
   const availableCloudProviders = useMemo(
-    () => (streamingOnly ? getStreamingTranscriptionProviders() : getTranscriptionProviders()),
+    () =>
+      streamingOnly ? getMeetingStreamingTranscriptionProviders() : getTranscriptionProviders(),
     [streamingOnly]
   );
   const cloudProviders = useMemo(
