@@ -1,57 +1,52 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import type { MeetingNotificationData } from "../types/electron";
 import { MeetingNotificationCard } from "./MeetingNotificationCard";
-
-type PromptVariant = "detected" | "starting" | "underway";
-
-interface NotificationData {
-  detectionId: string;
-  source: string;
-  key: string;
-  event: { summary?: string | null } | null;
-  variant: PromptVariant;
-  joinUrl: string | null;
-}
+import {
+  getMeetingNotificationPresentation,
+  initializeMeetingNotificationOverlay,
+  subscribeMeetingAutoEndCountdown,
+} from "./meetingNotificationModel";
 
 export default function MeetingNotificationOverlay() {
   const { t } = useTranslation();
-  const [data, setData] = useState<NotificationData | null>(null);
+  const [data, setData] = useState<MeetingNotificationData | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState(0);
 
   useEffect(() => {
-    let shown = false;
-
-    const show = (d: NotificationData) => {
-      if (shown) return;
-      shown = true;
-      setData(d);
-      setTimeout(() => {
-        setIsVisible(true);
-        window.electronAPI?.meetingNotificationReady?.();
-      }, 50);
-    };
-
-    const cleanup = window.electronAPI?.onMeetingNotificationData?.((incoming: NotificationData) =>
-      show(incoming)
-    );
-
-    window.electronAPI?.getMeetingNotificationData?.().then((pulled: NotificationData | null) => {
-      if (pulled) show(pulled);
+    return initializeMeetingNotificationOverlay({
+      subscribe: (callback) => window.electronAPI?.onMeetingNotificationData?.(callback),
+      getPendingData: () =>
+        window.electronAPI?.getMeetingNotificationData?.() ?? Promise.resolve(null),
+      onData: setData,
+      onVisible: () => setIsVisible(true),
+      onReady: () => {
+        void window.electronAPI?.meetingNotificationReady?.();
+      },
     });
-
-    return () => cleanup?.();
   }, []);
+
+  useEffect(() => {
+    if (data?.kind !== "auto-end") return;
+    return subscribeMeetingAutoEndCountdown(data.expiresAt, setSecondsRemaining);
+  }, [data]);
 
   const respond = useCallback(
     async (action: string) => {
-      if (!data) return;
+      if (data?.kind !== "detection") return;
       setIsVisible(false);
       await new Promise((r) => setTimeout(r, 200));
       window.electronAPI?.meetingNotificationRespond?.(data.detectionId, action);
     },
     [data]
   );
+
+  const keepRecording = useCallback(() => {
+    if (data?.kind !== "auto-end") return;
+    void window.electronAPI?.meetingAutoEndKeep?.(data.sessionId);
+  }, [data]);
 
   const handleMouseEnter = useCallback(() => {
     setIsHovered(true);
@@ -63,18 +58,25 @@ export default function MeetingNotificationOverlay() {
     window.electronAPI?.setNotificationInteractivity?.(false);
   }, []);
 
-  const variant: PromptVariant = data?.variant ?? "detected";
-  const title = (variant !== "detected" && data?.event?.summary) || t("meetingNotification.title");
+  const presentation = getMeetingNotificationPresentation(data, secondsRemaining);
+  const title = "title" in presentation ? presentation.title : t(presentation.titleKey);
+  const body =
+    "bodyValues" in presentation
+      ? t(presentation.bodyKey, presentation.bodyValues)
+      : t(presentation.bodyKey);
+  const handleAction =
+    presentation.action === "keep" ? keepRecording : () => respond(presentation.action);
 
   return (
     <div className="meeting-notification-window w-full h-full bg-transparent p-3">
       <MeetingNotificationCard
         title={title}
-        body={t(`meetingNotification.body.${variant}`)}
-        startLabel={data?.joinUrl ? t("meetingNotification.join") : t("meetingNotification.start")}
-        onStart={() => respond(data?.joinUrl ? "join" : "start")}
-        onDismiss={() => respond("dismiss")}
+        body={body}
+        startLabel={t(presentation.actionKey)}
+        onStart={handleAction}
+        onDismiss={presentation.dismissible ? () => respond("dismiss") : undefined}
         closeVisible={isHovered}
+        allowTitleWrap={presentation.allowTitleWrap}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className={[

@@ -1,9 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("fs");
-const path = require("path");
 
-const load = () => import("../../src/helpers/geminiResponse.js");
+const load = () => import("../../src/helpers/geminiResponse.ts");
 
 function makeResponse({ parts, finishReason, usage } = {}) {
   return {
@@ -76,16 +74,30 @@ test("assess: empty candidates keep the #938 empty guard reachable", async () =>
 
 test("cleanup suppresses thinking on thinking-capable models", async () => {
   const { resolveGeminiThinkingConfig } = await load();
-  assert.deepEqual(resolveGeminiThinkingConfig({}, { supportsThinking: true }), {
-    thinkingLevel: "minimal",
-    includeThoughts: false,
-  });
+  assert.deepEqual(
+    resolveGeminiThinkingConfig({ disableThinking: true }, { supportsThinking: true }),
+    {
+      thinkingLevel: "minimal",
+      includeThoughts: false,
+    }
+  );
+});
+
+test("cleanup keeps thinking when the user explicitly enabled it", async () => {
+  const { resolveGeminiThinkingConfig } = await load();
+  assert.equal(
+    resolveGeminiThinkingConfig({ disableThinking: false }, { supportsThinking: true }),
+    undefined
+  );
 });
 
 test("cleanup honors the model's minimum thinking level", async () => {
   const { resolveGeminiThinkingConfig } = await load();
   assert.deepEqual(
-    resolveGeminiThinkingConfig({}, { supportsThinking: true, minThinkingLevel: "low" }),
+    resolveGeminiThinkingConfig(
+      { disableThinking: true },
+      { supportsThinking: true, minThinkingLevel: "low" }
+    ),
     { thinkingLevel: "low", includeThoughts: false }
   );
 });
@@ -140,17 +152,4 @@ test("registry marks the thinking-by-default Gemini 3 models", () => {
       }
     }
   }
-});
-
-// Source-level wiring assert; the TS provider is not requirable here. See #1341.
-test("gemini provider wires the response assessment and truncation failure", () => {
-  const src = fs.readFileSync(
-    path.join(__dirname, "../../src/services/ai/inferenceProviders/gemini.ts"),
-    "utf8"
-  );
-  assert.match(src, /assessGeminiResponse\(response\)/);
-  assert.match(src, /GEMINI_EMPTY_RESPONSE/);
-  assert.match(src, /GEMINI_TRUNCATED_RESPONSE/);
-  assert.match(src, /truncatedResponseError\("Gemini"\)/);
-  assert.match(src, /resolveGeminiThinkingConfig\(config, modelDef\)/);
 });

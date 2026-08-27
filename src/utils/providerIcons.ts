@@ -5,7 +5,10 @@ import llamaIcon from "@/assets/icons/providers/llama.svg";
 import mistralIcon from "@/assets/icons/providers/mistral.svg";
 import qwenIcon from "@/assets/icons/providers/qwen.svg";
 import groqIcon from "@/assets/icons/providers/groq.svg";
-import nvidiaIcon from "@/assets/icons/providers/nvidia.svg";
+// The square brand tile (green field, white mark) rather than the bare eye: the
+// eye SVG is 163x108, and ProviderIcon renders a square img, so it came out
+// squashed in every row. WebP because NVIDIA ships the tile as raster art.
+import nvidiaIcon from "@/assets/icons/providers/nvidia.webp";
 import openaiOssIcon from "@/assets/icons/providers/openai-oss.svg";
 import gemmaIcon from "@/assets/icons/providers/gemma.svg";
 import liquidaiIcon from "@/assets/icons/providers/liquidai.svg";

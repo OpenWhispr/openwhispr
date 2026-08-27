@@ -3,6 +3,7 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { OrgPolicy } from "./policy";
 import type { ManagedEnterpriseConfig } from "./enterpriseIdentity";
+import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./calendar";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
@@ -71,6 +72,36 @@ export type TranscriptionErrorCode =
   | "CUSTOM_ENDPOINT_INVALID"
   | null;
 
+export type MeetingPromptVariant = "detected" | "starting" | "underway";
+
+export interface MeetingDetectionNotificationData {
+  kind: "detection";
+  detectionId: string;
+  source: string;
+  key: string;
+  event: { summary?: string | null } | null;
+  variant: MeetingPromptVariant;
+  joinUrl: string | null;
+}
+
+/** Why auto-end concluded the meeting is over. */
+export type MeetingAutoEndReason = "mic-released" | "silence" | "process-exit";
+
+export interface MeetingAutoEndNotificationData {
+  kind: "auto-end";
+  sessionId: string;
+  expiresAt: number;
+  reason?: MeetingAutoEndReason;
+}
+
+export type MeetingNotificationData =
+  MeetingDetectionNotificationData | MeetingAutoEndNotificationData;
+
+export interface MeetingAutoEndRequest {
+  sessionId: string;
+  reason?: MeetingAutoEndReason;
+}
+
 /**
  * Proxied-transcription IPC results. `ipcMain.handle` drops custom error props on
  * rejection, so these handlers resolve with a serialized error instead of throwing.
@@ -134,6 +165,7 @@ export interface NoteItem {
   // team notes mirrored before ownership shipped (the UI fails closed on
   // those until the owner backfill fills them).
   owner_user_id?: string | null;
+  created_by_user_id?: string | null;
   // Last cloud editor; only populated on cloud pull (local edits don't set it).
   updated_by_user_id?: string | null;
   // Server updated_at this device last acked (push response or pull); echoed
@@ -667,7 +699,11 @@ export interface WhisperDownloadProgressData {
 export interface ParakeetCheckResult {
   installed: boolean;
   working: boolean;
+  supported?: boolean;
   path?: string;
+  code?: string;
+  message?: string;
+  minimumMacOSVersion?: string;
 }
 
 export interface ParakeetModelResult {
@@ -827,6 +863,29 @@ export interface ConversationPreview {
   last_message_role?: "user" | "assistant" | "system" | null;
 }
 
+export interface ConversationCreateSnapshot {
+  client_conversation_id?: string | null;
+  title: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export interface ConversationCreateAckResult {
+  success: boolean;
+  outcome: "synced" | "changed" | "already-linked" | "delete-pending" | "orphaned" | "unresolved";
+  cloud_id?: string | null;
+}
+
+export type OnboardingDemoKind = "dictation" | "assistant";
+export type OnboardingDemoStatus = "listening" | "processing" | "partial" | "success" | "error";
+export interface OnboardingDemoEvent {
+  demoId: string;
+  kind: OnboardingDemoKind;
+  status: OnboardingDemoStatus;
+  text?: string;
+  message?: string;
+}
+
 export interface ReferralItem {
   id: string;
   email: string;
@@ -840,6 +899,24 @@ declare global {
   interface Window {
     electronAPI: {
       // Basic window operations
+      setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
+      setOnboardingActive?: (active: boolean) => Promise<boolean>;
+      beginOnboardingDemo?: (session: { id: string; kind: OnboardingDemoKind }) => Promise<boolean>;
+      endOnboardingDemo?: (id: string) => Promise<boolean>;
+      stopOnboardingDemo?: (id: string) => Promise<boolean>;
+      publishOnboardingDemoEvent?: (event: Omit<OnboardingDemoEvent, "demoId">) => Promise<boolean>;
+      onOnboardingDemoEvent?: (callback: (event: OnboardingDemoEvent) => void) => () => void;
+      testProviderConnection?: (config: {
+        scope: "transcription" | "reasoning";
+        provider: string;
+        apiKey?: string;
+        baseUrl?: string;
+        model?: string;
+        clientId?: string;
+        clientSecret?: string;
+        environment?: string;
+        tenant?: string;
+      }) => Promise<{ success: boolean; error?: string; errorCode?: string; status?: number }>;
       pasteText: (
         text: string,
         options?: {
@@ -848,12 +925,16 @@ declare global {
           allowClipboardFallback?: boolean;
         }
       ) => Promise<void>;
-      captureSelectedText?: () => Promise<
+      captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
             sessionId: string;
             text: string;
             characterCount: number;
+          }
+        | {
+            status: "editable";
+            sessionId: string;
           }
         | {
             status: "none" | "unavailable" | "target_changed" | "too_large";
@@ -878,6 +959,20 @@ declare global {
           | "selection_manager_unavailable";
         error?: string;
       }>;
+      pasteAtCapturedTarget?: (
+        sessionId: string,
+        text: string,
+        options?: { restoreClipboard?: boolean; allowClipboardFallback?: boolean }
+      ) => Promise<{
+        success: boolean;
+        code?:
+          | "invalid_replacement"
+          | "session_expired"
+          | "target_changed"
+          | "paste_failed"
+          | "selection_manager_unavailable";
+        error?: string;
+      }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
@@ -886,9 +981,41 @@ declare global {
       onToggleTranslation?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
-      onPrepareDictation?: (callback: () => void) => () => void;
+      onPrepareDictation?: (
+        callback: (options?: { inputKind?: "dictation" | "assistant" | "translation" }) => void
+      ) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
+      onCancelDictation?: (callback: () => void) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
+      dictationLifecycleStateChanged: (
+        state: "idle" | "preparing" | "recording" | "processing",
+        inputKind?: "dictation" | "assistant" | "translation"
+      ) => void;
+      dictationAudioLevelChanged?: (level: number) => void;
+      toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
+      cancelAgentPanelDictation?: () => Promise<{ success: boolean }>;
+      getAgentDictationPillState?: () => Promise<{
+        lifecycle: "idle" | "preparing" | "recording" | "processing";
+        interactive: boolean;
+        horizontalDirection: "left" | "right";
+      }>;
+      resizeAgentDictationPillToContent?: (surfaceHeight: number | null) => Promise<{
+        success: boolean;
+        changed?: boolean;
+        bounds?: { x: number; y: number; width: number; height: number };
+        message?: string;
+      }>;
+      setAgentDictationPillInteractivity?: (interactive: boolean) => Promise<{ success: boolean }>;
+      onAgentDictationPillStateChanged?: (
+        callback: (state: {
+          lifecycle: "idle" | "preparing" | "recording" | "processing";
+          interactive: boolean;
+          horizontalDirection: "left" | "right";
+        }) => void
+      ) => () => void;
+      onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
+      showAgentDictationFinalTranscript?: (text: string) => void;
+      onAgentDictationPillFinalTranscript?: (callback: (text: string) => void) => () => void;
 
       // STT config
       getSttConfig?: () => Promise<
@@ -1133,6 +1260,20 @@ declare global {
 
       // Space operations
       getSpaces?: () => Promise<SpaceItem[]>;
+      setActiveAccountScope?: (
+        accountId: string | null,
+        expectedAuthGeneration?: number
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      deleteAccountData?: (
+        accountId: string,
+        expectedAuthGeneration: number
+      ) => Promise<{
+        success: boolean;
+        code?: string;
+        error?: string;
+        deletedNoteIds?: number[];
+        deletedFolderIds?: number[];
+      }>;
       updateSpace?: (
         id: number,
         updates: { name?: string; emoji?: string | null }
@@ -1153,6 +1294,7 @@ declare global {
         relocatedNotes?: NoteItem[];
         relocatedCount?: number;
         relocatedTitles?: string[];
+        preservedForOtherAccounts?: boolean;
       }>;
       upsertSpaceFromCloud?: (space: Record<string, unknown>) => Promise<SpaceItem>;
       setSpaceSyncStatus?: (
@@ -1172,6 +1314,24 @@ declare global {
       noteFilesRebuild?: () => Promise<{ success: boolean; error?: string }>;
       noteFilesGetDefaultPath?: () => Promise<string>;
       noteFilesPickFolder?: () => Promise<{ canceled: boolean; path?: string }>;
+      granolaImportPickAndPreview?: () => Promise<{
+        canceled: boolean;
+        success?: boolean;
+        error?: string;
+        fileName?: string;
+        total?: number;
+        newCount?: number;
+        duplicateCount?: number;
+        sampleTitles?: string[];
+        rowIssueCount?: number;
+      }>;
+      granolaImportRun?: () => Promise<{
+        success: boolean;
+        error?: string;
+        imported?: number;
+        skipped?: number;
+        errors?: Array<{ clientNoteId: string; error: string }>;
+      }>;
       showNoteFile?: (noteId: number) => Promise<{ success: boolean }>;
       showFolderInExplorer?: (folderName: string) => Promise<{ success: boolean }>;
 
@@ -1214,9 +1374,10 @@ declare global {
           provider?: "whisper" | "nvidia";
           model?: string;
           language?: string;
+          requestId?: string;
           [key: string]: unknown;
         }
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{ success: boolean; text?: string; error?: string; code?: string }>;
       getPathForFile: (file: File) => string;
 
       // URL audio download
@@ -1291,7 +1452,6 @@ declare global {
       checkPasteTools: () => Promise<PasteToolsResult>;
 
       // Audio
-      onNoAudioDetected: (callback: (event: any, data?: any) => void) => () => void;
 
       // Whisper operations (whisper.cpp)
       transcribeLocalWhisper: (audioBlob: Blob | ArrayBuffer, options?: any) => Promise<any>;
@@ -1515,6 +1675,33 @@ declare global {
       stopWindowDrag: () => Promise<void>;
       setMainWindowInteractivity: (interactive: boolean) => Promise<void>;
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
+      resizeMainWindow: (
+        sizeKey:
+          | "BASE"
+          | "RECORDING"
+          | "DICTATION_ERROR"
+          | "DICTATION_ERROR_WITH_TRANSCRIPT"
+          | "WITH_MENU"
+          | "WITH_TOAST"
+          | "EXPANDED"
+          | "ASSISTANT"
+      ) => Promise<{
+        success: boolean;
+        bounds?: Electron.Rectangle;
+        message?: string;
+        changed?: boolean;
+      }>;
+      resizeAssistantWindowToContent: (surfaceHeight: number) => Promise<{
+        success: boolean;
+        bounds?: Electron.Rectangle;
+        message?: string;
+        changed?: boolean;
+      }>;
+      resizeDictationErrorWindowToContent: (
+        surfaceHeight: number
+      ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
+      setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
+      setAssistantPanelBusy: (busy: boolean) => Promise<{ success: boolean }>;
 
       // App management
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
@@ -1544,11 +1731,13 @@ declare global {
       // Hotkey management
       updateHotkey: (key: string) => Promise<{ success: boolean; message: string }>;
       setHotkeyListeningMode?: (enabled: boolean) => Promise<{ success: boolean }>;
-      getHotkeyModeInfo?: () => Promise<{
+      getHotkeyModeInfo?: (hotkey?: string) => Promise<{
         isUsingGnome: boolean;
         isUsingHyprland: boolean;
+        isUsingKDE: boolean;
         isUsingNativeShortcut: boolean;
         supportsPushToTalk: boolean;
+        pushToTalkUnavailableReason: string | null;
       }>;
       getHyprlandConfigStatus?: () => Promise<{ canWrite: boolean; path: string } | null>;
 
@@ -1756,6 +1945,12 @@ declare global {
       // System settings helpers
       requestMicrophoneAccess?: () => Promise<{ granted: boolean }>;
       checkMicrophoneAccess?: () => Promise<{ granted: boolean; status: string }>;
+      getSystemDefaultMicrophone?: (options?: { refresh?: boolean }) => Promise<{
+        name: string;
+        nativeId?: string;
+        platform: string;
+        source: "system" | "unavailable";
+      }>;
       checkSystemAudioAccess?: () => Promise<SystemAudioAccessResult>;
       requestSystemAudioAccess?: () => Promise<SystemAudioAccessResult>;
       openMicrophoneSettings?: () => Promise<{ success: boolean; error?: string }>;
@@ -1783,6 +1978,16 @@ declare global {
       onFloatingIconAutoHideChanged?: (callback: (enabled: boolean) => void) => () => void;
       notifyStartMinimizedChanged?: (enabled: boolean) => void;
       notifyPanelStartPositionChanged?: (position: string) => void;
+      getMainWindowHorizontalDirection?: () => Promise<"left" | "right">;
+      onMainWindowHorizontalDirectionChanged?: (
+        callback: (direction: "left" | "right") => void
+      ) => () => void;
+      onMainWindowWillResize?: (
+        callback: (resize: {
+          bounds: Electron.Rectangle;
+          anchor: "bottom-left" | "bottom-right" | "center";
+        }) => void
+      ) => () => void;
 
       // Auto-start at login. requiresApproval is macOS-only: SMAppService can
       // register the login item and still leave it awaiting approval in System
@@ -1821,6 +2026,7 @@ declare global {
           limitReached?: boolean;
         } & PolicyFailureMetadata
       >;
+      cancelCloudTranscription?: () => void;
       cloudReason?: (
         text: string,
         opts: {
@@ -1846,6 +2052,7 @@ declare global {
         error?: string;
         code?: string;
       }>;
+      cancelCloudReason?: () => void;
       cloudStreamingUsage?: (
         text: string,
         audioDurationSeconds: number,
@@ -1960,6 +2167,7 @@ declare global {
         baseUrl: string;
         model: string;
         diarize?: boolean;
+        timestamps?: boolean;
         provider?: string;
         language?: string;
         environment?: string;
@@ -1972,6 +2180,7 @@ declare global {
         text?: string;
         error?: string;
         diarized?: boolean;
+        segments?: Array<{ text: string; start: number; end: number; speaker?: string }>;
       }>;
 
       // Usage limit events
@@ -2056,13 +2265,10 @@ declare global {
       }>;
 
       // Agent Mode
-      updateAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
       updateVoiceAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
       getVoiceAgentKey?: () => Promise<string>;
       updateTranslationHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
       getTranslationKey?: () => Promise<string>;
-      getAgentKey?: () => Promise<string>;
-      saveAgentKey?: (key: string) => Promise<void>;
       createAgentConversation?: (
         title: string,
         noteId?: number | null,
@@ -2117,7 +2323,8 @@ declare global {
         id: number;
         title: string;
         archived_at?: string;
-        cloud_id?: string;
+        cloud_id?: string | null;
+        client_conversation_id?: string | null;
         created_at: string;
         updated_at: string;
         messages: Array<{
@@ -2234,42 +2441,34 @@ declare global {
       onCortiError?: (callback: (error: string) => void) => () => void;
       onCortiSessionEnd?: (callback: (data: { text?: string }) => void) => () => void;
 
-      // Agent overlay
-      resizeAgentWindow?: (width: number, height: number) => Promise<void>;
-      getAgentWindowBounds?: () => Promise<{
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-      } | null>;
-      setAgentWindowBounds?: (x: number, y: number, width: number, height: number) => Promise<void>;
-      hideAgentOverlay?: () => Promise<void>;
-      onAgentStartRecording?: (callback: () => void) => () => void;
-      onAgentStopRecording?: (callback: () => void) => () => void;
-      onAgentToggleRecording?: (callback: () => void) => () => void;
-
       // Agent cloud streaming (event-based)
       startAgentStream?: (
+        requestId: string,
         messages: Array<{ role: string; content: string | Array<unknown> }>,
         opts?: {
           systemPrompt?: string;
           tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+          screenContext?: { data: string; mediaType: string };
         }
       ) => void;
+      cancelAgentStream?: (requestId: string) => void;
       onAgentStreamChunk?: (
-        callback: (chunk: {
-          type: "content" | "tool_call" | "done";
-          text?: string;
-          id?: string;
-          name?: string;
-          arguments?: string;
-          finishReason?: string;
+        callback: (payload: {
+          requestId: string;
+          chunk: {
+            type: "content" | "tool_call" | "done";
+            text?: string;
+            id?: string;
+            name?: string;
+            arguments?: string;
+            finishReason?: string;
+          };
         }) => void
       ) => () => void;
       onAgentStreamError?: (
-        callback: (error: PolicyFailureMetadata & { error: string }) => void
+        callback: (payload: PolicyFailureMetadata & { requestId: string; error: string }) => void
       ) => () => void;
-      onAgentStreamEnd?: (callback: () => void) => () => void;
+      onAgentStreamEnd?: (callback: (payload: { requestId: string }) => void) => () => void;
 
       // Agent cloud tools
       agentOpenNote?: (noteId: number) => Promise<{ success: boolean; error?: string }>;
@@ -2306,6 +2505,12 @@ declare global {
       gcalGetUpcomingEvents?: (
         windowMinutes?: number
       ) => Promise<{ success: boolean; events: any[] }>;
+      calendarGetAvailability?: (
+        request: CalendarAvailabilityRequest
+      ) => Promise<
+        | { success: true; availability: CalendarAvailabilityResult }
+        | { success: false; error: string }
+      >;
       gcalGetEvent?: (eventId: string) => Promise<{
         success: boolean;
         event: {
@@ -2340,20 +2545,29 @@ declare global {
         model?: string;
         language?: string;
         noteId?: number | null;
+        sessionId: string;
+        autoEndEligible: boolean;
       }) => Promise<
         {
           success: boolean;
+          sessionId?: string;
+          error?: string;
           systemAudioMode?: SystemAudioMode;
           systemAudioStrategy?: SystemAudioStrategy;
           oneOnOneAttendee?: { displayName: string; email: string | null } | null;
         } & PolicyFailureMetadata
       >;
       meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
-      meetingTranscriptionStop?: () => Promise<{
+      meetingTranscriptionSetSystemAudioAvailable?: (
+        sessionId: string,
+        available: boolean
+      ) => Promise<{ success: boolean; reason?: "stale-session" }>;
+      meetingTranscriptionStop?: (expectedSessionId?: string) => Promise<{
         success: boolean;
         transcript?: string;
         diarizationSessionId?: string;
         error?: string;
+        reason?: "stale-session";
       }>;
       meetingTranscriptionCancel?: () => Promise<{
         success: boolean;
@@ -2390,6 +2604,9 @@ declare global {
       ) => () => void;
       onMeetingTranscriptionError?: (callback: (error: string) => void) => () => void;
       onMeetingTranscriptionFatalError?: (callback: (error: string) => void) => () => void;
+      onMeetingSystemAudioSilent?: (
+        callback: (data: { systemAudioStrategy: SystemAudioStrategy }) => void
+      ) => () => void;
 
       // Speaker diarization
       downloadDiarizationModels?: () => Promise<{ success: boolean; error?: string }>;
@@ -2410,12 +2627,13 @@ declare global {
       ) => Promise<{ success: boolean; text?: string; error?: string }>;
       diarizeAudioFile?: (
         filePath: string,
-        options?: { numSpeakers?: number; threshold?: number }
+        options?: { numSpeakers?: number; threshold?: number; requestId?: string }
       ) => Promise<{
         success: boolean;
         segments?: Array<{ start: number; end: number; speaker: string }>;
         durationSeconds?: number;
         error?: string;
+        code?: string;
       }>;
       onDiarizationDownloadProgress?: (callback: (data: any) => void) => () => void;
       onMeetingDiarizationComplete?: (
@@ -2565,8 +2783,16 @@ declare global {
         speechPadMs?: number;
         samplesOverlap?: number;
       }) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
-      onMeetingNotificationData?: (callback: (data: any) => void) => () => void;
-      getMeetingNotificationData?: () => Promise<any>;
+      onMeetingNotificationData?: (callback: (data: MeetingNotificationData) => void) => () => void;
+      onMeetingAutoEndRequested?: (
+        callback: (request: MeetingAutoEndRequest) => void
+      ) => () => void;
+      meetingAutoEndKeep?: (sessionId: string) => Promise<{
+        success: boolean;
+        reason?: "invalid-session" | "stale-session";
+        error?: string;
+      }>;
+      getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (
         detectionId: string,
@@ -2610,15 +2836,9 @@ declare global {
         flushed?: boolean;
       }) => Promise<{ success: boolean; streamed?: boolean; text?: string }>;
       dismissDictationPreview?: () => Promise<{ success: boolean }>;
+      updateDictationPreview?: (text: string) => Promise<{ success: boolean }>;
       completeDictationPreview?: (payload: { text?: string }) => Promise<{ success: boolean }>;
       hideDictationPreview?: () => Promise<{ success: boolean }>;
-      resizeTranscriptionPreviewWindow?: (
-        width: number,
-        height: number
-      ) => Promise<{
-        success: boolean;
-        bounds?: { x: number; y: number; width: number; height: number };
-      }>;
       sendDictationPreviewAudio?: (data: ArrayBuffer) => void;
 
       // Sync operations
@@ -2703,6 +2923,11 @@ declare global {
         cloudConv: Record<string, unknown>,
         messages: Array<Record<string, unknown>>
       ) => Promise<void>;
+      acknowledgeConversationCreate?: (
+        id: number,
+        snapshot: ConversationCreateSnapshot,
+        cloudId: string
+      ) => Promise<ConversationCreateAckResult | undefined>;
       markConversationSynced?: (
         id: number,
         cloudId: string

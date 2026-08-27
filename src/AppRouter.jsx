@@ -1,20 +1,26 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import App from "./App.jsx";
-import AuthenticationStep from "./components/AuthenticationStep.tsx";
+import AgentDictationPillOverlay from "./components/dictation/AgentDictationPillOverlay.tsx";
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
-import TranscriptionPreviewOverlay from "./components/TranscriptionPreviewOverlay.tsx";
+import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
 import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
-import WindowControls from "./components/WindowControls.tsx";
-import { Card, CardContent } from "./components/ui/card.tsx";
+import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
+import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
 import { usePolicyStore } from "./stores/policyStore";
+import { resolveSettledControlPanelWindowMode } from "./utils/controlPanelWindowMode.ts";
 import { isControlPanelWindow } from "./utils/windowContext.ts";
+
+// Either marker means the flow is mid-way: the legacy step key is kept for
+// back-compat, the v2 session is what the rebuilt flow actually persists.
+const isOnboardingInProgress = () =>
+  localStorage.getItem(LEGACY_ONBOARDING_STEP_KEY) !== null ||
+  localStorage.getItem(ONBOARDING_SESSION_KEY) !== null;
 
 const ControlPanel = React.lazy(() => import("./components/ControlPanel.tsx"));
 const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow.tsx"));
-const AgentOverlay = React.lazy(() => import("./components/AgentOverlay.tsx"));
 
 export default function AppRouter() {
   useTheme();
@@ -28,8 +34,8 @@ export default function AppRouter() {
     return <UpdateNotificationOverlay />;
   }
 
-  if (params.includes("transcription-preview=true")) {
-    return <TranscriptionPreviewOverlay />;
+  if (params.includes("agent-dictation-pill=true")) {
+    return <AgentDictationPillOverlay />;
   }
 
   return <MainApp />;
@@ -51,14 +57,11 @@ function MainApp() {
   const [isLoading, setIsLoading] = useState(true);
   const [postOnboardingSettingsSection, setPostOnboardingSettingsSection] = useState(undefined);
 
-  const isAgentPanel = window.location.search.includes("agent=true");
-  const isControlPanel = !isAgentPanel && isControlPanelWindow();
-  const isDictationPanel = !isControlPanel && !isAgentPanel;
+  const isControlPanel = isControlPanelWindow();
+  const isDictationPanel = !isControlPanel;
 
   useEffect(() => {
-    if (isAgentPanel) {
-      import("./components/AgentOverlay.tsx").catch(() => {});
-    } else if (isControlPanel) {
+    if (isControlPanel) {
       import("./components/ControlPanel.tsx").catch(() => {});
 
       if (!localStorage.getItem("onboardingCompleted")) {
@@ -70,12 +73,12 @@ function MainApp() {
     // the previous account's rows while validation is still running. A failed
     // (guest/offline) resolution also counts as settled: canSync() then no-ops
     // because no validated auth context exists.
-    if (!isAgentPanel && autoSyncReady) {
+    if (autoSyncReady) {
       import("./services/SyncService.js")
         .then(({ syncService }) => syncService.startAutoSync())
         .catch(() => {});
     }
-  }, [autoSyncReady, isAgentPanel, isControlPanel]);
+  }, [autoSyncReady, isControlPanel]);
 
   useEffect(() => {
     if (!authLoaded) return;
@@ -84,7 +87,7 @@ function MainApp() {
     const authSkipped =
       localStorage.getItem("authenticationSkipped") === "true" ||
       localStorage.getItem("skipAuth") === "true";
-    const onboardingInProgress = localStorage.getItem("onboardingCurrentStep") !== null;
+    const onboardingInProgress = isOnboardingInProgress();
     const isReturningUser =
       !onboardingCompleted && isSignedIn && !isGracePeriodOnly && !onboardingInProgress;
 
@@ -111,6 +114,49 @@ function MainApp() {
     setIsLoading(false);
   }, [authLoaded, isControlPanel, isDictationPanel, isGracePeriodOnly, isSignedIn]);
 
+  useEffect(() => {
+    if (!isControlPanel || !authLoaded) return;
+    // Fast path: a user who already finished onboarding can never enter the
+    // compact flow only when their session or guest choice is still valid.
+    // Signed-out account users fall through so reauthentication can select the
+    // compact window without first flashing restored control-panel dimensions.
+    const completed = localStorage.getItem("onboardingCompleted") === "true";
+    const authSkipped =
+      localStorage.getItem("authenticationSkipped") === "true" ||
+      localStorage.getItem("skipAuth") === "true";
+    if (completed && !isOnboardingInProgress() && (isSignedIn || authSkipped)) {
+      void window.electronAPI?.setOnboardingWindowMode?.("restore");
+    }
+  }, [authLoaded, isControlPanel, isSignedIn]);
+
+  const settledControlPanelWindowMode = resolveSettledControlPanelWindowMode({
+    isControlPanel,
+    isLoading,
+    isWaitingForPolicyStart,
+    showOnboarding,
+    needsReauth,
+  });
+
+  useEffect(() => {
+    if (!settledControlPanelWindowMode) return;
+    // The main process waits for this renderer decision before showing the
+    // control panel, preventing a fresh install from flashing at 1200×800
+    // before its route-appropriate window mode is applied.
+    void window.electronAPI?.setOnboardingWindowMode?.(settledControlPanelWindowMode);
+  }, [settledControlPanelWindowMode]);
+
+  useEffect(() => {
+    if (isLoading || isWaitingForPolicyStart) return;
+
+    const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
+    const normalAppVisible =
+      onboardingCompleted && (!isControlPanel || (!showOnboarding && !needsReauth));
+    // Main starts fail-closed. Only a renderer that has resolved the route and
+    // actually committed the normal app may release global hotkeys and popup
+    // surfaces; fresh installs and onboarding reloads keep them suppressed.
+    void window.electronAPI?.setOnboardingActive?.(!normalAppVisible);
+  }, [isControlPanel, isLoading, isWaitingForPolicyStart, needsReauth, showOnboarding]);
+
   const handleOnboardingComplete = (options) => {
     if (options?.openSettings) {
       setPostOnboardingSettingsSection("transcription");
@@ -118,17 +164,6 @@ function MainApp() {
     setShowOnboarding(false);
     localStorage.setItem("onboardingCompleted", "true");
   };
-
-  // The agent waits for auth resolution so account policy can fail closed;
-  // guests still render once the signed-out state resolves.
-  if (isAgentPanel) {
-    if (!authLoaded || isWaitingForPolicyStart) return <LoadingFallback />;
-    return (
-      <Suspense fallback={<LoadingFallback />}>
-        <AgentOverlay />
-      </Suspense>
-    );
-  }
 
   // isLoading clears once the onboarding effect has run, which itself waits
   // for authLoaded — and authLoaded terminates even when the session cannot
@@ -141,50 +176,28 @@ function MainApp() {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <OnboardingFlow onComplete={handleOnboardingComplete} />
+        <BackgroundModelDownloadTray />
       </Suspense>
     );
   }
 
   if (isControlPanel && needsReauth) {
     return (
-      <div
-        className="h-screen flex flex-col bg-background"
-        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
-      >
-        <div
-          className="flex items-center justify-end w-full h-10 shrink-0"
-          style={{ WebkitAppRegion: "drag" }}
-        >
-          {window.electronAPI?.getPlatform?.() !== "darwin" && (
-            <div className="pr-1" style={{ WebkitAppRegion: "no-drag" }}>
-              <WindowControls />
-            </div>
-          )}
-        </div>
-        <div className="flex-1 px-6 overflow-y-auto flex items-center">
-          <div className="w-full max-w-sm mx-auto">
-            <Card className="bg-card/90 backdrop-blur-2xl border border-border/50 dark:border-white/5 shadow-lg rounded-xl overflow-hidden">
-              <CardContent className="p-6">
-                <AuthenticationStep
-                  onContinueWithoutAccount={() => {
-                    localStorage.setItem("authenticationSkipped", "true");
-                    localStorage.setItem("skipAuth", "true");
-                    setNeedsReauth(false);
-                  }}
-                  onAuthComplete={() => setNeedsReauth(false)}
-                  onNeedsVerification={() => {}}
-                />
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
+      <ReauthenticationScreen
+        onContinueWithoutAccount={() => {
+          localStorage.setItem("authenticationSkipped", "true");
+          localStorage.setItem("skipAuth", "true");
+          setNeedsReauth(false);
+        }}
+        onAuthComplete={() => setNeedsReauth(false)}
+      />
     );
   }
 
   return isControlPanel ? (
     <Suspense fallback={<LoadingFallback />}>
       <ControlPanel initialSettingsSection={postOnboardingSettingsSection} />
+      <BackgroundModelDownloadTray />
     </Suspense>
   ) : (
     <App />

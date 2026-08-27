@@ -91,6 +91,18 @@ const QT_KEYS = {
   right: 0x01000014,
   "`": 0x60,
   grave: 0x60,
+  // Unshifted punctuation (Qt::Key_*). Same set GNOME maps to X11 keysyms.
+  ",": 0x2c,
+  ".": 0x2e,
+  "/": 0x2f,
+  "-": 0x2d,
+  "=": 0x3d,
+  ";": 0x3b,
+  "'": 0x27,
+  "\\": 0x5c,
+  "[": 0x5b,
+  "]": 0x5d,
+  plus: 0x2b,
   print: 0x01000009,
   scrolllock: 0x01000026,
   pause: 0x01000008,
@@ -191,13 +203,21 @@ class KDEShortcutManager {
         const callback =
           this.callbacks.get(shortcutUnique) || this._findCallbackByFriendlyName(shortcutUnique);
         if (callback) {
-          callback();
+          callback(undefined, "down");
         } else {
           debugLogger.log("[KDEShortcut] No callback found for", {
             shortcutUnique,
             registered: [...this.callbacks.keys()],
           });
         }
+      });
+      iface.on("globalShortcutReleased", (componentUnique, shortcutUnique) => {
+        debugLogger.log("[KDEShortcut] Shortcut released", { componentUnique, shortcutUnique });
+        const slotName = this.callbacks.has(shortcutUnique)
+          ? shortcutUnique
+          : this._findSlotByFriendlyName(shortcutUnique);
+        if (slotName !== "dictation") return;
+        this.callbacks.get(slotName)?.(undefined, "up");
       });
 
       this.componentProxy = iface;
@@ -210,22 +230,21 @@ class KDEShortcutManager {
   }
 
   _findCallbackByFriendlyName(name) {
+    const slotName = this._findSlotByFriendlyName(name);
+    return slotName ? this.callbacks.get(slotName) : null;
+  }
+
+  _findSlotByFriendlyName(name) {
     // Map friendly names back to slot names
     const friendlyToSlot = {};
     for (const slotName of this.registeredSlots) {
       friendlyToSlot[`OpenWhispr ${slotName}`] = slotName;
       friendlyToSlot[`OpenWhispr`] = "dictation"; // legacy compat
     }
-    const slotName = friendlyToSlot[name];
-    return slotName ? this.callbacks.get(slotName) : null;
+    return friendlyToSlot[name] || null;
   }
 
-  setAgentCallback(callback) {
-    this.callbacks.set("agent", callback);
-    debugLogger.log("[KDEShortcut] Agent callback set");
-  }
-
-  async registerKeybinding(electronHotkey, slotName = "dictation", callback) {
+  async registerKeybinding(electronHotkey, slotName = "dictation", callback, isPushToTalk = false) {
     if (!this.kglobalaccel) return false;
 
     const qtKey = KDEShortcutManager.convertToQtKeyCode(electronHotkey);
@@ -234,14 +253,19 @@ class KDEShortcutManager {
       return false;
     }
 
-    // Modifier-only shortcuts (e.g. Control+Super) don't work on X11 —
-    // XGrabKey requires an actual key code, not just modifiers.
-    // On Wayland, KWin handles modifier-only natively, so allow them.
+    // Modifier-only shortcuts (e.g. Control+Super) don't work on X11.
+    // KWin accepts them on Wayland, but emits press and release together after
+    // the first modifier is released, so they cannot represent push-to-talk.
     const QT_MODIFIER_MASK = 0xfe000000;
-    if (!KDEShortcutManager.isWayland() && (qtKey & ~QT_MODIFIER_MASK) === 0) {
-      debugLogger.log("[KDEShortcut] Modifier-only shortcut not supported on X11", {
+    const isModifierOnly = (qtKey & ~QT_MODIFIER_MASK) === 0;
+    const modifierOnlyUnsupported =
+      isModifierOnly &&
+      (!KDEShortcutManager.isWayland() || (slotName === "dictation" && isPushToTalk));
+    if (modifierOnlyUnsupported) {
+      debugLogger.log("[KDEShortcut] Modifier-only shortcut not supported in this mode", {
         slot: slotName,
         hotkey: electronHotkey,
+        isPushToTalk,
         qtKey: `0x${qtKey.toString(16)}`,
       });
       return "modifier-only";
@@ -387,6 +411,10 @@ class KDEShortcutManager {
     } catch (err) {
       debugLogger.log(`[KDEShortcut] Unregister failed for "${slotName}":`, err.message);
     }
+  }
+
+  async removeRetiredAgentKeybinding() {
+    await this.unregisterKeybinding("agent");
   }
 
   close() {

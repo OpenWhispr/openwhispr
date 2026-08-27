@@ -33,6 +33,19 @@ async function connectPreconfigured(streaming, socket) {
   await connected;
 }
 
+function captureLogs(t) {
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const entries = [];
+  for (const level of ["debug", "warn", "error"]) {
+    const original = debugLogger[level];
+    debugLogger[level] = (message, meta) => entries.push({ level, message, meta });
+    t.after(() => {
+      debugLogger[level] = original;
+    });
+  }
+  return entries;
+}
+
 test("sendAudio buffers frames arriving before the socket exists (token-fetch window)", async () => {
   const OpenAIRealtimeStreaming = (await load()).default;
   const streaming = new OpenAIRealtimeStreaming();
@@ -565,6 +578,50 @@ test("BYOK session.update is byte-for-byte today's payload when no VAD/language/
   streaming.cleanup();
 });
 
+test("BYOK session.update is byte-for-byte the overridden payload when vadThreshold is passed (system socket)", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+
+  const connected = streaming.connect({
+    apiKey: "sk-test",
+    model: "gpt-4o-mini-transcribe",
+    streamLabel: "system",
+    vadThreshold: 0.3,
+    createSocket: async () => socket,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+
+  const updates = socket.sent
+    .map((raw) => JSON.parse(raw))
+    .filter((e) => e.type === "session.update");
+  assert.equal(updates.length, 1, "exactly one session.update after session.created");
+  assert.deepEqual(updates[0], {
+    type: "session.update",
+    session: {
+      type: "transcription",
+      audio: {
+        input: {
+          format: { type: "audio/pcm", rate: 24000 },
+          transcription: { model: "gpt-4o-mini-transcribe" },
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.3,
+            silence_duration_ms: 600,
+            prefix_padding_ms: 500,
+          },
+        },
+      },
+    },
+  });
+
+  socket.emit("message", JSON.stringify({ type: "session.updated" }));
+  await connected;
+  streaming.cleanup();
+});
+
 test("dictation-style connect (inputRate 16000, custom socket factory) declares the 16kHz format and the same VAD", async () => {
   const OpenAIRealtimeStreaming = (await load()).default;
   const streaming = new OpenAIRealtimeStreaming();
@@ -640,4 +697,173 @@ test("characterization: a final that lands during disconnect()'s commit window r
   // awaiting the commit forwards only `text` to the previous handler.
   // Phase 1 changes this line to `typeof calls[0].timestamp === "number"`.
   assert.equal(calls[0].timestamp, undefined);
+});
+
+// -- diagnostic logging: stream labels, VAD events, failed/empty turns --
+
+test("transcription.failed is logged with the stream label and stays log-only (no onError, no segment)", async (t) => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  streaming.streamLabel = "system";
+  const logs = captureLogs(t);
+  let errorCalled = false;
+  streaming.onError = () => {
+    errorCalled = true;
+  };
+
+  streaming.handleMessage(
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.failed",
+      item_id: "item_1",
+      error: { code: "audio_unintelligible", message: "audio too noisy" },
+    })
+  );
+
+  const line = logs.find((entry) => entry.message.includes("turn transcription failed"));
+  assert.ok(line, "failed turn must produce a debug line");
+  assert.equal(line.level, "debug");
+  assert.equal(line.meta.stream, "system");
+  assert.equal(line.meta.itemId, "item_1");
+  assert.equal(line.meta.error, "audio too noisy");
+  assert.equal(errorCalled, false, "failed turns must not surface as errors");
+  assert.equal(streaming.completedSegments.length, 0, "failed turns must not count as segments");
+});
+
+test("empty-transcript completed events are logged and add no segment", async (t) => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  streaming.streamLabel = "system";
+  streaming.audioBytesSent = 4800;
+  const logs = captureLogs(t);
+  let finalCalled = false;
+  streaming.onFinalTranscript = () => {
+    finalCalled = true;
+  };
+
+  streaming.handleMessage(
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      item_id: "item_2",
+      transcript: "   ",
+    })
+  );
+
+  const line = logs.find((entry) => entry.message.includes("turn completed with empty transcript"));
+  assert.ok(line, "empty completion must produce a debug line");
+  assert.equal(line.meta.stream, "system");
+  assert.equal(line.meta.itemId, "item_2");
+  assert.equal(line.meta.audioBytesSent, 4800);
+  assert.equal(finalCalled, false);
+  assert.equal(streaming.completedSegments.length, 0);
+});
+
+test("VAD events log first-3-then-every-50th with streamLabel and audioBytesSent", async (t) => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  streaming.streamLabel = "system";
+  streaming.audioBytesSent = 1234;
+  const logs = captureLogs(t);
+  const vadLines = () => logs.filter((entry) => entry.message.includes("VAD event"));
+
+  streaming.handleMessage(JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+  streaming.handleMessage(JSON.stringify({ type: "input_audio_buffer.speech_stopped" }));
+  streaming.handleMessage(JSON.stringify({ type: "input_audio_buffer.committed" }));
+  assert.equal(vadLines().length, 3, "first 3 events all log");
+  assert.equal(vadLines()[0].meta.stream, "system");
+  assert.equal(vadLines()[0].meta.event, "input_audio_buffer.speech_started");
+  assert.equal(vadLines()[0].meta.audioBytesSent, 1234);
+
+  // Events 4..49 are throttled; the 50th logs again.
+  for (let i = 4; i <= 49; i++) {
+    streaming.handleMessage(JSON.stringify({ type: "input_audio_buffer.committed" }));
+  }
+  assert.equal(vadLines().length, 3, "events 4..49 stay silent");
+  streaming.handleMessage(JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+  assert.equal(vadLines().length, 4, "the 50th event logs");
+  assert.equal(vadLines()[3].meta.count, 50);
+
+  assert.equal(streaming.speechStartedCount, 2, "only speech_started increments the counter");
+});
+
+test("disconnect summary carries streamLabel and speechStartedCount", async (t) => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const connected = streaming.connect({
+    apiKey: "key",
+    preconfigured: true,
+    streamLabel: "system",
+    createSocket: async () => socket,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+  await connected;
+
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+
+  const logs = captureLogs(t);
+  await streaming.disconnect();
+
+  const line = logs.find((entry) => entry.message === "OpenAI Realtime disconnect");
+  assert.ok(line, "disconnect must log a summary");
+  assert.equal(line.meta.stream, "system");
+  assert.equal(line.meta.speechStartedCount, 2);
+  assert.equal(line.meta.segments, 0);
+  assert.equal(line.meta.audioBytesSent, 0);
+});
+
+test("preconfigured session.created echoes the server VAD config and format into the log", async (t) => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const logs = captureLogs(t);
+
+  const connected = streaming.connect({
+    apiKey: "key",
+    preconfigured: true,
+    streamLabel: "system",
+    createSocket: async () => socket,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit(
+    "message",
+    JSON.stringify({
+      type: "session.created",
+      session: {
+        audio: {
+          input: {
+            format: { type: "audio/pcm", rate: 24000 },
+            turn_detection: { type: "server_vad", threshold: 0.5, silence_duration_ms: 600 },
+          },
+        },
+      },
+    })
+  );
+  await connected;
+
+  const lines = logs.filter((entry) => entry.message.includes("session created (preconfigured)"));
+  assert.equal(lines.length, 1, "server config echo logs once per socket");
+  assert.equal(lines[0].meta.stream, "system");
+  assert.deepEqual(lines[0].meta.turnDetection, {
+    type: "server_vad",
+    threshold: 0.5,
+    silence_duration_ms: 600,
+  });
+  assert.deepEqual(lines[0].meta.inputFormat, { type: "audio/pcm", rate: 24000 });
+  streaming.cleanup();
+});
+
+test("without a streamLabel (dictation) log metadata carries no stream key", async (t) => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const logs = captureLogs(t);
+
+  await streaming.disconnect();
+
+  const line = logs.find((entry) => entry.message === "OpenAI Realtime disconnect");
+  assert.ok(line);
+  assert.equal("stream" in line.meta, false, "unlabelled sockets keep today's metadata shape");
 });

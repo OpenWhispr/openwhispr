@@ -11,19 +11,40 @@ import {
   isTruncatedFinishReason,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
+import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import {
   isTruncatedResponsesPayload,
   truncatedResponseError,
-} from "../../../helpers/completionTruncation.js";
+} from "../../../helpers/completionTruncation";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
-const REQUEST_TIMEOUT_MS = 30_000;
 const PROBE_TIMEOUT_MS = 2_000;
 
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
 const probedBases = new Set<string>();
+
+interface OpenAITextContentPart {
+  type?: string;
+  text?: string;
+}
+
+interface OpenAIChatChoice {
+  finish_reason?: string | null;
+  message?: { content?: string | OpenAITextContentPart[] | null };
+  delta?: { content?: string | OpenAITextContentPart[] | null };
+  text?: string;
+}
+
+interface OpenAIResponsePayload {
+  status?: string;
+  incomplete_details?: { reason?: string };
+  output?: Array<{ type?: string; content?: OpenAITextContentPart[] }>;
+  output_text?: string;
+  choices?: OpenAIChatChoice[];
+  usage?: { total_tokens?: number };
+}
 
 function readStoredPreference(base: string): "responses" | "chat" | undefined {
   if (endpointPreferenceCache.has(base)) {
@@ -214,12 +235,15 @@ export const openaiProvider: InferenceProvider = {
       });
     }
 
+    const retryStrategy = createApiRetryStrategy();
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
+      let lastRetryableError: Error | null = null;
 
       for (const { url: endpoint, type } of endpointCandidates) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const timeoutSeconds = getLlmRequestTimeoutSeconds();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
         try {
           const maxTokens =
             config.maxTokens ||
@@ -294,12 +318,15 @@ export const openaiProvider: InferenceProvider = {
           }
 
           rememberPreference(openAiBase, type);
-          return res.json();
+          return (await res.json()) as OpenAIResponsePayload;
         } catch (error) {
           if ((error as Error).name === "AbortError") {
-            throw new Error("Request timed out after 30s");
+            throw new Error(`Request timed out after ${timeoutSeconds}s`);
           }
           lastError = error as Error;
+          if (retryStrategy.shouldRetry(lastError)) {
+            lastRetryableError = lastError;
+          }
           if (type === "responses") {
             logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
               attemptedEndpoint: endpoint,
@@ -307,14 +334,14 @@ export const openaiProvider: InferenceProvider = {
             });
             continue;
           }
-          throw error;
+          throw lastRetryableError || error;
         } finally {
           clearTimeout(timeoutId);
         }
       }
 
-      throw lastError || new Error("No OpenAI endpoint responded");
-    }, createApiRetryStrategy());
+      throw lastRetryableError || lastError || new Error("No OpenAI endpoint responded");
+    }, retryStrategy);
 
     const isResponsesApi = Array.isArray(response?.output);
     const isChatCompletions = Array.isArray(response?.choices);
@@ -323,7 +350,7 @@ export const openaiProvider: InferenceProvider = {
       const responseIncomplete =
         response?.status === "incomplete" ||
         !!response?.incomplete_details ||
-        response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
+        response?.choices?.some((choice) => isTruncatedFinishReason(choice.finish_reason));
       if (responseIncomplete) {
         throw new Error("Model output was truncated before the selection edit completed");
       }
@@ -334,9 +361,7 @@ export const openaiProvider: InferenceProvider = {
       format: isResponsesApi ? "responses" : isChatCompletions ? "chat_completions" : "unknown",
       hasOutput: isResponsesApi,
       outputLength: isResponsesApi ? response.output.length : 0,
-      outputTypes: isResponsesApi
-        ? response.output.map((item: { type: string }) => item.type)
-        : undefined,
+      outputTypes: isResponsesApi ? response.output.map((item) => item.type) : undefined,
       hasChoices: isChatCompletions,
       choicesLength: isChatCompletions ? response.choices.length : 0,
       usage: response.usage,
@@ -393,7 +418,7 @@ export const openaiProvider: InferenceProvider = {
     // A token-limit cut means partial text; fail instead of pasting a clipped reply. The
     // extraction above scans every choice, so the guard must too. See #1341.
     const truncatedChoice = isChatCompletions
-      ? response.choices.find((choice: any) => isTruncatedFinishReason(choice?.finish_reason))
+      ? response.choices.find((choice) => isTruncatedFinishReason(choice.finish_reason))
       : undefined;
     if (truncatedChoice || (isResponsesApi && isTruncatedResponsesPayload(response))) {
       const providerLabel = isCustomProvider

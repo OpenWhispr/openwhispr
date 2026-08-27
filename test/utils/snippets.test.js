@@ -76,6 +76,11 @@ test("multiple occurrences and unmatched text are preserved", () => {
   assert.equal(expandSnippets("İmza and imza, done", snippets), "X and X, done");
 });
 
+test("expandSnippets leaves the transcript unchanged when snippets is nullish", () => {
+  assert.equal(expandSnippets("hello there", null), "hello there");
+  assert.equal(expandSnippets("hello there", undefined), "hello there");
+});
+
 test("getDictionaryHintWords returns empty list on nullish, empty, or partial settings", () => {
   assert.deepEqual(getDictionaryHintWords(null), []);
   assert.deepEqual(getDictionaryHintWords(undefined), []);

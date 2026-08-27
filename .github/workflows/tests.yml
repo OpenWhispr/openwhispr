@@ -4,7 +4,7 @@ on:
   pull_request:
 
 jobs:
-  tests:
+  pr-quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,9 +17,19 @@ jobs:
         # --ignore-scripts skips the native build, so every DB-backed test
         # (snippetsDatabase, noteCloudUpsertGuard, …) silently skips without this.
         run: npm rebuild better-sqlite3
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Quality checks
+        # format:check + typecheck — the same gate build-and-notarize runs, so
+        # the two workflows can't disagree about whether a PR passed (#1735).
+        run: npm run quality-check
+      - name: Check translations
+        run: npm run i18n:check
+      - name: Audit dependencies
+        run: npm audit
       - name: Run tests
+        # The gates above fail on drift that has nothing to do with the suite —
+        # a stray format nit, a missing locale key, a fresh advisory. Without
+        # this the job stops there and the PR reports no test result at all.
+        if: ${{ !cancelled() }}
         run: npm test
         env:
           # keeps require("electron") from throwing when postinstall was skipped

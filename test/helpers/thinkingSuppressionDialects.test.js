@@ -108,6 +108,19 @@ test("lan gets the nested reasoning object plus chat_template_kwargs", async () 
   });
 });
 
+test("lan sends a family's suppress floor inside the reasoning object, not a flat effort", async () => {
+  const { suppressThinking } = await load();
+
+  const body = {};
+  suppressThinking(body, "lan", "gpt-oss-20b-mxfp4");
+
+  assert.deepEqual(body, {
+    reasoning: { effort: "low" },
+    chat_template_kwargs: { enable_thinking: false },
+  });
+  assert.ok(!("reasoning_effort" in body), "flat reasoning_effort trips vLLM on lan (#1611)");
+});
+
 test("unlisted providers keep the legacy reasoning_effort none plus chat_template_kwargs", async () => {
   const { suppressThinking } = await load();
 
@@ -214,7 +227,11 @@ test("deepseek hosts get the native thinking switch, never reasoning_effort (#12
   const { suppressThinking, detectEndpointDialect } = await load();
 
   const dialect = detectEndpointDialect("https://api.deepseek.com/v1");
-  assert.deepEqual(dialect, { key: "deepseek", tokenParam: "max_tokens", supportsTemperature: true });
+  assert.deepEqual(dialect, {
+    key: "deepseek",
+    tokenParam: "max_tokens",
+    supportsTemperature: true,
+  });
 
   const body = {};
   suppressThinking(body, "deepseek", "deepseek-chat");

@@ -108,8 +108,11 @@ export function MeetingTranscriptionPanel() {
   };
 
   const handleLocalTranscriptionModelSelect = useCallback(
-    (modelId: string) => {
-      if (meetingLocalTranscriptionProvider === "nvidia") {
+    (modelId: string, providerId?: string) => {
+      if (
+        providerId === "nvidia" ||
+        (!providerId && meetingLocalTranscriptionProvider === "nvidia")
+      ) {
         setMeetingParakeetModel(modelId);
       } else {
         setMeetingWhisperModel(modelId);

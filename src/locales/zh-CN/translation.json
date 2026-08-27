@@ -25,6 +25,31 @@
         "description": "无法重建笔记文件。请确保已启用该功能，并且文件夹可写。"
       }
     },
+    "granolaImport": {
+      "title": "从 Granola 导入",
+      "description": "从 Granola 的 CSV 导出文件导入会议笔记",
+      "howTo": "在 Granola 中:Settings → Profile → Export historical data → Generate CSV。导出文件将通过邮件发送,通常在几小时内送达。",
+      "chooseFile": "选择 CSV 文件",
+      "preview": {
+        "title": "从 Granola 导入",
+        "summary": "共找到 {{total}} 条笔记:{{newCount}} 条新笔记,{{duplicateCount}} 条已导入",
+        "warnings": "{{warningCount}} 行存在问题(已跳过或导入时缺少日期)",
+        "confirm": "导入 {{newCount}} 条笔记",
+        "nothingNew": "此文件中的笔记均已导入。"
+      },
+      "done": {
+        "title": "导入完成",
+        "summary": "已将 {{imported}} 条笔记导入到“Imported”文件夹,跳过 {{skipped}} 条重复项"
+      },
+      "error": {
+        "title": "导入失败",
+        "EMPTY_FILE": "文件为空。",
+        "HEADERS_UNRECOGNIZED": "这看起来不像 Granola 的 CSV 导出文件。",
+        "NO_DATA_ROWS": "此文件中未找到笔记。",
+        "FILE_TOO_LARGE": "此文件过大,无法导入。",
+        "generic": "读取文件时出错。"
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "识别并标记发言者",
@@ -54,8 +79,7 @@
   },
   "window": {
     "voiceRecorderTitle": "录音器",
-    "controlPanelTitle": "控制面板",
-    "agentChatTitle": "智能助手聊天"
+    "controlPanelTitle": "控制面板"
   },
   "dialog": {
     "openLink": {
@@ -93,6 +117,7 @@
     "errors": {
       "callbackRequired": "设置快捷键需要回调函数",
       "globeOnlyMac": "Globe 键仅在 macOS 上可用。",
+      "fnCombinationUnsupported": "Globe/Fn 键只能单独使用。",
       "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
@@ -135,6 +160,7 @@
     "pttUnavailable": "按住说话原生监听器不可用"
   },
   "common": {
+    "continue": "继续",
     "add": "添加",
     "retry": "重试",
     "back": "返回",
@@ -178,6 +204,222 @@
     "policyTranscriptionRestricted": "转录已被您的组织限制。"
   },
   "onboarding": {
+    "rehaul": {
+      "permissions": {
+        "title": "3 分钟完成 OpenWhispr 设置",
+        "microphoneDescription": "将语音转换为文本。",
+        "accessibilityDescription": "将文本粘贴到当前应用。",
+        "systemAudioTitle": "系统音频",
+        "systemAudioDescription": "捕获其他应用的音频。",
+        "screenContextDescription": "让语音助手查看当前屏幕，绝不保存。",
+        "enable": "启用",
+        "enabled": "已启用"
+      },
+      "languages": {
+        "title": "你会说哪些语言？",
+        "titleLineOne": "你会说",
+        "titleLineTwo": "哪些语言？",
+        "description": "选择所有适用的语言。这有助于 OpenWhispr 更准确地识别语言切换。"
+      },
+      "dictationHotkey": {
+        "title": "设置键盘快捷键",
+        "titleLineOne": "设置你的",
+        "titleLineTwo": "键盘快捷键",
+        "description": "选择一个键盘快捷键，随时开始和停止听写。"
+      },
+      "assistantHotkey": {
+        "title": "设置 OpenWhispr Assistant",
+        "titleLineOne": "设置",
+        "titleLineTwo": "OpenWhispr Assistant",
+        "description": "说出你的需求，OpenWhispr Assistant 就会为你写好结果。"
+      },
+      "hotkey": {
+        "capture": "请按下你想使用的按键",
+        "chooseAnother": "选择其他快捷键",
+        "inUse": "该快捷键已被使用。请选择其他快捷键。",
+        "holding": "继续按住，或按下另一个键"
+      },
+      "dictationDemo": {
+        "title": "试试第一次听写",
+        "titleLineOne": "试试你的",
+        "titleLineTwo": "第一次听写",
+        "description": "按 {{hotkey}} 开始说话，OpenWhispr 会把你的语音转成文字。",
+        "founder": "你好，我是 Gabe，OpenWhispr 的创始人",
+        "prompt": "试着说：“我第一次测试听写功能。”",
+        "placeholder": "你的听写结果会显示在这里…"
+      },
+      "assistantDemo": {
+        "title": "认识 OpenWhispr Assistant",
+        "titleLineOne": "认识一下",
+        "titleLineTwo": "OpenWhispr Assistant",
+        "description": "说出你的需求，OpenWhispr Assistant 就会为你写好结果。",
+        "senderName": "Eren Lauren",
+        "senderEmail": "eren32@gmail.com",
+        "recipientLabel": "发送给 John Doe",
+        "email": "嗨！下周一起喝杯咖啡吗？告诉我你什么时候方便。",
+        "prompt": "回复说周二下午 3 点可以。发送一个邀请。",
+        "response": "你好，Eren：\n\n很想和你聊聊近况。周二下午 3 点对我来说很合适。如果你方便，我会发送日历邀请。\n期待见面，\nJohn"
+      },
+      "demo": {
+        "listening": "正在聆听…",
+        "processing": "正在把你的语音转成文字…",
+        "stop": "停止",
+        "typing": "正在输入…"
+      },
+      "notes": {
+        "title": "用 OpenWhispr Notes 录制会议，无需机器人加入",
+        "titleLineOne": "无需机器人即可录制会议",
+        "titleLineTwoPrefix": "使用 OpenWhispr",
+        "titleLineTwoBrand": "Notes",
+        "description": "OpenWhispr 把你的对话变成清晰的笔记。不会有会议机器人加入你的通话。",
+        "hero": {
+          "description": "录制会议，让 OpenWhispr 把对话整理成清晰有条理的笔记。",
+          "chat": "与会议笔记对话",
+          "transcript": "查看完整转录",
+          "speakers": "查看谁说了什么"
+        },
+        "connectors": {
+          "connect": "连接",
+          "googleTitle": "Google 日历",
+          "googleDescription": "同步你的会议。",
+          "microsoftTitle": "Microsoft Outlook",
+          "microsoftDescription": "导入工作会议和邀请。",
+          "appleTitle": "Apple 日历",
+          "appleDescription": "同步你的 Mac 和 iPhone 上的日程。"
+        }
+      },
+      "setupChoice": {
+        "title": "选择你的 OpenWhispr 设置",
+        "titleLineOne": "选择你的",
+        "titleLineTwo": "OpenWhispr 设置",
+        "description": "选择最适合你工作方式的方案。",
+        "unavailable": {
+          "title": "没有可用的设置选项",
+          "description": "你的工作区策略不允许完整配置转录和 AI。请联系管理员。"
+        },
+        "cloud": {
+          "title": "OpenWhispr Cloud",
+          "description": "每周获得 2,000 个免费字数。你的设置会在各设备间保持同步。",
+          "continue": "免费继续",
+          "signIn": "登录以使用云端",
+          "features": {
+            "fast": "最快，无需设置",
+            "privacy": "Privacy-focused processing",
+            "sync": "设置在各设备间同步",
+            "features": "面向笔记和操作的 AI 功能"
+          }
+        },
+        "byok": {
+          "title": "API 服务商",
+          "description": "使用你自己的 API Key。"
+        },
+        "local": {
+          "title": "在你的设备上",
+          "description": "私密的离线转录。至少需要 {{minimumSpace}} GB 可用空间。",
+          "badge": "免费",
+          "download": "下载模型",
+          "features": {
+            "device": "在你的设备上运行",
+            "offline": "设置完成后可离线使用",
+            "models": "为听写和助手选择模型",
+            "free": "永久免费使用"
+          }
+        },
+        "warnings": {
+          "byok": {
+            "title": "你的数据由服务商处理",
+            "description": "你需要分别为听写和 Assistant 服务商添加凭据。将适用服务商的定价和数据保留政策。",
+            "continue": "设置 API 服务商",
+            "steps": {
+              "1": "为听写和 Assistant 选择服务商",
+              "2": "使用安全存储添加凭据",
+              "3": "启用前测试每个连接"
+            }
+          },
+          "local": {
+            "title": "本地设置需要多几个步骤",
+            "description": "本地处理会把你的语音保留在此设备上，但需要一次性设置和至少 {{minimumSpace}} GB 可用空间。",
+            "continue": "本地设置",
+            "steps": {
+              "1": "选择转录引擎",
+              "2": "配置或下载模型，约 {{modelSize}}",
+              "3": "等待安装和启用"
+            }
+          }
+        },
+        "useCloud": "改用云端",
+        "continueSetup": "继续设置",
+        "showMore": "显示更多选项",
+        "moreOptions": {
+          "title": "选择你的 API 设置方式",
+          "description": "添加 API Key 或连接自托管模型。",
+          "selfHosted": {
+            "title": "自托管",
+            "description": "连接你自己托管的模型。"
+          }
+        }
+      },
+      "provider": {
+        "progress": "服务商设置进度",
+        "dictation": "听写",
+        "assistant": "助手",
+        "title": "连接你的 AI 服务商",
+        "description": "选择服务商，添加凭据，然后测试连接。",
+        "descriptionLineOne": "选择服务商并添加",
+        "descriptionLineTwo": "你的 API Key。",
+        "selfHosted": "我有自托管模型的密钥",
+        "providerLabel": "服务商",
+        "providerPlaceholder": "选择模型服务商",
+        "modelLabel": "模型",
+        "modelPlaceholder": "选择模型",
+        "apiKey": "API 密钥",
+        "apiKeyPlaceholder": "粘贴你的 API Key",
+        "endpointUrl": "端点 URL",
+        "endpointPlaceholder": "粘贴你的端点 URL",
+        "optional": "可选",
+        "modelId": "模型 ID",
+        "modelIdPlaceholder": "填写你的模型 ID",
+        "testConnection": "测试连接",
+        "proceed": "继续",
+        "clinical": "用于临床转录",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "runTest": "运行测试",
+        "testing": "测试中…",
+        "connected": "已连接",
+        "connectionFailed": "无法验证此连接。",
+        "errors": {
+          "endpointRequired": "测试前请先输入端点 URL。",
+          "invalidUrl": "端点必须是有效的 HTTP 或 HTTPS URL。",
+          "httpsRequired": "公共端点必须使用 HTTPS。HTTP 仅允许用于私有地址。",
+          "unsupportedProvider": "此服务商不支持连接测试。",
+          "apiKeyRequired": "测试前请先添加 API Key。",
+          "credentialsRejected": "服务商拒绝了这些凭据。",
+          "endpointNotFound": "该端点未提供兼容 OpenAI 的模型列表。",
+          "modelNotFound": "所选模型无法从此服务商获得。",
+          "providerStatus": "服务商返回了状态码 {{status}}。",
+          "timeout": "连接测试超时。",
+          "network": "无法连接到服务商。"
+        }
+      },
+      "local": {
+        "title": "设置本地模型",
+        "description": "选择你想在设备上运行的模型。",
+        "descriptionLineOne": "选择你想在设备上",
+        "descriptionLineTwo": "运行的模型。",
+        "providerLabel": "服务商",
+        "agent": "智能体",
+        "download": "下载",
+        "downloadingShort": "下载中",
+        "selected": "已选择",
+        "use": "使用",
+        "downloadInProgress": "下载进行中",
+        "cancelDownload": "取消下载 {{model}}",
+        "downloads": "模型下载",
+        "downloading": "正在下载… {{progress}}%",
+        "installing": "正在安装模型…"
+      }
+    },
     "steps": {
       "welcome": "欢迎",
       "setup": "设置",
@@ -236,11 +478,11 @@
       "title": "语音助手设置",
       "description": "一键唤起你的 AI 助手",
       "hotkey": "快捷键",
-      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。如果有选中的文本，{{agentName}} 会编辑并替换所选内容；否则会把结果输入到光标所在的位置。无需先说“Hey {{agentName}}”。",
+      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。如果有选中的文本，{{agentName}} 会编辑并替换它。如果可编辑文本框已获得焦点，回答会粘贴到光标处；否则会在悬浮面板中打开。无需先说“Hey {{agentName}}”。",
       "test": "试一试",
-      "testInstruction": "点击下方，按下 {{hotkey}} 并说出指令",
+      "testInstruction": "选中下方的示例文本，按下 {{hotkey}} 并说“把它改短一点”——编辑结果会直接出现在文本框里",
       "testSetHotkey": "在上方设置快捷键即可试用",
-      "testPlaceholder": "点击这里，按下快捷键并说出其中一个示例...",
+      "sampleText": "周四的会议改期了，我们下周初碰一下，过一遍发布计划，并分配剩下的任务。",
       "examples": [
         "翻译成意大利语:“我说话比打字快”",
         "给我的老板写一封简短的邮件,告诉他我想要升职,他叫 Mark",
@@ -255,34 +497,37 @@
       "continue": "仍然继续"
     },
     "useCase": {
-      "title": "你为什么来到这里？",
-      "description": "我们是一个小团队，每周发布更新。你的选择会为你配置应用，也告诉我们接下来该做什么。",
+      "title": "你会如何使用 OpenWhispr？",
+      "titleLineOne": "你会如何使用",
+      "titleLineTwo": "OpenWhispr？",
+      "description": "选择所有适用项，我们会据此为你定制设置。",
       "noteLabel": "还有什么想告诉我们的吗？",
-      "notePlaceholder": "可选",
+      "notePlaceholder": "告诉我们你打算如何使用 OpenWhispr（可选）",
+      "proceedToSetup": "继续设置",
       "options": {
         "dictation": {
           "title": "更快地写作",
-          "description": "在任何应用中口述，而不是打字"
+          "description": "在任何应用中用说话代替打字。"
         },
         "meetings": {
-          "title": "会议笔记与摘要",
-          "description": "录制、转写并总结会议"
+          "title": "会议笔记",
+          "description": "录制、转写并总结会议。"
         },
         "healthcare": {
-          "title": "医疗、临床与治疗转写",
-          "description": "口述病历、咨询记录和报告"
+          "title": "临床记录",
+          "description": "创建病历、咨询记录和报告。"
         },
         "translation": {
-          "title": "语言翻译",
-          "description": "说一种语言，输出另一种"
+          "title": "边说边翻译",
+          "description": "说一种语言，写出另一种。"
         },
         "ai": {
-          "title": "与我的 AI 对话",
-          "description": "用语音驱动 ChatGPT、Claude 等智能体"
+          "title": "与你的 AI 对话",
+          "description": "用语音使用 ChatGPT、Claude 等 AI 工具。"
         },
         "upload": {
-          "title": "上传音频文件",
-          "description": "上传并转写 MP3、OGG 等"
+          "title": "转写音频文件",
+          "description": "上传音频文件进行转写。"
         }
       },
       "selectHint": "可多选"
@@ -313,6 +558,17 @@
         "step1": "在 corti.ai 注册",
         "step2": "打开 Corti 控制台并创建 API 凭据",
         "step3": "在下方粘贴 Client ID 和 Secret"
+      }
+    },
+    "requiredModels": {
+      "title": "安装必需的模型",
+      "description": "{{organization}}要求在此设备上安装这些模型后才能开始听写。",
+      "genericOrganization": "您的组织",
+      "installed": "已安装",
+      "queued": "排队中",
+      "failed": {
+        "title": "有一项下载未完成",
+        "description": "请检查网络连接和磁盘剩余空间，然后重试。如果仍然失败，请联系您的管理员。"
       }
     }
   },
@@ -437,7 +693,12 @@
       "enableButton": "启用 GPU",
       "dismissButton": "暂不启用"
     },
-    "backToNotes": "返回笔记"
+    "backToNotes": "返回笔记",
+    "requiredModelsByOrg": {
+      "title": "缺少必需的模型",
+      "description": "您的组织要求在此设备上安装这些模型：{{models}}。",
+      "download": "下载"
+    }
   },
   "reasoning": {
     "mode": {
@@ -544,7 +805,9 @@
     },
     "parakeet": {
       "multilingual": "25 种语言",
-      "english": "英语"
+      "english": "英语",
+      "requiresMacOS": "macOS {{version}}+",
+      "unavailable": "不可用"
     },
     "apiKeyOptional": "API Key（可选）",
     "getKey": "获取密钥 ->",
@@ -582,9 +845,12 @@
         "title": "回退模式",
         "description": "本地 Whisper 失败，已改用 OpenAI API。"
       },
+      "errorActions": {
+        "viewTranscript": "查看转录"
+      },
       "noAudio": {
-        "title": "未检测到音频",
-        "description": "录音中未检测到音频，请重试。"
+        "title": "我们没听清",
+        "description": "请检查麦克风后重试。"
       },
       "micDisconnected": {
         "title": "麦克风已断开",
@@ -758,9 +1024,12 @@
       "or": "或"
     },
     "emailStep": {
+      "checkingEmail": "正在检查您的邮箱...",
       "continueWithEmail": "使用邮箱继续",
-      "continueWithoutAccount": "不登录继续",
-      "emailPlaceholder": "you@example.com"
+      "continueWithoutAccount": "无需账户，继续使用",
+      "emailLabel": "邮箱",
+      "emailPlaceholder": "you@example.com",
+      "useDifferentEmail": "使用其他邮箱"
     },
     "errors": {
       "accountExistsSignIn": "此邮箱已注册账户，请直接登录。",
@@ -783,17 +1052,19 @@
     },
     "passwordForm": {
       "createAccount": "创建账户",
-      "createAccountButton": "创建账户",
+      "createAccountButton": "使用邮箱继续",
       "createAccountLink": "创建账户",
       "createPasswordPlaceholder": "创建密码",
       "creatingAccount": "正在创建账户...",
       "enterPasswordPlaceholder": "输入密码",
       "forgotPassword": "忘记密码？",
-      "fullNamePlaceholder": "姓名",
+      "fullNamePlaceholder": "填写你的姓名",
+      "nameLabel": "姓名",
+      "passwordLabel": "密码",
       "haveAccount": "已有账户？",
       "newHere": "新用户？",
       "passwordMinLength": "密码至少需要 8 个字符",
-      "signIn": "登录",
+      "signIn": "使用邮箱继续",
       "signInLink": "登录",
       "signingIn": "正在登录...",
       "welcomeBack": "欢迎回来"
@@ -819,7 +1090,7 @@
       "continueWithMicrosoft": "使用 Microsoft 继续",
       "protocolUnavailable": "无法通过浏览器登录 — 请在系统的“默认应用”设置中重新注册 openwhispr:// 协议。"
     },
-    "welcomeSubtitle": "随时随地用语音输入",
+    "welcomeSubtitle": "用语音完成一切",
     "welcomeTitle": "欢迎使用 OpenWhispr",
     "sessionExpired": "会话已过期，请重新登录。"
   },
@@ -891,8 +1162,8 @@
   },
   "dictionarySuffix": "词典后缀",
   "emailVerification": {
-    "checkEmailDescription": "我们已向以下邮箱发送了验证链接",
-    "checkEmailTitle": "查看你的邮箱",
+    "checkEmailDescription": "我们已向你的邮箱发送了验证链接：",
+    "checkEmailTitle": "验证邮件已发送",
     "errors": {
       "resendFailed": "无法重新发送邮件，请重试。",
       "serverUnreachable": "无法连接到服务器，请检查网络连接后重试。"
@@ -900,8 +1171,8 @@
     "resendButton": "重新发送验证邮件",
     "resendIn": "{{seconds}} 秒后可重新发送",
     "verifiedDescription": "你的账户已准备就绪。",
-    "verifiedTitle": "邮箱已验证",
-    "waiting": "正在等待验证...",
+    "verifiedTitle": "已验证",
+    "waiting": "正在等待验证",
     "backToSignIn": "返回登录"
   },
   "errorBoundary": {
@@ -989,11 +1260,12 @@
     "tryShortcutMac": "试试 ⌘⇧K",
     "remove": "移除快捷键",
     "addAnother": "添加其他快捷键",
-    "duplicate": "已添加"
+    "duplicate": "已添加",
+    "singleModifierNeedsRightSide": "{{key}} 单独不能作为快捷键。请按 {{alternative}}，或再加一个按键。"
   },
   "languageSelector": {
     "noLanguagesFound": "未找到匹配的语言",
-    "searchPlaceholder": "搜索..."
+    "searchPlaceholder": "搜索语言"
   },
   "microphoneSettings": {
     "builtIn": "（内置）",
@@ -1325,7 +1597,9 @@
             "SSO 与合规",
             "专属支持"
           ],
-          "cta": "联系销售"
+          "cta": "联系销售",
+          "upgradeCta": "升级到 Enterprise",
+          "askOwner": "请 {{name}} 升级您的工作区。"
         },
         "currentPlan": "当前套餐",
         "coveredByWorkspace": "已包含在您的工作区套餐中",
@@ -1354,16 +1628,20 @@
       "wordsRemaining": "剩余 {{remaining}} 个词",
       "deleteAccount": {
         "label": "删除账户",
-        "labelDescription": "永久删除您的账户、所有云端数据和本地数据。此操作无法撤销。",
+        "labelDescription": "永久删除您的账户和个人云端数据。其他本地用户和工作区所有的内容将被保留。",
         "button": "删除我的账户",
         "deleting": "正在删除...",
         "title": "删除您的账户？",
-        "description": "这将永久删除您的 OpenWhispr 账户、所有云端同步笔记和所有本地数据，包括转录、音频录制、下载的模型、日历连接和设置。此操作无法撤销。",
-        "confirmText": "删除所有内容",
+        "description": "这将永久删除您的 OpenWhispr 账户和个人数据。工作区所有的内容及其他本地用户的数据会保留在此设备上。",
+        "confirmText": "删除账户",
+        "eraseDeviceLabel": "同时清除此设备上的所有数据",
+        "eraseDeviceDescription": "删除所有本地用户的笔记和工作区缓存、已下载模型、设置、日历连接、凭据和录音。",
+        "eraseDeviceWarning": "此设备级清除无法撤销，并会影响所有本地用户。",
         "successTitle": "账户已删除",
-        "successDescription": "您的账户和所有数据已被删除。应用将立即重新加载。",
+        "successDescription": "您的账户和个人数据已删除。其他本地用户、工作区、模型和设备设置均已保留。",
+        "partialCleanupDescription": "您的账户已删除，但部分本地清理未能完成。其他用户和工作区所有的内容均已保留。",
         "failedTitle": "删除失败",
-        "failedDescription": "删除您的账户时出错。您的本地数据可能已被部分删除。请重试。"
+        "failedDescription": "无法完成账户删除。未启动设备级清除。请重试。"
       },
       "profile": {
         "name": {
@@ -1413,7 +1691,7 @@
       },
       "examplesTitle": "示例",
       "helper": "选一个简短、说起来自然的名字",
-      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，AI 会执行你的命令。如果有选中的文本，该文本会发送到你配置的语音助手模型，并安全地替换为结果。",
+      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，选中的文本会安全地替换为结果。启用自动粘贴后，如果可编辑文本框已获得焦点，回答会粘贴到光标处；否则会在悬浮助手面板中打开。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1577,7 +1855,7 @@
       },
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",
-        "description": "说出你的需求——选中的文本会就地编辑，否则助手会把结果输入到光标位置"
+        "description": "说出指令，助手会使用你的笔记、日历和网页工具。回答会粘贴到已聚焦的可编辑光标处、替换选中文本，或在悬浮面板中打开。"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",
@@ -1624,7 +1902,7 @@
       },
       "waylandPaste": {
         "title": "Wayland 粘贴设置",
-        "description": "Wayland 下的自动粘贴需要 ydotool。请检查以下各组件的状态。",
+        "description": "Wayland 下的自动粘贴使用 ydotool 或 wtype。在 wlroots 合成器上优先使用 wtype。",
         "allGoodDesc": "自动粘贴已就绪。",
         "recheck": "重新检查",
         "copy": "复制",
@@ -2143,7 +2421,40 @@
             "admin": "工作区管理员"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise 控制台",
+        "description": "在网页端管理 SSO、策略和成员",
+        "open": "打开控制台"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "升级到 Enterprise",
+      "description": "选择工作区、席位数量和计费周期。付款将在 Stripe Checkout 中完成。",
+      "allSubscribed": "您拥有的工作区已在 Enterprise 方案或无法在此更改。如需更改方案，请联系销售。",
+      "workspaceLabel": "工作区",
+      "seatsLabel": "席位",
+      "seatsHint_one": "当前已使用 {{count}} 个席位",
+      "seatsHint_other": "当前已使用 {{count}} 个席位",
+      "intervalLabel": "计费周期",
+      "interval": {
+        "monthly": "按月",
+        "annual": "按年"
+      },
+      "proratedCharge": "按比例费用",
+      "prorationNote": "按比例计算的差额将计入下一张账单。",
+      "errors": {
+        "previewFailed": "无法加载升级预览。",
+        "alreadyEnterprise": "该工作区已在 Enterprise 计划中。",
+        "subscriptionInactive": "该工作区的订阅未激活。请更新账单信息后重试。",
+        "priceNotConfigured": "Enterprise 价格暂不可用。请联系销售。"
+      },
+      "priceNote": "最终价格将在结账时显示。",
+      "continueCta": "继续结账",
+      "upgradeDescription": "将 {{workspace}} 从{{plan}}升级到 Enterprise。席位和计费周期保持不变，更改立即生效。",
+      "upgradeCta": "立即升级",
+      "upgradedTitle": "已升级到 Enterprise",
+      "upgradedDescription": "{{workspace}} 现已升级到 Enterprise。"
     }
   },
   "models": {
@@ -2188,16 +2499,15 @@
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet",
         "anthropic_claude_haiku_4_5": "快速且接近前沿水平",
         "gemini_gemini_3_5_flash": "最新、快速且高能力的 Gemini 模型",
+        "gemini_gemini_3_5_flash_lite": "最快、最经济的 3.5 模型",
         "gemini_gemini_3_1_pro_preview": "新一代旗舰模型，擅长复杂推理",
+        "gemini_gemini_3_1_flash_lite": "前沿级性能，成本更低",
         "gemini_gemini_3_flash_preview": "超快速、高能力的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延迟和成本",
         "gemini_gemma_4_31b_it": "Google 最大的 Gemma 4，31B 稠密，256K 上下文",
         "gemini_gemma_4_26b_a4b_it": "Google Gemma 4 MoE，4B 活跃参数，256K 上下文",
-        "groq_qwen_qwen3_32b": "强大的推理模型，131K 上下文",
         "groq_openai_gpt_oss_120b": "OpenAI 开源旗舰，500 T/秒",
         "groq_openai_gpt_oss_20b": "快速开源模型，1000 T/秒",
-        "groq_llama_3_3_70b_versatile": "Meta 多功能模型，280 T/秒",
-        "groq_llama_3_1_8b_instant": "超快 560 T/秒，131K 上下文",
         "groq_compound": "Groq Compound 系统，450 T/秒",
         "groq_compound_mini": "快速 Compound 系统，3x 更低延迟",
         "openai_gpt_5_6_sol": "旗舰 GPT-5.6，适用于复杂编码与研究",
@@ -2211,7 +2521,6 @@
         "anthropic_claude_opus_4_5": "更早的 Opus 模型",
         "tinfoil_deepseek_v4_pro": "安全飞地中的私密长上下文推理，800K 上下文",
         "tinfoil_glm_5_2": "安全飞地中的私密智能体工程模型，384K 上下文",
-        "tinfoil_kimi_k2_6": "私密长程编码与多模态模型，256K 上下文",
         "tinfoil_gemma4_31b": "支持工具调用的私密多语言推理模型，256K 上下文",
         "tinfoil_gpt_oss_120b": "支持工具使用的私密开源权重推理模型，131K 上下文",
         "tinfoil_llama3_3_70b": "支持工具调用的私密对话模型，128K 上下文",
@@ -2625,7 +2934,12 @@
       "title": "会议笔记",
       "description": "转录与结构化摘要",
       "back": "返回",
-      "restrictedByOrg": "会议转录已被您的组织限制。"
+      "restrictedByOrg": "会议转录已被您的组织限制。",
+      "autoEnded": "会议结束后，录音已自动停止。",
+      "systemAudioSilent": {
+        "title": "尚未检测到会议音频",
+        "description": "到目前为止，只有您的麦克风采集到声音。正在进行视频通话？请检查会议音频是否正在此电脑上播放且未被静音。正在进行现场录音？您可以忽略此提示——您的麦克风会采集房间内的声音。"
+      }
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
@@ -2866,7 +3180,10 @@
     "limitReachedDescription": "升级到 Pro 即可无限转录。",
     "viewPlans": "查看套餐",
     "upgradeTitle": "升级到 Pro",
-    "upgradeDescription": "无限转录、实时转录等更多功能。",
+    "upgradeDescription": "无限量、更准确、更快速的转录。",
+    "upgradeInstantSetup": "即时设置",
+    "upgradeZeroRetention": "零数据保留",
+    "upgradeEnterpriseSecurity": "企业级安全 SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "了解更多",
     "integrations": "集成",
     "defaultUser": "用户",
@@ -2975,7 +3292,8 @@
     "commandMenu": {
       "stopListening": "停止录音",
       "startListening": "开始录音",
-      "hideForNow": "暂时隐藏"
+      "hideForNow": "暂时隐藏",
+      "askAssistant": "询问助手"
     }
   },
   "dictationAgent": {
@@ -3012,10 +3330,6 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "聊天助手快捷键",
-      "hotkeyDescription": "打开或关闭聊天助手窗口",
-      "model": "助手模型",
-      "modelDescription": "用于助手对话的AI模型",
       "systemPrompt": "系统提示词",
       "systemPromptDescription": "助手的自定义指令",
       "systemPromptPlaceholder": "输入自定义系统提示词...",
@@ -3030,31 +3344,13 @@
         "selfHostedDesc": "你自己网络上的服务器。",
         "enterprise": "企业级",
         "enterpriseDesc": "使用你组织的云账号（AWS、Azure、GCP）。"
-      },
-      "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "准确可靠，无需设置。",
-      "customSetup": "自定义配置 (BYOK)",
-      "customSetupDescription": "使用自己的 API 密钥并选择偏好的模型"
+      }
     },
     "chat": {
-      "placeholder": "按 {{hotkey}} 开始说话",
-      "thinking": "思考中...",
-      "transcribing": "转录中...",
-      "listening": "正在聆听...",
-      "newConversation": "新建",
-      "copyToClipboard": "复制到剪贴板",
-      "copied": "已复制！",
-      "emptyState": "随便问我",
-      "errorPrefix": "错误"
-    },
-    "titleBar": {
-      "label": "助手",
-      "newChat": "新对话",
-      "close": "关闭"
+      "errorPrefix": "错误",
+      "emptyResponse": "模型没有返回任何回复。"
     },
     "input": {
-      "holdToSpeak": "按住说话",
-      "toClose": "关闭",
       "listening": "正在聆听...",
       "transcribing": "正在转录...",
       "thinking": "正在思考...",
@@ -3062,25 +3358,49 @@
       "send": "发送"
     },
     "tools": {
+      "search_notesName": "搜索笔记",
+      "get_noteName": "获取笔记",
+      "create_noteName": "创建笔记",
+      "update_noteName": "更新笔记",
+      "list_foldersName": "列出文件夹",
+      "copy_to_clipboardName": "复制到剪贴板",
+      "web_searchName": "网页搜索",
+      "get_calendar_eventsName": "获取日历事件",
+      "get_calendar_availabilityName": "查看空闲时间",
       "search_notesStatus": "正在搜索笔记...",
       "web_searchStatus": "正在搜索网页...",
       "copy_to_clipboardStatus": "正在复制到剪贴板...",
       "get_calendar_eventsStatus": "正在查看日历...",
+      "get_calendar_availabilityStatus": "正在查看空闲时间...",
       "get_noteStatus": "正在读取笔记...",
       "create_noteStatus": "正在创建笔记...",
       "update_noteStatus": "正在更新笔记...",
       "copiedToClipboard": "已复制到剪贴板",
-      "foundNotes": "找到 {{count}} 条笔记",
-      "foundNotes_plural": "找到 {{count}} 条笔记",
-      "searchResults": "找到 {{count}} 条结果",
-      "searchResults_plural": "找到 {{count}} 条结果",
       "openNote": "打开笔记",
-      "calendarEvents": "找到 {{count}} 个日程",
-      "calendarEvents_plural": "找到 {{count}} 个日程",
-      "noResults": "未找到结果",
-      "error": "工具错误",
       "unknownTool": "未知工具：{{name}}",
       "invalidArgs": "{{name}} 的工具参数无效"
+    }
+  },
+  "assistant": {
+    "panel": {
+      "selectionHint": "选择要编辑的文本，然后按",
+      "selectedContext": "已添加所选文本",
+      "removeSelectedContext": "移除所选文本",
+      "newConversation": "新对话",
+      "copyToClipboard": "复制到剪贴板",
+      "suggestions": {
+        "summarizeNotes": "总结我最近的笔记",
+        "calendar": "我的日历上有什么安排？",
+        "draft": "帮我起草一些内容"
+      }
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "调用中",
+        "calling": "请求中",
+        "using": "使用中"
+      },
+      "toolFallback": "工具"
     }
   },
   "integrations": {
@@ -3220,20 +3540,21 @@
     "tomorrow": "明天"
   },
   "upcoming": {
-    "title": "即将开始的会议",
+    "title": "即将开始",
     "transcriptions": "转录",
-    "tomorrow": "明天",
-    "noMoreMeetings": "今天没有更多会议了",
     "now": "进行中",
-    "join": "加入",
     "untitledEvent": "无标题事件",
+    "joinAndTakeNotes": "加入并记笔记",
+    "takeNotes": "记笔记",
+    "noEventsToday": "今天没有日程",
+    "noUpcomingEvents": "暂无即将开始的日程",
+    "moreCalendarsHint": "想连接更多日历？",
+    "connectHere": "在这里连接",
+    "openMeetingLink": "打开会议链接",
     "systemAudioRequired": "需要系统音频权限来录制其他参与者的音频。",
     "openSettings": "打开系统设置",
-    "signInRequired": "登录以使用会议录制",
-    "signInDescription": "创建账户或登录以录制和转录会议。",
     "connectCalendar": "连接您的日历",
-    "connectCalendarDescription": "关联 Google 日历以查看即将到来的会议并自动记录笔记。",
-    "notABot": "OpenWhispr 通过系统音频录制 — 它不会以机器人身份加入您的会议。",
+    "connectCalendarDescription": "无需离开 OpenWhispr 即可查看并加入您的会议。",
     "connectCalendarButton": "连接日历"
   },
   "notesView": {
@@ -3402,6 +3723,7 @@
     "ready": "就绪",
     "copy": "复制",
     "copied": "已复制",
+    "collapse": "折叠转录",
     "waitingForInput": "说点什么..."
   },
   "transcript": {
@@ -3517,6 +3839,15 @@
       "underway": "你的会议似乎已在进行中。要开始记录吗？"
     },
     "start": "开始记录",
-    "join": "加入并转录"
+    "join": "加入并转录",
+    "autoEnd": {
+      "title": "会议可能已结束",
+      "body": {
+        "micReleased": "没有其他应用在使用麦克风。录音将在 {{seconds}} 秒后停止。",
+        "silence": "未检测到音频。录音将在 {{seconds}} 秒后停止。",
+        "processExit": "会议应用已关闭。录音将在 {{seconds}} 秒后停止。"
+      },
+      "keep": "继续录音"
+    }
   }
 }

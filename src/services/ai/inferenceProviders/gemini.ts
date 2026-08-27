@@ -2,34 +2,22 @@ import type { InferenceProvider } from "./types";
 import { getCloudModel } from "../../../models/ModelRegistry";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
+import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import logger from "../../../utils/logger";
 import {
   assessGeminiResponse,
   resolveGeminiThinkingConfig,
-} from "../../../helpers/geminiResponse.js";
-import { truncatedResponseError } from "../../../helpers/completionTruncation.js";
-
-interface GeminiResponse {
-  candidates?: Array<{
-    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
-    finishReason?: string;
-  }>;
-  usageMetadata?: {
-    totalTokenCount?: number;
-    thoughtsTokenCount?: number;
-    candidatesTokenCount?: number;
-  };
-}
+  type GeminiResponsePayload,
+  type GeminiThinkingConfig,
+} from "../../../helpers/geminiResponse";
+import { truncatedResponseError } from "../../../helpers/completionTruncation";
 
 interface GeminiGenerationConfig {
   temperature: number;
   maxOutputTokens: number;
-  thinkingConfig?: {
-    thinkingLevel: "minimal" | "low" | "medium" | "high";
-    includeThoughts: boolean;
-  };
+  thinkingConfig?: GeminiThinkingConfig;
 }
 
 export const geminiProvider: InferenceProvider = {
@@ -96,7 +84,8 @@ export const geminiProvider: InferenceProvider = {
       });
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutSeconds = getLlmRequestTimeoutSeconds();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
       try {
         const res = await fetch(`${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`, {
           method: "POST",
@@ -127,7 +116,7 @@ export const geminiProvider: InferenceProvider = {
           throw httpError(errMsg, res.status);
         }
 
-        const jsonResponse = (await res.json()) as GeminiResponse;
+        const jsonResponse = (await res.json()) as GeminiResponsePayload;
         logger.logReasoning("GEMINI_RAW_RESPONSE", {
           hasResponse: !!jsonResponse,
           hasCandidates: !!jsonResponse?.candidates,
@@ -136,7 +125,7 @@ export const geminiProvider: InferenceProvider = {
         return jsonResponse;
       } catch (error) {
         if ((error as Error).name === "AbortError") {
-          throw new Error("Request timed out after 30s");
+          throw new Error(`Request timed out after ${timeoutSeconds}s`);
         }
         throw error;
       } finally {

@@ -1,33 +1,25 @@
 import { useState, useRef, useEffect } from "react";
 import { cn } from "../lib/utils";
+import {
+  WAVE_MAX_PX,
+  WAVE_QUIET_COLOR,
+  WAVE_REST_VISUAL,
+  waveBarColor,
+  waveBarVisual,
+} from "./liveWaveformMath";
 
 const DEFAULT_BAR_COUNT = 40;
 const WAVE_SAMPLE_MS = 150;
-const WAVE_MAX_PX = 20;
-const WAVE_MIN_PX = 2;
 // Bar width 2px + gap 2px — used to derive the count in "auto" mode.
 const WAVE_BAR_PITCH = 4;
 const WAVE_MIN_AUTO_BARS = 16;
 // Bars scale against a decaying session peak, so any mic gain fills the range.
 const WAVE_PEAK_FLOOR = 0.01;
 const WAVE_PEAK_DECAY = 0.99;
-const WAVE_QUIET_NORM = 0.14;
 
-function waveBarStyle(norm: number, index: number, count: number): React.CSSProperties {
-  if (norm < WAVE_QUIET_NORM) {
-    return { height: WAVE_MIN_PX, backgroundColor: "rgba(143,170,255,0.35)" };
-  }
-  // Periwinkle (#8FAAFF) → orange (#FFA23E) across the strip, louder = more opaque
-  const t = index / (count - 1);
-  const r = Math.round(143 + 112 * t);
-  const g = Math.round(170 - 8 * t);
-  const b = Math.round(255 - 193 * t);
-  const alpha = 0.55 + 0.45 * Math.min(1, norm);
-  return {
-    height: Math.max(WAVE_MIN_PX, Math.round(Math.sqrt(norm) * WAVE_MAX_PX)),
-    backgroundColor: `rgba(${r},${g},${b},${alpha})`,
-  };
-}
+// The cross-faded quiet/active pair behind every bar (see liveWaveformMath.ts).
+const WAVE_LAYER_CLASS =
+  "absolute inset-0 rounded-full transition-opacity duration-150 ease-out motion-reduce:transition-none";
 
 interface LiveWaveformProps {
   /** Returns the current level (RMS, 0..1-ish); sampled every 150ms. */
@@ -42,12 +34,18 @@ export function LiveWaveform({
   bars = DEFAULT_BAR_COUNT,
   className,
 }: LiveWaveformProps) {
-  const [samples, setSamples] = useState<number[]>([]);
   const peakRef = useRef(WAVE_PEAK_FLOOR);
   const containerRef = useRef<HTMLDivElement>(null);
+  const barRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const quietRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const activeRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const levelsRef = useRef<number[]>([]);
   const [autoCount, setAutoCount] = useState(DEFAULT_BAR_COUNT);
 
   const count = bars === "auto" ? autoCount : bars;
+  // Read through a ref inside the sampler: in "auto" mode a resize drag can
+  // change the count faster than WAVE_SAMPLE_MS, and a count dependency would
+  // restart the interval each time so it never ticks.
   const countRef = useRef(count);
   countRef.current = count;
 
@@ -62,28 +60,66 @@ export function LiveWaveform({
     return () => observer.disconnect();
   }, [bars]);
 
+  // Samples are written straight to the bar elements (no setState per tick):
+  // recording never pays React render, layout, or paint cost for the wave.
   useEffect(() => {
     const id = setInterval(() => {
       const level = readLevel();
       peakRef.current = Math.max(level, peakRef.current * WAVE_PEAK_DECAY, WAVE_PEAK_FLOOR);
       const norm = Math.min(1, level / peakRef.current);
-      setSamples((prev) => [...prev.slice(-(countRef.current - 1)), norm]);
+      const barCount = countRef.current;
+      const levels = levelsRef.current;
+      levels.push(norm);
+      if (levels.length > barCount) levels.splice(0, levels.length - barCount);
+      for (let i = 0; i < barCount; i++) {
+        const bar = barRefs.current[i];
+        const quiet = quietRefs.current[i];
+        const active = activeRefs.current[i];
+        if (!bar || !quiet || !active) continue;
+        // History is right-aligned: bars without a sample yet rest at minimum.
+        const { scaleY, quietOpacity, activeOpacity } = waveBarVisual(
+          levels[levels.length - barCount + i] ?? 0
+        );
+        bar.style.transform = `scaleY(${scaleY})`;
+        quiet.style.opacity = String(quietOpacity);
+        active.style.opacity = String(activeOpacity);
+      }
     }, WAVE_SAMPLE_MS);
     return () => clearInterval(id);
   }, [readLevel]);
 
-  const recent = samples.slice(-count);
-  const padded =
-    recent.length < count ? [...Array<number>(count - recent.length).fill(0), ...recent] : recent;
-
   return (
     <div ref={containerRef} className={cn("flex items-center gap-0.5 h-5", className)}>
-      {padded.map((norm, i) => (
+      {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
-          className="w-0.5 rounded-full shrink-0 transition-[height,background-color] duration-150 ease-out"
-          style={waveBarStyle(norm, i, count)}
-        />
+          ref={(el) => {
+            barRefs.current[i] = el;
+          }}
+          className="relative w-0.5 shrink-0 transition-transform duration-150 ease-out motion-reduce:transition-none"
+          style={{
+            height: WAVE_MAX_PX,
+            transform: `scaleY(${WAVE_REST_VISUAL.scaleY})`,
+          }}
+        >
+          <div
+            ref={(el) => {
+              quietRefs.current[i] = el;
+            }}
+            className={WAVE_LAYER_CLASS}
+            style={{ backgroundColor: WAVE_QUIET_COLOR, opacity: WAVE_REST_VISUAL.quietOpacity }}
+          />
+          <div
+            ref={(el) => {
+              activeRefs.current[i] = el;
+            }}
+            className={WAVE_LAYER_CLASS}
+            style={{
+              backgroundColor: waveBarColor(i, count),
+              opacity: WAVE_REST_VISUAL.activeOpacity,
+            }}
+          />
+        </div>
       ))}
     </div>
   );

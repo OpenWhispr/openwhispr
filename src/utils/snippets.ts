@@ -52,8 +52,8 @@ function buildMatcher(snippets: Snippet[]): SnippetMatcher | null {
  * matcher is memoized against the snippets array reference (the settings
  * store replaces the array on every change).
  */
-export function expandSnippets(text: string, snippets: Snippet[]): string {
-  if (!text || snippets.length === 0) return text;
+export function expandSnippets(text: string, snippets?: Snippet[] | null): string {
+  if (!text || !Array.isArray(snippets) || snippets.length === 0) return text;
   if (snippets !== cachedSnippets) {
     cachedSnippets = snippets;
     cachedMatcher = buildMatcher(snippets);
@@ -76,10 +76,12 @@ export function expandSnippets(text: string, snippets: Snippet[]): string {
  * Dictionary words plus snippet triggers — the hint list fed to the STT
  * prompt and cleanup-model dictionary suffix so triggers survive both.
  */
-export function getDictionaryHintWords(settings?: {
-  customDictionary?: string[] | null;
-  snippets?: Snippet[] | null;
-} | null): string[] {
+export function getDictionaryHintWords(
+  settings?: {
+    customDictionary?: string[] | null;
+    snippets?: Snippet[] | null;
+  } | null
+): string[] {
   const dictionary = Array.isArray(settings?.customDictionary) ? settings.customDictionary : [];
   const snippets = Array.isArray(settings?.snippets) ? settings.snippets : [];
   if (snippets.length === 0) return [...dictionary];

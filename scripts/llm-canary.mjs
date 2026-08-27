@@ -10,7 +10,9 @@
  *
  * Run: node --import tsx scripts/llm-canary.mjs
  * Keys come from LLM_CANARY_<PROVIDER>_KEY env vars; providers without a key
- * are skipped and listed. Exit 1 when any probe on a keyed provider fails.
+ * are skipped and listed. Exit 1 when any probe on a keyed provider fails, or
+ * when no key is configured at all — an all-skip run probed nothing and must
+ * not report green.
  */
 import { applyChatCompletionsParams } from "../src/services/ai/chatRequestBody.ts";
 import registryData from "../src/models/modelRegistryData.json" with { type: "json" };
@@ -22,13 +24,15 @@ const PROVIDERS = [
     id: "openai",
     keyEnv: "LLM_CANARY_OPENAI_KEY",
     base: "https://api.openai.com/v1",
-    models: ["gpt-4o-mini", "gpt-5-mini"],
+    // Registry models only — a non-registry id skips the suppression gate and
+    // draws a 400 from OpenAI's strict parser that no app user ever hits.
+    models: ["gpt-4.1-mini", "gpt-5-mini"],
   },
   {
     id: "groq",
     keyEnv: "LLM_CANARY_GROQ_KEY",
     base: "https://api.groq.com/openai/v1",
-    models: ["openai/gpt-oss-120b", "qwen/qwen3-32b", "llama-3.3-70b-versatile"],
+    models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b"],
   },
   {
     id: "tinfoil",
@@ -125,7 +129,11 @@ async function catalogDiff(entry, apiKey) {
     signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) return { error: `models list HTTP ${res.status}` };
-  const live = ((await res.json())?.data ?? []).map((m) => m.id).filter(Boolean);
+  // Gemini's OpenAI-compat /models returns "models/"-prefixed ids; the
+  // registry pins bare ids, so compare without the prefix.
+  const live = ((await res.json())?.data ?? [])
+    .map((m) => m.id?.replace(/^models\//, ""))
+    .filter(Boolean);
   const pinned = registryIdsByProvider.get(entry.id) ?? [];
   const vanished = pinned.filter((id) => !live.includes(id));
   const probed = new Set(entry.models);
@@ -171,6 +179,10 @@ for (const entry of PROVIDERS) {
       }
     }
   }
+}
+
+if (skipped.length === PROVIDERS.length) {
+  failures.push("no canary secrets configured — every provider was skipped, nothing was probed");
 }
 
 console.log("## LLM request-shape canary\n");

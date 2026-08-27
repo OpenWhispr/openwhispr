@@ -108,20 +108,12 @@ export const usePermissions = (
   const { t } = useTranslation();
   const [micPermissionGranted, setMicPermissionGranted] = useLocalStorage(
     "micPermissionGranted",
-    false,
-    {
-      serialize: String,
-      deserialize: (value) => value === "true",
-    }
+    false
   );
   const [micPermissionError, setMicPermissionError] = useState<string | null>(null);
   const [accessibilityPermissionGranted, setAccessibilityPermissionGranted] = useLocalStorage(
     "accessibilityPermissionGranted",
-    false,
-    {
-      serialize: String,
-      deserialize: (value) => value === "true",
-    }
+    false
   );
   const [pasteToolsInfo, setPasteToolsInfo] = useState<PasteToolsResult | null>(null);
   const [isCheckingPasteTools, setIsCheckingPasteTools] = useState(false);

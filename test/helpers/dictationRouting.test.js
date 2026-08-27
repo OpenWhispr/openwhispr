@@ -20,8 +20,9 @@ test("voice agent hotkey routes to the agent without a wake word", async () => {
 test("voice agent hotkey never triggers cleanup", async () => {
   const { resolveDictationRouteKind } = await load();
 
-  // Even with cleanup enabled and reachable, a voice agent recording with an
-  // unreachable agent returns the raw transcript instead of falling back.
+  // Even with the dictation agent unreachable, a voice assistant recording
+  // takes the agent route: standalone commands run on the chat scope in the
+  // panel, so only selection edits (decided later) need this scope.
   assert.equal(
     resolveDictationRouteKind({
       cleanupReachable: true,
@@ -29,7 +30,7 @@ test("voice agent hotkey never triggers cleanup", async () => {
       agentInvoked: false,
       voiceAgentRequested: true,
     }),
-    "skip"
+    "agent"
   );
 });
 
@@ -728,4 +729,17 @@ test("wake-word language is undefined when no usable hint exists", async () => {
     undefined
   );
   assert.equal(resolveWakeWordLanguage({}), undefined);
+});
+
+test("lifecycle input kind prefers assistant, then translation, then dictation", async () => {
+  const { resolveLifecycleInputKind } = await load();
+  assert.equal(
+    resolveLifecycleInputKind({ voiceAgentRequested: true, translationRequested: true }),
+    "assistant"
+  );
+  assert.equal(
+    resolveLifecycleInputKind({ voiceAgentRequested: false, translationRequested: true }),
+    "translation"
+  );
+  assert.equal(resolveLifecycleInputKind({}), "dictation");
 });

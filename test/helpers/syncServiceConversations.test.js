@@ -59,6 +59,83 @@ function queryParam(path, name) {
   return new URLSearchParams(query ?? "").get(name);
 }
 
+function pauseNextConversationCreate(api) {
+  const request = api.cloudApiRequest;
+  let resume;
+  let signalStarted;
+  const started = new Promise((resolve) => {
+    signalStarted = resolve;
+  });
+  const resumed = new Promise((resolve) => {
+    resume = resolve;
+  });
+
+  api.cloudApiRequest = async (options) => {
+    if (options.method === "POST" && options.path === "/api/conversations/create") {
+      signalStarted();
+      await resumed;
+      api.cloudApiRequest = request;
+    }
+    return request(options);
+  };
+
+  return { started, resume };
+}
+
+test("a conversation changed during create retries with its complete message history", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  const conversation = db.createAgentConversation("In-flight conversation");
+  db.addAgentMessage(conversation.id, "user", "first message");
+  const gate = pauseNextConversationCreate(api);
+
+  const firstSync = service.syncAll(true);
+  await gate.started;
+  db.addAgentMessage(conversation.id, "assistant", "late message");
+  gate.resume();
+  await firstSync;
+
+  const pending = db.getAgentConversation(conversation.id);
+  assert.equal(pending.cloud_id, null);
+  assert.equal(pending.sync_status, "pending");
+  assert.equal(cloud.logFor("/api/conversations/delete").length, 1);
+
+  await service.syncAll(true);
+
+  const creates = cloud.logFor("/api/conversations/create");
+  assert.equal(creates.length, 2);
+  assert.deepEqual(
+    creates[1].body.messages.map((message) => message.content),
+    ["first message", "late message"]
+  );
+  const synced = db.getAgentConversation(conversation.id);
+  assert.ok(synced.cloud_id);
+  assert.equal(synced.sync_status, "synced");
+
+  await service.syncAll(true);
+  assert.equal(cloud.logFor("/api/conversations/create").length, 2);
+});
+
+test("a losing concurrent conversation create is deleted without replacing the winner", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  const conversation = db.createAgentConversation("Concurrent conversation");
+  db.addAgentMessage(conversation.id, "user", "hello");
+  const gate = pauseNextConversationCreate(api);
+
+  const sync = service.syncAll(true);
+  await gate.started;
+  db.markConversationSynced(conversation.id, "cloud-winner");
+  gate.resume();
+  await sync;
+
+  const current = db.getAgentConversation(conversation.id);
+  assert.equal(current.cloud_id, "cloud-winner");
+  assert.equal(cloud.logFor("/api/conversations/delete").length, 1);
+});
+
 test("pullConversations applies a strictly newer cloud copy and rejects older and tied ones", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

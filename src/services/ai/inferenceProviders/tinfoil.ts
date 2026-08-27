@@ -3,11 +3,10 @@ import { TOKEN_LIMITS } from "../../../config/constants";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { applyChatCompletionsParams, isTruncatedFinishReason } from "../chatRequestBody";
-import { truncatedResponseError } from "../../../helpers/completionTruncation.js";
+import { truncatedResponseError } from "../../../helpers/completionTruncation";
 import { getTinfoilChatClient } from "../tinfoilClient";
+import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
-
-const REQUEST_TIMEOUT_MS = 30_000;
 
 export const tinfoilProvider: InferenceProvider = {
   id: "tinfoil",
@@ -41,12 +40,12 @@ export const tinfoilProvider: InferenceProvider = {
     const requestBody: Record<string, unknown> = { model, messages };
     applyChatCompletionsParams(requestBody, { model, provider: "tinfoil", config, maxTokens });
 
-    // 30s per attempt like sibling providers; SDK-internal retries off so
-    // withRetry stays the single retry layer.
+    // Keep SDK-internal retries off so withRetry stays the single retry layer.
+    const timeoutMs = getLlmRequestTimeoutSeconds() * 1000;
     const response = await withRetry(
       () =>
         client.chat.completions.create(requestBody as any, {
-          timeout: REQUEST_TIMEOUT_MS,
+          timeout: timeoutMs,
           maxRetries: 0,
         }),
       createApiRetryStrategy()
@@ -54,20 +53,20 @@ export const tinfoilProvider: InferenceProvider = {
 
     const responseText =
       response.choices
-        ?.map((choice: any) => choice?.message?.content)
+        ?.map((choice) => choice.message.content)
         .find((content: unknown) => typeof content === "string" && content.trim())
         ?.trim() || "";
 
     if (
       config.requireCompleteOutput &&
-      response.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason))
+      response.choices?.some((choice) => isTruncatedFinishReason(choice.finish_reason))
     ) {
       throw new Error("Model output was truncated before the selection edit completed");
     }
 
     // A token-limit cut means partial text; fail instead of pasting a clipped reply. See #1341.
-    const truncatedChoice = response.choices?.find((choice: any) =>
-      isTruncatedFinishReason(choice?.finish_reason)
+    const truncatedChoice = response.choices?.find((choice) =>
+      isTruncatedFinishReason(choice.finish_reason)
     );
     if (truncatedChoice) {
       logger.logReasoning("TINFOIL_TRUNCATED_RESPONSE", {

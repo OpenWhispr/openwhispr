@@ -1,10 +1,21 @@
 import * as React from "react";
 
+export type ToastPresentation = "standard" | "dictation-error";
+
+export interface ToastActionConfig {
+  label: string;
+  icon?: "retry" | "transcript";
+  onClick: () => void | Promise<void>;
+  dismissOnClick?: boolean;
+}
+
 export interface ToastProps {
   id?: string;
   title?: string;
   description?: string;
   action?: React.ReactNode;
+  actions?: ToastActionConfig[];
+  presentation?: ToastPresentation;
   variant?: "default" | "destructive" | "success";
   duration?: number;
   onClose?: () => void;
@@ -14,6 +25,8 @@ export interface ToastContextType {
   toast: (props: Omit<ToastProps, "id">) => string;
   dismiss: (id?: string) => void;
   toastCount: number;
+  dictationErrorActionCount: number;
+  dismissByPresentation: (presentation: ToastPresentation) => void;
 }
 
 export const ToastContext = React.createContext<ToastContextType | undefined>(undefined);

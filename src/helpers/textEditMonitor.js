@@ -41,37 +41,6 @@ function isPersistentAxNoValueFailure(stderr) {
 // keyboard focus. Modern Chromium builds the tree on demand when our
 // reads arrive; where it doesn't, we skip auto-learn for that paste instead.
 
-// Returns the character before the cursor for smart-spacing. Output protocol:
-//   "OK:X"   — preceding char is X
-//   "START:" — cursor at field start, no preceding char
-//   ""       — unknown / read failed (caller falls back to append-mode spacing)
-// AppleScript `character N` is 1-indexed; AXSelectedTextRange.location is
-// 0-indexed, so the char at offset (loc-1) is `character loc`.
-const MACOS_AX_PRECEDING_CHAR_SCRIPT = (pid) =>
-  `tell application "System Events"\n` +
-  `\tset targetProc to first application process whose unix id is ${pid}\n` +
-  `\tset focAttr to value of attribute "AXFocusedUIElement" of targetProc\n` +
-  `\tif focAttr is missing value then return ""\n` +
-  `\tset theVal to ""\n` +
-  `\ttry\n` +
-  `\t\tset theVal to value of attribute "AXValue" of focAttr\n` +
-  `\t\tif theVal is missing value then set theVal to ""\n` +
-  `\tend try\n` +
-  `\tset loc to -1\n` +
-  `\ttry\n` +
-  `\t\tset sel to value of attribute "AXSelectedTextRange" of focAttr\n` +
-  `\t\ttry\n` +
-  `\t\t\tset loc to item 1 of sel\n` +
-  `\t\tend try\n` +
-  `\tend try\n` +
-  `\tif loc is -1 then return ""\n` +
-  `\tif loc < 1 then return "START:"\n` +
-  `\tif (length of theVal) is 0 then return "START:"\n` +
-  `\tif loc > (length of theVal) then set loc to length of theVal\n` +
-  `\tif loc < 1 then return "START:"\n` +
-  `\treturn "OK:" & (character loc of theVal)\n` +
-  `end tell`;
-
 // Read the exact current selection without touching the clipboard. Prefixes
 // distinguish an empty selection from an inaccessible target so selection
 // editing can fail closed when Accessibility cannot inspect the focused field.
@@ -249,6 +218,10 @@ class TextEditMonitor extends EventEmitter {
           { timeout: timeoutMs },
           (error, stdout, stderr) => {
             const output = stdout.replace(/\n$/, "");
+            if (output === "EDITABLE_NONE:") {
+              resolve({ state: "none", editable: true });
+              return;
+            }
             if (output === "NONE:") {
               resolve({ state: "none" });
               return;
@@ -309,6 +282,9 @@ class TextEditMonitor extends EventEmitter {
           return;
         }
 
+        // The AppleScript never reports an editable caret (only the native
+        // binary emits EDITABLE_NONE:), so this fallback can read selections
+        // but never produce a caret delivery target — panel-first by design.
         const output = stdout.replace(/\n$/, "");
         if (output === "NONE:") {
           resolve({ state: "none" });
@@ -319,6 +295,50 @@ class TextEditMonitor extends EventEmitter {
         }
       }
     );
+  }
+
+  async isFocusedEditable(target, timeoutMs = 1000) {
+    const resolved = this.resolveBinary();
+    if (!resolved) return false;
+
+    let args;
+    if (process.platform === "darwin") {
+      const pid = target?.kind === "mac-pid" ? target.pid : this.lastTargetPid;
+      if (!pid) return false;
+      args = [...resolved.args, "--editable-target", String(pid)];
+    } else {
+      args = [...resolved.args, "--probe-editable"];
+    }
+
+    // The verdict is the first output line. A stale binary that predates the
+    // probe flag falls into monitor mode instead: it blocks reading stdin,
+    // then emits its monitor output and keeps running — closing stdin and
+    // resolving on that first line keeps the stale case a fast "not editable"
+    // rather than a hang until the timeout.
+    return new Promise((resolve) => {
+      const child = spawn(resolved.command, args, { stdio: ["pipe", "pipe", "ignore"] });
+      let buffered = "";
+      let settled = false;
+      const settle = (verdict) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          child.kill();
+        } catch {}
+        resolve(verdict);
+      };
+      const timer = setTimeout(() => settle(false), timeoutMs);
+      child.stdin.on("error", () => {});
+      child.stdin.end();
+      child.stdout.on("data", (data) => {
+        buffered += data.toString();
+        const newline = buffered.indexOf("\n");
+        if (newline !== -1) settle(buffered.slice(0, newline).trim() === "EDITABLE");
+      });
+      child.on("error", () => settle(false));
+      child.on("close", () => settle(buffered.trim() === "EDITABLE"));
+    });
   }
 
   /**
@@ -363,38 +383,6 @@ class TextEditMonitor extends EventEmitter {
 
     this._windowBounds = { pid, bounds, at: Date.now() };
     return bounds;
-  }
-
-  /**
-   * macOS: read the char before the cursor in the focused text field, used by
-   * paste-time smart spacing. Resolves to { state: "ok", char } | { state:
-   * "start" } | { state: "unknown" }. Tight timeout so paste latency is
-   * unaffected; on "unknown" the caller falls back to append-mode spacing.
-   */
-  getPrecedingChar(pid, timeoutMs = 400) {
-    return new Promise((resolve) => {
-      if (process.platform !== "darwin" || !pid) {
-        resolve({ state: "unknown" });
-        return;
-      }
-      const script = MACOS_AX_PRECEDING_CHAR_SCRIPT(pid);
-      execFile("osascript", ["-e", script], { timeout: timeoutMs }, (err, stdout) => {
-        if (err) {
-          resolve({ state: "unknown" });
-          return;
-        }
-        const out = stdout.replace(/\n$/, "");
-        if (out === "START:") {
-          resolve({ state: "start" });
-          return;
-        }
-        if (out.startsWith("OK:")) {
-          resolve({ state: "ok", char: out.slice(3) });
-          return;
-        }
-        resolve({ state: "unknown" });
-      });
-    });
   }
 
   /**

@@ -67,12 +67,12 @@ test("push mode watches every dictation hotkey, including regular keys", () => {
 test("membership and lookup helpers work across multi-hotkey slots", () => {
   const mgr = makeManager({
     dictation: ["GLOBE", "Control+Shift+R"],
-    agent: "Control+Alt",
+    meeting: "Control+Alt",
   });
   assert.equal(mgr.slotHasHotkey("dictation", "Control+Shift+R"), true);
   assert.equal(mgr.slotHasHotkey("dictation", "F12"), false);
   assert.equal(mgr.findSlotByHotkey("Control+Shift+R"), "dictation");
-  assert.equal(mgr.findSlotByHotkey("Control+Alt"), "agent");
+  assert.equal(mgr.findSlotByHotkey("Control+Alt"), "meeting");
   assert.equal(mgr.findSlotByHotkey("Nope"), null);
   assert.deepEqual(mgr.getSlotHotkeys("dictation"), ["GLOBE", "Control+Shift+R"]);
   assert.equal(mgr.getSlotHotkey("dictation"), "GLOBE");
@@ -80,7 +80,7 @@ test("membership and lookup helpers work across multi-hotkey slots", () => {
 
 // The macOS Globe listener config drives both mouse-button suppression and
 // whether macOS's own standalone Globe action has to stand down.
-const MAC_SLOTS = ["dictation", "agent", "voiceAgent", "translation"];
+const MAC_SLOTS = ["dictation", "voiceAgent", "translation"];
 
 test("Globe in any supported slot asks for system Globe suppression", () => {
   for (const slot of MAC_SLOTS) {
@@ -104,7 +104,7 @@ test("Fn is treated as Globe, including as a secondary hotkey", () => {
 test("mouse buttons are collected across slots and de-duplicated", () => {
   const mgr = makeManager({
     dictation: ["MouseButton4", "F8"],
-    agent: "MouseButton5",
+    translation: "MouseButton5",
     voiceAgent: "MouseButton4",
   });
   const config = mgr.getMacNativeListenerConfig(MAC_SLOTS);
@@ -122,7 +122,7 @@ test("slots outside the requested list are ignored", () => {
 });
 
 test("no native macOS hotkeys means nothing to configure", () => {
-  const mgr = makeManager({ dictation: "F8", agent: "Control+Shift+A", voiceAgent: "" });
+  const mgr = makeManager({ dictation: "F8", meeting: "Control+Shift+A", voiceAgent: "" });
   assert.deepEqual(mgr.getMacNativeListenerConfig(MAC_SLOTS), {
     mouseButtons: [],
     suppressGlobeAction: false,
@@ -132,14 +132,14 @@ test("no native macOS hotkeys means nothing to configure", () => {
 test("_findSlotConflict detects a hotkey already bound to another slot's list", () => {
   const mgr = makeManager({
     dictation: ["GLOBE", "Control+Shift+R"],
-    agent: "Control+Alt",
+    meeting: "Control+Alt",
   });
-  // Re-using a dictation hotkey for the agent slot should conflict.
-  const conflict = mgr._findSlotConflict("agent", "Control+Shift+R");
+  // Re-using a dictation hotkey for the voiceAgent slot should conflict.
+  const conflict = mgr._findSlotConflict("voiceAgent", "Control+Shift+R");
   assert.equal(conflict?.reason, "slot_conflict");
   assert.equal(conflict?.conflictSlot, "dictation");
   // A fresh hotkey does not conflict.
-  assert.equal(mgr._findSlotConflict("agent", "F7"), null);
+  assert.equal(mgr._findSlotConflict("voiceAgent", "F7"), null);
   // Re-checking a slot against its own hotkey is not a conflict.
   assert.equal(mgr._findSlotConflict("dictation", "GLOBE"), null);
 });
@@ -150,7 +150,7 @@ test("translation slot conflicts are detected and it is never push-enabled", () 
     translation: "Control+Shift+T",
   });
   // Cross-slot conflict: reusing the translation hotkey on another slot.
-  const conflict = mgr._findSlotConflict("agent", "Control+Shift+T");
+  const conflict = mgr._findSlotConflict("voiceAgent", "Control+Shift+T");
   assert.equal(conflict?.reason, "slot_conflict");
   assert.equal(conflict?.conflictSlot, "translation");
   // Push mode only push-enables the dictation slot, never translation.

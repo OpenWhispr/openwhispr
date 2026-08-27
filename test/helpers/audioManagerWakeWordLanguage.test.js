@@ -77,7 +77,6 @@ async function loadAudioManager(t) {
     },
     createManager: () =>
       Object.assign(Object.create(AudioManager.prototype), {
-        skipReasoning: false,
         voiceAgentRequested: false,
         translationRequested: false,
         isDictionaryEcho: () => false,
@@ -123,4 +122,38 @@ test("cloud auto-language routing uses detected speech before the UI language", 
   });
   const italianResult = await createManager().processWithOpenWhisprCloud(audioBlob);
   assert.equal(italianResult.text, "agent output");
+});
+
+test("failed BYOK cleanup preserves the complete raw transcript", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t);
+  const audioBlob = {
+    type: "audio/webm",
+    size: 1024,
+    arrayBuffer: async () => new ArrayBuffer(8),
+  };
+  const rawTranscript = "The complete raw transcript must survive cleanup failure.";
+
+  setSettings({
+    preferredLanguage: "auto",
+    uiLanguage: "en",
+    useCleanupModel: true,
+    cleanupCloudMode: "byok",
+    cleanupDisableThinking: true,
+    customDictionary: [],
+    snippets: [],
+  });
+  window.electronAPI.cloudTranscribe = async () => ({
+    success: true,
+    text: rawTranscript,
+    sttLanguage: "en",
+  });
+  const manager = createManager();
+  manager.processWithReasoningModel = async () => {
+    throw new Error("Gemini hit the token limit and returned a truncated response");
+  };
+
+  const result = await manager.processWithOpenWhisprCloud(audioBlob);
+
+  assert.equal(result.text, rawTranscript);
+  assert.equal(result.rawText, rawTranscript);
 });
