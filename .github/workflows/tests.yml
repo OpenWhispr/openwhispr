@@ -26,6 +26,10 @@ jobs:
       - name: Audit dependencies
         run: npm audit
       - name: Run tests
+        # The gates above fail on drift that has nothing to do with the suite —
+        # a stray format nit, a missing locale key, a fresh advisory. Without
+        # this the job stops there and the PR reports no test result at all.
+        if: ${{ !cancelled() }}
         run: npm test
         env:
           # keeps require("electron") from throwing when postinstall was skipped
