@@ -67,6 +67,18 @@ export default function AgentDictationPillOverlay() {
     };
   }, []);
 
+  // hideAgentDictationPill force-resets native click-through, but a hidden
+  // window never fires mouseleave, so React's hovered flag would survive the
+  // hide and desync the interactivity effect on the next show (first click
+  // falls through). Electron marks hidden windows document.hidden.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") setHovered(false);
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
   const resizeToContent = useCallback(
     (height: number) =>
       window.electronAPI.resizeAgentDictationPillToContent?.(height) ??
