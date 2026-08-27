@@ -622,3 +622,52 @@ test("onboarding suppresses the companion pill like every popup surface", () => 
 
   assert.equal(createdBrowserWindows.length, 0);
 });
+
+test("a ready but hidden companion never counts as an available surface", () => {
+  createdBrowserWindows.length = 0;
+  const manager = new WindowManager();
+  manager.setOnboardingActive(false);
+  manager._assistantPanelOpen = true;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1000, y: 100, width: 400, height: 600 }),
+  };
+
+  manager.showAgentDictationPill();
+  const pill = createdBrowserWindows.at(-1);
+  pill.webContentsListeners.get("did-finish-load")();
+  assert.equal(pill.isVisible(), true);
+  assert.equal(manager._shouldBlockDictationInput("dictation"), false);
+
+  // Onboarding hides the pill without dropping readiness; a hidden surface
+  // cannot show a recording, so dictation must fail closed rather than start
+  // invisibly.
+  manager.hideAgentDictationPill();
+  assert.equal(pill.isVisible(), false);
+  assert.equal(manager._shouldBlockDictationInput("dictation"), true);
+  // The blocked press re-kicks the show, so the next press can land.
+  assert.equal(pill.isVisible(), true);
+});
+
+test("entering onboarding hides an already-visible companion pill", () => {
+  createdBrowserWindows.length = 0;
+  const manager = new WindowManager();
+  manager.setOnboardingActive(false);
+  manager._assistantPanelOpen = true;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1000, y: 100, width: 400, height: 600 }),
+    // Entering onboarding cancels any in-flight dictation before it hides
+    // the normal-app surfaces.
+    webContents: { send: () => undefined },
+  };
+
+  manager.showAgentDictationPill();
+  const pill = createdBrowserWindows.at(-1);
+  pill.webContentsListeners.get("did-finish-load")();
+  assert.equal(pill.isVisible(), true);
+
+  manager.setOnboardingActive(true);
+
+  assert.equal(pill.isVisible(), false);
+});

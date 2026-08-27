@@ -262,6 +262,7 @@ test("a busy Assistant blocks its voice hotkey before native side effects", () =
   manager._agentDictationPillReady = true;
   manager.agentDictationPillWindow = {
     isDestroyed: () => false,
+    isVisible: () => true,
     webContents: { send: () => undefined },
   };
   manager.sendToggleDictation();
@@ -325,6 +326,7 @@ test("push-to-talk dictation follows the companion pill's availability", () => {
   manager._agentDictationPillReady = true;
   manager.agentDictationPillWindow = {
     isDestroyed: () => false,
+    isVisible: () => true,
     webContents: { send: () => undefined },
   };
   manager.sendPrepareDictation();

@@ -801,9 +801,18 @@ class WindowManager {
     return this._isOnboardingInputAllowed("meeting");
   }
 
+  // Visibility is part of "available": a ready pill that is merely hidden
+  // (onboarding took the screen, a panel close hid it) cannot show a
+  // recording, so counting it as a live surface would let dictation start
+  // with nothing on screen. A blocked press re-kicks the show below.
   _isAgentDictationPillAvailable() {
     const pillWindow = this.agentDictationPillWindow;
-    return Boolean(pillWindow && !pillWindow.isDestroyed() && this._agentDictationPillReady);
+    return Boolean(
+      pillWindow &&
+      !pillWindow.isDestroyed() &&
+      this._agentDictationPillReady &&
+      pillWindow.isVisible()
+    );
   }
 
   _shouldBlockDictationInput(inputKind) {
@@ -1487,6 +1496,7 @@ class WindowManager {
   _hideNormalAppSurfaces() {
     this.hideDictationPanel();
     this.hideTranscriptionPreview();
+    this.hideAgentDictationPill();
     this.dismissMeetingNotification();
 
     if (this._pendingUpdateNotificationData) {
