@@ -29,8 +29,8 @@ function createElement(overrides = {}) {
     removeEventListener(name, listener) {
       if (listeners.get(name) === listener) listeners.delete(name);
     },
-    dispatch(name) {
-      listeners.get(name)?.();
+    dispatch(name, event) {
+      listeners.get(name)?.(event);
     },
     hasListener(name) {
       return listeners.has(name);
@@ -137,4 +137,60 @@ test("the panel cap leaves the promised note content visible", async () => {
   assert.equal(FLOATING_CHAT_INSET_EXTRA_PX, 32);
   assert.equal(FLOATING_CHAT_MIN_VISIBLE_CONTENT_PX, 80);
   assert.equal(FLOATING_CHAT_MAX_HEIGHT_CSS, "calc(100% - 7rem)");
+});
+
+test("upward wheel intent cancels resize pinning until the reader returns to bottom", async () => {
+  const { observeFloatingChatLayout } = await load();
+  const panel = createElement({ offsetHeight: 200 });
+  const container = createElement();
+  const contentRoot = createElement();
+  const scroller = createElement({ scrollHeight: 1000, scrollTop: 700, clientHeight: 300 });
+  const scheduledFrames = new Map();
+  let resizeCallback;
+  let nextFrameId = 0;
+
+  const cleanup = observeFloatingChatLayout(
+    {
+      panel,
+      container,
+      contentRoot,
+      getActiveScroller: () => scroller,
+    },
+    {
+      createResizeObserver(callback) {
+        resizeCallback = callback;
+        return { observe() {}, disconnect() {} };
+      },
+      requestFrame(callback) {
+        const frameId = ++nextFrameId;
+        scheduledFrames.set(frameId, () => {
+          scheduledFrames.delete(frameId);
+          callback();
+        });
+        return frameId;
+      },
+      cancelFrame(frameId) {
+        scheduledFrames.delete(frameId);
+      },
+    }
+  );
+
+  scheduledFrames.get(nextFrameId)();
+  resizeCallback();
+  assert.equal(scheduledFrames.size, 1, "a followed resize schedules a bottom correction");
+
+  contentRoot.dispatch("wheel", { deltaY: -8 });
+  assert.equal(scheduledFrames.size, 0, "upward intent cancels the pending correction");
+
+  scroller.scrollTop = 680;
+  contentRoot.dispatch("scroll");
+  resizeCallback();
+  assert.equal(scheduledFrames.size, 0, "resizes do not re-pin a reader away from bottom");
+
+  scroller.scrollTop = 700;
+  contentRoot.dispatch("scroll");
+  resizeCallback();
+  assert.equal(scheduledFrames.size, 1, "reaching the true bottom restores follow mode");
+
+  cleanup();
 });
