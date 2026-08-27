@@ -34,6 +34,15 @@ function pinToBottom(node: HTMLElement): void {
   if (bottom > 0 && Math.abs(node.scrollTop - bottom) > 1) node.scrollTop = bottom;
 }
 
+// Portaled descendants (e.g. a popover opened from a row) bubble synthetic
+// events through the React tree while their DOM target lives outside the
+// scroller; wheeling there scrolls another surface, not the stream.
+function isReaderGesture(node: HTMLElement, target: EventTarget | null): boolean {
+  return (
+    node.scrollHeight - node.clientHeight > 1 && target instanceof Node && node.contains(target)
+  );
+}
+
 /**
  * Keeps a scroller pinned to its bottom while content (`dep`) grows, but never
  * yanks a user back down after they scroll up to re-read. Attach the returned
@@ -79,7 +88,7 @@ export function useStickToBottom<T extends HTMLElement>(
 
   const handleWheel = useCallback((event: WheelEvent<T>) => {
     const node = scrollRef.current;
-    if (event.deltaY < 0 && node && node.scrollHeight - node.clientHeight > 1) {
+    if (event.deltaY < 0 && node && isReaderGesture(node, event.target)) {
       followerRef.current?.leaveBottom();
     }
   }, []);
@@ -93,12 +102,7 @@ export function useStickToBottom<T extends HTMLElement>(
     const previousY = touchYRef.current;
     if (nextY == null) return;
     const node = scrollRef.current;
-    if (
-      previousY != null &&
-      nextY > previousY &&
-      node &&
-      node.scrollHeight - node.clientHeight > 1
-    ) {
+    if (previousY != null && nextY > previousY && node && isReaderGesture(node, event.target)) {
       followerRef.current?.leaveBottom();
     }
     touchYRef.current = nextY;

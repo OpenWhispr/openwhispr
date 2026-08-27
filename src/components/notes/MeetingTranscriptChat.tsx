@@ -754,6 +754,12 @@ export function MeetingTranscriptChat({
   onToggleSelect,
 }: MeetingTranscriptChatProps) {
   const { t } = useTranslation();
+  const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
+  // The scroller mounts only once content exists, and a recording opens with
+  // partials before its first final segment — the follow effect must re-run on
+  // that mount too, or it runs against a null node and never attaches its
+  // resize observer.
+  const followDep = useMemo(() => ({ segments, hasContent }), [segments, hasContent]);
   const {
     scrollRef,
     handleScroll,
@@ -761,7 +767,7 @@ export function MeetingTranscriptChat({
     handleTouchStart,
     handleTouchMove,
     handleTouchEnd,
-  } = useStickToBottom<HTMLDivElement>(segments);
+  } = useStickToBottom<HTMLDivElement>(followDep);
 
   // Rows are keyed by segment id, not index: segments are inserted by timestamp
   // and retracted mid-list, which would misalign an index-keyed size cache.
@@ -775,7 +781,6 @@ export function MeetingTranscriptChat({
   });
   const totalSize = virtualizer.getTotalSize();
 
-  const hasContent = segments.length > 0 || micPartial || systemPartial;
   const systemPartialSpeakerLabel =
     systemPartialSpeakerName ||
     (systemPartialSpeakerId
