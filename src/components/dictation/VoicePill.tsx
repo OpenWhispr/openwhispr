@@ -114,7 +114,10 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         width: footprint.width,
         height: footprint.height,
         cursor: isProcessing || isThinking ? "not-allowed" : isDragging ? "grabbing" : "pointer",
-        boxShadow: floatingHover ? "var(--shadow-card-hover-subtle)" : undefined,
+        // Yields to the fused rule's `box-shadow: none` while the liquid skin
+        // owns the chrome — an inline shadow would outrank it and paint a
+        // phantom capsule when a de-fusing skin lingers over a hovered pill.
+        boxShadow: floatingHover && !liquidFused ? "var(--shadow-card-hover-subtle)" : undefined,
         transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, padding-left ${GROW_TRANSITION}, padding-right ${GROW_TRANSITION}, background-color 220ms ease-out, border-color 220ms ease-out, box-shadow 220ms ease-out`,
         ...style,
       }}
