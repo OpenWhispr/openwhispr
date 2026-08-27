@@ -1724,6 +1724,7 @@ class WindowManager {
   }
 
   showAgentDictationPill() {
+    if (this._onboardingActive) return;
     if (!this._assistantPanelOpen || !this.mainWindow || this.mainWindow.isDestroyed()) return;
 
     let pillWindow = this.agentDictationPillWindow;

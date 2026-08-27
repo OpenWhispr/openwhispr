@@ -251,6 +251,7 @@ test("the companion toggles macOS click-through with hover interactivity", () =>
 test("the Agent companion window is created content-protected", () => {
   createdBrowserWindows.length = 0;
   const manager = new WindowManager();
+  manager.setOnboardingActive(false);
   manager._assistantPanelOpen = true;
   manager.mainWindow = {
     isDestroyed: () => false,
@@ -454,6 +455,7 @@ test("a real drag marks the pill as manually positioned", async () => {
 test("did-finish-load marks the companion ready, pushes state, and shows it", () => {
   createdBrowserWindows.length = 0;
   const manager = new WindowManager();
+  manager.setOnboardingActive(false);
   manager._assistantPanelOpen = true;
   manager.mainWindow = {
     isDestroyed: () => false,
@@ -479,6 +481,7 @@ test("did-finish-load marks the companion ready, pushes state, and shows it", ()
 test("a crashed companion renderer drops readiness and closes for recreation", () => {
   createdBrowserWindows.length = 0;
   const manager = new WindowManager();
+  manager.setOnboardingActive(false);
   manager._assistantPanelOpen = true;
   manager.mainWindow = {
     isDestroyed: () => false,
@@ -501,6 +504,7 @@ test("a crashed companion renderer drops readiness and closes for recreation", (
 test("a clean-exit companion renderer teardown leaves readiness untouched", () => {
   createdBrowserWindows.length = 0;
   const manager = new WindowManager();
+  manager.setOnboardingActive(false);
   manager._assistantPanelOpen = true;
   manager.mainWindow = {
     isDestroyed: () => false,
@@ -581,6 +585,7 @@ test("display changes reposition the companion pill", () => {
   createdBrowserWindows.length = 0;
   screenListeners.length = 0;
   const manager = new WindowManager();
+  manager.setOnboardingActive(false);
   manager._assistantPanelOpen = true;
   manager.mainWindow = {
     isDestroyed: () => false,
@@ -601,4 +606,19 @@ test("display changes reposition the companion pill", () => {
     screenListeners.map((entry) => entry.event).sort(),
     ["display-added", "display-metrics-changed", "display-removed"]
   );
+});
+
+test("onboarding suppresses the companion pill like every popup surface", () => {
+  createdBrowserWindows.length = 0;
+  const manager = new WindowManager();
+  manager.setOnboardingActive(true);
+  manager._assistantPanelOpen = true;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1000, y: 100, width: 400, height: 600 }),
+  };
+
+  manager.showAgentDictationPill();
+
+  assert.equal(createdBrowserWindows.length, 0);
 });
