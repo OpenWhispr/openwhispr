@@ -15,6 +15,7 @@ const BINDING_VERSION = 1;
 const bindingFile = () => path.join(app.getPath("userData"), "account-scope-binding.json");
 
 function hashToken(token) {
+  if (typeof token !== "string" || token.length === 0) return "";
   return crypto.createHash("sha256").update(token, "utf8").digest("hex");
 }
 
@@ -22,7 +23,9 @@ function hashToken(token) {
 // arriving while a token exists is a "validated signed-out" transition and
 // must carry the current generation, so a stray early null call cannot
 // discard a valid binding.
-function evaluateScopeRequest({ accountId, expectedGeneration, token, generation }) {
+function evaluateScopeRequest(request = {}) {
+  const { accountId, expectedGeneration, token, generation } =
+    request && typeof request === "object" ? request : {};
   if (accountId !== null && (typeof accountId !== "string" || accountId.trim().length === 0)) {
     return { ok: false, code: "INVALID_ACCOUNT" };
   }
@@ -37,7 +40,8 @@ function evaluateScopeRequest({ accountId, expectedGeneration, token, generation
 
 // Pure boot decision: restore only when the persisted bearer is the exact
 // credential this binding was validated under.
-function resolveBootAccountScope({ token, binding }) {
+function resolveBootAccountScope(params = {}) {
+  const { token, binding } = params && typeof params === "object" ? params : {};
   if (typeof token !== "string" || token.length === 0) return null;
   if (!binding || binding.version !== BINDING_VERSION) return null;
   if (typeof binding.accountId !== "string" || binding.accountId.trim().length === 0) return null;

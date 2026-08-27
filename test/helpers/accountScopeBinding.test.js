@@ -130,3 +130,17 @@ test("clear removes the binding and read tolerates absence and corruption", (t) 
   assert.equal(binding.read(), null);
   binding.clear();
 });
+
+test("safely handles nullish arguments and non-string tokens", () => {
+  assert.equal(binding.resolveBootAccountScope(null), null);
+  assert.equal(binding.resolveBootAccountScope(), null);
+  assert.deepEqual(binding.evaluateScopeRequest(null), { ok: false, code: "INVALID_ACCOUNT" });
+  assert.deepEqual(binding.evaluateScopeRequest(), { ok: false, code: "INVALID_ACCOUNT" });
+  assert.equal(
+    binding.resolveBootAccountScope({
+      token: 123,
+      binding: { version: 1, accountId: "account-a", tokenHash: "abc" },
+    }),
+    null
+  );
+});
