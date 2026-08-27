@@ -104,11 +104,11 @@ test("a missing key fails before any request is made", async () => {
 });
 
 test("HTTP statuses map to coded errors without leaking the key", async () => {
-  const statusError = async (status) => {
+  const statusError = async (status, body = "denied") => {
     const fetchImpl = async () => ({
       ok: false,
       status,
-      text: async () => "denied",
+      text: async () => body,
     });
     return transcribeWithGemini({ audioBuffer: AUDIO, apiKey: "sk-secret" }, fetchImpl).then(
       () => assert.fail(`status ${status} must reject`),
@@ -123,6 +123,13 @@ test("HTTP statuses map to coded errors without leaking the key", async () => {
   }
   assert.equal((await statusError(429)).code, "PROVIDER_RATE_LIMITED");
   assert.equal((await statusError(500)).code, "SERVER_ERROR");
+
+  // Google's real answer to a bad key, captured from the live API.
+  const badKey = await statusError(400, '{"error":{"reason":"API_KEY_INVALID"}}');
+  assert.equal(badKey.code, "INVALID_KEY");
+  assert.equal(badKey.message.includes("sk-secret"), false);
+
+  assert.equal((await statusError(400, "unsupported mime")).code, undefined);
 });
 
 test("a failed interaction status rejects even on HTTP 200", async () => {

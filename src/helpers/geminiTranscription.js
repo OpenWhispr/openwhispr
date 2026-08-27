@@ -73,13 +73,19 @@ async function transcribeWithGemini(
     body: JSON.stringify(requestBody),
   });
 
-  if (response.status === 401 || response.status === 403) {
-    const error = new Error("Invalid Gemini API key. Check your key in Settings.");
-    error.code = "INVALID_KEY";
-    throw error;
-  }
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
+    // Google rejects a bad key with 400 + reason API_KEY_INVALID rather than 401,
+    // so status alone would surface the raw JSON instead of a fixable message.
+    if (
+      response.status === 401 ||
+      response.status === 403 ||
+      errorText.includes("API_KEY_INVALID")
+    ) {
+      const error = new Error("Invalid Gemini API key. Check your key in Settings.");
+      error.code = "INVALID_KEY";
+      throw error;
+    }
     const error = new Error(`Gemini API Error: ${response.status} ${errorText}`.trim());
     if (response.status === 429) {
       error.code = "PROVIDER_RATE_LIMITED";

@@ -147,6 +147,11 @@ const XAI_STT_URL = "https://api.x.ai/v1/stt";
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
 
+// Route caps vary by provider (Gemini's inline-base64 limit is the lowest), so
+// the message reports the cap that actually applied.
+const byokSizeCapError = (sizeCapBytes) =>
+  `File too large. Maximum size for bring-your-own-key is ${Math.floor(sizeCapBytes / (1024 * 1024))} MB.`;
+
 const AUDIO_MIME_TYPES = {
   mp3: "audio/mpeg",
   wav: "audio/wav",
@@ -5899,12 +5904,8 @@ class IPCHandlers {
           });
           if (text) result = { text, source: "corti", model: route.model };
         } else if (route.transport === "proxied" && route.provider === "gemini") {
-          // Gemini's Interactions API takes JSON with inline base64 audio, so
-          // it can't use the generic multipart fetch below.
           if (route.sizeCapBytes && buffer.byteLength > route.sizeCapBytes) {
-            throw new Error(
-              `File too large. Maximum size for Gemini is ${Math.floor(route.sizeCapBytes / (1024 * 1024))} MB.`
-            );
+            throw new Error(byokSizeCapError(route.sizeCapBytes));
           }
           const { text } = await transcribeWithGemini({
             audioBuffer: buffer,
@@ -9152,11 +9153,7 @@ class IPCHandlers {
 
           const fileSize = fs.statSync(realByok).size;
           if (route.sizeCapBytes && fileSize > route.sizeCapBytes) {
-            const capMb = Math.floor(route.sizeCapBytes / (1024 * 1024));
-            return {
-              success: false,
-              error: `File too large. Maximum size for bring-your-own-key is ${capMb} MB.`,
-            };
+            return { success: false, error: byokSizeCapError(route.sizeCapBytes) };
           }
 
           if (route.transport === "proxied" && route.provider === "corti") {

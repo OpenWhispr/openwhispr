@@ -98,8 +98,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
   dictationLifecycleStateChanged: (state, inputKind) =>
     ipcRenderer.send("dictation-lifecycle-state-changed", state, inputKind),
-  dictationAudioLevelChanged: (level) =>
-    ipcRenderer.send("dictation-audio-level-changed", level),
+  dictationAudioLevelChanged: (level) => ipcRenderer.send("dictation-audio-level-changed", level),
   toggleAgentPanelDictation: () => ipcRenderer.invoke("toggle-agent-panel-dictation"),
   cancelAgentPanelDictation: () => ipcRenderer.invoke("cancel-agent-panel-dictation"),
   getAgentDictationPillState: () => ipcRenderer.invoke("get-agent-dictation-pill-state"),
