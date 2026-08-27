@@ -18,17 +18,22 @@ const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}/`;
 
 class DevServerManager {
   static async waitForDevServer(url = DEV_SERVER_URL, maxAttempts = 30, delay = 1000) {
-    for (let i = 0; i < maxAttempts; i++) {
+    const attempts = Number.isInteger(maxAttempts) && maxAttempts > 0 ? maxAttempts : 30;
+    const intervalDelay = Number.isInteger(delay) && delay >= 0 ? delay : 1000;
+
+    for (let i = 0; i < attempts; i++) {
       try {
-        const http = require("http");
         const urlObj = new URL(url);
+        const isHttps = urlObj.protocol === "https:";
+        const client = isHttps ? require("https") : require("http");
+        const defaultPort = isHttps ? 443 : 80;
 
         const result = await new Promise((resolve) => {
-          const req = http.get(
+          const req = client.get(
             {
               hostname: urlObj.hostname,
-              port: urlObj.port || 80,
-              path: urlObj.pathname,
+              port: urlObj.port || defaultPort,
+              path: urlObj.pathname + urlObj.search,
               timeout: 2000,
             },
             (res) => {
@@ -49,7 +54,7 @@ class DevServerManager {
       } catch {
         // Dev server not ready yet, continue waiting
       }
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, intervalDelay));
     }
     return false;
   }
@@ -91,3 +96,4 @@ class DevServerManager {
 module.exports = DevServerManager;
 module.exports.DEV_SERVER_PORT = DEV_SERVER_PORT;
 module.exports.DEV_SERVER_URL = DEV_SERVER_URL;
+module.exports.parseDevServerPort = parseDevServerPort;
