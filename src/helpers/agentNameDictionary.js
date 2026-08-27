@@ -1,5 +1,6 @@
 function findStoredWord(words, word) {
-  const needle = word.toLowerCase();
+  if (typeof word !== "string" || !Array.isArray(words)) return undefined;
+  const needle = word.trim().toLowerCase();
   return words.find((w) => typeof w === "string" && w.trim().toLowerCase() === needle);
 }
 
@@ -11,13 +12,17 @@ function findStoredWord(words, word) {
  * table, so a caller holding a stale snapshot deletes everything it omitted
  * (#1295); a delta can only touch the words it names.
  *
- * @param {string[]} dictionary current dictionary snapshot
+ * @param {Iterable<string>|string[]} dictionary current dictionary snapshot
  * @param {string} newName
  * @param {string} [oldName]
  * @returns {{ add: string[], remove: string[] }}
  */
 export function agentNameDictionaryChanges(dictionary, newName, oldName) {
-  const words = Array.isArray(dictionary) ? dictionary : [];
+  const words = Array.isArray(dictionary)
+    ? dictionary
+    : dictionary && typeof dictionary[Symbol.iterator] === "function" && typeof dictionary !== "string"
+      ? Array.from(dictionary)
+      : [];
   const trimmedNew = typeof newName === "string" ? newName.trim() : "";
   const trimmedOld = typeof oldName === "string" ? oldName.trim() : "";
   const storedNew = trimmedNew ? findStoredWord(words, trimmedNew) : undefined;

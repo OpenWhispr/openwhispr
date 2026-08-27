@@ -113,3 +113,19 @@ test("removes previous agent name when oldName contains surrounding whitespace",
     }
   );
 });
+
+test("supports Set and iterable dictionary inputs", async () => {
+  const { agentNameDictionaryChanges } = await load();
+  assert.deepEqual(
+    agentNameDictionaryChanges(new Set(["OpenWhispr", "Alice"]), "OpenWhispr"),
+    { add: [], remove: [] }
+  );
+  assert.deepEqual(
+    agentNameDictionaryChanges(new Set(["OpenWhispr", "Alice"]), "Jarvis", "OpenWhispr"),
+    { add: ["Jarvis"], remove: ["OpenWhispr"] }
+  );
+  assert.deepEqual(agentNameDictionaryChanges(null, "Jarvis"), {
+    add: ["Jarvis"],
+    remove: [],
+  });
+});
