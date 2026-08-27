@@ -1606,6 +1606,7 @@ if (typeof window !== "undefined") {
     enqueueDiarizationCompletion(async () => {
       const {
         diarizationSessionId,
+        isRecording,
         recordingNoteId,
         segments: liveSegments,
       } = useMeetingRecordingStore.getState();
@@ -1613,6 +1614,7 @@ if (typeof window !== "undefined") {
         payloadNoteId: data?.noteId,
         payloadSessionId: data?.sessionId,
         currentSessionId: diarizationSessionId,
+        activeRecordingNoteId: isRecording ? recordingNoteId : null,
       });
       if (targetNoteId == null) return;
 
