@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { emergenceBlend, traceFusedOutline } from "./liquidFusion";
@@ -84,11 +84,13 @@ export function LiquidCancelButton({
   const skinActive = fused && t > 0;
   const notifyRef = useRef(onFusedSkinChange);
   notifyRef.current = onFusedSkinChange;
-  useEffect(() => {
+  useLayoutEffect(() => {
     notifyRef.current?.(skinActive);
   }, [skinActive]);
 
   const slotWidth = t * (CANCEL_BUTTON_GAP + CANCEL_BUTTON_SIZE);
+  // The absolute button overlaps the pill until its slot is at least one button wide.
+  const buttonInteractive = visible && slotWidth >= CANCEL_BUTTON_SIZE;
   const outline = useMemo(() => {
     if (!fused || t <= 0) return null;
     return traceFusedOutline(
@@ -135,6 +137,9 @@ export function LiquidCancelButton({
       <button
         type="button"
         aria-label={ariaLabel}
+        aria-hidden={!buttonInteractive || undefined}
+        disabled={!buttonInteractive}
+        tabIndex={buttonInteractive ? undefined : -1}
         onMouseDown={(event) => event.stopPropagation()}
         onClick={(event) => {
           event.preventDefault();
@@ -143,7 +148,8 @@ export function LiquidCancelButton({
         }}
         className={cn(
           "absolute right-0 top-0 flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-          !fused && "border border-border/55 bg-surface-2 shadow-sm hover:bg-surface-3"
+          !fused && "border border-border/55 bg-surface-2 shadow-sm hover:bg-surface-3",
+          !buttonInteractive && "pointer-events-none"
         )}
         style={{
           // The glyph surfaces once the bud is mostly out; plain mode just

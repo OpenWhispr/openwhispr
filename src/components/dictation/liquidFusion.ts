@@ -80,18 +80,26 @@ function fieldEval(s: FusionShapes, k: number, x: number, y: number): number {
 // edges the contour crosses. Edges: 0=top, 1=right, 2=bottom, 3=left. Corner
 // bits: 8=TL, 4=TR, 2=BR, 1=BL (set = inside). Saddles (5, 10) are resolved by
 // the cell-center sign at trace time.
+const SADDLE_TL_BR: number[][] = [
+  [3, 0],
+  [2, 1],
+];
+const SADDLE_TR_BL: number[][] = [
+  [3, 2],
+  [0, 1],
+];
 const EDGES: number[][][] = [
   [],
   [[3, 2]],
   [[2, 1]],
   [[3, 1]],
   [[0, 1]],
-  [[3, 2], [0, 1]],
+  SADDLE_TR_BL,
   [[0, 2]],
   [[3, 0]],
   [[3, 0]],
   [[0, 2]],
-  [[3, 0], [2, 1]],
+  SADDLE_TL_BR,
   [[0, 1]],
   [[3, 1]],
   [[2, 1]],
@@ -220,9 +228,8 @@ export function traceFusedOutline(shapes: FusionShapes, opts: FusionOptions = {}
 
       let cases = EDGES[mask];
       if (mask === 5 || mask === 10) {
-        const center = fieldEval(shapes, k, (x0 + x1) / 2, (y0 + y1) / 2);
-        if (mask === 5) cases = center < 0 ? [[3, 0], [2, 1]] : [[3, 2], [0, 1]];
-        else cases = center < 0 ? [[3, 2], [0, 1]] : [[3, 0], [2, 1]];
+        const centerInside = fieldEval(shapes, k, (x0 + x1) / 2, (y0 + y1) / 2) < 0;
+        cases = (mask === 5) === centerInside ? SADDLE_TL_BR : SADDLE_TR_BL;
       }
       for (const [ea, eb] of cases) segs.push([edgePt(ea), edgePt(eb)]);
     }
