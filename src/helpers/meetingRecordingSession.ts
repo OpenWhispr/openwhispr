@@ -69,16 +69,6 @@ export function createMeetingAutoEndRestartContext(
   };
 }
 
-export function getMeetingAutoEndRestartArgs(
-  request: MeetingAutoEndRestartRequest,
-  context: MeetingAutoEndRestartContext | null,
-  activeSessionId: string | null,
-  latestSegments: TranscriptSegment[]
-): StartRecordingArgs | null {
-  if (!context || context.sessionId !== request.sessionId || activeSessionId !== null) return null;
-  return { ...context.args, seedSegments: latestSegments };
-}
-
 type MeetingAutoEndRestartNote = Pick<NoteItem, "transcript" | "deleted_at">;
 
 export type MeetingAutoEndRestartSeed =
@@ -98,6 +88,56 @@ export function resolveMeetingAutoEndRestartSeed(
   if (noteId == null) return { ok: true, seedSegments: liveSegments };
   if (!note || note.deleted_at) return { ok: false, reason: "note-missing" };
   return { ok: true, seedSegments: note.transcript ? parseSegments(note.transcript) : [] };
+}
+
+export interface MeetingAutoEndRestartDeps {
+  getActiveSessionId: () => string | null;
+  getLatestSegments: () => TranscriptSegment[];
+  getNote: (noteId: number) => Promise<MeetingAutoEndRestartNote | null | undefined>;
+  parseSegments: (transcript: string) => TranscriptSegment[];
+  startRecording: (args: StartRecordingArgs) => Promise<boolean>;
+}
+
+export type MeetingAutoEndRestartOutcome =
+  | { status: "started" }
+  | {
+      status: "aborted";
+      reason: "no-context" | "already-recording" | "note-missing" | "start-refused";
+    };
+
+// Every abort is named rather than swallowed: main closes the card and reports
+// success the moment it hands the restart to this renderer, so a drop here is
+// invisible to the user unless the caller tells them.
+export async function runMeetingAutoEndRestart(
+  request: MeetingAutoEndRestartRequest,
+  context: MeetingAutoEndRestartContext | null,
+  deps: MeetingAutoEndRestartDeps
+): Promise<MeetingAutoEndRestartOutcome> {
+  if (!context || context.sessionId !== request.sessionId) {
+    return { status: "aborted", reason: "no-context" };
+  }
+  if (deps.getActiveSessionId() !== null) {
+    return { status: "aborted", reason: "already-recording" };
+  }
+
+  const args: StartRecordingArgs = { ...context.args, seedSegments: deps.getLatestSegments() };
+  const note = args.noteId == null ? null : await deps.getNote(args.noteId);
+  const seed = resolveMeetingAutoEndRestartSeed(
+    args.noteId,
+    note,
+    deps.parseSegments,
+    args.seedSegments ?? []
+  );
+  if (!seed.ok) return { status: "aborted", reason: "note-missing" };
+
+  // Re-checked after the note read: a manual recording can win the race across
+  // that await, and starting here would adopt the auto-ended note under it.
+  if (deps.getActiveSessionId() !== null) {
+    return { status: "aborted", reason: "already-recording" };
+  }
+
+  const started = await deps.startRecording({ ...args, seedSegments: seed.seedSegments });
+  return started ? { status: "started" } : { status: "aborted", reason: "start-refused" };
 }
 
 export function isMeetingAutoEndEligible(

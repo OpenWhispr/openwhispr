@@ -11,9 +11,8 @@ import {
 } from "../stores/meetingRecordingStore";
 import {
   createMeetingAutoEndRestartContext,
-  getMeetingAutoEndRestartArgs,
   requestMeetingRecordingAutoEnd,
-  resolveMeetingAutoEndRestartSeed,
+  runMeetingAutoEndRestart,
   type MeetingAutoEndRestartContext,
 } from "../helpers/meetingRecordingSession";
 import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
@@ -115,49 +114,35 @@ export default function MeetingRecordingMount(): null {
     });
 
     const unsubscribeRestart = window.electronAPI?.onMeetingAutoEndRestartRequested?.((request) => {
-      const restartArgs = getMeetingAutoEndRestartArgs(
-        request,
-        pendingAutoEndRestart.current,
-        getActiveRecordingSessionId(),
-        useMeetingRecordingStore.getState().segments
-      );
-      if (!restartArgs) {
-        if (pendingAutoEndRestart.current?.sessionId === request.sessionId) {
-          pendingAutoEndRestart.current = null;
-        }
-        return;
-      }
-
+      const context = pendingAutoEndRestart.current;
       pendingAutoEndRestart.current = null;
-      void (async () => {
-        const note =
-          restartArgs.noteId == null
-            ? null
-            : await window.electronAPI?.getNote?.(restartArgs.noteId);
-        const seed = resolveMeetingAutoEndRestartSeed(
-          restartArgs.noteId,
-          note,
-          parseTranscriptSegments,
-          restartArgs.seedSegments ?? []
-        );
-        if (!seed.ok) {
+
+      void runMeetingAutoEndRestart(request, context, {
+        getActiveSessionId: getActiveRecordingSessionId,
+        getLatestSegments: () => useMeetingRecordingStore.getState().segments,
+        getNote: (noteId) => window.electronAPI?.getNote?.(noteId) ?? Promise.resolve(null),
+        parseSegments: parseTranscriptSegments,
+        startRecording,
+      })
+        .then((outcome) => {
+          // Main already closed the card and reported success, so an abort the
+          // user is not told about looks exactly like a restart that worked.
+          if (outcome.status === "started") return;
           logger.error(
-            "Meeting recording restart skipped — its note is gone",
-            { noteId: restartArgs.noteId },
+            "Meeting recording restart aborted",
+            { reason: outcome.reason, sessionId: request.sessionId },
             "meeting"
           );
           notifyRestartFailed.current();
-          return;
-        }
-        await startRecording({ ...restartArgs, seedSegments: seed.seedSegments });
-      })().catch((error) => {
-        logger.error(
-          "Meeting recording restart failed",
-          { error: error instanceof Error ? error.message : String(error) },
-          "meeting"
-        );
-        notifyRestartFailed.current();
-      });
+        })
+        .catch((error) => {
+          logger.error(
+            "Meeting recording restart failed",
+            { error: error instanceof Error ? error.message : String(error) },
+            "meeting"
+          );
+          notifyRestartFailed.current();
+        });
     });
 
     return () => {

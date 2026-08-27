@@ -1448,6 +1448,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
 export interface StopRecordingResult {
   diarizationSessionId: string | null;
+  // True only when this call ended a live recording — false for a no-op stop
+  // (nothing recording, or a scoped stop for a session that is not active).
   stopped: boolean;
 }
 
@@ -1508,7 +1510,6 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       }
     };
 
-    let stopCompleted = false;
     const diarizationSessionId = await persistFinalTranscriptAroundStop({
       segments: finalSegments,
       serializeSegments: serializeTranscriptSegments,
@@ -1530,9 +1531,6 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
           }
           if (result?.success && result.transcript) {
             useMeetingRecordingStore.setState({ transcript: result.transcript });
-          }
-          if (result?.success) {
-            stopCompleted = true;
           } else if (result?.error) {
             reportMeetingError(result.error);
           }
@@ -1558,7 +1556,10 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     });
 
     logger.info("Meeting transcription stopped", {}, "meeting");
-    return { diarizationSessionId, stopped: stopCompleted };
+    // Reaching here means this call ended a live recording and its transcript
+    // was written above, so its note is resumable. A failed main-side teardown
+    // is surfaced by reportMeetingError and must not void the restart offer.
+    return { diarizationSessionId, stopped: true };
   });
 }
 

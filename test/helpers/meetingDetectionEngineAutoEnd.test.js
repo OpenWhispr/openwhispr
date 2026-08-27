@@ -21,8 +21,11 @@ const { SILENCE_WINDOW_MS, FAST_SILENCE_MS, OWNERSHIP_MIN_ACTIVE_MS, OWNERSHIP_C
   createMeetingAutoEndController;
 
 const TICK_MS = 1000;
-const { AUTO_END_RESTART_WINDOW_MS: RESTART_WINDOW_MS, AUTO_END_RESTART_GRACE_MS } =
-  MeetingDetectionEngine;
+const {
+  AUTO_END_RESTART_WINDOW_MS: RESTART_WINDOW_MS,
+  AUTO_END_RESTART_GRACE_MS,
+  AUTO_END_RESTART_CLAIM_MS,
+} = MeetingDetectionEngine;
 
 const createClock = () => {
   let now = 10_000;
@@ -892,5 +895,153 @@ test("a recovery notice that does not report success invalidates the restart off
     ),
     false
   );
+  harness.engine.stop();
+});
+
+// The window manager destroys a notification window on paths that cannot tell
+// the engine about it (_hideNormalAppSurfaces on re-auth, a late detection
+// response landing on a replaced card): dismissMeetingNotification() nulls its
+// window reference before close(), so the "closed" handler early-returns, and
+// it cancels the dismiss timer, so the timeout handler never runs either. The
+// offer therefore has to expire on its own clock, or it gates every meeting
+// prompt for the rest of the app session.
+test("an offer whose card vanished without notice stops gating the queue once it expires", async () => {
+  const harness = createEngine();
+  const ownerWebContents = harness.owner([]);
+  await triggerOwnershipStop(harness, ownerWebContents);
+
+  harness.engine.handleCalendarReminder({
+    id: "calendar-next",
+    summary: "Next call",
+    start_time: new Date(harness.clock.now()).toISOString(),
+  });
+  harness.engine.endRecordingSession("meeting-1");
+  harness.engine.setUserRecording(false);
+  await harness.engine.completeAutoEndSession("meeting-1", ownerWebContents);
+
+  harness.engine._flushNotificationQueue();
+  assert.deepEqual(harness.shownNotifications, []);
+
+  harness.clock.advance(RESTART_WINDOW_MS + TICK_MS);
+  harness.engine._flushNotificationQueue();
+  assert.equal(harness.shownNotifications.length, 1);
+  assert.equal(harness.shownNotifications[0].detectionId, "calendar:calendar-next");
+  harness.engine.stop();
+});
+
+// No setUserRecording here: its 2.5s cooldown is itself a queue gate, and this
+// test is about the offer gate alone.
+test("an expired offer no longer queues a fresh detection", async () => {
+  const harness = createEngine();
+  const ownerWebContents = harness.owner([]);
+  await triggerOwnershipStop(harness, ownerWebContents);
+  harness.engine.endRecordingSession("meeting-1");
+  await harness.engine.completeAutoEndSession("meeting-1", ownerWebContents);
+
+  harness.clock.advance(RESTART_WINDOW_MS + TICK_MS);
+  harness.engine.handleCalendarReminder({
+    id: "calendar-late",
+    summary: "Later call",
+    start_time: new Date(harness.clock.now()).toISOString(),
+  });
+
+  assert.equal(harness.shownNotifications.length, 1);
+  assert.equal(harness.shownNotifications[0].detectionId, "calendar:calendar-late");
+  harness.engine.stop();
+});
+
+// The renderer can drop a restart it accepted (its context died with a reload,
+// or a manual recording won the race). Main cannot see that, so the grace it
+// banks has to lapse on its own rather than waiting to be claimed by whatever
+// recording happens to start next.
+test("a restart grace nobody claims in time does not suppress a later recording", async () => {
+  const harness = createEngine();
+  const messages = [];
+  const ownerWebContents = harness.owner(messages);
+  await triggerOwnershipStop(harness, ownerWebContents);
+  harness.engine.endRecordingSession("meeting-1");
+  await harness.engine.completeAutoEndSession("meeting-1", ownerWebContents);
+  assert.equal(
+    harness.engine.respondToAutoEndNotification("meeting-1", "restart", harness.overlayWebContents),
+    true
+  );
+
+  // The restart never reaches startRecording; the user opens an unrelated
+  // meeting note well after the restart could plausibly have begun.
+  harness.clock.advance(AUTO_END_RESTART_CLAIM_MS + TICK_MS);
+  harness.audioActivityDetector.externalMicState = { reliable: true, externalMicActive: false };
+  messages.length = 0;
+  await harness.engine.beginRecordingSession({
+    sessionId: "meeting-2",
+    autoEndEligible: true,
+    ownerWebContents,
+    systemAudioAvailable: true,
+  });
+
+  harness.clock.advance(SILENCE_WINDOW_MS + TICK_MS);
+  assert.deepEqual(messages, [
+    {
+      channel: "meeting-auto-end-requested",
+      payload: { sessionId: "meeting-2", reason: "silence" },
+    },
+  ]);
+  harness.engine.stop();
+});
+
+test("a restart claimed inside the claim window still suppresses auto-end", async () => {
+  const harness = createEngine();
+  const messages = [];
+  const ownerWebContents = harness.owner(messages);
+  await triggerOwnershipStop(harness, ownerWebContents);
+  harness.engine.endRecordingSession("meeting-1");
+  await harness.engine.completeAutoEndSession("meeting-1", ownerWebContents);
+  harness.engine.respondToAutoEndNotification("meeting-1", "restart", harness.overlayWebContents);
+
+  harness.clock.advance(AUTO_END_RESTART_CLAIM_MS - TICK_MS);
+  harness.audioActivityDetector.externalMicState = { reliable: true, externalMicActive: false };
+  messages.length = 0;
+  await harness.engine.beginRecordingSession({
+    sessionId: "meeting-2",
+    autoEndEligible: true,
+    ownerWebContents,
+    systemAudioAvailable: true,
+  });
+
+  harness.clock.advance(SILENCE_WINDOW_MS + TICK_MS);
+  assert.deepEqual(messages, []);
+  harness.engine.stop();
+});
+
+// A restart is the one response that deliberately skips the flush, because the
+// recording it starts gates the queue again. When it cannot be delivered at
+// all, nothing will start, so the detections held behind it have to go out.
+test("a restart that cannot reach its renderer releases the detections it was holding", async () => {
+  const harness = createEngine();
+  let ownerDestroyed = false;
+  const ownerWebContents = {
+    isDestroyed: () => ownerDestroyed,
+    send: () => {},
+  };
+  await triggerOwnershipStop(harness, ownerWebContents);
+
+  harness.engine.handleCalendarReminder({
+    id: "calendar-next",
+    summary: "Next call",
+    start_time: new Date(harness.clock.now()).toISOString(),
+  });
+  harness.engine.endRecordingSession("meeting-1");
+  harness.engine.setUserRecording(false);
+  await harness.engine.completeAutoEndSession("meeting-1", ownerWebContents);
+  harness.engine._flushNotificationQueue();
+  assert.deepEqual(harness.shownNotifications, []);
+
+  ownerDestroyed = true;
+  assert.equal(
+    harness.engine.respondToAutoEndNotification("meeting-1", "restart", harness.overlayWebContents),
+    false
+  );
+
+  assert.equal(harness.shownNotifications.length, 1);
+  assert.equal(harness.shownNotifications[0].detectionId, "calendar:calendar-next");
   harness.engine.stop();
 });

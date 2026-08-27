@@ -5,6 +5,7 @@ import { MeetingNotificationCard } from "./MeetingNotificationCard";
 import {
   getMeetingNotificationPresentation,
   initializeMeetingNotificationOverlay,
+  shouldRestoreAutoEndCard,
   subscribeMeetingAutoEndCountdown,
 } from "./meetingNotificationModel";
 
@@ -47,11 +48,16 @@ export default function MeetingNotificationOverlay() {
     async (action: MeetingAutoEndAction) => {
       if (data?.kind !== "auto-end") return;
       setIsVisible(false);
-      const result = await window.electronAPI?.meetingAutoEndRespond?.(data.sessionId, action);
-      // Main closes this window when it accepts the response. A rejection (the
-      // window expired, or a replacement took the offer) leaves it open, so put
-      // the card back instead of stranding an invisible, unclickable overlay.
-      if (result && !result.success) setIsVisible(true);
+      // Main closes this window when it accepts the response. Anything else —
+      // a rejection, a throw, a preload without the method — leaves it open, so
+      // put the card back instead of stranding an invisible, unclickable
+      // always-on-top overlay.
+      try {
+        const result = await window.electronAPI?.meetingAutoEndRespond?.(data.sessionId, action);
+        if (shouldRestoreAutoEndCard(result)) setIsVisible(true);
+      } catch {
+        setIsVisible(true);
+      }
     },
     [data]
   );

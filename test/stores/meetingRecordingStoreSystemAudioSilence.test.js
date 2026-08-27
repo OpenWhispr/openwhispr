@@ -1,6 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installMicCaptureGlobals,
+} = require("../lib/rendererTestHarness");
 
 // Drives the real startRecording/stopRecording flow through the renderer
 // harness and pins the meeting-system-audio-silent warning: latched once per
@@ -55,74 +59,6 @@ async function loadStore(t, api) {
     cachePrefix: "openwhispr-meeting-system-audio-silence-test-",
   });
   return vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
-}
-
-// Minimal Web Audio + capture stubs so the mic pipeline can run under Node.
-function installMicCaptureGlobals(t) {
-  const track = {
-    readyState: "live",
-    label: "Fake Mic",
-    stop() {},
-    getSettings: () => ({}),
-  };
-  const stream = {
-    getTracks: () => [track],
-    getAudioTracks: () => [track],
-    getVideoTracks: () => [],
-  };
-  const mediaDevices = {
-    getUserMedia: async () => stream,
-    enumerateDevices: async () => [],
-    addEventListener() {},
-    removeEventListener() {},
-  };
-  const node = () => ({
-    connect() {},
-    disconnect() {},
-    gain: { value: 0 },
-    fftSize: 0,
-    smoothingTimeConstant: 0,
-  });
-  class FakeAudioContext {
-    constructor() {
-      this.state = "running";
-      this.audioWorklet = { addModule: async () => {} };
-      this.destination = {};
-    }
-    createMediaStreamSource() {
-      return node();
-    }
-    createGain() {
-      return node();
-    }
-    createAnalyser() {
-      return node();
-    }
-    async resume() {}
-    async close() {}
-  }
-  class FakeAudioWorkletNode {
-    constructor() {
-      this.port = { onmessage: null, postMessage() {} };
-    }
-    connect() {}
-    disconnect() {}
-  }
-
-  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
-  Object.defineProperty(globalThis, "navigator", {
-    value: { mediaDevices },
-    configurable: true,
-    writable: true,
-  });
-  globalThis.AudioContext = FakeAudioContext;
-  globalThis.AudioWorkletNode = FakeAudioWorkletNode;
-  t.after(() => {
-    if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);
-    else delete globalThis.navigator;
-    delete globalThis.AudioContext;
-    delete globalThis.AudioWorkletNode;
-  });
 }
 
 test("silence event latches the warning once during a system-audio session", async (t) => {

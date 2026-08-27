@@ -12,6 +12,11 @@ const AUTO_END_RESTART_WINDOW_MS = 30_000;
 // a while, or the same silence that just ended the recording ends it again a
 // minute later and they have to keep clicking.
 const AUTO_END_RESTART_GRACE_MS = 5 * 60_000;
+// The grace belongs to the recording the user restarted, which starts within a
+// second or two. Main cannot see a restart the renderer drops (its context died
+// with a reload, or a manual recording won the race), so an unclaimed grace has
+// to lapse rather than wait to be taken by whatever recording starts next.
+const AUTO_END_RESTART_CLAIM_MS = 30_000;
 
 const PLACEHOLDER_PREFIX = { __detected__: "detected", __manual__: "manual" };
 
@@ -60,7 +65,7 @@ class MeetingDetectionEngine {
     this._postRecordingCooldown = null;
     this._recordingSession = null;
     this._pendingAutoEnd = null;
-    this._autoEndRestartGraceUntil = 0;
+    this._autoEndRestartGrace = null;
     this._now = now;
     this._setInterval = setInterval;
     this._clearInterval = clearInterval;
@@ -162,8 +167,14 @@ class MeetingDetectionEngine {
     }
   }
 
+  // Time-bounded on purpose: the window manager destroys a notification window
+  // on paths that cannot notify us (_hideNormalAppSurfaces, a late detection
+  // response landing on a replaced card), and this gate holds every meeting
+  // prompt. Without the deadline one of those silently kills detection for the
+  // rest of the app session.
   _hasLiveAutoEndOffer() {
-    return this._pendingAutoEnd?.expiresAt != null;
+    const expiresAt = this._pendingAutoEnd?.expiresAt;
+    return expiresAt != null && this._now() < expiresAt;
   }
 
   _clearAutoEndRecovery({ dismiss = true } = {}) {
@@ -245,13 +256,22 @@ class MeetingDetectionEngine {
       return true;
     }
 
-    // A restart deliberately does not flush: the user chose the old meeting, and
-    // the recording about to start gates the queue again anyway.
-    if (!ownerWebContents || ownerWebContents.isDestroyed?.()) return false;
+    // A delivered restart deliberately does not flush: the user chose the old
+    // meeting, and the recording about to start gates the queue again anyway.
+    // One that cannot be delivered starts nothing, so the detections held
+    // behind the offer have to go out.
+    if (!ownerWebContents || ownerWebContents.isDestroyed?.()) {
+      this._flushNotificationQueue();
+      return false;
+    }
 
     try {
       ownerWebContents.send("meeting-auto-end-restart-requested", { sessionId });
-      this._autoEndRestartGraceUntil = this._now() + AUTO_END_RESTART_GRACE_MS;
+      const nowMs = this._now();
+      this._autoEndRestartGrace = {
+        suppressUntil: nowMs + AUTO_END_RESTART_GRACE_MS,
+        claimUntil: nowMs + AUTO_END_RESTART_CLAIM_MS,
+      };
       return true;
     } catch (error) {
       debugLogger.error(
@@ -259,6 +279,7 @@ class MeetingDetectionEngine {
         { error: error?.message, sessionId },
         "meeting"
       );
+      this._flushNotificationQueue();
       return false;
     }
   }
@@ -342,8 +363,9 @@ class MeetingDetectionEngine {
       "meeting"
     );
     this._audioActivityMonitor.reset();
-    const suppressUntil = this._autoEndRestartGraceUntil;
-    this._autoEndRestartGraceUntil = 0;
+    const grace = this._autoEndRestartGrace;
+    this._autoEndRestartGrace = null;
+    const suppressUntil = grace && this._now() < grace.claimUntil ? grace.suppressUntil : 0;
     this._autoEndController.beginSession({
       sessionId,
       eligible: true,
@@ -868,7 +890,7 @@ class MeetingDetectionEngine {
   stop() {
     debugLogger.info("Meeting detection engine stopped", {}, "meeting");
     this._clearAutoEndRecovery();
-    this._autoEndRestartGraceUntil = 0;
+    this._autoEndRestartGrace = null;
     this._deactivateAutoEnd();
     this._recordingSession = null;
     this.meetingProcessDetector.stop();
@@ -886,3 +908,4 @@ class MeetingDetectionEngine {
 module.exports = MeetingDetectionEngine;
 module.exports.AUTO_END_RESTART_WINDOW_MS = AUTO_END_RESTART_WINDOW_MS;
 module.exports.AUTO_END_RESTART_GRACE_MS = AUTO_END_RESTART_GRACE_MS;
+module.exports.AUTO_END_RESTART_CLAIM_MS = AUTO_END_RESTART_CLAIM_MS;

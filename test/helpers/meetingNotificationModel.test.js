@@ -153,3 +153,18 @@ test("overlay initialization cleanup cancels reveal and invalidates a pending pu
   assert.equal(readyCount, 0);
   assert.equal(unsubscribeCount, 1);
 });
+
+// The overlay hides its card optimistically and relies on main closing the
+// window. Anything short of an explicit success leaves the window open, so the
+// card has to come back or the user is left with an invisible, unclickable
+// always-on-top window over their screen.
+test("only an explicit success keeps the auto-end card hidden", async () => {
+  const { shouldRestoreAutoEndCard } = await load();
+
+  assert.equal(shouldRestoreAutoEndCard({ success: true }), false);
+  assert.equal(shouldRestoreAutoEndCard({ success: false, reason: "stale-session" }), true);
+  // The IPC method is optional on the preload surface: an older or partially
+  // wired bridge resolves undefined, which is not a success.
+  assert.equal(shouldRestoreAutoEndCard(undefined), true);
+  assert.equal(shouldRestoreAutoEndCard(null), true);
+});

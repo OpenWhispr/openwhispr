@@ -143,52 +143,6 @@ test("restart context preserves note identity and session speaker settings", asy
   );
 });
 
-test("restart args use the latest segments and reject stale or active sessions", async () => {
-  const { getMeetingAutoEndRestartArgs } = await load();
-  const context = {
-    sessionId: "meeting-2",
-    args: {
-      noteId: 42,
-      noteTitle: "Planning",
-      folderId: 8,
-      seedSegments: [{ id: "old", text: "Old", source: "mic" }],
-      diarizationEnabled: true,
-      expectedCount: 3,
-      expectedCountIsExplicit: false,
-      autoEndEligible: true,
-    },
-  };
-  const latestSegments = [{ id: "latest", text: "Latest", source: "system" }];
-
-  assert.deepEqual(
-    getMeetingAutoEndRestartArgs(
-      { sessionId: "meeting-2" },
-      context,
-      null,
-      latestSegments
-    ),
-    { ...context.args, seedSegments: latestSegments }
-  );
-  assert.equal(
-    getMeetingAutoEndRestartArgs(
-      { sessionId: "meeting-1" },
-      context,
-      null,
-      latestSegments
-    ),
-    null
-  );
-  assert.equal(
-    getMeetingAutoEndRestartArgs(
-      { sessionId: "meeting-2" },
-      context,
-      "meeting-3",
-      latestSegments
-    ),
-    null
-  );
-});
-
 test("only meeting notes are eligible for automatic ending", async () => {
   const { isMeetingAutoEndEligible } = await load();
 
@@ -500,4 +454,132 @@ test("restart starts empty when the note has no transcript yet", async () => {
     ]),
     { ok: true, seedSegments: [] }
   );
+});
+
+// runMeetingAutoEndRestart owns every abort path, so the component can toast on
+// all of them instead of dropping some silently.
+function createRestartDeps(overrides = {}) {
+  const started = [];
+  return {
+    started,
+    deps: {
+      getActiveSessionId: () => null,
+      getLatestSegments: () => [],
+      getNote: async () => ({ transcript: "[]", deleted_at: null }),
+      parseSegments,
+      startRecording: async (args) => {
+        started.push(args);
+        return true;
+      },
+      ...overrides,
+    },
+  };
+}
+
+const restartContext = (sessionId = "meeting-1", args = {}) => ({
+  sessionId,
+  args: { noteId: 7, noteTitle: "Standup", folderId: 3, seedSegments: [], ...args },
+});
+
+test("a delivered restart starts a recording seeded from the note", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const { deps, started } = createRestartDeps({
+    getNote: async () => ({
+      transcript: JSON.stringify([{ id: "a", text: "hi" }]),
+      deleted_at: null,
+    }),
+  });
+
+  const outcome = await runMeetingAutoEndRestart(
+    { sessionId: "meeting-1" },
+    restartContext(),
+    deps
+  );
+
+  assert.deepEqual(outcome, { status: "started" });
+  assert.equal(started.length, 1);
+  assert.deepEqual(started[0].seedSegments, [{ id: "a", text: "hi" }]);
+  assert.equal(started[0].noteId, 7);
+});
+
+test("a restart whose context died reports an abort instead of failing silently", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const { deps, started } = createRestartDeps();
+
+  assert.deepEqual(await runMeetingAutoEndRestart({ sessionId: "meeting-1" }, null, deps), {
+    status: "aborted",
+    reason: "no-context",
+  });
+  assert.deepEqual(
+    await runMeetingAutoEndRestart({ sessionId: "meeting-9" }, restartContext(), deps),
+    { status: "aborted", reason: "no-context" }
+  );
+  assert.equal(started.length, 0);
+});
+
+test("a restart racing an already-live recording aborts before it starts one", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const { deps, started } = createRestartDeps({ getActiveSessionId: () => "meeting-other" });
+
+  assert.deepEqual(
+    await runMeetingAutoEndRestart({ sessionId: "meeting-1" }, restartContext(), deps),
+    { status: "aborted", reason: "already-recording" }
+  );
+  assert.equal(started.length, 0);
+});
+
+// The note read is awaited, so a manual recording can win the race after the
+// first guard passed. Starting anyway would adopt the old note under the user's
+// new recording.
+test("a recording that starts while the note is being read cancels the restart", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  let activeSessionId = null;
+  const noteRead = createDeferred();
+  const { deps, started } = createRestartDeps({
+    getActiveSessionId: () => activeSessionId,
+    getNote: () => noteRead.promise,
+  });
+
+  const outcome = runMeetingAutoEndRestart({ sessionId: "meeting-1" }, restartContext(), deps);
+  activeSessionId = "meeting-manual";
+  noteRead.resolve({ transcript: "[]", deleted_at: null });
+
+  assert.deepEqual(await outcome, { status: "aborted", reason: "already-recording" });
+  assert.equal(started.length, 0);
+});
+
+test("a restart whose note vanished aborts without starting a recording", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const { deps, started } = createRestartDeps({ getNote: async () => null });
+
+  assert.deepEqual(
+    await runMeetingAutoEndRestart({ sessionId: "meeting-1" }, restartContext(), deps),
+    { status: "aborted", reason: "note-missing" }
+  );
+  assert.equal(started.length, 0);
+});
+
+test("a restart that startRecording refuses reports an abort", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const { deps } = createRestartDeps({ startRecording: async () => false });
+
+  assert.deepEqual(
+    await runMeetingAutoEndRestart({ sessionId: "meeting-1" }, restartContext(), deps),
+    { status: "aborted", reason: "start-refused" }
+  );
+});
+
+test("a restart without a note keeps the segments captured at the stop", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const live = [{ id: "a", text: "in person" }];
+  const { deps, started } = createRestartDeps({ getLatestSegments: () => live });
+
+  const outcome = await runMeetingAutoEndRestart(
+    { sessionId: "meeting-1" },
+    restartContext("meeting-1", { noteId: null }),
+    deps
+  );
+
+  assert.deepEqual(outcome, { status: "started" });
+  assert.deepEqual(started[0].seedSegments, live);
 });

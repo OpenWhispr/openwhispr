@@ -129,6 +129,13 @@ const defaultCountdownClock: CountdownClock = {
   clearInterval: (timer) => clearInterval(timer),
 };
 
+// Main closes the notification window when it accepts a response. Anything
+// else — a rejected response, or a preload without the method — leaves the
+// window alive, so the optimistically hidden card must be restored.
+export function shouldRestoreAutoEndCard(result: { success: boolean } | null | undefined): boolean {
+  return result?.success !== true;
+}
+
 export function getMeetingAutoEndSecondsRemaining(expiresAt: number, now: number): number {
   return Math.max(0, Math.ceil((expiresAt - now) / 1000));
 }
