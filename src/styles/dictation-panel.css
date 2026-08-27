@@ -5,7 +5,7 @@
 
 /* Shared pill-to-panel surface. Each mode chooses the pill corner it grows from. */
 .expanding-panel-surface {
-  clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 108px) round 24px);
+  clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 114px) round 24px);
   opacity: 0;
   pointer-events: none;
   transition:
@@ -21,7 +21,7 @@
 }
 
 .expanding-panel-anchor-bottom-left {
-  clip-path: inset(calc(100% - 52px) calc(100% - 108px) 0 0 round 24px);
+  clip-path: inset(calc(100% - 52px) calc(100% - 114px) 0 0 round 24px);
   transform: translate(-4px, 4px);
   transform-origin: bottom left;
 }
@@ -49,7 +49,7 @@
 /* Live Transcript stages its empty surface before buffered text becomes visible. */
 .expanding-panel-surface[data-panel-mode="live-transcript"] {
   --live-transcript-footer-height: 4rem;
-  --live-transcript-speaking-pill-width: 5.75rem;
+  --live-transcript-speaking-pill-width: 6.125rem;
   --live-transcript-speaking-pill-height: 2.25rem;
   --live-transcript-footer-inline-padding: 1rem;
   --live-transcript-encapsulated-width: calc(
@@ -229,6 +229,24 @@
     var(--shadow-card),
     0 0 0 1px color-mix(in oklch, var(--color-agent-brand) 28%, transparent),
     0 0 10px color-mix(in oklch, var(--color-agent-brand) 18%, transparent);
+}
+
+/* While the cancel button's liquid skin owns the fused surface, the pill goes
+   headless like inside the Live Transcript panel. Placed after the agent-beam
+   rule so a fused pill never keeps the brand glow ring on its own box. */
+.voice-pill-control[data-liquid-fused="true"] {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.liquid-cancel-skin {
+  pointer-events: none;
+}
+
+/* Match the pill's shadow-card, which only exists in dark theme. */
+.dark .liquid-cancel-skin {
+  filter: drop-shadow(0 1px 3px oklch(0 0 0 / 0.2));
 }
 
 /* The Signal glow: a comet orbiting a breathing ambient halo around the

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
 import "./index.css";
 import { useToast } from "./components/ui/useToast";
 import { useHotkey } from "./hooks/useHotkey";
@@ -21,6 +20,7 @@ import { LiveTranscriptPanel } from "./components/dictation/LiveTranscriptPanel"
 import { VoiceModePanelCore } from "./components/dictation/VoiceModePanelCore";
 import { PillTooltip } from "./components/dictation/PillTooltip";
 import { PillCommandMenu } from "./components/dictation/PillCommandMenu";
+import { LiquidCancelButton } from "./components/dictation/LiquidCancelButton";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
@@ -35,6 +35,7 @@ import {
   resolveVoicePanelCorePresentation,
   resolveVoicePillDock,
   resolveVoicePillInteraction,
+  VOICE_PILL_FOOTPRINT,
   isVoicePillActivationKey,
   shouldActivateVoicePill,
   shouldOfferLiveTranscriptReopen,
@@ -477,6 +478,17 @@ export default function App() {
     isHovered,
   });
   const pillIsInteractive = voicePillInteraction.pillInteractive;
+  // The cancel button pours out of the pill as a fused liquid skin — except
+  // inside the Live Transcript panel, where the pill is already headless and
+  // the classic bordered circle stays (with the same emergence motion).
+  const [cancelSkinActive, setCancelSkinActive] = useState(false);
+  const cancelFused = !liveTranscript.open;
+  // isCompactPill tracks the pill's rendered footprint through the entrance
+  // phases (logo-collapsed thinking renders 40×40 even while recording), so
+  // the skin's pill geometry always matches what is actually on screen.
+  const cancelPillFootprint = isCompactPill
+    ? VOICE_PILL_FOOTPRINT.recording
+    : VOICE_PILL_FOOTPRINT.idle;
   const activateVoicePill = () => {
     if (!pillIsInteractive) return;
     if (canReopenLiveTranscript) {
@@ -554,7 +566,7 @@ export default function App() {
         aria-hidden={pillVisuallySuppressed || undefined}
       >
         <div
-          className="assistant-pill-presence relative flex items-center gap-2"
+          className="assistant-pill-presence relative flex items-center"
           data-assistant-footer-phase={assistant.open ? assistant.footerPhase : undefined}
           data-horizontal-direction={voiceHorizontalDirection}
           style={{
@@ -590,6 +602,7 @@ export default function App() {
               waveformVisible={listeningEntrance.waveformVisible}
               waveformOnlyWhileRecording={anyPanelMounted}
               integratedWithPanel={liveTranscript.open}
+              liquidFused={cancelSkinActive}
               agentMode={agentModeActive}
               showExpandChevron={canReopenLiveTranscript && isHovered}
               getAudioLevel={getAudioLevel}
@@ -653,24 +666,20 @@ export default function App() {
               }}
             />
           </PillTooltip>
-          {voicePillInteraction.cancelVisible && (
-            <button
-              type="button"
-              aria-label={
-                isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
-              }
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                if (isRecording) cancelRecording();
-                else cancelProcessing();
-              }}
-              className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/55 bg-surface-2 text-muted-foreground shadow-sm transition-colors hover:bg-surface-3 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              <X size={13} strokeWidth={2.5} aria-hidden="true" />
-            </button>
-          )}
+          <LiquidCancelButton
+            visible={voicePillInteraction.cancelVisible}
+            fused={cancelFused}
+            pillWidth={cancelPillFootprint.width}
+            pillHeight={cancelPillFootprint.height}
+            ariaLabel={
+              isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
+            }
+            onCancel={() => {
+              if (isRecording) cancelRecording();
+              else cancelProcessing();
+            }}
+            onFusedSkinChange={setCancelSkinActive}
+          />
           {!anyPanelMounted && isCommandMenuOpen && (
             <PillCommandMenu
               buttonRef={buttonRef}

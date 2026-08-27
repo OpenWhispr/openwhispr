@@ -1,0 +1,159 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { X } from "lucide-react";
+import { cn } from "../lib/utils";
+import { emergenceBlend, traceFusedOutline } from "./liquidFusion";
+
+// Sizing shared with WINDOW_SIZES.RECORDING's fit comment in windowConfig.js.
+const CANCEL_BUTTON_SIZE = 28;
+const CANCEL_BUTTON_GAP = 8;
+const EMERGENCE_MS = 280;
+
+// cubic-bezier(0.2, 0, 0, 1) — the house motion curve, solved numerically so
+// this rAF-driven emergence matches the CSS transitions around it.
+function houseEase(x: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  let lo = 0;
+  let hi = 1;
+  let u = x;
+  for (let i = 0; i < 24; i++) {
+    const inv = 1 - u;
+    const bx = 0.6 * u * inv * inv + u * u * u;
+    if (bx < x) lo = u;
+    else hi = u;
+    u = (lo + hi) / 2;
+  }
+  const inv = 1 - u;
+  return 3 * inv * u * u + u * u * u;
+}
+
+/** Drives the cancel button's emergence progress: 0 = swallowed by the pill,
+ *  1 = at rest beside it. Reversing mid-flight resumes from the current value. */
+function useCancelEmergence(visible: boolean): number {
+  const [t, setT] = useState(visible ? 1 : 0);
+  const raf = useRef(0);
+  const tRef = useRef(t);
+  tRef.current = t;
+
+  useEffect(() => {
+    const target = visible ? 1 : 0;
+    const from = tRef.current;
+    if (from === target) return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    const duration = reduced ? 1 : EMERGENCE_MS * Math.abs(target - from);
+    let start = 0;
+    const step = (now: number) => {
+      if (!start) start = now;
+      const p = Math.min(1, (now - start) / duration);
+      setT(from + (target - from) * houseEase(p));
+      if (p < 1) raf.current = requestAnimationFrame(step);
+    };
+    raf.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf.current);
+  }, [visible]);
+
+  return t;
+}
+
+interface LiquidCancelButtonProps {
+  visible: boolean;
+  /** Fused mode draws the liquid skin and the pill goes headless; plain mode
+   *  (inside the Live Transcript panel, where the pill is already headless)
+   *  keeps the classic bordered circle and only animates scale/fade. */
+  fused: boolean;
+  pillWidth: number;
+  pillHeight: number;
+  ariaLabel: string;
+  onCancel: () => void;
+  /** Fires when the fused skin starts/stops owning the pill surface, so the
+   *  pill can go headless without the parent re-rendering every rAF frame. */
+  onFusedSkinChange?: (active: boolean) => void;
+}
+
+export function LiquidCancelButton({
+  visible,
+  fused,
+  pillWidth,
+  pillHeight,
+  ariaLabel,
+  onCancel,
+  onFusedSkinChange,
+}: LiquidCancelButtonProps) {
+  // The 60fps emergence lives here so only this leaf re-renders per frame.
+  const t = useCancelEmergence(visible);
+  const skinActive = fused && t > 0;
+  const notifyRef = useRef(onFusedSkinChange);
+  notifyRef.current = onFusedSkinChange;
+  useEffect(() => {
+    notifyRef.current?.(skinActive);
+  }, [skinActive]);
+
+  const slotWidth = t * (CANCEL_BUTTON_GAP + CANCEL_BUTTON_SIZE);
+  const outline = useMemo(() => {
+    if (!fused || t <= 0) return null;
+    return traceFusedOutline(
+      {
+        pill: { w: pillWidth, h: pillHeight },
+        circle: {
+          cx: pillWidth + slotWidth - CANCEL_BUTTON_SIZE / 2,
+          cy: pillHeight / 2,
+          r: CANCEL_BUTTON_SIZE / 2,
+        },
+      },
+      { k: emergenceBlend(t) }
+    );
+  }, [fused, t, pillWidth, pillHeight, slotWidth]);
+
+  if (t <= 0) return null;
+
+  return (
+    <div
+      className="relative shrink-0"
+      style={{ width: slotWidth, height: CANCEL_BUTTON_SIZE, overflow: "visible" }}
+    >
+      {outline && (
+        <svg
+          aria-hidden="true"
+          className="liquid-cancel-skin absolute"
+          viewBox={`${outline.minX} ${outline.minY} ${outline.width} ${outline.height}`}
+          style={{
+            left: outline.minX - pillWidth,
+            top: outline.minY - (pillHeight - CANCEL_BUTTON_SIZE) / 2,
+            width: outline.width,
+            height: outline.height,
+            zIndex: -1,
+          }}
+        >
+          <path
+            d={outline.d}
+            fill="var(--color-surface-1)"
+            stroke="var(--color-border-hover)"
+            strokeWidth="1"
+          />
+        </svg>
+      )}
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onCancel();
+        }}
+        className={cn(
+          "absolute right-0 top-0 flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+          !fused && "border border-border/55 bg-surface-2 shadow-sm hover:bg-surface-3"
+        )}
+        style={{
+          // The glyph surfaces once the bud is mostly out; plain mode just
+          // scales in with the slot.
+          opacity: fused ? Math.max(0, (t - 0.35) / 0.65) : t,
+          transform: fused ? undefined : `scale(${t})`,
+        }}
+      >
+        <X size={13} strokeWidth={2.5} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}

@@ -130,6 +130,8 @@ const WINDOW_SIZES = {
   // classes); the remaining area is click-through headroom so the hover
   // tooltip and the Signal glow's halo render without clipping at the window
   // bounds. Sized with dictation-panel.css's dock insets — change together.
+  // RECORDING also fits the 98px compact pill + 8px gap + 28px hover cancel
+  // (134px) inside its 184px usable width, so the cancel control never clips.
   BASE: { width: 176, height: 120 },
   RECORDING: { width: 208, height: 120 },
   DICTATION_ERROR: { width: DICTATION_ERROR_WINDOW_LIMITS.width, height: 112 },

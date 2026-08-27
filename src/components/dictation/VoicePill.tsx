@@ -21,6 +21,8 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   waveformVisible?: boolean;
   waveformOnlyWhileRecording?: boolean;
   integratedWithPanel?: boolean;
+  /** The cancel button's liquid skin owns the fused surface; go headless. */
+  liquidFused?: boolean;
   agentMode?: boolean;
   showExpandChevron?: boolean;
   isDragging?: boolean;
@@ -34,6 +36,11 @@ const RESTING_WAVE_HEIGHTS = Array.from(
   { length: WAVEFORM_BAR_COUNT },
   (_, index) => RESTING_WAVE_SILHOUETTE[index % RESTING_WAVE_SILHOUETTE.length]
 );
+
+// Icon↔waveform spacing inside the compact pill. Together with the 98px
+// recording footprint and pr-1.5, centering lands the documented 6/12 edge
+// insets (VOICE_PILL_FOOTPRINT in voicePillPresentation.js).
+const COMPACT_CONTENT_GAP_PX = 6;
 
 const STATE_APPEARANCE: Record<VoicePillState, string> = {
   idle: "border-border-hover bg-surface-1 text-muted-foreground dark:border-border/50",
@@ -55,6 +62,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     waveformVisible = true,
     waveformOnlyWhileRecording = false,
     integratedWithPanel = false,
+    liquidFused = false,
     agentMode = false,
     showExpandChevron = false,
     isDragging = false,
@@ -79,7 +87,9 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const showCompactPill =
     !collapseToIdentity && (isRecording || expanded || (isPanel && !waveformOnlyWhileRecording));
   const showDivider = showCompactPill && waveformVisible && !isRecording;
-  const dividerMargin = showCompactPill ? (showDivider ? 4 : 3) : 0;
+  // The hidden divider's margins are what carry the compact pill's 6px
+  // icon↔waveform gap; a visible divider keeps 4px flanking its 1px rule.
+  const dividerMargin = showCompactPill ? (showDivider ? 4 : COMPACT_CONTENT_GAP_PX / 2) : 0;
   const identitySize = 22;
   const floatingHover = !isPanel && state === "hover";
   const footprint = showCompactPill ? VOICE_PILL_FOOTPRINT.recording : VOICE_PILL_FOOTPRINT.idle;
@@ -89,7 +99,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       ref={ref}
       className={cn(
         "voice-pill-control relative flex items-center justify-center overflow-hidden rounded-full border",
-        showCompactPill && "pr-1",
+        showCompactPill && "pr-1.5",
         "shadow-[var(--shadow-card)]",
         STATE_APPEARANCE[state],
         className
@@ -107,6 +117,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       }}
       data-horizontal-direction={horizontalDirection}
       data-integrated-with-panel={integratedWithPanel || undefined}
+      data-liquid-fused={liquidFused || undefined}
       data-agent-mode={agentMode || undefined}
       data-agent-beam-active={(agentMode && isThinking) || undefined}
       data-expand-chevron={showExpandChevron || undefined}

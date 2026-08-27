@@ -8,7 +8,9 @@ export { LIVE_TRANSCRIPT_SURFACE_LIMITS };
 // and that window size may only change together.
 export const VOICE_PILL_FOOTPRINT = Object.freeze({
   idle: Object.freeze({ width: 40, height: 40 }),
-  recording: Object.freeze({ width: 92, height: 36 }),
+  // 98 = 6px edge inset + 22px icon + 6px gap + 52px waveform + 12px edge
+  // inset (the waveform side keeps extra air; insets include the 1px border).
+  recording: Object.freeze({ width: 98, height: 36 }),
 });
 
 export const LISTENING_ENTRANCE_TIMING = Object.freeze({
