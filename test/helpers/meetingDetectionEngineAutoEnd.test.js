@@ -898,6 +898,46 @@ test("a recovery notice that does not report success invalidates the restart off
   harness.engine.stop();
 });
 
+// endRecordingSession returns false only when a *different* session is live —
+// the one case where the caller must not tear down shared capture. A stale stop
+// arriving after a replacement (the old renderer unwinding) would otherwise
+// kill the recording that just took over.
+test("a stale end request is refused and leaves the replacement session recording", async () => {
+  const harness = createEngine();
+  const messages = [];
+  const ownerWebContents = harness.owner(messages);
+
+  await harness.engine.beginRecordingSession({
+    sessionId: "meeting-1",
+    autoEndEligible: true,
+    ownerWebContents,
+    systemAudioAvailable: true,
+  });
+  harness.clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  harness.micState(true, false);
+
+  await harness.engine.beginRecordingSession({
+    sessionId: "meeting-2",
+    autoEndEligible: true,
+    ownerWebContents,
+    systemAudioAvailable: true,
+  });
+
+  assert.equal(harness.engine.endRecordingSession("meeting-1"), false);
+
+  harness.clock.advance(OWNERSHIP_MIN_ACTIVE_MS);
+  harness.micState(true, false);
+  harness.clock.advance(OWNERSHIP_CONFIRM_MS);
+
+  assert.deepEqual(messages, [
+    {
+      channel: "meeting-auto-end-requested",
+      payload: { sessionId: "meeting-2", reason: "mic-released" },
+    },
+  ]);
+  harness.engine.stop();
+});
+
 // The window manager destroys a notification window on paths that cannot tell
 // the engine about it (_hideNormalAppSurfaces on re-auth, a late detection
 // response landing on a replaced card): dismissMeetingNotification() nulls its

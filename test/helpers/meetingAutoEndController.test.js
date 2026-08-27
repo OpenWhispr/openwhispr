@@ -296,6 +296,51 @@ test("clock: a sleep-sized tick gap discards accumulated silence", () => {
   assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
 });
 
+// Every entry point observes the clock, not just tick(): after wake the owner's
+// monitor can deliver an activity change before the controller's own tick runs,
+// and that path has to discard the pre-sleep silence too.
+test("clock: a sleep-sized gap observed through an activity event discards accumulated silence", () => {
+  const harness = createHarness();
+  beginFallback(harness.controller);
+  harness.runFor(SILENCE_WINDOW_MS - TICK_MS);
+
+  harness.jump(TICK_GAP_MS + 1);
+  audio(harness.controller, false, false);
+
+  assert.deepEqual(harness.stops, []);
+  harness.runFor(SILENCE_WINDOW_MS - TICK_MS);
+  assert.deepEqual(harness.stops, []);
+
+  harness.runFor(TICK_MS);
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "silence" }]);
+});
+
+// endSession drops the session outright, so evidence gathered before it can
+// never drive a stop afterwards. Every _deactivateAutoEnd goes through here.
+test("ending a session keeps its pending evidence from stopping anything later", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  micReleased(harness.controller);
+
+  harness.controller.endSession("s1");
+  harness.runFor(OWNERSHIP_CONFIRM_MS + SILENCE_WINDOW_MS);
+
+  assert.deepEqual(harness.stops, []);
+});
+
+test("ending a session that is not the live one leaves the live one running", () => {
+  const harness = createHarness();
+  beginOwnership(harness.controller);
+  harness.runFor(OWNERSHIP_MIN_ACTIVE_MS);
+  micReleased(harness.controller);
+
+  harness.controller.endSession("s2");
+  harness.runFor(OWNERSHIP_CONFIRM_MS);
+
+  assert.deepEqual(harness.stops, [{ sessionId: "s1", reason: "mic-released" }]);
+});
+
 test("clock: a mic release observed on wake does not stop immediately", () => {
   const { controller, jump, runFor, stops } = createHarness();
   beginOwnership(controller);
