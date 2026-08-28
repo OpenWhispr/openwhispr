@@ -17,6 +17,11 @@ const INACTIVE_RESET_MS = 60 * 1000;
 const LINUX_RECONCILE_MIN_SPACING_MS = 1000;
 const EXEC_OPTS = { timeout: 5000, encoding: "utf8" };
 
+function isLinuxMeetingPromptSourceOutput(sourceOutput) {
+  const properties = sourceOutput?.properties ?? {};
+  return properties["media.role"] !== "production" && properties["stream.capture.sink"] !== "true";
+}
+
 class AudioActivityDetector extends EventEmitter {
   // `getExcludedProcessIds` lists every pid whose mic use is OpenWhispr's own:
   // the Electron process tree by default, plus any live capture helpers when
@@ -448,15 +453,6 @@ class AudioActivityDetector extends EventEmitter {
 
   _parsePactlSubscribeLine(line) {
     if (!this._running || !line.includes("source-output")) return;
-
-    if (/Event\s+'new'\s+on\s+source-output/i.test(line)) {
-      this._activeSources++;
-      this._onMicStateChanged(true);
-    } else if (/Event\s+'remove'\s+on\s+source-output/i.test(line)) {
-      this._activeSources = Math.max(0, this._activeSources - 1);
-      this._onMicStateChanged(this._activeSources > 0);
-    }
-
     this._queueLinuxReconcile();
   }
 
@@ -533,7 +529,9 @@ class AudioActivityDetector extends EventEmitter {
       }
 
       this._activeMicPids = activeMicPids;
-      this._activeSources = sourceOutputs.length;
+      // Prompt qualification is narrower than auto-end ownership: production
+      // and sink-monitor capture are recording evidence, not meeting evidence.
+      this._activeSources = sourceOutputs.filter(isLinuxMeetingPromptSourceOutput).length;
       this._setPidScopedCapability(true);
       this._onMicStateChanged(this._activeSources > 0);
     } catch (err) {
@@ -801,8 +799,9 @@ class AudioActivityDetector extends EventEmitter {
 
   async _checkLinux() {
     try {
-      const { stdout } = await execAsync("pactl list source-outputs short", EXEC_OPTS);
-      return stdout.trim().length > 0;
+      const { stdout } = await execAsync("pactl --format=json list source-outputs", EXEC_OPTS);
+      const sourceOutputs = JSON.parse(stdout);
+      return sourceOutputs.some(isLinuxMeetingPromptSourceOutput);
     } catch {
       // pactl unavailable, try PipeWire
     }
