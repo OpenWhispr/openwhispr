@@ -1336,40 +1336,40 @@ export default function TranscriptionModelPicker({
                       </Button>
                     </div>
                   ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      {gpuActivating ? (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.activating")}
-                          </span>
-                        </>
-                      ) : gpuActive ? (
-                        <>
-                          <Check size={13} className="text-success" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.active")}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.ready")}
-                          </span>
-                        </>
-                      )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        {gpuActivating ? (
+                          <>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.activating")}
+                            </span>
+                          </>
+                        ) : gpuActive ? (
+                          <>
+                            <Check size={13} className="text-success" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.active")}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.ready")}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <Button
+                        onClick={handleGpuDelete}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        {t("gpu.remove")}
+                      </Button>
                     </div>
-                    <Button
-                      onClick={handleGpuDelete}
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
-                    >
-                      {t("gpu.remove")}
-                    </Button>
-                  </div>
                   )
                 ) : (
                   <div className="flex items-start gap-2.5">
