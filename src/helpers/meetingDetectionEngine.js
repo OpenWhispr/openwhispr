@@ -768,6 +768,17 @@ class MeetingDetectionEngine {
     });
   }
 
+  handleDetectionNotificationClosed(detectionId, { flushQueued = true } = {}) {
+    if (!this.activeDetections.has(detectionId)) return;
+    this.activeDetections.delete(detectionId);
+    debugLogger.info(
+      "Detection notification closed without a response",
+      { detectionId },
+      "meeting"
+    );
+    if (flushQueued) this._flushNotificationQueue();
+  }
+
   handleNotificationTimeout(notification = null) {
     if (notification?.kind === "auto-end") {
       this.handleAutoEndNotificationClosed(notification.sessionId);

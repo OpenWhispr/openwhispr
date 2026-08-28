@@ -231,21 +231,6 @@ test("win32: MIC_START/MIC_STOP pids are tracked across partial chunks", async (
   detector.stop();
 });
 
-test("linux: pactl source-output events drive the sustained timer", async () => {
-  const { detector, children, calls } = createDetector("linux");
-
-  await detector.start();
-  assert.equal(calls[0].command, "pactl");
-  assert.deepEqual(calls[0].args, ["subscribe"]);
-
-  children[0].stdout.emit("data", "Event 'new' on source-output #7\n");
-  assert.notEqual(detector._sustainedTimer, null);
-
-  children[0].stdout.emit("data", "Event 'remove' on source-output #7\n");
-  assert.equal(detector._sustainedTimer, null);
-  detector.stop();
-});
-
 test("a listener that dies while running falls back to polling", async () => {
   const { detector, children } = createDetector("linux");
 
@@ -953,4 +938,86 @@ test("win32: our own capture cannot cancel a real meeting already in progress", 
   assert.deepEqual([...detector._activeMicPids], [9001]);
   assert.notEqual(detector._sustainedTimer, null);
   detector.stop();
+});
+
+const RECONCILE_SPACING = 1000;
+const linuxStream = (index, processId) => ({
+  index,
+  properties: { "application.process.id": String(processId) },
+});
+const linuxStreams = (...processIds) =>
+  JSON.stringify(processIds.map((processId, index) => linuxStream(index + 1, processId)));
+
+test("linux: an owned source event cannot prompt before ownership reconciliation", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const ownership = createDeferred();
+  const { detector, children } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [{ stdout: "[]" }, { promise: ownership.promise }],
+  });
+  let detections = 0;
+  detector.on("sustained-audio-detected", () => detections++);
+
+  await detector.start();
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  t.mock.timers.tick(RECONCILE_SPACING + SUSTAINED_MS);
+  await flushImmediate();
+  assert.equal(detections, 0);
+
+  ownership.resolve({ stdout: linuxStreams(700), stderr: "" });
+  await flushImmediate();
+  assert.equal(detector._lastKnownMicState, false);
+  detector.stop();
+});
+
+test("linux: a later capture process re-prompts while the same process does not", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const CHROME = 17111;
+  const ZOOM = 22222;
+  const { detector, children } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      { stdout: "[]" },
+      { stdout: linuxStreams(CHROME) },
+      { stdout: linuxStreams(CHROME) },
+      { stdout: "[]" },
+      { stdout: linuxStreams(ZOOM) },
+    ],
+  });
+  let detections = 0;
+  detector.on("sustained-audio-detected", () => detections++);
+
+  await detector.start();
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 1);
+
+  children[0].stdout.emit("data", "Event 'change' on source-output #1\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 1);
+
+  children[0].stdout.emit("data", "Event 'remove' on source-output #1\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+
+  children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 2);
+  detector.stop();
+});
+
+test("linux: polling reports only external capture as mic activity", async () => {
+  const { detector } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [{ stdout: linuxStreams(700) }, { stdout: linuxStreams(900) }],
+  });
+
+  assert.equal(await detector._checkLinux(), false);
+  assert.equal(await detector._checkLinux(), true);
 });
