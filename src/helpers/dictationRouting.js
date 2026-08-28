@@ -160,6 +160,15 @@ export function resolveWakeWordLanguage({ preferredLanguage, uiLanguage }, detec
 // selection disposition, not here. A translation recording degrades to
 // cleanup instead: the transcript is still a useful dictation without the
 // translation step.
+// The renderer-side source of truth for what the main process gates the Agent
+// companion pill on. Assistant wins over translation: a voice-agent request is
+// explicit user intent even if a stale translation flag survived.
+export function resolveLifecycleInputKind({ voiceAgentRequested, translationRequested }) {
+  if (voiceAgentRequested) return "assistant";
+  if (translationRequested) return "translation";
+  return "dictation";
+}
+
 export function resolveDictationRouteKind({
   cleanupReachable,
   agentReachable,

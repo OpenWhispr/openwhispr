@@ -25,6 +25,31 @@
         "description": "Impossible de reconstruire les fichiers de notes. Assurez-vous que la fonctionnalité est activée et que le dossier est accessible en écriture."
       }
     },
+    "granolaImport": {
+      "title": "Importer depuis Granola",
+      "description": "Importer les notes de réunion depuis un export CSV de Granola",
+      "howTo": "Dans Granola : Settings → Profile → Export historical data → Generate CSV. L'export est envoyé par e-mail, généralement en quelques heures.",
+      "chooseFile": "Choisir le fichier CSV",
+      "preview": {
+        "title": "Importer depuis Granola",
+        "summary": "{{total}} notes trouvées : {{newCount}} nouvelles, {{duplicateCount}} déjà importées",
+        "warnings": "{{warningCount}} lignes posent problème (ignorées ou importées sans date)",
+        "confirm": "Importer {{newCount}} notes",
+        "nothingNew": "Toutes les notes de ce fichier ont déjà été importées."
+      },
+      "done": {
+        "title": "Import terminé",
+        "summary": "{{imported}} notes importées dans le dossier « Imported », {{skipped}} doublons ignorés"
+      },
+      "error": {
+        "title": "Échec de l'import",
+        "EMPTY_FILE": "Le fichier est vide.",
+        "HEADERS_UNRECOGNIZED": "Ce fichier ne ressemble pas à un export CSV de Granola.",
+        "NO_DATA_ROWS": "Aucune note trouvée dans ce fichier.",
+        "FILE_TOO_LARGE": "Ce fichier est trop volumineux pour être importé.",
+        "generic": "Une erreur s'est produite lors de la lecture du fichier."
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "Identifier et étiqueter les intervenants",
@@ -186,6 +211,7 @@
         "accessibilityDescription": "Colle le texte dans votre application active.",
         "systemAudioTitle": "Audio Système",
         "systemAudioDescription": "Capture l’audio d’autres applications.",
+        "screenContextDescription": "Permet à votre assistant vocal de voir votre écran. Jamais enregistré.",
         "enable": "Activer",
         "enabled": "Activé"
       },
@@ -458,7 +484,7 @@
       "title": "Configuration de l'assistant vocal",
       "description": "Parlez à votre assistant IA d'une simple touche",
       "hotkey": "Raccourci",
-      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». Si du texte est surligné, {{agentName}} modifie et remplace cette sélection ; sinon, la réponse s'ouvre dans un panneau flottant. Pas besoin de dire « Hey {{agentName}} » d'abord.",
+      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». Si du texte est surligné, {{agentName}} le modifie et le remplace. Si un champ de texte modifiable est actif, la réponse est collée au curseur ; sinon, elle s'ouvre dans un panneau flottant. Pas besoin de dire « Hey {{agentName}} » d'abord.",
       "test": "Essayer",
       "testInstruction": "Sélectionnez le texte d'exemple ci-dessous, appuyez sur {{hotkey}} et dites « raccourcis ce texte » — la modification apparaît directement dans la zone de texte",
       "testSetHotkey": "Définissez un raccourci ci-dessus pour l'essayer",
@@ -538,6 +564,17 @@
         "step1": "Inscrivez-vous sur corti.ai",
         "step2": "Ouvrez la console Corti et créez des identifiants API",
         "step3": "Collez votre Client ID et votre Secret ci-dessous"
+      }
+    },
+    "requiredModels": {
+      "title": "Installez les modèles requis",
+      "description": "{{organization}} exige ces modèles sur cet appareil avant que vous puissiez commencer la dictée.",
+      "genericOrganization": "Votre organisation",
+      "installed": "Installé",
+      "queued": "En attente",
+      "failed": {
+        "title": "Un téléchargement ne s'est pas terminé",
+        "description": "Vérifiez votre connexion et l'espace disque disponible, puis réessayez. Si le problème persiste, contactez votre administrateur."
       }
     }
   },
@@ -662,7 +699,12 @@
       "enableButton": "Activer le GPU",
       "dismissButton": "Pas maintenant"
     },
-    "backToNotes": "Retour aux notes"
+    "backToNotes": "Retour aux notes",
+    "requiredModelsByOrg": {
+      "title": "Modèles requis manquants",
+      "description": "Votre organisation exige ces modèles sur cet appareil : {{models}}.",
+      "download": "Télécharger"
+    }
   },
   "reasoning": {
     "mode": {
@@ -990,7 +1032,7 @@
     "emailStep": {
       "checkingEmail": "Vérification de votre adresse e-mail...",
       "continueWithEmail": "Continuer avec l'e-mail",
-      "continueWithoutAccount": "Utiliser OpenWhispr sans compte",
+      "continueWithoutAccount": "Continuer sans compte",
       "emailLabel": "Adresse e-mail",
       "emailPlaceholder": "vous@exemple.com",
       "useDifferentEmail": "Utiliser une autre adresse e-mail"
@@ -1682,6 +1724,11 @@
             "admin": "Administrateur de l'espace"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Console Enterprise",
+        "description": "Gérez le SSO, les politiques et les membres sur le web",
+        "open": "Ouvrir la console"
       }
     },
     "unifiedBilling": {
@@ -1826,7 +1873,9 @@
             "SSO et conformité",
             "Support dédié"
           ],
-          "cta": "Contacter les ventes"
+          "cta": "Contacter les ventes",
+          "upgradeCta": "Passer à Enterprise",
+          "askOwner": "Demandez à {{name}} de mettre à niveau votre espace de travail."
         },
         "currentPlan": "Forfait actuel",
         "coveredByWorkspace": "Inclus dans votre plan d'espace de travail",
@@ -1874,16 +1923,20 @@
       "wordsRemaining": "{{remaining}} restants",
       "deleteAccount": {
         "label": "Supprimer le compte",
-        "labelDescription": "Supprimer définitivement votre compte, toutes les données cloud et les données locales. Cette action est irréversible.",
+        "labelDescription": "Supprimer définitivement votre compte et vos données cloud personnelles. Les autres utilisateurs locaux et le contenu des espaces de travail sont conservés.",
         "button": "Supprimer mon compte",
         "deleting": "Suppression...",
         "title": "Supprimer votre compte ?",
-        "description": "Cela supprimera définitivement votre compte OpenWhispr, toutes les notes synchronisées dans le cloud et toutes les données locales, y compris les transcriptions, les enregistrements audio, les modèles téléchargés, les connexions de calendrier et les paramètres. Cette action est irréversible.",
-        "confirmText": "Tout supprimer",
+        "description": "Cela supprime définitivement votre compte OpenWhispr et vos données personnelles. Le contenu des espaces de travail et les données des autres utilisateurs locaux restent sur cet appareil.",
+        "confirmText": "Supprimer le compte",
+        "eraseDeviceLabel": "Effacer aussi toutes les données de cet appareil",
+        "eraseDeviceDescription": "Supprime les notes et caches d’espaces de tous les utilisateurs locaux, les modèles téléchargés, paramètres, calendriers, identifiants et enregistrements.",
+        "eraseDeviceWarning": "Cet effacement de l’appareil est irréversible et affecte tous les utilisateurs locaux.",
         "successTitle": "Compte supprimé",
-        "successDescription": "Votre compte et toutes les données ont été supprimés. L'application va maintenant se recharger.",
+        "successDescription": "Votre compte et vos données personnelles ont été supprimés. Les autres utilisateurs locaux, espaces de travail, modèles et paramètres ont été conservés.",
+        "partialCleanupDescription": "Votre compte a été supprimé, mais une partie du nettoyage local n’a pas pu aboutir. Les autres utilisateurs et le contenu des espaces de travail ont été conservés.",
         "failedTitle": "Échec de la suppression",
-        "failedDescription": "Une erreur s'est produite lors de la suppression de votre compte. Vos données locales ont peut-être été partiellement supprimées. Veuillez réessayer."
+        "failedDescription": "La suppression du compte n’a pas pu aboutir. Aucun effacement global de l’appareil n’a été lancé. Veuillez réessayer."
       },
       "profile": {
         "name": {
@@ -1933,7 +1986,7 @@
       },
       "examplesTitle": "Exemples",
       "helper": "Choisissez un nom court et naturel à prononcer",
-      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, la réponse s'ouvre dans le panneau flottant de l'assistant. Si du texte est surligné, ce texte est envoyé à votre modèle d'Assistant vocal configuré et remplacé en toute sécurité par le résultat.",
+      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, le texte surligné est remplacé en toute sécurité par le résultat. Si le collage automatique est activé, la réponse est collée au curseur d'un champ modifiable actif ; sinon, elle s'ouvre dans le panneau flottant de l'assistant.",
       "howItWorksTitle": "Comment ça marche",
       "instructionMode": "Instruction",
       "placeholder": "ex. Jarvis, Nova, Atlas...",
@@ -2097,7 +2150,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'assistant vocal",
-        "description": "Dites une commande et l'assistant répond dans un panneau flottant avec vos notes, votre calendrier et des outils web. Sélectionnez d'abord du texte pour le modifier sur place."
+        "description": "Dites une commande et l'assistant utilise vos notes, votre calendrier et les outils web. La réponse est collée à un curseur modifiable actif, remplace le texte sélectionné ou s'ouvre dans le panneau flottant."
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
@@ -2469,6 +2522,34 @@
       "endpointUrl": "URL du point d'accès",
       "serverUrl": "URL du serveur",
       "apiKeyOptional": "Clé API (facultative)"
+    },
+    "enterpriseCheckout": {
+      "title": "Passer à Enterprise",
+      "description": "Choisissez l'espace de travail, les sièges et le cycle de facturation. Le paiement s'effectue dans Stripe Checkout.",
+      "allSubscribed": "Les espaces de travail que vous possédez sont déjà sur Enterprise ou ne peuvent pas être modifiés ici. Pour tout changement de plan, contactez le service commercial.",
+      "workspaceLabel": "Espace de travail",
+      "seatsLabel": "Sièges",
+      "seatsHint_one": "{{count}} siège actuellement utilisé",
+      "seatsHint_other": "{{count}} sièges actuellement utilisés",
+      "intervalLabel": "Cycle de facturation",
+      "interval": {
+        "monthly": "Mensuel",
+        "annual": "Annuel"
+      },
+      "proratedCharge": "Montant au prorata",
+      "prorationNote": "La différence au prorata est ajoutée à votre prochaine facture.",
+      "errors": {
+        "previewFailed": "Impossible de charger l'aperçu de la mise à niveau.",
+        "alreadyEnterprise": "Cet espace de travail est déjà sur Enterprise.",
+        "subscriptionInactive": "L'abonnement de cet espace de travail n'est pas actif. Mettez à jour vos informations de facturation et réessayez.",
+        "priceNotConfigured": "Les tarifs Enterprise ne sont pas disponibles pour le moment. Veuillez contacter le service commercial."
+      },
+      "priceNote": "Le prix final est affiché lors du paiement.",
+      "continueCta": "Continuer vers le paiement",
+      "upgradeDescription": "Passez {{workspace}} de {{plan}} à Enterprise. Les sièges et le cycle de facturation sont conservés ; le changement prend effet immédiatement.",
+      "upgradeCta": "Mettre à niveau",
+      "upgradedTitle": "Mise à niveau effectuée",
+      "upgradedDescription": "{{workspace}} est maintenant sur Enterprise."
     }
   },
   "models": {
@@ -2500,6 +2581,7 @@
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
+        "gemini_3_5_transcribe": "Reconnaissance vocale Gemini de Google",
         "corti_transcribe": "Transcription médicale de qualité clinique",
         "xai_grok_stt": "Reconnaissance vocale haute précision par xAI",
         "tinfoil_voxtral": "Transcription vérifiablement privée"
@@ -3021,8 +3103,8 @@
       "paidPlanRequired": "La transcription cloud pour les fichiers de plus de 25 Mo nécessite un abonnement payant. Les fichiers volumineux sont traités avec OpenWhispr Cloud pour des résultats fiables et de haute qualité.",
       "largeFileNote": "Les fichiers volumineux sont découpés et transcrits en parallèle.",
       "chunkProgress": "Transcription de la partie {{completed}} sur {{total}}...",
-      "byokTooLarge": "Les clés API tierces ne prennent en charge que les fichiers jusqu'à 25 Mo.",
-      "byokTooLargeDetail": "Pour les fichiers de plus de 25 Mo, OpenWhispr Cloud gère le découpage, le traitement parallèle et le réassemblage — pour des résultats fiables sans dépendre des limites des fournisseurs tiers.",
+      "byokTooLarge": "Les clés API tierces ne prennent en charge que les fichiers jusqu'à {{size}} Mo.",
+      "byokTooLargeDetail": "Pour les fichiers de plus de {{size}} Mo, OpenWhispr Cloud gère le découpage, le traitement parallèle et le réassemblage — pour des résultats fiables sans dépendre des limites des fournisseurs tiers.",
       "byokTooLargeNeedsAccount": "Créez un compte et passez à un abonnement payant pour transcrire des fichiers plus volumineux avec OpenWhispr Cloud.",
       "byokTooLargeNeedsUpgrade": "Passez à un abonnement payant pour transcrire des fichiers plus volumineux avec OpenWhispr Cloud.",
       "switchToCloudForLargeFiles": "Passez à OpenWhispr Cloud pour transcrire ce fichier.",
@@ -3071,7 +3153,12 @@
       "description": "Transcriptions et résumés structurés",
       "back": "Retour",
       "restrictedByOrg": "La transcription des réunions est restreinte par votre organisation.",
-      "autoEnded": "L'enregistrement s'est arrêté automatiquement à la fin de votre réunion."
+      "autoEnded": "L'enregistrement s'est arrêté automatiquement à la fin de votre réunion.",
+      "restartFailed": "Impossible de redémarrer l'enregistrement de la réunion.",
+      "systemAudioSilent": {
+        "title": "Aucun son de réunion détecté pour le moment",
+        "description": "Seul votre microphone a capté du son jusqu'à présent. Vous êtes en visioconférence ? Vérifiez que le son de la réunion est diffusé sur cet ordinateur et qu'il n'est pas coupé. Vous enregistrez en présentiel ? Vous pouvez ignorer ce message : votre microphone capte la salle."
+      }
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",
@@ -3452,10 +3539,12 @@
       "copy_to_clipboardName": "Copier dans le presse-papiers",
       "web_searchName": "Rechercher sur le web",
       "get_calendar_eventsName": "Obtenir les événements du calendrier",
+      "get_calendar_availabilityName": "Vérifier les disponibilités",
       "search_notesStatus": "Recherche de notes...",
       "web_searchStatus": "Recherche sur le web...",
       "copy_to_clipboardStatus": "Copie dans le presse-papiers...",
       "get_calendar_eventsStatus": "Vérification du calendrier...",
+      "get_calendar_availabilityStatus": "Vérification des disponibilités...",
       "get_noteStatus": "Lecture de la note...",
       "create_noteStatus": "Création de la note...",
       "update_noteStatus": "Mise à jour de la note...",
@@ -3760,13 +3849,13 @@
     "start": "Prendre des notes",
     "join": "Rejoindre et transcrire",
     "autoEnd": {
-      "title": "La réunion est peut-être terminée",
+      "title": "L’enregistrement de la réunion est terminé",
       "body": {
-        "micReleased": "Aucune autre app n'utilise votre micro. L'enregistrement s'arrêtera dans {{seconds}}s.",
-        "silence": "Aucun son détecté. L'enregistrement s'arrêtera dans {{seconds}}s.",
-        "processExit": "Votre app de réunion s'est fermée. L'enregistrement s'arrêtera dans {{seconds}}s."
+        "micReleased": "Aucune autre app n’utilise votre micro, donc l’enregistrement s’est arrêté automatiquement. Redémarrez-le dans les {{seconds}} s.",
+        "silence": "Aucun son n’a été détecté, donc l’enregistrement s’est arrêté automatiquement. Redémarrez-le dans les {{seconds}} s.",
+        "processExit": "Votre app de réunion s’est fermée, donc l’enregistrement s’est arrêté automatiquement. Redémarrez-le dans les {{seconds}} s."
       },
-      "keep": "Continuer l’enregistrement"
+      "restart": "Redémarrer l’enregistrement"
     }
   }
 }

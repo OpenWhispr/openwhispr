@@ -25,6 +25,31 @@
         "description": "Impossibile ricostruire i file delle note. Assicurati che la funzione sia abilitata e che la cartella sia scrivibile."
       }
     },
+    "granolaImport": {
+      "title": "Importa da Granola",
+      "description": "Importa le note delle riunioni da un'esportazione CSV di Granola",
+      "howTo": "In Granola: Settings → Profile → Export historical data → Generate CSV. L'esportazione arriva via e-mail, di solito entro poche ore.",
+      "chooseFile": "Scegli file CSV",
+      "preview": {
+        "title": "Importa da Granola",
+        "summary": "Trovate {{total}} note: {{newCount}} nuove, {{duplicateCount}} già importate",
+        "warnings": "{{warningCount}} righe presentano problemi (saltate o importate senza data)",
+        "confirm": "Importa {{newCount}} note",
+        "nothingNew": "Tutte le note di questo file sono già state importate."
+      },
+      "done": {
+        "title": "Importazione completata",
+        "summary": "{{imported}} note importate nella cartella \"Imported\", {{skipped}} duplicati saltati"
+      },
+      "error": {
+        "title": "Importazione non riuscita",
+        "EMPTY_FILE": "Il file è vuoto.",
+        "HEADERS_UNRECOGNIZED": "Questo non sembra un'esportazione CSV di Granola.",
+        "NO_DATA_ROWS": "Nessuna nota trovata in questo file.",
+        "FILE_TOO_LARGE": "Questo file è troppo grande per essere importato.",
+        "generic": "Si è verificato un errore durante la lettura del file."
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "Identifica ed etichetta i partecipanti",
@@ -186,6 +211,7 @@
         "accessibilityDescription": "Incolla il testo nell’app attiva.",
         "systemAudioTitle": "Audio di Sistema",
         "systemAudioDescription": "Acquisisce l’audio da altre app.",
+        "screenContextDescription": "Consente all’assistente vocale di vedere lo schermo. Mai salvato.",
         "enable": "Attiva",
         "enabled": "Attivato"
       },
@@ -458,7 +484,7 @@
       "title": "Configurazione dell'assistente vocale",
       "description": "Parla con il tuo assistente IA con un solo tasto",
       "hotkey": "Scorciatoia",
-      "howItWorks": "Premi il tasto e di' cosa vuoi — ad esempio “scrivi un breve messaggio di ringraziamento”. Se c'è del testo evidenziato, {{agentName}} modifica e sostituisce quella selezione; altrimenti la risposta si apre in un pannello flottante. Non serve dire prima “Hey {{agentName}}”.",
+      "howItWorks": "Premi il tasto e di' cosa vuoi — ad esempio “scrivi un breve messaggio di ringraziamento”. Se c'è del testo evidenziato, {{agentName}} lo modifica e sostituisce. Se è attivo un campo di testo modificabile, la risposta viene incollata al cursore; altrimenti si apre in un pannello flottante. Non serve dire prima “Hey {{agentName}}”.",
       "test": "Provalo",
       "testInstruction": "Seleziona il testo di esempio qui sotto, premi {{hotkey}} e di' «rendilo più corto» — la modifica arriva direttamente nella casella di testo",
       "testSetHotkey": "Imposta una scorciatoia sopra per provarlo",
@@ -538,6 +564,17 @@
         "step1": "Registrati su corti.ai",
         "step2": "Apri la console Corti e crea le credenziali API",
         "step3": "Incolla qui sotto Client ID e Secret"
+      }
+    },
+    "requiredModels": {
+      "title": "Installa i modelli richiesti",
+      "description": "{{organization}} richiede questi modelli su questo dispositivo prima che tu possa iniziare a dettare.",
+      "genericOrganization": "La tua organizzazione",
+      "installed": "Installato",
+      "queued": "In coda",
+      "failed": {
+        "title": "Un download non è stato completato",
+        "description": "Controlla la connessione e lo spazio libero su disco, poi riprova. Se continua a fallire, contatta il tuo amministratore."
       }
     }
   },
@@ -662,7 +699,12 @@
       "enableButton": "Attiva GPU",
       "dismissButton": "Non ora"
     },
-    "backToNotes": "Torna alle note"
+    "backToNotes": "Torna alle note",
+    "requiredModelsByOrg": {
+      "title": "Modelli richiesti mancanti",
+      "description": "La tua organizzazione richiede questi modelli su questo dispositivo: {{models}}.",
+      "download": "Scarica"
+    }
   },
   "reasoning": {
     "mode": {
@@ -991,7 +1033,7 @@
     "emailStep": {
       "checkingEmail": "Verifica dell'e-mail in corso...",
       "continueWithEmail": "Continua con l'e-mail",
-      "continueWithoutAccount": "Usa OpenWhispr senza account",
+      "continueWithoutAccount": "Continua senza account",
       "emailLabel": "E-mail",
       "emailPlaceholder": "tu@esempio.com",
       "useDifferentEmail": "Usa un'altra e-mail"
@@ -1561,7 +1603,9 @@
             "SSO e conformità",
             "Supporto dedicato"
           ],
-          "cta": "Contatta le vendite"
+          "cta": "Contatta le vendite",
+          "upgradeCta": "Passa a Enterprise",
+          "askOwner": "Chiedi a {{name}} di eseguire l'upgrade del tuo spazio di lavoro."
         },
         "currentPlan": "Piano attuale",
         "coveredByWorkspace": "Incluso nel piano della tua area di lavoro",
@@ -1590,16 +1634,20 @@
       "wordsRemaining": "{{remaining}} rimanenti",
       "deleteAccount": {
         "label": "Elimina account",
-        "labelDescription": "Elimina permanentemente il tuo account, tutti i dati cloud e i dati locali. Questa azione non può essere annullata.",
+        "labelDescription": "Elimina permanentemente il tuo account e i dati cloud personali. Gli altri utenti locali e i contenuti degli spazi di lavoro vengono conservati.",
         "button": "Elimina il mio account",
         "deleting": "Eliminazione...",
         "title": "Eliminare il tuo account?",
-        "description": "Questo eliminerà permanentemente il tuo account OpenWhispr, tutte le note sincronizzate nel cloud e tutti i dati locali, incluse trascrizioni, registrazioni audio, modelli scaricati, connessioni calendario e impostazioni. Questa azione non può essere annullata.",
-        "confirmText": "Elimina tutto",
+        "description": "Questo elimina permanentemente il tuo account OpenWhispr e i dati personali. I contenuti degli spazi di lavoro e i dati degli altri utenti locali restano su questo dispositivo.",
+        "confirmText": "Elimina account",
+        "eraseDeviceLabel": "Elimina anche tutti i dati da questo dispositivo",
+        "eraseDeviceDescription": "Elimina note e cache degli spazi di tutti gli utenti locali, modelli scaricati, impostazioni, calendari, credenziali e registrazioni.",
+        "eraseDeviceWarning": "Questa cancellazione dell’intero dispositivo non può essere annullata e riguarda tutti gli utenti locali.",
         "successTitle": "Account eliminato",
-        "successDescription": "Il tuo account e tutti i dati sono stati eliminati. L'app si ricaricherà ora.",
+        "successDescription": "Il tuo account e i dati personali sono stati eliminati. Gli altri utenti locali, spazi di lavoro, modelli e impostazioni sono stati conservati.",
+        "partialCleanupDescription": "Il tuo account è stato eliminato, ma parte della pulizia locale non è stata completata. Gli altri utenti e i contenuti degli spazi di lavoro sono stati conservati.",
         "failedTitle": "Eliminazione fallita",
-        "failedDescription": "Qualcosa è andato storto durante l'eliminazione del tuo account. I tuoi dati locali potrebbero essere stati parzialmente rimossi. Riprova."
+        "failedDescription": "Impossibile completare l’eliminazione dell’account. Non è stata avviata alcuna cancellazione dell’intero dispositivo. Riprova."
       },
       "profile": {
         "name": {
@@ -1649,7 +1697,7 @@
       },
       "examplesTitle": "Esempi",
       "helper": "Scegli qualcosa di breve e naturale da dire ad alta voce",
-      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, la risposta si apre nel pannello flottante dell'assistente. Se c'è del testo evidenziato, quel testo viene inviato al tuo modello di Assistente vocale configurato e sostituito in sicurezza con il risultato.",
+      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, il testo evidenziato viene sostituito in sicurezza con il risultato. Con l'incolla automatico attivo, la risposta viene incollata al cursore di un campo modificabile attivo; altrimenti si apre nel pannello flottante dell'assistente.",
       "howItWorksTitle": "Come funziona",
       "instructionMode": "Istruzione",
       "placeholder": "es. Jarvis, Nova, Atlas...",
@@ -1813,7 +1861,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Scorciatoia dell'assistente vocale",
-        "description": "Pronuncia un comando e l'assistente risponde in un pannello flottante con le tue note, il calendario e gli strumenti web. Seleziona prima del testo per modificarlo sul posto."
+        "description": "Pronuncia un comando e l'assistente usa le tue note, il calendario e gli strumenti web. La risposta viene incollata a un cursore modificabile attivo, sostituisce il testo selezionato o si apre nel pannello flottante."
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",
@@ -2379,7 +2427,40 @@
             "admin": "Amministratore dell'area di lavoro"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Console Enterprise",
+        "description": "Gestisci SSO, policy e membri dal web",
+        "open": "Apri console"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "Passa a Enterprise",
+      "description": "Scegli lo spazio di lavoro, i posti e il ciclo di fatturazione. Il pagamento viene completato in Stripe Checkout.",
+      "allSubscribed": "Gli spazi di lavoro di tua proprietà sono già su Enterprise o non possono essere modificati qui. Per cambiare piano, contatta il team vendite.",
+      "workspaceLabel": "Spazio di lavoro",
+      "seatsLabel": "Posti",
+      "seatsHint_one": "{{count}} posto attualmente in uso",
+      "seatsHint_other": "{{count}} posti attualmente in uso",
+      "intervalLabel": "Ciclo di fatturazione",
+      "interval": {
+        "monthly": "Mensile",
+        "annual": "Annuale"
+      },
+      "proratedCharge": "Addebito proporzionale",
+      "prorationNote": "La differenza proporzionale viene aggiunta alla prossima fattura.",
+      "errors": {
+        "previewFailed": "Impossibile caricare l'anteprima dell'upgrade.",
+        "alreadyEnterprise": "Questo workspace è già su Enterprise.",
+        "subscriptionInactive": "L'abbonamento di questo workspace non è attivo. Aggiorna i dati di fatturazione e riprova.",
+        "priceNotConfigured": "I prezzi Enterprise non sono al momento disponibili. Contatta il team vendite."
+      },
+      "priceNote": "Il prezzo finale viene mostrato al momento del pagamento.",
+      "continueCta": "Continua al pagamento",
+      "upgradeDescription": "Aggiorna {{workspace}} da {{plan}} a Enterprise. Posti e ciclo di fatturazione restano invariati; la modifica ha effetto immediato.",
+      "upgradeCta": "Esegui l'upgrade",
+      "upgradedTitle": "Upgrade completato",
+      "upgradedDescription": "{{workspace}} è ora su Enterprise."
     }
   },
   "models": {
@@ -2407,6 +2488,7 @@
         "groq_whisper_large_v3_turbo": "Velocità 216x in tempo reale",
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
+        "gemini_3_5_transcribe": "Riconoscimento vocale Gemini di Google",
         "corti_transcribe": "Trascrizione medica di livello clinico",
         "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI",
         "tinfoil_voxtral": "Trascrizione verificabilmente privata"
@@ -2810,8 +2892,8 @@
       "largeFileNote": "I file di grandi dimensioni vengono suddivisi e trascritti in parallelo.",
       "chunkProgress": "Trascrizione parte {{completed}} di {{total}}...",
       "paidPlanRequired": "La trascrizione cloud per file superiori a 25 MB richiede un piano a pagamento. I file di grandi dimensioni vengono elaborati con OpenWhispr Cloud per risultati affidabili e di alta qualità.",
-      "byokTooLarge": "Le chiavi API di terze parti supportano solo file fino a 25 MB.",
-      "byokTooLargeDetail": "Per file superiori a 25 MB, OpenWhispr Cloud gestisce la suddivisione, l'elaborazione parallela e il riassemblaggio — per risultati affidabili senza dipendere dai limiti dei provider di terze parti.",
+      "byokTooLarge": "Le chiavi API di terze parti supportano solo file fino a {{size}} MB.",
+      "byokTooLargeDetail": "Per file superiori a {{size}} MB, OpenWhispr Cloud gestisce la suddivisione, l'elaborazione parallela e il riassemblaggio — per risultati affidabili senza dipendere dai limiti dei provider di terze parti.",
       "byokTooLargeNeedsAccount": "Crea un account e passa a un piano a pagamento per trascrivere file più grandi con OpenWhispr Cloud.",
       "byokTooLargeNeedsUpgrade": "Passa a un piano a pagamento per trascrivere file più grandi con OpenWhispr Cloud.",
       "switchToCloudForLargeFiles": "Passa a OpenWhispr Cloud per trascrivere questo file.",
@@ -2860,7 +2942,12 @@
       "description": "Trascrizioni e riassunti strutturati",
       "back": "Indietro",
       "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione.",
-      "autoEnded": "La registrazione si è interrotta automaticamente al termine della riunione."
+      "autoEnded": "La registrazione si è interrotta automaticamente al termine della riunione.",
+      "restartFailed": "Impossibile riavviare la registrazione della riunione.",
+      "systemAudioSilent": {
+        "title": "Nessun audio della riunione rilevato finora",
+        "description": "Finora solo il tuo microfono ha captato suoni. Sei in una videochiamata? Verifica che l'audio della riunione venga riprodotto su questo computer e non sia disattivato. Stai registrando di persona? Puoi ignorare questo avviso: il tuo microfono cattura la stanza."
+      }
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
@@ -3287,10 +3374,12 @@
       "copy_to_clipboardName": "Copia negli appunti",
       "web_searchName": "Cerca sul web",
       "get_calendar_eventsName": "Ottieni eventi del calendario",
+      "get_calendar_availabilityName": "Verifica disponibilità",
       "search_notesStatus": "Ricerca nelle note...",
       "web_searchStatus": "Ricerca sul web...",
       "copy_to_clipboardStatus": "Copia negli appunti...",
       "get_calendar_eventsStatus": "Controllo del calendario...",
+      "get_calendar_availabilityStatus": "Controllo della disponibilità...",
       "get_noteStatus": "Lettura della nota...",
       "create_noteStatus": "Creazione della nota...",
       "update_noteStatus": "Aggiornamento della nota...",
@@ -3760,13 +3849,13 @@
     "start": "Prendi appunti",
     "join": "Partecipa e trascrivi",
     "autoEnd": {
-      "title": "La riunione potrebbe essere finita",
+      "title": "Registrazione della riunione terminata",
       "body": {
-        "micReleased": "Nessun'altra app sta usando il microfono. La registrazione si fermerà tra {{seconds}}s.",
-        "silence": "Nessun audio rilevato. La registrazione si fermerà tra {{seconds}}s.",
-        "processExit": "L'app della riunione è stata chiusa. La registrazione si fermerà tra {{seconds}}s."
+        "micReleased": "Nessun’altra app sta usando il microfono, quindi la registrazione si è interrotta automaticamente. Riavviala entro {{seconds}} s.",
+        "silence": "Non è stato rilevato audio, quindi la registrazione si è interrotta automaticamente. Riavviala entro {{seconds}} s.",
+        "processExit": "L’app della riunione è stata chiusa, quindi la registrazione si è interrotta automaticamente. Riavviala entro {{seconds}} s."
       },
-      "keep": "Continua a registrare"
+      "restart": "Riavvia registrazione"
     }
   }
 }

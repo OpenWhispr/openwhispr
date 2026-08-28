@@ -180,8 +180,7 @@ function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   }
 }
 
-// Call BEFORE purgeSpace, from every purge path (sync revocation, sign-out,
-// and the UI's delete-space flow).
+// Call BEFORE purgeSpace from revocation and UI delete-space flows.
 export async function markSpacePurged(
   cloudSpaceId: string,
   reason: PurgedSpaceReason
@@ -298,21 +297,18 @@ export class SyncService {
     localStorage.setItem("teamSpacesCapability.probedAt", new Date().toISOString());
   }
 
-  // Sign-out leaves no team content behind: purge every team space locally and
-  // forget the capability probe + team cursors so the next account re-probes
-  // and backfills from scratch. Never throws — a failed purge must not block
-  // signing out.
+  // Sign-out clears account-scoped renderer/session state without deleting
+  // workspace-owned rows. The main-process account scope hides those rows as
+  // soon as the bearer token is cleared.
   async purgeTeamSpacesForSignOut(): Promise<void> {
-    // Wait for the sync lock: an in-flight pass (often in another window)
-    // still holds a pre-purge space map, and its remaining rows would
-    // re-insert team content after the purge — unreachable by any later
-    // cleanup once the guard entries below are gone.
+    // Wait for the sync lock so an in-flight pass cannot repopulate renderer
+    // state after this account boundary has been cleared.
     try {
-      await navigator.locks.request(SYNC_ALL_LOCK, () => this.purgeAllTeamSpaces());
+      await navigator.locks.request(SYNC_ALL_LOCK, () => this.clearTeamSpaceSessionState());
     } catch (err) {
-      console.error("Sign-out purge could not take the sync lock:", err);
-      // Never block sign-out: purge unfenced rather than not at all.
-      await this.purgeAllTeamSpaces();
+      console.error("Sign-out cleanup could not take the sync lock:", err);
+      // Never block sign-out: clear session state even if the lock failed.
+      await this.clearTeamSpaceSessionState();
     }
   }
 
@@ -325,15 +321,13 @@ export class SyncService {
     let purgedCount = 0;
     await navigator.locks.request(SYNC_ALL_LOCK, async () => {
       await assertAuthGenerationCurrent(authGeneration);
-      let localSpaces = (await window.electronAPI.getSpaces?.()) ?? [];
-      const localTeamSpaces = localSpaces.filter((space) => space.kind === "team");
-      if (localTeamSpaces.length === 0) {
-        await assertAuthGenerationCurrent(authGeneration);
-        return;
-      }
-
       const remoteSpaces = await SpacesService.mySpacesForAuthValidation(authGeneration);
       await assertAuthGenerationCurrent(authGeneration);
+      await prunePurgedSpaceIds(new Set(remoteSpaces.map((space) => space.id)));
+      await upsertCloudSpaces(remoteSpaces);
+      await assertAuthGenerationCurrent(authGeneration);
+      let localSpaces = (await window.electronAPI.getSpaces?.()) ?? [];
+      const localTeamSpaces = localSpaces.filter((space) => space.kind === "team");
       const initial = partitionLocalTeamSpaces(localTeamSpaces, remoteSpaces);
       for (const space of initial.unproven) {
         await assertAuthGenerationCurrent(authGeneration);
@@ -367,30 +361,12 @@ export class SyncService {
     return purgedCount;
   }
 
-  private async purgeAllTeamSpaces(): Promise<void> {
-    try {
-      const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
-      for (const space of spaces) {
-        if (space.kind !== "team") continue;
-        try {
-          // "revoked", not "deleted": the whole guard key is removed once the
-          // sign-out purge completes, and if that removal ever fails a revoked
-          // entry self-heals on the next pass instead of locking the space out.
-          if (space.cloud_space_id) await markSpacePurged(space.cloud_space_id, "revoked");
-          await window.electronAPI.purgeSpace?.(space.id, { mode: "destructive" });
-        } catch (err) {
-          console.error(`Purging space ${space.id} on sign-out failed:`, err);
-        }
-      }
-    } catch (err) {
-      console.error("Team space purge on sign-out failed:", err);
-    }
+  private async clearTeamSpaceSessionState(): Promise<void> {
     clearTeamSpacesCapability();
     localStorage.removeItem("teamSpacesCapability.probedAt");
     localStorage.removeItem("lastSyncedAt.notes.team");
     localStorage.removeItem("lastSyncedAt.folders.team");
-    // The guard protected any pass still in flight during the purge; drop it
-    // so the next account (possibly a member of the same spaces) starts clean.
+    // The next account must establish its own remote membership view.
     localStorage.removeItem(PURGED_SPACE_GUARD_KEY);
     // Pre-spaces guard key; stale entries are meaningless now.
     localStorage.removeItem("purgedTeamIds");

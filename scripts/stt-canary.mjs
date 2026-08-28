@@ -1,10 +1,13 @@
 /**
- * Live realtime-STT canary. Per keyed provider, acquires a session credential
- * through the app's REAL token registry (realtimeTokenProviders.js) and, where
- * the transport is a plain WebSocket, performs a live handshake against the
- * same endpoint the app dials — so a provider changing its auth, endpoint, or
+ * Live STT canary. Per keyed provider, acquires a session credential through
+ * the app's REAL token registry (realtimeTokenProviders.js) and, where the
+ * transport is a plain WebSocket, performs a live handshake against the same
+ * endpoint the app dials — so a provider changing its auth, endpoint, or
  * handshake surfaces here on a schedule instead of in a customer report
  * (#1624 sat in shipped builds for three days as a swallowed warmup warning).
+ * Batch providers whose request shape is theirs alone rather than the shared
+ * OpenAI-compatible multipart (Gemini) send a real transcription through the
+ * shipped module for the same reason.
  *
  * Run: node scripts/stt-canary.mjs
  * Keys come from STT_CANARY_<PROVIDER>_KEY env vars; providers without a key
@@ -13,12 +16,24 @@
  * not report green.
  * Corti is not probed (needs tenant/environment credentials beyond a key).
  */
+import { spawnSync } from "child_process";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import WebSocket from "ws";
+import ffmpegPath from "ffmpeg-static";
 import tokenProviders from "../src/helpers/realtimeTokenProviders.js";
+import audioUtils from "../src/utils/audioUtils.js";
+import geminiTranscription from "../src/helpers/geminiTranscription.js";
 
 const { fetchRealtimeTokenForProvider } = tokenProviders;
+const { pcm16ToWav } = audioUtils;
+const { transcribeWithGemini } = geminiTranscription;
 
 const HANDSHAKE_TIMEOUT_MS = 15000;
+// Half a second of 16 kHz mono silence: enough for a provider to accept and
+// decode the container, short enough to stay far inside every request cap.
+const SILENT_WAV = () => pcm16ToWav(Buffer.alloc(16000));
 
 // Mirrors the app's dial: openaiRealtimeStreaming.js connects with a bare
 // Bearer header; deepgramStreaming.js passes the key as the bearer token.
@@ -66,6 +81,33 @@ function probeWebSocket(url, token, { awaitServerEvent = false } = {}) {
       resolve({ ok: false, detail: err.message });
     });
   });
+}
+
+// Dictation records WebM/Opus, and Gemini's documented input formats do not
+// list it — so wav and webm are probed separately: a wav-only probe would stay
+// green while every BYOK dictation failed.
+function toWebmOpus(wav) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "stt-canary-"));
+  const input = path.join(dir, "in.wav");
+  const output = path.join(dir, "out.webm");
+  try {
+    fs.writeFileSync(input, wav);
+    const result = spawnSync(ffmpegPath, ["-y", "-i", input, "-c:a", "libopus", output], {
+      stdio: "ignore",
+    });
+    if (result.status !== 0) return null;
+    return fs.readFileSync(output);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// A completed interaction proves auth, endpoint, and container decode; silence
+// legitimately transcribes to empty text, so text content is not asserted.
+async function probeGeminiBatch(key, audio, contentType) {
+  if (!audio) return { ok: false, detail: `could not build ${contentType} fixture` };
+  await transcribeWithGemini({ audioBuffer: audio, contentType, apiKey: key }, fetch);
+  return { ok: true };
 }
 
 const tokenDeps = (key) => ({
@@ -131,6 +173,16 @@ const PROBES = [
         : { ok: false, detail: "empty token" };
     },
   },
+  {
+    id: "gemini-batch-wav",
+    keyEnv: "STT_CANARY_GEMINI_KEY",
+    run: (key) => probeGeminiBatch(key, SILENT_WAV(), "audio/wav"),
+  },
+  {
+    id: "gemini-batch-webm",
+    keyEnv: "STT_CANARY_GEMINI_KEY",
+    run: (key) => probeGeminiBatch(key, toWebmOpus(SILENT_WAV()), "audio/webm"),
+  },
 ];
 
 const report = [];
@@ -153,7 +205,7 @@ if (skipped.length === PROBES.length) {
   failures.push("no canary secrets configured — every provider was skipped, nothing was probed");
 }
 
-console.log("## Realtime STT canary\n");
+console.log("## STT canary\n");
 console.log("| provider | result |\n|---|---|");
 for (const line of report) console.log(line);
 if (skipped.length) console.log(`\nSkipped (no key configured): ${skipped.join(", ")}`);

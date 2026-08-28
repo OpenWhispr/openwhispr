@@ -33,23 +33,31 @@ import {
   resolveAssistantPanelBusy,
   restoreAssistantConversation,
 } from "../../helpers/assistantSessionState";
+import {
+  deliverAssistantResponse,
+  type AssistantResponseDelivery,
+} from "../../helpers/assistantResponseDelivery";
 
 export interface AssistantCommand {
   id: number;
   text: string;
   attachment: ChatImageAttachment | null;
   selectedContext: AgentSelectionContext | null;
+  delivery: AssistantResponseDelivery | null;
 }
 
 type AssistantFooterPhase =
   "pill" | "pill-entering" | "pill-exiting" | "actions-entering" | "actions" | "actions-exiting";
+
+const MANUAL_COPY_FEEDBACK_MS = 1800;
+const AUTO_COPY_FEEDBACK_MS = 6000;
 
 interface AssistantPanelProps {
   /** Voice command waiting to be sent into the conversation (consumed on mount and on change). */
   pendingCommand: AssistantCommand | null;
   onCommandConsumed: (id: number) => void;
   onCommandDiscarded: (id: number) => void;
-  onCommandSettled: (id: number) => void;
+  onCommandSettled: (id: number, options?: { showPanel?: boolean }) => void;
   /** Conversation to resume when reopening the panel; null starts fresh on first message. */
   initialConversationId: number | null;
   onConversationIdChange: (id: number | null) => void;
@@ -106,7 +114,7 @@ export function AssistantPanel({
     messages,
     setMessages,
     onStreamComplete: (_assistantId, content, toolCalls) => {
-      persistence.saveAssistantMessage(content, toolCalls);
+      void persistence.saveAssistantMessage(content, toolCalls);
     },
     onResponseContent,
   });
@@ -126,6 +134,17 @@ export function AssistantPanel({
     streaming,
     createConversation,
     onSendingChange: setSubmissionInFlight,
+  });
+  const latestAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
+  const responseContent = latestAssistantMessage?.content ?? "";
+  const {
+    copied,
+    copy: handleCopy,
+    confirmCopied,
+  } = useCopyFeedback(responseContent, {
+    resetMs: MANUAL_COPY_FEEDBACK_MS,
   });
 
   useEffect(() => {
@@ -171,6 +190,9 @@ export function AssistantPanel({
     }
     consumedCommandIdRef.current = pendingCommand.id;
     const commandId = pendingCommand.id;
+    const delivery = pendingCommand.delivery;
+    const targetsCapturedInput = delivery?.mode === "paste";
+    let responseDelivered = false;
     if (pendingCommand.selectedContext) {
       setSelectedContext(null);
       onSelectionContextChange(null);
@@ -178,6 +200,14 @@ export function AssistantPanel({
     void sendMessage(pendingCommand.text, {
       attachment: pendingCommand.attachment ?? undefined,
       selectedContext: pendingCommand.selectedContext ?? undefined,
+      suppressResponseContent: targetsCapturedInput,
+      onComplete: delivery
+        ? async ({ content }) => {
+            const result = await deliverAssistantResponse(delivery, content);
+            responseDelivered = result.pasted;
+            if (result.copied) confirmCopied(content, AUTO_COPY_FEEDBACK_MS);
+          }
+        : undefined,
     })
       .then((sent) => {
         if (sent) {
@@ -206,7 +236,7 @@ export function AssistantPanel({
           },
         ]);
       })
-      .finally(() => onCommandSettled(commandId));
+      .finally(() => onCommandSettled(commandId, { showPanel: !responseDelivered }));
   }, [
     historyReady,
     submissionInFlight,
@@ -215,6 +245,7 @@ export function AssistantPanel({
     onCommandDiscarded,
     onCommandSettled,
     onSelectionContextChange,
+    confirmCopied,
     sendMessage,
     setMessages,
     t,
@@ -245,10 +276,6 @@ export function AssistantPanel({
     return () => onBusyChange(false);
   }, [isBusy, onBusyChange]);
 
-  const latestAssistantMessage = [...messages]
-    .reverse()
-    .find((message) => message.role === "assistant");
-  const responseContent = latestAssistantMessage?.content ?? "";
   const displayedResponseRef = useRef("");
   if (responseContent) displayedResponseRef.current = responseContent;
   const displayedResponse = responseContent || displayedResponseRef.current;
@@ -263,7 +290,6 @@ export function AssistantPanel({
     voiceState,
     requestPending: thinking || pendingCommand != null,
   });
-  const { copied, copy: handleCopy } = useCopyFeedback(responseContent, { resetMs: 1800 });
   const responseSelectionRootRef = useRef<HTMLDivElement | null>(null);
   const [selectedContext, setSelectedContext] = useState<AgentSelectionContext | null>(null);
 

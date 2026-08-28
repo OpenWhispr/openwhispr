@@ -25,6 +25,31 @@
         "description": "ノートファイルを再構築できませんでした。機能が有効になっており、フォルダーに書き込み可能であることを確認してください。"
       }
     },
+    "granolaImport": {
+      "title": "Granola からインポート",
+      "description": "Granola の CSV エクスポートから会議ノートをインポート",
+      "howTo": "Granola で Settings → Profile → Export historical data → Generate CSV を実行します。エクスポートは通常数時間以内にメールで届きます。",
+      "chooseFile": "CSV ファイルを選択",
+      "preview": {
+        "title": "Granola からインポート",
+        "summary": "{{total}} 件のノートが見つかりました: 新規 {{newCount}} 件、インポート済み {{duplicateCount}} 件",
+        "warnings": "{{warningCount}} 行に問題があります(スキップ、または日付なしでインポート)",
+        "confirm": "{{newCount}} 件のノートをインポート",
+        "nothingNew": "このファイルのノートはすべてインポート済みです。"
+      },
+      "done": {
+        "title": "インポート完了",
+        "summary": "{{imported}} 件のノートを「Imported」フォルダにインポートし、{{skipped}} 件の重複をスキップしました"
+      },
+      "error": {
+        "title": "インポートに失敗しました",
+        "EMPTY_FILE": "ファイルが空です。",
+        "HEADERS_UNRECOGNIZED": "Granola の CSV エクスポートではないようです。",
+        "NO_DATA_ROWS": "このファイルにはノートが見つかりませんでした。",
+        "FILE_TOO_LARGE": "このファイルは大きすぎてインポートできません。",
+        "generic": "ファイルの読み込み中に問題が発生しました。"
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "話者を識別してラベル付け",
@@ -186,6 +211,7 @@
         "accessibilityDescription": "アクティブなアプリにテキストを貼り付けます。",
         "systemAudioTitle": "システムオーディオ",
         "systemAudioDescription": "ほかのアプリの音声を取り込みます。",
+        "screenContextDescription": "音声アシスタントが作業中の画面を確認できます。保存はされません。",
         "enable": "有効にする",
         "enabled": "有効"
       },
@@ -458,7 +484,7 @@
       "title": "音声アシスタント設定",
       "description": "ワンキーでAIアシスタントに話しかけられます",
       "hotkey": "ホットキー",
-      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えます。テキストが選択されていれば、{{agentName}}がその選択範囲を編集して置き換えます。選択がなければ、答えはフローティングパネルに表示されます。「Hey {{agentName}}」と言う必要はありません。",
+      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えます。テキストが選択されていれば、{{agentName}}が編集して置き換えます。編集可能なテキスト欄にフォーカスがある場合、回答はカーソル位置に貼り付けられ、それ以外の場合はフローティングパネルに表示されます。「Hey {{agentName}}」と言う必要はありません。",
       "test": "試す",
       "testInstruction": "下のサンプルテキストを選択して {{hotkey}} を押し、「短くして」と話してください。編集結果がそのままテキストボックスに反映されます",
       "testSetHotkey": "上でホットキーを設定すると試せます",
@@ -538,6 +564,17 @@
         "step1": "corti.ai でアカウントを作成",
         "step2": "Corti コンソールで API 認証情報を作成",
         "step3": "Client ID と Secret を下に貼り付け"
+      }
+    },
+    "requiredModels": {
+      "title": "必須モデルをインストール",
+      "description": "{{organization}}では、ディクテーションを開始する前にこれらのモデルをこのデバイスにインストールする必要があります。",
+      "genericOrganization": "所属組織",
+      "installed": "インストール済み",
+      "queued": "待機中",
+      "failed": {
+        "title": "ダウンロードが完了しませんでした",
+        "description": "接続とディスクの空き容量を確認して、再試行してください。それでも失敗する場合は、管理者にお問い合わせください。"
       }
     }
   },
@@ -662,7 +699,12 @@
       "enableButton": "GPU を有効化",
       "dismissButton": "後で"
     },
-    "backToNotes": "ノートに戻る"
+    "backToNotes": "ノートに戻る",
+    "requiredModelsByOrg": {
+      "title": "必須モデルがありません",
+      "description": "組織では、このデバイスにこれらのモデルが必要です：{{models}}。",
+      "download": "ダウンロード"
+    }
   },
   "reasoning": {
     "mode": {
@@ -991,7 +1033,7 @@
     "emailStep": {
       "checkingEmail": "メールアドレスを確認しています...",
       "continueWithEmail": "メールで続ける",
-      "continueWithoutAccount": "アカウントなしで OpenWhispr を使う",
+      "continueWithoutAccount": "アカウントなしで続ける",
       "emailLabel": "メールアドレス",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "別のメールアドレスを使用"
@@ -1542,7 +1584,9 @@
             "SSO とコンプライアンス",
             "専任サポート"
           ],
-          "cta": "営業に問い合わせる"
+          "cta": "営業に問い合わせる",
+          "upgradeCta": "Enterpriseにアップグレード",
+          "askOwner": "{{name}}さんにワークスペースのアップグレードを依頼してください。"
         },
         "currentPlan": "現在のプラン",
         "coveredByWorkspace": "ワークスペースのプランに含まれています",
@@ -1590,16 +1634,20 @@
       "wordsRemaining": "残り {{remaining}}",
       "deleteAccount": {
         "label": "アカウントを削除",
-        "labelDescription": "アカウント、すべてのクラウドデータ、ローカルデータを完全に削除します。この操作は元に戻せません。",
+        "labelDescription": "アカウントと個人のクラウドデータを完全に削除します。他のローカルユーザーとワークスペース所有のコンテンツは保持されます。",
         "button": "アカウントを削除",
         "deleting": "削除中...",
         "title": "アカウントを削除しますか？",
-        "description": "OpenWhispr アカウント、すべてのクラウド同期ノート、すべてのローカルデータ（文字起こし、音声録音、ダウンロード済みモデル、カレンダー接続、設定を含む）が完全に削除されます。この操作は元に戻せません。",
-        "confirmText": "すべて削除",
+        "description": "OpenWhispr アカウントと個人データを完全に削除します。ワークスペース所有のコンテンツと他のローカルユーザーのデータはこのデバイスに残ります。",
+        "confirmText": "アカウントを削除",
+        "eraseDeviceLabel": "このデバイス上のすべてのデータも消去する",
+        "eraseDeviceDescription": "すべてのローカルユーザーのノートとワークスペースキャッシュ、ダウンロード済みモデル、設定、カレンダー接続、認証情報、録音を削除します。",
+        "eraseDeviceWarning": "このデバイス全体の消去は元に戻せず、すべてのローカルユーザーに影響します。",
         "successTitle": "アカウントが削除されました",
-        "successDescription": "アカウントとすべてのデータが削除されました。アプリが再読み込みされます。",
+        "successDescription": "アカウントと個人データが削除されました。他のローカルユーザー、ワークスペース、モデル、デバイス設定は保持されました。",
+        "partialCleanupDescription": "アカウントは削除されましたが、一部のローカルクリーンアップを完了できませんでした。他のユーザーとワークスペース所有のコンテンツは保持されました。",
         "failedTitle": "削除に失敗しました",
-        "failedDescription": "アカウントの削除中にエラーが発生しました。ローカルデータが部分的に削除された可能性があります。もう一度お試しください。"
+        "failedDescription": "アカウントの削除を完了できませんでした。デバイス全体の消去は開始されていません。もう一度お試しください。"
       },
       "profile": {
         "name": {
@@ -1649,7 +1697,7 @@
       },
       "examplesTitle": "例",
       "helper": "声に出して言いやすい短い名前を選びましょう",
-      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、回答がフローティングのアシスタントパネルに表示されます。テキストが選択されている場合、そのテキストは設定済みの音声アシスタントモデルに送信され、結果で安全に置き換えられます。",
+      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、選択中のテキストは結果で安全に置き換えられます。自動貼り付けが有効で編集可能なテキスト欄にフォーカスがある場合、回答はカーソル位置に貼り付けられ、それ以外の場合はフローティングのアシスタントパネルに表示されます。",
       "howItWorksTitle": "仕組み",
       "instructionMode": "指示",
       "placeholder": "例: ジャービス、ノヴァ、アトラス...",
@@ -1813,7 +1861,7 @@
       },
       "voiceAgentHotkey": {
         "title": "音声アシスタントホットキー",
-        "description": "コマンドを話すと、アシスタントがノート・カレンダー・ウェブツールを使ってフローティングパネルで答えます。テキストを選択してから話すと、その場で編集されます。"
+        "description": "コマンドを話すと、アシスタントがノート・カレンダー・ウェブツールを使います。回答はフォーカス中の編集可能なカーソル位置に貼り付けられるか、選択テキストを置き換えるか、フローティングパネルに表示されます。"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -2379,7 +2427,40 @@
             "admin": "ワークスペース管理者"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterpriseコンソール",
+        "description": "SSO、ポリシー、メンバーをウェブで管理",
+        "open": "コンソールを開く"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "Enterpriseにアップグレード",
+      "description": "ワークスペース、シート数、請求サイクルを選択してください。支払いはStripe Checkoutで完了します。",
+      "allSubscribed": "所有しているワークスペースは既にEnterpriseであるか、ここでは変更できません。プランの変更は営業までお問い合わせください。",
+      "workspaceLabel": "ワークスペース",
+      "seatsLabel": "シート数",
+      "seatsHint_one": "現在{{count}}シート使用中",
+      "seatsHint_other": "現在{{count}}シート使用中",
+      "intervalLabel": "請求サイクル",
+      "interval": {
+        "monthly": "月払い",
+        "annual": "年払い"
+      },
+      "proratedCharge": "日割り料金",
+      "prorationNote": "日割り計算された差額は次回の請求書に追加されます。",
+      "errors": {
+        "previewFailed": "アップグレードのプレビューを読み込めませんでした。",
+        "alreadyEnterprise": "このワークスペースはすでに Enterprise プランです。",
+        "subscriptionInactive": "このワークスペースのサブスクリプションが有効ではありません。請求情報を更新して再度お試しください。",
+        "priceNotConfigured": "Enterprise の料金は現在ご利用いただけません。営業までお問い合わせください。"
+      },
+      "priceNote": "最終的な価格はチェックアウト時に表示されます。",
+      "continueCta": "チェックアウトへ進む",
+      "upgradeDescription": "{{workspace}}を{{plan}}からEnterpriseにアップグレードします。シート数と請求サイクルは引き継がれ、変更は即時に適用されます。",
+      "upgradeCta": "今すぐアップグレード",
+      "upgradedTitle": "Enterpriseにアップグレードしました",
+      "upgradedDescription": "{{workspace}}はEnterpriseになりました。"
     }
   },
   "models": {
@@ -2407,6 +2488,7 @@
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
+        "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
         "xai_grok_stt": "xAIによる高精度音声認識",
         "tinfoil_voxtral": "検証可能なプライベート文字起こし"
@@ -2794,8 +2876,8 @@
       "largeFileNote": "大容量ファイルは分割され、並列で文字起こしされます。",
       "chunkProgress": "パート {{completed}} / {{total}} を文字起こし中...",
       "paidPlanRequired": "25 MB を超えるファイルのクラウド文字起こしには有料プランが必要です。大容量ファイルは OpenWhispr Cloud で信頼性の高い高品質な結果を得られます。",
-      "byokTooLarge": "サードパーティの API キーは 25 MB までのファイルのみ対応しています。",
-      "byokTooLargeDetail": "25 MB を超えるファイルは、OpenWhispr Cloud が分割・並列処理・結合を行います。サードパーティの制限に依存せず、信頼性の高い結果が得られます。",
+      "byokTooLarge": "サードパーティの API キーは {{size}} MB までのファイルのみ対応しています。",
+      "byokTooLargeDetail": "{{size}} MB を超えるファイルは、OpenWhispr Cloud が分割・並列処理・結合を行います。サードパーティの制限に依存せず、信頼性の高い結果が得られます。",
       "byokTooLargeNeedsAccount": "アカウントを作成し、有料プランにアップグレードすると、OpenWhispr Cloud でより大きなファイルを文字起こしできます。",
       "byokTooLargeNeedsUpgrade": "有料プランにアップグレードすると、OpenWhispr Cloud でより大きなファイルを文字起こしできます。",
       "switchToCloudForLargeFiles": "このファイルを文字起こしするには OpenWhispr Cloud に切り替えてください。",
@@ -2844,7 +2926,12 @@
       "description": "文字起こしと構造化されたサマリー",
       "back": "戻る",
       "restrictedByOrg": "会議の文字起こしは組織によって制限されています。",
-      "autoEnded": "会議の終了後、録音は自動的に停止しました。"
+      "autoEnded": "会議の終了後、録音は自動的に停止しました。",
+      "restartFailed": "会議の録音を再開できませんでした。",
+      "systemAudioSilent": {
+        "title": "会議の音声がまだ検出されていません",
+        "description": "これまでのところ、音声を拾っているのはマイクのみです。ビデオ会議中の場合は、会議の音声がこのコンピューターで再生されており、ミュートになっていないことを確認してください。対面で録音している場合は、この通知は無視してかまいません。マイクが室内の音を拾います。"
+      }
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",
@@ -3287,10 +3374,12 @@
       "copy_to_clipboardName": "クリップボードにコピー",
       "web_searchName": "ウェブ検索",
       "get_calendar_eventsName": "カレンダーの予定を取得",
+      "get_calendar_availabilityName": "空き時間を確認",
       "search_notesStatus": "ノートを検索中...",
       "web_searchStatus": "ウェブを検索中...",
       "copy_to_clipboardStatus": "クリップボードにコピー中...",
       "get_calendar_eventsStatus": "カレンダーを確認中...",
+      "get_calendar_availabilityStatus": "空き時間を確認中...",
       "get_noteStatus": "ノートを読み込み中...",
       "create_noteStatus": "ノートを作成中...",
       "update_noteStatus": "ノートを更新中...",
@@ -3760,13 +3849,13 @@
     "start": "メモを取る",
     "join": "参加して文字起こし",
     "autoEnd": {
-      "title": "会議が終了した可能性があります",
+      "title": "会議の録音が終了しました",
       "body": {
-        "micReleased": "ほかのアプリはマイクを使用していません。録音は{{seconds}}秒後に停止します。",
-        "silence": "音声が検出されません。録音は{{seconds}}秒後に停止します。",
-        "processExit": "会議アプリが終了しました。録音は{{seconds}}秒後に停止します。"
+        "micReleased": "ほかのアプリがマイクを使用していないため、録音を自動停止しました。{{seconds}}秒以内に再開できます。",
+        "silence": "音声が検出されなかったため、録音を自動停止しました。{{seconds}}秒以内に再開できます。",
+        "processExit": "会議アプリが終了したため、録音を自動停止しました。{{seconds}}秒以内に再開できます。"
       },
-      "keep": "録音を続ける"
+      "restart": "録音を再開"
     }
   }
 }

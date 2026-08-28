@@ -50,6 +50,7 @@ export interface TranscriptionApiKeys {
   groqApiKey: string;
   xaiApiKey: string;
   mistralApiKey: string;
+  geminiApiKey: string;
   tinfoilApiKey: string;
   customTranscriptionApiKey?: string;
 }
@@ -64,6 +65,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.xaiApiKey;
     case "mistral":
       return keys.mistralApiKey;
+    case "gemini":
+      return keys.geminiApiKey;
     case "tinfoil":
       return keys.tinfoilApiKey;
     case "custom":

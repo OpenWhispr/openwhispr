@@ -168,7 +168,6 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
   if (!isRecording) {
     return {
       activeState: null,
-      beamActive: null,
       collapseToLogo: false,
       compactPill: false,
       waveformVisible: true,
@@ -182,7 +181,6 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
       // waveform can sample audio while hidden and its reveal changes opacity
       // only; it never remounts or changes the pill's layout.
       activeState: "recording",
-      beamActive: true,
       collapseToLogo: true,
       compactPill: false,
       waveformVisible: false,
@@ -195,7 +193,6 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
     // reveal, so the presentation must not change between them.
     return {
       activeState: "recording",
-      beamActive: false,
       collapseToLogo: false,
       compactPill: true,
       waveformVisible: false,
@@ -204,7 +201,6 @@ export function resolveListeningEntrancePresentation({ isRecording, phase }) {
 
   return {
     activeState: "recording",
-    beamActive: false,
     collapseToLogo: false,
     compactPill: true,
     waveformVisible: true,
@@ -320,6 +316,36 @@ export function resolveVoicePillInteraction({
     // it on hover so a stalled processing step can still be cancelled.
     cancelVisible: active && (Boolean(liveTranscriptMounted) || Boolean(isHovered)),
   };
+}
+
+// The companion pill defers to the main process's interactivity verdict and
+// keeps toggle clicks away from a transcript still processing — except to
+// reopen a manually collapsed transcript, which must stay reachable until the
+// final text lands (activatePill routes the reopen before any toggle).
+export function resolveCompanionPillInteractive({
+  mainProcessInteractive,
+  surfaceInteractive,
+  isProcessing,
+  canReopenLiveTranscript,
+}) {
+  if (!mainProcessInteractive || !surfaceInteractive) return false;
+  if (!isProcessing) return true;
+  return Boolean(canReopenLiveTranscript);
+}
+
+// Final Agent actions own the footer, so the pill node stays mounted but
+// hidden until the panel finishes closing. Live activity handed back at close
+// INTENT is the exception: the companion hides on that same tick, so keeping
+// the pill hidden until the fade completes would leave a running recording
+// with no visible owner at all.
+export function shouldSuppressPillForAssistantActions({
+  assistantOpen,
+  footerPillVisible,
+  assistantClosing,
+  hasLiveActivity,
+}) {
+  if (!assistantOpen || footerPillVisible) return false;
+  return !(assistantClosing && hasLiveActivity);
 }
 
 export function shouldActivateVoicePill({

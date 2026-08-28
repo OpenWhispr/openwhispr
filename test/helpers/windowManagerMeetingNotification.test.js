@@ -25,6 +25,7 @@ class FakeBrowserWindow extends EventEmitter {
     this.messages = [];
     this.loadUrlCount = 0;
     this.showCount = 0;
+    this.ignoreMouseEvents = [];
     this.webContents = {
       send: (channel, payload) => this.messages.push({ channel, payload }),
     };
@@ -33,7 +34,9 @@ class FakeBrowserWindow extends EventEmitter {
 
   setContentProtection() {}
 
-  setIgnoreMouseEvents() {}
+  setIgnoreMouseEvents(ignore, options) {
+    this.ignoreMouseEvents.push({ ignore, options });
+  }
 
   loadFile() {
     return this.loadDeferred.promise;
@@ -77,7 +80,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   if (request === "electron") {
     return {
       app: { on: () => undefined },
-      screen: { getPrimaryDisplay: () => ({}) },
+      screen: { getPrimaryDisplay: () => ({}), on: () => undefined },
       BrowserWindow: FakeBrowserWindow,
       shell: {},
       dialog: {},
@@ -122,6 +125,8 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
 };
 const WindowManager = require("../../src/helpers/windowManager");
 Module._load = originalLoad;
+
+const notificationWindowFor = (index) => createdWindows[index];
 
 function createNormalWindowManager() {
   const manager = new WindowManager();
@@ -238,20 +243,49 @@ test("a busy Assistant blocks its voice hotkey before native side effects", () =
   manager._assistantPanelBusy = true;
 
   manager.sendToggleVoiceAgent();
+  // Before the panel opens there is no companion pill to show a plain
+  // recording either, so the busy state blocks ordinary dictation too.
+  manager.sendToggleDictation();
 
   assert.equal(showCount, 0);
   assert.equal(prepareCount, 0);
   assert.deepEqual(rendererChannels, []);
 
-  manager._assistantPanelBusy = false;
-  manager.sendToggleVoiceAgent();
+  // The open panel alone is not enough: until the companion window is live,
+  // a recording would still be invisible, so the press only re-kicks its load.
+  manager._assistantPanelOpen = true;
+  let pillShowCalls = 0;
+  manager.showAgentDictationPill = () => {
+    pillShowCalls += 1;
+  };
+  manager.sendToggleDictation();
+
+  assert.equal(showCount, 0);
+  assert.deepEqual(rendererChannels, []);
+  assert.equal(pillShowCalls, 1);
+
+  manager._agentDictationPillReady = true;
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    webContents: { send: () => undefined },
+  };
+  manager.sendToggleDictation();
 
   assert.equal(showCount, 1);
   assert.equal(prepareCount, 1);
-  assert.deepEqual(rendererChannels, ["toggle-voice-agent"]);
+  assert.deepEqual(rendererChannels, ["toggle-dictation"]);
+  assert.equal(pillShowCalls, 1);
+
+  manager._assistantPanelBusy = false;
+  manager.sendToggleVoiceAgent();
+
+  assert.equal(showCount, 2);
+  assert.equal(prepareCount, 2);
+  assert.deepEqual(rendererChannels, ["toggle-dictation", "toggle-voice-agent"]);
 });
 
-test("a busy Assistant blocks direct push-to-talk prepare and start paths", () => {
+test("push-to-talk dictation follows the companion pill's availability", () => {
   const manager = createNormalWindowManager();
   const rendererChannels = [];
   let showCount = 0;
@@ -272,11 +306,39 @@ test("a busy Assistant blocks direct push-to-talk prepare and start paths", () =
     showCount += 1;
   };
 
+  // Busy without an open panel: no surface could show the recording.
   manager.sendPrepareDictation();
   manager.sendStartDictation();
 
   assert.equal(showCount, 0);
   assert.deepEqual(rendererChannels, []);
+
+  // An open panel whose companion window is not live yet keeps PTT dictation
+  // blocked; each press re-kicks the companion load.
+  manager._assistantPanelOpen = true;
+  let pillShowCalls = 0;
+  manager.showAgentDictationPill = () => {
+    pillShowCalls += 1;
+  };
+  manager.sendPrepareDictation();
+  manager.sendStartDictation();
+
+  assert.equal(showCount, 0);
+  assert.deepEqual(rendererChannels, []);
+  assert.equal(pillShowCalls, 2);
+
+  // With a live companion pill, PTT dictation flows again.
+  manager._agentDictationPillReady = true;
+  manager.agentDictationPillWindow = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    webContents: { send: () => undefined },
+  };
+  manager.sendPrepareDictation();
+  manager.sendStartDictation();
+
+  assert.equal(showCount, 1);
+  assert.deepEqual(rendererChannels, ["prepare-dictation", "start-dictation"]);
 });
 
 test("window manager starts fail-closed and suppresses normal-app popup surfaces", async () => {
@@ -295,7 +357,7 @@ test("window creation uses the auto-end dimensions and variant-aware position", 
   const manager = createNormalWindowManager();
 
   try {
-    const showPromise = manager.showMeetingAutoEndCountdown({
+    const showPromise = manager.showMeetingAutoEndNotification({
       sessionId: "meeting-1",
       expiresAt: 70_000,
       reason: "silence",
@@ -327,14 +389,14 @@ test("window creation uses the auto-end dimensions and variant-aware position", 
   }
 });
 
-test("unexpected auto-end window closure suppresses that countdown", async () => {
+test("unexpected auto-end window closure invalidates that restart offer", async () => {
   const manager = createNormalWindowManager();
-  const unavailableSessions = [];
+  const closedSessions = [];
   manager.meetingDetectionEngine = {
-    handleAutoEndNotificationUnavailable: (sessionId) => unavailableSessions.push(sessionId),
+    handleAutoEndNotificationClosed: (sessionId) => closedSessions.push(sessionId),
   };
 
-  const showPromise = manager.showMeetingAutoEndCountdown({
+  const showPromise = manager.showMeetingAutoEndNotification({
     sessionId: "meeting-1",
     expiresAt: 70_000,
     reason: "silence",
@@ -345,13 +407,42 @@ test("unexpected auto-end window closure suppresses that countdown", async () =>
 
   notificationWindow.close();
 
-  assert.deepEqual(unavailableSessions, ["meeting-1"]);
+  assert.deepEqual(closedSessions, ["meeting-1"]);
+});
+
+test("replacing an auto-end notification invalidates its restart offer", async () => {
+  const manager = createNormalWindowManager();
+  const closedSessions = [];
+  manager.meetingDetectionEngine = {
+    handleAutoEndNotificationClosed: (sessionId) => closedSessions.push(sessionId),
+  };
+
+  const autoEndPromise = manager.showMeetingAutoEndNotification({
+    sessionId: "meeting-1",
+    expiresAt: Date.now() + 30_000,
+    reason: "silence",
+  });
+  createdWindows[0].loadDeferred.resolve();
+  await autoEndPromise;
+
+  const replacementPromise = manager.showMeetingNotification(
+    { kind: "detection", detectionId: "calendar:next", source: "calendar" },
+    { autoDismiss: false }
+  );
+
+  try {
+    assert.deepEqual(closedSessions, ["meeting-1"]);
+  } finally {
+    createdWindows[1].loadDeferred.resolve();
+    await replacementPromise;
+    manager.dismissMeetingNotification();
+  }
 });
 
 test("auto-end notification loading has a fail-safe timeout", async () => {
   const timers = installFakeTimers();
   const manager = createNormalWindowManager();
-  const showPromise = manager.showMeetingAutoEndCountdown({
+  const showPromise = manager.showMeetingAutoEndNotification({
     sessionId: "meeting-1",
     expiresAt: 70_000,
     reason: "silence",
@@ -369,6 +460,47 @@ test("auto-end notification loading has a fail-safe timeout", async () => {
     manager.dismissMeetingNotification();
     notificationWindow.loadDeferred.resolve();
     await showPromise.catch(() => undefined);
+    timers.restore();
+  }
+});
+
+test("auto-end recovery subtracts load time from its expiry and hover cannot extend it", async () => {
+  const timers = installFakeTimers();
+  const manager = createNormalWindowManager();
+  const originalDateNow = Date.now;
+  const timedOutNotifications = [];
+  let now = 40_000;
+  Date.now = () => now;
+  manager.meetingDetectionEngine = {
+    handleNotificationTimeout: (notification) => timedOutNotifications.push(notification),
+    handleAutoEndNotificationClosed: () => undefined,
+  };
+
+  const notification = {
+    kind: "auto-end",
+    sessionId: "meeting-1",
+    expiresAt: 70_000,
+    reason: "silence",
+  };
+  const showPromise = manager.showMeetingAutoEndNotification(notification);
+  const notificationWindow = createdWindows[0];
+
+  try {
+    now = 45_000;
+    notificationWindow.loadDeferred.resolve();
+    await showPromise;
+    assert.equal(timers.pendingDelays().includes(25_000), true);
+
+    manager.setNotificationInteractivity(notificationWindow.webContents, true);
+    manager.setNotificationInteractivity(notificationWindow.webContents, false);
+    assert.equal(timers.pendingDelays().includes(25_000), true);
+
+    timers.runDelay(25_000);
+    assert.deepEqual(timedOutNotifications, [notification]);
+    assert.equal(notificationWindow.isDestroyed(), true);
+  } finally {
+    Date.now = originalDateNow;
+    manager.dismissMeetingNotification();
     timers.restore();
   }
 });
@@ -485,6 +617,79 @@ test("a stale ready callback cannot show the replacement notification window", a
     manager.showNotificationWindow(secondWindow.webContents);
     assert.equal(secondWindow.showCount, 1);
   } finally {
+    manager.dismissMeetingNotification();
+    timers.restore();
+  }
+});
+
+test("an auto-end notification dismissed while loading reports that it was not shown", async () => {
+  const manager = createNormalWindowManager();
+
+  const showPromise = manager.showMeetingAutoEndNotification({
+    sessionId: "meeting-1",
+    expiresAt: Date.now() + 30_000,
+    reason: "silence",
+  });
+  manager.dismissMeetingNotification();
+  createdWindows[0].loadDeferred.resolve();
+
+  assert.equal(await showPromise, false);
+});
+
+test("an auto-end notification whose load fails after dismissal reports that it was not shown", async () => {
+  const manager = createNormalWindowManager();
+
+  const showPromise = manager.showMeetingAutoEndNotification({
+    sessionId: "meeting-1",
+    expiresAt: Date.now() + 30_000,
+    reason: "silence",
+  });
+  manager.dismissMeetingNotification();
+  createdWindows[0].loadDeferred.reject(new Error("load failed"));
+
+  assert.equal(await showPromise, false);
+});
+
+// The engine flushes its queued detections when an expiring restart offer
+// releases them, so a prompt raised from the timeout handler must outlive the
+// dismissal that closes the expired card.
+test("a notification raised from the timeout handler survives the dismissal that follows", async () => {
+  const timers = installFakeTimers();
+  const manager = createNormalWindowManager();
+  const originalDateNow = Date.now;
+  let now = 40_000;
+  Date.now = () => now;
+  let replacementPromise = null;
+  manager.meetingDetectionEngine = {
+    handleNotificationTimeout: () => {
+      replacementPromise = manager.showMeetingNotification(
+        { kind: "detection", detectionId: "calendar:next", source: "calendar" },
+        { autoDismiss: false }
+      );
+    },
+    handleAutoEndNotificationClosed: () => undefined,
+  };
+
+  const showPromise = manager.showMeetingAutoEndNotification({
+    kind: "auto-end",
+    sessionId: "meeting-1",
+    expiresAt: 70_000,
+    reason: "silence",
+  });
+
+  try {
+    notificationWindowFor(0).loadDeferred.resolve();
+    await showPromise;
+
+    timers.runDelay(30_000);
+    notificationWindowFor(1).loadDeferred.resolve();
+    await replacementPromise;
+
+    assert.equal(createdWindows.length, 2);
+    assert.equal(notificationWindowFor(1).isDestroyed(), false);
+    assert.equal(manager.notificationWindow, notificationWindowFor(1));
+  } finally {
+    Date.now = originalDateNow;
     manager.dismissMeetingNotification();
     timers.restore();
   }

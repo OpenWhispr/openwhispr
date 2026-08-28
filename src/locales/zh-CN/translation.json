@@ -25,6 +25,31 @@
         "description": "无法重建笔记文件。请确保已启用该功能，并且文件夹可写。"
       }
     },
+    "granolaImport": {
+      "title": "从 Granola 导入",
+      "description": "从 Granola 的 CSV 导出文件导入会议笔记",
+      "howTo": "在 Granola 中:Settings → Profile → Export historical data → Generate CSV。导出文件将通过邮件发送,通常在几小时内送达。",
+      "chooseFile": "选择 CSV 文件",
+      "preview": {
+        "title": "从 Granola 导入",
+        "summary": "共找到 {{total}} 条笔记:{{newCount}} 条新笔记,{{duplicateCount}} 条已导入",
+        "warnings": "{{warningCount}} 行存在问题(已跳过或导入时缺少日期)",
+        "confirm": "导入 {{newCount}} 条笔记",
+        "nothingNew": "此文件中的笔记均已导入。"
+      },
+      "done": {
+        "title": "导入完成",
+        "summary": "已将 {{imported}} 条笔记导入到“Imported”文件夹,跳过 {{skipped}} 条重复项"
+      },
+      "error": {
+        "title": "导入失败",
+        "EMPTY_FILE": "文件为空。",
+        "HEADERS_UNRECOGNIZED": "这看起来不像 Granola 的 CSV 导出文件。",
+        "NO_DATA_ROWS": "此文件中未找到笔记。",
+        "FILE_TOO_LARGE": "此文件过大,无法导入。",
+        "generic": "读取文件时出错。"
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "识别并标记发言者",
@@ -186,6 +211,7 @@
         "accessibilityDescription": "将文本粘贴到当前应用。",
         "systemAudioTitle": "系统音频",
         "systemAudioDescription": "捕获其他应用的音频。",
+        "screenContextDescription": "让语音助手查看当前屏幕，绝不保存。",
         "enable": "启用",
         "enabled": "已启用"
       },
@@ -458,7 +484,7 @@
       "title": "语音助手设置",
       "description": "一键唤起你的 AI 助手",
       "hotkey": "快捷键",
-      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。如果有选中的文本，{{agentName}} 会编辑并替换所选内容；否则回答会在悬浮面板中打开。无需先说“Hey {{agentName}}”。",
+      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。如果有选中的文本，{{agentName}} 会编辑并替换它。如果可编辑文本框已获得焦点，回答会粘贴到光标处；否则会在悬浮面板中打开。无需先说“Hey {{agentName}}”。",
       "test": "试一试",
       "testInstruction": "选中下方的示例文本，按下 {{hotkey}} 并说“把它改短一点”——编辑结果会直接出现在文本框里",
       "testSetHotkey": "在上方设置快捷键即可试用",
@@ -538,6 +564,17 @@
         "step1": "在 corti.ai 注册",
         "step2": "打开 Corti 控制台并创建 API 凭据",
         "step3": "在下方粘贴 Client ID 和 Secret"
+      }
+    },
+    "requiredModels": {
+      "title": "安装必需的模型",
+      "description": "{{organization}}要求在此设备上安装这些模型后才能开始听写。",
+      "genericOrganization": "您的组织",
+      "installed": "已安装",
+      "queued": "排队中",
+      "failed": {
+        "title": "有一项下载未完成",
+        "description": "请检查网络连接和磁盘剩余空间，然后重试。如果仍然失败，请联系您的管理员。"
       }
     }
   },
@@ -662,7 +699,12 @@
       "enableButton": "启用 GPU",
       "dismissButton": "暂不启用"
     },
-    "backToNotes": "返回笔记"
+    "backToNotes": "返回笔记",
+    "requiredModelsByOrg": {
+      "title": "缺少必需的模型",
+      "description": "您的组织要求在此设备上安装这些模型：{{models}}。",
+      "download": "下载"
+    }
   },
   "reasoning": {
     "mode": {
@@ -990,7 +1032,7 @@
     "emailStep": {
       "checkingEmail": "正在检查您的邮箱...",
       "continueWithEmail": "使用邮箱继续",
-      "continueWithoutAccount": "无需账户使用 OpenWhispr",
+      "continueWithoutAccount": "无需账户，继续使用",
       "emailLabel": "邮箱",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "使用其他邮箱"
@@ -1561,7 +1603,9 @@
             "SSO 与合规",
             "专属支持"
           ],
-          "cta": "联系销售"
+          "cta": "联系销售",
+          "upgradeCta": "升级到 Enterprise",
+          "askOwner": "请 {{name}} 升级您的工作区。"
         },
         "currentPlan": "当前套餐",
         "coveredByWorkspace": "已包含在您的工作区套餐中",
@@ -1590,16 +1634,20 @@
       "wordsRemaining": "剩余 {{remaining}} 个词",
       "deleteAccount": {
         "label": "删除账户",
-        "labelDescription": "永久删除您的账户、所有云端数据和本地数据。此操作无法撤销。",
+        "labelDescription": "永久删除您的账户和个人云端数据。其他本地用户和工作区所有的内容将被保留。",
         "button": "删除我的账户",
         "deleting": "正在删除...",
         "title": "删除您的账户？",
-        "description": "这将永久删除您的 OpenWhispr 账户、所有云端同步笔记和所有本地数据，包括转录、音频录制、下载的模型、日历连接和设置。此操作无法撤销。",
-        "confirmText": "删除所有内容",
+        "description": "这将永久删除您的 OpenWhispr 账户和个人数据。工作区所有的内容及其他本地用户的数据会保留在此设备上。",
+        "confirmText": "删除账户",
+        "eraseDeviceLabel": "同时清除此设备上的所有数据",
+        "eraseDeviceDescription": "删除所有本地用户的笔记和工作区缓存、已下载模型、设置、日历连接、凭据和录音。",
+        "eraseDeviceWarning": "此设备级清除无法撤销，并会影响所有本地用户。",
         "successTitle": "账户已删除",
-        "successDescription": "您的账户和所有数据已被删除。应用将立即重新加载。",
+        "successDescription": "您的账户和个人数据已删除。其他本地用户、工作区、模型和设备设置均已保留。",
+        "partialCleanupDescription": "您的账户已删除，但部分本地清理未能完成。其他用户和工作区所有的内容均已保留。",
         "failedTitle": "删除失败",
-        "failedDescription": "删除您的账户时出错。您的本地数据可能已被部分删除。请重试。"
+        "failedDescription": "无法完成账户删除。未启动设备级清除。请重试。"
       },
       "profile": {
         "name": {
@@ -1649,7 +1697,7 @@
       },
       "examplesTitle": "示例",
       "helper": "选一个简短、说起来自然的名字",
-      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，回答会在悬浮助手面板中打开。如果有选中的文本，该文本会发送到你配置的语音助手模型，并安全地替换为结果。",
+      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，选中的文本会安全地替换为结果。启用自动粘贴后，如果可编辑文本框已获得焦点，回答会粘贴到光标处；否则会在悬浮助手面板中打开。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1813,7 +1861,7 @@
       },
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",
-        "description": "说出指令，助手会在悬浮面板中回答，并可使用你的笔记、日历和网页工具。先选中文本即可就地编辑。"
+        "description": "说出指令，助手会使用你的笔记、日历和网页工具。回答会粘贴到已聚焦的可编辑光标处、替换选中文本，或在悬浮面板中打开。"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",
@@ -2379,7 +2427,40 @@
             "admin": "工作区管理员"
           }
         }
+      },
+      "enterpriseConsole": {
+        "title": "Enterprise 控制台",
+        "description": "在网页端管理 SSO、策略和成员",
+        "open": "打开控制台"
       }
+    },
+    "enterpriseCheckout": {
+      "title": "升级到 Enterprise",
+      "description": "选择工作区、席位数量和计费周期。付款将在 Stripe Checkout 中完成。",
+      "allSubscribed": "您拥有的工作区已在 Enterprise 方案或无法在此更改。如需更改方案，请联系销售。",
+      "workspaceLabel": "工作区",
+      "seatsLabel": "席位",
+      "seatsHint_one": "当前已使用 {{count}} 个席位",
+      "seatsHint_other": "当前已使用 {{count}} 个席位",
+      "intervalLabel": "计费周期",
+      "interval": {
+        "monthly": "按月",
+        "annual": "按年"
+      },
+      "proratedCharge": "按比例费用",
+      "prorationNote": "按比例计算的差额将计入下一张账单。",
+      "errors": {
+        "previewFailed": "无法加载升级预览。",
+        "alreadyEnterprise": "该工作区已在 Enterprise 计划中。",
+        "subscriptionInactive": "该工作区的订阅未激活。请更新账单信息后重试。",
+        "priceNotConfigured": "Enterprise 价格暂不可用。请联系销售。"
+      },
+      "priceNote": "最终价格将在结账时显示。",
+      "continueCta": "继续结账",
+      "upgradeDescription": "将 {{workspace}} 从{{plan}}升级到 Enterprise。席位和计费周期保持不变，更改立即生效。",
+      "upgradeCta": "立即升级",
+      "upgradedTitle": "已升级到 Enterprise",
+      "upgradedDescription": "{{workspace}} 现已升级到 Enterprise。"
     }
   },
   "models": {
@@ -2407,6 +2488,7 @@
         "groq_whisper_large_v3_turbo": "216 倍实时速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
         "mistral_voxtral_mini_latest": "快速多语言转录",
+        "gemini_3_5_transcribe": "Google Gemini 语音转文字",
         "corti_transcribe": "临床级医疗转录",
         "xai_grok_stt": "xAI 高精度语音识别",
         "tinfoil_voxtral": "可验证的私密转录"
@@ -2810,8 +2892,8 @@
       "largeFileNote": "大文件将被分割并平行转录。",
       "chunkProgress": "正在转录第 {{completed}} 部分，共 {{total}} 部分...",
       "paidPlanRequired": "超过 25 MB 的文件需要付费计划才能使用云端转录。大文件通过 OpenWhispr Cloud 处理，确保可靠、高质量的结果。",
-      "byokTooLarge": "第三方 API 密钥仅支持 25 MB 以内的文件。",
-      "byokTooLargeDetail": "超过 25 MB 的文件由 OpenWhispr Cloud 负责分割、并行处理和重组——无需依赖第三方服务限制，即可获得可靠的结果。",
+      "byokTooLarge": "第三方 API 密钥仅支持 {{size}} MB 以内的文件。",
+      "byokTooLargeDetail": "超过 {{size}} MB 的文件由 OpenWhispr Cloud 负责分割、并行处理和重组——无需依赖第三方服务限制，即可获得可靠的结果。",
       "byokTooLargeNeedsAccount": "创建账户并升级到付费计划，即可使用 OpenWhispr Cloud 转录更大的文件。",
       "byokTooLargeNeedsUpgrade": "升级到付费计划，即可使用 OpenWhispr Cloud 转录更大的文件。",
       "switchToCloudForLargeFiles": "切换到 OpenWhispr Cloud 来转录此文件。",
@@ -2860,7 +2942,12 @@
       "description": "转录与结构化摘要",
       "back": "返回",
       "restrictedByOrg": "会议转录已被您的组织限制。",
-      "autoEnded": "会议结束后，录音已自动停止。"
+      "autoEnded": "会议结束后，录音已自动停止。",
+      "restartFailed": "无法重新开始会议录音。",
+      "systemAudioSilent": {
+        "title": "尚未检测到会议音频",
+        "description": "到目前为止，只有您的麦克风采集到声音。正在进行视频通话？请检查会议音频是否正在此电脑上播放且未被静音。正在进行现场录音？您可以忽略此提示——您的麦克风会采集房间内的声音。"
+      }
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
@@ -3287,10 +3374,12 @@
       "copy_to_clipboardName": "复制到剪贴板",
       "web_searchName": "网页搜索",
       "get_calendar_eventsName": "获取日历事件",
+      "get_calendar_availabilityName": "查看空闲时间",
       "search_notesStatus": "正在搜索笔记...",
       "web_searchStatus": "正在搜索网页...",
       "copy_to_clipboardStatus": "正在复制到剪贴板...",
       "get_calendar_eventsStatus": "正在查看日历...",
+      "get_calendar_availabilityStatus": "正在查看空闲时间...",
       "get_noteStatus": "正在读取笔记...",
       "create_noteStatus": "正在创建笔记...",
       "update_noteStatus": "正在更新笔记...",
@@ -3760,13 +3849,13 @@
     "start": "开始记录",
     "join": "加入并转录",
     "autoEnd": {
-      "title": "会议可能已结束",
+      "title": "会议录音已结束",
       "body": {
-        "micReleased": "没有其他应用在使用麦克风。录音将在 {{seconds}} 秒后停止。",
-        "silence": "未检测到音频。录音将在 {{seconds}} 秒后停止。",
-        "processExit": "会议应用已关闭。录音将在 {{seconds}} 秒后停止。"
+        "micReleased": "没有其他应用在使用麦克风，因此录音已自动停止。请在 {{seconds}} 秒内重新开始录音。",
+        "silence": "未检测到音频，因此录音已自动停止。请在 {{seconds}} 秒内重新开始录音。",
+        "processExit": "会议应用已关闭，因此录音已自动停止。请在 {{seconds}} 秒内重新开始录音。"
       },
-      "keep": "继续录音"
+      "restart": "重新开始录音"
     }
   }
 }

@@ -6,6 +6,7 @@ type OnboardingStorage = Pick<Storage, "setItem" | "removeItem">;
 
 export type OnboardingStepId =
   | "auth"
+  | "required-models"
   | "permissions"
   | "interface-language"
   | "languages"
@@ -38,6 +39,13 @@ export interface OnboardingRouteContext {
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
   agentAllowed: boolean;
+  /**
+   * Org-required local models are missing on disk. Inserts the blocking
+   * "required-models" step right after auth — account path only, since guests
+   * never fetch a policy. Callers latch this once the step is entered so a
+   * mid-download policy refresh can't yank the step from under the user.
+   */
+  requiredModelsPending?: boolean;
   /** A confirmed Enterprise workspace is already provisioned outside onboarding. */
   skipSetupChoice?: boolean;
 }
@@ -62,6 +70,7 @@ const SETUP_ROUTES: Record<Exclude<OnboardingSetupMode, null | "cloud">, Onboard
 // it to clamp backwards instead of jumping to the end of the route.
 const STEP_ORDER: OnboardingStepId[] = [
   "auth",
+  "required-models",
   "permissions",
   "interface-language",
   "languages",
@@ -155,6 +164,10 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
           ...setupChoice,
         ];
 
+  if (context.requiredModelsPending && context.authPath === "account") {
+    route.splice(route.indexOf("auth") + 1, 0, "required-models");
+  }
+
   if (context.setupMode && context.setupMode !== "cloud") {
     route.push(
       ...SETUP_ROUTES[context.setupMode].filter(
@@ -212,6 +225,17 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
   } catch {
     return null;
   }
+}
+
+/**
+ * True while a persisted onboarding session sits on the blocking
+ * required-models step. The background download tray uses this to keep its
+ * hands off downloads that step owns: a tray row would duplicate the step's
+ * own progress pill, and the tray's cancel cannot stick — the step
+ * auto-restarts org-mandated downloads.
+ */
+export function isRequiredModelsOnboardingStepActive(sessionValue: string | null): boolean {
+  return parseOnboardingSession(sessionValue)?.currentStepId === "required-models";
 }
 
 export function migrateLegacyOnboardingStep(value: string | null): OnboardingStepId {

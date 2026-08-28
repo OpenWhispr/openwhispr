@@ -84,7 +84,7 @@ const browserLanguage =
   typeof navigator !== "undefined" ? navigator.language || navigator.languages?.[0] : undefined;
 
 const storageLanguage =
-  typeof window !== "undefined" ? window.localStorage.getItem("uiLanguage") : undefined;
+  typeof window !== "undefined" ? window.localStorage?.getItem("uiLanguage") : undefined;
 
 const initialLanguage = normalizeUiLanguage(storageLanguage || browserLanguage || "en");
 
