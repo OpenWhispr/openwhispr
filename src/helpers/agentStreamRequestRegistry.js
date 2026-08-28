@@ -11,38 +11,44 @@ class AgentStreamRequestRegistry {
       throw new TypeError("requestId must be a non-empty string");
     }
 
+    const normalizedRequestId = requestId.trim();
     let senderRequests = this.requestsBySender.get(senderId);
     if (!senderRequests) {
       senderRequests = new Map();
       this.requestsBySender.set(senderId, senderRequests);
     }
 
-    senderRequests.get(requestId)?.abort();
+    senderRequests.get(normalizedRequestId)?.abort();
     const controller = new AbortController();
-    senderRequests.set(requestId, controller);
+    senderRequests.set(normalizedRequestId, controller);
     return controller;
   }
 
   cancel(senderId, requestId) {
+    if (!Number.isInteger(senderId) || typeof requestId !== "string") return false;
+    const normalizedRequestId = requestId.trim();
     const senderRequests = this.requestsBySender.get(senderId);
-    const controller = senderRequests?.get(requestId);
+    const controller = senderRequests?.get(normalizedRequestId);
     if (!controller) return false;
 
     controller.abort();
-    senderRequests.delete(requestId);
+    senderRequests.delete(normalizedRequestId);
     if (senderRequests.size === 0) this.requestsBySender.delete(senderId);
     return true;
   }
 
   complete(senderId, requestId, controller) {
+    if (!Number.isInteger(senderId) || typeof requestId !== "string") return;
+    const normalizedRequestId = requestId.trim();
     const senderRequests = this.requestsBySender.get(senderId);
-    if (senderRequests?.get(requestId) !== controller) return;
+    if (senderRequests?.get(normalizedRequestId) !== controller) return;
 
-    senderRequests.delete(requestId);
+    senderRequests.delete(normalizedRequestId);
     if (senderRequests.size === 0) this.requestsBySender.delete(senderId);
   }
 
   cancelSender(senderId) {
+    if (!Number.isInteger(senderId)) return 0;
     const senderRequests = this.requestsBySender.get(senderId);
     if (!senderRequests) return 0;
 

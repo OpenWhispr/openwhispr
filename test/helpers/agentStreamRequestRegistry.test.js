@@ -53,3 +53,20 @@ test("sender teardown cancels only that sender and reports the cancelled count",
   assert.equal(otherSender.signal.aborted, false);
   assert.equal(registry.cancelSender(10), 0);
 });
+
+test("normalizes requestId whitespace across begin and cancel", () => {
+  const registry = new AgentStreamRequestRegistry();
+  const controller = registry.begin(10, "  request-spaced  ");
+
+  assert.equal(registry.cancel(10, "request-spaced"), true);
+  assert.equal(controller.signal.aborted, true);
+});
+
+test("handles invalid arguments safely in cancel, complete, and cancelSender", () => {
+  const registry = new AgentStreamRequestRegistry();
+
+  assert.equal(registry.cancel(null, "req"), false);
+  assert.equal(registry.cancel(10, null), false);
+  assert.equal(registry.cancelSender(null), 0);
+  assert.doesNotThrow(() => registry.complete(null, null, null));
+});
