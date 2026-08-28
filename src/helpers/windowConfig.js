@@ -126,8 +126,12 @@ function fitDictationErrorWindowToWorkArea(requestedSize, workArea) {
 }
 
 const WINDOW_SIZES = {
-  BASE: { width: 96, height: 96 },
-  RECORDING: { width: 128, height: 96 },
+  // The pill docks 12px from the window's bottom corner (voice-pill-position
+  // classes); the remaining area is click-through headroom so the hover
+  // tooltip and the Signal glow's halo render without clipping at the window
+  // bounds. Sized with dictation-panel.css's dock insets — change together.
+  BASE: { width: 176, height: 120 },
+  RECORDING: { width: 208, height: 120 },
   DICTATION_ERROR: { width: DICTATION_ERROR_WINDOW_LIMITS.width, height: 112 },
   DICTATION_ERROR_WITH_TRANSCRIPT: {
     width: DICTATION_ERROR_WINDOW_LIMITS.width,
@@ -269,8 +273,8 @@ const NOTIFICATION_WINDOW_CONFIG = {
 };
 
 const AUTO_END_NOTIFICATION_WINDOW_SIZE = {
-  width: 620,
-  height: 116,
+  width: 480,
+  height: 128,
 };
 
 function getMeetingNotificationWindowSize(promptData) {

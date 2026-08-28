@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
-import AuthenticationStep from "./AuthenticationStep";
-import EmailVerificationStep from "./EmailVerificationStep";
+import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
 import UseCaseStep from "./onboarding/UseCaseStep";
 import { hasUseCaseIntent } from "./onboarding/useCases";
 import OnboardingShell, { OnboardingStepHeader } from "./onboarding/OnboardingShell";
@@ -14,19 +13,21 @@ import DemoStep from "./onboarding/DemoStep";
 import CalendarConnectionsStep from "./onboarding/CalendarConnectionsStep";
 import SetupChoiceStep from "./onboarding/SetupChoiceStep";
 import { ByokProviderStep, LocalModelSetupStep } from "./onboarding/ProviderSetupStep";
+import { RequiredModelDownloadStep } from "./onboarding/RequiredModelDownloadStep";
 import { AlertDialog } from "./ui/dialog";
 import { useAuth } from "../hooks/useAuth";
-import { signOut } from "../lib/auth";
 import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
+import { useScreenRecordingPermission } from "../hooks/useScreenRecordingPermission";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useRequiredLocalModels } from "../hooks/useRequiredLocalModels";
 import { usePolicyStore } from "../stores/policyStore";
-import { isAgentAllowed } from "../stores/policyRules";
+import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import { formatHotkeyInstruction } from "./onboarding/hotkeyPresentation";
@@ -77,6 +78,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
   const agentAllowed = usePolicyStore(isAgentAllowed);
+  const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
   const settings = useSettings();
   const settingsStore = useSettingsStore();
   const {
@@ -90,7 +92,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     clearSession,
   } = useOnboardingSession();
 
-  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [dictationHotkey, setDictationHotkey] = useState(
     () => parseHotkeyList(settings.dictationKey)[0] || getDefaultHotkey()
   );
@@ -122,7 +123,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setPermissionAlert({ title: dialog.title, description: dialog.description })
   );
   const systemAudio = useSystemAudioPermission();
-  const { isUsingNativeShortcut, supportsPushToTalk } = useHotkeyModeInfo("onboarding");
+  const {
+    granted: screenRecordingGranted,
+    needsRelaunch: screenRecordingNeedsRelaunch,
+    request: requestScreenRecordingAccess,
+  } = useScreenRecordingPermission();
+  const { supportsPushToTalk, pushToTalkUnavailableReason } = useHotkeyModeInfo(
+    "onboarding",
+    dictationHotkey
+  );
   const { activationMode, setActivationMode } = settings;
   // This hook also starts the membership fetch for already-authenticated users;
   // relying on the login transition alone would leave resumed onboarding stuck
@@ -167,18 +176,86 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     (!workspacesLoaded ||
       (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)));
 
+  // The setting turns on only once the permission is actually granted, so an
+  // Enable click whose System Settings grant is abandoned can't leave screen
+  // context armed to activate silently on some later grant.
+  const [screenContextRequested, setScreenContextRequested] = useState(false);
+
+  const applyScreenContext = useCallback(() => {
+    settingsStore.setVoiceAgentScreenContext(true);
+    // Keeps the dictation overlay out of its own screenshots.
+    void window.electronAPI?.setScreenContextEnabled?.(true);
+  }, [settingsStore]);
+
+  const enableScreenContext = useCallback(async () => {
+    setScreenContextRequested(true);
+    const granted = await requestScreenRecordingAccess();
+    if (granted) applyScreenContext();
+    return granted;
+  }, [applyScreenContext, requestScreenRecordingAccess]);
+
+  // macOS grants Screen Recording in System Settings, outside the app; the
+  // permission hook re-checks on window focus. When the grant lands, complete
+  // the opt-in the Enable click started — within this session only.
+  useEffect(() => {
+    if (!screenContextRequested || !screenRecordingGranted) return;
+    if (settingsStore.voiceAgentScreenContext) return;
+    applyScreenContext();
+  }, [
+    screenContextRequested,
+    screenRecordingGranted,
+    settingsStore.voiceAgentScreenContext,
+    applyScreenContext,
+  ]);
+
+  const requiredModels = useRequiredLocalModels();
+  // Latched for the session once the step is entered (or resumed at), so a
+  // mid-download policy refresh or the disk check settling can't rebuild the
+  // route out from under the user. Seeded from the persisted session because
+  // relaunching mid-download must resume on the step, not bounce off it while
+  // the disk check is still pending.
+  const requiredModelsLatchRef = useRef(session.currentStepId === "required-models");
+  const requiredModelsPending = requiredModelsLatchRef.current || requiredModels.missing.length > 0;
+
   const route = useMemo(
     () =>
       getOnboardingRoute({
         authPath: session.authPath,
         setupMode: session.setupMode,
         agentAllowed,
+        requiredModelsPending,
         skipSetupChoice: skipSetupChoiceForEnterprise,
       }),
-    [agentAllowed, session.authPath, session.setupMode, skipSetupChoiceForEnterprise]
+    [
+      agentAllowed,
+      requiredModelsPending,
+      session.authPath,
+      session.setupMode,
+      skipSetupChoiceForEnterprise,
+    ]
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
   const compact = COMPACT_STEPS.has(currentStepId);
+
+  useEffect(() => {
+    if (currentStepId === "required-models") requiredModelsLatchRef.current = true;
+  }, [currentStepId]);
+
+  // The auth step lands on "permissions" before the policy and disk checks
+  // settle (AppRouter's policy gate remounts this component mid-transition),
+  // so a persisted session can sit one step past the gate when the pending
+  // flag arrives. Pull the user back — only from permissions, the immediate
+  // post-auth screen, and only before the step was entered this session.
+  useEffect(() => {
+    if (
+      requiredModelsPending &&
+      currentStepId === "permissions" &&
+      !requiredModelsLatchRef.current &&
+      route.includes("required-models")
+    ) {
+      goTo("required-models");
+    }
+  }, [currentStepId, goTo, requiredModelsPending, route]);
 
   useEffect(() => {
     if (session.currentStepId !== currentStepId) {
@@ -200,12 +277,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   useEffect(() => {
     setStageReady(false);
   }, [currentStepId]);
-
-  useEffect(() => {
-    if (isUsingNativeShortcut && !supportsPushToTalk && activationMode === "push") {
-      setActivationMode("tap");
-    }
-  }, [activationMode, isUsingNativeShortcut, setActivationMode, supportsPushToTalk]);
 
   // Track main's actual registration: the platform default may be unregistrable
   // (GNOME gsettings and X11 reject modifier-only combos like Control+Super), in
@@ -424,6 +495,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         authPath: session.authPath,
         setupMode: mode,
         agentAllowed,
+        requiredModelsPending,
       });
       const next = getNextOnboardingStep("setup-choice", nextRoute);
       if (next) goTo(next);
@@ -432,6 +504,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       agentAllowed,
       finalizeOnboarding,
       goTo,
+      requiredModelsPending,
       session.authPath,
       setSelfHostedRequested,
       setSetupMode,
@@ -538,6 +611,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const canContinue = (() => {
     switch (currentStepId) {
+      case "required-models":
+        return !requiredModels.loading && requiredModels.missing.length === 0;
       case "permissions":
         return areRequiredPermissionsMet(permissions.micPermissionGranted);
       case "languages":
@@ -571,37 +646,40 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "auth":
         return (
           <div className="min-h-full w-full">
-            {pendingVerificationEmail ? (
-              <EmailVerificationStep
-                email={pendingVerificationEmail}
-                onVerified={() => {
-                  setPendingVerificationEmail(null);
-                  setAuthPath("account");
-                  goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
-                }}
-                onBack={() => {
-                  // Abandoning verification leaves a live session for the
-                  // wrong email; end it first or the remounted auth step
-                  // auto-completes with that account (signOut never rejects).
-                  void signOut().then(() => setPendingVerificationEmail(null));
-                }}
-              />
-            ) : (
-              <AuthenticationStep
-                onContinueWithoutAccount={() => {
-                  // Guests continue onto their route's permissions step — jumping
-                  // straight to setup-choice would skip the permission grants and
-                  // hotkey the guest route exists to guarantee (see flow.ts).
-                  setAuthPath("guest");
-                  goTo("permissions");
-                }}
-                onAuthComplete={() => {
-                  setAuthPath("account");
-                  goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
-                }}
-                onNeedsVerification={setPendingVerificationEmail}
-              />
-            )}
+            <CompactAuthenticationFlow
+              onContinueWithoutAccount={() => {
+                // Guests continue onto their route's permissions step — jumping
+                // straight to setup-choice would skip the permission grants and
+                // hotkey the guest route exists to guarantee (see flow.ts).
+                setAuthPath("guest");
+                goTo("permissions");
+              }}
+              onAuthComplete={() => {
+                setAuthPath("account");
+                goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
+              }}
+            />
+          </div>
+        );
+
+      case "required-models":
+        return (
+          <div className="h-full w-full pt-2">
+            <OnboardingStepHeader
+              title={t("onboarding.requiredModels.title")}
+              wideTitle
+              description={t("onboarding.requiredModels.description", {
+                organization:
+                  activeWorkspace?.name ?? t("onboarding.requiredModels.genericOrganization"),
+              })}
+            />
+            <RequiredModelDownloadStep
+              required={requiredModels.required}
+              missing={requiredModels.missing}
+              loading={requiredModels.loading}
+              refresh={requiredModels.refresh}
+              onProceed={() => void continueFromCurrentStep()}
+            />
           </div>
         );
 
@@ -610,6 +688,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           <CompactPermissionsStep
             permissions={permissions}
             systemAudio={systemAudio}
+            screenContext={
+              agentAllowed && screenContextAllowed
+                ? {
+                    enabled: settingsStore.voiceAgentScreenContext,
+                    granted: screenRecordingGranted,
+                    needsRelaunch: screenRecordingNeedsRelaunch,
+                    request: enableScreenContext,
+                  }
+                : undefined
+            }
             onContinue={() => void continueFromCurrentStep()}
           />
         );
@@ -737,7 +825,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     )}
                   </p>
                 </div>
-                <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+                <ActivationModeSelector
+                  value={activationMode}
+                  onChange={setActivationMode}
+                  pushDisabledReason={
+                    !supportsPushToTalk
+                      ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
+                      : undefined
+                  }
+                />
               </div>
               {getPlatform() === "linux" && activationMode === "push" && (
                 <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
@@ -947,7 +1043,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         stepKey={currentStepId}
         // History is the only Back gate. This preserves the branch's provider
         // escape path and also lets users return from setup choice/languages.
-        onBack={hasShellNavigation && session.history.length > 0 ? goBack : undefined}
+        // The required-models step is the exception: it is an org-mandated
+        // blocker, so backing out of it (to auth) is suppressed.
+        onBack={
+          hasShellNavigation && session.history.length > 0 && currentStepId !== "required-models"
+            ? goBack
+            : undefined
+        }
         onContinue={showsContinue ? () => void continueFromCurrentStep() : undefined}
         // The demos are practice, not configuration — a mic problem or an
         // unreachable transcription backend must never dead-end setup, so they

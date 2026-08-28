@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/**
- * Copies `text` to the clipboard (native bridge first, web API fallback) and
- * latches `copied` for `resetMs`. The latch clears immediately when the source
- * text changes so stale feedback never survives a new answer.
- */
 export function useCopyFeedback(
   text: string,
   { resetMs = 1800 }: { resetMs?: number } = {}
-): { copied: boolean; copy: () => Promise<void> } {
+): {
+  copied: boolean;
+  copy: () => Promise<void>;
+  confirmCopied: (copiedText: string, durationMs?: number) => void;
+} {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const confirmedTextRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (confirmedTextRef.current === text) return;
+    confirmedTextRef.current = null;
     setCopied(false);
     if (timerRef.current) clearTimeout(timerRef.current);
   }, [text]);
@@ -22,6 +24,16 @@ export function useCopyFeedback(
       if (timerRef.current) clearTimeout(timerRef.current);
     },
     []
+  );
+
+  const confirmCopied = useCallback(
+    (copiedText: string, durationMs = resetMs) => {
+      confirmedTextRef.current = copiedText;
+      setCopied(true);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopied(false), durationMs);
+    },
+    [resetMs]
   );
 
   const copy = useCallback(async () => {
@@ -40,10 +52,8 @@ export function useCopyFeedback(
       }
     }
 
-    setCopied(true);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setCopied(false), resetMs);
-  }, [text, resetMs]);
+    confirmCopied(text, resetMs);
+  }, [confirmCopied, text, resetMs]);
 
-  return { copied, copy };
+  return { copied, copy, confirmCopied };
 }

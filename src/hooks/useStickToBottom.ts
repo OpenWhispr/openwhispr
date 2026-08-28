@@ -33,6 +33,15 @@ export function useStickToBottom<T extends HTMLElement>(
       const bottom = node.scrollHeight - node.clientHeight;
       if (bottom > 0 && Math.abs(node.scrollTop - bottom) > 1) node.scrollTop = bottom;
     }
+    // Re-pin when content height settles late; re-attached per dep since the
+    // content element can swap (empty state → list).
+    const content = node.firstElementChild;
+    if (!content) return;
+    const ro = new ResizeObserver(() => {
+      if (pinnedRef.current) node.scrollTop = node.scrollHeight - node.clientHeight;
+    });
+    ro.observe(content);
+    return () => ro.disconnect();
   }, [dep, resetToTop]);
 
   const handleScroll = useCallback(() => {

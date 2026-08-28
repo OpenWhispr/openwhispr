@@ -1,0 +1,21 @@
+document_id,user_email,document_title,workspace_name,document_created,summary,notes,transcript
+11111111-2222-4333-8444-555555555555,owner@example.com,Product Design Review,Example Workspace,2026-08-20T17:46:57.650Z,"# UI Cleanup Priorities
+
+- Overall goal: make the UI more opinionated, visual, and systematized
+- Key pain points identified:
+  - Share and export should be combined into one button with a dropdown
+  - Meeting view is too stacked (attendees, folders, nested folders)
+
+# Templates
+
+- Plan to build out template testing
+  - Users can preview what different templates look like before applying
+  - Team-created templates plus user-created templates
+
+---
+
+Chat with meeting transcript: [https://notes.example.com/t/00000000-0000-4000-8000-000000000000](https://notes.example.com/t/00000000-0000-4000-8000-000000000000)",,"Button here. Like maybe we should actually have the share and export in one button and have a drop down there. We just need overall a clean up the UI, make it more opinionated.
+Okay. But essentially, you can test out what different templates look like. So if we just do something like this.
+So here. So there's everything from, like, building out different templates, for example. So having all these different templates, we have our own team ones, and then allow them to create their own.
+Sweet. Cool, guys. So I guess the only thing that's left right now is just my thoughts on the onboarding. Let's try to get that merged in, I suppose.
+Thanks, guys. Thank you, guys."

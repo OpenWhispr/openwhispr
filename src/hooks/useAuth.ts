@@ -161,26 +161,17 @@ export function useAuth() {
     let cancelled = false;
     const run = async () => {
       const { syncService, resetRendererCaches } = await loadAccountDependencies();
+      const scopeResult = await window.electronAPI?.setActiveAccountScope?.(
+        resolvedUserId,
+        boundGeneration
+      );
+      if (!scopeResult?.success) {
+        throw new Error(scopeResult?.error ?? "Could not establish the local account scope");
+      }
       const purgeCachedTeamContent = async () => {
         resetRendererCaches();
-        let lastError: unknown;
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          try {
-            await syncService.purgeTeamSpacesForSignOut();
-            const spaces = await window.electronAPI?.getSpaces?.();
-            if (!spaces) {
-              throw new Error("Cannot verify account cleanup: database bridge unavailable");
-            }
-            if (!spaces.some((space) => space.kind === "team")) {
-              resetRendererCaches();
-              return;
-            }
-            lastError = new Error("Team content remained after account cleanup");
-          } catch (error) {
-            lastError = error;
-          }
-        }
-        throw lastError ?? new Error("Team content remained after account cleanup");
+        await syncService.purgeTeamSpacesForSignOut();
+        resetRendererCaches();
       };
       const verifyCachedTeamContent = async () => {
         const purged = await syncService.verifyTeamSpacesForAccount(boundGeneration);

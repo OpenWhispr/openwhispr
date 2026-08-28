@@ -502,6 +502,45 @@ class EnvironmentManager {
     require("dotenv").config({ path: envPath });
     return { success: true, path: envPath };
   }
+
+  async clearAllPersistedData() {
+    for (const envVarName of PERSISTED_KEYS) {
+      delete process.env[envVarName];
+    }
+    delete process.env.CUSTOM_REASONING_API_KEY;
+
+    await Promise.all([
+      fsPromises.rm(path.join(app.getPath("userData"), ".env"), { force: true }),
+      fsPromises.rm(this._getSecureKeysDir(), { recursive: true, force: true }),
+    ]);
+    return { success: true };
+  }
+
+  // Removes a single key's line from .env, preserving every other line
+  // verbatim. saveAllKeysToEnvFile() would instead regenerate the file from
+  // PERSISTED_KEYS, dropping hand-added lines (e.g. OPENWHISPR_LOG_LEVEL) and
+  // materializing session/shell env values into the file.
+  removeKeyFromEnvFile(key) {
+    const envPath = path.join(app.getPath("userData"), ".env");
+    envWriteQueue = envWriteQueue.catch(() => {}).then(() => this._removeKeyLine(envPath, key));
+    return envWriteQueue;
+  }
+
+  async _removeKeyLine(envPath, key) {
+    let content;
+    try {
+      content = await fsPromises.readFile(envPath, "utf8");
+    } catch {
+      return; // No .env — nothing to remove.
+    }
+    const keyLine = new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=`);
+    const lines = content.split("\n");
+    const kept = lines.filter((line) => !keyLine.test(line));
+    if (kept.length === lines.length) return;
+    const tmpPath = `${envPath}.tmp`;
+    await fsPromises.writeFile(tmpPath, kept.join("\n"), "utf8");
+    await fsPromises.rename(tmpPath, envPath);
+  }
 }
 
 // Generate the uniform BYOK key accessors (getOpenAIKey/saveOpenAIKey/…) from

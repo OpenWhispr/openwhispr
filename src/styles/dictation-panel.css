@@ -231,40 +231,141 @@
     0 0 10px color-mix(in oklch, var(--color-agent-brand) 18%, transparent);
 }
 
-/* The Beam package's compact light preset is deliberately faint. Keep its
-   darker light-theme palette visible against our pale surfaces without
-   changing the established dark-mode treatment. */
-:root:not(.dark) .agent-thinking-beam {
-  --beam-stroke-opacity: 5;
-  --beam-inner-opacity: 1.1;
-  --beam-bloom-opacity: 0.8;
+/* The Signal glow: a comet orbiting a breathing ambient halo around the
+   pill. Both identities light it for the thinking state only — brand blue
+   for dictation processing, the agent's purple for agent thinking. */
+.voice-pill-glow-anchor {
+  position: relative;
+  display: inline-flex;
+  border-radius: 9999px;
 }
 
-/* Plain dictation contracts to the identity circle while processing. Match
-   the radial bloom's perceived strength to dark mode without strengthening
-   the listening entrance or Agent Mode beam. */
-:root:not(.dark) .agent-thinking-beam.plain-dictation-processing-glow {
-  --beam-stroke-opacity: 6.25;
-  --beam-bloom-opacity: 2.2;
+/* The orbit animates the conic gradients' start angle instead of rotating
+   the layers, so the same glow tracks the circular thinking pill and the
+   expanded recording capsule alike. */
+@property --signal-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: true;
 }
 
-:root:not(.dark) .agent-thinking-beam::before,
-:root:not(.dark) .agent-thinking-beam::after,
-:root:not(.dark) .agent-thinking-beam [data-beam-bloom] {
-  mix-blend-mode: multiply;
+.processing-signal-glow {
+  --signal-bright: #38bdf8;
+  --signal-core: #2563eb;
+  --signal-deep: #6366f1;
+  --signal-head: #eaf6ff;
+  --signal-halo-opacity: 0.8;
+  --signal-comet-opacity: 0.95;
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease-out;
 }
 
-:root:not(.dark) .agent-thinking-beam[data-agent-mode="true"] {
-  --beam-stroke-opacity: 5.25;
-  --beam-inner-opacity: 0;
-  --beam-bloom-opacity: 0;
+/* Agent Mode keeps the identical glow in its purple identity. */
+.processing-signal-glow[data-agent="true"] {
+  --signal-bright: #a78bfa;
+  --signal-core: #8787ff;
+  --signal-deep: #7c3aed;
+  --signal-head: #f2edff;
 }
 
-.agent-thinking-beam[data-agent-mode="true"] {
-  --beam-hue-base: 18deg;
-  --beam-stroke-opacity: 1.18;
-  --beam-inner-opacity: 0;
-  --beam-bloom-opacity: 0;
+:root:not(.dark) .processing-signal-glow {
+  --signal-halo-opacity: 0.7;
+  --signal-comet-opacity: 0.85;
+}
+
+.processing-signal-glow[data-active="true"] {
+  opacity: 1;
+}
+
+/* Breathing ambient halo, sized to stay inside the pill's 12px dock inset
+   (see WINDOW_SIZES in windowConfig.js) so it never hard-clips at the native
+   window bounds. */
+.processing-signal-glow::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--signal-core) 90%, transparent) 45%,
+    color-mix(in srgb, var(--signal-deep) 70%, transparent) 75%,
+    transparent
+  );
+  filter: blur(5px);
+  opacity: var(--signal-halo-opacity);
+}
+
+/* Soft bloom trailing the comet head. */
+.processing-signal-glow::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from var(--signal-angle),
+    transparent 0 55%,
+    color-mix(in srgb, var(--signal-core) 70%, transparent) 82%,
+    var(--signal-bright) 100%
+  );
+  filter: blur(4px);
+  opacity: var(--signal-comet-opacity);
+}
+
+/* Gradient ring whose white-hot head cools through the bright hue into the
+   deep tail. */
+.processing-signal-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  padding: 2.5px;
+  background: conic-gradient(
+    from var(--signal-angle),
+    color-mix(in srgb, var(--signal-core) 25%, transparent) 0%,
+    color-mix(in srgb, var(--signal-deep) 55%, transparent) 45%,
+    var(--signal-core) 75%,
+    var(--signal-bright) 94%,
+    var(--signal-head) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+
+/* Animations only run while active so the always-visible idle pill costs
+   nothing; the 220ms fade covers the frozen final frame on exit. */
+.processing-signal-glow[data-active="true"]::before {
+  animation: processing-signal-breathe 1.9s ease-in-out infinite;
+}
+
+.processing-signal-glow[data-active="true"] {
+  animation: processing-signal-spin 1.6s linear infinite;
+}
+
+@keyframes processing-signal-spin {
+  to {
+    --signal-angle: 360deg;
+  }
+}
+
+@keyframes processing-signal-breathe {
+  0%,
+  100% {
+    opacity: calc(var(--signal-halo-opacity) * 0.55);
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: var(--signal-halo-opacity);
+    transform: scale(1.05);
+  }
 }
 
 .expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-stage="encapsulated"] {
@@ -304,20 +405,24 @@
   will-change: left, bottom, transform;
 }
 
+/* Floating docks keep the pill 12px inside the window so the Signal glow's
+   halo and the hover tooltip have click-through headroom instead of clipping
+   at the window bounds. Sized with WINDOW_SIZES in windowConfig.js — change
+   together. */
 .voice-pill-position-bottom-right {
-  bottom: 0.25rem;
-  left: calc(100% - 0.25rem);
+  bottom: 0.75rem;
+  left: calc(100% - 0.75rem);
   transform: translateX(-100%);
 }
 
 .voice-pill-position-bottom-left {
-  bottom: 0.25rem;
-  left: 0.25rem;
+  bottom: 0.75rem;
+  left: 0.75rem;
   transform: none;
 }
 
 .voice-pill-position-center {
-  bottom: 0.25rem;
+  bottom: 0.75rem;
   left: 50%;
   transform: translateX(-50%);
 }
@@ -496,9 +601,9 @@
     animation-duration: 1ms !important;
   }
 
-  .agent-thinking-beam[data-active] {
-    animation-duration: 1ms, 1ms !important;
-    animation-iteration-count: 1, 1 !important;
+  .processing-signal-glow[data-active="true"],
+  .processing-signal-glow[data-active="true"]::before {
+    animation: none;
   }
 
   .inline-response-shimmer {

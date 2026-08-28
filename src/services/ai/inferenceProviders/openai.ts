@@ -210,8 +210,10 @@ export const openaiProvider: InferenceProvider = {
       });
     }
 
+    const retryStrategy = createApiRetryStrategy();
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
+      let lastRetryableError: Error | null = null;
 
       for (const { url: endpoint, type } of endpointCandidates) {
         const controller = new AbortController();
@@ -297,6 +299,9 @@ export const openaiProvider: InferenceProvider = {
             throw new Error(`Request timed out after ${timeoutSeconds}s`);
           }
           lastError = error as Error;
+          if (retryStrategy.shouldRetry(lastError)) {
+            lastRetryableError = lastError;
+          }
           if (type === "responses") {
             logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
               attemptedEndpoint: endpoint,
@@ -304,14 +309,14 @@ export const openaiProvider: InferenceProvider = {
             });
             continue;
           }
-          throw error;
+          throw lastRetryableError || error;
         } finally {
           clearTimeout(timeoutId);
         }
       }
 
-      throw lastError || new Error("No OpenAI endpoint responded");
-    }, createApiRetryStrategy());
+      throw lastRetryableError || lastError || new Error("No OpenAI endpoint responded");
+    }, retryStrategy);
 
     const isResponsesApi = Array.isArray(response?.output);
     const isChatCompletions = Array.isArray(response?.choices);

@@ -1,6 +1,7 @@
-# Weekly live check that every realtime STT provider still accepts the app's
-# credential flow and WebSocket handshake. Deliberately NOT part of PR CI: it
-# exercises external APIs and its failures are provider news, not code
+# Weekly live check that every STT provider still accepts the app's credential
+# flow — WebSocket handshake for realtime providers, a real transcription for
+# batch providers with a bespoke request shape. Deliberately NOT part of PR CI:
+# it exercises external APIs and its failures are provider news, not code
 # regressions. Same pattern as llm-canary.yml.
 name: stt-canary
 
@@ -30,6 +31,7 @@ jobs:
           STT_CANARY_DEEPGRAM_KEY: ${{ secrets.STT_CANARY_DEEPGRAM_KEY }}
           STT_CANARY_ASSEMBLYAI_KEY: ${{ secrets.STT_CANARY_ASSEMBLYAI_KEY }}
           STT_CANARY_TINFOIL_KEY: ${{ secrets.STT_CANARY_TINFOIL_KEY }}
+          STT_CANARY_GEMINI_KEY: ${{ secrets.STT_CANARY_GEMINI_KEY }}
         run: |
           set -o pipefail
           node scripts/stt-canary.mjs | tee canary-report.md
@@ -38,7 +40,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          title="STT canary: realtime provider handshake failing"
+          title="STT canary: provider credential flow failing"
           body="$(cat canary-report.md)
 
           _Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}_"

@@ -37,7 +37,10 @@ import {
   Languages,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
+import { AUTH_URL, signOut } from "../lib/auth";
+import { deleteAccount } from "../lib/accountDeletionRequest";
+import { executeAccountDeletion } from "../lib/accountDeletionFlow";
+import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
@@ -109,7 +112,12 @@ import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { startMigration, useMigration } from "../stores/noteStore.js";
+import {
+  startMigration,
+  useMigration,
+  loadFolders,
+  initializeNotesTree,
+} from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import {
@@ -133,7 +141,10 @@ import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
+import { enterpriseTileCta, type EnterpriseTileCta } from "../lib/workspaceBilling";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
+import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
+import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
 import { getTranscriptionProvider } from "../models/ModelRegistry";
@@ -223,6 +234,243 @@ function SectionHeader({
         <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
       )}
       {note && <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{note}</p>}
+    </div>
+  );
+}
+
+interface GranolaImportPreview {
+  total: number;
+  newCount: number;
+  duplicateCount: number;
+  sampleTitles: string[];
+  warningCount: number;
+}
+
+type GranolaImportState =
+  | { phase: "idle" }
+  | { phase: "picking" }
+  | { phase: "preview"; preview: GranolaImportPreview }
+  | { phase: "importing"; preview: GranolaImportPreview }
+  | { phase: "done"; imported: number; skipped: number };
+
+function GranolaImportSection({
+  showAlertDialog,
+}: {
+  showAlertDialog: (options: { title: string; description?: string }) => void;
+}) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<GranolaImportState>({ phase: "idle" });
+  // Guards double-clicks: handlers read stale closure state, so state alone
+  // can't prevent a second dialog/run being started in the same frame.
+  const requestInFlightRef = useRef(false);
+
+  const errorDescription = (code?: string) => {
+    switch (code) {
+      case "EMPTY_FILE":
+        return t("settings.granolaImport.error.EMPTY_FILE");
+      case "HEADERS_UNRECOGNIZED":
+        return t("settings.granolaImport.error.HEADERS_UNRECOGNIZED");
+      case "NO_DATA_ROWS":
+        return t("settings.granolaImport.error.NO_DATA_ROWS");
+      case "FILE_TOO_LARGE":
+        return t("settings.granolaImport.error.FILE_TOO_LARGE");
+      default:
+        return t("settings.granolaImport.error.generic");
+    }
+  };
+
+  const showImportError = (code?: string) => {
+    showAlertDialog({
+      title: t("settings.granolaImport.error.title"),
+      description: errorDescription(code),
+    });
+  };
+
+  const handleChooseFile = async () => {
+    if (requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
+    setState({ phase: "picking" });
+    try {
+      let result:
+        | Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportPickAndPreview>>>
+        | undefined;
+      try {
+        result = await window.electronAPI?.granolaImportPickAndPreview?.();
+      } catch {
+        setState({ phase: "idle" });
+        showImportError();
+        return;
+      }
+      if (!result || result.canceled) {
+        setState({ phase: "idle" });
+        return;
+      }
+      if (!result.success) {
+        setState({ phase: "idle" });
+        showImportError(result.error);
+        return;
+      }
+      setState({
+        phase: "preview",
+        preview: {
+          total: result.total ?? 0,
+          newCount: result.newCount ?? 0,
+          duplicateCount: result.duplicateCount ?? 0,
+          sampleTitles: result.sampleTitles ?? [],
+          warningCount: result.rowIssueCount ?? 0,
+        },
+      });
+    } finally {
+      requestInFlightRef.current = false;
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (state.phase !== "preview" || requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
+    setState({ phase: "importing", preview: state.preview });
+    try {
+      let result:
+        Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportRun>>> | undefined;
+      try {
+        result = await window.electronAPI?.granolaImportRun?.();
+      } catch {
+        result = undefined;
+      }
+      if (!result?.success) {
+        setState({ phase: "idle" });
+        showImportError(result?.error);
+        return;
+      }
+      const imported = result.imported ?? 0;
+      setState({ phase: "done", imported, skipped: result.skipped ?? 0 });
+      if (imported > 0) {
+        // One refresh + one batched sync pass — never per-note pushes.
+        void loadFolders();
+        void initializeNotesTree();
+        void syncService.requestSyncAll("manual");
+      }
+    } finally {
+      requestInFlightRef.current = false;
+    }
+  };
+
+  const dialogOpen =
+    state.phase === "preview" || state.phase === "importing" || state.phase === "done";
+  const preview = state.phase === "preview" || state.phase === "importing" ? state.preview : null;
+
+  return (
+    <div>
+      <SectionHeader
+        title={t("settings.granolaImport.title")}
+        description={t("settings.granolaImport.howTo")}
+      />
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settings.granolaImport.title")}
+            description={t("settings.granolaImport.description")}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={state.phase === "picking"}
+              onClick={handleChooseFile}
+            >
+              {state.phase === "picking" ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                t("settings.granolaImport.chooseFile")
+              )}
+            </Button>
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
+
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open && state.phase !== "importing") setState({ phase: "idle" });
+        }}
+      >
+        <DialogContent className="sm:max-w-90">
+          <DialogHeader>
+            <DialogTitle>
+              {state.phase === "done"
+                ? t("settings.granolaImport.done.title")
+                : t("settings.granolaImport.preview.title")}
+            </DialogTitle>
+            {state.phase === "done" ? (
+              <DialogDescription>
+                {t("settings.granolaImport.done.summary", {
+                  imported: state.imported,
+                  skipped: state.skipped,
+                })}
+              </DialogDescription>
+            ) : (
+              preview && (
+                <DialogDescription>
+                  {preview.newCount === 0
+                    ? t("settings.granolaImport.preview.nothingNew")
+                    : t("settings.granolaImport.preview.summary", {
+                        total: preview.total,
+                        newCount: preview.newCount,
+                        duplicateCount: preview.duplicateCount,
+                      })}
+                </DialogDescription>
+              )
+            )}
+          </DialogHeader>
+          {preview && (
+            <div className="space-y-2">
+              {preview.sampleTitles.length > 0 && (
+                <ul className="text-xs text-muted-foreground space-y-1">
+                  {preview.sampleTitles.map((title, index) => (
+                    <li key={`${index}-${title}`} className="truncate">
+                      {title}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {preview.warningCount > 0 && (
+                <p className="text-xs text-muted-foreground/80">
+                  {t("settings.granolaImport.preview.warnings", {
+                    warningCount: preview.warningCount,
+                  })}
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            {state.phase === "done" ? (
+              <Button size="sm" onClick={() => setState({ phase: "idle" })}>
+                {t("common.close")}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={state.phase === "importing"}
+                  onClick={() => setState({ phase: "idle" })}
+                >
+                  {t("common.cancel")}
+                </Button>
+                <Button size="sm" disabled={state.phase === "importing"} onClick={handleConfirm}>
+                  {state.phase === "importing" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    t("settings.granolaImport.preview.confirm", {
+                      newCount: preview?.newCount ?? 0,
+                    })
+                  )}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1047,6 +1295,16 @@ export default function SettingsPage({
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
   const billingWorkspaces = useWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const billingWorkspacesLoaded = useWorkspaceStore((s) => s.loaded);
+  const [enterpriseCheckoutOpen, setEnterpriseCheckoutOpen] = useState(false);
+  const [enterpriseWorkspaceCreateOpen, setEnterpriseWorkspaceCreateOpen] = useState(false);
+  // Until the store resolves, an empty list would make enterpriseTileCta answer
+  // "createWorkspace" for everyone — including members who must never be routed
+  // into creating a workspace. Fall back to contact sales for that window.
+  const enterpriseCta: EnterpriseTileCta = billingWorkspacesLoaded
+    ? enterpriseTileCta(billingWorkspaces, activeWorkspaceId)
+    : { action: "contactSales", ownerName: null };
   const coveringWorkspaces = billingWorkspaces.filter((workspace) =>
     usage?.entitledWorkspaceIds?.includes(workspace.id)
   );
@@ -1187,8 +1445,13 @@ export default function SettingsPage({
     [dictationKey, meetingKey, voiceAgentKey, t]
   );
 
-  const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
-    useHotkeyModeInfo("settings");
+  const {
+    isUsingNativeShortcut,
+    isUsingHyprland,
+    hyprlandConfigStatus,
+    supportsPushToTalk,
+    pushToTalkUnavailableReason,
+  } = useHotkeyModeInfo("settings", dictationKey);
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -1297,12 +1560,6 @@ export default function SettingsPage({
       clearTimeout(timer);
     };
   }, [checkWhisperInstallation, getAppVersion]);
-
-  useEffect(() => {
-    if (isUsingNativeShortcut && !supportsPushToTalk) {
-      setActivationMode("tap");
-    }
-  }, [isUsingNativeShortcut, supportsPushToTalk, setActivationMode]);
 
   useEffect(() => {
     const loadEffectiveDefaultHotkey = async () => {
@@ -1438,6 +1695,8 @@ export default function SettingsPage({
   });
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
+  const [eraseDeviceData, setEraseDeviceData] = useState(false);
   const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(usage);
   const [billingState, setBillingState] = useState<Record<string, boolean>>({
     pro: true,
@@ -1527,8 +1786,8 @@ export default function SettingsPage({
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
     try {
-      // Team content is membership-scoped, not account data: drop it locally
-      // before the session ends (never blocks sign-out).
+      // Clear account-scoped renderer/session state before ending the session.
+      // Workspace-owned rows remain cached behind their membership boundary.
       await syncService.purgeTeamSpacesForSignOut();
       await signOut();
       window.location.reload();
@@ -1544,47 +1803,65 @@ export default function SettingsPage({
   }, [showAlertDialog, t]);
 
   const handleDeleteAccount = useCallback(() => {
-    showConfirmDialog({
-      title: t("settingsPage.account.deleteAccount.title"),
-      description: t("settingsPage.account.deleteAccount.description"),
-      onConfirm: async () => {
-        setIsDeletingAccount(true);
-        try {
-          // Best-effort cloud cleanup (needs session cookies before sign-out)
-          try {
-            const { NotesService } = await import("../services/NotesService");
-            await NotesService.deleteAll();
-          } catch {}
+    setEraseDeviceData(false);
+    setIsDeleteAccountDialogOpen(true);
+  }, []);
 
-          const result = await deleteAccount();
-          if (result.error) {
-            logger.error("Server account deletion failed", result.error, "auth");
-          }
+  const confirmDeleteAccount = useCallback(async () => {
+    const accountId = user?.id;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) {
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.failedTitle"),
+        description: t("settingsPage.account.deleteAccount.failedDescription"),
+      });
+      return;
+    }
 
-          try {
-            await signOut();
-          } catch {}
-          await window.electronAPI?.cleanupApp();
+    setIsDeletingAccount(true);
+    try {
+      const result = await executeAccountDeletion({
+        eraseDeviceData,
+        dependencies: {
+          deleteRemoteAccount: deleteAccount,
+          deleteLocalAccountData: async () => {
+            const cleanup = await window.electronAPI?.deleteAccountData?.(
+              accountId,
+              authGeneration
+            );
+            if (!cleanup?.success) {
+              throw new Error(cleanup?.error ?? "Could not remove local account data");
+            }
+          },
+          clearWorkspaceSessionState: () => syncService.purgeTeamSpacesForSignOut(),
+          signOut,
+          eraseDeviceData: async () => {
+            const cleanup = await window.electronAPI?.cleanupApp();
+            if (!cleanup?.success) {
+              throw new Error(cleanup?.errors?.join(", ") || "Could not erase device data");
+            }
+          },
+        },
+      });
 
-          showAlertDialog({
-            title: t("settingsPage.account.deleteAccount.successTitle"),
-            description: t("settingsPage.account.deleteAccount.successDescription"),
-          });
-          setTimeout(() => window.location.reload(), 1000);
-        } catch (error) {
-          logger.error("Account deletion failed", error, "auth");
-          showAlertDialog({
-            title: t("settingsPage.account.deleteAccount.failedTitle"),
-            description: t("settingsPage.account.deleteAccount.failedDescription"),
-          });
-        } finally {
-          setIsDeletingAccount(false);
-        }
-      },
-      variant: "destructive",
-      confirmText: t("settingsPage.account.deleteAccount.confirmText"),
-    });
-  }, [showConfirmDialog, showAlertDialog, t]);
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.successTitle"),
+        description:
+          result.localCleanupFailures.length > 0
+            ? t("settingsPage.account.deleteAccount.partialCleanupDescription")
+            : t("settingsPage.account.deleteAccount.successDescription"),
+      });
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (error) {
+      logger.error("Account deletion failed", error, "auth");
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.failedTitle"),
+        description: t("settingsPage.account.deleteAccount.failedDescription"),
+      });
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  }, [eraseDeviceData, showAlertDialog, t, user?.id]);
 
   const renderWhisperVadSettings = () => (
     <div>
@@ -2379,17 +2656,73 @@ export default function SettingsPage({
                           </li>
                         ))}
                       </ul>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 w-full h-6 text-[10px]"
-                        onClick={() =>
-                          window.electronAPI?.openExternal?.("https://openwhispr.com/contact-sales")
-                        }
-                      >
-                        <Mail size={10} />
-                        {t("settingsPage.account.pricing.enterprise.cta")}
-                      </Button>
+                      {isSignedIn && enterpriseCta.action !== "contactSales" ? (
+                        <div className="mt-2 space-y-1">
+                          <Button
+                            size="sm"
+                            className="w-full h-6 text-[10px]"
+                            onClick={() => {
+                              if (enterpriseCta.action === "openDialog") {
+                                setEnterpriseCheckoutOpen(true);
+                              } else {
+                                setEnterpriseWorkspaceCreateOpen(true);
+                              }
+                            }}
+                          >
+                            {t("settingsPage.account.pricing.enterprise.upgradeCta")}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full h-6 text-[10px] text-muted-foreground"
+                            onClick={() =>
+                              window.electronAPI?.openExternal?.(
+                                "https://openwhispr.com/contact-sales"
+                              )
+                            }
+                          >
+                            <Mail size={10} />
+                            {t("settingsPage.account.pricing.enterprise.cta")}
+                          </Button>
+                        </div>
+                      ) : isSignedIn ? (
+                        <div className="mt-2 space-y-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-6 text-[10px]"
+                            onClick={() =>
+                              window.electronAPI?.openExternal?.(
+                                "https://openwhispr.com/contact-sales"
+                              )
+                            }
+                          >
+                            <Mail size={10} />
+                            {t("settingsPage.account.pricing.enterprise.cta")}
+                          </Button>
+                          {enterpriseCta.action === "contactSales" && enterpriseCta.ownerName && (
+                            <p className="text-[10px] text-muted-foreground text-center">
+                              {t("settingsPage.account.pricing.enterprise.askOwner", {
+                                name: enterpriseCta.ownerName,
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 w-full h-6 text-[10px]"
+                          onClick={() =>
+                            window.electronAPI?.openExternal?.(
+                              "https://openwhispr.com/contact-sales"
+                            )
+                          }
+                        >
+                          <Mail size={10} />
+                          {t("settingsPage.account.pricing.enterprise.cta")}
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -2479,6 +2812,18 @@ export default function SettingsPage({
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
+
+                  <EnterpriseCheckoutDialog
+                    open={enterpriseCheckoutOpen}
+                    onOpenChange={setEnterpriseCheckoutOpen}
+                    workspaces={billingWorkspaces}
+                    onRefreshEntitlement={usage?.refetch}
+                  />
+                  <CreateWorkspaceDialog
+                    open={enterpriseWorkspaceCreateOpen}
+                    onOpenChange={setEnterpriseWorkspaceCreateOpen}
+                    onCreated={() => setEnterpriseCheckoutOpen(true)}
+                  />
                 </div>
               </>
             ) : (
@@ -2725,6 +3070,9 @@ export default function SettingsPage({
                 )}
               </SettingsPanel>
             </div>
+
+            {/* Import from Granola */}
+            <GranolaImportSection showAlertDialog={showAlertDialog} />
 
             {/* Floating Icon */}
             <div>
@@ -3487,7 +3835,15 @@ EOF`,
                       <span className="text-xs text-muted-foreground/80">
                         {t("settingsPage.general.hotkey.activationMode")}
                       </span>
-                      <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+                      <ActivationModeSelector
+                        value={activationMode}
+                        onChange={setActivationMode}
+                        pushDisabledReason={
+                          !supportsPushToTalk
+                            ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
+                            : undefined
+                        }
+                      />
                     </div>
                     {getCachedPlatform() === "linux" && activationMode === "push" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
@@ -4217,6 +4573,42 @@ EOF`,
         confirmText={confirmDialog.confirmText}
         cancelText={confirmDialog.cancelText}
       />
+
+      <ConfirmDialog
+        open={isDeleteAccountDialogOpen}
+        onOpenChange={(open) => {
+          setIsDeleteAccountDialogOpen(open);
+          if (!open) setEraseDeviceData(false);
+        }}
+        title={t("settingsPage.account.deleteAccount.title")}
+        description={t("settingsPage.account.deleteAccount.description")}
+        onConfirm={() => void confirmDeleteAccount()}
+        variant="destructive"
+        confirmText={t("settingsPage.account.deleteAccount.confirmText")}
+        confirmDisabled={isDeletingAccount}
+      >
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-border accent-destructive"
+            checked={eraseDeviceData}
+            onChange={(event) => setEraseDeviceData(event.target.checked)}
+          />
+          <span className="space-y-1">
+            <span className="block text-sm font-medium">
+              {t("settingsPage.account.deleteAccount.eraseDeviceLabel")}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {t("settingsPage.account.deleteAccount.eraseDeviceDescription")}
+            </span>
+            {eraseDeviceData && (
+              <span className="block text-xs font-medium text-destructive">
+                {t("settingsPage.account.deleteAccount.eraseDeviceWarning")}
+              </span>
+            )}
+          </span>
+        </label>
+      </ConfirmDialog>
 
       <AlertDialog
         open={alertDialog.open}

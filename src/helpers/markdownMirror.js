@@ -1,16 +1,23 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+
+const ENCODED_FOLDER_PREFIX = "__ow-";
+const WINDOWS_RESERVED_FOLDER = /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?$/i;
 
 class MarkdownMirror {
   constructor() {
     this._basePath = null;
+    this._baseRealPath = null;
   }
 
   init(basePath) {
     this._basePath = basePath;
+    this._baseRealPath = null;
     try {
       fs.mkdirSync(basePath, { recursive: true });
+      this._baseRealPath = fs.realpathSync(basePath);
       debugLogger.debug("Markdown mirror initialized", { basePath }, "note-files");
     } catch (err) {
       debugLogger.error("Failed to init markdown mirror", { error: err.message }, "note-files");
@@ -19,6 +26,75 @@ class MarkdownMirror {
 
   getBasePath() {
     return this._basePath;
+  }
+
+  _safeFolderName(folderName) {
+    const raw = String(folderName || "Personal");
+    const requiresEncoding =
+      raw === "." ||
+      raw === ".." ||
+      raw.startsWith(" ") ||
+      /[ .]$/.test(raw) ||
+      /[<>:"/\\|?*\u0000-\u001f]/.test(raw) ||
+      WINDOWS_RESERVED_FOLDER.test(raw) ||
+      raw.toLowerCase().startsWith(ENCODED_FOLDER_PREFIX);
+    if (!requiresEncoding) return raw;
+
+    const digest = crypto.createHash("sha256").update(raw, "utf8").digest("hex");
+    return `${ENCODED_FOLDER_PREFIX}${digest}`;
+  }
+
+  _isInsideBase(candidatePath) {
+    if (!this._baseRealPath) return false;
+    const relative = path.relative(this._baseRealPath, candidatePath);
+    return (
+      relative !== "" &&
+      relative !== ".." &&
+      !relative.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relative)
+    );
+  }
+
+  _folderCandidatePath(folderName) {
+    if (!this._baseRealPath) return null;
+    return path.join(this._baseRealPath, this._safeFolderName(folderName));
+  }
+
+  _displayPath(canonicalPath) {
+    const relative = path.relative(this._baseRealPath, canonicalPath);
+    return path.join(this._basePath, relative);
+  }
+
+  _resolveExistingFolderPath(candidatePath) {
+    const stats = fs.lstatSync(candidatePath);
+    if (stats.isSymbolicLink() || !stats.isDirectory()) {
+      throw new Error("Markdown mirror folder is not a regular directory");
+    }
+
+    const realPath = fs.realpathSync(candidatePath);
+    if (!this._isInsideBase(realPath)) {
+      throw new Error("Markdown mirror folder resolves outside the configured directory");
+    }
+    return realPath;
+  }
+
+  _resolveFolderPath(folderName, { create = false } = {}) {
+    const candidatePath = this._folderCandidatePath(folderName);
+    if (!candidatePath) return null;
+
+    if (!fs.existsSync(candidatePath)) {
+      if (!create) return null;
+      fs.mkdirSync(candidatePath, { recursive: true });
+    }
+    return this._resolveExistingFolderPath(candidatePath);
+  }
+
+  _assertWritableFilePath(filePath) {
+    if (!fs.existsSync(filePath)) return;
+    const stats = fs.lstatSync(filePath);
+    if (stats.isSymbolicLink() || !stats.isFile()) {
+      throw new Error("Markdown mirror file is not a regular file");
+    }
   }
 
   _slugify(title) {
@@ -66,17 +142,17 @@ class MarkdownMirror {
   }
 
   writeNote(note, folderName) {
-    if (!this._basePath) return;
+    if (!this._baseRealPath) return;
     try {
-      const dirName = folderName || "Personal";
-      const dirPath = path.join(this._basePath, dirName);
-      fs.mkdirSync(dirPath, { recursive: true });
+      const dirPath = this._resolveFolderPath(folderName, { create: true });
+      if (!dirPath) return;
 
       // Remove stale files (title changed or note moved to different folder)
       const glob = this._globNoteFiles(note.id);
       const slug = this._slugify(note.title);
       const newFileName = `${note.id}-${slug}.md`;
       const newFilePath = path.join(dirPath, newFileName);
+      this._assertWritableFilePath(newFilePath);
       for (const existing of glob) {
         if (existing !== newFilePath) {
           try {
@@ -85,7 +161,7 @@ class MarkdownMirror {
         }
       }
 
-      const frontmatter = this._buildFrontmatter(note, dirName);
+      const frontmatter = this._buildFrontmatter(note, folderName || "Personal");
       const body = note.enhanced_content || note.content || "";
       fs.writeFileSync(newFilePath, `${frontmatter}\n\n${body}`, "utf-8");
     } catch (err) {
@@ -98,18 +174,18 @@ class MarkdownMirror {
   }
 
   writeTranscript(note, folderName, speakerMappings) {
-    if (!this._basePath) return;
+    if (!this._baseRealPath) return;
     try {
       const segments = JSON.parse(note.transcript || "[]");
       if (!segments.length) return;
 
-      const dirName = folderName || "Personal";
-      const dirPath = path.join(this._basePath, dirName);
-      fs.mkdirSync(dirPath, { recursive: true });
+      const dirPath = this._resolveFolderPath(folderName, { create: true });
+      if (!dirPath) return;
 
       const slug = this._slugify(note.title);
       const newFileName = `${note.id}-${slug}-transcript.md`;
       const newFilePath = path.join(dirPath, newFileName);
+      this._assertWritableFilePath(newFilePath);
 
       const stale = this._globTranscriptFiles(note.id);
       for (const existing of stale) {
@@ -132,7 +208,7 @@ class MarkdownMirror {
   }
 
   deleteNote(noteId) {
-    if (!this._basePath) return;
+    if (!this._baseRealPath) return;
     try {
       const files = [...this._globNoteFiles(noteId), ...this._globTranscriptFiles(noteId)];
       for (const f of files) {
@@ -155,9 +231,9 @@ class MarkdownMirror {
   }
 
   ensureFolder(folderName) {
-    if (!this._basePath) return;
+    if (!this._baseRealPath) return;
     try {
-      fs.mkdirSync(path.join(this._basePath, folderName), { recursive: true });
+      this._resolveFolderPath(folderName, { create: true });
     } catch (err) {
       debugLogger.error(
         "Failed to ensure folder",
@@ -168,13 +244,14 @@ class MarkdownMirror {
   }
 
   renameFolder(oldName, newName) {
-    if (!this._basePath) return;
+    if (!this._baseRealPath) return;
     try {
-      const oldPath = path.join(this._basePath, oldName);
-      const newPath = path.join(this._basePath, newName);
-      if (fs.existsSync(oldPath)) {
-        fs.renameSync(oldPath, newPath);
-      }
+      const oldPath = this._resolveFolderPath(oldName);
+      if (!oldPath) return;
+      const newPath = this._folderCandidatePath(newName);
+      if (!newPath || oldPath === newPath) return;
+      if (fs.existsSync(newPath)) this._resolveExistingFolderPath(newPath);
+      fs.renameSync(oldPath, newPath);
     } catch (err) {
       debugLogger.error(
         "Failed to rename folder",
@@ -185,12 +262,10 @@ class MarkdownMirror {
   }
 
   deleteFolder(folderName) {
-    if (!this._basePath) return;
+    if (!this._baseRealPath) return;
     try {
-      const dir = path.join(this._basePath, folderName);
-      if (fs.existsSync(dir)) {
-        fs.rmSync(dir, { recursive: true, force: true });
-      }
+      const dirPath = this._resolveFolderPath(folderName);
+      if (dirPath) fs.rmSync(dirPath, { recursive: true, force: true });
     } catch (err) {
       debugLogger.error(
         "Failed to delete folder",
@@ -201,7 +276,7 @@ class MarkdownMirror {
   }
 
   rebuildAll(notes, folderMap, speakerMappingsMap) {
-    if (!this._basePath) return;
+    if (!this._baseRealPath) return;
     try {
       for (const note of notes) {
         const folderName = folderMap[note.folder_id] || "Personal";
@@ -217,15 +292,19 @@ class MarkdownMirror {
   }
 
   getNotePath(noteId) {
-    if (!this._basePath) return null;
+    if (!this._baseRealPath) return null;
     const files = this._globNoteFiles(noteId);
-    return files.length > 0 ? files[0] : null;
+    return files.length > 0 ? this._displayPath(files[0]) : null;
   }
 
   getFolderPath(folderName) {
-    if (!this._basePath) return null;
-    const dirPath = path.join(this._basePath, folderName);
-    return fs.existsSync(dirPath) ? dirPath : null;
+    if (!this._baseRealPath) return null;
+    try {
+      const canonicalPath = this._resolveFolderPath(folderName);
+      return canonicalPath ? this._displayPath(canonicalPath) : null;
+    } catch {
+      return null;
+    }
   }
 
   // Note markdown opens with the frontmatter this mirror writes; transcript
@@ -234,6 +313,8 @@ class MarkdownMirror {
   _isNoteMarkdownFile(filePath) {
     let fd;
     try {
+      const stats = fs.lstatSync(filePath);
+      if (stats.isSymbolicLink() || !stats.isFile()) return false;
       fd = fs.openSync(filePath, "r");
       const marker = Buffer.alloc(8);
       const bytesRead = fs.readSync(fd, marker, 0, marker.length, 0);
@@ -246,14 +327,19 @@ class MarkdownMirror {
   }
 
   _globNoteFiles(noteId) {
-    if (!this._basePath) return [];
+    if (!this._baseRealPath) return [];
     const results = [];
     try {
       const prefix = `${noteId}-`;
-      const dirs = fs.readdirSync(this._basePath, { withFileTypes: true });
+      const dirs = fs.readdirSync(this._baseRealPath, { withFileTypes: true });
       for (const dir of dirs) {
-        if (!dir.isDirectory()) continue;
-        const dirPath = path.join(this._basePath, dir.name);
+        if (!dir.isDirectory() || dir.isSymbolicLink()) continue;
+        let dirPath;
+        try {
+          dirPath = this._resolveExistingFolderPath(path.join(this._baseRealPath, dir.name));
+        } catch {
+          continue;
+        }
         const files = fs.readdirSync(dirPath);
         for (const file of files) {
           const filePath = path.join(dirPath, file);
@@ -271,18 +357,29 @@ class MarkdownMirror {
   }
 
   _globTranscriptFiles(noteId) {
-    if (!this._basePath) return [];
+    if (!this._baseRealPath) return [];
     const results = [];
     try {
       const prefix = `${noteId}-`;
-      const dirs = fs.readdirSync(this._basePath, { withFileTypes: true });
+      const dirs = fs.readdirSync(this._baseRealPath, { withFileTypes: true });
       for (const dir of dirs) {
-        if (!dir.isDirectory()) continue;
-        const dirPath = path.join(this._basePath, dir.name);
+        if (!dir.isDirectory() || dir.isSymbolicLink()) continue;
+        let dirPath;
+        try {
+          dirPath = this._resolveExistingFolderPath(path.join(this._baseRealPath, dir.name));
+        } catch {
+          continue;
+        }
         const files = fs.readdirSync(dirPath);
         for (const file of files) {
           const filePath = path.join(dirPath, file);
+          let isRegularFile = false;
+          try {
+            const stats = fs.lstatSync(filePath);
+            isRegularFile = stats.isFile() && !stats.isSymbolicLink();
+          } catch {}
           if (
+            isRegularFile &&
             file.startsWith(prefix) &&
             (file.endsWith("-transcript.txt") ||
               (file.endsWith("-transcript.md") && !this._isNoteMarkdownFile(filePath)))

@@ -56,8 +56,17 @@ function createSearchDatabase() {
       id INTEGER PRIMARY KEY,
       title TEXT NOT NULL,
       content TEXT NOT NULL,
-      deleted_at TEXT
+      deleted_at TEXT,
+      space_id INTEGER NOT NULL DEFAULT 1,
+      account_id TEXT
     );
+    CREATE TABLE spaces (id INTEGER PRIMARY KEY, kind TEXT NOT NULL);
+    CREATE TABLE space_accounts (
+      space_id INTEGER NOT NULL,
+      account_id TEXT NOT NULL,
+      PRIMARY KEY (space_id, account_id)
+    );
+    INSERT INTO spaces (id, kind) VALUES (1, 'private');
     CREATE VIRTUAL TABLE notes_fts USING fts5(title, content);
   `);
 
@@ -81,6 +90,7 @@ function createSearchDatabase() {
 
   const manager = Object.create(DatabaseManager.prototype);
   manager.db = sqlite;
+  manager.activeAccountId = null;
   return { manager, sqlite };
 }
 

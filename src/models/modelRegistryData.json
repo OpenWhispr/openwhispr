@@ -246,6 +246,19 @@
       ]
     },
     {
+      "id": "gemini",
+      "name": "Gemini",
+      "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+      "models": [
+        {
+          "id": "gemini-3.5-transcribe",
+          "name": "Gemini 3.5 Transcribe",
+          "description": "Google's Gemini speech-to-text",
+          "descriptionKey": "models.descriptions.transcription.gemini_3_5_transcribe"
+        }
+      ]
+    },
+    {
       "id": "corti",
       "name": "Corti",
       "baseUrl": "https://api.us.corti.app/v2",
