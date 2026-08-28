@@ -3245,8 +3245,11 @@
     "active": "GPU アクセラレーション有効",
     "ready": "GPUアクセラレーション準備完了",
     "activating": "GPU を有効化中...",
-    "activationFailed": "GPU を有効化できませんでした",
+    "activationFailed": "GPU アクセラレーションを利用できません",
+    "activationFailedDescription": "OpenWhispr は CPU 文字起こしに切り替えました。",
+    "reasoningActivationFailedDescription": "OpenWhispr は CPU 処理に切り替えました。",
     "retry": "再試行",
+    "retryActivation": "GPU アクセラレーションを再試行",
     "remove": "削除",
     "dismiss": "後で",
     "cancel": "キャンセル"
@@ -3269,7 +3272,8 @@
       },
       "gpuFallback": {
         "title": "GPU アクセラレーションを利用できません",
-        "description": "文字起こしは代わりに CPU を使用しています。設定で GPU アクセラレーションを無効にできます。"
+        "description": "OpenWhispr は CPU 文字起こしに切り替えました。",
+        "retry": "GPU を再試行"
       },
       "gpuPackMigration": {
         "title": "GPU パックの再ダウンロードが必要です",

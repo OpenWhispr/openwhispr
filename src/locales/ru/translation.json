@@ -3273,8 +3273,11 @@
     "active": "Ускорение GPU активно",
     "ready": "Ускорение GPU готово",
     "activating": "Активация GPU...",
-    "activationFailed": "Не удалось активировать GPU",
+    "activationFailed": "Ускорение GPU недоступно",
+    "activationFailedDescription": "OpenWhispr переключился на транскрипцию на CPU.",
+    "reasoningActivationFailedDescription": "OpenWhispr переключился на обработку на CPU.",
     "retry": "Повторить",
+    "retryActivation": "Повторить ускорение GPU",
     "remove": "Удалить",
     "dismiss": "Не сейчас",
     "cancel": "Отмена"
@@ -3297,7 +3300,8 @@
       },
       "gpuFallback": {
         "title": "Ускорение GPU недоступно",
-        "description": "Транскрипция выполняется на CPU. Вы можете отключить ускорение GPU в настройках."
+        "description": "OpenWhispr переключился на транскрипцию на CPU.",
+        "retry": "Повторить GPU"
       },
       "gpuPackMigration": {
         "title": "Требуется повторная загрузка GPU-пакета",

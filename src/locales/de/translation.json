@@ -3410,8 +3410,11 @@
     "active": "GPU-Beschleunigung aktiv",
     "ready": "GPU-Beschleunigung bereit",
     "activating": "GPU wird aktiviert...",
-    "activationFailed": "GPU konnte nicht aktiviert werden",
+    "activationFailed": "GPU-Beschleunigung nicht verfügbar",
+    "activationFailedDescription": "OpenWhispr verwendet die CPU-Transkription.",
+    "reasoningActivationFailedDescription": "OpenWhispr verwendet die CPU-Verarbeitung.",
     "retry": "Erneut versuchen",
+    "retryActivation": "GPU-Beschleunigung erneut versuchen",
     "remove": "Entfernen",
     "dismiss": "Nicht jetzt",
     "cancel": "Abbrechen"
@@ -3434,7 +3437,8 @@
       },
       "gpuFallback": {
         "title": "GPU-Beschleunigung nicht verfügbar",
-        "description": "Die Transkription verwendet stattdessen die CPU. Du kannst die GPU-Beschleunigung in den Einstellungen deaktivieren."
+        "description": "OpenWhispr verwendet die CPU-Transkription.",
+        "retry": "GPU erneut versuchen"
       },
       "gpuPackMigration": {
         "title": "GPU-Paket muss erneut heruntergeladen werden",

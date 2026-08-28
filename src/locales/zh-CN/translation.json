@@ -3245,8 +3245,11 @@
     "active": "GPU 加速已启用",
     "ready": "GPU 加速已就绪",
     "activating": "正在激活 GPU...",
-    "activationFailed": "无法激活 GPU",
+    "activationFailed": "GPU 加速不可用",
+    "activationFailedDescription": "OpenWhispr 已切换为 CPU 转录。",
+    "reasoningActivationFailedDescription": "OpenWhispr 已切换为 CPU 处理。",
     "retry": "重试",
+    "retryActivation": "重试 GPU 加速",
     "remove": "移除",
     "dismiss": "暂不启用",
     "cancel": "取消"
@@ -3269,7 +3272,8 @@
       },
       "gpuFallback": {
         "title": "GPU 加速不可用",
-        "description": "转录正在使用 CPU。你可以在设置中关闭 GPU 加速。"
+        "description": "OpenWhispr 已切换为 CPU 转录。",
+        "retry": "重试 GPU"
       },
       "gpuPackMigration": {
         "title": "需要重新下载 GPU 加速包",

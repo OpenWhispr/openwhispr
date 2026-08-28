@@ -3293,8 +3293,11 @@
     "active": "Aceleración GPU activa",
     "ready": "Aceleración GPU lista",
     "activating": "Activando GPU...",
-    "activationFailed": "No se pudo activar la GPU",
+    "activationFailed": "Aceleración GPU no disponible",
+    "activationFailedDescription": "OpenWhispr cambió a la transcripción por CPU.",
+    "reasoningActivationFailedDescription": "OpenWhispr cambió al procesamiento por CPU.",
     "retry": "Reintentar",
+    "retryActivation": "Reintentar aceleración GPU",
     "remove": "Eliminar",
     "dismiss": "Ahora no",
     "cancel": "Cancelar"
@@ -3317,7 +3320,8 @@
       },
       "gpuFallback": {
         "title": "Aceleración GPU no disponible",
-        "description": "La transcripción está usando la CPU. Puedes desactivar la aceleración GPU en Configuración."
+        "description": "OpenWhispr cambió a la transcripción por CPU.",
+        "retry": "Reintentar GPU"
       },
       "gpuPackMigration": {
         "title": "Es necesario volver a descargar el paquete GPU",
