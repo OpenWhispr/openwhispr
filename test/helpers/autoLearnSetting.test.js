@@ -39,3 +39,13 @@ test("coerces truthy/falsy incoming values to boolean", () => {
     enabled: false,
   });
 });
+
+test("correctly coerces string boolean representations", () => {
+  assert.deepEqual(applyAutoLearnSetting(false, "false"), { changed: false, enabled: false });
+  assert.deepEqual(applyAutoLearnSetting(true, "false"), { changed: true, enabled: false });
+  assert.deepEqual(applyAutoLearnSetting(false, "true"), { changed: true, enabled: true });
+  assert.deepEqual(applyAutoLearnSetting(true, "0"), { changed: true, enabled: false });
+  assert.deepEqual(applyAutoLearnSetting(false, "1"), { changed: true, enabled: true });
+  assert.deepEqual(applyAutoLearnSetting(true, "off"), { changed: true, enabled: false });
+  assert.deepEqual(applyAutoLearnSetting(false, "on"), { changed: true, enabled: true });
+});
