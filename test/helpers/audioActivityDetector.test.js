@@ -231,17 +231,29 @@ test("win32: MIC_START/MIC_STOP pids are tracked across partial chunks", async (
   detector.stop();
 });
 
-test("linux: pactl source-output events drive the sustained timer", async () => {
-  const { detector, children, calls } = createDetector("linux");
+test("linux: pactl source-output events reconcile before driving the sustained timer", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children, calls } = createDetector("linux", {
+    execResponses: [
+      { stdout: "[]" },
+      { stdout: JSON.stringify([{ index: 7, properties: {} }]) },
+      { stdout: "[]" },
+    ],
+  });
 
   await detector.start();
   assert.equal(calls[0].command, "pactl");
   assert.deepEqual(calls[0].args, ["subscribe"]);
 
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
   children[0].stdout.emit("data", "Event 'new' on source-output #7\n");
+  assert.equal(detector._sustainedTimer, null, "the raw event must not arm detection");
+  await flushImmediate();
   assert.notEqual(detector._sustainedTimer, null);
 
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
   children[0].stdout.emit("data", "Event 'remove' on source-output #7\n");
+  await flushImmediate();
   assert.equal(detector._sustainedTimer, null);
   detector.stop();
 });
@@ -541,6 +553,85 @@ test("linux: reconciles source-output ownership at startup and on events", async
   detector.stop();
 });
 
+test("linux: production and sink-monitor streams do not drive meeting prompts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("linux", {
+    execResponses: [
+      { stdout: "[]" },
+      {
+        stdout: JSON.stringify([
+          {
+            properties: {
+              "application.process.id": "101",
+              "media.role": "production",
+            },
+          },
+          { properties: { "stream.capture.sink": "true" } },
+        ]),
+      },
+    ],
+  });
+
+  await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  await flushImmediate();
+
+  assert.equal(detector._activeSources, 0);
+  assert.equal(detector._sustainedTimer, null);
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: true,
+  });
+  detector.stop();
+});
+
+test("linux: browser and unattributed captures remain prompt-capable", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("linux", {
+    execResponses: [
+      { stdout: "[]" },
+      {
+        stdout: JSON.stringify([
+          {
+            properties: {
+              "application.process.id": "202",
+              "application.process.binary": "chromium",
+            },
+          },
+          { properties: {} },
+        ]),
+      },
+    ],
+  });
+
+  await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  await flushImmediate();
+
+  assert.equal(detector._activeSources, 2);
+  assert.notEqual(detector._sustainedTimer, null);
+  detector.stop();
+});
+
+test("linux: polling uses the same prompt classification", async () => {
+  const { detector } = createDetector("linux", {
+    execResponses: [
+      {
+        stdout: JSON.stringify([
+          { properties: { "media.role": "production" } },
+          { properties: { "stream.capture.sink": "true" } },
+        ]),
+      },
+      { stdout: JSON.stringify([{ properties: {} }]) },
+    ],
+  });
+
+  assert.equal(await detector._checkLinux(), false);
+  assert.equal(await detector._checkLinux(), true);
+});
+
 test("linux: a subscribe-event burst runs one leading and one spaced trailing reconcile", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children, execCalls } = createDetector("linux", {
@@ -668,7 +759,7 @@ test("linux: module streams without a process id stay excluded without costing r
   detector.stop();
 });
 
-test("linux: ownership query failure is unreliable while aggregate events still prompt", async (t) => {
+test("linux: a failed reconciliation does not invent prompt state", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("linux", {
     execResponses: [{ stdout: "[]" }, { stdout: "not-json" }],
@@ -694,7 +785,7 @@ test("linux: ownership query failure is unreliable while aggregate events still 
     { reliable: true, externalMicActive: false },
     { reliable: false, externalMicActive: false },
   ]);
-  assert.notEqual(detector._sustainedTimer, null, "aggregate activity must still drive prompts");
+  assert.equal(detector._sustainedTimer, null);
   detector.stop();
 });
 
