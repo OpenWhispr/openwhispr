@@ -8031,7 +8031,7 @@ class IPCHandlers {
       }
     };
 
-    const startManagedMeetingSystemAudio = (event, manager, warningLabel) => {
+    const startManagedMeetingSystemAudio = (event, manager, warningLabel, mode) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       return manager.start({
         onChunk: (chunk) => {
@@ -8049,6 +8049,7 @@ class IPCHandlers {
             "meeting"
           );
         },
+        mode,
       });
     };
 
@@ -8096,7 +8097,8 @@ class IPCHandlers {
           await startManagedMeetingSystemAudio(
             event,
             this.windowsLoopbackAudioManager,
-            "Windows system audio warning"
+            "Windows system audio warning",
+            "endpoint-loopback"
           );
           return { systemAudioMode, systemAudioStrategy };
         } catch (error) {
