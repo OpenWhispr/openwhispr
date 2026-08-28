@@ -329,8 +329,9 @@ test("the required-models step is counted in progress", async () => {
     agentAllowed: true,
     requiredModelsPending: true,
   });
-  assert.deepEqual(getOnboardingProgress("required-models", route), { index: 0, total: 10 });
-  assert.deepEqual(getOnboardingProgress("languages", route), { index: 1, total: 10 });
+  assert.deepEqual(getOnboardingProgress("required-models", route), { index: 0, total: 11 });
+  assert.deepEqual(getOnboardingProgress("interface-language", route), { index: 1, total: 11 });
+  assert.deepEqual(getOnboardingProgress("languages", route), { index: 2, total: 11 });
 });
 
 test("the tray suppression predicate matches only an active required-models session", async () => {
