@@ -62,6 +62,21 @@ describe("needsSttConfigBeforeStart", () => {
   test("missing settings fail open to a non-blocking start", async () => {
     const { needsSttConfigBeforeStart } = await loadPolicy();
     assert.equal(needsSttConfigBeforeStart(null), false);
+    assert.equal(needsSttConfigBeforeStart(undefined), false);
+    assert.equal(needsSttConfigBeforeStart(123), false);
+    assert.equal(needsSttConfigBeforeStart(""), false);
     assert.equal(needsSttConfigBeforeStart({}), false);
+  });
+
+  test("normalizes mixed-case and whitespace in cloudTranscriptionMode", async () => {
+    const { needsSttConfigBeforeStart } = await loadPolicy();
+    assert.equal(
+      needsSttConfigBeforeStart({
+        useLocalWhisper: false,
+        cloudTranscriptionMode: " OpenWhispr ",
+        isSignedIn: true,
+      }),
+      true
+    );
   });
 });

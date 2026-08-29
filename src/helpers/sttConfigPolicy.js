@@ -5,8 +5,12 @@
 // awaited fetch stalls on auth resolution for seconds and then changes
 // nothing (#1673).
 export function needsSttConfigBeforeStart(settings) {
-  const s = settings || {};
+  const s = settings && typeof settings === "object" ? settings : {};
   if (s.useLocalWhisper) return false;
-  if (s.cloudTranscriptionMode !== "openwhispr") return false;
+  const cloudMode =
+    typeof s.cloudTranscriptionMode === "string"
+      ? s.cloudTranscriptionMode.trim().toLowerCase()
+      : "";
+  if (cloudMode !== "openwhispr") return false;
   return !!s.isSignedIn;
 }
