@@ -32,3 +32,12 @@ test("clamps compact windows to small and negative-origin work areas", () => {
     { x: 0, y: 0, width: 800, height: 600 }
   );
 });
+
+test("safely handles nullish and incomplete geometry inputs", () => {
+  assert.deepEqual(
+    centeredBounds(null, { width: 480, height: 576 }, { x: 0, y: 0, width: 1920, height: 1080 }),
+    { x: 0, y: 0, width: 480, height: 576 }
+  );
+  assert.deepEqual(centeredBounds(null, null, null), { x: 0, y: 0, width: 0, height: 0 });
+  assert.deepEqual(clampedBounds(null, null), { x: 0, y: 0, width: 0, height: 0 });
+});
