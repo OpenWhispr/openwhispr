@@ -573,7 +573,7 @@ class ClipboardManager {
     });
   }
 
-  _detectKdeWindowClass() {
+  _detectKdeWindowInfo() {
     if (this.commandExists("kdotool")) {
       try {
         const idResult = spawnSync("kdotool", ["getactivewindow"], { timeout: 1000 });
@@ -584,14 +584,19 @@ class ClipboardManager {
           });
           if (classResult.status === 0) {
             const cls = classResult.stdout.toString().toLowerCase().trim();
-            if (cls) return cls;
+            if (cls) {
+              const pidResult = spawnSync("kdotool", ["getwindowpid", winId], { timeout: 1000 });
+              const pid =
+                pidResult.status === 0 ? parseInt(pidResult.stdout.toString().trim(), 10) : null;
+              return { windowClass: cls, pid: Number.isFinite(pid) && pid > 0 ? pid : null };
+            }
           }
         }
       } catch {}
     }
 
     // Fallback (KDE 5 and 6): load a tiny script into KWin via D-Bus that
-    // prints the active window's resourceClass to the journal, read it back.
+    // prints the active window's class and PID to the journal, read it back.
     const qdbus = ["qdbus6", "qdbus"].find((cmd) => this.commandExists(cmd));
     if (qdbus) {
       const journalMarker = `OW_CLASS_${process.pid}`;
@@ -600,7 +605,7 @@ class ClipboardManager {
           this._kwinScriptPath = path.join(os.tmpdir(), `kwin-active-class-${process.pid}.js`);
           fs.writeFileSync(
             this._kwinScriptPath,
-            `print("${journalMarker}:" + (workspace.activeWindow ? workspace.activeWindow.resourceClass : ""))`
+            `var w = workspace.activeWindow; print("${journalMarker}:" + JSON.stringify({ windowClass: w ? w.resourceClass : "", pid: w ? w.pid : 0 }))`
           );
         }
         const loadResult = spawnSync(
@@ -628,7 +633,7 @@ class ClipboardManager {
             "cat",
           ];
 
-          let windowClass = null;
+          let windowInfo = null;
           // Try user journal first; fall back to system journal when
           // /var/log/journal/ is missing and entries land there instead.
           for (const prefix of [["--user"], []]) {
@@ -641,17 +646,16 @@ class ClipboardManager {
               for (let i = lines.length - 1; i >= 0; i--) {
                 const idx = lines[i].indexOf(`${journalMarker}:`);
                 if (idx !== -1) {
-                  const cls = lines[i]
-                    .slice(idx + journalMarker.length + 1)
-                    .trim()
-                    .toLowerCase();
-                  if (cls) {
-                    windowClass = cls;
+                  const info = JSON.parse(lines[i].slice(idx + journalMarker.length + 1).trim());
+                  const windowClass = info.windowClass?.toLowerCase().trim();
+                  const pid = Number.isFinite(info.pid) && info.pid > 0 ? info.pid : null;
+                  if (windowClass) {
+                    windowInfo = { windowClass, pid };
                     break;
                   }
                 }
               }
-              if (windowClass) break;
+              if (windowInfo) break;
             }
           }
 
@@ -660,7 +664,7 @@ class ClipboardManager {
             stdio: "pipe",
           });
 
-          if (windowClass) return windowClass;
+          if (windowInfo) return windowInfo;
         }
       } catch (err) {
         debugLogger.warn("KWin script fallback failed", { error: err?.message }, "clipboard");
@@ -668,6 +672,10 @@ class ClipboardManager {
     }
 
     return null;
+  }
+
+  _detectKdeWindowClass() {
+    return this._detectKdeWindowInfo()?.windowClass || null;
   }
 
   _detectHyprlandWindowClass() {
@@ -1520,11 +1528,14 @@ class ClipboardManager {
       }
     };
 
-    const targetWindowId = preDetectTargetWindow();
-    let detectedWindowClass = preDetectWindowClass(targetWindowId);
+    let targetWindowId = isWayland ? null : preDetectTargetWindow();
+    let detectedWindowClass = isWayland ? null : preDetectWindowClass(targetWindowId);
+    let detectedWindowPid = isWayland ? null : preDetectWindowPid(targetWindowId);
 
     if (!detectedWindowClass && isKde) {
-      detectedWindowClass = this._detectKdeWindowClass();
+      const kdeWindow = this._detectKdeWindowInfo();
+      detectedWindowClass = kdeWindow?.windowClass || null;
+      detectedWindowPid = kdeWindow?.pid || null;
       if (detectedWindowClass) {
         debugLogger.debug("KDE window class detected", { detectedWindowClass }, "clipboard");
       }
@@ -1537,7 +1548,6 @@ class ClipboardManager {
       }
     }
 
-    const detectedWindowPid = preDetectWindowPid(targetWindowId);
     const detectedWindowComm = preDetectWindowComm(detectedWindowPid);
     const detectedIsElectron = preDetectIsElectron(detectedWindowPid);
     if (detectedIsElectron) {
@@ -1580,6 +1590,11 @@ class ClipboardManager {
     const appendModeFlag = (args) => {
       if (useShiftInsert) args.push("--shift-insert");
       else if (isTerminalTarget) args.push("--terminal");
+    };
+
+    const detectXwaylandTarget = () => {
+      // Avoid xdotool on the normal Wayland path; fallbacks target the window active now.
+      if (isWayland && !targetWindowId) targetWindowId = preDetectTargetWindow();
     };
 
     if (isWayland && isWlroots && wtypeExists) {
@@ -1744,6 +1759,7 @@ class ClipboardManager {
 
         // XTest/XWayland fallback: works for XWayland apps on any Wayland compositor
         if (xwaylandAvailable && !this.xtestTimedOut) {
+          detectXwaylandTarget();
           const xtestArgs = [];
           if (targetWindowId) xtestArgs.push("--window", targetWindowId);
           appendModeFlag(xtestArgs);
@@ -1816,10 +1832,6 @@ class ClipboardManager {
     const canUseXdotool = isWayland ? xwaylandAvailable && xdotoolExists : xdotoolExists;
 
     // windowactivate ensures the target window (not ours) receives the keystroke
-    const xdotoolArgs = targetWindowId
-      ? ["windowactivate", "--sync", targetWindowId, "key", pasteKeys]
-      : ["key", pasteKeys];
-
     if (targetWindowId) {
       this.safeLog(
         `🎯 Targeting window ID ${targetWindowId} for paste (signals: ${windowSignals.join(" | ") || "none"})`
@@ -1842,7 +1854,7 @@ class ClipboardManager {
       ydotoolArgs = legacyYdotool ? ["key", "ctrl+v"] : ["key", "29:1", "47:1", "47:0", "29:0"];
     }
 
-    const xdotoolEntry = canUseXdotool ? [{ cmd: "xdotool", args: xdotoolArgs }] : [];
+    const xdotoolEntry = canUseXdotool ? [{ cmd: "xdotool" }] : [];
     const ydotoolEntry = canUseYdotool ? [{ cmd: "ydotool", args: ydotoolArgs }] : [];
 
     // Compositor-aware priority ordering. X11 and wlroots (where wtype already
@@ -1961,6 +1973,12 @@ class ClipboardManager {
     const failedAttempts = [];
     for (const tool of available) {
       try {
+        if (tool.cmd === "xdotool") {
+          detectXwaylandTarget();
+          tool.args = targetWindowId
+            ? ["windowactivate", "--sync", targetWindowId, "key", pasteKeys]
+            : ["key", pasteKeys];
+        }
         const pasteResult = await pasteWith(tool);
         this.safeLog(`✅ Paste successful using ${tool.cmd}`);
         debugLogger.info("Paste successful", { tool: tool.cmd }, "clipboard");
