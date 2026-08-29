@@ -1,13 +1,13 @@
-import deTranslation from "./de/translation.json";
-import enTranslation from "./en/translation.json";
-import esTranslation from "./es/translation.json";
-import frTranslation from "./fr/translation.json";
-import itTranslation from "./it/translation.json";
-import jaTranslation from "./ja/translation.json";
-import ptTranslation from "./pt/translation.json";
-import ruTranslation from "./ru/translation.json";
-import zhCNTranslation from "./zh-CN/translation.json";
-import zhTWTranslation from "./zh-TW/translation.json";
+import deTranslation from "./de/translation.json" with { type: "json" };
+import enTranslation from "./en/translation.json" with { type: "json" };
+import esTranslation from "./es/translation.json" with { type: "json" };
+import frTranslation from "./fr/translation.json" with { type: "json" };
+import itTranslation from "./it/translation.json" with { type: "json" };
+import jaTranslation from "./ja/translation.json" with { type: "json" };
+import ptTranslation from "./pt/translation.json" with { type: "json" };
+import ruTranslation from "./ru/translation.json" with { type: "json" };
+import zhCNTranslation from "./zh-CN/translation.json" with { type: "json" };
+import zhTWTranslation from "./zh-TW/translation.json" with { type: "json" };
 
 export const TRANSLATIONS_BY_LOCALE = {
   en: enTranslation,
