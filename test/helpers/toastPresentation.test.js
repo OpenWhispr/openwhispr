@@ -60,3 +60,12 @@ test("long dictation errors dismiss after five seconds", async () => {
   const { getDictationErrorDuration } = await load();
   assert.equal(getDictationErrorDuration("Error", "a".repeat(200)), 5000);
 });
+
+test("safely handles nullish arguments in resolveToastPresentation and getDictationErrorActionCount", async () => {
+  const { resolveToastPresentation, getDictationErrorActionCount } = await load();
+  assert.equal(resolveToastPresentation(null), "standard");
+  assert.equal(resolveToastPresentation(), "standard");
+  assert.equal(getDictationErrorActionCount(null), 0);
+  assert.equal(getDictationErrorActionCount(undefined), 0);
+  assert.equal(getDictationErrorActionCount([null, { presentation: "dictation-error" }]), 1);
+});

@@ -7,14 +7,16 @@
  *   variant/isDictationPanel are accepted for callers that still pass them
  *   (e.g. Toast.tsx) but are no longer read here.
  */
-export function resolveToastPresentation({ presentation }) {
+export function resolveToastPresentation(options = {}) {
+  const { presentation } = options && typeof options === "object" ? options : {};
   return presentation === "dictation-error" ? "dictation-error" : "standard";
 }
 
 export function getDictationErrorActionCount(toasts) {
+  if (!Array.isArray(toasts)) return 0;
   const currentError = [...toasts]
     .reverse()
-    .find((toast) => toast.presentation === "dictation-error");
+    .find((toast) => toast && typeof toast === "object" && toast.presentation === "dictation-error");
   return currentError ? Math.max(1, currentError.actions?.length ?? 0) : 0;
 }
 
