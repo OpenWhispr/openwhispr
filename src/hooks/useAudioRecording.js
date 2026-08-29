@@ -534,6 +534,10 @@ export const useAudioRecording = (toast, options = {}) => {
           const isStreaming = result.source?.includes("streaming");
           const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
 
+          audioManagerRef.current.saveTranscription(result.text, result.rawText ?? result.text, {
+            clientTranscriptionId: result.clientTranscriptionId,
+          });
+
           if (autoPasteEnabled && !result.assistantConversation) {
             const pasteStart = performance.now();
             let pasteSucceeded = true;
@@ -550,7 +554,11 @@ export const useAudioRecording = (toast, options = {}) => {
               if (!pasteSucceeded) {
                 window.electronAPI?.hideDictationPreview?.();
                 if (keepTranscriptionInClipboard) {
-                  await navigator.clipboard.writeText(result.text);
+                  await window.electronAPI.writeClipboard(result.text).catch((error) => {
+                    logger.warn("Failed to keep transcription in clipboard", {
+                      error: error?.message,
+                    });
+                  });
                 }
                 const detailKey =
                   SELECTION_EDIT_DETAIL_KEY_BY_CODE[replacement?.code] || "unavailable";
@@ -586,12 +594,10 @@ export const useAudioRecording = (toast, options = {}) => {
               window.electronAPI?.hideDictationPreview?.();
             }
           } else if (keepTranscriptionInClipboard && !result.assistantConversation) {
-            await navigator.clipboard.writeText(result.text);
+            await window.electronAPI.writeClipboard(result.text).catch((error) => {
+              logger.warn("Failed to keep transcription in clipboard", { error: error?.message });
+            });
           }
-
-          audioManagerRef.current.saveTranscription(result.text, result.rawText ?? result.text, {
-            clientTranscriptionId: result.clientTranscriptionId,
-          });
 
           if (result.source === "openai" && getSettings().useLocalWhisper) {
             toast({
