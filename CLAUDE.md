@@ -50,7 +50,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 
 - **windows-key-listener.c**: C source for Windows low-level keyboard hook (Push-to-Talk)
 - **windows-mic-listener.c**: C source for WASAPI mic session monitor (event-driven mic detection)
-- **windows-system-audio-helper.c**: C source for WASAPI process-loopback system audio capture (meeting transcription). Excludes OpenWhispr's own process tree, so it hears every app on every output device. Requires Windows 10 2004+; falls back to Chromium display-media loopback when unavailable. Outputs 24 kHz mono s16le PCM on stdout, line-delimited JSON events on stderr (same protocol as linux-system-audio-helper)
+- **windows-system-audio-helper.c**: C source for WASAPI process-loopback system audio capture (meeting transcription). Excludes OpenWhispr's own process tree, so it hears every app on every output device. Requires Windows 10 2004+; falls back to Chromium display-media loopback when unavailable, and mid-session when the helper emits a `capture_silent` warning (its own stream is silent while a render endpoint is metering output — activation success cannot detect that). Outputs 24 kHz mono s16le PCM on stdout, line-delimited JSON events on stderr (same protocol as linux-system-audio-helper)
 - **macos-mic-listener.swift**: Swift source for CoreAudio mic property listener (event-driven mic detection)
 - **globe-listener.swift**: Swift source for macOS Globe/Fn key detection
 - **bin/**: Directory for compiled native binaries (whisper-cpp, nircmd, key/mic listeners)

@@ -1321,19 +1321,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         }
       }
 
-      if (systemCaptureResult.stream) {
-        const stream = systemCaptureResult.stream;
+      // Builds the renderer-side capture graph for the system channel. Shared
+      // by the initial start and by the mid-session takeover registered below.
+      const attachRendererSystemAudio = async (stream: MediaStream) => {
         systemStream = stream;
-        setupSystemCaptureResult = { stream: null, error: null };
-
         const ctx = new AudioContext({ sampleRate: 24000 });
         systemContext = ctx;
         await detachFromOutputDevice(ctx);
-        if (!isCurrentStart()) {
-          await teardownStart();
-          return;
-        }
-
         const { source, processor } = await createAudioPipeline({
           stream,
           context: ctx,
@@ -1346,14 +1340,17 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             pendingSystemChunks.push(chunk.slice(0));
           },
         });
+        systemSource = source;
+        systemProcessor = processor;
+      };
+
+      if (systemCaptureResult.stream) {
+        setupSystemCaptureResult = { stream: null, error: null };
+        await attachRendererSystemAudio(systemCaptureResult.stream);
         if (!isCurrentStart()) {
-          source.disconnect();
-          await flushAndDisconnectProcessor(processor);
           await teardownStart();
           return;
         }
-        systemSource = source;
-        systemProcessor = processor;
       } else if (systemCaptureError) {
         if (systemAudioStrategy === "loopback") {
           logger.warn(
@@ -1365,6 +1362,36 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             reportMeetingError("System audio capture failed. Continuing with microphone only.");
           }
         }
+      }
+
+      // Main sends this when a native helper reports it is capturing silence
+      // while audio is really playing, which activation success cannot detect.
+      // Take the channel over with Chromium loopback for the rest of the call.
+      if (systemAudioHandledInMain) {
+        const degradedCleanup = window.electronAPI?.onMeetingSystemAudioDegraded?.(() => {
+          if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+          if (systemStream) return;
+          void (async () => {
+            const takeover = await requestSystemAudioDisplayStream(
+              getDisplayCaptureModeForStrategy("loopback")
+            );
+            if (!takeover.stream) {
+              logger.warn(
+                "Renderer loopback takeover failed after native system audio went silent",
+                { error: takeover.error?.message },
+                "meeting"
+              );
+              return;
+            }
+            if (activeRecordingSessionId !== sessionId || !isRecordingFlag || systemStream) {
+              stopMediaStream(takeover.stream);
+              return;
+            }
+            await attachRendererSystemAudio(takeover.stream);
+            logger.info("Renderer loopback took over system audio capture", {}, "meeting");
+          })();
+        });
+        if (degradedCleanup) ipcCleanups.push(degradedCleanup);
       }
 
       if (!isCurrentStart()) {

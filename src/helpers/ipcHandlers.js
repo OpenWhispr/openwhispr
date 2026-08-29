@@ -6253,6 +6253,7 @@ class IPCHandlers {
       meetingMicDiarizationPath = null;
       meetingMicDiarizationStartedAt = null;
       meetingSystemAudioHeard = false;
+      meetingSystemAudioDegraded = false;
       meetingDiarizationSegments = [];
       const { pcmPath, startedAt, diarizedSource, cleanupPcmPaths } = resolveDiarizationInput({
         systemPcmPath,
@@ -6799,6 +6800,7 @@ class IPCHandlers {
     let meetingMicDiarizationPath = null;
     let meetingMicDiarizationStartedAt = null;
     let meetingSystemAudioHeard = false;
+    let meetingSystemAudioDegraded = false;
     let meetingDiarizationSegments = [];
     let meetingLiveSpeakerActive = false;
     let meetingLiveSpeakerState = null;
@@ -7399,6 +7401,7 @@ class IPCHandlers {
       meetingDiarizationStartedAt = null;
       dropMeetingMicDiarizationCapture();
       meetingSystemAudioHeard = false;
+      meetingSystemAudioDegraded = false;
       meetingDiarizationSegments = [];
       meetingLocalWin = null;
       meetingLocalTranscript = "";
@@ -8031,7 +8034,26 @@ class IPCHandlers {
       }
     };
 
-    const startManagedMeetingSystemAudio = (event, manager, warningLabel) => {
+    // The Windows helper reports capture_silent when its own stream is silent
+    // while a render endpoint is playing: activation succeeded but no audio
+    // will ever arrive, so hand the live session to Chromium's renderer
+    // loopback. The silence watchdog stays armed in case that fails too.
+    const degradeMeetingSystemAudioToLoopback = async (event) => {
+      if (meetingSystemAudioDegraded || meetingSystemAudioHeard) return;
+      meetingSystemAudioDegraded = true;
+      debugLogger.warn(
+        "Windows system audio helper captured only silence, switching to renderer loopback",
+        {},
+        "meeting"
+      );
+      await this.windowsLoopbackAudioManager?.stop().catch(() => {});
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("meeting-system-audio-degraded");
+      }
+    };
+
+    const startManagedMeetingSystemAudio = (event, manager, warningLabel, onWarningCode) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       return manager.start({
         onChunk: (chunk) => {
@@ -8048,6 +8070,7 @@ class IPCHandlers {
             { code: warning.code, message: warning.message },
             "meeting"
           );
+          onWarningCode?.(warning.code);
         },
       });
     };
@@ -8096,7 +8119,12 @@ class IPCHandlers {
           await startManagedMeetingSystemAudio(
             event,
             this.windowsLoopbackAudioManager,
-            "Windows system audio warning"
+            "Windows system audio warning",
+            (code) => {
+              if (code === "capture_silent") {
+                void degradeMeetingSystemAudioToLoopback(event);
+              }
+            }
           );
           return { systemAudioMode, systemAudioStrategy };
         } catch (error) {
