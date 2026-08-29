@@ -38,11 +38,13 @@ function loadModelManager({ downloadFile } = {}) {
 
   try {
     // modelManagerBridge requires modelDirUtils lazily (inside getModelsDir),
-    // after this mock is uninstalled — load it now so its electron binding is
-    // the stub and modelsDir resolves inside the per-test temp home instead of
-    // the real ~/.cache/openwhispr.
+    // after this mock is uninstalled. Load it with the Electron stub, then pin
+    // this manager to the test home so host XDG/OPENWHISPR cache overrides
+    // cannot expose real downloaded models to the test.
     require("../../src/helpers/modelDirUtils.js");
-    return require("../../src/helpers/modelManagerBridge.js").default;
+    const modelManager = require("../../src/helpers/modelManagerBridge.js").default;
+    modelManager.getModelsDir = () => path.join(electronHome, ".cache", "openwhispr", "models");
+    return modelManager;
   } finally {
     Module._load = originalLoad;
   }

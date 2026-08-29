@@ -93,6 +93,7 @@ export function useModelDownload({
   const { toast } = useToast();
   const [downloads, setDownloads] = useState<Record<string, LocalModelDownloadStatus>>({});
   const [cancellingModels, setCancellingModels] = useState<Set<string>>(new Set());
+  const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
   const ownedRequestsRef = useRef(new Set<string>());
   const settlingDownloadsRef = useRef(new Set<string>());
   const terminalSequencesRef = useRef<Record<string, number>>({});
@@ -180,16 +181,18 @@ export function useModelDownload({
       if (ownedRequestsRef.current.has(modelId)) return;
       if (type === "complete") notifyLocalModelsChanged();
       if (type === "error" && !isCancellation(error, code)) {
+        const message = getDownloadErrorMessage(
+          t,
+          error || t("hooks.modelDownload.errors.unknown"),
+          code
+        );
+        setDownloadErrors((current) => ({ ...current, [modelId]: message }));
         showAlertDialog({
           title:
             code === "EXTRACTION_FAILED"
               ? t("hooks.modelDownload.installationFailed.title")
               : t("hooks.modelDownload.downloadFailed.title"),
-          description: getDownloadErrorMessage(
-            t,
-            error || t("hooks.modelDownload.errors.unknown"),
-            code
-          ),
+          description: message,
         });
       }
       void settleDownload(modelId, sequence);
@@ -294,6 +297,11 @@ export function useModelDownload({
       }
 
       ownedRequestsRef.current.add(modelId);
+      setDownloadErrors((current) => {
+        if (!(modelId in current)) return current;
+        const { [modelId]: _removed, ...remaining } = current;
+        return remaining;
+      });
       updateDownload({
         modelType,
         modelId,
@@ -338,24 +346,28 @@ export function useModelDownload({
             description: t("hooks.modelDownload.downloadInProgress.description"),
           });
         } else if (!isCancellation(result?.error, result?.code)) {
+          const message = getDownloadErrorMessage(
+            t,
+            result?.error || t("hooks.modelDownload.errors.unknown"),
+            result?.code
+          );
+          setDownloadErrors((current) => ({ ...current, [modelId]: message }));
           showAlertDialog({
             title:
               result?.code === "EXTRACTION_FAILED"
                 ? t("hooks.modelDownload.installationFailed.title")
                 : t("hooks.modelDownload.downloadFailed.title"),
-            description: getDownloadErrorMessage(
-              t,
-              result?.error || t("hooks.modelDownload.errors.unknown"),
-              result?.code
-            ),
+            description: message,
           });
         }
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (!isCancellation(errorMessage)) {
+          const message = getDownloadErrorMessage(t, errorMessage);
+          setDownloadErrors((current) => ({ ...current, [modelId]: message }));
           showAlertDialog({
             title: t("hooks.modelDownload.downloadFailed.title"),
-            description: getDownloadErrorMessage(t, errorMessage),
+            description: message,
           });
         }
       } finally {
@@ -444,8 +456,23 @@ export function useModelDownload({
     [cancellingModels, clearCancelling, downloads, modelType, t, toast]
   );
 
+  const downloadingModel = Object.keys(downloads)[0] || null;
+  const activeDownload = downloadingModel ? downloads[downloadingModel] : null;
+  const errorMessages = Object.values(downloadErrors);
+
   return {
     downloads,
+    downloadErrors,
+    downloadingModel,
+    downloadProgress: {
+      percentage: activeDownload?.progress || 0,
+      downloadedBytes: activeDownload?.downloadedBytes || 0,
+      totalBytes: activeDownload?.totalBytes || 0,
+    },
+    downloadError: errorMessages[errorMessages.length - 1] || null,
+    isDownloading: downloadingModel !== null,
+    isInstalling: activeDownload?.phase === "installing",
+    isCancelling: downloadingModel ? cancellingModels.has(downloadingModel) : false,
     isDownloadingModel: (modelId: string) => !!downloads[modelId],
     isCancellingModel: (modelId: string) => cancellingModels.has(modelId),
     downloadModel,
