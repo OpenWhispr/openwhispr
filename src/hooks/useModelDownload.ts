@@ -8,9 +8,21 @@ import type {
   LocalModelDownloadStatus,
   WhisperDownloadProgressData,
 } from "../types/electron";
+import { clearMissingLocalModelSelections } from "../stores/settingsStore";
 import "../types/electron";
 
 const PROGRESS_THROTTLE_MS = 100;
+
+/**
+ * Fired on this window whenever a local model lands on or leaves the disk
+ * (download complete, model deleted), so surfaces that mirror disk truth
+ * without owning the download — e.g. useRequiredLocalModels — can re-check.
+ */
+export const LOCAL_MODELS_CHANGED_EVENT = "openwhispr-local-models-changed";
+
+function notifyLocalModelsChanged(): void {
+  window.dispatchEvent(new Event(LOCAL_MODELS_CHANGED_EVENT));
+}
 
 export interface DownloadProgress {
   percentage: number;
@@ -166,6 +178,7 @@ export function useModelDownload({
         );
       }
       if (ownedRequestsRef.current.has(modelId)) return;
+      if (type === "complete") notifyLocalModelsChanged();
       if (type === "error" && !isCancellation(error, code)) {
         showAlertDialog({
           title:
@@ -292,6 +305,8 @@ export function useModelDownload({
       });
       lastProgressUpdateRef.current[modelId] = 0;
 
+      let keepActiveDownloadState = false;
+
       try {
         const result =
           modelType === "whisper"
@@ -301,6 +316,7 @@ export function useModelDownload({
               : await window.electronAPI?.modelDownload?.(modelId);
 
         if (result?.success) {
+          notifyLocalModelsChanged();
           onSelectAfterDownload?.(modelId);
           toast({
             title: t("hooks.modelDownload.modelDownloaded.title"),
@@ -309,6 +325,14 @@ export function useModelDownload({
             }),
           });
         } else if (result?.code === "DOWNLOAD_IN_PROGRESS") {
+          const activeDownloads = await window.electronAPI?.modelGetActiveDownloads?.();
+          const activeDownload = activeDownloads?.find(
+            (status) => status.modelType === modelType && status.modelId === modelId
+          );
+          if (activeDownload) {
+            updateDownload(activeDownload);
+            keepActiveDownloadState = true;
+          }
           toast({
             title: t("hooks.modelDownload.downloadInProgress.title"),
             description: t("hooks.modelDownload.downloadInProgress.description"),
@@ -336,7 +360,9 @@ export function useModelDownload({
         }
       } finally {
         ownedRequestsRef.current.delete(modelId);
-        await settleDownload(modelId);
+        if (!keepActiveDownloadState) {
+          await settleDownload(modelId);
+        }
       }
     },
     [downloads, modelType, settleDownload, showAlertDialog, t, toast, updateDownload]
@@ -366,12 +392,17 @@ export function useModelDownload({
             });
           }
         } else {
-          await window.electronAPI?.modelDelete?.(modelId);
+          // model-delete reports failure by resolving, not throwing — leaving the
+          // model on disk, so the scopes pointing at it must stay untouched.
+          const result = await window.electronAPI?.modelDelete?.(modelId);
+          if (!result?.success) throw new Error(result?.error ?? "");
+          clearMissingLocalModelSelections((id) => id !== modelId);
           toast({
             title: t("hooks.modelDownload.modelDeleted.title"),
             description: t("hooks.modelDownload.modelDeleted.description"),
           });
         }
+        notifyLocalModelsChanged();
         onComplete?.();
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);

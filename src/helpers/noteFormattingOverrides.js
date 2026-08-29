@@ -1,9 +1,10 @@
 // Provider overrides for note-formatting ReasoningService.processText calls.
 // Self-hosted must forward remoteUrl as lanUrl — without it, processText
-// guesses the provider from the model and can silently hit a cloud API.
-export function buildNoteFormattingOverrides(noteFormatting, isCloudMode, customApiKey) {
+// would use the dictation-cleanup scope instead of this scope's endpoint.
+export function buildNoteFormattingOverrides(noteFormatting, isCloudMode) {
   if (isCloudMode) {
     return {
+      inferenceScope: /** @type {const} */ ("noteFormatting"),
       provider: "openwhispr",
       baseUrl: undefined,
       customApiKey: undefined,
@@ -15,19 +16,28 @@ export function buildNoteFormattingOverrides(noteFormatting, isCloudMode, custom
 
   if (mode === "self-hosted") {
     return {
+      inferenceScope: /** @type {const} */ ("noteFormatting"),
       provider: undefined,
       baseUrl: undefined,
-      customApiKey: customApiKey || undefined,
+      customApiKey: noteFormatting?.customApiKey || undefined,
       lanUrl: noteFormatting?.remoteUrl || undefined,
     };
   }
 
-  const provider = mode === "providers" ? noteFormatting?.provider || undefined : undefined;
+  // Local and enterprise must pin their providers too, or processText would
+  // use the dictation-cleanup scope when this scope has no route override.
+  const provider =
+    mode === "local"
+      ? "local"
+      : mode === "providers" || mode === "enterprise"
+        ? noteFormatting?.provider || undefined
+        : undefined;
   const isCustom = provider === "custom";
   return {
+    inferenceScope: /** @type {const} */ ("noteFormatting"),
     provider,
     baseUrl: isCustom ? noteFormatting?.cloudBaseUrl || undefined : undefined,
-    customApiKey: isCustom ? customApiKey || undefined : undefined,
+    customApiKey: isCustom ? noteFormatting?.customApiKey || undefined : undefined,
     lanUrl: undefined,
   };
 }

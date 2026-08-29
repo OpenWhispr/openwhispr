@@ -55,6 +55,11 @@ export default function LocalModelPicker({
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
   const loadDownloadedModelsRequestRef = useRef(0);
 
+  const knownModelIds = useMemo(
+    () => new Set(providers.flatMap((provider) => provider.models.map((model) => model.id))),
+    [providers]
+  );
+
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const styles = useMemo(() => MODEL_PICKER_COLORS[colorScheme], [colorScheme]);
 
@@ -105,12 +110,19 @@ export default function LocalModelPicker({
   useEffect(() => {
     const initAndValidate = async () => {
       const downloaded = await loadDownloadedModels();
-      if (downloaded && selectedModel && !downloaded.has(selectedModel)) {
+      // Only clear ids this picker owns — a foreign id (e.g. a cloud model)
+      // must survive untouched.
+      if (
+        downloaded &&
+        selectedModel &&
+        knownModelIds.has(selectedModel) &&
+        !downloaded.has(selectedModel)
+      ) {
         onModelSelect("");
       }
     };
     initAndValidate();
-  }, [loadDownloadedModels, selectedModel, onModelSelect]);
+  }, [loadDownloadedModels, selectedModel, onModelSelect, knownModelIds]);
 
   const handleDownloadComplete = useCallback(async () => {
     await loadDownloadedModels();
@@ -131,11 +143,34 @@ export default function LocalModelPicker({
   });
 
   const allModels = useMemo(() => providers.flatMap((provider) => provider.models), [providers]);
+  const selectionStateRef = useRef({ selectedModel, downloadedModels, knownModelIds });
+
+  useEffect(() => {
+    selectionStateRef.current = { selectedModel, downloadedModels, knownModelIds };
+  }, [selectedModel, downloadedModels, knownModelIds]);
 
   const handleDownload = useCallback(
     (modelId: string) => {
+      const selectedWhenStarted = selectionStateRef.current.selectedModel;
       const model = allModels.find((entry) => entry.id === modelId);
-      downloadModel(modelId, onModelSelect, model?.name || modelId);
+
+      downloadModel(
+        modelId,
+        (downloadedId) => {
+          const {
+            selectedModel: current,
+            downloadedModels: downloaded,
+            knownModelIds: known,
+          } = selectionStateRef.current;
+          if (current !== selectedWhenStarted) return;
+
+          const selectionGone = known.has(current) && !downloaded.has(current);
+          if (!current || selectionGone) {
+            onModelSelect(downloadedId);
+          }
+        },
+        model?.name || modelId
+      );
     },
     [allModels, downloadModel, onModelSelect]
   );

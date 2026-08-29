@@ -5,6 +5,442 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Meetings
+
+- **Meeting prompts swipe away like desktop notifications.** A horizontal pointer swipe of 80px in either direction dismisses a meeting card — detection, calendar reminder, or the auto-end restart offer — taking the same path as its close button. Swipes that start on an action button are ignored.
+
+## [1.9.1] - 2026-08-27
+
+Meeting recordings now stop the moment the call does, with a short window to pick the same note back up. Gemini joins the bring-your-own-key transcription providers, Granola users can import their back catalogue, and the dictation pill gets a brand-blue processing glow plus a companion surface for Agent mode. Account deletion no longer reaches across accounts, and 1.9.0's recording-time CPU regression — along with the GPU packs 1.8.3 quietly deleted — is repaired.
+
+### Meetings
+
+- **Meeting recordings stop as soon as the call ends.** The microphone, silence, and meeting-app signals no longer open a 60-second **Keep recording** countdown first, so recordings now end about a minute sooner than before. A microphone release still waits 5 seconds of continued quiet before it counts, so a headset reconnecting or an app that drops the mic on mute cannot cut a live call short. A 30-second card then offers to restart the same note — keeping its transcript, folder, and speaker settings — and restarting holds auto-end off for five minutes. (#1898)
+- **Meetings that recorded you but nobody else.** On Windows, the system-audio helper excludes OpenWhispr's own process tree from loopback capture — and a browser launched by clicking the meeting link from inside the app landed in that tree, so the other participants were never captured at all. The meeting link now opens outside the tree, and both capture helpers report enough detail for a debug log to tell real silence from a dead transcription socket. (#1864)
+- **A malformed speaker segment no longer throws.** Nullish segments and non-object patches are ignored instead of crashing speaker assignment. (#1798, thanks @hsusul)
+
+### Transcription
+
+- **Gemini is a bring-your-own-key transcription provider.** Google's dedicated speech model (`gemini-3.5-transcribe`) joins OpenAI, Groq, and Mistral for dictation and uploads, reusing the Gemini key you may already have saved for cleanup. Batch only, so it stays out of the streaming-only meeting picker. (#1899)
+
+### Dictation
+
+- **A Signal glow replaces the rainbow processing beam.** The thinking state on the dictation pill was nine hues orbiting a 40px circle, which read as faint chromatic noise in light theme. It's now a cyan-to-indigo band with a white-hot comet head and a breathing halo that's legible from across the room. Agent mode keeps its ocean beam, and `prefers-reduced-motion` disables the motion entirely. (#1826)
+- **Agent mode gets its own dictation pill.** A focusless companion surface appears on the opposite edge of the same display, with the real microphone waveform and the production entrance timing, and it hosts Live Transcript when preview mode is on. Agent and translation hotkeys can't activate it, and plain dictation no longer animates the Agent footer pill. (#1867)
+- **Voice Assistant answers paste into the field you were typing in.** With Auto-Paste on, the assistant's completed response goes back to the writable input you had focused, revalidated at paste time. If the target moved, the field is protected, or nothing writable was focused, the response goes to the clipboard and stays visible in the panel instead of being lost. (#1859)
+- **Recording starts without waiting on the cloud transcription config.** Local-mode and signed-out users sat through a 4–5 second IPC round trip before the microphone opened, for a config that can only change the decision for signed-in Cloud users. (#1710, thanks @AdityaPainuli)
+- **No trailing space after Chinese or Japanese text.** Dictation appended an ASCII space after every paste, so consecutive Chinese dictations accumulated gaps that violate East Asian typography. Korean deliberately keeps its space, since modern Hangul separates words the same way English does. (#1823)
+
+### Notes
+
+- **Import your Granola history.** Settings → General takes Granola's official CSV export and brings meeting notes across with their original dates, transcripts as native segments, and speaker names locked where the export labels them. Notes land in an "Imported" folder, and re-running the import skips what's already there rather than duplicating it. (#1813)
+- **Uploaded transcript timestamps stay in bounds.** Provider names are matched regardless of casing or stray whitespace, and negative or inverted segment ranges are clamped instead of reaching the transcript. (#1800, thanks @hsusul)
+
+### Calendar
+
+- **The assistant can find you a free slot.** A read-only availability tool unions your selected Google, Microsoft, and Apple calendars into busy intervals and open slots, honoring all-day events, self-declined invitations, buffers, and a minimum duration. No titles, attendees, links, or account identifiers reach the model. (#1821)
+- **Availability looks 31 days ahead instead of 7.** "Suggest times Wednesday or Thursday next week" can land 13 days out and used to fail outright; each provider's sync window widened to match. (#1858)
+- **Recurring meetings on shared Microsoft calendars have names again.** 1.9.0 backfilled series masters only from your own mailbox, so occurrences on a shared calendar 404'd on every sync and stuck as "Untitled Event" until the delta token expired a week later. The lookup is now calendar-scoped, and a failed backfill retries within ten minutes. (#1835)
+
+### Onboarding & accounts
+
+- **Screen Context is offered during setup.** An optional macOS permission row alongside the existing ones, gated by organization policy. Microphone remains the only permission that blocks you. (#1856)
+- **Compact onboarding windows have real window controls.** Minimize, maximize, and close on Windows and Linux; native traffic lights on macOS; and the window can be resized. (#1857)
+- **Sign-up checks whether your email already has an account** before sending you down the wrong path, through the auth service rather than the optional cloud API, and handles a duplicate-account race at submit. (#1854)
+
+### Data safety
+
+- **Deleting one account no longer erases another account's local content.** Account deletion now removes only that account's private notes and folders, preserves workspace-owned spaces and content with former-user attribution cleared, and leaves downloaded models and device settings intact. Deleting a folder likewise releases other accounts' notes to the space root instead of deleting them. A separate unchecked option erases all app data from the device when you're leaving OpenWhispr permanently. (#1812)
+
+### Enterprise
+
+- **Buy Enterprise without talking to sales.** Signed-in users get an **Upgrade to Enterprise** button on the pricing tile that opens a checkout dialog — pick the workspace, seat count, and billing cycle, then pay through Stripe. Owners and admins of an active Enterprise workspace also get a one-click **Enterprise console** entry from Plans & Billing and Workspace settings. (#1623)
+- **Organizations can require local models.** Managed users missing a required model hit a blocking onboarding step that downloads them with per-row progress and retry; already-onboarded users get a non-dismissable banner with an inline download instead. (#1836)
+
+### AI models & routing
+
+- **Thinking tags stop leaking, whatever their case.** `<Think>` blocks from LAN fine-tunes and orphan `</think>` closers from R1-style templates survived the filter on both the streamed and non-streamed paths, landing reasoning text in titles and notes. (#1802, #1862, thanks @hsusul)
+- **An Anthropic reply with no text block no longer crashes cleanup.** A response that hit its token limit before producing text threw a `TypeError`; it now reports what happened and your raw dictation still pastes. (#1709, thanks @AdityaPainuli)
+
+### Performance & GPU
+
+- **1.9.0's recording-time CPU spike is fixed, and 1.8.3's deleted GPU packs heal themselves.** The notes bottom bar animated a layout property inside a blurred surface sitting over the live transcript, so every partial forced a re-blur and CPU scaled with participant count. Separately, 1.8.3's pack migration deleted GPU packs while leaving acceleration flagged as enabled, silently dropping whisper-large onto the CPU binary — orphaned packs are now detected at launch and repaired instead of waiting for a manual retry. (#1863)
+- **The GPU banner refreshes when you close Settings.** Installing a pack left the home screen showing the previous result until something else changed or the app restarted. (#1804, thanks @zhongwater123)
+
+### Elsewhere
+
+- **Settings stays open when you dismiss a dropdown.** An open dropdown made the panel inert, so the next click anywhere inside it landed on the modal backdrop and closed the whole thing. (#1820)
+- **Debug logs record which release produced them.** The System Info header carried platform, Node, and Electron versions but not the app's own. (#1688)
+- **Packaged builds block untrusted file navigation.** The control-panel guard trusted every `file://` URL. (#1776, thanks @hsusul)
+- **Self-hosted servers across the full IPv6 link-local range are reachable.** The check matched `fe80` literally rather than `fe80::/10`, rejecting `fe90::`, `fea0::`, and `febf::`. (#1733, thanks @hsusul)
+- **The CLI bridge handles UTF-8 correctly.** A multibyte character split across two network chunks was corrupted, and the 1 MiB request limit counted characters instead of bytes. (#1386, #1777, thanks @hsusul)
+- **Date formatting survives null and invalid input** instead of throwing on note lists and transcripts. (#1784, thanks @hsusul)
+- **Renderer stores import cleanly under partial browser environments**, closing a class of import-time crash that briefly took CI down. (#1841, #1842)
+- **Two CI checks no longer share a name.** A failing gate rendered as the twin of a passing one, so contributors had to dig through the logs to tell which suite had broken. (#1745, thanks @AdityaPainuli)
+
+## [1.9.0] - 2026-08-24
+
+The chat agent and the voice agent become one Voice Assistant behind a redesigned dictation pill, guided setup is rebuilt end to end, and the notes surface gets a design pass with @mention tagging and real speaker identity in meeting notes. Meetings you forget to stop now end themselves. Linux gains push-to-talk on Wayland, Windows pastes back into the window you dictated into, and local transcription stops thanking you for watching.
+
+### Voice Assistant
+
+- **One assistant, one entry point.** The separate always-on-top chat window is gone. The dictation pill is now the only surface: speak a standalone command and the answer streams into a floating panel with the chat's full toolset — notes search and editing, calendar, web search, clipboard, and memory when you're signed in — with conversations saved and resumable. Highlighted text is still edited in place. (#1597)
+- **Answers return to the focused field.** With auto-paste enabled, standalone Voice Assistant answers now paste at a verified writable cursor. Without a writable cursor—or if the target changes while the answer is generated—the completed answer stays safely in the floating panel and is copied to the clipboard for manual paste; the existing Copy button confirms the automatic copy for six seconds. Empty or cancelled responses do not change the clipboard. (#1859)
+- **A pill that shows what it's doing.** An idle orb that grows into a recording capsule with a live, level-driven waveform and an in-capsule cancel, then a processing state that never changes shape mid-cycle. Dragging the pill no longer walks it across the screen as it resizes. (#1597)
+- **Your dictionary reaches the assistant.** Custom-dictionary words are injected into every assistant conversation, so replies come back using your names and jargon. (#1597)
+- **Follow-ups without reopening.** Type into the panel or press the hotkey again to speak into the same conversation; Esc collapses it and cancels anything in flight; Copy takes the answer in one click. (#1597)
+- **Wake words work in your language.** "Ehi Jarvis", "Привет, Jarvis", "ねぇ Jarvis" — localized vocative cues now count as addressing your agent, not just the English ones. (#1604, thanks @xAlcahest)
+- **Selection edits no longer fail on a missing completion marker.** (#1587, thanks @hsusul)
+- **Assistant conversations survive the cloud migration.** (#1772, thanks @hsusul)
+
+### Onboarding
+
+- **Guided setup, rebuilt.** A new versioned flow walks through sign-in, permissions, language, use cases, hotkey capture, live dictation and assistant demos, and calendar connection — then branches into guided OpenWhispr Cloud, bring-your-own-key, local-model, or enterprise setup, with provider validation and models downloading in the background. Demo recordings are isolated from the rest of the app, so the floating pill and global hotkeys stay out of the way while you're being shown around. (#1670)
+- **Signing back in looks like signing up.** The returning-user screen uses the same compact authentication shell as onboarding instead of a form embedded in a full-size control panel. (#1763)
+
+### Notes
+
+- **A design pass over the notes surface.** A shared gradient send and mic identity across every input, a voice-reactive recording pill with an elapsed timer, and a translucent "liquid glass" bottom bar that note content scrolls under. The ask input stays mounted and animates as the chat panel opens instead of blinking out. (#1651)
+- **Voice notes straight into chat.** The chat input's mic records with a full-width live waveform, timer, and cancel; the recording runs through the normal transcription pipeline (any provider, no cleanup pass) and lands in the input for you to review before sending. (#1651)
+- **@mention the people in your notes.** Typing `@` opens a picker fed by your account, meeting attendees, and known speakers; chips render with an avatar and round-trip through Markdown as readable links. Generated action items tag their owner automatically. (#1741)
+- **Create a note inside a folder.** Folder rows get the same hover "+" that space rows already had, instead of making you create the note elsewhere and move it. (#1650)
+- **Timestamped transcripts and SRT export for uploads.** Audio uploaded or ingested from a URL and transcribed through your own OpenAI, Groq, or Mistral key now keeps segment-level timestamps, so the Transcript tab and SRT/TXT/JSON/MD export light up for upload notes. (#1727)
+- **Cancelling an upload actually stops it.** Cancel used to reset only the UI while local transcription and diarization kept burning CPU to the end of the file. (#1728)
+- **The chat panel no longer covers what you're reading.** Opening it reserves scroll space and reveals the bottom of the note instead of forcing a manual scroll. (#1769, thanks @IdrisGit)
+- **Uploaded notes remember their speaker detection.** A note created through Upload ran speaker detection but stored none of it — it now records that diarization ran, the speaker count you chose, and the audio duration, so it behaves like a meeting note when you record into it or resolve participants. Present since upload speaker detection shipped in 1.7.6. (#1610)
+- **Generated titles lose their quotes.** Curly quotes, guillemets, and stacked wrappers are peeled off; apostrophes inside the title stay. (#1640, thanks @hsusul)
+- **Mirrored Markdown files stay inside your mirror folder.** A folder named with `..` could write note files outside it. (#1773, thanks @hsusul)
+- **A line break in a title no longer destroys a note's metadata.** Control characters are escaped in mirrored frontmatter instead of invalidating the whole block. (#1646, thanks @hsusul)
+- **One undeletable file no longer strands the rest.** Deleting a note whose mirror file is open in another editor now cleans up everything else. (#1649, thanks @hsusul)
+- **Future timestamps show a date instead of "now".** (#1768, thanks @hsusul)
+- **The share dialog reads email domains correctly.** Padded addresses and `Name <addr>` forms no longer make a personal Gmail look like a company domain. (#1683, thanks @hsusul)
+- **The unused workspace short name is gone from settings.** (#1660)
+
+### Meetings & speakers
+
+- **Forgotten recordings end themselves.** When the call is over — the meeting app releases your microphone, or both audio channels go quiet, or the app exits — a 60-second countdown starts, cancellable with **Keep recording**, and the card tells you which signal fired. Remote voices still playing defer the countdown, so a quiet-but-live meeting is never cut short. (#1494)
+- **Meeting notes know who is who.** Every transcript line carries its resolved speaker name and the mic track carries your own name, a Meeting Context block names the note owner and invited participants, and the prompt is forbidden from inventing identities — so notes stop assuming you're whoever got named in conversation. (#1741)
+- **In-person meetings get speaker labels.** Recordings with everyone in the room and no call ended with zero diarized segments, because only the (silent) system-audio channel was ever diarized. Those sessions now diarize the microphone track. (#1726)
+- **Windows system-audio capture is re-checked at meeting start.** One early probe failure used to pin the whole session to the browser fallback. (#1474, thanks @stantheman0128)
+
+### Calendar
+
+- **Recurring Outlook meetings have names again.** Microsoft's delta sync can return occurrences as bare stubs, which showed up as "Untitled Event"; they're now backfilled from the series master. (#1665)
+- **Personal time blocks stop prompting you to record.** Focus time, reminders, and "lunch" — events with no attendees and no meeting link — no longer fire the meeting overlay, on Google, Microsoft, and Apple Calendar alike. (#1615, #1696, thanks @IdrisGit)
+- **Join recognizes more meeting links.** Zoom webinars and personal links, and Teams `/meet/` URLs. (#1692, thanks @hsusul)
+- **All-day events sit on the right day.** West of UTC they landed on yesterday's card in Coming up. (#1742)
+- **A mismatched sign-in fails immediately** instead of leaving Connect spinning for two minutes. (#1753, thanks @hsusul)
+- **Coming up, redesigned.** Day cards with a today marker, per-event accent, an attendee avatar stack with RSVP state, and a "Join & take notes" button. (#1741)
+
+### Speech to text
+
+- **Dictation works again on the default realtime model.** Since 1.8.2, every dictation configured for OpenAI realtime transcription failed with `Unsupported realtime token provider: undefined`. Provider routing now has a single source of truth. (#1631)
+- **Local transcription stops thanking you for watching.** whisper.cpp's anti-hallucination thresholds are now sent on every request — the values the reporter measured cut hallucinated tails from 2.25% to 0.06% across 4,814 real dictations. (#1723)
+- **Your phone is no longer mistaken for your microphone.** A phone offered through Continuity was classified as a built-in mic and auto-selected over the real one, producing empty transcripts. (#1515, thanks @xpipko)
+- **Parakeet is offered only where it can run.** Its bundled ONNX runtime needs macOS 15.5; older Macs now fall back safely instead of loading an incompatible native library. (#1720)
+- **The preview closes when you didn't say anything.** It used to stick in the cleanup state. (#1667, thanks @IdrisGit)
+
+### GPU acceleration
+
+- **1.8.3's multi-GPU regression is fixed.** Vulkan pins to the discrete GPU instead of defaulting to integrated graphics, NVIDIA detection finds `nvidia-smi` off PATH, and packs cleared during the upgrade are announced rather than silently deleted. (#1609)
+- **A downloaded pack is used, with or without the env flag.** A pack on disk now implies intent; the flag became an explicit opt-out instead of a required opt-in that could silently fall back to CPU forever. (#1724)
+- **The GPU banner only appears when cleanup actually runs locally.** Cloud-cleanup users saw "GPU acceleration available" on every launch, forever. (#1591)
+
+### AI models & routing
+
+- **Retired cloud models are gone.** Groq's shut-down Qwen and Llama models and Tinfoil's replaced Kimi model no longer sit in the picker returning `model_not_found`, and the canary suites that should have caught it can now actually fail. (#1722)
+- **A working Gemini Flash Lite again.** Google retired `gemini-2.5-flash-lite` for new API keys; Gemini 3.5 and 3.1 Flash Lite are in the registry, so cleanup doesn't have to run on a heavier model. (#1702, thanks @xAlcahest)
+- **gpt-oss on Tinfoil works.** Every request on all five LLM surfaces returned a 400 over an unsupported reasoning-effort value. (#1611)
+- **Request parameters have one source of truth.** Token-limit names, temperature support, and reasoning-effort values are now declared per provider and model family instead of being duplicated across five transports — the recurring cause of a new provider-and-model combination breaking in production. Local model parameters and their canaries got the same treatment. (#1620, #1714)
+- **A blank model reply never eats your dictation.** Whitespace-only cleanup, agent, or chain output preserves the spoken text on every route. (#1618, #1645, thanks @hsusul)
+- **Thinking tags stop leaking into your text.** Nested `<think>` blocks are stripped correctly, streamed or not, so stray tags stop landing in titles and notes. (#1619, #1644, thanks @hsusul)
+- **Browsing provider tabs no longer switches your model.** The provider-and-model pair commits only when you click a model. (#1288, thanks @IdrisGit)
+- **Transient failures back off instead of failing.** HTTP 408 joins 429 in the retry strategy, and flaky DNS and broken pipes are reported as the network errors they are. (#1734, #1682, thanks @hsusul)
+- **Snippets and dictionary hints can't crash a dictation.** An empty or missing list threw and dropped the paste. (#1672, #1708, thanks @hsusul)
+- **Your agent's name is matched case-insensitively in the dictionary.** (#1639, thanks @hsusul)
+
+### Linux
+
+- **Push-to-talk on Wayland.** Hold-to-dictate now works on Hyprland, KDE, and GNOME 48+, which previously only delivered a single toggle with no press or release. (#1738, thanks @IdrisGit)
+- **Hyprland's Lua config is supported.** On Hyprland 0.55+ (and Omarchy), shortcuts persisted only to the deprecated `hyprland.conf` and vanished on reload. (#1664, thanks @IdrisGit)
+- **Auto-paste works on non-QWERTY layouts.** Compositor-native symbolic shortcuts and keysyms replace hardcoded keycodes, and dictated text stays on the clipboard when automatic paste can't land. (#1525, thanks @IdrisGit)
+- **Punctuation hotkeys bind on GNOME and KDE.** `Control+,` and friends silently failed to register. (#1658, #1752, thanks @hsusul)
+- **Ptyxis and GNOME Console paste correctly**, like the other terminals. (#1659, thanks @hsusul)
+- **Paste stops stalling on KDE.** A stale desktop-portal session cost up to 19 seconds on every paste until restart; failures are now remembered and skipped. (#1629)
+- **Sway overlays keep your text field focused**, so auto-paste lands. (#1718)
+
+### Windows
+
+- **Dictation pastes into the window you recorded from.** If another window took the foreground while transcription ran, the text went there instead; the captured target is now restored first. (#1725)
+- **Packaged builds stop printing logs to the terminal.** Use `--console-logs` if you want them. (#1719)
+- **Whisper models work under non-ASCII and redirected profiles.** A CJK or Cyrillic user name crashed the local transcription server; a redirected `USERPROFILE` hid downloaded models. (#1514, #1721, thanks @stantheman0128)
+
+### Elsewhere
+
+- **Turning off App updates turns off update checks.** The toggle used to gate only the popup, so firewalled machines still got network attempts on every launch and error dialogs when Settings opened. (#1662, thanks @AdityaPainuli)
+- **A wedged background service can't spin forever.** The reaper now escalates to SIGKILL and verifies the process actually died, instead of clearing its record after one ignored signal and spawning another alongside it. (#1626)
+- **Chinese UI for `zh-Hans` and `zh-Hant` system locales.** Those tags fell back to English. (#1691, thanks @hsusul)
+
+## [1.8.3] - 2026-08-12
+
+GPU acceleration for local transcription gets an overhaul: the status you see is now the truth, enabling it works without a restart, older NVIDIA cards are routed to a backend that actually works on them, and a GPU failure can never cost you a dictation. LLM routing gains the same fail-closed treatment speech-to-text received in 1.8.2. Launch at login arrives on Linux, and transcription errors stop blaming your microphone.
+
+### GPU acceleration
+
+- **"GPU acceleration active" now means it.** The indicator reflects what the transcription server is actually running on — ready, activating, active, or "GPU could not be activated" with a Retry — instead of turning green whenever a file finished downloading. (#1578)
+- **Enable GPU applies immediately.** Downloading or removing a GPU pack reloads the transcription engine in place; previously nothing changed until the app was restarted, with no hint. (#1578)
+- **A GPU crash never costs you a dictation — and is remembered.** If the GPU engine fails, the same recording is retried on CPU and pasted, and the failed backend isn't silently re-attempted (and its model reload re-paid) on every launch. Retry or re-download clears the memory. (#1578)
+- **GTX 10-series (Pascal) cards get CUDA.** The CUDA pack now ships Pascal kernels and is offered to those cards; a Pascal machine already running the Vulkan pack keeps it instead of being re-prompted to download a second backend. (#1585)
+- **NVIDIA cards below the CUDA build's floor are offered a backend that works.** Cards the build carries no kernels for (Maxwell and older) were offered a CUDA build that loaded the model, then crashed at first use while reporting success. They now get the Vulkan pack, like AMD and Intel GPUs. (#1576)
+- **GPU packs can no longer corrupt each other.** The whisper CUDA and llama Vulkan packs shipped identically-named runtime libraries into one shared folder, so installing one could silently break the other — and removing one deleted the other's files. Each pack now owns its own directory, and old installs are healed on startup. (#1577)
+- **An interrupted GPU install can no longer fake success.** Installs are staged and swapped in atomically, so a crash or power cut mid-install can't leave a truncated binary the app reports as installed forever. (#1577)
+- **GPU binaries updated (whisper.cpp pack 0.0.9).** Same engine and source as 0.0.8, rebuilt with the Pascal CUDA kernels included (+17.5 MB per CUDA pack). (#1584)
+
+### Speech to text
+
+- **Action required for some Custom endpoints.** If you selected the Custom speech-to-text provider but never changed its pre-filled URL (`https://api.openai.com/v1`), your audio and your custom key were being sent to OpenAI. That now fails with a clear error instead, so set a real endpoint under Settings → Speech to Text — or switch to the OpenAI provider, which the URL field does automatically once you re-enter it. (#1556)
+- **"No Audio Detected" means silence again.** A broken transcription engine used to blame your microphone; it now reports the real error, keeps the recording for retry, and still falls back to your cloud provider when enabled. (#1575)
+- **Re-transcribing a Corti recording reaches Corti.** History → Re-transcribe sent Corti recordings to OpenAI. (#1556)
+- **A leftover provider can no longer hijack self-hosted transcription.** With self-hosted selected, a stale Mistral, xAI, or Corti selection could still divert your audio to that provider. (#1556)
+- **Each provider remembers its own model.** Switching speech-to-text providers and back restores the model you had chosen instead of resetting it to the default — including custom model names on your own endpoint. (#1556)
+- **Mistral file uploads authenticate correctly.** Upload was the last path still sending a Bearer token instead of Mistral's `x-api-key`. (#1556)
+- **Azure OpenAI endpoints work on every path.** Dictation, re-transcribe, and upload all build deployment-style URLs, whether the endpoint is configured as Custom or self-hosted. (#1556)
+- **Uploads detect their own language again.** A file you upload is no longer forced into your dictation language. (#1556)
+- **Realtime streaming waits for the transcript tail.** Stopping a streamed dictation no longer races a fixed delay against the last words arriving. (#1573)
+- **Recordings discarded as dictionary echo are kept and surfaced.** (#1559)
+- **Parakeet accepts non-PCM16 WAV uploads.** (#1376)
+
+### AI models & routing
+
+- **Custom LLM endpoints fail closed.** An empty, unparseable, or non-OpenAI custom URL no longer falls back to sending your prompt — and your custom API key — to OpenAI; it fails with a clear, localized error. Unknown providers are rejected instead of routed to OpenAI. (#1583)
+- **Your cleanup key stays on the cleanup endpoint.** The dictation-cleanup custom key no longer rides along to other scopes' custom endpoints. (#1583)
+- **Every LLM scope remembers its model per provider.** Switching provider tabs and back restores your previous choice across all six scopes, and retired cloud models are repointed to the provider's current default instead of failing forever. (#1583)
+- **The voice-agent vision override works.** Screenshot-carrying commands can actually route to the configured vision model, and are enforced under the correct policy scope. (#1583)
+- **Custom-endpoint API keys move to the OS secure store.** Five scopes stored their keys in plaintext; existing keys are migrated automatically. (#1583)
+
+### Voice agent
+
+- **Screen context, selection edits, and calendar answers are more reliable.** Screenshot capture failures retry text-only without losing the command, selection edits recover from a rejected screenshot, and the agent's calendar tool and accessibility reads are fixed. (#1566)
+- **Selection edits work in apps with dormant accessibility trees.** Commands dictated into Dia, Arc, Chrome, Claude Desktop, Slack, or VS Code no longer die before reaching the model when the selected text can't be read natively. (#1593)
+
+### Meetings & speakers
+
+- **Your own dictation no longer triggers meeting detection.** (#1570)
+- **Manual speaker reassignments win.** A segment you reassign keeps your label instead of being pulled back to its diarization cluster. (#1569)
+- **Gap segments follow the nearest speaker.** (#1423)
+- **Realtime meeting streams stop cleanly.** (#1553)
+- **Expected speaker counts are validated in one place.** (#1555, #1522)
+
+### Calendar
+
+- **Large Google Calendars sync completely.** Sync now follows all result pages instead of stopping after the first. (#1572)
+- **Meeting reminders re-arm after a provider reset.** (#1486)
+- **Calendar API failures are reported with their cause.** (#1553)
+- **Meeting join links tolerate malformed calendar data.** Whitespace-only or missing join URLs no longer break the join flow. (#1580)
+
+### Startup & Linux
+
+- **Launch at login on Linux.** Via an XDG autostart entry, with correct behavior across GNOME and KDE autostart editors — plus start-hidden fixes on Windows and a hardened Linux launcher probe. (#1518, #1574, thanks @edwin-luu)
+- **Linux text monitor builds link AT-SPI2 correctly.** (#1544, thanks @iSparsh)
+- **Meeting notifications stay clickable after the first hover on Linux.** (#1562)
+
+### macOS
+
+- **The Globe hotkey no longer also triggers the system Globe action.** (#1567)
+
+### Notes & interface
+
+- **Meeting transcript timestamps export correctly to Markdown.** (#1560)
+- **Retired default prompts are cleared from persisted settings.** (#1561)
+- **Empty states close their layout gaps.** (#1565)
+- **The "Coming Soon" badge translates again.** A wrong-prefix key rendered raw text in every language; a new lint-style test guards all referenced keys. (#1592)
+- **Hotkey parsing handles left/right modifiers and trailing `+` correctly.** (#1437, #1433)
+- **Retention cleanup waits for the first renderer sync.** A fresh install can no longer sweep history before settings arrive. (#1558)
+
+### Security & enterprise
+
+- **IPv6 private and metadata addresses are blocked for enterprise endpoints.** (#1440)
+
+### CLI
+
+- **Validation errors return HTTP 400 with a structured body.** (#1521)
+
+## [1.8.2] - 2026-08-11
+
+Meetings get more reliable speaker identity — labels you set now stick, Windows loopback gains live identification, and Intel Mac meetings no longer fail when the optional ONNX binding is unavailable. The voice agent can edit highlighted text in place or use an opt-in screenshot as context. Collaboration is now free for signed-in users, Microsoft and Apple Calendar join Google Calendar, and organizations gain server-enforced policy plus centrally managed Bedrock and Azure OpenAI access.
+
+### Voice agent
+
+- **Edit highlighted text by voice.** Select text anywhere, trigger the voice agent, and say what you want changed — the agent rewrites the selection in place instead of appending a new block. (#1264)
+- **Optional screen context.** With "Share screen context" enabled (Settings → AI Models → Voice Agent, off by default), pressing the voice agent hotkey captures the display your cursor is on and sends it with your command, so you can say things like "reply to this email" or "explain the error on screen". You can route screenshot-carrying commands to a separate vision-capable model, and a screenshot that can't be sent never costs you the command — it silently reruns text-only and tells you.
+- **Agent failures are no longer silent.** If the agent can't process a command, you get an "Agent Unavailable" notice instead of your raw words appearing in whatever app you were in.
+
+### Meetings & speaker identity
+
+- **Speaker labels stay put.** Manual speaker labels persist, identities stay stable across a meeting, and reconciliation no longer deletes a mapping you set by hand when live and offline speaker ids happen to match. (#1501)
+- **Live speaker identification on Windows.** Windows loopback capture now identifies speakers live, matching macOS. (#1502)
+- **Intel Mac meetings no longer fail at startup.** ONNX Runtime no longer ships a macOS x86_64 binding, so live speaker identification and voice fingerprinting remain unavailable on Intel Macs; meeting recording, transcription, offline diarization, and keyword note search continue normally. (#1538)
+- **Diarization writes land on the right note.** Delayed diarization is always persisted to the note it belongs to, and completions are serialized so labels don't get crossed between notes. (#1539, #1495)
+- **Tinfoil realtime meeting transcription.** Tinfoil joins the realtime meeting providers.
+- **Live speaker identification degrades gracefully.** A missing onnxruntime binding disables live identification instead of breaking the meeting.
+- **Steadier meeting prompts.** Meeting detection re-evaluates gated microphone state, prompts no longer expire early, and the countdown is scoped to its own window. (#1532)
+- **Speaker timestamps anchored correctly.** Live speaker timestamps anchor to the first system chunk, and the roster-driven speaker cap only ever raises.
+
+### Organization policy
+
+- **Every policy field is enforced.** Organization policy is now applied across the whole app rather than just the settings UI: restricted options are hidden with safe fallbacks, enforcement covers modes, providers, features, sharing, and retention, and a malformed policy response fails closed. (#1074, #1506)
+- **Managed Enterprise AI.** Enterprise workspaces can centrally configure Amazon Bedrock or Azure OpenAI for cleanup, voice agent, note formatting, note chat, and translation. Employees sign in with company SSO instead of entering cloud keys; short-lived credentials stay in the desktop main process and prompts go directly to the organization's cloud account. (#1530)
+
+### Dictation
+
+- **No more clipped first words.** Cold microphone opens could swallow the beginning of a recording; the mic is warmed so your first words are captured. (#845, #1493)
+- **Dropped transcript segments are retried and surfaced.** Silently dropped segments are retried, and a genuine loss is reported rather than quietly shortening your transcript. (#1462)
+- **VAD is now opt-in.** Voice activity detection is off by default, with dictionary-echo decodes rescued rather than discarded.
+- **Transcripts are no longer replaced unexpectedly.** (#1461)
+
+### Notes & sync
+
+- **Collaboration is free.** Any signed-in account can create and join team spaces, share individual notes, and sync shared content even when personal cloud backup is off. New users who missed an invitation email can join when invited or verified through company SSO; otherwise they can request access from workspace admins. (#1549)
+- **Workspace invites no longer stop at prepaid capacity.** Free workspaces can add members without a subscription. Paid workspaces show the estimated prorated seat cost before an invitation is sent and increase Stripe capacity only if it is accepted. (#1549)
+- **Idle collaboration sync backs off.** Accounts with no shared activity gradually reduce background checks to once per hour, while manual syncs and active collaboration remain immediate. (#1549)
+- **Tombstones survive.** Note pulls and deletes are guarded so a tombstone can't be lost and a deleted note resurrected. (#1354, thanks @xAlcahest)
+- **Edits during a push are not lost.** A note edited while its save is being acknowledged stays pending instead of being marked clean.
+
+### Account & billing
+
+- **Edit your profile.** Change your display name in the app; email-and-password accounts can also change their password and optionally sign out other devices. Email address changes still go through support. (#1162)
+- **Correct plan shown for covered workspaces.** Members covered by a workspace plan no longer see "Free", and an unknown entitlement is never reported as a free plan. (#1540, #1424)
+- **Current Business pricing.** Plan cards now show $16 per user monthly or $160 per user annually. (#1551)
+
+### Calendars
+
+- **Apple Calendar support.** Native EventKit integration joins Google Calendar for meeting detection and reminders. (#1237)
+- **Microsoft Calendar support.** Connect Outlook.com or Microsoft 365 on macOS, Windows, or Linux. Microsoft Graph sync adds scheduled-meeting prompts, titles, attendees, and join links alongside Google and Apple Calendar events. (#1251)
+
+### Models
+
+- **Claude Opus 5.** Added to the Anthropic provider. (#1452)
+- **Retired model ids removed** from the registry. (#1482)
+- **Anthropic temperature compatibility.** Models that reject a `temperature` parameter no longer fail. (#1475)
+
+### Translations & internationalization
+
+- **Chinese locales corrected.** Spanish and untranslated strings that leaked into the Chinese locales are fixed. (#1504)
+- **Simplified vs Traditional Chinese respected** for Chinese speech-to-text. (#1226)
+- **Speaker labels are translated,** including "unknown speaker" and your own voice in exported transcripts.
+
+### Other fixes
+
+- **Security updates.** Better Auth and affected packaged dependencies were updated to patched releases; the release dependency audit now reports no known vulnerabilities.
+- **More reliable cloud audio uploads.** A poisoned TLS connection is discarded before retrying, and upload diarization never requests more speaker clusters than the local model supports. (#1496)
+- **Custom STT endpoint URLs are preserved** when switching provider tabs. (#1463)
+- **Hotkey slots release their accelerators** when unregistered, so a rebound hotkey no longer leaves the old one dead. (#1425, #1420, thanks @hsusul)
+- **Tailscale MagicDNS works over HTTP,** and self-hosted mode is allowed for uploads.
+- **Local translation models with an empty provider** route through llama.cpp correctly.
+- **The dictation agent's inference mode is authoritative,** with providers normalized for local and self-hosted modes.
+
+## [1.8.1] - 2026-07-30
+
+A critical fix on top of 1.8.0. If you installed 1.8.0, update to 1.8.1 right away.
+
+### Fixed
+
+- **Note content no longer leaks between notes.** In 1.8.0, switching from one note to another could copy the second note's content into the first — even when you edited neither — because the editor re-mounting on a note switch registered a phantom edit against the note you'd just left. Editor edits and pending saves are now tied to the specific note they came from, and switching notes no longer emits a spurious change. (#1406)
+
+## [1.8.0] - 2026-07-30
+
+Team spaces and web note sharing headline this release: create shared spaces inside your workspace, invite teammates with roles and one-click deep links, and publish notes to the web with link, domain, or invite-only visibility — all local-first, with access enforced server-side and revocation handled gracefully. Alongside it: workspace management lands in Settings, new Gemma 4 local models, configurable privacy retention, custom-dictionary management over the CLI, and a broad reliability pass across transcription, notes sync, translation, exports, and per-platform polish.
+
+### Team spaces & sharing
+
+- **Team spaces in the notes sidebar.** A new TEAM SPACES section sits alongside your private space: create a space with a name and emoji, organize per-space folders and notes, drag notes between containers, and drive the whole tree from the keyboard. The editor shows where a note lives — a breadcrumb chip that jumps to and reveals its space, and an audience pill showing how many people can see it. Content is local-first: your notes stay in the on-device database as the source of truth, with each space syncing to the cloud in the background. (#925)
+- **Membership, roles, and invitations.** Invite teammates by email with team spaces pre-selected; the invitation email lands on notes.openwhispr.com with a one-click "Open in OpenWhispr" deep link straight into the accept flow (and an honest copy-the-link path on phones). Space members are admins or members, workspace owners and admins hold implicit admin access to every space, and rosters are managed from the space's Members dialog or Settings → Workspace → Team spaces — with type-the-name confirmation before a space is deleted, everywhere it can be deleted from. (#925)
+- **Server-enforced access with graceful revocation.** Membership checks live on the server — non-members get existence privacy, and revoked or archived spaces return typed errors the app understands. Losing access to a space removes its synced notes locally and relocates anything you never managed to sync into your private space, with a toast explaining what happened. If a teammate's edit arrives while you have unpushed changes, a conflict banner names who edited it and lets you take their copy or keep yours. (#925)
+- **Share notes on the web.** Personal notes can be published to notes.openwhispr.com under three visibilities: anyone with the link, anyone signed in under your email domain, or invited people only. Rich link previews (title and snippet) are emitted only for link-visibility shares — restricted notes unfurl generically so nothing leaks into chat preview caches. Team notes deliberately have no public link; their audience is the space. (#925)
+- **Changes land live, everywhere.** Space changes now broadcast across windows the way notes and folders already did: a teammate's rename, a role or member-count change, or a freshly accepted invitation appears in an open sidebar without remounting, skeleton rows clear as a new space's content finishes backfilling, and a deleted space vanishes from every window at once. (#925)
+- **Workspace management in Settings.** The new Settings → Workspace section covers members (invite, remove, roles), team spaces, billing with per-seat counts, and developer settings — with workspace creation and switching built in. (#925)
+
+### Transcription & reliability
+
+- **Local transcription no longer splits words mid-word.** Segment boundaries could cut a word in half and drop a fragment on either side; segments now break on natural gaps so words stay intact. (#1348, #1369)
+- **Local transcription timeouts scale with audio length.** A fixed timeout could kill long recordings before they finished decoding — the limit now grows with the duration of the audio. (#1104)
+- **Sturdier chunked cloud uploads.** Chunked cloud transcription gained per-request timeouts, a fresh-connection retry, proper cancellation, and a global cap so a stuck upload can no longer hang the pipeline. (#1330)
+- **Your transcript survives an empty cleanup.** If the cloud cleanup pass returned nothing, the whole transcription used to come back blank; the raw transcript is now kept when cleanup yields no text. (#938)
+- **Recordings are recovered when the mic disconnects.** Unplugging or losing the microphone mid-recording no longer discards what you already said. (#1261)
+- **Steadier NVIDIA Parakeet streaming.** Streaming dictation falls back to a full decode if the live stream loses audio, and it keeps the newer partial result instead of an older one — so the committed text matches what you said. (#1283, #1285)
+- **Cleaner AssemblyAI streaming.** Premature stream closes from AssemblyAI are now rejected rather than treated as a finished transcript. (#1240)
+- **Pinned, verified CUDA Whisper binaries.** The CUDA whisper.cpp binaries are pinned to known versions and checked against their digests before use. (#1372)
+
+### Local models
+
+- **Gemma 4 QAT local models.** Added the quantization-aware-trained Gemma 4 models, including MTP drafters for faster local generation. (#1268, #1269)
+- **Local llama-server pre-warming restored.** The local LLM server warms up ahead of time again, so the first local reasoning request isn't slow. (#1363)
+- **Stale local model selections are cleared.** Removing a downloaded model no longer leaves it selected as your active model. (#1312)
+- **Download state persists across the picker.** A model download keeps its progress when the model picker remounts, instead of appearing to reset. (#1052)
+- **Correct model download filename.** A local model download filename now matches its HuggingFace link so the download succeeds. (#1292)
+- **Canceled downloads clean up properly.** Canceling a model download waits for the file to finish closing, so it no longer leaves a partial file behind. (#1252)
+
+### Translation
+
+- **Local translation routed through llama.cpp.** Dictation translation with a local model now runs through the llama.cpp path like the rest of local reasoning. (#1327)
+- **Empty translation results are handled.** An empty result from the translation chain is guarded instead of surfacing as a broken response. (#1258)
+
+### Notes
+
+- **Chat text selection survives live transcription.** With meeting transcription running in Notes, every incoming transcript update could yank the text selection out of the embedded chat; selections in chat are now left alone while the transcript streams. (#1027)
+- **Cloud sync won't wipe locally-edited notes.** A stale, empty copy arriving from the cloud can no longer overwrite a note you've edited locally. (#1291)
+- **Mirrored notes are distinguished from transcripts.** Notes mirrored from elsewhere are no longer confused with transcription records. (#1276)
+- **Fixed a note race condition.** (#1277)
+
+### History & export
+
+- **See and copy the full raw transcript.** History shows the complete raw transcript with a dedicated "copy raw transcript" action. (#1289)
+- **History groups by your local date.** Entries are grouped by local calendar day instead of UTC, so late-evening items land on the right day. (#1272)
+- **Meeting participants included in exports.** Exported meeting transcripts now carry their participant list. (#1274)
+- **Cleaner exported segments.** Consecutive speaker-less segments within the gap threshold are merged, and SRT millisecond overflow rolls correctly into seconds. (#1335, #1294)
+
+### Custom dictionary
+
+- **Manage your dictionary from the CLI.** The CLI bridge can now list dictionary entries and apply bulk updates. (#1366)
+- **Fresh dictionary on startup.** The dictionary is read from SQLite rather than a stale in-memory cache at launch. (#1304)
+
+### Privacy & security
+
+- **Configurable retention, actually enforced.** Added a 1-day option to audio/transcript retention and made the configured retention periods actually take effect, so saved recordings and transcripts are cleaned up on schedule. (#1368)
+- **Stricter private-endpoint validation.** Private HTTP endpoints (self-hosted / LAN) must use IPv4 literals, closing an SSRF-style hostname bypass. (#1318)
+
+### AI, providers & settings
+
+- **Prompt Studio tests the right scope.** The agent-prompt test now runs against the cleanup scope and echoes its input, so what you test matches what runs. (#1359)
+- **Clearer API error messages.** Top-level and string `detail` fields are extracted from provider error bodies instead of showing an opaque error. (#1339)
+- **Pasted base URLs are parsed correctly.** Paths are joined before query strings, so a base URL with a query string no longer breaks the request. (#1310)
+- **Inherited endpoints keep their key.** Selecting an inherited endpoint now carries the associated API key. (#1364)
+
+### Audio upload & import
+
+- **Opus uploads transcribe correctly.** YouTube imports often arrive as `.opus` files, which were uploaded with a generic MPEG content type and rejected by cloud transcription as an unsupported format. Opus (and a filename-first media-type check) is now part of the upload pipeline, so short YouTube links and direct Opus files transcribe instead of erroring. (#1249)
+
+### Interface
+
+- **The macOS Dock icon follows the control panel.** The Dock icon appears when the control panel opens and disappears when it closes to the tray — and nothing else can resurrect it, which fixes the icon reappearing after dictation. The separate "Show Dock Icon" setting is gone; the Dock now simply reflects whether the panel is open. (#1202)
+- **The tray icon toggles the control panel.** Clicking the tray icon hides the panel if it's visible and shows-and-focuses it otherwise (previously it could only open it), with a matching toggle item in the tray menu. Especially useful on Linux, where a window parked on another workspace no longer gets stuck out of sight. (#1133)
+
+### Windows
+
+- **No more console window flashes.** Native helper launches across dictation, meetings, GPU probes, and media control — `where.exe` lookups, nvidia-smi GPU detection, media pause/resume and paste helpers, the meeting AEC, text-edit monitor, and mic listener — now spawn hidden instead of flashing a console window mid-flow. (#1228, #1232, #1233, #1234)
+
+### Linux
+
+- **Wayland dev/runtime parity.** The Wayland development server is aligned with packaged behavior and runs under XWayland. (#1323)
+- **More reliable portal paste.** Modifier keys settle before the key press in portal-based paste, fixing dropped or garbled pastes. (#1257)
+- **Meeting detection degrades gracefully.** Detection falls back to polling when `pactl` or a native mic listener isn't available. (#1350)
+
+### macOS
+
+- **Accessibility guidance when the app isn't listed.** The permissions flow now handles the case where OpenWhispr is missing from the Accessibility list entirely. (#1302)
+
 ## [1.7.6] - 2026-07-18
 
 A feature release across the entire app on top of 1.7.5: dictation translation with its own hotkey and dedicated model, audio import that takes YouTube and direct URLs plus batch uploads with on-device speaker detection, one-click Vulkan GPU acceleration bringing local Whisper GPU support to AMD and Intel, NVIDIA Nemotron streaming models that decode dictation live and commit the moment you stop, Liquid AI LFM2/LFM2.5 local reasoning models, a collapsible sidebar, and meeting prompts unified into the in-app overlay — plus a deep reliability pass on self-hosted routing (uploads, retries, note formatting, chat), Mistral and Groq cleanup, local LLM memory safety, media pause/resume on macOS 15.4+, and Windows/Linux packaging.

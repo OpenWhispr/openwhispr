@@ -38,7 +38,7 @@ export const enterpriseProvider: InferenceProvider = {
         systemPrompt,
         provider: enterpriseId,
         supportsTemperature,
-        ...getEnterpriseCallSettings(enterpriseId),
+        ...getEnterpriseCallSettings(enterpriseId, config.inferenceScope || "dictationCleanup"),
       }
     );
 

@@ -5,6 +5,7 @@ import type {
 } from "@ai-sdk/provider";
 import type { EnterpriseProvider } from "../../models/ModelRegistry";
 import { getEnterpriseCallSettings } from "./enterpriseSettings";
+import type { InferenceScope } from "../../config/inferenceScopes";
 
 // Enterprise SDKs (Bedrock/Azure/Vertex) must run in the main process — SigV4
 // signing and CORS rule out renderer fetches. This LanguageModelV3 shim keeps
@@ -40,7 +41,8 @@ function pickSerializableOptions(options: LanguageModelV3CallOptions) {
 
 export function createEnterpriseChatModel(
   provider: EnterpriseProvider,
-  modelId: string
+  modelId: string,
+  inferenceScope: InferenceScope = "chatIntelligence"
 ): LanguageModelV3 {
   return {
     specificationVersion: "v3",
@@ -59,7 +61,7 @@ export function createEnterpriseChatModel(
       }
 
       const streamId = crypto.randomUUID();
-      const config = getEnterpriseCallSettings(provider);
+      const config = getEnterpriseCallSettings(provider, inferenceScope);
       let unsubscribe: (() => void) | undefined;
       const stopListening = () => {
         unsubscribe?.();

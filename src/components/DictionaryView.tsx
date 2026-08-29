@@ -19,16 +19,11 @@ import { useToast } from "./ui/useToast";
 import SnippetsView from "./SnippetsView";
 import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
-
-const parseWords = (text: string): string[] =>
-  text
-    .split(/[,\n]/)
-    .map((w) => w.trim())
-    .filter(Boolean);
+import { parseDictionaryImportText } from "../helpers/dictionaryImport";
 
 export default function DictionaryView() {
   const { t } = useTranslation();
-  const { customDictionary, setCustomDictionary } = useSettings();
+  const { customDictionary, updateCustomDictionary } = useSettings();
   const agentName = getAgentName();
   const { toast } = useToast();
 
@@ -40,12 +35,14 @@ export default function DictionaryView() {
   const [confirmClear, setConfirmClear] = useState(false);
   const addInputRef = useRef<HTMLInputElement>(null);
 
-  const pendingImportCount = useMemo(() => parseWords(bulkText).length, [bulkText]);
+  const pendingImportCount = useMemo(() => parseDictionaryImportText(bulkText).length, [bulkText]);
 
-  const userWords = useMemo(
-    () => customDictionary.filter((w) => w !== agentName),
-    [customDictionary, agentName]
-  );
+  // Same membership rule as agentNameDictionaryChanges: a stored spelling that
+  // differs only by case is still the agent name's entry, so keep it hidden.
+  const userWords = useMemo(() => {
+    const agentWord = agentName.trim().toLowerCase();
+    return customDictionary.filter((w) => w.trim().toLowerCase() !== agentWord);
+  }, [customDictionary, agentName]);
 
   const searchQuery = newWord.trim().toLowerCase();
   const visibleWords = useMemo(
@@ -57,17 +54,17 @@ export default function DictionaryView() {
   const addWords = useCallback(
     (text: string): number => {
       const existing = new Set(customDictionary.map((w) => w.toLowerCase()));
-      const words = parseWords(text).filter((w) => {
+      const words = parseDictionaryImportText(text).filter((w) => {
         if (existing.has(w.toLowerCase())) return false;
         existing.add(w.toLowerCase());
         return true;
       });
       if (words.length > 0) {
-        setCustomDictionary([...customDictionary, ...words]);
+        updateCustomDictionary({ add: words });
       }
       return words.length;
     },
-    [customDictionary, setCustomDictionary]
+    [customDictionary, updateCustomDictionary]
   );
 
   const handleAdd = useCallback(() => {
@@ -82,9 +79,9 @@ export default function DictionaryView() {
 
   const handleRemove = useCallback(
     (word: string) => {
-      setCustomDictionary(customDictionary.filter((w) => w !== word));
+      updateCustomDictionary({ remove: [word] });
     },
-    [customDictionary, setCustomDictionary]
+    [updateCustomDictionary]
   );
 
   const startEdit = useCallback((word: string) => {
@@ -99,10 +96,10 @@ export default function DictionaryView() {
       (w) => w !== editingWord && w.toLowerCase() === trimmed.toLowerCase()
     );
     if (trimmed && trimmed !== editingWord && !isDuplicate) {
-      setCustomDictionary(customDictionary.map((w) => (w === editingWord ? trimmed : w)));
+      updateCustomDictionary({ add: [trimmed], remove: [editingWord] });
     }
     setEditingWord(null);
-  }, [editingWord, editValue, customDictionary, setCustomDictionary]);
+  }, [editingWord, editValue, customDictionary, updateCustomDictionary]);
 
   const handleExport = useCallback(async () => {
     const result = await window.electronAPI?.exportDictionary?.(customDictionary);
@@ -145,7 +142,7 @@ export default function DictionaryView() {
         onOpenChange={setConfirmClear}
         title={t("dictionary.clearTitle")}
         description={t("dictionary.clearDescription")}
-        onConfirm={() => setCustomDictionary(customDictionary.filter((w) => w === agentName))}
+        onConfirm={() => updateCustomDictionary({ remove: userWords })}
         variant="destructive"
       />
 

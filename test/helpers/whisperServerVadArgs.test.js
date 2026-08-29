@@ -29,6 +29,7 @@ test("buildWhisperServerArgs includes VAD flags when enabled and model path prov
     "8180",
     "--language",
     "auto",
+    "--no-timestamps",
     "--vad",
     "--vad-model",
     "/tmp/ggml-silero-v5.1.2.bin",
@@ -60,6 +61,16 @@ test("buildWhisperServerArgs omits VAD flags when vadModelPath is missing", () =
   assert.equal(args.includes("--vad-model"), false);
 });
 
+test("buildWhisperServerArgs disables timestamps so segments aren't wrapped mid-word", () => {
+  const args = WhisperServerManager.buildWhisperServerArgs({
+    modelPath: "/tmp/model.bin",
+    port: 8180,
+    language: "auto",
+  });
+
+  assert.equal(args.includes("--no-timestamps"), true);
+});
+
 test("buildWhisperServerArgs includes thread count when provided", () => {
   const args = WhisperServerManager.buildWhisperServerArgs({
     modelPath: "/tmp/model.bin",
@@ -78,6 +89,30 @@ test("buildWhisperServerArgs includes thread count when provided", () => {
     "--threads",
     "10",
   ]);
+});
+
+test("buildWhisperServerArgs pins the GPU device when an index is given", () => {
+  const args = WhisperServerManager.buildWhisperServerArgs({
+    modelPath: "/tmp/model.bin",
+    port: 8180,
+    language: "auto",
+    gpuDeviceIndex: 1,
+  });
+
+  assert.deepEqual(args.slice(6, 8), ["--device", "1"]);
+});
+
+test("buildWhisperServerArgs omits --device by default and for unpinned sentinels", () => {
+  for (const gpuDeviceIndex of [undefined, null, -1]) {
+    const args = WhisperServerManager.buildWhisperServerArgs({
+      modelPath: "/tmp/model.bin",
+      port: 8180,
+      language: "auto",
+      gpuDeviceIndex,
+    });
+
+    assert.equal(args.includes("--device"), false);
+  }
 });
 
 test("resolveWhisperThreads keeps whisper.cpp default on small machines", () => {

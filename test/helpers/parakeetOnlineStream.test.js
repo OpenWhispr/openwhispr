@@ -179,6 +179,57 @@ test("unexpected close before Done! reports an error and truncation", async () =
   }
 });
 
+test("a clean finish reports no truncation", async () => {
+  const mock = await startMockOnlineServer({});
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    const { text, truncated } = await stream.finish();
+    assert.equal(truncated, false);
+    assert.equal(text, "final after 1 frames");
+  } finally {
+    await mock.close();
+  }
+});
+
+test("a send error during the queued flush flags truncation", async () => {
+  const mock = await startMockOnlineServer({});
+  const WebSocket = require("ws");
+  const realSend = WebSocket.prototype.send;
+  // Only client audio frames are binary; the mock server sends strings, so gate on type.
+  WebSocket.prototype.send = function (data, cb) {
+    if (typeof data !== "string") {
+      if (typeof cb === "function") cb(new Error("forced send failure"));
+      return;
+    }
+    return realSend.call(this, data, cb);
+  };
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    const { truncated } = await stream.finish({ idleTimeoutMs: 1000 });
+    assert.equal(truncated, true);
+  } finally {
+    WebSocket.prototype.send = realSend;
+    await mock.close();
+  }
+});
+
+test("a chunk arriving after finish flags truncation", async () => {
+  const mock = await startMockOnlineServer({});
+  try {
+    const stream = onlineWsServerAt(mock.port).createOnlineStream({});
+    stream.sendPcm16(Buffer.alloc(3200));
+    const finishPromise = stream.finish({ idleTimeoutMs: 1000 });
+    // Renderer flushed a chunk after we already told the server we were done.
+    stream.sendPcm16(Buffer.alloc(3200));
+    const { truncated } = await finishPromise;
+    assert.equal(truncated, true);
+  } finally {
+    await mock.close();
+  }
+});
+
 test("finish is idempotent and returns the same result", async () => {
   const mock = await startMockOnlineServer({});
   try {
@@ -186,6 +237,64 @@ test("finish is idempotent and returns the same result", async () => {
     stream.sendPcm16(Buffer.alloc(3200));
     const [first, second] = await Promise.all([stream.finish(), stream.finish()]);
     assert.deepEqual(first, second);
+  } finally {
+    await mock.close();
+  }
+});
+
+test("offline transcription rejects with AbortError when cancelled mid-flight", async () => {
+  const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
+  await once(wss, "listening");
+  const controller = new AbortController();
+  // The server holds the request open; only the abort can settle it.
+  wss.on("connection", () => controller.abort());
+
+  try {
+    const server = onlineWsServerAt(wss.address().port);
+    server.modelRuntime = "offline";
+    await assert.rejects(
+      () => server.transcribe(Buffer.alloc(3200), 16000, { signal: controller.signal }),
+      (err) => {
+        assert.equal(err.name, "AbortError");
+        return true;
+      }
+    );
+  } finally {
+    await new Promise((resolve) => wss.close(resolve));
+  }
+});
+
+test("offline transcription rejects immediately on a pre-aborted signal", async () => {
+  const controller = new AbortController();
+  controller.abort();
+
+  const server = onlineWsServerAt(1);
+  server.modelRuntime = "offline";
+  await assert.rejects(
+    () => server.transcribe(Buffer.alloc(3200), 16000, { signal: controller.signal }),
+    (err) => {
+      assert.equal(err.name, "AbortError");
+      return true;
+    }
+  );
+});
+
+test("online transcription rejects with AbortError when cancelled mid-flight", async () => {
+  // The server never acknowledges Done, so only the abort settles the stream.
+  const mock = await startMockOnlineServer({});
+  mock.ignoreDone();
+
+  try {
+    const server = onlineWsServerAt(mock.port);
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 20);
+    await assert.rejects(
+      () => server.transcribe(Buffer.alloc(3200), 16000, { signal: controller.signal }),
+      (err) => {
+        assert.equal(err.name, "AbortError");
+        return true;
+      }
+    );
   } finally {
     await mock.close();
   }

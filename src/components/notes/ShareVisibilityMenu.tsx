@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Check, ChevronDown, Globe, Lock, Building2 } from "lucide-react";
+import { Check, ChevronDown, Globe, Lock, Building2, Users } from "lucide-react";
 import { cn } from "../lib/utils";
 import {
   DropdownMenu,
@@ -14,6 +14,7 @@ interface ShareVisibilityMenuProps {
   value: ShareVisibility;
   ownerDomain: string;
   showDomainOption: boolean;
+  visibleOptions?: readonly ShareVisibility[];
   disabled?: boolean;
   onChange: (visibility: ShareVisibility) => void;
 }
@@ -22,12 +23,15 @@ export default function ShareVisibilityMenu({
   value,
   ownerDomain,
   showDomainOption,
+  visibleOptions = ["private", "invited", "link", "domain"],
   disabled,
   onChange,
 }: ShareVisibilityMenuProps) {
   const { t } = useTranslation();
 
   const current = renderCurrent(value, ownerDomain, t);
+  const isVisible = (visibility: ShareVisibility): boolean =>
+    visibility === "private" || visibleOptions.includes(visibility);
 
   return (
     <DropdownMenu>
@@ -46,24 +50,34 @@ export default function ShareVisibilityMenu({
           aria-label={t("noteEditor.share.dialog.visibility.label")}
         >
           {current.icon}
-          <span>{current.label}</span>
-          <ChevronDown size={12} className="text-foreground/40" />
+          <span className="max-w-44 truncate">{current.label}</span>
+          <ChevronDown size={12} className="text-foreground/40 shrink-0" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={4} className="min-w-[260px]">
         <VisibilityItem
           icon={<Lock size={13} className="text-foreground/50" />}
-          label={t("noteEditor.share.dialog.visibility.invited")}
-          active={value === "invited"}
-          onSelect={() => onChange("invited")}
+          label={t("noteEditor.share.dialog.visibility.privateOption")}
+          active={value === "private"}
+          onSelect={() => onChange("private")}
         />
-        <VisibilityItem
-          icon={<Globe size={13} className="text-foreground/50" />}
-          label={t("noteEditor.share.dialog.visibility.link")}
-          active={value === "link"}
-          onSelect={() => onChange("link")}
-        />
-        {showDomainOption && (
+        {isVisible("invited") && (
+          <VisibilityItem
+            icon={<Users size={13} className="text-foreground/50" />}
+            label={t("noteEditor.share.dialog.visibility.invited")}
+            active={value === "invited"}
+            onSelect={() => onChange("invited")}
+          />
+        )}
+        {isVisible("link") && (
+          <VisibilityItem
+            icon={<Globe size={13} className="text-foreground/50" />}
+            label={t("noteEditor.share.dialog.visibility.link")}
+            active={value === "link"}
+            onSelect={() => onChange("link")}
+          />
+        )}
+        {showDomainOption && isVisible("domain") && (
           <VisibilityItem
             icon={<Building2 size={13} className="text-foreground/50" />}
             label={t("noteEditor.share.dialog.visibility.domain", { domain: ownerDomain })}
@@ -92,12 +106,16 @@ function renderCurrent(
         icon: <Building2 size={12} className="text-foreground/60" />,
         label: t("noteEditor.share.dialog.visibility.domain", { domain: ownerDomain }),
       };
-    case "private":
     case "invited":
+      return {
+        icon: <Users size={12} className="text-foreground/60" />,
+        label: t("noteEditor.share.dialog.visibility.invited"),
+      };
+    case "private":
     default:
       return {
         icon: <Lock size={12} className="text-foreground/60" />,
-        label: t("noteEditor.share.dialog.visibility.invited"),
+        label: t("noteEditor.share.dialog.visibility.private"),
       };
   }
 }

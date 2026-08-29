@@ -21,6 +21,8 @@ class AssemblyAiStreaming {
     this.onFinalTranscript = null;
     this.onError = null;
     this.onSessionEnd = null;
+    this.onConnectionLost = null;
+    this.connectionLossNotified = false;
     this.pendingResolve = null;
     this.pendingReject = null;
     this.connectionTimeout = null;
@@ -132,7 +134,10 @@ class AssemblyAiStreaming {
     debugLogger.debug("AssemblyAI warming up connection");
 
     return new Promise((resolve, reject) => {
+      let settled = false;
       const warmupTimeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         this.cleanupWarmConnection();
         reject(new Error("AssemblyAI warmup connection timeout"));
       }, WEBSOCKET_TIMEOUT_MS);
@@ -146,7 +151,8 @@ class AssemblyAiStreaming {
       this.warmConnection.on("message", (data) => {
         try {
           const message = JSON.parse(data.toString());
-          if (message.type === "Begin") {
+          if (message.type === "Begin" && !settled) {
+            settled = true;
             clearTimeout(warmupTimeout);
             this.warmConnectionReady = true;
             this.warmSessionId = message.id || null;
@@ -163,7 +169,10 @@ class AssemblyAiStreaming {
         clearTimeout(warmupTimeout);
         debugLogger.error("AssemblyAI warmup connection error", { error: error.message });
         this.cleanupWarmConnection();
-        reject(error);
+        if (!settled) {
+          settled = true;
+          reject(error);
+        }
       });
 
       this.warmConnection.on("close", (code, reason) => {
@@ -177,6 +186,11 @@ class AssemblyAiStreaming {
           reason: reason?.toString(),
         });
         this.cleanupWarmConnection();
+        if (!settled) {
+          settled = true;
+          reject(new Error(`AssemblyAI warmup connection closed before ready (code: ${code})`));
+          return;
+        }
         if (wasReady && savedOptions) {
           this.warmConnectionOptions = savedOptions;
           this.scheduleRewarm();
@@ -233,6 +247,7 @@ class AssemblyAiStreaming {
 
     this.ws = this.warmConnection;
     this.isConnected = true;
+    this.connectionLossNotified = false;
     this.sessionId = this.warmSessionId || null;
     this.warmConnection = null;
     this.warmConnectionReady = false;
@@ -245,9 +260,10 @@ class AssemblyAiStreaming {
 
     this.ws.removeAllListeners("error");
     this.ws.on("error", (error) => {
+      const wasActive = this.isConnected;
       debugLogger.error("AssemblyAI WebSocket error", { error: error.message });
       this.cleanup();
-      this.onError?.(error);
+      if (wasActive && !this.isDisconnecting) this.notifyConnectionLost(error);
     });
 
     this.ws.removeAllListeners("close");
@@ -260,7 +276,7 @@ class AssemblyAiStreaming {
       });
       this.cleanup();
       if (wasActive && !this.isDisconnecting) {
-        this.onError?.(new Error(`Connection lost (code: ${code})`));
+        this.notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
       }
     });
 
@@ -306,6 +322,7 @@ class AssemblyAiStreaming {
     this.accumulatedText = "";
     this.lastTurnText = "";
     this.turns = [];
+    this.connectionLossNotified = false;
 
     // Try to use pre-warmed connection for instant start
     if (this.hasWarmConnection()) {
@@ -338,6 +355,7 @@ class AssemblyAiStreaming {
       });
 
       this.ws.on("error", (error) => {
+        const wasActive = this.isConnected;
         debugLogger.error("AssemblyAI WebSocket error", { error: error.message });
         this.cleanup();
         if (this.pendingReject) {
@@ -345,7 +363,11 @@ class AssemblyAiStreaming {
           this.pendingReject = null;
           this.pendingResolve = null;
         }
-        this.onError?.(error);
+        if (wasActive && !this.isDisconnecting) {
+          this.notifyConnectionLost(error);
+        } else if (!this.isDisconnecting) {
+          this.onError?.(error);
+        }
       });
 
       this.ws.on("close", (code, reason) => {
@@ -355,12 +377,27 @@ class AssemblyAiStreaming {
           reason: reason?.toString(),
           wasActive,
         });
+        if (this.pendingReject) {
+          this.pendingReject(new Error(`AssemblyAI WebSocket closed before ready (code: ${code})`));
+          this.pendingReject = null;
+          this.pendingResolve = null;
+        }
         this.cleanup();
         if (wasActive && !this.isDisconnecting) {
-          this.onError?.(new Error(`Connection lost (code: ${code})`));
+          this.notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
         }
       });
     });
+  }
+
+  notifyConnectionLost(error) {
+    if (this.connectionLossNotified) return;
+    this.connectionLossNotified = true;
+    if (this.onConnectionLost) {
+      this.onConnectionLost(error);
+    } else {
+      this.onError?.(error);
+    }
   }
 
   handleMessage(data) {

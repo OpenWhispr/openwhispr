@@ -2,6 +2,10 @@
 
 This document provides comprehensive technical details about the OpenWhispr project architecture for AI assistants working on the codebase.
 
+## Response Style
+
+Keep responses focused, brief, and concise. Keep disclaimers and caveats short, and spend most of the response on the main answer. When asked to explain something, give a high-level summary unless an in-depth explanation is specifically requested.
+
 ## Project Overview
 
 OpenWhispr is an Electron-based desktop dictation application that uses whisper.cpp for speech-to-text transcription. It supports both local (privacy-focused) and cloud (OpenAI API) processing modes.
@@ -57,7 +61,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **clipboard.js**: Cross-platform clipboard operations
   - macOS: AppleScript-based paste with accessibility permission check
   - Windows: PowerShell SendKeys with nircmd.exe fallback
-  - Linux: Native XTest binary + compositor-aware fallbacks (xdotool, wtype, ydotool)
+  - Linux: compositor-aware Wayland paste (Hyprland sendshortcut, wlroots wtype, GNOME/KDE portal keysyms) with native uinput/XTest and system-tool fallbacks
 - **database.js**: SQLite operations for transcription history
 - **debugLogger.js**: Debug logging system with file output
 - **devServerManager.js**: Vite dev server integration
@@ -69,7 +73,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **dragManager.js**: Window dragging functionality
 - **environment.js**: Environment variable and OpenAI API management
 - **hotkeyManager.js**: Global hotkey registration and management
-  - Named hotkey slots: `dictation`, `agent` (chat agent overlay), `voiceAgent` (dictation routed straight to the dictation agent), `meeting`
+  - Named hotkey slots: `dictation`, `voiceAgent` (voice assistant — dictation routed to the assistant panel), `translation`, `meeting`
   - Handles platform-specific defaults (GLOBE on macOS, Control+Super on Windows/Linux)
   - Auto-fallback to F8/F9 if default hotkey is unavailable
   - Notifies renderer via IPC when hotkey registration fails
@@ -95,6 +99,23 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Converts Electron hotkey format to Qt key codes
   - Only active on Linux + KDE desktop (detected via `XDG_CURRENT_DESKTOP`)
   - D-Bus transport: `@homebridge/dbus-native` (pure JavaScript, no native addons)
+- **autoStart.js**: Single entry point for launch at login, used by `ipcHandlers.js` and `main.js`
+  - Dispatches to `setLoginItemSettings()` on macOS/Windows and to `linuxAutostart.js` on Linux
+  - `getAutoStartState()` returns `{ enabled, requiresApproval }`; `requiresApproval` is macOS-only and means SMAppService registered the item but the user has not allowed it under System Settings → General → Login Items yet
+  - `wasLaunchedAtLoginHidden()` decides whether this launch should go straight to the tray
+  - `syncAutoStartEntry()` runs from `initializeCoreManagers()` and repairs entries written by older builds
+  - Decision logic lives in `autoStartPolicy.js` (pure, unit-tested in `test/helpers/autoStartPolicy.test.js`)
+- **autoStartPolicy.js**: Electron-free launch-at-login decisions
+  - `HIDDEN_LAUNCH_FLAG` (`--hidden`) is how a login launch tells the app to start in the tray. Windows has no native equivalent (`openAsHidden` is macOS-only and a no-op on macOS 13+), so the flag rides on the login item's `args`; Linux puts it on the autostart entry's `Exec`; macOS uses `wasOpenedAtLogin` instead
+  - On Windows, read the state from `executableWillLaunchAtLogin`, never from `openAtLogin`: `openAtLogin` only compares the `Run` value against the current executable and args and ignores the `StartupApproved` key that Task Manager and Settings write when a user disables a startup app
+  - Reads and writes must pass identical `args`, or `openAtLogin` always reports false
+- **linuxAutostart.js**: Launch-at-login on Linux via an XDG autostart entry
+  - `app.setLoginItemSettings()` is a no-op on Linux, so the entry is written directly to `$XDG_CONFIG_HOME/autostart/open-whispr.desktop`, matching the executable name electron-builder packages under
+  - `Exec` resolves from `$APPIMAGE` first: `process.execPath` is the ephemeral AppImage FUSE mount
+  - `isAutostartEnabled()` honors `X-GNOME-Autostart-enabled=false` and `Hidden=true`, which GNOME Tweaks and KDE's autostart editor write in place instead of deleting the file
+  - `Exec` carries `--hidden` (see `autoStartPolicy.js`), and `syncAutostartEntry()` compares against the full value including that flag — comparing against the bare path would make every launch look stale
+  - `syncAutostartEntry()` runs from `autoStart.syncAutoStartEntry()` in `initializeCoreManagers()` and re-points a stale `Exec` after the executable moves (renamed or auto-updated AppImage); it never re-enables an entry the user disabled, and no-ops in development
+  - Unit-tested in `test/helpers/linuxAutostart.test.js`
 - **ipcHandlers.js**: Centralized IPC handler registration
 - **windowsKeyManager.js**: Windows Push-to-Talk support with native key listener
   - Spawns native `windows-key-listener.exe` binary for low-level keyboard hooks
@@ -114,10 +135,22 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Linux: Event-driven via `pactl subscribe` (PulseAudio source-output events)
   - All platforms: Graceful fallback to polling if native approach fails
 - **processListCache.js**: Shared singleton process list cache (5s TTL, `ps-list` npm)
-- **googleCalendarManager.js**: Google Calendar sync with exponential backoff
+- **meetingEchoLeakDetector.js**: Audio-layer echo analysis for meeting recordings — correlates each mic chunk against the recent system-audio tap (lag search 0–500 ms in 5 ms steps) and classifies it `clean_local` / `suspected_render_bleed` / `double_talk`; drives chunk muting and per-segment suppression flags. PCM-driven tests in `test/helpers/meetingEchoLeakDetector.test.js`
+- **meetingMicGate.js**: Pure RMS/peak chunk stats + the meeting mic gate verdict (`send` / `zero` for streaming, `send` / `skip` for local) with the exported silence and bleed thresholds; `ipcHandlers.js` (`dispatchMeetingAudioBuffer`, `transcribeLocalMeetingChunk`) only applies the verdict. Unit-tested in `test/helpers/meetingMicGate.test.js`
+- **meetingMicHoldback.js**: Pure holdback/retract policy for risky mic finals — pending-final partition, retract window, risky-profile classifier, text-layer duplicate check, racing-retract candidate selection, pending-overlap partition. `ipcHandlers.js` keeps thin adapters over its closure state (`meetingDiarizationSegments`, `meetingPendingMicFinals`, `hasNearbyTranscriptMatch`). Unit-tested in `test/helpers/meetingMicHoldback.test.js`
+- **googleCalendarManager.js**: Google Calendar sync (REST, OAuth via `googleCalendarOAuth.js`)
   - 10s socket timeout on API requests
-  - Backoff: 2min → 4min → 8min → cap 30min on consecutive failures
-  - Reset to normal interval on success
+  - Incremental sync via `syncToken`; full re-sync on 410 prunes stale events (note-linked rows retained)
+  - Sync tokens pin the `timeMin`/`timeMax` window of the full sync that created them (incremental syncs never roll it forward), so tokens are discarded after 1 day to keep the 33-day lookahead covering the availability tool's 31-day horizon
+- **microsoftCalendarManager.js**: Microsoft Calendar sync via Graph API (OAuth via `microsoftCalendarOAuth.js`)
+  - `calendarView/delta` incremental sync over a 38-day window; delta token discarded after 7 days (Graph delta links never roll their window forward)
+  - Delta can return recurring-series occurrences as bare stubs (no subject/attendees/meeting link); they're backfilled from their series master, one `GET /me/calendars/{calendarId}/events/{id}` per series (calendar-scoped: `/me/events/{id}` 404s for shared calendars). A failed backfill shortens the delta token TTL to 10 min so an early full sync retries instead of leaving untitled blocks
+  - Full re-sync (410 or expired token) prunes stale events like Google
+- **appleCalendarManager.js**: Apple Calendar (EventKit) via the `macos-calendar-listener` Swift helper — macOS only, snapshot-push over stdout, no tokens ("connected" = `apple_calendars` has rows)
+- **calendarReminderScheduler.js**: Provider-agnostic meeting reminder scheduling over the shared `calendar_events` table (provider-scoped reset keys, so one provider's disconnect doesn't re-fire another's reminders)
+- **calendarSyncInterval.js**: Shared interval runner for the REST providers — exponential backoff (2min → 4min → 8min → cap 30min on consecutive failures, reset on success) and 30s focus-sync throttle
+- **oauthLoopbackFlow.js**: Shared PKCE auth-code flow over an ephemeral 127.0.0.1 server, used by both calendar OAuth helpers
+- Events from all providers land in the shared `calendar_events` table with a `provider` column; queries suppress the Apple copy of a meeting when a REST row occupies the same time slot + title (Calendar.app mirrors the same accounts)
 - **menuManager.js**: Application menu management
 - **tray.js**: System tray icon and menu
 - **whisper.js**: Local whisper.cpp integration and model management
@@ -135,7 +168,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 
 - **App.jsx**: Main dictation interface with recording states
 - **ControlPanel.tsx**: Settings, history, model management UI
-- **OnboardingFlow.tsx**: 8-step first-time setup wizard
+- **OnboardingFlow.tsx**: First-time setup wizard over a versioned, route-based step machine (`src/components/onboarding/flow.ts`; session persisted in `onboardingSessionV2`). Routes vary by auth path (account vs guest), policy (agent allowed), and setup mode (cloud / BYOK / local / enterprise); step components live in `src/components/onboarding/`
 - **PostMigrationOnboarding.tsx**: One-time modal for users returning from the pre-Gizmo bundle ID; reuses `PermissionsSection` to walk through re-granting Microphone, Accessibility, and System Audio. Triggered by `postMigrationDetector.js` (see Helper Modules)
 - **SettingsPage.tsx**: Comprehensive settings interface
 - **WhisperModelPicker.tsx**: Model selection and download UI
@@ -144,6 +177,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 ### React Hooks (src/hooks/)
 
 - **useAudioRecording.js**: MediaRecorder API wrapper with error handling
+- **useAssistantPanel.js**: Assistant panel lifecycle (open/close choreography, thinking flourish, footer phases, pending voice commands, conversation session boundaries)
+- **useLiveTranscriptPanel.js**: Live transcript panel lifecycle (entrance choreography, buffered text scheduler, measure-then-reveal resize pipeline, preview IPC wiring)
+- **useMainWindowSizeOwner.js**: Single owner of the main window size ladder (panel > menu > toast > pill > base) and the dictation-error pill handoff
+- **useWindowResizeCompensation.js**: Masks split native setBounds frames via CSS-variable counter-translation
+- **useMainProcessNotifications.tsx**: Main-process notifications (hotkey fallback, GPU fallback, learned corrections) as toasts
 - **useClipboard.ts**: Clipboard operations hook
 - **useDialogs.ts**: Electron dialog integration
 - **useHotkey.js**: Hotkey state management
@@ -326,7 +364,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 - User names their agent during onboarding (step 6/8)
 - Name stored in localStorage and database
 - ReasoningService detects "Hey [AgentName]" patterns
-- AI processes command and removes agent reference from output
+- Standalone wake-word commands stream into the assistant panel (the address is stripped first, `stripAgentAddress`); a highlighted selection is edited in place by the dictation agent
 - Supports multiple AI providers (all models defined in `src/models/modelRegistryData.json`):
   - **OpenAI** (Responses API):
     - GPT-5.5 (`gpt-5.5`) - Latest flagship frontier model, 1M context
@@ -342,9 +380,13 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Previous Sonnet generation
     - Claude Opus 4.5 (`claude-opus-4-5`) - Earlier Opus model
   - **Google Gemini** (Direct API integration):
+    - Gemini 3.5 Flash (`gemini-3.5-flash`) - Latest fast, high-capability Gemini model
+    - Gemini 3.5 Flash Lite (`gemini-3.5-flash-lite`) - Fastest, most cost-effective 3.5 model
     - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Most capable Gemini model
+    - Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`) - Frontier-class performance at low cost (no thinking support, so no `supportsThinking` flag)
     - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
-    - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost
+    - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost (retired for new API keys; kept for existing ones)
+    - Gemma 4 (`gemma-4-31b-it`, `gemma-4-26b-a4b-it`) - Google's open Gemma 4 models served through the Gemini API
   - **Local**: GGUF models via llama.cpp (Qwen, Llama, Mistral, GPT-OSS)
 
 ### 8. Model Registry Architecture
@@ -369,7 +411,7 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 **Local model features:**
 
 - Each model has `hfRepo` for direct HuggingFace download URLs
-- `promptTemplate` defines the chat format (ChatML, Llama, Mistral)
+- Chat formatting comes from the GGUF's embedded template (llama-server runs with `--jinja`); the registry carries no prompt templates
 - Download URLs constructed as: `{baseUrl}/{hfRepo}/resolve/main/{fileName}`
 
 ### 9. API Integrations and Updates
@@ -411,14 +453,15 @@ The app can open OS-level settings for microphone permissions, sound input selec
 - `open-microphone-settings`: Opens microphone privacy settings
 - `open-sound-input-settings`: Opens sound/audio input device settings
 - `open-accessibility-settings`: Opens accessibility privacy settings (macOS only)
+- `open-login-items-settings`: Opens the login/startup items pane (macOS Login Items, Windows Startup Apps)
 
 **Platform-specific URLs**:
 
-| Platform | Microphone Privacy                                                           | Sound Input                                                  | Accessibility                                                                   |
-| -------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| macOS    | `x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone` | `x-apple.systempreferences:com.apple.preference.sound?input` | `x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility` |
-| Windows  | `ms-settings:privacy-microphone`                                             | `ms-settings:sound`                                          | N/A                                                                             |
-| Linux    | Manual (no URL scheme)                                                       | Manual (e.g., pavucontrol)                                   | N/A                                                                             |
+| Platform | Microphone Privacy                                                           | Sound Input                                                  | Accessibility                                                                   | Login Items                                                         |
+| -------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| macOS    | `x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone` | `x-apple.systempreferences:com.apple.preference.sound?input` | `x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility` | `x-apple.systempreferences:com.apple.LoginItems-Settings.extension` |
+| Windows  | `ms-settings:privacy-microphone`                                             | `ms-settings:sound`                                          | N/A                                                                             | `ms-settings:startupapps`                                           |
+| Linux    | Manual (no URL scheme)                                                       | Manual (e.g., pavucontrol)                                   | N/A                                                                             | N/A (XDG autostart entry, see `linuxAutostart.js`)                  |
 
 **UI Component** (`MicPermissionWarning.tsx`):
 
@@ -435,6 +478,11 @@ Enable with `--log-level=debug` or `OPENWHISPR_LOG_LEVEL=debug` (can be set in `
 - FFmpeg path resolution details
 - Audio level analysis
 - Complete reasoning pipeline debugging with stage-by-stage logging
+
+Packaged Windows builds keep logger output off stdout/stderr by default. Launch with
+`--console-logs` to opt into terminal output independently of the configured log level.
+Default INFO entries are not persisted in this mode; enabling debug logging retains them
+in the existing log file without enabling terminal output.
 
 ### 12. Windows Push-to-Talk
 
@@ -559,7 +607,7 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 **Architecture**:
 
 - `MeetingDetectionEngine` listens to events from `MeetingProcessDetector` and `AudioActivityDetector`
-- `GoogleCalendarManager` provides calendar context (imminent events, active meetings)
+- `CalendarReminderScheduler` provides calendar context (imminent events, active meetings) from the shared `calendar_events` table, fed by the Google/Microsoft/Apple calendar managers
 - All three sources feed into a unified notification pipeline
 
 **Process Detection** (known meeting apps — Zoom, Teams, Webex, FaceTime):
@@ -576,7 +624,7 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 
 **Calendar Reminders** (scheduled meetings):
 
-- `GoogleCalendarManager` fires `meetingDetectionEngine.handleCalendarReminder(event)` 1 minute before the scheduled start (`MEETING_REMINDER_LEAD_MS`) — no native OS notifications; all meeting prompts use the in-app overlay so they survive Focus/DND and screen-share notification muting
+- `CalendarReminderScheduler` fires `meetingDetectionEngine.handleCalendarReminder(event)` 1 minute before the scheduled start (`MEETING_REMINDER_LEAD_MS`) — no native OS notifications; all meeting prompts use the in-app overlay so they survive Focus/DND and screen-share notification muting
 - Calendar-sourced prompts show a Join primary action when the event has a meeting link (`getMeetingJoinUrl` in `src/helpers/meetingJoinUrl.js`, shared with the renderer's Upcoming Meetings join button) — Join opens the link and starts the note
 
 **UX Rules**:
@@ -602,15 +650,18 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 - Exponential backoff on consecutive failures: 2min → 4min → 8min → cap 30min
 - Reset to normal 2min interval on any successful sync
 
-### 17. Voice Agent Hotkey
+### 17. Voice Assistant Hotkey
 
-A dedicated global hotkey that starts a dictation whose transcript is sent straight to the dictation agent as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. Separate from the chat agent hotkey (`CHAT_AGENT_KEY`), which toggles the agent overlay window.
+A dedicated global hotkey that starts a dictation whose transcript is sent straight to the voice assistant as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. Standalone commands never type at an unverified cursor: with auto-paste enabled and a writable caret verified at capture time (an opaque `caret` session in `selectionManager.js`, revalidated before pasting; terminals and fields with a live selection excluded — the native probes check the focused element's own selection state, closing the clipboard-capture blind spots), the completed answer pastes at that caret and the pill returns to idle. Otherwise the answer streams into a floating assistant panel attached to the dictation pill (there is no separate assistant window) and, with auto-paste enabled, is also copied to the clipboard for manual paste (the Copy button confirms for six seconds). The pill window is content-protected while the panel is open (the panel never appears in screen shares).
 
 **Flow**:
 
-1. Hotkey pressed → `voiceAgent` slot callback in `main.js` → `windowManager.sendToggleVoiceAgent()` → `toggle-voice-agent` IPC to the main window
+1. Hotkey pressed → `voiceAgent` slot callback in `main.js` → `windowManager.sendToggleVoiceAgent()` → `toggle-voice-agent` IPC to the main window → recording capsule appears
 2. `useAudioRecording.js` starts a recording with `audioManager.setVoiceAgentRequested(true)` (any other start resets it to `false`)
-3. On transcription, `resolveReasoningRoute` consults `resolveDictationRouteKind()` (`src/helpers/dictationRouting.js`): a voice agent recording always takes the agent route; if the dictation agent is disabled or has no model, the raw transcript is returned — it never falls back to cleanup
+3. On transcription, `resolveReasoningRoute` consults `resolveDictationRouteKind()` (`src/helpers/dictationRouting.js`): a voice assistant recording always takes the agent route and never falls back to cleanup. The dictation agent's reachability only gates selection edits — a selection with the dictation agent unconfigured routes to the panel with the selected text quoted instead of editing in place
+4. Standalone commands (no text selected) run through the chat pipeline (`src/components/dictation/AssistantPanel.tsx`): chat tools (notes search/create/update, calendar, web search, clipboard), RAG memory, and the custom dictionary injected into the system prompt. Conversations persist in the `agent_conversations` table and are browsable from the ControlPanel chat
+5. Response delivery: a capture with `status: "editable"` (a focused writable non-terminal field with no selection) plus auto-paste banks a `deliverySessionId`; the completed answer is pasted via `paste-at-captured-target`, which revalidates the target and fails closed to the panel + clipboard on any change (`assistantResponseDelivery.ts`, `pasteAtCapturedTarget` in `selectionManager.js`). A follow-up spoken while the panel is already open stays panel-first. Cancelled or empty responses never paste and never touch the clipboard
+6. Selection edits are unchanged: highlighted text goes through the `dictationAgent` scope and is safely replaced in place — it never opens the panel
 
 **Storage & IPC**:
 
@@ -618,13 +669,39 @@ A dedicated global hotkey that starts a dictation whose transcript is sent strai
 - IPC handlers: `update-voice-agent-hotkey`, `get-voice-agent-key`
 - Hotkey slot: `voiceAgent` (tap-to-toggle; GNOME-native slot via `ToggleVoiceAgent` D-Bus method, KDE via KGlobalAccel, otherwise `globalShortcut`)
 
+**Panel**:
+
+- Esc collapses the panel; a Copy button copies the answer; a follow-up input takes typed questions. Esc while the command is still thinking cancels it; a command whose stream ends without content settles as `agentMode.chat.emptyResponse`
+- Pressing the hotkey again while the panel is open records a follow-up into the same conversation
+
 **UI**:
 
-- Settings → Hotkeys → "Voice Agent Hotkey" (with cross-slot conflict validation)
+- Settings → Hotkeys → "Voice Assistant Hotkey" (with cross-slot conflict validation)
 - Onboarding: optional step right after the dictation hotkey (activation) step
-- Requires the dictation agent to be enabled (Settings → AI Models) for the agent route to apply
+- Panel conversations run on the `chatIntelligence` scope (the chat's brain); in-place selection edits require the dictation agent (Settings → AI Models) and its `dictationAgent`/`dictationAgentVision` scopes
 
-**Tests**: `test/helpers/dictationRouting.test.js` (run with `node --test`)
+**Screen Context (opt-in)**:
+
+When "Share screen context" is enabled (Settings → AI Models → Voice Assistant → Screen Context, store key `voiceAgentScreenContext`, default off), each voice-assistant recording start captures the display the cursor is on and attaches it to the request as a base64 JPEG (long edge ≤ 1568 px).
+
+- Capture: `src/helpers/screenContextCapture.js` (main process; `screen.getCursorScreenPoint` + `desktopCapturer`). macOS requires the Screen Recording TCC permission (`useScreenRecordingPermission` hook + `PermissionCard` in `DictationAgentSettings`); Windows/Linux X11 need no permission; Linux Wayland is unsupported (capture silently skipped)
+- Encoding: `encodeWithinBudget()` walks a JPEG quality ladder (82 → 70 → 55), then falls back to a 1024 px resize, keeping the payload under `MAX_ENCODED_BYTES` (1.5 MB ≈ 2.05M base64 chars, inside the API's 2.8M cap). Each rung re-encodes the original bitmap, so quality drops never compound. A screen that still won't fit is dropped
+- Trigger: `useAudioRecording.js` calls `audioManager.beginScreenContextCapture()` at recording start (fire-and-forget); `consumeScreenContext()` (3s guard) is awaited when the request is built. The dictation overlay gets `setContentProtection` while the setting is on so the pill never appears in captures
+- Routing: the press-time screenshot is re-decided against the model that will actually answer. On BYOK, it attaches only when the chat model's provider client is image-wired (`supportsImages` on the `InferenceProvider`) and the model has `supportsVision` in `modelRegistryData.json`; on OpenWhispr Cloud, attachment is pending API vision routing for the chat path. Dropping the image never fails the command
+- Privacy: screenshots live only in renderer memory for one request — never written to disk, stored in history, or logged (loggers emit `hasScreenContext` booleans only)
+- IPC: `capture-screen-context`, `check-screen-recording-access`, `request-screen-recording-access`, `open-screen-recording-settings`, `screen-context-set-enabled`
+
+**Tests**: `test/helpers/dictationRouting.test.js`, `test/helpers/screenContextCapture.test.js` (run with `node --test`)
+
+### 18. Meeting Transcription: Echo, Duplicate, and Segment Pipeline
+
+Live meeting transcription runs two streams (mic + system-audio tap) and must keep the remote party's voice, as heard through the local speakers, out of the mic transcript. The policy lives in pure, unit-tested seams so it can be tuned without touching the IPC plumbing:
+
+- **Audio layer**: `meetingEchoLeakDetector.js` correlates mic chunks against recent system audio; `meetingMicGate.js` turns chunk RMS/peak (+ a "system speaking" lookback) into a `send` / `zero` / `skip` verdict that `ipcHandlers.js` applies in `dispatchMeetingAudioBuffer` (streaming) and `transcribeLocalMeetingChunk` (local)
+- **Text layer**: `meetingMicHoldback.js` decides whether a mic final is risky (held back), a duplicate of recent system text (dropped), or racing an arriving system final (retracted); the `ipcHandlers.js` adapters (`shouldSkipDuplicateMicSegment`, `hasRiskyMicDuplicateProfile`, `removeRacingMicEntriesFor`, `removePendingMicFinalsFor`) apply the results to closure state and emit `meeting-transcription-segment` events (`partial` / `final` / `retract`)
+- **Renderer**: `src/stores/meetingSegmentReducer.ts` is the pure `(state, event, deps) → reduction` transition for those events (timestamp-sorted insert, retract by exact match, per-source partial slots); `meetingRecordingStore.ts` supplies `mintSegmentId` / `decorateFinal` (speaker identifications, provisional speaker, locks — must not write to the store) and applies the reduction. Tests: `test/stores/meetingSegmentReducer.test.js`, `test/stores/meetingRecordingStoreImports.test.js`
+- **Regression pins**: BYOK `session.update` payload and the disconnect-commit callback (`test/helpers/openaiRealtimeStreaming.test.js`, `tinfoilRealtimeStreaming.test.js`), token-endpoint wire bodies (`test/helpers/realtimeTokenProviders.test.js`). Tests named `characterization: …` pin known oddities on purpose — flip them deliberately when changing policy
+- **Fixtures**: `test/helpers/harness/pcmFixtures.js` — deterministic 24 kHz PCM generators (`makeSine`, `makeSeededNoise`, `mix`, `delayBy`, `toInt16Buffer`, `chunkBuffer`, …) used by the gate and echo-detector tests
 
 ## Development Guidelines
 
@@ -653,6 +730,26 @@ const { t } = useTranslation();
 3. Keep `{{variable}}` interpolation syntax for dynamic values
 4. Do NOT translate: brand names (OpenWhispr, Pro), technical terms (Markdown, Signal ID), format names (MP3, WAV), AI system prompts
 5. Group keys by feature area (e.g., `notes.editor.*`, `referral.toasts.*`)
+
+### Image and Icon Assets — REQUIRED
+
+Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`). Vector provider/brand marks live in `src/assets/icons/`.
+
+**Rules**:
+
+1. **Always `import` the asset**; never write a literal path like `/assets/foo.webp`. Packaged builds load the renderer from a `file://` origin, so root-relative paths resolve to nothing. Importing lets Vite fingerprint the file and rewrite the URL:
+
+   ```tsx
+   import microphoneIcon from "@/assets/onboarding-permission-microphone.webp";
+   <img src={microphoneIcon} ... />;
+   ```
+
+2. **WebP, lossless** for UI art with hard edges or alpha — `cwebp -lossless -z 9 -alpha_q 100 in.png -o out.webp` (roughly 40–55% smaller than PNG). Reserve lossy for photographic art.
+3. **Author at 2x the CSS slot** and no larger (a 44px slot gets an 88px asset). Retina-sharp without paying for pixels that get downscaled away.
+4. **Bake rounded corners into the artwork as transparency** rather than adding a CSS `rounded-*` on the `<img>` — CSS rounding on top of already-rounded art clips the corners twice.
+5. **Decorative images take `alt=""` plus `aria-hidden="true"`.** Most icons sit beside a visible label that already names them (e.g. the permission rows), so a descriptive `alt` makes screen readers announce the same thing twice. Only write real `alt` text when the image is the _only_ source of that information.
+6. **Always set explicit `width`/`height`** matching the CSS size, to reserve layout space before decode. Add `decoding="async"` and `draggable={false}` (in Electron a draggable image can be dragged out of the window).
+7. **Assets under 4 KB are inlined** by Vite as base64 data URIs, so they will not appear in `dist/assets/`. Grep the JS chunks for `data:image/webp;base64,` before concluding an asset went missing.
 
 ### Adding New Features
 
@@ -701,8 +798,10 @@ const { t } = useTranslation();
    - macOS: Check accessibility permissions (required for AppleScript paste)
    - Linux: Native `linux-fast-paste` binary (XTest) is tried first, works for X11 and XWayland apps
      - X11: xdotool fallback if native binary unavailable
-     - GNOME/KDE Wayland: xdotool (XWayland apps) → ydotool (requires ydotoold daemon)
-     - wlroots Wayland (Sway, Hyprland): wtype → xdotool → ydotool
+     - Hyprland Wayland: wtype → sendshortcut → uinput/ydotool
+     - Sway/wlroots Wayland: wtype → uinput/ydotool
+     - GNOME/KDE Wayland: portal keysyms → uinput/ydotool
+     - Physical Wayland fallbacks use Shift+Insert to avoid layout-sensitive KEY_V
    - Windows: PowerShell SendKeys (built-in) or nircmd.exe (bundled)
 
 4. **Build Issues**:
@@ -746,6 +845,7 @@ const { t } = useTranslation();
 - Shows in dock with indicator dot when running (LSUIElement: false)
 - whisper.cpp bundled for both arm64 and x64
 - System settings accessible via `x-apple.systempreferences:` URL scheme
+- **Launch at login**: `setLoginItemSettings()`, which routes through `SMAppService` on macOS 13+. `openAsHidden` is deprecated and does nothing, so `wasOpenedAtLogin` is what sends a login launch to the tray. An item can register and still report `status: "requires-approval"` until the user allows it under System Settings → General → Login Items
 
 **Windows**:
 
@@ -754,6 +854,9 @@ const { t } = useTranslation();
 - Sound settings at `ms-settings:sound`
 - NSIS installer for distribution
 - whisper.cpp bundled for x64
+- **Launch at login**: `HKCU\...\Run` entry written by Electron, named after the AppUserModelId, carrying `--hidden` so a login launch goes to the tray
+  - Read the state from `executableWillLaunchAtLogin`; `openAtLogin` misses a startup app disabled from Task Manager or Settings
+  - `resources/nsis/installer.nsh` removes the `Run` and `StartupApproved\Run` values on uninstall (but not on update), which Electron itself never cleans up
 - **Push-to-Talk**: Native key listener binary (`windows-key-listener.exe`) enables true push-to-talk
   - Uses Windows Low-Level Keyboard Hook (`WH_KEYBOARD_LL`)
   - Supports compound hotkeys (e.g., `Ctrl+Shift+F11`)
@@ -769,10 +872,15 @@ const { t } = useTranslation();
 - No standardized URL scheme for system settings (user must open manually)
 - Privacy settings button hidden in UI (not applicable on Linux)
 - Recommend `pavucontrol` for audio device management
+- **Launch at login**: XDG autostart entry at `~/.config/autostart/open-whispr.desktop` (see `linuxAutostart.js`), since Electron's `setLoginItemSettings()` does nothing on Linux
+  - Disabling it from GNOME Tweaks or KDE's autostart editor is reflected in the Settings toggle
+  - "Start minimized" is handled app-side by the `startMinimized` setting, not by the desktop entry
 - **Clipboard paste tools** (at least one required for auto-paste):
   - **X11**: `xdotool` (recommended)
-  - **Wayland** (non-GNOME): `wtype` (requires virtual keyboard protocol) or `xdotool` (works via XWayland, recommended for Electron apps)
-  - **GNOME Wayland**: `xdotool` for XWayland apps only (native Wayland apps require manual paste)
+  - **Hyprland Wayland**: `wtype`, then `hyprctl` sendshortcut (avoids the sendshortcut stuck-modifier bug when wtype is installed)
+  - **Sway/wlroots Wayland**: `wtype` (requires the virtual keyboard protocol)
+  - **GNOME/KDE Wayland**: RemoteDesktop portal keysyms, then uinput/ydotool
+  - **Wayland physical fallback**: Shift+Insert avoids layout-sensitive KEY_V; `ydotool` requires the `ydotoold` daemon
   - Terminal detection: Auto-detects terminal emulators and uses Ctrl+Shift+V
   - Fallback: Text copied to clipboard with manual paste instructions
 - **GNOME Wayland global hotkeys**:
@@ -801,7 +909,7 @@ const { t } = useTranslation();
 - Process timeout protection (5 minutes)
 - Meeting detection uses event-driven OS APIs (near-zero CPU) with polling fallback
 - Process list cache shared between detectors to avoid duplicate `tasklist`/`pgrep` calls
-- Google Calendar sync uses exponential backoff to avoid hammering API on network failures
+- Calendar sync (Google/Microsoft) uses exponential backoff to avoid hammering APIs on network failures
 
 ## Security Considerations
 

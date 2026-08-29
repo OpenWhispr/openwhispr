@@ -1,0 +1,52 @@
+# Weekly live check that every STT provider still accepts the app's credential
+# flow — WebSocket handshake for realtime providers, a real transcription for
+# batch providers with a bespoke request shape. Deliberately NOT part of PR CI:
+# it exercises external APIs and its failures are provider news, not code
+# regressions. Same pattern as llm-canary.yml.
+name: stt-canary
+
+on:
+  schedule:
+    - cron: "30 6 * * 1" # Mondays 06:30 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run canary
+        id: canary
+        env:
+          STT_CANARY_OPENAI_KEY: ${{ secrets.STT_CANARY_OPENAI_KEY }}
+          STT_CANARY_DEEPGRAM_KEY: ${{ secrets.STT_CANARY_DEEPGRAM_KEY }}
+          STT_CANARY_ASSEMBLYAI_KEY: ${{ secrets.STT_CANARY_ASSEMBLYAI_KEY }}
+          STT_CANARY_TINFOIL_KEY: ${{ secrets.STT_CANARY_TINFOIL_KEY }}
+          STT_CANARY_GEMINI_KEY: ${{ secrets.STT_CANARY_GEMINI_KEY }}
+        run: |
+          set -o pipefail
+          node scripts/stt-canary.mjs | tee canary-report.md
+      - name: File or update failure issue
+        if: failure() && steps.canary.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="STT canary: provider credential flow failing"
+          body="$(cat canary-report.md)
+
+          _Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}_"
+          existing=$(gh issue list --label stt-canary --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" --label stt-canary
+          fi

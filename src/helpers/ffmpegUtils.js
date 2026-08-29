@@ -3,6 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const debugLogger = require("./debugLogger");
+const { createAbortError } = require("./abortError");
 
 let cachedFFmpegPath = null;
 
@@ -195,6 +196,7 @@ function parseWavFormat(wavBuffer) {
 
     if (chunkId === "fmt ") {
       return {
+        audioFormat: wavBuffer.readUInt16LE(offset + 8),
         channels: wavBuffer.readUInt16LE(offset + 10),
         sampleRate: wavBuffer.readUInt32LE(offset + 12),
         bitsPerSample: wavBuffer.readUInt16LE(offset + 22),
@@ -265,10 +267,21 @@ function computeFloat32RMS(float32Buffer) {
   return Math.sqrt(sumSquares / numSamples);
 }
 
+function parseFfmpegDuration(stderr) {
+  const match = stderr?.match(/Duration:\s*(\d+):([0-5]\d):([0-5]\d(?:\.\d+)?)/);
+  if (!match) return null;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
 function splitAudioFile(inputPath, outputDir, options = {}) {
-  const { segmentDuration = 600, audioBitrate = "128k" } = options;
+  const { segmentDuration = 600, audioBitrate = "128k", signal } = options;
 
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
+
     const ffmpegPath = getFFmpegPath();
     if (!ffmpegPath) {
       reject(new Error("FFmpeg not found - required for audio splitting"));
@@ -310,15 +323,31 @@ function splitAudioFile(inputPath, outputDir, options = {}) {
 
     let stderr = "";
 
+    const onAbort = () => {
+      try {
+        proc.kill("SIGKILL");
+      } catch {
+        // an uncaught throw here would escape the abort dispatch
+      }
+      reject(createAbortError());
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+
     proc.stderr.on("data", (data) => {
       stderr += data.toString();
     });
 
     proc.on("error", (error) => {
+      signal?.removeEventListener("abort", onAbort);
+      if (signal?.aborted) return;
       reject(new Error(`FFmpeg split error: ${error.message}`));
     });
 
+    // The kill lands here as a non-zero exit; returning early keeps a cancel
+    // from being logged and reported as an ffmpeg failure.
     proc.on("close", (code) => {
+      signal?.removeEventListener("abort", onAbort);
+      if (signal?.aborted) return;
       if (code !== 0) {
         const stderrPreview = stderr.slice(-500).trim();
         debugLogger.debug("FFmpeg split failed", { code, stderr: stderrPreview });
@@ -341,8 +370,9 @@ function splitAudioFile(inputPath, outputDir, options = {}) {
         return;
       }
 
-      debugLogger.debug("FFmpeg split complete", { chunkCount: chunks.length });
-      resolve(chunks);
+      const durationSeconds = parseFfmpegDuration(stderr);
+      debugLogger.debug("FFmpeg split complete", { chunkCount: chunks.length, durationSeconds });
+      resolve({ chunkPaths: chunks, durationSeconds });
     });
   });
 }
@@ -430,6 +460,7 @@ module.exports = {
   parseWavFormat,
   convertToWav,
   splitAudioFile,
+  parseFfmpegDuration,
   wavToFloat32Samples,
   computeFloat32RMS,
   mergeAudioSegments,

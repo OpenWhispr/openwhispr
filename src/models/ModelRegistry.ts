@@ -1,6 +1,7 @@
 import modelDataRaw from "./modelRegistryData.json";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
+import type { InferenceMode } from "../types/electron";
 
 export interface ModelDefinition {
   id: string;
@@ -15,13 +16,16 @@ export interface ModelDefinition {
   hfRepo: string;
   recommended?: boolean;
   supportsThinking?: boolean;
+  // Optional MTP speculative-decoding drafter downloaded alongside the main GGUF.
+  draftHfRepo?: string;
+  draftFileName?: string;
+  draftSizeBytes?: number;
 }
 
 export interface LocalProviderData {
   id: string;
   name: string;
   baseUrl: string;
-  promptTemplate: string;
   models: ModelDefinition[];
 }
 
@@ -30,7 +34,6 @@ export interface ModelProvider {
   name: string;
   baseUrl: string;
   models: ModelDefinition[];
-  formatPrompt(text: string, systemPrompt: string): string;
   getDownloadUrl(model: ModelDefinition): string;
 }
 
@@ -41,6 +44,7 @@ export interface CloudModelDefinition {
   descriptionKey?: string;
   disableThinking?: boolean;
   supportsThinking?: boolean;
+  supportsVision?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
 }
@@ -130,12 +134,6 @@ if (cachedTinfoilModels.length > 0) {
   }
 }
 
-function createPromptFormatter(template: string): (text: string, systemPrompt: string) => string {
-  return (text: string, systemPrompt: string) => {
-    return template.replace("{system}", systemPrompt).replace("{user}", text);
-  };
-}
-
 class ModelRegistry {
   private static instance: ModelRegistry;
   private providers = new Map<string, ModelProvider>();
@@ -199,14 +197,11 @@ class ModelRegistry {
     const localProviders = modelData.localProviders;
 
     for (const providerData of localProviders) {
-      const formatPrompt = createPromptFormatter(providerData.promptTemplate);
-
       this.registerProvider({
         id: providerData.id,
         name: providerData.name,
         baseUrl: providerData.baseUrl,
         models: providerData.models,
-        formatPrompt,
         getDownloadUrl(model: ModelDefinition): string {
           return `${providerData.baseUrl}/${model.hfRepo}/resolve/main/${model.fileName}`;
         },
@@ -237,6 +232,10 @@ export function isEnterpriseProvider(value: unknown): value is EnterpriseProvide
   return typeof value === "string" && (ENTERPRISE_PROVIDERS as readonly string[]).includes(value);
 }
 
+export function enterpriseProviderName(provider: EnterpriseProvider): string {
+  return modelRegistry.getEnterpriseProviders().find((p) => p.id === provider)?.name ?? provider;
+}
+
 export function toReasoningModel(m: CloudModelDefinition): ReasoningModel {
   return {
     value: m.id,
@@ -244,6 +243,23 @@ export function toReasoningModel(m: CloudModelDefinition): ReasoningModel {
     description: m.description,
     descriptionKey: m.descriptionKey,
   };
+}
+
+export function isProviderValidForMode(provider: string, mode: InferenceMode): boolean {
+  switch (mode) {
+    case "providers":
+      return (
+        provider === "custom" ||
+        provider === "openrouter" ||
+        modelRegistry.getCloudProviders().some((p) => p.id === provider)
+      );
+    case "local":
+      return modelRegistry.getAllProviders().some((p) => p.id === provider);
+    case "enterprise":
+      return isEnterpriseProvider(provider);
+    default:
+      return true;
+  }
 }
 
 function buildReasoningProviders(): ReasoningProviders {
@@ -375,12 +391,26 @@ export function getModelProvider(modelId: string): string {
       modelId.includes("llama") ||
       modelId.includes("mistral") ||
       modelId.includes("lfm2") ||
+      modelId.includes("gemma") ||
       modelId.includes("gpt-oss-20b-mxfp4")
     )
       return "local";
   }
 
-  return model?.provider || "openai";
+  // No default: an unrecognized model must fail closed at dispatch instead of
+  // being routed to OpenAI with whatever key that attaches.
+  return model?.provider || "";
+}
+
+// Local catalog IDs group models for selection and downloads, but all execute
+// through the single local llama.cpp inference provider.
+export function resolveInferenceProvider(
+  configuredProvider: string | undefined,
+  modelId: string
+): string {
+  const provider = configuredProvider?.trim();
+  if (provider && modelRegistry.getProvider(provider)) return "local";
+  return provider || getModelProvider(modelId);
 }
 
 export function getTranscriptionProviders(): TranscriptionProviderData[] {
@@ -457,8 +487,12 @@ export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiAp
   // OpenRouter's vendor-prefixed ids (openai/gpt-4o, anthropic/claude-…) speak
   // standard Chat Completions. Scoped to the provider so vendor-prefixed ids on
   // custom endpoints keep the request shape they had before OpenRouter landed.
+  // Sampling params pass through to the upstream vendor, so a model the
+  // registry knows rejects temperature (Claude Opus 4.7+, #1417) must keep it
+  // omitted here too — OpenRouter forwards the 400 rather than stripping it.
   if (provider === "openrouter" && modelId.includes("/")) {
-    return { tokenParam: "max_tokens", supportsTemperature: true };
+    const upstream = getCloudModel(modelId.slice(modelId.lastIndexOf("/") + 1));
+    return { tokenParam: "max_tokens", supportsTemperature: upstream?.supportsTemperature ?? true };
   }
 
   // Fallback for models not in the registry (custom model IDs, etc.)

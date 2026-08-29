@@ -12,6 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const {
   downloadFile,
   extractZip,
@@ -28,6 +29,25 @@ const VERSION_OVERRIDE = process.env.WINDOWS_FAST_PASTE_VERSION || null;
 
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 
+function supportsSelectionCopy(binaryPath) {
+  try {
+    const result = spawnSync(binaryPath, ["--capabilities"], {
+      stdio: "pipe",
+      windowsHide: true,
+    });
+    return result.status === 0 && result.stdout.toString().includes("selection-copy-v1");
+  } catch {
+    return false;
+  }
+}
+
+function discardIncompatibleBinary(outputPath, reason) {
+  try {
+    fs.rmSync(outputPath, { force: true });
+  } catch {}
+  console.warn(`[windows-fast-paste] ${reason}`);
+}
+
 async function main() {
   if (process.platform !== "win32") {
     console.log("[windows-fast-paste] Skipping download (not Windows)");
@@ -38,9 +58,15 @@ async function main() {
   const outputPath = path.join(BIN_DIR, BINARY_NAME);
 
   if (fs.existsSync(outputPath) && !forceDownload) {
-    console.log("[windows-fast-paste] Already exists (use --force to re-download)");
-    console.log(`  ${outputPath}`);
-    return;
+    if (supportsSelectionCopy(outputPath)) {
+      console.log("[windows-fast-paste] Already exists and supports selection copy");
+      console.log(`  ${outputPath}`);
+      return;
+    }
+    discardIncompatibleBinary(
+      outputPath,
+      "Discarded existing binary without selection-copy-v1 support; re-downloading"
+    );
   }
 
   if (VERSION_OVERRIDE) {
@@ -87,6 +113,13 @@ async function main() {
     if (fs.existsSync(binaryPath)) {
       fs.copyFileSync(binaryPath, outputPath);
       setExecutable(outputPath);
+      if (!supportsSelectionCopy(outputPath)) {
+        discardIncompatibleBinary(
+          outputPath,
+          "Downloaded binary lacks selection-copy-v1 support and will not be packaged"
+        );
+        throw new Error("Downloaded binary does not support selection-copy-v1");
+      }
       console.log(`  Extracted to: ${BINARY_NAME}`);
     } else {
       throw new Error(`Binary not found in archive: ${BINARY_NAME}`);

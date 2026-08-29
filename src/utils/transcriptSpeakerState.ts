@@ -206,3 +206,16 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
       speakerLockSource: segment.speakerLockSource,
     }))
   );
+
+// A speaker mapping renames a whole diarization cluster; a locked segment is the
+// user correcting one stretch of it. The correction has to outrank the cluster,
+// or reassigning part of a mis-split block appears to do nothing (#1533). This
+// mirrors the precedence the exporter already applies in transcriptFormatter.js.
+export const resolveSegmentSpeakerName = (
+  segment: TranscriptSegment,
+  speakerMappings?: Record<string, string>
+): string | undefined => {
+  if (segment.speakerName && isTranscriptSpeakerLocked(segment)) return segment.speakerName;
+  const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
+  return mapped || segment.speakerName;
+};

@@ -36,10 +36,19 @@ const PERSONAL_EMAIL_DOMAINS = new Set<string>([
 ]);
 
 export function emailDomain(email: string): string {
-  const at = email.indexOf("@");
-  return at === -1 ? "" : email.slice(at + 1).toLowerCase();
+  if (typeof email !== "string") return "";
+  const trimmed = email.trim();
+  const angle = /<([^<>]+)>/.exec(trimmed);
+  const addr = (angle ? angle[1] : trimmed).trim();
+  const at = addr.lastIndexOf("@");
+  if (at === -1) return "";
+  return addr
+    .slice(at + 1)
+    .trim()
+    .toLowerCase();
 }
 
 export function isPersonalEmailDomain(domain: string): boolean {
+  if (typeof domain !== "string") return false;
   return PERSONAL_EMAIL_DOMAINS.has(domain.toLowerCase());
 }

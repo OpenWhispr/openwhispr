@@ -44,8 +44,42 @@ function pcm16ToFloat32(pcmBuffer) {
   return output;
 }
 
+// Energy floors below which a meeting channel is treated as silent. Shared by
+// the echo-leak detector and the auto-end activity monitor so both agree on
+// what "audible" means.
+const MEETING_MIC_ACTIVITY_RMS = 0.006;
+const MEETING_SYSTEM_ACTIVITY_RMS = 0.004;
+
+// RMS of raw s16le PCM in [0, 1]. Tolerates the odd-length and unaligned
+// buffers that helper stdout reads produce (an Int16Array view would throw on
+// an odd byteOffset), which is why it doesn't reuse pcm16ToFloat32.
+function computePcm16Rms(pcmBuffer) {
+  if (!pcmBuffer || pcmBuffer.length < 2) return 0;
+
+  const sampleCount = pcmBuffer.length >> 1;
+  let sumSquares = 0;
+
+  if ((pcmBuffer.byteOffset & 1) === 0) {
+    const samples = new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, sampleCount);
+    for (let i = 0; i < sampleCount; i++) {
+      const sample = samples[i] / 32768;
+      sumSquares += sample * sample;
+    }
+  } else {
+    for (let i = 0; i < sampleCount; i++) {
+      const sample = pcmBuffer.readInt16LE(i * 2) / 32768;
+      sumSquares += sample * sample;
+    }
+  }
+
+  return Math.sqrt(sumSquares / sampleCount);
+}
+
 module.exports = {
   downsample24kTo16k,
   pcm16ToWav,
   pcm16ToFloat32,
+  computePcm16Rms,
+  MEETING_MIC_ACTIVITY_RMS,
+  MEETING_SYSTEM_ACTIVITY_RMS,
 };

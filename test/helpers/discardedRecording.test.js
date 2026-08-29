@@ -38,3 +38,21 @@ test("handles missing settings", async () => {
   assert.equal(shouldSaveDiscardedRecording(null, 3), false);
   assert.equal(shouldSaveDiscardedRecording(undefined, 3), false);
 });
+
+test("uses the policy-effective history setting without changing raw settings", async () => {
+  const { shouldSaveDiscardedRecording } = await load();
+  const settings = { ...base };
+  const policyState = {
+    status: "managed",
+    appVersion: "1.8.1",
+    policy: {
+      dataRetention: {
+        audioRetentionMaxDays: 7,
+        localHistoryMode: "always_off",
+      },
+    },
+  };
+
+  assert.equal(shouldSaveDiscardedRecording(settings, 3, policyState), false);
+  assert.deepEqual(settings, base);
+});
