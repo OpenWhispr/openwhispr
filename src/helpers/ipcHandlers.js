@@ -123,6 +123,7 @@ const {
 
 const {
   ALLOWED_MEETING_PROVIDERS,
+  NON_STREAMING_MEETING_PROVIDERS,
   getMeetingStreamingClient,
   getMeetingConnectionKey,
 } = require("./meetingStreamingProviders");
@@ -6816,6 +6817,10 @@ class IPCHandlers {
     let meetingLocalModel = null;
     let meetingLocalLanguage = null;
     let meetingLocalTranscribing = false;
+    // Set for self-hosted note recording: same buffering and chunking as local
+    // mode, but each chunk is POSTed to the user's server instead of decoded
+    // on device. Null for every other provider.
+    let meetingSelfHostedRoute = null;
     let meetingPendingMicChunks = [];
     let meetingPendingMicFinals = [];
     let meetingPendingMicFinalTimer = null;
@@ -7169,6 +7174,30 @@ class IPCHandlers {
       return started;
     };
 
+    // Mirrors the retry/upload self-hosted request: file, model, language. The
+    // wire contract is documented in examples/custom-asr-shim.
+    const transcribeSelfHostedMeetingChunk = async (wav) => {
+      const formData = new FormData();
+      formData.append("file", new Blob([wav], { type: "audio/wav" }), "audio.wav");
+      if (meetingSelfHostedRoute.model) {
+        formData.append("model", meetingSelfHostedRoute.model);
+      }
+      if (meetingSelfHostedRoute.language) {
+        formData.append("language", meetingSelfHostedRoute.language);
+      }
+
+      const response = await proxyFetch(meetingSelfHostedRoute.endpoint, {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new Error(`Self-hosted API Error: ${response.status} ${errorText}`.trim());
+      }
+      const data = await response.json();
+      return { success: true, text: typeof data?.text === "string" ? data.text : "" };
+    };
+
     const transcribeLocalMeetingChunk = async (source) => {
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
@@ -7206,7 +7235,9 @@ class IPCHandlers {
 
       try {
         let result;
-        if (meetingLocalProvider === "nvidia") {
+        if (meetingSelfHostedRoute) {
+          result = await transcribeSelfHostedMeetingChunk(wav);
+        } else if (meetingLocalProvider === "nvidia") {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: meetingLocalModel,
           });
@@ -7409,6 +7440,7 @@ class IPCHandlers {
       meetingLocalModel = null;
       meetingLocalLanguage = null;
       meetingLocalTranscribing = false;
+      meetingSelfHostedRoute = null;
       meetingPendingMicChunks = [];
       resetPendingMicFinals();
       meetingAecEnabled = false;
@@ -7733,7 +7765,8 @@ class IPCHandlers {
         return { success: false, error: `Unsupported provider: ${options.provider}` };
       }
 
-      if (options.provider === "local") {
+      // Nothing to pre-warm: on-device and self-hosted chunking open no socket.
+      if (NON_STREAMING_MEETING_PROVIDERS.has(options.provider)) {
         return { success: true };
       }
 
@@ -7879,9 +7912,36 @@ class IPCHandlers {
           });
         }
 
-        if (options.provider === "local") {
+        if (NON_STREAMING_MEETING_PROVIDERS.has(options.provider)) {
+          if (options.provider === "self-hosted") {
+            // Resolved by the same router dictation, retry, and upload use, so
+            // endpoint shape (Azure included) and validation stay in one place.
+            // Anything but a usable self-hosted route fails the start: meeting
+            // audio must never reach a provider the user opted out of.
+            const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+            const route = resolveTranscriptionRoute({
+              settings: {
+                transcriptionMode: "self-hosted",
+                remoteTranscriptionUrl: options.url,
+                remoteTranscriptionModel: options.model,
+              },
+              request: { effectiveLanguage: options.language || undefined },
+            });
+            if (route.transport !== "http-batch" || route.provider !== "self-hosted") {
+              return {
+                success: false,
+                error:
+                  route.transport === "error"
+                    ? route.message
+                    : "Self-hosted transcription URL is not configured",
+              };
+            }
+            meetingSelfHostedRoute = route;
+          }
+
           meetingLocalMode = true;
-          meetingLocalProvider = options.localProvider || "whisper";
+          meetingLocalProvider =
+            options.provider === "self-hosted" ? "self-hosted" : options.localProvider || "whisper";
           meetingLocalModel = options.localModel || null;
           meetingLocalLanguage = options.language || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
@@ -7899,10 +7959,10 @@ class IPCHandlers {
             event,
             systemAudioMode,
             systemAudioStrategy,
-            "in local meeting mode"
+            meetingSelfHostedRoute ? "in self-hosted meeting mode" : "in local meeting mode"
           ));
 
-          debugLogger.debug("Meeting transcription started in local mode", {
+          debugLogger.debug("Meeting transcription started in chunked mode", {
             provider: meetingLocalProvider,
             systemAudioMode,
             systemAudioStrategy,

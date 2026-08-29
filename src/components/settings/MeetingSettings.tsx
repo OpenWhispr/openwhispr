@@ -7,6 +7,7 @@ import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
+import SelfHostedPanel from "../SelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 import { getStreamingTranscriptionProviders } from "../../models/ModelRegistry";
@@ -54,6 +55,10 @@ export function MeetingTranscriptionPanel() {
     meetingCloudTranscriptionBaseUrl,
     setMeetingCloudTranscriptionBaseUrl,
     setMeetingCloudTranscriptionMode,
+    meetingRemoteTranscriptionUrl,
+    setMeetingRemoteTranscriptionUrl,
+    meetingRemoteTranscriptionModel,
+    setMeetingRemoteTranscriptionModel,
   } = useSettingsStore();
   const {
     modes: transcriptionModes,
@@ -86,8 +91,6 @@ export function MeetingTranscriptionPanel() {
         label: t("settingsPage.transcription.modes.selfHosted"),
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
-        disabled: true,
-        badge: t("common.comingSoon"),
       },
     ],
     "transcription",
@@ -96,7 +99,6 @@ export function MeetingTranscriptionPanel() {
   );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
-    if (mode === "self-hosted") return;
     if (mode === "openwhispr" && !isSignedIn) {
       startOnboarding();
       return;
@@ -154,6 +156,20 @@ export function MeetingTranscriptionPanel() {
 
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
       {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+      {effectiveTranscriptionMode === "self-hosted" && (
+        <>
+          <SelfHostedPanel
+            service="transcription"
+            url={meetingRemoteTranscriptionUrl}
+            onUrlChange={setMeetingRemoteTranscriptionUrl}
+            model={meetingRemoteTranscriptionModel}
+            onModelChange={setMeetingRemoteTranscriptionModel}
+          />
+          <p className="text-xs text-muted-foreground/80 px-1">
+            {t("settingsPage.speechToText.selfHostedChunkedNote")}
+          </p>
+        </>
+      )}
       <MeetingSpeakerDetectionRow />
     </div>
   );

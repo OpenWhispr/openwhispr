@@ -2104,7 +2104,7 @@
         "noteRecording": "筆記錄音",
         "upload": "上傳音訊"
       },
-      "selfHostedStreamingNote": "需要支援串流轉錄的伺服器。"
+      "selfHostedChunkedNote": "音訊會以短片段傳送至伺服器的 /audio/transcriptions 端點，與聽寫使用相同的 OpenAI 相容介面。在多人長時間錄音中，分段轉錄的準確度可能低於即時轉錄。"
     },
     "llms": {
       "title": "語言模型",
