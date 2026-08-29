@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Meetings
+
+- **Windows meetings that recorded only your own voice.** On some machines the system-audio helper starts up reporting itself healthy and then captures nothing but digital silence, so meeting notes contained your microphone and none of the other participants — with no error anywhere in the app. The check that picked the capture method only asked Windows whether loopback capture was *available*, never whether any audio was actually arriving, so the working fallback was never reached. The helper now compares its own output against what your speakers or headphones are really playing, and a recording that hits this switches to the fallback a few seconds in and keeps the rest of the call. (#1935, thanks @KishenG)
+
 ## [1.9.2] - 2026-08-29
 
 A repair release for two 1.9.1 regressions. Windows desktop sign-in works again — every provider button had gone dead — and the three transcription paths that only failed in packaged builds are back on all platforms. Meeting prompts also pick up swipe-to-dismiss.
