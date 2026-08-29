@@ -783,28 +783,24 @@ export default function TranscriptionModelPicker({
   };
 
   const {
-    downloadingModel,
-    downloadProgress,
+    downloads: whisperDownloads,
     downloadModel,
     deleteModel,
     isDownloadingModel,
-    isInstalling,
     cancelDownload,
-    isCancelling,
+    isCancellingModel,
   } = useModelDownload({
     modelType: "whisper",
     onDownloadComplete: loadLocalModels,
   });
 
   const {
-    downloadingModel: downloadingParakeetModel,
-    downloadProgress: parakeetDownloadProgress,
+    downloads: parakeetDownloads,
     downloadModel: downloadParakeetModel,
     deleteModel: deleteParakeetModel,
     isDownloadingModel: isDownloadingParakeetModel,
-    isInstalling: isInstallingParakeet,
     cancelDownload: cancelParakeetDownload,
-    isCancelling: isCancellingParakeet,
+    isCancellingModel: isCancellingParakeetModel,
   } = useModelDownload({
     modelType: "parakeet",
     onDownloadComplete: loadParakeetModels,
@@ -967,39 +963,35 @@ export default function TranscriptionModelPicker({
   const progressDisplay = useMemo(() => {
     if (!effectiveLocal) return null;
 
-    if (downloadingModel && internalLocalProvider === "whisper") {
-      const modelInfo = WHISPER_MODEL_INFO[downloadingModel];
-      return (
-        <DownloadProgressBar
-          modelName={modelInfo?.name || downloadingModel}
-          progress={downloadProgress}
-          isInstalling={isInstalling}
-        />
-      );
-    }
+    const activeDownloads = [
+      ...Object.values(whisperDownloads),
+      ...Object.values(parakeetDownloads),
+    ];
+    if (activeDownloads.length === 0) return null;
 
-    if (downloadingParakeetModel && internalLocalProvider === "nvidia") {
-      const modelInfo = PARAKEET_MODEL_INFO[downloadingParakeetModel];
-      return (
-        <DownloadProgressBar
-          modelName={modelInfo?.name || downloadingParakeetModel}
-          progress={parakeetDownloadProgress}
-          isInstalling={isInstallingParakeet}
-        />
-      );
-    }
-
-    return null;
-  }, [
-    downloadingModel,
-    downloadProgress,
-    isInstalling,
-    downloadingParakeetModel,
-    parakeetDownloadProgress,
-    isInstallingParakeet,
-    effectiveLocal,
-    internalLocalProvider,
-  ]);
+    return (
+      <div className="space-y-2">
+        {activeDownloads.map((status) => {
+          const modelInfo =
+            status.modelType === "whisper"
+              ? WHISPER_MODEL_INFO[status.modelId]
+              : PARAKEET_MODEL_INFO[status.modelId];
+          return (
+            <DownloadProgressBar
+              key={`${status.modelType}:${status.modelId}`}
+              modelName={modelInfo?.name || status.modelId}
+              progress={{
+                percentage: status.progress,
+                downloadedBytes: status.downloadedBytes,
+                totalBytes: status.totalBytes,
+              }}
+              isInstalling={status.phase === "installing"}
+            />
+          );
+        })}
+      </div>
+    );
+  }, [effectiveLocal, whisperDownloads, parakeetDownloads]);
 
   const renderLocalModels = () => {
     const modelsToRender =
@@ -1033,8 +1025,8 @@ export default function TranscriptionModelPicker({
               isSelected={modelId === selectedLocalModel}
               isDownloaded={model.downloaded ?? false}
               isDownloading={isDownloadingModel(modelId)}
-              isCancelling={isCancelling}
-              isInstalling={isInstalling}
+              isCancelling={isCancellingModel(modelId)}
+              isInstalling={whisperDownloads[modelId]?.phase === "installing"}
               recommended={info.recommended}
               provider="whisper"
               onSelect={() => handleWhisperModelSelect(modelId)}
@@ -1047,7 +1039,7 @@ export default function TranscriptionModelPicker({
                   handleWhisperModelSelect(downloadedId);
                 })
               }
-              onCancel={cancelDownload}
+              onCancel={() => cancelDownload(modelId)}
               styles={styles}
             />
           );
@@ -1108,8 +1100,8 @@ export default function TranscriptionModelPicker({
               isSelected={modelId === selectedLocalModel}
               isDownloaded={model.downloaded ?? false}
               isDownloading={isDownloadingParakeetModel(modelId)}
-              isCancelling={isCancellingParakeet}
-              isInstalling={isInstallingParakeet}
+              isCancelling={isCancellingParakeetModel(modelId)}
+              isInstalling={parakeetDownloads[modelId]?.phase === "installing"}
               recommended={info.recommended}
               provider="nvidia"
               onSelect={() => handleParakeetModelSelect(modelId)}
@@ -1122,7 +1114,7 @@ export default function TranscriptionModelPicker({
                   handleParakeetModelSelect(downloadedId);
                 })
               }
-              onCancel={cancelParakeetDownload}
+              onCancel={() => cancelParakeetDownload(modelId)}
               styles={styles}
             />
           );

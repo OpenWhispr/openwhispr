@@ -706,6 +706,17 @@ export interface WhisperDownloadProgressData {
   error?: string;
   code?: string;
   result?: any;
+  sequence?: number;
+}
+
+export interface LocalModelDownloadStatus {
+  modelType: "whisper" | "parakeet" | "llm";
+  modelId: string;
+  phase: "downloading" | "installing";
+  progress: number;
+  downloadedBytes: number;
+  totalBytes: number;
+  sequence: number;
 }
 
 export interface ParakeetCheckResult {
@@ -757,6 +768,7 @@ export interface ParakeetDownloadProgressData {
   total_bytes?: number;
   error?: string;
   code?: string;
+  sequence?: number;
 }
 
 export interface ParakeetTranscriptionResult {
@@ -842,6 +854,7 @@ export type LocalLLMDownloadProgressEvent =
       progress: number;
       downloadedSize: number;
       totalSize: number;
+      sequence?: number;
     }
   | {
       type: "complete";
@@ -849,6 +862,7 @@ export type LocalLLMDownloadProgressEvent =
       progress: 100;
       downloadedSize?: number;
       totalSize?: number;
+      sequence?: number;
     }
   | {
       type: "error";
@@ -856,6 +870,7 @@ export type LocalLLMDownloadProgressEvent =
       error: string;
       code?: string;
       details?: unknown;
+      sequence?: number;
     };
 
 export interface ConversationPreview {
@@ -1569,6 +1584,7 @@ declare global {
 
       // Local AI model management
       modelGetAll: () => Promise<LocalLLMModelStatus[]>;
+      modelGetActiveDownloads: () => Promise<LocalModelDownloadStatus[]>;
       modelCheck: (modelId: string) => Promise<boolean>;
       modelDownload: (modelId: string) => Promise<{
         success: boolean;

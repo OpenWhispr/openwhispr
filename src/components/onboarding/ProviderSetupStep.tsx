@@ -23,7 +23,11 @@ import {
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
 import type { OnboardingStepId } from "./flow";
-import { forgetPendingLocalModel, rememberPendingLocalModel } from "./pendingLocalModels";
+import {
+  forgetPendingLocalModel,
+  isPendingLocalModel,
+  rememberPendingLocalModel,
+} from "./pendingLocalModels";
 import { isLocalStageDownloadActive } from "./localDownloadState";
 
 export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
@@ -697,6 +701,9 @@ export function LocalModelSetupStep({
 
   const selectInstalledModel = useCallback(
     (modelId: string) => {
+      const kind = assistant ? "assistant" : "dictation";
+      if (!isPendingLocalModel(kind, { provider: selectedProvider, modelId })) return;
+
       setSelectedModel(modelId);
       if (assistant) {
         store.setChatAgentMode("local");
@@ -710,7 +717,7 @@ export function LocalModelSetupStep({
         store.setWhisperModel(modelId);
       }
       if (localStorage.getItem("localSetupPending") !== "true") {
-        forgetPendingLocalModel(assistant ? "assistant" : "dictation", modelId);
+        forgetPendingLocalModel(kind, modelId);
       }
     },
     [assistant, selectedProvider, store]
