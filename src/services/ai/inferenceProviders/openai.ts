@@ -2,7 +2,7 @@ import type { InferenceProvider } from "./types";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl } from "../../../config/constants";
 import { getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
-import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
+import { withRetry, createApiRetryStrategy, httpError, timeoutError } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
 import {
@@ -296,7 +296,7 @@ export const openaiProvider: InferenceProvider = {
           return res.json();
         } catch (error) {
           if ((error as Error).name === "AbortError") {
-            throw new Error(`Request timed out after ${timeoutSeconds}s`);
+            throw timeoutError(`Request timed out after ${timeoutSeconds}s`);
           }
           lastError = error as Error;
           if (retryStrategy.shouldRetry(lastError)) {

@@ -8,7 +8,7 @@ import {
 } from "../models/ModelRegistry";
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
-import { withRetry, createApiRetryStrategy, httpError } from "../utils/retry";
+import { withRetry, createApiRetryStrategy, httpError, timeoutError } from "../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../config/constants";
 import logger from "../utils/logger";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
@@ -384,7 +384,7 @@ class ReasoningService extends BaseReasoningService {
           if (requestGeneration !== this.requestCancellationGeneration) {
             throw httpError("Request cancelled", 499);
           }
-          throw new Error(`Request timed out after ${timeoutSeconds}s`);
+          throw timeoutError(`Request timed out after ${timeoutSeconds}s`);
         }
         throw error;
       } finally {

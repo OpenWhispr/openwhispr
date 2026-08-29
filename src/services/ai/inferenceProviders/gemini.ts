@@ -1,6 +1,6 @@
 import type { InferenceProvider } from "./types";
 import { getCloudModel } from "../../../models/ModelRegistry";
-import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
+import { withRetry, createApiRetryStrategy, httpError, timeoutError } from "../../../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
@@ -126,7 +126,7 @@ export const geminiProvider: InferenceProvider = {
         return jsonResponse;
       } catch (error) {
         if ((error as Error).name === "AbortError") {
-          throw new Error(`Request timed out after ${timeoutSeconds}s`);
+          throw timeoutError(`Request timed out after ${timeoutSeconds}s`);
         }
         throw error;
       } finally {
