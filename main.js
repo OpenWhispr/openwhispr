@@ -1185,6 +1185,20 @@ async function startApp() {
   });
 
   const { powerMonitor } = require("electron");
+  powerMonitor.on("suspend", () => {
+    debugLogger.info("System suspending: forcefully stopping local LLM to prevent VRAM deadlock");
+    const modelManager = require("./src/helpers/modelManagerBridge").default;
+    // We don't await here because suspend is synchronous and blocks sleep if prolonged in older Electron,
+    // but starting the kill immediately ensures the SIGTERM/SIGKILL hits before driver suspends.
+    modelManager.stopServer().catch((err) => {
+      debugLogger.warn("Error stopping local model during suspend", { error: err.message });
+    });
+    if (whisperManager) {
+      whisperManager.stopServer().catch((err) => {
+        debugLogger.warn("Error stopping whisper server during suspend", { error: err.message });
+      });
+    }
+  });
   powerMonitor.on("resume", () => {
     if (calendarReminderScheduler) calendarReminderScheduler.onWakeFromSleep();
     if (googleCalendarManager) {
