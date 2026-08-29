@@ -746,3 +746,23 @@ test("an expired detection reports the timeout once, not also as a close", async
     timers.restore();
   }
 });
+
+test("a detection card whose load fails releases that detection", async () => {
+  const manager = createNormalWindowManager();
+  const closedDetections = [];
+  manager.meetingDetectionEngine = {
+    handleDetectionNotificationClosed: (detectionId) => closedDetections.push(detectionId),
+  };
+
+  const showPromise = manager.showMeetingNotification({
+    kind: "detection",
+    detectionId: "audio:sustained-audio",
+    source: "audio",
+  });
+  createdWindows[0].loadDeferred.reject(new Error("load failed"));
+
+  // The card never appeared and no countdown ever started, so nothing else
+  // would ever settle this detection.
+  await assert.rejects(showPromise, /load failed/);
+  assert.deepEqual(closedDetections, ["audio:sustained-audio"]);
+});

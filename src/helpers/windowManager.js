@@ -69,7 +69,12 @@ class WindowManager {
     this._notificationLoadTimeout = null;
     this._notificationDismissTimer = new NotificationDismissTimer(() => {
       const notification = this._pendingNotificationData;
-      // Let the timeout handler settle the notification after the window closes.
+      // Dismiss first: an expiring restart offer lets the engine flush the
+      // detections it was holding, and a prompt raised from that handler must
+      // not be closed by this dismissal. The engine is not told the card closed
+      // either — handleNotificationTimeout below settles this expiry, and a
+      // close report here would flush the queue into a card that handler is
+      // about to clear.
       this.dismissMeetingNotification({ notifyEngine: false });
       if (this.meetingDetectionEngine) {
         this.meetingDetectionEngine.handleNotificationTimeout(notification);

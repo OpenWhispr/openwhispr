@@ -1021,3 +1021,76 @@ test("linux: polling reports only external capture as mic activity", async () =>
   assert.equal(await detector._checkLinux(), false);
   assert.equal(await detector._checkLinux(), true);
 });
+
+test("linux: a capture pid swapped inside one reconcile does not re-prompt", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const AUDIO_SERVICE = 17111;
+  const RESPAWNED_AUDIO_SERVICE = 17999;
+  const { detector, children } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      { stdout: "[]" },
+      { stdout: linuxStreams(AUDIO_SERVICE) },
+      // The call never went quiet: one reconcile sees the old stream gone and
+      // the app's replacement capture helper already in its place.
+      { stdout: linuxStreams(RESPAWNED_AUDIO_SERVICE) },
+    ],
+  });
+  let detections = 0;
+  detector.on("sustained-audio-detected", () => detections++);
+
+  await detector.start();
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 1);
+
+  children[0].stdout.emit("data", "Event 'change' on source-output #2\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 1, "a card must not drop over a call that never ended");
+  detector.stop();
+});
+
+test("linux: polling never reports ownership as reliable", async () => {
+  const { detector } = createDetector("linux", {
+    spawnError: "spawn ENOENT",
+    excludedProcessIds: () => [700],
+    execResponses: [{ stdout: linuxStreams(900) }],
+  });
+  detector._isMicActive = undefined;
+  delete detector._isMicActive;
+
+  await detector.start();
+  await flush();
+
+  assert.equal(detector._eventDriven, false);
+  assert.equal(detector._pidScopedCapability, true, "the poll still scopes the re-arm by pid");
+  // The poller stops sampling for the whole of a recording, so a snapshot it
+  // took cannot be handed to auto-end as live ownership evidence.
+  assert.deepEqual(detector.getExternalMicState(), { reliable: false, externalMicActive: false });
+  detector.setUserRecording(true);
+  assert.deepEqual(detector.getExternalMicState(), { reliable: false, externalMicActive: false });
+  detector.stop();
+});
+
+test("linux: a listing with no attributable stream falls through to the unfiltered check", async () => {
+  const { detector, execCalls } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      {
+        stdout: JSON.stringify([{ index: 1, properties: { "media.name": "echo-cancel source" } }]),
+      },
+      { stdout: "0\tsink\n" },
+    ],
+  });
+
+  assert.equal(await detector._checkLinux(), true);
+  assert.deepEqual(
+    execCalls.map((call) => call.command),
+    ["pactl --format=json list source-outputs", "pactl list source-outputs short"]
+  );
+  assert.equal(detector._pidScopedCapability, false);
+});
