@@ -35,3 +35,10 @@ test("rejects a non-canonical app version instead of advertising a malformed cli
   assert.throws(() => withPolicyRequestHeaders({}, "1.8"), /canonical app version/i);
   assert.throws(() => withPolicyRequestHeaders({}, "1.8.1-beta.1"), /canonical app version/i);
 });
+
+test("normalizes whitespace in appVersion and safely defaults null headers", () => {
+  assert.deepEqual(withPolicyRequestHeaders(null, " 1.8.1 "), {
+    "x-openwhispr-policy-version": "1",
+    "x-openwhispr-version": "1.8.1",
+  });
+});
