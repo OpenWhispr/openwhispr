@@ -47,3 +47,20 @@ test("resolveContextSileroEnabled defaults dictation off, other contexts on", as
   assert.equal(resolveContextSileroEnabled({}, "noteRecording"), true);
   assert.equal(resolveContextSileroEnabled({}, "meeting"), true);
 });
+
+test("clampVadField handles unknown keys safely without throwing", async () => {
+  const { clampVadField } = await import("../../src/helpers/whisperVadConfig.js");
+  assert.equal(clampVadField("unknownField", 42), 42);
+  assert.equal(clampVadField(null, 42), 42);
+});
+
+test("resolveContextSileroEnabled normalizes casing and whitespace in context", async () => {
+  const { resolveContextSileroEnabled } = await import("../../src/helpers/whisperVadConfig.js");
+  assert.equal(resolveContextSileroEnabled({}, " DICTATION "), false);
+  assert.equal(resolveContextSileroEnabled({}, "NoteRecording"), true);
+  assert.equal(resolveContextSileroEnabled({}, " MEETING "), true);
+  assert.equal(
+    resolveContextSileroEnabled({ dictationSileroEnabled: true }, "Dictation"),
+    true
+  );
+});
