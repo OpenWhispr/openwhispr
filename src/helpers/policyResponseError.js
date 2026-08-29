@@ -12,24 +12,30 @@ function createPolicyResponseError(status, payload, fallback) {
   const details = payload?.data;
   const minAppVersion =
     payload?.minAppVersion ?? details?.minAppVersion ?? payload?.error?.minAppVersion;
+  const safeStatus = Number.isInteger(status) ? status : 500;
   return Object.assign(new Error(errorMessage(payload, fallback)), {
     ...(code ? { code } : {}),
-    status,
-    statusCode: status,
+    status: safeStatus,
+    statusCode: safeStatus,
     ...(minAppVersion ? { minAppVersion } : {}),
     ...(details !== undefined ? { details } : {}),
   });
 }
 
 async function readPolicyResponseError(response, fallback) {
-  const payload = await response.json().catch(() => null);
+  if (!response || typeof response !== "object") {
+    return createPolicyResponseError(500, null, fallback);
+  }
+  const payload = typeof response.json === "function" ? await response.json().catch(() => null) : null;
   return createPolicyResponseError(response.status, payload, fallback);
 }
 
 function toPolicyFailure(error) {
+  const message =
+    (typeof error === "string" ? error : error?.message) || "Unknown error";
   return {
     success: false,
-    error: error?.message || String(error),
+    error: message,
     ...(error?.code ? { code: error.code } : {}),
     ...(Number.isInteger(error?.status) ? { status: error.status } : {}),
     ...(error?.minAppVersion ? { minAppVersion: error.minAppVersion } : {}),

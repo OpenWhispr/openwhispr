@@ -46,3 +46,15 @@ test("normalizes parsed multipart policy errors without losing legacy statusCode
   assert.equal(error.statusCode, 426);
   assert.equal(error.minAppVersion, "2.1.0");
 });
+
+test("safely handles nullish response and nullish error objects", async () => {
+  const error = await readPolicyResponseError(null, "Fallback error");
+  assert.equal(error.message, "Fallback error");
+  assert.equal(error.status, 500);
+
+  const failure = toPolicyFailure(null);
+  assert.deepEqual(failure, { success: false, error: "Unknown error" });
+
+  const stringFailure = toPolicyFailure("Direct error message");
+  assert.deepEqual(stringFailure, { success: false, error: "Direct error message" });
+});
