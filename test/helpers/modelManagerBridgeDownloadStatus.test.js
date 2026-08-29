@@ -13,7 +13,7 @@ const modelManagerModulePath = require.resolve("../../src/helpers/modelManagerBr
 const modelDirUtilsModulePath = require.resolve("../../src/helpers/modelDirUtils.js");
 let electronHome = os.tmpdir();
 
-function loadModelManager({ downloadFile } = {}) {
+function loadModelManager({ downloadFile, checkDiskSpace } = {}) {
   delete require.cache[modelManagerModulePath];
   delete require.cache[modelDirUtilsModulePath];
 
@@ -30,7 +30,11 @@ function loadModelManager({ downloadFile } = {}) {
     }
 
     if (request === "./downloadUtils" && parent?.filename === modelManagerModulePath) {
-      return { ...downloadUtils, ...(downloadFile ? { downloadFile } : {}) };
+      return {
+        ...downloadUtils,
+        ...(downloadFile ? { downloadFile } : {}),
+        ...(checkDiskSpace ? { checkDiskSpace } : {}),
+      };
     }
 
     return originalLoad.call(this, request, parent, isMain);
@@ -167,6 +171,88 @@ test("downloadModel permits distinct local models to download concurrently", asy
   await Promise.all([firstDownload, secondDownload]);
 });
 
+test("parallel downloads reserve their combined disk space", async (t) => {
+  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-disk-reservation-"));
+  electronHome = tmpHome;
+  t.after(() => fs.rm(tmpHome, { recursive: true, force: true }));
+
+  const [firstModel, secondModel] = modelRegistryData.localProviders
+    .flatMap((provider) => provider.models)
+    .filter((model) => !model.draftFileName)
+    .slice(0, 2);
+  const required = [firstModel, secondModel].map(
+    (model) => (model.sizeBytes || model.sizeMb * 1_000_000) * 1.2
+  );
+  const availableBytes = Math.max(...required) + 1;
+  let releaseFirst;
+  const firstCanFinish = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+  let firstStarted;
+  const firstDidStart = new Promise((resolve) => {
+    firstStarted = resolve;
+  });
+  const modelManager = loadModelManager({
+    checkDiskSpace: async (_directory, requiredBytes) => ({
+      ok: requiredBytes <= availableBytes,
+      availableBytes,
+    }),
+    downloadFile: async (_url, destination) => {
+      firstStarted();
+      await firstCanFinish;
+      await fs.writeFile(destination, Buffer.alloc(1_000_001));
+    },
+  });
+
+  const firstDownload = modelManager.downloadModel(firstModel.id);
+  await firstDidStart;
+  await assert.rejects(
+    modelManager.downloadModel(secondModel.id),
+    (error) => error.code === "INSUFFICIENT_DISK_SPACE"
+  );
+
+  releaseFirst();
+  await firstDownload;
+  assert.equal(modelManager.downloadReservations.size, 0);
+});
+
+test("cancelling an optional drafter does not complete the model download", async (t) => {
+  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-drafter-cancel-"));
+  electronHome = tmpHome;
+  t.after(() => fs.rm(tmpHome, { recursive: true, force: true }));
+
+  let downloadCount = 0;
+  const modelManager = loadModelManager({
+    checkDiskSpace: async () => ({ ok: true, availableBytes: Number.MAX_SAFE_INTEGER }),
+    downloadFile: async (_url, destination) => {
+      downloadCount += 1;
+      if (downloadCount === 1) {
+        await fs.writeFile(destination, Buffer.alloc(1_000_001));
+        return;
+      }
+      const error = new Error("cancelled");
+      error.isAbort = true;
+      throw error;
+    },
+  });
+  const model = modelRegistryData.localProviders
+    .flatMap((provider) => provider.models)
+    .find((candidate) => candidate.draftFileName);
+
+  await assert.rejects(
+    modelManager.downloadModel(model.id),
+    (error) => error.code === "DOWNLOAD_CANCELLED"
+  );
+  assert.equal(
+    await modelManager.checkFileExists(path.join(modelManager.modelsDir, model.fileName)),
+    true
+  );
+  assert.equal(
+    await modelManager.checkFileExists(path.join(modelManager.modelsDir, model.draftFileName)),
+    false
+  );
+});
+
 test("downloadModel rejects a duplicate local model download", async (t) => {
   const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-duplicate-download-"));
   electronHome = tmpHome;
@@ -189,7 +275,9 @@ test("cancelDownload keeps the local LLM guard until the request unwinds", async
   t.after(() => fs.rm(tmpHome, { recursive: true, force: true }));
 
   const modelManager = loadModelManager();
-  const [model, otherModel] = modelRegistryData.localProviders.flatMap((provider) => provider.models);
+  const [model, otherModel] = modelRegistryData.localProviders.flatMap(
+    (provider) => provider.models
+  );
   let aborted = false;
 
   modelManager.activeDownloads.set(model.id, true);

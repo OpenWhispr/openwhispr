@@ -44,6 +44,7 @@ class ModelManager {
     this.modelsDir = null;
     this.downloadProgress = new Map();
     this.activeDownloads = new Map();
+    this.downloadReservations = new Map();
     this.activeRequests = new Map(); // Track HTTP requests for cancellation
     this.downloadLifecycleVersion = 0;
     this.serverManager = new LlamaServerManager();
@@ -211,6 +212,14 @@ class ModelManager {
     return options;
   }
 
+  getReservedDownloadBytes() {
+    let reserved = 0;
+    for (const [modelId, bytes] of this.downloadReservations) {
+      reserved += Math.max(0, bytes - (this.downloadProgress.get(modelId)?.downloadedSize || 0));
+    }
+    return reserved;
+  }
+
   async downloadModel(modelId, onProgress) {
     this.ensureInitialized();
     const modelInfo = this.findModelById(modelId);
@@ -246,13 +255,15 @@ class ModelManager {
         requiredBytes += model.draftSizeBytes;
       }
       if (requiredBytes > 0) {
-        const spaceCheck = await checkDiskSpace(this.modelsDir, requiredBytes * 1.2);
+        this.downloadReservations.set(modelId, requiredBytes * 1.2);
+        const reservedBytes = this.getReservedDownloadBytes();
+        const spaceCheck = await checkDiskSpace(this.modelsDir, reservedBytes);
         if (!spaceCheck.ok) {
           throw new ModelError(
-            `Not enough disk space. Need ~${Math.round((requiredBytes * 1.2) / 1_000_000)}MB, ` +
+            `Not enough disk space. Need ~${Math.round(reservedBytes / 1_000_000)}MB, ` +
               `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`,
             "INSUFFICIENT_DISK_SPACE",
-            { required: requiredBytes, available: spaceCheck.availableBytes }
+            { required: reservedBytes, available: spaceCheck.availableBytes }
           );
         }
       }
@@ -322,6 +333,7 @@ class ModelManager {
           }
         } catch (draftError) {
           await fsPromises.unlink(draftPath).catch(() => {});
+          if (draftError.isAbort) throw draftError;
           debugLogger.warn("MTP drafter download failed, keeping model without it", {
             modelId,
             error: draftError.message,
@@ -351,6 +363,7 @@ class ModelManager {
       }
       this.activeRequests.delete(modelId);
       this.downloadProgress.delete(modelId);
+      this.downloadReservations.delete(modelId);
     }
   }
 
