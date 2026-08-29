@@ -7,9 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-08-29
+
+A repair release for two 1.9.1 regressions. Windows desktop sign-in works again — every provider button had gone dead — and the three transcription paths that only failed in packaged builds are back on all platforms. Meeting prompts also pick up swipe-to-dismiss.
+
+### Accounts
+
+- **Windows desktop sign-in works again.** Since 1.9.1, clicking Google, Microsoft, Apple, or SSO on Windows showed a spinner and then nothing. Browser links were routed through `explorer.exe`, which silently opens a File Explorer window instead of the browser for any URL carrying a query string — and every sign-in URL carries one. Connecting a calendar, opening Stripe checkout, and following tagged outbound links broke the same way. Those links now open directly; the ones `explorer.exe` can deliver still go through it, so meeting recordings keep capturing the audio of a browser launched from a meeting link. (#1932)
+
+### Transcription
+
+- **Three transcription paths failed in packaged builds.** A model-registry import added in 1.9.1 was missing the attribute Node's module loader requires for JSON, so xAI dictation, re-transcribing a saved recording, and bring-your-own-key file uploads threw `needs an import attribute of "type: json"` on Windows, macOS, and Linux while ordinary dictation kept working. Development builds inline that import, which is why it reached release. (#1908)
+
 ### Meetings
 
-- **Meeting prompts swipe away like desktop notifications.** A horizontal pointer swipe of 80px in either direction dismisses a meeting card — detection, calendar reminder, or the auto-end restart offer — taking the same path as its close button. Swipes that start on an action button are ignored.
+- **Meeting prompts swipe away like desktop notifications.** A horizontal pointer swipe of 80px in either direction dismisses a meeting card — detection, calendar reminder, or the auto-end restart offer — taking the same path as its close button. Swipes that start on an action button are ignored. (#1906)
 
 ## [1.9.1] - 2026-08-27
 
