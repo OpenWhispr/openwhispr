@@ -152,27 +152,22 @@ export default function LocalModelPicker({
   const handleDownload = useCallback(
     (modelId: string) => {
       const selectedWhenStarted = selectionStateRef.current.selectedModel;
-      const model = allModels.find((entry) => entry.id === modelId);
 
-      downloadModel(
-        modelId,
-        (downloadedId) => {
-          const {
-            selectedModel: current,
-            downloadedModels: downloaded,
-            knownModelIds: known,
-          } = selectionStateRef.current;
-          if (current !== selectedWhenStarted) return;
+      downloadModel(modelId, (downloadedId) => {
+        const {
+          selectedModel: current,
+          downloadedModels: downloaded,
+          knownModelIds: known,
+        } = selectionStateRef.current;
+        if (current !== selectedWhenStarted) return;
 
-          const selectionGone = known.has(current) && !downloaded.has(current);
-          if (!current || selectionGone) {
-            onModelSelect(downloadedId);
-          }
-        },
-        model?.name || modelId
-      );
+        const selectionGone = known.has(current) && !downloaded.has(current);
+        if (!current || selectionGone) {
+          onModelSelect(downloadedId);
+        }
+      });
     },
-    [allModels, downloadModel, onModelSelect]
+    [downloadModel, onModelSelect]
   );
 
   const handleDelete = useCallback(

@@ -283,11 +283,7 @@ export function useModelDownload({
   }, [updateDownload]);
 
   const downloadModel = useCallback(
-    async (
-      modelId: string,
-      onSelectAfterDownload?: (id: string) => void,
-      displayName = modelId
-    ) => {
+    async (modelId: string, onSelectAfterDownload?: (id: string) => void) => {
       if (downloads[modelId] || (modelType !== "llm" && Object.keys(downloads).length > 0)) {
         toast({
           title: t("hooks.modelDownload.downloadInProgress.title"),
@@ -326,12 +322,6 @@ export function useModelDownload({
         if (result?.success) {
           notifyLocalModelsChanged();
           onSelectAfterDownload?.(modelId);
-          toast({
-            title: t("hooks.modelDownload.modelDownloaded.title"),
-            description: t("hooks.modelDownload.modelDownloaded.description", {
-              model: displayName,
-            }),
-          });
         } else if (result?.code === "DOWNLOAD_IN_PROGRESS") {
           const activeDownloads = await window.electronAPI?.modelGetActiveDownloads?.();
           const activeDownload = activeDownloads?.find(

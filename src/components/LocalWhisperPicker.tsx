@@ -120,7 +120,7 @@ export default function LocalWhisperPicker({
 
   const handleDownload = useCallback(
     (modelId: string) => {
-      downloadModel(modelId, onModelSelect, WHISPER_MODEL_INFO[modelId]?.name || modelId);
+      downloadModel(modelId, onModelSelect);
     },
     [downloadModel, onModelSelect]
   );

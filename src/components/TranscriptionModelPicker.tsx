@@ -1032,16 +1032,12 @@ export default function TranscriptionModelPicker({
               onSelect={() => handleWhisperModelSelect(modelId)}
               onDelete={() => handleDelete(modelId)}
               onDownload={() =>
-                downloadModel(
-                  modelId,
-                  (downloadedId) => {
-                    setLocalModels((prev) =>
-                      prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
-                    );
-                    handleWhisperModelSelect(downloadedId);
-                  },
-                  info.name
-                )
+                downloadModel(modelId, (downloadedId) => {
+                  setLocalModels((prev) =>
+                    prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
+                  );
+                  handleWhisperModelSelect(downloadedId);
+                })
               }
               onCancel={() => cancelDownload(modelId)}
               styles={styles}
@@ -1111,16 +1107,12 @@ export default function TranscriptionModelPicker({
               onSelect={() => handleParakeetModelSelect(modelId)}
               onDelete={() => handleParakeetDelete(modelId)}
               onDownload={() =>
-                downloadParakeetModel(
-                  modelId,
-                  (downloadedId) => {
-                    setParakeetModels((prev) =>
-                      prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
-                    );
-                    handleParakeetModelSelect(downloadedId);
-                  },
-                  info.name
-                )
+                downloadParakeetModel(modelId, (downloadedId) => {
+                  setParakeetModels((prev) =>
+                    prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
+                  );
+                  handleParakeetModelSelect(downloadedId);
+                })
               }
               onCancel={() => cancelParakeetDownload(modelId)}
               styles={styles}
