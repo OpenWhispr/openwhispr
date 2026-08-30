@@ -148,11 +148,9 @@ export const useAudioRecording = (toast, options = {}) => {
         // still the user's actual editing target here. Refresh it for recordings
         // started from the panel itself as well as from global hotkeys; otherwise
         // paste can reactivate a stale target from the preceding dictation.
-        try {
-          await window.electronAPI.captureDictationTarget?.();
-        } catch (error) {
+        window.electronAPI.captureDictationTarget?.().catch((error) => {
           logger.warn("Failed to refresh dictation target", { error: error?.message });
-        }
+        });
 
         demoKindRef.current = getOnboardingDemoKind(voiceAgentRequested);
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);

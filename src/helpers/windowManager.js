@@ -870,7 +870,7 @@ class WindowManager {
       // sites in main.js; a stop-press capture resolves the same frontmost
       // app, since NSWorkspace ignores the overlay panel.
       const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
-      void this.selectionManager?.captureTarget?.();
+      void this.selectionManager?.captureTarget?.({ force: !isStarting });
       if (!isStarting) {
         this._mainWindowPlacementCoordinator.cancelPending();
       }
