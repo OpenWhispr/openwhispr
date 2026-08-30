@@ -2461,6 +2461,9 @@
     "learnMore": "瞭解更多",
     "noneAvailable": "沒有可用的模型",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "最準確的本地語音辨識(平均 WER 5.42%,支援 14 種語言)。不支援自動語言偵測"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "快速多語言 ASR，自動語言偵測（25 種語言）",
         "parakeet_unified_en_0_6b": "僅英語 ASR，最先進的準確度（平均 WER 5.91%）",

@@ -18,6 +18,8 @@ import {
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
   PARAKEET_MODEL_INFO,
+  isCohereTranscribeModel,
+  isSherpaLocalProvider,
 } from "../models/ModelRegistry";
 import {
   MODEL_PICKER_COLORS,
@@ -302,6 +304,7 @@ const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
 const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> = [
   { id: "whisper", name: "OpenAI" },
   { id: "nvidia", name: "NVIDIA" },
+  { id: "cohere", name: "Cohere" },
 ];
 
 interface ModeToggleProps {
@@ -438,11 +441,11 @@ export default function TranscriptionModelPicker({
     if (parakeetCapability?.supported !== false) return;
 
     // Tabs are pure browse state, so the browsed tab and the committed
-    // provider must each leave "nvidia" on their own: moving the tab off the
-    // disabled Parakeet entry keeps the UI usable, while committing "whisper"
+    // provider must each leave the sherpa tabs on their own: moving the tab off
+    // the disabled entry keeps the UI usable, while committing "whisper"
     // is what actually reroutes transcription on unsupported Macs.
-    if (internalLocalProvider === "nvidia") setInternalLocalProvider("whisper");
-    if (selectedLocalProvider === "nvidia") onLocalProviderSelect?.("whisper");
+    if (isSherpaLocalProvider(internalLocalProvider)) setInternalLocalProvider("whisper");
+    if (isSherpaLocalProvider(selectedLocalProvider)) onLocalProviderSelect?.("whisper");
   }, [internalLocalProvider, onLocalProviderSelect, parakeetCapability, selectedLocalProvider]);
 
   const localModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -482,7 +485,7 @@ export default function TranscriptionModelPicker({
   const localProviderTabs = useMemo(
     () =>
       LOCAL_PROVIDER_TABS.map((provider) =>
-        provider.id === "nvidia" && parakeetCapability?.supported === false
+        isSherpaLocalProvider(provider.id) && parakeetCapability?.supported === false
           ? {
               ...provider,
               disabled: true,
@@ -636,7 +639,7 @@ export default function TranscriptionModelPicker({
     if (internalLocalProvider === "whisper" && !hasLoadedRef.current) {
       hasLoadedRef.current = true;
       loadLocalModelsRef.current?.();
-    } else if (internalLocalProvider === "nvidia" && !hasLoadedParakeetRef.current) {
+    } else if (isSherpaLocalProvider(internalLocalProvider) && !hasLoadedParakeetRef.current) {
       hasLoadedParakeetRef.current = true;
       loadParakeetModelsRef.current?.();
     }
@@ -862,9 +865,10 @@ export default function TranscriptionModelPicker({
 
   const handleParakeetModelSelect = useCallback(
     (modelId: string) => {
-      setInternalLocalProvider("nvidia");
-      onLocalProviderSelect?.("nvidia");
-      onLocalModelSelect(modelId, "nvidia");
+      const provider = isCohereTranscribeModel(modelId) ? "cohere" : "nvidia";
+      setInternalLocalProvider(provider);
+      onLocalProviderSelect?.(provider);
+      onLocalModelSelect(modelId, provider);
     },
     [onLocalModelSelect, onLocalProviderSelect]
   );
@@ -978,7 +982,7 @@ export default function TranscriptionModelPicker({
       );
     }
 
-    if (downloadingParakeetModel && internalLocalProvider === "nvidia") {
+    if (downloadingParakeetModel && isSherpaLocalProvider(internalLocalProvider)) {
       const modelInfo = PARAKEET_MODEL_INFO[downloadingParakeetModel];
       return (
         <DownloadProgressBar
@@ -1075,15 +1079,18 @@ export default function TranscriptionModelPicker({
     [showConfirmDialog, deleteParakeetModel, t]
   );
 
-  const renderParakeetModels = () => {
-    const modelsToRender =
+  // Both sherpa-onnx tabs share one downloaded-models list; each renders only
+  // its own vendor's registry entries.
+  const renderParakeetModels = (provider: "nvidia" | "cohere") => {
+    const modelsToRender = (
       parakeetModels.length === 0
         ? Object.entries(PARAKEET_MODEL_INFO).map(([modelId, info]) => ({
             model: modelId,
             downloaded: false,
             size_mb: info.sizeMb,
           }))
-        : parakeetModels;
+        : parakeetModels
+    ).filter((model) => isCohereTranscribeModel(model.model) === (provider === "cohere"));
 
     return (
       <div className="space-y-0.5">
@@ -1111,7 +1118,7 @@ export default function TranscriptionModelPicker({
               isCancelling={isCancellingParakeet}
               isInstalling={isInstallingParakeet}
               recommended={info.recommended}
-              provider="nvidia"
+              provider={provider}
               onSelect={() => handleParakeetModelSelect(modelId)}
               onDelete={() => handleParakeetDelete(modelId)}
               onDownload={() =>
@@ -1378,7 +1385,8 @@ export default function TranscriptionModelPicker({
 
           <div>
             {internalLocalProvider === "whisper" && renderLocalModels()}
-            {internalLocalProvider === "nvidia" && renderParakeetModels()}
+            {(internalLocalProvider === "nvidia" || internalLocalProvider === "cohere") &&
+              renderParakeetModels(internalLocalProvider)}
           </div>
         </>
       )}

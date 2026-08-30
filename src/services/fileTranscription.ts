@@ -1,6 +1,7 @@
 import { withSessionRefresh } from "../lib/auth";
 import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
+import type { LocalTranscriptionProvider } from "../types/electron";
 
 export interface FileTranscriptionResult {
   success: boolean;
@@ -32,6 +33,7 @@ export interface FileTranscriptionConfig {
   localTranscriptionProvider: string;
   whisperModel: string;
   parakeetModel: string;
+  cohereModel: string;
   isOpenWhisprCloud: boolean;
   getApiKey: () => string;
   cloudTranscriptionProvider: string;
@@ -97,9 +99,18 @@ export async function transcribeFile(
   }
 
   if (cfg.useLocalWhisper) {
+    const provider = cfg.localTranscriptionProvider as LocalTranscriptionProvider;
     return window.electronAPI.transcribeAudioFile(filePath, {
-      provider: cfg.localTranscriptionProvider as "whisper" | "nvidia",
-      model: cfg.localTranscriptionProvider === "nvidia" ? cfg.parakeetModel : cfg.whisperModel,
+      provider,
+      model:
+        provider === "nvidia"
+          ? cfg.parakeetModel
+          : provider === "cohere"
+            ? cfg.cohereModel
+            : cfg.whisperModel,
+      // Only Cohere consumes it (no auto-detect); passing it to whisper would
+      // override its auto language detection.
+      ...(provider === "cohere" && cfg.language ? { language: cfg.language } : {}),
       requestId: opts.requestId,
     });
   }

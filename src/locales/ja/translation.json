@@ -2461,6 +2461,9 @@
     "learnMore": "詳細を見る",
     "noneAvailable": "利用可能なモデルがありません",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "最高精度のローカルASR(平均WER 5.42%、14言語)。言語の自動検出はありません"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "高速多言語 ASR、自動言語検出対応（25 言語）",
         "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）",

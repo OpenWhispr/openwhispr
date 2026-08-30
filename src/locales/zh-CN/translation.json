@@ -2461,6 +2461,9 @@
     "learnMore": "了解更多",
     "noneAvailable": "没有可用的模型",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "最准确的本地语音识别(平均 WER 5.42%,支持 14 种语言)。不支持自动语言检测"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）",
         "parakeet_unified_en_0_6b": "仅英语 ASR，最先进的准确度（平均 WER 5.91%）",

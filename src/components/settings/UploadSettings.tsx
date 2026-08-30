@@ -25,6 +25,8 @@ export function UploadTranscriptionPanel() {
     setUploadLocalTranscriptionProvider,
     uploadParakeetModel,
     setUploadParakeetModel,
+    uploadCohereModel,
+    setUploadCohereModel,
     uploadCloudTranscriptionProvider,
     setUploadCloudTranscriptionProvider,
     uploadCloudTranscriptionModel,
@@ -88,16 +90,21 @@ export function UploadTranscriptionPanel() {
 
   const handleLocalTranscriptionModelSelect = useCallback(
     (modelId: string, providerId?: string) => {
-      if (
-        providerId === "nvidia" ||
-        (!providerId && uploadLocalTranscriptionProvider === "nvidia")
-      ) {
+      const provider = providerId ?? uploadLocalTranscriptionProvider;
+      if (provider === "nvidia") {
         setUploadParakeetModel(modelId);
+      } else if (provider === "cohere") {
+        setUploadCohereModel(modelId);
       } else {
         setUploadWhisperModel(modelId);
       }
     },
-    [uploadLocalTranscriptionProvider, setUploadParakeetModel, setUploadWhisperModel]
+    [
+      uploadLocalTranscriptionProvider,
+      setUploadParakeetModel,
+      setUploadCohereModel,
+      setUploadWhisperModel,
+    ]
   );
 
   const renderTranscriptionPicker = (mode: "cloud" | "local") => (
@@ -108,7 +115,11 @@ export function UploadTranscriptionPanel() {
       selectedCloudModel={uploadCloudTranscriptionModel}
       onCloudModelSelect={setUploadCloudTranscriptionModel}
       selectedLocalModel={
-        uploadLocalTranscriptionProvider === "nvidia" ? uploadParakeetModel : uploadWhisperModel
+        uploadLocalTranscriptionProvider === "nvidia"
+          ? uploadParakeetModel
+          : uploadLocalTranscriptionProvider === "cohere"
+            ? uploadCohereModel
+            : uploadWhisperModel
       }
       onLocalModelSelect={handleLocalTranscriptionModelSelect}
       selectedLocalProvider={uploadLocalTranscriptionProvider}

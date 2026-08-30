@@ -16,7 +16,11 @@ const { getModelsDirForService } = require("./modelDirUtils");
 const { assertParakeetSupported, getParakeetCapability } = require("./parakeetCapability");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
-const { getModelRuntime, REQUIRED_MODEL_FILES } = require("./parakeetModelInfo");
+const {
+  getModelRuntime,
+  getRequiredModelFiles,
+  isSherpaLocalProvider,
+} = require("./parakeetModelInfo");
 
 function getParakeetModelConfig(modelName) {
   const modelInfo = modelRegistryData.parakeetModels[modelName];
@@ -60,6 +64,17 @@ class ParakeetManager {
     return path.join(this.getModelsDir(), modelName);
   }
 
+  // Cohere models keep their weights in encoder.int8.onnx.data; transducers in
+  // encoder.int8.onnx. Used as the reported on-disk size of a model.
+  _getModelWeightsSize(modelDir) {
+    for (const file of ["encoder.int8.onnx.data", "encoder.int8.onnx"]) {
+      try {
+        return fs.statSync(path.join(modelDir, file)).size;
+      } catch {}
+    }
+    return 0;
+  }
+
   async initializeAtStartup(settings = {}) {
     const startTime = Date.now();
 
@@ -70,12 +85,12 @@ class ParakeetManager {
 
       await this.logDependencyStatus();
 
-      const { localTranscriptionProvider, parakeetModel } = settings;
+      const { localTranscriptionProvider, parakeetModel, language } = settings;
       const capability = getParakeetCapability();
 
       if (
         capability.supported &&
-        localTranscriptionProvider === "nvidia" &&
+        isSherpaLocalProvider(localTranscriptionProvider) &&
         parakeetModel &&
         this.serverManager.isAvailable(getModelRuntime(parakeetModel))
       ) {
@@ -84,7 +99,7 @@ class ParakeetManager {
 
           try {
             const serverStartTime = Date.now();
-            await this.serverManager.startServer(parakeetModel);
+            await this.serverManager.startServer(parakeetModel, language);
             debugLogger.info("Parakeet server pre-warmed successfully", {
               model: parakeetModel,
               startupTimeMs: Date.now() - serverStartTime,
@@ -104,8 +119,8 @@ class ParakeetManager {
         debugLogger.debug("Skipping parakeet server pre-warm", {
           reason: !capability.supported
             ? capability.message
-            : localTranscriptionProvider !== "nvidia"
-              ? "provider not nvidia"
+            : !isSherpaLocalProvider(localTranscriptionProvider)
+              ? "provider not sherpa-based"
               : !parakeetModel
                 ? "no model selected"
                 : "server binary not available",
@@ -135,14 +150,10 @@ class ParakeetManager {
     for (const modelName of getValidModelNames()) {
       const modelPath = this.getModelPath(modelName);
       if (this.serverManager.isModelDownloaded(modelName)) {
-        try {
-          const encoderPath = path.join(modelPath, "encoder.int8.onnx");
-          const stats = fs.statSync(encoderPath);
-          status.models.push({
-            name: modelName,
-            size: `${Math.round(stats.size / (1024 * 1024))}MB`,
-          });
-        } catch {}
+        status.models.push({
+          name: modelName,
+          size: `${Math.round(this._getModelWeightsSize(modelPath) / (1024 * 1024))}MB`,
+        });
       }
     }
 
@@ -180,13 +191,13 @@ class ParakeetManager {
     return { installed: true, working: true, supported: true, path: binaryPath };
   }
 
-  async startServer(modelName) {
+  async startServer(modelName, language) {
     this.validateModelName(modelName);
     const capability = getParakeetCapability();
     if (!capability.supported) {
       return { success: false, code: capability.code, reason: capability.message };
     }
-    return this.serverManager.startServer(modelName);
+    return this.serverManager.startServer(modelName, language);
   }
 
   async stopServer() {
@@ -262,6 +273,7 @@ class ParakeetManager {
     const startTime = Date.now();
     const result = await this.serverManager.transcribe(audioBuffer, {
       modelName: model,
+      language: options.language,
       signal: options.signal,
     });
     const elapsed = Date.now() - startTime;
@@ -475,7 +487,9 @@ class ParakeetManager {
           const stat = await fsPromises.stat(entryPath);
           if (
             stat.isDirectory() &&
-            REQUIRED_MODEL_FILES.every((file) => fs.existsSync(path.join(entryPath, file)))
+            getRequiredModelFiles(modelName).every((file) =>
+              fs.existsSync(path.join(entryPath, file))
+            )
           ) {
             modelDir = entry;
             break;
@@ -495,7 +509,9 @@ class ParakeetManager {
         }
       }
 
-      const missing = REQUIRED_MODEL_FILES.filter((f) => !fs.existsSync(path.join(targetDir, f)));
+      const missing = getRequiredModelFiles(modelName).filter(
+        (f) => !fs.existsSync(path.join(targetDir, f))
+      );
       if (missing.length > 0) {
         throw new Error(`Extracted model is missing required files: ${missing.join(", ")}`);
       }
@@ -557,21 +573,16 @@ class ParakeetManager {
     };
 
     if (this.serverManager.isModelDownloaded(modelName)) {
-      try {
-        const encoderPath = path.join(modelPath, "encoder.int8.onnx");
-        const stats = fs.statSync(encoderPath);
-        return {
-          model: modelName,
-          downloaded: true,
-          path: modelPath,
-          size_bytes: stats.size,
-          size_mb: Math.round(stats.size / (1024 * 1024)),
-          success: true,
-          ...downloadStatus,
-        };
-      } catch {
-        return { model: modelName, downloaded: false, success: true, ...downloadStatus };
-      }
+      const sizeBytes = this._getModelWeightsSize(modelPath);
+      return {
+        model: modelName,
+        downloaded: true,
+        path: modelPath,
+        size_bytes: sizeBytes,
+        size_mb: Math.round(sizeBytes / (1024 * 1024)),
+        success: true,
+        ...downloadStatus,
+      };
     }
 
     return { model: modelName, downloaded: false, success: true, ...downloadStatus };
@@ -598,13 +609,7 @@ class ParakeetManager {
 
     if (fs.existsSync(modelPath)) {
       try {
-        const encoderPath = path.join(modelPath, "encoder.int8.onnx");
-        let freedBytes = 0;
-
-        if (fs.existsSync(encoderPath)) {
-          const stats = fs.statSync(encoderPath);
-          freedBytes = stats.size;
-        }
+        const freedBytes = this._getModelWeightsSize(modelPath);
 
         fs.rmSync(modelPath, { recursive: true, force: true });
 
@@ -638,11 +643,7 @@ class ParakeetManager {
         if (entry.isDirectory()) {
           const dirPath = path.join(modelsDir, entry.name);
           try {
-            const encoderPath = path.join(dirPath, "encoder.int8.onnx");
-            if (fs.existsSync(encoderPath)) {
-              const stats = fs.statSync(encoderPath);
-              totalFreed += stats.size;
-            }
+            totalFreed += this._getModelWeightsSize(dirPath);
 
             fs.rmSync(dirPath, { recursive: true, force: true });
             deletedCount++;

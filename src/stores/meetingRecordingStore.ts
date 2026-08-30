@@ -150,6 +150,7 @@ const getMeetingTranscriptionOptions = () => {
     localProvider: resolved.localTranscriptionProvider,
     whisperModel: resolved.whisperModel,
     parakeetModel: resolved.parakeetModel,
+    cohereModel: resolved.cohereModel,
     selectedProvider: resolved.cloudTranscriptionProvider,
     selectedModel: resolved.cloudTranscriptionModel,
     byokProviders: getStreamingTranscriptionProviders(),

@@ -2461,6 +2461,9 @@
     "learnMore": "Scopri di più",
     "noneAvailable": "Nessun modello disponibile",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "ASR locale più preciso (5,42% WER medio, 14 lingue). Nessun rilevamento automatico della lingua"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilingue veloce con rilevamento automatico della lingua (25 lingue)",
         "parakeet_unified_en_0_6b": "ASR solo inglese con precisione all'avanguardia (5,91% WER medio)",

@@ -87,6 +87,34 @@
       "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11.tar.bz2",
       "extractDir": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
       "descriptionKey": "models.descriptions.parakeet.nemotron_3_5_asr_streaming_0_6b"
+    },
+    "cohere-transcribe-03-2026": {
+      "name": "Cohere Transcribe 2B",
+      "description": "Most accurate local ASR (5.42% avg WER, 14 languages). No auto language detection",
+      "size": "2.7GB",
+      "sizeMb": 2700,
+      "expectedSizeBytes": 1699791751,
+      "language": "multilingual",
+      "supportedLanguages": [
+        "ar",
+        "de",
+        "el",
+        "en",
+        "es",
+        "fr",
+        "it",
+        "ja",
+        "ko",
+        "nl",
+        "pl",
+        "pt",
+        "vi",
+        "zh"
+      ],
+      "modelType": "cohere-transcribe",
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01.tar.bz2",
+      "extractDir": "sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01",
+      "descriptionKey": "models.descriptions.cohere.cohere_transcribe_03_2026"
     }
   },
   "diarizationModels": {

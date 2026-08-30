@@ -5,6 +5,7 @@ const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
+const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
@@ -2683,7 +2684,7 @@ class IPCHandlers {
         const real = resolveAllowedAudioPath(filePath);
         if (!real) return { success: false, error: "File path not allowed" };
         const audioBuffer = fs.readFileSync(real);
-        if (options.provider === "nvidia") {
+        if (isSherpaLocalProvider(options.provider)) {
           const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, {
             ...options,
             signal,
@@ -3348,7 +3349,8 @@ class IPCHandlers {
       // Persisting a provider that failed to start would wedge every launch
       // into a failing pre-warm.
       if (result.success) {
-        process.env.LOCAL_TRANSCRIPTION_PROVIDER = "nvidia";
+        process.env.LOCAL_TRANSCRIPTION_PROVIDER =
+          getModelType(modelName) === "cohere-transcribe" ? "cohere" : "nvidia";
         process.env.PARAKEET_MODEL = modelName;
         await this.environmentManager.saveAllKeysToEnvFile();
       }
@@ -4642,7 +4644,8 @@ class IPCHandlers {
       if (prefs.useLocalWhisper && prefs.model) {
         // Local mode with model selected - set provider and model for pre-warming
         setVars.LOCAL_TRANSCRIPTION_PROVIDER = prefs.localTranscriptionProvider;
-        if (prefs.localTranscriptionProvider === "nvidia") {
+        if (prefs.language) setVars.DICTATION_LANGUAGE = prefs.language;
+        if (isSherpaLocalProvider(prefs.localTranscriptionProvider)) {
           setVars.PARAKEET_MODEL = prefs.model;
           clearVars.push("LOCAL_WHISPER_MODEL");
           this.whisperManager.stopServer().catch((err) => {
@@ -5814,10 +5817,17 @@ class IPCHandlers {
             };
           }
         } else if (route.transport === "local") {
-          if (settings.localTranscriptionProvider === "nvidia") {
+          if (isSherpaLocalProvider(settings.localTranscriptionProvider)) {
             const model =
-              settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3";
-            result = await this.parakeetManager.transcribeLocalParakeet(buffer, { model });
+              (settings.localTranscriptionProvider === "cohere"
+                ? settings.cohereModel
+                : settings.parakeetModel) ||
+              process.env.PARAKEET_MODEL ||
+              "parakeet-tdt-0.6b-v3";
+            result = await this.parakeetManager.transcribeLocalParakeet(buffer, {
+              model,
+              language,
+            });
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
             const vadOptions = this._resolveWhisperVadOptions("noteRecording");
             result = await this.whisperManager.transcribeLocalWhisper(buffer, {
@@ -7206,9 +7216,10 @@ class IPCHandlers {
 
       try {
         let result;
-        if (meetingLocalProvider === "nvidia") {
+        if (isSherpaLocalProvider(meetingLocalProvider)) {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: meetingLocalModel,
+            language: meetingLocalLanguage,
           });
         } else {
           const vadOptions = this._resolveWhisperVadOptions("meeting");
@@ -7501,9 +7512,10 @@ class IPCHandlers {
         const wav = pcm16ToWav(pcm);
 
         let result;
-        if (dictationPreviewProvider === "nvidia") {
+        if (isSherpaLocalProvider(dictationPreviewProvider)) {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: dictationPreviewModel,
+            language: dictationPreviewLanguage,
           });
         } else {
           const vadOptions = this._resolveWhisperVadOptions("dictation");

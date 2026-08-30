@@ -5,7 +5,7 @@ import type { OrgPolicy } from "./policy";
 import type { ManagedEnterpriseConfig } from "./enterpriseIdentity";
 import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./calendar";
 
-export type LocalTranscriptionProvider = "whisper" | "nvidia";
+export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 
 export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcribed";
 
@@ -1139,6 +1139,7 @@ declare global {
           cortiEnvironment?: string;
           cortiTenant?: string;
           parakeetModel: string;
+          cohereModel: string;
           whisperModel: string;
           preferredLanguage?: string;
           transcriptionMode?: InferenceMode;
@@ -1383,7 +1384,7 @@ declare global {
       transcribeAudioFile: (
         filePath: string,
         options?: {
-          provider?: "whisper" | "nvidia";
+          provider?: LocalTranscriptionProvider;
           model?: string;
           language?: string;
           requestId?: string;
@@ -1448,6 +1449,7 @@ declare global {
         useLocalWhisper: boolean;
         localTranscriptionProvider: LocalTranscriptionProvider;
         model?: string;
+        language?: string;
         useCleanupModel: boolean;
         cleanupMode: InferenceMode;
         cleanupModel?: string;
@@ -1542,7 +1544,7 @@ declare global {
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
         audioBlob: ArrayBuffer,
-        options?: { model?: string }
+        options?: { model?: string; language?: string }
       ) => Promise<ParakeetTranscriptionResult>;
       checkParakeetInstallation: () => Promise<ParakeetCheckResult>;
       downloadParakeetModel: (modelName: string) => Promise<ParakeetModelResult>;

@@ -2550,6 +2550,9 @@
     "learnMore": "Learn more",
     "noneAvailable": "No models available",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "Most accurate local ASR (5.42% avg WER, 14 languages). No auto language detection"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)",
         "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)",
