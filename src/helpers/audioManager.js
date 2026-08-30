@@ -295,8 +295,13 @@ const STREAMING_FINAL_CEILING_MS = 2000;
 // buildStreamingSessionOptions already stamps it) is pinned by
 // audioManagerStreamingRouting.test.js: the hardened main-process allowlist
 // fails closed on an options object that lost the tag (#1624).
-const makeDictationRealtimeProvider = (id) => ({
+//
+// `cloudMetered` is per-caller rather than per-factory: these two share an IPC
+// surface but not a billing relationship — OpenAI realtime runs as OpenWhispr
+// Cloud's own upstream, Tinfoil never does.
+const makeDictationRealtimeProvider = (id, { cloudMetered = false } = {}) => ({
   awaitsFinalTranscript: true,
+  cloudMetered,
   warmup: (opts) => window.electronAPI.dictationRealtimeWarmup({ ...opts, provider: id }),
   start: (opts) => window.electronAPI.dictationRealtimeStart({ ...opts, provider: id }),
   send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
@@ -307,8 +312,16 @@ const makeDictationRealtimeProvider = (id) => ({
   onSessionEnd: (cb) => window.electronAPI.onDictationRealtimeSessionEnd(cb),
 });
 
+// `cloudMetered` marks the providers whose audio travels through OpenWhispr
+// Cloud, and therefore the only sessions allowed to report usage back to it.
+// That report carries `sendLogs` — the transcript itself — so a provider that
+// transcribes elsewhere (the user's own key, their own server) must stay silent
+// or the feature ships their text to the service they deliberately routed
+// around. The flag is opt-in: a backend added later never reports until someone
+// states otherwise, so an oversight costs a usage row rather than a transcript.
 const STREAMING_PROVIDERS = {
   deepgram: {
+    cloudMetered: true,
     warmup: (opts) => window.electronAPI.deepgramStreamingWarmup(opts),
     start: (opts) => window.electronAPI.deepgramStreamingStart(opts),
     send: (buf) => window.electronAPI.deepgramStreamingSend(buf),
@@ -321,6 +334,7 @@ const STREAMING_PROVIDERS = {
     onSessionEnd: (cb) => window.electronAPI.onDeepgramSessionEnd(cb),
   },
   assemblyai: {
+    cloudMetered: true,
     warmup: (opts) => window.electronAPI.assemblyAiStreamingWarmup(opts),
     start: (opts) => window.electronAPI.assemblyAiStreamingStart(opts),
     send: (buf) => window.electronAPI.assemblyAiStreamingSend(buf),
@@ -332,7 +346,10 @@ const STREAMING_PROVIDERS = {
     onError: (cb) => window.electronAPI.onAssemblyAiError(cb),
     onSessionEnd: (cb) => window.electronAPI.onAssemblyAiSessionEnd(cb),
   },
-  "openai-realtime": makeDictationRealtimeProvider("openai-realtime"),
+  // Runs both as OpenWhispr Cloud's own upstream and, in BYOK mode, against the
+  // user's key — so the mode decides whether a session reports.
+  "openai-realtime": makeDictationRealtimeProvider("openai-realtime", { cloudMetered: true }),
+  // Streams over Corti's own WSS on the user's credentials.
   corti: {
     warmup: (opts) => window.electronAPI.cortiStreamingWarmup(opts),
     start: (opts) => window.electronAPI.cortiStreamingStart(opts),
@@ -345,6 +362,7 @@ const STREAMING_PROVIDERS = {
     onError: (cb) => window.electronAPI.onCortiError(cb),
     onSessionEnd: (cb) => window.electronAPI.onCortiSessionEnd(cb),
   },
+  // Streams against the user's own Tinfoil key.
   "tinfoil-realtime": makeDictationRealtimeProvider("tinfoil-realtime"),
 };
 
@@ -488,6 +506,7 @@ class AudioManager {
     this.streamingPartialText = "";
     this.streamingTextBump = null;
     this.streamingTextDebounce = null;
+    this.streamingSessionMetered = false;
     this.cachedMicDeviceId = null;
     this.rejectedMicDeviceId = null;
     this.persistentAudioContext = null;
@@ -4209,15 +4228,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const result = await withSessionRefresh(async () => {
         const streamingSettings = getSettings();
         const { useLocalWhisper } = streamingSettings;
-        const res = await provider.start(
-          buildStreamingSessionOptions({
-            providerName: this.getStreamingProviderName(),
-            settings: streamingSettings,
-            language: this.getEffectiveSttLanguage(streamingSettings),
-            keyterms: this.getKeyterms(),
-            voiceAgentRequested: this.voiceAgentRequested,
-          })
-        );
+        const sessionOptions = buildStreamingSessionOptions({
+          providerName: this.getStreamingProviderName(),
+          settings: streamingSettings,
+          language: this.getEffectiveSttLanguage(streamingSettings),
+          keyterms: this.getKeyterms(),
+          voiceAgentRequested: this.voiceAgentRequested,
+        });
+        // Pin the usage decision to the routing this session actually connects
+        // with; settings may change before it ends, the routing will not.
+        this.streamingSessionMetered =
+          !!provider.cloudMetered && sessionOptions.mode === "openwhispr";
+        const res = await provider.start(sessionOptions);
 
         if (!res.success) {
           if (res.code === "NO_API") {
@@ -4886,7 +4908,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
 
-      if (!usedBatchFallback) {
+      if (!usedBatchFallback && this.streamingSessionMetered) {
         (async () => {
           try {
             await withSessionRefresh(async () => {
