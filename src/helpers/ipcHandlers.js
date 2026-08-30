@@ -262,7 +262,17 @@ const approvedAudioPaths = new Set();
 // (e.g. the CLI-import bridge) that need to validate a path outside the file
 // dialog reuse the exact same supported-extension list instead of a second,
 // driftable copy.
-const SUPPORTED_AUDIO_EXTENSIONS = ["mp3", "wav", "m4a", "webm", "ogg", "oga", "flac", "aac", "opus"];
+const SUPPORTED_AUDIO_EXTENSIONS = [
+  "mp3",
+  "wav",
+  "m4a",
+  "webm",
+  "ogg",
+  "oga",
+  "flac",
+  "aac",
+  "opus",
+];
 
 function approveAudioPath(filePath) {
   if (typeof filePath !== "string" || !filePath) return;
@@ -2608,7 +2618,9 @@ class IPCHandlers {
     // the decision to persist a note are serialized through one place
     // instead of racing across two processes.
     ipcMain.handle("cli-audio-import:begin-persist", (_event, jobId) => {
-      return this.cliAudioImportBridge?.beginPersist(jobId) ?? { ok: false, reason: "not_available" };
+      return (
+        this.cliAudioImportBridge?.beginPersist(jobId) ?? { ok: false, reason: "not_available" }
+      );
     });
     // Authoritative fallback for a renderer that computed a real outcome
     // but couldn't deliver it via report-result (e.g. that IPC call itself

@@ -74,7 +74,11 @@ function makeFakeWebContents() {
     _fireRenderProcessGone(details = { reason: "crashed" }) {
       fire("render-process-gone", {}, details);
     },
-    _fireNavigation({ isInPlace = false, isMainFrame = true, url = "http://localhost/control-panel" } = {}) {
+    _fireNavigation({
+      isInPlace = false,
+      isMainFrame = true,
+      url = "http://localhost/control-panel",
+    } = {}) {
       fire("did-start-navigation", {}, url, isInPlace, isMainFrame);
     },
     _listenerCount(event) {
@@ -592,7 +596,11 @@ test("a completed report is rejected once the job is already cancelling, and ter
 
   const stored = bridge.get(first.job_id);
   assert.equal(stored.status, "cancelled");
-  assert.equal(stored.result, null, "no note/result data from the rejected completion leaks through");
+  assert.equal(
+    stored.result,
+    null,
+    "no note/result data from the rejected completion leaks through"
+  );
 
   // The queue must still advance to the next job.
   assert.equal(bridge.get(second.job_id).status, "transcribing");
@@ -684,7 +692,11 @@ test("cancel arriving after beginPersist has committed reports too_late without 
   );
   const stored = bridge.get(job.job_id);
   assert.equal(stored.stage, "persisting", "state must stay persisting, never flip to cancelling");
-  assert.equal(stored.status, "transcribing", "status is still non-terminal, awaiting the real report");
+  assert.equal(
+    stored.status,
+    "transcribing",
+    "status is still non-terminal, awaiting the real report"
+  );
 });
 
 test("a completed report after beginPersist committed completes normally, not cancelled", (t) => {
@@ -747,10 +759,7 @@ test("failJob defaults to a diagnostic message when no reason is given", (t) => 
 
   bridge.failJob(job.job_id, requestId);
 
-  assert.equal(
-    bridge.get(job.job_id).error,
-    "the renderer could not report this import's result"
-  );
+  assert.equal(bridge.get(job.job_id).error, "the renderer could not report this import's result");
 });
 
 test("failJob rejects an unknown job id", () => {

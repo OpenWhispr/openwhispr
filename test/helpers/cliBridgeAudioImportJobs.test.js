@@ -53,7 +53,12 @@ test("POST /v1/audio-import-jobs returns 202 with the submitted job", async () =
   });
   assert.equal(route.status, 202);
   const result = await promise;
-  assert.deepEqual(result.data, { job_id: "job-1", status: "queued", stage: "queued", progress: 0 });
+  assert.deepEqual(result.data, {
+    job_id: "job-1",
+    status: "queued",
+    stage: "queued",
+    progress: 0,
+  });
 });
 
 test("POST /v1/audio-import-jobs surfaces a validation rejection as 400", async () => {

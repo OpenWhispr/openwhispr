@@ -92,12 +92,10 @@ export function useCliAudioImportHost(): void {
         return result;
       };
       runCliAudioImport(job.path, job.requestId, shouldAbort, beginPersist)
-        .catch(
-          (error): CliAudioImportOutcome => ({
-            status: "failed",
-            error: error?.message || "Local audio import failed",
-          })
-        )
+        .catch((error): CliAudioImportOutcome => ({
+          status: "failed",
+          error: error?.message || "Local audio import failed",
+        }))
         .then(async (outcome) => {
           if (activeRequestIdRef.current === job.requestId) activeRequestIdRef.current = null;
           cancelledRequestIdsRef.current.delete(job.requestId);

@@ -2202,9 +2202,7 @@ declare global {
       ) => Promise<void>;
       // Atomic commit gate (see cliAudioImportBridge.js#beginPersist): must
       // resolve ok:true before the renderer may call saveUploadNote.
-      beginCliAudioImportPersist?: (
-        jobId: string
-      ) => Promise<{ ok: boolean; reason?: string }>;
+      beginCliAudioImportPersist?: (jobId: string) => Promise<{ ok: boolean; reason?: string }>;
       // Authoritative fallback terminalization for when
       // reportCliAudioImportResult itself is unreachable (see
       // cliAudioImportBridge.js#failJob).

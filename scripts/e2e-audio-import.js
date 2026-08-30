@@ -85,7 +85,12 @@ const CACHE_ROOT = path.join(HOME_DIR, ".cache", "openwhispr");
 // of them (even empty) is required so getCacheRoot()'s legacy-migration
 // step no-ops via its `fs.existsSync(to)` skip check for every one of them —
 // see the isolation note by OPENWHISPR_CACHE_ROOT below for why this matters.
-const RELOCATED_MODEL_SUBDIRS = ["whisper-models", "parakeet-models", "diarization-models", "models"];
+const RELOCATED_MODEL_SUBDIRS = [
+  "whisper-models",
+  "parakeet-models",
+  "diarization-models",
+  "models",
+];
 
 function ensureDirs() {
   for (const d of [
@@ -125,9 +130,7 @@ function ensureWhisperServerBinary() {
 function ensureElectronBinary() {
   const electronPath = require("electron");
   if (typeof electronPath !== "string" || !fs.existsSync(electronPath)) {
-    throw new Error(
-      "electron binary missing; run `node node_modules/electron/install.js` first"
-    );
+    throw new Error("electron binary missing; run `node node_modules/electron/install.js` first");
   }
   return electronPath;
 }
@@ -533,14 +536,12 @@ async function main() {
       network_requests_during_import: networkRequests.length,
       external_requests_during_import: externalRequests,
     };
-    fs.writeFileSync(
-      path.join(EVIDENCE_DIR, "evidence.json"),
-      JSON.stringify(evidence, null, 2)
-    );
+    fs.writeFileSync(path.join(EVIDENCE_DIR, "evidence.json"), JSON.stringify(evidence, null, 2));
     log("evidence written:", path.join(EVIDENCE_DIR, "evidence.json"));
 
     const failures = [];
-    if (note.note_type !== "upload") failures.push(`note_type is "${note.note_type}", expected "upload"`);
+    if (note.note_type !== "upload")
+      failures.push(`note_type is "${note.note_type}", expected "upload"`);
     if (!visibleInList) failures.push("note not present in notes list");
     if (looksLikePlaceholder) failures.push("transcript matches a known placeholder string");
     if (!isNonEmptyTranscript) failures.push("transcript is empty");

@@ -87,7 +87,8 @@ export async function runCliAudioImport(
     localTranscriptionProvider: resolved.localTranscriptionProvider,
     whisperModel: resolved.whisperModel,
     parakeetModel: resolved.parakeetModel,
-    // transcribeFile only reads the four fields above once useLocalWhisper
+    cohereModel: resolved.cohereModel,
+    // transcribeFile only reads the local-provider fields above once useLocalWhisper
     // is true — these remain inert, satisfying FileTranscriptionConfig's
     // shape without exercising any cloud/BYOK branch.
     isOpenWhisprCloud: false,

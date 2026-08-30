@@ -156,7 +156,9 @@ test("maps an UPLOAD_CANCELLED transcription result to a cancelled outcome", asy
       }),
     },
   });
-  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-cli-audio-import-cancel-" });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-cli-audio-import-cancel-",
+  });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   useSettingsStore.setState({ uploadUseLocalWhisper: true });
   const { runCliAudioImport } = await vite.ssrLoadModule("/services/cliAudioImport.ts");
@@ -239,7 +241,12 @@ test("beginPersist resolving not-ok (cancel won the race) is honored before savi
     return { ok: false, reason: "cancelling" };
   };
 
-  const outcome = await runCliAudioImport("/abs/path/audio.mp3", "req-3c", () => false, beginPersist);
+  const outcome = await runCliAudioImport(
+    "/abs/path/audio.mp3",
+    "req-3c",
+    () => false,
+    beginPersist
+  );
 
   assert.equal(beginPersistCalled, true, "the commit gate was consulted");
   assert.equal(getFoldersCalled, true, "the folder lookup (a read) is allowed before the gate");
@@ -273,7 +280,12 @@ test("beginPersist resolving ok (commit won the race) proceeds to save and compl
     return { ok: true };
   };
 
-  const outcome = await runCliAudioImport("/abs/path/audio.mp3", "req-3d", () => false, beginPersist);
+  const outcome = await runCliAudioImport(
+    "/abs/path/audio.mp3",
+    "req-3d",
+    () => false,
+    beginPersist
+  );
 
   assert.equal(beginPersistCalled, true);
   assert.equal(saveNoteCalled, true, "commit winning must still create the note");
@@ -305,7 +317,12 @@ test("a beginPersist call that throws fails closed: no note is saved, outcome is
     throw new Error("IPC channel closed");
   };
 
-  const outcome = await runCliAudioImport("/abs/path/audio.mp3", "req-3e", () => false, beginPersist);
+  const outcome = await runCliAudioImport(
+    "/abs/path/audio.mp3",
+    "req-3e",
+    () => false,
+    beginPersist
+  );
 
   assert.equal(saveNoteCalled, false, "must not save a note when the commit gate itself errors");
   assert.equal(outcome.status, "failed");
@@ -340,7 +357,12 @@ test("an absent commit gate (the exact reason useCliAudioImportHost reports when
 
   const beginPersist = async () => ({ ok: false, reason: "begin_persist_unavailable" });
 
-  const outcome = await runCliAudioImport("/abs/path/audio.mp3", "req-3f", () => false, beginPersist);
+  const outcome = await runCliAudioImport(
+    "/abs/path/audio.mp3",
+    "req-3f",
+    () => false,
+    beginPersist
+  );
 
   assert.equal(saveNoteCalled, false, "an absent/unreachable gate must never permit a save");
   assert.equal(outcome.status, "failed", "must be an explicit failure, not mislabeled cancelled");
