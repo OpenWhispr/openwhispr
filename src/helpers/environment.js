@@ -41,6 +41,7 @@ const PERSISTED_KEYS = [
   "TRANSLATION_KEY",
   "MEETING_KEY",
   "ACTIVATION_MODE",
+  "ACTIVATION_MODE_BY_HOTKEY",
   "FLOATING_ICON_AUTO_HIDE",
   "PANEL_START_POSITION",
   "START_MINIMIZED",
@@ -449,6 +450,31 @@ class EnvironmentManager {
   saveActivationMode(mode) {
     const validMode = mode === "push" ? "push" : "tap";
     const result = this._saveKey("ACTIVATION_MODE", validMode);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getActivationModes() {
+    try {
+      const parsed = JSON.parse(this._getKey("ACTIVATION_MODE_BY_HOTKEY") || "{}");
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return {};
+      return Object.fromEntries(
+        Object.entries(parsed).filter(
+          ([hotkey, mode]) => typeof hotkey === "string" && (mode === "tap" || mode === "push")
+        )
+      );
+    } catch {
+      return {};
+    }
+  }
+
+  saveActivationModes(modes) {
+    const validModes = Object.fromEntries(
+      Object.entries(modes || {}).filter(
+        ([hotkey, mode]) => typeof hotkey === "string" && (mode === "tap" || mode === "push")
+      )
+    );
+    const result = this._saveKey("ACTIVATION_MODE_BY_HOTKEY", JSON.stringify(validModes));
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

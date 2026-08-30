@@ -24,6 +24,8 @@ export interface HotkeyListInputProps {
   maxHotkeys?: number;
   /** Per-hotkey validation (e.g. cross-slot conflicts). Receives a single hotkey. */
   validate?: (hotkey: string) => string | null | undefined;
+  /** Optional content shown beside each configured hotkey. */
+  renderHotkeyEnd?: (hotkey: string, index: number) => ReactNode;
   /** Optional content shown on the right of the action row (e.g. a "Reset" link). */
   footerEnd?: ReactNode;
 }
@@ -42,6 +44,7 @@ export function HotkeyListInput({
   required = false,
   maxHotkeys = Infinity,
   validate,
+  renderHotkeyEnd,
   footerEnd,
 }: HotkeyListInputProps) {
   const { t } = useTranslation();
@@ -108,14 +111,18 @@ export function HotkeyListInput({
   return (
     <div className="flex flex-col gap-2">
       {items.map((hotkey, index) => (
-        <HotkeyInput
-          key={`${hotkey}-${index}`}
-          value={hotkey}
-          onChange={(next) => replaceAt(index, next)}
-          onClear={canRemove ? () => void removeAt(index) : undefined}
-          disabled={disabled}
-          validate={makeValidate(index)}
-        />
+        <div key={`${hotkey}-${index}`} className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <HotkeyInput
+              value={hotkey}
+              onChange={(next) => replaceAt(index, next)}
+              onClear={canRemove ? () => void removeAt(index) : undefined}
+              disabled={disabled}
+              validate={makeValidate(index)}
+            />
+          </div>
+          {renderHotkeyEnd?.(hotkey, index)}
+        </div>
       ))}
 
       {(items.length === 0 || adding) && (

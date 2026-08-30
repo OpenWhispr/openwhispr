@@ -546,8 +546,8 @@ class WindowManager {
         return;
       }
 
-      const activationMode = this.getActivationMode();
       const currentHotkey = triggeredHotkey || this.hotkeyManager.getCurrentHotkey?.();
+      const activationMode = this.getActivationMode(currentHotkey);
 
       if (process.platform === "linux" && activationMode === "push") {
         if (phase === "down") {
@@ -1022,8 +1022,11 @@ class WindowManager {
     }
   }
 
-  getActivationMode() {
-    return this._cachedActivationMode;
+  getActivationMode(hotkey) {
+    return (
+      this.hotkeyManager.getActivationMode?.(hotkey, this._cachedActivationMode) ??
+      this._cachedActivationMode
+    );
   }
 
   async setActivationModeCache(mode) {
@@ -1034,6 +1037,10 @@ class WindowManager {
     return true;
   }
 
+  async setActivationModesCache(modes) {
+    return await this.hotkeyManager.setActivationModes(modes);
+  }
+
   /**
    * Sync the native low-level key listeners (Windows/Linux) so every hotkey slot
    * that needs one is watched. Call after any change to a slot hotkey or the
@@ -1042,15 +1049,16 @@ class WindowManager {
   reconcileNativeKeyListeners() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     if (this.hotkeyManager.isInListeningMode()) return;
-    const activationMode = this.getActivationMode();
-    const nativeListenerKeys = this.hotkeyManager.getNativeListenerKeys(activationMode);
+    const nativeListenerKeys = this.hotkeyManager.getNativeListenerKeys(this._cachedActivationMode);
     // Native desktop shortcuts replace the low-level listener in tap mode. In
     // push mode, keep the dictation listener as a release-event fallback; the
     // push state machine makes duplicate backend and low-level phases harmless.
     const keys = this.hotkeyManager.isUsingNativeShortcut()
-      ? activationMode === "push"
-        ? nativeListenerKeys.filter((key) => this.hotkeyManager.slotHasHotkey("dictation", key))
-        : []
+      ? nativeListenerKeys.filter(
+          (key) =>
+            this.hotkeyManager.slotHasHotkey("dictation", key) &&
+            this.getActivationMode(key) === "push"
+        )
       : nativeListenerKeys;
     if (process.platform === "win32" && this.windowsKeyManager) {
       this.windowsKeyManager.setKeys(keys);
