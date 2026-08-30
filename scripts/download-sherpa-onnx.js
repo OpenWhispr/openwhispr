@@ -14,7 +14,7 @@ const {
   compareVersions,
 } = require("../src/helpers/parakeetCapability");
 
-const SHERPA_ONNX_VERSION = "1.13.4";
+const SHERPA_ONNX_VERSION = "1.13.6";
 const GITHUB_RELEASE_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}`;
 
 // Binary configurations for each platform
