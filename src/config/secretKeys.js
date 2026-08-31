@@ -35,6 +35,13 @@ const BYOK_API_KEYS = [
     save: "saveGroqKey",
     storeKey: "groqApiKey",
   },
+  {
+    base: "assemblyai",
+    env: "ASSEMBLYAI_API_KEY",
+    get: "getAssemblyAIKey",
+    save: "saveAssemblyAIKey",
+    storeKey: "assemblyaiApiKey",
+  },
   { base: "xai", env: "XAI_API_KEY", get: "getXaiKey", save: "saveXaiKey", storeKey: "xaiApiKey" },
   {
     base: "mistral",

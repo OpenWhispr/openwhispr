@@ -9,7 +9,6 @@ const { BYOK_API_KEYS } = require("../config/secretKeys");
 
 const SECRET_KEYS = [
   ...BYOK_API_KEYS.map((k) => k.env),
-  "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
   "CORTI_CLIENT_ID",
   "CORTI_CLIENT_SECRET",
@@ -263,14 +262,6 @@ class EnvironmentManager {
       delete process.env[envVarName];
     }
     return { success: true };
-  }
-
-  getAssemblyAIKey() {
-    return this._getKey("ASSEMBLYAI_API_KEY");
-  }
-
-  saveAssemblyAIKey(key) {
-    return this._saveKey("ASSEMBLYAI_API_KEY", key);
   }
 
   getDeepgramKey() {

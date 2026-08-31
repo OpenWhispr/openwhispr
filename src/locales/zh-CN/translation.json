@@ -2488,7 +2488,9 @@
         "gemini_3_5_transcribe": "Google Gemini 语音转文字",
         "corti_transcribe": "临床级医疗转录",
         "xai_grok_stt": "xAI 高精度语音识别",
-        "tinfoil_voxtral": "可验证的私密转录"
+        "tinfoil_voxtral": "可验证的私密转录",
+        "assemblyai_universal_3_5_pro": "支持段落结构的转录，标点符号精准出众",
+        "assemblyai_universal_2": "上一代 AssemblyAI 批量转录模型"
       },
       "cloud": {
         "openai_gpt_5_2": "强大的推理模型",

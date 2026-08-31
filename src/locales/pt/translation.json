@@ -2467,7 +2467,9 @@
         "gemini_3_5_transcribe": "Fala para texto Gemini do Google",
         "corti_transcribe": "Transcrição médica de nível clínico",
         "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI",
-        "tinfoil_voxtral": "Transcrição verificavelmente privada"
+        "tinfoil_voxtral": "Transcrição verificavelmente privada",
+        "assemblyai_universal_3_5_pro": "Transcrição com consciência de parágrafos e pontuação de primeira linha",
+        "assemblyai_universal_2": "Modelo de lote da AssemblyAI da geração anterior"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo forte de raciocínio",

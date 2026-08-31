@@ -2488,7 +2488,9 @@
         "gemini_3_5_transcribe": "Riconoscimento vocale Gemini di Google",
         "corti_transcribe": "Trascrizione medica di livello clinico",
         "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI",
-        "tinfoil_voxtral": "Trascrizione verificabilmente privata"
+        "tinfoil_voxtral": "Trascrizione verificabilmente privata",
+        "assemblyai_universal_3_5_pro": "Trascrizione attenta ai paragrafi con punteggiatura di primo livello",
+        "assemblyai_universal_2": "Modello batch AssemblyAI della generazione precedente"
       },
       "cloud": {
         "openai_gpt_5_2": "Modello di ragionamento potente",

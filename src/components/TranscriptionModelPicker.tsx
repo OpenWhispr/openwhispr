@@ -225,6 +225,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "mistral", name: "Mistral" },
   { id: "gemini", name: "Gemini" },
   { id: "corti", name: "Corti" },
+  { id: "assemblyai", name: "AssemblyAI" },
   { id: "tinfoil", name: "Tinfoil" },
   { id: "custom", name: "Custom" },
 ];
@@ -236,6 +237,7 @@ interface ProviderCredentialField {
     | "xaiApiKey"
     | "mistralApiKey"
     | "geminiApiKey"
+    | "assemblyaiApiKey"
     | "cortiClientId"
     | "cortiClientSecret"
     | "cortiEnvironment"
@@ -292,6 +294,10 @@ const PROVIDER_CREDENTIALS: Record<
         placeholder: "base",
       },
     ],
+  },
+  assemblyai: {
+    consoleUrl: "https://www.assemblyai.com/app/api-keys",
+    fields: [{ key: "assemblyaiApiKey", input: "secret" }],
   },
   tinfoil: {
     consoleUrl: "https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr",
@@ -386,6 +392,8 @@ export default function TranscriptionModelPicker({
   const setCortiTenant = useSettingsStore((s) => s.setCortiTenant);
   const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
+  const assemblyaiApiKey = useSettingsStore((s) => s.assemblyaiApiKey);
+  const setAssemblyaiApiKey = useSettingsStore((s) => s.setAssemblyaiApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
@@ -940,6 +948,7 @@ export default function TranscriptionModelPicker({
     cortiEnvironment,
     cortiTenant,
     tinfoilApiKey,
+    assemblyaiApiKey,
   };
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
     openaiApiKey: setOpenaiApiKey,
@@ -952,6 +961,7 @@ export default function TranscriptionModelPicker({
     cortiEnvironment: setCortiEnvironment,
     cortiTenant: setCortiTenant,
     tinfoilApiKey: setTinfoilApiKey,
+    assemblyaiApiKey: setAssemblyaiApiKey,
   };
 
   const cloudModelOptions = useMemo(() => {

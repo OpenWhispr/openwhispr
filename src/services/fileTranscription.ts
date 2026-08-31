@@ -54,6 +54,7 @@ export interface TranscriptionApiKeys {
   mistralApiKey: string;
   geminiApiKey: string;
   tinfoilApiKey: string;
+  assemblyaiApiKey: string;
   customTranscriptionApiKey?: string;
 }
 
@@ -71,6 +72,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.geminiApiKey;
     case "tinfoil":
       return keys.tinfoilApiKey;
+    case "assemblyai":
+      return keys.assemblyaiApiKey;
     case "custom":
       return keys.customTranscriptionApiKey || "";
     default:
