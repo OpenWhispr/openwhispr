@@ -536,7 +536,10 @@ function initializeCoreManagers() {
   // the same instance.
   cliAudioImportBridge = new CliAudioImportBridge({
     approveAudioPath: IPCHandlers.approveAudioPath,
+    revokeApprovedAudioPath: IPCHandlers.revokeAudioPath,
     resolveAllowedAudioPath: IPCHandlers.resolveAllowedAudioPath,
+    cancelActiveTranscription: (requestId) =>
+      ipcHandlers?.cancelUploadTranscription(requestId) ?? 0,
     supportedAudioExtensions: IPCHandlers.SUPPORTED_AUDIO_EXTENSIONS,
   });
   ipcHandlers = new IPCHandlers({

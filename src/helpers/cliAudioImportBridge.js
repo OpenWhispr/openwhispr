@@ -14,6 +14,7 @@ const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 // after it has already gone terminal.
 const TERMINAL_JOB_RETENTION_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_RETAINED_TERMINAL_JOBS = 20;
+const MAX_QUEUED_JOBS = 20;
 // The CLI's --wait polls this bridge roughly once a second (see the CLI
 // worktree's transcribe command). The count cap alone offers no such
 // guarantee: a burst of other jobs terminalizing in the same pump cycle can
@@ -43,6 +44,8 @@ class CliAudioImportBridge {
   constructor({
     resolveAllowedAudioPath,
     approveAudioPath,
+    revokeApprovedAudioPath = () => {},
+    cancelActiveTranscription = () => {},
     supportedAudioExtensions,
     now = Date.now,
     setTimeoutFn = setTimeout,
@@ -50,6 +53,8 @@ class CliAudioImportBridge {
   }) {
     this._resolveAllowedAudioPath = resolveAllowedAudioPath;
     this._approveAudioPath = approveAudioPath;
+    this._revokeApprovedAudioPath = revokeApprovedAudioPath;
+    this._cancelActiveTranscription = cancelActiveTranscription;
     this._supportedExtensions = new Set(
       (supportedAudioExtensions || []).map((ext) => ext.toLowerCase())
     );
@@ -129,14 +134,18 @@ class CliAudioImportBridge {
   _failActiveJob(reason) {
     const jobId = this._activeJobId;
     if (!jobId) return;
-    this._activeJobId = null;
     const job = this._jobs.get(jobId);
     if (job && !TERMINAL_STATUSES.has(job.status)) {
+      this._cancelActiveTranscription(job.requestId);
+      this._activeJobId = null;
       job.status = "failed";
       job.stage = "failed";
       job.error = reason;
       job.updatedAt = this._nowIso();
+      this._releaseJobPath(job);
       this._scheduleTerminalJobPrune();
+    } else {
+      this._activeJobId = null;
     }
     this._pump();
   }
@@ -178,6 +187,12 @@ class CliAudioImportBridge {
         { code: "RENDERER_UNAVAILABLE" }
       );
     }
+    if (this._queue.length >= MAX_QUEUED_JOBS) {
+      throw Object.assign(
+        new Error("the desktop app's audio import queue is full; wait for an import to finish"),
+        { code: "QUEUE_FULL" }
+      );
+    }
 
     // Pre-approve through the same main-process allowlist the file-dialog/
     // drag-drop flow populates (see ipcHandlers.js#approveAudioPath): the
@@ -189,6 +204,7 @@ class CliAudioImportBridge {
     const job = {
       id: crypto.randomUUID(),
       path: real,
+      pathApproved: true,
       requestId: crypto.randomUUID(),
       status: "queued",
       stage: "queued",
@@ -218,6 +234,7 @@ class CliAudioImportBridge {
         job.stage = "failed";
         job.error = "the desktop app's renderer became unavailable before this job could run";
         job.updatedAt = this._nowIso();
+        this._releaseJobPath(job);
         continue;
       }
 
@@ -235,11 +252,13 @@ class CliAudioImportBridge {
       } catch (err) {
         // Same failure mode as a destroyed renderer: it can't run this job,
         // so fail it explicitly instead of leaving it stuck "transcribing".
+        this._cancelActiveTranscription(job.requestId);
         this._activeJobId = null;
         job.status = "failed";
         job.stage = "failed";
         job.error = `failed to dispatch import job to the renderer: ${err.message}`;
         job.updatedAt = this._nowIso();
+        this._releaseJobPath(job);
       }
     }
 
@@ -256,23 +275,39 @@ class CliAudioImportBridge {
       this._terminalJobPruneTimer = null;
     }
 
-    let earliestExpiry = Infinity;
-    for (const job of this._jobs.values()) {
-      if (!TERMINAL_STATUSES.has(job.status)) continue;
-      earliestExpiry = Math.min(
-        earliestExpiry,
-        Date.parse(job.updatedAt) + TERMINAL_JOB_RETENTION_MS
-      );
-    }
-    if (!Number.isFinite(earliestExpiry)) return;
+    const terminalJobs = [...this._jobs.values()]
+      .filter((job) => TERMINAL_STATUSES.has(job.status))
+      .sort((a, b) => Date.parse(a.updatedAt) - Date.parse(b.updatedAt));
+    if (terminalJobs.length === 0) return;
 
-    const delay = Math.max(0, earliestExpiry - this._now()) + 1;
+    let earliestPrune = terminalJobs.reduce(
+      (earliest, job) => Math.min(earliest, Date.parse(job.updatedAt) + TERMINAL_JOB_RETENTION_MS),
+      Infinity
+    );
+    const excess = terminalJobs.length - MAX_RETAINED_TERMINAL_JOBS;
+    if (excess > 0) {
+      for (const job of terminalJobs.slice(0, excess)) {
+        earliestPrune = Math.min(
+          earliestPrune,
+          Date.parse(job.updatedAt) + TERMINAL_JOB_EVICTION_GRACE_MS
+        );
+      }
+    }
+
+    const delay = Math.max(0, earliestPrune - this._now()) + 1;
     this._terminalJobPruneTimer = this._setTimeout(() => {
       this._terminalJobPruneTimer = null;
       this._pruneTerminalJobs();
       this._scheduleTerminalJobPrune();
     }, delay);
     this._terminalJobPruneTimer?.unref?.();
+  }
+
+  _releaseJobPath(job) {
+    if (!job.pathApproved) return;
+    this._revokeApprovedAudioPath(job.path);
+    job.pathApproved = false;
+    job.path = null;
   }
 
   // Bounds in-memory retention of terminal jobs (see TERMINAL_JOB_RETENTION_MS
@@ -285,6 +320,7 @@ class CliAudioImportBridge {
         TERMINAL_STATUSES.has(job.status) &&
         now - Date.parse(job.updatedAt) > TERMINAL_JOB_RETENTION_MS
       ) {
+        this._releaseJobPath(job);
         this._jobs.delete(id);
       }
     }
@@ -302,7 +338,9 @@ class CliAudioImportBridge {
     );
     const evictionCount = Math.min(excess, evictable.length);
     for (let i = 0; i < evictionCount; i++) {
-      this._jobs.delete(evictable[i][0]);
+      const [id, job] = evictable[i];
+      this._releaseJobPath(job);
+      this._jobs.delete(id);
     }
   }
 
@@ -342,6 +380,7 @@ class CliAudioImportBridge {
       job.error = report?.error || "local audio import failed";
     }
 
+    this._releaseJobPath(job);
     this._scheduleTerminalJobPrune();
     if (this._activeJobId === job.id) {
       this._activeJobId = null;
@@ -389,6 +428,7 @@ class CliAudioImportBridge {
     job.stage = "failed";
     job.error = reason || "the renderer could not report this import's result";
     job.updatedAt = this._nowIso();
+    this._releaseJobPath(job);
     this._scheduleTerminalJobPrune();
     if (this._activeJobId === job.id) {
       this._activeJobId = null;
@@ -427,6 +467,7 @@ class CliAudioImportBridge {
       job.status = "cancelled";
       job.stage = "cancelled";
       job.updatedAt = this._nowIso();
+      this._releaseJobPath(job);
       this._scheduleTerminalJobPrune();
       return { job: this._toJson(job), cancelled: true };
     }

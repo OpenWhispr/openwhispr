@@ -163,6 +163,32 @@ test("a second submission queues behind the active job", (t) => {
   assert.equal(renderer.sent.length, 2, "the queued job is pumped once the active one finishes");
 });
 
+test("submit rejects once the queue reaches its admission limit", (t) => {
+  const bridge = makeBridge();
+  bridge.registerRenderer(makeFakeWebContents());
+  bridge.submit(makeAudioFile(t, "active.mp3"));
+  for (let i = 0; i < 20; i++) {
+    bridge.submit(makeAudioFile(t, `queued-${i}.mp3`));
+  }
+
+  assert.throws(() => bridge.submit(makeAudioFile(t, "rejected.mp3")), { code: "QUEUE_FULL" });
+});
+
+test("terminal jobs revoke their bridge-only path approval", (t) => {
+  const approved = new Set();
+  const bridge = makeBridge({
+    approveAudioPath: (filePath) => approved.add(filePath),
+    revokeApprovedAudioPath: (filePath) => approved.delete(filePath),
+  });
+  bridge.registerRenderer(makeFakeWebContents());
+  const job = bridge.submit(makeAudioFile(t));
+
+  assert.equal(approved.size, 1);
+  bridge.reportResult(job.job_id, { status: "completed", text: "done" });
+
+  assert.equal(approved.size, 0);
+});
+
 test("reportResult populates the result for a completed job", (t) => {
   const bridge = makeBridge();
   bridge.registerRenderer(makeFakeWebContents());
@@ -291,6 +317,20 @@ test("renderer destruction immediately terminalizes the active job, not just que
   // an already-terminal job.
   bridge.reportResult(job.job_id, { status: "completed", text: "too late" });
   assert.equal(bridge.get(job.job_id).status, "failed");
+});
+
+test("renderer loss aborts the active transcription before terminalizing its job", (t) => {
+  const cancelledRequestIds = [];
+  const bridge = makeBridge({
+    cancelActiveTranscription: (requestId) => cancelledRequestIds.push(requestId),
+  });
+  const renderer = makeFakeWebContents();
+  bridge.registerRenderer(renderer);
+  bridge.submit(makeAudioFile(t));
+
+  renderer._fireDestroyed();
+
+  assert.deepEqual(cancelledRequestIds, [renderer.sent[0].payload.requestId]);
 });
 
 test("renderer destruction while active drains the queue so --wait can never poll indefinitely", (t) => {
@@ -601,6 +641,40 @@ test("terminal job count is capped once entries clear the eviction grace period,
   assert.equal(bridge.get(jobs[0].job_id), null, "oldest terminal job was evicted");
   assert.equal(bridge.get(jobs[1].job_id), null, "second-oldest terminal job was evicted");
   assert.ok(bridge.get(jobs.at(-1).job_id), "the most recent terminal job is retained");
+});
+
+test("an idle terminal burst is capped after its scheduled eviction grace period", (t) => {
+  let now = 0;
+  const timers = [];
+  const bridge = makeBridge({
+    now: () => now,
+    setTimeoutFn(callback, delay) {
+      const timer = { callback, delay, cleared: false };
+      timers.push(timer);
+      return timer;
+    },
+    clearTimeoutFn(timer) {
+      timer.cleared = true;
+    },
+  });
+  bridge.registerRenderer(makeFakeWebContents());
+
+  const jobs = [];
+  for (let i = 0; i < 22; i++) {
+    const job = bridge.submit(makeAudioFile(t, `clip-${i}.mp3`));
+    bridge.reportResult(job.job_id, { status: "completed", text: `hi ${i}` });
+    jobs.push(job);
+  }
+
+  const graceTimer = timers.at(-1);
+  assert.equal(graceTimer.delay, 5 * 1000 + 1);
+
+  now += graceTimer.delay;
+  graceTimer.callback();
+
+  assert.equal(bridge.get(jobs[0].job_id), null);
+  assert.equal(bridge.get(jobs[1].job_id), null);
+  assert.ok(bridge.get(jobs.at(-1).job_id));
 });
 
 test("active and queued jobs are never pruned by retention, only terminal ones", (t) => {

@@ -231,6 +231,10 @@ class CliBridge {
       sendV1Error(res, 503, "renderer_unavailable", err.message);
       return;
     }
+    if (err.code === "QUEUE_FULL") {
+      sendV1Error(res, 429, "queue_full", err.message);
+      return;
+    }
     debugLogger.error("CLI bridge route error", { error: err.message }, "cli-bridge");
     sendV1Error(res, 500, "internal_error", err.message || "Internal server error");
   }

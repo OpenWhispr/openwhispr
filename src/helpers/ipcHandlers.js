@@ -283,6 +283,12 @@ function approveAudioPath(filePath) {
   }
 }
 
+function revokeAudioPath(filePath) {
+  if (typeof filePath === "string" && filePath) {
+    approvedAudioPaths.delete(filePath);
+  }
+}
+
 // Returns the realpath'd file path if it lives under an allowed dir, else null.
 function resolveAllowedAudioPath(filePath) {
   const real = fs.realpathSync(path.resolve(filePath));
@@ -687,6 +693,10 @@ class IPCHandlers {
         this._syncStartupEnv({}, ["WHISPER_VULKAN_DEVICE"]);
       });
     }
+  }
+
+  cancelUploadTranscription(requestId) {
+    return this._uploadCancelRegistry.cancel(requestId);
   }
 
   // The dictation slot reports its own changes from the renderer. Slots
@@ -11532,5 +11542,6 @@ module.exports = IPCHandlers;
 // pre-approved through the exact same allowlist the file-dialog/drag-drop
 // flow populates, rather than a second, driftable implementation.
 module.exports.approveAudioPath = approveAudioPath;
+module.exports.revokeAudioPath = revokeAudioPath;
 module.exports.resolveAllowedAudioPath = resolveAllowedAudioPath;
 module.exports.SUPPORTED_AUDIO_EXTENSIONS = SUPPORTED_AUDIO_EXTENSIONS;
