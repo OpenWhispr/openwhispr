@@ -643,6 +643,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, snapshot) => callback(snapshot)
   ),
   clearManagedEnterpriseIdentity: () => ipcRenderer.invoke("clear-managed-enterprise-identity"),
+  managedTranscribe: (data) => ipcRenderer.invoke("managed-transcribe", data),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),

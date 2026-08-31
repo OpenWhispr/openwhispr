@@ -5601,6 +5601,82 @@ class IPCHandlers {
         },
       };
     };
+    // Managed Azure STT shared by dictation, file upload, and history retry:
+    // re-validates the renderer's managed context (MANAGED_CONFIG_CHANGED on
+    // mismatch), mints an Entra token, and posts the audio straight to the
+    // workspace's Azure resource. No user-owned API key is involved.
+    const executeManagedTranscription = async (
+      event,
+      route,
+      { audioBuffer, fileName, contentType, prompt }
+    ) => {
+      const runtime = await resolveEnterpriseRuntime(event, route.provider, null, {
+        managedContext: route.context,
+      });
+      const { azureEndpoint, azureApiVersion, managedTokenProvider } = runtime.enterprise;
+      // The workspace's default deployment wins over anything the renderer sent.
+      const deployment = runtime.model;
+      let endpoint;
+      if (azureApiVersion === "v1" || azureApiVersion === "preview") {
+        const suffix = azureApiVersion === "preview" ? "?api-version=preview" : "";
+        endpoint = `${new URL(azureEndpoint).origin}/openai/v1/audio/transcriptions${suffix}`;
+      } else {
+        const { buildAzureTranscriptionUrl } = await import("../utils/urlUtils.ts");
+        endpoint = buildAzureTranscriptionUrl(azureEndpoint, deployment, azureApiVersion);
+      }
+      if (!endpoint) {
+        throw new Error("Managed Azure transcription endpoint could not be built");
+      }
+      const token = await managedTokenProvider();
+      const formData = new FormData();
+      formData.append("file", new Blob([audioBuffer], { type: contentType }), fileName);
+      formData.append("model", deployment);
+      if (route.language && route.language !== "auto") {
+        formData.append("language", route.language);
+      }
+      if (prompt) formData.append("prompt", prompt);
+      const response = await proxyFetch(endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        const err = new Error(`Azure transcription error: ${response.status} ${errorText}`);
+        if (response.status === 429) {
+          err.code = "PROVIDER_RATE_LIMITED";
+          err.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";
+        } else if (response.status >= 500) {
+          err.code = "SERVER_ERROR";
+        }
+        throw err;
+      }
+      const result = await response.json();
+      if (typeof result?.text !== "string" || !result.text.trim()) {
+        throw new Error("Managed transcription response was empty");
+      }
+      return result.text;
+    };
+    this.executeManagedTranscription = executeManagedTranscription;
+
+    ipcMain.handle(
+      "managed-transcribe",
+      serializeIpcError(
+        async (event, { audioBuffer, fileName, mimeType, language, prompt, managed }) => {
+          const text = await executeManagedTranscription(
+            event,
+            { provider: managed.provider, context: managed.context, language },
+            {
+              audioBuffer: Buffer.from(audioBuffer),
+              fileName: fileName || "audio.webm",
+              contentType: mimeType || "audio/webm",
+              prompt,
+            }
+          );
+          return { text };
+        }
+      )
+    );
     const handleSttConfigRequest = createCloudConfigRequestHandler({
       getApiUrl,
       getAuthHeader,
@@ -5774,6 +5850,7 @@ class IPCHandlers {
         const route = resolveTranscriptionRoute({
           settings: settings || {},
           providers: transcriptionProviderBaseUrls(),
+          managed: settings?.managed,
           request: { effectiveLanguage: language },
         });
 
@@ -5790,7 +5867,14 @@ class IPCHandlers {
           throw err;
         }
 
-        if (route.transport === "http-batch" && route.provider === "self-hosted") {
+        if (route.transport === "managed") {
+          const text = await this.executeManagedTranscription(event, route, {
+            audioBuffer: buffer,
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+          });
+          result = { text, source: "azure-managed", model: route.deployment };
+        } else if (route.transport === "http-batch" && route.provider === "self-hosted") {
           const formData = new FormData();
           formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
           if (route.model) {
@@ -9140,6 +9224,7 @@ class IPCHandlers {
           transcriptionMode,
           remoteTranscriptionUrl,
           remoteTranscriptionModel,
+          managed,
         }
       ) => {
         const fs = require("fs");
@@ -9163,12 +9248,26 @@ class IPCHandlers {
               cortiTenant: tenant,
             },
             providers: transcriptionProviderBaseUrls(),
+            managed,
             request: { effectiveLanguage: language || undefined },
           });
 
           // Fail closed: a misconfigured route must never fall through to a default.
           if (route.transport === "error") {
             return { success: false, error: route.message, code: route.code };
+          }
+
+          if (route.transport === "managed") {
+            if (fs.statSync(realByok).size > route.sizeCapBytes) {
+              return { success: false, error: byokSizeCapError(route.sizeCapBytes) };
+            }
+            const ext = path.extname(realByok).toLowerCase().replace(".", "");
+            const text = await this.executeManagedTranscription(event, route, {
+              audioBuffer: fs.readFileSync(realByok),
+              fileName: path.basename(realByok),
+              contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+            });
+            return { success: true, text };
           }
 
           if (route.transport === "http-batch" && route.provider === "self-hosted") {

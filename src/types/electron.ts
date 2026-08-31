@@ -2,7 +2,10 @@ import type { ModelDefinition } from "../models/ModelRegistry";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { OrgPolicy } from "./policy";
-import type { ManagedEnterpriseConfig } from "./enterpriseIdentity";
+import type {
+  ManagedEnterpriseConfig,
+  ManagedEnterpriseRequestContext,
+} from "./enterpriseIdentity";
 import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./calendar";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
@@ -1146,6 +1149,12 @@ declare global {
           remoteTranscriptionType?: SelfHostedType;
           remoteTranscriptionUrl?: string;
           remoteTranscriptionModel?: string;
+          managed?: {
+            kind: "managed";
+            provider: "azure";
+            deployment: string;
+            context: ManagedEnterpriseRequestContext;
+          };
         }
       ) => Promise<{
         success: boolean;
@@ -1925,6 +1934,14 @@ declare global {
         }) => void
       ) => () => void;
       clearManagedEnterpriseIdentity?: () => Promise<void>;
+      managedTranscribe?: (data: {
+        audioBuffer: ArrayBuffer;
+        fileName: string;
+        mimeType: string;
+        language?: string;
+        prompt?: string;
+        managed: { provider: "azure"; context: ManagedEnterpriseRequestContext };
+      }) => Promise<{ text?: string; error?: string; code?: string; messageKey?: string }>;
 
       // Dictation key persistence (file-based for reliable startup)
       getDictationKey?: () => Promise<string | null>;
@@ -2195,6 +2212,12 @@ declare global {
         transcriptionMode?: string;
         remoteTranscriptionUrl?: string;
         remoteTranscriptionModel?: string;
+        managed?: {
+          kind: "managed";
+          provider: "azure";
+          deployment: string;
+          context: ManagedEnterpriseRequestContext;
+        };
       }) => Promise<{
         success: boolean;
         text?: string;

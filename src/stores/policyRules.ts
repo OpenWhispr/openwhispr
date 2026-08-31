@@ -103,6 +103,19 @@ export function isEnterpriseProviderAllowed(
   );
 }
 
+/**
+ * Whether an enterprise cloud may run managed transcription. The field is
+ * absent on servers that predate it; absent means none.
+ */
+export function isTranscriptionEnterpriseProviderAllowed(
+  state: PolicyDecisionSnapshot,
+  providerId: string
+): boolean {
+  return managedPolicyDecision(state, (policy) =>
+    (policy.transcription.allowedEnterpriseProviders ?? []).includes(providerId)
+  );
+}
+
 /** Whether the AI agent (dictation, voice, and chat) is allowed. */
 export function isAgentAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.agentEnabled);
@@ -263,8 +276,13 @@ export function isTranscriptionSelectionAllowed(
   selection: TranscriptionSelection
 ): boolean {
   if (!isModeAllowedByPolicy(state, "transcription", selection.mode)) return false;
-  if (selection.mode !== "providers") return true;
-  return isProviderAllowedByPolicy(state, "transcription", selection.provider);
+  if (selection.mode === "providers") {
+    return isProviderAllowedByPolicy(state, "transcription", selection.provider);
+  }
+  if (selection.mode === "enterprise") {
+    return isTranscriptionEnterpriseProviderAllowed(state, selection.provider);
+  }
+  return true;
 }
 
 export type TranscriptionPolicyContext = "dictation" | "meeting" | "upload";
@@ -394,12 +412,12 @@ function policyModeHasAvailableProvider(
       : policy[scope].allowedByokProviders.length > 0;
   }
   if (mode === "enterprise") {
+    if (scope === "transcription") {
+      return (policy.transcription.allowedEnterpriseProviders ?? []).length > 0;
+    }
     const selectableProviders = providerCatalog?.enterpriseProviders ?? ["bedrock"];
-    return (
-      scope === "llm" &&
-      selectableProviders.some((provider) =>
-        policy.llm.allowedEnterpriseProviders.includes(provider)
-      )
+    return selectableProviders.some((provider) =>
+      policy.llm.allowedEnterpriseProviders.includes(provider)
     );
   }
   return true;

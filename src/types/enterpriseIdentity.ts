@@ -4,12 +4,17 @@ export type ManagedEnterpriseProvider = "bedrock" | "azure";
 export type ManagedEnterpriseProviderMode = "disabled" | "managed_default" | "managed_required";
 export type EnterpriseSetupMode = "auto" | "managed" | "manual";
 
+/** The managed speech-to-text scope; resolved from the Azure `transcription` config section. */
+export type ManagedTranscriptionScope = "transcription";
+export type ManagedEnterpriseScope = InferenceScope | ManagedTranscriptionScope;
+
 export interface ManagedEnterpriseProviderRecord {
   provider: ManagedEnterpriseProvider;
   mode: ManagedEnterpriseProviderMode;
   allowManualSetup: boolean;
   config: {
-    scopeDefaults: Partial<Record<InferenceScope, string>>;
+    /** Present when the text-processing section is configured. */
+    scopeDefaults?: Partial<Record<InferenceScope, string>>;
     roleArn?: string;
     region?: string;
     allowedModels?: string[];
@@ -18,6 +23,11 @@ export interface ManagedEnterpriseProviderRecord {
     endpoint?: string;
     apiVersion?: string;
     allowedDeployments?: string[];
+    /** Azure-only managed speech-to-text section. */
+    transcription?: {
+      allowedDeployments: string[];
+      defaultDeployment: string;
+    };
   };
   version: number;
   updatedAt: string;
@@ -56,7 +66,7 @@ export interface ManagedEnterpriseRequestContext {
   workspaceId: string;
   authGeneration: number;
   setupMode: EnterpriseSetupMode;
-  inferenceScope: InferenceScope;
+  inferenceScope: ManagedEnterpriseScope;
   provider: ManagedEnterpriseProvider;
   generation: number;
   providerVersion: number;

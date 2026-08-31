@@ -16,6 +16,8 @@ export interface OrgPolicy {
   transcription: {
     allowedModes: InferenceMode[];
     allowedByokProviders: string[];
+    /** Absent on servers that predate the field; absent means none. */
+    allowedEnterpriseProviders?: string[];
   };
   llm: {
     allowedModes: InferenceMode[];

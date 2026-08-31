@@ -18,6 +18,7 @@ import {
   Key,
   Cpu,
   Network,
+  ShieldCheck,
   Sparkles,
   AlertTriangle,
   Loader2,
@@ -147,7 +148,8 @@ import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
-import { getTranscriptionProvider } from "../models/ModelRegistry";
+import { enterpriseProviderName, getTranscriptionProvider } from "../models/ModelRegistry";
+import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
 export type SettingsSectionType =
@@ -546,6 +548,10 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
+  const enterpriseSetupMode = useSettingsStore((s) => s.enterpriseSetupMode);
+  const setEnterpriseSetupMode = useSettingsStore((s) => s.setEnterpriseSetupMode);
+  const managed = useManagedScopeResolution("transcription", enterpriseSetupMode);
+  const managedAvailable = useManagedScopeResolution("transcription", "managed");
   const {
     modes: transcriptionModes,
     effectiveMode: effectiveTranscriptionMode,
@@ -679,8 +685,83 @@ function TranscriptionSection({
     />
   );
 
+  if (managed.kind === "error") {
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3" role="alert">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div>
+            <p className="text-sm font-medium">
+              {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{managed.message}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (managed.kind === "managed") {
+    return (
+      <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
+        <div className="flex items-start gap-2.5">
+          <div className="rounded-md bg-primary/10 p-1.5 text-primary">
+            <ShieldCheck className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">
+              {t("settingsPage.aiModels.managedEnterprise.title")}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {enterpriseProviderName(managed.provider)} ·{" "}
+              <span className="font-mono">{managed.model}</span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("settingsPage.aiModels.managedEnterprise.description")}
+            </p>
+          </div>
+        </div>
+        {managed.mode !== "managed_required" && managed.allowManualSetup && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setEnterpriseSetupMode("manual")}
+            >
+              {t("settingsPage.aiModels.managedEnterprise.usePersonalSetup")}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {enterpriseSetupMode === "manual" && managedAvailable.kind === "managed" && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">
+              {t("settingsPage.aiModels.managedEnterprise.availableTitle")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("settingsPage.aiModels.managedEnterprise.availableDescription", {
+                provider: enterpriseProviderName(managedAvailable.provider),
+              })}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setEnterpriseSetupMode("managed")}
+          >
+            {t("settingsPage.aiModels.managedEnterprise.useManaged")}
+          </Button>
+        </div>
+      )}
       <InferenceModeSelector
         modes={transcriptionModes}
         activeMode={effectiveTranscriptionMode}

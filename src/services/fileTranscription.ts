@@ -1,5 +1,6 @@
 import { withSessionRefresh } from "../lib/auth";
 import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
+import { getManagedTranscriptionResolution } from "./managedTranscription";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
 import type { LocalTranscriptionProvider } from "../types/electron";
 
@@ -115,6 +116,9 @@ export async function transcribeFile(
     });
   }
 
+  // Managed enterprise STT outranks personal BYOK settings on this lane too.
+  const managed = getManagedTranscriptionResolution();
+
   // Pre-flight through the shared resolver: code-carrying errors (incl. the
   // Tinfoil-URL and fail-closed custom guards) surface here without an IPC
   // round-trip; the main-process handler re-resolves the same fields as
@@ -131,6 +135,7 @@ export async function transcribeFile(
       cortiTenant: cfg.cortiTenant,
     },
     providers: getTranscriptionProviders(),
+    managed,
     request: { effectiveLanguage: cfg.language || undefined },
   });
   if (route.transport === "error") {
@@ -141,6 +146,7 @@ export async function transcribeFile(
   // (fail-closed on misconfiguration) instead of stale BYOK settings.
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
+    managed: managed?.kind === "managed" ? managed : undefined,
     apiKey: cfg.getApiKey(),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,

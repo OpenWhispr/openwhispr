@@ -6,12 +6,12 @@ import {
 import type {
   EnterpriseSetupMode,
   ManagedEnterpriseConfig,
+  ManagedEnterpriseScope,
   ManagedEnterpriseScopeResolution,
 } from "../types/enterpriseIdentity";
-import type { InferenceScope } from "../config/inferenceScopes";
 import logger from "../utils/logger";
 import { resolveManagedEnterpriseScope } from "../helpers/enterpriseManagedConfig.mjs";
-import { isLlmSelectionAllowed } from "./policyRules";
+import { isLlmSelectionAllowed, isTranscriptionSelectionAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
 
 interface EnterpriseIdentityState {
@@ -191,13 +191,24 @@ function ensureLifecycleListeners(): void {
 // The vision override is the dictation agent's image lane; it has no managed
 // scope of its own (enterprise envelopes predate it), so managed resolution
 // follows the agent scope instead of failing as an unknown scope.
-const MANAGED_SCOPE_ALIASES: Partial<Record<InferenceScope, InferenceScope>> = {
+const MANAGED_SCOPE_ALIASES: Partial<Record<ManagedEnterpriseScope, ManagedEnterpriseScope>> = {
   dictationAgentVision: "dictationAgent",
 };
 
+function isManagedSelectionAllowedByPolicy(
+  scope: ManagedEnterpriseScope,
+  provider: string
+): boolean {
+  const policy = usePolicyStore.getState();
+  const selection = { mode: "enterprise" as const, provider };
+  return scope === "transcription"
+    ? isTranscriptionSelectionAllowed(policy, selection)
+    : isLlmSelectionAllowed(policy, selection);
+}
+
 function resolveScope(
   config: ManagedEnterpriseConfig | null,
-  requestedScope: InferenceScope,
+  requestedScope: ManagedEnterpriseScope,
   setupMode: EnterpriseSetupMode,
   failClosed: boolean
 ): ManagedEnterpriseScopeResolution {
@@ -216,10 +227,7 @@ function resolveScope(
   ) as ManagedEnterpriseScopeResolution;
   if (
     resolution.kind === "managed" &&
-    !isLlmSelectionAllowed(usePolicyStore.getState(), {
-      mode: "enterprise",
-      provider: resolution.provider,
-    })
+    !isManagedSelectionAllowedByPolicy(scope, resolution.provider)
   ) {
     const required = resolution.mode === "managed_required" || !resolution.allowManualSetup;
     logger.warn("Managed enterprise provider is blocked by workspace policy", {
@@ -241,7 +249,7 @@ function resolveScope(
 
 /** Imperative reads (services, stores). Components should use useManagedScopeResolution. */
 export function getManagedScopeResolution(
-  scope: InferenceScope,
+  scope: ManagedEnterpriseScope,
   setupMode: EnterpriseSetupMode
 ): ManagedEnterpriseScopeResolution {
   const state = useEnterpriseIdentityStore.getState();
@@ -255,7 +263,7 @@ export function getManagedScopeResolution(
 
 /** Subscribes to the managed config so the UI re-renders when an administrator changes it. */
 export function useManagedScopeResolution(
-  scope: InferenceScope,
+  scope: ManagedEnterpriseScope,
   setupMode: EnterpriseSetupMode
 ): ManagedEnterpriseScopeResolution {
   const config = useEnterpriseIdentityStore((state) => state.config);
