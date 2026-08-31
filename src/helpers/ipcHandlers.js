@@ -1434,7 +1434,15 @@ class IPCHandlers {
     });
 
     ipcMain.handle("analytics-claim-anonymous", async () => {
-      return this.databaseManager.claimAnonymousAnalyticsEvents();
+      const result = this.databaseManager.claimAnonymousAnalyticsEvents();
+      // Claimed rows are only pushed by the Insights view's reload, and the
+      // claim itself changes nothing it renders, so tell it to reload.
+      if (result?.claimed > 0) {
+        setImmediate(() => {
+          broadcastToWindows("analytics-changed");
+        });
+      }
+      return result;
     });
 
     ipcMain.handle("db-clear-transcriptions", async (event) => {

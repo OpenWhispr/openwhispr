@@ -103,6 +103,8 @@ export default function InsightsView() {
   const [syncError, setSyncError] = useState(false);
   // Every dictation broadcasts analytics-changed, so loads overlap; only the
   // newest one may write state, or a slow reply overwrites a fresher summary.
+  // A superseded load also bails before syncing, so two passes cannot share a
+  // batch and leave the winner reading a summary the other has not finished.
   const requestIdRef = useRef(0);
 
   const load = useCallback(async () => {
@@ -112,6 +114,7 @@ export default function InsightsView() {
     let local: AnalyticsSummary | null = null;
     try {
       local = await window.electronAPI.getAnalyticsSummary();
+      if (requestId !== requestIdRef.current) return;
       if (isLoaded && isSignedIn && insightsSyncEnabled) {
         await syncPendingAnalytics();
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -119,7 +122,6 @@ export default function InsightsView() {
         if (requestId !== requestIdRef.current) return;
         setSummary(account);
       } else {
-        if (requestId !== requestIdRef.current) return;
         setSummary(local);
       }
     } catch {

@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/ui/dialog";
-import { syncPendingAnalytics } from "../services/AnalyticsService";
 import { useSettings } from "./useSettings";
 
 /**
@@ -9,6 +8,11 @@ import { useSettings } from "./useSettings";
  * toggle and the Insights banner. Dictations recorded before signing in stay
  * unattributed until the user says otherwise here — signing in never adopts
  * them on its own — so the prompt is the only path that claims them.
+ *
+ * Flipping the setting and claiming are all this does: pushing the pending
+ * rows stays with InsightsView, whose reload the flip and the claim's
+ * analytics-changed broadcast both re-fire. Syncing here too would race that
+ * reload, which could then read a summary the other pass had not finished.
  */
 export function useInsightsSyncOptIn() {
   const { t } = useTranslation();
@@ -17,15 +21,11 @@ export function useInsightsSyncOptIn() {
 
   const activate = useCallback(
     (claimAnonymous: boolean) => {
-      void (async () => {
-        setInsightsSyncEnabled(true);
-        try {
-          if (claimAnonymous) await window.electronAPI.claimAnonymousAnalyticsEvents();
-          await syncPendingAnalytics();
-        } catch (error) {
-          console.error("Enabling Insights sync failed:", error);
-        }
-      })();
+      setInsightsSyncEnabled(true);
+      if (!claimAnonymous) return;
+      window.electronAPI.claimAnonymousAnalyticsEvents().catch((error) => {
+        console.error("Claiming earlier Insights events failed:", error);
+      });
     },
     [setInsightsSyncEnabled]
   );
