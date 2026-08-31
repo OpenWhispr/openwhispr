@@ -1,26 +1,28 @@
+// ESM like calendarAvailability.js: this module is shared with the renderer,
+// where Vite only handles ESM source files; main-process CJS callers load it
+// via Node's require(esm) with module-syntax detection.
 const DAY_MS = 86_400_000;
 
-function countSpokenWords(text) {
+export function countSpokenWords(text) {
   const trimmed = typeof text === "string" ? text.trim() : "";
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
-function localDateKey(date = new Date()) {
+export function localDateKey(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
-function parseStoredTimestamp(value) {
-  if (typeof value !== "string" || !value) return new Date();
-  if (value.includes("T") || /Z$|[+-]\d\d:\d\d$/.test(value)) return new Date(value);
-  return new Date(`${value.replace(" ", "T")}Z`);
-}
-
-function resolveAnalyticsMode({ useLocalWhisper, transcriptionMode, cloudTranscriptionMode }) {
+export function resolveAnalyticsMode({
+  useLocalWhisper,
+  transcriptionMode,
+  cloudTranscriptionMode,
+}) {
   if (useLocalWhisper || transcriptionMode === "local") return "local";
   if (transcriptionMode === "self-hosted") return "self_hosted";
+  if (transcriptionMode === "enterprise") return "enterprise";
   if (cloudTranscriptionMode === "openwhispr" || transcriptionMode === "openwhispr") {
     return "openwhispr_cloud";
   }
@@ -28,7 +30,7 @@ function resolveAnalyticsMode({ useLocalWhisper, transcriptionMode, cloudTranscr
   return "unknown";
 }
 
-function modeFromStoredProvider(provider) {
+export function modeFromStoredProvider(provider) {
   if (!provider) return "unknown";
   if (provider.startsWith("local")) return "local";
   if (provider === "openwhispr") return "openwhispr_cloud";
@@ -40,7 +42,7 @@ function dayNumber(value) {
   return Math.floor(Date.parse(`${value}T00:00:00Z`) / DAY_MS);
 }
 
-function calculateStreaks(ascendingDays, today) {
+export function calculateStreaks(ascendingDays, today) {
   const days = [...new Set(ascendingDays)].sort();
   if (days.length === 0) return { currentStreakDays: 0, longestStreakDays: 0 };
 
@@ -63,7 +65,7 @@ function calculateStreaks(ascendingDays, today) {
   return { currentStreakDays, longestStreakDays };
 }
 
-function summarizeAnalyticsEvents(events, today = localDateKey()) {
+export function summarizeAnalyticsEvents(events, today = localDateKey()) {
   const buckets = new Map();
   let totalWords = 0;
   let totalSpokenDurationMs = 0;
@@ -106,13 +108,3 @@ function summarizeAnalyticsEvents(events, today = localDateKey()) {
     daily: daily.slice(-366),
   };
 }
-
-module.exports = {
-  calculateStreaks,
-  countSpokenWords,
-  localDateKey,
-  modeFromStoredProvider,
-  parseStoredTimestamp,
-  resolveAnalyticsMode,
-  summarizeAnalyticsEvents,
-};

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useSettings } from "../hooks/useSettings";
 import { getAccountAnalyticsSummary, syncPendingAnalytics } from "../services/AnalyticsService";
+import { localDateKey } from "../helpers/analytics";
 import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
 
@@ -20,13 +21,6 @@ const EMPTY_SUMMARY: AnalyticsSummary = {
   daily: [],
 };
 
-function dateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] }) {
   const { t } = useTranslation();
   const days = useMemo(() => {
@@ -34,7 +28,7 @@ function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] }) {
     const today = new Date();
     return Array.from({ length: 365 }, (_, index) => {
       const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 364 + index);
-      const key = dateKey(date);
+      const key = localDateKey(date);
       return { date: key, words: byDate.get(key)?.words || 0 };
     });
   }, [daily]);
@@ -124,9 +118,7 @@ export default function InsightsView() {
 
   useEffect(() => {
     void load();
-    const refresh = () => void load();
-    window.addEventListener("analytics-changed", refresh);
-    return () => window.removeEventListener("analytics-changed", refresh);
+    return window.electronAPI.onAnalyticsChanged?.(() => void load());
   }, [load]);
 
   const number = useMemo(

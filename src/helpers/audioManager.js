@@ -30,7 +30,12 @@ import { followsSystemDefaultMic } from "./micSelectionRecovery";
 import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
-import { localDateKey, modeFromStoredProvider, resolveAnalyticsMode } from "./analyticsRenderer";
+import {
+  countSpokenWords,
+  localDateKey,
+  modeFromStoredProvider,
+  resolveAnalyticsMode,
+} from "./analytics";
 import {
   getSettings,
   useSettingsStore,
@@ -124,6 +129,12 @@ function getEffectiveRetentionPreferences() {
     dataRetentionEnabled: effectiveLocalHistoryEnabled(policyState, settings.dataRetentionEnabled),
     audioRetentionDays: effectiveAudioRetentionDays(policyState, settings.audioRetentionDays),
   };
+}
+
+// Insights sync is opt-in, so nothing analytics-only may ride along on a cloud
+// request until the user has enabled it.
+function analyticsSyncEnabled(settings = getSettings()) {
+  return settings.isSignedIn && settings.insightsSyncEnabled;
 }
 
 const providerSupportsImages = (providerId) =>
@@ -3050,7 +3061,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const audioFormat = audioBlob.type;
     const opts = {};
     if (language) opts.language = language;
-    opts.localDate = localDateKey();
+    if (analyticsSyncEnabled(settings)) opts.localDate = localDateKey();
     const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
     if (
       (settings.useCleanupModel && cleanupCloudMode === "openwhispr") ||
@@ -3685,7 +3696,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     try {
       await window.electronAPI.recordAnalyticsEvent({
         eventId,
-        text: rawText || text,
+        wordCount: countSpokenWords(rawText || text),
         occurredAt: occurredAt.toISOString(),
         localDate: localDateKey(occurredAt),
         spokenDurationMs: metadata.durationMs || null,
@@ -3693,9 +3704,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider: metadata.provider || null,
         model: metadata.model || null,
       });
-      window.dispatchEvent(new Event("analytics-changed"));
-      const settings = getSettings();
-      if (settings.isSignedIn && settings.insightsSyncEnabled) {
+      if (analyticsSyncEnabled()) {
         void syncPendingAnalytics().catch((syncError) => {
           logger.warn("Failed to sync analytics event", { error: syncError.message }, "analytics");
         });
@@ -4956,9 +4965,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
                   clientTotalMs,
-                  clientTranscriptionId,
-                  localDate: localDateKey(),
-                  analyticsWordCount: streamingSttWordCount,
+                  ...(analyticsSyncEnabled()
+                    ? {
+                        clientTranscriptionId,
+                        localDate: localDateKey(),
+                        analyticsWordCount: streamingSttWordCount,
+                      }
+                    : {}),
                 }
               );
               if (!res.success) {

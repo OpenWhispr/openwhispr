@@ -6,13 +6,7 @@ const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { parseEventTime } = require("./calendarAvailability");
-const {
-  countSpokenWords,
-  localDateKey,
-  modeFromStoredProvider,
-  parseStoredTimestamp,
-  summarizeAnalyticsEvents,
-} = require("./analytics.cjs");
+const { summarizeAnalyticsEvents } = require("./analytics");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -1283,7 +1277,7 @@ class DatabaseManager {
 
   recordAnalyticsEvent({
     eventId,
-    text,
+    wordCount,
     occurredAt,
     localDate,
     spokenDurationMs = null,
@@ -1293,7 +1287,6 @@ class DatabaseManager {
   }) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const wordCount = countSpokenWords(text);
       if (wordCount === 0) return { success: true, ignored: true };
       this.db
         .prepare(
@@ -1336,21 +1329,14 @@ class DatabaseManager {
   getAnalyticsSummary() {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const rows = this.activeAccountId
-        ? this.db
-            .prepare(
-              `SELECT local_date, word_count, spoken_duration_ms
-               FROM analytics_events
-               WHERE account_id = ? OR account_id IS NULL
-               ORDER BY local_date ASC`
-            )
-            .all(this.activeAccountId)
-        : this.db
-            .prepare(
-              `SELECT local_date, word_count, spoken_duration_ms
-               FROM analytics_events WHERE account_id IS NULL ORDER BY local_date ASC`
-            )
-            .all();
+      // Device-scoped by design: account_id only attributes rows for cloud
+      // sync, so filtering on it here would blank the view on every sign-out.
+      const rows = this.db
+        .prepare(
+          `SELECT local_date, word_count, spoken_duration_ms
+           FROM analytics_events ORDER BY local_date ASC`
+        )
+        .all();
       return {
         scope: "device",
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",

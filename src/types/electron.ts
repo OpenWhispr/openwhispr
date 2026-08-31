@@ -152,11 +152,12 @@ export interface TranscriptionItem {
   deleted_at: string | null;
 }
 
-export type AnalyticsMode = "local" | "openwhispr_cloud" | "byok" | "self_hosted" | "unknown";
+export type AnalyticsMode =
+  "local" | "openwhispr_cloud" | "byok" | "self_hosted" | "enterprise" | "unknown";
 
 export interface AnalyticsEventInput {
   eventId: string;
-  text: string;
+  wordCount: number;
   occurredAt: string;
   localDate: string;
   spokenDurationMs?: number | null;
@@ -1489,6 +1490,7 @@ declare global {
       onTranscriptionUpdated?: (callback: (item: TranscriptionItem) => void) => () => void;
       onTranscriptionDeleted?: (callback: (payload: { id: number }) => void) => () => void;
       onTranscriptionsCleared?: (callback: (payload: { cleared: number }) => void) => () => void;
+      onAnalyticsChanged?: (callback: () => void) => () => void;
 
       // API key management
       getOpenAIKey: () => Promise<string>;

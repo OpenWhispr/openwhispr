@@ -5,7 +5,7 @@ const {
   countSpokenWords,
   resolveAnalyticsMode,
   summarizeAnalyticsEvents,
-} = require("../../src/helpers/analytics.cjs");
+} = require("../../src/helpers/analytics.js");
 
 test("analytics counts raw whitespace-delimited spoken words", () => {
   assert.equal(countSpokenWords("  one two\nthree  "), 3);
@@ -19,6 +19,10 @@ test("analytics resolves local, cloud, and BYOK modes", () => {
     "openwhispr_cloud"
   );
   assert.equal(resolveAnalyticsMode({ transcriptionMode: "providers" }), "byok");
+  assert.equal(
+    resolveAnalyticsMode({ transcriptionMode: "enterprise", cloudTranscriptionMode: "openwhispr" }),
+    "enterprise"
+  );
 });
 
 test("analytics computes weighted WPM, coverage, and streaks", () => {

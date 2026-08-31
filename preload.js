@@ -351,6 +351,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("transcription-updated", listener);
     return () => ipcRenderer.removeListener("transcription-updated", listener);
   },
+  onAnalyticsChanged: (callback) => {
+    const listener = () => callback?.();
+    ipcRenderer.on("analytics-changed", listener);
+    return () => ipcRenderer.removeListener("analytics-changed", listener);
+  },
 
   // BYOK API keys (get/save for every provider in the secretKeys manifest)
   ...secretKeyApi,

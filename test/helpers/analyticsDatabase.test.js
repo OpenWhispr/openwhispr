@@ -52,7 +52,7 @@ test("analytics stays content-free, idempotent, and claimable for account sync",
 
   db.recordAnalyticsEvent({
     eventId: "event-1",
-    text: "one two three four",
+    wordCount: 4,
     occurredAt: "2026-08-30T10:00:00.000Z",
     localDate: "2026-08-30",
     spokenDurationMs: 2_000,
@@ -62,7 +62,7 @@ test("analytics stays content-free, idempotent, and claimable for account sync",
   });
   db.recordAnalyticsEvent({
     eventId: "event-1",
-    text: "one two three four five",
+    wordCount: 5,
     occurredAt: "2026-08-30T10:00:00.000Z",
     localDate: "2026-08-30",
     spokenDurationMs: 2_000,
