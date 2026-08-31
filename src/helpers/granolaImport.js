@@ -376,9 +376,11 @@ export function parseGranolaCsv(text) {
     }
 
     // Stable per-note key: Granola's own id when the export carries one,
-    // otherwise a hash of title + raw date (re-import stays idempotent either way).
+    // otherwise a hash of title + raw date + content (re-import stays idempotent either way,
+    // while preventing collisions between distinct notes sharing a title/date).
     const id = cell("id");
-    const key = id || createHash("sha256").update(`${title}|${rawDate}`).digest("hex").slice(0, 16);
+    const key =
+      id || createHash("sha256").update(`${title}|${rawDate}|${content}`).digest("hex").slice(0, 16);
 
     const anchorMs = createdAt ? Date.parse(`${createdAt.replace(" ", "T")}Z`) : 0;
     const segments = parseTranscriptToSegments(cell("transcript"), anchorMs);

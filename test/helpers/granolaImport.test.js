@@ -348,13 +348,37 @@ test("parseGranolaCsv reports header mapping and derives stable ids", async () =
   );
 });
 
-test("parseGranolaCsv falls back to a title+date hash key without an id column", async () => {
+test("parseGranolaCsv falls back to a title+date+content hash key without an id column", async () => {
   const { parseGranolaCsv } = await load();
   const csv = 'title,summary,created_at\nSync,"Some notes",2026-07-15T14:30:00Z';
   const result = parseGranolaCsv(csv);
   assert.match(result.notes[0].sourceFile, /^granola:[0-9a-f]{16}$/);
   const again = parseGranolaCsv(csv);
   assert.equal(again.notes[0].clientNoteId, result.notes[0].clientNoteId);
+});
+
+test("parseGranolaCsv generates distinct fallback keys for notes sharing title and date without an id column", async () => {
+  const { parseGranolaCsv } = await load();
+  const csv = [
+    "title,summary,created_at",
+    'Sync,"Morning sync notes",2026-07-15T14:30:00Z',
+    'Sync,"Afternoon sync notes",2026-07-15T14:30:00Z',
+  ].join("\n");
+  const result = parseGranolaCsv(csv);
+  assert.equal(result.notes.length, 2);
+  assert.notEqual(result.notes[0].clientNoteId, result.notes[1].clientNoteId);
+  assert.notEqual(result.notes[0].sourceFile, result.notes[1].sourceFile);
+});
+
+test("parseGranolaCsv generates distinct fallback keys for multiple untitled notes without dates", async () => {
+  const { parseGranolaCsv } = await load();
+  const csv = ["summary", '"First untitled meeting"', '"Second untitled meeting"'].join("\n");
+  const result = parseGranolaCsv(csv);
+  assert.equal(result.notes.length, 2);
+  assert.equal(result.notes[0].title, "Untitled");
+  assert.equal(result.notes[1].title, "Untitled");
+  assert.notEqual(result.notes[0].clientNoteId, result.notes[1].clientNoteId);
+  assert.notEqual(result.notes[0].sourceFile, result.notes[1].sourceFile);
 });
 
 test("parseGranolaCsv warns once when the transcript column is missing", async () => {
