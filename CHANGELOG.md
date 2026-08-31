@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Voice Assistant
+
+- **Agent answers paste into browser and Electron inputs again on macOS.** Speaking to the assistant with the cursor in Gmail, VS Code, or any Chromium-family input always opened the floating panel: those apps keep their accessibility tree dormant on macOS, so the editable-caret check restored in 1.9.1 could never verify the field, and no wake-up switch exists. The probe now reports "accessibility cannot see this field" as its own verdict, and such a caret is trusted after a synthetic copy rules out a live selection — terminals, password fields, and fields a working accessibility tree confirms as non-editable still fall back to the panel. (#1952)
+
 ## [1.9.2] - 2026-08-29
 
 A repair release for two 1.9.1 regressions. Windows desktop sign-in works again — every provider button had gone dead — and the three transcription paths that only failed in packaged builds are back on all platforms. Meetings get three fixes of their own: recordings that captured only your voice on Windows, prompts that stopped appearing after the first call, and swipe-to-dismiss on the prompt cards.
