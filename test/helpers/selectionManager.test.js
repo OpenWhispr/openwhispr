@@ -142,7 +142,7 @@ test("a terminal-flagged target is refused as a caret destination without probin
     textEditMonitor: {
       isFocusedEditable: async (target) => {
         probes.push(target);
-        return true;
+        return "editable";
       },
     },
     platform: "win32",
@@ -182,7 +182,7 @@ test("a Linux AT-SPI terminal pid never becomes a caret delivery target", async 
     textEditMonitor: {
       isFocusedEditable: async (target) => {
         probes.push(target);
-        return true;
+        return "editable";
       },
     },
     platform: "linux",
@@ -563,7 +563,7 @@ test("a terminal target reads as no selection", async () => {
   };
   const manager = new SelectionManager({
     clipboardManager,
-    textEditMonitor: { isFocusedEditable: async () => true },
+    textEditMonitor: { isFocusedEditable: async () => "editable" },
     platform: "linux",
     now: () => 1000,
   });
@@ -647,6 +647,58 @@ test("a macOS line copy in a line-copy editor reads as no selection", async () =
     copied: "const x = 1;\n",
   });
   assert.equal((await manager.captureSelectedText()).status, "none");
+});
+
+// Chromium-family apps expose no focused element to macOS accessibility, so an
+// "unknown" probe verdict with no live selection and a non-terminal target is
+// trusted as a caret — restoring in-input delivery for browser/Electron fields.
+test("an unverifiable macOS field with no selection is trusted as a caret", async () => {
+  const { manager } = makeMacClipboardHarness({ copied: null });
+  manager.textEditMonitor.isFocusedEditable = async () => "unknown";
+
+  const result = await manager.captureSelectedText({ probeEditable: true });
+  assert.equal(result.status, "editable");
+  assert.ok(result.sessionId);
+});
+
+test("a confirmed non-editable macOS focus stays on the panel route", async () => {
+  const { manager } = makeMacClipboardHarness({ copied: null });
+  manager.textEditMonitor.isFocusedEditable = async () => "not_editable";
+
+  assert.equal((await manager.captureSelectedText({ probeEditable: true })).status, "none");
+});
+
+test("an unknown verdict in a terminal is still refused as a caret", async () => {
+  const { manager } = makeMacClipboardHarness({ copyOutput: "COPY_OK 42 Ghostty", copied: null });
+  manager.textEditMonitor.isFocusedEditable = async () => "unknown";
+
+  assert.equal((await manager.captureSelectedText({ probeEditable: true })).status, "none");
+});
+
+// COPY_OK reports the app name best-effort; when it is missing, the executable
+// must be resolved before an unnamed terminal can be trusted as a caret.
+test("an unnamed macOS target resolves the executable before trusting a caret", async () => {
+  const { manager } = makeMacClipboardHarness({ copyOutput: "COPY_OK 42", copied: null });
+  manager.textEditMonitor.isFocusedEditable = async () => "unknown";
+  manager._readExecutablePath = async () => "/Applications/Ghostty.app/Contents/MacOS/ghostty";
+
+  assert.equal((await manager.captureSelectedText({ probeEditable: true })).status, "none");
+});
+
+test("a trusted-unknown caret delivers the assistant response", async () => {
+  const { manager } = makeMacClipboardHarness({ copied: null });
+  const pastes = [];
+  manager.textEditMonitor.isFocusedEditable = async () => "unknown";
+  manager.clipboardManager._pasteText = async (text, options) => {
+    pastes.push({ text, options });
+    return { restoreComplete: Promise.resolve() };
+  };
+
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+  assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
+    success: true,
+  });
+  assert.equal(pastes[0].text, "Agent response");
 });
 
 test("a failed macOS copy stays non-fatal so the command still runs", async () => {
