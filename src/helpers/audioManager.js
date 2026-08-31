@@ -1332,6 +1332,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return this.startRecording(true);
       }
 
+      logger.error(
+        "Failed to start recording",
+        { name: error.name, error: error.message },
+        "audio"
+      );
+
       let errorTitle = "Recording Error";
       let errorDescription = `Failed to access microphone: ${error.message}`;
 

@@ -1,4 +1,13 @@
-const TRACK_READY_TIMEOUT_MS = 600;
+// Slow-waking inputs (Bluetooth hands-free negotiation, wireless dongles,
+// freshly plugged USB mics) can take 1–2s to deliver their first frames, and
+// closing and reopening the device restarts that wake — so the first track we
+// hold is the only place patience can rescue them. Chromium fires `unmute` the
+// moment frames flow, so healthy mics never wait this long. See #1152.
+const FIRST_TRACK_READY_TIMEOUT_MS = 2500;
+// Recovery opens only run after the first track sat muted for the full budget
+// above, so the device is dead rather than slow; keep these hops snappy so a
+// truly unusable input still fails fast.
+const RECOVERY_TRACK_READY_TIMEOUT_MS = 600;
 
 // Waits until a capture track is actually delivering audio (wake-after-idle re-acquire).
 // After the OS suspends the input during idle, getUserMedia can hand back a track that
@@ -61,7 +70,7 @@ export const waitForTrackReady = (track, timeoutMs) =>
 // hop to the system default when the retry reopens the same device and it is still silent.
 export const reacquireIfDead = async (stream, getFreshConstraints, logger, fallback = null) => {
   const track = stream.getAudioTracks()[0];
-  if (!track || (await waitForTrackReady(track, TRACK_READY_TIMEOUT_MS))) {
+  if (!track || (await waitForTrackReady(track, FIRST_TRACK_READY_TIMEOUT_MS))) {
     return stream;
   }
 
@@ -90,7 +99,7 @@ export const reacquireIfDead = async (stream, getFreshConstraints, logger, fallb
   // The retry usually resolves back to the same device; a healthy track means it just woke up.
   if (retryStream) {
     const retryTrack = retryStream.getAudioTracks()[0];
-    if (retryTrack && (await waitForTrackReady(retryTrack, TRACK_READY_TIMEOUT_MS))) {
+    if (retryTrack && (await waitForTrackReady(retryTrack, RECOVERY_TRACK_READY_TIMEOUT_MS))) {
       return retryStream;
     }
   }
@@ -110,7 +119,11 @@ export const reacquireIfDead = async (stream, getFreshConstraints, logger, fallb
   logger.info("Fell back to the default microphone after a silent device", {}, "audio");
 
   const fallbackTrack = fallbackStream.getAudioTracks()[0];
-  if (!fallbackTrack || !(await waitForTrackReady(fallbackTrack, TRACK_READY_TIMEOUT_MS))) {
+  if (
+    !fallbackTrack ||
+    !(await waitForTrackReady(fallbackTrack, RECOVERY_TRACK_READY_TIMEOUT_MS))
+  ) {
+    logger.warn("Fallback microphone also stayed muted, no usable input", {}, "audio");
     fallback.onFallbackUnusable();
   }
   return fallbackStream;
