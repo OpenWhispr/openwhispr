@@ -68,6 +68,7 @@ import {
   serializeTranscriptSegments,
 } from "../../utils/transcriptSpeakerState";
 import NoteParticipants from "./NoteParticipants";
+import { shouldShowNoteParticipants } from "./shared";
 import type { CalendarAttendee } from "../../types/calendar";
 import { observeFloatingChatLayout } from "./floatingChatLayout";
 
@@ -837,7 +838,9 @@ export default function NoteEditor({
                 <span className="truncate max-w-40">{calendarEventName}</span>
               </span>
             )}
-            <NoteParticipants noteId={note.id} participants={parsedParticipants} />
+            {shouldShowNoteParticipants(note.note_type) && (
+              <NoteParticipants noteId={note.id} participants={parsedParticipants} />
+            )}
             {isTeamNote && space && (
               <>
                 <button
