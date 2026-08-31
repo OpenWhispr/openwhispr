@@ -1846,7 +1846,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       let result;
       let activeModel;
-      if (useLocalWhisper) {
+      // Managed enterprise STT outranks the local and OpenWhispr Cloud lanes,
+      // matching the LLM scopes; users opt out via "Use personal setup" when
+      // the administrator allows it. Error resolutions fail closed inside
+      // processWithOpenAIAPI with their own code.
+      const managedTranscription = getManagedTranscriptionResolution();
+      if (managedTranscription) {
+        activeModel = managedTranscription.kind === "managed" ? managedTranscription.deployment : null;
+        result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
+      } else if (useLocalWhisper) {
         if (isSherpaLocalProvider(localProvider)) {
           activeModel = localProvider === "cohere" ? settings.cohereModel : parakeetModel;
           result = await this.processWithLocalParakeet(
@@ -3278,8 +3286,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "transcription"
       );
 
-      const optimizedAudio = audioBlob;
-
       // Managed enterprise STT outranks every personal setting.
       const managedResolution = getManagedTranscriptionResolution();
       if (managedResolution?.kind === "error") {
@@ -3287,6 +3293,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           code: managedResolution.code,
         });
       }
+
+      const apiKey = managedResolution ? null : await this.getAPIKey();
+      const optimizedAudio = audioBlob;
 
       // Dispatch before endpoint resolution (which defaults to OpenAI and would leak
       // the key). Self-hosted wins, so a leftover proxied provider isn't diverted here.
@@ -3339,7 +3348,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return { success: true, text, rawText: proxyText, source, timings };
       }
 
-      const apiKey = await this.getAPIKey();
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
       const mimeType = optimizedAudio.type || "audio/webm";
@@ -3851,6 +3859,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   shouldUseStreaming(isSignedInOverride) {
     const s = getSettings();
     if (s.useLocalWhisper) return false;
+
+    // Managed enterprise STT is batch-only and outranks personal streaming
+    // setups; an error resolution must fail closed on the batch path too.
+    if (getManagedTranscriptionResolution()) return false;
 
     // Self-hosted transcription is batch HTTP to the user's server, never cloud realtime WS.
     if (isSelfHostedTranscription(s)) return false;

@@ -217,7 +217,8 @@ function resolveScope(
     return {
       kind: "error",
       code: "MANAGED_CONFIG_UNAVAILABLE",
-      message: "Managed enterprise access is unavailable. Sign in with company SSO or contact IT.",
+      message:
+        "Managed enterprise access is unavailable. Sign in again or contact your IT administrator.",
     };
   }
   const resolution = resolveManagedEnterpriseScope(
