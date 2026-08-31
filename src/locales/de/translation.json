@@ -2581,7 +2581,9 @@
         "gemini_3_5_transcribe": "Googles Gemini-Spracherkennung",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
-        "tinfoil_voxtral": "Nachweisbar private Transkription"
+        "tinfoil_voxtral": "Nachweisbar private Transkription",
+        "assemblyai_universal_3_5_pro": "Absatzbewusste Transkription mit erstklassiger Zeichensetzung",
+        "assemblyai_universal_2": "Batch-Modell der vorherigen Generation von AssemblyAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",

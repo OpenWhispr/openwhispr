@@ -1806,6 +1806,15 @@ declare global {
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
 
+      // AssemblyAI API key management
+      getAssemblyAIKey?: () => Promise<string | null>;
+      saveAssemblyAIKey?: (key: string) => Promise<void>;
+      proxyAssemblyAiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+      }) => Promise<ProxyTranscriptionResult>;
+
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
       saveGroqKey: (key: string) => Promise<void>;

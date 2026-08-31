@@ -70,6 +70,7 @@ const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
+const { transcribeWithAssemblyAI } = require("./assemblyAiBatchTranscription");
 const AudioStorageManager = require("./audioStorage");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
@@ -4257,6 +4258,21 @@ class IPCHandlers {
       })
     );
 
+    // AssemblyAI's pre-recorded API is an upload→submit→poll job flow, not an
+    // OpenAI-compatible multipart endpoint, so batch transcription is proxied
+    // through main.
+    ipcMain.handle(
+      "proxy-assemblyai-transcription",
+      serializeIpcError(async (event, { audioBuffer, model, language }) => {
+        return await transcribeWithAssemblyAI({
+          audioBuffer: Buffer.from(audioBuffer),
+          model,
+          language,
+          apiKey: this.environmentManager.getAssemblyAIKey(),
+        });
+      })
+    );
+
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -5925,6 +5941,17 @@ class IPCHandlers {
             apiKey: this.environmentManager.getGeminiKey(),
           });
           if (text) result = { text, source: "gemini", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "assemblyai") {
+          if (route.sizeCapBytes && buffer.byteLength > route.sizeCapBytes) {
+            throw new Error(byokSizeCapError(route.sizeCapBytes));
+          }
+          const { text } = await transcribeWithAssemblyAI({
+            audioBuffer: buffer,
+            model: route.model,
+            language: route.language,
+            apiKey: this.environmentManager.getAssemblyAIKey(),
+          });
+          if (text) result = { text, source: "assemblyai", model: route.model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
           // directly; everything else consumes the route endpoint as-is.
@@ -9235,6 +9262,19 @@ class IPCHandlers {
               model: route.model,
               contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
               apiKey: apiKey || this.environmentManager.getGeminiKey(),
+            });
+            return { success: true, text };
+          }
+          if (route.transport === "proxied" && route.provider === "assemblyai") {
+            const assemblyAiKey = apiKey || this.environmentManager.getAssemblyAIKey();
+            if (!assemblyAiKey) {
+              throw new Error("No AssemblyAI API key configured. Add your key in Settings.");
+            }
+            const { text } = await transcribeWithAssemblyAI({
+              audioBuffer: fs.readFileSync(realByok),
+              model: route.model,
+              language: route.language,
+              apiKey: assemblyAiKey,
             });
             return { success: true, text };
           }

@@ -73,7 +73,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini";
+      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "assemblyai";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -133,7 +133,8 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "openai" && (trimmed.startsWith("gpt-4o") || trimmed === "whisper-1")) ||
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
-      (provider === "gemini" && trimmed.startsWith("gemini-"));
+      (provider === "gemini" && trimmed.startsWith("gemini-")) ||
+      (provider === "assemblyai" && trimmed.startsWith("universal-"));
     if (matchesProvider) return trimmed;
   }
   if (provider === "groq") return "whisper-large-v3-turbo";
@@ -141,6 +142,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
+  if (provider === "assemblyai") return "universal-3-5-pro";
   return "gpt-4o-mini-transcribe";
 }
 
@@ -271,6 +273,15 @@ export function resolveTranscriptionRoute({
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
       cortiEnvironment: s.cortiEnvironment || "us",
       cortiTenant: (s.cortiTenant || "").trim() || "base",
+    };
+  }
+  if (provider === "assemblyai") {
+    return {
+      transport: "proxied",
+      provider,
+      model,
+      language,
+      sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
   }
 

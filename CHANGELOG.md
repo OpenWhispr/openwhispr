@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Transcription
+
+- **AssemblyAI is a bring-your-own-key transcription provider.** AssemblyAI's Universal models (`universal-3-5-pro` and `universal-2`) join OpenAI, Groq, xAI, Mistral, and Gemini for dictation and uploads. Transcription runs through AssemblyAI's pre-recorded API and returns paragraph-formatted text, and the key is stored encrypted like every other provider key. Batch only, so it stays out of the streaming-only meeting picker.
+
 ## [1.9.2] - 2026-08-29
 
 A repair release for two 1.9.1 regressions. Windows desktop sign-in works again — every provider button had gone dead — and the three transcription paths that only failed in packaged builds are back on all platforms. Meetings get three fixes of their own: recordings that captured only your voice on Windows, prompts that stopped appearing after the first call, and swipe-to-dismiss on the prompt cards.

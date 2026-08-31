@@ -197,6 +197,8 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
       return { value: store.openrouterApiKey, set: store.setOpenrouterApiKey };
     case "tinfoil":
       return { value: store.tinfoilApiKey, set: store.setTinfoilApiKey };
+    case "assemblyai":
+      return { value: store.assemblyaiApiKey, set: store.setAssemblyaiApiKey };
     case "corti":
       return { value: store.cortiApiKey, set: store.setCortiApiKey };
     default:

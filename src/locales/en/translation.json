@@ -2581,7 +2581,9 @@
         "gemini_3_5_transcribe": "Google's Gemini speech-to-text",
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
-        "tinfoil_voxtral": "Verifiably private transcription"
+        "tinfoil_voxtral": "Verifiably private transcription",
+        "assemblyai_universal_3_5_pro": "Paragraph-aware transcription with best-in-class punctuation",
+        "assemblyai_universal_2": "Previous-generation AssemblyAI batch model"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",

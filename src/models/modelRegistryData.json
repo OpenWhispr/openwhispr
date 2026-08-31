@@ -314,6 +314,26 @@
           "streaming": true
         }
       ]
+    },
+    {
+      "id": "assemblyai",
+      "name": "AssemblyAI",
+      "baseUrl": "https://api.assemblyai.com/v2",
+      "batchModel": "universal-3-5-pro",
+      "models": [
+        {
+          "id": "universal-3-5-pro",
+          "name": "Universal 3.5 Pro",
+          "description": "Paragraph-aware transcription with best-in-class punctuation",
+          "descriptionKey": "models.descriptions.transcription.assemblyai_universal_3_5_pro"
+        },
+        {
+          "id": "universal-2",
+          "name": "Universal 2",
+          "description": "Previous-generation AssemblyAI batch model",
+          "descriptionKey": "models.descriptions.transcription.assemblyai_universal_2"
+        }
+      ]
     }
   ],
   "cloudProviders": [

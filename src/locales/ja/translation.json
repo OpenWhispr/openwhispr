@@ -2488,7 +2488,9 @@
         "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
         "xai_grok_stt": "xAIによる高精度音声認識",
-        "tinfoil_voxtral": "検証可能なプライベート文字起こし"
+        "tinfoil_voxtral": "検証可能なプライベート文字起こし",
+        "assemblyai_universal_3_5_pro": "段落構造を考慮し、最高水準の句読点を付ける文字起こし",
+        "assemblyai_universal_2": "前世代のAssemblyAIバッチモデル"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",

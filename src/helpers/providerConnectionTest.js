@@ -8,6 +8,7 @@ const ENDPOINTS = {
   openrouter: "https://openrouter.ai/api/v1/models",
   corti: "https://ai.eu.corti.app/v1/models",
   tinfoil: "https://inference.tinfoil.sh/v1/models",
+  assemblyai: "https://api.assemblyai.com/v2/transcript?limit=1",
 };
 
 // Renderers translate errorCode via onboarding.rehaul.provider.errors.*; the
@@ -196,6 +197,9 @@ function resolveProviderRequest(config) {
       headers["anthropic-version"] = "2023-06-01";
     } else if (provider === "gemini") {
       headers["x-goog-api-key"] = apiKey;
+    } else if (provider === "assemblyai") {
+      // AssemblyAI authenticates with the raw key, no Bearer prefix.
+      headers.authorization = apiKey;
     } else {
       headers.Authorization = `Bearer ${apiKey}`;
     }
@@ -281,7 +285,13 @@ async function testProviderConnection(config, fetchImpl = fetch) {
   }
 
   const provider = String(config?.provider || "").toLowerCase();
-  const model = String(config?.model || "").trim();
+  // AssemblyAI has no model-list endpoint; the authenticated transcripts GET
+  // is the whole probe, and a fresh account has no transcripts to match
+  // against — so its model check is skipped.
+  const model =
+    String(config?.provider || "").toLowerCase() === "assemblyai"
+      ? ""
+      : String(config?.model || "").trim();
   let failure = null;
   for (const endpoint of request.endpoints) {
     const controller = new AbortController();
