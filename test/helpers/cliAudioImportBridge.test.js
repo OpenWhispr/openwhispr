@@ -87,11 +87,12 @@ function makeFakeWebContents() {
   };
 }
 
-function makeBridge() {
+function makeBridge(options = {}) {
   return new CliAudioImportBridge({
     approveAudioPath,
     resolveAllowedAudioPath,
     supportedAudioExtensions: SUPPORTED_AUDIO_EXTENSIONS,
+    ...options,
   });
 }
 
@@ -488,6 +489,76 @@ test("terminal jobs older than the retention window are pruned on the next pump"
   bridge._pruneTerminalJobs(Date.now() + 60 * 60 * 1000);
 
   assert.equal(bridge.get(job.job_id), null);
+});
+
+test("an idle terminal job is pruned by its scheduled expiry", (t) => {
+  let now = 0;
+  const timers = [];
+  const bridge = makeBridge({
+    now: () => now,
+    setTimeoutFn(callback, delay) {
+      const timer = { callback, delay, cleared: false };
+      timers.push(timer);
+      return timer;
+    },
+    clearTimeoutFn(timer) {
+      timer.cleared = true;
+    },
+  });
+  bridge.registerRenderer(makeFakeWebContents());
+  const job = bridge.submit(makeAudioFile(t));
+  bridge.reportResult(job.job_id, { status: "completed", text: "hi" });
+
+  const expiryTimer = timers.at(-1);
+  assert.equal(expiryTimer.delay, 15 * 60 * 1000 + 1);
+
+  now += expiryTimer.delay;
+  expiryTimer.callback();
+
+  assert.equal(bridge.get(job.job_id), null);
+});
+
+test("renderer loss drains a large queued batch without recursive pumping", () => {
+  const bridge = makeBridge();
+  const renderer = makeFakeWebContents();
+  bridge.registerRenderer(renderer);
+
+  const timestamp = new Date().toISOString();
+  bridge._jobs.set("active", {
+    id: "active",
+    status: "transcribing",
+    stage: "transcribing",
+    progress: 0,
+    error: null,
+    result: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+  bridge._activeJobId = "active";
+
+  const queueSize = 12_000;
+  for (let i = 0; i < queueSize; i++) {
+    const id = `queued-${i}`;
+    bridge._jobs.set(id, {
+      id,
+      status: "queued",
+      stage: "queued",
+      progress: 0,
+      error: null,
+      result: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    bridge._queue.push(id);
+  }
+
+  renderer._fireRenderProcessGone();
+
+  assert.equal(bridge._activeJobId, null);
+  assert.equal(bridge._queue.length, 0);
+  assert.equal(bridge.get("active").status, "failed");
+  assert.equal(bridge.get("queued-0").status, "failed");
+  assert.equal(bridge.get(`queued-${queueSize - 1}`).status, "failed");
 });
 
 test("a burst of jobs terminalizing within the eviction grace period is never evicted by the count cap alone", (t) => {
