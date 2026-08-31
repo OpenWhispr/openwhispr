@@ -85,9 +85,9 @@ import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
 import {
+  analyzeDictionaryPromptFragment,
   DICTIONARY_ECHO_CODE,
   dictionaryEchoError,
-  isLikelyDictionaryPromptFragment,
   matchesDictionaryPrompt,
 } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
@@ -111,8 +111,8 @@ const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short record
 // Failure detector only: fires when the worklet or audio graph is dead and never flushes.
 const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
 const neverCancelled = () => false;
-const normalizedAlphanumericLength = (text) =>
-  String(text || "").replace(/[^\p{L}\p{N}]/gu, "").length;
+const MIN_SPARSE_RECORDING_DURATION_SECONDS = 3;
+const MIN_UNIQUE_WORD_GAIN = 2;
 
 const micDeviceKey = (settings) =>
   `${settings.microphoneSelectionMode}|${settings.selectedMicDeviceId}`;
@@ -2009,10 +2009,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           (matchesDictionaryPrompt(result.text, dictionaryPrompt) ||
             matchesDictionaryPrompt(result.text, customDictionaryPrompt))
         );
-        const shortDictionaryFragment =
-          !strictDictionaryEcho && isLikelyDictionaryPromptFragment(result.text, dictionaryPrompt);
+        const initialFragment = analyzeDictionaryPromptFragment(result.text, dictionaryPrompt);
+        const dictionaryPromptFragment = !strictDictionaryEcho && initialFragment.isPromptFragment;
 
-        if (strictDictionaryEcho || shortDictionaryFragment) {
+        if (strictDictionaryEcho || dictionaryPromptFragment) {
           // A prompt-free, VAD-free retry distinguishes real speech from Whisper
           // continuing either the whole dictionary prompt or a short fragment of it.
           const retryStart = performance.now();
@@ -2023,21 +2023,39 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               ...(options.language ? { language: options.language } : {}),
               skipVad: true,
             });
-          } catch {
-            // A heuristic recovery is best-effort; strict echoes still fail below.
+          } catch (retryError) {
+            if (strictDictionaryEcho) throw retryError;
+            // A heuristic recovery is best-effort; keep the initial text if it fails.
           }
 
           const retryText = retry?.success && typeof retry.text === "string" ? retry.text : "";
           const hasRetryText = Boolean(retryText.trim());
+          const retryFragment = analyzeDictionaryPromptFragment(retryText, dictionaryPrompt);
+          const retryStrictDictionaryEcho = Boolean(
+            hasRetryText &&
+            (matchesDictionaryPrompt(retryText, dictionaryPrompt) ||
+              matchesDictionaryPrompt(retryText, customDictionaryPrompt))
+          );
+          const retryStillPromptLike = retryStrictDictionaryEcho || retryFragment.isPromptFragment;
+          const retryAddsUniqueWords =
+            retryFragment.uniqueWordCount > initialFragment.uniqueWordCount;
+          const repeatedFragmentRecovered =
+            initialFragment.hasRepeatedWords && retryAddsUniqueWords;
+          // A non-repeated dictionary term or snippet is valid short-form
+          // dictation unless a long recording yields substantially more content.
+          const sparseRecordingRecovered =
+            Number.isFinite(metadata.durationSeconds) &&
+            metadata.durationSeconds >= MIN_SPARSE_RECORDING_DURATION_SECONDS &&
+            retryFragment.uniqueWordCount >= initialFragment.uniqueWordCount + MIN_UNIQUE_WORD_GAIN;
           const recovered =
             hasRetryText &&
-            (strictDictionaryEcho ||
-              normalizedAlphanumericLength(retryText) > normalizedAlphanumericLength(result.text));
+            !retryStillPromptLike &&
+            (strictDictionaryEcho || repeatedFragmentRecovered || sparseRecordingRecovered);
 
           logger.info(
             "Local dictionary-prompt recovery attempt",
             {
-              reason: strictDictionaryEcho ? "strict-echo" : "short-fragment",
+              reason: strictDictionaryEcho ? "strict-echo" : "prompt-fragment",
               retryDurationMs: Math.round(performance.now() - retryStart),
               promptLength: dictionaryPrompt.length,
               initialTextLength: result.text.length,

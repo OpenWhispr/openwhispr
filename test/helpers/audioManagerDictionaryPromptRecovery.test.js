@@ -40,18 +40,19 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
     delete globalThis.__dictionaryPromptRecoveryLogs;
   });
 
-  const { window, createManager } = await loadAudioManager(t, {
+  const baseSettings = {
+    allowOpenAIFallback: false,
+    cloudTranscriptionProvider: "openai",
+    useLocalWhisper: true,
+    localTranscriptionProvider: "whisper",
+    whisperModel: "base",
+    cloudTranscriptionMode: "byok",
+    isSignedIn: false,
+  };
+  const { window, createManager, setSettings } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-dictionary-prompt-recovery-test-",
     settingsKey: "__dictionaryPromptRecoverySettings",
-    settings: {
-      allowOpenAIFallback: false,
-      cloudTranscriptionProvider: "openai",
-      useLocalWhisper: true,
-      localTranscriptionProvider: "whisper",
-      whisperModel: "base",
-      cloudTranscriptionMode: "byok",
-      isSignedIn: false,
-    },
+    settings: baseSettings,
     mockModules: {
       "/utils/logger": `
         export default {
@@ -106,7 +107,7 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
     const recoveryLog = globalThis.__dictionaryPromptRecoveryLogs.find(
       ({ message }) => message === "Local dictionary-prompt recovery attempt"
     );
-    assert.equal(recoveryLog.data.reason, "short-fragment");
+    assert.equal(recoveryLog.data.reason, "prompt-fragment");
     assert.equal(recoveryLog.data.promptLength, DICTIONARY_PROMPT.length);
     assert.equal(recoveryLog.data.initialTextLength, "data, data, data, data,".length);
     assert.equal(recoveryLog.data.retryTextLength, fullTranscript.length);
@@ -115,7 +116,83 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
     assert.equal(Object.values(recoveryLog.data).includes(DICTIONARY_PROMPT), false);
   });
 
-  await t.test("a strict full-prompt echo accepts any non-empty prompt-free retry", async () => {
+  await t.test("a correct short dictionary term survives an unrelated longer retry", async () => {
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "testing" },
+      { success: true, text: "testing the unrelated application" },
+    ]);
+    const { manager, processedTexts } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 1,
+    });
+
+    assert.equal(result.rawText, "testing");
+    assert.deepEqual(processedTexts, ["testing"]);
+    assert.equal(calls.length, 2);
+  });
+
+  await t.test("an exact snippet trigger survives an equally rich retry", async () => {
+    const prompt = `${DICTIONARY_PROMPT}, cal link`;
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "cal link" },
+      { success: true, text: "calendar hyperlink" },
+    ]);
+    const { manager, processedTexts } = createRecoveryManager(prompt);
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 1,
+    });
+
+    assert.equal(result.rawText, "cal link");
+    assert.deepEqual(processedTexts, ["cal link"]);
+    assert.equal(calls.length, 2);
+  });
+
+  await t.test("a sparse long recording uses a materially fuller retry", async () => {
+    const fullTranscript = "The complete sentence was recovered from the recording.";
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "testing" },
+      { success: true, text: fullTranscript },
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 5,
+    });
+
+    assert.equal(result.rawText, fullTranscript);
+    assert.equal(calls.length, 2);
+  });
+
+  await t.test("a repeated fragment yields to a shorter retry with more unique words", async () => {
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "data, data, data, data," },
+      { success: true, text: "data is valid" },
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base");
+
+    assert.equal(result.rawText, "data is valid");
+    assert.equal(calls.length, 2);
+  });
+
+  await t.test("a repeated long dictionary term triggers recovery", async () => {
+    const fullTranscript = "The application opened successfully.";
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "OpenWhispr, OpenWhispr, OpenWhispr" },
+      { success: true, text: fullTranscript },
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base");
+
+    assert.equal(result.rawText, fullTranscript);
+    assert.equal(calls.length, 2);
+  });
+
+  await t.test("a strict full-prompt echo accepts a non-prompt retry", async () => {
     const fullTranscript = "This is the complete dictated sentence.";
     const calls = queueTranscriptions(window, [
       { success: true, text: DICTIONARY_PROMPT },
@@ -132,6 +209,23 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
     assert.equal(calls[1].options.language, "en");
     assert.equal(calls[1].options.initialPrompt, undefined);
     assert.equal(calls[1].options.skipVad, true);
+  });
+
+  await t.test("a strict echo rejects a prompt-free retry that is still the prompt", async () => {
+    const calls = queueTranscriptions(window, [
+      { success: true, text: DICTIONARY_PROMPT },
+      { success: true, text: DICTIONARY_PROMPT },
+    ]);
+    const { manager, processedTexts } = createRecoveryManager();
+
+    await assert.rejects(manager.processWithLocalWhisper(AUDIO_BLOB, "base"), (error) => {
+      assert.equal(error.message, "No audio detected");
+      assert.equal(error.code, "DICTIONARY_ECHO");
+      return true;
+    });
+
+    assert.deepEqual(processedTexts, []);
+    assert.equal(calls.length, 2);
   });
 
   await t.test("classification uses the exact prompt sent with the initial request", async () => {
@@ -228,5 +322,33 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
     assert.equal(calls.length, 2);
     assert.deepEqual(lifecycle, ["idle", "no-audio"]);
     assert.deepEqual(saved, [{ message: "No audio detected", code: "DICTIONARY_ECHO" }]);
+  });
+
+  await t.test("a strict retry exception reaches the configured cloud fallback", async (t) => {
+    setSettings({ ...baseSettings, allowOpenAIFallback: true });
+    t.after(() => setSettings(baseSettings));
+    const calls = queueTranscriptions(window, [
+      { success: true, text: DICTIONARY_PROMPT },
+      new Error("IPC unavailable"),
+    ]);
+    const { manager } = createRecoveryManager();
+    let fallbackCalls = 0;
+    manager.processWithOpenAIAPI = async () => {
+      fallbackCalls += 1;
+      return {
+        success: true,
+        text: "Recovered by cloud fallback.",
+        rawText: "Recovered by cloud fallback.",
+        source: "openai",
+        timings: {},
+      };
+    };
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base");
+
+    assert.equal(result.text, "Recovered by cloud fallback.");
+    assert.equal(result.source, "openai-fallback");
+    assert.equal(fallbackCalls, 1);
+    assert.equal(calls.length, 2);
   });
 });

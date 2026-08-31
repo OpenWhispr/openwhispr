@@ -176,12 +176,25 @@ test("requires non-empty text and a non-empty dictionary prompt", async () => {
   assert.equal(isLikelyDictionaryPromptFragment("testing", ""), false);
 });
 
-test("does not classify normalized output longer than 30 characters as a short fragment", async () => {
+test("detects repeated long dictionary terms without a character cutoff", async () => {
   const { isLikelyDictionaryPromptFragment } =
     await import("../../src/utils/dictionaryEchoFilter.js");
 
   assert.equal(
-    isLikelyDictionaryPromptFragment("data data data data data data data", LARGE_DICTIONARY_PROMPT),
+    isLikelyDictionaryPromptFragment("OpenWhispr, OpenWhispr, OpenWhispr", LARGE_DICTIONARY_PROMPT),
+    true
+  );
+});
+
+test("does not classify long non-repeated dictionary speech as a prompt fragment", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(
+    isLikelyDictionaryPromptFragment(
+      "OpenWhispr Parakeet Alcahest Chromium",
+      LARGE_DICTIONARY_PROMPT
+    ),
     false
   );
 });

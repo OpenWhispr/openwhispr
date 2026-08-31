@@ -5,6 +5,40 @@ const normalize = (s) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const EMPTY_FRAGMENT_ANALYSIS = Object.freeze({
+  isPromptFragment: false,
+  hasRepeatedWords: false,
+  uniqueWordCount: 0,
+});
+const MAX_SHORT_FRAGMENT_CHARACTERS = 30;
+
+export function analyzeDictionaryPromptFragment(text, dictionaryPrompt) {
+  if (!text || !dictionaryPrompt) return EMPTY_FRAGMENT_ANALYSIS;
+
+  const normalizedText = normalize(text);
+  const normalizedPrompt = normalize(dictionaryPrompt);
+
+  if (!normalizedText || !normalizedPrompt) return EMPTY_FRAGMENT_ANALYSIS;
+
+  const textWords = normalizedText.split(" ");
+  const promptWords = new Set(normalizedPrompt.split(" "));
+  const uniqueTextWords = new Set(textWords);
+  const hasRepeatedWords = textWords.length > uniqueTextWords.size;
+  let matchCount = 0;
+
+  for (const word of uniqueTextWords) {
+    if (promptWords.has(word)) matchCount++;
+  }
+
+  return {
+    isPromptFragment:
+      matchCount / uniqueTextWords.size >= 0.9 &&
+      (normalizedText.length <= MAX_SHORT_FRAGMENT_CHARACTERS || hasRepeatedWords),
+    hasRepeatedWords,
+    uniqueWordCount: uniqueTextWords.size,
+  };
+}
+
 export function matchesDictionaryPrompt(text, dictionaryPrompt) {
   if (!text || !dictionaryPrompt) return false;
 
@@ -30,22 +64,7 @@ export function matchesDictionaryPrompt(text, dictionaryPrompt) {
 }
 
 export function isLikelyDictionaryPromptFragment(text, dictionaryPrompt) {
-  if (!text || !dictionaryPrompt) return false;
-
-  const normalizedText = normalize(text);
-  const normalizedPrompt = normalize(dictionaryPrompt);
-
-  if (!normalizedText || !normalizedPrompt || normalizedText.length > 30) return false;
-
-  const promptWords = new Set(normalizedPrompt.split(" "));
-  const uniqueTextWords = new Set(normalizedText.split(" "));
-  let matchCount = 0;
-
-  for (const word of uniqueTextWords) {
-    if (promptWords.has(word)) matchCount++;
-  }
-
-  return matchCount / uniqueTextWords.size >= 0.9;
+  return analyzeDictionaryPromptFragment(text, dictionaryPrompt).isPromptFragment;
 }
 
 export const DICTIONARY_ECHO_CODE = "DICTIONARY_ECHO";
