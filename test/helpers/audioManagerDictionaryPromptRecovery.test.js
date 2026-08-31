@@ -116,6 +116,86 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
     assert.equal(Object.values(recoveryLog.data).includes(DICTIONARY_PROMPT), false);
   });
 
+  await t.test("a strict echo accepts a short dictionary-spelled retry", async () => {
+    // The retry is the recovered dictation, so only another full-prompt echo may
+    // reject it — the fragment heuristic would discard a genuine two-term list.
+    const calls = queueTranscriptions(window, [
+      { success: true, text: DICTIONARY_PROMPT },
+      { success: true, text: "OpenWhispr, Parakeet" },
+    ]);
+    const { manager, processedTexts } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 4,
+    });
+
+    assert.equal(result.rawText, "OpenWhispr, Parakeet");
+    assert.deepEqual(processedTexts, ["OpenWhispr, Parakeet"]);
+    assert.equal(calls.length, 2);
+  });
+
+  await t.test("ordinary speech spelled from snippet-trigger words is never retried", async () => {
+    const prompt = `${DICTIONARY_PROMPT}, on my way, let me know`;
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "On my way." },
+      { success: true, text: "I am on my way to the office now." },
+    ]);
+    const { manager, processedTexts } = createRecoveryManager(prompt);
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 4,
+    });
+
+    assert.equal(result.rawText, "On my way.");
+    assert.deepEqual(processedTexts, ["On my way."]);
+    assert.equal(calls.length, 1);
+  });
+
+  await t.test("a long recording keeps correct dictionary terms it decoded", async () => {
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "Electron renderer latency" },
+      { success: true, text: "electron render or latency issue" },
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 6,
+    });
+
+    assert.equal(result.rawText, "Electron renderer latency");
+    assert.equal(calls.length, 1);
+  });
+
+  await t.test("a hallucinated retry never replaces a genuine dictionary term", async () => {
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "testing" },
+      { success: true, text: "Thank you for watching!" },
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 6,
+    });
+
+    assert.equal(result.rawText, "testing");
+    assert.equal(calls.length, 1);
+  });
+
+  await t.test("a fragment the retry could not replace skips the retry entirely", async () => {
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "testing," },
+      { success: true, text: "The whole sentence I actually said." },
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 2,
+    });
+
+    assert.equal(result.rawText, "testing,");
+    assert.equal(calls.length, 1);
+  });
+
   await t.test("a correct short dictionary term survives an unrelated longer retry", async () => {
     const calls = queueTranscriptions(window, [
       { success: true, text: "testing" },
@@ -129,7 +209,7 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
 
     assert.equal(result.rawText, "testing");
     assert.deepEqual(processedTexts, ["testing"]);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 1);
   });
 
   await t.test("an exact snippet trigger survives an equally rich retry", async () => {
@@ -146,13 +226,15 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
 
     assert.equal(result.rawText, "cal link");
     assert.deepEqual(processedTexts, ["cal link"]);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 1);
   });
 
   await t.test("a sparse long recording uses a materially fuller retry", async () => {
     const fullTranscript = "The complete sentence was recovered from the recording.";
+    // The literal output reported in #1889 — a dictionary term carrying the
+    // prompt's own ", " separator.
     const calls = queueTranscriptions(window, [
-      { success: true, text: "testing" },
+      { success: true, text: "testing, " },
       { success: true, text: fullTranscript },
     ]);
     const { manager } = createRecoveryManager();

@@ -2011,8 +2011,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
         const initialFragment = analyzeDictionaryPromptFragment(result.text, dictionaryPrompt);
         const dictionaryPromptFragment = !strictDictionaryEcho && initialFragment.isPromptFragment;
+        // A non-repeated fragment can only be replaced by the sparse-recording rule
+        // below, so on a short recording the retry would be decoded and then discarded.
+        const retryCanBeAdopted =
+          strictDictionaryEcho ||
+          initialFragment.hasRepeatedWords ||
+          (Number.isFinite(metadata.durationSeconds) &&
+            metadata.durationSeconds >= MIN_SPARSE_RECORDING_DURATION_SECONDS);
 
-        if (strictDictionaryEcho || dictionaryPromptFragment) {
+        if ((strictDictionaryEcho || dictionaryPromptFragment) && retryCanBeAdopted) {
           // A prompt-free, VAD-free retry distinguishes real speech from Whisper
           // continuing either the whole dictionary prompt or a short fragment of it.
           const retryStart = performance.now();
@@ -2036,7 +2043,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             (matchesDictionaryPrompt(retryText, dictionaryPrompt) ||
               matchesDictionaryPrompt(retryText, customDictionaryPrompt))
           );
-          const retryStillPromptLike = retryStrictDictionaryEcho || retryFragment.isPromptFragment;
+          // On the strict path a short, dictionary-spelled retry is the recovered
+          // dictation (#1454), not a second echo — only another full-prompt echo
+          // disqualifies it. The fragment test applies to the heuristic path alone.
+          const retryStillPromptLike = strictDictionaryEcho
+            ? retryStrictDictionaryEcho
+            : retryStrictDictionaryEcho || retryFragment.isPromptFragment;
           const retryAddsUniqueWords =
             retryFragment.uniqueWordCount > initialFragment.uniqueWordCount;
           const repeatedFragmentRecovered =

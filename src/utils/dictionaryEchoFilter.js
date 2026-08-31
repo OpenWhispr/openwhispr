@@ -11,6 +11,14 @@ const EMPTY_FRAGMENT_ANALYSIS = Object.freeze({
   uniqueWordCount: 0,
 });
 const MAX_SHORT_FRAGMENT_CHARACTERS = 30;
+// Whisper continues an initial prompt in the prompt's own shape: the hint list is
+// joined with ", " (getCustomDictionaryPrompt), so a continuation arrives either
+// comma-separated or as a looped term. Vocabulary overlap alone cannot stand in for
+// that: short dictation is legitimately spelled out of dictionary words, and
+// getDictionaryHintWords appends whole snippet triggers, so multi-word triggers put
+// common words ("on", "my", "way") into the prompt and make plain speech look like
+// an echo (#1889).
+const PROMPT_DELIMITER_RE = /[,、，]/;
 
 export function analyzeDictionaryPromptFragment(text, dictionaryPrompt) {
   if (!text || !dictionaryPrompt) return EMPTY_FRAGMENT_ANALYSIS;
@@ -30,9 +38,13 @@ export function analyzeDictionaryPromptFragment(text, dictionaryPrompt) {
     if (promptWords.has(word)) matchCount++;
   }
 
+  // Tested against the raw text: normalize() strips the separator punctuation.
+  const continuesPromptShape = hasRepeatedWords || PROMPT_DELIMITER_RE.test(text);
+
   return {
     isPromptFragment:
       matchCount / uniqueTextWords.size >= 0.9 &&
+      continuesPromptShape &&
       (normalizedText.length <= MAX_SHORT_FRAGMENT_CHARACTERS || hasRepeatedWords),
     hasRepeatedWords,
     uniqueWordCount: uniqueTextWords.size,

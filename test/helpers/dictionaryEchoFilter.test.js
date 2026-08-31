@@ -198,3 +198,28 @@ test("does not classify long non-repeated dictionary speech as a prompt fragment
     false
   );
 });
+
+test("requires the prompt's own separator or a repeat, not just dictionary words", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  // A bare dictionary term is short-form dictation, not a prompt continuation.
+  assert.equal(isLikelyDictionaryPromptFragment("testing", LARGE_DICTIONARY_PROMPT), false);
+  assert.equal(
+    isLikelyDictionaryPromptFragment("Electron renderer latency", LARGE_DICTIONARY_PROMPT),
+    false
+  );
+  // Whisper continuing the prompt carries the ", " the hint list was joined with.
+  assert.equal(isLikelyDictionaryPromptFragment("testing, ", LARGE_DICTIONARY_PROMPT), true);
+});
+
+test("does not treat snippet-trigger words as an echo of ordinary speech", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  // getDictionaryHintWords appends whole triggers, so a multi-word trigger puts
+  // "on", "my" and "way" into the prompt's word set.
+  const promptWithTriggers = `${LARGE_DICTIONARY_PROMPT}, on my way, let me know`;
+  assert.equal(isLikelyDictionaryPromptFragment("On my way.", promptWithTriggers), false);
+  assert.equal(isLikelyDictionaryPromptFragment("Let me know", promptWithTriggers), false);
+});
