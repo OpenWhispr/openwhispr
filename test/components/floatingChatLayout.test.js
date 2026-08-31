@@ -139,17 +139,14 @@ test("the panel cap leaves the promised note content visible", async () => {
   assert.equal(FLOATING_CHAT_MAX_HEIGHT_CSS, "calc(100% - 7rem)");
 });
 
-test("upward wheel intent cancels resize pinning until the reader returns to bottom", async () => {
-  const { observeFloatingChatLayout } = await load();
+function createLayoutHarness(observeFloatingChatLayout, { scroller }) {
   const panel = createElement({ offsetHeight: 200 });
   const container = createElement();
   const contentRoot = createElement();
-  const scroller = createElement({ scrollHeight: 1000, scrollTop: 700, clientHeight: 300 });
   const scheduledFrames = new Map();
-  let resizeCallback;
-  let nextFrameId = 0;
+  const harness = { panel, container, contentRoot, scheduledFrames, nextFrameId: 0 };
 
-  const cleanup = observeFloatingChatLayout(
+  harness.cleanup = observeFloatingChatLayout(
     {
       panel,
       container,
@@ -158,11 +155,11 @@ test("upward wheel intent cancels resize pinning until the reader returns to bot
     },
     {
       createResizeObserver(callback) {
-        resizeCallback = callback;
+        harness.resizeCallback = callback;
         return { observe() {}, disconnect() {} };
       },
       requestFrame(callback) {
-        const frameId = ++nextFrameId;
+        const frameId = ++harness.nextFrameId;
         scheduledFrames.set(frameId, () => {
           scheduledFrames.delete(frameId);
           callback();
@@ -175,11 +172,26 @@ test("upward wheel intent cancels resize pinning until the reader returns to bot
     }
   );
 
+  return harness;
+}
+
+test("upward wheel intent cancels resize pinning until the reader returns to bottom", async () => {
+  const { observeFloatingChatLayout } = await load();
+  const transcriptRow = { name: "transcript-row" };
+  const scroller = createElement({
+    scrollHeight: 1000,
+    scrollTop: 700,
+    clientHeight: 300,
+    contains: (target) => target === transcriptRow,
+  });
+  const { contentRoot, scheduledFrames, resizeCallback, nextFrameId, cleanup } =
+    createLayoutHarness(observeFloatingChatLayout, { scroller });
+
   scheduledFrames.get(nextFrameId)();
   resizeCallback();
   assert.equal(scheduledFrames.size, 1, "a followed resize schedules a bottom correction");
 
-  contentRoot.dispatch("wheel", { deltaY: -8 });
+  contentRoot.dispatch("wheel", { deltaY: -8, target: transcriptRow });
   assert.equal(scheduledFrames.size, 0, "upward intent cancels the pending correction");
 
   scroller.scrollTop = 680;
@@ -193,4 +205,34 @@ test("upward wheel intent cancels resize pinning until the reader returns to bot
   assert.equal(scheduledFrames.size, 1, "reaching the true bottom restores follow mode");
 
   cleanup();
+});
+
+test("upward wheel over chrome outside the scroller keeps following", async () => {
+  const { observeFloatingChatLayout } = await load();
+  const recordingHeader = { name: "recording-header" };
+  const scroller = createElement({
+    scrollHeight: 1000,
+    scrollTop: 700,
+    clientHeight: 300,
+    contains: () => false,
+  });
+  const harness = createLayoutHarness(observeFloatingChatLayout, { scroller });
+  const { contentRoot, scheduledFrames } = harness;
+
+  scheduledFrames.get(harness.nextFrameId)();
+  harness.resizeCallback();
+  assert.equal(scheduledFrames.size, 1, "a followed resize schedules a bottom correction");
+
+  // The wheel moves nothing (its target never scrolls the active scroller), so
+  // no scroll event could ever rejoin — detaching here would wedge follow off.
+  contentRoot.dispatch("wheel", { deltaY: -8, target: recordingHeader });
+  assert.equal(scheduledFrames.size, 1, "a wheel aimed at chrome is not reader intent");
+
+  scheduledFrames.get(harness.nextFrameId)();
+  assert.equal(scroller.scrollTop, 700, "the pending correction still pins the bottom");
+
+  harness.resizeCallback();
+  assert.equal(scheduledFrames.size, 1, "later resizes keep following");
+
+  harness.cleanup();
 });

@@ -84,9 +84,16 @@ export function observeFloatingChatLayout(
     if (scroller) follower.update(scroller);
   };
 
-  const stopFollowing = (): void => {
+  // The capture listeners on the content root also see gestures over chrome
+  // that never scrolls the active scroller (consent strip, recording header).
+  // A wheel there moves nothing, so no scroll event could ever rejoin follow
+  // mode — only a gesture aimed at the scroller itself counts as leaving.
+  const stopFollowing = (target: EventTarget | null): void => {
     const scroller = getActiveScroller();
     if (!scroller || scroller.scrollHeight - scroller.clientHeight <= 1) return;
+    // Cast, not `instanceof Node`: this module runs under node:test, which has
+    // no DOM globals; wheel/touch targets are always nodes in the renderer.
+    if (target == null || !scroller.contains(target as Node)) return;
     follower.leaveBottom();
     forcePinPending = false;
     if (frameId !== null) {
@@ -96,7 +103,7 @@ export function observeFloatingChatLayout(
   };
 
   const handleWheel = (event: WheelEvent): void => {
-    if (event.deltaY < 0) stopFollowing();
+    if (event.deltaY < 0) stopFollowing(event.target);
   };
 
   const handleTouchStart = (event: TouchEvent): void => {
@@ -106,7 +113,7 @@ export function observeFloatingChatLayout(
   const handleTouchMove = (event: TouchEvent): void => {
     const nextY = event.touches[0]?.clientY;
     if (nextY == null) return;
-    if (touchY != null && nextY > touchY) stopFollowing();
+    if (touchY != null && nextY > touchY) stopFollowing(event.target);
     touchY = nextY;
   };
 
