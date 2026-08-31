@@ -2033,6 +2033,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           } catch (retryError) {
             if (strictDictionaryEcho) throw retryError;
             // A heuristic recovery is best-effort; keep the initial text if it fails.
+            logger.warn(
+              "Dictionary-fragment retry failed; keeping the initial transcript",
+              { message: retryError?.message },
+              "audio"
+            );
           }
 
           const retryText = retry?.success && typeof retry.text === "string" ? retry.text : "";

@@ -223,3 +223,62 @@ test("does not treat snippet-trigger words as an echo of ordinary speech", async
   assert.equal(isLikelyDictionaryPromptFragment("On my way.", promptWithTriggers), false);
   assert.equal(isLikelyDictionaryPromptFragment("Let me know", promptWithTriggers), false);
 });
+
+test("does not classify comma-separated dictionary-term dictation as a fragment", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  // Real short-form dictation of curated terms; replacing it with a prompt-free
+  // retry would misspell exactly the vocabulary the dictionary protects.
+  assert.equal(
+    isLikelyDictionaryPromptFragment("Electron, renderer", LARGE_DICTIONARY_PROMPT),
+    false
+  );
+  // Without a dangling separator, two echoed terms are indistinguishable from
+  // that dictation, so they are deliberately left alone as well.
+  assert.equal(isLikelyDictionaryPromptFragment("testing, data", LARGE_DICTIONARY_PROMPT), false);
+});
+
+test("does not classify a genuinely doubled term as a looped echo", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  // Whisper's echo pathology loops a term many times; saying it twice is speech.
+  assert.equal(
+    isLikelyDictionaryPromptFragment("OpenWhispr, OpenWhispr", LARGE_DICTIONARY_PROMPT),
+    false
+  );
+});
+
+test("detects a run of consecutive prompt terms past the character cutoff", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  // A comma-separated continuation of 3+ entries in the prompt's own order is
+  // the echo shape that outgrows the short-fragment cap.
+  assert.equal(
+    isLikelyDictionaryPromptFragment(
+      "TypeScript, Electron, testing, data, benchmark",
+      LARGE_DICTIONARY_PROMPT
+    ),
+    true
+  );
+  // The same words out of prompt order are dictation, not a continuation.
+  assert.equal(
+    isLikelyDictionaryPromptFragment(
+      "benchmark, TypeScript, data, Electron, testing",
+      LARGE_DICTIONARY_PROMPT
+    ),
+    false
+  );
+});
+
+test("a dangling separator does not outweigh non-dictionary words", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(
+    isLikelyDictionaryPromptFragment("yes, no, maybe, dunno,", LARGE_DICTIONARY_PROMPT),
+    false
+  );
+});

@@ -11,14 +11,61 @@ const EMPTY_FRAGMENT_ANALYSIS = Object.freeze({
   uniqueWordCount: 0,
 });
 const MAX_SHORT_FRAGMENT_CHARACTERS = 30;
+// Whisper's echo pathology loops a term many times; saying a word twice is speech.
+const LOOPED_WORD_MIN_OCCURRENCES = 3;
+// Dictation almost never recites 3+ dictionary entries in the prompt's own order.
+const MIN_CONSECUTIVE_TERM_RUN = 3;
 // Whisper continues an initial prompt in the prompt's own shape: the hint list is
-// joined with ", " (getCustomDictionaryPrompt), so a continuation arrives either
-// comma-separated or as a looped term. Vocabulary overlap alone cannot stand in for
-// that: short dictation is legitimately spelled out of dictionary words, and
-// getDictionaryHintWords appends whole snippet triggers, so multi-word triggers put
-// common words ("on", "my", "way") into the prompt and make plain speech look like
-// an echo (#1889).
+// joined with ", " (getCustomDictionaryPrompt), so a continuation arrives as a
+// looped term, a short fragment left dangling on its separator ("testing, "), or
+// a run of consecutive entries in the prompt's own order. Vocabulary overlap
+// alone cannot stand in for that: short dictation is legitimately spelled out of
+// dictionary words ("Electron, renderer"), and getDictionaryHintWords appends
+// whole snippet triggers, so multi-word triggers put common words ("on", "my",
+// "way") into the prompt and make plain speech look like an echo (#1889).
 const PROMPT_DELIMITER_RE = /[,、，]/;
+const TRAILING_DELIMITER_RE = /[,、，]\s*$/;
+
+const hasLoopedWord = (textWords) => {
+  const counts = new Map();
+  for (const word of textWords) {
+    const count = (counts.get(word) ?? 0) + 1;
+    if (count >= LOOPED_WORD_MIN_OCCURRENCES) return true;
+    counts.set(word, count);
+  }
+  return false;
+};
+
+// True when the text is MIN_CONSECUTIVE_TERM_RUN+ consecutive prompt entries in
+// the prompt's own order — a literal continuation of the hint list, however long.
+const matchesConsecutiveTermRun = (textWords, dictionaryPrompt) => {
+  const promptSequence = [];
+  let termIndex = 0;
+  for (const term of dictionaryPrompt.split(PROMPT_DELIMITER_RE)) {
+    const normalizedTerm = normalize(term);
+    if (!normalizedTerm) continue;
+    for (const word of normalizedTerm.split(" ")) {
+      promptSequence.push({ word, termIndex });
+    }
+    termIndex++;
+  }
+  for (let start = 0; start + textWords.length <= promptSequence.length; start++) {
+    let offset = 0;
+    while (offset < textWords.length && promptSequence[start + offset].word === textWords[offset]) {
+      offset++;
+    }
+    if (
+      offset === textWords.length &&
+      promptSequence[start + textWords.length - 1].termIndex -
+        promptSequence[start].termIndex +
+        1 >=
+        MIN_CONSECUTIVE_TERM_RUN
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
 
 export function analyzeDictionaryPromptFragment(text, dictionaryPrompt) {
   if (!text || !dictionaryPrompt) return EMPTY_FRAGMENT_ANALYSIS;
@@ -38,14 +85,14 @@ export function analyzeDictionaryPromptFragment(text, dictionaryPrompt) {
     if (promptWords.has(word)) matchCount++;
   }
 
-  // Tested against the raw text: normalize() strips the separator punctuation.
-  const continuesPromptShape = hasRepeatedWords || PROMPT_DELIMITER_RE.test(text);
+  // Shape tests run against the raw text: normalize() strips the separators.
+  const continuesPromptShape =
+    hasLoopedWord(textWords) ||
+    (TRAILING_DELIMITER_RE.test(text) && normalizedText.length <= MAX_SHORT_FRAGMENT_CHARACTERS) ||
+    (PROMPT_DELIMITER_RE.test(text) && matchesConsecutiveTermRun(textWords, dictionaryPrompt));
 
   return {
-    isPromptFragment:
-      matchCount / uniqueTextWords.size >= 0.9 &&
-      continuesPromptShape &&
-      (normalizedText.length <= MAX_SHORT_FRAGMENT_CHARACTERS || hasRepeatedWords),
+    isPromptFragment: matchCount / uniqueTextWords.size >= 0.9 && continuesPromptShape,
     hasRepeatedWords,
     uniqueWordCount: uniqueTextWords.size,
   };

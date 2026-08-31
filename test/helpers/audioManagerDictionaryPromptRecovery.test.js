@@ -60,7 +60,9 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
           info(message, data, category) {
             globalThis.__dictionaryPromptRecoveryLogs.push({ message, data, category });
           },
-          warn() {},
+          warn(message, data, category) {
+            globalThis.__dictionaryPromptRecoveryLogs.push({ level: "warn", message, data, category });
+          },
           error() {},
           logReasoning() {},
         };
@@ -148,6 +150,37 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
 
     assert.equal(result.rawText, "On my way.");
     assert.deepEqual(processedTexts, ["On my way."]);
+    assert.equal(calls.length, 1);
+  });
+
+  await t.test("comma-separated dictionary terms are dictation, never retried", async () => {
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "Electron, renderer" },
+      { success: true, text: "electron rendered a late in sea" },
+    ]);
+    const { manager, processedTexts } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 5,
+    });
+
+    assert.equal(result.rawText, "Electron, renderer");
+    assert.deepEqual(processedTexts, ["Electron, renderer"]);
+    assert.equal(calls.length, 1);
+  });
+
+  await t.test("a genuinely doubled dictionary term is never retried", async () => {
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "OpenWhispr, OpenWhispr" },
+      { success: true, text: "open whisper open whisper too" },
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 4,
+    });
+
+    assert.equal(result.rawText, "OpenWhispr, OpenWhispr");
     assert.equal(calls.length, 1);
   });
 
@@ -244,6 +277,37 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
     });
 
     assert.equal(result.rawText, fullTranscript);
+    assert.equal(calls.length, 2);
+  });
+
+  await t.test("a consecutive-term continuation recovers past the length cap", async () => {
+    const fullTranscript = "The quarterly report is ready for review.";
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "TypeScript, Electron, testing, data, benchmark" },
+      { success: true, text: fullTranscript },
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 6,
+    });
+
+    assert.equal(result.rawText, fullTranscript);
+    assert.equal(calls.length, 2);
+  });
+
+  await t.test("a sparse retry below the unique-word gain keeps the fragment", async () => {
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "testing, " },
+      { success: true, text: "yes please" },
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base", {
+      durationSeconds: 5,
+    });
+
+    assert.equal(result.rawText, "testing, ");
     assert.equal(calls.length, 2);
   });
 
@@ -353,6 +417,45 @@ test("local Whisper recovers dictionary prompt echoes and fragments", async (t) 
       assert.equal(calls.length, 2);
     });
   }
+
+  await t.test("a failed fragment retry is logged before keeping the initial text", async () => {
+    globalThis.__dictionaryPromptRecoveryLogs.length = 0;
+    const calls = queueTranscriptions(window, [
+      { success: true, text: "data, data, data, data," },
+      new Error("GPU inference failed"),
+    ]);
+    const { manager } = createRecoveryManager();
+
+    const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base");
+
+    assert.equal(result.rawText, "data, data, data, data,");
+    assert.equal(calls.length, 2);
+    const warnLog = globalThis.__dictionaryPromptRecoveryLogs.find(({ level }) => level === "warn");
+    assert.ok(warnLog, "expected the swallowed retry failure to be logged");
+    assert.equal(warnLog.data.message, "GPU inference failed");
+  });
+
+  await t.test(
+    "a small-dictionary echo stays strict when the merged prompt dilutes it",
+    async () => {
+      // getWhisperPrompt may append a Chinese script bias; the strict check must
+      // also consult the dictionary alone (see isDictionaryEcho's rationale).
+      const fullTranscript = "This is what I actually said.";
+      const calls = queueTranscriptions(window, [
+        { success: true, text: "OpenWhispr, Parakeet" },
+        { success: true, text: fullTranscript },
+      ]);
+      const { manager, processedTexts } = createRecoveryManager();
+      manager.getCustomDictionaryPrompt = () => "OpenWhispr, Parakeet";
+      manager.getWhisperPrompt = () => "OpenWhispr, Parakeet, 简体中文";
+
+      const result = await manager.processWithLocalWhisper(AUDIO_BLOB, "base");
+
+      assert.equal(result.rawText, fullTranscript);
+      assert.deepEqual(processedTexts, [fullTranscript]);
+      assert.equal(calls.length, 2);
+    }
+  );
 
   await t.test("normal output with a dictionary uses one inference call", async () => {
     const transcript = "Please summarize the customer meeting.";
