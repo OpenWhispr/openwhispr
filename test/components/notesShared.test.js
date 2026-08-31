@@ -17,6 +17,14 @@ test("space roots keep the generic empty title", async () => {
   assert.equal(notesEmptyTitleKey(false), "notes.empty.title");
 });
 
+test("participant controls are only available on meeting notes", async () => {
+  const { shouldShowNoteParticipants } = await load();
+
+  assert.equal(shouldShowNoteParticipants("meeting"), true);
+  assert.equal(shouldShowNoteParticipants("personal"), false);
+  assert.equal(shouldShowNoteParticipants("upload"), false);
+});
+
 test("both empty-title keys resolve to strings in the en locale", async () => {
   const { notesEmptyTitleKey } = await load();
   const en = JSON.parse(
