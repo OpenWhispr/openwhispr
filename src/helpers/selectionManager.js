@@ -335,9 +335,10 @@ class SelectionManager {
       };
     }
     // Chromium browsers (and any app whose accessibility tree stays dormant)
-    // never resolve a focused element, so the read above cannot tell a selection
-    // from an empty field. A synthetic copy still can — the same route Windows
-    // and Linux take by default.
+    // never resolve a focused element — or resolve only the bare window (the
+    // native read's "unknown" state) — so the read above cannot tell a
+    // selection from an empty field. A synthetic copy still can — the same
+    // route Windows and Linux take by default.
     return this._readMacSelectionViaClipboard(pid, expectedTarget, probeEditable);
   }
 
@@ -497,8 +498,27 @@ class SelectionManager {
     // to match — so resolve the executable name before a Wayland terminal's
     // empty prompt can read as a writable caret.
     if (target.kind === "atspi-pid" && (await this._isTerminalPid(target.id))) return capture;
-    const editable = await this.textEditMonitor?.isFocusedEditable?.(target);
-    return editable ? { status: "editable", target } : capture;
+    // macOS targets normally carry the copier's NSWorkspace app name, already
+    // matched above; only an unnamed target needs its executable resolved so a
+    // terminal cannot reach the trusted-unknown verdict below. Never resolve a
+    // named one — `ps` reports bundle paths like "Visual Studio Code" whose
+    // "st" substring would misread editors as terminals.
+    if (
+      target.kind === "mac-pid" &&
+      !this._targetSignature(target) &&
+      (await this._isTerminalPid(target.pid))
+    ) {
+      return capture;
+    }
+    const verdict = await this.textEditMonitor?.isFocusedEditable?.(target);
+    if (verdict === "editable") return { status: "editable", target };
+    // "unknown" is the dormant-accessibility signature (Chromium-family: Arc,
+    // Dia, Chrome, Electron) where nothing can verify the field and no wake-up
+    // switch exists. The synthetic copy already ruled out a live selection and
+    // the terminal checks passed, so trust the caret — dictation auto-paste's
+    // long-standing risk profile. A confirmed "not_editable" still declines.
+    if (verdict === "unknown") return { status: "editable", target };
+    return capture;
   }
 
   _isTerminalTarget(...targets) {
@@ -628,10 +648,11 @@ class SelectionManager {
     // A clipboard side the sentinel write didn't reach (KDE desyncs X11 from
     // Wayland) still holds pre-copy content; snapshot it so stale text can't
     // be mistaken for the copied selection. Known limitation: a clipboard that
-    // already held exactly the selected text reads as "no selection". The
-    // command then falls back to the Assistant panel — never to a caret paste,
-    // because the editable probe reads the focused element's own selection
-    // state and refuses a field with a live selection.
+    // already held exactly the selected text reads as "no selection". Where
+    // accessibility can inspect the focused element, the editable probe still
+    // refuses the field's live selection; in AX-dormant apps the trusted
+    // "unknown" caret cannot see it — the blind spot dictation's auto-paste
+    // has always had.
     const baseline = new Set([...beforeWrite, ...this.clipboardManager._readClipboardTextAll()]);
 
     const copyResult = await sendCopy();
