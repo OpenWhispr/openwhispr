@@ -49,11 +49,26 @@ export async function syncPendingAnalytics(): Promise<number> {
   }
 }
 
+const REQUIRED_SUMMARY_TOTALS = [
+  "totalWords",
+  "totalDictations",
+  "totalSpokenDurationMs",
+  "currentStreakDays",
+  "longestStreakDays",
+  "wpmCoveragePercent",
+] as const;
+
 export async function getAccountAnalyticsSummary(timeZone: string): Promise<AnalyticsSummary> {
   const summary = await cloudGet<AnalyticsSummary>(
     `/api/analytics/summary?timeZone=${encodeURIComponent(timeZone)}`
   );
-  if (!Array.isArray(summary?.daily)) {
+  // Every total is rendered straight into a metric card, where a missing field
+  // would read as "NaN"; fall back to the device summary instead.
+  const totalsAreNumbers = REQUIRED_SUMMARY_TOTALS.every((field) =>
+    Number.isFinite(summary?.[field])
+  );
+  const wpmIsValid = summary?.averageWpm === null || Number.isFinite(summary?.averageWpm);
+  if (!Array.isArray(summary?.daily) || !totalsAreNumbers || !wpmIsValid) {
     throw new Error("Malformed analytics summary from cloud");
   }
   return summary;

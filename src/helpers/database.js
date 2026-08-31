@@ -1367,56 +1367,82 @@ class DatabaseManager {
   }
 
   getPendingAnalyticsEvents(limit = 200) {
-    if (!this.activeAccountId) return [];
-    const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
-    return this.db
-      .prepare(
-        `SELECT event_id, occurred_at, local_date, word_count, spoken_duration_ms,
-                mode, provider, model, counter_version
-         FROM analytics_events
-         WHERE account_id = ? AND sync_status = 'pending' AND deleted_at IS NULL
-         ORDER BY occurred_at ASC LIMIT ?`
-      )
-      .all(this.activeAccountId, safeLimit);
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this.activeAccountId) return [];
+      const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
+      return this.db
+        .prepare(
+          `SELECT event_id, occurred_at, local_date, word_count, spoken_duration_ms,
+                  mode, provider, model, counter_version
+           FROM analytics_events
+           WHERE account_id = ? AND sync_status = 'pending' AND deleted_at IS NULL
+           ORDER BY occurred_at ASC LIMIT ?`
+        )
+        .all(this.activeAccountId, safeLimit);
+    } catch (error) {
+      debugLogger.error("Error reading pending analytics", { error: error.message }, "database");
+      throw error;
+    }
   }
 
+  // Tombstoned rows are excluded so a delete that landed while the batch was in
+  // flight cannot be un-tombstoned by a late accept from the server.
   markAnalyticsEventsSynced(eventIds) {
-    if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
-      return { success: true, updated: 0 };
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
+        return { success: true, updated: 0 };
+      }
+      const placeholders = eventIds.map(() => "?").join(", ");
+      const result = this.db
+        .prepare(
+          `UPDATE analytics_events SET sync_status = 'synced'
+           WHERE account_id = ? AND deleted_at IS NULL AND event_id IN (${placeholders})`
+        )
+        .run(this.activeAccountId, ...eventIds);
+      return { success: true, updated: result.changes };
+    } catch (error) {
+      debugLogger.error("Error marking analytics synced", { error: error.message }, "database");
+      throw error;
     }
-    const placeholders = eventIds.map(() => "?").join(", ");
-    const result = this.db
-      .prepare(
-        `UPDATE analytics_events SET sync_status = 'synced'
-         WHERE account_id = ? AND event_id IN (${placeholders})`
-      )
-      .run(this.activeAccountId, ...eventIds);
-    return { success: true, updated: result.changes };
   }
 
   getPendingAnalyticsDeletes(limit = 200) {
-    if (!this.activeAccountId) return [];
-    const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
-    return this.db
-      .prepare(
-        `SELECT event_id FROM analytics_events
-         WHERE account_id = ? AND deleted_at IS NOT NULL AND sync_status = 'pending'
-         ORDER BY occurred_at ASC LIMIT ?`
-      )
-      .all(this.activeAccountId, safeLimit);
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this.activeAccountId) return [];
+      const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
+      return this.db
+        .prepare(
+          `SELECT event_id FROM analytics_events
+           WHERE account_id = ? AND deleted_at IS NOT NULL AND sync_status = 'pending'
+           ORDER BY occurred_at ASC LIMIT ?`
+        )
+        .all(this.activeAccountId, safeLimit);
+    } catch (error) {
+      debugLogger.error("Error reading analytics deletes", { error: error.message }, "database");
+      throw error;
+    }
   }
 
   hardDeleteAnalyticsEvents(eventIds) {
-    if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
-      return { success: true, deleted: 0 };
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
+        return { success: true, deleted: 0 };
+      }
+      const placeholders = eventIds.map(() => "?").join(", ");
+      const result = this.db
+        .prepare(
+          `DELETE FROM analytics_events WHERE account_id = ? AND event_id IN (${placeholders})`
+        )
+        .run(this.activeAccountId, ...eventIds);
+      return { success: true, deleted: result.changes };
+    } catch (error) {
+      debugLogger.error("Error deleting analytics events", { error: error.message }, "database");
+      throw error;
     }
-    const placeholders = eventIds.map(() => "?").join(", ");
-    const result = this.db
-      .prepare(
-        `DELETE FROM analytics_events WHERE account_id = ? AND event_id IN (${placeholders})`
-      )
-      .run(this.activeAccountId, ...eventIds);
-    return { success: true, deleted: result.changes };
   }
 
   countUnclaimedAnalyticsEvents() {
@@ -1431,13 +1457,19 @@ class DatabaseManager {
   // Device-local rows stay unattributed until the signed-in user explicitly
   // asks for them, so signing in never silently adopts someone else's history.
   claimAnonymousAnalyticsEvents() {
-    if (!this.activeAccountId) return { success: false, claimed: 0 };
-    const result = this.db
-      .prepare(
-        "UPDATE analytics_events SET account_id = ? WHERE account_id IS NULL AND deleted_at IS NULL"
-      )
-      .run(this.activeAccountId);
-    return { success: true, claimed: result.changes };
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this.activeAccountId) return { success: false, claimed: 0 };
+      const result = this.db
+        .prepare(
+          "UPDATE analytics_events SET account_id = ? WHERE account_id IS NULL AND deleted_at IS NULL"
+        )
+        .run(this.activeAccountId);
+      return { success: true, claimed: result.changes };
+    } catch (error) {
+      debugLogger.error("Error claiming analytics events", { error: error.message }, "database");
+      throw error;
+    }
   }
 
   getTranscriptions(limit = 50, { includeDiscarded = false } = {}) {
@@ -1466,16 +1498,17 @@ class DatabaseManager {
         "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL"
       );
       const hardDelete = this.db.prepare("DELETE FROM transcriptions WHERE cloud_id IS NULL");
-      // Analytics rows follow the same tombstone protocol: rows the cloud never
-      // saw are dropped outright, synced rows become pending deletes for
-      // AnalyticsService to retire server-side. The hard delete runs first —
-      // tombstoning flips sync_status to 'pending' and would re-match it.
+      // Analytics rows split on ownership, not on sync state: only a row with an
+      // account_id can ever be uploaded, so an unattributed row is dropped
+      // outright while every owned row leaves a tombstone. Splitting on
+      // sync_status instead would hard-delete a row whose upload was still in
+      // flight, leaving the accepted cloud copy with nothing to retire it.
       const hardDeleteAnalytics = this.db.prepare(
-        "DELETE FROM analytics_events WHERE sync_status <> 'synced' AND deleted_at IS NULL"
+        "DELETE FROM analytics_events WHERE account_id IS NULL AND deleted_at IS NULL"
       );
       const tombstoneAnalytics = this.db.prepare(
         `UPDATE analytics_events SET deleted_at = datetime('now'), sync_status = 'pending'
-         WHERE sync_status = 'synced' AND deleted_at IS NULL`
+         WHERE account_id IS NOT NULL AND deleted_at IS NULL`
       );
       const clearAll = this.db.transaction(() => {
         const cleared = tombstone.run().changes + hardDelete.run().changes;

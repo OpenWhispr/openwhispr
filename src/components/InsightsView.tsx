@@ -6,6 +6,8 @@ import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
 import { getAccountAnalyticsSummary, syncPendingAnalytics } from "../services/AnalyticsService";
 import { localDateKey } from "../helpers/analytics";
+import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
 
@@ -91,7 +93,10 @@ function MetricCard({
 export default function InsightsView() {
   const { t } = useTranslation();
   const { isSignedIn, isLoaded } = useAuth();
-  const { insightsSyncEnabled } = useSettings();
+  const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
+  const dataRetentionEnabled = usePolicyStore((policyState) =>
+    effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
+  );
   const { enableInsightsSync, optInDialog } = useInsightsSyncOptIn();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,16 +141,14 @@ export default function InsightsView() {
     []
   );
 
-  if (loading && !summary) {
+  if (!summary) {
+    if (!loading) return null;
     return (
       <div className="flex min-h-64 items-center justify-center text-muted-foreground">
         <Loader2 size={18} className="animate-spin" />
       </div>
     );
   }
-
-  const data = summary;
-  if (!data) return null;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
@@ -164,7 +167,16 @@ export default function InsightsView() {
         </div>
       </div>
 
-      {isSignedIn && !insightsSyncEnabled && (
+      {!dataRetentionEnabled && (
+        <div className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 px-3.5 py-2.5 flex items-center gap-2.5">
+          <span className="text-amber-600 dark:text-amber-400 shrink-0 text-sm">⊘</span>
+          <p className="text-xs text-amber-700 dark:text-amber-300/90 leading-relaxed">
+            {t("insights.dataRetentionDisabled")}
+          </p>
+        </div>
+      )}
+
+      {isSignedIn && !insightsSyncEnabled && dataRetentionEnabled && (
         <div className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3">
           <p className="text-xs text-muted-foreground">{t("insights.syncPrompt")}</p>
           <button
@@ -181,25 +193,25 @@ export default function InsightsView() {
         <MetricCard
           icon={Mic2}
           label={t("insights.wordsSpoken")}
-          value={number.format(data.totalWords)}
+          value={number.format(summary.totalWords)}
           detail={t("insights.allTime")}
         />
         <MetricCard
           icon={Flame}
           label={t("insights.currentStreak")}
-          value={t("insights.days", { count: data.currentStreakDays })}
-          detail={t("insights.longestStreak", { count: data.longestStreakDays })}
+          value={t("insights.days", { count: summary.currentStreakDays })}
+          detail={t("insights.longestStreak", { count: summary.longestStreakDays })}
         />
         <MetricCard
           icon={Gauge}
           label={t("insights.wordsPerMinute")}
-          value={data.averageWpm == null ? "—" : number.format(data.averageWpm)}
-          detail={t("insights.wpmCoverage", { count: data.wpmCoveragePercent })}
+          value={summary.averageWpm == null ? "—" : number.format(summary.averageWpm)}
+          detail={t("insights.wpmCoverage", { count: summary.wpmCoveragePercent })}
         />
         <MetricCard
           icon={BarChart3}
           label={t("insights.dictations")}
-          value={number.format(data.totalDictations)}
+          value={number.format(summary.totalDictations)}
           detail={t("insights.allTime")}
         />
       </div>
@@ -211,7 +223,7 @@ export default function InsightsView() {
             {t("insights.activityDescription")}
           </p>
         </div>
-        <Heatmap daily={data.daily} />
+        <Heatmap daily={summary.daily} />
       </div>
 
       {optInDialog}

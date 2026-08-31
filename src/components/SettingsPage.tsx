@@ -4078,14 +4078,21 @@ EOF`,
                   <SettingsRow
                     label={t("settingsPage.privacy.insightsSync")}
                     description={
-                      isSignedIn
-                        ? t("settingsPage.privacy.insightsSyncDescription")
-                        : t("settingsPage.privacy.insightsSyncRequiresAccount")
+                      !isSignedIn
+                        ? t("settingsPage.privacy.insightsSyncRequiresAccount")
+                        : effectiveDataRetentionEnabled
+                          ? t("settingsPage.privacy.insightsSyncDescription")
+                          : t("settingsPage.privacy.insightsSyncRequiresHistory")
                     }
                   >
+                    {/* With history off no dictation is ever counted, so turning
+                        this on could only promise a sync that never happens —
+                        but an already-on toggle must stay switchable off. */}
                     <Toggle
                       checked={insightsSyncEnabled}
-                      disabled={!isSignedIn}
+                      disabled={
+                        !isSignedIn || (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
+                      }
                       onChange={(enabled) =>
                         enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)
                       }

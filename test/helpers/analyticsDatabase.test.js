@@ -66,10 +66,11 @@ test("clearing history and deleting account data both erase analytics rows", (t)
   );
 });
 
-test("clearing history tombstones synced analytics so the cloud copy can be retired", (t) => {
+test("clearing history tombstones every owned analytics row so the cloud copy can be retired", (t) => {
   const db = createDb(t);
   if (!db) return;
 
+  recordEvent(db, "guest-1");
   db.setActiveAccountId("account-a");
   recordEvent(db, "synced-1");
   recordEvent(db, "pending-1");
@@ -79,12 +80,29 @@ test("clearing history tombstones synced analytics so the cloud copy can be reti
 
   assert.equal(db.getAnalyticsSummary().totalDictations, 0, "tombstones leave the summary");
   assert.deepEqual(db.getPendingAnalyticsEvents(), [], "tombstones are never re-uploaded");
+  assert.equal(db.countUnclaimedAnalyticsEvents(), 0, "the unattributed row is gone outright");
   assert.deepEqual(
-    db.getPendingAnalyticsDeletes().map((row) => row.event_id),
-    ["synced-1"],
-    "only the row the cloud has seen becomes a pending delete"
+    db
+      .getPendingAnalyticsDeletes()
+      .map((row) => row.event_id)
+      .sort(),
+    ["pending-1", "synced-1"],
+    "every row that could have reached the cloud becomes a pending delete"
   );
-  assert.equal(db.hardDeleteAnalyticsEvents(["synced-1"]).deleted, 1);
+
+  // A batch already in flight when the clear landed still gets accepted; the
+  // late ack must not resurrect the row out of its tombstone.
+  assert.equal(db.markAnalyticsEventsSynced(["pending-1"]).updated, 0);
+  assert.deepEqual(
+    db
+      .getPendingAnalyticsDeletes()
+      .map((row) => row.event_id)
+      .sort(),
+    ["pending-1", "synced-1"],
+    "a late accept cannot un-tombstone a cleared row"
+  );
+
+  assert.equal(db.hardDeleteAnalyticsEvents(["pending-1", "synced-1"]).deleted, 2);
   assert.deepEqual(db.getPendingAnalyticsDeletes(), []);
 });
 
