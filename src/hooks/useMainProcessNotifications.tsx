@@ -44,8 +44,12 @@ export function useMainProcessNotifications({
         action: (
           <button
             onClick={async () => {
-              const result = await window.electronAPI?.whisperGpuRetry?.();
-              if (result?.success) dismiss(toastId);
+              try {
+                const result = await window.electronAPI?.whisperGpuRetry?.();
+                if (result?.success) dismiss(toastId);
+              } catch {
+                // silently fail — toast stays up for another attempt
+              }
             }}
             className="rounded-sm border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-medium whitespace-nowrap text-white/90 transition-colors hover:border-white/35 hover:bg-white/20 hover:text-white"
           >

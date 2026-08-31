@@ -3276,7 +3276,6 @@
     "activationFailed": "Ускорение GPU недоступно",
     "activationFailedDescription": "OpenWhispr переключился на транскрипцию на CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr переключился на обработку на CPU.",
-    "retry": "Повторить",
     "retryActivation": "Повторить ускорение GPU",
     "remove": "Удалить",
     "dismiss": "Не сейчас",

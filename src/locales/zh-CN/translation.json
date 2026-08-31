@@ -3248,7 +3248,6 @@
     "activationFailed": "GPU 加速不可用",
     "activationFailedDescription": "OpenWhispr 已切换为 CPU 转录。",
     "reasoningActivationFailedDescription": "OpenWhispr 已切换为 CPU 处理。",
-    "retry": "重试",
     "retryActivation": "重试 GPU 加速",
     "remove": "移除",
     "dismiss": "暂不启用",

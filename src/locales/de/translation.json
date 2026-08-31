@@ -3413,7 +3413,6 @@
     "activationFailed": "GPU-Beschleunigung nicht verfügbar",
     "activationFailedDescription": "OpenWhispr verwendet die CPU-Transkription.",
     "reasoningActivationFailedDescription": "OpenWhispr verwendet die CPU-Verarbeitung.",
-    "retry": "Erneut versuchen",
     "retryActivation": "GPU-Beschleunigung erneut versuchen",
     "remove": "Entfernen",
     "dismiss": "Nicht jetzt",

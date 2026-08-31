@@ -3248,7 +3248,6 @@
     "activationFailed": "Accelerazione GPU non disponibile",
     "activationFailedDescription": "OpenWhispr sta usando la trascrizione CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr sta usando l'elaborazione CPU.",
-    "retry": "Riprova",
     "retryActivation": "Riprova l'accelerazione GPU",
     "remove": "Rimuovi",
     "dismiss": "Non ora",

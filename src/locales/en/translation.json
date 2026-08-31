@@ -3413,7 +3413,6 @@
     "activationFailed": "GPU acceleration unavailable",
     "activationFailedDescription": "OpenWhispr switched to CPU transcription.",
     "reasoningActivationFailedDescription": "OpenWhispr switched to CPU processing.",
-    "retry": "Retry",
     "retryActivation": "Retry GPU acceleration",
     "remove": "Remove",
     "dismiss": "Not now",
