@@ -1413,10 +1413,6 @@ class IPCHandlers {
       return this.databaseManager.getAnalyticsSummary();
     });
 
-    ipcMain.handle("analytics-claim-anonymous", async () => {
-      return this.databaseManager.claimAnonymousAnalyticsEvents();
-    });
-
     ipcMain.handle("analytics-get-pending", async (_event, limit) => {
       return this.databaseManager.getPendingAnalyticsEvents(limit);
     });
@@ -1433,6 +1429,7 @@ class IPCHandlers {
           broadcastToWindows("transcriptions-cleared", {
             cleared: result.cleared,
           });
+          broadcastToWindows("analytics-changed");
         });
       }
       return result;

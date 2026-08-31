@@ -1151,7 +1151,6 @@ declare global {
         input: AnalyticsEventInput
       ) => Promise<{ success: boolean; eventId?: string; ignored?: boolean }>;
       getAnalyticsSummary: () => Promise<AnalyticsSummary>;
-      claimAnonymousAnalyticsEvents: () => Promise<{ success: boolean; claimed: number }>;
       getPendingAnalyticsEvents: (limit?: number) => Promise<PendingAnalyticsEvent[]>;
       markAnalyticsEventsSynced: (
         eventIds: string[]

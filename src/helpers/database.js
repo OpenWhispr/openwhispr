@@ -1348,17 +1348,6 @@ class DatabaseManager {
     }
   }
 
-  claimAnonymousAnalyticsEvents() {
-    if (!this.activeAccountId) return { success: false, claimed: 0 };
-    const result = this.db
-      .prepare(
-        `UPDATE analytics_events SET account_id = ?, sync_status = 'pending'
-         WHERE account_id IS NULL`
-      )
-      .run(this.activeAccountId);
-    return { success: true, claimed: result.changes };
-  }
-
   getPendingAnalyticsEvents(limit = 200) {
     if (!this.activeAccountId) return [];
     const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
@@ -1413,9 +1402,14 @@ class DatabaseManager {
         "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL"
       );
       const hardDelete = this.db.prepare("DELETE FROM transcriptions WHERE cloud_id IS NULL");
-      const clearAll = this.db.transaction(
-        () => tombstone.run().changes + hardDelete.run().changes
-      );
+      // Analytics rows are derived per-dictation history, and this is the only
+      // erase affordance the user has for them.
+      const clearAnalytics = this.db.prepare("DELETE FROM analytics_events");
+      const clearAll = this.db.transaction(() => {
+        const cleared = tombstone.run().changes + hardDelete.run().changes;
+        clearAnalytics.run();
+        return cleared;
+      });
       return { cleared: clearAll(), success: true };
     } catch (error) {
       debugLogger.error("Error clearing transcriptions", { error: error.message }, "database");
@@ -2719,6 +2713,7 @@ class DatabaseManager {
           .prepare(`DELETE FROM folders WHERE id IN (${folderPlaceholders})`)
           .run(...deletedFolderIds);
       }
+      this.db.prepare("DELETE FROM analytics_events WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM space_accounts WHERE account_id = ?").run(accountId);
     };
 

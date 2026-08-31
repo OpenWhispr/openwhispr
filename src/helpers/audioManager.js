@@ -1,5 +1,4 @@
 import ReasoningService from "../services/ReasoningService";
-import { syncPendingAnalytics } from "../services/AnalyticsService";
 import { PROVIDER_REGISTRY } from "../services/ai/inferenceProviders";
 import logger from "../utils/logger";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
@@ -30,12 +29,7 @@ import { followsSystemDefaultMic } from "./micSelectionRecovery";
 import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
-import {
-  countSpokenWords,
-  localDateKey,
-  modeFromStoredProvider,
-  resolveAnalyticsMode,
-} from "./analytics";
+import { countSpokenWords, localDateKey, resolveAnalyticsMode } from "./analytics";
 import {
   getSettings,
   useSettingsStore,
@@ -3682,17 +3676,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async saveTranscription(text, rawText = null, { clientTranscriptionId } = {}) {
+    const { dataRetentionEnabled, audioRetentionDays } = getEffectiveRetentionPreferences();
+    if (!dataRetentionEnabled) {
+      logger.debug("Skipping transcription save — data retention disabled", {}, "audio");
+      this.lastAudioBlob = null;
+      this.lastAudioMetadata = null;
+      return true;
+    }
+
     const eventId = clientTranscriptionId || crypto.randomUUID();
     const occurredAt = new Date();
     const metadata = this.lastAudioMetadata || {};
-    const selectedMode = resolveAnalyticsMode(getSettings());
-    const providerMode = modeFromStoredProvider(metadata.provider);
-    const mode =
-      providerMode === "local" || providerMode === "self_hosted"
-        ? providerMode
-        : selectedMode === "unknown"
-          ? providerMode
-          : selectedMode;
     try {
       await window.electronAPI.recordAnalyticsEvent({
         eventId,
@@ -3700,29 +3694,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         occurredAt: occurredAt.toISOString(),
         localDate: localDateKey(occurredAt),
         spokenDurationMs: metadata.durationMs || null,
-        mode,
+        mode: resolveAnalyticsMode(getSettings(), metadata.provider),
         provider: metadata.provider || null,
         model: metadata.model || null,
       });
-      if (analyticsSyncEnabled()) {
-        void syncPendingAnalytics().catch((syncError) => {
-          logger.warn("Failed to sync analytics event", { error: syncError.message }, "analytics");
-        });
-      }
     } catch (analyticsError) {
       logger.warn(
         "Failed to record local analytics event",
         { error: analyticsError.message },
         "analytics"
       );
-    }
-
-    const { dataRetentionEnabled, audioRetentionDays } = getEffectiveRetentionPreferences();
-    if (!dataRetentionEnabled) {
-      logger.debug("Skipping transcription save — data retention disabled", {}, "audio");
-      this.lastAudioBlob = null;
-      this.lastAudioMetadata = null;
-      return true;
     }
 
     try {
