@@ -368,3 +368,59 @@ test("reacquireIfDead falls back when the re-acquired track stays muted", async 
     restore();
   }
 });
+
+// Slow-waking devices (Bluetooth negotiation, wireless dongles, fresh USB
+// plug-ins) deliver their first frames well after the old 600ms budget, and
+// reopening the device restarts the wake — the first track must be waited out.
+test("reacquireIfDead waits out a slow-waking first track instead of re-acquiring", async (t) => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const stream = new FakeStream(trackWithStop({ muted: true }));
+  const fallback = spyFallback();
+  let called = false;
+  const restore = stubGetUserMedia(async () => {
+    called = true;
+  });
+  try {
+    const pending = reacquireIfDead(stream, () => ({}), noopLogger, fallback.options);
+    await new Promise((resolve) => setImmediate(resolve));
+    // The old per-track budget elapses with no re-acquire.
+    t.mock.timers.tick(600);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(called, false);
+    // The device finishes waking and frames start flowing.
+    stream.track.muted = false;
+    stream.track.fire("unmute");
+    assert.equal(await pending, stream);
+    assert.equal(called, false);
+    assert.equal(stream.track._stopCount, 0);
+    assert.equal(stream.track._listenerCount, 0);
+    assert.equal(fallback.calls.onDeviceRejected, 0);
+    assert.equal(fallback.calls.onFallbackUnusable, 0);
+  } finally {
+    restore();
+  }
+});
+
+test("reacquireIfDead re-acquires once the first track exhausts the extended budget", async (t) => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const stream = new FakeStream(trackWithStop({ muted: true }));
+  const retry = new FakeStream(trackWithStop({ muted: false }));
+  let calls = 0;
+  const restore = stubGetUserMedia(async () => {
+    calls += 1;
+    return retry;
+  });
+  try {
+    const pending = reacquireIfDead(stream, () => ({}), noopLogger);
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(2500);
+    assert.equal(await pending, retry);
+    assert.equal(calls, 1);
+    assert.equal(stream.track._stopCount, 1);
+    assert.equal(stream.track._listenerCount, 0);
+  } finally {
+    restore();
+  }
+});
