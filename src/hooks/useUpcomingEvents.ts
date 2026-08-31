@@ -8,7 +8,7 @@ export interface UseUpcomingEventsReturn {
   isConnected: boolean;
 }
 
-const LOOKAHEAD_DAYS = 7;
+const LOOKAHEAD_DAYS = 3;
 
 function getLookaheadMinutes(): number {
   const now = new Date();

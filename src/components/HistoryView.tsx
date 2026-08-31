@@ -340,14 +340,12 @@ export default function HistoryView({
           </div>
 
           <div className="w-64 shrink-0 hidden sm:block">
-            <div className="sticky top-4">
-              <UpcomingMeetings
-                events={events}
-                isLoading={eventsLoading}
-                isConnected={isConnected}
-                onConnectCalendar={onOpenIntegrations}
-              />
-            </div>
+            <UpcomingMeetings
+              events={events}
+              isLoading={eventsLoading}
+              isConnected={isConnected}
+              onConnectCalendar={onOpenIntegrations}
+            />
           </div>
         </div>
       </div>
