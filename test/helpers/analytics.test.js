@@ -4,7 +4,7 @@ const {
   calculateStreaks,
   countSpokenWords,
   resolveAnalyticsMode,
-  summarizeAnalyticsEvents,
+  summarizeAnalyticsDays,
 } = require("../../src/helpers/analytics.js");
 
 test("analytics counts raw whitespace-delimited spoken words", () => {
@@ -45,19 +45,44 @@ test("analytics credits a fallback to the provider that actually ran", () => {
   );
 });
 
-test("analytics computes weighted WPM, coverage, and streaks", () => {
-  const summary = summarizeAnalyticsEvents(
+test("analytics computes weighted WPM, coverage, and streaks from day totals", () => {
+  const summary = summarizeAnalyticsDays(
     [
-      { local_date: "2026-08-28", word_count: 100, spoken_duration_ms: 60_000 },
-      { local_date: "2026-08-29", word_count: 50, spoken_duration_ms: null },
-      { local_date: "2026-08-30", word_count: 100, spoken_duration_ms: 30_000 },
+      {
+        date: "2026-08-30",
+        words: 100,
+        dictations: 2,
+        spokenDurationMs: 30_000,
+        coveredWords: 100,
+      },
+      {
+        date: "2026-08-28",
+        words: 100,
+        dictations: 1,
+        spokenDurationMs: 60_000,
+        coveredWords: 100,
+      },
+      { date: "2026-08-29", words: 50, dictations: 1, spokenDurationMs: 0, coveredWords: 0 },
     ],
     "2026-08-30"
   );
+  assert.equal(summary.totalWords, 250);
+  assert.equal(summary.totalDictations, 4);
   assert.equal(summary.averageWpm, 133);
   assert.equal(summary.wpmCoveragePercent, 80);
   assert.equal(summary.currentStreakDays, 3);
   assert.equal(summary.longestStreakDays, 3);
+  // Unsorted input still yields ascending buckets carrying only view fields.
+  assert.deepEqual(
+    summary.daily.map((bucket) => bucket.date),
+    ["2026-08-28", "2026-08-29", "2026-08-30"]
+  );
+  assert.deepEqual(Object.keys(summary.daily[0]).sort(), [
+    "date",
+    "dictations",
+    "spokenDurationMs",
+    "words",
+  ]);
 });
 
 test("analytics expires a stale current streak", () => {

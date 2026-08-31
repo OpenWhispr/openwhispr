@@ -65,3 +65,52 @@ test("clearing history and deleting account data both erase analytics rows", (t)
     "only the deleted account's rows go"
   );
 });
+
+test("clearing history tombstones synced analytics so the cloud copy can be retired", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.setActiveAccountId("account-a");
+  recordEvent(db, "synced-1");
+  recordEvent(db, "pending-1");
+  db.markAnalyticsEventsSynced(["synced-1"]);
+
+  db.clearTranscriptions();
+
+  assert.equal(db.getAnalyticsSummary().totalDictations, 0, "tombstones leave the summary");
+  assert.deepEqual(db.getPendingAnalyticsEvents(), [], "tombstones are never re-uploaded");
+  assert.deepEqual(
+    db.getPendingAnalyticsDeletes().map((row) => row.event_id),
+    ["synced-1"],
+    "only the row the cloud has seen becomes a pending delete"
+  );
+  assert.equal(db.hardDeleteAnalyticsEvents(["synced-1"]).deleted, 1);
+  assert.deepEqual(db.getPendingAnalyticsDeletes(), []);
+});
+
+test("pre-sign-in analytics are attributed only by an explicit claim", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  recordEvent(db, "guest-1");
+  recordEvent(db, "guest-2");
+  db.setActiveAccountId("account-a");
+  recordEvent(db, "account-1");
+
+  assert.equal(db.countUnclaimedAnalyticsEvents(), 2);
+  assert.deepEqual(
+    db.getPendingAnalyticsEvents().map((row) => row.event_id),
+    ["account-1"],
+    "signing in alone never adopts device-local rows"
+  );
+
+  assert.equal(db.claimAnonymousAnalyticsEvents().claimed, 2);
+  assert.equal(db.countUnclaimedAnalyticsEvents(), 0);
+  assert.deepEqual(
+    db
+      .getPendingAnalyticsEvents()
+      .map((row) => row.event_id)
+      .sort(),
+    ["account-1", "guest-1", "guest-2"]
+  );
+});

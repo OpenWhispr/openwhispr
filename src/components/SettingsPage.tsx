@@ -62,6 +62,7 @@ import {
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { useSettings } from "../hooks/useSettings";
 import { useDialogs } from "../hooks/useDialogs";
+import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
@@ -119,7 +120,6 @@ import {
   initializeNotesTree,
 } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
-import { syncPendingAnalytics } from "../services/AnalyticsService";
 import { formatBytes } from "../utils/formatBytes";
 import {
   clearMissingLocalModelSelections,
@@ -1700,6 +1700,7 @@ export default function SettingsPage({
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
   const { isSignedIn, isLoaded, user, refetch } = useAuth();
+  const { enableInsightsSync, optInDialog: insightsOptInDialog } = useInsightsSyncOptIn();
   // Signed out there is nothing to load and the plan grid is purely
   // promotional; signed in, no card may claim a plan until usage confirms one.
   const planStateKnown = !isSignedIn || usage?.status === "success";
@@ -4085,10 +4086,9 @@ EOF`,
                     <Toggle
                       checked={insightsSyncEnabled}
                       disabled={!isSignedIn}
-                      onChange={(enabled) => {
-                        setInsightsSyncEnabled(enabled);
-                        if (enabled) void syncPendingAnalytics().catch(console.error);
-                      }}
+                      onChange={(enabled) =>
+                        enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)
+                      }
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
@@ -4600,6 +4600,8 @@ EOF`,
 
   return (
     <>
+      {insightsOptInDialog}
+
       <ConfirmDialog
         open={confirmDialog.open}
         onOpenChange={(open) => !open && hideConfirmDialog()}

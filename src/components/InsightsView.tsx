@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, Cloud, Flame, Gauge, Loader2, Mic2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
+import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
 import { getAccountAnalyticsSummary, syncPendingAnalytics } from "../services/AnalyticsService";
 import { localDateKey } from "../helpers/analytics";
@@ -90,12 +91,17 @@ function MetricCard({
 export default function InsightsView() {
   const { t } = useTranslation();
   const { isSignedIn, isLoaded } = useAuth();
-  const { insightsSyncEnabled, setInsightsSyncEnabled } = useSettings();
+  const { insightsSyncEnabled } = useSettings();
+  const { enableInsightsSync, optInDialog } = useInsightsSyncOptIn();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
+  // Every dictation broadcasts analytics-changed, so loads overlap; only the
+  // newest one may write state, or a slow reply overwrites a fresher summary.
+  const requestIdRef = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setSyncError(false);
     let local: AnalyticsSummary | null = null;
@@ -104,15 +110,19 @@ export default function InsightsView() {
       if (isLoaded && isSignedIn && insightsSyncEnabled) {
         await syncPendingAnalytics();
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-        setSummary(await getAccountAnalyticsSummary(timeZone));
+        const account = await getAccountAnalyticsSummary(timeZone);
+        if (requestId !== requestIdRef.current) return;
+        setSummary(account);
       } else {
+        if (requestId !== requestIdRef.current) return;
         setSummary(local);
       }
     } catch {
+      if (requestId !== requestIdRef.current) return;
       setSummary((current) => local || current || EMPTY_SUMMARY);
       setSyncError(true);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [insightsSyncEnabled, isLoaded, isSignedIn]);
 
@@ -159,7 +169,7 @@ export default function InsightsView() {
           <p className="text-xs text-muted-foreground">{t("insights.syncPrompt")}</p>
           <button
             type="button"
-            onClick={() => setInsightsSyncEnabled(true)}
+            onClick={enableInsightsSync}
             className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
           >
             {t("insights.enableSync")}
@@ -203,6 +213,8 @@ export default function InsightsView() {
         </div>
         <Heatmap daily={data.daily} />
       </div>
+
+      {optInDialog}
     </div>
   );
 }

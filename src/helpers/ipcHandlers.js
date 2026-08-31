@@ -1421,6 +1421,22 @@ class IPCHandlers {
       return this.databaseManager.markAnalyticsEventsSynced(eventIds);
     });
 
+    ipcMain.handle("analytics-get-pending-deletes", async (_event, limit) => {
+      return this.databaseManager.getPendingAnalyticsDeletes(limit);
+    });
+
+    ipcMain.handle("analytics-hard-delete", async (_event, eventIds) => {
+      return this.databaseManager.hardDeleteAnalyticsEvents(eventIds);
+    });
+
+    ipcMain.handle("analytics-count-unclaimed", async () => {
+      return this.databaseManager.countUnclaimedAnalyticsEvents();
+    });
+
+    ipcMain.handle("analytics-claim-anonymous", async () => {
+      return this.databaseManager.claimAnonymousAnalyticsEvents();
+    });
+
     ipcMain.handle("db-clear-transcriptions", async (event) => {
       this.audioStorageManager.deleteAllAudio();
       const result = this.databaseManager.clearTranscriptions();

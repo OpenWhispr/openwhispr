@@ -2725,7 +2725,12 @@
     "synced": "Synced across devices",
     "syncFallback": "Showing device data — sync unavailable",
     "syncPrompt": "Sync content-free counters to combine local and cloud activity across devices.",
-    "enableSync": "Enable sync"
+    "enableSync": "Enable sync",
+    "claimTitle": "Include earlier dictations?",
+    "claimDescription_one": "{{count}} dictation on this device was recorded before you signed in. Include it in your synced Insights? Only its word count and date are sent.",
+    "claimDescription_other": "{{count}} dictations on this device were recorded before you signed in. Include them in your synced Insights? Only their word counts and dates are sent.",
+    "claimInclude": "Include",
+    "claimSkip": "Keep on this device"
   },
   "workspaces": {
     "switcher": {

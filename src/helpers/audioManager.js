@@ -126,9 +126,15 @@ function getEffectiveRetentionPreferences() {
 }
 
 // Insights sync is opt-in, so nothing analytics-only may ride along on a cloud
-// request until the user has enabled it.
+// request until the user has enabled it. History retention gates it too: the
+// local write below the same gate is skipped, and the cloud must not keep rows
+// the device never recorded and cannot erase.
 function analyticsSyncEnabled(settings = getSettings()) {
-  return settings.isSignedIn && settings.insightsSyncEnabled;
+  return (
+    settings.isSignedIn &&
+    settings.insightsSyncEnabled &&
+    getEffectiveRetentionPreferences().dataRetentionEnabled
+  );
 }
 
 const providerSupportsImages = (providerId) =>

@@ -6,7 +6,7 @@ const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { parseEventTime } = require("./calendarAvailability");
-const { summarizeAnalyticsEvents } = require("./analytics");
+const { summarizeAnalyticsDays } = require("./analytics");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -972,11 +972,19 @@ class DatabaseManager {
           model TEXT,
           counter_version INTEGER NOT NULL DEFAULT 1,
           sync_status TEXT NOT NULL DEFAULT 'pending',
+          deleted_at TEXT,
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_analytics_events_account_date
           ON analytics_events(account_id, local_date);
       `);
+      // Repair path only, for machines that ran this branch before deleted_at
+      // joined the CREATE TABLE above.
+      try {
+        this.db.exec("ALTER TABLE analytics_events ADD COLUMN deleted_at TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_client_id ON custom_dictionary(client_dict_id)"
       );
@@ -1329,18 +1337,28 @@ class DatabaseManager {
   getAnalyticsSummary() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // Grouped in SQL so the row count is bounded by distinct days rather than
+      // by dictations; summarizeAnalyticsDays still owns every derived figure.
       // Device-scoped by design: account_id only attributes rows for cloud
       // sync, so filtering on it here would blank the view on every sign-out.
-      const rows = this.db
+      const days = this.db
         .prepare(
-          `SELECT local_date, word_count, spoken_duration_ms
-           FROM analytics_events ORDER BY local_date ASC`
+          `SELECT local_date AS date,
+                  SUM(word_count) AS words,
+                  COUNT(*) AS dictations,
+                  SUM(CASE WHEN spoken_duration_ms > 0 THEN spoken_duration_ms ELSE 0 END)
+                    AS spokenDurationMs,
+                  SUM(CASE WHEN spoken_duration_ms > 0 THEN word_count ELSE 0 END)
+                    AS coveredWords
+           FROM analytics_events
+           WHERE deleted_at IS NULL
+           GROUP BY local_date`
         )
         .all();
       return {
         scope: "device",
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-        ...summarizeAnalyticsEvents(rows),
+        ...summarizeAnalyticsDays(days),
       };
     } catch (error) {
       debugLogger.error("Error reading analytics summary", { error: error.message }, "database");
@@ -1356,7 +1374,7 @@ class DatabaseManager {
         `SELECT event_id, occurred_at, local_date, word_count, spoken_duration_ms,
                 mode, provider, model, counter_version
          FROM analytics_events
-         WHERE account_id = ? AND sync_status = 'pending'
+         WHERE account_id = ? AND sync_status = 'pending' AND deleted_at IS NULL
          ORDER BY occurred_at ASC LIMIT ?`
       )
       .all(this.activeAccountId, safeLimit);
@@ -1374,6 +1392,52 @@ class DatabaseManager {
       )
       .run(this.activeAccountId, ...eventIds);
     return { success: true, updated: result.changes };
+  }
+
+  getPendingAnalyticsDeletes(limit = 200) {
+    if (!this.activeAccountId) return [];
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
+    return this.db
+      .prepare(
+        `SELECT event_id FROM analytics_events
+         WHERE account_id = ? AND deleted_at IS NOT NULL AND sync_status = 'pending'
+         ORDER BY occurred_at ASC LIMIT ?`
+      )
+      .all(this.activeAccountId, safeLimit);
+  }
+
+  hardDeleteAnalyticsEvents(eventIds) {
+    if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
+      return { success: true, deleted: 0 };
+    }
+    const placeholders = eventIds.map(() => "?").join(", ");
+    const result = this.db
+      .prepare(
+        `DELETE FROM analytics_events WHERE account_id = ? AND event_id IN (${placeholders})`
+      )
+      .run(this.activeAccountId, ...eventIds);
+    return { success: true, deleted: result.changes };
+  }
+
+  countUnclaimedAnalyticsEvents() {
+    if (!this.db) throw new Error("Database not initialized");
+    return this.db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM analytics_events WHERE account_id IS NULL AND deleted_at IS NULL"
+      )
+      .get().count;
+  }
+
+  // Device-local rows stay unattributed until the signed-in user explicitly
+  // asks for them, so signing in never silently adopts someone else's history.
+  claimAnonymousAnalyticsEvents() {
+    if (!this.activeAccountId) return { success: false, claimed: 0 };
+    const result = this.db
+      .prepare(
+        "UPDATE analytics_events SET account_id = ? WHERE account_id IS NULL AND deleted_at IS NULL"
+      )
+      .run(this.activeAccountId);
+    return { success: true, claimed: result.changes };
   }
 
   getTranscriptions(limit = 50, { includeDiscarded = false } = {}) {
@@ -1402,12 +1466,21 @@ class DatabaseManager {
         "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL"
       );
       const hardDelete = this.db.prepare("DELETE FROM transcriptions WHERE cloud_id IS NULL");
-      // Analytics rows are derived per-dictation history, and this is the only
-      // erase affordance the user has for them.
-      const clearAnalytics = this.db.prepare("DELETE FROM analytics_events");
+      // Analytics rows follow the same tombstone protocol: rows the cloud never
+      // saw are dropped outright, synced rows become pending deletes for
+      // AnalyticsService to retire server-side. The hard delete runs first —
+      // tombstoning flips sync_status to 'pending' and would re-match it.
+      const hardDeleteAnalytics = this.db.prepare(
+        "DELETE FROM analytics_events WHERE sync_status <> 'synced' AND deleted_at IS NULL"
+      );
+      const tombstoneAnalytics = this.db.prepare(
+        `UPDATE analytics_events SET deleted_at = datetime('now'), sync_status = 'pending'
+         WHERE sync_status = 'synced' AND deleted_at IS NULL`
+      );
       const clearAll = this.db.transaction(() => {
         const cleared = tombstone.run().changes + hardDelete.run().changes;
-        clearAnalytics.run();
+        hardDeleteAnalytics.run();
+        tombstoneAnalytics.run();
         return cleared;
       });
       return { cleared: clearAll(), success: true };

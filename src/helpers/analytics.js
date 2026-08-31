@@ -73,46 +73,40 @@ export function calculateStreaks(ascendingDays, today) {
   return { currentStreakDays, longestStreakDays };
 }
 
-export function summarizeAnalyticsEvents(events, today = localDateKey()) {
-  const buckets = new Map();
+// Takes one row per local date (grouped in SQL so the row count stays bounded
+// by calendar days) and stays the single owner of every derived figure.
+export function summarizeAnalyticsDays(days, today = localDateKey()) {
+  const daily = [...days].sort((a, b) => a.date.localeCompare(b.date));
   let totalWords = 0;
+  let totalDictations = 0;
   let totalSpokenDurationMs = 0;
   let coveredWords = 0;
 
-  for (const event of events) {
-    const words = Number(event.word_count) || 0;
-    const duration = Number(event.spoken_duration_ms) || 0;
-    totalWords += words;
-    if (duration > 0) {
-      totalSpokenDurationMs += duration;
-      coveredWords += words;
-    }
-    const existing = buckets.get(event.local_date) || {
-      date: event.local_date,
-      words: 0,
-      dictations: 0,
-      spokenDurationMs: 0,
-    };
-    existing.words += words;
-    existing.dictations += 1;
-    existing.spokenDurationMs += duration;
-    buckets.set(event.local_date, existing);
+  for (const day of daily) {
+    totalWords += day.words;
+    totalDictations += day.dictations;
+    totalSpokenDurationMs += day.spokenDurationMs;
+    coveredWords += day.coveredWords;
   }
 
-  const daily = [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date));
   return {
     totalWords,
-    totalDictations: events.length,
+    totalDictations,
     totalSpokenDurationMs,
     averageWpm:
       totalSpokenDurationMs > 0
         ? Math.round((coveredWords * 60_000) / totalSpokenDurationMs)
         : null,
     ...calculateStreaks(
-      daily.map((bucket) => bucket.date),
+      daily.map((day) => day.date),
       today
     ),
     wpmCoveragePercent: totalWords > 0 ? Math.round((coveredWords / totalWords) * 100) : 0,
-    daily: daily.slice(-366),
+    daily: daily.slice(-366).map(({ date, words, dictations, spokenDurationMs }) => ({
+      date,
+      words,
+      dictations,
+      spokenDurationMs,
+    })),
   };
 }
