@@ -3204,7 +3204,7 @@ export async function initializeSettings(): Promise<void> {
 
     try {
       const envModes = await window.electronAPI.getActivationModes?.();
-      if (envModes && Object.keys(envModes).length > 0) {
+      if (envModes) {
         const nextModes = retainActivationModes(envModes, useSettingsStore.getState().dictationKey);
         if (isBrowser) localStorage.setItem("activationModeByHotkey", JSON.stringify(nextModes));
         useSettingsStore.setState({ activationModeByHotkey: nextModes });
