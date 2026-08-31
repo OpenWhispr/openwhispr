@@ -1,4 +1,5 @@
 import ReasoningService from "../services/ReasoningService";
+import { syncPendingAnalytics } from "../services/AnalyticsService";
 import { PROVIDER_REGISTRY } from "../services/ai/inferenceProviders";
 import logger from "../utils/logger";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
@@ -29,6 +30,7 @@ import { followsSystemDefaultMic } from "./micSelectionRecovery";
 import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
+import { localDateKey, modeFromStoredProvider, resolveAnalyticsMode } from "./analyticsRenderer";
 import {
   getSettings,
   useSettingsStore,
@@ -38,6 +40,7 @@ import {
   isCloudTranslationMode,
   selectResolvedLLMConfig,
 } from "../stores/settingsStore";
+
 import {
   effectiveAudioRetentionDays,
   effectiveLocalHistoryEnabled,
@@ -3047,6 +3050,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const audioFormat = audioBlob.type;
     const opts = {};
     if (language) opts.language = language;
+    opts.localDate = localDateKey();
     const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
     if (
       (settings.useCleanupModel && cleanupCloudMode === "openwhispr") ||
@@ -3667,6 +3671,43 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async saveTranscription(text, rawText = null, { clientTranscriptionId } = {}) {
+    const eventId = clientTranscriptionId || crypto.randomUUID();
+    const occurredAt = new Date();
+    const metadata = this.lastAudioMetadata || {};
+    const selectedMode = resolveAnalyticsMode(getSettings());
+    const providerMode = modeFromStoredProvider(metadata.provider);
+    const mode =
+      providerMode === "local" || providerMode === "self_hosted"
+        ? providerMode
+        : selectedMode === "unknown"
+          ? providerMode
+          : selectedMode;
+    try {
+      await window.electronAPI.recordAnalyticsEvent({
+        eventId,
+        text: rawText || text,
+        occurredAt: occurredAt.toISOString(),
+        localDate: localDateKey(occurredAt),
+        spokenDurationMs: metadata.durationMs || null,
+        mode,
+        provider: metadata.provider || null,
+        model: metadata.model || null,
+      });
+      window.dispatchEvent(new Event("analytics-changed"));
+      const settings = getSettings();
+      if (settings.isSignedIn && settings.insightsSyncEnabled) {
+        void syncPendingAnalytics().catch((syncError) => {
+          logger.warn("Failed to sync analytics event", { error: syncError.message }, "analytics");
+        });
+      }
+    } catch (analyticsError) {
+      logger.warn(
+        "Failed to record local analytics event",
+        { error: analyticsError.message },
+        "analytics"
+      );
+    }
+
     const { dataRetentionEnabled, audioRetentionDays } = getEffectiveRetentionPreferences();
     if (!dataRetentionEnabled) {
       logger.debug("Skipping transcription save — data retention disabled", {}, "audio");
@@ -3677,7 +3718,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       const result = await window.electronAPI.saveTranscription(text, rawText, {
-        clientTranscriptionId,
+        clientTranscriptionId: eventId,
         routeKind: this.translationRequested ? "translation" : null,
       });
       if (result?.id) syncService.debouncedPush("transcription", result.id);
@@ -4831,6 +4872,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // and cloud audio never cross over (see resolveStreamingFallbackTarget).
     let usedBatchFallback = false;
     let batchWarning = null;
+    let batchFallbackResult = null;
     if (!finalText && durationSeconds > 2 && fallbackBlob?.size > 0) {
       const target = resolveStreamingFallbackTarget(getSettings());
       if (target === "skip") {
@@ -4859,6 +4901,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           if (batchResult?.text) {
             finalText = batchResult.text;
             usedBatchFallback = true;
+            batchFallbackResult = batchResult;
             batchWarning = batchResult.warning || null;
             logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
           }
@@ -4877,19 +4920,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       const tBeforePaste = performance.now();
       const clientTotalMs = Math.round(tBeforePaste - t0);
+      const clientTranscriptionId =
+        batchFallbackResult?.clientTranscriptionId || crypto.randomUUID();
       this.lastAudioMetadata = {
         durationMs: durationSeconds
           ? Math.round(durationSeconds * 1000)
           : Math.round(tBeforePaste - t0),
-        provider: `${this.getStreamingProviderName()}-streaming`,
-        model: streamingSttModel || null,
+        provider: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
+        model: batchFallbackResult ? null : streamingSttModel || null,
       };
       if (wasCancelled()) return true;
       this.onTranscriptionComplete?.({
         success: true,
         text: finalText,
-        rawText: rawStreamingText || finalText,
-        source: `${this.getStreamingProviderName()}-streaming`,
+        rawText: batchFallbackResult?.rawText || rawStreamingText || finalText,
+        source: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
+        clientTranscriptionId,
         ...this._takePendingResultExtras(),
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
@@ -4910,6 +4956,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
                   clientTotalMs,
+                  clientTranscriptionId,
+                  localDate: localDateKey(),
+                  analyticsWordCount: streamingSttWordCount,
                 }
               );
               if (!res.success) {

@@ -119,6 +119,7 @@ import {
   initializeNotesTree,
 } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
+import { syncPendingAnalytics } from "../services/AnalyticsService";
 import { formatBytes } from "../utils/formatBytes";
 import {
   clearMissingLocalModelSelections,
@@ -1138,6 +1139,8 @@ export default function SettingsPage({
     setPanelStartPosition,
     cloudBackupEnabled,
     setCloudBackupEnabled,
+    insightsSyncEnabled,
+    setInsightsSyncEnabled,
     telemetryEnabled,
     setTelemetryEnabled,
     audioRetentionDays,
@@ -4070,6 +4073,25 @@ EOF`,
               )}
 
               <SettingsPanel>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.insightsSync")}
+                    description={
+                      isSignedIn
+                        ? t("settingsPage.privacy.insightsSyncDescription")
+                        : t("settingsPage.privacy.insightsSyncRequiresAccount")
+                    }
+                  >
+                    <Toggle
+                      checked={insightsSyncEnabled}
+                      disabled={!isSignedIn}
+                      onChange={(enabled) => {
+                        setInsightsSyncEnabled(enabled);
+                        if (enabled) void syncPendingAnalytics().catch(console.error);
+                      }}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.privacy.usageAnalytics")}

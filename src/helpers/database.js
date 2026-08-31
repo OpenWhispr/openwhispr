@@ -6,6 +6,13 @@ const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { parseEventTime } = require("./calendarAvailability");
+const {
+  countSpokenWords,
+  localDateKey,
+  modeFromStoredProvider,
+  parseStoredTimestamp,
+  summarizeAnalyticsEvents,
+} = require("./analytics.cjs");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -957,6 +964,25 @@ class DatabaseManager {
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_transcriptions_client_id ON transcriptions(client_transcription_id)"
       );
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS analytics_events (
+          event_id TEXT PRIMARY KEY,
+          account_id TEXT,
+          occurred_at TEXT NOT NULL,
+          local_date TEXT NOT NULL,
+          word_count INTEGER NOT NULL CHECK (word_count > 0),
+          spoken_duration_ms INTEGER,
+          mode TEXT NOT NULL,
+          provider TEXT,
+          model TEXT,
+          counter_version INTEGER NOT NULL DEFAULT 1,
+          sync_status TEXT NOT NULL DEFAULT 'pending',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_analytics_events_account_date
+          ON analytics_events(account_id, local_date);
+      `);
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_client_id ON custom_dictionary(client_dict_id)"
       );
@@ -1253,6 +1279,126 @@ class DatabaseManager {
       debugLogger.error("Error saving transcription", { error: error.message }, "database");
       throw error;
     }
+  }
+
+  recordAnalyticsEvent({
+    eventId,
+    text,
+    occurredAt,
+    localDate,
+    spokenDurationMs = null,
+    mode = "unknown",
+    provider = null,
+    model = null,
+  }) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const wordCount = countSpokenWords(text);
+      if (wordCount === 0) return { success: true, ignored: true };
+      this.db
+        .prepare(
+          `INSERT INTO analytics_events (
+             event_id, account_id, occurred_at, local_date, word_count,
+             spoken_duration_ms, mode, provider, model
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(event_id) DO UPDATE SET
+             account_id = COALESCE(analytics_events.account_id, excluded.account_id),
+             occurred_at = excluded.occurred_at,
+             local_date = excluded.local_date,
+             word_count = excluded.word_count,
+             spoken_duration_ms = COALESCE(
+               excluded.spoken_duration_ms,
+               analytics_events.spoken_duration_ms
+             ),
+             mode = excluded.mode,
+             provider = COALESCE(excluded.provider, analytics_events.provider),
+             model = COALESCE(excluded.model, analytics_events.model),
+             sync_status = 'pending'`
+        )
+        .run(
+          eventId,
+          this.activeAccountId,
+          occurredAt,
+          localDate,
+          wordCount,
+          Number(spokenDurationMs) > 0 ? Number(spokenDurationMs) : null,
+          mode,
+          provider,
+          model
+        );
+      return { success: true, eventId };
+    } catch (error) {
+      debugLogger.error("Error recording analytics event", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getAnalyticsSummary() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const rows = this.activeAccountId
+        ? this.db
+            .prepare(
+              `SELECT local_date, word_count, spoken_duration_ms
+               FROM analytics_events
+               WHERE account_id = ? OR account_id IS NULL
+               ORDER BY local_date ASC`
+            )
+            .all(this.activeAccountId)
+        : this.db
+            .prepare(
+              `SELECT local_date, word_count, spoken_duration_ms
+               FROM analytics_events WHERE account_id IS NULL ORDER BY local_date ASC`
+            )
+            .all();
+      return {
+        scope: "device",
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        ...summarizeAnalyticsEvents(rows),
+      };
+    } catch (error) {
+      debugLogger.error("Error reading analytics summary", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  claimAnonymousAnalyticsEvents() {
+    if (!this.activeAccountId) return { success: false, claimed: 0 };
+    const result = this.db
+      .prepare(
+        `UPDATE analytics_events SET account_id = ?, sync_status = 'pending'
+         WHERE account_id IS NULL`
+      )
+      .run(this.activeAccountId);
+    return { success: true, claimed: result.changes };
+  }
+
+  getPendingAnalyticsEvents(limit = 200) {
+    if (!this.activeAccountId) return [];
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
+    return this.db
+      .prepare(
+        `SELECT event_id, occurred_at, local_date, word_count, spoken_duration_ms,
+                mode, provider, model, counter_version
+         FROM analytics_events
+         WHERE account_id = ? AND sync_status = 'pending'
+         ORDER BY occurred_at ASC LIMIT ?`
+      )
+      .all(this.activeAccountId, safeLimit);
+  }
+
+  markAnalyticsEventsSynced(eventIds) {
+    if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
+      return { success: true, updated: 0 };
+    }
+    const placeholders = eventIds.map(() => "?").join(", ");
+    const result = this.db
+      .prepare(
+        `UPDATE analytics_events SET sync_status = 'synced'
+         WHERE account_id = ? AND event_id IN (${placeholders})`
+      )
+      .run(this.activeAccountId, ...eventIds);
+    return { success: true, updated: result.changes };
   }
 
   getTranscriptions(limit = 50, { includeDiscarded = false } = {}) {

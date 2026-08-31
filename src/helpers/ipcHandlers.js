@@ -1396,6 +1396,26 @@ class IPCHandlers {
       return this.databaseManager.getTranscriptions(limit, options);
     });
 
+    ipcMain.handle("analytics-record-event", async (_event, input) => {
+      return this.databaseManager.recordAnalyticsEvent(input);
+    });
+
+    ipcMain.handle("analytics-get-summary", async () => {
+      return this.databaseManager.getAnalyticsSummary();
+    });
+
+    ipcMain.handle("analytics-claim-anonymous", async () => {
+      return this.databaseManager.claimAnonymousAnalyticsEvents();
+    });
+
+    ipcMain.handle("analytics-get-pending", async (_event, limit) => {
+      return this.databaseManager.getPendingAnalyticsEvents(limit);
+    });
+
+    ipcMain.handle("analytics-mark-synced", async (_event, eventIds) => {
+      return this.databaseManager.markAnalyticsEventsSynced(eventIds);
+    });
+
     ipcMain.handle("db-clear-transcriptions", async (event) => {
       this.audioStorageManager.deleteAllAudio();
       const result = this.databaseManager.clearTranscriptions();
@@ -5645,6 +5665,7 @@ class IPCHandlers {
           clientVersion: app.getVersion(),
           sessionId: this.sessionId,
           clientTranscriptionId,
+          localDate: opts.localDate,
         };
 
         debugLogger.debug("Cloud transcribe request", { audioSize: audioData.length }, "cloud-api");
@@ -5658,6 +5679,42 @@ class IPCHandlers {
             signal: controller.signal,
           });
           const sum = (field) => responses.reduce((s, r) => s + (r?.[field] || 0), 0);
+          try {
+            const analyticsResponse = await proxyFetch(`${apiUrl}/api/analytics/events/batch`, {
+              method: "POST",
+              headers: withPolicyHeaders({
+                "Content-Type": "application/json",
+                ...authHeader,
+              }),
+              body: JSON.stringify({
+                events: [
+                  {
+                    event_id: clientTranscriptionId,
+                    occurred_at: new Date().toISOString(),
+                    local_date: opts.localDate,
+                    word_count: text.trim().split(/\s+/).filter(Boolean).length,
+                    spoken_duration_ms: sum("audioDurationMs") || undefined,
+                    mode: "openwhispr_cloud",
+                    provider: lastResponse?.sttProvider,
+                    model: lastResponse?.sttModel,
+                  },
+                ],
+              }),
+            });
+            if (!analyticsResponse.ok) {
+              debugLogger.warn(
+                "Failed to consolidate chunked transcription analytics",
+                { status: analyticsResponse.status },
+                "analytics"
+              );
+            }
+          } catch (analyticsError) {
+            debugLogger.warn(
+              "Failed to consolidate chunked transcription analytics",
+              { error: analyticsError.message },
+              "analytics"
+            );
+          }
           return {
             success: true,
             text,
@@ -8840,6 +8897,9 @@ class IPCHandlers {
               audioFormat: opts.audioFormat,
               clientTotalMs: opts.clientTotalMs,
               sendLogs: opts.sendLogs,
+              clientTranscriptionId: opts.clientTranscriptionId,
+              localDate: opts.localDate,
+              analyticsWordCount: opts.analyticsWordCount,
             }),
           });
 
