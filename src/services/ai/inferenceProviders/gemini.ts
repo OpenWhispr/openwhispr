@@ -3,13 +3,14 @@ import { getCloudModel } from "../../../models/ModelRegistry";
 import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
 import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
+import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import logger from "../../../utils/logger";
 
 interface GeminiResponse {
   candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }> };
+    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
     finishReason?: string;
   }>;
   usageMetadata?: { totalTokenCount?: number };
@@ -138,7 +139,8 @@ export const geminiProvider: InferenceProvider = {
     if (config.requireCompleteOutput && candidate?.finishReason === "MAX_TOKENS") {
       throw new Error("Model output was truncated before the selection edit completed");
     }
-    if (!candidate?.content?.parts?.[0]?.text) {
+    const responseText = extractGeminiText(candidate);
+    if (!responseText) {
       logger.logReasoning("GEMINI_EMPTY_RESPONSE", {
         model,
         finishReason: candidate?.finishReason,
@@ -150,8 +152,6 @@ export const geminiProvider: InferenceProvider = {
       }
       throw new Error("Gemini returned empty response");
     }
-
-    const responseText = candidate.content.parts[0].text!.trim();
     logger.logReasoning("GEMINI_RESPONSE", {
       model,
       responseLength: responseText.length,
