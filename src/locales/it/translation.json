@@ -64,6 +64,8 @@
     },
     "openControlPanel": "Apri pannello di controllo",
     "hideControlPanel": "Nascondi pannello di controllo",
+    "pasteLastTranscription": "Incolla ultima trascrizione",
+    "pasteLastTranscriptionEmpty": "Incolla ultima trascrizione (nessuna ancora)",
     "quit": "Esci da OpenWhispr",
     "tooltip": "OpenWhispr - Dettatura vocale"
   },
@@ -1856,6 +1858,13 @@
       "voiceAgentHotkey": {
         "title": "Scorciatoia dell'assistente vocale",
         "description": "Pronuncia un comando e l'assistente usa le tue note, il calendario e gli strumenti web. La risposta viene incollata a un cursore modificabile attivo, sostituisce il testo selezionato o si apre nel pannello flottante."
+      },
+      "pasteLastHotkey": {
+        "title": "Incolla ultima trascrizione",
+        "description": "Premi questa scorciatoia per incollare istantaneamente la tua trascrizione più recente",
+        "resetToDefault": "Ripristina a {{hotkey}}",
+        "emptyNotificationTitle": "Niente da incollare",
+        "emptyNotificationBody": "Registra prima una trascrizione, poi premi la scorciatoia per ripeterla."
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",

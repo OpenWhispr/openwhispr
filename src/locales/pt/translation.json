@@ -64,6 +64,8 @@
     },
     "openControlPanel": "Abrir painel de controle",
     "hideControlPanel": "Ocultar painel de controle",
+    "pasteLastTranscription": "Colar última transcrição",
+    "pasteLastTranscriptionEmpty": "Colar última transcrição (nenhuma ainda)",
     "quit": "Sair do OpenWhispr",
     "tooltip": "OpenWhispr - Ditado por voz"
   },
@@ -1835,6 +1837,13 @@
       "voiceAgentHotkey": {
         "title": "Atalho do assistente de voz",
         "description": "Diga um comando e o assistente usa suas notas, calendário e ferramentas web. A resposta é colada em um cursor editável em foco, substitui o texto selecionado ou abre no painel flutuante."
+      },
+      "pasteLastHotkey": {
+        "title": "Colar última transcrição",
+        "description": "Pressione este atalho para colar instantaneamente sua transcrição mais recente",
+        "resetToDefault": "Redefinir para {{hotkey}}",
+        "emptyNotificationTitle": "Nada para colar",
+        "emptyNotificationBody": "Grave primeiro uma transcrição e depois pressione o atalho para repeti-la."
       },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",
