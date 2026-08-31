@@ -53,6 +53,7 @@ import {
   getTranscriptionProvider,
   getTranscriptionProviders,
   isOnlineParakeetModel,
+  isSherpaLocalProvider,
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import { resolveByokModel, resolveTranscriptionRoute } from "./transcriptionRoute.ts";
@@ -373,6 +374,16 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       if (tokens.length > 0) payload.contextBias = tokens;
       return payload;
     },
+  },
+  gemini: {
+    displayName: "Gemini",
+    ipc: () => window.electronAPI?.proxyGeminiTranscription,
+    buildPayload: ({ audioBuffer, model, language, keyterms }) => ({
+      audioBuffer,
+      model,
+      language,
+      keyterms: keyterms.length > 0 ? keyterms : undefined,
+    }),
   },
   xai: {
     displayName: "xAI",
@@ -1261,6 +1272,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         localTranscriptionProvider,
         whisperModel,
         parakeetModel,
+        cohereModel,
       } = getSettings();
       const isNvidia = localTranscriptionProvider === "nvidia";
       // Online models stream+commit during capture, so PCM runs even with preview off.
@@ -1285,11 +1297,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           };
           this._previewSource.connect(this._previewProcessor);
 
-          const provider = isNvidia ? "nvidia" : "whisper";
-          const model = isNvidia ? parakeetModel : whisperModel;
+          const model = isNvidia
+            ? parakeetModel
+            : localTranscriptionProvider === "cohere"
+              ? cohereModel
+              : whisperModel;
           const language = getBaseLanguageCode(getSettings().preferredLanguage);
           window.electronAPI?.startDictationPreview?.({
-            provider,
+            provider: localTranscriptionProvider,
             model,
             language,
             display: shouldDisplayDictationPreview(
@@ -1804,11 +1819,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       let result;
       let activeModel;
       if (useLocalWhisper) {
-        if (localProvider === "nvidia") {
-          activeModel = parakeetModel;
+        if (isSherpaLocalProvider(localProvider)) {
+          activeModel = localProvider === "cohere" ? settings.cohereModel : parakeetModel;
           result = await this.processWithLocalParakeet(
             audioBlob,
-            parakeetModel,
+            activeModel,
             metadata,
             wasCancelled
           );
@@ -2091,7 +2106,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
 
         const transcriptionStart = performance.now();
-        result = await window.electronAPI.transcribeLocalParakeet(arrayBuffer, { model });
+        result = await window.electronAPI.transcribeLocalParakeet(arrayBuffer, {
+          model,
+          language: getBaseLanguageCode(this.getEffectiveSttLanguage(getSettings())),
+        });
         timings.transcriptionProcessingDurationMs = Math.round(
           performance.now() - transcriptionStart
         );
@@ -2251,6 +2269,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!apiKey?.trim()) {
         const err = new Error(
           "Tinfoil API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "gemini") {
+      apiKey = s.geminiApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getGeminiKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "Gemini API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
         throw err;

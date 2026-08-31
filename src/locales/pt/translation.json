@@ -2440,6 +2440,9 @@
     "learnMore": "Saiba mais",
     "noneAvailable": "Nenhum modelo disponível",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "ASR local mais preciso (5,42% WER médio, 14 idiomas). Sem detecção automática de idioma"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilíngue rápido com detecção automática de idioma (25 idiomas)",
         "parakeet_unified_en_0_6b": "ASR apenas em inglês com precisão de ponta (5,91% WER médio)",
@@ -2461,6 +2464,7 @@
         "groq_whisper_large_v3_turbo": "Velocidade 216x em tempo real",
         "groq_whisper_large_v3": "Modelo Large v3, rápido e preciso",
         "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida",
+        "gemini_3_5_transcribe": "Fala para texto Gemini do Google",
         "corti_transcribe": "Transcrição médica de nível clínico",
         "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI",
         "tinfoil_voxtral": "Transcrição verificavelmente privada"
@@ -2885,8 +2889,8 @@
       "largeFileNote": "Arquivos grandes são divididos e transcritos em paralelo.",
       "chunkProgress": "Transcrevendo parte {{completed}} de {{total}}...",
       "paidPlanRequired": "A transcrição na nuvem para arquivos acima de 25 MB requer um plano pago. Arquivos grandes são processados com o OpenWhispr Cloud para resultados confiáveis e de alta qualidade.",
-      "byokTooLarge": "Chaves API de terceiros suportam apenas arquivos de até 25 MB.",
-      "byokTooLargeDetail": "Para arquivos acima de 25 MB, o OpenWhispr Cloud cuida da divisão, processamento paralelo e remontagem — para resultados confiáveis sem depender dos limites de provedores de terceiros.",
+      "byokTooLarge": "Chaves API de terceiros suportam apenas arquivos de até {{size}} MB.",
+      "byokTooLargeDetail": "Para arquivos acima de {{size}} MB, o OpenWhispr Cloud cuida da divisão, processamento paralelo e remontagem — para resultados confiáveis sem depender dos limites de provedores de terceiros.",
       "byokTooLargeNeedsAccount": "Crie uma conta e mude para um plano pago para transcrever arquivos maiores com o OpenWhispr Cloud.",
       "byokTooLargeNeedsUpgrade": "Mude para um plano pago para transcrever arquivos maiores com o OpenWhispr Cloud.",
       "switchToCloudForLargeFiles": "Mude para o OpenWhispr Cloud para transcrever este arquivo.",
@@ -2936,6 +2940,7 @@
       "back": "Voltar",
       "restrictedByOrg": "A transcrição de reuniões está restrita pela sua organização.",
       "autoEnded": "A gravação parou automaticamente após o fim da reunião.",
+      "restartFailed": "Não foi possível reiniciar a gravação da reunião.",
       "systemAudioSilent": {
         "title": "Nenhum áudio da reunião detectado até agora",
         "description": "Até agora, apenas o seu microfone captou som. Está em uma videochamada? Verifique se o áudio da reunião está sendo reproduzido neste computador e não está silenciado. Está gravando presencialmente? Você pode ignorar este aviso: seu microfone capta o ambiente."
@@ -3243,8 +3248,10 @@
     "active": "Aceleração GPU ativa",
     "ready": "Aceleração GPU pronta",
     "activating": "Ativando GPU...",
-    "activationFailed": "Não foi possível ativar a GPU",
-    "retry": "Tentar novamente",
+    "activationFailed": "Aceleração GPU indisponível",
+    "activationFailedDescription": "OpenWhispr mudou para a transcrição por CPU.",
+    "reasoningActivationFailedDescription": "OpenWhispr mudou para o processamento por CPU.",
+    "retryActivation": "Tentar aceleração por GPU novamente",
     "remove": "Remover",
     "dismiss": "Agora não",
     "cancel": "Cancelar"
@@ -3267,7 +3274,8 @@
       },
       "gpuFallback": {
         "title": "Aceleração GPU indisponível",
-        "description": "A transcrição está usando a CPU. Você pode desativar a aceleração GPU nas Configurações."
+        "description": "OpenWhispr mudou para a transcrição por CPU.",
+        "retry": "Tentar GPU novamente"
       },
       "gpuPackMigration": {
         "title": "O pacote GPU precisa ser baixado novamente",
@@ -3841,13 +3849,13 @@
     "start": "Fazer anotações",
     "join": "Entrar e transcrever",
     "autoEnd": {
-      "title": "A reunião pode ter terminado",
+      "title": "Gravação da reunião encerrada",
       "body": {
-        "micReleased": "Nenhum outro app está usando o microfone. A gravação vai parar em {{seconds}}s.",
-        "silence": "Nenhum áudio detectado. A gravação vai parar em {{seconds}}s.",
-        "processExit": "Seu app de reunião foi fechado. A gravação vai parar em {{seconds}}s."
+        "micReleased": "Nenhum outro app está usando o microfone, então a gravação parou automaticamente. Reinicie em até {{seconds}} s.",
+        "silence": "Nenhum áudio foi detectado, então a gravação parou automaticamente. Reinicie em até {{seconds}} s.",
+        "processExit": "Seu app de reunião foi fechado, então a gravação parou automaticamente. Reinicie em até {{seconds}} s."
       },
-      "keep": "Continuar gravando"
+      "restart": "Reiniciar gravação"
     }
   }
 }

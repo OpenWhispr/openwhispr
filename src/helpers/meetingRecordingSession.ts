@@ -1,4 +1,5 @@
-import type { NoteItem } from "../types/electron";
+import type { StartRecordingArgs, TranscriptSegment } from "../stores/meetingRecordingStore";
+import type { MeetingAutoEndRestartRequest, NoteItem } from "../types/electron";
 
 export function createMeetingRecordingSessionId(
   randomUUID: () => string = () => crypto.randomUUID()
@@ -15,16 +16,128 @@ export function canStopMeetingRecordingSession(
 
 export function requestMeetingRecordingAutoEnd(
   payload: { sessionId?: unknown } | null | undefined,
-  stopRecording: (sessionId: string) => unknown,
+  stopRecording: (sessionId: string) => Promise<{ stopped: boolean }> | { stopped: boolean },
+  // Always called once the stop settles. `stopped` is false when the recording
+  // ended without a persisted result — the caller still has to tell the user,
+  // because no restart card will be offered for it.
+  onStopSettled: (sessionId: string, stopped: boolean) => Promise<unknown> | unknown,
   onError: (error: unknown, sessionId: string) => void
 ): boolean {
   const sessionId = payload?.sessionId;
   if (typeof sessionId !== "string" || sessionId.trim().length === 0) return false;
 
-  // A rejected stop means the recording is still running while main already
-  // considers the countdown expired — surface it instead of swallowing it.
-  void Promise.resolve(stopRecording(sessionId)).catch((error) => onError(error, sessionId));
+  void Promise.resolve(stopRecording(sessionId))
+    .then((result) => onStopSettled(sessionId, result.stopped))
+    .catch((error) => onError(error, sessionId));
   return true;
+}
+
+interface MeetingAutoEndRestartState {
+  recordingNoteId: number | null;
+  recordingNoteTitle: string | null;
+  recordingFolderId: number | null;
+  sessionDiarizationEnabled: boolean;
+  sessionExpectedCount: number;
+  userTouchedStepper: boolean;
+  segments: TranscriptSegment[];
+}
+
+export interface MeetingAutoEndRestartContext {
+  sessionId: string;
+  args: StartRecordingArgs;
+}
+
+export function createMeetingAutoEndRestartContext(
+  sessionId: string,
+  activeSessionId: string | null,
+  state: MeetingAutoEndRestartState
+): MeetingAutoEndRestartContext | null {
+  if (activeSessionId !== sessionId) return null;
+
+  return {
+    sessionId,
+    args: {
+      noteId: state.recordingNoteId,
+      noteTitle: state.recordingNoteTitle,
+      folderId: state.recordingFolderId,
+      seedSegments: state.segments,
+      diarizationEnabled: state.sessionDiarizationEnabled,
+      expectedCount: state.sessionExpectedCount,
+      expectedCountIsExplicit: state.userTouchedStepper,
+      autoEndEligible: true,
+    },
+  };
+}
+
+type MeetingAutoEndRestartNote = Pick<NoteItem, "transcript" | "deleted_at">;
+
+export type MeetingAutoEndRestartSeed =
+  { ok: true; seedSegments: TranscriptSegment[] } | { ok: false; reason: "note-missing" };
+
+// The live segments the renderer holds are the pre-diarization copy: background
+// speaker identification writes its enrichment to the note, never back into the
+// store. Reseeding from the store would overwrite those labels at the next stop,
+// so the note is the source of truth — and reading it is also what catches a
+// note deleted during the restart window, which must not be resurrected.
+export function resolveMeetingAutoEndRestartSeed(
+  noteId: number | null,
+  note: MeetingAutoEndRestartNote | null | undefined,
+  parseSegments: (transcript: string) => TranscriptSegment[],
+  liveSegments: TranscriptSegment[]
+): MeetingAutoEndRestartSeed {
+  if (noteId == null) return { ok: true, seedSegments: liveSegments };
+  if (!note || note.deleted_at) return { ok: false, reason: "note-missing" };
+  return { ok: true, seedSegments: note.transcript ? parseSegments(note.transcript) : [] };
+}
+
+export interface MeetingAutoEndRestartDeps {
+  getActiveSessionId: () => string | null;
+  getLatestSegments: () => TranscriptSegment[];
+  getNote: (noteId: number) => Promise<MeetingAutoEndRestartNote | null | undefined>;
+  parseSegments: (transcript: string) => TranscriptSegment[];
+  startRecording: (args: StartRecordingArgs) => Promise<boolean>;
+}
+
+export type MeetingAutoEndRestartOutcome =
+  | { status: "started" }
+  | {
+      status: "aborted";
+      reason: "no-context" | "already-recording" | "note-missing" | "start-refused";
+    };
+
+// Every abort is named rather than swallowed: main closes the card and reports
+// success the moment it hands the restart to this renderer, so a drop here is
+// invisible to the user unless the caller tells them.
+export async function runMeetingAutoEndRestart(
+  request: MeetingAutoEndRestartRequest,
+  context: MeetingAutoEndRestartContext | null,
+  deps: MeetingAutoEndRestartDeps
+): Promise<MeetingAutoEndRestartOutcome> {
+  if (!context || context.sessionId !== request.sessionId) {
+    return { status: "aborted", reason: "no-context" };
+  }
+  if (deps.getActiveSessionId() !== null) {
+    return { status: "aborted", reason: "already-recording" };
+  }
+
+  const args: StartRecordingArgs = { ...context.args, seedSegments: deps.getLatestSegments() };
+  const note = args.noteId == null ? null : await deps.getNote(args.noteId);
+  const seed = resolveMeetingAutoEndRestartSeed(
+    args.noteId,
+    note,
+    deps.parseSegments,
+    args.seedSegments ?? []
+  );
+  if (!seed.ok) return { status: "aborted", reason: "note-missing" };
+
+  // Re-checked after the note read: a manual recording can win the race across
+  // that await, and starting here would adopt the auto-ended note under it.
+  if (deps.getActiveSessionId() !== null) {
+    return { status: "aborted", reason: "already-recording" };
+  }
+
+  const started = await deps.startRecording({ ...args, seedSegments: seed.seedSegments });
+  return started ? { status: "started" } : { status: "aborted", reason: "start-refused" };
 }
 
 export function isMeetingAutoEndEligible(

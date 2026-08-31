@@ -2461,6 +2461,9 @@
     "learnMore": "瞭解更多",
     "noneAvailable": "沒有可用的模型",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "最準確的本地語音辨識(平均 WER 5.42%,支援 14 種語言)。不支援自動語言偵測"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "快速多語言 ASR，自動語言偵測（25 種語言）",
         "parakeet_unified_en_0_6b": "僅英語 ASR，最先進的準確度（平均 WER 5.91%）",
@@ -2482,6 +2485,7 @@
         "groq_whisper_large_v3_turbo": "216 倍即時速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精準",
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
+        "gemini_3_5_transcribe": "Google Gemini 語音轉文字",
         "corti_transcribe": "臨床級醫療轉錄",
         "xai_grok_stt": "xAI 高精度語音辨識",
         "tinfoil_voxtral": "可驗證的私密轉錄"
@@ -2885,8 +2889,8 @@
       "largeFileNote": "大型檔案將被分割並平行轉錄。",
       "chunkProgress": "正在轉錄第 {{completed}} 部分，共 {{total}} 部分...",
       "paidPlanRequired": "超過 25 MB 的檔案需要付費方案才能使用雲端轉錄。大型檔案透過 OpenWhispr Cloud 處理，確保可靠、高品質的結果。",
-      "byokTooLarge": "第三方 API 金鑰僅支援 25 MB 以內的檔案。",
-      "byokTooLargeDetail": "超過 25 MB 的檔案由 OpenWhispr Cloud 負責分割、平行處理和重組——無需依賴第三方服務限制，即可獲得可靠的結果。",
+      "byokTooLarge": "第三方 API 金鑰僅支援 {{size}} MB 以內的檔案。",
+      "byokTooLargeDetail": "超過 {{size}} MB 的檔案由 OpenWhispr Cloud 負責分割、平行處理和重組——無需依賴第三方服務限制，即可獲得可靠的結果。",
       "byokTooLargeNeedsAccount": "建立帳戶並升級至付費方案，即可使用 OpenWhispr Cloud 轉錄更大的檔案。",
       "byokTooLargeNeedsUpgrade": "升級至付費方案，即可使用 OpenWhispr Cloud 轉錄更大的檔案。",
       "switchToCloudForLargeFiles": "切換到 OpenWhispr Cloud 來轉錄此檔案。",
@@ -2936,6 +2940,7 @@
       "back": "返回",
       "restrictedByOrg": "會議轉錄已被您的組織限制。",
       "autoEnded": "會議結束後，錄音已自動停止。",
+      "restartFailed": "無法重新開始會議錄音。",
       "systemAudioSilent": {
         "title": "尚未偵測到會議音訊",
         "description": "到目前為止，只有您的麥克風收到聲音。正在進行視訊通話？請檢查會議音訊是否正在此電腦上播放且未被靜音。正在進行現場錄音？您可以忽略此提示——您的麥克風會收錄房間內的聲音。"
@@ -3243,8 +3248,10 @@
     "active": "GPU 加速已啟用",
     "ready": "GPU 加速已就緒",
     "activating": "正在啟動 GPU...",
-    "activationFailed": "無法啟動 GPU",
-    "retry": "重試",
+    "activationFailed": "GPU 加速無法使用",
+    "activationFailedDescription": "OpenWhispr 已切換為 CPU 轉錄。",
+    "reasoningActivationFailedDescription": "OpenWhispr 已切換為 CPU 處理。",
+    "retryActivation": "重試 GPU 加速",
     "remove": "移除",
     "dismiss": "暫時不要",
     "cancel": "取消"
@@ -3267,7 +3274,8 @@
       },
       "gpuFallback": {
         "title": "GPU 加速無法使用",
-        "description": "轉錄正在使用 CPU。你可以在設定中關閉 GPU 加速。"
+        "description": "OpenWhispr 已切換為 CPU 轉錄。",
+        "retry": "重試 GPU"
       },
       "gpuPackMigration": {
         "title": "需要重新下載 GPU 加速包",
@@ -3841,13 +3849,13 @@
     "start": "開始記錄",
     "join": "加入並轉錄",
     "autoEnd": {
-      "title": "會議可能已結束",
+      "title": "會議錄音已結束",
       "body": {
-        "micReleased": "沒有其他應用程式在使用麥克風。錄音將在 {{seconds}} 秒後停止。",
-        "silence": "未偵測到音訊。錄音將在 {{seconds}} 秒後停止。",
-        "processExit": "會議應用程式已關閉。錄音將在 {{seconds}} 秒後停止。"
+        "micReleased": "沒有其他應用程式在使用麥克風，因此錄音已自動停止。請在 {{seconds}} 秒內重新開始錄音。",
+        "silence": "未偵測到音訊，因此錄音已自動停止。請在 {{seconds}} 秒內重新開始錄音。",
+        "processExit": "會議應用程式已關閉，因此錄音已自動停止。請在 {{seconds}} 秒內重新開始錄音。"
       },
-      "keep": "繼續錄音"
+      "restart": "重新開始錄音"
     }
   }
 }

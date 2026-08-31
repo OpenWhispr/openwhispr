@@ -11,7 +11,7 @@ const load = () => import("../../src/helpers/transcriptionRoute.ts");
 //
 // Tinfoil is excluded: its batch model comes from the registry directly
 // (getBatchTranscriptionModel) and the route sends none.
-const PREFIX_VALIDATED_PROVIDERS = ["openai", "groq", "xai", "mistral", "corti"];
+const PREFIX_VALIDATED_PROVIDERS = ["openai", "groq", "xai", "mistral", "corti", "gemini"];
 
 test("every shipping registry model survives resolveByokModel", async () => {
   const { resolveByokModel } = await load();
@@ -72,4 +72,5 @@ test("a model belonging to another provider degrades to the provider default", a
   assert.equal(resolveByokModel("openai", "voxtral-mini-latest"), "gpt-4o-mini-transcribe");
   assert.equal(resolveByokModel("mistral", "whisper-1"), "voxtral-mini-latest");
   assert.equal(resolveByokModel("corti", "whisper-1"), "corti-transcribe");
+  assert.equal(resolveByokModel("gemini", "whisper-1"), "gemini-3.5-transcribe");
 });

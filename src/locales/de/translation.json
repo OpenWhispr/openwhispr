@@ -2550,6 +2550,9 @@
     "learnMore": "Mehr erfahren",
     "noneAvailable": "Keine Modelle verfügbar",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "Präzisestes lokales ASR (5,42 % durchschnittliche WER, 14 Sprachen). Keine automatische Spracherkennung"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Schnelle mehrsprachige ASR mit automatischer Spracherkennung (25 Sprachen)",
         "parakeet_unified_en_0_6b": "Englisch-only ASR mit Spitzen-Genauigkeit (5,91% durchschnittliche WER)",
@@ -2575,6 +2578,7 @@
         "groq_whisper_large_v3": "Hochpräzise Spracherkennung",
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
+        "gemini_3_5_transcribe": "Googles Gemini-Spracherkennung",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
         "tinfoil_voxtral": "Nachweisbar private Transkription"
@@ -3096,8 +3100,8 @@
       "paidPlanRequired": "Cloud-Transkription für Dateien über 25 MB erfordert einen kostenpflichtigen Plan. Große Dateien werden mit OpenWhispr Cloud für zuverlässige, hochwertige Ergebnisse verarbeitet.",
       "largeFileNote": "Große Dateien werden aufgeteilt und parallel transkribiert.",
       "chunkProgress": "Transkribiere Teil {{completed}} von {{total}}...",
-      "byokTooLarge": "API-Schlüssel von Drittanbietern unterstützen nur Dateien bis 25 MB.",
-      "byokTooLargeDetail": "Für Dateien über 25 MB übernimmt OpenWhispr Cloud das Aufteilen, die parallele Verarbeitung und das Zusammenführen — so erhältst du zuverlässige Ergebnisse ohne die Einschränkungen von Drittanbietern.",
+      "byokTooLarge": "API-Schlüssel von Drittanbietern unterstützen nur Dateien bis {{size}} MB.",
+      "byokTooLargeDetail": "Für Dateien über {{size}} MB übernimmt OpenWhispr Cloud das Aufteilen, die parallele Verarbeitung und das Zusammenführen — so erhältst du zuverlässige Ergebnisse ohne die Einschränkungen von Drittanbietern.",
       "byokTooLargeNeedsAccount": "Erstelle ein Konto und wechsle zu einem kostenpflichtigen Plan, um größere Dateien mit OpenWhispr Cloud zu transkribieren.",
       "byokTooLargeNeedsUpgrade": "Wechsle zu einem kostenpflichtigen Plan, um größere Dateien mit OpenWhispr Cloud zu transkribieren.",
       "switchToCloudForLargeFiles": "Wechsle zu OpenWhispr Cloud, um diese Datei zu transkribieren.",
@@ -3147,6 +3151,7 @@
       "back": "Zurück",
       "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt.",
       "autoEnded": "Die Aufnahme wurde nach dem Ende des Meetings automatisch beendet.",
+      "restartFailed": "Die Meeting-Aufnahme konnte nicht neu gestartet werden.",
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
@@ -3408,8 +3413,10 @@
     "active": "GPU-Beschleunigung aktiv",
     "ready": "GPU-Beschleunigung bereit",
     "activating": "GPU wird aktiviert...",
-    "activationFailed": "GPU konnte nicht aktiviert werden",
-    "retry": "Erneut versuchen",
+    "activationFailed": "GPU-Beschleunigung nicht verfügbar",
+    "activationFailedDescription": "OpenWhispr verwendet die CPU-Transkription.",
+    "reasoningActivationFailedDescription": "OpenWhispr verwendet die CPU-Verarbeitung.",
+    "retryActivation": "GPU-Beschleunigung erneut versuchen",
     "remove": "Entfernen",
     "dismiss": "Nicht jetzt",
     "cancel": "Abbrechen"
@@ -3432,7 +3439,8 @@
       },
       "gpuFallback": {
         "title": "GPU-Beschleunigung nicht verfügbar",
-        "description": "Die Transkription verwendet stattdessen die CPU. Du kannst die GPU-Beschleunigung in den Einstellungen deaktivieren."
+        "description": "OpenWhispr verwendet die CPU-Transkription.",
+        "retry": "GPU erneut versuchen"
       },
       "gpuPackMigration": {
         "title": "GPU-Paket muss erneut heruntergeladen werden",
@@ -3841,13 +3849,13 @@
     "start": "Notizen aufnehmen",
     "join": "Beitreten & transkribieren",
     "autoEnd": {
-      "title": "Das Meeting könnte beendet sein",
+      "title": "Meeting-Aufnahme beendet",
       "body": {
-        "micReleased": "Keine andere App nutzt Ihr Mikrofon. Die Aufnahme stoppt in {{seconds}} s.",
-        "silence": "Kein Ton erkannt. Die Aufnahme stoppt in {{seconds}} s.",
-        "processExit": "Ihre Meeting-App wurde geschlossen. Die Aufnahme stoppt in {{seconds}} s."
+        "micReleased": "Keine andere App nutzt Ihr Mikrofon, daher wurde die Aufnahme automatisch beendet. Neustart innerhalb von {{seconds}} s.",
+        "silence": "Es wurde kein Ton erkannt, daher wurde die Aufnahme automatisch beendet. Neustart innerhalb von {{seconds}} s.",
+        "processExit": "Ihre Meeting-App wurde geschlossen, daher wurde die Aufnahme automatisch beendet. Neustart innerhalb von {{seconds}} s."
       },
-      "keep": "Aufnahme fortsetzen"
+      "restart": "Aufnahme neu starten"
     }
   }
 }

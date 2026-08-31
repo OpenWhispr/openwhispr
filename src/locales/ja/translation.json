@@ -2461,6 +2461,9 @@
     "learnMore": "詳細を見る",
     "noneAvailable": "利用可能なモデルがありません",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "最高精度のローカルASR(平均WER 5.42%、14言語)。言語の自動検出はありません"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "高速多言語 ASR、自動言語検出対応（25 言語）",
         "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）",
@@ -2482,6 +2485,7 @@
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
+        "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
         "xai_grok_stt": "xAIによる高精度音声認識",
         "tinfoil_voxtral": "検証可能なプライベート文字起こし"
@@ -2869,8 +2873,8 @@
       "largeFileNote": "大容量ファイルは分割され、並列で文字起こしされます。",
       "chunkProgress": "パート {{completed}} / {{total}} を文字起こし中...",
       "paidPlanRequired": "25 MB を超えるファイルのクラウド文字起こしには有料プランが必要です。大容量ファイルは OpenWhispr Cloud で信頼性の高い高品質な結果を得られます。",
-      "byokTooLarge": "サードパーティの API キーは 25 MB までのファイルのみ対応しています。",
-      "byokTooLargeDetail": "25 MB を超えるファイルは、OpenWhispr Cloud が分割・並列処理・結合を行います。サードパーティの制限に依存せず、信頼性の高い結果が得られます。",
+      "byokTooLarge": "サードパーティの API キーは {{size}} MB までのファイルのみ対応しています。",
+      "byokTooLargeDetail": "{{size}} MB を超えるファイルは、OpenWhispr Cloud が分割・並列処理・結合を行います。サードパーティの制限に依存せず、信頼性の高い結果が得られます。",
       "byokTooLargeNeedsAccount": "アカウントを作成し、有料プランにアップグレードすると、OpenWhispr Cloud でより大きなファイルを文字起こしできます。",
       "byokTooLargeNeedsUpgrade": "有料プランにアップグレードすると、OpenWhispr Cloud でより大きなファイルを文字起こしできます。",
       "switchToCloudForLargeFiles": "このファイルを文字起こしするには OpenWhispr Cloud に切り替えてください。",
@@ -2920,6 +2924,7 @@
       "back": "戻る",
       "restrictedByOrg": "会議の文字起こしは組織によって制限されています。",
       "autoEnded": "会議の終了後、録音は自動的に停止しました。",
+      "restartFailed": "会議の録音を再開できませんでした。",
       "systemAudioSilent": {
         "title": "会議の音声がまだ検出されていません",
         "description": "これまでのところ、音声を拾っているのはマイクのみです。ビデオ会議中の場合は、会議の音声がこのコンピューターで再生されており、ミュートになっていないことを確認してください。対面で録音している場合は、この通知は無視してかまいません。マイクが室内の音を拾います。"
@@ -3243,8 +3248,10 @@
     "active": "GPU アクセラレーション有効",
     "ready": "GPUアクセラレーション準備完了",
     "activating": "GPU を有効化中...",
-    "activationFailed": "GPU を有効化できませんでした",
-    "retry": "再試行",
+    "activationFailed": "GPU アクセラレーションを利用できません",
+    "activationFailedDescription": "OpenWhispr は CPU 文字起こしに切り替えました。",
+    "reasoningActivationFailedDescription": "OpenWhispr は CPU 処理に切り替えました。",
+    "retryActivation": "GPU アクセラレーションを再試行",
     "remove": "削除",
     "dismiss": "後で",
     "cancel": "キャンセル"
@@ -3267,7 +3274,8 @@
       },
       "gpuFallback": {
         "title": "GPU アクセラレーションを利用できません",
-        "description": "文字起こしは代わりに CPU を使用しています。設定で GPU アクセラレーションを無効にできます。"
+        "description": "OpenWhispr は CPU 文字起こしに切り替えました。",
+        "retry": "GPU を再試行"
       },
       "gpuPackMigration": {
         "title": "GPU パックの再ダウンロードが必要です",
@@ -3841,13 +3849,13 @@
     "start": "メモを取る",
     "join": "参加して文字起こし",
     "autoEnd": {
-      "title": "会議が終了した可能性があります",
+      "title": "会議の録音が終了しました",
       "body": {
-        "micReleased": "ほかのアプリはマイクを使用していません。録音は{{seconds}}秒後に停止します。",
-        "silence": "音声が検出されません。録音は{{seconds}}秒後に停止します。",
-        "processExit": "会議アプリが終了しました。録音は{{seconds}}秒後に停止します。"
+        "micReleased": "ほかのアプリがマイクを使用していないため、録音を自動停止しました。{{seconds}}秒以内に再開できます。",
+        "silence": "音声が検出されなかったため、録音を自動停止しました。{{seconds}}秒以内に再開できます。",
+        "processExit": "会議アプリが終了したため、録音を自動停止しました。{{seconds}}秒以内に再開できます。"
       },
-      "keep": "録音を続ける"
+      "restart": "録音を再開"
     }
   }
 }

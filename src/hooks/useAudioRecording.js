@@ -21,6 +21,7 @@ import {
 } from "../utils/transcriptionPreview";
 import { canStartDictation } from "../utils/dictationReadiness";
 import { waitForVisualFrames } from "../utils/visualFrame";
+import { resolveLifecycleInputKind } from "../helpers/dictationRouting";
 import { createAssistantResponseDelivery } from "../helpers/assistantResponseDelivery";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
@@ -31,6 +32,7 @@ const SELECTION_EDIT_DETAIL_KEY_BY_CODE = {
   session_expired: "expired",
   paste_failed: "pasteFailed",
 };
+const COMPANION_AUDIO_LEVEL_INTERVAL_MS = 80;
 
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
@@ -65,6 +67,7 @@ export const useAudioRecording = (toast, options = {}) => {
     getAssistantSelectionContext,
     onShowTranscript,
     onDemoEvent,
+    assistantOpenRef,
   } = options;
 
   useEffect(() => {
@@ -85,6 +88,23 @@ export const useAudioRecording = (toast, options = {}) => {
   useEffect(() => {
     getAssistantSelectionContextRef.current = getAssistantSelectionContext;
   });
+
+  // Reads only refs and the global electronAPI bridge, so a single stable
+  // instance is safe to share between the mount effect (recording/processing
+  // transitions) and performStartRecording (the toggle path's own "preparing"
+  // report).
+  const reportLifecycle = useCallback((state, inputKindOverride) => {
+    const inputKind =
+      inputKindOverride ??
+      resolveLifecycleInputKind({
+        voiceAgentRequested: audioManagerRef.current?.voiceAgentRequested,
+        translationRequested: audioManagerRef.current?.translationRequested,
+      });
+    const signature = `${state}:${inputKind}`;
+    if (reportedLifecycleRef.current === signature) return;
+    reportedLifecycleRef.current = signature;
+    window.electronAPI?.dictationLifecycleStateChanged?.(state, inputKind);
+  }, []);
 
   const performStartRecording = useCallback(
     async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
@@ -138,6 +158,10 @@ export const useAudioRecording = (toast, options = {}) => {
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
         audioManagerRef.current.setAssistantSelectionContext(assistantSelectionContext);
         audioManagerRef.current.setTranslationRequested(translationRequested);
+        // Covers the toggle path with freshly-set flags; the signature dedup
+        // makes this a no-op when the prepare handler already reported the
+        // same kind ahead of the flags being set.
+        reportLifecycle("preparing");
         if (voiceAgentRequested) {
           logger.info(
             "Voice agent recording start",
@@ -224,10 +248,19 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!recordingStarted) {
           setIsPreparing(false);
           setIsAssistantVoice(false);
+          // Covers every exit above that never started a recording — the
+          // policy-block early return, the mic-open failure, a stale
+          // preparation generation, etc. Without this, a failed start leaves
+          // the main process (and the companion pill) stuck reporting
+          // "preparing" forever, since startRecording's failure path only
+          // fires onError, never the onStateChange that normally reports
+          // "idle". The signature dedup makes this a no-op when
+          // onStateChange already reported it first.
+          if (reportedLifecycleRef.current?.startsWith("preparing:")) reportLifecycle("idle");
         }
       }
     },
-    [t, toast, dismissDictationError]
+    [t, toast, dismissDictationError, reportLifecycle]
   );
 
   const performStopRecording = useCallback(async () => {
@@ -273,11 +306,6 @@ export const useAudioRecording = (toast, options = {}) => {
   useEffect(() => {
     audioManagerRef.current = new AudioManager();
 
-    const reportLifecycle = (state) => {
-      if (reportedLifecycleRef.current === state) return;
-      reportedLifecycleRef.current = state;
-      window.electronAPI?.dictationLifecycleStateChanged?.(state);
-    };
     // Reset stale main-process state after a renderer reload or crash recovery.
     reportLifecycle("idle");
 
@@ -667,12 +695,16 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
-    const disposePrepare = window.electronAPI.onPrepareDictation?.(async () => {
+    const disposePrepare = window.electronAPI.onPrepareDictation?.(async (options) => {
       if (!audioManagerRef.current || startLockRef.current) return;
       if (!canStartDictation(audioManagerRef.current.getState())) return;
       const generation = ++preparationGenerationRef.current;
       setIsAssistantVoice(false);
       setIsPreparing(true);
+      // The prepare event precedes the flag-setting start, so the kind must come
+      // from the payload — the audioManager flags still describe the PREVIOUS
+      // recording at this point.
+      reportLifecycle("preparing", options?.inputKind);
       await waitForVisualFrames();
       if (generation !== preparationGenerationRef.current || startLockRef.current) return;
       void audioManagerRef.current.prepareMicCapture?.();
@@ -682,6 +714,7 @@ export const useAudioRecording = (toast, options = {}) => {
       preparationGenerationRef.current += 1;
       setIsPreparing(false);
       audioManagerRef.current?.cancelPreparedMicCapture?.();
+      if (reportedLifecycleRef.current?.startsWith("preparing:")) reportLifecycle("idle");
     });
 
     const disposeStop = window.electronAPI.onStopDictation?.(() => {
@@ -711,6 +744,7 @@ export const useAudioRecording = (toast, options = {}) => {
     performStopRecording,
     dismissDictationError,
     onDictationError,
+    reportLifecycle,
     t,
   ]);
 
@@ -735,17 +769,34 @@ export const useAudioRecording = (toast, options = {}) => {
     return false;
   }, []);
 
-  const cancelProcessing = () => {
+  const cancelProcessing = useCallback(() => {
     if (audioManagerRef.current) {
       return audioManagerRef.current.cancelProcessing();
     }
     return false;
-  };
+  }, []);
 
   const getAudioLevel = useCallback(
     () => audioManagerRef.current?.getRecordingAudioLevel() ?? null,
     []
   );
+
+  useEffect(() => {
+    if (!isRecording || isAssistantVoice) return undefined;
+
+    const reportAudioLevel = () => {
+      // The companion pill only exists while the Agent panel is open — with
+      // the panel closed there is nobody to mirror levels to, so skip the
+      // IPC. Checked per tick, not once: the panel can open mid-recording and
+      // a ref change never re-runs this effect.
+      if (!assistantOpenRef?.current) return;
+      const level = getAudioLevel();
+      if (level !== null) window.electronAPI?.dictationAudioLevelChanged?.(level);
+    };
+    reportAudioLevel();
+    const interval = setInterval(reportAudioLevel, COMPANION_AUDIO_LEVEL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [assistantOpenRef, getAudioLevel, isAssistantVoice, isRecording]);
 
   const toggleListening = async ({
     voiceAgentRequested = false,

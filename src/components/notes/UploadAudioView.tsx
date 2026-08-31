@@ -40,6 +40,7 @@ import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
   getTranscriptionProviders,
+  isSherpaLocalProvider,
 } from "../../models/ModelRegistry";
 import {
   useSettingsStore,
@@ -67,14 +68,13 @@ import { getBaseLanguageCode } from "../../utils/languageSupport";
 import { isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
-import { resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
+import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
 import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
 const SUPPORTED_EXTENSIONS = ["mp3", "wav", "m4a", "webm", "ogg", "oga", "flac", "aac", "opus"];
 
-const BYOK_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB — hard limit for bring-your-own-key
 const CLOUD_FREE_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB — free plan cloud limit
 const CLOUD_PRO_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB — pro plan cloud limit
 
@@ -253,6 +253,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    geminiApiKey,
     tinfoilApiKey,
     customTranscriptionApiKey,
   } = apiKeys;
@@ -263,6 +264,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     whisperModel,
     localTranscriptionProvider,
     parakeetModel,
+    cohereModel,
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
@@ -307,9 +309,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   // Mode-aware file size validation
   // Local: no limits at all
-  // BYOK: 25 MB hard max regardless of plan
+  // BYOK: 25 MB hard max regardless of plan (14 MB for Gemini's inline cap)
   // Cloud free: 25 MB max (upgrade to Pro for more)
   // Cloud pro: 500 MB max
+  const byokMaxFileSize = byokFileSizeLimit(cloudTranscriptionProvider);
+  const byokMaxFileSizeMb = Math.floor(byokMaxFileSize / (1024 * 1024));
   let fileTooLarge = false;
   let requiresUpgrade = false;
   let requiresAccount = false;
@@ -322,7 +326,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     } else if (isSelfHosted || cloudTranscriptionProvider === "custom") {
       // Self-hosted / custom endpoints (e.g. local whisper.cpp): no file size restrictions
     } else if (isByok) {
-      byokTooLarge = file.sizeBytes > BYOK_MAX_FILE_SIZE;
+      byokTooLarge = file.sizeBytes > byokMaxFileSize;
       if (byokTooLarge && !isSignedIn) {
         requiresAccount = true;
       }
@@ -406,6 +410,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 groqApiKey,
                 xaiApiKey,
                 mistralApiKey,
+                geminiApiKey,
                 tinfoilApiKey,
                 customTranscriptionApiKey,
               })
@@ -413,7 +418,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         }
         return;
       }
-      if (localTranscriptionProvider === "nvidia") {
+      if (isSherpaLocalProvider(localTranscriptionProvider)) {
         const r = await window.electronAPI.listParakeetModels?.();
         if (!cancelled)
           setProviderReady(
@@ -443,6 +448,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    geminiApiKey,
     tinfoilApiKey,
     customTranscriptionApiKey,
     cortiClientId,
@@ -454,6 +460,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (useLocalWhisper) {
       if (localTranscriptionProvider === "nvidia")
         return `Parakeet · ${parakeetModel || "default"}`;
+      if (localTranscriptionProvider === "cohere") return `Cohere · ${cohereModel || "default"}`;
       return `Whisper · ${whisperModel || "base"}`;
     }
     if (isSelfHosted) {
@@ -473,6 +480,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     localTranscriptionProvider: localTranscriptionProvider as string,
     whisperModel,
     parakeetModel,
+    cohereModel,
     isOpenWhisprCloud,
     getApiKey: () => getTranscriptionApiKey(cloudTranscriptionProvider, apiKeys),
     cloudTranscriptionProvider: cloudTranscriptionProvider as string,
@@ -490,7 +498,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   // Batch counterpart of the single-file size gating above; returns keys under notes.upload.*.
   const getBatchSizeErrorKey = (sizeBytes: number): string | null => {
     if (useLocalWhisper || isSelfHosted || cloudTranscriptionProvider === "custom") return null;
-    if (isByok) return sizeBytes > BYOK_MAX_FILE_SIZE ? "byokTooLarge" : null;
+    if (isByok) return sizeBytes > byokMaxFileSize ? "byokTooLarge" : null;
     if (sizeBytes > CLOUD_PRO_MAX_FILE_SIZE) return "fileTooLarge";
     if (!isProUser && sizeBytes > CLOUD_FREE_MAX_FILE_SIZE) return "paidPlanRequired";
     return null;
@@ -1042,6 +1050,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             <div className="mt-3">
               <BatchQueueView
                 queue={batch.queue}
+                byokMaxFileSizeMb={byokMaxFileSizeMb}
                 completedCount={batch.completedCount}
                 failedCount={batch.failedCount}
                 totalCount={batch.totalCount}
@@ -1100,6 +1109,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               isLargeFile={isLargeFile}
               isOpenWhisprCloud={isOpenWhisprCloud}
               byokTooLarge={byokTooLarge}
+              byokMaxFileSizeMb={byokMaxFileSizeMb}
               requiresAccount={requiresAccount}
               isProUser={!!isProUser}
               onUpgrade={() => usage?.openCheckout()}
@@ -1517,7 +1527,7 @@ function IdleView({
 }
 
 interface SelectedViewProps {
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
   file: { name: string; path: string; size: string; sizeBytes: number };
   getActiveModelLabel: () => string;
   reset: () => void;
@@ -1528,6 +1538,7 @@ interface SelectedViewProps {
   isLargeFile: boolean;
   isOpenWhisprCloud: boolean;
   byokTooLarge: boolean;
+  byokMaxFileSizeMb: number;
   requiresAccount: boolean;
   isProUser: boolean;
   onUpgrade: () => void;
@@ -1547,6 +1558,7 @@ function SelectedView({
   isLargeFile,
   isOpenWhisprCloud,
   byokTooLarge,
+  byokMaxFileSizeMb,
   requiresAccount,
   isProUser,
   onUpgrade,
@@ -1589,10 +1601,10 @@ function SelectedView({
       {byokTooLarge && (
         <div className="rounded-lg border border-primary/12 dark:border-primary/15 bg-primary/[0.03] px-3 py-2.5 mb-3">
           <p className="text-xs text-foreground/50 leading-relaxed">
-            {t("notes.upload.byokTooLarge")}
+            {t("notes.upload.byokTooLarge", { size: byokMaxFileSizeMb })}
           </p>
           <p className="text-xs text-foreground/35 leading-relaxed mt-1.5">
-            {t("notes.upload.byokTooLargeDetail")}
+            {t("notes.upload.byokTooLargeDetail", { size: byokMaxFileSizeMb })}
           </p>
           <p className="text-xs text-foreground/50 leading-relaxed mt-1.5 font-medium">
             {requiresAccount

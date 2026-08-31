@@ -6,6 +6,7 @@ const {
   normalizeDictationLifecycle,
   shouldIgnoreDictationHotkey,
   isDictationRecording,
+  resolveAgentDictationPillState,
   shouldBlockDictationWhilePanelOpen,
 } = require("../../src/helpers/dictationLifecycle");
 
@@ -27,16 +28,85 @@ test("unknown lifecycle input fails closed to idle", () => {
   assert.equal(isDictationRecording({}), false);
 });
 
-test("regular dictation is blocked while the assistant panel is open", () => {
+test("the Agent companion mirrors only ordinary dictation lifecycle", () => {
+  assert.deepEqual(resolveAgentDictationPillState("recording", "dictation"), {
+    lifecycle: "recording",
+    interactive: true,
+  });
+  assert.deepEqual(resolveAgentDictationPillState("processing", "dictation"), {
+    lifecycle: "processing",
+    interactive: true,
+  });
+  assert.deepEqual(resolveAgentDictationPillState("recording", "assistant"), {
+    lifecycle: "idle",
+    interactive: false,
+  });
+  assert.deepEqual(resolveAgentDictationPillState("processing", "translation"), {
+    lifecycle: "idle",
+    interactive: false,
+  });
+});
+
+test("regular dictation remains available while the assistant panel is open", () => {
   assert.equal(
-    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: true, voiceAgentRequested: false }),
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: true,
+      assistantPanelBusy: true,
+      inputKind: "dictation",
+      companionAvailable: true,
+    }),
+    false
+  );
+});
+
+test("regular dictation is blocked while the open panel lacks a live companion", () => {
+  // The open panel hands plain dictation's visuals to the companion pill; if
+  // that window is still loading or its load failed, the recording would be
+  // invisible, so it must not start.
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: true,
+      inputKind: "dictation",
+      companionAvailable: false,
+    }),
     true
+  );
+  // With the panel closed the main pill owns the visuals; companion
+  // availability is irrelevant.
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: false,
+      inputKind: "dictation",
+      companionAvailable: false,
+    }),
+    false
+  );
+});
+
+test("regular dictation is blocked while a busy assistant has not opened its panel", () => {
+  // The companion pill only exists once the panel opens; before that, a busy
+  // assistant suppresses the main pill too, so a recording would be invisible.
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: false,
+      assistantPanelBusy: true,
+      inputKind: "dictation",
+    }),
+    true
+  );
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: false,
+      assistantPanelBusy: false,
+      inputKind: "dictation",
+    }),
+    false
   );
 });
 
 test("the assistant hotkey can still record an in-panel follow-up", () => {
   assert.equal(
-    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: true, voiceAgentRequested: true }),
+    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: true, inputKind: "assistant" }),
     false
   );
 });
@@ -46,7 +116,7 @@ test("the assistant hotkey is blocked while the open panel is busy", () => {
     shouldBlockDictationWhilePanelOpen({
       assistantPanelOpen: true,
       assistantPanelBusy: true,
-      voiceAgentRequested: true,
+      inputKind: "assistant",
     }),
     true
   );
@@ -57,15 +127,37 @@ test("the assistant hotkey is blocked while an initial response thinks before th
     shouldBlockDictationWhilePanelOpen({
       assistantPanelOpen: false,
       assistantPanelBusy: true,
-      voiceAgentRequested: true,
+      inputKind: "assistant",
     }),
     true
   );
 });
 
-test("regular dictation resumes after the assistant panel closes", () => {
+test("translation remains blocked while the assistant panel owns the shared surface", () => {
   assert.equal(
-    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: false, voiceAgentRequested: false }),
+    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: true, inputKind: "translation" }),
+    true
+  );
+  assert.equal(
+    shouldBlockDictationWhilePanelOpen({ assistantPanelOpen: false, inputKind: "translation" }),
     false
   );
+});
+
+test("mic preparation is a first-class lifecycle mirrored only for ordinary dictation", () => {
+  assert.equal(normalizeDictationLifecycle("preparing"), "preparing");
+  assert.equal(shouldIgnoreDictationHotkey("preparing"), false);
+  assert.equal(isDictationRecording("preparing"), false);
+  assert.deepEqual(resolveAgentDictationPillState("preparing", "dictation"), {
+    lifecycle: "preparing",
+    interactive: true,
+  });
+  assert.deepEqual(resolveAgentDictationPillState("preparing", "assistant"), {
+    lifecycle: "idle",
+    interactive: false,
+  });
+  assert.deepEqual(resolveAgentDictationPillState("preparing", "translation"), {
+    lifecycle: "idle",
+    interactive: false,
+  });
 });
