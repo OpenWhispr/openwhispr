@@ -1,6 +1,25 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+const LARGE_DICTIONARY_PROMPT = [
+  "OpenWhispr",
+  "Parakeet",
+  "Alcahest",
+  "Chromium",
+  "TypeScript",
+  "Electron",
+  "testing",
+  "data",
+  "benchmark",
+  "inference",
+  "transcription",
+  "dictionary",
+  "microphone",
+  "renderer",
+  "latency",
+  "pipeline",
+].join(", ");
+
 test("detects verbatim echo of dictionary prompt", async () => {
   const { matchesDictionaryPrompt } = await import("../../src/utils/dictionaryEchoFilter.js");
   assert.equal(
@@ -123,4 +142,46 @@ test("returns false when text or prompt normalizes to empty string (punctuation 
   assert.equal(matchesDictionaryPrompt("!!!", ",,,"), false);
   assert.equal(matchesDictionaryPrompt("???", "OpenWhispr, Parakeet"), false);
   assert.equal(matchesDictionaryPrompt("OpenWhispr, Parakeet", "!!!"), false);
+});
+
+test("detects short repeated fragments from a large dictionary prompt", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(
+    isLikelyDictionaryPromptFragment("data, data, data, data,", LARGE_DICTIONARY_PROMPT),
+    true
+  );
+  assert.equal(isLikelyDictionaryPromptFragment("testing,", LARGE_DICTIONARY_PROMPT), true);
+});
+
+test("does not classify normal or unrelated short speech as a dictionary fragment", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(
+    isLikelyDictionaryPromptFragment("OpenWhispr is working", LARGE_DICTIONARY_PROMPT),
+    false
+  );
+  assert.equal(isLikelyDictionaryPromptFragment("hello there", LARGE_DICTIONARY_PROMPT), false);
+});
+
+test("requires non-empty text and a non-empty dictionary prompt", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(isLikelyDictionaryPromptFragment("", LARGE_DICTIONARY_PROMPT), false);
+  assert.equal(isLikelyDictionaryPromptFragment("...", LARGE_DICTIONARY_PROMPT), false);
+  assert.equal(isLikelyDictionaryPromptFragment("testing", null), false);
+  assert.equal(isLikelyDictionaryPromptFragment("testing", ""), false);
+});
+
+test("does not classify normalized output longer than 30 characters as a short fragment", async () => {
+  const { isLikelyDictionaryPromptFragment } =
+    await import("../../src/utils/dictionaryEchoFilter.js");
+
+  assert.equal(
+    isLikelyDictionaryPromptFragment("data data data data data data data", LARGE_DICTIONARY_PROMPT),
+    false
+  );
 });

@@ -29,6 +29,25 @@ export function matchesDictionaryPrompt(text, dictionaryPrompt) {
   return textComposition >= 0.9 && dictionaryUsage >= 0.7;
 }
 
+export function isLikelyDictionaryPromptFragment(text, dictionaryPrompt) {
+  if (!text || !dictionaryPrompt) return false;
+
+  const normalizedText = normalize(text);
+  const normalizedPrompt = normalize(dictionaryPrompt);
+
+  if (!normalizedText || !normalizedPrompt || normalizedText.length > 30) return false;
+
+  const promptWords = new Set(normalizedPrompt.split(" "));
+  const uniqueTextWords = new Set(normalizedText.split(" "));
+  let matchCount = 0;
+
+  for (const word of uniqueTextWords) {
+    if (promptWords.has(word)) matchCount++;
+  }
+
+  return matchCount / uniqueTextWords.size >= 0.9;
+}
+
 export const DICTIONARY_ECHO_CODE = "DICTIONARY_ECHO";
 
 // Keeps the "No audio detected" message so the existing message comparisons and

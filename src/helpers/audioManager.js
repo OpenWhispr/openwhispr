@@ -87,6 +87,7 @@ import { isEmptyRecording } from "./recordingGuard";
 import {
   DICTIONARY_ECHO_CODE,
   dictionaryEchoError,
+  isLikelyDictionaryPromptFragment,
   matchesDictionaryPrompt,
 } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
@@ -110,6 +111,8 @@ const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short record
 // Failure detector only: fires when the worklet or audio graph is dead and never flushes.
 const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
 const neverCancelled = () => false;
+const normalizedAlphanumericLength = (text) =>
+  String(text || "").replace(/[^\p{L}\p{N}]/gu, "").length;
 
 const micDeviceKey = (settings) =>
   `${settings.microphoneSelectionMode}|${settings.selectedMicDeviceId}`;
@@ -1970,6 +1973,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // Add custom dictionary as initial prompt to help Whisper recognize specific words
+      const customDictionaryPrompt = this.getCustomDictionaryPrompt();
       const dictionaryPrompt = this.getWhisperPrompt();
       if (dictionaryPrompt) {
         options.initialPrompt = dictionaryPrompt;
@@ -2000,28 +2004,58 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
 
       if (result.success && result.text) {
-        if (this.isDictionaryEcho(result.text)) {
-          // Whisper decoded (near-)silence and continued the dictionary prompt —
-          // typically VAD stripping pause-heavy speech (#1454). Retry once
-          // without the prompt and without VAD: real speech comes back as the
-          // true transcript, true silence comes back empty.
-          const retry = await window.electronAPI.transcribeLocalWhisper(arrayBuffer, {
-            model: options.model,
-            ...(options.language ? { language: options.language } : {}),
-            skipVad: true,
-          });
-          if (!retry?.success || !retry.text?.trim() || this.isDictionaryEcho(retry.text)) {
-            throw dictionaryEchoError();
+        const strictDictionaryEcho = Boolean(
+          dictionaryPrompt &&
+          (matchesDictionaryPrompt(result.text, dictionaryPrompt) ||
+            matchesDictionaryPrompt(result.text, customDictionaryPrompt))
+        );
+        const shortDictionaryFragment =
+          !strictDictionaryEcho && isLikelyDictionaryPromptFragment(result.text, dictionaryPrompt);
+
+        if (strictDictionaryEcho || shortDictionaryFragment) {
+          // A prompt-free, VAD-free retry distinguishes real speech from Whisper
+          // continuing either the whole dictionary prompt or a short fragment of it.
+          const retryStart = performance.now();
+          let retry = null;
+          try {
+            retry = await window.electronAPI.transcribeLocalWhisper(arrayBuffer, {
+              model: options.model,
+              ...(options.language ? { language: options.language } : {}),
+              skipVad: true,
+            });
+          } catch {
+            // A heuristic recovery is best-effort; strict echoes still fail below.
           }
+
+          const retryText = retry?.success && typeof retry.text === "string" ? retry.text : "";
+          const hasRetryText = Boolean(retryText.trim());
+          const recovered =
+            hasRetryText &&
+            (strictDictionaryEcho ||
+              normalizedAlphanumericLength(retryText) > normalizedAlphanumericLength(result.text));
+
           logger.info(
-            "Recovered transcript after dictionary-echo detection",
-            { retryTextLength: retry.text.length },
+            "Local dictionary-prompt recovery attempt",
+            {
+              reason: strictDictionaryEcho ? "strict-echo" : "short-fragment",
+              retryDurationMs: Math.round(performance.now() - retryStart),
+              promptLength: dictionaryPrompt.length,
+              initialTextLength: result.text.length,
+              retryTextLength: retryText.length,
+              recovered,
+            },
             "audio"
           );
-          result = retry;
+
           timings.transcriptionProcessingDurationMs = Math.round(
             performance.now() - transcriptionStart
           );
+
+          if (recovered) {
+            result = retry;
+          } else if (strictDictionaryEcho) {
+            throw dictionaryEchoError();
+          }
         }
         const rawText = result.text;
         const reasoningStart = performance.now();
