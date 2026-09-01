@@ -847,14 +847,22 @@ class WindowManager {
     // Flush what the gesture state governed before dropping it: a pending
     // quick-release still owns a warm preparation, and a latched hands-free
     // recording has no other stop path once the tracker forgets it.
-    const hadPendingPrepCancel = this._pushPrepCancelTimers.size > 0;
-    for (const inputKind of [...this._pushPrepCancelTimers.keys()]) {
+    const pendingPrepCancelKinds = [...this._pushPrepCancelTimers.keys()];
+    for (const inputKind of pendingPrepCancelKinds) {
       this._clearPushPrepCancelTimer(inputKind);
     }
-    if (hadPendingPrepCancel) {
-      this.sendCancelDictationPreparation();
-      if (!this._isDictatingToggle) {
-        this.hideDictationPanel();
+    if (pendingPrepCancelKinds.length > 0) {
+      // Same guard as the deferred timers being flushed: a pipeline that a
+      // kind with no pending cancel now owns must not be torn down by a
+      // stale, kind-blind cancel.
+      const pipelineOwnedElsewhere =
+        this._dictationLifecycleState !== DICTATION_LIFECYCLE.IDLE &&
+        !pendingPrepCancelKinds.includes(this._dictationInputKind);
+      if (!pipelineOwnedElsewhere) {
+        this.sendCancelDictationPreparation();
+        if (!this._isDictatingToggle) {
+          this.hideDictationPanel();
+        }
       }
     }
     for (const inputKind of Object.values(DICTATION_INPUT_KIND)) {

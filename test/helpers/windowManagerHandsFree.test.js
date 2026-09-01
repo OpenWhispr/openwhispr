@@ -309,6 +309,28 @@ test("a settings change with a pending quick-release cancels the preparation", (
   assert.equal(channels(sent).includes("__hide-panel"), true);
 });
 
+test("resetNativePushState never cancels another kind's fresh preparation", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  manager.startNativePushToTalk("F8", "dictation");
+  manager.setDictationLifecycleState("preparing", "dictation");
+  t.mock.timers.tick(80);
+  manager.handleNativePushKeyUp("F8");
+
+  // Before the deferred dictation cancel fires, an assistant tap-toggle takes
+  // the pipeline; the flush must skip its stale, kind-blind cancel exactly
+  // like the deferred timer itself would.
+  t.mock.timers.tick(100);
+  manager.sendToggleVoiceAgent();
+  manager.setDictationLifecycleState("preparing", "assistant");
+
+  manager.resetNativePushState();
+
+  assert.equal(channels(sent).includes("cancel-dictation-preparation"), false);
+  assert.equal(channels(sent).includes("__hide-panel"), false);
+});
+
 test("listening mode blocks a native hold press before any side effects", (t) => {
   useGestureTimers(t);
   const { manager, sent } = makeManager();
