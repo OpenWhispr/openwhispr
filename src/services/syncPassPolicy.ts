@@ -38,6 +38,31 @@ export function resolveSyncConsent(state: {
   };
 }
 
+/**
+ * Whether the Insights view offers to adopt the counters recorded while signed
+ * out. The offer is gated on there being rows to adopt, never on the sync
+ * toggle: insightsSyncEnabled is device-scoped and survives sign-out, so
+ * counters spoken between a sign-out and the next sign-in land unattributed
+ * with the toggle still on. Gating the offer on the toggle left exactly those
+ * rows unreachable — excluded from the account summary the view then shows,
+ * so visible totals silently dropped after signing back in. Offering is not
+ * adopting: the prompt still has to be confirmed (useInsightsSyncOptIn).
+ *
+ * The other three inputs are the preconditions the offer always had. Retention
+ * being off is not a technicality here: it stops new counters being recorded,
+ * so a sync the user turns on would have nothing to carry.
+ */
+export function canOfferAnalyticsClaim(state: {
+  signedIn: boolean;
+  syncAllowedByPolicy: boolean;
+  dataRetentionEnabled: boolean;
+  insightsSyncEnabled: boolean;
+  unclaimedCount: number;
+}): boolean {
+  if (!state.signedIn || !state.syncAllowedByPolicy || !state.dataRetentionEnabled) return false;
+  return !state.insightsSyncEnabled || state.unclaimedCount > 0;
+}
+
 const TEAM_ONLY_PASS_BASE_MS = 5 * 60 * 1000;
 const TEAM_ONLY_PASS_MAX_MS = 60 * 60 * 1000;
 

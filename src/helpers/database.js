@@ -1359,12 +1359,12 @@ class DatabaseManager {
       if (!this.activeAccountId) return [];
       const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
       // The projection is the wire shape: AnalyticsService posts these rows
-      // verbatim. occurred_at stays on the device -- the cloud rollup only ever
-      // reads a date, and local_date is what it reads -- but it still orders
-      // the batch, oldest dictation first.
+      // verbatim, so every column here has to satisfy the batch endpoint's
+      // event schema -- occurred_at included, which that schema requires
+      // alongside local_date. It also orders the batch, oldest dictation first.
       return this.db
         .prepare(
-          `SELECT event_id, local_date, word_count, spoken_duration_ms,
+          `SELECT event_id, occurred_at, local_date, word_count, spoken_duration_ms,
                   mode, provider, model, counter_version
            FROM analytics_events
            WHERE account_id = ? AND sync_status = 'pending'

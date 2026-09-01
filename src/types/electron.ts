@@ -167,6 +167,7 @@ export interface AnalyticsEventInput {
 
 export interface PendingAnalyticsEvent {
   event_id: string;
+  occurred_at: string;
   local_date: string;
   word_count: number;
   spoken_duration_ms: number | null;

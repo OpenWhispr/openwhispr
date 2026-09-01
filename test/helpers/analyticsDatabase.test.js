@@ -116,7 +116,11 @@ test("pre-sign-in analytics are attributed only by an explicit claim", (t) => {
   );
 });
 
-test("the pending batch carries the local date, never the precise timestamp", (t) => {
+// The batch endpoint requires occurred_at as well as local_date, and rejects
+// an event that is missing either. Dropping it from the projection to keep the
+// timestamp on the device would 400 every batch, so the wire shape is pinned
+// here rather than left to the consent copy to imply.
+test("the pending batch carries both the precise timestamp and the local date", (t) => {
   const db = createDb(t);
   if (!db) return;
 
@@ -128,14 +132,14 @@ test("the pending batch carries the local date, never the precise timestamp", (t
   assert.deepEqual(
     pending.map((row) => row.event_id),
     ["earlier", "later"],
-    "the device still orders the batch by when each dictation happened"
+    "the device orders the batch by when each dictation happened"
+  );
+  assert.deepEqual(
+    pending.map((row) => row.occurred_at),
+    ["2026-08-30T09:00:00.000Z", "2026-08-30T18:00:00.000Z"],
+    "occurred_at is required by the batch schema, so it has to be on the wire"
   );
   for (const row of pending) {
-    assert.equal(
-      "occurred_at" in row,
-      false,
-      "the cloud only ever reads a date, so no ms-precision timestamp leaves the device"
-    );
     assert.equal(row.local_date, "2026-08-30");
   }
 });

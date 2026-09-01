@@ -6,6 +6,7 @@ import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
 import { getAccountAnalyticsSummary, syncPendingAnalytics } from "../services/AnalyticsService";
 import { localDateKey } from "../helpers/analytics";
+import { canOfferAnalyticsClaim } from "../services/syncPassPolicy";
 import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
@@ -95,7 +96,8 @@ export default function InsightsView() {
   const dataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );
-  const { enableInsightsSync, optInDialog, syncAllowedByPolicy } = useInsightsSyncOptIn();
+  const { enableInsightsSync, optInDialog, syncAllowedByPolicy, unclaimedCount } =
+    useInsightsSyncOptIn();
   // A managed workspace that forbids cloud backup forbids these counters with
   // it, so the view stays device-scoped even with the preference left on.
   const syncActive = isSignedIn && insightsSyncEnabled && syncAllowedByPolicy;
@@ -179,15 +181,23 @@ export default function InsightsView() {
         </div>
       )}
 
-      {isSignedIn && !insightsSyncEnabled && syncAllowedByPolicy && dataRetentionEnabled && (
+      {canOfferAnalyticsClaim({
+        signedIn: isSignedIn,
+        syncAllowedByPolicy,
+        dataRetentionEnabled,
+        insightsSyncEnabled,
+        unclaimedCount,
+      }) && (
         <div className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3">
-          <p className="text-xs text-muted-foreground">{t("insights.syncPrompt")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t(insightsSyncEnabled ? "insights.claimTitle" : "insights.syncPrompt")}
+          </p>
           <button
             type="button"
             onClick={enableInsightsSync}
             className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
           >
-            {t("insights.enableSync")}
+            {t(insightsSyncEnabled ? "insights.claimInclude" : "insights.enableSync")}
           </button>
         </div>
       )}
