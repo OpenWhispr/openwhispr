@@ -562,6 +562,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   proxyCortiTranscription: (data) => ipcRenderer.invoke("proxy-corti-transcription", data),
   getTinfoilChatModels: () => ipcRenderer.invoke("get-tinfoil-chat-models"),
   proxyTinfoilTranscription: (data) => ipcRenderer.invoke("proxy-tinfoil-transcription", data),
+  proxyCustomTranscription: (data) => ipcRenderer.invoke("proxy-custom-transcription", data),
 
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),

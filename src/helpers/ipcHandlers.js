@@ -4241,6 +4241,60 @@ class IPCHandlers {
       })
     );
 
+    // Custom BYOK endpoints are proxied through main to avoid Chromium's
+    // renderer fetch() which can fail with ERR_CONNECTION_REFUSED on some
+    // servers due to differences in DNS resolution and TLS handling.
+    ipcMain.handle(
+      "proxy-custom-transcription",
+      serializeIpcError(async (event, { audioBuffer, model, language, prompt }) => {
+        const settings = this.settingsManager.getAllSettings();
+        const rawUrl = (settings.cloudTranscriptionBaseUrl || "").trim();
+        if (!rawUrl) {
+          throw new Error("Custom transcription endpoint is not configured");
+        }
+
+        const { normalizeBaseUrl, buildApiUrl, isAzureOpenAIEndpoint, isSecureHttpEndpoint } =
+          require("./config/constants");
+        const { buildBatchEndpoint } = require("./transcriptionRoute");
+
+        const base = normalizeBaseUrl(rawUrl);
+        if (!base || !isSecureHttpEndpoint(base)) {
+          throw new Error("Custom transcription endpoint URL is invalid or unsupported");
+        }
+
+        const endpoint = buildBatchEndpoint(rawUrl, base, model || "whisper-1");
+        const apiKey = this.environmentManager.getCustomTranscriptionKey();
+
+        const formData = new FormData();
+        const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
+        formData.append("file", audioBlob, "audio.webm");
+        formData.append("model", model || "whisper-1");
+        if (language && language !== "auto") {
+          formData.append("language", language);
+        }
+        if (prompt) {
+          formData.append("prompt", prompt);
+        }
+
+        const headers = {};
+        if (apiKey) {
+          if (isAzureOpenAIEndpoint(base)) {
+            headers["api-key"] = apiKey;
+          } else {
+            headers.Authorization = `Bearer ${apiKey}`;
+          }
+        }
+
+        const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Custom endpoint Error: ${response.status} ${errorText}`);
+        }
+
+        return await response.json();
+      })
+    );
+
     // Gemini's Interactions API takes JSON with inline base64 audio, not
     // OpenAI-compatible multipart, so batch transcription is proxied through main.
     ipcMain.handle(
