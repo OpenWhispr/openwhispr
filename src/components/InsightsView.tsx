@@ -171,11 +171,13 @@ function MetricCard({
   label,
   value,
   detail,
+  largeValue = false,
 }: {
   icon: typeof BarChart3;
   label: string;
   value: string;
-  detail: string;
+  detail?: string;
+  largeValue?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-border/40 dark:border-white/8 bg-card/70 p-4">
@@ -183,8 +185,15 @@ function MetricCard({
         <Icon size={14} />
         <span className="text-xs">{label}</span>
       </div>
-      <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
-      <p className="mt-1 text-[11px] text-muted-foreground/70">{detail}</p>
+      <p
+        className={cn(
+          "mt-3 font-semibold tracking-tight text-foreground",
+          largeValue ? "text-3xl" : "text-2xl"
+        )}
+      >
+        {value}
+      </p>
+      {detail && <p className="mt-1 text-[11px] text-muted-foreground/70">{detail}</p>}
     </div>
   );
 }
@@ -309,19 +318,19 @@ export default function InsightsView() {
           icon={Mic2}
           label={t("insights.wordsSpoken")}
           value={number.format(summary.totalWords)}
-          detail={t("insights.allTime")}
+          largeValue
         />
         <MetricCard
           icon={Gauge}
           label={t("insights.wordsPerMinute")}
           value={summary.averageWpm == null ? "—" : number.format(summary.averageWpm)}
-          detail={t("insights.wpmCoverage", { count: summary.wpmCoveragePercent })}
+          largeValue
         />
         <MetricCard
           icon={BarChart3}
           label={t("insights.dictations")}
           value={number.format(summary.totalDictations)}
-          detail={t("insights.allTime")}
+          largeValue
         />
         <MetricCard
           icon={Flame}
