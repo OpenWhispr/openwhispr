@@ -132,3 +132,56 @@ test("pre-sign-in analytics are attributed only by an explicit claim", (t) => {
     ["account-1", "guest-1", "guest-2"]
   );
 });
+
+test("an event the server keeps refusing is retired so it stops blocking the queue", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.setActiveAccountId("account-a");
+  // The bad row is older, so it sorts ahead of the good one and would be
+  // re-offered on every pass forever if nothing counted the refusals.
+  recordEvent(db, "bad-1", { occurredAt: "2026-08-30T09:00:00.000Z" });
+  recordEvent(db, "good-1", { occurredAt: "2026-08-30T11:00:00.000Z" });
+
+  // Four refusals is not enough to give up on it.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    assert.equal(db.recordAnalyticsSyncFailures(["bad-1"]).retired, 0);
+    assert.deepEqual(
+      db.getPendingAnalyticsEvents().map((row) => row.event_id),
+      ["bad-1", "good-1"],
+      "still offered while it has attempts left"
+    );
+  }
+
+  assert.equal(db.recordAnalyticsSyncFailures(["bad-1"]).retired, 1);
+  assert.deepEqual(
+    db.getPendingAnalyticsEvents().map((row) => row.event_id),
+    ["good-1"],
+    "the retired row no longer blocks the queue"
+  );
+  // Retiring an upload is not deleting a dictation.
+  assert.equal(db.getAnalyticsSummary().totalDictations, 2);
+
+  // Already retired, so further refusals are inert rather than cumulative.
+  assert.equal(db.recordAnalyticsSyncFailures(["bad-1"]).retired, 0);
+  assert.equal(db.recordAnalyticsSyncFailures([]).retired, 0);
+});
+
+test("a successful upload never counts against a retry budget", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.setActiveAccountId("account-a");
+  recordEvent(db, "event-1");
+  db.recordAnalyticsSyncFailures(["event-1"]);
+  assert.equal(db.markAnalyticsEventsSynced(["event-1"]).updated, 1);
+  assert.deepEqual(db.getPendingAnalyticsEvents(), []);
+
+  // A cleared row still becomes a pending delete even after refusals, so the
+  // cloud copy is retired if one of the earlier attempts did land.
+  db.clearTranscriptions();
+  assert.deepEqual(
+    db.getPendingAnalyticsDeletes().map((row) => row.event_id),
+    ["event-1"]
+  );
+});

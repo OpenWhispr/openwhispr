@@ -130,6 +130,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAnalyticsSummary: () => ipcRenderer.invoke("analytics-get-summary"),
   getPendingAnalyticsEvents: (limit) => ipcRenderer.invoke("analytics-get-pending", limit),
   markAnalyticsEventsSynced: (eventIds) => ipcRenderer.invoke("analytics-mark-synced", eventIds),
+  recordAnalyticsSyncFailures: (eventIds) =>
+    ipcRenderer.invoke("analytics-record-sync-failures", eventIds),
   getPendingAnalyticsDeletes: (limit) => ipcRenderer.invoke("analytics-get-pending-deletes", limit),
   hardDeleteAnalyticsEvents: (eventIds) => ipcRenderer.invoke("analytics-hard-delete", eventIds),
   countUnclaimedAnalyticsEvents: () => ipcRenderer.invoke("analytics-count-unclaimed"),

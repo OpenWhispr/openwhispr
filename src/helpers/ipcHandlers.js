@@ -1421,6 +1421,10 @@ class IPCHandlers {
       return this.databaseManager.markAnalyticsEventsSynced(eventIds);
     });
 
+    ipcMain.handle("analytics-record-sync-failures", async (_event, eventIds) => {
+      return this.databaseManager.recordAnalyticsSyncFailures(eventIds);
+    });
+
     ipcMain.handle("analytics-get-pending-deletes", async (_event, limit) => {
       return this.databaseManager.getPendingAnalyticsDeletes(limit);
     });

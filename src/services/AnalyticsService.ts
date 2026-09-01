@@ -38,6 +38,22 @@ export async function syncPendingAnalytics(): Promise<number> {
       events,
     });
     const accepted = Array.isArray(result?.accepted) ? result.accepted : [];
+
+    // The server drops an event it cannot accept from `accepted` instead of
+    // failing the batch, so a permanently-invalid row would stay pending, sort
+    // back to the head of the queue, and be re-sent on every pass forever.
+    // Count the miss; the database retires the row after a few attempts.
+    const acceptedIds = new Set(accepted);
+    const rejected = events
+      .filter((event) => !acceptedIds.has(event.event_id))
+      .map((event) => event.event_id);
+    if (rejected.length > 0) {
+      await window.electronAPI.recordAnalyticsSyncFailures(rejected);
+    }
+
+    // Returning here rather than looping is deliberate: the rejected rows are
+    // still pending until they exhaust their attempts, so another read this
+    // pass would hand back the same batch.
     if (accepted.length === 0) return synced;
 
     // Every pass must retire rows locally, or the next read returns the same

@@ -1155,6 +1155,9 @@ declare global {
       markAnalyticsEventsSynced: (
         eventIds: string[]
       ) => Promise<{ success: boolean; updated: number }>;
+      recordAnalyticsSyncFailures: (
+        eventIds: string[]
+      ) => Promise<{ success: boolean; retired: number }>;
       getPendingAnalyticsDeletes: (limit?: number) => Promise<{ event_id: string }[]>;
       hardDeleteAnalyticsEvents: (
         eventIds: string[]

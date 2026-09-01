@@ -12,6 +12,12 @@ const { app } = require("electron");
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
 // trigger can't 400 the whole sync batch.
 const MAX_SNIPPET_TRIGGER_LENGTH = 100;
+// The analytics batch endpoint omits an event it cannot accept from its
+// response rather than failing the whole batch, so a row the server will never
+// take stays pending forever. Pending rows sort to the head of the upload
+// queue, so enough of them block every later event behind them. Give up after
+// this many offers.
+const MAX_ANALYTICS_SYNC_ATTEMPTS = 5;
 
 // Every local field a note create (POST) carries; the acknowledgement compares
 // these atomically against the pushed snapshot. Must mirror NotePushSnapshot
@@ -972,6 +978,7 @@ class DatabaseManager {
           model TEXT,
           counter_version INTEGER NOT NULL DEFAULT 1,
           sync_status TEXT NOT NULL DEFAULT 'pending',
+          sync_attempts INTEGER NOT NULL DEFAULT 0,
           deleted_at TEXT,
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
@@ -979,11 +986,13 @@ class DatabaseManager {
           ON analytics_events(account_id, local_date);
       `);
       // Repair path only, for machines that ran this branch before deleted_at
-      // joined the CREATE TABLE above.
-      try {
-        this.db.exec("ALTER TABLE analytics_events ADD COLUMN deleted_at TEXT");
-      } catch (err) {
-        if (!err.message.includes("duplicate column")) throw err;
+      // and sync_attempts joined the CREATE TABLE above.
+      for (const column of ["deleted_at TEXT", "sync_attempts INTEGER NOT NULL DEFAULT 0"]) {
+        try {
+          this.db.exec(`ALTER TABLE analytics_events ADD COLUMN ${column}`);
+        } catch (err) {
+          if (!err.message.includes("duplicate column")) throw err;
+        }
       }
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_client_id ON custom_dictionary(client_dict_id)"
@@ -1404,6 +1413,52 @@ class DatabaseManager {
       return { success: true, updated: result.changes };
     } catch (error) {
       debugLogger.error("Error marking analytics synced", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  /** Counts one failed upload offer per id and retires any row that has now been
+   *  refused too many times. Retired rows stay on the device and still count in
+   *  the local summary -- the dictation happened, only its upload is abandoned. */
+  recordAnalyticsSyncFailures(eventIds) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
+        return { success: true, retired: 0 };
+      }
+      const placeholders = eventIds.map(() => "?").join(", ");
+      // Tombstoned rows are excluded for the same reason markAnalyticsEventsSynced
+      // excludes them: a clear that landed mid-flight must stay a pending delete.
+      const countAttempt = this.db.prepare(
+        `UPDATE analytics_events SET sync_attempts = sync_attempts + 1
+         WHERE account_id = ? AND sync_status = 'pending' AND deleted_at IS NULL
+           AND event_id IN (${placeholders})`
+      );
+      const retireExhausted = this.db.prepare(
+        `UPDATE analytics_events SET sync_status = 'rejected'
+         WHERE account_id = ? AND sync_status = 'pending' AND deleted_at IS NULL
+           AND sync_attempts >= ? AND event_id IN (${placeholders})`
+      );
+      const run = this.db.transaction(() => {
+        countAttempt.run(this.activeAccountId, ...eventIds);
+        return retireExhausted.run(this.activeAccountId, MAX_ANALYTICS_SYNC_ATTEMPTS, ...eventIds)
+          .changes;
+      });
+      const retired = run();
+      if (retired > 0) {
+        debugLogger.warn(
+          "Retired analytics events the server would not accept",
+          { retired, attempts: MAX_ANALYTICS_SYNC_ATTEMPTS },
+          "database"
+        );
+      }
+      return { success: true, retired };
+    } catch (error) {
+      debugLogger.error(
+        "Error recording analytics sync failures",
+        { error: error.message },
+        "database"
+      );
       throw error;
     }
   }
