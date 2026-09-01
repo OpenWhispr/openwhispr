@@ -3242,6 +3242,7 @@
     "defaultUser": "Usuario",
     "notSignedIn": "Sin sesión iniciada",
     "chat": "Chat",
+    "assistant": "Asistente",
     "collapse": "Contraer barra lateral",
     "expand": "Expandir barra lateral"
   },

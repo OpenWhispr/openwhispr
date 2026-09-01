@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import {
-  Home,
-  MessageSquare,
-  NotebookPen,
-  BookOpen,
+  House,
+  MessagesSquare,
+  GalleryVerticalEnd,
+  Bookmark,
   Upload,
-  Blocks,
+  LayoutGrid,
   Gift,
   Lock,
   Settings,
@@ -27,8 +27,9 @@ import { usePolicyStore } from "../stores/policyStore";
 
 const platform = getCachedPlatform();
 
+// Keep Lucide strokes opaque and fade the whole SVG so overlapping paths composite uniformly.
 const rowIconClass =
-  "shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150";
+  "shrink-0 text-foreground opacity-60 group-hover:opacity-75 dark:opacity-50 dark:group-hover:opacity-65 transition-opacity duration-150";
 const rowLabelClass =
   "text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150";
 const rowButtonClass =
@@ -86,16 +87,16 @@ export default function ControlPanelSidebar({
     label: string;
     icon: React.ComponentType<{ size?: number; className?: string }>;
   }[] = [
-    { id: "home", label: t("sidebar.home"), icon: Home },
+    { id: "home", label: t("sidebar.home"), icon: House },
     ...(agentAllowed
-      ? [{ id: "chat" as const, label: t("sidebar.chat"), icon: MessageSquare }]
+      ? [{ id: "chat" as const, label: t("sidebar.assistant"), icon: MessagesSquare }]
       : []),
-    { id: "personal-notes", label: t("sidebar.notes"), icon: NotebookPen },
+    { id: "personal-notes", label: t("sidebar.notes"), icon: GalleryVerticalEnd },
     ...(policyActionsAllowed
       ? [{ id: "upload" as const, label: t("sidebar.upload"), icon: Upload }]
       : []),
-    { id: "dictionary", label: t("sidebar.dictionary"), icon: BookOpen },
-    { id: "integrations", label: t("sidebar.integrations"), icon: Blocks },
+    { id: "dictionary", label: t("sidebar.dictionary"), icon: Bookmark },
+    { id: "integrations", label: t("sidebar.integrations"), icon: LayoutGrid },
   ];
 
   return (
@@ -111,7 +112,7 @@ export default function ControlPanelSidebar({
             onClick={onOpenSearch}
             className="group flex items-center w-full h-7 px-2.5 rounded-md border border-border/70 dark:border-white/25 bg-transparent hover:bg-foreground/5 dark:hover:bg-white/5 transition-colors gap-2 outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
           >
-            <Search size={11} className="text-muted-foreground/50 shrink-0" />
+            <Search size={11} className="text-muted-foreground opacity-50 shrink-0" />
             <span className="flex-1 text-[11px] text-left text-muted-foreground/50">
               {t("commandSearch.shortPlaceholder")}
             </span>
@@ -147,10 +148,10 @@ export default function ControlPanelSidebar({
               <Icon
                 size={15}
                 className={cn(
-                  "shrink-0 transition-colors duration-150",
+                  "shrink-0 transition-[color,opacity] duration-150",
                   isActive
-                    ? "text-primary"
-                    : "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/55 dark:group-hover:text-foreground/70"
+                    ? "text-primary opacity-100"
+                    : "text-foreground opacity-60 group-hover:opacity-75 dark:opacity-55 dark:group-hover:opacity-70"
                 )}
               />
               <span
@@ -221,7 +222,7 @@ export default function ControlPanelSidebar({
                 ] as const
               ).map(([Icon, label]) => (
                 <div key={label} className="flex items-start gap-1.5">
-                  <Icon size={12} className="shrink-0 mt-px text-foreground/60" />
+                  <Icon size={12} className="shrink-0 mt-px text-foreground opacity-60" />
                   <span className="text-[11px] leading-snug text-foreground/80">{label}</span>
                 </div>
               ))}
@@ -278,7 +279,7 @@ export default function ControlPanelSidebar({
           {userImage ? (
             <img src={userImage} alt="" className="w-6 h-6 rounded-full shrink-0 object-cover" />
           ) : (
-            <UserCircle size={18} className="shrink-0 text-foreground/50 dark:text-foreground/45" />
+            <UserCircle size={18} className="shrink-0 text-foreground opacity-50 dark:opacity-45" />
           )}
           <div className="flex-1 min-w-0">
             {isSignedIn && (userName || userEmail) ? (

@@ -2697,6 +2697,7 @@
     "defaultUser": "Utilisateur",
     "notSignedIn": "Non connecté",
     "chat": "Chat",
+    "assistant": "Assistant",
     "collapse": "Réduire la barre latérale",
     "expand": "Développer la barre latérale"
   },

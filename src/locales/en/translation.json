@@ -2697,6 +2697,7 @@
     "defaultUser": "User",
     "notSignedIn": "Not signed in",
     "chat": "Chat",
+    "assistant": "Assistant",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar"
   },

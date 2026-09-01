@@ -2697,6 +2697,7 @@
     "defaultUser": "Benutzer",
     "notSignedIn": "Nicht angemeldet",
     "chat": "Chat",
+    "assistant": "Assistent",
     "collapse": "Seitenleiste einklappen",
     "expand": "Seitenleiste ausklappen"
   },
