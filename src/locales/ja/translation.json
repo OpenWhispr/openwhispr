@@ -3194,6 +3194,7 @@
     "defaultUser": "ユーザー",
     "notSignedIn": "未サインイン",
     "chat": "チャット",
+    "assistant": "アシスタント",
     "collapse": "サイドバーを折りたたむ",
     "expand": "サイドバーを展開"
   },

@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import {
-  Home,
-  MessageSquare,
-  NotebookPen,
-  BookOpen,
+  House,
+  MessagesSquare,
+  GalleryVerticalEnd,
+  Bookmark,
   Upload,
-  Blocks,
+  LayoutGrid,
   Gift,
   Lock,
   Settings,
@@ -86,16 +86,16 @@ export default function ControlPanelSidebar({
     label: string;
     icon: React.ComponentType<{ size?: number; className?: string }>;
   }[] = [
-    { id: "home", label: t("sidebar.home"), icon: Home },
+    { id: "home", label: t("sidebar.home"), icon: House },
     ...(agentAllowed
-      ? [{ id: "chat" as const, label: t("sidebar.chat"), icon: MessageSquare }]
+      ? [{ id: "chat" as const, label: t("sidebar.assistant"), icon: MessagesSquare }]
       : []),
-    { id: "personal-notes", label: t("sidebar.notes"), icon: NotebookPen },
+    { id: "personal-notes", label: t("sidebar.notes"), icon: GalleryVerticalEnd },
     ...(policyActionsAllowed
       ? [{ id: "upload" as const, label: t("sidebar.upload"), icon: Upload }]
       : []),
-    { id: "dictionary", label: t("sidebar.dictionary"), icon: BookOpen },
-    { id: "integrations", label: t("sidebar.integrations"), icon: Blocks },
+    { id: "dictionary", label: t("sidebar.dictionary"), icon: Bookmark },
+    { id: "integrations", label: t("sidebar.integrations"), icon: LayoutGrid },
   ];
 
   return (
