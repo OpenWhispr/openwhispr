@@ -403,6 +403,20 @@ class HotkeyManager extends EventEmitter {
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
       return false;
     }
+    // macOS release detection covers Globe/Fn, mouse buttons, right-side
+    // modifiers and compound accelerators (modifier-up). A plain single key
+    // has no key-up source, so Hold would silently act as Tap. With no hotkey
+    // to judge yet (early startup), stay permissive.
+    if (
+      process.platform === "darwin" &&
+      hotkey &&
+      !isGlobeLikeHotkey(hotkey) &&
+      !isMouseButtonHotkey(hotkey) &&
+      !isRightSideModifier(hotkey) &&
+      !hotkey.includes("+")
+    ) {
+      return false;
+    }
     if (this.useGnome && this.gnomeManager?.supportsPushToTalk) {
       return this.gnomeManager.supportsPushToTalk();
     }

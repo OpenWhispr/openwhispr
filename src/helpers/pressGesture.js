@@ -42,32 +42,44 @@ class PressGestureTracker {
 
   // Tap mode. Returns true when this press is the second press of a double
   // press and must be suppressed: the recording started by the first press
-  // keeps running (hands-free) instead of being toggled off. The suppression
-  // keys off the tracker's own history, not the renderer's recording state,
-  // because the recording-state mirror can lag a fast second press.
-  handleTogglePress(kind, now, isStartEdge) {
+  // keeps running (hands-free) instead of being toggled off. `pipelineActive`
+  // is the caller's evidence that the first press really is preparing or
+  // recording this kind — without it (the renderer declined: mic in use,
+  // permission denied, policy) the press flows through so a retry works.
+  handleTogglePress(kind, now, isStartEdge, pipelineActive) {
     const state = this._slot(kind);
-    const suppress = state.lastToggleWasStartEdge && this._isInWindow(now - state.lastToggleDownAt);
+    const suppress =
+      pipelineActive &&
+      state.lastToggleWasStartEdge &&
+      this._isInWindow(now - state.lastToggleDownAt);
     state.lastToggleDownAt = now;
     state.lastToggleWasStartEdge = suppress ? false : isStartEdge;
     return suppress;
   }
 
-  // Push (hold) mode key-down. "stop-hands-free": a latched recording is
+  // Push (hold) mode key-down. "ignore": a duplicate delivery of the previous
+  // down (a DE backend phase plus the low-level listener can both report one
+  // physical press) — do nothing. "stop-hands-free": a latched recording is
   // running and this press ends it. "latch": this is the second press of a
   // double press — start recording and keep it running past the release.
   // "proceed": drive the normal push-to-talk machine.
   handlePushDown(kind, now) {
     const state = this._slot(kind);
+    const sinceLastDown = now - state.lastPushDownAt;
+    if (state.lastPushDownAt !== 0 && sinceLastDown <= DOUBLE_PRESS_MIN_GAP_MS) {
+      return "ignore";
+    }
     if (state.handsFree) {
       state.handsFree = false;
       state.primeToken = 0;
+      state.lastPushDownAt = now;
       return "stop-hands-free";
     }
-    if (state.primeToken !== 0 && this._isInWindow(now - state.lastPushDownAt)) {
+    if (state.primeToken !== 0 && this._isInWindow(sinceLastDown)) {
       state.primeToken = 0;
       state.handsFree = true;
       state.handsFreeSince = now;
+      state.lastPushDownAt = now;
       return "latch";
     }
     state.primeToken = 0;
@@ -85,7 +97,10 @@ class PressGestureTracker {
     state.primeToken = primeToken;
     return {
       primeToken,
-      cancelDelayMs: Math.max(0, DOUBLE_PRESS_MAX_GAP_MS - (now - state.lastPushDownAt)),
+      cancelDelayMs: Math.min(
+        DOUBLE_PRESS_MAX_GAP_MS,
+        Math.max(0, DOUBLE_PRESS_MAX_GAP_MS - (now - state.lastPushDownAt))
+      ),
     };
   }
 
@@ -114,6 +129,10 @@ class PressGestureTracker {
 
   isHandsFreeActive(kind) {
     return this._slot(kind).handsFree;
+  }
+
+  clearHandsFree(kind) {
+    this._slot(kind).handsFree = false;
   }
 
   // The renderer owns the real recording state; when it reports the recording
