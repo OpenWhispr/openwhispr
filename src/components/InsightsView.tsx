@@ -176,7 +176,7 @@ function MetricCard({
   icon: typeof BarChart3;
   label: string;
   value: string;
-  detail?: string;
+  detail: string;
   largeValue?: boolean;
 }) {
   return (
@@ -193,7 +193,7 @@ function MetricCard({
       >
         {value}
       </p>
-      {detail && <p className="mt-1 text-[11px] text-muted-foreground/70">{detail}</p>}
+      <p className="mt-1 text-[11px] text-muted-foreground/70">{detail}</p>
     </div>
   );
 }
@@ -268,10 +268,9 @@ export default function InsightsView() {
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-sm! font-semibold! leading-none! tracking-normal! text-foreground">
+          <h1 className="text-base! font-semibold! leading-none! tracking-normal! text-foreground">
             {t("insights.title")}
           </h1>
-          <p className="mt-1 text-xs text-muted-foreground">{t("insights.description")}</p>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
           <Cloud size={13} />
@@ -318,18 +317,21 @@ export default function InsightsView() {
           icon={Mic2}
           label={t("insights.wordsSpoken")}
           value={number.format(summary.totalWords)}
+          detail={t("insights.allTime")}
           largeValue
         />
         <MetricCard
           icon={Gauge}
           label={t("insights.wordsPerMinute")}
           value={summary.averageWpm == null ? "—" : number.format(summary.averageWpm)}
+          detail={t("insights.wpmCoverage", { count: summary.wpmCoveragePercent })}
           largeValue
         />
         <MetricCard
           icon={BarChart3}
           label={t("insights.dictations")}
           value={number.format(summary.totalDictations)}
+          detail={t("insights.allTime")}
           largeValue
         />
         <MetricCard
@@ -342,9 +344,6 @@ export default function InsightsView() {
 
       <div className="mt-5 rounded-2xl border border-border/50 bg-card/70 px-5 py-2.5 dark:border-white/8">
         <h2 className="text-base font-medium text-foreground">{t("insights.activity")}</h2>
-        <p className="mt-1 text-[11px] text-muted-foreground/70">
-          {t("insights.activityDescription")}
-        </p>
         <div className="mt-2">
           <Heatmap daily={summary.daily} />
         </div>
