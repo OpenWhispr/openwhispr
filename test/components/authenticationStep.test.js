@@ -19,6 +19,7 @@ function createHarness(values = {}) {
     discoveryResult: { exists: false },
     discoveryError: null,
     signupResult: {},
+    portalContainers: [],
   };
 }
 
@@ -118,7 +119,12 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
       `,
       // Keep portalled children in the returned tree so findElement still
       // reaches them; this harness walks elements rather than mounting a DOM.
-      "react-dom": `export function createPortal(children) { return children; }`,
+      // The container is recorded so the escape-the-drag-band contract is
+      // asserted rather than stubbed away.
+      "react-dom": `export function createPortal(children, container) {
+        globalThis.__authenticationStepHarness.portalContainers.push(container);
+        return children;
+      }`,
       "/utils/logger": `export default { error() {} };`,
       "/utils/platform": `export function getCachedPlatform() { return "linux"; }`,
       "/ForgotPasswordView": `export default function ForgotPasswordView() { return null; }`,
@@ -151,6 +157,14 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
     form.props.onSubmit({ preventDefault() {} });
     await settleAsyncHandler();
   };
+
+  const backPortal = createHarness({ [AUTH_MODE_INDEX]: "sign-in" });
+  render(backPortal);
+  assert.deepEqual(
+    backPortal.portalContainers,
+    [globalThis.document.body],
+    "the compact Back must be portalled to document.body so the shell's drag band cannot swallow it"
+  );
 
   const existingAccount = createHarness({ [EMAIL_INDEX]: "returning@example.com" });
   existingAccount.discoveryResult = { exists: true };
