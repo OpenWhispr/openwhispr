@@ -23,18 +23,23 @@ const DEFAULT_INFO: HotkeyModeInfo = {
 };
 
 /**
- * Resolves how the dictation hotkey is registered for the current session
+ * Resolves how a slot's hotkey is registered for the current session
  * (native shortcut, Hyprland) and, on Hyprland, whether its config is
- * persistable. `scope` tags log output for the calling surface.
+ * persistable. `scope` tags log output for the calling surface; `slot`
+ * defaults to dictation.
  */
-export function useHotkeyModeInfo(scope: string, hotkey?: string): HotkeyModeInfo {
+export function useHotkeyModeInfo(
+  scope: string,
+  hotkey?: string,
+  slot?: "dictation" | "voiceAgent" | "translation"
+): HotkeyModeInfo {
   const [modeInfo, setModeInfo] = useState<HotkeyModeInfo>(DEFAULT_INFO);
 
   useEffect(() => {
     let cancelled = false;
     const checkHotkeyMode = async () => {
       try {
-        const info = await window.electronAPI?.getHotkeyModeInfo?.(hotkey);
+        const info = await window.electronAPI?.getHotkeyModeInfo?.(hotkey, slot);
         if (!info || cancelled) return;
         const hyprlandConfigStatus = info.isUsingHyprland
           ? ((await window.electronAPI?.getHyprlandConfigStatus?.()) ?? null)
@@ -55,7 +60,7 @@ export function useHotkeyModeInfo(scope: string, hotkey?: string): HotkeyModeInf
     return () => {
       cancelled = true;
     };
-  }, [scope, hotkey]);
+  }, [scope, hotkey, slot]);
 
   return modeInfo;
 }
