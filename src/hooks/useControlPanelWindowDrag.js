@@ -46,7 +46,8 @@ export function useControlPanelWindowDrag(enabled) {
       // window chrome (e.g. the compact onboarding hero via
       // data-window-drag-zone in OnboardingShell).
       const inDragZone =
-        event.clientY <= DRAG_STRIP_HEIGHT_PX || Boolean(target?.closest("[data-window-drag-zone]"));
+        event.clientY <= DRAG_STRIP_HEIGHT_PX ||
+        Boolean(target?.closest("[data-window-drag-zone]"));
       if (!inDragZone) return;
       if (target?.closest(INTERACTIVE_SELECTOR)) return;
       dragging = true;
