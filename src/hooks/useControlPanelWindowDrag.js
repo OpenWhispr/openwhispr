@@ -42,6 +42,20 @@ export function useControlPanelWindowDrag(enabled) {
     const api = window.electronAPI;
     if (!api?.startControlPanelDrag) return undefined;
 
+    // Zones are matched by their bounds rather than by hit testing the event
+    // target: a declared zone can then be pointer-events-none and still count,
+    // which is what keeps the compact onboarding hero from swallowing the
+    // clicks and wheel scrolling of the step content it overlays.
+    const pointInDeclaredDragZone = (x, y) => {
+      for (const zone of document.querySelectorAll("[data-window-drag-zone]")) {
+        const rect = zone.getBoundingClientRect();
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     let origin = null;
     let dragging = false;
     const stop = () => {
@@ -58,13 +72,20 @@ export function useControlPanelWindowDrag(enabled) {
       // data-window-drag-zone in OnboardingShell).
       const inDragZone =
         event.clientY <= DRAG_STRIP_HEIGHT_PX ||
-        Boolean(target?.closest("[data-window-drag-zone]"));
+        pointInDeclaredDragZone(event.clientX, event.clientY);
       if (!inDragZone) return;
       if (target?.closest(INTERACTIVE_SELECTOR)) return;
       origin = { x: event.clientX, y: event.clientY };
     };
     const onMouseMove = (event) => {
       if (!origin || dragging) return;
+      // A mouseup that never reached this listener (a handler that stopped it,
+      // a release the window never saw) would otherwise leave `origin` armed
+      // and let the next unpressed move start a drag the user cannot end.
+      if (event.buttons === 0) {
+        stop();
+        return;
+      }
       if (
         Math.abs(event.clientX - origin.x) < DRAG_START_THRESHOLD_PX &&
         Math.abs(event.clientY - origin.y) < DRAG_START_THRESHOLD_PX
@@ -81,13 +102,13 @@ export function useControlPanelWindowDrag(enabled) {
     // swallow the titlebar gesture before it reaches this window listener.
     window.addEventListener("mousedown", onMouseDown, true);
     window.addEventListener("mousemove", onMouseMove, true);
-    window.addEventListener("mouseup", stop);
+    window.addEventListener("mouseup", stop, true);
     window.addEventListener("blur", stop);
     return () => {
       stop();
       window.removeEventListener("mousedown", onMouseDown, true);
       window.removeEventListener("mousemove", onMouseMove, true);
-      window.removeEventListener("mouseup", stop);
+      window.removeEventListener("mouseup", stop, true);
       window.removeEventListener("blur", stop);
     };
   }, [enabled]);

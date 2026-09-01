@@ -1025,6 +1025,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             {isSidePanelLayout && (
               <div
                 className={platform === "darwin" ? "ml-[84px] mt-[16px]" : "ml-2"}
+                data-no-window-drag=""
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
                 <Button
@@ -1040,7 +1041,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
             <div className="flex-1" />
             {platform !== "darwin" && (
-              <div className="pr-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+              <div
+                className="pr-1"
+                data-no-window-drag=""
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+              >
                 <WindowControls />
               </div>
             )}
@@ -1230,6 +1235,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             className={`absolute z-40 flex h-10 items-center ${
               platform === "darwin" ? "left-21 top-2" : "left-2 top-0"
             }`}
+            data-no-window-drag=""
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
             onMouseLeave={sidebarCollapsed ? leaveSidebarToggle : undefined}
