@@ -8,6 +8,8 @@ const handlers = new Map();
 const listeners = new Map();
 const generateCalls = [];
 let generateBehavior = async () => ({ text: "hello", finishReason: "stop" });
+let resolveManagedRuntime = async () => ({ managed: false });
+let handlerContext;
 
 const electronStub = {
   app: {
@@ -53,6 +55,15 @@ const electronStub = {
 
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
+  if (request === "./tokenStore") return { get: () => "test-token" };
+  if (request === "./enterpriseIdentityManager") {
+    return {
+      createEnterpriseIdentityManager: () => ({
+        resolveProvider: (...args) => resolveManagedRuntime(...args),
+        clear: () => {},
+      }),
+    };
+  }
   if (parent?.filename === handlersModulePath) {
     if (request === "./debugLogger") {
       return new Proxy({}, { get: () => () => {} });
@@ -108,13 +119,18 @@ function buildFakeThis() {
 
 function sender(id) {
   const eventListeners = new Map();
+  let destroyed = false;
   return {
     id,
     once: (event, listener) => eventListeners.set(event, listener),
     removeListener: (event, listener) => {
       if (eventListeners.get(event) === listener) eventListeners.delete(event);
     },
-    isDestroyed: () => false,
+    isDestroyed: () => destroyed,
+    destroy: () => {
+      destroyed = true;
+      eventListeners.get("destroyed")?.();
+    },
   };
 }
 
@@ -130,7 +146,8 @@ test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  Ctor.prototype.setupHandlers.call(buildFakeThis());
+  handlerContext = buildFakeThis();
+  Ctor.prototype.setupHandlers.call(handlerContext);
   assert.ok(handlers.get("test-enterprise-connection"));
   assert.ok(handlers.get("process-enterprise-reasoning"));
   assert.ok(listeners.get("enterprise-reasoning-cancel"));
@@ -142,6 +159,7 @@ test.after(() => {
 
 test.beforeEach(() => {
   generateCalls.length = 0;
+  resolveManagedRuntime = async () => ({ managed: false });
 });
 
 test("Check connection uses the Bedrock retry policy and disables nested AI SDK retries", async () => {
@@ -259,6 +277,59 @@ test("Bedrock cleanup cancellation aborts only the requesting renderer without r
 
   assert.equal(requestSignal.aborted, true);
   assert.equal(attempts, 1);
+});
+
+test("Bedrock cleanup cancelled during managed runtime resolution never invokes the model", async () => {
+  const requestingSender = sender(12);
+  let releaseResolution;
+  let resolutionStarted;
+  const resolving = new Promise((resolve) => (releaseResolution = resolve));
+  const started = new Promise((resolve) => (resolutionStarted = resolve));
+  resolveManagedRuntime = async () => {
+    resolutionStarted();
+    return resolving;
+  };
+  handlerContext.enterpriseIdentityManager = {
+    resolveProvider: (...args) => resolveManagedRuntime(...args),
+    clear: () => {},
+  };
+
+  const request = handlers.get("process-enterprise-reasoning")(
+    { sender: requestingSender },
+    "raw dictation",
+    "anthropic.claude-haiku",
+    null,
+    {
+      provider: "bedrock",
+      managedContext: {
+        accountId: "account-1",
+        workspaceId: "workspace-1",
+        authGeneration: 1,
+        inferenceScope: "cleanup",
+        setupMode: "managed",
+        provider: "bedrock",
+        generation: 1,
+        providerVersion: 1,
+      },
+    }
+  );
+  await Promise.race([
+    started,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("managed resolution did not start")), 100)),
+  ]);
+  listeners.get("enterprise-reasoning-cancel")({ sender: requestingSender });
+  releaseResolution({
+    managed: true,
+    provider: "bedrock",
+    model: "anthropic.claude-haiku",
+    generation: 1,
+    version: 1,
+    config: { region: "eu-west-1" },
+    credentialProvider: async () => ({}),
+  });
+  await request;
+
+  assert.equal(generateCalls.length, 0);
 });
 
 test("Check connection returns AWS diagnostics without a dictation fallback status", async () => {

@@ -4417,68 +4417,73 @@ class IPCHandlers {
           if (!isEnterpriseProvider(provider)) {
             throw new Error(`Unsupported enterprise provider: ${provider}`);
           }
-          const runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
-          if (!runtime.model) throw new Error("No model specified for enterprise reasoning");
-          validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
-
-          const { generateText } = require("ai");
-          const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
-
-          const model = getEnterpriseAIModel(
-            runtime.provider,
-            runtime.model,
-            runtime.apiKey,
-            runtime.enterprise
-          );
-
-          const timeoutMs = config?.timeoutMs || 60000;
-          const isBedrock = runtime.provider === "bedrock";
-          const sender = event.sender;
-          const senderId = sender.id;
-          const requestId = isBedrock ? crypto.randomUUID() : null;
-          const controller = isBedrock
+          const isBedrockRequest = provider === "bedrock";
+          const sender = isBedrockRequest ? event.sender : null;
+          const senderId = sender?.id;
+          const requestId = isBedrockRequest ? crypto.randomUUID() : null;
+          const controller = isBedrockRequest
             ? this._enterpriseReasoningRequests.begin(senderId, requestId)
             : null;
           const cancelSenderRequests = () => this._enterpriseReasoningRequests.cancelSender(senderId);
-          if (controller) sender.once("destroyed", cancelSenderRequests);
-          // Opus 4.7 / GPT-5 / o-series dropped `temperature`; renderer
-          // derives support from the model registry and we honor that here.
-          const useTemperature = config?.supportsTemperature !== false;
-          const request = () => {
-            const abortSignal = isBedrock
-              ? AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)])
-              : AbortSignal.timeout(timeoutMs);
-            return generateText({
-              model,
-              system: config?.systemPrompt || "",
-              prompt: text,
-              maxOutputTokens: config?.maxTokens || 4096,
-              ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
-              abortSignal,
-              ...(isBedrock ? { maxRetries: 0 } : {}),
-            });
-          };
-          let generated;
-          let finishReason;
           try {
-            ({ text: generated, finishReason } = await (isBedrock
+            if (controller) {
+              sender.once("destroyed", cancelSenderRequests);
+              if (sender.isDestroyed()) controller.abort();
+            }
+            controller?.signal.throwIfAborted();
+
+            const runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
+            controller?.signal.throwIfAborted();
+            if (!runtime.model) throw new Error("No model specified for enterprise reasoning");
+            validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
+
+            const { generateText } = require("ai");
+            const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
+
+            const model = getEnterpriseAIModel(
+              runtime.provider,
+              runtime.model,
+              runtime.apiKey,
+              runtime.enterprise
+            );
+
+            const timeoutMs = config?.timeoutMs || 60000;
+            const isBedrock = runtime.provider === "bedrock";
+            // Opus 4.7 / GPT-5 / o-series dropped `temperature`; renderer
+            // derives support from the model registry and we honor that here.
+            const useTemperature = config?.supportsTemperature !== false;
+            const request = () => {
+              const abortSignal = isBedrock
+                ? AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)])
+                : AbortSignal.timeout(timeoutMs);
+              return generateText({
+                model,
+                system: config?.systemPrompt || "",
+                prompt: text,
+                maxOutputTokens: config?.maxTokens || 4096,
+                ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
+                abortSignal,
+                ...(isBedrock ? { maxRetries: 0 } : {}),
+              });
+            };
+            const { text: generated, finishReason } = await (isBedrock
               ? runBedrockRequest(request, { signal: controller.signal })
-              : request()));
+              : request());
+
+            if (
+              config?.requireCompleteOutput &&
+              ["length", "max-tokens", "max_tokens"].includes(finishReason)
+            ) {
+              throw new Error("Model output was truncated before the selection edit completed");
+            }
+
+            return { success: true, text: (generated || "").trim() };
           } finally {
             if (controller) {
               sender.removeListener("destroyed", cancelSenderRequests);
               this._enterpriseReasoningRequests.complete(senderId, requestId, controller);
             }
           }
-
-          if (
-            config?.requireCompleteOutput &&
-            ["length", "max-tokens", "max_tokens"].includes(finishReason)
-          ) {
-            throw new Error("Model output was truncated before the selection edit completed");
-          }
-
-          return { success: true, text: (generated || "").trim() };
         } catch (err) {
           debugLogger.error("Enterprise reasoning error:", err);
           const mapped = mapEnterpriseError(provider, err, config || {});
