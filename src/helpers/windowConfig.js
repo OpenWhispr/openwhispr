@@ -357,11 +357,20 @@ class WindowPositionUtil {
       // macOS: Use panel level for proper floating behavior
       // This ensures the window stays on top across spaces and fullscreen apps
       window.setAlwaysOnTop(true, "floating", 1);
-      window.setVisibleOnAllWorkspaces(true, {
-        visibleOnFullScreen: true,
-        skipTransformProcessType: true, // Keep Dock/Command-Tab behaviour
-      });
-      window.setFullScreenable(false);
+      // Re-applying the collection behavior when nothing drifted makes the
+      // window server momentarily pull the window out of the active Space,
+      // which blinks the entire visible window. Enforce calls land on hot
+      // paths (assistant panel open/close, window show), so Spaces membership
+      // is only touched when it was actually lost.
+      if (!window.isVisibleOnAllWorkspaces()) {
+        window.setVisibleOnAllWorkspaces(true, {
+          visibleOnFullScreen: true,
+          skipTransformProcessType: true, // Keep Dock/Command-Tab behaviour
+        });
+      }
+      if (window.isFullScreenable()) {
+        window.setFullScreenable(false);
+      }
 
       if (window.isVisible()) {
         window.setAlwaysOnTop(true, "floating", 1);
