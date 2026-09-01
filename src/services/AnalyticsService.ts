@@ -6,17 +6,6 @@ const BATCH_SIZE = 200;
 export async function syncPendingAnalytics(): Promise<number> {
   let synced = 0;
 
-  // A session that never opens the control panel (start minimized, launch at
-  // login) never binds the local account scope, so its rows are written with
-  // no account and would stay unpushable forever. Both callers run only with
-  // the Insights opt-in active, and that opt-in is only ever set by confirming
-  // the claim dialog, so adopting them needs no further consent. The claim
-  // targets the signed-in account and only rows that carry no account, so it
-  // can never move another account's counters.
-  await window.electronAPI.claimAnonymousAnalyticsEvents().catch((error) => {
-    console.error("Adopting unattributed Insights events failed:", error);
-  });
-
   while (true) {
     const events: PendingAnalyticsEvent[] =
       await window.electronAPI.getPendingAnalyticsEvents(BATCH_SIZE);
