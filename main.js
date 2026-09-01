@@ -1181,6 +1181,16 @@ async function startApp() {
     }
   }
 
+  // Dictation's legacy mode gets the same silent convergence: a stored Hold
+  // whose hotkey has no key-up source (macOS plain single key, stored before
+  // the capability gate existed) behaves as Tap anyway and would wedge every
+  // later hotkey update. Darwin-only on purpose — its hotkey restore is
+  // synchronous by this point, while DE-native Linux registration is still
+  // pending and the current hotkey would be judged before it loads.
+  if (process.platform === "darwin" && (await windowManager.demoteUnsupportedDictationHold())) {
+    environmentManager.saveActivationMode("tap");
+  }
+
   // Set up meeting mode hotkey
   const meetingHotkeyCallback = () => {
     if (hotkeyManager.isInListeningMode()) return;
@@ -1878,8 +1888,13 @@ async function startApp() {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"
         );
-        if (isLiveWindow(windowManager.mainWindow)) {
-          windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
+        // The only subscriber is SettingsPage, which mounts in the control
+        // panel window — sending to the dictation overlay alone dropped the
+        // event and left every slot's Hold mode un-reverted.
+        for (const browserWindow of BrowserWindow.getAllWindows()) {
+          if (!browserWindow.isDestroyed()) {
+            browserWindow.webContents.send("linux-ptt-permission-denied");
+          }
         }
       });
     }
