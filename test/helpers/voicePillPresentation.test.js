@@ -716,6 +716,85 @@ test("final Agent actions keep the idle pill hidden until the panel finishes clo
   );
 });
 
+test("the composed pill suppression keeps a live recording visible through the close", async () => {
+  const { resolvePillVisualSuppression } = await load();
+
+  const base = {
+    dictationErrorSuppressed: false,
+    assistantActionsSuppressed: false,
+    assistantClosing: false,
+    panelReturnResizeActive: false,
+    hasLiveActivity: false,
+  };
+
+  // The regression this pins: folding the pill into the panel exit must not
+  // override the close-intent ownership handoff. beginClose hides the companion
+  // on the same tick, so a suppressed pill here leaves a running recording with
+  // no visible owner for the whole ~580ms close.
+  assert.equal(
+    resolvePillVisualSuppression({ ...base, assistantClosing: true, hasLiveActivity: true }),
+    false
+  );
+  // An idle close still folds into one beat.
+  assert.equal(resolvePillVisualSuppression({ ...base, assistantClosing: true }), true);
+
+  // The panel-return mask covers a real native shrink and is bounded by it, so
+  // it stays unconditional — same contract as the dictation-error handoff.
+  assert.equal(
+    resolvePillVisualSuppression({ ...base, panelReturnResizeActive: true, hasLiveActivity: true }),
+    true
+  );
+
+  // Error and footer owners are absolute regardless of activity.
+  assert.equal(
+    resolvePillVisualSuppression({
+      ...base,
+      dictationErrorSuppressed: true,
+      hasLiveActivity: true,
+    }),
+    true
+  );
+  assert.equal(
+    resolvePillVisualSuppression({
+      ...base,
+      assistantActionsSuppressed: true,
+      hasLiveActivity: true,
+    }),
+    true
+  );
+
+  // Nothing claiming the pill leaves it visible.
+  assert.equal(resolvePillVisualSuppression(base), false);
+});
+
+test("the composed suppression honours the assistant-actions carve-out end to end", async () => {
+  const { resolvePillVisualSuppression, shouldSuppressPillForAssistantActions } = await load();
+
+  // Both halves of the close: `assistantOpen` is still true through the content
+  // fade, then flips false while `closing` runs out the contraction. A live
+  // recording has to survive both, which is exactly what regressed when the
+  // composition ORed `closing` in unconditionally.
+  for (const assistantOpen of [true, false]) {
+    const assistantActionsSuppressed = shouldSuppressPillForAssistantActions({
+      assistantOpen,
+      footerPillVisible: false,
+      assistantClosing: true,
+      hasLiveActivity: true,
+    });
+    assert.equal(
+      resolvePillVisualSuppression({
+        dictationErrorSuppressed: false,
+        assistantActionsSuppressed,
+        assistantClosing: true,
+        panelReturnResizeActive: false,
+        hasLiveActivity: true,
+      }),
+      false,
+      `a live recording must stay visible with assistantOpen=${assistantOpen}`
+    );
+  }
+});
+
 test("activity handed back at close intent stays visible through the content fade", async () => {
   const { shouldSuppressPillForAssistantActions } = await load();
 

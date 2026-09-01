@@ -32,6 +32,7 @@ import {
   resolveListeningEntrancePresentation,
   resolveVoiceActivityPresentation,
   resolveVoiceHorizontalDirection,
+  resolvePillVisualSuppression,
   resolveVoicePanelCorePresentation,
   resolveVoicePillDock,
   resolveVoicePillInteraction,
@@ -555,22 +556,26 @@ export default function App() {
   // Keep one pill DOM node alive while final Agent actions own the footer. On
   // close it can fade and travel from the panel dock instead of mounting at
   // the resting dock halfway through the surface contraction.
+  const pillHasLiveActivity = voicePillIsRecording || voicePillIsProcessing;
   const assistantActionsSuppressPill = shouldSuppressPillForAssistantActions({
     assistantOpen: assistant.open,
     footerPillVisible: assistantFooter.pillVisible,
     assistantClosing: assistant.closing,
-    hasLiveActivity: voicePillIsRecording || voicePillIsProcessing,
+    hasLiveActivity: pillHasLiveActivity,
   });
   // assistant.closing folds the pill into the panel's own exit: it fades with
   // the closing content, stays hidden through the surface contraction, the
   // travel, and the masked window shrink (panelReturnResizeActive picks up at
   // unmount), and materializes once at its settled dock — one beat, not a
-  // condense-then-blink.
-  const pillVisuallySuppressed =
-    dictationErrorSuppressesPill ||
-    assistantActionsSuppressPill ||
-    assistant.closing ||
-    panelReturnResizeActive;
+  // condense-then-blink. Live activity opts out of that fold: the pill is the
+  // only owner left once beginClose hides the companion.
+  const pillVisuallySuppressed = resolvePillVisualSuppression({
+    dictationErrorSuppressed: dictationErrorSuppressesPill,
+    assistantActionsSuppressed: assistantActionsSuppressPill,
+    assistantClosing: assistant.closing,
+    panelReturnResizeActive,
+    hasLiveActivity: pillHasLiveActivity,
+  });
 
   return (
     <div className="dictation-window">

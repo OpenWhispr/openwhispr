@@ -375,6 +375,28 @@ export function shouldSuppressPillForAssistantActions({
   return !(assistantClosing && hasLiveActivity);
 }
 
+/**
+ * Compose the persistent pill root's visibility from every owner that can hide
+ * it. `assistantClosing` folds the pill into the panel's exit — but never while
+ * the pill owns live activity: ownership returns to it at close INTENT (see
+ * voicePillOwnsActivity in App.jsx) and beginClose hides the companion on that
+ * same tick, so suppressing here would leave a running recording with no
+ * visible owner for the whole close. The panel-return mask stays unconditional
+ * like the dictation-error handoff — it is bounded by the native shrink it
+ * covers, not by the panel's full exit choreography.
+ */
+export function resolvePillVisualSuppression({
+  dictationErrorSuppressed,
+  assistantActionsSuppressed,
+  assistantClosing,
+  panelReturnResizeActive,
+  hasLiveActivity,
+}) {
+  if (dictationErrorSuppressed || assistantActionsSuppressed) return true;
+  if (panelReturnResizeActive) return true;
+  return Boolean(assistantClosing) && !hasLiveActivity;
+}
+
 export function shouldActivateVoicePill({
   hasDragged,
   liveTranscriptMounted,
