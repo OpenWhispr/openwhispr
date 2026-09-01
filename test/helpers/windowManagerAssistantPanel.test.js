@@ -312,7 +312,15 @@ test("live transcript events are mirrored to the companion only for plain dictat
 test("opening the assistant panel surfaces a hidden pill window before focusing it", () => {
   const { manager, calls } = makeManager({ visible: false });
   manager.setAssistantPanelOpen(true);
-  assert.deepEqual(calls, ["showInactive", "focusable:true", "focus"]);
+  // macOS never requests app activation for the overlay: focus() answers a
+  // user-granted activation with a whole-desktop Space slide when another
+  // OpenWhispr window lives on a different Space. The non-activating panel
+  // becomes key on click instead.
+  const expected =
+    process.platform === "darwin"
+      ? ["showInactive", "focusable:true"]
+      : ["showInactive", "focusable:true", "focus"];
+  assert.deepEqual(calls, expected);
 });
 
 test("showDictationPanel still surfaces a hidden window while the panel is open", () => {

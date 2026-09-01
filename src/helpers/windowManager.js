@@ -198,12 +198,24 @@ class WindowManager {
         // (PTT tap, auto-hide, tray); focus() is a no-op on a hidden window.
         if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
         this.mainWindow.setFocusable(true);
-        this.mainWindow.focus();
+        // macOS: never request app activation for the overlay. focus() calls
+        // NSApp activate, and when another OpenWhispr window (control panel)
+        // lives on a different Space, macOS answers a granted activation by
+        // sliding the whole desktop to it — the "massive flash" on panel
+        // open/close. The window is a non-activating panel, so clicking its
+        // input still makes it key (typing and Escape work from then on)
+        // without activating the app or stealing the user's keyboard.
+        if (process.platform !== "darwin") {
+          this.mainWindow.focus();
+        }
       } else {
         // On Windows/Linux the pill is a normal/toolbar window, so focus()
         // activated OpenWhispr — blur before dropping focusability to hand
-        // the foreground back to the app the user was in.
-        this.mainWindow.blur();
+        // the foreground back to the app the user was in. On macOS nothing
+        // was activated, and blur() would only churn key-window state.
+        if (process.platform !== "darwin") {
+          this.mainWindow.blur();
+        }
         this.mainWindow.setFocusable(false);
       }
       this.enforceMainWindowOnTop();
