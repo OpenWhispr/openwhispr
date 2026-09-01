@@ -125,3 +125,34 @@ test("paste-text preserves a clipboard-only fallback as not pasted", async () =>
 
   assert.deepEqual(result, { success: true, pasted: false });
 });
+
+test("paste-text does not schedule AutoLearn monitoring after a clipboard-only fallback", async (t) => {
+  const originalSetTimeout = global.setTimeout;
+  t.after(() => {
+    global.setTimeout = originalSetTimeout;
+    target._autoLearnEnabled = false;
+    target.textEditMonitor = null;
+  });
+  global.setTimeout = (callback) => {
+    callback();
+    return 1;
+  };
+  const monitored = [];
+  target._autoLearnEnabled = true;
+  target.textEditMonitor = {
+    lastTargetPid: 42,
+    activateTargetPid: async () => true,
+    startMonitoring: (...args) => monitored.push(args),
+  };
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  target.clipboardManager = {
+    pasteText: async () => ({ pasted: false }),
+  };
+
+  const result = await handlers.get("paste-text")({ sender: { id: 1 } }, "manual transcript", {
+    allowClipboardFallback: true,
+  });
+
+  assert.deepEqual(result, { success: true, pasted: false });
+  assert.deepEqual(monitored, []);
+});

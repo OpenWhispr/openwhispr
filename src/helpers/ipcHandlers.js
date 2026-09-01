@@ -2795,12 +2795,14 @@ class IPCHandlers {
         webContents: event.sender,
         targetWindow,
       });
+      const pasted = pasteResult?.pasted !== false;
       debugLogger.debug("[AutoLearn] Paste completed", {
         autoLearnEnabled: this._autoLearnEnabled,
         hasMonitor: !!this.textEditMonitor,
         targetPid,
+        pasted,
       });
-      if (this.textEditMonitor && this._autoLearnEnabled) {
+      if (pasted && this.textEditMonitor && this._autoLearnEnabled) {
         setTimeout(() => {
           try {
             debugLogger.debug("[AutoLearn] Starting monitoring", {
@@ -2818,7 +2820,7 @@ class IPCHandlers {
       // callers need to know whether text was pasted, but not the delayed
       // clipboard restoration promise. Successful platform paths predate the
       // explicit `pasted` outcome; only the clipboard-only fallback sets false.
-      return { success: true, pasted: pasteResult?.pasted !== false };
+      return { success: true, pasted };
     });
 
     ipcMain.handle("check-accessibility-permission", async (_event, silent = false) => {
@@ -4360,12 +4362,7 @@ class IPCHandlers {
       } = require("./enterpriseProviderErrors");
       let runtime;
       try {
-        runtime = await resolveEnterpriseRuntime(
-          event,
-          provider,
-          config?.model || "test",
-          config
-        );
+        runtime = await resolveEnterpriseRuntime(event, provider, config?.model || "test", config);
         validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
 
         const { generateText } = require("ai");
@@ -4433,7 +4430,8 @@ class IPCHandlers {
           const controller = isBedrockRequest
             ? this._enterpriseReasoningRequests.begin(senderId, requestId)
             : null;
-          const cancelSenderRequests = () => this._enterpriseReasoningRequests.cancelSender(senderId);
+          const cancelSenderRequests = () =>
+            this._enterpriseReasoningRequests.cancelSender(senderId);
           try {
             if (controller) {
               sender.once("destroyed", cancelSenderRequests);
