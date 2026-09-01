@@ -571,14 +571,13 @@ export default function App() {
     assistantActionsSuppressPill ||
     assistant.closing ||
     panelReturnResizeActive;
-  const pillInteractionSuppressed = pillVisuallySuppressed || assistant.closing;
 
   return (
     <div className="dictation-window">
       {/* The panel footer can hide this pill, but never unmounts it. */}
       <div
         className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50 transition-opacity duration-150 ease-out ${
-          pillInteractionSuppressed ? "pointer-events-none" : ""
+          pillVisuallySuppressed ? "pointer-events-none" : ""
         } ${pillVisuallySuppressed ? "opacity-0" : "opacity-100"}`}
         style={{
           "--voice-pill-travel-duration": `${voicePillTravelDuration}ms`,
