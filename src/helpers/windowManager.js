@@ -186,7 +186,8 @@ class WindowManager {
   }
 
   // The pill window is created focusable:false so it never steals focus; the
-  // assistant panel needs keyboard focus so Escape can dismiss it reliably.
+  // assistant panel makes it focusable so it can take keyboard input at all.
+  // How it then becomes key is platform-split — see the branches below.
   setAssistantPanelOpen(open) {
     this._assistantPanelOpen = Boolean(open);
     if (!this._assistantPanelOpen) {
