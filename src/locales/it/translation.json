@@ -3195,7 +3195,7 @@
     "activityLabel": "Mappa di calore dell'attività di dettatura su 365 giorni",
     "dayTooltip_one": "{{date}}: {{count}} parola",
     "dayTooltip_other": "{{date}}: {{count}} parole",
-    "dataRetentionDisabled": "La conservazione dei dati è disattivata, quindi le nuove dettature non vengono conteggiate su questo dispositivo. Le dettature trascritte da OpenWhispr Cloud continuano a contare nei totali del tuo account.",
+    "dataRetentionDisabled": "La conservazione dei dati è disattivata, quindi le nuove dettature non vengono conteggiate nelle Statistiche: né su questo dispositivo né nel tuo account. I conteggi già sincronizzati restano nel tuo account.",
     "onDevice": "Su questo dispositivo",
     "synced": "Sincronizzato tra i dispositivi",
     "syncFallback": "Dati del dispositivo — sincronizzazione non disponibile",

@@ -3243,7 +3243,7 @@
     "activityLabel": "Mapa de calor de actividad de dictado de 365 días",
     "dayTooltip_one": "{{date}}: {{count}} palabra",
     "dayTooltip_other": "{{date}}: {{count}} palabras",
-    "dataRetentionDisabled": "La retención de datos está desactivada, así que los nuevos dictados no se cuentan en este dispositivo. Los dictados transcritos por OpenWhispr Cloud siguen contando en los totales de tu cuenta.",
+    "dataRetentionDisabled": "La retención de datos está desactivada, así que los nuevos dictados no se cuentan en las Estadísticas: ni en este dispositivo ni en tu cuenta. Los contadores ya sincronizados permanecen en tu cuenta.",
     "onDevice": "En este dispositivo",
     "synced": "Sincronizado entre dispositivos",
     "syncFallback": "Mostrando datos del dispositivo: sincronización no disponible",

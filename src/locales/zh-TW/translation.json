@@ -3195,7 +3195,7 @@
     "activityLabel": "365 天聽寫活躍度熱圖",
     "dayTooltip_one": "{{date}}：{{count}} 字",
     "dayTooltip_other": "{{date}}：{{count}} 字",
-    "dataRetentionDisabled": "資料保留已關閉，因此新的聽寫不會在本裝置上計數。由 OpenWhispr Cloud 轉錄的聽寫仍會計入你的帳戶總數。",
+    "dataRetentionDisabled": "資料保留已關閉，因此新的聽寫不會計入統計——本裝置和你的帳戶都不會計數。已同步的計數會保留在你的帳戶中。",
     "onDevice": "僅在本裝置",
     "synced": "已跨裝置同步",
     "syncFallback": "正在顯示本裝置資料 — 同步無法使用",

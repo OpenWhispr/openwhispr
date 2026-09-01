@@ -2698,7 +2698,7 @@
     "activityLabel": "Heatmap der Sprechaktivität über 365 Tage",
     "dayTooltip_one": "{{date}}: {{count}} Wort",
     "dayTooltip_other": "{{date}}: {{count}} Wörter",
-    "dataRetentionDisabled": "Die Datenaufbewahrung ist deaktiviert, daher werden neue Diktate auf diesem Gerät nicht gezählt. Von OpenWhispr Cloud transkribierte Diktate zählen weiterhin zu den Summen Ihres Kontos.",
+    "dataRetentionDisabled": "Die Datenaufbewahrung ist deaktiviert, daher werden neue Diktate in den Statistiken nicht gezählt – weder auf diesem Gerät noch in Ihrem Konto. Bereits synchronisierte Zähler bleiben in Ihrem Konto.",
     "onDevice": "Auf diesem Gerät",
     "synced": "Geräteübergreifend synchronisiert",
     "syncFallback": "Gerätedaten werden angezeigt – Synchronisierung nicht verfügbar",

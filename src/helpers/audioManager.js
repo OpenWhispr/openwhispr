@@ -4955,11 +4955,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
                   clientTotalMs,
-                  // Always sent, like the batch cloud path: the cloud records a
-                  // counter for every dictation it transcribes, and this id is
-                  // what makes that row and the local one the same event. Held
-                  // back until opt-in, a later sync would push the local copy
-                  // under a second id and double every total.
+                  // Always sent, like the batch cloud path: this id is what
+                  // makes the row the server writes and the local one the same
+                  // event. Held back until opt-in, a later sync would push the
+                  // local copy under a second id and double every total.
+                  // Cosmetic caveat: the server labels its row mode
+                  // "openwhispr_cloud" whatever actually transcribed the audio,
+                  // and BYOK streaming reaches here too (tinfoil-realtime,
+                  // corti, openai-realtime — see resolveStreamingProviderName).
+                  // That row only exists when localDate rides along, which is
+                  // exactly when this device also pushes its own copy under the
+                  // same id, and last-write-wins replaces the label with the
+                  // real mode. Neither summary renders mode either way.
                   clientTranscriptionId,
                   ...(analyticsSyncEnabled()
                     ? {

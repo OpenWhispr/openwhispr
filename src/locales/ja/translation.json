@@ -3195,7 +3195,7 @@
     "activityLabel": "365日間の発話アクティビティのヒートマップ",
     "dayTooltip_one": "{{date}}: {{count}} 語",
     "dayTooltip_other": "{{date}}: {{count}} 語",
-    "dataRetentionDisabled": "データ保持が無効なため、新しいディクテーションはこのデバイスでは集計されません。OpenWhispr Cloud で文字起こししたディクテーションは、引き続きアカウントの合計に加算されます。",
+    "dataRetentionDisabled": "データ保持が無効なため、新しいディクテーションは統計に集計されません。このデバイスでもアカウントでも加算されません。すでに同期済みのカウントはアカウントに残ります。",
     "onDevice": "このデバイス上",
     "synced": "デバイス間で同期済み",
     "syncFallback": "デバイスのデータを表示中 — 同期は利用できません",

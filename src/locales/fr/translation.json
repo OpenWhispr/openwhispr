@@ -2698,7 +2698,7 @@
     "activityLabel": "Carte de chaleur de l'activité de dictée sur 365 jours",
     "dayTooltip_one": "{{date}} : {{count}} mot",
     "dayTooltip_other": "{{date}} : {{count}} mots",
-    "dataRetentionDisabled": "La conservation des données est désactivée : les nouvelles dictées ne sont pas comptabilisées sur cet appareil. Les dictées transcrites par OpenWhispr Cloud comptent toujours dans les totaux de votre compte.",
+    "dataRetentionDisabled": "La conservation des données est désactivée : les nouvelles dictées ne sont comptabilisées dans les Statistiques ni sur cet appareil ni dans votre compte. Les compteurs déjà synchronisés restent dans votre compte.",
     "onDevice": "Sur cet appareil",
     "synced": "Synchronisé entre les appareils",
     "syncFallback": "Données de l'appareil affichées — synchronisation indisponible",

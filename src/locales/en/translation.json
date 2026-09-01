@@ -2723,7 +2723,7 @@
     "activityLabel": "365-day speaking activity heatmap",
     "dayTooltip_one": "{{date}}: {{count}} word",
     "dayTooltip_other": "{{date}}: {{count}} words",
-    "dataRetentionDisabled": "Data retention is off, so new dictations are not counted on this device. Dictations transcribed by OpenWhispr Cloud still count toward your account totals.",
+    "dataRetentionDisabled": "Data retention is off, so new dictations aren't counted in Insights — not on this device and not in your account. Counters already synced stay in your account.",
     "onDevice": "On this device",
     "synced": "Synced across devices",
     "syncFallback": "Showing device data — sync unavailable",
