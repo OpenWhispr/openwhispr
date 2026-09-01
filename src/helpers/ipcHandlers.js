@@ -3976,9 +3976,7 @@ class IPCHandlers {
           ? isUsingNativeShortcut
             ? hotkeyManager.supportsPushToTalk(hotkey, slotName)
             : this.linuxKeyManager?.isAvailable?.() === true
-          : isUsingNativeShortcut
-            ? hotkeyManager.supportsPushToTalk(hotkey, slotName)
-            : true;
+          : hotkeyManager.supportsPushToTalk(hotkey, slotName);
 
       return {
         isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
