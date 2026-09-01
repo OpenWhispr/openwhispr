@@ -560,7 +560,13 @@ class WindowManager {
       }
 
       const activationMode = this.getSlotActivationMode(slotName);
-      const currentHotkey = triggeredHotkey || this.hotkeyManager.getCurrentHotkey?.();
+      // Dictation resolves the hotkey the manager actually registered (which
+      // can be a fallback); the other slots fall back to their own primary.
+      const currentHotkey =
+        triggeredHotkey ||
+        (slotName === "dictation"
+          ? this.hotkeyManager.getCurrentHotkey?.()
+          : this.hotkeyManager.getSlotHotkey?.(slotName));
 
       if (process.platform === "linux" && activationMode === "push") {
         if (phase === "down") {
@@ -801,6 +807,26 @@ class WindowManager {
     } else {
       this.handlePushGestureQuickRelease(inputKind);
     }
+  }
+
+  // The session's key stopped meaning "talk" mid-press (Fn became a navigation
+  // modifier): cancel instead of stopping — the held audio is noise, not intent.
+  interruptNativePushSession(key) {
+    if (!this.nativePushState?.active) return;
+    if (key && this.nativePushState.key && key !== this.nativePushState.key) return;
+
+    if (this.nativePushState.safetyTimeoutId) {
+      clearTimeout(this.nativePushState.safetyTimeoutId);
+    }
+    const wasRecording = this.nativePushState.isRecording;
+    this.nativePushState = null;
+
+    if (wasRecording) {
+      this.sendCancelDictation();
+    } else {
+      this.sendCancelDictationPreparation();
+    }
+    this.hideDictationPanel();
   }
 
   resetNativePushState() {
