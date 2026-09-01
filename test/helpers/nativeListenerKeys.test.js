@@ -64,6 +64,24 @@ test("push mode watches every dictation hotkey, including regular keys", () => {
   assert.deepEqual(mgr.getNativeListenerKeys("push").sort(), ["Control+Shift+R", "F8"]);
 });
 
+test("a voiceAgent slot set to Hold watches its regular-key hotkeys", () => {
+  const mgr = makeManager({ dictation: "F8", voiceAgent: "F9" });
+  assert.deepEqual(mgr.getNativeListenerKeys("tap", { voiceAgent: "push" }), ["F9"]);
+});
+
+test("a translation slot set to Hold watches every translation hotkey", () => {
+  const mgr = makeManager({ translation: ["F7", "Control+Shift+T"] });
+  assert.deepEqual(mgr.getNativeListenerKeys("tap", { translation: "push" }).sort(), [
+    "Control+Shift+T",
+    "F7",
+  ]);
+});
+
+test("meeting and unknown slots are never push-enabled by slot modes", () => {
+  const mgr = makeManager({ meeting: "F6", cancel: "F5" });
+  assert.deepEqual(mgr.getNativeListenerKeys("tap", { meeting: "push", cancel: "push" }), []);
+});
+
 test("membership and lookup helpers work across multi-hotkey slots", () => {
   const mgr = makeManager({
     dictation: ["GLOBE", "Control+Shift+R"],
