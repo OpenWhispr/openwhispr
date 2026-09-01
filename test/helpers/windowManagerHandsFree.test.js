@@ -220,8 +220,7 @@ test("an unsupported Hold request is rejected and reported", async () => {
   const failures = [];
   manager.hotkeyManager.supportsPushToTalk = () => false;
   manager.hotkeyManager.getPushToTalkUnavailableReason = () => "no hold here";
-  manager.hotkeyManager.notifyHotkeyFailure = (hotkey, result) =>
-    failures.push({ hotkey, result });
+  manager.hotkeyManager.notifyHotkeyFailure = (hotkey, result) => failures.push({ hotkey, result });
 
   assert.equal(await manager.setSlotActivationModeCache("voiceAgent", "push"), false);
   assert.equal(manager.getSlotActivationMode("voiceAgent"), "tap");

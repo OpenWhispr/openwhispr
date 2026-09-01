@@ -1068,7 +1068,9 @@ declare global {
       onToggleDictation: (callback: () => void) => () => void;
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
-      onStartDictation?: (callback: () => void) => () => void;
+      onStartDictation?: (
+        callback: (options?: { inputKind?: "dictation" | "assistant" | "translation" }) => void
+      ) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (
         callback: (options?: { inputKind?: "dictation" | "assistant" | "translation" }) => void
@@ -1873,7 +1875,10 @@ declare global {
       // Hotkey management
       updateHotkey: (key: string) => Promise<{ success: boolean; message: string }>;
       setHotkeyListeningMode?: (enabled: boolean) => Promise<{ success: boolean }>;
-      getHotkeyModeInfo?: (hotkey?: string) => Promise<{
+      getHotkeyModeInfo?: (
+        hotkey?: string,
+        slot?: "dictation" | "voiceAgent" | "translation"
+      ) => Promise<{
         isUsingGnome: boolean;
         isUsingHyprland: boolean;
         isUsingKDE: boolean;
@@ -2086,6 +2091,7 @@ declare global {
 
       // Activation mode persistence (file-based for reliable startup)
       getActivationMode?: () => Promise<"tap" | "push">;
+      getSlotActivationModes?: () => Promise<Record<string, "tap" | "push">>;
       saveActivationMode?: (mode: "tap" | "push") => Promise<void>;
 
       // Debug logging
@@ -2144,6 +2150,10 @@ declare global {
 
       // Windows Push-to-Talk notifications
       notifyActivationModeChanged?: (mode: "tap" | "push") => void;
+      notifySlotActivationModeChanged?: (
+        slot: "voiceAgent" | "translation",
+        mode: "tap" | "push"
+      ) => void;
       notifyHotkeyChanged?: (hotkey: string) => void;
       registerMeetingHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       notifyFloatingIconAutoHideChanged?: (enabled: boolean) => void;
