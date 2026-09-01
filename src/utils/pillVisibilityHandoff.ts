@@ -1,6 +1,6 @@
 import { waitForVisualFrames } from "./visualFrame";
 
-interface DictationErrorPillHandoffOptions {
+interface PillVisibilityHandoffOptions {
   onSuppressedChange: (suppressed: boolean) => void;
   shouldAutoHide?: () => boolean;
   hideWindow?: () => Promise<unknown> | undefined;
@@ -8,17 +8,18 @@ interface DictationErrorPillHandoffOptions {
 }
 
 /**
- * Own the error-to-pill visibility handoff independently from React renders.
- * A new error invalidates every pending release, while a successful release
- * waits for native geometry and compositor frames before exposing the same
- * persistent pill root again.
+ * Hide the persistent pill root across a risky native resize, independently of
+ * React renders. Two callers own one each: the dictation-error return and the
+ * panel return (useMainWindowSizeOwner). A fresh suppress invalidates every
+ * pending release, while a successful release waits for native geometry and
+ * compositor frames before exposing the pill again.
  */
-export function createDictationErrorPillHandoff({
+export function createPillVisibilityHandoff({
   onSuppressedChange,
   shouldAutoHide = () => false,
   hideWindow = () => undefined,
   waitForFrames = waitForVisualFrames,
-}: DictationErrorPillHandoffOptions) {
+}: PillVisibilityHandoffOptions) {
   let generation = 0;
   let suppressed = false;
   let disposed = false;

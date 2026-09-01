@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSettingsStore } from "../stores/settingsStore";
-import { createDictationErrorPillHandoff } from "../utils/dictationErrorPillHandoff";
+import { createPillVisibilityHandoff } from "../utils/pillVisibilityHandoff";
 import { SIZE_RANK, resolveMainWindowSizeKey } from "../utils/windowSizeLadder";
 
 // The pill container fades with App.jsx's `transition-opacity duration-150`;
@@ -41,14 +41,14 @@ export function useMainWindowSizeOwner({
   const panelReturnSuppressedRef = useRef(false);
   const panelReturnHandoffRef = useRef(null);
   useEffect(() => {
-    const handoff = createDictationErrorPillHandoff({
+    const handoff = createPillVisibilityHandoff({
       onSuppressedChange: setHandoffActive,
       shouldAutoHide: () => useSettingsStore.getState().floatingIconAutoHide,
       hideWindow: () => window.electronAPI?.hideWindow?.(),
     });
     handoffRef.current = handoff;
     if (actionCountRef.current > 0) handoff.suppress();
-    const panelReturnHandoff = createDictationErrorPillHandoff({
+    const panelReturnHandoff = createPillVisibilityHandoff({
       onSuppressedChange: (suppressed) => {
         panelReturnSuppressedRef.current = suppressed;
         setPanelReturnResizeActive(suppressed);
