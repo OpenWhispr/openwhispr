@@ -2047,7 +2047,7 @@
       "description": "Controle quais dados saem do seu dispositivo. Tudo está desativado por padrão.",
       "title": "Privacidade",
       "insightsSync": "Sincronizar Estatísticas pessoais",
-      "insightsSyncDescription": "Sincronize contagens de palavras, datas, durações e tipos de modelo entre seus dispositivos. O conteúdo das transcrições nunca é incluído.",
+      "insightsSyncDescription": "Sincronize contagens de palavras, datas, durações e tipos de modelo entre seus dispositivos. O conteúdo das transcrições nunca é incluído. Limpar o histórico local não remove as contagens já sincronizadas: elas permanecem na sua conta até você excluí-la.",
       "insightsSyncRequiresAccount": "Entre na sua conta para sincronizar dados de Estatísticas sem conteúdo entre seus dispositivos.",
       "insightsSyncRequiresHistory": "Ative a retenção de dados para registrar as Estatísticas antes de sincronizá-las entre seus dispositivos.",
       "usageAnalytics": "Análise de uso",

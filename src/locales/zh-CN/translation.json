@@ -2068,7 +2068,7 @@
       "description": "控制哪些数据会离开你的设备。默认全部关闭。",
       "title": "隐私",
       "insightsSync": "同步个人统计",
-      "insightsSyncDescription": "在你的设备之间同步字数、日期、时长和模型类型。转录内容永远不会包含在内。",
+      "insightsSyncDescription": "在你的设备之间同步字数、日期、时长和模型类型。转录内容永远不会包含在内。 清除本地历史不会删除已同步的计数，它们会保留在你的账户中，直到你删除账户。",
       "insightsSyncRequiresAccount": "登录后即可在设备之间同步不含内容的统计数据。",
       "insightsSyncRequiresHistory": "开启数据保留后才会记录统计，之后才能跨设备同步。",
       "usageAnalytics": "使用分析",

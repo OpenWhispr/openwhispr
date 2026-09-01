@@ -97,7 +97,10 @@ export default function InsightsView() {
   const dataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );
-  const { enableInsightsSync, optInDialog } = useInsightsSyncOptIn();
+  const { enableInsightsSync, optInDialog, syncAllowedByPolicy } = useInsightsSyncOptIn();
+  // A managed workspace that forbids cloud backup forbids these counters with
+  // it, so the view stays device-scoped even with the preference left on.
+  const syncActive = isSignedIn && insightsSyncEnabled && syncAllowedByPolicy;
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
@@ -115,7 +118,7 @@ export default function InsightsView() {
     try {
       local = await window.electronAPI.getAnalyticsSummary();
       if (requestId !== requestIdRef.current) return;
-      if (isLoaded && isSignedIn && insightsSyncEnabled) {
+      if (isLoaded && syncActive) {
         await syncPendingAnalytics();
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
         const account = await getAccountAnalyticsSummary(timeZone);
@@ -131,7 +134,7 @@ export default function InsightsView() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [insightsSyncEnabled, isLoaded, isSignedIn]);
+  }, [isLoaded, syncActive]);
 
   useEffect(() => {
     void load();
@@ -161,7 +164,7 @@ export default function InsightsView() {
         </div>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
           <Cloud size={13} />
-          {isSignedIn && insightsSyncEnabled
+          {syncActive
             ? syncError
               ? t("insights.syncFallback")
               : t("insights.synced")
@@ -178,7 +181,7 @@ export default function InsightsView() {
         </div>
       )}
 
-      {isSignedIn && !insightsSyncEnabled && dataRetentionEnabled && (
+      {isSignedIn && !insightsSyncEnabled && syncAllowedByPolicy && dataRetentionEnabled && (
         <div className="mb-5 flex items-center justify-between gap-4 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3">
           <p className="text-xs text-muted-foreground">{t("insights.syncPrompt")}</p>
           <button

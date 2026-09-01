@@ -2068,7 +2068,7 @@
       "description": "控制哪些資料會離開你的裝置。預設全部關閉。",
       "title": "隱私權",
       "insightsSync": "同步個人統計",
-      "insightsSyncDescription": "在你的裝置之間同步字數、日期、時長與模型類型。轉錄內容永遠不會包含在內。",
+      "insightsSyncDescription": "在你的裝置之間同步字數、日期、時長與模型類型。轉錄內容永遠不會包含在內。 清除本機記錄不會刪除已同步的計數，它們會保留在你的帳戶中，直到你刪除帳戶。",
       "insightsSyncRequiresAccount": "登入後即可在裝置之間同步不含內容的統計資料。",
       "insightsSyncRequiresHistory": "開啟資料保留後才會記錄統計，之後才能跨裝置同步。",
       "usageAnalytics": "使用分析",

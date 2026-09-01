@@ -2357,7 +2357,7 @@
       "description": "Steuern Sie, welche Daten Ihr Gerät verlassen. Standardmäßig ist alles deaktiviert.",
       "title": "Datenschutz",
       "insightsSync": "Persönliche Statistiken synchronisieren",
-      "insightsSyncDescription": "Synchronisieren Sie Wortanzahl, Datum, Dauer und Modelltyp geräteübergreifend. Transkriptionsinhalte werden nie übertragen.",
+      "insightsSyncDescription": "Synchronisieren Sie Wortanzahl, Datum, Dauer und Modelltyp geräteübergreifend. Transkriptionsinhalte werden nie übertragen. Das Löschen des lokalen Verlaufs entfernt bereits synchronisierte Zähler nicht – sie bleiben in Ihrem Konto, bis Sie es löschen.",
       "insightsSyncRequiresAccount": "Melden Sie sich an, um inhaltsfreie Statistikdaten geräteübergreifend zu synchronisieren.",
       "insightsSyncRequiresHistory": "Aktivieren Sie die Datenaufbewahrung, um Statistiken zu erfassen, bevor Sie sie geräteübergreifend synchronisieren.",
       "usageAnalytics": "Nutzungsanalysen",

@@ -2359,7 +2359,7 @@
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
       "insightsSync": "Sync personal Insights",
-      "insightsSyncDescription": "Sync word counts, dates, durations, and model types across your devices. Transcript content is never included.",
+      "insightsSyncDescription": "Sync word counts, dates, durations, and model types across your devices. Transcript content is never included. Clearing local history won't remove counters already synced — they stay in your account until you delete it.",
       "insightsSyncRequiresAccount": "Sign in to sync content-free Insights data across your devices.",
       "insightsSyncRequiresHistory": "Turn on data retention to record Insights before syncing them across your devices.",
       "audioRetention": "Audio Retention",

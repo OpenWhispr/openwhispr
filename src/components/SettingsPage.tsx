@@ -1700,7 +1700,12 @@ export default function SettingsPage({
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
   const { isSignedIn, isLoaded, user, refetch } = useAuth();
-  const { enableInsightsSync, optInDialog: insightsOptInDialog } = useInsightsSyncOptIn();
+  const {
+    canToggleSync: canToggleInsightsSync,
+    enableInsightsSync,
+    optInDialog: insightsOptInDialog,
+    syncAllowedByPolicy: insightsSyncAllowedByPolicy,
+  } = useInsightsSyncOptIn();
   // Signed out there is nothing to load and the plan grid is purely
   // promotional; signed in, no card may claim a plan until usage confirms one.
   const planStateKnown = !isSignedIn || usage?.status === "success";
@@ -4080,9 +4085,11 @@ EOF`,
                     description={
                       !isSignedIn
                         ? t("settingsPage.privacy.insightsSyncRequiresAccount")
-                        : effectiveDataRetentionEnabled
-                          ? t("settingsPage.privacy.insightsSyncDescription")
-                          : t("settingsPage.privacy.insightsSyncRequiresHistory")
+                        : !insightsSyncAllowedByPolicy
+                          ? t("common.managedByOrg")
+                          : effectiveDataRetentionEnabled
+                            ? t("settingsPage.privacy.insightsSyncDescription")
+                            : t("settingsPage.privacy.insightsSyncRequiresHistory")
                     }
                   >
                     {/* With history off no dictation is ever counted, so turning
@@ -4091,7 +4098,9 @@ EOF`,
                     <Toggle
                       checked={insightsSyncEnabled}
                       disabled={
-                        !isSignedIn || (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
+                        !isSignedIn ||
+                        !canToggleInsightsSync ||
+                        (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
                       }
                       onChange={(enabled) =>
                         enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)

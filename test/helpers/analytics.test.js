@@ -22,13 +22,6 @@ test("analytics resolves local, cloud, and BYOK modes", () => {
     "openwhispr_cloud"
   );
   assert.equal(resolveAnalyticsMode({ transcriptionMode: "providers" }, "openai"), "byok");
-  assert.equal(
-    resolveAnalyticsMode(
-      { transcriptionMode: "enterprise", cloudTranscriptionMode: "openwhispr" },
-      "azure"
-    ),
-    "enterprise"
-  );
 });
 
 test("analytics credits a fallback to the provider that actually ran", () => {

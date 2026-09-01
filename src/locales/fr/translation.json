@@ -2357,7 +2357,7 @@
       "description": "Contrôlez quelles données quittent votre appareil. Tout est désactivé par défaut.",
       "title": "Confidentialité",
       "insightsSync": "Synchroniser les Statistiques personnelles",
-      "insightsSyncDescription": "Synchronisez le nombre de mots, les dates, les durées et les types de modèle entre vos appareils. Le contenu des transcriptions n'est jamais inclus.",
+      "insightsSyncDescription": "Synchronisez le nombre de mots, les dates, les durées et les types de modèle entre vos appareils. Le contenu des transcriptions n'est jamais inclus. Effacer l'historique local ne supprime pas les compteurs déjà synchronisés : ils restent dans votre compte jusqu'à sa suppression.",
       "insightsSyncRequiresAccount": "Connectez-vous pour synchroniser des données de Statistiques sans contenu entre vos appareils.",
       "insightsSyncRequiresHistory": "Activez la conservation des données pour enregistrer les Statistiques avant de les synchroniser entre vos appareils.",
       "usageAnalytics": "Analyse d'utilisation",

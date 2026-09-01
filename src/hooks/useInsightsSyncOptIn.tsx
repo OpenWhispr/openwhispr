@@ -1,6 +1,8 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/ui/dialog";
+import { canChangeCloudBackupPreference, isCloudBackupAllowed } from "../stores/policyRules";
+import { usePolicyStore } from "../stores/policyStore";
 import { useSettings } from "./useSettings";
 
 /**
@@ -9,6 +11,10 @@ import { useSettings } from "./useSettings";
  * unattributed until the user says otherwise here — signing in never adopts
  * them on its own — so the prompt is the only path that claims them.
  *
+ * These counters are user data leaving the device, so they ride on the same
+ * managed-workspace permission as cloud backup: a policy that forbids backup
+ * forbids the sync, and an already-on toggle stays switchable off.
+ *
  * Flipping the setting and claiming are all this does: pushing the pending
  * rows stays with InsightsView, whose reload the flip and the claim's
  * analytics-changed broadcast both re-fire. Syncing here too would race that
@@ -16,8 +22,10 @@ import { useSettings } from "./useSettings";
  */
 export function useInsightsSyncOptIn() {
   const { t } = useTranslation();
-  const { setInsightsSyncEnabled } = useSettings();
+  const { insightsSyncEnabled, setInsightsSyncEnabled } = useSettings();
   const [unclaimedCount, setUnclaimedCount] = useState(0);
+  const syncAllowedByPolicy = usePolicyStore(isCloudBackupAllowed);
+  const canToggleSync = canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled);
 
   const activate = useCallback(
     (claimAnonymous: boolean) => {
@@ -31,12 +39,13 @@ export function useInsightsSyncOptIn() {
   );
 
   const enableInsightsSync = useCallback(() => {
+    if (!syncAllowedByPolicy) return;
     void (async () => {
       const unclaimed = await window.electronAPI.countUnclaimedAnalyticsEvents().catch(() => 0);
       if (unclaimed > 0) setUnclaimedCount(unclaimed);
       else activate(false);
     })();
-  }, [activate]);
+  }, [activate, syncAllowedByPolicy]);
 
   const optInDialog = (
     <ConfirmDialog
@@ -53,5 +62,5 @@ export function useInsightsSyncOptIn() {
     />
   );
 
-  return { enableInsightsSync, optInDialog };
+  return { canToggleSync, enableInsightsSync, optInDialog, syncAllowedByPolicy };
 }

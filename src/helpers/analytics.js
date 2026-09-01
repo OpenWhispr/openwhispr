@@ -18,7 +18,6 @@ export function localDateKey(date = new Date()) {
 function modeFromSettings({ useLocalWhisper, transcriptionMode, cloudTranscriptionMode }) {
   if (useLocalWhisper || transcriptionMode === "local") return "local";
   if (transcriptionMode === "self-hosted") return "self_hosted";
-  if (transcriptionMode === "enterprise") return "enterprise";
   if (cloudTranscriptionMode === "openwhispr" || transcriptionMode === "openwhispr") {
     return "openwhispr_cloud";
   }

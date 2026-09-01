@@ -152,8 +152,7 @@ export interface TranscriptionItem {
   deleted_at: string | null;
 }
 
-export type AnalyticsMode =
-  "local" | "openwhispr_cloud" | "byok" | "self_hosted" | "enterprise" | "unknown";
+export type AnalyticsMode = "local" | "openwhispr_cloud" | "byok" | "self_hosted" | "unknown";
 
 export interface AnalyticsEventInput {
   eventId: string;
@@ -1155,13 +1154,6 @@ declare global {
       markAnalyticsEventsSynced: (
         eventIds: string[]
       ) => Promise<{ success: boolean; updated: number }>;
-      recordAnalyticsSyncFailures: (
-        eventIds: string[]
-      ) => Promise<{ success: boolean; retired: number }>;
-      getPendingAnalyticsDeletes: (limit?: number) => Promise<{ event_id: string }[]>;
-      hardDeleteAnalyticsEvents: (
-        eventIds: string[]
-      ) => Promise<{ success: boolean; deleted: number }>;
       countUnclaimedAnalyticsEvents: () => Promise<number>;
       claimAnonymousAnalyticsEvents: () => Promise<{ success: boolean; claimed: number }>;
       clearTranscriptions: () => Promise<{ cleared: number; success: boolean }>;

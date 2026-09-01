@@ -12,12 +12,6 @@ const { app } = require("electron");
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
 // trigger can't 400 the whole sync batch.
 const MAX_SNIPPET_TRIGGER_LENGTH = 100;
-// The analytics batch endpoint omits an event it cannot accept from its
-// response rather than failing the whole batch, so a row the server will never
-// take stays pending forever. Pending rows sort to the head of the upload
-// queue, so enough of them block every later event behind them. Give up after
-// this many offers.
-const MAX_ANALYTICS_SYNC_ATTEMPTS = 5;
 
 // Every local field a note create (POST) carries; the acknowledgement compares
 // these atomically against the pushed snapshot. Must mirror NotePushSnapshot
@@ -978,22 +972,11 @@ class DatabaseManager {
           model TEXT,
           counter_version INTEGER NOT NULL DEFAULT 1,
           sync_status TEXT NOT NULL DEFAULT 'pending',
-          sync_attempts INTEGER NOT NULL DEFAULT 0,
-          deleted_at TEXT,
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_analytics_events_account_date
           ON analytics_events(account_id, local_date);
       `);
-      // Repair path only, for machines that ran this branch before deleted_at
-      // and sync_attempts joined the CREATE TABLE above.
-      for (const column of ["deleted_at TEXT", "sync_attempts INTEGER NOT NULL DEFAULT 0"]) {
-        try {
-          this.db.exec(`ALTER TABLE analytics_events ADD COLUMN ${column}`);
-        } catch (err) {
-          if (!err.message.includes("duplicate column")) throw err;
-        }
-      }
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_client_id ON custom_dictionary(client_dict_id)"
       );
@@ -1360,7 +1343,6 @@ class DatabaseManager {
                   SUM(CASE WHEN spoken_duration_ms > 0 THEN word_count ELSE 0 END)
                     AS coveredWords
            FROM analytics_events
-           WHERE deleted_at IS NULL
            GROUP BY local_date`
         )
         .all();
@@ -1385,7 +1367,7 @@ class DatabaseManager {
           `SELECT event_id, occurred_at, local_date, word_count, spoken_duration_ms,
                   mode, provider, model, counter_version
            FROM analytics_events
-           WHERE account_id = ? AND sync_status = 'pending' AND deleted_at IS NULL
+           WHERE account_id = ? AND sync_status = 'pending'
            ORDER BY occurred_at ASC LIMIT ?`
         )
         .all(this.activeAccountId, safeLimit);
@@ -1395,8 +1377,6 @@ class DatabaseManager {
     }
   }
 
-  // Tombstoned rows are excluded so a delete that landed while the batch was in
-  // flight cannot be un-tombstoned by a late accept from the server.
   markAnalyticsEventsSynced(eventIds) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -1407,7 +1387,7 @@ class DatabaseManager {
       const result = this.db
         .prepare(
           `UPDATE analytics_events SET sync_status = 'synced'
-           WHERE account_id = ? AND deleted_at IS NULL AND event_id IN (${placeholders})`
+           WHERE account_id = ? AND event_id IN (${placeholders})`
         )
         .run(this.activeAccountId, ...eventIds);
       return { success: true, updated: result.changes };
@@ -1417,95 +1397,10 @@ class DatabaseManager {
     }
   }
 
-  /** Counts one failed upload offer per id and retires any row that has now been
-   *  refused too many times. Retired rows stay on the device and still count in
-   *  the local summary -- the dictation happened, only its upload is abandoned. */
-  recordAnalyticsSyncFailures(eventIds) {
-    try {
-      if (!this.db) throw new Error("Database not initialized");
-      if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
-        return { success: true, retired: 0 };
-      }
-      const placeholders = eventIds.map(() => "?").join(", ");
-      // Tombstoned rows are excluded for the same reason markAnalyticsEventsSynced
-      // excludes them: a clear that landed mid-flight must stay a pending delete.
-      const countAttempt = this.db.prepare(
-        `UPDATE analytics_events SET sync_attempts = sync_attempts + 1
-         WHERE account_id = ? AND sync_status = 'pending' AND deleted_at IS NULL
-           AND event_id IN (${placeholders})`
-      );
-      const retireExhausted = this.db.prepare(
-        `UPDATE analytics_events SET sync_status = 'rejected'
-         WHERE account_id = ? AND sync_status = 'pending' AND deleted_at IS NULL
-           AND sync_attempts >= ? AND event_id IN (${placeholders})`
-      );
-      const run = this.db.transaction(() => {
-        countAttempt.run(this.activeAccountId, ...eventIds);
-        return retireExhausted.run(this.activeAccountId, MAX_ANALYTICS_SYNC_ATTEMPTS, ...eventIds)
-          .changes;
-      });
-      const retired = run();
-      if (retired > 0) {
-        debugLogger.warn(
-          "Retired analytics events the server would not accept",
-          { retired, attempts: MAX_ANALYTICS_SYNC_ATTEMPTS },
-          "database"
-        );
-      }
-      return { success: true, retired };
-    } catch (error) {
-      debugLogger.error(
-        "Error recording analytics sync failures",
-        { error: error.message },
-        "database"
-      );
-      throw error;
-    }
-  }
-
-  getPendingAnalyticsDeletes(limit = 200) {
-    try {
-      if (!this.db) throw new Error("Database not initialized");
-      if (!this.activeAccountId) return [];
-      const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
-      return this.db
-        .prepare(
-          `SELECT event_id FROM analytics_events
-           WHERE account_id = ? AND deleted_at IS NOT NULL AND sync_status = 'pending'
-           ORDER BY occurred_at ASC LIMIT ?`
-        )
-        .all(this.activeAccountId, safeLimit);
-    } catch (error) {
-      debugLogger.error("Error reading analytics deletes", { error: error.message }, "database");
-      throw error;
-    }
-  }
-
-  hardDeleteAnalyticsEvents(eventIds) {
-    try {
-      if (!this.db) throw new Error("Database not initialized");
-      if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
-        return { success: true, deleted: 0 };
-      }
-      const placeholders = eventIds.map(() => "?").join(", ");
-      const result = this.db
-        .prepare(
-          `DELETE FROM analytics_events WHERE account_id = ? AND event_id IN (${placeholders})`
-        )
-        .run(this.activeAccountId, ...eventIds);
-      return { success: true, deleted: result.changes };
-    } catch (error) {
-      debugLogger.error("Error deleting analytics events", { error: error.message }, "database");
-      throw error;
-    }
-  }
-
   countUnclaimedAnalyticsEvents() {
     if (!this.db) throw new Error("Database not initialized");
     return this.db
-      .prepare(
-        "SELECT COUNT(*) AS count FROM analytics_events WHERE account_id IS NULL AND deleted_at IS NULL"
-      )
+      .prepare("SELECT COUNT(*) AS count FROM analytics_events WHERE account_id IS NULL")
       .get().count;
   }
 
@@ -1516,9 +1411,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.activeAccountId) return { success: false, claimed: 0 };
       const result = this.db
-        .prepare(
-          "UPDATE analytics_events SET account_id = ? WHERE account_id IS NULL AND deleted_at IS NULL"
-        )
+        .prepare("UPDATE analytics_events SET account_id = ? WHERE account_id IS NULL")
         .run(this.activeAccountId);
       return { success: true, claimed: result.changes };
     } catch (error) {
@@ -1553,22 +1446,14 @@ class DatabaseManager {
         "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL"
       );
       const hardDelete = this.db.prepare("DELETE FROM transcriptions WHERE cloud_id IS NULL");
-      // Analytics rows split on ownership, not on sync state: only a row with an
-      // account_id can ever be uploaded, so an unattributed row is dropped
-      // outright while every owned row leaves a tombstone. Splitting on
-      // sync_status instead would hard-delete a row whose upload was still in
-      // flight, leaving the accepted cloud copy with nothing to retire it.
-      const hardDeleteAnalytics = this.db.prepare(
-        "DELETE FROM analytics_events WHERE account_id IS NULL AND deleted_at IS NULL"
-      );
-      const tombstoneAnalytics = this.db.prepare(
-        `UPDATE analytics_events SET deleted_at = datetime('now'), sync_status = 'pending'
-         WHERE account_id IS NOT NULL AND deleted_at IS NULL`
-      );
+      // The cloud has no analytics delete route, so a tombstone could never be
+      // pushed; erase the device copy outright. Counters already uploaded stay
+      // in the account until it is deleted -- see settingsPage.privacy
+      // .insightsSyncDescription, which tells the user so before they opt in.
+      const hardDeleteAnalytics = this.db.prepare("DELETE FROM analytics_events");
       const clearAll = this.db.transaction(() => {
         const cleared = tombstone.run().changes + hardDelete.run().changes;
         hardDeleteAnalytics.run();
-        tombstoneAnalytics.run();
         return cleared;
       });
       return { cleared: clearAll(), success: true };

@@ -4,7 +4,6 @@ const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
-const { countSpokenWords } = require("./analytics");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
@@ -1419,18 +1418,6 @@ class IPCHandlers {
 
     ipcMain.handle("analytics-mark-synced", async (_event, eventIds) => {
       return this.databaseManager.markAnalyticsEventsSynced(eventIds);
-    });
-
-    ipcMain.handle("analytics-record-sync-failures", async (_event, eventIds) => {
-      return this.databaseManager.recordAnalyticsSyncFailures(eventIds);
-    });
-
-    ipcMain.handle("analytics-get-pending-deletes", async (_event, limit) => {
-      return this.databaseManager.getPendingAnalyticsDeletes(limit);
-    });
-
-    ipcMain.handle("analytics-hard-delete", async (_event, eventIds) => {
-      return this.databaseManager.hardDeleteAnalyticsEvents(eventIds);
     });
 
     ipcMain.handle("analytics-count-unclaimed", async () => {
@@ -5713,47 +5700,6 @@ class IPCHandlers {
             signal: controller.signal,
           });
           const sum = (field) => responses.reduce((s, r) => s + (r?.[field] || 0), 0);
-          // The renderer only sends localDate once the user has opted into
-          // Insights sync, and the transcript must never wait on this call.
-          if (opts.localDate) {
-            void proxyFetch(`${apiUrl}/api/analytics/events/batch`, {
-              method: "POST",
-              headers: withPolicyHeaders({
-                "Content-Type": "application/json",
-                ...authHeader,
-              }),
-              body: JSON.stringify({
-                events: [
-                  {
-                    event_id: clientTranscriptionId,
-                    occurred_at: new Date().toISOString(),
-                    local_date: opts.localDate,
-                    word_count: countSpokenWords(text),
-                    spoken_duration_ms: sum("audioDurationMs") || undefined,
-                    mode: "openwhispr_cloud",
-                    provider: lastResponse?.sttProvider,
-                    model: lastResponse?.sttModel,
-                  },
-                ],
-              }),
-              signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
-            })
-              .then((analyticsResponse) => {
-                if (analyticsResponse.ok) return;
-                debugLogger.warn(
-                  "Failed to consolidate chunked transcription analytics",
-                  { status: analyticsResponse.status },
-                  "analytics"
-                );
-              })
-              .catch((analyticsError) => {
-                debugLogger.warn(
-                  "Failed to consolidate chunked transcription analytics",
-                  { error: analyticsError.message },
-                  "analytics"
-                );
-              });
-          }
           return {
             success: true,
             text,

@@ -2068,7 +2068,7 @@
       "description": "Controlla quali dati escono dal tuo dispositivo. Tutto è disattivato per impostazione predefinita.",
       "title": "Privacy",
       "insightsSync": "Sincronizza le Statistiche personali",
-      "insightsSyncDescription": "Sincronizza conteggi di parole, date, durate e tipi di modello tra i tuoi dispositivi. Il contenuto delle trascrizioni non è mai incluso.",
+      "insightsSyncDescription": "Sincronizza conteggi di parole, date, durate e tipi di modello tra i tuoi dispositivi. Il contenuto delle trascrizioni non è mai incluso. Cancellare la cronologia locale non rimuove i conteggi già sincronizzati: restano nel tuo account finché non lo elimini.",
       "insightsSyncRequiresAccount": "Accedi per sincronizzare i dati delle Statistiche senza contenuti tra i tuoi dispositivi.",
       "insightsSyncRequiresHistory": "Attiva la conservazione dei dati per registrare le Statistiche prima di sincronizzarle tra i tuoi dispositivi.",
       "usageAnalytics": "Analisi dell'utilizzo",
