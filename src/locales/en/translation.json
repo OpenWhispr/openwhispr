@@ -3448,7 +3448,7 @@
       },
       "cleanupFailed": {
         "title": "Cleanup failed",
-        "description": "Your dictation was pasted without AI cleanup."
+        "description": "Original dictation pasted without AI cleanup."
       }
     },
     "mic": {

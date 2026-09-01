@@ -1625,7 +1625,18 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string; retryable?: boolean }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+        retryable?: boolean;
+        technicalDetails?: {
+          status?: number;
+          exceptionType?: string;
+          requestId?: string;
+          underlyingError?: string;
+        };
+      }>;
       enterpriseStreamStart?: (payload: {
         streamId: string;
         provider: string;
@@ -1897,7 +1908,18 @@ declare global {
       testEnterpriseConnection?: (
         provider: string,
         config: Record<string, unknown>
-      ) => Promise<{ success: boolean; error?: string; action?: string; copyCommand?: string }>;
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        action?: string;
+        copyCommand?: string;
+        technicalDetails?: {
+          status?: number;
+          exceptionType?: string;
+          requestId?: string;
+          underlyingError?: string;
+        };
+      }>;
       getManagedEnterpriseConfig?: (
         accountId: string,
         workspaceId: string,

@@ -53,8 +53,15 @@ export const enterpriseProvider: InferenceProvider = {
       });
       const enhanced = new Error(result.error || `${enterpriseId} reasoning failed`) as Error & {
         retryable?: boolean;
+        technicalDetails?: {
+          status?: number;
+          exceptionType?: string;
+          requestId?: string;
+          underlyingError?: string;
+        };
       };
       enhanced.retryable = result.retryable ?? false;
+      enhanced.technicalDetails = result.technicalDetails;
       throw enhanced;
     }
 

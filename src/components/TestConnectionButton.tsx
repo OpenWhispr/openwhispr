@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { CheckCircle, XCircle, Loader2, Copy } from "lucide-react";
+import { TechnicalErrorDetails } from "./ui/TechnicalErrorDetails";
+import type { TechnicalErrorDetailsData } from "./ui/useToast";
 
 interface TestConnectionButtonProps {
   provider: string;
@@ -15,6 +17,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
     message: string;
     action?: string;
     copyCommand?: string;
+    technicalDetails?: TechnicalErrorDetailsData;
   } | null>(null);
   const requestIdRef = useRef(0);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -37,6 +40,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
             error?: string;
             action?: string;
             copyCommand?: string;
+            technicalDetails?: TechnicalErrorDetailsData;
           }
         | undefined = await window.electronAPI?.testEnterpriseConnection?.(provider, getConfig());
       if (requestId !== requestIdRef.current) return;
@@ -51,6 +55,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
           message: result?.error || "Connection failed",
           action: result?.action,
           copyCommand: result?.copyCommand,
+          technicalDetails: result?.technicalDetails,
         });
       }
     } catch {
@@ -104,6 +109,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
               </Button>
             </div>
           )}
+          <TechnicalErrorDetails details={errorInfo.technicalDetails} />
         </div>
       )}
     </div>

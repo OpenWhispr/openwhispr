@@ -15,6 +15,7 @@ import {
 } from "../../helpers/toastPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { DictationErrorCard } from "../dictation/DictationErrorCard";
+import { TechnicalErrorDetails } from "./TechnicalErrorDetails";
 
 interface ToastState extends ToastProps {
   id: string;
@@ -243,6 +244,8 @@ const Toast: React.FC<
 > = ({
   title,
   description,
+  secondaryDescription,
+  technicalDetails,
   action,
   actions,
   presentation = "standard",
@@ -360,6 +363,9 @@ const Toast: React.FC<
           {message && (
             <div className="text-xs font-medium leading-tight text-white/90">{message}</div>
           )}
+          {secondaryDescription && (
+            <div className="mt-1 text-xs leading-snug text-white/45">{secondaryDescription}</div>
+          )}
           {detail &&
             (isDestructive ? (
               <div
@@ -388,6 +394,7 @@ const Toast: React.FC<
             ) : (
               <div className="text-xs leading-snug mt-0.5 text-white/45">{detail}</div>
             ))}
+          <TechnicalErrorDetails details={technicalDetails} onDark />
         </div>
 
         {action && <div className="shrink-0 self-center">{action}</div>}

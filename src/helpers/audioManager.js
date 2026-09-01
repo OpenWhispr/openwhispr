@@ -46,7 +46,6 @@ import {
   isTranscriptionSelectionAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
-import { recordCleanupFailure } from "../stores/cleanupFailureStore";
 import {
   getBatchTranscriptionModel,
   getCloudModel,
@@ -113,6 +112,11 @@ const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
 const neverCancelled = () => false;
 const MIN_SPARSE_RECORDING_DURATION_SECONDS = 3;
 const MIN_UNIQUE_WORD_GAIN = 2;
+
+const cleanupFailureFromError = (error) => ({
+  message: error?.message || String(error),
+  ...(error?.technicalDetails ? { technicalDetails: error.technicalDetails } : {}),
+});
 
 const micDeviceKey = (settings) =>
   `${settings.microphoneSelectionMode}|${settings.selectedMicDeviceId}`;
@@ -513,6 +517,7 @@ class AudioManager {
     this.translationApplied = false;
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
+    this.pendingCleanupFailure = null;
     this._processingCancellationGeneration = 0;
     this._activeProcessingPipeline = null;
     this.assistantSelectionContext = null;
@@ -742,6 +747,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.voiceAgentRequested = requested;
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
+    this.pendingCleanupFailure = null;
     this.assistantSelectionContext = null;
     // No recording must ever see a stale capture (e.g. left over from a
     // cancelled voice-agent recording, even after the setting was turned
@@ -2488,9 +2494,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         ? { assistantConversation: this.pendingAssistantConversation }
         : {}),
       ...(this.pendingSelectionEdit ? { selectionEdit: this.pendingSelectionEdit } : {}),
+      ...(this.pendingCleanupFailure ? { cleanupFailure: this.pendingCleanupFailure } : {}),
     };
     this.pendingAssistantConversation = null;
     this.pendingSelectionEdit = null;
+    this.pendingCleanupFailure = null;
     return extras;
   }
 
@@ -2932,7 +2940,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           fallbackToCleanup: true,
         });
         logger.warn("Reasoning failed", { source, error: error.message }, "notes");
-        if (route?.kind === "cleanup") recordCleanupFailure(error.message);
+        if (route?.kind === "cleanup") this.pendingCleanupFailure = cleanupFailureFromError(error);
         if (route?.kind === "agent") this._notifyAgentReasoningFailed();
       }
     }
@@ -3260,7 +3268,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             { error: reasonError.message },
             "transcription"
           );
-          if (route.kind === "cleanup") recordCleanupFailure(reasonError.message);
+          if (route.kind === "cleanup") {
+            this.pendingCleanupFailure = cleanupFailureFromError(reasonError);
+          }
           if (route.kind === "agent") this._notifyAgentReasoningFailed();
         }
       }
@@ -4505,6 +4515,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._activeTranscriptionAbortController = null;
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
+    this.pendingCleanupFailure = null;
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.selectionCapturePromise = null;
@@ -4890,7 +4901,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           { error: reasonError.message },
           "streaming"
         );
-        if (route.kind === "cleanup") recordCleanupFailure(reasonError.message);
+        if (route.kind === "cleanup") {
+          this.pendingCleanupFailure = cleanupFailureFromError(reasonError);
+        }
         if (route.kind === "agent") this._notifyAgentReasoningFailed();
       }
       if (wasCancelled()) return true;

@@ -4351,6 +4351,7 @@ class IPCHandlers {
     ipcMain.handle("test-enterprise-connection", async (event, provider, config) => {
       const {
         mapEnterpriseError,
+        runBedrockRequest,
         validateEnterpriseEndpoint,
       } = require("./enterpriseProviderErrors");
       try {
@@ -4372,11 +4373,14 @@ class IPCHandlers {
           runtime.enterprise
         );
 
-        await generateText({
-          model,
-          prompt: "Say hello in one word.",
-          maxOutputTokens: 10,
-        });
+        const request = () =>
+          generateText({
+            model,
+            prompt: "Say hello in one word.",
+            maxOutputTokens: 10,
+            ...(runtime.provider === "bedrock" ? { maxRetries: 0 } : {}),
+          });
+        await (runtime.provider === "bedrock" ? runBedrockRequest(request) : request());
 
         return { success: true };
       } catch (err) {
@@ -4387,6 +4391,7 @@ class IPCHandlers {
           action: mapped.action,
           copyCommand: mapped.copyCommand,
           retryable: mapped.retryable,
+          technicalDetails: mapped.technicalDetails,
         };
       }
     });
@@ -4397,6 +4402,7 @@ class IPCHandlers {
         const {
           isEnterpriseProvider,
           mapEnterpriseError,
+          runBedrockRequest,
           validateEnterpriseEndpoint,
         } = require("./enterpriseProviderErrors");
         const provider = config?.provider;
@@ -4422,14 +4428,19 @@ class IPCHandlers {
           // Opus 4.7 / GPT-5 / o-series dropped `temperature`; renderer
           // derives support from the model registry and we honor that here.
           const useTemperature = config?.supportsTemperature !== false;
-          const { text: generated, finishReason } = await generateText({
-            model,
-            system: config?.systemPrompt || "",
-            prompt: text,
-            maxOutputTokens: config?.maxTokens || 4096,
-            ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
-            abortSignal: AbortSignal.timeout(timeoutMs),
-          });
+          const request = () =>
+            generateText({
+              model,
+              system: config?.systemPrompt || "",
+              prompt: text,
+              maxOutputTokens: config?.maxTokens || 4096,
+              ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
+              abortSignal: AbortSignal.timeout(timeoutMs),
+              ...(runtime.provider === "bedrock" ? { maxRetries: 0 } : {}),
+            });
+          const { text: generated, finishReason } = await (runtime.provider === "bedrock"
+            ? runBedrockRequest(request)
+            : request());
 
           if (
             config?.requireCompleteOutput &&
@@ -4442,7 +4453,12 @@ class IPCHandlers {
         } catch (err) {
           debugLogger.error("Enterprise reasoning error:", err);
           const mapped = mapEnterpriseError(provider, err, config || {});
-          return { success: false, error: mapped.message, retryable: mapped.retryable };
+          return {
+            success: false,
+            error: mapped.message,
+            retryable: mapped.retryable,
+            technicalDetails: mapped.technicalDetails,
+          };
         }
       }
     );
