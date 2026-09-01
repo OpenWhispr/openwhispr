@@ -3901,7 +3901,8 @@ class IPCHandlers {
 
     ipcMain.handle("get-hotkey-mode-info", async (_event, requestedHotkey, requestedSlot) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
-      const slotName = typeof requestedSlot === "string" && requestedSlot ? requestedSlot : "dictation";
+      const slotName =
+        typeof requestedSlot === "string" && requestedSlot ? requestedSlot : "dictation";
       const hotkey =
         typeof requestedHotkey === "string" && requestedHotkey.trim()
           ? requestedHotkey.split(",")[0].trim()

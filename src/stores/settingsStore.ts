@@ -922,6 +922,10 @@ export interface SettingsState
   setOnboardingUseCaseNote: (note: string) => void;
   setSpokenLanguages: (languages: string[]) => void;
   setActivationMode: (mode: "tap" | "push") => void;
+  voiceAgentActivationMode: "tap" | "push";
+  setVoiceAgentActivationMode: (mode: "tap" | "push") => void;
+  translationActivationMode: "tap" | "push";
+  setTranslationActivationMode: (mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
   setMicrophoneSelectionMode: (mode: MicrophoneSelectionMode) => void;
@@ -1317,6 +1321,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     : "full-width") as "side-panel" | "full-width",
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     "tap" | "push",
+  voiceAgentActivationMode: (readString("voiceAgentActivationMode", "tap") === "push"
+    ? "push"
+    : "tap") as "tap" | "push",
+  translationActivationMode: (readString("translationActivationMode", "tap") === "push"
+    ? "push"
+    : "tap") as "tap" | "push",
 
   microphoneSelectionMode: (() => {
     const mode = readString("microphoneSelectionMode", "system");
@@ -2050,6 +2060,24 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ activationMode: mode });
     if (isBrowser) {
       window.electronAPI?.notifyActivationModeChanged?.(mode);
+    }
+  },
+
+  setVoiceAgentActivationMode: (mode: "tap" | "push") => {
+    const validMode = mode === "push" ? "push" : "tap";
+    if (isBrowser) localStorage.setItem("voiceAgentActivationMode", validMode);
+    set({ voiceAgentActivationMode: validMode });
+    if (isBrowser) {
+      window.electronAPI?.notifySlotActivationModeChanged?.("voiceAgent", validMode);
+    }
+  },
+
+  setTranslationActivationMode: (mode: "tap" | "push") => {
+    const validMode = mode === "push" ? "push" : "tap";
+    if (isBrowser) localStorage.setItem("translationActivationMode", validMode);
+    set({ translationActivationMode: validMode });
+    if (isBrowser) {
+      window.electronAPI?.notifySlotActivationModeChanged?.("translation", validMode);
     }
   },
 
@@ -3134,6 +3162,29 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync activation mode on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    try {
+      const envSlotModes = await window.electronAPI.getSlotActivationModes?.();
+      if (envSlotModes) {
+        const slotModeKeys = [
+          ["voiceAgent", "voiceAgentActivationMode"],
+          ["translation", "translationActivationMode"],
+        ] as const;
+        for (const [slotName, settingKey] of slotModeKeys) {
+          const envSlotMode = envSlotModes[slotName] === "push" ? "push" : "tap";
+          if (envSlotMode !== useSettingsStore.getState()[settingKey]) {
+            if (isBrowser) localStorage.setItem(settingKey, envSlotMode);
+            useSettingsStore.setState({ [settingKey]: envSlotMode });
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync slot activation modes on startup",
         { error: (err as Error).message },
         "settings"
       );

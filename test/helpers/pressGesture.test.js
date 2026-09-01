@@ -80,10 +80,7 @@ test("a down after the double-press window expires proceeds as a fresh push", ()
 
   tracker.handlePushDown("dictation", T0);
   tracker.handlePushQuickRelease("dictation", T0 + 80);
-  assert.equal(
-    tracker.handlePushDown("dictation", T0 + DOUBLE_PRESS_MAX_GAP_MS + 1),
-    "proceed"
-  );
+  assert.equal(tracker.handlePushDown("dictation", T0 + DOUBLE_PRESS_MAX_GAP_MS + 1), "proceed");
   assert.equal(tracker.isHandsFreeActive("dictation"), false);
 });
 
@@ -92,10 +89,7 @@ test("a duplicate down delivery inside the dedupe floor does not latch", () => {
 
   tracker.handlePushDown("dictation", T0);
   tracker.handlePushQuickRelease("dictation", T0 + 40);
-  assert.equal(
-    tracker.handlePushDown("dictation", T0 + DOUBLE_PRESS_MIN_GAP_MS - 1),
-    "proceed"
-  );
+  assert.equal(tracker.handlePushDown("dictation", T0 + DOUBLE_PRESS_MIN_GAP_MS - 1), "proceed");
 });
 
 test("the next push down while hands-free is active stops it", () => {

@@ -1199,8 +1199,7 @@ class WindowManager {
     // push state machine makes duplicate backend and low-level phases harmless.
     const keys = this.hotkeyManager.isUsingNativeShortcut()
       ? nativeListenerKeys.filter(
-          (key) =>
-            this.getSlotActivationMode(this.hotkeyManager.findSlotByHotkey?.(key)) === "push"
+          (key) => this.getSlotActivationMode(this.hotkeyManager.findSlotByHotkey?.(key)) === "push"
         )
       : nativeListenerKeys;
     if (process.platform === "win32" && this.windowsKeyManager) {

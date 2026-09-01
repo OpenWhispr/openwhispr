@@ -669,8 +669,13 @@ export const useAudioRecording = (toast, options = {}) => {
       }
     };
 
-    const handleStart = async () => {
-      await performStartRecording();
+    // Hold-mode starts name their recording kind; a payload-less event (an
+    // older main process) keeps meaning plain dictation.
+    const handleStart = async (options) => {
+      await performStartRecording({
+        voiceAgentRequested: options?.inputKind === "assistant",
+        translationRequested: options?.inputKind === "translation",
+      });
     };
 
     const handleStop = async () => {
@@ -692,8 +697,8 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
-    const disposeStart = window.electronAPI.onStartDictation?.(() => {
-      handleStart();
+    const disposeStart = window.electronAPI.onStartDictation?.((options) => {
+      handleStart(options);
       onToggle?.();
     });
 
