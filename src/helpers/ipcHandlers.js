@@ -597,6 +597,7 @@ class IPCHandlers {
     this._agentStreamRequests = new AgentStreamRequestRegistry();
     this._cloudReasonRequests = new AgentStreamRequestRegistry();
     this._cloudTranscriptionRequests = new AgentStreamRequestRegistry();
+    this._enterpriseReasoningRequests = new AgentStreamRequestRegistry();
     // webContents id -> its release listener, for renderers holding the mic open.
     this._micHoldSenders = new Map();
     this.assemblyAiStreaming = null;
@@ -4373,13 +4374,19 @@ class IPCHandlers {
           runtime.enterprise
         );
 
-        const request = () =>
-          generateText({
+        const request = () => {
+          const abortSignal =
+            runtime.provider === "bedrock"
+              ? AbortSignal.timeout(config?.timeoutMs || 30_000)
+              : undefined;
+          return generateText({
             model,
             prompt: "Say hello in one word.",
             maxOutputTokens: 10,
+            ...(abortSignal ? { abortSignal } : {}),
             ...(runtime.provider === "bedrock" ? { maxRetries: 0 } : {}),
           });
+        };
         await (runtime.provider === "bedrock" ? runBedrockRequest(request) : request());
 
         return { success: true };
@@ -4425,22 +4432,44 @@ class IPCHandlers {
           );
 
           const timeoutMs = config?.timeoutMs || 60000;
+          const isBedrock = runtime.provider === "bedrock";
+          const sender = event.sender;
+          const senderId = sender.id;
+          const requestId = isBedrock ? crypto.randomUUID() : null;
+          const controller = isBedrock
+            ? this._enterpriseReasoningRequests.begin(senderId, requestId)
+            : null;
+          const cancelSenderRequests = () => this._enterpriseReasoningRequests.cancelSender(senderId);
+          if (controller) sender.once("destroyed", cancelSenderRequests);
           // Opus 4.7 / GPT-5 / o-series dropped `temperature`; renderer
           // derives support from the model registry and we honor that here.
           const useTemperature = config?.supportsTemperature !== false;
-          const request = () =>
-            generateText({
+          const request = () => {
+            const abortSignal = isBedrock
+              ? AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)])
+              : AbortSignal.timeout(timeoutMs);
+            return generateText({
               model,
               system: config?.systemPrompt || "",
               prompt: text,
               maxOutputTokens: config?.maxTokens || 4096,
               ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
-              abortSignal: AbortSignal.timeout(timeoutMs),
-              ...(runtime.provider === "bedrock" ? { maxRetries: 0 } : {}),
+              abortSignal,
+              ...(isBedrock ? { maxRetries: 0 } : {}),
             });
-          const { text: generated, finishReason } = await (runtime.provider === "bedrock"
-            ? runBedrockRequest(request)
-            : request());
+          };
+          let generated;
+          let finishReason;
+          try {
+            ({ text: generated, finishReason } = await (isBedrock
+              ? runBedrockRequest(request, { signal: controller.signal })
+              : request()));
+          } finally {
+            if (controller) {
+              sender.removeListener("destroyed", cancelSenderRequests);
+              this._enterpriseReasoningRequests.complete(senderId, requestId, controller);
+            }
+          }
 
           if (
             config?.requireCompleteOutput &&
@@ -4462,6 +4491,10 @@ class IPCHandlers {
         }
       }
     );
+
+    ipcMain.on("enterprise-reasoning-cancel", (event) => {
+      this._enterpriseReasoningRequests.cancelSender(event.sender.id);
+    });
 
     // Runs doStream for the renderer's enterprise chat model shim; parts are
     // relayed verbatim over enterprise-stream-part, ending with {done}/{error}.

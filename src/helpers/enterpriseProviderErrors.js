@@ -56,7 +56,11 @@ function getBedrockHttpStatus(error) {
 
 function getBedrockExceptionType(error) {
   for (const item of bedrockErrorChain(error)) {
-    const type = item?.data?.type || item?.type || item?.code || item?.name;
+    const type =
+      item?.data?.type ||
+      item?.type ||
+      (typeof item?.code === "string" ? item.code : undefined) ||
+      item?.name;
     if (type && !["Error", "AI_APICallError", "AI_RetryError"].includes(type)) return type;
   }
   return undefined;
@@ -77,8 +81,8 @@ function getBedrockRequestId(error) {
 
 function getBedrockErrorCode(error) {
   for (const item of bedrockErrorChain(error)) {
-    if (item?.code) return item.code;
-    if (item?.cause?.code) return item.cause.code;
+    if (typeof item?.code === "string") return item.code;
+    if (typeof item?.cause?.code === "string") return item.cause.code;
   }
   return undefined;
 }
@@ -131,23 +135,49 @@ function shouldRetryBedrockError(error) {
   return ["unavailable", "throttled", "timeout", "network"].includes(getBedrockFailureKind(error));
 }
 
+function sleepWithAbort(delay, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+
+    let timer;
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(signal.reason);
+    };
+    const onTimeout = () => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    };
+
+    timer = setTimeout(onTimeout, delay);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 async function runBedrockRequest(operation, options = {}) {
   const {
+    signal,
     maxAttempts = BEDROCK_MAX_ATTEMPTS,
     initialDelayMs = BEDROCK_INITIAL_DELAY_MS,
     maxDelayMs = BEDROCK_MAX_DELAY_MS,
     random = Math.random,
-    sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay)),
+    sleep = sleepWithAbort,
   } = options;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    signal?.throwIfAborted();
     try {
       return await operation();
     } catch (error) {
+      signal?.throwIfAborted();
       const underlying = unwrapRetryError(error);
       if (attempt === maxAttempts || !shouldRetryBedrockError(underlying)) throw underlying;
       const backoffCeiling = Math.min(maxDelayMs, initialDelayMs * 2 ** Math.max(0, attempt - 1));
-      await sleep(Math.floor(random() * backoffCeiling));
+      await sleep(Math.floor(random() * backoffCeiling), signal);
     }
   }
 

@@ -1637,6 +1637,7 @@ declare global {
           underlyingError?: string;
         };
       }>;
+      cancelEnterpriseReasoning?: () => void;
       enterpriseStreamStart?: (payload: {
         streamId: string;
         provider: string;

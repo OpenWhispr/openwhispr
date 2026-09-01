@@ -59,6 +59,34 @@ test("Bedrock cleanup succeeds after a retryable 503", async () => {
   assert.deepEqual(delays, [50]);
 });
 
+test("Bedrock cleanup aborts during retry backoff without another attempt", async () => {
+  const controller = new AbortController();
+  let attempts = 0;
+  let releaseSleep;
+  const sleeping = new Promise((resolve) => (releaseSleep = resolve));
+  const request = runBedrockRequest(
+    async () => {
+      attempts += 1;
+      throw awsError({ name: "ServiceUnavailableException", status: 503 });
+    },
+    {
+      signal: controller.signal,
+      random: () => 0.5,
+      sleep: async (_delay, signal) => {
+        releaseSleep();
+        await new Promise((resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      },
+    }
+  );
+
+  await sleeping;
+  controller.abort();
+  await assert.rejects(request, (error) => error?.name === "AbortError");
+  assert.equal(attempts, 1);
+});
+
 test("Bedrock stops after six total attempts when 503 responses continue", async () => {
   const { delays, options } = deterministicRetryOptions();
   let attempts = 0;

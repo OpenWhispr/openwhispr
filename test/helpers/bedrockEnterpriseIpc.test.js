@@ -5,6 +5,7 @@ const Module = require("node:module");
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 const handlers = new Map();
+const listeners = new Map();
 const generateCalls = [];
 let generateBehavior = async () => ({ text: "hello", finishReason: "stop" });
 
@@ -19,7 +20,7 @@ const electronStub = {
   },
   ipcMain: {
     handle: (channel, fn) => handlers.set(channel, fn),
-    on: () => {},
+    on: (channel, fn) => listeners.set(channel, fn),
     removeHandler: () => {},
   },
   net: {
@@ -95,10 +96,26 @@ function anything() {
 }
 
 function buildFakeThis() {
-  const target = { sessionId: "test-session" };
+  const AgentStreamRequestRegistry = require("../../src/helpers/agentStreamRequestRegistry");
+  const target = {
+    sessionId: "test-session",
+    _enterpriseReasoningRequests: new AgentStreamRequestRegistry(),
+  };
   return new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
+}
+
+function sender(id) {
+  const eventListeners = new Map();
+  return {
+    id,
+    once: (event, listener) => eventListeners.set(event, listener),
+    removeListener: (event, listener) => {
+      if (eventListeners.get(event) === listener) eventListeners.delete(event);
+    },
+    isDestroyed: () => false,
+  };
 }
 
 function retryable503() {
@@ -116,6 +133,7 @@ test.before(() => {
   Ctor.prototype.setupHandlers.call(buildFakeThis());
   assert.ok(handlers.get("test-enterprise-connection"));
   assert.ok(handlers.get("process-enterprise-reasoning"));
+  assert.ok(listeners.get("enterprise-reasoning-cancel"));
 });
 
 test.after(() => {
@@ -136,7 +154,7 @@ test("Check connection uses the Bedrock retry policy and disables nested AI SDK 
   const originalRandom = Math.random;
   Math.random = () => 0;
   try {
-    const result = await handlers.get("test-enterprise-connection")({ sender: {} }, "bedrock", {
+    const result = await handlers.get("test-enterprise-connection")({ sender: sender(2) }, "bedrock", {
       model: "anthropic.claude-haiku",
       bedrockRegion: "eu-west-1",
     });
@@ -144,6 +162,35 @@ test("Check connection uses the Bedrock retry policy and disables nested AI SDK 
     assert.deepEqual(result, { success: true });
     assert.equal(generateCalls.length, 2);
     assert.ok(generateCalls.every((call) => call.maxRetries === 0));
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("Check connection retries timed-out Bedrock attempts with the existing timeout message", async () => {
+  let attempts = 0;
+  generateBehavior = async (options) => {
+    attempts += 1;
+    await new Promise((resolve, reject) => {
+      options.abortSignal.addEventListener("abort", () => reject(options.abortSignal.reason), {
+        once: true,
+      });
+    });
+  };
+  const originalRandom = Math.random;
+  Math.random = () => 0;
+  try {
+    const result = await handlers.get("test-enterprise-connection")(
+      { sender: sender(1) },
+      "bedrock",
+      { model: "anthropic.claude-haiku", bedrockRegion: "eu-west-1", timeoutMs: 5 }
+    );
+
+    assert.equal(attempts, 6);
+    assert.equal(
+      result.error,
+      "AWS Bedrock did not respond in time. Please try again. If this continues, check your internet connection and AWS Bedrock service status."
+    );
   } finally {
     Math.random = originalRandom;
   }
@@ -160,7 +207,7 @@ test("dictation cleanup uses the Bedrock retry policy and returns the eventual t
   Math.random = () => 0;
   try {
     const result = await handlers.get("process-enterprise-reasoning")(
-      { sender: {} },
+      { sender: sender(3) },
       "raw dictation",
       "anthropic.claude-haiku",
       null,
@@ -179,6 +226,41 @@ test("dictation cleanup uses the Bedrock retry policy and returns the eventual t
   }
 });
 
+test("Bedrock cleanup cancellation aborts only the requesting renderer without retrying", async () => {
+  const requestingSender = sender(10);
+  const otherSender = sender(11);
+  let attempts = 0;
+  let requestSignal;
+  let releaseRequest;
+  const started = new Promise((resolve) => (releaseRequest = resolve));
+  generateBehavior = async (options) => {
+    attempts += 1;
+    requestSignal = options.abortSignal;
+    releaseRequest();
+    await new Promise((resolve, reject) => {
+      options.abortSignal.addEventListener("abort", () => reject(options.abortSignal.reason), {
+        once: true,
+      });
+    });
+  };
+
+  const request = handlers.get("process-enterprise-reasoning")(
+    { sender: requestingSender },
+    "raw dictation",
+    "anthropic.claude-haiku",
+    null,
+    { provider: "bedrock", bedrockRegion: "eu-west-1", systemPrompt: "Clean the dictation" }
+  );
+  await started;
+  listeners.get("enterprise-reasoning-cancel")({ sender: otherSender });
+  assert.equal(requestSignal.aborted, false);
+  listeners.get("enterprise-reasoning-cancel")({ sender: requestingSender });
+  await request;
+
+  assert.equal(requestSignal.aborted, true);
+  assert.equal(attempts, 1);
+});
+
 test("Check connection returns AWS diagnostics without a dictation fallback status", async () => {
   generateBehavior = async () => {
     throw Object.assign(new Error("Bad signature"), {
@@ -188,7 +270,7 @@ test("Check connection returns AWS diagnostics without a dictation fallback stat
     });
   };
 
-  const result = await handlers.get("test-enterprise-connection")({ sender: {} }, "bedrock", {
+  const result = await handlers.get("test-enterprise-connection")({ sender: sender(4) }, "bedrock", {
     model: "anthropic.claude-haiku",
     bedrockRegion: "eu-west-1",
   });
@@ -214,7 +296,7 @@ test("dictation cleanup returns preserved AWS diagnostics to the renderer", asyn
   };
 
   const result = await handlers.get("process-enterprise-reasoning")(
-    { sender: {} },
+    { sender: sender(5) },
     "raw dictation",
     "anthropic.claude-haiku",
     null,
