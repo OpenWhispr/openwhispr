@@ -885,12 +885,31 @@ class WindowManager {
     let verdict = this._pressGesture.handlePushDown(inputKind, Date.now());
     if (
       verdict === "latch" &&
-      (!this._isOnboardingInputAllowed(inputKind) || !this._isPipelineActiveFor(inputKind))
+      (!this._isOnboardingInputAllowed(inputKind) ||
+        this._shouldBlockDictationInput(inputKind) ||
+        !this._isPipelineActiveFor(inputKind))
     ) {
       // The first press never really started preparing this kind (declined
-      // start, onboarding gate, another kind owns the pipeline) — a latch
-      // here would be a phantom whose next press stops the wrong recording.
+      // start, onboarding gate, another kind owns the pipeline), or the
+      // input is blocked outright (busy assistant panel) — a latch here
+      // would be a phantom whose next press stops the wrong recording.
       this._pressGesture.clearHandsFree(inputKind);
+      // The tracker consumed the prime, so the deferred cancel it belonged
+      // to can never fire; finish that timer's job here, or a demoted latch
+      // whose machine start then gets blocked orphans the warm preparation
+      // (panel stuck on a "preparing" that nothing will ever resolve).
+      if (this._pushPrepCancelTimers.has(inputKind)) {
+        this._clearPushPrepCancelTimer(inputKind);
+        if (
+          this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE ||
+          this._dictationInputKind === inputKind
+        ) {
+          this.sendCancelDictationPreparation();
+          if (!this._isDictatingToggle) {
+            this.hideDictationPanel();
+          }
+        }
+      }
       verdict = "proceed";
     }
     if (verdict === "stop-hands-free") {
@@ -1227,6 +1246,18 @@ class WindowManager {
     if (!success) return false;
     this._cachedActivationMode = nextMode;
     return true;
+  }
+
+  // Legacy dictation Hold stored against a hotkey that cannot Hold on this
+  // backend (a macOS plain single key predating the capability gate)
+  // converges to Tap silently, like the per-slot modes — left on "push" it
+  // behaves as Tap anyway but wedges every later hotkey update behind
+  // updateHotkey's Hold gate. Call only once the real hotkey is restored.
+  async demoteUnsupportedDictationHold() {
+    if (this._cachedActivationMode !== "push") return false;
+    const hotkey = this.hotkeyManager.getCurrentHotkey?.();
+    if (!hotkey || this.hotkeyManager.supportsPushToTalk(hotkey)) return false;
+    return await this.setActivationModeCache("tap");
   }
 
   // Dictation keeps the legacy activationMode; voiceAgent/translation carry

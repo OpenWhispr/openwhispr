@@ -309,6 +309,55 @@ test("a settings change with a pending quick-release cancels the preparation", (
   assert.equal(channels(sent).includes("__hide-panel"), true);
 });
 
+test("a latch blocked by a busy assistant panel unwinds the warm preparation", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  manager.startNativePushToTalk("F9", "assistant");
+  manager.setDictationLifecycleState("preparing", "assistant");
+  t.mock.timers.tick(80);
+  manager.handleNativePushKeyUp("F9");
+
+  // The panel turns busy inside the double-press window (an earlier assistant
+  // request came back), so the would-be latch cannot start anything — and the
+  // deferred cancel it consumed can no longer fire on its own.
+  manager._assistantPanelBusy = true;
+  t.mock.timers.tick(170);
+  manager.startNativePushToTalk("F9", "assistant");
+
+  assert.equal(manager._pressGesture.isHandsFreeActive("assistant"), false);
+  assert.equal(channels(sent).includes("start-dictation"), false);
+  assert.equal(channels(sent).includes("cancel-dictation-preparation"), true);
+
+  // No phantom latch remains to turn a later press into a stop of nothing.
+  t.mock.timers.tick(1000);
+  assert.equal(channels(sent).includes("stop-dictation"), false);
+});
+
+test("boot demotes a dictation Hold whose hotkey cannot Hold on this backend", async () => {
+  const { manager } = makeManager();
+  manager.hotkeyManager.setActivationMode = async () => true;
+  // The boot restore accepted "push" against the default hotkey before the
+  // real one loaded (the legacy macOS push + plain-key combination).
+  manager.hotkeyManager.getCurrentHotkey = () => "F13";
+  manager.hotkeyManager.supportsPushToTalk = (hotkey) => hotkey !== "F13";
+  await manager.setActivationModeCache("push");
+
+  assert.equal(await manager.demoteUnsupportedDictationHold(), true);
+  assert.equal(manager.getActivationMode(), "tap");
+
+  // A hotkey with release detection keeps its Hold.
+  manager.hotkeyManager.getCurrentHotkey = () => "Command+Period";
+  await manager.setActivationModeCache("push");
+  assert.equal(await manager.demoteUnsupportedDictationHold(), false);
+  assert.equal(manager.getActivationMode(), "push");
+
+  // Tap mode is left alone.
+  await manager.setActivationModeCache("tap");
+  assert.equal(await manager.demoteUnsupportedDictationHold(), false);
+  assert.equal(manager.getActivationMode(), "tap");
+});
+
 test("resetNativePushState never cancels another kind's fresh preparation", (t) => {
   useGestureTimers(t);
   const { manager, sent } = makeManager();
