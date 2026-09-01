@@ -4355,8 +4355,9 @@ class IPCHandlers {
         runBedrockRequest,
         validateEnterpriseEndpoint,
       } = require("./enterpriseProviderErrors");
+      let runtime;
       try {
-        const runtime = await resolveEnterpriseRuntime(
+        runtime = await resolveEnterpriseRuntime(
           event,
           provider,
           config?.model || "test",
@@ -4367,7 +4368,7 @@ class IPCHandlers {
         const { generateText } = require("ai");
         const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
 
-        const model = getEnterpriseAIModel(
+        const model = await getEnterpriseAIModel(
           runtime.provider,
           runtime.model,
           runtime.apiKey,
@@ -4391,7 +4392,11 @@ class IPCHandlers {
 
         return { success: true };
       } catch (err) {
-        const mapped = mapEnterpriseError(provider, err, config);
+        const mappingConfig =
+          runtime?.provider === "bedrock" && runtime.enterprise?.bedrockRegion
+            ? { ...(config || {}), bedrockRegion: runtime.enterprise.bedrockRegion }
+            : config;
+        const mapped = mapEnterpriseError(provider, err, mappingConfig);
         return {
           success: false,
           error: mapped.message,
@@ -4413,6 +4418,7 @@ class IPCHandlers {
           validateEnterpriseEndpoint,
         } = require("./enterpriseProviderErrors");
         const provider = config?.provider;
+        let runtime;
         try {
           if (!isEnterpriseProvider(provider)) {
             throw new Error(`Unsupported enterprise provider: ${provider}`);
@@ -4432,7 +4438,7 @@ class IPCHandlers {
             }
             controller?.signal.throwIfAborted();
 
-            const runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
+            runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
             controller?.signal.throwIfAborted();
             if (!runtime.model) throw new Error("No model specified for enterprise reasoning");
             validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
@@ -4440,7 +4446,7 @@ class IPCHandlers {
             const { generateText } = require("ai");
             const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
 
-            const model = getEnterpriseAIModel(
+            const model = await getEnterpriseAIModel(
               runtime.provider,
               runtime.model,
               runtime.apiKey,
@@ -4486,7 +4492,11 @@ class IPCHandlers {
           }
         } catch (err) {
           debugLogger.error("Enterprise reasoning error:", err);
-          const mapped = mapEnterpriseError(provider, err, config || {});
+          const mappingConfig =
+            runtime?.provider === "bedrock" && runtime.enterprise?.bedrockRegion
+              ? { ...(config || {}), bedrockRegion: runtime.enterprise.bedrockRegion }
+              : config || {};
+          const mapped = mapEnterpriseError(provider, err, mappingConfig);
           return {
             success: false,
             error: mapped.message,
@@ -4511,6 +4521,7 @@ class IPCHandlers {
         validateEnterpriseEndpoint,
       } = require("./enterpriseProviderErrors");
       const { streamId, provider, modelId, config, options } = payload || {};
+      let runtime;
       const send = (message) => {
         if (!event.sender.isDestroyed()) {
           event.sender.send("enterprise-stream-part", { streamId, ...message });
@@ -4531,12 +4542,12 @@ class IPCHandlers {
         if (!streamId || !isEnterpriseProvider(provider)) {
           throw new Error(`Unsupported enterprise provider: ${provider}`);
         }
-        const runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
+        runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
         if (!runtime.model) throw new Error("No model specified for enterprise streaming");
         validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
 
         const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
-        const model = getEnterpriseAIModel(
+        const model = await getEnterpriseAIModel(
           runtime.provider,
           runtime.model,
           runtime.apiKey,
@@ -4565,7 +4576,11 @@ class IPCHandlers {
         return { success: true };
       } catch (err) {
         debugLogger.error("Enterprise stream error:", err);
-        const mapped = mapEnterpriseError(provider, err, config || {});
+        const mappingConfig =
+          runtime?.provider === "bedrock" && runtime.enterprise?.bedrockRegion
+            ? { ...(config || {}), bedrockRegion: runtime.enterprise.bedrockRegion }
+            : config || {};
+        const mapped = mapEnterpriseError(provider, err, mappingConfig);
         send({ error: mapped.message });
         return { success: false, error: mapped.message };
       } finally {

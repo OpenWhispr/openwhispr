@@ -27,6 +27,69 @@ test("rejects unsupported managed Azure endpoint forms", () => {
   }
 });
 
+test("managed Bedrock credential failures preserve the original AWS error", async () => {
+  const cause = Object.assign(new Error("credential exchange failed"), {
+    code: "ECONNRESET",
+  });
+  const credentialError = Object.assign(new Error("temporary credentials expired"), {
+    name: "ExpiredTokenException",
+    $metadata: {
+      httpStatusCode: 403,
+      requestId: "credential-request-123",
+    },
+    cause,
+  });
+
+  await assert.rejects(
+    getEnterpriseAIModel("bedrock", "anthropic.claude-haiku", "", {
+      bedrockRegion: "us-west-2",
+      managedCredentialProvider: async () => {
+        throw credentialError;
+      },
+    }),
+    (error) => error === credentialError
+  );
+});
+
+test("managed Bedrock credentials are resolved once before the real SDK reaches fetch", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+  let request;
+  global.fetch = async (url, init) => {
+    request = {
+      url: String(url),
+      headers: Object.fromEntries(new Headers(init.headers)),
+    };
+    return new Response("{}", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  let credentialCalls = 0;
+  const model = await getEnterpriseAIModel("bedrock", "anthropic.claude-haiku", "", {
+    bedrockRegion: "us-west-2",
+    managedCredentialProvider: async () => {
+      credentialCalls += 1;
+      return {
+        accessKeyId: "AKIAEXAMPLE",
+        secretAccessKey: "example-secret",
+        sessionToken: "example-session-token",
+      };
+    },
+  });
+
+  assert.equal(credentialCalls, 1);
+  await assert.rejects(
+    model.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }] })
+  );
+  assert.equal(credentialCalls, 1);
+  assert.match(request.url, /^https:\/\/bedrock-runtime\.us-west-2\.amazonaws\.com\//);
+  assert.match(request.headers.authorization, /^AWS4-HMAC-SHA256 /);
+  assert.equal(request.headers["x-amz-security-token"], "example-session-token");
+});
+
 test("the pinned Azure SDK requests the deployment below /openai/v1 with bearer auth", async (t) => {
   const originalFetch = global.fetch;
   t.after(() => {
@@ -45,7 +108,7 @@ test("the pinned Azure SDK requests the deployment below /openai/v1 with bearer 
     });
   };
 
-  const model = getEnterpriseAIModel("azure", "deployment-a", "", {
+  const model = await getEnterpriseAIModel("azure", "deployment-a", "", {
     azureEndpoint: "https://example.openai.azure.com",
     azureApiVersion: "v1",
     managedTokenProvider: async () => "temporary-bearer-token",
@@ -78,7 +141,7 @@ test("manual Azure setup preserves legacy endpoints and API-key auth", async (t)
     });
   };
 
-  const model = getEnterpriseAIModel("azure", "legacy-deployment", "legacy-api-key", {
+  const model = await getEnterpriseAIModel("azure", "legacy-deployment", "legacy-api-key", {
     azureEndpoint: "https://legacy.example.com/custom/openai",
     azureApiVersion: "2024-10-21",
   });

@@ -8,7 +8,7 @@
 // app startup doesn't eager-load ~100 MB of AWS/Azure/Google SDKs for users
 // who never select an enterprise provider.
 
-function getEnterpriseAIModel(provider, model, apiKey, enterprise) {
+async function getEnterpriseAIModel(provider, model, apiKey, enterprise) {
   switch (provider) {
     case "bedrock":
       return createBedrockModel(model, enterprise);
@@ -21,35 +21,33 @@ function getEnterpriseAIModel(provider, model, apiKey, enterprise) {
   }
 }
 
-function createBedrockModel(model, enterprise) {
+async function createBedrockModel(model, enterprise) {
   const { createAmazonBedrock } = require("@ai-sdk/amazon-bedrock");
   const region = enterprise?.bedrockRegion || "us-east-1";
+  const credentials = enterprise?.managedCredentialProvider
+    ? await enterprise.managedCredentialProvider()
+    : enterprise?.bedrockProfile
+      ? await require("@aws-sdk/credential-providers").fromNodeProviderChain({
+          profile: enterprise.bedrockProfile,
+        })()
+      : null;
 
-  if (enterprise?.managedCredentialProvider) {
-    return createAmazonBedrock({
-      region,
-      credentialProvider: enterprise.managedCredentialProvider,
-    })(model);
-  }
-
-  if (enterprise?.bedrockProfile) {
-    const { fromNodeProviderChain } = require("@aws-sdk/credential-providers");
-    return createAmazonBedrock({
-      region,
-      credentialProvider: fromNodeProviderChain({ profile: enterprise.bedrockProfile }),
-    })(model);
-  }
-
-  if (enterprise?.bedrockAccessKeyId && enterprise?.bedrockSecretAccessKey) {
-    return createAmazonBedrock({
-      region,
-      accessKeyId: enterprise.bedrockAccessKeyId,
-      secretAccessKey: enterprise.bedrockSecretAccessKey,
-      sessionToken: enterprise.bedrockSessionToken,
-    })(model);
-  }
-
-  return createAmazonBedrock({ region })(model);
+  return createAmazonBedrock({
+    region,
+    ...(credentials
+      ? {
+          accessKeyId: credentials.accessKeyId,
+          secretAccessKey: credentials.secretAccessKey,
+          sessionToken: credentials.sessionToken,
+        }
+      : enterprise?.bedrockAccessKeyId && enterprise?.bedrockSecretAccessKey
+        ? {
+            accessKeyId: enterprise.bedrockAccessKeyId,
+            secretAccessKey: enterprise.bedrockSecretAccessKey,
+            sessionToken: enterprise.bedrockSessionToken,
+          }
+        : {}),
+  })(model);
 }
 
 function createAzureModel(model, apiKey, enterprise) {

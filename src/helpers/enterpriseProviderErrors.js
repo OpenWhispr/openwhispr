@@ -14,12 +14,16 @@ const BEDROCK_SAFE_NETWORK_CODES = new Set([
   "EAI_AGAIN",
   "ECONNREFUSED",
   "ECONNRESET",
+  "EHOSTDOWN",
   "EHOSTUNREACH",
+  "ENETDOWN",
   "ENETUNREACH",
   "ENOTFOUND",
   "EPIPE",
   "ETIMEDOUT",
   "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
   "UND_ERR_SOCKET",
 ]);
 
@@ -96,7 +100,9 @@ function isBedrockTimeout(error) {
     type === "timeouterror" ||
     type.includes("requesttimeout") ||
     code === "ETIMEDOUT" ||
-    code === "UND_ERR_CONNECT_TIMEOUT"
+    code === "UND_ERR_CONNECT_TIMEOUT" ||
+    code === "UND_ERR_HEADERS_TIMEOUT" ||
+    code === "UND_ERR_BODY_TIMEOUT"
   );
 }
 
@@ -252,6 +258,13 @@ function mapBedrockError(error, config = {}) {
   const withDetails = (mapped) => ({ ...mapped, technicalDetails });
 
   if (signature.includes("expiredtoken") || signature.includes("expired")) {
+    if (config.managedContext) {
+      return withDetails({
+        message: "Temporary AWS access expired.",
+        action: "Sign out and sign back in to refresh company access, then retry.",
+        retryable: true,
+      });
+    }
     return withDetails({
       message: "AWS SSO session expired.",
       action: "Run the command below in your terminal to re-authenticate:",

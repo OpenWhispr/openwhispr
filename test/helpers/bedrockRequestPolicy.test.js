@@ -13,6 +13,8 @@ const THROTTLED_MESSAGE =
   "AWS Bedrock is temporarily limiting requests because it is receiving too many. Please wait a moment and try again. If this continues, ask your AWS administrator to check your Bedrock usage and quotas.";
 const TIMEOUT_MESSAGE =
   "AWS Bedrock did not respond in time. Please try again. If this continues, check your internet connection and AWS Bedrock service status.";
+const NETWORK_MESSAGE =
+  "AWS Bedrock could not be reached. Check your internet connection and try again.";
 
 function awsError({ name, status, message = name, requestId = "request-123", code }) {
   return Object.assign(new Error(message), {
@@ -147,6 +149,33 @@ test("Bedrock retries a request timeout and returns the timeout message", async 
   assert.equal(result, "ok");
   assert.equal(attempts, 2);
   assert.equal(mapEnterpriseError("bedrock", timeout).message, TIMEOUT_MESSAGE);
+});
+
+test("Bedrock retries audited network and Undici timeout cause shapes", async () => {
+  for (const [code, expectedMessage] of [
+    ["ENETDOWN", NETWORK_MESSAGE],
+    ["EHOSTDOWN", NETWORK_MESSAGE],
+    ["UND_ERR_HEADERS_TIMEOUT", TIMEOUT_MESSAGE],
+    ["UND_ERR_BODY_TIMEOUT", TIMEOUT_MESSAGE],
+  ]) {
+    const transportError = Object.assign(new Error(`transport failed: ${code}`), { code });
+    const apiCallError = Object.assign(new Error("Failed to call AWS Bedrock"), {
+      name: "AI_APICallError",
+      cause: transportError,
+    });
+    const { options } = deterministicRetryOptions();
+    let attempts = 0;
+
+    const result = await runBedrockRequest(async () => {
+      attempts += 1;
+      if (attempts === 1) throw apiCallError;
+      return "ok";
+    }, options);
+
+    assert.equal(result, "ok", code);
+    assert.equal(attempts, 2, code);
+    assert.equal(mapEnterpriseError("bedrock", apiCallError).message, expectedMessage, code);
+  }
 });
 
 test("Bedrock does not retry access denied errors", async () => {

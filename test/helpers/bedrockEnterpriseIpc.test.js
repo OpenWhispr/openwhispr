@@ -77,7 +77,12 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       };
     }
     if (request === "./enterpriseAiProviders") {
-      return { getEnterpriseAIModel: () => ({ provider: "bedrock-test-model" }) };
+      return {
+        getEnterpriseAIModel: async (_provider, _model, _apiKey, enterprise) => {
+          await enterprise?.managedCredentialProvider?.();
+          return { provider: "bedrock-test-model" };
+        },
+      };
     }
     if (request === "./cortiTranscription") {
       return { transcribeAudio: async () => ({ text: "corti text" }) };
@@ -140,6 +145,36 @@ function retryable503() {
     statusCode: 503,
     responseHeaders: { "x-amzn-requestid": "aws-request-503" },
   });
+}
+
+function managedContext() {
+  return {
+    accountId: "account-1",
+    workspaceId: "workspace-1",
+    authGeneration: 1,
+    inferenceScope: "cleanup",
+    setupMode: "managed",
+    provider: "bedrock",
+    generation: 1,
+    providerVersion: 1,
+  };
+}
+
+function managedBedrockRuntime(overrides = {}) {
+  return {
+    managed: true,
+    provider: "bedrock",
+    model: "anthropic.claude-haiku",
+    generation: 1,
+    version: 1,
+    config: { region: "us-west-2" },
+    credentialProvider: async () => ({
+      accessKeyId: "AKIAEXAMPLE",
+      secretAccessKey: "example-secret",
+      sessionToken: "example-session-token",
+    }),
+    ...overrides,
+  };
 }
 
 test.before(() => {
@@ -330,6 +365,93 @@ test("Bedrock cleanup cancelled during managed runtime resolution never invokes 
   await request;
 
   assert.equal(generateCalls.length, 0);
+});
+
+test("managed Bedrock failures use the resolved region in actionable copy", async () => {
+  resolveManagedRuntime = async () => managedBedrockRuntime();
+  handlerContext.enterpriseIdentityManager = {
+    resolveProvider: (...args) => resolveManagedRuntime(...args),
+    clear: () => {},
+  };
+
+  for (const { label, error, rendererRegion } of [
+    {
+      label: "permission",
+      error: Object.assign(new Error("Not allowed to invoke model"), {
+        name: "AccessDeniedException",
+        $metadata: { httpStatusCode: 403, requestId: "managed-permission-request" },
+      }),
+      rendererRegion: "eu-west-1",
+    },
+    {
+      label: "model",
+      error: Object.assign(new Error("Selected model does not exist"), {
+        name: "ResourceNotFoundException",
+        $metadata: { httpStatusCode: 404, requestId: "managed-model-request" },
+      }),
+    },
+    {
+      label: "configuration",
+      error: Object.assign(new Error("Invalid inference profile"), {
+        name: "ValidationException",
+        $metadata: { httpStatusCode: 400, requestId: "managed-config-request" },
+      }),
+      rendererRegion: "ap-southeast-1",
+    },
+  ]) {
+    generateBehavior = async () => {
+      throw error;
+    };
+    const result = await handlers.get("test-enterprise-connection")(
+      { sender: sender(20) },
+      "bedrock",
+      {
+        model: "renderer-model-is-ignored",
+        managedContext: managedContext(),
+        ...(rendererRegion ? { bedrockRegion: rendererRegion } : {}),
+      }
+    );
+
+    assert.equal(result.success, false, label);
+    assert.match(result.error, /us-west-2/, label);
+    if (rendererRegion) assert.doesNotMatch(result.error, new RegExp(rendererRegion), label);
+  }
+});
+
+test("managed Bedrock credential expiry keeps AWS diagnostics and gives no profile command", async () => {
+  const expired = Object.assign(new Error("The security token included in the request is expired"), {
+    name: "ExpiredTokenException",
+    $metadata: {
+      httpStatusCode: 403,
+      requestId: "managed-expired-request",
+    },
+  });
+  resolveManagedRuntime = async () =>
+    managedBedrockRuntime({
+      credentialProvider: async () => {
+        throw expired;
+      },
+    });
+  handlerContext.enterpriseIdentityManager = {
+    resolveProvider: (...args) => resolveManagedRuntime(...args),
+    clear: () => {},
+  };
+
+  const result = await handlers.get("test-enterprise-connection")(
+    { sender: sender(21) },
+    "bedrock",
+    { model: "renderer-model-is-ignored", managedContext: managedContext() }
+  );
+
+  assert.equal(result.success, false);
+  assert.match(result.action, /sign out and sign back in/i);
+  assert.equal(result.copyCommand, undefined);
+  assert.deepEqual(result.technicalDetails, {
+    status: 403,
+    exceptionType: "ExpiredTokenException",
+    requestId: "managed-expired-request",
+    underlyingError: "The security token included in the request is expired",
+  });
 });
 
 test("Check connection returns AWS diagnostics without a dictation fallback status", async () => {
