@@ -12,8 +12,6 @@ import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
 
 const EMPTY_SUMMARY: AnalyticsSummary = {
-  scope: "device",
-  timeZone: "UTC",
   totalWords: 0,
   totalDictations: 0,
   totalSpokenDurationMs: 0,

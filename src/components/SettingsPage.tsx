@@ -4092,9 +4092,11 @@ EOF`,
                             : t("settingsPage.privacy.insightsSyncRequiresHistory")
                     }
                   >
-                    {/* With history off no dictation is ever counted, so turning
-                        this on could only promise a sync that never happens —
-                        but an already-on toggle must stay switchable off. */}
+                    {/* With history off this device counts nothing, so turning
+                        this on could only promise a sync of local counters that
+                        never happens (OpenWhispr Cloud still counts what it
+                        transcribes, server-side) — but an already-on toggle
+                        must stay switchable off. */}
                     <Toggle
                       checked={insightsSyncEnabled}
                       disabled={

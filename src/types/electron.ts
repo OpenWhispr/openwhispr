@@ -185,8 +185,6 @@ export interface AnalyticsDailyBucket {
 }
 
 export interface AnalyticsSummary {
-  scope: "device" | "account";
-  timeZone: string;
   totalWords: number;
   totalDictations: number;
   totalSpokenDurationMs: number;

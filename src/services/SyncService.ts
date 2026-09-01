@@ -472,6 +472,12 @@ export class SyncService {
         if (!lock) return;
         teamSpacesReady = await this.syncSpaces(authGeneration);
         if (!hasValidatedAuthContext()) return;
+        // Ahead of the branch below: Insights counters are free and
+        // content-free, so they ride their own opt-in rather than backup's plan
+        // and toggle — and a push has to be recorded as work before the
+        // backup-off branch stamps this pass's empty streak.
+        await this.syncAnalytics();
+        if (!hasValidatedAuthContext()) return;
         if (full) {
           await this.syncFolders();
           if (!hasValidatedAuthContext()) return;
@@ -500,10 +506,6 @@ export class SyncService {
           await this.syncNotes(true);
           this.recordTeamOnlyPass();
         }
-        if (!hasValidatedAuthContext()) return;
-        // Outside the branch above: Insights counters are free and content-free,
-        // so they ride their own opt-in rather than backup's plan and toggle.
-        await this.syncAnalytics();
         if (!hasValidatedAuthContext()) return;
         if (teamSpacesReady) {
           if (this.teamSpacesRetryTimer) {
@@ -2168,7 +2170,7 @@ export class SyncService {
   private async syncAnalytics(): Promise<void> {
     if (!this.consent().analytics) return;
     try {
-      await syncPendingAnalytics();
+      if ((await syncPendingAnalytics()) > 0) this.teamPassMovedWork = true;
     } catch (err) {
       if (isAuthContextError(err)) throw err;
       // A rejected batch stays pending for the next pass; the rest of this one

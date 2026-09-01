@@ -1346,11 +1346,7 @@ class DatabaseManager {
            GROUP BY local_date`
         )
         .all();
-      return {
-        scope: "device",
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-        ...summarizeAnalyticsDays(days),
-      };
+      return summarizeAnalyticsDays(days);
     } catch (error) {
       debugLogger.error("Error reading analytics summary", { error: error.message }, "database");
       throw error;
