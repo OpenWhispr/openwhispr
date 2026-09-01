@@ -3,11 +3,9 @@ import { X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { emergenceBlend, traceFusedOutline } from "./liquidFusion";
 import type { VoicePillState } from "./VoicePill";
-import { LISTENING_ENTRANCE_TIMING } from "../../helpers/voicePillPresentation";
+import { LISTENING_ENTRANCE_TIMING, VOICE_PILL_CANCEL } from "../../helpers/voicePillPresentation";
 
-// Sizing shared with WINDOW_SIZES.RECORDING's fit comment in windowConfig.js.
-const CANCEL_BUTTON_SIZE = 28;
-const CANCEL_BUTTON_GAP = 8;
+const { size: CANCEL_BUTTON_SIZE, gap: CANCEL_BUTTON_GAP } = VOICE_PILL_CANCEL;
 const EMERGENCE_MS = 280;
 // The pill's chrome fade (VoicePill's inline 220ms background/border/shadow
 // transition, mirrored by .liquid-cancel-skin's fill/stroke) — change together.
@@ -61,7 +59,7 @@ function useCancelEmergence(visible: boolean): number {
 }
 
 /** Chases the pill footprint contract with the pill's own width/height
- *  transition (VoicePill's GROW_TRANSITION: expansionMs on the house curve),
+ *  transition (VOICE_PILL_GROW_TRANSITION: expansionMs on the house curve),
  *  so the skin never snaps while the real pill is mid-flight between
  *  footprints — the entrance's logo hold → compact expansion and the
  *  compact → thinking collapse at stop. It keeps chasing even while the skin
@@ -176,10 +174,7 @@ export function LiquidCancelButton({
   if (t <= 0 && !skinLingers) return null;
 
   return (
-    <div
-      className="relative shrink-0"
-      style={{ width: slotWidth, height: CANCEL_BUTTON_SIZE, overflow: "visible" }}
-    >
+    <div className="relative shrink-0" style={{ width: slotWidth, height: CANCEL_BUTTON_SIZE }}>
       {outline && (
         <svg
           aria-hidden="true"

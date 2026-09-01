@@ -1,10 +1,27 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+// Mirrors of the shared pill contract, pinned against it below so these
+// fixtures can never drift from the geometry the component actually renders.
 const PILL = { w: 98, h: 36 };
 const R = 14;
 const GAP = 8;
 const SIZE = 28;
+
+test("the fusion fixtures still match the shared pill contract", async () => {
+  const { VOICE_PILL_FOOTPRINT, VOICE_PILL_CANCEL } = await import(
+    "../../src/helpers/voicePillPresentation.js"
+  );
+  assert.deepEqual(
+    { w: VOICE_PILL_FOOTPRINT.recording.width, h: VOICE_PILL_FOOTPRINT.recording.height },
+    PILL
+  );
+  assert.equal(VOICE_PILL_CANCEL.size, SIZE);
+  assert.equal(VOICE_PILL_CANCEL.gap, GAP);
+  // The skin's circle radius is half the button; the t=0 tangency proof rests
+  // on it (a capsule at least 2R tall swallows the circle exactly).
+  assert.equal(R, SIZE / 2);
+});
 
 function circleAt(t) {
   return { cx: PILL.w + t * (GAP + SIZE) - SIZE / 2, cy: PILL.h / 2, r: R };

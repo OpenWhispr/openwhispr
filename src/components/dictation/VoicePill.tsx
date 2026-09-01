@@ -5,8 +5,8 @@ import { PillWaveform } from "./PillWaveform";
 import { VoiceIdentityIcon } from "./VoiceIdentityIcon";
 import { RESTING_WAVE_SILHOUETTE, WAVEFORM_BAR_COUNT } from "./waveformMath";
 import {
-  LISTENING_ENTRANCE_TIMING,
   VOICE_PILL_FOOTPRINT,
+  VOICE_PILL_GROW_TRANSITION,
 } from "../../helpers/voicePillPresentation";
 
 export type VoicePillState =
@@ -29,7 +29,6 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   horizontalDirection?: "left" | "right";
 }
 
-const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms cubic-bezier(0.2, 0, 0, 1)`;
 // Sized from WAVEFORM_BAR_COUNT so a bar-count change can never silently
 // desync the resting silhouette from the live waveform's footprint.
 const RESTING_WAVE_HEIGHTS = Array.from(
@@ -118,7 +117,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         // owns the chrome — an inline shadow would outrank it and paint a
         // phantom capsule when a de-fusing skin lingers over a hovered pill.
         boxShadow: floatingHover && !liquidFused ? "var(--shadow-card-hover-subtle)" : undefined,
-        transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, padding-left ${GROW_TRANSITION}, padding-right ${GROW_TRANSITION}, background-color 220ms ease-out, border-color 220ms ease-out, box-shadow 220ms ease-out`,
+        transition: `width ${VOICE_PILL_GROW_TRANSITION}, height ${VOICE_PILL_GROW_TRANSITION}, padding-left ${VOICE_PILL_GROW_TRANSITION}, padding-right ${VOICE_PILL_GROW_TRANSITION}, background-color 220ms ease-out, border-color 220ms ease-out, box-shadow 220ms ease-out`,
         ...style,
       }}
       data-horizontal-direction={horizontalDirection}
@@ -172,7 +171,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
           marginLeft: dividerMargin,
           marginRight: dividerMargin,
           opacity: showDivider ? 1 : 0,
-          transition: `width ${GROW_TRANSITION}, margin ${GROW_TRANSITION}, opacity 180ms ease-out`,
+          transition: `width ${VOICE_PILL_GROW_TRANSITION}, margin ${VOICE_PILL_GROW_TRANSITION}, opacity 180ms ease-out`,
         }}
       />
 
@@ -181,7 +180,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         style={{
           width: showCompactPill ? 52 : 0,
           height: showCompactPill ? 24 : 32,
-          transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}`,
+          transition: `width ${VOICE_PILL_GROW_TRANSITION}, height ${VOICE_PILL_GROW_TRANSITION}`,
         }}
       >
         <div

@@ -13,6 +13,11 @@ export const VOICE_PILL_FOOTPRINT = Object.freeze({
   recording: Object.freeze({ width: 98, height: 36 }),
 });
 
+// The hover cancel control that emerges beside the pill (px). Same contract:
+// WINDOW_SIZES.RECORDING must fit pill + gap + cancel inside its dock insets,
+// or the control clips at the native window bounds.
+export const VOICE_PILL_CANCEL = Object.freeze({ size: 28, gap: 8 });
+
 export const LISTENING_ENTRANCE_TIMING = Object.freeze({
   // A short hold that reads as an acknowledged press before the control
   // changes shape. It was 420ms when it also had to hide the native window
@@ -29,6 +34,13 @@ export const LISTENING_ENTRANCE_TIMING = Object.freeze({
   // perceived as part of the width animation.
   waveformDelayMs: 100,
 });
+
+// The pill's morph between the two VOICE_PILL_FOOTPRINT boxes. The cancel
+// skin tweens its capsule geometry against the same duration and curve
+// (usePillFootprintTween), so a fused outline never drifts off the real pill —
+// one definition keeps them from diverging.
+export const VOICE_PILL_GROW_EASING = "cubic-bezier(0.2, 0, 0, 1)";
+export const VOICE_PILL_GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms ${VOICE_PILL_GROW_EASING}`;
 
 export const ASSISTANT_FOOTER_TRANSITION_TIMING = Object.freeze({
   pillRetreatMs: 180,
