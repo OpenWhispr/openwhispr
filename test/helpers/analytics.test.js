@@ -1,11 +1,32 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
+  ANALYTICS_ACTIVITY_MONTH_COUNT,
+  buildAnalyticsActivityDays,
   calculateStreaks,
   countSpokenWords,
   resolveAnalyticsMode,
   summarizeAnalyticsDays,
 } = require("../../src/helpers/analytics.js");
+
+test("analytics activity covers this month and the previous five calendar months", () => {
+  const days = buildAnalyticsActivityDays(
+    [
+      { date: "2026-03-31", words: 99 },
+      { date: "2026-04-01", words: 3 },
+      { date: "2026-09-15", words: 7 },
+    ],
+    new Date(2026, 8, 15, 12)
+  );
+
+  assert.equal(ANALYTICS_ACTIVITY_MONTH_COUNT, 6);
+  assert.deepEqual(days[0], { date: "2026-04-01", words: 3 });
+  assert.deepEqual(days.at(-1), { date: "2026-09-15", words: 7 });
+  assert.deepEqual(
+    [...new Set(days.map((day) => day.date.slice(0, 7)))],
+    ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"]
+  );
+});
 
 test("analytics counts raw whitespace-delimited spoken words", () => {
   assert.equal(countSpokenWords("  one two\nthree  "), 3);

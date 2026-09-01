@@ -2,6 +2,7 @@
 // where Vite only handles ESM source files; main-process CJS callers load it
 // via Node's require(esm) with module-syntax detection.
 const DAY_MS = 86_400_000;
+export const ANALYTICS_ACTIVITY_MONTH_COUNT = 6;
 
 export function countSpokenWords(text) {
   const trimmed = typeof text === "string" ? text.trim() : "";
@@ -13,6 +14,29 @@ export function localDateKey(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+export function buildAnalyticsActivityDays(daily, today = new Date()) {
+  const byDate = new Map(daily.map((bucket) => [bucket.date, bucket]));
+  const startDate = new Date(
+    today.getFullYear(),
+    today.getMonth() - ANALYTICS_ACTIVITY_MONTH_COUNT + 1,
+    1,
+    12
+  );
+  const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
+  const days = [];
+
+  for (
+    let date = startDate;
+    date <= endDate;
+    date = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 12)
+  ) {
+    const key = localDateKey(date);
+    days.push({ date: key, words: byDate.get(key)?.words || 0 });
+  }
+
+  return days;
 }
 
 function modeFromSettings({ useLocalWhisper, transcriptionMode, cloudTranscriptionMode }) {

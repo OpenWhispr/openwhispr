@@ -5,12 +5,13 @@ import { useAuth } from "../hooks/useAuth";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
 import { getAccountAnalyticsSummary, syncPendingAnalytics } from "../services/AnalyticsService";
-import { localDateKey } from "../helpers/analytics";
+import { buildAnalyticsActivityDays } from "../helpers/analytics";
 import { canOfferAnalyticsClaim } from "../services/syncPassPolicy";
 import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
+import { Tooltip } from "./ui/tooltip";
 
 const EMPTY_SUMMARY: AnalyticsSummary = {
   totalWords: 0,
@@ -23,44 +24,143 @@ const EMPTY_SUMMARY: AnalyticsSummary = {
   daily: [],
 };
 
+type ActivityDay = { date: string; words: number };
+
+const ACTIVITY_INTENSITY_CLASSES = [
+  "bg-foreground/6 dark:bg-white/6",
+  "bg-primary/25",
+  "bg-primary/45",
+  "bg-primary/70",
+  "bg-primary",
+] as const;
+
+function dateFromLocalKey(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day, 12);
+}
+
 function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] }) {
-  const { t } = useTranslation();
-  const days = useMemo(() => {
-    const byDate = new Map(daily.map((bucket) => [bucket.date, bucket]));
-    const today = new Date();
-    return Array.from({ length: 365 }, (_, index) => {
-      const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 364 + index);
-      const key = localDateKey(date);
-      return { date: key, words: byDate.get(key)?.words || 0 };
+  const { t, i18n } = useTranslation();
+  const calendar = useMemo(() => {
+    const days: ActivityDay[] = buildAnalyticsActivityDays(daily);
+    const cells: Array<ActivityDay | null> = [
+      ...Array(dateFromLocalKey(days[0].date).getDay()).fill(null),
+      ...days,
+    ];
+    while (cells.length % 7 !== 0) cells.push(null);
+
+    const weeks = Array.from({ length: cells.length / 7 }, (_, index) =>
+      cells.slice(index * 7, index * 7 + 7)
+    );
+    const monthFormatter = new Intl.DateTimeFormat(i18n.language, { month: "short" });
+    let previousMonth = "";
+    const monthLabels = weeks.map((week, index) => {
+      const labelDay =
+        week.find((day) => day?.date.endsWith("-01")) ||
+        (index === 0 ? week.find((day) => day !== null) : null);
+      if (!labelDay) return null;
+      const month = labelDay.date.slice(0, 7);
+      if (month === previousMonth) return null;
+      previousMonth = month;
+      return monthFormatter.format(dateFromLocalKey(labelDay.date));
     });
-  }, [daily]);
-  const maxWords = Math.max(1, ...days.map((day) => day.words));
+
+    return {
+      maxWords: Math.max(1, ...days.map((day) => day.words)),
+      monthLabels,
+      todayDate: days[days.length - 1].date,
+      weeks,
+    };
+  }, [daily, i18n.language]);
+
+  const weekdayLabels = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) =>
+        new Intl.DateTimeFormat(i18n.language, { weekday: "short" }).format(
+          new Date(2024, 0, 7 + index, 12)
+        )
+      ),
+    [i18n.language]
+  );
+  const columnStyle = { gridTemplateColumns: `repeat(${calendar.weeks.length}, minmax(0, 1fr))` };
 
   return (
     <div className="overflow-x-auto pb-1">
-      <div
-        className="grid grid-flow-col grid-rows-7 gap-1 min-w-max"
-        role="img"
-        aria-label={t("insights.activityLabel")}
-      >
-        {days.map((day) => {
-          const intensity =
-            day.words === 0 ? 0 : Math.max(1, Math.ceil((day.words / maxWords) * 4));
-          return (
-            <div
-              key={day.date}
-              title={t("insights.dayTooltip", { date: day.date, count: day.words })}
-              className={cn(
-                "h-2.5 w-2.5 rounded-[2px]",
-                intensity === 0 && "bg-foreground/6 dark:bg-white/6",
-                intensity === 1 && "bg-primary/25",
-                intensity === 2 && "bg-primary/45",
-                intensity === 3 && "bg-primary/70",
-                intensity === 4 && "bg-primary"
-              )}
-            />
-          );
-        })}
+      <div className="min-w-xl" role="img" aria-label={t("insights.activityLabel")}>
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
+          <div aria-hidden="true" />
+          <div className="grid h-4 gap-2" style={columnStyle} aria-hidden="true">
+            {calendar.monthLabels.map((label, index) => (
+              <span
+                key={index}
+                className="truncate text-[10px] font-medium text-muted-foreground/70"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+
+          <div className="grid grid-rows-7 gap-0.5" aria-hidden="true">
+            {weekdayLabels.map((label) => (
+              <span key={label} className="flex items-center text-[10px] text-muted-foreground/70">
+                {label}
+              </span>
+            ))}
+          </div>
+
+          <div className="grid gap-2" style={columnStyle}>
+            {calendar.weeks.map((week, weekIndex) => (
+              <div key={weekIndex} className="grid grid-rows-7 gap-0.5">
+                {week.map((day, dayIndex) => {
+                  if (!day) {
+                    return (
+                      <div
+                        key={dayIndex}
+                        aria-hidden="true"
+                        className="size-6 justify-self-center"
+                      />
+                    );
+                  }
+                  const intensity =
+                    day.words === 0
+                      ? 0
+                      : Math.max(1, Math.ceil((day.words / calendar.maxWords) * 4));
+                  const tooltip = t("insights.dayTooltip", {
+                    date: day.date,
+                    count: day.words,
+                  });
+                  return (
+                    <div key={day.date} className="justify-self-center">
+                      <Tooltip content={tooltip}>
+                        <div
+                          aria-label={tooltip}
+                          className={cn(
+                            "size-6 rounded-sm",
+                            ACTIVITY_INTENSITY_CLASSES[intensity],
+                            day.date === calendar.todayDate &&
+                              "ring-1 ring-primary ring-offset-1 ring-offset-card"
+                          )}
+                        />
+                      </Tooltip>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-2 flex items-center text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span>{t("insights.activityLess")}</span>
+            <div className="flex items-center gap-1" aria-hidden="true">
+              {ACTIVITY_INTENSITY_CLASSES.slice(1).map((className) => (
+                <span key={className} className={cn("size-3 rounded-sm", className)} />
+              ))}
+            </div>
+            <span>{t("insights.activityMore")}</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -159,7 +259,9 @@ export default function InsightsView() {
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-foreground">{t("insights.title")}</h1>
+          <h1 className="text-sm! font-semibold! leading-none! tracking-normal! text-foreground">
+            {t("insights.title")}
+          </h1>
           <p className="mt-1 text-xs text-muted-foreground">{t("insights.description")}</p>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
@@ -210,12 +312,6 @@ export default function InsightsView() {
           detail={t("insights.allTime")}
         />
         <MetricCard
-          icon={Flame}
-          label={t("insights.currentStreak")}
-          value={t("insights.days", { count: summary.currentStreakDays })}
-          detail={t("insights.longestStreak", { count: summary.longestStreakDays })}
-        />
-        <MetricCard
           icon={Gauge}
           label={t("insights.wordsPerMinute")}
           value={summary.averageWpm == null ? "—" : number.format(summary.averageWpm)}
@@ -227,16 +323,22 @@ export default function InsightsView() {
           value={number.format(summary.totalDictations)}
           detail={t("insights.allTime")}
         />
+        <MetricCard
+          icon={Flame}
+          label={t("insights.currentStreak")}
+          value={t("insights.days", { count: summary.currentStreakDays })}
+          detail={t("insights.longestStreak", { count: summary.longestStreakDays })}
+        />
       </div>
 
-      <div className="mt-5 rounded-xl border border-border/40 dark:border-white/8 bg-card/70 p-4">
-        <div className="mb-4">
-          <h2 className="text-sm font-medium text-foreground">{t("insights.activity")}</h2>
-          <p className="mt-0.5 text-[11px] text-muted-foreground/70">
-            {t("insights.activityDescription")}
-          </p>
+      <div className="mt-5 rounded-2xl border border-border/50 bg-card/70 px-5 py-2.5 dark:border-white/8">
+        <h2 className="text-base font-medium text-foreground">{t("insights.activity")}</h2>
+        <p className="mt-1 text-[11px] text-muted-foreground/70">
+          {t("insights.activityDescription")}
+        </p>
+        <div className="mt-2">
+          <Heatmap daily={summary.daily} />
         </div>
-        <Heatmap daily={summary.daily} />
       </div>
 
       {optInDialog}
