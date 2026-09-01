@@ -809,6 +809,11 @@
       "requiresMacOS": "macOS {{version}}+",
       "unavailable": "No disponible"
     },
+    "modelCompatibility": {
+      "englishOnly": "Solo inglés",
+      "unsupported": "No admite {{language}}",
+      "chooseLanguage": "Elige un idioma compatible"
+    },
     "apiKeyOptional": "Clave API (opcional)",
     "getKey": "Obtener clave ->",
     "endpointUrl": "URL del endpoint",

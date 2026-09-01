@@ -354,7 +354,7 @@ const clampVadValue = (key: WhisperVadKey, raw: unknown): number => {
   return round ? Math.round(clamped) : clamped;
 };
 
-const LANGUAGE_MIGRATIONS: Record<string, string> = { zh: "zh-CN" };
+const LANGUAGE_MIGRATIONS: Record<string, string> = { zh: "zh-CN", en: "en-US" };
 
 function migratePreferredLanguage() {
   if (!isBrowser) return;

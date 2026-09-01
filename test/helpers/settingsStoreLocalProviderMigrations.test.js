@@ -8,6 +8,18 @@ const modelRegistryData = require("../../src/models/modelRegistryData.json");
 // list used to be hand-maintained and missed `liquidai` when LFM landed
 // (#1176), so a legacy LFM selection would have migrated to `providers`. Every
 // registry local provider must classify as local in both migrations.
+test("persisted English language preference migrates to US English", async (t) => {
+  const { storage } = installBrowserGlobals(t);
+  storage.setItem("preferredLanguage", "en");
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-preferred-language-migration-test-",
+  });
+
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  assert.equal(storage.getItem("preferredLanguage"), "en-US");
+  assert.equal(useSettingsStore.getState().preferredLanguage, "en-US");
+});
+
 test("provider migrations classify every registry local provider as local", async (t) => {
   const localProviderIds = modelRegistryData.localProviders.map((provider) => provider.id);
   assert.ok(localProviderIds.includes("liquidai"), "the regression case must be in the registry");

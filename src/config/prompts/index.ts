@@ -17,7 +17,7 @@ export interface ResolvePromptOptions {
 export function resolvePrompt(kind: PromptKind, opts: ResolvePromptOptions): string {
   const custom = useSettingsStore.getState().customPrompts[kind];
   const template = custom || getDefaultPromptText(kind, opts.uiLanguage);
-  return applySubstitutions(template, opts);
+  return applySubstitutions(kind, template, opts);
 }
 
 export function getDefaultPromptText(kind: PromptKind, uiLanguage?: string): string {
@@ -58,7 +58,11 @@ export function appendDictionarySuffix(
   return prompt + suffix + customDictionary.join(", ");
 }
 
-function applySubstitutions(template: string, opts: ResolvePromptOptions): string {
+function applySubstitutions(
+  kind: PromptKind,
+  template: string,
+  opts: ResolvePromptOptions
+): string {
   const name = opts.agentName?.trim() || "Assistant";
   let prompt = template.replace(/\{\{agentName\}\}/g, name);
 
@@ -66,8 +70,8 @@ function applySubstitutions(template: string, opts: ResolvePromptOptions): strin
     prompt = prompt.replace(/\{\{targetLanguage\}\}/g, opts.targetLanguageLabel);
   }
 
-  const langInstruction = getLanguageInstruction(opts.language);
-  if (langInstruction) prompt += "\n\n" + langInstruction;
+  const langInstruction = kind === "cleanup" ? getLanguageInstruction(opts.language) : "";
+  if (langInstruction) prompt = langInstruction + "\n\n" + prompt;
 
   return appendDictionarySuffix(prompt, opts.customDictionary, opts.uiLanguage);
 }

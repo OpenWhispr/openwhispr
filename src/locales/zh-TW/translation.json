@@ -809,6 +809,11 @@
       "requiresMacOS": "macOS {{version}}+",
       "unavailable": "無法使用"
     },
+    "modelCompatibility": {
+      "englishOnly": "僅支援英文",
+      "unsupported": "不支援{{language}}",
+      "chooseLanguage": "請選擇支援的語言"
+    },
     "apiKeyOptional": "API Key（選填）",
     "getKey": "取得金鑰 ->",
     "endpointUrl": "端點 URL",

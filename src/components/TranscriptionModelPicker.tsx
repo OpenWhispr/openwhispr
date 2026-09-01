@@ -18,6 +18,7 @@ import {
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
   PARAKEET_MODEL_INFO,
+  getParakeetLanguageCompatibility,
   isCohereTranscribeModel,
   isSherpaLocalProvider,
 } from "../models/ModelRegistry";
@@ -41,6 +42,7 @@ import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
 import logger from "../utils/logger";
+import { getLanguageLabel } from "../utils/languageSupport";
 import type { ParakeetCheckResult } from "../types/electron";
 
 interface LocalModel {
@@ -63,6 +65,7 @@ interface LocalModelCardProps {
   recommended?: boolean;
   provider: string;
   languageLabel?: string;
+  isLanguageUnsupported?: boolean;
   onSelect: () => void;
   onDelete: () => void;
   onDownload: () => void;
@@ -84,6 +87,7 @@ function LocalModelCard({
   recommended,
   provider,
   languageLabel,
+  isLanguageUnsupported,
   onSelect,
   onDelete,
   onDownload,
@@ -92,7 +96,7 @@ function LocalModelCard({
 }: LocalModelCardProps) {
   const { t } = useTranslation();
   const handleClick = () => {
-    if (isDownloaded && !isSelected) {
+    if (isDownloaded && !isSelected && !isLanguageUnsupported) {
       onSelect();
     }
   };
@@ -100,9 +104,12 @@ function LocalModelCard({
   return (
     <div
       onClick={handleClick}
+      aria-disabled={isLanguageUnsupported || undefined}
       className={`relative w-full text-left overflow-hidden rounded-md border transition-colors duration-200 group ${
         isSelected ? cardStyles.modelCard.selected : cardStyles.modelCard.default
-      } ${isDownloaded && !isSelected ? "cursor-pointer" : ""}`}
+      } ${isDownloaded && !isSelected && !isLanguageUnsupported ? "cursor-pointer" : ""} ${
+        isLanguageUnsupported ? "opacity-60" : ""
+      }`}
     >
       <div className="flex items-center gap-1.5 p-2">
         <div className="shrink-0">
@@ -133,7 +140,14 @@ function LocalModelCard({
             <span className={cardStyles.badges.recommended}>{t("common.recommended")}</span>
           )}
           {languageLabel && (
-            <span className="text-xs text-muted-foreground/50 font-medium shrink-0">
+            <span
+              title={languageLabel}
+              className={`max-w-44 truncate text-xs font-medium shrink-0 ${
+                isLanguageUnsupported
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-muted-foreground/50"
+              }`}
+            >
               {languageLabel}
             </span>
           )}
@@ -389,6 +403,7 @@ export default function TranscriptionModelPicker({
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
   const [localModels, setLocalModels] = useState<LocalModel[]>([]);
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
@@ -1103,6 +1118,23 @@ export default function TranscriptionModelPicker({
             language: "en",
             recommended: false,
           };
+          const languageCompatibility = getParakeetLanguageCompatibility(
+            modelId,
+            preferredLanguage
+          );
+          const isLanguageUnsupported =
+            languageCompatibility === "language-required" ||
+            languageCompatibility === "unsupported";
+          let languageLabel: string | undefined;
+          if (languageCompatibility === "english-only") {
+            languageLabel = t("transcription.modelCompatibility.englishOnly");
+          } else if (languageCompatibility === "language-required") {
+            languageLabel = t("transcription.modelCompatibility.chooseLanguage");
+          } else if (languageCompatibility === "unsupported") {
+            languageLabel = t("transcription.modelCompatibility.unsupported", {
+              language: getLanguageLabel(preferredLanguage),
+            });
+          }
 
           return (
             <LocalModelCard
@@ -1119,6 +1151,8 @@ export default function TranscriptionModelPicker({
               isInstalling={isInstallingParakeet}
               recommended={info.recommended}
               provider={provider}
+              languageLabel={languageLabel}
+              isLanguageUnsupported={isLanguageUnsupported}
               onSelect={() => handleParakeetModelSelect(modelId)}
               onDelete={() => handleParakeetDelete(modelId)}
               onDownload={() =>
@@ -1126,7 +1160,7 @@ export default function TranscriptionModelPicker({
                   setParakeetModels((prev) =>
                     prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
                   );
-                  handleParakeetModelSelect(downloadedId);
+                  if (!isLanguageUnsupported) handleParakeetModelSelect(downloadedId);
                 })
               }
               onCancel={cancelParakeetDownload}
