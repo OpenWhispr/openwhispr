@@ -40,17 +40,26 @@ export function useControlPanelWindowDrag(enabled) {
       void api.stopControlPanelDrag?.();
     };
     const onMouseDown = (event) => {
-      if (event.button !== 0 || event.clientY > DRAG_STRIP_HEIGHT_PX) return;
-      if (event.target instanceof Element && event.target.closest(INTERACTIVE_SELECTOR)) return;
+      if (event.button !== 0) return;
+      const target = event.target instanceof Element ? event.target : null;
+      // The universal titlebar band, plus any surface that declares itself
+      // window chrome (e.g. the compact onboarding hero via
+      // data-window-drag-zone in OnboardingShell).
+      const inDragZone =
+        event.clientY <= DRAG_STRIP_HEIGHT_PX || Boolean(target?.closest("[data-window-drag-zone]"));
+      if (!inDragZone) return;
+      if (target?.closest(INTERACTIVE_SELECTOR)) return;
       dragging = true;
       void api.startControlPanelDrag();
     };
-    window.addEventListener("mousedown", onMouseDown);
+    // Capture phase: a step's own mousedown handling must not be able to
+    // swallow the titlebar gesture before it reaches this window listener.
+    window.addEventListener("mousedown", onMouseDown, true);
     window.addEventListener("mouseup", stop);
     window.addEventListener("blur", stop);
     return () => {
       stop();
-      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("mousedown", onMouseDown, true);
       window.removeEventListener("mouseup", stop);
       window.removeEventListener("blur", stop);
     };

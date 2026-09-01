@@ -203,15 +203,20 @@ export default function OnboardingShell({
         } as CSSProperties
       }
     >
-      {/* 48px, not a sliver: this is the frameless window's only title bar, so
-          it has to be a target someone can actually grab. Interactive overlays
-          in this band need z-60 + app-region: no-drag and must live outside the
-          step wrapper (a sibling here, or portalled to body) — the wrapper's
-          entry animation retains a transform, capping its descendants below
-          z-50. */}
+      {/* This is the frameless window's only title bar, so it has to be a
+          target someone can actually grab: 48px normally, and on compact
+          screens the full 192px hero band — the dithered ramp reads as window
+          chrome, so people grab it to move the window. Interactive overlays
+          in this band need z-60 + app-region: no-drag and must live outside
+          the step wrapper (a sibling here, or portalled to body) — the
+          wrapper's entry animation retains a transform, capping its
+          descendants below z-50. data-window-drag-zone lets the JS drag
+          fallback (useControlPanelWindowDrag, for macOS where the transparent
+          window can drop app-region) honor the same footprint. */}
       <div
-        className="absolute inset-x-0 top-0 z-50 h-12"
+        className={`absolute inset-x-0 top-0 z-50 ${compact ? "h-48" : "h-12"}`}
         style={{ WebkitAppRegion: "drag" } as CSSProperties}
+        data-window-drag-zone=""
         aria-hidden="true"
       />
       {getPlatform() !== "darwin" && <OnboardingWindowControls />}
