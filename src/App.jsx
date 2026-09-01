@@ -293,7 +293,7 @@ export default function App() {
   // a menu opening over the compact pill resolves to EXPANDED geometry.
   const windowFitsCompactPill = voicePillIsRecording || voiceActivity.compactPill;
 
-  const { dictationErrorPillHandoffActive } = useMainWindowSizeOwner({
+  const { dictationErrorPillHandoffActive, panelReturnResizeActive } = useMainWindowSizeOwner({
     requestMainWindowSize,
     dictationErrorActionCount,
     toastCount,
@@ -561,7 +561,8 @@ export default function App() {
     assistantClosing: assistant.closing,
     hasLiveActivity: voicePillIsRecording || voicePillIsProcessing,
   });
-  const pillVisuallySuppressed = dictationErrorSuppressesPill || assistantActionsSuppressPill;
+  const pillVisuallySuppressed =
+    dictationErrorSuppressesPill || assistantActionsSuppressPill || panelReturnResizeActive;
   const pillInteractionSuppressed = pillVisuallySuppressed || assistant.closing;
 
   return (

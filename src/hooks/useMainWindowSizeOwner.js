@@ -3,12 +3,19 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { createDictationErrorPillHandoff } from "../utils/dictationErrorPillHandoff";
 import { SIZE_RANK, resolveMainWindowSizeKey } from "../utils/windowSizeLadder";
 
+// The pill container fades with App.jsx's `transition-opacity duration-150`;
+// wait out that fade plus a couple of frames so setBounds can never catch a
+// half-visible pill — change together.
+const PANEL_RETURN_FADE_MS = 180;
+
 /**
  * Single owner of the main window size: panel > menu > toast > compact pill >
  * base. Grows apply immediately so content never clips; shrinks wait for the
  * content collapse animation to finish before the window snaps down. Also owns
- * the dictation-error pill handoff, which hides the pill until the native
- * window has left the error footprint.
+ * the two pill-visibility handoffs around risky native resizes: the
+ * dictation-error handoff (pill hidden until the window leaves the error
+ * footprint) and the panel-return handoff (pill faded out across the
+ * panel-to-pill shrink).
  */
 export function useMainWindowSizeOwner({
   requestMainWindowSize,
@@ -26,6 +33,13 @@ export function useMainWindowSizeOwner({
   const [handoffActive, setHandoffActive] = useState(false);
   const actionCountRef = useRef(dictationErrorActionCount);
   const handoffRef = useRef(null);
+  // Same masking for the panel-return shrink: snapping the native window from
+  // panel bounds back to the pill box paints one compositor frame of the old
+  // texture inside the new bounds, which blanks the just-settled pill. Fade
+  // the pill out, resize while nothing shows, reveal at rest.
+  const [panelReturnResizeActive, setPanelReturnResizeActive] = useState(false);
+  const panelReturnSuppressedRef = useRef(false);
+  const panelReturnHandoffRef = useRef(null);
   useEffect(() => {
     const handoff = createDictationErrorPillHandoff({
       onSuppressedChange: setHandoffActive,
@@ -34,9 +48,20 @@ export function useMainWindowSizeOwner({
     });
     handoffRef.current = handoff;
     if (actionCountRef.current > 0) handoff.suppress();
+    const panelReturnHandoff = createDictationErrorPillHandoff({
+      onSuppressedChange: (suppressed) => {
+        panelReturnSuppressedRef.current = suppressed;
+        setPanelReturnResizeActive(suppressed);
+      },
+    });
+    panelReturnHandoffRef.current = panelReturnHandoff;
     return () => {
       handoff.dispose();
+      panelReturnHandoff.dispose();
       if (handoffRef.current === handoff) handoffRef.current = null;
+      if (panelReturnHandoffRef.current === panelReturnHandoff) {
+        panelReturnHandoffRef.current = null;
+      }
     };
   }, []);
 
@@ -57,6 +82,11 @@ export function useMainWindowSizeOwner({
       liveTranscriptMounted;
     if (panelOwnsWindow) {
       panelSizeReservationRef.current = true;
+      if (panelReturnSuppressedRef.current) {
+        // A panel reopened during the masked shrink; the pill re-docks inside
+        // it and must not stay hidden.
+        void panelReturnHandoffRef.current?.releaseAfter(async () => {});
+      }
       return undefined;
     }
 
@@ -94,7 +124,37 @@ export function useMainWindowSizeOwner({
       });
       return undefined;
     }
-    if (returningFromPanel || !prev || SIZE_RANK[target] >= SIZE_RANK[prev]) {
+    if (returningFromPanel) {
+      // The panel exit leaves the native window at panel bounds. Suppress the
+      // pill through its opacity fade, resize while nothing is visible, and
+      // reveal once bounds settle — the dictation-error handoff above exists
+      // for the same artifact. No cleanup: the chase below follows the size
+      // owner's latest target across effect re-runs.
+      const panelReturnHandoff = panelReturnHandoffRef.current;
+      if (!panelReturnHandoff) {
+        void requestMainWindowSize(target);
+        return undefined;
+      }
+      panelReturnHandoff.suppress();
+      void (async () => {
+        await new Promise((resolve) => setTimeout(resolve, PANEL_RETURN_FADE_MS));
+        // A panel reopening during the fade re-takes the window; leave its
+        // bounds alone and let the ownership branch reveal the pill.
+        if (panelSizeReservationRef.current) return;
+        await panelReturnHandoff.releaseAfter(async () => {
+          // A menu/toast edge can supersede the target while the fade runs.
+          // Follow the size owner's latest target before revealing.
+          let settledTarget = lastSizeKeyRef.current;
+          await requestMainWindowSize(settledTarget);
+          while (lastSizeKeyRef.current !== settledTarget) {
+            settledTarget = lastSizeKeyRef.current;
+            await requestMainWindowSize(settledTarget);
+          }
+        });
+      })();
+      return undefined;
+    }
+    if (!prev || SIZE_RANK[target] >= SIZE_RANK[prev]) {
       void requestMainWindowSize(target);
       return undefined;
     }
@@ -128,5 +188,5 @@ export function useMainWindowSizeOwner({
     void handoffRef.current?.releaseAfter(async () => {});
   }, [assistantMounted, dictationErrorActionCount, handoffActive, liveTranscriptMounted]);
 
-  return { dictationErrorPillHandoffActive: handoffActive };
+  return { dictationErrorPillHandoffActive: handoffActive, panelReturnResizeActive };
 }
