@@ -2747,10 +2747,11 @@ class IPCHandlers {
     ipcMain.handle("paste-text", async (event, text, options) => {
       // An onboarding demo already puts the transcript in its own textarea from
       // the demo event, and that textarea is what has focus — pasting on top of
-      // it appends the same sentence a second time. Reported as success because
-      // nothing failed and the caller would otherwise toast a paste error.
+      // it appends the same sentence a second time. This is a successful no-op,
+      // not a completed paste, so callers can avoid reporting paste-dependent
+      // fallbacks as if text reached another application.
       if (this.windowManager?.isOnboardingDemoActive()) {
-        return { success: true };
+        return { success: true, pasted: false };
       }
 
       const mainWindow = this.windowManager?.mainWindow;
@@ -2814,8 +2815,9 @@ class IPCHandlers {
       // ClipboardManager returns `restoreComplete` so main-process callers can
       // serialize subsequent clipboard work behind its delayed restore. A
       // Promise cannot cross Electron's IPC boundary, though, and renderer
-      // callers only need to know that the paste was accepted.
-      return { success: true };
+      // callers need to know that the paste completed, but not its delayed
+      // clipboard restoration promise.
+      return { success: true, pasted: true };
     });
 
     ipcMain.handle("check-accessibility-permission", async (_event, silent = false) => {

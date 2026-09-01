@@ -22,7 +22,7 @@ export default class FakeAudioManager {
   shouldUseStreaming() { return false; }
   async safePaste() {
     this.pasteCalls += 1;
-    return globalThis.__cleanupFallbackPasteSucceeded;
+    return globalThis.__cleanupFallbackPasteOutcome?.pasted === true;
   }
   saveTranscription() {}
   cleanup() {}
@@ -34,7 +34,7 @@ test("raw cleanup fallback is reported only after the original dictation is past
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
     delete globalThis.__cleanupFallbackManager;
-    delete globalThis.__cleanupFallbackPasteSucceeded;
+    delete globalThis.__cleanupFallbackPasteOutcome;
   });
 
   const noopDispose = () => () => {};
@@ -94,19 +94,19 @@ test("raw cleanup fallback is reported only after the original dictation is past
     cleanupFailure,
   };
 
-  globalThis.__cleanupFallbackPasteSucceeded = true;
+  globalThis.__cleanupFallbackPasteOutcome = { success: true, pasted: true };
   await React.act(async () => manager.callbacks.onTranscriptionComplete({ ...result }));
   assert.equal(manager.pasteCalls, 1);
   assert.equal(useCleanupFailureStore.getState().pending, 1);
   assert.deepEqual(useCleanupFailureStore.getState().lastFailure, cleanupFailure);
 
   useCleanupFailureStore.setState({ pending: 0, lastFailure: null });
-  globalThis.__cleanupFallbackPasteSucceeded = false;
+  globalThis.__cleanupFallbackPasteOutcome = { success: true, pasted: false };
   await React.act(async () => manager.callbacks.onTranscriptionComplete({ ...result }));
   assert.equal(useCleanupFailureStore.getState().pending, 0);
 
   useSettingsStore.setState({ autoPasteEnabled: false, keepTranscriptionInClipboard: false });
-  globalThis.__cleanupFallbackPasteSucceeded = true;
+  globalThis.__cleanupFallbackPasteOutcome = { success: true, pasted: true };
   await React.act(async () => manager.callbacks.onTranscriptionComplete({ ...result }));
   assert.equal(useCleanupFailureStore.getState().pending, 0);
 });
