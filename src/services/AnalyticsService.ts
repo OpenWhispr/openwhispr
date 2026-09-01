@@ -11,9 +11,13 @@ export async function syncPendingAnalytics(): Promise<number> {
       await window.electronAPI.getPendingAnalyticsEvents(BATCH_SIZE);
     if (events.length === 0) return synced;
 
-    // The batch endpoint is all-or-nothing: it validates every event before
-    // recording any, so a 200 means each id it echoes back was stored. A
-    // rejected batch throws and stays pending for the next pass.
+    // `accepted` is an ack list, not a list of stored rows. The endpoint
+    // validates per event and deliberately echoes back the ids it refused as
+    // permanently invalid, so marking exactly `accepted` as synced is what
+    // retires them. Narrowing this to the ids that were actually stored -- or
+    // deriving it from the sibling `rejected` field -- would leave a row that
+    // can never validate at the head of the queue forever. A batch the server
+    // refuses outright throws and stays pending for the next pass.
     const result = await cloudPost<{ accepted: string[] }>("/api/analytics/events/batch", {
       events,
     });

@@ -1446,10 +1446,12 @@ class DatabaseManager {
         "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL"
       );
       const hardDelete = this.db.prepare("DELETE FROM transcriptions WHERE cloud_id IS NULL");
-      // The cloud has no analytics delete route, so a tombstone could never be
-      // pushed; erase the device copy outright. Counters already uploaded stay
-      // in the account until it is deleted -- see settingsPage.privacy
-      // .insightsSyncDescription, which tells the user so before they opt in.
+      // Clearing history erases the device copy outright rather than
+      // tombstoning it: the client never calls the cloud's analytics delete
+      // route, so a tombstone would have nowhere to go. Counters already
+      // uploaded stay in the account until it is deleted -- see settingsPage
+      // .privacy.insightsSyncDescription, which tells the user so before they
+      // opt in.
       const hardDeleteAnalytics = this.db.prepare("DELETE FROM analytics_events");
       const clearAll = this.db.transaction(() => {
         const cleared = tombstone.run().changes + hardDelete.run().changes;
@@ -1491,10 +1493,12 @@ class DatabaseManager {
       // created_at is CURRENT_TIMESTAMP ("2026-08-30 10:00:00"), the same
       // format as the cutoff, while occurred_at is a renderer ISO string whose
       // "T" sorts above a space and would spare every same-day row. Pending
-      // rows go too -- the cloud has no delete route, so pushing first would
-      // make a retention setting cause an upload. Anything already uploaded
-      // stays in the account, as settingsPage.privacy.insightsSyncDescription
-      // says before the user opts in.
+      // rows go too, and the purge stays local: pushing them first would make
+      // a retention setting cause an upload, and the client never calls the
+      // cloud's analytics delete route, so nothing is erased server-side
+      // either. Anything already uploaded stays in the account, as
+      // settingsPage.privacy.insightsSyncDescription says before the user opts
+      // in.
       const purgeAnalytics = this.db.prepare("DELETE FROM analytics_events WHERE created_at < ?");
       let analyticsPurged = 0;
       this.db.transaction(() => {

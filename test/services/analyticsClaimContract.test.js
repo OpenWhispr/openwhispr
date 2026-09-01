@@ -11,9 +11,9 @@ const read = (relativePath) =>
 // when they were spoken, and insightsSyncEnabled is device-scoped and survives
 // sign-out while sign-out clears only isSignedIn. A claim inside the sync path
 // therefore reads as: user A signs out, dictates, user B signs in, and B's
-// first pass uploads A's counters into B's account -- unrevocably, since the
-// cloud has no analytics delete route. The claim must stay where the user is
-// actually asked (useInsightsSyncOptIn's dialog).
+// first pass uploads A's counters into B's account -- unrevocably, since this
+// client never calls the cloud's analytics delete route. The claim must stay
+// where the user is actually asked (useInsightsSyncOptIn's dialog).
 test("syncing analytics never adopts unattributed counters", () => {
   assert.equal(
     read("src/services/AnalyticsService.ts").includes("claimAnonymousAnalyticsEvents"),
