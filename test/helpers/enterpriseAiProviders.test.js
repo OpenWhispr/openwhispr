@@ -90,6 +90,117 @@ test("managed Bedrock credentials are resolved once before the real SDK reaches 
   assert.equal(request.headers["x-amz-security-token"], "example-session-token");
 });
 
+test("explicit Bedrock credential sources cannot fall through to populated AWS environment", async (t) => {
+  const environmentKeys = [
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+  ];
+  const originalEnvironment = new Map(
+    environmentKeys.map((key) => [
+      key,
+      {
+        present: Object.prototype.hasOwnProperty.call(process.env, key),
+        value: process.env[key],
+      },
+    ])
+  );
+  const originalFetch = global.fetch;
+  let fetchCalls = 0;
+  process.env.AWS_ACCESS_KEY_ID = "AKIAENVIRONMENT";
+  process.env.AWS_SECRET_ACCESS_KEY = "environment-secret";
+  process.env.AWS_SESSION_TOKEN = "environment-session-token";
+  global.fetch = async () => {
+    fetchCalls += 1;
+    return new Response("{}", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  t.after(() => {
+    global.fetch = originalFetch;
+    for (const [key, original] of originalEnvironment) {
+      if (original.present) process.env[key] = original.value;
+      else delete process.env[key];
+    }
+  });
+
+  for (const [label, enterprise] of [
+    ["null managed result", { managedCredentialProvider: async () => null }],
+    [
+      "missing managed access key",
+      { managedCredentialProvider: async () => ({ secretAccessKey: "managed-secret" }) },
+    ],
+    [
+      "missing managed secret",
+      { managedCredentialProvider: async () => ({ accessKeyId: "AKIAMANAGED" }) },
+    ],
+    ["partial manual static keys", { bedrockAccessKeyId: "AKIAEXPLICIT" }],
+  ]) {
+    await assert.rejects(
+      getEnterpriseAIModel("bedrock", "anthropic.claude-haiku", "", {
+        bedrockRegion: "us-west-2",
+        ...enterprise,
+      }),
+      (error) =>
+        error?.name === "CredentialsProviderError" &&
+        /accessKeyId and secretAccessKey/.test(error.message),
+      label
+    );
+  }
+  assert.equal(fetchCalls, 0);
+});
+
+test("Bedrock environment fallback remains available without an explicit credential source", async (t) => {
+  const environmentKeys = [
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+  ];
+  const originalEnvironment = new Map(
+    environmentKeys.map((key) => [
+      key,
+      {
+        present: Object.prototype.hasOwnProperty.call(process.env, key),
+        value: process.env[key],
+      },
+    ])
+  );
+  const originalFetch = global.fetch;
+  let request;
+  process.env.AWS_ACCESS_KEY_ID = "AKIAENVIRONMENT";
+  process.env.AWS_SECRET_ACCESS_KEY = "environment-secret";
+  process.env.AWS_SESSION_TOKEN = "environment-session-token";
+  global.fetch = async (url, init) => {
+    request = {
+      url: String(url),
+      headers: Object.fromEntries(new Headers(init.headers)),
+    };
+    return new Response("{}", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  t.after(() => {
+    global.fetch = originalFetch;
+    for (const [key, original] of originalEnvironment) {
+      if (original.present) process.env[key] = original.value;
+      else delete process.env[key];
+    }
+  });
+
+  const model = await getEnterpriseAIModel("bedrock", "anthropic.claude-haiku", "", {
+    bedrockRegion: "us-west-2",
+  });
+  await assert.rejects(
+    model.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }] })
+  );
+
+  assert.match(request.url, /^https:\/\/bedrock-runtime\.us-west-2\.amazonaws\.com\//);
+  assert.match(request.headers.authorization, /^AWS4-HMAC-SHA256 /);
+  assert.equal(request.headers["x-amz-security-token"], "environment-session-token");
+});
+
 test("the pinned Azure SDK requests the deployment below /openai/v1 with bearer auth", async (t) => {
   const originalFetch = global.fetch;
   t.after(() => {

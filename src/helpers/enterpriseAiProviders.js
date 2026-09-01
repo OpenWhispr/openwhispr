@@ -24,13 +24,41 @@ async function getEnterpriseAIModel(provider, model, apiKey, enterprise) {
 async function createBedrockModel(model, enterprise) {
   const { createAmazonBedrock } = require("@ai-sdk/amazon-bedrock");
   const region = enterprise?.bedrockRegion || "us-east-1";
+  const explicitCredentialSource = enterprise?.managedCredentialProvider
+    ? "managed credential provider"
+    : enterprise?.bedrockProfile
+      ? "profile credential provider"
+      : enterprise?.bedrockAccessKeyId || enterprise?.bedrockSecretAccessKey
+        ? "static credentials"
+        : null;
   const credentials = enterprise?.managedCredentialProvider
     ? await enterprise.managedCredentialProvider()
     : enterprise?.bedrockProfile
       ? await require("@aws-sdk/credential-providers").fromNodeProviderChain({
           profile: enterprise.bedrockProfile,
         })()
-      : null;
+      : explicitCredentialSource
+        ? {
+            accessKeyId: enterprise.bedrockAccessKeyId,
+            secretAccessKey: enterprise.bedrockSecretAccessKey,
+            sessionToken: enterprise.bedrockSessionToken,
+          }
+        : null;
+
+  if (
+    explicitCredentialSource &&
+    (!credentials ||
+      typeof credentials.accessKeyId !== "string" ||
+      credentials.accessKeyId.length === 0 ||
+      typeof credentials.secretAccessKey !== "string" ||
+      credentials.secretAccessKey.length === 0)
+  ) {
+    const error = new Error(
+      `AWS ${explicitCredentialSource} returned invalid credentials. Expected accessKeyId and secretAccessKey.`
+    );
+    error.name = "CredentialsProviderError";
+    throw error;
+  }
 
   return createAmazonBedrock({
     region,
@@ -40,13 +68,7 @@ async function createBedrockModel(model, enterprise) {
           secretAccessKey: credentials.secretAccessKey,
           sessionToken: credentials.sessionToken,
         }
-      : enterprise?.bedrockAccessKeyId && enterprise?.bedrockSecretAccessKey
-        ? {
-            accessKeyId: enterprise.bedrockAccessKeyId,
-            secretAccessKey: enterprise.bedrockSecretAccessKey,
-            sessionToken: enterprise.bedrockSessionToken,
-          }
-        : {}),
+      : {}),
   })(model);
 }
 
