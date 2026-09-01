@@ -153,8 +153,11 @@ export function LiquidCancelButton({
   }, [skinActive]);
 
   const slotWidth = t * (CANCEL_BUTTON_GAP + CANCEL_BUTTON_SIZE);
-  // The absolute button overlaps the pill until its slot is at least one button wide.
-  const buttonInteractive = visible && slotWidth >= CANCEL_BUTTON_SIZE;
+  // The fused bud overlaps the pill until its slot is at least one button wide,
+  // so it stays inert until it clears. Plain mode scales in on its own hit area
+  // and is the panel's persistent discard control — it must be clickable at
+  // mount, as it was before the emergence motion existed.
+  const buttonInteractive = visible && (!fused || slotWidth >= CANCEL_BUTTON_SIZE);
   const showSkin = skinActive || (fused && skinLingers);
   const outline = useMemo(() => {
     if (!showSkin) return null;
@@ -205,11 +208,16 @@ export function LiquidCancelButton({
           onCancel();
         }}
         className={cn(
-          "absolute right-0 top-0 flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+          "absolute right-0 top-0 flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
           !fused && "border border-border/55 bg-surface-2 shadow-sm hover:bg-surface-3",
           !buttonInteractive && "pointer-events-none"
         )}
         style={{
+          // Sized from the shared contract, not a utility class: the skin traces
+          // its circle at CANCEL_BUTTON_SIZE / 2, so a literal here would let the
+          // outline and the real control drift apart.
+          width: CANCEL_BUTTON_SIZE,
+          height: CANCEL_BUTTON_SIZE,
           // The glyph surfaces once the bud is mostly out; plain mode just
           // scales in with the slot.
           opacity: fused ? Math.max(0, (t - 0.35) / 0.65) : t,
