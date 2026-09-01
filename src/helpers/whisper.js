@@ -13,6 +13,11 @@ const {
 const WhisperServerManager = require("./whisperServer");
 const { createAbortError } = require("./abortError");
 const { getModelsDirForService } = require("./modelDirUtils");
+const {
+  IDLE_TIMEOUT_MS,
+  shouldPauseServer,
+  recordActivity,
+} = require("./transcriptionIdlePolicy");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 
@@ -69,6 +74,9 @@ class WhisperManager {
     this._rewarmInFlight = false;
     this._cudaBinaryManager = null;
     this._vulkanBinaryManager = null;
+    // Idle pause/resume state
+    this._idleTimer = null;
+    this._lastActivityMs = Date.now();
   }
 
   setGpuBinaryManagers({ cuda, vulkan }) {
@@ -293,6 +301,8 @@ class WhisperManager {
     try {
       await this.serverManager.start(modelPath, options);
       this.currentServerModel = modelName;
+      this._recordActivity();
+      this._resetIdleTimer();
       debugLogger.info("whisper-server started", {
         model: modelName,
         port: this.serverManager.port,
@@ -305,8 +315,46 @@ class WhisperManager {
   }
 
   async stopServer() {
+    this._clearIdleTimer();
     await this.serverManager.stop();
     this.currentServerModel = null;
+  }
+
+  _resetIdleTimer() {
+    this._clearIdleTimer();
+    this._idleTimer = setTimeout(() => {
+      const state = {
+        serverRunning: this.serverManager.ready,
+        transcribing: this._transcribing,
+        rewarmInFlight: this._rewarmInFlight,
+        lastActivityMs: this._lastActivityMs,
+        nowMs: Date.now(),
+      };
+
+      if (shouldPauseServer(state)) {
+        debugLogger.info("whisper-server idle timeout reached, stopping to free memory", {
+          timeoutMs: IDLE_TIMEOUT_MS,
+          model: this.currentServerModel,
+        });
+        this.stopServer().catch((err) => {
+          debugLogger.warn("Failed to stop whisper-server after idle timeout", {
+            error: err.message,
+          });
+        });
+      }
+    }, IDLE_TIMEOUT_MS);
+    this._idleTimer.unref?.();
+  }
+
+  _clearIdleTimer() {
+    if (this._idleTimer) {
+      clearTimeout(this._idleTimer);
+      this._idleTimer = null;
+    }
+  }
+
+  _recordActivity() {
+    this._lastActivityMs = recordActivity(Date.now());
   }
 
   async onWakeFromSleep() {
@@ -399,12 +447,18 @@ class WhisperManager {
   }
 
   async transcribeViaServer(audioBlob, model, language, initialPrompt = null, options = {}) {
+    // Clear idle timer during active work
+    this._clearIdleTimer();
+
     // Mark the server busy so a wake re-warm doesn't kill an in-flight dictation. See #766.
     this._transcribing = true;
     try {
       return await this._runServerTranscription(audioBlob, model, language, initialPrompt, options);
     } finally {
       this._transcribing = false;
+      // Record activity and reset idle timer after transcription completes
+      this._recordActivity();
+      this._resetIdleTimer();
     }
   }
 
