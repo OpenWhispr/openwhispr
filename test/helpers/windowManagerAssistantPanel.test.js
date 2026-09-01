@@ -418,7 +418,7 @@ test("native Linux push-to-talk keeps only the dictation low-level listener", as
       isInListeningMode: () => false,
       isUsingNativeShortcut: () => true,
       getNativeListenerKeys: () => ["Control+Space", "Control+Shift+Space"],
-      slotHasHotkey: (slot, key) => slot === "dictation" && key === "Control+Space",
+      findSlotByHotkey: (key) => (key === "Control+Space" ? "dictation" : "voiceAgent"),
     };
     await manager.setActivationModeCache("push");
     manager.linuxKeyManager = {

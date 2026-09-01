@@ -14,6 +14,18 @@ const DICTATION_INPUT_KIND = Object.freeze({
 const VALID_STATES = new Set(Object.values(DICTATION_LIFECYCLE));
 const VALID_INPUT_KINDS = new Set(Object.values(DICTATION_INPUT_KIND));
 
+// Hotkey slot names and dictation input kinds are parallel vocabularies:
+// slots name the binding ("voiceAgent"), kinds name the recording ("assistant").
+const SLOT_FOR_INPUT_KIND = Object.freeze({
+  [DICTATION_INPUT_KIND.DICTATION]: "dictation",
+  [DICTATION_INPUT_KIND.ASSISTANT]: "voiceAgent",
+  [DICTATION_INPUT_KIND.TRANSLATION]: "translation",
+});
+
+function slotForInputKind(inputKind) {
+  return SLOT_FOR_INPUT_KIND[normalizeDictationInputKind(inputKind)];
+}
+
 function normalizeDictationLifecycle(state) {
   return VALID_STATES.has(state) ? state : DICTATION_LIFECYCLE.IDLE;
 }
@@ -74,4 +86,5 @@ module.exports = {
   shouldIgnoreDictationHotkey,
   isDictationRecording,
   shouldBlockDictationWhilePanelOpen,
+  slotForInputKind,
 };

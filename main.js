@@ -1024,7 +1024,7 @@ async function startApp() {
             }
           }
         }
-        windowManager.resetWindowsPushState();
+        windowManager.resetNativePushState();
         windowManager.reconcileNativeKeyListeners();
       })
       .catch((err) => {
@@ -1673,7 +1673,7 @@ async function startApp() {
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         if (windowManager.getActivationMode() === "push") {
-          windowManager.startWindowsPushToTalk(key);
+          windowManager.startNativePushToTalk(key);
         } else {
           windowManager.sendToggleDictation();
         }
@@ -1693,13 +1693,13 @@ async function startApp() {
     // Only dictation drives push-to-talk, so only its key-up matters.
     const dispatchNativeKeyUp = (key) => {
       if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
-      if (windowManager.winPushState?.active) {
-        windowManager.handleWindowsPushKeyUp(key);
+      if (windowManager.nativePushState?.active) {
+        windowManager.handleNativePushKeyUp(key);
       } else if (
         isLiveWindow(windowManager.mainWindow) &&
         windowManager.getActivationMode() === "push"
       ) {
-        windowManager.handleWindowsPushKeyUp(key);
+        windowManager.handleNativePushKeyUp(key);
       }
     };
 
@@ -1747,7 +1747,7 @@ async function startApp() {
     setTimeout(() => windowManager.reconcileNativeKeyListeners(), STARTUP_DELAY_MS);
 
     ipcMain.on("hotkey-changed", () => {
-      windowManager.resetWindowsPushState();
+      windowManager.resetNativePushState();
       windowManager.reconcileNativeKeyListeners();
     });
   }
