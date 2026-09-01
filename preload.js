@@ -84,7 +84,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
-  onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
+  onStartDictation: registerListener(
+    "start-dictation",
+    (callback) => (_event, options) => callback(options)
+  ),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
   onPrepareDictation: registerListener(
     "prepare-dictation",
@@ -480,7 +483,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cleanupApp: () => ipcRenderer.invoke("cleanup-app"),
   updateHotkey: (hotkey) => ipcRenderer.invoke("update-hotkey", hotkey),
   setHotkeyListeningMode: (enabled) => ipcRenderer.invoke("set-hotkey-listening-mode", enabled),
-  getHotkeyModeInfo: (hotkey) => ipcRenderer.invoke("get-hotkey-mode-info", hotkey),
+  getHotkeyModeInfo: (hotkey, slot) => ipcRenderer.invoke("get-hotkey-mode-info", hotkey, slot),
   getHyprlandConfigStatus: () => ipcRenderer.invoke("get-hyprland-config-status"),
   startWindowDrag: () => ipcRenderer.invoke("start-window-drag"),
   stopWindowDrag: () => ipcRenderer.invoke("stop-window-drag"),
@@ -606,6 +609,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Activation mode persistence (file-based for reliable startup)
   getActivationMode: () => ipcRenderer.invoke("get-activation-mode"),
   saveActivationMode: (mode) => ipcRenderer.invoke("save-activation-mode", mode),
+  getSlotActivationModes: () => ipcRenderer.invoke("get-slot-activation-modes"),
 
   saveAllKeysToEnv: () => ipcRenderer.invoke("save-all-keys-to-env"),
   syncStartupPreferences: (prefs) => ipcRenderer.invoke("sync-startup-preferences", prefs),
@@ -950,8 +954,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   checkAccessibilityTrusted: () => ipcRenderer.invoke("check-accessibility-trusted"),
 
-  // Notify main process of activation mode changes (for Windows Push-to-Talk)
+  // Notify main process of activation mode changes (for Push-to-Talk)
   notifyActivationModeChanged: (mode) => ipcRenderer.send("activation-mode-changed", mode),
+  notifySlotActivationModeChanged: (slot, mode) =>
+    ipcRenderer.send("slot-activation-mode-changed", { slot, mode }),
   notifyHotkeyChanged: (hotkey) => ipcRenderer.send("hotkey-changed", hotkey),
   registerMeetingHotkey: (hotkey) => ipcRenderer.invoke("register-meeting-hotkey", hotkey),
 

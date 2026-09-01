@@ -280,6 +280,24 @@ test("an interrupt right after a latch cancels the accidental recording", (t) =>
   assert.equal(channels(sent).includes("cancel-hotkey-pressed"), true);
 });
 
+test("an interrupted native push session is cancelled, not transcribed", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  manager.startNativePushToTalk("GLOBE", "assistant");
+  t.mock.timers.tick(150);
+  manager.interruptNativePushSession("GLOBE");
+
+  assert.equal(channels(sent).includes("cancel-hotkey-pressed"), true);
+  assert.equal(channels(sent).includes("stop-dictation"), false);
+  assert.equal(manager.nativePushState, null);
+
+  // A session on another key is left alone.
+  manager.startNativePushToTalk("F9", "assistant");
+  manager.interruptNativePushSession("GLOBE");
+  assert.equal(manager.nativePushState?.active, true);
+});
+
 test("the dictation hotkey callback drives compound push-to-talk with the slot's kind", async (t) => {
   useGestureTimers(t);
   const { manager, sent } = makeManager();
