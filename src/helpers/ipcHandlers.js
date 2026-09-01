@@ -4357,38 +4357,53 @@ class IPCHandlers {
     ipcMain.handle("test-enterprise-connection", async (event, provider, config) => {
       const {
         mapEnterpriseError,
+        runAbortableOperation,
         runBedrockRequest,
         validateEnterpriseEndpoint,
       } = require("./enterpriseProviderErrors");
       let runtime;
       try {
-        runtime = await resolveEnterpriseRuntime(event, provider, config?.model || "test", config);
-        validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
-
         const { generateText } = require("ai");
         const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
 
-        const model = await getEnterpriseAIModel(
-          runtime.provider,
-          runtime.model,
-          runtime.apiKey,
-          runtime.enterprise
-        );
+        const resolveModel = (abortSignal) =>
+          runAbortableOperation(async () => {
+            runtime = await resolveEnterpriseRuntime(
+              event,
+              provider,
+              config?.model || "test",
+              config
+            );
+            abortSignal?.throwIfAborted();
+            validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
+            return getEnterpriseAIModel(
+              runtime.provider,
+              runtime.model,
+              runtime.apiKey,
+              runtime.enterprise
+            );
+          }, abortSignal);
 
-        const request = () => {
-          const abortSignal =
-            runtime.provider === "bedrock"
-              ? AbortSignal.timeout(config?.timeoutMs || 30_000)
-              : undefined;
-          return generateText({
+        if (provider === "bedrock") {
+          await runBedrockRequest(async () => {
+            const abortSignal = AbortSignal.timeout(config?.timeoutMs || 30_000);
+            const model = await resolveModel(abortSignal);
+            return generateText({
+              model,
+              prompt: "Say hello in one word.",
+              maxOutputTokens: 10,
+              abortSignal,
+              maxRetries: 0,
+            });
+          });
+        } else {
+          const model = await resolveModel();
+          await generateText({
             model,
             prompt: "Say hello in one word.",
             maxOutputTokens: 10,
-            ...(abortSignal ? { abortSignal } : {}),
-            ...(runtime.provider === "bedrock" ? { maxRetries: 0 } : {}),
           });
-        };
-        await (runtime.provider === "bedrock" ? runBedrockRequest(request) : request());
+        }
 
         return { success: true };
       } catch (err) {
@@ -4400,7 +4415,10 @@ class IPCHandlers {
         return {
           success: false,
           error: mapped.message,
+          messageKey: mapped.messageKey,
+          messageParams: mapped.messageParams,
           action: mapped.action,
+          actionKey: mapped.actionKey,
           copyCommand: mapped.copyCommand,
           retryable: mapped.retryable,
           technicalDetails: mapped.technicalDetails,
@@ -4414,6 +4432,7 @@ class IPCHandlers {
         const {
           isEnterpriseProvider,
           mapEnterpriseError,
+          runAbortableOperation,
           runBedrockRequest,
           validateEnterpriseEndpoint,
         } = require("./enterpriseProviderErrors");
@@ -4423,11 +4442,12 @@ class IPCHandlers {
           if (!isEnterpriseProvider(provider)) {
             throw new Error(`Unsupported enterprise provider: ${provider}`);
           }
-          const isBedrockRequest = provider === "bedrock";
-          const sender = isBedrockRequest ? event.sender : null;
+          const isBedrockCleanup =
+            provider === "bedrock" && config?.inferenceScope === "dictationCleanup";
+          const sender = isBedrockCleanup ? event.sender : null;
           const senderId = sender?.id;
-          const requestId = isBedrockRequest ? crypto.randomUUID() : null;
-          const controller = isBedrockRequest
+          const requestId = isBedrockCleanup ? crypto.randomUUID() : null;
+          const controller = isBedrockCleanup
             ? this._enterpriseReasoningRequests.begin(senderId, requestId)
             : null;
           const cancelSenderRequests = () =>
@@ -4439,30 +4459,26 @@ class IPCHandlers {
             }
             controller?.signal.throwIfAborted();
 
-            runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
-            controller?.signal.throwIfAborted();
-            if (!runtime.model) throw new Error("No model specified for enterprise reasoning");
-            validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
-
             const { generateText } = require("ai");
             const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
-
-            const model = await getEnterpriseAIModel(
-              runtime.provider,
-              runtime.model,
-              runtime.apiKey,
-              runtime.enterprise
-            );
-
             const timeoutMs = config?.timeoutMs || 60000;
-            const isBedrock = runtime.provider === "bedrock";
             // Opus 4.7 / GPT-5 / o-series dropped `temperature`; renderer
             // derives support from the model registry and we honor that here.
             const useTemperature = config?.supportsTemperature !== false;
-            const request = () => {
-              const abortSignal = isBedrock
-                ? AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)])
-                : AbortSignal.timeout(timeoutMs);
+            const resolveModel = (abortSignal) =>
+              runAbortableOperation(async () => {
+                runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
+                abortSignal?.throwIfAborted();
+                if (!runtime.model) throw new Error("No model specified for enterprise reasoning");
+                validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
+                return getEnterpriseAIModel(
+                  runtime.provider,
+                  runtime.model,
+                  runtime.apiKey,
+                  runtime.enterprise
+                );
+              }, abortSignal);
+            const generate = (model, abortSignal, disableNestedRetries = false) => {
               return generateText({
                 model,
                 system: config?.systemPrompt || "",
@@ -4470,12 +4486,27 @@ class IPCHandlers {
                 maxOutputTokens: config?.maxTokens || 4096,
                 ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
                 abortSignal,
-                ...(isBedrock ? { maxRetries: 0 } : {}),
+                ...(disableNestedRetries ? { maxRetries: 0 } : {}),
               });
             };
-            const { text: generated, finishReason } = await (isBedrock
-              ? runBedrockRequest(request, { signal: controller.signal })
-              : request());
+            let result;
+            if (isBedrockCleanup) {
+              result = await runBedrockRequest(
+                async () => {
+                  const abortSignal = AbortSignal.any([
+                    controller.signal,
+                    AbortSignal.timeout(timeoutMs),
+                  ]);
+                  const model = await resolveModel(abortSignal);
+                  return generate(model, abortSignal, true);
+                },
+                { signal: controller.signal }
+              );
+            } else {
+              const model = await resolveModel();
+              result = await generate(model, AbortSignal.timeout(timeoutMs));
+            }
+            const { text: generated, finishReason } = result;
 
             if (
               config?.requireCompleteOutput &&
@@ -4501,6 +4532,11 @@ class IPCHandlers {
           return {
             success: false,
             error: mapped.message,
+            messageKey: mapped.messageKey,
+            messageParams: mapped.messageParams,
+            action: mapped.action,
+            actionKey: mapped.actionKey,
+            copyCommand: mapped.copyCommand,
             retryable: mapped.retryable,
             technicalDetails: mapped.technicalDetails,
           };

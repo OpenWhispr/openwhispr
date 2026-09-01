@@ -1629,6 +1629,11 @@ declare global {
         success: boolean;
         text?: string;
         error?: string;
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
+        action?: string;
+        actionKey?: string;
+        copyCommand?: string;
         retryable?: boolean;
         technicalDetails?: {
           status?: number;
@@ -1912,7 +1917,10 @@ declare global {
       ) => Promise<{
         success: boolean;
         error?: string;
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
         action?: string;
+        actionKey?: string;
         copyCommand?: string;
         technicalDetails?: {
           status?: number;

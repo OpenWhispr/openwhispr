@@ -194,6 +194,24 @@ function sleepWithAbort(delay, signal) {
   });
 }
 
+async function runAbortableOperation(operation, signal) {
+  if (!signal) return operation();
+  signal.throwIfAborted();
+
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+
+  try {
+    signal.throwIfAborted();
+    return await Promise.race([operation(), aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
 async function runBedrockRequest(operation, options = {}) {
   const {
     signal,
@@ -291,13 +309,17 @@ function mapBedrockError(error, config = {}) {
     if (config.managedContext) {
       return withDetails({
         message: "Temporary AWS access expired.",
+        messageKey: "reasoning.enterprise.errors.bedrock.temporaryAccessExpired",
         action: "Sign out and sign back in to refresh company access, then retry.",
+        actionKey: "reasoning.enterprise.errors.bedrock.actions.refreshManagedAccess",
         retryable: true,
       });
     }
     return withDetails({
       message: "AWS SSO session expired.",
+      messageKey: "reasoning.enterprise.errors.bedrock.ssoExpired",
       action: "Run the command below in your terminal to re-authenticate:",
+      actionKey: "reasoning.enterprise.errors.bedrock.actions.reauthenticate",
       copyCommand: `aws sso login --profile ${profile}`,
       retryable: true,
     });
@@ -312,21 +334,28 @@ function mapBedrockError(error, config = {}) {
   ) {
     return withDetails({
       message: "AWS credentials were rejected. Check the access key ID, secret, and session token.",
+      messageKey: "reasoning.enterprise.errors.bedrock.credentialsRejected",
     });
   }
   if (status === 403 || signature.includes("accessdenied") || signature.includes("permission")) {
     return withDetails({
       message: `AWS Bedrock denied this request. Ask your AWS administrator to grant permission to invoke the selected model in region ${region}.`,
+      messageKey: "reasoning.enterprise.errors.bedrock.accessDenied",
+      messageParams: { region },
     });
   }
   if (signature.includes("resourcenotfound") || signature.includes("modelnotfound")) {
     return withDetails({
       message: `AWS Bedrock could not find the selected model in region ${region}. Check the model ID and whether it is available in that region.`,
+      messageKey: "reasoning.enterprise.errors.bedrock.modelNotFound",
+      messageParams: { region },
     });
   }
   if (status === 400 || signature.includes("validationexception")) {
     return withDetails({
       message: `AWS Bedrock rejected the model configuration for region ${region}. Check the model ID, inference profile, and region.`,
+      messageKey: "reasoning.enterprise.errors.bedrock.configurationRejected",
+      messageParams: { region },
     });
   }
   if (
@@ -337,6 +366,7 @@ function mapBedrockError(error, config = {}) {
   ) {
     return withDetails({
       message: "AWS Bedrock is not configured correctly. Check the region and AWS credentials.",
+      messageKey: "reasoning.enterprise.errors.bedrock.notConfigured",
     });
   }
   const kind = getBedrockFailureKind(underlying);
@@ -344,6 +374,7 @@ function mapBedrockError(error, config = {}) {
     return withDetails({
       message:
         "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an OpenWhispr outage. Please try again in a few minutes.",
+      messageKey: "reasoning.enterprise.errors.bedrock.serviceUnavailable",
       retryable: true,
     });
   }
@@ -351,6 +382,7 @@ function mapBedrockError(error, config = {}) {
     return withDetails({
       message:
         "AWS Bedrock is temporarily limiting requests because it is receiving too many. Please wait a moment and try again. If this continues, ask your AWS administrator to check your Bedrock usage and quotas.",
+      messageKey: "reasoning.enterprise.errors.bedrock.throttled",
       retryable: true,
     });
   }
@@ -358,16 +390,22 @@ function mapBedrockError(error, config = {}) {
     return withDetails({
       message:
         "AWS Bedrock did not respond in time. Please try again. If this continues, check your internet connection and AWS Bedrock service status.",
+      messageKey: "reasoning.enterprise.errors.bedrock.timeout",
       retryable: true,
     });
   }
   if (kind === "network") {
     return withDetails({
       message: "AWS Bedrock could not be reached. Check your internet connection and try again.",
+      messageKey: "reasoning.enterprise.errors.bedrock.network",
       retryable: true,
     });
   }
-  return withDetails({ message: `AWS Bedrock error: ${msg}` });
+  return withDetails({
+    message: `AWS Bedrock error: ${msg}`,
+    messageKey: "reasoning.enterprise.errors.bedrock.unknown",
+    messageParams: { error: msg },
+  });
 }
 
 function mapAzureError(error) {
@@ -553,6 +591,7 @@ module.exports = {
   isEnterpriseProvider,
   mapEnterpriseError,
   pickEnterpriseConfig,
+  runAbortableOperation,
   runBedrockRequest,
   unwrapRetryError,
   validateEnterpriseEndpoint,

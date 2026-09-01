@@ -311,3 +311,31 @@ test("RetryError.lastError is unwrapped before classification and diagnostics", 
     underlyingError: "Bedrock overloaded in eu-west-1",
   });
 });
+
+test("Bedrock mappings include renderer localization metadata", () => {
+  const unavailable = mapEnterpriseError(
+    "bedrock",
+    awsError({ name: "ServiceUnavailableException", status: 503 })
+  );
+  assert.equal(
+    unavailable.messageKey,
+    "reasoning.enterprise.errors.bedrock.serviceUnavailable"
+  );
+
+  const denied = mapEnterpriseError(
+    "bedrock",
+    awsError({ name: "AccessDeniedException", status: 403 }),
+    { bedrockRegion: "eu-west-1" }
+  );
+  assert.equal(denied.messageKey, "reasoning.enterprise.errors.bedrock.accessDenied");
+  assert.deepEqual(denied.messageParams, { region: "eu-west-1" });
+
+  const expired = mapEnterpriseError(
+    "bedrock",
+    awsError({ name: "ExpiredTokenException", status: 403 }),
+    { bedrockProfile: "company-sso" }
+  );
+  assert.equal(expired.messageKey, "reasoning.enterprise.errors.bedrock.ssoExpired");
+  assert.equal(expired.actionKey, "reasoning.enterprise.errors.bedrock.actions.reauthenticate");
+  assert.equal(expired.copyCommand, "aws sso login --profile company-sso");
+});

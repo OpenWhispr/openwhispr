@@ -52,6 +52,11 @@ export const enterpriseProvider: InferenceProvider = {
         error: result.error,
       });
       const enhanced = new Error(result.error || `${enterpriseId} reasoning failed`) as Error & {
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
+        action?: string;
+        actionKey?: string;
+        copyCommand?: string;
         retryable?: boolean;
         technicalDetails?: {
           status?: number;
@@ -60,6 +65,11 @@ export const enterpriseProvider: InferenceProvider = {
           underlyingError?: string;
         };
       };
+      enhanced.messageKey = result.messageKey;
+      enhanced.messageParams = result.messageParams;
+      enhanced.action = result.action;
+      enhanced.actionKey = result.actionKey;
+      enhanced.copyCommand = result.copyCommand;
       enhanced.retryable = result.retryable ?? false;
       enhanced.technicalDetails = result.technicalDetails;
       throw enhanced;

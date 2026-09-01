@@ -2,6 +2,11 @@ import { create } from "zustand";
 
 export interface CleanupFailure {
   message: string;
+  messageKey?: string;
+  messageParams?: Record<string, string | number>;
+  action?: string;
+  actionKey?: string;
+  copyCommand?: string;
   technicalDetails?: {
     status?: number;
     exceptionType?: string;

@@ -207,10 +207,14 @@ test("Check connection uses the Bedrock retry policy and disables nested AI SDK 
   const originalRandom = Math.random;
   Math.random = () => 0;
   try {
-    const result = await handlers.get("test-enterprise-connection")({ sender: sender(2) }, "bedrock", {
-      model: "anthropic.claude-haiku",
-      bedrockRegion: "eu-west-1",
-    });
+    const result = await handlers.get("test-enterprise-connection")(
+      { sender: sender(2) },
+      "bedrock",
+      {
+        model: "anthropic.claude-haiku",
+        bedrockRegion: "eu-west-1",
+      }
+    );
 
     assert.deepEqual(result, { success: true });
     assert.equal(generateCalls.length, 2);
@@ -232,14 +236,68 @@ test("Check connection retries timed-out Bedrock attempts with the existing time
   };
   const originalRandom = Math.random;
   Math.random = () => 0;
+  let watchdog;
   try {
-    const result = await handlers.get("test-enterprise-connection")(
-      { sender: sender(1) },
-      "bedrock",
-      { model: "anthropic.claude-haiku", bedrockRegion: "eu-west-1", timeoutMs: 5 }
-    );
+    const request = handlers.get("test-enterprise-connection")({ sender: sender(1) }, "bedrock", {
+      model: "anthropic.claude-haiku",
+      bedrockRegion: "eu-west-1",
+      timeoutMs: 5,
+    });
+    const result = await Promise.race([
+      request,
+      new Promise((_, reject) => {
+        watchdog = setTimeout(() => reject(new Error("Bedrock timeout did not settle")), 250);
+      }),
+    ]);
 
     assert.equal(attempts, 6);
+    assert.equal(
+      result.error,
+      "AWS Bedrock did not respond in time. Please try again. If this continues, check your internet connection and AWS Bedrock service status."
+    );
+  } finally {
+    clearTimeout(watchdog);
+    Math.random = originalRandom;
+  }
+});
+
+test("Check connection timeout includes managed credential resolution", async () => {
+  let releaseCredentials;
+  let credentialAttempts = 0;
+  const resolvingCredentials = new Promise((resolve) => (releaseCredentials = resolve));
+  resolveManagedRuntime = async () =>
+    managedBedrockRuntime({
+      credentialProvider: async () => {
+        credentialAttempts += 1;
+        return resolvingCredentials;
+      },
+    });
+  handlerContext.enterpriseIdentityManager = {
+    resolveProvider: (...args) => resolveManagedRuntime(...args),
+    clear: () => {},
+  };
+  generateBehavior = async () => ({ text: "hello", finishReason: "stop" });
+  const originalRandom = Math.random;
+  Math.random = () => 0;
+  try {
+    const request = handlers.get("test-enterprise-connection")({ sender: sender(22) }, "bedrock", {
+      model: "renderer-model-is-ignored",
+      managedContext: managedContext(),
+      timeoutMs: 5,
+    });
+    const completedInBound = await Promise.race([
+      request.then((result) => ({ completed: true, result })),
+      new Promise((resolve) => setTimeout(() => resolve({ completed: false }), 250)),
+    ]);
+    releaseCredentials({
+      accessKeyId: "AKIAEXAMPLE",
+      secretAccessKey: "example-secret",
+      sessionToken: "example-session-token",
+    });
+    const result = await request;
+
+    assert.equal(completedInBound.completed, true);
+    assert.equal(credentialAttempts, 6);
     assert.equal(
       result.error,
       "AWS Bedrock did not respond in time. Please try again. If this continues, check your internet connection and AWS Bedrock service status."
@@ -266,6 +324,7 @@ test("dictation cleanup uses the Bedrock retry policy and returns the eventual t
       null,
       {
         provider: "bedrock",
+        inferenceScope: "dictationCleanup",
         bedrockRegion: "eu-west-1",
         systemPrompt: "Clean the dictation",
       }
@@ -274,6 +333,34 @@ test("dictation cleanup uses the Bedrock retry policy and returns the eventual t
     assert.deepEqual(result, { success: true, text: "cleaned dictation" });
     assert.equal(generateCalls.length, 2);
     assert.ok(generateCalls.every((call) => call.maxRetries === 0));
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test("non-cleanup Bedrock scopes preserve the AI SDK retry policy", async () => {
+  generateBehavior = async () => {
+    throw retryable503();
+  };
+  const originalRandom = Math.random;
+  Math.random = () => 0;
+  try {
+    const result = await handlers.get("process-enterprise-reasoning")(
+      { sender: sender(6) },
+      "translate this",
+      "anthropic.claude-haiku",
+      null,
+      {
+        provider: "bedrock",
+        inferenceScope: "dictationTranslation",
+        bedrockRegion: "eu-west-1",
+        systemPrompt: "Translate it",
+      }
+    );
+
+    assert.equal(result.success, false);
+    assert.equal(generateCalls.length, 1);
+    assert.equal("maxRetries" in generateCalls[0], false);
   } finally {
     Math.random = originalRandom;
   }
@@ -302,7 +389,12 @@ test("Bedrock cleanup cancellation aborts only the requesting renderer without r
     "raw dictation",
     "anthropic.claude-haiku",
     null,
-    { provider: "bedrock", bedrockRegion: "eu-west-1", systemPrompt: "Clean the dictation" }
+    {
+      provider: "bedrock",
+      inferenceScope: "dictationCleanup",
+      bedrockRegion: "eu-west-1",
+      systemPrompt: "Clean the dictation",
+    }
   );
   await started;
   listeners.get("enterprise-reasoning-cancel")({ sender: otherSender });
@@ -314,7 +406,7 @@ test("Bedrock cleanup cancellation aborts only the requesting renderer without r
   assert.equal(attempts, 1);
 });
 
-test("Bedrock cleanup cancelled during managed runtime resolution never invokes the model", async () => {
+test("Bedrock cleanup cancellation settles while managed runtime resolution is pending", async () => {
   const requestingSender = sender(12);
   let releaseResolution;
   let resolutionStarted;
@@ -336,6 +428,7 @@ test("Bedrock cleanup cancelled during managed runtime resolution never invokes 
     null,
     {
       provider: "bedrock",
+      inferenceScope: "dictationCleanup",
       managedContext: {
         accountId: "account-1",
         workspaceId: "workspace-1",
@@ -350,9 +443,15 @@ test("Bedrock cleanup cancelled during managed runtime resolution never invokes 
   );
   await Promise.race([
     started,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("managed resolution did not start")), 100)),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("managed resolution did not start")), 100)
+    ),
   ]);
   listeners.get("enterprise-reasoning-cancel")({ sender: requestingSender });
+  const settledBeforeRelease = await Promise.race([
+    request.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 25)),
+  ]);
   releaseResolution({
     managed: true,
     provider: "bedrock",
@@ -364,6 +463,58 @@ test("Bedrock cleanup cancelled during managed runtime resolution never invokes 
   });
   await request;
 
+  assert.equal(settledBeforeRelease, true);
+  assert.equal(generateCalls.length, 0);
+});
+
+test("Bedrock cleanup cancellation settles while managed credentials are pending", async () => {
+  const requestingSender = sender(13);
+  let releaseCredentials;
+  let credentialsStarted;
+  const resolvingCredentials = new Promise((resolve) => (releaseCredentials = resolve));
+  const started = new Promise((resolve) => (credentialsStarted = resolve));
+  resolveManagedRuntime = async () =>
+    managedBedrockRuntime({
+      credentialProvider: async () => {
+        credentialsStarted();
+        return resolvingCredentials;
+      },
+    });
+  handlerContext.enterpriseIdentityManager = {
+    resolveProvider: (...args) => resolveManagedRuntime(...args),
+    clear: () => {},
+  };
+
+  const request = handlers.get("process-enterprise-reasoning")(
+    { sender: requestingSender },
+    "raw dictation",
+    "anthropic.claude-haiku",
+    null,
+    {
+      provider: "bedrock",
+      inferenceScope: "dictationCleanup",
+      managedContext: managedContext(),
+    }
+  );
+  await Promise.race([
+    started,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("credentials did not start")), 100)
+    ),
+  ]);
+  listeners.get("enterprise-reasoning-cancel")({ sender: requestingSender });
+  const settledBeforeRelease = await Promise.race([
+    request.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 25)),
+  ]);
+  releaseCredentials({
+    accessKeyId: "AKIAEXAMPLE",
+    secretAccessKey: "example-secret",
+    sessionToken: "example-session-token",
+  });
+  await request;
+
+  assert.equal(settledBeforeRelease, true);
   assert.equal(generateCalls.length, 0);
 });
 
@@ -419,13 +570,16 @@ test("managed Bedrock failures use the resolved region in actionable copy", asyn
 });
 
 test("managed Bedrock credential expiry keeps AWS diagnostics and gives no profile command", async () => {
-  const expired = Object.assign(new Error("The security token included in the request is expired"), {
-    name: "ExpiredTokenException",
-    $metadata: {
-      httpStatusCode: 403,
-      requestId: "managed-expired-request",
-    },
-  });
+  const expired = Object.assign(
+    new Error("The security token included in the request is expired"),
+    {
+      name: "ExpiredTokenException",
+      $metadata: {
+        httpStatusCode: 403,
+        requestId: "managed-expired-request",
+      },
+    }
+  );
   resolveManagedRuntime = async () =>
     managedBedrockRuntime({
       credentialProvider: async () => {
@@ -463,10 +617,14 @@ test("Check connection returns AWS diagnostics without a dictation fallback stat
     });
   };
 
-  const result = await handlers.get("test-enterprise-connection")({ sender: sender(4) }, "bedrock", {
-    model: "anthropic.claude-haiku",
-    bedrockRegion: "eu-west-1",
-  });
+  const result = await handlers.get("test-enterprise-connection")(
+    { sender: sender(4) },
+    "bedrock",
+    {
+      model: "anthropic.claude-haiku",
+      bedrockRegion: "eu-west-1",
+    }
+  );
 
   assert.equal(result.success, false);
   assert.match(result.error, /credentials were rejected/i);
@@ -493,7 +651,12 @@ test("dictation cleanup returns preserved AWS diagnostics to the renderer", asyn
     "raw dictation",
     "anthropic.claude-haiku",
     null,
-    { provider: "bedrock", bedrockRegion: "eu-west-1", systemPrompt: "Clean it" }
+    {
+      provider: "bedrock",
+      inferenceScope: "dictationCleanup",
+      bedrockRegion: "eu-west-1",
+      systemPrompt: "Clean it",
+    }
   );
 
   assert.equal(result.success, false);

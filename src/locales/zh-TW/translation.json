@@ -780,6 +780,35 @@
         "ssoHelp": "使用你的 AWS CLI SSO 設定。請確保已執行 'aws sso login'。",
         "keysHelp": "輸入你的 AWS IAM 存取金鑰。"
       },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "AWS 暫時存取權限已過期。",
+          "ssoExpired": "AWS SSO 工作階段已過期。",
+          "credentialsRejected": "AWS 拒絕了這些憑證。請檢查存取金鑰 ID、密鑰和工作階段權杖。",
+          "accessDenied": "AWS Bedrock 拒絕了此請求。請讓 AWS 管理員授予在區域 {{region}} 中呼叫所選模型的權限。",
+          "modelNotFound": "AWS Bedrock 在區域 {{region}} 中找不到所選模型。請檢查模型 ID，以及該模型是否在此區域提供。",
+          "configurationRejected": "AWS Bedrock 拒絕了區域 {{region}} 的模型設定。請檢查模型 ID、推論設定檔和區域。",
+          "notConfigured": "AWS Bedrock 設定不正確。請檢查區域和 AWS 憑證。",
+          "serviceUnavailable": "由於需求過高，AWS Bedrock 暫時無法使用。這是 AWS 服務問題，並非 OpenWhispr 中斷。請幾分鐘後再試。",
+          "throttled": "由於收到太多請求，AWS Bedrock 正在暫時限制請求。請稍候再試。如果問題持續，請讓 AWS 管理員檢查 Bedrock 使用量和配額。",
+          "timeout": "AWS Bedrock 未及時回應。請重試。如果問題持續，請檢查網際網路連線和 AWS Bedrock 服務狀態。",
+          "network": "無法連線到 AWS Bedrock。請檢查網際網路連線並重試。",
+          "unknown": "AWS Bedrock 錯誤：{{error}}",
+          "actions": {
+            "refreshManagedAccess": "請登出並重新登入以更新公司存取權限，然後重試。",
+            "reauthenticate": "請在終端機中執行以下命令以重新驗證身分："
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "技術詳細資料",
+        "httpStatus": "HTTP 狀態",
+        "awsException": "AWS 例外",
+        "awsRequestId": "AWS 請求 ID",
+        "underlyingError": "底層錯誤",
+        "copy": "複製技術詳細資料",
+        "copyCommand": "複製復原命令"
+      },
       "azure": {
         "endpointHelp": "你的 Azure OpenAI 資源端點（例如 https://myresource.openai.azure.com）。",
         "deploymentHelp": "Azure OpenAI 中的模型部署名稱。"

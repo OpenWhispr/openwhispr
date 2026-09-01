@@ -1,14 +1,25 @@
 import { Check, Copy } from "lucide-react";
+import type { TFunction } from "i18next";
+import type { JSX } from "react";
+import { useTranslation } from "react-i18next";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { cn } from "../lib/utils";
 import type { TechnicalErrorDetailsData } from "./useToast";
 
-function formatTechnicalErrorDetails(details: TechnicalErrorDetailsData): string {
+function formatTechnicalErrorDetails(details: TechnicalErrorDetailsData, t: TFunction): string {
   return [
-    details.status !== undefined ? `HTTP status: ${details.status}` : "",
-    details.exceptionType ? `AWS exception: ${details.exceptionType}` : "",
-    details.requestId ? `AWS request ID: ${details.requestId}` : "",
-    details.underlyingError ? `Underlying error: ${details.underlyingError}` : "",
+    details.status !== undefined
+      ? `${t("reasoning.enterprise.technicalDetails.httpStatus")}: ${details.status}`
+      : "",
+    details.exceptionType
+      ? `${t("reasoning.enterprise.technicalDetails.awsException")}: ${details.exceptionType}`
+      : "",
+    details.requestId
+      ? `${t("reasoning.enterprise.technicalDetails.awsRequestId")}: ${details.requestId}`
+      : "",
+    details.underlyingError
+      ? `${t("reasoning.enterprise.technicalDetails.underlyingError")}: ${details.underlyingError}`
+      : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -20,8 +31,9 @@ export function TechnicalErrorDetails({
 }: {
   details?: TechnicalErrorDetailsData;
   onDark?: boolean;
-}) {
-  const text = details ? formatTechnicalErrorDetails(details) : "";
+}): JSX.Element | null {
+  const { t } = useTranslation();
+  const text = details ? formatTechnicalErrorDetails(details, t) : "";
   const { copied, copy } = useCopyFeedback(text, { resetMs: 2000 });
   if (!text) return null;
 
@@ -33,7 +45,7 @@ export function TechnicalErrorDetails({
       )}
     >
       <summary className="cursor-pointer select-none text-xs text-muted-foreground">
-        Technical details
+        {t("reasoning.enterprise.technicalDetails.title")}
       </summary>
       <div className="mt-1.5 flex items-start justify-between gap-2">
         <pre className="min-w-0 flex-1 whitespace-pre-wrap wrap-break-word font-mono text-[11px] leading-snug select-all">
@@ -48,7 +60,7 @@ export function TechnicalErrorDetails({
               ? "text-white/30 hover:bg-white/6 hover:text-white/70"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
-          aria-label="Copy technical details"
+          aria-label={t("reasoning.enterprise.technicalDetails.copy")}
         >
           {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
         </button>

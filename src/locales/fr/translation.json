@@ -780,6 +780,35 @@
         "ssoHelp": "Utilise votre configuration SSO d'AWS CLI. Assurez-vous d'avoir exécuté 'aws sso login'.",
         "keysHelp": "Saisissez vos clés d'accès AWS IAM."
       },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "L’accès AWS temporaire a expiré.",
+          "ssoExpired": "La session SSO AWS a expiré.",
+          "credentialsRejected": "Les identifiants AWS ont été refusés. Vérifiez l’ID de clé d’accès, le secret et le jeton de session.",
+          "accessDenied": "AWS Bedrock a refusé cette requête. Demandez à votre administrateur AWS l’autorisation d’appeler le modèle sélectionné dans la région {{region}}.",
+          "modelNotFound": "AWS Bedrock n’a pas trouvé le modèle sélectionné dans la région {{region}}. Vérifiez l’ID du modèle et sa disponibilité dans cette région.",
+          "configurationRejected": "AWS Bedrock a refusé la configuration du modèle pour la région {{region}}. Vérifiez l’ID du modèle, le profil d’inférence et la région.",
+          "notConfigured": "AWS Bedrock n’est pas configuré correctement. Vérifiez la région et les identifiants AWS.",
+          "serviceUnavailable": "AWS Bedrock est temporairement indisponible en raison d’une forte demande. Il s’agit d’un problème du service AWS, et non d’une panne d’OpenWhispr. Réessayez dans quelques minutes.",
+          "throttled": "AWS Bedrock limite temporairement les requêtes car il en reçoit trop. Patientez un instant et réessayez. Si le problème persiste, demandez à votre administrateur AWS de vérifier l’utilisation et les quotas Bedrock.",
+          "timeout": "AWS Bedrock n’a pas répondu à temps. Réessayez. Si le problème persiste, vérifiez votre connexion Internet et l’état du service AWS Bedrock.",
+          "network": "AWS Bedrock est inaccessible. Vérifiez votre connexion Internet et réessayez.",
+          "unknown": "Erreur AWS Bedrock : {{error}}",
+          "actions": {
+            "refreshManagedAccess": "Déconnectez-vous puis reconnectez-vous pour actualiser l’accès de l’entreprise, puis réessayez.",
+            "reauthenticate": "Exécutez la commande suivante dans votre terminal pour vous réauthentifier :"
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "Détails techniques",
+        "httpStatus": "État HTTP",
+        "awsException": "Exception AWS",
+        "awsRequestId": "ID de requête AWS",
+        "underlyingError": "Erreur sous-jacente",
+        "copy": "Copier les détails techniques",
+        "copyCommand": "Copier la commande de récupération"
+      },
       "azure": {
         "endpointHelp": "L'endpoint de votre ressource Azure OpenAI (par ex. https://myresource.openai.azure.com).",
         "deploymentHelp": "Nom du déploiement de votre modèle dans Azure OpenAI."

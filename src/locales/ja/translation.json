@@ -780,6 +780,35 @@
         "ssoHelp": "AWS CLI の SSO 設定を使用します。'aws sso login' を実行済みであることを確認してください。",
         "keysHelp": "AWS IAM のアクセスキーを入力してください。"
       },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "AWS の一時アクセスの有効期限が切れました。",
+          "ssoExpired": "AWS SSO セッションの有効期限が切れました。",
+          "credentialsRejected": "AWS によって認証情報が拒否されました。アクセスキー ID、シークレット、セッショントークンを確認してください。",
+          "accessDenied": "AWS Bedrock がこのリクエストを拒否しました。リージョン {{region}} で選択したモデルを呼び出す権限を AWS 管理者に依頼してください。",
+          "modelNotFound": "AWS Bedrock はリージョン {{region}} で選択したモデルを見つけられませんでした。モデル ID とそのリージョンでの提供状況を確認してください。",
+          "configurationRejected": "AWS Bedrock はリージョン {{region}} のモデル設定を拒否しました。モデル ID、推論プロファイル、リージョンを確認してください。",
+          "notConfigured": "AWS Bedrock が正しく設定されていません。リージョンと AWS 認証情報を確認してください。",
+          "serviceUnavailable": "需要が高いため、AWS Bedrock は一時的に利用できません。これは OpenWhispr の障害ではなく AWS サービス側の問題です。数分後にもう一度お試しください。",
+          "throttled": "リクエストが多すぎるため、AWS Bedrock は一時的にリクエストを制限しています。少し待ってから再試行してください。続く場合は、AWS 管理者に Bedrock の使用量とクォータの確認を依頼してください。",
+          "timeout": "AWS Bedrock が時間内に応答しませんでした。もう一度お試しください。続く場合は、インターネット接続と AWS Bedrock サービスの状態を確認してください。",
+          "network": "AWS Bedrock に接続できませんでした。インターネット接続を確認して、もう一度お試しください。",
+          "unknown": "AWS Bedrock エラー: {{error}}",
+          "actions": {
+            "refreshManagedAccess": "サインアウトして再度サインインし、会社のアクセスを更新してから再試行してください。",
+            "reauthenticate": "再認証するには、ターミナルで次のコマンドを実行してください:"
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "技術情報",
+        "httpStatus": "HTTP ステータス",
+        "awsException": "AWS 例外",
+        "awsRequestId": "AWS リクエスト ID",
+        "underlyingError": "原因となったエラー",
+        "copy": "技術情報をコピー",
+        "copyCommand": "復旧コマンドをコピー"
+      },
       "azure": {
         "endpointHelp": "Azure OpenAI リソースのエンドポイント（例: https://myresource.openai.azure.com）。",
         "deploymentHelp": "Azure OpenAI 内のモデルデプロイメント名。"

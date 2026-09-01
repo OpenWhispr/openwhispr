@@ -21,6 +21,7 @@ export interface ToastProps {
   title?: string;
   description?: string;
   secondaryDescription?: string;
+  copyCommand?: string;
   technicalDetails?: TechnicalErrorDetailsData;
   action?: React.ReactNode;
   actions?: ToastActionConfig[];

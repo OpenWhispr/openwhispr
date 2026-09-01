@@ -34,15 +34,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
     setStatus("testing");
     setErrorInfo(null);
     try {
-      const result:
-        | {
-            success?: boolean;
-            error?: string;
-            action?: string;
-            copyCommand?: string;
-            technicalDetails?: TechnicalErrorDetailsData;
-          }
-        | undefined = await window.electronAPI?.testEnterpriseConnection?.(provider, getConfig());
+      const result = await window.electronAPI?.testEnterpriseConnection?.(provider, getConfig());
       if (requestId !== requestIdRef.current) return;
       if (result?.success) {
         setStatus("success");
@@ -52,8 +44,10 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
       } else {
         setStatus("error");
         setErrorInfo({
-          message: result?.error || "Connection failed",
-          action: result?.action,
+          message: result?.messageKey
+            ? t(result.messageKey, result.messageParams)
+            : result?.error || t("reasoning.enterprise.testFailed"),
+          action: result?.actionKey ? t(result.actionKey) : result?.action,
           copyCommand: result?.copyCommand,
           technicalDetails: result?.technicalDetails,
         });
@@ -104,6 +98,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
                 size="sm"
                 className="h-6 w-6 p-0 shrink-0"
                 onClick={() => handleCopy(errorInfo.copyCommand!)}
+                aria-label={t("reasoning.enterprise.technicalDetails.copyCommand")}
               >
                 <Copy className="w-3 h-3" />
               </Button>

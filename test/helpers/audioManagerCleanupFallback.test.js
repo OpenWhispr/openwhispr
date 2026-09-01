@@ -64,7 +64,13 @@ test("cleanup failure details ride the raw result instead of notifying before pa
     new Error(
       "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an OpenWhispr outage. Please try again in a few minutes."
     ),
-    { technicalDetails }
+    {
+      messageKey: "reasoning.enterprise.errors.bedrock.serviceUnavailable",
+      action: "Run the command below in your terminal to re-authenticate:",
+      actionKey: "reasoning.enterprise.errors.bedrock.actions.reauthenticate",
+      copyCommand: "aws sso login --profile company-sso",
+      technicalDetails,
+    }
   );
   const manager = createManager({
     voiceAgentRequested: false,
@@ -83,7 +89,14 @@ test("cleanup failure details ride the raw result instead of notifying before pa
   assert.equal(text, "original dictation");
   assert.deepEqual(globalThis.__cleanupFallbackImmediateNotifications, []);
   assert.deepEqual(manager._takePendingResultExtras(), {
-    cleanupFailure: { message: failure.message, technicalDetails },
+    cleanupFailure: {
+      message: failure.message,
+      messageKey: failure.messageKey,
+      action: failure.action,
+      actionKey: failure.actionKey,
+      copyCommand: failure.copyCommand,
+      technicalDetails,
+    },
   });
   assert.deepEqual(manager._takePendingResultExtras(), {});
 });
