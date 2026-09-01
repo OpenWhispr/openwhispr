@@ -1156,6 +1156,21 @@ class WindowManager {
     return this.hotkeyManager.isUsingNativeShortcut();
   }
 
+  // The control panel is transparent on macOS, where Electron ignores
+  // `-webkit-app-region: drag` entirely — the renderer recreates its titlebar
+  // drag through the shared DragManager instead (useControlPanelWindowDrag).
+  // No pill bookkeeping: position ownership below is main-window-only.
+  async startControlPanelDrag() {
+    if (!this.controlPanelWindow || this.controlPanelWindow.isDestroyed()) {
+      return { success: false, message: "Window not available" };
+    }
+    return await this.dragManager.startWindowDrag(this.controlPanelWindow);
+  }
+
+  async stopControlPanelDrag() {
+    return await this.dragManager.stopWindowDrag();
+  }
+
   async startWindowDrag() {
     // A lookup started by a prior hotkey must never land while the user is
     // taking ownership of the panel position.

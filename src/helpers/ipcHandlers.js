@@ -3945,6 +3945,14 @@ class IPCHandlers {
       return await this.windowManager.stopWindowDrag();
     });
 
+    ipcMain.handle("start-control-panel-drag", async () => {
+      return await this.windowManager.startControlPanelDrag();
+    });
+
+    ipcMain.handle("stop-control-panel-drag", async () => {
+      return await this.windowManager.stopControlPanelDrag();
+    });
+
     ipcMain.handle("open-external", async (event, url) => {
       try {
         const { protocol } = new URL(url);
