@@ -568,7 +568,10 @@ export const useAudioRecording = (toast, options = {}) => {
 
           const keepInClipboard = async (delivery) => {
             try {
-              await window.electronAPI.writeClipboard(result.text);
+              const clipboardResult = await window.electronAPI.writeClipboard(result.text);
+              if (clipboardResult?.success === false) {
+                throw new Error("clipboard-write-failed");
+              }
             } catch (error) {
               logger.warn(
                 "Failed to keep transcription in clipboard",
