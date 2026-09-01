@@ -2376,7 +2376,7 @@
       "dataRetention": "Conservation des données",
       "dataRetentionDescription": "Stocker les transcriptions et l'audio localement dans votre historique. Lorsque désactivé, les transcriptions sont collées mais pas enregistrées.",
       "transcriptRetention": "Conservation des transcriptions",
-      "transcriptRetentionDescription": "Supprimer automatiquement les transcriptions enregistrées et leur audio après cette période.",
+      "transcriptRetentionDescription": "Supprimer automatiquement les transcriptions enregistrées, leur audio et leurs compteurs Insights après cette période.",
       "transcriptRetentionForever": "Toujours",
       "hoursAgo": "il y a {{count}}h",
       "justNow": "à l'instant",

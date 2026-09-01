@@ -67,6 +67,21 @@ export function shouldRunAmbientTeamOnlyPass(state: {
   return state.now - state.lastPassAt >= teamOnlyPassDelayMs(state.emptyStreak);
 }
 
+/**
+ * The empty streak after an ambient pass. Insights counters are the second kind
+ * of work such a pass can move, and they get their own input rather than
+ * borrowing the team flag: a pass that uploaded counters did real work and
+ * resets the backoff, while merely having the opt-in on does not — that
+ * conflation would pin every backup-off Insights account to the 5-minute
+ * cadence teamOnlyPassDelayMs exists to remove.
+ */
+export function nextAmbientEmptyStreak(
+  emptyStreak: number,
+  moved: { team: boolean; analytics: boolean }
+): number {
+  return moved.team || moved.analytics ? 0 : emptyStreak + 1;
+}
+
 export interface PullCursorAdvance {
   // The pass's own cursor ("lastSyncedAt.<kind>", or ".<kind>.team" on a
   // team-only pass).

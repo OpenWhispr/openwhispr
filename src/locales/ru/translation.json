@@ -2080,7 +2080,7 @@
       "dataRetention": "Хранение данных",
       "dataRetentionDescription": "Сохранять транскрипции и аудио локально в истории. При отключении транскрипции вставляются, но не сохраняются.",
       "transcriptRetention": "Хранение транскрипций",
-      "transcriptRetentionDescription": "Автоматически удалять сохранённые транскрипции и их аудио по истечении этого срока.",
+      "transcriptRetentionDescription": "Автоматически удалять сохранённые транскрипции, их аудио и их счётчики Insights по истечении этого срока.",
       "transcriptRetentionForever": "Бессрочно",
       "hoursAgo": "{{count}}ч назад",
       "justNow": "только что",

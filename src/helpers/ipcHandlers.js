@@ -996,12 +996,13 @@ class IPCHandlers {
     const { audioRetentionDays, transcriptRetentionDays } = this._retentionSettings;
     try {
       if (transcriptRetentionDays > 0) {
-        const { ids } =
+        const { ids, analyticsPurged } =
           this.databaseManager.deleteTranscriptionsExpiredBefore(transcriptRetentionDays);
         for (const id of ids) {
           this.audioStorageManager.deleteAudio(id);
           broadcastToWindows("transcription-deleted", { id });
         }
+        if (analyticsPurged > 0) broadcastToWindows("analytics-changed");
       }
       if (audioRetentionDays > 0) {
         this.audioStorageManager.cleanupExpiredAudio(audioRetentionDays, this.databaseManager);

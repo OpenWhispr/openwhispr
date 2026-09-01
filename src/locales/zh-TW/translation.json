@@ -2076,7 +2076,7 @@
       "dataRetention": "資料保留",
       "dataRetentionDescription": "將轉錄和音訊本地儲存至歷史記錄。停用後，轉錄內容會被貼上但不會被儲存。",
       "transcriptRetention": "轉錄保留",
-      "transcriptRetentionDescription": "在此期限後自動刪除已儲存的轉錄及其音訊。",
+      "transcriptRetentionDescription": "在此期限後自動刪除已儲存的轉錄、其音訊及其 Insights 計數。",
       "transcriptRetentionForever": "永久",
       "hoursAgo": "{{count}}小時前",
       "justNow": "剛剛",

@@ -1358,9 +1358,13 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.activeAccountId) return [];
       const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
+      // The projection is the wire shape: AnalyticsService posts these rows
+      // verbatim. occurred_at stays on the device -- the cloud rollup only ever
+      // reads a date, and local_date is what it reads -- but it still orders
+      // the batch, oldest dictation first.
       return this.db
         .prepare(
-          `SELECT event_id, occurred_at, local_date, word_count, spoken_duration_ms,
+          `SELECT event_id, local_date, word_count, spoken_duration_ms,
                   mode, provider, model, counter_version
            FROM analytics_events
            WHERE account_id = ? AND sync_status = 'pending'
@@ -1459,8 +1463,9 @@ class DatabaseManager {
     }
   }
 
-  /** Purges transcriptions older than the retention window. Returns the affected ids so
-   *  callers can drop the matching audio files. */
+  /** Purges transcriptions and their Insights counters older than the retention window.
+   *  Returns the affected transcription ids so callers can drop the matching audio files.
+   *  Runs even with no expired transcriptions: counters outlive tombstoned rows. */
   deleteTranscriptionsExpiredBefore(retentionDays) {
     try {
       if (!this.db) {
@@ -1474,7 +1479,6 @@ class DatabaseManager {
         .prepare("SELECT id FROM transcriptions WHERE deleted_at IS NULL AND created_at < ?")
         .all(cutoff)
         .map((row) => row.id);
-      if (expired.length === 0) return { ids: [] };
 
       const tombstone = this.db.prepare(
         "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL AND created_at < ?"
@@ -1482,11 +1486,23 @@ class DatabaseManager {
       const hardDelete = this.db.prepare(
         "DELETE FROM transcriptions WHERE cloud_id IS NULL AND created_at < ?"
       );
+      // Counters follow the transcripts they describe, on the same cutoff and
+      // in the same transaction. Matched on created_at, never occurred_at:
+      // created_at is CURRENT_TIMESTAMP ("2026-08-30 10:00:00"), the same
+      // format as the cutoff, while occurred_at is a renderer ISO string whose
+      // "T" sorts above a space and would spare every same-day row. Pending
+      // rows go too -- the cloud has no delete route, so pushing first would
+      // make a retention setting cause an upload. Anything already uploaded
+      // stays in the account, as settingsPage.privacy.insightsSyncDescription
+      // says before the user opts in.
+      const purgeAnalytics = this.db.prepare("DELETE FROM analytics_events WHERE created_at < ?");
+      let analyticsPurged = 0;
       this.db.transaction(() => {
         tombstone.run(cutoff);
         hardDelete.run(cutoff);
+        analyticsPurged = purgeAnalytics.run(cutoff).changes;
       })();
-      return { ids: expired };
+      return { ids: expired, analyticsPurged };
     } catch (error) {
       debugLogger.error(
         "Error purging expired transcriptions",

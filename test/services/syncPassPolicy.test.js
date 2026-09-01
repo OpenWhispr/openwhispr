@@ -111,6 +111,18 @@ test("team-only backoff: an idle account waits, and the first launch always runs
   assert.equal(shouldRunAmbientTeamOnlyPass({ emptyStreak: 9, lastPassAt: null, now }), true);
 });
 
+test("ambient streak: a counter upload counts as work without borrowing the team flag", async () => {
+  const { nextAmbientEmptyStreak } = await load();
+  // The bug: an analytics push was not pass work at all, so a backup-off
+  // account with Insights on backed off to hourly while counters queued up.
+  assert.equal(nextAmbientEmptyStreak(3, { team: false, analytics: true }), 0);
+  // The over-correction: setting the team flag on any analytics consent pinned
+  // every such account to the 5-minute cadence. Work, not consent, resets it.
+  assert.equal(nextAmbientEmptyStreak(3, { team: false, analytics: false }), 4);
+  assert.equal(nextAmbientEmptyStreak(3, { team: true, analytics: false }), 0);
+  assert.equal(nextAmbientEmptyStreak(0, { team: false, analytics: false }), 1);
+});
+
 // --- resolvePullCursorAdvance ----------------------------------------------
 // The matrix mirrors SyncService's pullFolders/pullNotes cursor semantics: a
 // wrongly advanced cursor silently drops teammate edits from the delta pulls.

@@ -115,3 +115,27 @@ test("pre-sign-in analytics are attributed only by an explicit claim", (t) => {
     ["account-1", "guest-1", "guest-2"]
   );
 });
+
+test("the pending batch carries the local date, never the precise timestamp", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.setActiveAccountId("account-a");
+  recordEvent(db, "later", { occurredAt: "2026-08-30T18:00:00.000Z" });
+  recordEvent(db, "earlier", { occurredAt: "2026-08-30T09:00:00.000Z" });
+
+  const pending = db.getPendingAnalyticsEvents();
+  assert.deepEqual(
+    pending.map((row) => row.event_id),
+    ["earlier", "later"],
+    "the device still orders the batch by when each dictation happened"
+  );
+  for (const row of pending) {
+    assert.equal(
+      "occurred_at" in row,
+      false,
+      "the cloud only ever reads a date, so no ms-precision timestamp leaves the device"
+    );
+    assert.equal(row.local_date, "2026-08-30");
+  }
+});

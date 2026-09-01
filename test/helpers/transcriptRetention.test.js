@@ -99,3 +99,45 @@ test("ignores rows that are already tombstoned", (t) => {
     1
   );
 });
+
+function insertAnalytics(db, eventId, ageDays) {
+  db.recordAnalyticsEvent({
+    eventId,
+    wordCount: 4,
+    occurredAt: "2026-08-30T10:00:00.000Z",
+    localDate: "2026-08-30",
+    spokenDurationMs: 2_000,
+    mode: "local",
+    provider: "local-whisper",
+    model: "small",
+  });
+  // Backdated explicitly on created_at: that is the column the purge compares,
+  // and it is the only one whose format matches the cutoff (see the purge).
+  db.db
+    .prepare("UPDATE analytics_events SET created_at = datetime('now', ?) WHERE event_id = ?")
+    .run(`-${ageDays} days`, eventId);
+}
+
+test("retention purges analytics counters on the same schedule as transcripts", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.setActiveAccountId("account-a");
+  insertAnalytics(db, "stale-pending", 10);
+  insertAnalytics(db, "stale-synced", 10);
+  insertAnalytics(db, "fresh", 0);
+  db.markAnalyticsEventsSynced(["stale-synced"]);
+
+  const { analyticsPurged } = db.deleteTranscriptionsExpiredBefore(7);
+
+  assert.equal(analyticsPurged, 2);
+  assert.deepEqual(
+    db.db
+      .prepare("SELECT event_id FROM analytics_events")
+      .all()
+      .map((row) => row.event_id),
+    ["fresh"],
+    "a counter never uploaded is still deleted: retention is an instruction to delete"
+  );
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
+});

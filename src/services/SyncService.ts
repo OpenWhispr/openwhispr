@@ -42,6 +42,7 @@ import {
   isPermissionDenialCode,
   isSpaceAccessErrorCode,
   keepPurgedSpaceEntry,
+  nextAmbientEmptyStreak,
   normalizePurgedSpaceEntries,
   prunePurgedSpaceEntries,
   recordUpdate404,
@@ -244,6 +245,9 @@ export class SyncService {
   // Set by any pass that actually moves team or shared content; drives the
   // ambient team-only backoff (see shouldRunAmbientTeamOnlyPass).
   private teamPassMovedWork = false;
+  // The same, for Insights counters. Kept separate so neither kind of work is
+  // ever inferred from the other (see nextAmbientEmptyStreak).
+  private analyticsPassMovedWork = false;
 
   private consent(): SyncConsent {
     return resolveSyncConsent({
@@ -290,7 +294,12 @@ export class SyncService {
     const streak = Number(localStorage.getItem("teamOnlyPass.emptyStreak") ?? 0);
     localStorage.setItem(
       "teamOnlyPass.emptyStreak",
-      String(this.teamPassMovedWork ? 0 : streak + 1)
+      String(
+        nextAmbientEmptyStreak(streak, {
+          team: this.teamPassMovedWork,
+          analytics: this.analyticsPassMovedWork,
+        })
+      )
     );
     localStorage.setItem("teamOnlyPass.lastAt", String(Date.now()));
   }
@@ -463,6 +472,7 @@ export class SyncService {
     }
     this.syncing = true;
     this.teamPassMovedWork = false;
+    this.analyticsPassMovedWork = false;
     let teamSpacesReady = false;
     try {
       // Ambient passes skip when another window holds the lock — that pass
@@ -498,12 +508,17 @@ export class SyncService {
           await this.syncFolders(true);
           if (!hasValidatedAuthContext()) return;
           await this.syncNotes(true);
-          this.recordTeamOnlyPass();
         }
         if (!hasValidatedAuthContext()) return;
         // Outside the branch above: Insights counters are free and content-free,
         // so they ride their own opt-in rather than backup's plan and toggle.
         await this.syncAnalytics();
+        // Stamped after the push, so a pass that moved counters is recorded as
+        // work rather than as another empty one. A pass that loses auth before
+        // reaching here now leaves the streak unstamped where it used to stamp
+        // it, which only makes the next pass due immediately -- the right answer
+        // after an interruption.
+        if (!full) this.recordTeamOnlyPass();
         if (!hasValidatedAuthContext()) return;
         if (teamSpacesReady) {
           if (this.teamSpacesRetryTimer) {
@@ -2168,7 +2183,7 @@ export class SyncService {
   private async syncAnalytics(): Promise<void> {
     if (!this.consent().analytics) return;
     try {
-      await syncPendingAnalytics();
+      if ((await syncPendingAnalytics()) > 0) this.analyticsPassMovedWork = true;
     } catch (err) {
       if (isAuthContextError(err)) throw err;
       // A rejected batch stays pending for the next pass; the rest of this one

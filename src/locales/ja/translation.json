@@ -2076,7 +2076,7 @@
       "dataRetention": "データ保持",
       "dataRetentionDescription": "文字起こしと音声を履歴にローカル保存します。無効にすると、文字起こしは貼り付けられますが保存されません。",
       "transcriptRetention": "文字起こしの保持",
-      "transcriptRetentionDescription": "保存された文字起こしとその音声を、この期間の経過後に自動的に削除します。",
+      "transcriptRetentionDescription": "保存された文字起こし、その音声、およびその Insights カウンターを、この期間の経過後に自動的に削除します。",
       "transcriptRetentionForever": "無期限",
       "hoursAgo": "{{count}}時間前",
       "justNow": "たった今",
