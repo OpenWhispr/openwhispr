@@ -277,7 +277,9 @@ export default function App() {
     isAssistantVoice,
     assistantThinking: assistant.thinking || assistant.busy,
   });
-  const listeningEntrancePhase = useListeningEntrancePhase(voicePillIsRecording);
+  const listeningEntrancePhase = useListeningEntrancePhase(voicePillIsRecording, {
+    afterAssistantFooterHandoff: assistant.open,
+  });
   const listeningEntrance = resolveListeningEntrancePresentation({
     isRecording: voicePillIsRecording,
     phase: listeningEntrancePhase,
@@ -285,10 +287,10 @@ export default function App() {
   const isCompactPill = voicePillIsRecording
     ? listeningEntrance.compactPill
     : voiceActivity.compactPill;
-  // The native window grows during the entrance's static thinking hold, not
-  // when the pill starts its width transition: a setBounds landing mid
-  // animation forces compositor work that visibly stutters the expansion, and
-  // the growing pill can clip against the old bounds if the resize IPC lags.
+  // BASE and RECORDING resolve to the same native box (windowConfig.js), so
+  // recording edges never call setBounds — resizing the transparent window
+  // always kicks a compositor frame. This flag still feeds the size ladder so
+  // a menu opening over the compact pill resolves to EXPANDED geometry.
   const windowFitsCompactPill = voicePillIsRecording || voiceActivity.compactPill;
 
   const { dictationErrorPillHandoffActive } = useMainWindowSizeOwner({

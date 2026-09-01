@@ -14,9 +14,16 @@ export const VOICE_PILL_FOOTPRINT = Object.freeze({
 });
 
 export const LISTENING_ENTRANCE_TIMING = Object.freeze({
-  // Give the Beam enough time to read as an intentional thinking state before
-  // the persistent control begins changing shape.
-  thinkingMs: 420,
+  // A short hold that reads as an acknowledged press before the control
+  // changes shape. It was 420ms when it also had to hide the native window
+  // grow; BASE and RECORDING now share one box (windowConfig.js), so the
+  // floating pill's hold is purely the design beat.
+  thinkingMs: 260,
+  // A recording that starts under the open assistant panel first hands the
+  // footer from final actions back to the pill (actions retreat + pill
+  // entrance — getAssistantFooterTransitionTimeline). The expansion must not
+  // start until that handoff settles, or both animate the same control.
+  assistantFooterThinkingMs: 420,
   expansionMs: 300,
   // Hold the finished footprint briefly so the waveform reveal cannot be
   // perceived as part of the width animation.
@@ -152,10 +159,16 @@ export function resolveVoicePillDock({
   return `bottom-${horizontalDirection}`;
 }
 
-export function getListeningEntranceTimeline(timing = LISTENING_ENTRANCE_TIMING) {
-  const settleAtMs = timing.thinkingMs + timing.expansionMs;
+export function getListeningEntranceTimeline({
+  afterAssistantFooterHandoff = false,
+  timing = LISTENING_ENTRANCE_TIMING,
+} = {}) {
+  const thinkingMs = afterAssistantFooterHandoff
+    ? timing.assistantFooterThinkingMs
+    : timing.thinkingMs;
+  const settleAtMs = thinkingMs + timing.expansionMs;
   return {
-    expandAtMs: timing.thinkingMs,
+    expandAtMs: thinkingMs,
     settleAtMs,
     waveformAtMs: settleAtMs + timing.waveformDelayMs,
   };

@@ -125,15 +125,23 @@ function fitDictationErrorWindowToWorkArea(requestedSize, workArea) {
   };
 }
 
+// The pill docks 12px from the window's bottom corner (voice-pill-position
+// classes); the remaining area is click-through headroom so the hover
+// tooltip and the Signal glow's halo render without clipping at the window
+// bounds. Sized with dictation-panel.css's dock insets — change together.
+// The box fits the 98px compact pill + 8px gap + 28px hover cancel (134px)
+// inside its 184px usable width, so the cancel control never clips.
+const PILL_WINDOW_SIZE = { width: 208, height: 120 };
+
 const WINDOW_SIZES = {
-  // The pill docks 12px from the window's bottom corner (voice-pill-position
-  // classes); the remaining area is click-through headroom so the hover
-  // tooltip and the Signal glow's halo render without clipping at the window
-  // bounds. Sized with dictation-panel.css's dock insets — change together.
-  // RECORDING also fits the 98px compact pill + 8px gap + 28px hover cancel
-  // (134px) inside its 184px usable width, so the cancel control never clips.
-  BASE: { width: 176, height: 120 },
-  RECORDING: { width: 208, height: 120 },
+  // BASE and RECORDING are deliberately the same box. Resizing a transparent
+  // always-on-top window paints one compositor frame of the stale texture
+  // inside the new bounds before the renderer catches up — no resize mask can
+  // cover it — so recording edges must never call setBounds. The keys stay
+  // distinct for the size ladder's ranking; identical bounds make the native
+  // resize a no-op.
+  BASE: PILL_WINDOW_SIZE,
+  RECORDING: PILL_WINDOW_SIZE,
   DICTATION_ERROR: { width: DICTATION_ERROR_WINDOW_LIMITS.width, height: 112 },
   DICTATION_ERROR_WITH_TRANSCRIPT: {
     width: DICTATION_ERROR_WINDOW_LIMITS.width,

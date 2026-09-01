@@ -319,11 +319,20 @@ test("listening entrance settles at full width before revealing the waveform", a
 
 test("listening entrance timers preserve the visual order", async () => {
   const { getListeningEntranceTimeline } = await load();
-  const timeline = getListeningEntranceTimeline();
 
-  assert.ok(timeline.expandAtMs > 0);
-  assert.ok(timeline.settleAtMs > timeline.expandAtMs);
-  assert.ok(timeline.waveformAtMs > timeline.settleAtMs);
+  for (const afterAssistantFooterHandoff of [false, true]) {
+    const timeline = getListeningEntranceTimeline({ afterAssistantFooterHandoff });
+    assert.ok(timeline.expandAtMs > 0);
+    assert.ok(timeline.settleAtMs > timeline.expandAtMs);
+    assert.ok(timeline.waveformAtMs > timeline.settleAtMs);
+  }
+
+  // The floating pill has no footer handoff to wait out, so its hold is the
+  // shorter of the two speeds.
+  assert.ok(
+    getListeningEntranceTimeline().expandAtMs <
+      getListeningEntranceTimeline({ afterAssistantFooterHandoff: true }).expandAtMs
+  );
 });
 
 test("Agent footer retreats actions before the compact pill enters", async () => {
@@ -337,8 +346,12 @@ test("Agent footer retreats actions before the compact pill enters", async () =>
   assert.ok(timeline.settledAtMs > timeline.handoffAtMs);
   // Cross-policy contract: the footer handoff must fully settle before the
   // listening entrance starts expanding the pill, or the two animations fight
-  // over the same control.
-  assert.ok(timeline.settledAtMs < getListeningEntranceTimeline().expandAtMs);
+  // over the same control. Only the footer-handoff hold carries this bound;
+  // the floating pill never runs the two together.
+  assert.ok(
+    timeline.settledAtMs <
+      getListeningEntranceTimeline({ afterAssistantFooterHandoff: true }).expandAtMs
+  );
 });
 
 test("Agent footer retreats the pill before final actions grow from its anchor", async () => {

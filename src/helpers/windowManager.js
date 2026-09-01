@@ -419,6 +419,19 @@ class WindowManager {
           ? "center"
           : `bottom-${this._activeHorizontalDirection || this.getMainWindowHorizontalDirection()}`;
       this._baseBoundsBeforeResize = null;
+      if (
+        restored.x === currentBounds.x &&
+        restored.y === currentBounds.y &&
+        restored.width === currentBounds.width &&
+        restored.height === currentBounds.height
+      ) {
+        // Nothing moved (BASE and the grown size share bounds) — skip the mask
+        // handshake and setBounds so the restore cannot perturb the renderer.
+        this._lastResizeBounds = restored;
+        this._activeHorizontalDirection = null;
+        this._notifyMainWindowHorizontalDirection();
+        return { success: true, bounds: restored, changed: false };
+      }
       await this._prepareRendererForMainWindowResize(restored, restoreAnchor);
       if (!this.mainWindow || this.mainWindow.isDestroyed()) {
         return { success: false, message: "Window not available" };
