@@ -5303,7 +5303,9 @@ class IPCHandlers {
       if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
         return { success: false };
       }
-      this.windowManager.sendToggleDictation();
+      // A pill click is a deliberate UI action: a fast second click must stop
+      // the recording, never latch it hands-free like a hotkey double press.
+      this.windowManager.sendToggleDictation({ applyPressGesture: false });
       return { success: true };
     });
 
@@ -10323,6 +10325,23 @@ class IPCHandlers {
     });
 
     // Agent mode handlers
+    // A slot left on Hold whose new (or cleared) hotkey cannot Hold on this
+    // backend silently reverts to Tap everywhere: cache, env and renderer.
+    const revalidateSlotActivationMode = async (slotName, settingKey) => {
+      const windowManager = this.windowManager;
+      if (windowManager.getSlotActivationMode(slotName) !== "push") return;
+      const hotkey = windowManager.hotkeyManager.getSlotHotkey?.(slotName);
+      if (hotkey && windowManager.hotkeyManager.supportsPushToTalk(hotkey, slotName)) return;
+      await windowManager.setSlotActivationModeCache(slotName, "tap");
+      this.environmentManager.saveSlotActivationMode?.(slotName, "tap");
+      for (const browserWindow of BrowserWindow.getAllWindows()) {
+        if (!browserWindow.isDestroyed()) {
+          browserWindow.webContents.send("setting-updated", { key: settingKey, value: "tap" });
+        }
+      }
+      windowManager.reconcileNativeKeyListeners();
+    };
+
     ipcMain.handle("update-voice-agent-hotkey", async (_event, hotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
@@ -10334,6 +10353,7 @@ class IPCHandlers {
         hotkeyManager.unregisterSlot("voiceAgent");
         this.environmentManager.saveVoiceAgentKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
+        await revalidateSlotActivationMode("voiceAgent", "voiceAgentActivationMode");
         this._notifyHotkeyChanged("");
         return { success: true, message: "Voice agent hotkey cleared" };
       }
@@ -10344,6 +10364,7 @@ class IPCHandlers {
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveVoiceAgentKey?.(hotkey);
+        await revalidateSlotActivationMode("voiceAgent", "voiceAgentActivationMode");
         this._notifyHotkeyChanged(hotkey);
         return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
       }
@@ -10369,6 +10390,7 @@ class IPCHandlers {
         hotkeyManager.unregisterSlot("translation");
         this.environmentManager.saveTranslationKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
+        await revalidateSlotActivationMode("translation", "translationActivationMode");
         this._notifyHotkeyChanged("");
         return { success: true, message: "Translation hotkey cleared" };
       }
@@ -10379,6 +10401,7 @@ class IPCHandlers {
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveTranslationKey?.(hotkey);
+        await revalidateSlotActivationMode("translation", "translationActivationMode");
         this._notifyHotkeyChanged(hotkey);
         return { success: true, message: `Translation hotkey updated to: ${hotkey}` };
       }

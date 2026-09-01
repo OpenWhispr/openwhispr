@@ -113,6 +113,7 @@ test("a fast second dictation toggle press latches instead of stopping", (t) => 
   const { manager, sent } = makeManager();
 
   manager.sendToggleDictation();
+  manager.setDictationLifecycleState("preparing", "dictation");
   t.mock.timers.tick(250);
   manager.sendToggleDictation();
 
@@ -121,6 +122,31 @@ test("a fast second dictation toggle press latches instead of stopping", (t) => 
   t.mock.timers.tick(600);
   manager.sendToggleDictation();
   assert.deepEqual(channels(sent).filter((channel) => channel === "toggle-dictation").length, 2);
+});
+
+test("a declined start leaves the retry press working", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  // The renderer never reported preparing/recording (mic in use, permission
+  // denied): the second press must not be swallowed as a latch.
+  manager.sendToggleDictation();
+  t.mock.timers.tick(250);
+  manager.sendToggleDictation();
+
+  assert.equal(channels(sent).filter((channel) => channel === "toggle-dictation").length, 2);
+});
+
+test("a companion-pill toggle is never treated as a double press", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  manager.sendToggleDictation();
+  manager.setDictationLifecycleState("preparing", "dictation");
+  t.mock.timers.tick(250);
+  manager.sendToggleDictation({ applyPressGesture: false });
+
+  assert.equal(channels(sent).filter((channel) => channel === "toggle-dictation").length, 2);
 });
 
 test("the tap latch also works once the renderer reports the recording", (t) => {
@@ -184,6 +210,7 @@ test("a double press in hold mode latches a hands-free recording", (t) => {
   const { manager, sent } = makeManager();
 
   manager.startNativePushToTalk("F8", "dictation");
+  manager.setDictationLifecycleState("preparing", "dictation");
   t.mock.timers.tick(80);
   manager.handleNativePushKeyUp("F8");
   t.mock.timers.tick(170);
@@ -201,6 +228,96 @@ test("a double press in hold mode latches a hands-free recording", (t) => {
   t.mock.timers.tick(5000);
   manager.startNativePushToTalk("F8", "dictation");
   assert.equal(channels(sent).includes("stop-dictation"), true);
+});
+
+test("a hold press for a blocked kind produces no session and no spurious stop", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+  manager._assistantPanelBusy = true;
+
+  manager.startNativePushToTalk("F9", "assistant");
+  t.mock.timers.tick(150);
+  manager.handleNativePushKeyUp("F9");
+
+  assert.deepEqual(sent, []);
+  assert.equal(manager.nativePushState, null);
+});
+
+test("a stale deferred cancel never tears down another kind's preparation", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  manager.startNativePushToTalk("F8", "dictation");
+  manager.setDictationLifecycleState("preparing", "dictation");
+  t.mock.timers.tick(80);
+  manager.handleNativePushKeyUp("F8");
+
+  // Before the dictation cancel timer fires, the assistant takes the pipeline.
+  t.mock.timers.tick(220);
+  manager.startNativePushToTalk("F9", "assistant");
+  manager.setDictationLifecycleState("preparing", "assistant");
+
+  t.mock.timers.tick(400);
+  assert.equal(channels(sent).includes("cancel-dictation-preparation"), false);
+  assert.equal(channels(sent).includes("__hide-panel"), false);
+});
+
+test("a latch is demoted to a plain press while another kind is recording", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+  manager.setDictationLifecycleState("recording", "assistant");
+
+  manager.startNativePushToTalk("F8", "dictation");
+  t.mock.timers.tick(80);
+  manager.handleNativePushKeyUp("F8");
+  t.mock.timers.tick(170);
+  manager.startNativePushToTalk("F8", "dictation");
+
+  assert.equal(manager._pressGesture.isHandsFreeActive("dictation"), false);
+  assert.equal(channels(sent).includes("stop-dictation"), false);
+});
+
+test("a settings change mid-latch stops the hands-free recording", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  manager.startNativePushToTalk("F8", "dictation");
+  manager.setDictationLifecycleState("preparing", "dictation");
+  t.mock.timers.tick(80);
+  manager.handleNativePushKeyUp("F8");
+  t.mock.timers.tick(170);
+  manager.startNativePushToTalk("F8", "dictation");
+  manager.setDictationLifecycleState("recording", "dictation");
+
+  manager.resetNativePushState();
+
+  assert.equal(channels(sent).includes("stop-dictation"), true);
+  assert.equal(manager._pressGesture.isHandsFreeActive("dictation"), false);
+});
+
+test("a settings change with a pending quick-release cancels the preparation", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  manager.startNativePushToTalk("F8", "dictation");
+  t.mock.timers.tick(80);
+  manager.handleNativePushKeyUp("F8");
+
+  manager.resetNativePushState();
+
+  assert.equal(channels(sent).includes("cancel-dictation-preparation"), true);
+  assert.equal(channels(sent).includes("__hide-panel"), true);
+});
+
+test("listening mode blocks a native hold press before any side effects", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+  manager.hotkeyManager.isInListeningMode = () => true;
+
+  manager.startNativePushToTalk("F8", "dictation");
+
+  assert.deepEqual(sent, []);
+  assert.equal(manager.nativePushState, null);
 });
 
 test("slot activation modes default to tap and are cached per slot", async () => {
@@ -225,6 +342,18 @@ test("an unsupported Hold request is rejected and reported", async () => {
   assert.equal(await manager.setSlotActivationModeCache("voiceAgent", "push"), false);
   assert.equal(manager.getSlotActivationMode("voiceAgent"), "tap");
   assert.equal(failures.length, 1);
+
+  // A slot with no hotkey cannot be verified: Hold is refused, not assumed.
+  manager.hotkeyManager.getSlotHotkey = () => null;
+  assert.equal(await manager.setSlotActivationModeCache("voiceAgent", "push"), false);
+
+  // The startup restore validates silently — no toast on every launch.
+  manager.hotkeyManager.getSlotHotkey = () => "F9";
+  assert.equal(
+    await manager.setSlotActivationModeCache("voiceAgent", "push", { notifyFailure: false }),
+    false
+  );
+  assert.equal(failures.length, 1);
 });
 
 test("reconcileNativeKeyListeners passes the per-slot activation modes", async () => {
@@ -248,6 +377,7 @@ test("a renderer idle report clears the hands-free latch", (t) => {
   const { manager, sent } = makeManager();
 
   manager.startNativePushToTalk("F9", "assistant");
+  manager.setDictationLifecycleState("preparing", "assistant");
   t.mock.timers.tick(80);
   manager.handleNativePushKeyUp("F9");
   t.mock.timers.tick(170);
@@ -269,6 +399,7 @@ test("an interrupt right after a latch cancels the accidental recording", (t) =>
   const { manager, sent } = makeManager();
 
   manager.startNativePushToTalk("F8", "dictation");
+  manager.setDictationLifecycleState("preparing", "dictation");
   t.mock.timers.tick(80);
   manager.handleNativePushKeyUp("F8");
   t.mock.timers.tick(170);
@@ -277,6 +408,26 @@ test("an interrupt right after a latch cancels the accidental recording", (t) =>
   t.mock.timers.tick(300);
   assert.equal(manager.interruptPushGesture("dictation"), "cancel-recording");
   assert.equal(channels(sent).includes("cancel-hotkey-pressed"), true);
+});
+
+test("stopHandsFreeSession ends a latched recording on demand", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  manager.startNativePushToTalk("GLOBE", "dictation");
+  manager.setDictationLifecycleState("preparing", "dictation");
+  t.mock.timers.tick(80);
+  manager.handleNativePushKeyUp("GLOBE");
+  t.mock.timers.tick(170);
+  manager.startNativePushToTalk("GLOBE", "dictation");
+
+  assert.equal(manager.isHandsFreeActive("dictation"), true);
+  manager.stopHandsFreeSession("dictation");
+  assert.equal(channels(sent).includes("stop-dictation"), true);
+  assert.equal(manager.isHandsFreeActive("dictation"), false);
+  // A second call is a no-op.
+  manager.stopHandsFreeSession("dictation");
+  assert.equal(channels(sent).filter((channel) => channel === "stop-dictation").length, 1);
 });
 
 test("an interrupted native push session is cancelled, not transcribed", (t) => {

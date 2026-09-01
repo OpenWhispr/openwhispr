@@ -1638,9 +1638,11 @@ export default function SettingsPage({
         duration: 15000,
       });
       setActivationMode("tap");
+      setVoiceAgentActivationMode("tap");
+      setTranslationActivationMode("tap");
     });
     return () => cleanup?.();
-  }, [toast, t, setActivationMode]);
+  }, [toast, t, setActivationMode, setVoiceAgentActivationMode, setTranslationActivationMode]);
 
   useEffect(() => {
     if (updateError) {

@@ -609,10 +609,12 @@ class WindowManager {
 
   startMacCompoundPushToTalk(hotkey, inputKind = DICTATION_INPUT_KIND.DICTATION) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
-    if (this.handlePushGestureDown(inputKind) !== "proceed") return;
+    if (this.hotkeyManager.isInListeningMode()) return;
     if (this.macCompoundPushState?.active || this.isDictationProcessing()) {
       return;
     }
+    if (this.handlePushGestureDown(inputKind) !== "proceed") return;
+    if (this._shouldBlockDictationInput(inputKind)) return;
 
     const requiredModifiers = this.getMacRequiredModifiers(hotkey);
     if (requiredModifiers.size === 0) {
@@ -746,10 +748,12 @@ class WindowManager {
 
   startNativePushToTalk(key, inputKind = DICTATION_INPUT_KIND.DICTATION) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
-    if (this.handlePushGestureDown(inputKind) !== "proceed") return;
+    if (this.hotkeyManager.isInListeningMode()) return;
     if (this.nativePushState?.active || this.isDictationProcessing()) {
       return;
     }
+    if (this.handlePushGestureDown(inputKind) !== "proceed") return;
+    if (this._shouldBlockDictationInput(inputKind)) return;
 
     const MIN_HOLD_DURATION_MS = 150;
     const MAX_PUSH_DURATION_MS = 300000;
@@ -829,9 +833,32 @@ class WindowManager {
     this.hideDictationPanel();
   }
 
+  isHandsFreeActive(inputKind) {
+    return this._pressGesture.isHandsFreeActive(inputKind);
+  }
+
+  stopHandsFreeSession(inputKind) {
+    if (!this._pressGesture.isHandsFreeActive(inputKind)) return;
+    this._pressGesture.clearHandsFree(inputKind);
+    this.sendStopDictation();
+  }
+
   resetNativePushState() {
+    // Flush what the gesture state governed before dropping it: a pending
+    // quick-release still owns a warm preparation, and a latched hands-free
+    // recording has no other stop path once the tracker forgets it.
+    const hadPendingPrepCancel = this._pushPrepCancelTimers.size > 0;
     for (const inputKind of [...this._pushPrepCancelTimers.keys()]) {
       this._clearPushPrepCancelTimer(inputKind);
+    }
+    if (hadPendingPrepCancel) {
+      this.sendCancelDictationPreparation();
+      if (!this._isDictatingToggle) {
+        this.hideDictationPanel();
+      }
+    }
+    for (const inputKind of Object.values(DICTATION_INPUT_KIND)) {
+      this.stopHandsFreeSession(inputKind);
     }
     this._pressGesture.reset();
     if (!this.nativePushState?.active) {
@@ -841,12 +868,23 @@ class WindowManager {
     this.handleNativePushKeyUp();
   }
 
-  // The three verdicts of a push-mode key-down, with their side effects:
-  // "stop-hands-free" ends a latched recording, "latch" turns the second press
-  // of a double press into a hands-free recording, "proceed" tells the caller
-  // to run its normal push-to-talk machine.
+  // The verdicts of a push-mode key-down, with their side effects: "ignore"
+  // is a duplicate delivery of the previous down, "stop-hands-free" ends a
+  // latched recording, "latch" turns the second press of a double press into
+  // a hands-free recording, "proceed" tells the caller to run its normal
+  // push-to-talk machine.
   handlePushGestureDown(inputKind) {
-    const verdict = this._pressGesture.handlePushDown(inputKind, Date.now());
+    let verdict = this._pressGesture.handlePushDown(inputKind, Date.now());
+    if (
+      verdict === "latch" &&
+      (!this._isOnboardingInputAllowed(inputKind) || !this._isPipelineActiveFor(inputKind))
+    ) {
+      // The first press never really started preparing this kind (declined
+      // start, onboarding gate, another kind owns the pipeline) — a latch
+      // here would be a phantom whose next press stops the wrong recording.
+      this._pressGesture.clearHandsFree(inputKind);
+      verdict = "proceed";
+    }
     if (verdict === "stop-hands-free") {
       this.sendStopDictation();
     } else if (verdict === "latch") {
@@ -869,9 +907,15 @@ class WindowManager {
     const timer = setTimeout(() => {
       this._pushPrepCancelTimers.delete(inputKind);
       if (!this._pressGesture.shouldCancelPreparation(inputKind, primeToken)) return;
+      // Another kind took the pipeline during the wait: its preparation or
+      // recording must not be torn down by this stale, kind-blind cancel.
+      if (
+        this._dictationLifecycleState !== DICTATION_LIFECYCLE.IDLE &&
+        this._dictationInputKind !== inputKind
+      ) {
+        return;
+      }
       this.sendCancelDictationPreparation();
-      // Another kind may have started recording during the wait; its panel
-      // must not be pulled down by this stale cancel.
       if (!this._isDictatingToggle) {
         this.hideDictationPanel();
       }
@@ -952,7 +996,17 @@ class WindowManager {
     return blocked;
   }
 
-  _sendDictationToggle(channel, inputKind) {
+  // The recording pipeline is visibly running this kind — the evidence a
+  // double-press latch needs before it may swallow a stop press.
+  _isPipelineActiveFor(inputKind) {
+    return (
+      (this._dictationLifecycleState === DICTATION_LIFECYCLE.PREPARING ||
+        this._dictationLifecycleState === DICTATION_LIFECYCLE.RECORDING) &&
+      this._dictationInputKind === inputKind
+    );
+  }
+
+  _sendDictationToggle(channel, inputKind, { applyPressGesture = true } = {}) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
     if (this._shouldBlockDictationInput(inputKind)) {
       return;
@@ -970,8 +1024,19 @@ class WindowManager {
       const isStarting = !this._isDictatingToggle;
       // A double press within the gesture window means "keep recording
       // hands-free": swallow the stop-toggle the second press would have sent.
-      // The renderer stays authoritative — nothing else changes hands.
-      if (this._pressGesture.handleTogglePress(inputKind, Date.now(), isStarting)) {
+      // Only hotkey presses take part — a UI click (the companion pill) must
+      // always act — and only when the pipeline visibly runs this kind, so a
+      // declined start leaves the retry press working. The renderer stays
+      // authoritative — nothing else changes hands.
+      if (
+        applyPressGesture &&
+        this._pressGesture.handleTogglePress(
+          inputKind,
+          Date.now(),
+          isStarting,
+          this._isPipelineActiveFor(inputKind)
+        )
+      ) {
         debugLogger.debug("Double press latched hands-free; toggle suppressed", { channel });
         return;
       }
@@ -1061,8 +1126,8 @@ class WindowManager {
     return shouldIgnoreDictationHotkey(this._dictationLifecycleState);
   }
 
-  sendToggleDictation() {
-    this._sendDictationToggle("toggle-dictation", "dictation");
+  sendToggleDictation(options) {
+    this._sendDictationToggle("toggle-dictation", "dictation", options);
   }
 
   sendToggleVoiceAgent() {
@@ -1163,15 +1228,18 @@ class WindowManager {
     return this._cachedSlotActivationModes[slotName] === "push" ? "push" : "tap";
   }
 
-  async setSlotActivationModeCache(slotName, mode) {
+  async setSlotActivationModeCache(slotName, mode, { notifyFailure = true } = {}) {
     if (!(slotName in this._cachedSlotActivationModes)) return false;
     const nextMode = mode === "push" ? "push" : "tap";
     if (nextMode === "push") {
+      // No bound hotkey means the capability cannot be verified: fail closed.
       const hotkey = this.hotkeyManager.getSlotHotkey?.(slotName);
-      if (hotkey && !this.hotkeyManager.supportsPushToTalk(hotkey, slotName)) {
-        this.hotkeyManager.notifyHotkeyFailure?.(hotkey, {
-          error: this.hotkeyManager.getPushToTalkUnavailableReason(hotkey),
-        });
+      if (!hotkey || !this.hotkeyManager.supportsPushToTalk(hotkey, slotName)) {
+        if (notifyFailure && hotkey) {
+          this.hotkeyManager.notifyHotkeyFailure?.(hotkey, {
+            error: this.hotkeyManager.getPushToTalkUnavailableReason(hotkey),
+          });
+        }
         return false;
       }
     }

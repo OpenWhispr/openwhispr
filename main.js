@@ -1169,9 +1169,16 @@ async function startApp() {
   }
 
   // Restore the per-slot activation modes once the slots are registered, so
-  // the Hold capability check can see each slot's primary hotkey.
+  // the Hold capability check can see each slot's primary hotkey. Validation
+  // is silent here — a stale Hold (backend change, unbound slot) converges the
+  // persisted mode to Tap instead of toasting on every launch.
   for (const [slotName, mode] of Object.entries(environmentManager.getSlotActivationModes())) {
-    await windowManager.setSlotActivationModeCache(slotName, mode);
+    const applied = await windowManager.setSlotActivationModeCache(slotName, mode, {
+      notifyFailure: false,
+    });
+    if (!applied && mode === "push") {
+      environmentManager.saveSlotActivationMode(slotName, "tap");
+    }
   }
 
   // Set up meeting mode hotkey
@@ -1352,6 +1359,10 @@ async function startApp() {
     let globeKeyDownTime = 0;
     let globeKeyIsRecording = false;
     let globeLastStopTime = 0;
+    // A hands-free stop on bare Fn is deferred to the release: if the press
+    // turns out to be an Fn combo (globe-interrupted), the hands-free
+    // dictation keeps running instead of being stopped mid-sentence.
+    let globePendingHandsFreeStop = false;
     const MIN_HOLD_DURATION_MS = 150;
     const POST_STOP_COOLDOWN_MS = 300;
 
@@ -1359,6 +1370,7 @@ async function startApp() {
     // toggles as before; Hold runs the shared native push-to-talk machine
     // (which owns the double-press hands-free gesture).
     const dispatchMacSlotPress = (slotName, inputKind, key, sendToggle) => {
+      if (hotkeyManager.isInListeningMode()) return;
       if (windowManager.getSlotActivationMode(slotName) === "push") {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         windowManager.startNativePushToTalk(key, inputKind);
@@ -1391,11 +1403,11 @@ async function startApp() {
           if (textEditMonitor) textEditMonitor.captureTargetPid();
           const activationMode = windowManager.getActivationMode();
           if (activationMode === "push") {
-            const verdict = windowManager.handlePushGestureDown("dictation");
-            if (verdict === "stop-hands-free") {
-              globeLastStopTime = Date.now();
+            if (windowManager.isHandsFreeActive("dictation")) {
+              globePendingHandsFreeStop = true;
               return;
             }
+            const verdict = windowManager.handlePushGestureDown("dictation");
             if (verdict !== "proceed") return;
             const now = Date.now();
             if (now - globeLastStopTime < POST_STOP_COOLDOWN_MS) {
@@ -1452,6 +1464,12 @@ async function startApp() {
         windowManager.controlPanelWindow.webContents.send("globe-key-released");
       }
 
+      if (globePendingHandsFreeStop) {
+        globePendingHandsFreeStop = false;
+        globeLastStopTime = Date.now();
+        windowManager.stopHandsFreeSession("dictation");
+      }
+
       if (hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey)) {
         const activationMode = windowManager.getActivationMode();
         if (activationMode === "push") {
@@ -1488,6 +1506,9 @@ async function startApp() {
     // Only the bare-Fn path uses globeKeyDownTime/globeKeyIsRecording, so compound
     // Fn-hotkey push-to-talk and tap mode are untouched.
     globeKeyManager.on("globe-interrupted", () => {
+      // The Fn press was a navigation combo: a hands-free stop pending on its
+      // release is called off — the dictation keeps running.
+      globePendingHandsFreeStop = false;
       // A globe-keyed agent/translation Hold session (shared native machine)
       // and any pending double-press gesture on a globe-bound slot unwind
       // first — the quick tap that primed them was the start of an Fn combo.
@@ -1751,6 +1772,7 @@ async function startApp() {
     // Reset native key state when hotkey changes
     ipcMain.on("hotkey-changed", (_event, _newHotkey) => {
       windowManager.resetNativePushState();
+      globePendingHandsFreeStop = false;
       globeKeyDownTime = 0;
       globeKeyIsRecording = false;
       globeLastStopTime = 0;

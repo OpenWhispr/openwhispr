@@ -22,23 +22,53 @@ const HotkeyManager = require("../../src/helpers/hotkeyManager");
 test("native push-to-talk support is hotkey-aware", () => {
   const manager = new HotkeyManager();
   manager.useKDE = true;
-
-  assert.equal(manager.supportsPushToTalk("Control+Super"), false);
-  assert.equal(manager.supportsPushToTalk("F8"), true);
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  try {
+    assert.equal(manager.supportsPushToTalk("Control+Super"), false);
+    assert.equal(manager.supportsPushToTalk("F8"), true);
+  } finally {
+    Object.defineProperty(process, "platform", originalPlatform);
+  }
 });
 
 test("non-dictation slots support Hold everywhere except DE-native backends", () => {
   const manager = new HotkeyManager();
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  try {
+    assert.equal(manager.supportsPushToTalk("F9", "voiceAgent"), true);
+    assert.equal(manager.supportsPushToTalk("F7", "translation"), true);
 
-  assert.equal(manager.supportsPushToTalk("F9", "voiceAgent"), true);
-  assert.equal(manager.supportsPushToTalk("F7", "translation"), true);
+    manager.useKDE = true;
+    assert.equal(manager.supportsPushToTalk("F9", "voiceAgent"), false);
+    assert.equal(manager.supportsPushToTalk("F7", "translation"), false);
+    // Dictation keeps its own KDE answer: regular keys stay push-capable.
+    assert.equal(manager.supportsPushToTalk("F8", "dictation"), true);
+    assert.equal(typeof manager.getPushToTalkUnavailableReason("F9", "voiceAgent"), "string");
+  } finally {
+    Object.defineProperty(process, "platform", originalPlatform);
+  }
+});
 
-  manager.useKDE = true;
-  assert.equal(manager.supportsPushToTalk("F9", "voiceAgent"), false);
-  assert.equal(manager.supportsPushToTalk("F7", "translation"), false);
-  // Dictation keeps its own KDE answer: regular keys stay push-capable.
-  assert.equal(manager.supportsPushToTalk("F8", "dictation"), true);
-  assert.equal(typeof manager.getPushToTalkUnavailableReason("F9", "voiceAgent"), "string");
+test("macOS supports Hold only for hotkeys with release detection", () => {
+  const manager = new HotkeyManager();
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+  try {
+    assert.equal(manager.supportsPushToTalk("Command+Period"), true);
+    assert.equal(manager.supportsPushToTalk("GLOBE"), true);
+    assert.equal(manager.supportsPushToTalk("RightOption"), true);
+    assert.equal(manager.supportsPushToTalk("MouseButton4"), true);
+    // A plain key has no key-up source on macOS: Hold would silently act as
+    // Tap, so it must be reported unsupported.
+    assert.equal(manager.supportsPushToTalk("F13"), false);
+    assert.equal(typeof manager.getPushToTalkUnavailableReason("F13"), "string");
+    // No hotkey to judge yet (early startup): stay permissive.
+    assert.equal(manager.supportsPushToTalk(null), true);
+  } finally {
+    Object.defineProperty(process, "platform", originalPlatform);
+  }
 });
 
 test("a failed activation-mode registration preserves Tap and notifies the user", async () => {
