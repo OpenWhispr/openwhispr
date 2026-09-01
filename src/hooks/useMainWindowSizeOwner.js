@@ -143,10 +143,13 @@ export function useMainWindowSizeOwner({
         if (panelSizeReservationRef.current) return;
         await panelReturnHandoff.releaseAfter(async () => {
           // A menu/toast edge can supersede the target while the fade runs.
-          // Follow the size owner's latest target before revealing.
+          // Follow the size owner's latest target before revealing. A dictation
+          // error takes over the window on its own path, so bail to it rather
+          // than chase a target it is already moving (same guard as the
+          // error-return chase above).
           let settledTarget = lastSizeKeyRef.current;
           await requestMainWindowSize(settledTarget);
-          while (lastSizeKeyRef.current !== settledTarget) {
+          while (actionCountRef.current === 0 && lastSizeKeyRef.current !== settledTarget) {
             settledTarget = lastSizeKeyRef.current;
             await requestMainWindowSize(settledTarget);
           }
