@@ -561,8 +561,16 @@ export default function App() {
     assistantClosing: assistant.closing,
     hasLiveActivity: voicePillIsRecording || voicePillIsProcessing,
   });
+  // assistant.closing folds the pill into the panel's own exit: it fades with
+  // the closing content, stays hidden through the surface contraction, the
+  // travel, and the masked window shrink (panelReturnResizeActive picks up at
+  // unmount), and materializes once at its settled dock — one beat, not a
+  // condense-then-blink.
   const pillVisuallySuppressed =
-    dictationErrorSuppressesPill || assistantActionsSuppressPill || panelReturnResizeActive;
+    dictationErrorSuppressesPill ||
+    assistantActionsSuppressPill ||
+    assistant.closing ||
+    panelReturnResizeActive;
   const pillInteractionSuppressed = pillVisuallySuppressed || assistant.closing;
 
   return (
