@@ -236,6 +236,7 @@
       "hotkey": {
         "capture": "请按下你想使用的按键",
         "chooseAnother": "选择其他快捷键",
+        "confirmAgain": "再次按下 {{hotkey}} 以确认",
         "inUse": "该快捷键已被使用。请选择其他快捷键。",
         "holding": "继续按住，或按下另一个键"
       },
@@ -413,6 +414,7 @@
         "downloadingShort": "下载中",
         "selected": "已选择",
         "use": "使用",
+        "selectModel": "选择模型",
         "downloadInProgress": "下载进行中",
         "cancelDownload": "取消下载 {{model}}",
         "downloads": "模型下载",
@@ -1105,6 +1107,8 @@
     },
     "sso": {
       "continueWithSSO": "使用 SSO 登录",
+      "workEmailLabel": "工作邮箱",
+      "emailPlaceholder": "添加您的邮箱",
       "emailRequired": "输入您的工作邮箱以使用 SSO。",
       "failed": "单点登录失败，请重试。",
       "companySignInTitle": "使用公司登录",

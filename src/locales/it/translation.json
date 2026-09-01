@@ -236,6 +236,7 @@
       "hotkey": {
         "capture": "Premi i tasti che vuoi usare",
         "chooseAnother": "Scegli un’altra scorciatoia",
+        "confirmAgain": "Premi di nuovo {{hotkey}} per confermare",
         "inUse": "Questa scorciatoia è già in uso. Scegline un’altra.",
         "holding": "Continua a tenere premuto o premi un altro tasto"
       },
@@ -413,6 +414,7 @@
         "downloadingShort": "Download",
         "selected": "Selezionato",
         "use": "Usa",
+        "selectModel": "Seleziona modello",
         "downloadInProgress": "Download in corso",
         "cancelDownload": "Annulla il download di {{model}}",
         "downloads": "Download dei modelli",
@@ -1106,6 +1108,8 @@
     },
     "sso": {
       "continueWithSSO": "Accedi con SSO",
+      "workEmailLabel": "E-mail di lavoro",
+      "emailPlaceholder": "Aggiungi la tua e-mail",
       "emailRequired": "Inserisci la tua email di lavoro per usare l’SSO.",
       "failed": "Accesso SSO non riuscito. Riprova.",
       "companySignInTitle": "Usa l'accesso aziendale",

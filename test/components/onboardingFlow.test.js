@@ -143,11 +143,54 @@ test("versioned sessions reject malformed or old data", async () => {
 
   const legacyV2 = { ...session };
   delete legacyV2.selfHostedRequested;
+  delete legacyV2.resume;
   assert.equal(parseOnboardingSession(JSON.stringify(legacyV2)).selfHostedRequested, false);
+  assert.deepEqual(
+    parseOnboardingSession(JSON.stringify(legacyV2)).resume,
+    createOnboardingSession().resume
+  );
   assert.equal(
     parseOnboardingSession(JSON.stringify({ ...session, selfHostedRequested: "yes" })),
     null
   );
+});
+
+test("v2 sessions retain safe within-step state without accepting secrets", async () => {
+  const { createOnboardingSession, parseOnboardingSession } = await load();
+  const session = createOnboardingSession();
+  session.currentStepId = "byok-dictation";
+  session.resume.dictationHotkeyConfirmed = true;
+  session.resume.dictationDemoCompleted = true;
+  session.resume.auth = {
+    ...session.resume.auth,
+    authMode: "sign-up",
+    email: "person@example.com",
+    fullName: "Person Example",
+  };
+  session.resume.byok["byok-dictation"] = {
+    selectedProvider: "openai",
+    selectedModel: "gpt-4o-mini-transcribe",
+    baseUrl: "https://self-hosted.example.com",
+    customModel: "whisper-local",
+    cortiClientId: "client-id",
+  };
+  session.resume.localModels["local-assistant"] = {
+    provider: "qwen",
+    modelId: "qwen-9b",
+  };
+
+  const serialized = JSON.stringify(session);
+  assert.doesNotMatch(serialized, /password|apiKey|clientSecret/);
+  assert.deepEqual(parseOnboardingSession(serialized), session);
+
+  const malformedDraft = JSON.parse(serialized);
+  malformedDraft.resume.auth.authMode = "unknown";
+  malformedDraft.resume.byok["byok-dictation"].selectedProvider = 42;
+  malformedDraft.resume.localModels["local-assistant"].modelId = false;
+  const parsed = parseOnboardingSession(JSON.stringify(malformedDraft));
+  assert.equal(parsed.resume.auth.authMode, null);
+  assert.equal(parsed.resume.byok["byok-dictation"].selectedProvider, "");
+  assert.equal(parsed.resume.localModels["local-assistant"].modelId, "");
 });
 
 test("an explicit restart clears every persisted route choice and returns to auth", async () => {
@@ -157,6 +200,8 @@ test("an explicit restart clears every persisted route choice and returns to aut
     ["onboardingCompleted", "true"],
     ["authenticationSkipped", "true"],
     ["skipAuth", "true"],
+    ["localSetupPending", "true"],
+    ["pendingLocalModelSelectionsV1", '{"assistant":{"provider":"qwen","modelId":"qwen-9b"}}'],
   ]);
   const storage = {
     setItem: (key, value) => values.set(key, value),
@@ -170,6 +215,8 @@ test("an explicit restart clears every persisted route choice and returns to aut
   assert.equal(values.has("onboardingCompleted"), false);
   assert.equal(values.has("authenticationSkipped"), false);
   assert.equal(values.has("skipAuth"), false);
+  assert.equal(values.has("localSetupPending"), false);
+  assert.equal(values.has("pendingLocalModelSelectionsV1"), false);
 });
 
 test("legacy numeric steps migrate conservatively", async () => {

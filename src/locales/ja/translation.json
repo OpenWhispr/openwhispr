@@ -236,6 +236,7 @@
       "hotkey": {
         "capture": "使用したいキーを押してください",
         "chooseAnother": "別のショートカットを選ぶ",
+        "confirmAgain": "確認するには {{hotkey}} をもう一度押してください",
         "inUse": "そのショートカットはすでに使用されています。別のものを選んでください。",
         "holding": "押したままにするか、別のキーを押してください"
       },
@@ -413,6 +414,7 @@
         "downloadingShort": "ダウンロード中",
         "selected": "選択済み",
         "use": "使用",
+        "selectModel": "モデルを選択",
         "downloadInProgress": "ダウンロード中",
         "cancelDownload": "{{model}} のダウンロードをキャンセル",
         "downloads": "モデルのダウンロード",
@@ -1106,6 +1108,8 @@
     },
     "sso": {
       "continueWithSSO": "SSO でサインイン",
+      "workEmailLabel": "勤務先のメールアドレス",
+      "emailPlaceholder": "メールアドレスを入力",
       "emailRequired": "SSO を使用するには勤務先のメールアドレスを入力してください。",
       "failed": "シングルサインオンに失敗しました。もう一度お試しください。",
       "companySignInTitle": "会社のサインインを使用",

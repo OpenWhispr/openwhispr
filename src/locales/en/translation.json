@@ -236,6 +236,7 @@
       "hotkey": {
         "capture": "Press the keys you want to use",
         "chooseAnother": "Choose another shortcut",
+        "confirmAgain": "Press {{hotkey}} again to confirm",
         "inUse": "That shortcut is already in use. Choose another one.",
         "holding": "Keep holding, or press another key"
       },
@@ -413,6 +414,7 @@
         "downloadingShort": "Downloading",
         "selected": "Selected",
         "use": "Use",
+        "selectModel": "Select Model",
         "downloadInProgress": "Download in progress",
         "cancelDownload": "Cancel download of {{model}}",
         "downloads": "Model downloads",
@@ -1105,6 +1107,8 @@
     },
     "sso": {
       "continueWithSSO": "Sign in with SSO",
+      "workEmailLabel": "Work email",
+      "emailPlaceholder": "Add your email",
       "emailRequired": "Enter your work email to use SSO.",
       "failed": "Single sign-on failed. Please try again.",
       "companySignInTitle": "Use your company sign-in",

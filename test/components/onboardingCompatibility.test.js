@@ -27,7 +27,6 @@ async function createOnboardingRenderer(t, platform = "linux") {
       "onboarding-permission-microphone.webp": `export default "microphone.webp";`,
       "onboarding-permission-accessibility.webp": `export default "accessibility.webp";`,
       "onboarding-permission-system-audio.webp": `export default "system-audio.webp";`,
-      "onboarding-permission-screen-context.webp": `export default "screen-context.webp";`,
       "/utils/platform": `
         export function getPlatform() { return "${platform}"; }
         export function getCachedPlatform() { return "${platform}"; }
@@ -143,6 +142,32 @@ test("Linux onboarding shows paste-tool installation and recheck guidance", asyn
   assert.match(markup, />pasteToolsInfo.recheck<\/button>/);
 });
 
+test("permissions keeps Continue at the bottom and gates it on microphone access", async (t) => {
+  const vite = await createOnboardingRenderer(t, "darwin");
+  const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
+    "/components/onboarding/CompactPermissionsStep.tsx"
+  );
+
+  const render = (micPermissionGranted) =>
+    renderToStaticMarkup(
+      React.createElement(CompactPermissionsStep, {
+        permissions: permissions({ micPermissionGranted }),
+        systemAudio,
+        screenContext,
+        onContinue: noop,
+      })
+    );
+
+  const blocked = render(false);
+  assert.match(blocked, /overflow-y-auto px-5 pb-6 pt-38/);
+  assert.match(blocked, /disabled="" class="onboarding-pressable mt-4[^>]+>common\.continue/);
+  assert.doesNotMatch(blocked, /fixed top-4/);
+
+  const ready = render(true);
+  assert.match(ready, /class="onboarding-pressable mt-4[^>]+>common\.continue/);
+  assert.doesNotMatch(ready, /disabled="" class="onboarding-pressable mt-4/);
+});
+
 test("macOS onboarding offers optional Screen Context setup", async (t) => {
   const vite = await createOnboardingRenderer(t, "darwin");
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
@@ -159,7 +184,7 @@ test("macOS onboarding offers optional Screen Context setup", async (t) => {
   );
 
   assert.match(markup, /dictationAgent\.screenContext\.title/);
-  assert.match(markup, /screen-context\.webp/);
+  assert.match(markup, /lucide-laptop/);
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
 });
 
@@ -224,7 +249,7 @@ test("Windows onboarding offers Screen Context as a permissionless opt-in", asyn
   );
 
   assert.match(markup, /dictationAgent\.screenContext\.title/);
-  assert.match(markup, /screen-context\.webp/);
+  assert.match(markup, /lucide-laptop/);
   assert.match(markup, />onboarding\.rehaul\.permissions\.enabled<\/button>/);
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
 });

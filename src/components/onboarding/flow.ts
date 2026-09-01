@@ -24,6 +24,48 @@ export type OnboardingStepId =
 
 export type OnboardingAuthPath = "account" | "guest" | null;
 export type OnboardingSetupMode = "cloud" | "byok" | "local" | null;
+export type OnboardingAuthMode = "sign-in" | "sign-up" | null;
+export type OnboardingByokStepId = "byok-dictation" | "byok-assistant";
+export type OnboardingLocalStepId = "local-dictation" | "local-assistant";
+
+export interface OnboardingSsoDiscoveryDraft {
+  required: boolean;
+  domain: string;
+  exists: boolean;
+}
+
+export interface OnboardingAuthDraft {
+  authMode: OnboardingAuthMode;
+  email: string;
+  fullName: string;
+  showSSOEmailStep: boolean;
+  forgotPasswordOpen: boolean;
+  ssoDiscovery: OnboardingSsoDiscoveryDraft | null;
+  pendingVerificationEmail: string | null;
+}
+
+export interface OnboardingByokDraft {
+  selectedProvider: string;
+  selectedModel: string;
+  baseUrl: string;
+  customModel: string;
+  cortiClientId: string;
+}
+
+export interface OnboardingLocalModelDraft {
+  provider: string;
+  modelId: string;
+}
+
+export interface OnboardingResumeState {
+  dictationHotkeyConfirmed: boolean;
+  assistantHotkeyConfirmed: boolean;
+  dictationDemoCompleted: boolean;
+  assistantDemoCompleted: boolean;
+  auth: OnboardingAuthDraft;
+  byok: Partial<Record<OnboardingByokStepId, OnboardingByokDraft>>;
+  localModels: Partial<Record<OnboardingLocalStepId, OnboardingLocalModelDraft>>;
+}
 
 export interface OnboardingSession {
   version: typeof ONBOARDING_FLOW_VERSION;
@@ -32,6 +74,7 @@ export interface OnboardingSession {
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
   selfHostedRequested: boolean;
+  resume: OnboardingResumeState;
 }
 
 export interface OnboardingRouteContext {
@@ -112,6 +155,26 @@ const LEGACY_STEP_MAP: OnboardingStepId[] = [
   "setup-choice",
 ];
 
+export function createOnboardingResumeState(): OnboardingResumeState {
+  return {
+    dictationHotkeyConfirmed: false,
+    assistantHotkeyConfirmed: false,
+    dictationDemoCompleted: false,
+    assistantDemoCompleted: false,
+    auth: {
+      authMode: null,
+      email: "",
+      fullName: "",
+      showSSOEmailStep: false,
+      forgotPasswordOpen: false,
+      ssoDiscovery: null,
+      pendingVerificationEmail: null,
+    },
+    byok: {},
+    localModels: {},
+  };
+}
+
 export function createOnboardingSession(): OnboardingSession {
   return {
     version: ONBOARDING_FLOW_VERSION,
@@ -120,6 +183,7 @@ export function createOnboardingSession(): OnboardingSession {
     authPath: null,
     setupMode: null,
     selfHostedRequested: false,
+    resume: createOnboardingResumeState(),
   };
 }
 
@@ -128,6 +192,8 @@ export function resetOnboardingProgress(storage: OnboardingStorage): void {
   storage.removeItem("onboardingCompleted");
   storage.removeItem("authenticationSkipped");
   storage.removeItem("skipAuth");
+  storage.removeItem("localSetupPending");
+  storage.removeItem("pendingLocalModelSelectionsV1");
   // AppRouter uses this marker to distinguish an explicit restart from a
   // returning signed-in user, while useOnboardingSession migrates it to auth.
   storage.setItem(LEGACY_ONBOARDING_STEP_KEY, "0");
@@ -179,6 +245,86 @@ export function isOnboardingStepId(value: unknown): value is OnboardingStepId {
   return typeof value === "string" && KNOWN_STEPS.has(value as OnboardingStepId);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readDraftString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function parseSsoDiscoveryDraft(value: unknown): OnboardingSsoDiscoveryDraft | null {
+  if (
+    !isRecord(value) ||
+    typeof value.required !== "boolean" ||
+    typeof value.domain !== "string" ||
+    typeof value.exists !== "boolean"
+  ) {
+    return null;
+  }
+  return { required: value.required, domain: value.domain, exists: value.exists };
+}
+
+function parseByokDraft(value: unknown): OnboardingByokDraft | undefined {
+  if (!isRecord(value)) return undefined;
+  return {
+    selectedProvider: readDraftString(value.selectedProvider),
+    selectedModel: readDraftString(value.selectedModel),
+    baseUrl: readDraftString(value.baseUrl),
+    customModel: readDraftString(value.customModel),
+    cortiClientId: readDraftString(value.cortiClientId),
+  };
+}
+
+function parseLocalModelDraft(value: unknown): OnboardingLocalModelDraft | undefined {
+  if (!isRecord(value)) return undefined;
+  return {
+    provider: readDraftString(value.provider),
+    modelId: readDraftString(value.modelId),
+  };
+}
+
+function parseOnboardingResumeState(value: unknown): OnboardingResumeState {
+  const defaults = createOnboardingResumeState();
+  if (!isRecord(value)) return defaults;
+
+  const authValue = isRecord(value.auth) ? value.auth : {};
+  const authMode = authValue.authMode;
+  const byokValue = isRecord(value.byok) ? value.byok : {};
+  const localModelsValue = isRecord(value.localModels) ? value.localModels : {};
+  const byokDictation = parseByokDraft(byokValue["byok-dictation"]);
+  const byokAssistant = parseByokDraft(byokValue["byok-assistant"]);
+  const localDictation = parseLocalModelDraft(localModelsValue["local-dictation"]);
+  const localAssistant = parseLocalModelDraft(localModelsValue["local-assistant"]);
+
+  return {
+    dictationHotkeyConfirmed: value.dictationHotkeyConfirmed === true,
+    assistantHotkeyConfirmed: value.assistantHotkeyConfirmed === true,
+    dictationDemoCompleted: value.dictationDemoCompleted === true,
+    assistantDemoCompleted: value.assistantDemoCompleted === true,
+    auth: {
+      authMode: authMode === "sign-in" || authMode === "sign-up" ? authMode : null,
+      email: readDraftString(authValue.email),
+      fullName: readDraftString(authValue.fullName),
+      showSSOEmailStep: authValue.showSSOEmailStep === true,
+      forgotPasswordOpen: authValue.forgotPasswordOpen === true,
+      ssoDiscovery: parseSsoDiscoveryDraft(authValue.ssoDiscovery),
+      pendingVerificationEmail:
+        typeof authValue.pendingVerificationEmail === "string"
+          ? authValue.pendingVerificationEmail
+          : null,
+    },
+    byok: {
+      ...(byokDictation ? { "byok-dictation": byokDictation } : {}),
+      ...(byokAssistant ? { "byok-assistant": byokAssistant } : {}),
+    },
+    localModels: {
+      ...(localDictation ? { "local-dictation": localDictation } : {}),
+      ...(localAssistant ? { "local-assistant": localAssistant } : {}),
+    },
+  };
+}
+
 export function parseOnboardingSession(value: string | null): OnboardingSession | null {
   if (!value) return null;
 
@@ -217,6 +363,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
       authPath,
       setupMode,
       selfHostedRequested: parsed.selfHostedRequested ?? false,
+      resume: parseOnboardingResumeState(parsed.resume),
     };
   } catch {
     return null;

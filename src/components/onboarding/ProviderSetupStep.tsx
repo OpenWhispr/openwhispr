@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "lucide-react";
+import { AudioLines, Check, Circle, CircleCheck, Download, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ProviderConnectionTest from "./ProviderConnectionTest";
 import { Button } from "../ui/button";
@@ -24,23 +24,35 @@ import {
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
 import { pickDefaultModelId } from "../../models/providerDefaultModel";
-import type { OnboardingStepId } from "./flow";
-import { forgetPendingLocalModel, rememberPendingLocalModel } from "./pendingLocalModels";
+import type { OnboardingByokDraft, OnboardingLocalModelDraft, OnboardingStepId } from "./flow";
+import {
+  forgetPendingLocalModel,
+  readPendingLocalModels,
+  rememberPendingLocalModel,
+} from "./pendingLocalModels";
 import { isLocalStageDownloadActive } from "./localDownloadState";
 
-export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
+export function SetupStageStepper({
+  stepId,
+  large = false,
+}: {
+  stepId: OnboardingStepId;
+  large?: boolean;
+}) {
   const { t } = useTranslation();
   const assistant = stepId.endsWith("assistant");
   const local = stepId.startsWith("local");
   return (
     <div
-      className="relative mx-auto flex w-36 items-start justify-between"
+      className={`relative mx-auto flex items-start justify-between ${large ? "w-40" : "w-36"}`}
       aria-label={t("onboarding.rehaul.provider.progress")}
     >
-      <span className="absolute left-8 right-8 top-3.5 border-t border-dashed border-[var(--onboarding-control-border)]" />
+      <span
+        className={`absolute left-8 right-8 border-t border-dashed border-[var(--onboarding-control-border)] ${large ? "top-4" : "top-3.5"}`}
+      />
       <div className="relative z-10 flex w-14 flex-col items-center gap-1.5 text-[var(--onboarding-text-secondary)]">
         <span
-          className={`flex size-7 items-center justify-center rounded-full ${
+          className={`flex items-center justify-center rounded-full ${large ? "size-8" : "size-7"} ${
             assistant
               ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)]"
               : "bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]"
@@ -48,30 +60,30 @@ export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
         >
           {assistant ? (
             local ? (
-              <AudioLines className="size-3.5" />
+              <AudioLines className={large ? "size-4" : "size-3.5"} />
             ) : (
-              <CircleCheck className="size-3.5" strokeWidth={2} />
+              <CircleCheck className={large ? "size-4" : "size-3.5"} strokeWidth={2} />
             )
           ) : (
-            <AudioLines className="size-3.5" />
+            <AudioLines className={large ? "size-4" : "size-3.5"} />
           )}
         </span>
-        <span className="text-[0.6875rem]">{t("onboarding.rehaul.provider.dictation")}</span>
+        <span className={large ? "text-xs" : "text-[0.6875rem]"}>
+          {t("onboarding.rehaul.provider.dictation")}
+        </span>
       </div>
       <div className="relative z-10 flex w-14 flex-col items-center gap-1.5 text-[var(--onboarding-text-secondary)]">
         <span
-          className={`flex size-7 items-center justify-center rounded-full ${
+          className={`flex items-center justify-center rounded-full ${large ? "size-8" : "size-7"} ${
             assistant
               ? "bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]"
               : "border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]"
           }`}
         >
-          <MousePointer2 className="size-3.5" />
+          <MousePointer2 className={large ? "size-4" : "size-3.5"} />
         </span>
-        <span className="text-[0.6875rem]">
-          {local && assistant
-            ? t("onboarding.rehaul.local.agent")
-            : t("onboarding.rehaul.provider.assistant")}
+        <span className={large ? "text-xs" : "text-[0.6875rem]"}>
+          {t("onboarding.rehaul.provider.assistant")}
         </span>
       </div>
     </div>
@@ -132,12 +144,17 @@ function StepSecondaryAction({
 }
 
 /** The card each setup mode's step renders into. Top margin is per call site. */
-export const SETUP_CARD_CLASS =
-  "mx-auto w-full max-w-[22rem] rounded-[1.125rem] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 py-4 text-[var(--onboarding-text-primary)]";
+const SETUP_CARD_BASE_CLASS =
+  "mx-auto w-full rounded-[1.125rem] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]";
+
+export const SETUP_CARD_CLASS = `${SETUP_CARD_BASE_CLASS} max-w-[22rem] px-3 py-4`;
+const LOCAL_MODEL_CARD_CLASS = `${SETUP_CARD_BASE_CLASS} max-w-[30rem] px-4 py-4`;
 
 /** The field trigger. Call sites that can be disabled add the disabled: variants. */
 const SELECT_TRIGGER_CLASS =
   "h-9 rounded-xl border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-3 text-xs text-[var(--onboarding-text-primary)]";
+const LOCAL_SELECT_TRIGGER_CLASS =
+  "h-12 rounded-xl border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-3 text-sm text-[var(--onboarding-text-primary)]";
 
 /**
  * The dropdown sheet, Figma "Onboarding / Frame 16": radius 17 on
@@ -219,6 +236,8 @@ export function ByokProviderStep({
   onSelfHostedChange,
   onConnectionChange,
   onProceed,
+  resumeState,
+  onResumeStateChange,
 }: {
   stepId: "byok-dictation" | "byok-assistant";
   /** Set when the user picked "Self-hosted" on setup-choice rather than BYOK. */
@@ -226,6 +245,8 @@ export function ByokProviderStep({
   onSelfHostedChange: (requested: boolean) => void;
   onConnectionChange: (connected: boolean) => void;
   onProceed: () => void;
+  resumeState?: OnboardingByokDraft;
+  onResumeStateChange?: (state: OnboardingByokDraft) => void;
 }) {
   const { t } = useTranslation();
   const store = useSettingsStore();
@@ -235,32 +256,6 @@ export function ByokProviderStep({
   const selfHostedAllowed =
     isModeAllowedByPolicy(policy, scope, "self-hosted") &&
     isProviderAllowedByPolicy(policy, scope, "custom");
-  const [selfHosted, setSelfHosted] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState("");
-  const [selectedModel, setSelectedModel] = useState("");
-  const [draftApiKey, setDraftApiKey] = useState("");
-  const [draftBaseUrl, setDraftBaseUrl] = useState("");
-  const [draftCustomModel, setDraftCustomModel] = useState("");
-  const [draftCortiClientId, setDraftCortiClientId] = useState("");
-  const [draftCortiClientSecret, setDraftCortiClientSecret] = useState("");
-  const [connected, setConnected] = useState(false);
-
-  // Policy can forbid self-hosted, in which case the checkbox isn't rendered and
-  // honouring the request would strand the user in fields they can't switch away
-  // from.
-  useEffect(() => {
-    setSelfHosted(selfHostedRequested && selfHostedAllowed);
-    setSelectedProvider("");
-    setSelectedModel("");
-    setDraftApiKey("");
-    setDraftBaseUrl("");
-    setDraftCustomModel("");
-    setDraftCortiClientId("");
-    setDraftCortiClientSecret("");
-    setConnected(false);
-    onConnectionChange(false);
-  }, [onConnectionChange, selfHostedAllowed, selfHostedRequested, stepId]);
-
   const providers = useMemo(
     () =>
       filterByokProviderOptionsByPolicy<HostedProvider>(
@@ -270,6 +265,69 @@ export function ByokProviderStep({
       ),
     [assistant, policy, scope]
   );
+  const initialProvider =
+    providers.find((provider) => provider.id === resumeState?.selectedProvider)?.id ?? "";
+  const initialProviderModels =
+    providers.find((provider) => provider.id === initialProvider)?.models ?? [];
+  const initialModel = initialProviderModels.some(
+    (model) => model.id === resumeState?.selectedModel
+  )
+    ? (resumeState?.selectedModel ?? "")
+    : (initialProviderModels[0]?.id ?? "");
+  const initiallySelfHosted = selfHostedRequested && selfHostedAllowed;
+  const [selfHosted, setSelfHosted] = useState(initiallySelfHosted);
+  const [selectedProvider, setSelectedProvider] = useState(
+    initiallySelfHosted ? "" : initialProvider
+  );
+  const [selectedModel, setSelectedModel] = useState(initiallySelfHosted ? "" : initialModel);
+  const [draftApiKey, setDraftApiKey] = useState(() =>
+    initiallySelfHosted
+      ? assistant
+        ? store.chatAgentCustomApiKey
+        : store.customTranscriptionApiKey
+      : providerCredential(initialProvider, store).value
+  );
+  const [draftBaseUrl, setDraftBaseUrl] = useState(resumeState?.baseUrl ?? "");
+  const [draftCustomModel, setDraftCustomModel] = useState(resumeState?.customModel ?? "");
+  const [draftCortiClientId, setDraftCortiClientId] = useState(
+    resumeState?.cortiClientId || store.cortiClientId
+  );
+  const [draftCortiClientSecret, setDraftCortiClientSecret] = useState(store.cortiClientSecret);
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    onConnectionChange(false);
+  }, [onConnectionChange]);
+
+  useEffect(() => {
+    onResumeStateChange?.({
+      selectedProvider,
+      selectedModel,
+      baseUrl: draftBaseUrl,
+      customModel: draftCustomModel,
+      cortiClientId: draftCortiClientId,
+    });
+  }, [
+    draftBaseUrl,
+    draftCortiClientId,
+    draftCustomModel,
+    onResumeStateChange,
+    selectedModel,
+    selectedProvider,
+  ]);
+
+  // A live policy update can remove self-hosting while this card is open.
+  useEffect(() => {
+    if (!selfHosted || selfHostedAllowed) return;
+    setSelfHosted(false);
+    onSelfHostedChange(false);
+    setDraftApiKey("");
+    setDraftBaseUrl("");
+    setDraftCustomModel("");
+    setConnected(false);
+    onConnectionChange(false);
+  }, [onConnectionChange, onSelfHostedChange, selfHosted, selfHostedAllowed]);
+
   const currentProvider = providers.find((provider) => provider.id === selectedProvider);
   const models = currentProvider?.models ?? [];
   const knownCredential = providerCredential(selectedProvider, store);
@@ -282,6 +340,8 @@ export function ByokProviderStep({
     setDraftApiKey("");
     setDraftBaseUrl("");
     setDraftCustomModel("");
+    setDraftCortiClientId("");
+    setDraftCortiClientSecret("");
     setConnected(false);
     onConnectionChange(false);
   };
@@ -291,6 +351,8 @@ export function ByokProviderStep({
     setSelectedProvider(providerId);
     setSelectedModel(fallbackModel);
     setDraftApiKey(providerCredential(providerId, store).value);
+    setDraftCortiClientId(providerId === "corti" ? store.cortiClientId : "");
+    setDraftCortiClientSecret(providerId === "corti" ? store.cortiClientSecret : "");
     setConnected(false);
     onConnectionChange(false);
   };
@@ -570,17 +632,46 @@ export function LocalModelSetupStep({
   onReadinessChange,
   onProceed,
   onSkip,
+  resumeState,
+  onResumeStateChange,
 }: {
   stepId: "local-dictation" | "local-assistant";
   onReadinessChange: (ready: boolean) => void;
   onProceed: () => void;
   onSkip: () => void;
+  resumeState?: OnboardingLocalModelDraft;
+  onResumeStateChange?: (state: OnboardingLocalModelDraft) => void;
 }) {
   const { t } = useTranslation();
   const store = useSettingsStore();
   const assistant = stepId === "local-assistant";
-  const [selectedProvider, setSelectedProvider] = useState(assistant ? "qwen" : "whisper");
-  const [selectedModel, setSelectedModel] = useState("");
+  const pendingSelection = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
+  const savedProvider = assistant
+    ? modelRegistry.getProvider(store.chatAgentProvider)
+      ? store.chatAgentProvider
+      : "qwen"
+    : store.localTranscriptionProvider === "nvidia"
+      ? "nvidia"
+      : "whisper";
+  const requestedProvider = resumeState?.provider || pendingSelection?.provider || savedProvider;
+  const initialProvider = assistant
+    ? modelRegistry.getProvider(requestedProvider)
+      ? requestedProvider
+      : "qwen"
+    : requestedProvider === "nvidia"
+      ? "nvidia"
+      : "whisper";
+  const savedModel = assistant
+    ? store.chatAgentModel
+    : initialProvider === "nvidia"
+      ? store.parakeetModel
+      : store.whisperModel;
+  const initialModel =
+    (resumeState?.provider === initialProvider ? resumeState.modelId : "") ||
+    (pendingSelection?.provider === initialProvider ? pendingSelection.modelId : "") ||
+    savedModel;
+  const [selectedProvider, setSelectedProvider] = useState(initialProvider);
+  const [selectedModel, setSelectedModel] = useState(initialModel);
   const [downloadedWhisper, setDownloadedWhisper] = useState<Set<string>>(new Set());
   const [downloadedParakeet, setDownloadedParakeet] = useState<Set<string>>(new Set());
   const [downloadedLlm, setDownloadedLlm] = useState<Set<string>>(new Set());
@@ -622,20 +713,6 @@ export function LocalModelSetupStep({
   useEffect(() => {
     void refreshDownloadedModels();
   }, [refreshDownloadedModels]);
-
-  useEffect(() => {
-    const saved = useSettingsStore.getState();
-    const defaultProvider = assistant
-      ? modelRegistry.getProvider(saved.chatAgentProvider)
-        ? saved.chatAgentProvider
-        : "qwen"
-      : saved.localTranscriptionProvider === "nvidia"
-        ? "nvidia"
-        : "whisper";
-    setSelectedProvider(defaultProvider);
-    setSelectedModel("");
-    onReadinessChange(false);
-  }, [assistant, onReadinessChange, stepId]);
 
   const providerOptions = useMemo(() => {
     if (assistant) {
@@ -683,6 +760,16 @@ export function LocalModelSetupStep({
     }));
   }, [assistant, selectedProvider]);
 
+  useEffect(() => {
+    if (selectedModel && !models.some((model) => model.id === selectedModel)) {
+      setSelectedModel("");
+    }
+  }, [models, selectedModel]);
+
+  useEffect(() => {
+    onResumeStateChange?.({ provider: selectedProvider, modelId: selectedModel });
+  }, [onResumeStateChange, selectedModel, selectedProvider]);
+
   const currentProvider = providerOptions.find((provider) => provider.id === selectedProvider);
   const activeDownload = assistant
     ? llmDownload
@@ -726,6 +813,7 @@ export function LocalModelSetupStep({
     // runs; recording the pending selection for a refused download leaves a
     // stale entry that a much later download would silently activate.
     if (!activeDownload.isDownloading) {
+      setSelectedModel(modelId);
       rememberPendingLocalModel(assistant ? "assistant" : "dictation", {
         provider: selectedProvider,
         modelId,
@@ -745,39 +833,31 @@ export function LocalModelSetupStep({
     parakeet: parakeetDownload.isDownloading,
     llm: llmDownload.isDownloading,
   });
-  // A running download is enough to move on: it lives in the main process, the
-  // model is already remembered as pending (downloadModel above), and
-  // BackgroundModelDownloadTray keeps the progress on screen and applies the
-  // selection when it lands. Waiting for 100% would pin the user to this step
-  // for a multi-gigabyte download.
-  const canProceed = selectedReady || anyDownloadActive;
+  const canProceed = selectedReady;
 
   const proceed = () => {
-    // Leaving mid-download is the same situation as "download in background":
-    // this step unmounts, so the tray is what finishes the job, and it only
-    // applies the pending selection while localSetupPending is set.
-    if (anyDownloadActive && !selectedReady) {
+    if (anyDownloadActive) {
       localStorage.setItem("localSetupPending", "true");
     }
     onProceed();
   };
 
-  return (
-    <section className={`mt-5 ${SETUP_CARD_CLASS}`}>
-      <SetupStageStepper stepId={stepId} />
+  const skip = () => {
+    if (anyDownloadActive) {
+      localStorage.setItem("localSetupPending", "true");
+    }
+    onSkip();
+  };
 
-      <div className="mt-5">
+  return (
+    <section className={`mt-8 ${LOCAL_MODEL_CARD_CLASS}`}>
+      <SetupStageStepper stepId={stepId} large />
+
+      <div className="mt-6">
         <FieldLabel>{t("onboarding.rehaul.local.providerLabel")}</FieldLabel>
         <Select value={selectedProvider} onValueChange={chooseProvider}>
-          <SelectTrigger className={SELECT_TRIGGER_CLASS}>
-            <div className="flex items-center gap-2">
-              <ProviderIcon
-                provider={currentProvider?.icon ?? selectedProvider}
-                className="size-4"
-                monochrome={assistant && selectedProvider === "qwen"}
-              />
-              {currentProvider?.name ?? selectedProvider}
-            </div>
+          <SelectTrigger className={LOCAL_SELECT_TRIGGER_CLASS}>
+            <span>{currentProvider?.name ?? selectedProvider}</span>
           </SelectTrigger>
           <SelectContent className={`max-h-[14.625rem] ${SELECT_PANEL_CLASS}`}>
             {providerOptions.map((provider) => (
@@ -796,18 +876,9 @@ export function LocalModelSetupStep({
         </Select>
       </div>
 
-      {/* h, not max-h: a fixed 16rem keeps the card the same height for every
-          provider. Hugging the rows instead makes the card — and the Proceed
-          button under it — jump as you move through the provider dropdown, since
-          providers carry anywhere from one model to five. The empty grey under a
-          short list is the accepted cost of that stability. Rows are min-h-16, so
-          16rem shows four and the rest scrolls. */}
-      {/* onboarding-scroll-hidden, not the 5px thin thumb: a classic scrollbar
-          reserves layout width, so rows in an overflowing list stopped short of
-          the edge while a short provider's list filled it, and the two read as
-          different widths. The partially visible row at the bottom edge is the
-          overflow affordance instead. */}
-      <div className="onboarding-scroll-hidden mt-3 h-56 overflow-y-auto rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)] px-3">
+      {/* A fixed list height keeps the card and footer stable while the visible
+          scrollbar makes additional provider models discoverable. */}
+      <div className="onboarding-list-scroll mt-4 h-56 rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)]">
         {models.map((model) => {
           const isDownloaded = downloadedModels.has(model.id);
           const isDownloading = activeDownload.isDownloadingModel(model.id);
@@ -816,9 +887,9 @@ export function LocalModelSetupStep({
           return (
             <div
               key={model.id}
-              className="flex min-h-14 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-1 py-2 last:border-b-0"
+              className="flex min-h-20 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-2 py-3 last:border-b-0"
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
                 <ProviderIcon
                   provider={model.icon}
                   className="size-5"
@@ -831,10 +902,10 @@ export function LocalModelSetupStep({
                 onClick={() => selectInstalledModel(model.id)}
                 className="min-w-0 flex-1 text-left disabled:cursor-default"
               >
-                <span className="block truncate text-sm font-medium text-[var(--onboarding-text-primary)]">
+                <span className="block truncate text-base font-medium text-[var(--onboarding-text-primary)]">
                   {model.name}
                 </span>
-                <span className="mt-0.5 block truncate text-xs text-[var(--onboarding-text-secondary)]">
+                <span className="mt-1 block truncate text-sm text-[var(--onboarding-text-secondary)]">
                   {model.size}
                   {!assistant && model.recommended && ` - ${t("common.recommended")}`}
                 </span>
@@ -846,7 +917,7 @@ export function LocalModelSetupStep({
                 // text-secondary. Progress is a light/surface-tertiary fill
                 // growing from the left behind them, not a fixed-width segment
                 // around the percentage.
-                <span className="relative -mr-2 flex shrink-0 items-center gap-2 overflow-hidden rounded-[38px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 py-1.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                <span className="relative flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-secondary)]">
                   {/* Figma draws the rect taller than the pill so it bleeds top
                       and bottom; inset-y-0 does that without a magic height. */}
                   <span
@@ -862,28 +933,27 @@ export function LocalModelSetupStep({
                   </span>
                 </span>
               ) : isSelected ? (
-                // Same token as the Use pill it replaces on click — on blue-500 it
-                // was a visibly different blue sitting in the same slot.
-                <span className="-mr-2 flex h-7 shrink-0 items-center gap-1 rounded-full bg-[var(--onboarding-accent)] px-3 text-xs text-[var(--onboarding-accent-foreground)]">
-                  <Check className="size-3.5" />
+                // The active model uses the filled accent treatment.
+                <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-[var(--onboarding-accent)] px-3 text-sm text-[var(--onboarding-accent-foreground)]">
+                  <CircleCheck className="size-4" />
                   {t("onboarding.rehaul.local.selected")}
                 </span>
               ) : isDownloaded ? (
-                // On the accent rather than neutral-950: this is the row's
-                // affirmative action, so it carries the brand the way every other
-                // primary in onboarding does, and Download stays neutral below it.
+                // Downloaded alternatives use the lighter accent treatment until
+                // they become the active selection.
                 <Button
                   type="button"
                   onClick={() => selectInstalledModel(model.id)}
-                  className="-mr-2 h-7 gap-1.5 rounded-full border-0! bg-[var(--onboarding-accent)] px-2.5 text-xs font-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none!"
+                  className="h-8 gap-1.5 rounded-full border-0! bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-3 text-sm font-normal text-[var(--onboarding-accent)] shadow-none! hover:bg-[color-mix(in_srgb,var(--onboarding-accent)_18%,transparent)] hover:shadow-none!"
                 >
-                  {t("onboarding.rehaul.local.use")}
+                  <Circle className="size-4" />
+                  {t("onboarding.rehaul.local.selectModel")}
                 </Button>
               ) : (
                 <Button
                   type="button"
                   onClick={() => downloadModel(model.id)}
-                  className="-mr-2 h-7 gap-1.5 rounded-full border-[var(--onboarding-inverse-surface)]! bg-[var(--onboarding-inverse-surface)] px-2.5 text-xs font-normal text-[var(--onboarding-inverse-text)] shadow-none! hover:shadow-none! hover:bg-[var(--onboarding-inverse-surface-secondary)] disabled:bg-[var(--onboarding-surface-tertiary-hover)] disabled:opacity-100"
+                  className="h-8 gap-1.5 rounded-full border-[var(--onboarding-inverse-surface)]! bg-[var(--onboarding-inverse-surface)] px-3 text-sm font-normal text-[var(--onboarding-inverse-text)] shadow-none! hover:bg-[var(--onboarding-inverse-surface-secondary)] hover:shadow-none! disabled:bg-[var(--onboarding-surface-tertiary-hover)] disabled:opacity-100"
                 >
                   <Download className="size-3.5" />
                   {t("onboarding.rehaul.local.download")}
@@ -894,11 +964,11 @@ export function LocalModelSetupStep({
         })}
       </div>
 
-      <div className={`mt-4 grid gap-2 ${anyDownloadActive ? "grid-cols-2" : "grid-cols-1"}`}>
-        {anyDownloadActive && (
-          <StepSecondaryAction onClick={onSkip}>{t("common.skip")}</StepSecondaryAction>
-        )}
-        <StepPrimaryAction onClick={proceed} disabled={!canProceed}>
+      <div className="mt-5 grid grid-cols-2 gap-2">
+        <StepSecondaryAction onClick={skip} className="h-10!">
+          {t("common.skip")}
+        </StepSecondaryAction>
+        <StepPrimaryAction onClick={proceed} disabled={!canProceed} className="h-10!">
           {t("onboarding.rehaul.provider.proceed")}
         </StepPrimaryAction>
       </div>

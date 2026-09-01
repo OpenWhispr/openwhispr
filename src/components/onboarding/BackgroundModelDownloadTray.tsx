@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { ProviderIcon } from "../ui/ProviderIcon";
 import { BrandMark } from "./OnboardingShell";
@@ -24,6 +24,7 @@ import type {
 } from "../../types/electron";
 import { mergeHydratedDownloads } from "./localDownloadState";
 import { ONBOARDING_SESSION_KEY, isRequiredModelsOnboardingStepActive } from "./flow";
+import { getPlatform } from "../../utils/platform";
 
 type DownloadKind = "whisper" | "parakeet" | "llm";
 
@@ -119,7 +120,11 @@ function CancelGlyph() {
   );
 }
 
-export default function BackgroundModelDownloadTray() {
+export default function BackgroundModelDownloadTray({
+  placement = "control-panel",
+}: {
+  placement?: "onboarding" | "control-panel";
+}) {
   const { t } = useTranslation();
   const [downloads, setDownloads] = useState<Record<string, ActiveDownload>>({});
   const [hydrated, setHydrated] = useState(false);
@@ -364,6 +369,12 @@ export default function BackgroundModelDownloadTray() {
   }, []);
 
   const activeDownloads = useMemo(() => Object.values(downloads), [downloads]);
+  const positionClass =
+    placement === "onboarding"
+      ? getPlatform() === "darwin"
+        ? "right-5 top-5"
+        : "right-5 top-14"
+      : "right-7 bottom-5";
 
   useEffect(() => {
     if (hydrated && activeDownloads.length === 0 && !hasPendingLocalModels()) {
@@ -383,7 +394,10 @@ export default function BackgroundModelDownloadTray() {
     // both contexts and match the Figma light values within a couple of hex
     // steps.
     <aside
-      className="fixed right-7 bottom-5 z-50 w-[341px] overflow-hidden rounded-[12px] border border-border bg-card text-card-foreground"
+      className={`fixed z-[60] w-[341px] overflow-hidden rounded-[12px] border border-border bg-card text-card-foreground ${positionClass}`}
+      style={
+        placement === "onboarding" ? ({ WebkitAppRegion: "no-drag" } as CSSProperties) : undefined
+      }
       aria-label={t("onboarding.rehaul.local.downloads")}
       aria-live="polite"
     >

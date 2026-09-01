@@ -236,6 +236,7 @@
       "hotkey": {
         "capture": "Appuyez sur les touches que vous souhaitez utiliser",
         "chooseAnother": "Choisir un autre raccourci",
+        "confirmAgain": "Appuyez à nouveau sur {{hotkey}} pour confirmer",
         "inUse": "Ce raccourci est déjà utilisé. Choisissez-en un autre.",
         "holding": "Maintenez la touche ou appuyez sur une autre"
       },
@@ -413,6 +414,7 @@
         "downloadingShort": "Téléchargement",
         "selected": "Sélectionné",
         "use": "Utiliser",
+        "selectModel": "Sélectionner le modèle",
         "downloadInProgress": "Téléchargement en cours",
         "cancelDownload": "Annuler le téléchargement de {{model}}",
         "downloads": "Téléchargements de modèles",
@@ -1105,6 +1107,8 @@
     },
     "sso": {
       "continueWithSSO": "Se connecter avec le SSO",
+      "workEmailLabel": "E-mail professionnel",
+      "emailPlaceholder": "Ajoutez votre e-mail",
       "emailRequired": "Saisissez votre e-mail professionnel pour utiliser le SSO.",
       "failed": "Échec de l’authentification unique. Veuillez réessayer.",
       "companySignInTitle": "Utiliser la connexion de votre entreprise",

@@ -30,7 +30,10 @@ import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
-import { formatHotkeyInstruction } from "./onboarding/hotkeyPresentation";
+import {
+  formatHotkeyInstruction,
+  getRecommendedDictationHotkey,
+} from "./onboarding/hotkeyPresentation";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform } from "../utils/platform";
@@ -45,6 +48,10 @@ import {
   reconcileStepWithRoute,
   resolveEnterpriseWorkspaceForOnboarding,
   shouldSkipOnboardingSetupChoice,
+  type OnboardingAuthDraft,
+  type OnboardingByokDraft,
+  type OnboardingLocalModelDraft,
+  type OnboardingResumeState,
   type OnboardingSetupMode,
   type OnboardingStepId,
 } from "./onboarding/flow";
@@ -98,15 +105,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [assistantHotkey, setAssistantHotkey] = useState(
     () => parseHotkeyList(settings.voiceAgentKey)[0] || "CommandOrControl+Shift+Space"
   );
-  const [dictationHotkeyConfirmed, setDictationHotkeyConfirmed] = useState(false);
-  const [assistantHotkeyConfirmed, setAssistantHotkeyConfirmed] = useState(false);
+  const { dictationHotkeyConfirmed, assistantHotkeyConfirmed } = session.resume;
   // Seeded from main rather than getDefaultHotkey(): main already knows when the
   // platform default can't bind (GNOME/X11 reject modifier-only combos) and
   // registered a fallback instead — recommending the unregistrable default would
   // make every confirm of it fail.
   const [recommendedDictationHotkey, setRecommendedDictationHotkey] = useState(getDefaultHotkey);
-  const [dictationDemoSuccess, setDictationDemoSuccess] = useState(false);
-  const [assistantDemoSuccess, setAssistantDemoSuccess] = useState(false);
+  const dictationDemoSuccess = session.resume.dictationDemoCompleted;
+  const assistantDemoSuccess = session.resume.assistantDemoCompleted;
   const [stageReady, setStageReady] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   const [fatalError, setFatalError] = useState<string | null>(null);
@@ -115,6 +121,53 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     description: string;
   } | null>(null);
   const [, setAccessibilitySkipped] = useLocalStorage(ACCESSIBILITY_SKIPPED_KEY, false);
+
+  const updateResumeFlag = useCallback(
+    (
+      key: Extract<
+        keyof OnboardingResumeState,
+        | "dictationHotkeyConfirmed"
+        | "assistantHotkeyConfirmed"
+        | "dictationDemoCompleted"
+        | "assistantDemoCompleted"
+      >,
+      value: boolean
+    ) => {
+      setSession((current) => ({
+        ...current,
+        resume: { ...current.resume, [key]: value },
+      }));
+    },
+    [setSession]
+  );
+  const setDictationHotkeyConfirmed = useCallback(
+    (confirmed: boolean) => updateResumeFlag("dictationHotkeyConfirmed", confirmed),
+    [updateResumeFlag]
+  );
+  const setAssistantHotkeyConfirmed = useCallback(
+    (confirmed: boolean) => updateResumeFlag("assistantHotkeyConfirmed", confirmed),
+    [updateResumeFlag]
+  );
+  const setDictationDemoSuccess = useCallback(
+    (successful: boolean) => updateResumeFlag("dictationDemoCompleted", successful),
+    [updateResumeFlag]
+  );
+  const setAssistantDemoSuccess = useCallback(
+    (successful: boolean) => updateResumeFlag("assistantDemoCompleted", successful),
+    [updateResumeFlag]
+  );
+  const updateAuthResumeState = useCallback(
+    (patch: Partial<OnboardingAuthDraft>) => {
+      setSession((current) => ({
+        ...current,
+        resume: {
+          ...current.resume,
+          auth: { ...current.resume.auth, ...patch },
+        },
+      }));
+    },
+    [setSession]
+  );
 
   const permissions = usePermissions((dialog) =>
     setPermissionAlert({ title: dialog.title, description: dialog.description })
@@ -236,6 +289,32 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
   const compact = COMPACT_STEPS.has(currentStepId);
+  const updateCurrentByokDraft = useCallback(
+    (state: OnboardingByokDraft) => {
+      if (currentStepId !== "byok-dictation" && currentStepId !== "byok-assistant") return;
+      setSession((current) => ({
+        ...current,
+        resume: {
+          ...current.resume,
+          byok: { ...current.resume.byok, [currentStepId]: state },
+        },
+      }));
+    },
+    [currentStepId, setSession]
+  );
+  const updateCurrentLocalModelDraft = useCallback(
+    (state: OnboardingLocalModelDraft) => {
+      if (currentStepId !== "local-dictation" && currentStepId !== "local-assistant") return;
+      setSession((current) => ({
+        ...current,
+        resume: {
+          ...current.resume,
+          localModels: { ...current.resume.localModels, [currentStepId]: state },
+        },
+      }));
+    },
+    [currentStepId, setSession]
+  );
 
   useEffect(() => {
     if (currentStepId === "required-models") requiredModelsLatchRef.current = true;
@@ -647,6 +726,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return (
           <div className="min-h-full w-full">
             <CompactAuthenticationFlow
+              resumeState={session.resume.auth}
+              onResumeStateChange={updateAuthResumeState}
               onContinueWithoutAccount={() => {
                 // Guests continue onto their route's permissions step — jumping
                 // straight to setup-choice would skip the permission grants and
@@ -791,7 +872,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   setDictationHotkeyConfirmed(false);
                 }
               }}
-              recommended={assistant ? "CommandOrControl+Shift+Space" : recommendedDictationHotkey}
+              recommended={
+                assistant
+                  ? "CommandOrControl+Shift+Space"
+                  : getRecommendedDictationHotkey(getPlatform(), recommendedDictationHotkey)
+              }
               captureLabel={t("onboarding.rehaul.hotkey.capture")}
               recommendedLabel={t("common.recommended")}
               chooseAnotherLabel={t("onboarding.rehaul.hotkey.chooseAnother")}
@@ -887,6 +972,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             <DemoStep
               kind={assistant ? "assistant" : "dictation"}
+              initialSuccessful={assistant ? assistantDemoSuccess : dictationDemoSuccess}
               firstMessage={t(
                 assistant
                   ? "onboarding.rehaul.assistantDemo.email"
@@ -983,11 +1069,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               />
             </div>
             <ByokProviderStep
+              key={currentStepId}
               stepId={currentStepId}
               selfHostedRequested={session.selfHostedRequested}
               onSelfHostedChange={setSelfHostedRequested}
               onConnectionChange={setStageReady}
               onProceed={() => void continueFromCurrentStep()}
+              resumeState={session.resume.byok[currentStepId]}
+              onResumeStateChange={updateCurrentByokDraft}
             />
           </div>
         );
@@ -1008,10 +1097,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               ]}
             />
             <LocalModelSetupStep
+              key={currentStepId}
               stepId={currentStepId}
               onReadinessChange={setStageReady}
               onProceed={() => void continueFromCurrentStep()}
               onSkip={() => void skipLocalSetup()}
+              resumeState={session.resume.localModels[currentStepId]}
+              onResumeStateChange={updateCurrentLocalModelDraft}
             />
           </div>
         );

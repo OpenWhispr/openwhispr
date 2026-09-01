@@ -6,8 +6,9 @@ const AUTH_MODE_INDEX = 0;
 const EMAIL_INDEX = 1;
 const PASSWORD_INDEX = 2;
 const FULL_NAME_INDEX = 3;
-const SSO_DISCOVERY_INDEX = 8;
-const ERROR_INDEX = 9;
+const SSO_EMAIL_STEP_INDEX = 8;
+const SSO_DISCOVERY_INDEX = 9;
+const ERROR_INDEX = 10;
 
 function createHarness(values = {}) {
   return {
@@ -16,9 +17,11 @@ function createHarness(values = {}) {
     values,
     refs: {},
     discoveryCalls: [],
+    ssoCalls: [],
     discoveryResult: { exists: false },
     discoveryError: null,
     signupResult: {},
+    ssoResult: {},
   };
 }
 
@@ -99,7 +102,11 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
           signIn: { async email() { return {}; } },
         };
         export async function signInWithSocial() { return {}; }
-        export async function signInWithSSO() { return {}; }
+        export async function signInWithSSO(email) {
+          const harness = globalThis.__authenticationStepHarness;
+          harness.ssoCalls.push(email);
+          return harness.ssoResult;
+        }
         export function updateLastSignInTime() {}
       `,
       "/lib/emailAuthDiscovery": `
@@ -130,11 +137,11 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
   );
   const props = { onAuthComplete() {}, onNeedsVerification() {} };
 
-  const render = (harness) => {
+  const render = (harness, overrides = {}) => {
     globalThis.__authenticationStepHarness = harness;
     harness.cursor = 0;
     harness.refCursor = 0;
-    return AuthenticationStep(props);
+    return AuthenticationStep({ ...props, ...overrides });
   };
   const submitEmail = async (harness) => {
     const form = findElement(render(harness), (node) => node.type === "form");
@@ -179,6 +186,37 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
     required: false,
     domain: "example.com",
   });
+
+  const directSso = createHarness({ [EMAIL_INDEX]: "person@company.test" });
+  const ssoTile = findElement(
+    render(directSso),
+    (node) => node.type?.name === "ProviderTile" && node.props?.label === "SSO"
+  );
+  assert.ok(ssoTile, "SSO provider tile should render");
+  ssoTile.props.onClick();
+  assert.equal(directSso.values[SSO_EMAIL_STEP_INDEX], true);
+
+  const ssoForm = findElement(render(directSso), (node) => node.type === "form");
+  assert.ok(ssoForm, "SSO work-email form should render after choosing SSO");
+  ssoForm.props.onSubmit({ preventDefault() {} });
+  await settleAsyncHandler();
+  assert.deepEqual(directSso.ssoCalls, ["person@company.test"]);
+
+  const resumedSso = createHarness();
+  const resumedSsoTree = render(resumedSso, {
+    resumeState: {
+      authMode: null,
+      email: "resume@company.test",
+      fullName: "Resume User",
+      showSSOEmailStep: true,
+      forgotPasswordOpen: false,
+      ssoDiscovery: null,
+      pendingVerificationEmail: null,
+    },
+  });
+  assert.equal(resumedSso.values[EMAIL_INDEX], "resume@company.test");
+  assert.equal(resumedSso.values[FULL_NAME_INDEX], "Resume User");
+  assert.ok(findElement(resumedSsoTree, (node) => node.type === "form"));
 
   const duplicateRace = createHarness({
     [AUTH_MODE_INDEX]: "sign-up",

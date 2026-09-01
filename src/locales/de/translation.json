@@ -236,6 +236,7 @@
       "hotkey": {
         "capture": "Drücken Sie die Tasten, die Sie verwenden möchten",
         "chooseAnother": "Anderes Tastenkürzel wählen",
+        "confirmAgain": "Drücke {{hotkey}} erneut zum Bestätigen",
         "inUse": "Dieses Tastenkürzel wird bereits verwendet. Wähle ein anderes.",
         "holding": "Weiter halten oder eine andere Taste drücken"
       },
@@ -413,6 +414,7 @@
         "downloadingShort": "Wird geladen",
         "selected": "Ausgewählt",
         "use": "Verwenden",
+        "selectModel": "Modell auswählen",
         "downloadInProgress": "Download läuft",
         "cancelDownload": "Download von {{model}} abbrechen",
         "downloads": "Modell-Downloads",
@@ -1105,6 +1107,8 @@
     },
     "sso": {
       "continueWithSSO": "Mit SSO anmelden",
+      "workEmailLabel": "Geschäftliche E-Mail",
+      "emailPlaceholder": "E-Mail-Adresse hinzufügen",
       "emailRequired": "Geben Sie Ihre geschäftliche E-Mail-Adresse ein, um SSO zu verwenden.",
       "failed": "Single Sign-on fehlgeschlagen. Bitte versuchen Sie es erneut.",
       "companySignInTitle": "Unternehmensanmeldung verwenden",

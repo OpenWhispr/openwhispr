@@ -215,6 +215,7 @@
       "hotkey": {
         "capture": "Pressione as teclas que você quer usar",
         "chooseAnother": "Escolher outro atalho",
+        "confirmAgain": "Pressione {{hotkey}} novamente para confirmar",
         "inUse": "Esse atalho já está em uso. Escolha outro.",
         "holding": "Continue pressionando ou pressione outra tecla"
       },
@@ -392,6 +393,7 @@
         "downloadingShort": "Baixando",
         "selected": "Selecionado",
         "use": "Usar",
+        "selectModel": "Selecionar modelo",
         "downloadInProgress": "Download em andamento",
         "cancelDownload": "Cancelar o download de {{model}}",
         "downloads": "Downloads de modelos",
@@ -1085,6 +1087,8 @@
     },
     "sso": {
       "continueWithSSO": "Entrar com SSO",
+      "workEmailLabel": "E-mail profissional",
+      "emailPlaceholder": "Adicione seu e-mail",
       "emailRequired": "Insira seu e-mail corporativo para usar o SSO.",
       "failed": "Falha no logon único. Tente novamente.",
       "companySignInTitle": "Usar o login da sua empresa",

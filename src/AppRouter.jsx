@@ -176,7 +176,7 @@ function MainApp() {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <OnboardingFlow onComplete={handleOnboardingComplete} />
-        <BackgroundModelDownloadTray />
+        <BackgroundModelDownloadTray placement="onboarding" />
       </Suspense>
     );
   }

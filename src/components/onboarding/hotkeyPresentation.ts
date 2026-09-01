@@ -1,4 +1,5 @@
 import { formatHotkeyLabel } from "../../utils/hotkeys";
+import type { Platform } from "../../utils/platform";
 
 export interface HotkeyKeycapDescriptor {
   id: string;
@@ -95,3 +96,6 @@ export function getHotkeyKeycaps(value: string): HotkeyKeycapDescriptor[] {
 
 export const formatHotkeyInstruction = (value: string) =>
   formatHotkeyLabel(value).split("+").join(" + ");
+
+export const getRecommendedDictationHotkey = (platform: Platform, effectiveDefault: string) =>
+  platform === "darwin" ? "Command+K" : effectiveDefault;

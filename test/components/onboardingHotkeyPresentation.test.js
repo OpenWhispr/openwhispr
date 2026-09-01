@@ -19,6 +19,20 @@ test("compound shortcuts produce ordered keycaps and readable instructions", asy
   assert.equal(formatHotkeyInstruction("Control+Shift+K"), "Ctrl + Shift + K");
 });
 
+test("macOS recommends Cmd + K while other platforms keep their effective default", async () => {
+  const { formatHotkeyInstruction, getRecommendedDictationHotkey } = await load();
+
+  assert.equal(
+    formatHotkeyInstruction(getRecommendedDictationHotkey("darwin", "GLOBE")),
+    "Cmd + K"
+  );
+  assert.equal(getRecommendedDictationHotkey("linux", "Control+Super"), "Control+Super");
+  assert.equal(
+    getRecommendedDictationHotkey("win32", "Control+Shift+Space"),
+    "Control+Shift+Space"
+  );
+});
+
 test("a side-specific modifier keeps its glyph and says which side in the label", async () => {
   const { getHotkeyKeycaps } = await load();
 

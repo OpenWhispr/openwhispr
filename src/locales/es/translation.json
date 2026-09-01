@@ -236,6 +236,7 @@
       "hotkey": {
         "capture": "Pulsa las teclas que quieras usar",
         "chooseAnother": "Elegir otro atajo",
+        "confirmAgain": "Pulsa {{hotkey}} otra vez para confirmar",
         "inUse": "Ese atajo ya está en uso. Elige otro.",
         "holding": "Mantén pulsado o pulsa otra tecla"
       },
@@ -413,6 +414,7 @@
         "downloadingShort": "Descargando",
         "selected": "Seleccionado",
         "use": "Usar",
+        "selectModel": "Seleccionar modelo",
         "downloadInProgress": "Descarga en curso",
         "cancelDownload": "Cancelar la descarga de {{model}}",
         "downloads": "Descargas de modelos",
@@ -1105,6 +1107,8 @@
     },
     "sso": {
       "continueWithSSO": "Iniciar sesión con SSO",
+      "workEmailLabel": "Correo del trabajo",
+      "emailPlaceholder": "Añade tu correo",
       "emailRequired": "Introduce tu correo del trabajo para usar SSO.",
       "failed": "Error al iniciar sesión con SSO. Inténtalo de nuevo.",
       "companySignInTitle": "Usa el inicio de sesión de tu empresa",
