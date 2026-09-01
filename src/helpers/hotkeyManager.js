@@ -20,6 +20,10 @@ const DEFAULT_HOTKEY = "Control+Super";
 // Temporary slots like "cancel" stay on globalShortcut.
 const GNOME_NATIVE_SLOTS = new Set(["meeting", "voiceAgent", "translation"]);
 
+// Slots whose activation mode is configurable per slot. Dictation keeps the
+// legacy activationMode value; meeting and cancel are always tap-to-toggle.
+const SLOT_MODE_PUSH_SLOTS = new Set(["voiceAgent", "translation"]);
+
 // KDE registration failure reasons — reuse existing i18n keys
 const KDE_FAILURE_REASONS = {
   conflict: (hotkey) => i18nMain.t("hotkey.errors.alreadyRegistered", { hotkey }),
@@ -367,17 +371,21 @@ class HotkeyManager extends EventEmitter {
   /**
    * Hotkeys that must be watched by a native low-level listener (Windows/Linux)
    * instead of globalShortcut. Modifier-only and right-side-modifier combos never
-   * register through globalShortcut, and in push-to-talk mode dictation also needs
-   * raw key-down/key-up events. Only the dictation slot supports push-to-talk;
-   * every other slot is tap-to-toggle. Globe/mouse hotkeys are macOS-only.
+   * register through globalShortcut, and in push-to-talk mode a slot also needs
+   * raw key-down/key-up events. Dictation follows the legacy activationMode;
+   * voiceAgent/translation follow their own per-slot mode in slotModes; meeting
+   * and cancel are always tap-to-toggle. Globe/mouse hotkeys are macOS-only.
    * Each slot may bind several hotkeys, so we evaluate every one.
    */
-  getNativeListenerKeys(activationMode) {
+  getNativeListenerKeys(activationMode, slotModes = {}) {
     const keys = [];
     for (const [slotName, slot] of this.slots) {
       for (const hotkey of slot.hotkeys ?? []) {
         if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
-        const pushToTalk = slotName === "dictation" && activationMode === "push";
+        const pushToTalk =
+          slotName === "dictation"
+            ? activationMode === "push"
+            : SLOT_MODE_PUSH_SLOTS.has(slotName) && slotModes[slotName] === "push";
         if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
           keys.push(hotkey);
         }
@@ -386,7 +394,12 @@ class HotkeyManager extends EventEmitter {
     return keys;
   }
 
-  supportsPushToTalk(hotkey = this.currentHotkey) {
+  supportsPushToTalk(hotkey = this.currentHotkey, slotName = "dictation") {
+    // DE-native backends (GNOME/KDE/Hyprland) only implement push-to-talk for
+    // the dictation binding; the other slots stay tap-to-toggle there.
+    if (slotName !== "dictation" && this.isUsingNativeShortcut()) {
+      return false;
+    }
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
       return false;
     }

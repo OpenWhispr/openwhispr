@@ -27,6 +27,20 @@ test("native push-to-talk support is hotkey-aware", () => {
   assert.equal(manager.supportsPushToTalk("F8"), true);
 });
 
+test("non-dictation slots support Hold everywhere except DE-native backends", () => {
+  const manager = new HotkeyManager();
+
+  assert.equal(manager.supportsPushToTalk("F9", "voiceAgent"), true);
+  assert.equal(manager.supportsPushToTalk("F7", "translation"), true);
+
+  manager.useKDE = true;
+  assert.equal(manager.supportsPushToTalk("F9", "voiceAgent"), false);
+  assert.equal(manager.supportsPushToTalk("F7", "translation"), false);
+  // Dictation keeps its own KDE answer: regular keys stay push-capable.
+  assert.equal(manager.supportsPushToTalk("F8", "dictation"), true);
+  assert.equal(typeof manager.getPushToTalkUnavailableReason("F9", "voiceAgent"), "string");
+});
+
 test("a failed activation-mode registration preserves Tap and notifies the user", async () => {
   const manager = new HotkeyManager();
   const failures = [];
