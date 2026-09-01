@@ -3202,10 +3202,10 @@
     "syncPrompt": "Sincronizza contatori senza contenuti per combinare l'attività locale e quella cloud su tutti i dispositivi.",
     "enableSync": "Attiva la sincronizzazione",
     "claimTitle": "Includere le dettature precedenti?",
-    "claimDescription_one": "{{count}} dettatura è stata registrata su questo dispositivo prima dell'accesso. Includerla nelle Statistiche sincronizzate? Vengono inviati solo il conteggio delle parole e la data.",
-    "claimDescription_other": "{{count}} dettature sono state registrate su questo dispositivo prima dell'accesso. Includerle nelle Statistiche sincronizzate? Vengono inviati solo i conteggi delle parole e le date.",
+    "claimDescription_one": "{{count}} dettatura è stata registrata su questo dispositivo prima dell'accesso. Attivando la sincronizzazione verrà inclusa: vengono inviati solo il conteggio delle parole e la data.",
+    "claimDescription_other": "{{count}} dettature sono state registrate su questo dispositivo prima dell'accesso. Attivando la sincronizzazione verranno incluse: vengono inviati solo i conteggi delle parole e le date.",
     "claimInclude": "Includi",
-    "claimSkip": "Mantieni su questo dispositivo"
+    "claimSkip": "Non ora"
   },
   "sidebar": {
     "insights": "Statistiche",

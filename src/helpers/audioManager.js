@@ -4955,9 +4955,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
                   clientTotalMs,
+                  // Always sent, like the batch cloud path: the cloud records a
+                  // counter for every dictation it transcribes, and this id is
+                  // what makes that row and the local one the same event. Held
+                  // back until opt-in, a later sync would push the local copy
+                  // under a second id and double every total.
+                  clientTranscriptionId,
                   ...(analyticsSyncEnabled()
                     ? {
-                        clientTranscriptionId,
                         localDate: localDateKey(),
                         analyticsWordCount: streamingSttWordCount,
                       }

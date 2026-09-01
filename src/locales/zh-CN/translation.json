@@ -3202,10 +3202,10 @@
     "syncPrompt": "同步不含内容的计数，将本地与云端的活动跨设备合并。",
     "enableSync": "启用同步",
     "claimTitle": "包含更早的听写吗？",
-    "claimDescription_one": "本设备上有 {{count}} 次听写是在你登录前记录的。要把它纳入同步的统计吗？只会发送字数和日期。",
-    "claimDescription_other": "本设备上有 {{count}} 次听写是在你登录前记录的。要把它们纳入同步的统计吗？只会发送字数和日期。",
+    "claimDescription_one": "本设备上有 {{count}} 次听写是在你登录前记录的。开启同步会把它一并纳入，只会发送字数和日期。",
+    "claimDescription_other": "本设备上有 {{count}} 次听写是在你登录前记录的。开启同步会把它们一并纳入，只会发送字数和日期。",
     "claimInclude": "包含",
-    "claimSkip": "保留在本设备"
+    "claimSkip": "暂不开启"
   },
   "sidebar": {
     "insights": "统计",

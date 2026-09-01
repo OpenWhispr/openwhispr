@@ -11,6 +11,7 @@ import { ConversationsService } from "./ConversationsService.js";
 import { FoldersService } from "./FoldersService.js";
 import { SpacesService, type MySpace } from "./SpacesService.js";
 import { TranscriptionsService } from "./TranscriptionsService.js";
+import { syncPendingAnalytics } from "./AnalyticsService.js";
 import { DictionaryService } from "./DictionaryService.js";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError, isAuthContextError } from "./cloudApi.js";
@@ -123,9 +124,10 @@ const TEAM_SPACES_MAX_RETRY_MS = AUTO_SYNC_INTERVAL_MS;
 // Web Lock name serializing syncAll() across windows (each renderer has its
 // own SyncService instance, but localStorage and the local DB are shared).
 const SYNC_ALL_LOCK = "openwhispr-sync-all";
-// localStorage keys gating canSync(); a change in another window means sync
-// may have just become possible (sign-in, subscription, backup enabled).
-const CAN_SYNC_KEYS = ["isSignedIn", "cloudBackupEnabled", "isSubscribed"];
+// localStorage keys gating what a pass may sync; a change in another window
+// means sync may have just become possible (sign-in, subscription, backup
+// enabled, Insights opt-in).
+const CAN_SYNC_KEYS = ["isSignedIn", "cloudBackupEnabled", "isSubscribed", "insightsSyncEnabled"];
 
 // Cross-window guard against a space purge racing an in-flight pull: every
 // purge initiator records the cloud space id here, and pull/upsert paths park
@@ -250,6 +252,7 @@ export class SyncService {
       backupEnabled: localStorage.getItem("cloudBackupEnabled") === "true",
       subscribed: readIsSubscribed(),
       backupAllowedByPolicy: isCloudBackupAllowed(usePolicyStore.getState()),
+      insightsSyncEnabled: localStorage.getItem("insightsSyncEnabled") === "true",
     });
   }
 
@@ -497,6 +500,10 @@ export class SyncService {
           await this.syncNotes(true);
           this.recordTeamOnlyPass();
         }
+        if (!hasValidatedAuthContext()) return;
+        // Outside the branch above: Insights counters are free and content-free,
+        // so they ride their own opt-in rather than backup's plan and toggle.
+        await this.syncAnalytics();
         if (!hasValidatedAuthContext()) return;
         if (teamSpacesReady) {
           if (this.teamSpacesRetryTimer) {
@@ -2153,6 +2160,20 @@ export class SyncService {
       if (!snapshot) localStorage.setItem("lastSyncedAt.conversations", syncStartedAt);
     } catch (err) {
       console.error("Conversation pull failed:", err);
+    }
+  }
+
+  // Push-only: the account summary is read live by the Insights view, so there
+  // is nothing to pull back into the device's own counters.
+  private async syncAnalytics(): Promise<void> {
+    if (!this.consent().analytics) return;
+    try {
+      await syncPendingAnalytics();
+    } catch (err) {
+      if (isAuthContextError(err)) throw err;
+      // A rejected batch stays pending for the next pass; the rest of this one
+      // still has folders, notes, and transcriptions to finish.
+      console.error("Analytics sync failed:", err);
     }
   }
 

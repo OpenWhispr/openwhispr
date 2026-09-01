@@ -14,6 +14,7 @@ const SIGNED_IN = {
   backupEnabled: true,
   subscribed: true,
   backupAllowedByPolicy: true,
+  insightsSyncEnabled: true,
 };
 
 test("consent: a free account still syncs shared notes and team spaces", async () => {
@@ -31,7 +32,7 @@ test("consent: a free account still syncs shared notes and team spaces", async (
 test("consent: sharing survives the cloud-backup toggle being off", async () => {
   const { resolveSyncConsent } = await load();
   const consent = resolveSyncConsent({ ...SIGNED_IN, backupEnabled: false });
-  assert.deepEqual(consent, { shared: true, backup: false });
+  assert.deepEqual(consent, { shared: true, backup: false, analytics: true });
 });
 
 test("consent: backup needs the plan, the toggle, and org policy together", async () => {
@@ -51,8 +52,23 @@ test("consent: nothing syncs without a validated signed-in session", async () =>
   for (const off of ["authValidated", "signedIn"]) {
     assert.deepEqual(
       resolveSyncConsent({ ...SIGNED_IN, [off]: false }),
-      { shared: false, backup: false },
+      { shared: false, backup: false, analytics: false },
       `${off} off must stop every pass`
+    );
+  }
+});
+
+test("consent: Insights counters answer to their own opt-in, not the plan", async () => {
+  const { resolveSyncConsent } = await load();
+  assert.equal(
+    resolveSyncConsent({ ...SIGNED_IN, backupEnabled: false, subscribed: false }).analytics,
+    true
+  );
+  for (const off of ["insightsSyncEnabled", "backupAllowedByPolicy"]) {
+    assert.equal(
+      resolveSyncConsent({ ...SIGNED_IN, [off]: false }).analytics,
+      false,
+      `analytics must not run with ${off} off`
     );
   }
 });

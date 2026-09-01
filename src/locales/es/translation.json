@@ -3250,10 +3250,10 @@
     "syncPrompt": "Sincroniza contadores sin contenido para combinar la actividad local y la de la nube entre dispositivos.",
     "enableSync": "Activar sincronización",
     "claimTitle": "¿Incluir dictados anteriores?",
-    "claimDescription_one": "{{count}} dictado de este dispositivo se grabó antes de que iniciaras sesión. ¿Incluirlo en tus Estadísticas sincronizadas? Solo se envían su recuento de palabras y su fecha.",
-    "claimDescription_other": "{{count}} dictados de este dispositivo se grabaron antes de que iniciaras sesión. ¿Incluirlos en tus Estadísticas sincronizadas? Solo se envían sus recuentos de palabras y sus fechas.",
+    "claimDescription_one": "{{count}} dictado de este dispositivo se grabó antes de que iniciaras sesión. Al activar la sincronización se incluirá: solo se envían su recuento de palabras y su fecha.",
+    "claimDescription_other": "{{count}} dictados de este dispositivo se grabaron antes de que iniciaras sesión. Al activar la sincronización se incluirán: solo se envían sus recuentos de palabras y sus fechas.",
     "claimInclude": "Incluir",
-    "claimSkip": "Mantener en este dispositivo"
+    "claimSkip": "Ahora no"
   },
   "sidebar": {
     "insights": "Estadísticas",

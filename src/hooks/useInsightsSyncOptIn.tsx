@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/ui/dialog";
 import { canChangeCloudBackupPreference, isCloudBackupAllowed } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { syncService } from "../services/SyncService.js";
 import { useSettings } from "./useSettings";
 
 /**
@@ -15,10 +16,10 @@ import { useSettings } from "./useSettings";
  * managed-workspace permission as cloud backup: a policy that forbids backup
  * forbids the sync, and an already-on toggle stays switchable off.
  *
- * Flipping the setting and claiming are all this does: pushing the pending
- * rows stays with InsightsView, whose reload the flip and the claim's
- * analytics-changed broadcast both re-fire. Syncing here too would race that
- * reload, which could then read a summary the other pass had not finished.
+ * Declining the prompt declines the whole opt-in, exactly like dismissing it:
+ * turning sync on while leaving those rows behind would swap the dashboard to
+ * the account summary they are not in, dropping totals the user just chose to
+ * keep. Enabling therefore always means "these counters too".
  */
 export function useInsightsSyncOptIn() {
   const { t } = useTranslation();
@@ -27,13 +28,17 @@ export function useInsightsSyncOptIn() {
   const syncAllowedByPolicy = usePolicyStore(isCloudBackupAllowed);
   const canToggleSync = canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled);
 
+  // The claim lands before the pass is requested so the rows it adopts go up
+  // with it, rather than waiting for the next ambient one.
   const activate = useCallback(
-    (claimAnonymous: boolean) => {
+    async (claimAnonymous: boolean) => {
+      if (claimAnonymous) {
+        await window.electronAPI.claimAnonymousAnalyticsEvents().catch((error) => {
+          console.error("Claiming earlier Insights events failed:", error);
+        });
+      }
       setInsightsSyncEnabled(true);
-      if (!claimAnonymous) return;
-      window.electronAPI.claimAnonymousAnalyticsEvents().catch((error) => {
-        console.error("Claiming earlier Insights events failed:", error);
-      });
+      syncService.requestSyncAll("manual");
     },
     [setInsightsSyncEnabled]
   );
@@ -43,7 +48,7 @@ export function useInsightsSyncOptIn() {
     void (async () => {
       const unclaimed = await window.electronAPI.countUnclaimedAnalyticsEvents().catch(() => 0);
       if (unclaimed > 0) setUnclaimedCount(unclaimed);
-      else activate(false);
+      else await activate(false);
     })();
   }, [activate, syncAllowedByPolicy]);
 
@@ -57,8 +62,7 @@ export function useInsightsSyncOptIn() {
       description={t("insights.claimDescription", { count: unclaimedCount })}
       confirmText={t("insights.claimInclude")}
       cancelText={t("insights.claimSkip")}
-      onConfirm={() => activate(true)}
-      onCancel={() => activate(false)}
+      onConfirm={() => void activate(true)}
     />
   );
 

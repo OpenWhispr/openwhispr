@@ -3202,10 +3202,10 @@
     "syncPrompt": "同步不含內容的計數，將本機與雲端的活動跨裝置合併。",
     "enableSync": "啟用同步",
     "claimTitle": "要包含較早的聽寫嗎？",
-    "claimDescription_one": "本裝置上有 {{count}} 次聽寫是在你登入前記錄的。要納入同步的統計嗎？只會傳送字數與日期。",
-    "claimDescription_other": "本裝置上有 {{count}} 次聽寫是在你登入前記錄的。要納入同步的統計嗎？只會傳送字數與日期。",
+    "claimDescription_one": "本裝置上有 {{count}} 次聽寫是在你登入前記錄的。開啟同步會一併納入，只會傳送字數與日期。",
+    "claimDescription_other": "本裝置上有 {{count}} 次聽寫是在你登入前記錄的。開啟同步會一併納入，只會傳送字數與日期。",
     "claimInclude": "包含",
-    "claimSkip": "保留在本裝置"
+    "claimSkip": "暫不開啟"
   },
   "sidebar": {
     "insights": "統計",

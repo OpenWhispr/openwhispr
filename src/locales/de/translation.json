@@ -2705,10 +2705,10 @@
     "syncPrompt": "Synchronisieren Sie inhaltsfreie Zähler, um lokale und Cloud-Aktivität geräteübergreifend zusammenzuführen.",
     "enableSync": "Synchronisierung aktivieren",
     "claimTitle": "Frühere Diktate einbeziehen?",
-    "claimDescription_one": "{{count}} Diktat wurde auf diesem Gerät vor Ihrer Anmeldung aufgezeichnet. In die synchronisierten Statistiken einbeziehen? Es werden nur Wortanzahl und Datum übertragen.",
-    "claimDescription_other": "{{count}} Diktate wurden auf diesem Gerät vor Ihrer Anmeldung aufgezeichnet. In die synchronisierten Statistiken einbeziehen? Es werden nur Wortanzahl und Datum übertragen.",
+    "claimDescription_one": "{{count}} Diktat wurde auf diesem Gerät vor Ihrer Anmeldung aufgezeichnet. Wenn Sie die Synchronisierung aktivieren, wird es einbezogen – übertragen werden nur Wortanzahl und Datum.",
+    "claimDescription_other": "{{count}} Diktate wurden auf diesem Gerät vor Ihrer Anmeldung aufgezeichnet. Wenn Sie die Synchronisierung aktivieren, werden sie einbezogen – übertragen werden nur Wortanzahl und Datum.",
     "claimInclude": "Einbeziehen",
-    "claimSkip": "Auf diesem Gerät behalten"
+    "claimSkip": "Jetzt nicht"
   },
   "sidebar": {
     "insights": "Statistiken",

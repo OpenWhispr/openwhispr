@@ -2705,10 +2705,10 @@
     "syncPrompt": "Synchronisez des compteurs sans contenu pour combiner l'activité locale et cloud sur tous vos appareils.",
     "enableSync": "Activer la synchronisation",
     "claimTitle": "Inclure les dictées antérieures ?",
-    "claimDescription_one": "{{count}} dictée a été enregistrée sur cet appareil avant votre connexion. L'inclure dans vos Statistiques synchronisées ? Seuls son nombre de mots et sa date sont envoyés.",
-    "claimDescription_other": "{{count}} dictées ont été enregistrées sur cet appareil avant votre connexion. Les inclure dans vos Statistiques synchronisées ? Seuls leur nombre de mots et leur date sont envoyés.",
+    "claimDescription_one": "{{count}} dictée a été enregistrée sur cet appareil avant votre connexion. Activer la synchronisation l'inclut : seuls son nombre de mots et sa date sont envoyés.",
+    "claimDescription_other": "{{count}} dictées ont été enregistrées sur cet appareil avant votre connexion. Activer la synchronisation les inclut : seuls leur nombre de mots et leur date sont envoyés.",
     "claimInclude": "Inclure",
-    "claimSkip": "Garder sur cet appareil"
+    "claimSkip": "Pas maintenant"
   },
   "sidebar": {
     "insights": "Statistiques",
