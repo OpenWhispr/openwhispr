@@ -83,7 +83,10 @@ class GpuBinaryManager {
   }
 
   isDownloaded() {
-    return this.getBinaryPath() !== null;
+    const binaryPath = this.getBinaryPath();
+    if (!binaryPath) return false;
+    const requiredFiles = this._getAssetConfig()?.requiredFiles || [];
+    return requiredFiles.every((fileName) => fs.existsSync(path.join(this.binDir, fileName)));
   }
 
   isDownloading() {
@@ -198,7 +201,15 @@ class GpuBinaryManager {
       await fsPromises.copyFile(binaryPath, outputPath);
       if (process.platform !== "win32") await fsPromises.chmod(outputPath, 0o755);
 
-      if (assetConfig.libPattern) {
+      if (assetConfig.requiredFiles) {
+        for (const fileName of assetConfig.requiredFiles) {
+          const source = await findFile(extractDir, fileName);
+          if (!source) throw new Error(`${fileName} not found in archive`);
+          const dest = path.join(stagingDir, fileName);
+          await fsPromises.copyFile(source, dest);
+          if (process.platform !== "win32") await fsPromises.chmod(dest, 0o755);
+        }
+      } else if (assetConfig.libPattern) {
         const libs = await findFiles(extractDir, assetConfig.libPattern);
         for (const lib of libs) {
           const dest = path.join(stagingDir, path.basename(lib));

@@ -1,5 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 
 const WhisperManager = require("../../src/helpers/whisper.js");
 const { resolveFailedGpuBackends } = require("../../src/helpers/whisper.js");
@@ -55,7 +58,43 @@ test("CUDA wins when both backends are enabled and downloaded", () => {
   process.env.WHISPER_CUDA_ENABLED = "true";
   process.env.WHISPER_VULKAN_ENABLED = "true";
   const manager = managerWith({ cudaDownloaded: true, vulkanDownloaded: true });
-  assert.deepEqual(manager.resolveGpuStartOptions(), { useCuda: true, useVulkan: false });
+  assert.deepEqual(manager.resolveGpuStartOptions(), {
+    useCuda: true,
+    useVulkan: false,
+    fallbackToVulkan: true,
+  });
+});
+
+test("startup pre-warm preserves the installed Vulkan fallback", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-prewarm-"));
+  const modelPath = path.join(dir, "ggml-base.bin");
+  fs.writeFileSync(modelPath, "model");
+
+  try {
+    const manager = managerWith({ cudaDownloaded: true, vulkanDownloaded: true });
+    manager.getModelsDir = () => dir;
+    manager.getModelPath = () => modelPath;
+    manager.logDependencyStatus = async () => {};
+    manager.serverManager.isAvailable = () => true;
+
+    let startOptions = null;
+    manager.serverManager.start = async (_modelPath, options) => {
+      startOptions = options;
+    };
+
+    await manager.initializeAtStartup({
+      localTranscriptionProvider: "whisper",
+      whisperModel: "base",
+    });
+
+    assert.deepEqual(startOptions, {
+      useCuda: true,
+      useVulkan: false,
+      fallbackToVulkan: true,
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("a remembered CUDA failure degrades to Vulkan, then both failures to CPU", () => {

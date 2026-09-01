@@ -93,12 +93,13 @@ class WhisperManager {
       (process.env.WHISPER_CUDA_ENABLED || "").toLowerCase() !== "false" &&
       !failed.includes("cuda") &&
       !!this._cudaBinaryManager?.isDownloaded();
-    const useVulkan =
-      !useCuda &&
+    const vulkanAvailable =
       (process.env.WHISPER_VULKAN_ENABLED || "").toLowerCase() !== "false" &&
       !failed.includes("vulkan") &&
       !!this._vulkanBinaryManager?.isDownloaded();
-    return { useCuda, useVulkan };
+    const options = { useCuda, useVulkan: !useCuda && vulkanAvailable };
+    if (useCuda && vulkanAvailable) options.fallbackToVulkan = true;
+    return options;
   }
 
   // Re-resolve GPU options and reload the server in place. Used after a GPU
@@ -159,7 +160,8 @@ class WhisperManager {
 
       // Pre-warm whisper-server if local mode enabled (eliminates 2-5s cold-start delay)
       const { localTranscriptionProvider, whisperModel } = settings;
-      const { useCuda, useVulkan } = this.resolveGpuStartOptions();
+      const gpuOptions = this.resolveGpuStartOptions();
+      const { useCuda, useVulkan } = gpuOptions;
 
       if (
         localTranscriptionProvider === "whisper" &&
@@ -178,7 +180,7 @@ class WhisperManager {
 
           try {
             const serverStartTime = Date.now();
-            await this.serverManager.start(modelPath, { useCuda, useVulkan });
+            await this.serverManager.start(modelPath, gpuOptions);
             this.currentServerModel = whisperModel;
 
             debugLogger.info("whisper-server pre-warmed successfully", {

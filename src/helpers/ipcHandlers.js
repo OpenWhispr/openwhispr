@@ -650,9 +650,11 @@ class IPCHandlers {
     if (this.whisperManager?.serverManager) {
       // Remember the failed backend so it isn't re-attempted (and its model
       // reload re-paid) on every launch; cleared by retry, re-download, delete.
-      this.whisperManager.serverManager.on("cuda-fallback", () => {
+      this.whisperManager.serverManager.on("cuda-fallback", ({ fallbackBackend } = {}) => {
         this._recordWhisperGpuFailure("cuda");
-        broadcastToWindows("cuda-fallback-notification", {});
+        if (fallbackBackend !== "vulkan") {
+          broadcastToWindows("cuda-fallback-notification", {});
+        }
       });
       this.whisperManager.serverManager.on("gpu-fallback", () => {
         this._recordWhisperGpuFailure("vulkan");

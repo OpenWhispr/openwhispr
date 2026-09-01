@@ -40,6 +40,12 @@ class WhisperCudaManager extends GpuBinaryManager {
           assetName: "whisper-server-linux-x64-cuda.zip",
           binaryName: "whisper-server-linux-x64-cuda",
           outputName: "whisper-server-linux-x64-cuda",
+          requiredFiles: [
+            "libcudart.so.12",
+            "libcublas.so.12",
+            "libcublasLt.so.12",
+            "CUDA-12.9-LICENSE.txt",
+          ],
           libPattern: /\.so(\.\d+)*$/,
         },
       },

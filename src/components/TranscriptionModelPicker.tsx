@@ -412,6 +412,7 @@ export default function TranscriptionModelPicker({
   const [gpuActivating, setGpuActivating] = useState(false);
   // Live truth from the running server; "active" is never inferred from a download
   const [gpuActive, setGpuActive] = useState(false);
+  const gpuBackendName = gpuBackend === "cuda" ? "CUDA" : "Vulkan";
 
   useEffect(() => {
     if (selectedLocalProvider !== internalLocalProvider) {
@@ -709,7 +710,11 @@ export default function TranscriptionModelPicker({
         ?.whisperServerStatus?.()
         .then((status) => {
           setGpuActive(!!status?.gpuAccelerated);
-          if (status?.gpuAccelerated) setGpuActivating(false);
+          if (status?.gpuAccelerated && status.gpuBackend) {
+            setGpuBackend(status.gpuBackend);
+            setGpuActivating(false);
+            setGpuFailed(false);
+          }
         })
         .catch(() => {});
     };
@@ -1349,21 +1354,21 @@ export default function TranscriptionModelPicker({
                           <>
                             <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
                             <span className="text-xs font-medium text-foreground">
-                              {t("gpu.activating")}
+                              {t("gpu.activatingBackend", { backend: gpuBackendName })}
                             </span>
                           </>
                         ) : gpuActive ? (
                           <>
                             <Check size={13} className="text-success" />
                             <span className="text-xs font-medium text-foreground">
-                              {t("gpu.active")}
+                              {t("gpu.activeBackend", { backend: gpuBackendName })}
                             </span>
                           </>
                         ) : (
                           <>
                             <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
                             <span className="text-xs font-medium text-foreground">
-                              {t("gpu.ready")}
+                              {t("gpu.readyBackend", { backend: gpuBackendName })}
                             </span>
                           </>
                         )}
@@ -1385,6 +1390,9 @@ export default function TranscriptionModelPicker({
                       <p className="text-xs font-medium text-foreground">
                         {t("gpu.transcriptionBanner")}
                       </p>
+                      <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                        {t(gpuBackend === "cuda" ? "gpu.cudaDescription" : "gpu.vulkanDescription")}
+                      </p>
                       <div className="flex items-center gap-2 mt-1.5">
                         <Button
                           onClick={handleGpuDownload}
@@ -1392,7 +1400,7 @@ export default function TranscriptionModelPicker({
                           variant="default"
                           className="h-6 px-2.5 text-xs"
                         >
-                          {t("gpu.enableButton")}
+                          {t("gpu.enableBackend", { backend: gpuBackendName })}
                         </Button>
                         <button
                           onClick={() => setGpuDismissed(true)}

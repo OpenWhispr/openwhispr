@@ -160,6 +160,13 @@ function getGpuSignature(options = {}) {
   return `gpu:vulkan:${Number.isInteger(deviceIndex) && deviceIndex >= 0 ? deviceIndex : "default"}`;
 }
 
+function parseWhisperGpuBackend(output) {
+  const match = String(output || "").match(
+    /whisper_backend_init_gpu: using (CUDA|Vulkan)\d+ backend/i
+  );
+  return match ? match[1].toLowerCase() : null;
+}
+
 function buildWhisperServerArgs({
   modelPath,
   port,
@@ -304,6 +311,7 @@ class WhisperServerManager extends EventEmitter {
     this.canConvert = false;
     this.useCuda = false;
     this.useVulkan = false;
+    this.activeGpuBackend = null;
     this.startGeneration = 0;
     this._stopRequested = false;
     this.vadSignature = "vad:off";
@@ -566,6 +574,7 @@ class WhisperServerManager extends EventEmitter {
     this.modelPath = modelPath;
     this.useCuda = usingCuda;
     this.useVulkan = usingVulkan;
+    this.activeGpuBackend = null;
 
     // Pin Vulkan to a specific device (see resolveVulkanDeviceIndex; the
     // one-shot restart below passes the explicit index).
@@ -592,9 +601,13 @@ class WhisperServerManager extends EventEmitter {
       spawnEnv.TMP = safeTmp;
     }
 
-    // Add the whisper-server directory to PATH so any companion DLLs are found
     const serverBinaryDir = path.dirname(serverBinary);
     spawnEnv.PATH = serverBinaryDir + pathSep + (process.env.PATH || "");
+    if (process.platform === "linux" && usingCuda) {
+      spawnEnv.LD_LIBRARY_PATH = [serverBinaryDir, process.env.LD_LIBRARY_PATH]
+        .filter(Boolean)
+        .join(":");
+    }
 
     // Select GPU by UUID + PCI_BUS_ID order so the device is unambiguous. See #531.
     if (usingCuda) {
@@ -635,8 +648,6 @@ class WhisperServerManager extends EventEmitter {
       threads: threadResolution,
     });
 
-    const startTime = Date.now();
-
     this.process = spawn(serverBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -668,6 +679,7 @@ class WhisperServerManager extends EventEmitter {
       debugLogger.debug("whisper-server process exited", { code });
       this.ready = false;
       this.process = null;
+      this.activeGpuBackend = null;
       this.stopHealthCheck();
       sidecarPidFile.clear("whisper");
     });
@@ -677,26 +689,38 @@ class WhisperServerManager extends EventEmitter {
         () => ({ stderr: stderrBuffer, exitCode }),
         usingVulkan ? VULKAN_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS
       );
+      const expectedBackend = usingCuda ? "cuda" : usingVulkan ? "vulkan" : null;
+      const activeBackend = parseWhisperGpuBackend(stderrBuffer);
+      if (expectedBackend && activeBackend !== expectedBackend) {
+        throw new Error(`${expectedBackend} server started without initializing its GPU backend`);
+      }
+      this.activeGpuBackend = activeBackend;
     } catch (err) {
       // An intentional stop() during startup is not a GPU/thread failure
       if (err.isStopped) throw err;
       if (usingCuda || usingVulkan) {
-        // Fall back on ANY startup rejection — a GPU server can exit early
-        // (missing kernels), die late (VRAM OOM mid-model-load), or hang, and
-        // in every case the CPU binary is the working answer. stop() reaps a
-        // hung process before the CPU restart.
+        // A GPU server can exit early, die during model load, or hang.
+        // Reap it before trying the next available backend.
+        const backend = usingCuda ? "cuda" : "vulkan";
+        const fallbackToVulkan = usingCuda && options.fallbackToVulkan === true;
         debugLogger.warn(
-          `${usingCuda ? "CUDA" : "Vulkan"} whisper-server failed, falling back to CPU`,
+          fallbackToVulkan
+            ? "CUDA whisper-server failed, trying Vulkan"
+            : `${backend} whisper-server failed, falling back to CPU`,
           {
             error: err.message,
             exitCode,
             stderr: stderrBuffer.slice(0, 200),
           }
         );
-        this.emit(usingCuda ? "cuda-fallback" : "gpu-fallback");
+        this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback", {
+          fallbackBackend: fallbackToVulkan ? "vulkan" : "cpu",
+        });
         await this.stop();
-        this.gpuFallbackActive = true;
-        return this._doStart(modelPath, { ...options, useCuda: false, useVulkan: false });
+        this.gpuFallbackActive = !fallbackToVulkan;
+        const fallbackOptions = { ...options, useCuda: false, useVulkan: fallbackToVulkan };
+        delete fallbackOptions.fallbackToVulkan;
+        return this._doStart(modelPath, fallbackOptions);
       }
       if (shouldFallbackToDefaultThreads(threadResolution)) {
         const defaultThreadResolution = createThreadResolution(
@@ -1043,7 +1067,7 @@ class WhisperServerManager extends EventEmitter {
           processExited,
         })
       ) {
-        return await this._fallbackToCpuAndRetry(body, boundary, modelPath);
+        return await this._fallbackAndRetry(body, boundary, modelPath);
       }
       if (this.startGeneration === generation) throw err;
     }
@@ -1077,20 +1101,38 @@ class WhisperServerManager extends EventEmitter {
       }
       const exited = await this._waitForProcessExit(PROCESS_EXIT_WAIT_MS);
       if (!exited || this._stopRequested) throw retryErr;
-      return await this._fallbackToCpuAndRetry(body, boundary, modelPath);
+      return await this._fallbackAndRetry(body, boundary, modelPath);
     }
   }
 
-  async _fallbackToCpuAndRetry(body, boundary, modelPath) {
+  async _fallbackAndRetry(body, boundary, modelPath) {
     const backend = this.useCuda ? "cuda" : "vulkan";
-    debugLogger.warn(`${backend} whisper-server died during transcription, falling back to CPU`, {
-      port: this.port,
-      model: modelPath ? path.basename(modelPath) : null,
-    });
-    await this.start(modelPath, { ...this.lastStartOptions, useCuda: false, useVulkan: false });
-    this.gpuFallbackActive = true;
-    // Emit only once the CPU server is up — the notification tells the user CPU is in use
-    this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback");
+    const fallbackToVulkan = backend === "cuda" && this.lastStartOptions.fallbackToVulkan === true;
+    debugLogger.warn(
+      fallbackToVulkan
+        ? "CUDA whisper-server died during transcription, trying Vulkan"
+        : `${backend} whisper-server died during transcription, falling back to CPU`,
+      {
+        port: this.port,
+        model: modelPath ? path.basename(modelPath) : null,
+      }
+    );
+    if (fallbackToVulkan) {
+      this.emit("cuda-fallback", { fallbackBackend: "vulkan" });
+    }
+    const fallbackOptions = {
+      ...this.lastStartOptions,
+      useCuda: false,
+      useVulkan: fallbackToVulkan,
+    };
+    delete fallbackOptions.fallbackToVulkan;
+    await this.start(modelPath, fallbackOptions);
+    this.gpuFallbackActive = !this.useVulkan;
+    if (!fallbackToVulkan) {
+      this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback", {
+        fallbackBackend: "cpu",
+      });
+    }
     return await this._postInference(body, boundary);
   }
 
@@ -1127,6 +1169,7 @@ class WhisperServerManager extends EventEmitter {
   async stop() {
     this._stopRequested = true;
     this.gpuFallbackActive = false;
+    this.activeGpuBackend = null;
     this.stopHealthCheck();
 
     if (this.isRemote) {
@@ -1178,7 +1221,7 @@ class WhisperServerManager extends EventEmitter {
 
   getStatus() {
     const running = this.ready && (this.process !== null || this.isRemote);
-    const gpuBackend = this.useCuda ? "cuda" : this.useVulkan ? "vulkan" : null;
+    const gpuBackend = this.activeGpuBackend;
     return {
       available: this.isAvailable(),
       running,
@@ -1202,6 +1245,7 @@ module.exports.parseVulkanDevices = parseVulkanDevices;
 module.exports.resolveVulkanPinAction = resolveVulkanPinAction;
 module.exports.getVadSignature = getVadSignature;
 module.exports.getGpuSignature = getGpuSignature;
+module.exports.parseWhisperGpuBackend = parseWhisperGpuBackend;
 module.exports.resolveWhisperThreads = resolveWhisperThreads;
 module.exports.shouldFallbackToCpuAfterRequestError = shouldFallbackToCpuAfterRequestError;
 module.exports.shouldRetryAfterServerReplaced = shouldRetryAfterServerReplaced;
