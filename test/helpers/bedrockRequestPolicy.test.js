@@ -212,6 +212,53 @@ test("Bedrock keeps rejected authentication distinct from permission errors", ()
   assert.match(mapEnterpriseError("bedrock", invalidToken).message, /credentials were rejected/i);
 });
 
+test("Bedrock normalizes AI SDK exception identity from headers and parsed data", () => {
+  for (const scenario of [
+    {
+      label: "case-insensitive response header",
+      error: Object.assign(new Error("The security token is invalid"), {
+        name: "AI_APICallError",
+        statusCode: 403,
+        responseHeaders: {
+          "X-AmZn-ErRoRtYpE": "com.amazon.identity#InvalidClientTokenId:client",
+        },
+      }),
+      expectedMessage: /credentials were rejected/i,
+      expectedExceptionType: "InvalidClientTokenId",
+    },
+    {
+      label: "parsed data code",
+      error: Object.assign(new Error("The security token is invalid"), {
+        name: "AI_APICallError",
+        statusCode: 403,
+        data: { code: "InvalidClientTokenId:client" },
+      }),
+      expectedMessage: /credentials were rejected/i,
+      expectedExceptionType: "InvalidClientTokenId",
+    },
+    {
+      label: "parsed data __type",
+      error: Object.assign(new Error("The requested model was not found"), {
+        name: "AI_APICallError",
+        statusCode: 404,
+        data: { __type: "com.amazon.bedrock#ResourceNotFoundException" },
+      }),
+      expectedMessage: /could not find the selected model/i,
+      expectedExceptionType: "ResourceNotFoundException",
+    },
+  ]) {
+    const mapped = mapEnterpriseError("bedrock", scenario.error, {
+      bedrockRegion: "us-west-2",
+    });
+    assert.match(mapped.message, scenario.expectedMessage, scenario.label);
+    assert.equal(
+      mapped.technicalDetails.exceptionType,
+      scenario.expectedExceptionType,
+      scenario.label
+    );
+  }
+});
+
 test("Bedrock does not retry invalid model or configuration errors", async () => {
   const { options } = deterministicRetryOptions();
 

@@ -58,14 +58,44 @@ function getBedrockHttpStatus(error) {
   return undefined;
 }
 
+function getHeaderCaseInsensitive(headers, headerName) {
+  if (!headers) return undefined;
+  if (typeof headers.get === "function") return headers.get(headerName) || undefined;
+  const normalizedName = headerName.toLowerCase();
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === normalizedName) return value;
+  }
+  return undefined;
+}
+
+function normalizeBedrockExceptionType(value) {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  const namespaceSeparator = trimmed.lastIndexOf("#");
+  const withoutNamespace =
+    namespaceSeparator === -1 ? trimmed : trimmed.slice(namespaceSeparator + 1);
+  const suffixSeparator = withoutNamespace.indexOf(":");
+  const normalized =
+    suffixSeparator === -1 ? withoutNamespace : withoutNamespace.slice(0, suffixSeparator);
+  return normalized.trim() || undefined;
+}
+
 function getBedrockExceptionType(error) {
   for (const item of bedrockErrorChain(error)) {
-    const type =
-      item?.data?.type ||
-      item?.type ||
-      (typeof item?.code === "string" ? item.code : undefined) ||
-      item?.name;
-    if (type && !["Error", "AI_APICallError", "AI_RetryError"].includes(type)) return type;
+    const headers = item?.responseHeaders || item?.response?.headers;
+    const candidates = [
+      getHeaderCaseInsensitive(headers, "x-amzn-errortype"),
+      item?.data?.code,
+      item?.data?.__type,
+      item?.data?.type,
+      item?.type,
+      item?.code,
+      item?.name,
+    ];
+    for (const candidate of candidates) {
+      const type = normalizeBedrockExceptionType(candidate);
+      if (type && !["Error", "AI_APICallError", "AI_RetryError"].includes(type)) return type;
+    }
   }
   return undefined;
 }
@@ -76,8 +106,8 @@ function getBedrockRequestId(error) {
     const requestId =
       item?.$metadata?.requestId ||
       item?.requestId ||
-      headers["x-amzn-requestid"] ||
-      headers["x-amz-request-id"];
+      getHeaderCaseInsensitive(headers, "x-amzn-requestid") ||
+      getHeaderCaseInsensitive(headers, "x-amz-request-id");
     if (requestId) return requestId;
   }
   return undefined;
