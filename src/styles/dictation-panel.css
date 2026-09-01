@@ -8,9 +8,13 @@
   clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 114px) round 24px);
   opacity: 0;
   pointer-events: none;
+  /* Exit transition (the -open state carries the entrance's). A fade much
+     faster than the 280ms contraction makes the surface blink-vanish a frame
+     or two in — it must stay visible long enough for the condense-into-the-
+     pill motion to read. */
   transition:
     clip-path 280ms cubic-bezier(0.2, 0, 0, 1),
-    opacity 140ms ease-out,
+    opacity 240ms ease-out,
     transform 280ms cubic-bezier(0.2, 0, 0, 1);
   will-change: clip-path, opacity, transform;
 }
@@ -31,6 +35,12 @@
   opacity: 1;
   pointer-events: auto;
   transform: none;
+  /* Entrance: turn solid fast so the expansion reads as a surface growing,
+     not a ghost inflating. The exit reads the base rule's slower fade. */
+  transition:
+    clip-path 280ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 140ms ease-out,
+    transform 280ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* Agent close first fades its complex inner tree while the surface is still
