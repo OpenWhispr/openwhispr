@@ -41,13 +41,19 @@ async function settleAsyncHandler() {
 
 test("email authentication discovers accounts before choosing sign-in or sign-up", async (t) => {
   installBrowserGlobals(t, { window: { electronAPI: {} } });
+  // The compact Back control is portalled to body (it has to out-stack the
+  // onboarding shell's drag band), so rendering reads document.body.
+  const originalDocument = globalThis.document;
+  globalThis.document = { body: {} };
   t.after(() => {
     delete globalThis.__authenticationStepHarness;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
   });
 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-authentication-step-",
-    noExternal: ["react", "react-i18next", "lucide-react"],
+    noExternal: ["react", "react-dom", "react-i18next", "lucide-react"],
     mockModules: {
       react: `
         export default {};
@@ -110,6 +116,9 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
           return harness.discoveryResult;
         }
       `,
+      // Keep portalled children in the returned tree so findElement still
+      // reaches them; this harness walks elements rather than mounting a DOM.
+      "react-dom": `export function createPortal(children) { return children; }`,
       "/utils/logger": `export default { error() {} };`,
       "/utils/platform": `export function getCachedPlatform() { return "linux"; }`,
       "/ForgotPasswordView": `export default function ForgotPasswordView() { return null; }`,
