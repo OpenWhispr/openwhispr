@@ -2790,7 +2790,7 @@ class IPCHandlers {
           ? ((await this.selectionManager?.getWinTargetHwnd?.()) ?? null)
           : null;
 
-      await this.clipboardManager.pasteText(textToPaste, {
+      const pasteResult = await this.clipboardManager.pasteText(textToPaste, {
         ...options,
         webContents: event.sender,
         targetWindow,
@@ -2815,9 +2815,10 @@ class IPCHandlers {
       // ClipboardManager returns `restoreComplete` so main-process callers can
       // serialize subsequent clipboard work behind its delayed restore. A
       // Promise cannot cross Electron's IPC boundary, though, and renderer
-      // callers need to know that the paste completed, but not its delayed
-      // clipboard restoration promise.
-      return { success: true, pasted: true };
+      // callers need to know whether text was pasted, but not the delayed
+      // clipboard restoration promise. Successful platform paths predate the
+      // explicit `pasted` outcome; only the clipboard-only fallback sets false.
+      return { success: true, pasted: pasteResult?.pasted !== false };
     });
 
     ipcMain.handle("check-accessibility-permission", async (_event, silent = false) => {

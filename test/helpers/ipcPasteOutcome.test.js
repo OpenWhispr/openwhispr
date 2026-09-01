@@ -112,3 +112,16 @@ test("paste-text reports pasted only after the clipboard paste completes", async
   assert.deepEqual(result, { success: true, pasted: true });
   assert.equal(pastes.length, 1);
 });
+
+test("paste-text preserves a clipboard-only fallback as not pasted", async () => {
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  target.clipboardManager = {
+    pasteText: async () => ({ pasted: false }),
+  };
+
+  const result = await handlers.get("paste-text")({ sender: { id: 1 } }, "manual transcript", {
+    allowClipboardFallback: true,
+  });
+
+  assert.deepEqual(result, { success: true, pasted: false });
+});

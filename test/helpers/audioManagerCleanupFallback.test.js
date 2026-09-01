@@ -93,7 +93,9 @@ test("safePaste returns false when the preload reports that no text was pasted",
     cachePrefix: "openwhispr-audio-cleanup-paste-outcome-",
     settingsKey: "__audioCleanupPasteOutcomeSettings",
   });
-  const manager = createManager({ onError: () => assert.fail("a resolved no-op is not a paste error") });
+  const manager = createManager({
+    onError: () => assert.fail("a resolved no-op is not a paste error"),
+  });
   window.electronAPI.pasteText = async () => ({ success: true, pasted: false });
 
   assert.equal(await manager.safePaste("onboarding transcript"), false);
@@ -104,7 +106,9 @@ test("safePaste returns true only when the preload reports a completed paste", a
     cachePrefix: "openwhispr-audio-cleanup-paste-success-",
     settingsKey: "__audioCleanupPasteSuccessSettings",
   });
-  const manager = createManager({ onError: () => assert.fail("a completed paste must not report an error") });
+  const manager = createManager({
+    onError: () => assert.fail("a completed paste must not report an error"),
+  });
   window.electronAPI.pasteText = async () => ({ success: true, pasted: true });
 
   assert.equal(await manager.safePaste("completed transcript"), true);
