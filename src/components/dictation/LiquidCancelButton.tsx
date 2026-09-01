@@ -9,6 +9,9 @@ import { LISTENING_ENTRANCE_TIMING } from "../../helpers/voicePillPresentation";
 const CANCEL_BUTTON_SIZE = 28;
 const CANCEL_BUTTON_GAP = 8;
 const EMERGENCE_MS = 280;
+// The pill's chrome fade (VoicePill's inline 220ms background/border/shadow
+// transition, mirrored by .liquid-cancel-skin's fill/stroke) — change together.
+const CHROME_HANDOFF_MS = 220;
 
 // cubic-bezier(0.2, 0, 0, 1) — the house motion curve, solved numerically so
 // this rAF-driven emergence matches the CSS transitions around it.
@@ -127,17 +130,36 @@ export function LiquidCancelButton({
   const t = useCancelEmergence(visible);
   const pillSize = usePillFootprintTween(pillWidth, pillHeight);
   const skinActive = fused && t > 0;
+  const [skinLingers, setSkinLingers] = useState(false);
   const notifyRef = useRef(onFusedSkinChange);
   notifyRef.current = onFusedSkinChange;
+  const skinWasActiveRef = useRef(false);
   useLayoutEffect(() => {
     notifyRef.current?.(skinActive);
+    const wasActive = skinWasActiveRef.current;
+    skinWasActiveRef.current = skinActive;
+    if (skinActive) {
+      setSkinLingers(false);
+      return undefined;
+    }
+    if (!wasActive) return undefined;
+    // Releasing the surface fades the pill's own chrome back in over
+    // CHROME_HANDOFF_MS. The swallowed skin (t=0) is geometry-identical to
+    // the bare pill, so keep painting it underneath until that fade lands —
+    // unmounting it mid-fade dips the capsule to the faded chrome. (Fuse-in
+    // is masked the same way for free: the skin mounts under the pill's
+    // still-painted chrome as it fades out.)
+    setSkinLingers(true);
+    const timer = setTimeout(() => setSkinLingers(false), CHROME_HANDOFF_MS + 40);
+    return () => clearTimeout(timer);
   }, [skinActive]);
 
   const slotWidth = t * (CANCEL_BUTTON_GAP + CANCEL_BUTTON_SIZE);
   // The absolute button overlaps the pill until its slot is at least one button wide.
   const buttonInteractive = visible && slotWidth >= CANCEL_BUTTON_SIZE;
+  const showSkin = skinActive || (fused && skinLingers);
   const outline = useMemo(() => {
-    if (!fused || t <= 0) return null;
+    if (!showSkin) return null;
     return traceFusedOutline(
       {
         pill: { w: pillSize.w, h: pillSize.h },
@@ -149,9 +171,9 @@ export function LiquidCancelButton({
       },
       { k: emergenceBlend(t) }
     );
-  }, [fused, t, pillSize, slotWidth]);
+  }, [showSkin, t, pillSize, slotWidth]);
 
-  if (t <= 0) return null;
+  if (t <= 0 && !skinLingers) return null;
 
   return (
     <div
