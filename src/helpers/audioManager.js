@@ -221,6 +221,9 @@ function resolveReasoningRoute(
       cleanupConfig: {
         inferenceScope: /** @type {const} */ ("dictationCleanup"),
         disableThinking: settings.cleanupDisableThinking,
+        // The chain's cleanup step is the same deterministic transform — see
+        // the cleanup route below for why the value has to be explicit.
+        temperature: 0,
       },
       config: {
         ...translation.config,
@@ -280,6 +283,9 @@ function resolveReasoningRoute(
       config: {
         inferenceScope: /** @type {const} */ ("dictationCleanup"),
         disableThinking: settings.cleanupDisableThinking,
+        // Cleanup is a deterministic transform: pass 0 explicitly, because the IPC-bridged
+        // providers (local bridge, Anthropic, enterprise) otherwise apply their own default.
+        temperature: 0,
       },
     };
   }
