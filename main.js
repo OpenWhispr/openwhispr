@@ -1808,6 +1808,16 @@ async function startApp() {
     // Dictation supports push-to-talk and needs the overlay window; meeting
     // drives other windows (matching their globalShortcut callbacks and macOS).
     const dispatchNativeKeyDown = (key) => {
+      const slotName = hotkeyManager.findSlotByHotkey(key);
+      debugLogger.debug(
+        "[Push-to-Talk] Native key-down",
+        {
+          key,
+          slot: slotName,
+          mode: slotName ? windowManager.getSlotActivationMode(slotName) : null,
+        },
+        "ptt"
+      );
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         if (windowManager.getActivationMode() === "push") {

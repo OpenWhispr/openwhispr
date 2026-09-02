@@ -747,13 +747,34 @@ class WindowManager {
   }
 
   startNativePushToTalk(key, inputKind = DICTATION_INPUT_KIND.DICTATION) {
+    debugLogger.debug(
+      "Native push key-down",
+      {
+        key,
+        inputKind,
+        pushActive: Boolean(this.nativePushState?.active),
+        lifecycle: this._dictationLifecycleState,
+      },
+      "ptt"
+    );
     if (!this._isOnboardingInputAllowed(inputKind)) return;
     if (this.hotkeyManager.isInListeningMode()) return;
     if (this.nativePushState?.active || this.isDictationProcessing()) {
       return;
     }
-    if (this.handlePushGestureDown(inputKind) !== "proceed") return;
-    if (this._shouldBlockDictationInput(inputKind)) return;
+    const verdict = this.handlePushGestureDown(inputKind);
+    if (verdict !== "proceed") {
+      debugLogger.debug(
+        "Native push key-down handled by the gesture",
+        { verdict, inputKind },
+        "ptt"
+      );
+      return;
+    }
+    if (this._shouldBlockDictationInput(inputKind)) {
+      debugLogger.debug("Native push key-down blocked by the panel state", { inputKind }, "ptt");
+      return;
+    }
 
     const MIN_HOLD_DURATION_MS = 150;
     const MAX_PUSH_DURATION_MS = 300000;
@@ -1249,21 +1270,16 @@ class WindowManager {
     return this._cachedSlotActivationModes[slotName] === "push" ? "push" : "tap";
   }
 
+  // The hotkey manager owns the capability check and the backend rebind
+  // (exactly as setActivationModeCache defers to it for dictation); the cache
+  // only follows a verdict of success.
   async setSlotActivationModeCache(slotName, mode, { notifyFailure = true } = {}) {
     if (!(slotName in this._cachedSlotActivationModes)) return false;
     const nextMode = mode === "push" ? "push" : "tap";
-    if (nextMode === "push") {
-      // No bound hotkey means the capability cannot be verified: fail closed.
-      const hotkey = this.hotkeyManager.getSlotHotkey?.(slotName);
-      if (!hotkey || !this.hotkeyManager.supportsPushToTalk(hotkey, slotName)) {
-        if (notifyFailure && hotkey) {
-          this.hotkeyManager.notifyHotkeyFailure?.(hotkey, {
-            error: this.hotkeyManager.getPushToTalkUnavailableReason(hotkey),
-          });
-        }
-        return false;
-      }
-    }
+    const success = await this.hotkeyManager.setSlotActivationMode(slotName, nextMode, {
+      notifyFailure,
+    });
+    if (!success) return false;
     this._cachedSlotActivationModes[slotName] = nextMode;
     return true;
   }
@@ -1347,7 +1363,16 @@ class WindowManager {
   }
 
   async updateHotkey(hotkey) {
-    return await this.hotkeyManager.updateHotkey(hotkey, this.createHotkeyCallback());
+    const result = await this.hotkeyManager.updateHotkey(hotkey, this.createHotkeyCallback());
+    // The manager converged a Hold this hotkey cannot deliver to Tap: the
+    // cache and the native listeners follow; the IPC layer persists it and
+    // tells the renderer.
+    if (result?.activationMode === "tap" && this._cachedActivationMode !== "tap") {
+      this._cachedActivationMode = "tap";
+      this.resetNativePushState();
+      this.reconcileNativeKeyListeners();
+    }
+    return result;
   }
 
   isUsingGnomeHotkeys() {
