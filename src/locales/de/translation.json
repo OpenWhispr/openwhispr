@@ -201,7 +201,7 @@
     "done": "Fertig",
     "skip": "Überspringen",
     "policyAiProcessingRestricted": "Die KI-Verarbeitung ist durch Ihre Organisation eingeschränkt.",
-    "policyAgentRestricted": "Die Nutzung des KI-Agenten ist durch Ihre Organisation eingeschränkt.",
+    "policyAgentRestricted": "Die Nutzung des KI-Assistenten ist durch Ihre Organisation eingeschränkt.",
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt."
   },
   "onboarding": {
@@ -212,7 +212,7 @@
         "accessibilityDescription": "Fügt Text in deine aktive App ein.",
         "systemAudioTitle": "Systemaudio",
         "systemAudioDescription": "Nimmt Audio aus anderen Apps auf.",
-        "screenContextDescription": "Lässt deinen Sprachassistenten deinen Bildschirm sehen. Wird nie gespeichert.",
+        "screenContextDescription": "Bildschirmkontext, immer privat.",
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },
@@ -418,7 +418,7 @@
         "cancelDownload": "Download von {{model}} abbrechen",
         "downloads": "Modell-Downloads",
         "downloading": "Wird heruntergeladen… {{progress}}%",
-        "installing": "Modell wird installiert…"
+        "installing": "Wird installiert"
       }
     },
     "steps": {
@@ -866,7 +866,7 @@
       "errorTitles": {
         "sessionExpired": "Sitzung abgelaufen",
         "offline": "Sie sind offline",
-        "agentUnavailable": "Agent nicht verfügbar",
+        "agentUnavailable": "Assistent nicht verfügbar",
         "screenContextSkipped": "Bildschirmkontext übersprungen",
         "dailyLimitReached": "Tägliches Limit erreicht",
         "providerRateLimited": "Anbieter-Ratenlimit erreicht"
@@ -1460,10 +1460,10 @@
       }
     },
     "edit": {
-      "agentNameLabel": "Agent-Name:",
+      "agentNameLabel": "Assistent-Name:",
       "cautionLabel": "Vorsicht",
       "cautionTextPrefix": "Änderungen an diesem Prompt können die Transkriptionsqualität beeinträchtigen.",
-      "cautionTextSuffix": "Behalten Sie den Platzhalter {{agentName}} bei, um die Agent-Erkennung zu gewährleisten.",
+      "cautionTextSuffix": "Behalten Sie den Platzhalter {{agentName}} bei, um die Assistent-Erkennung zu gewährleisten.",
       "placeholder": "Geben Sie Ihren benutzerdefinierten System-Prompt ein..."
     },
     "tabs": {
@@ -1878,7 +1878,7 @@
           "features": [
             "Unbegrenzte Meeting-Aufnahmen",
             "Workspace-Rollen & Mitgliederverwaltung",
-            "Agentenmodus",
+            "Assistentenmodus",
             "Chat über Ihre Daten",
             "Prioritäts-Support"
           ],
@@ -2002,11 +2002,11 @@
       }
     },
     "agentConfig": {
-      "agentName": "Agent-Name",
+      "agentName": "Assistent-Name",
       "description": "Benennen Sie Ihren KI-Assistenten, damit Sie ihn beim Diktieren direkt ansprechen können",
       "dialogs": {
-        "updatedDescription": "Ihr Agent heißt jetzt '{{name}}'. Sprechen Sie ihn an, indem Sie 'Hey {{name}}' gefolgt von Ihren Anweisungen sagen.",
-        "updatedTitle": "Agent-Name aktualisiert"
+        "updatedDescription": "Ihr Assistent heißt jetzt '{{name}}'. Sprechen Sie ihn an, indem Sie 'Hey {{name}}' gefolgt von Ihren Anweisungen sagen.",
+        "updatedTitle": "Assistent-Name aktualisiert"
       },
       "examplesTitle": "Beispiele",
       "helper": "Wählen Sie etwas Kurzes und Natürliches zum Aussprechen",
@@ -2121,7 +2121,7 @@
       "clearDictionaryTitle": "Wörterbuch löschen?",
       "clearDictionaryDescription": "Dadurch werden alle Wörter aus Ihrem benutzerdefinierten Wörterbuch entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "clearAll": "Alles löschen",
-      "agentNameAutoManaged": "Automatisch verwaltet — synchronisiert mit dem Agentennamen",
+      "agentNameAutoManaged": "Automatisch verwaltet — synchronisiert mit dem Assistentennamen",
       "removeWord": "Wort entfernen",
       "noWords": "Noch keine Wörter",
       "wordsAppearHere": "Hinzugefügte Wörter erscheinen hier",
@@ -2621,7 +2621,7 @@
         "openai_gpt_4_1_mini": "Kleineres GPT-4.1-Modell",
         "openai_gpt_4_1_nano": "GPT-4.1 mit der niedrigsten Latenz",
         "anthropic_claude_fable_5": "Leistungsstärkstes Modell von Anthropic, Mythos-Klasse",
-        "anthropic_claude_sonnet_5": "Schnelles, leistungsfähiges Agent-Modell zu geringeren Kosten",
+        "anthropic_claude_sonnet_5": "Schnelles, leistungsfähiges Assistentenmodell zu geringeren Kosten",
         "anthropic_claude_sonnet_4_6": "Ausgewogene Leistung",
         "anthropic_claude_sonnet_4_5": "Vorherige Sonnet-Generation",
         "anthropic_claude_haiku_4_5": "Schnell mit nahezu Frontier-Intelligenz",
@@ -2656,12 +2656,12 @@
         "corti_corti_s1_mini": "Kompaktes klinisches Modell mit Reasoning zum halben Preis"
       },
       "enterprise": {
-        "bedrock_claude_fable_5": "Leistungsstärkstes Claude-Modell. Ideal für die schwierigsten Agent-Modus-Aufgaben.",
+        "bedrock_claude_fable_5": "Leistungsstärkstes Claude-Modell. Ideal für die schwierigsten Assistenten-Aufgaben.",
         "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",
-        "bedrock_claude_sonnet_5": "Ausgewogen. Empfohlener Standard für den Agent-Modus.",
-        "bedrock_claude_opus_4_8": "Höchste Intelligenz. Für komplexe Aufgaben im Agent-Modus.",
+        "bedrock_claude_sonnet_5": "Ausgewogen. Empfohlener Standard für Assistenten-Aufgaben.",
+        "bedrock_claude_opus_4_8": "Höchste Intelligenz. Für komplexe Assistenten-Aufgaben.",
         "bedrock_gpt_oss_120b": "Offenes OpenAI-Modell. Starkes Reasoning zu geringen Kosten.",
-        "bedrock_deepseek_v3_2": "Offenes Frontier-Modell. Starker Wert für den Agent-Modus.",
+        "bedrock_deepseek_v3_2": "Offenes Frontier-Modell. Starker Wert für Assistenten-Aufgaben.",
         "bedrock_qwen3_next_80b": "Sparsames offenes Modell. Schnell und mehrsprachig.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
@@ -3501,7 +3501,7 @@
   },
   "dictationAgent": {
     "enabled": "Sprachassistenten aktivieren",
-    "enabledDescription": "Diktieren Sie Anweisungen an Ihren Agenten. Markierter Text wird an das konfigurierte Modell gesendet und direkt bearbeitet. Aktivieren Sie ihn, indem Sie \"{{agentName}}\" sagen.",
+    "enabledDescription": "Diktieren Sie Anweisungen an Ihren Assistenten. Markierter Text wird an das konfigurierte Modell gesendet und direkt bearbeitet. Aktivieren Sie ihn, indem Sie \"{{agentName}}\" sagen.",
     "screenContext": {
       "title": "Bildschirmkontext",
       "description": "Hängt einen Screenshot Ihres aktiven Bildschirms an Sprachassistent-Befehle an.",
@@ -3516,7 +3516,7 @@
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Den von OpenWhispr verwalteten Agenten nutzen, kein API-Schlüssel nötig.",
+      "openwhisprDesc": "Den von OpenWhispr verwalteten Assistenten nutzen, kein API-Schlüssel nötig.",
       "providers": "Eigenen Schlüssel nutzen",
       "providersDesc": "Mit Ihrem eigenen API-Schlüssel an OpenAI, Anthropic, Gemini oder Groq anbinden.",
       "local": "Lokal",
@@ -3527,14 +3527,14 @@
       "enterpriseDesc": "AWS Bedrock, Azure OpenAI oder Google Vertex nutzen."
     },
     "prompt": {
-      "title": "Agent-Prompt",
+      "title": "Assistent-Prompt",
       "description": "Der System-Prompt, der bei Erkennung des Aktivierungsworts verwendet wird. Fällt auf die integrierte Standardvorgabe zurück."
     }
   },
   "agentMode": {
     "settings": {
       "systemPrompt": "System-Prompt",
-      "systemPromptDescription": "Benutzerdefinierte Anweisungen für den Agenten",
+      "systemPromptDescription": "Benutzerdefinierte Anweisungen für den Assistenten",
       "systemPromptPlaceholder": "Benutzerdefinierten System-Prompt eingeben...",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
@@ -3686,7 +3686,7 @@
     },
     "cli": {
       "title": "Kommandozeilen-Zugriff",
-      "description": "Gib deinem Agenten über das Terminal Zugriff auf deine Notizen.",
+      "description": "Gib deinem Assistenten über das Terminal Zugriff auf deine Notizen.",
       "installLabel": "Installieren",
       "learnMore": "Dokumentation lesen",
       "copyDocsLink": "Doku-Link kopieren",

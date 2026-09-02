@@ -201,7 +201,7 @@
     "done": "完成",
     "skip": "跳过",
     "policyAiProcessingRestricted": "AI 处理已被您的组织限制。",
-    "policyAgentRestricted": "AI 智能体的使用已被您的组织限制。",
+    "policyAgentRestricted": "AI 助手的使用已被您的组织限制。",
     "policyTranscriptionRestricted": "转录已被您的组织限制。"
   },
   "onboarding": {
@@ -212,7 +212,7 @@
         "accessibilityDescription": "将文本粘贴到当前应用。",
         "systemAudioTitle": "系统音频",
         "systemAudioDescription": "捕获其他应用的音频。",
-        "screenContextDescription": "让语音助手查看当前屏幕，绝不保存。",
+        "screenContextDescription": "屏幕上下文，始终私密。",
         "enable": "启用",
         "enabled": "已启用"
       },
@@ -418,7 +418,7 @@
         "cancelDownload": "取消下载 {{model}}",
         "downloads": "模型下载",
         "downloading": "正在下载… {{progress}}%",
-        "installing": "正在安装模型…"
+        "installing": "安装中"
       }
     },
     "steps": {
@@ -1608,7 +1608,7 @@
           "features": [
             "无限会议录制",
             "工作区角色与成员管理",
-            "代理模式",
+            "助手模式",
             "与您的数据对话",
             "优先支持"
           ],
@@ -2528,7 +2528,7 @@
         "openai_gpt_4_1_mini": "精简版 GPT-4.1",
         "openai_gpt_4_1_nano": "最低延迟 GPT-4.1",
         "anthropic_claude_fable_5": "Anthropic 最强大的模型，Mythos 级",
-        "anthropic_claude_sonnet_5": "快速且强大的智能体模型，成本更低",
+        "anthropic_claude_sonnet_5": "快速且强大的助手模型，成本更低",
         "anthropic_claude_sonnet_4_6": "均衡性能",
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet",
         "anthropic_claude_haiku_4_5": "快速且接近前沿水平",
@@ -2563,12 +2563,12 @@
         "corti_corti_s1_mini": "紧凑型临床模型，半价提供推理"
       },
       "enterprise": {
-        "bedrock_claude_fable_5": "最强大的 Claude 模型。最适合最具挑战性的智能助手模式任务。",
+        "bedrock_claude_fable_5": "最强大的 Claude 模型。最适合最具挑战性的助手任务。",
         "bedrock_claude_haiku_4_5": "快速且低成本。适合文本清理。",
-        "bedrock_claude_sonnet_5": "均衡性能。推荐用作智能助手模式的默认模型。",
-        "bedrock_claude_opus_4_8": "最高智能。适用于复杂的智能助手模式任务。",
+        "bedrock_claude_sonnet_5": "均衡性能。推荐用作助手任务的默认模型。",
+        "bedrock_claude_opus_4_8": "最高智能。适用于复杂的助手任务。",
         "bedrock_gpt_oss_120b": "OpenAI 开放权重模型。低成本下的强大推理能力。",
-        "bedrock_deepseek_v3_2": "开放权重前沿模型。智能助手模式的高性价比之选。",
+        "bedrock_deepseek_v3_2": "开放权重前沿模型。助手任务的高性价比之选。",
         "bedrock_qwen3_next_80b": "稀疏开放权重模型。快速且多语言。",
         "vertex_gemini_2_5_flash": "通过 Vertex 提供的快速多模态模型",
         "vertex_gemini_2_5_pro": "通过 Vertex 提供的高级推理模型"
@@ -3521,7 +3521,7 @@
     },
     "cli": {
       "title": "命令行访问",
-      "description": "让你的智能助手通过终端访问你的笔记。",
+      "description": "让你的助手通过终端访问你的笔记。",
       "installLabel": "安装",
       "learnMore": "查看文档",
       "copyDocsLink": "复制文档链接",

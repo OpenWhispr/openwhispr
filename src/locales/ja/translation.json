@@ -201,7 +201,7 @@
     "done": "完了",
     "skip": "スキップ",
     "policyAiProcessingRestricted": "AI処理は組織によって制限されています。",
-    "policyAgentRestricted": "AIエージェントの使用は組織によって制限されています。",
+    "policyAgentRestricted": "AIアシスタントの使用は組織によって制限されています。",
     "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。"
   },
   "onboarding": {
@@ -212,7 +212,7 @@
         "accessibilityDescription": "アクティブなアプリにテキストを貼り付けます。",
         "systemAudioTitle": "システムオーディオ",
         "systemAudioDescription": "ほかのアプリの音声を取り込みます。",
-        "screenContextDescription": "音声アシスタントが作業中の画面を確認できます。保存はされません。",
+        "screenContextDescription": "画面コンテキスト、常にプライベート。",
         "enable": "有効にする",
         "enabled": "有効"
       },
@@ -418,7 +418,7 @@
         "cancelDownload": "{{model}} のダウンロードをキャンセル",
         "downloads": "モデルのダウンロード",
         "downloading": "ダウンロード中… {{progress}}%",
-        "installing": "モデルをインストール中…"
+        "installing": "インストール中"
       }
     },
     "steps": {
@@ -866,7 +866,7 @@
       "errorTitles": {
         "sessionExpired": "セッション期限切れ",
         "offline": "オフラインです",
-        "agentUnavailable": "エージェントを利用できません",
+        "agentUnavailable": "アシスタントを利用できません",
         "screenContextSkipped": "画面コンテキストをスキップしました",
         "dailyLimitReached": "1 日の上限に達しました",
         "providerRateLimited": "プロバイダーのレート制限"
@@ -1371,10 +1371,10 @@
       }
     },
     "edit": {
-      "agentNameLabel": "エージェント名:",
+      "agentNameLabel": "アシスタント名:",
       "cautionLabel": "注意",
       "cautionTextPrefix": "このプロンプトを変更すると文字起こしの品質に影響する場合があります。",
-      "cautionTextSuffix": "エージェント検出を維持するために {{agentName}} プレースホルダーを残してください。",
+      "cautionTextSuffix": "アシスタント検出を維持するために {{agentName}} プレースホルダーを残してください。",
       "placeholder": "カスタムシステムプロンプトを入力..."
     },
     "tabs": {
@@ -1589,7 +1589,7 @@
           "features": [
             "無制限の会議録音",
             "ワークスペースのロールとメンバー管理",
-            "エージェントモード",
+            "アシスタントモード",
             "データとチャット",
             "優先サポート"
           ],
@@ -1713,11 +1713,11 @@
       }
     },
     "agentConfig": {
-      "agentName": "エージェント名",
+      "agentName": "アシスタント名",
       "description": "ディクテーション中に直接呼びかけられるよう、AI アシスタントに名前を付けましょう",
       "dialogs": {
-        "updatedDescription": "エージェントの名前が「{{name}}」になりました。「ねぇ {{name}}」と呼びかけて指示を出してください。",
-        "updatedTitle": "エージェント名を更新しました"
+        "updatedDescription": "アシスタントの名前が「{{name}}」になりました。「ねぇ {{name}}」と呼びかけて指示を出してください。",
+        "updatedTitle": "アシスタント名を更新しました"
       },
       "examplesTitle": "例",
       "helper": "声に出して言いやすい短い名前を選びましょう",
@@ -1832,7 +1832,7 @@
       "clearDictionaryTitle": "辞書をクリアしますか？",
       "clearDictionaryDescription": "カスタム辞書からすべての単語が削除されます。この操作は元に戻せません。",
       "clearAll": "すべてクリア",
-      "agentNameAutoManaged": "自動管理 — エージェント名と同期",
+      "agentNameAutoManaged": "自動管理 — アシスタント名と同期",
       "removeWord": "単語を削除",
       "noWords": "まだ単語がありません",
       "wordsAppearHere": "追加した単語がここに表示されます",
@@ -2528,7 +2528,7 @@
         "openai_gpt_4_1_mini": "小型 GPT-4.1 モデル",
         "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
         "anthropic_claude_fable_5": "Anthropic の最も高性能なモデル、Mythos クラス",
-        "anthropic_claude_sonnet_5": "低コストで高速かつ高性能なエージェントモデル",
+        "anthropic_claude_sonnet_5": "低コストで高速かつ高性能なアシスタントモデル",
         "anthropic_claude_sonnet_4_6": "バランスの取れた性能",
         "anthropic_claude_sonnet_4_5": "前世代の Sonnet モデル",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
@@ -2563,12 +2563,12 @@
         "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で"
       },
       "enterprise": {
-        "bedrock_claude_fable_5": "最も高性能な Claude モデル。最も難しいエージェントモードのタスクに最適です。",
+        "bedrock_claude_fable_5": "最も高性能な Claude モデル。最も難しいアシスタントタスクに最適です。",
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
-        "bedrock_claude_sonnet_5": "バランス型。エージェントモードの既定モデルに最適です。",
-        "bedrock_claude_opus_4_8": "最高性能。複雑なエージェントモードのタスクに最適です。",
+        "bedrock_claude_sonnet_5": "バランス型。アシスタントタスクの既定モデルに最適です。",
+        "bedrock_claude_opus_4_8": "最高性能。複雑なアシスタントタスクに最適です。",
         "bedrock_gpt_oss_120b": "OpenAI のオープンウェイトモデル。低コストで高い推論力。",
-        "bedrock_deepseek_v3_2": "オープンウェイトのフロンティアモデル。エージェントモードに最適。",
+        "bedrock_deepseek_v3_2": "オープンウェイトのフロンティアモデル。アシスタントタスクに最適。",
         "bedrock_qwen3_next_80b": "スパースなオープンウェイトモデル。高速で多言語対応。",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
@@ -3336,7 +3336,7 @@
   },
   "dictationAgent": {
     "enabled": "音声アシスタントを有効にする",
-    "enabledDescription": "エージェントに指示を口述できます。選択中のテキストは設定済みのモデルに送信され、その場で編集されます。「{{agentName}}」と話しかけて起動します。",
+    "enabledDescription": "アシスタントに指示を口述できます。選択中のテキストは設定済みのモデルに送信され、その場で編集されます。「{{agentName}}」と話しかけて起動します。",
     "screenContext": {
       "title": "画面コンテキスト",
       "description": "音声アシスタントのコマンドに、作業中の画面のスクリーンショットを添付します。",
@@ -3351,7 +3351,7 @@
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "OpenWhispr が管理するエージェントを使用。API キーは不要です。",
+      "openwhisprDesc": "OpenWhispr が管理するアシスタントを使用。API キーは不要です。",
       "providers": "自分の API キーを使用",
       "providersDesc": "自分の API キーで OpenAI、Anthropic、Gemini、Groq に接続します。",
       "local": "ローカル",
@@ -3362,14 +3362,14 @@
       "enterpriseDesc": "AWS Bedrock、Azure OpenAI、Google Vertex を使用します。"
     },
     "prompt": {
-      "title": "エージェントプロンプト",
+      "title": "アシスタントプロンプト",
       "description": "ウェイクワードが検出されたときに使用するシステムプロンプト。未設定の場合は組み込みのデフォルトが使われます。"
     }
   },
   "agentMode": {
     "settings": {
       "systemPrompt": "システムプロンプト",
-      "systemPromptDescription": "エージェントへのカスタム指示",
+      "systemPromptDescription": "アシスタントへのカスタム指示",
       "systemPromptPlaceholder": "カスタムシステムプロンプトを入力...",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
@@ -3521,7 +3521,7 @@
     },
     "cli": {
       "title": "コマンドラインアクセス",
-      "description": "ターミナルからエージェントにメモへのアクセスを許可します。",
+      "description": "ターミナルからアシスタントにメモへのアクセスを許可します。",
       "installLabel": "インストール",
       "learnMore": "ドキュメントを読む",
       "copyDocsLink": "ドキュメントリンクをコピー",
