@@ -361,14 +361,14 @@ function createEnterpriseIdentityManager({
     }
   }
 
-  async function fetchAssertion(identity, provider) {
+  async function fetchAssertion(identity, provider, inferenceScope) {
     const url = `${identity.apiUrl}/api/workspaces/${encodeURIComponent(
       identity.workspaceId
     )}/enterprise-providers/${provider}/assertion`;
     const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: requestHeaders(identity, true),
-      body: "{}",
+      body: JSON.stringify(inferenceScope ? { inferenceScope } : {}),
     });
     assertIdentityCurrent(identity);
     if (!response.ok) {
@@ -434,7 +434,7 @@ function createEnterpriseIdentityManager({
       return {
         credentialProvider: () =>
           dedupeCredential(key, async () => {
-            const assertion = await fetchAssertion(identity, "bedrock");
+            const assertion = await fetchAssertion(identity, "bedrock", resolution.inferenceScope);
             const credentials = await createAwsWebIdentityProvider({
               roleArn: record.config.roleArn,
               roleSessionName: `openwhispr-${identity.workspaceId.slice(0, 8)}`,
@@ -469,7 +469,7 @@ function createEnterpriseIdentityManager({
     return {
       tokenProvider: () =>
         dedupeCredential(key, async () => {
-          const assertion = await fetchAssertion(identity, "azure");
+          const assertion = await fetchAssertion(identity, "azure", resolution.inferenceScope);
           const tokenUrl = `https://login.microsoftonline.com/${encodeURIComponent(
             record.config.tenantId
           )}/oauth2/v2.0/token`;
@@ -527,7 +527,11 @@ function createEnterpriseIdentityManager({
       config: resolution.record.config,
       version: resolution.record.version,
       generation: config.generation,
-      ...managedProviderFunctions(identity, { ...resolution, generation: config.generation }),
+      ...managedProviderFunctions(identity, {
+        ...resolution,
+        generation: config.generation,
+        inferenceScope: request.inferenceScope,
+      }),
     };
   }
 
