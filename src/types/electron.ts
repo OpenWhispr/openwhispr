@@ -177,6 +177,10 @@ export interface PendingAnalyticsEvent {
   counter_version: number;
 }
 
+export interface PendingAnalyticsClear {
+  cleared_through: string;
+}
+
 export interface AnalyticsDailyBucket {
   date: string;
   words: number;
@@ -1156,6 +1160,10 @@ declare global {
       hardDeleteAnalyticsEvents: (
         eventIds: string[]
       ) => Promise<{ success: boolean; deleted: number }>;
+      getPendingAnalyticsClear: () => Promise<PendingAnalyticsClear | null>;
+      completeAnalyticsClear: (
+        clearedThrough: string
+      ) => Promise<{ success: boolean; deleted: number }>;
       countUnclaimedAnalyticsEvents: () => Promise<number>;
       claimAnonymousAnalyticsEvents: () => Promise<{ success: boolean; claimed: number }>;
       clearTranscriptions: () => Promise<{ cleared: number; success: boolean }>;
@@ -2098,6 +2106,7 @@ declare global {
           useCase?: string;
           diarization?: boolean;
           localDate?: string;
+          analyticsOccurredAt?: string;
         }
       ) => Promise<
         {
@@ -2151,6 +2160,7 @@ declare global {
           clientTotalMs?: number;
           clientTranscriptionId?: string;
           localDate?: string;
+          analyticsOccurredAt?: string;
           analyticsWordCount?: number;
           analyticsCounterVersion?: number;
         }

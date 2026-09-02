@@ -190,6 +190,7 @@ const {
   abortableSleep,
   createTeardownGate,
   createUploadSlots,
+  withoutChunkAnalytics,
 } = require("./cloudChunkPolicy");
 
 // Chunk retries need their own connection pool: recovering a wedged chunk pool
@@ -430,7 +431,7 @@ async function chunkedCloudTranscribe({
               fs.readFileSync(chunkPaths[index]),
               path.basename(chunkPaths[index]),
               "audio/mpeg",
-              multipartFields
+              withoutChunkAnalytics(multipartFields)
             );
             const data = await postMultipart(url, body, boundary, policyHeaders, {
               signal: AbortSignal.any([jobSignal, timeoutSignal]),
@@ -1427,6 +1428,14 @@ class IPCHandlers {
 
     ipcMain.handle("analytics-hard-delete", async (_event, eventIds) => {
       return this.databaseManager.hardDeleteAnalyticsEvents(eventIds);
+    });
+
+    ipcMain.handle("analytics-get-pending-clear", async () => {
+      return this.databaseManager.getPendingAnalyticsClear();
+    });
+
+    ipcMain.handle("analytics-complete-clear", async (_event, clearedThrough) => {
+      return this.databaseManager.completeAnalyticsClear(clearedThrough);
     });
 
     ipcMain.handle("analytics-count-unclaimed", async () => {
@@ -5696,6 +5705,7 @@ class IPCHandlers {
           sessionId: this.sessionId,
           clientTranscriptionId,
           localDate: opts.localDate,
+          analyticsOccurredAt: opts.analyticsOccurredAt,
         };
 
         debugLogger.debug("Cloud transcribe request", { audioSize: audioData.length }, "cloud-api");
@@ -8893,6 +8903,7 @@ class IPCHandlers {
               sendLogs: opts.sendLogs,
               clientTranscriptionId: opts.clientTranscriptionId,
               localDate: opts.localDate,
+              analyticsOccurredAt: opts.analyticsOccurredAt,
               analyticsWordCount: opts.analyticsWordCount,
               analyticsCounterVersion: opts.analyticsCounterVersion,
             }),

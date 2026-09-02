@@ -543,7 +543,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const clearAllTranscriptions = useCallback(() => {
     showConfirmDialog({
       title: t("controlPanel.history.clearAllTitle"),
-      description: t("controlPanel.history.clearAllDescription"),
+      description: t(
+        isSignedIn
+          ? "controlPanel.history.clearAllDescription"
+          : "controlPanel.history.clearAllDescriptionDevice"
+      ),
       onConfirm: async () => {
         try {
           const result = await window.electronAPI.clearTranscriptions();
@@ -570,7 +574,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       },
       variant: "destructive",
     });
-  }, [showConfirmDialog, showAlertDialog, toast, t]);
+  }, [isSignedIn, showConfirmDialog, showAlertDialog, toast, t]);
 
   const showAudioInFolder = useCallback(
     async (id: number) => {

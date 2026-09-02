@@ -977,6 +977,15 @@ class DatabaseManager {
         );
         CREATE INDEX IF NOT EXISTS idx_analytics_events_account_date
           ON analytics_events(account_id, local_date);
+        CREATE TABLE IF NOT EXISTS analytics_clear_requests (
+          account_id TEXT PRIMARY KEY,
+          cleared_through TEXT NOT NULL,
+          synced INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS analytics_device_clear_state (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          cleared_through TEXT NOT NULL
+        );
       `);
       // Repair databases created before analytics deletion tombstones were
       // introduced. SQLite has no ADD COLUMN IF NOT EXISTS syntax.
@@ -1296,6 +1305,15 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (wordCount === 0) return { success: true, ignored: true };
+      // Clear History is device-wide, so an in-flight recording must stay
+      // cleared even if its account changes before this late write lands.
+      const cleared = this.db
+        .prepare(
+          `SELECT 1 FROM analytics_device_clear_state
+           WHERE id = 1 AND ? <= cleared_through`
+        )
+        .get(occurredAt);
+      if (cleared) return { success: true, ignored: true };
       this.db
         .prepare(
           `INSERT INTO analytics_events (
@@ -1457,6 +1475,43 @@ class DatabaseManager {
     }
   }
 
+  getPendingAnalyticsClear() {
+    if (!this.db) throw new Error("Database not initialized");
+    if (!this.activeAccountId) return null;
+    return (
+      this.db
+        .prepare(
+          `SELECT cleared_through FROM analytics_clear_requests
+           WHERE account_id = ? AND synced = 0`
+        )
+        .get(this.activeAccountId) ?? null
+    );
+  }
+
+  completeAnalyticsClear(clearedThrough) {
+    if (!this.db) throw new Error("Database not initialized");
+    if (!this.activeAccountId || typeof clearedThrough !== "string") {
+      return { success: false, deleted: 0 };
+    }
+
+    const complete = this.db.transaction(() => {
+      const request = this.db
+        .prepare(
+          `UPDATE analytics_clear_requests SET synced = 1
+           WHERE account_id = ? AND cleared_through = ? AND synced = 0`
+        )
+        .run(this.activeAccountId, clearedThrough);
+      if (request.changes === 0) return 0;
+      return this.db
+        .prepare(
+          `DELETE FROM analytics_events
+           WHERE account_id = ? AND occurred_at <= ?`
+        )
+        .run(this.activeAccountId, clearedThrough).changes;
+    });
+    return { success: true, deleted: complete() };
+  }
+
   countUnclaimedAnalyticsEvents() {
     if (!this.db) throw new Error("Database not initialized");
     return this.db
@@ -1510,21 +1565,47 @@ class DatabaseManager {
         "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL"
       );
       const hardDelete = this.db.prepare("DELETE FROM transcriptions WHERE cloud_id IS NULL");
-      // Anonymous counters have never left this device. Attributed counters
-      // may already be uploaded or in flight, so every one becomes a durable
-      // cloud-delete tombstone before it can be removed locally.
-      const hardDeleteAnonymousAnalytics = this.db.prepare(
-        "DELETE FROM analytics_events WHERE account_id IS NULL"
-      );
+      // Only the active account can be deleted with the current credentials.
+      // Keep other accounts' existing delete tombstones for their next login,
+      // but remove their live counters from this device without misattributing
+      // a cloud delete.
+      const hardDeleteLocalAnalytics = this.activeAccountId
+        ? this.db.prepare(
+            `DELETE FROM analytics_events
+             WHERE account_id IS NULL OR (account_id <> ? AND deleted_at IS NULL)`
+          )
+        : this.db.prepare(
+            "DELETE FROM analytics_events WHERE account_id IS NULL OR deleted_at IS NULL"
+          );
       const tombstoneAttributedAnalytics = this.db.prepare(
         `UPDATE analytics_events
-         SET deleted_at = datetime('now'), sync_status = 'pending'
-         WHERE account_id IS NOT NULL AND deleted_at IS NULL`
+         SET deleted_at = ?, sync_status = 'pending'
+         WHERE account_id = ? AND deleted_at IS NULL`
       );
+      const queueAnalyticsClear = this.db.prepare(
+        `INSERT INTO analytics_clear_requests (account_id, cleared_through, synced)
+         VALUES (?, ?, 0)
+         ON CONFLICT(account_id) DO UPDATE SET
+           cleared_through = MAX(analytics_clear_requests.cleared_through, excluded.cleared_through),
+           synced = 0`
+      );
+      const updateDeviceClearState = this.db.prepare(
+        `INSERT INTO analytics_device_clear_state (id, cleared_through)
+         VALUES (1, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           cleared_through = MAX(analytics_device_clear_state.cleared_through, excluded.cleared_through)`
+      );
+      const clearedThrough = new Date().toISOString();
       const clearAll = this.db.transaction(() => {
         const cleared = tombstone.run().changes + hardDelete.run().changes;
-        hardDeleteAnonymousAnalytics.run();
-        tombstoneAttributedAnalytics.run();
+        updateDeviceClearState.run(clearedThrough);
+        if (this.activeAccountId) {
+          hardDeleteLocalAnalytics.run(this.activeAccountId);
+          tombstoneAttributedAnalytics.run(clearedThrough, this.activeAccountId);
+          queueAnalyticsClear.run(this.activeAccountId, clearedThrough);
+        } else {
+          hardDeleteLocalAnalytics.run();
+        }
         return cleared;
       });
       return { cleared: clearAll(), success: true };
@@ -2849,6 +2930,7 @@ class DatabaseManager {
           .run(...deletedFolderIds);
       }
       this.db.prepare("DELETE FROM analytics_events WHERE account_id = ?").run(accountId);
+      this.db.prepare("DELETE FROM analytics_clear_requests WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM space_accounts WHERE account_id = ?").run(accountId);
     };
 

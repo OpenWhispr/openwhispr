@@ -103,11 +103,23 @@ async function pushAnalyticsDeletes(): Promise<void> {
   }
 }
 
+async function pushAnalyticsClear(): Promise<void> {
+  const pending = await window.electronAPI.getPendingAnalyticsClear();
+  if (!pending) return;
+
+  await cloudDelete("/api/analytics/events/delete", {
+    deleteAll: true,
+    clearedThrough: pending.cleared_through,
+  });
+  await window.electronAPI.completeAnalyticsClear(pending.cleared_through);
+}
+
 export async function syncPendingAnalytics({
   uploadAllowed = true,
 }: { uploadAllowed?: boolean } = {}): Promise<number> {
   // Deletes take precedence over uploads so a clear/retention action cannot
   // race with an older batch and recreate data the user asked us to erase.
+  await pushAnalyticsClear();
   await pushAnalyticsDeletes();
   if (!uploadAllowed) return 0;
 

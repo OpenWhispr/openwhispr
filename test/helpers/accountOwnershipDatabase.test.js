@@ -90,6 +90,10 @@ function createDatabaseManager() {
       event_id TEXT PRIMARY KEY,
       account_id TEXT
     );
+    CREATE TABLE analytics_clear_requests (
+      account_id TEXT PRIMARY KEY,
+      cleared_through TEXT NOT NULL
+    );
     INSERT INTO spaces (id, kind) VALUES (1, 'private'), (2, 'team'), (3, 'team');
     INSERT INTO space_accounts (space_id, account_id) VALUES
       (2, 'account-a'),
@@ -98,6 +102,9 @@ function createDatabaseManager() {
       ('event-a', 'account-a'),
       ('event-b', 'account-b'),
       ('event-guest', NULL);
+    INSERT INTO analytics_clear_requests (account_id, cleared_through) VALUES
+      ('account-a', '2026-08-30T10:00:00.000Z'),
+      ('account-b', '2026-08-30T10:00:00.000Z');
   `);
 
   const manager = Object.create(DatabaseManager.prototype);
@@ -263,6 +270,13 @@ test("deleting one account removes only its personal rows and dependent private 
       .all()
       .map((row) => row.event_id),
     ["event-b", "event-guest"]
+  );
+  assert.deepEqual(
+    sqlite
+      .prepare("SELECT account_id FROM analytics_clear_requests ORDER BY account_id")
+      .all()
+      .map((row) => row.account_id),
+    ["account-b"]
   );
 });
 

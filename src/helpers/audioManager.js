@@ -1491,6 +1491,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const durationSeconds = this.recordingStartTime
       ? (Date.now() - this.recordingStartTime) / 1000
       : null;
+    const analyticsOccurredAt = new Date(this.recordingStartTime || Date.now()).toISOString();
     this.recordingStartTime = null;
     const recordingCheck = evaluateFinishedRecording({
       blobSize: audioBlob.size,
@@ -1523,6 +1524,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       audioBlob,
       {
         durationSeconds,
+        analyticsOccurredAt,
         ...(salvagedRecording ? { salvagedRecording: true } : {}),
         ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
       },
@@ -1888,7 +1890,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       result = withSalvageWarning(result, metadata.salvagedRecording);
 
-      result = { ...result, ...this._takePendingResultExtras() };
+      result = {
+        ...result,
+        ...(metadata.analyticsOccurredAt
+          ? { analyticsOccurredAt: metadata.analyticsOccurredAt }
+          : {}),
+        ...this._takePendingResultExtras(),
+      };
       this.onTranscriptionComplete?.(result);
 
       if (result?.source === "openwhispr") {
@@ -3068,8 +3076,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const audioSizeBytes = audioBlob.size;
     const audioFormat = audioBlob.type;
     const opts = {};
+    const analyticsOccurredAt = new Date(metadata.analyticsOccurredAt || Date.now());
     if (language) opts.language = language;
-    if (analyticsSyncEnabled(settings)) opts.localDate = localDateKey();
+    if (analyticsSyncEnabled(settings)) {
+      opts.analyticsOccurredAt = analyticsOccurredAt.toISOString();
+      opts.localDate = localDateKey(analyticsOccurredAt);
+    }
     const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
     if (
       (settings.useCleanupModel && cleanupCloudMode === "openwhispr") ||
@@ -3231,6 +3243,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       wordsUsed: result.wordsUsed,
       wordsRemaining: result.wordsRemaining,
       clientTranscriptionId: result.clientTranscriptionId,
+      analyticsOccurredAt: analyticsOccurredAt.toISOString(),
       ...(result.warning ? { warning: result.warning } : {}),
     };
   }
@@ -3689,7 +3702,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async saveTranscription(text, rawText = null, { clientTranscriptionId } = {}) {
+  async saveTranscription(
+    text,
+    rawText = null,
+    { clientTranscriptionId, analyticsOccurredAt } = {}
+  ) {
     const { dataRetentionEnabled, audioRetentionDays } = getEffectiveRetentionPreferences();
     if (!dataRetentionEnabled) {
       logger.debug("Skipping transcription save — data retention disabled", {}, "audio");
@@ -3699,7 +3716,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     const eventId = clientTranscriptionId || crypto.randomUUID();
-    const occurredAt = new Date();
+    const occurredAt = analyticsOccurredAt ? new Date(analyticsOccurredAt) : new Date();
     const metadata = this.lastAudioMetadata || {};
     try {
       await window.electronAPI.recordAnalyticsEvent({
@@ -4581,6 +4598,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const durationSeconds = this.recordingStartTime
       ? (Date.now() - this.recordingStartTime) / 1000
       : null;
+    const analyticsOccurredAt = new Date(this.recordingStartTime || Date.now());
 
     // Enter processing synchronously, before any mic/provider await. This is
     // the authoritative guard that makes a second hotkey a no-op for the full
@@ -4897,7 +4915,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             target === "cloud"
               ? await this.processWithOpenWhisprCloud(
                   fallbackBlob,
-                  { durationSeconds },
+                  {
+                    durationSeconds,
+                    analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+                  },
                   wasCancelled
                 )
               : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds }, wasCancelled);
@@ -4926,6 +4947,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const clientTotalMs = Math.round(tBeforePaste - t0);
       const clientTranscriptionId =
         batchFallbackResult?.clientTranscriptionId || crypto.randomUUID();
+      const resultAnalyticsOccurredAt =
+        batchFallbackResult?.analyticsOccurredAt || analyticsOccurredAt.toISOString();
       this.lastAudioMetadata = {
         durationMs: durationSeconds
           ? Math.round(durationSeconds * 1000)
@@ -4940,6 +4963,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         rawText: batchFallbackResult?.rawText || rawStreamingText || finalText,
         source: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
         clientTranscriptionId,
+        analyticsOccurredAt: resultAnalyticsOccurredAt,
         ...this._takePendingResultExtras(),
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
@@ -4975,7 +4999,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   clientTranscriptionId,
                   ...(analyticsSyncEnabled()
                     ? {
-                        localDate: localDateKey(),
+                        localDate: localDateKey(analyticsOccurredAt),
+                        analyticsOccurredAt: analyticsOccurredAt.toISOString(),
                         analyticsWordCount: streamingSttWordCount,
                         analyticsCounterVersion: ANALYTICS_COUNTER_VERSION,
                       }

@@ -39,6 +39,7 @@ test("analytics deletion tombstones reach the cloud before pending uploads", asy
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
+        getPendingAnalyticsClear: async () => null,
         getPendingAnalyticsDeletes: async () =>
           deleteRead++ === 0 ? [{ event_id: "deleted-event" }] : [],
         hardDeleteAnalyticsEvents: async (eventIds) => {
@@ -83,6 +84,7 @@ test("a failed cloud deletion preserves its tombstone and blocks later uploads",
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
+        getPendingAnalyticsClear: async () => null,
         getPendingAnalyticsDeletes: async () => [{ event_id: "deleted-event" }],
         hardDeleteAnalyticsEvents: async () => {
           hardDeletes += 1;
@@ -114,6 +116,7 @@ test("a delete-only pass clears cloud tombstones without enabling uploads", asyn
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
+        getPendingAnalyticsClear: async () => null,
         getPendingAnalyticsDeletes: async () =>
           deleteRead++ === 0 ? [{ event_id: "deleted-event" }] : [],
         hardDeleteAnalyticsEvents: async (eventIds) => ({
@@ -139,6 +142,85 @@ test("a delete-only pass clears cloud tombstones without enabling uploads", asyn
     requests.map(({ method, path }) => [method, path]),
     [["DELETE", "/api/analytics/events/delete"]]
   );
+});
+
+test("an account clear reaches the cloud before newer analytics upload", async (t) => {
+  const clearedThrough = "2026-08-30T10:00:00.000Z";
+  const requests = [];
+  const localMutations = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => ({ cleared_through: clearedThrough }),
+        completeAnalyticsClear: async (value) => {
+          localMutations.push(["clear", value]);
+          return { success: true, deleted: 1 };
+        },
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async () => [EVENT],
+        markAnalyticsEventsSynced: async (eventIds) => {
+          localMutations.push(["sync", eventIds]);
+          return { success: true, updated: eventIds.length };
+        },
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return {
+            success: true,
+            data: request.method === "POST" ? { accepted: [EVENT.event_id] } : {},
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  assert.equal(await syncPendingAnalytics(), 1);
+  assert.deepEqual(
+    requests.map(({ method, body }) => [method, body]),
+    [
+      ["DELETE", { deleteAll: true, clearedThrough }],
+      ["POST", { events: [EVENT] }],
+    ]
+  );
+  assert.deepEqual(localMutations, [
+    ["clear", clearedThrough],
+    ["sync", [EVENT.event_id]],
+  ]);
+});
+
+test("a failed account clear remains pending and blocks every later analytics request", async (t) => {
+  let completed = 0;
+  let requestCount = 0;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => ({
+          cleared_through: "2026-08-30T10:00:00.000Z",
+        }),
+        completeAnalyticsClear: async () => {
+          completed += 1;
+          return { success: true, deleted: 0 };
+        },
+        getPendingAnalyticsDeletes: async () => {
+          throw new Error("per-event deletes must wait");
+        },
+        getPendingAnalyticsEvents: async () => {
+          throw new Error("analytics uploads must wait");
+        },
+        cloudApiRequest: async () => {
+          requestCount += 1;
+          return { success: false, status: 500, error: "clear failed" };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  await assert.rejects(syncPendingAnalytics(), /clear failed/);
+  assert.equal(requestCount, 1);
+  assert.equal(completed, 0);
 });
 
 test("account analytics accepts a complete cloud summary", async (t) => {

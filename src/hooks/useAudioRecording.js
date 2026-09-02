@@ -591,6 +591,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
           audioManagerRef.current.saveTranscription(result.text, result.rawText ?? result.text, {
             clientTranscriptionId: result.clientTranscriptionId,
+            analyticsOccurredAt: result.analyticsOccurredAt,
           });
 
           if (result.source === "openai" && getSettings().useLocalWhisper) {
