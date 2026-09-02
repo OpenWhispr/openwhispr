@@ -12,12 +12,23 @@ interface ChatMessagesProps {
 export function ChatMessages({ messages, emptyState, onOpenNote }: ChatMessagesProps) {
   // Follow the stream only while the user is at the bottom; scrolling up to
   // re-read must not be yanked back down by the next token.
-  const { scrollRef, handleScroll } = useStickToBottom<HTMLDivElement>(messages);
+  const {
+    scrollRef,
+    handleScroll,
+    handleWheel,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  } = useStickToBottom<HTMLDivElement>(messages);
 
   return (
     <div
       ref={scrollRef}
       onScroll={handleScroll}
+      onWheel={handleWheel}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       className={cn("flex-1 overflow-y-auto agent-chat-scroll", "px-3 py-2")}
     >
       {messages.length === 0 ? (

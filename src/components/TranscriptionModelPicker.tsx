@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Download, Trash2, Cloud, Lock, X, Zap, Check } from "lucide-react";
+import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "lucide-react";
 import { ProviderIcon } from "./ui/ProviderIcon";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
@@ -1305,55 +1305,79 @@ export default function TranscriptionModelPicker({
             !gpuDismissed &&
             !gpuDownloading &&
             gpuBackend && (
-              <div className="rounded-md border border-border bg-surface-1 p-2.5">
+              <div
+                className={`rounded-md border p-2.5 ${
+                  gpuDownloaded && gpuFailed
+                    ? "border-warning/40 bg-warning/5"
+                    : "border-border bg-surface-1"
+                }`}
+              >
                 {gpuDownloaded ? (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      {gpuFailed ? (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-warning" />
-                          <span className="text-xs font-medium text-foreground">
+                  gpuFailed ? (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-2">
+                        <CircleAlert size={15} className="mt-0.5 shrink-0 text-warning" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-foreground">
                             {t("gpu.activationFailed")}
-                          </span>
-                          <button
+                          </p>
+                          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                            {t("gpu.activationFailedDescription")}
+                          </p>
+                          <Button
                             onClick={handleGpuRetry}
-                            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+                            size="sm"
+                            className="mt-2 h-7 px-3 text-xs"
                           >
-                            {t("gpu.retry")}
-                          </button>
-                        </>
-                      ) : gpuActivating ? (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.activating")}
-                          </span>
-                        </>
-                      ) : gpuActive ? (
-                        <>
-                          <Check size={13} className="text-success" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.active")}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.ready")}
-                          </span>
-                        </>
-                      )}
+                            {t("gpu.retryActivation")}
+                          </Button>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={handleGpuDelete}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 shrink-0 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        {t("gpu.remove")}
+                      </Button>
                     </div>
-                    <Button
-                      onClick={handleGpuDelete}
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
-                    >
-                      {t("gpu.remove")}
-                    </Button>
-                  </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        {gpuActivating ? (
+                          <>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.activating")}
+                            </span>
+                          </>
+                        ) : gpuActive ? (
+                          <>
+                            <Check size={13} className="text-success" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.active")}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.ready")}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <Button
+                        onClick={handleGpuDelete}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        {t("gpu.remove")}
+                      </Button>
+                    </div>
+                  )
                 ) : (
                   <div className="flex items-start gap-2.5">
                     <Zap size={13} className="text-primary shrink-0 mt-0.5" />

@@ -23,6 +23,7 @@ import { canStartDictation } from "../utils/dictationReadiness";
 import { waitForVisualFrames } from "../utils/visualFrame";
 import { resolveLifecycleInputKind } from "../helpers/dictationRouting";
 import { createAssistantResponseDelivery } from "../helpers/assistantResponseDelivery";
+import { recordCleanupFailure } from "../stores/cleanupFailureStore";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -584,6 +585,7 @@ export const useAudioRecording = (toast, options = {}) => {
             // visible somewhere.
             if (pasteSucceeded) {
               window.electronAPI?.hideDictationPreview?.();
+              if (result.cleanupFailure) recordCleanupFailure(result.cleanupFailure);
             }
           } else if (keepTranscriptionInClipboard && !result.assistantConversation) {
             await navigator.clipboard.writeText(result.text);
