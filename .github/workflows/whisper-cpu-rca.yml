@@ -11,12 +11,24 @@ on:
         options:
           - "0.0.8"
           - "0.0.6"
+  pull_request:
+    types: [labeled]
+
+env:
+  SIDECAR_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.sidecar_version || github.event.label.name == 'des-165-run-0.0.6' && '0.0.6' || '0.0.8' }}
 
 permissions:
   contents: read
 
 jobs:
   ubuntu-cpu:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'diagnostic/des-165-whisper-cpu-rca' &&
+      (github.event.label.name == 'des-165-run-0.0.8' ||
+      github.event.label.name == 'des-165-run-0.0.6'))
     name: Ubuntu 22.04 x64 CPU
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -33,14 +45,14 @@ jobs:
       - name: Run controlled benchmark
         run: >-
           node scripts/benchmark-whisper-cpu.mjs
-          --sidecar-version "${{ inputs.sidecar_version }}"
+          --sidecar-version "$SIDECAR_VERSION"
           --output-dir artifacts/whisper-cpu-rca
 
       - name: Upload compact diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: whisper-cpu-rca-${{ inputs.sidecar_version }}-${{ github.run_id }}
+          name: whisper-cpu-rca-${{ env.SIDECAR_VERSION }}-${{ github.run_id }}
           path: |
             artifacts/whisper-cpu-rca/report.json
             artifacts/whisper-cpu-rca/report.md
