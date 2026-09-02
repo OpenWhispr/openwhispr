@@ -88,6 +88,7 @@ import {
   DICTIONARY_ECHO_CODE,
   dictionaryEchoError,
   matchesDictionaryPrompt,
+  payloadSendsDictionaryBias,
 } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
@@ -3346,19 +3347,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw new Error(`${proxySpec.displayName} transcription is unavailable in this window`);
         }
         const apiCallStart = performance.now();
-        const result = await call(
-          proxySpec.buildPayload({
-            audioBuffer: await optimizedAudio.arrayBuffer(),
-            model,
-            language,
-            apiSettings,
-            dictionaryPrompt: this.getWhisperPrompt(apiSettings),
-            keyterms: this.getKeyterms()
-              .map((t) => t.trim().slice(0, 50))
-              .filter(Boolean)
-              .slice(0, 100),
-          })
-        );
+        const proxyPayload = proxySpec.buildPayload({
+          audioBuffer: await optimizedAudio.arrayBuffer(),
+          model,
+          language,
+          apiSettings,
+          dictionaryPrompt: this.getWhisperPrompt(apiSettings),
+          keyterms: this.getKeyterms()
+            .map((t) => t.trim().slice(0, 50))
+            .filter(Boolean)
+            .slice(0, 100),
+        });
+        const result = await call(proxyPayload);
         if (result?.error) {
           const err = new Error(result.error);
           if (result.code) err.code = result.code;
@@ -3369,7 +3369,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (!proxyText?.trim()) {
           throw new Error(`No text transcribed - ${proxySpec.displayName} response was empty`);
         }
-        if (this.isDictionaryEcho(proxyText)) {
+        if (payloadSendsDictionaryBias(proxyPayload) && this.isDictionaryEcho(proxyText)) {
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
