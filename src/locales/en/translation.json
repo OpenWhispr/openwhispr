@@ -3108,6 +3108,7 @@
       "transcriptionComplete": "Transcription complete",
       "partialWarning": "Part of the audio couldn't be transcribed.",
       "partialWarningCount": "{{failed}} of {{total}} audio sections couldn't be transcribed.",
+      "diarizationWarning": "Speaker identification couldn't be applied. The transcript was saved without speaker labels.",
       "chunkLossExceeded": "Too much of the audio was lost to a network problem. Check your connection and try again.",
       "openNote": "Open Note",
       "uploadAnother": "Upload Another",

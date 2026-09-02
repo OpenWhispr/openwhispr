@@ -3108,6 +3108,7 @@
       "transcriptionComplete": "Transcription terminée",
       "partialWarning": "Une partie de l'audio n'a pas pu être transcrite.",
       "partialWarningCount": "{{failed}} sections audio sur {{total}} n'ont pas pu être transcrites.",
+      "diarizationWarning": "L’identification des intervenants n’a pas pu être appliquée. La transcription a été enregistrée sans étiquettes d’intervenant.",
       "chunkLossExceeded": "Une trop grande partie de l'audio a été perdue à cause d'un problème réseau. Vérifiez votre connexion et réessayez.",
       "openNote": "Ouvrir la note",
       "uploadAnother": "Téléverser un autre fichier",

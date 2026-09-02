@@ -2897,6 +2897,7 @@
       "transcriptionComplete": "Trascrizione completata",
       "partialWarning": "Non è stato possibile trascrivere una parte dell'audio.",
       "partialWarningCount": "Non è stato possibile trascrivere {{failed}} sezioni audio su {{total}}.",
+      "diarizationWarning": "Non è stato possibile applicare l'identificazione dei parlanti. La trascrizione è stata salvata senza etichette dei parlanti.",
       "chunkLossExceeded": "Troppo audio è andato perso a causa di un problema di rete. Controlla la connessione e riprova.",
       "openNote": "Apri nota",
       "uploadAnother": "Carica un altro",

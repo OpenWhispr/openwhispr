@@ -9,6 +9,8 @@ export interface FileTranscriptionResult {
   error?: string;
   code?: string;
   diarized?: boolean;
+  // The transcript succeeded, but requested speaker labels could not be applied.
+  diarizationWarning?: boolean;
   warning?: string;
   // Set alongside `warning` by the chunked cloud path: how much audio was lost.
   failedChunks?: number;
@@ -203,8 +205,10 @@ export async function transcribeFileWithSpeakers(
   const measuredDuration = durationSeconds || (diar?.success && diar.durationSeconds) || null;
   const result = { ...transcribed, durationSeconds: measuredDuration };
 
-  if (!result.success || !result.text || result.diarized) return result;
-  if (!diar?.success || !diar.segments?.length) return result;
+  if (!result.success || !result.text || !diarization.enabled || result.diarized) return result;
+  if (!diar?.success || !diar.segments?.length) {
+    return { ...result, diarizationWarning: true };
+  }
 
   try {
     const merged = await window.electronAPI.mergeSpeakerText?.(
@@ -216,5 +220,5 @@ export async function transcribeFileWithSpeakers(
   } catch {
     // Merge failure falls back to the plain transcript.
   }
-  return result;
+  return { ...result, diarizationWarning: true };
 }

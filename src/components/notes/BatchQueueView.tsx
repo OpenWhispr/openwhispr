@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Check, X, Loader2, Clock, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
@@ -28,6 +29,30 @@ function StatusIcon({ status }: { status: QueueItem["status"] }) {
     default:
       return <Loader2 size={12} className="text-primary/60 animate-spin" />;
   }
+}
+
+interface BatchWarningIndicatorProps {
+  transcriptionWarning: boolean;
+  diarizationWarning: boolean;
+  t: (key: string) => string;
+}
+
+export function BatchWarningIndicator({
+  transcriptionWarning,
+  diarizationWarning,
+  t,
+}: BatchWarningIndicatorProps): JSX.Element | null {
+  const messages: string[] = [];
+  if (transcriptionWarning) messages.push(t("notes.upload.partialWarning"));
+  if (diarizationWarning) messages.push(t("notes.upload.diarizationWarning"));
+  if (messages.length === 0) return null;
+
+  const label = messages.join(" ");
+  return (
+    <span className="flex shrink-0" role="img" tabIndex={0} title={label} aria-label={label}>
+      <AlertTriangle size={11} className="text-amber-600 dark:text-amber-300" />
+    </span>
+  );
 }
 
 export default function BatchQueueView({
@@ -110,10 +135,12 @@ export default function BatchQueueView({
               </div>
             )}
 
-            {item.status === "done" && item.warning && (
-              <span className="flex shrink-0" title={t("notes.upload.partialWarning")}>
-                <AlertTriangle size={11} className="text-amber-500/60" />
-              </span>
+            {item.status === "done" && (
+              <BatchWarningIndicator
+                transcriptionWarning={!!item.warning}
+                diarizationWarning={!!item.diarizationWarning}
+                t={t}
+              />
             )}
 
             {item.status === "done" && item.noteId && onOpenNote && (

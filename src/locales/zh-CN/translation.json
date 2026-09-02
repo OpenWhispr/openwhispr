@@ -2897,6 +2897,7 @@
       "transcriptionComplete": "转录完成",
       "partialWarning": "部分音频内容无法转录。",
       "partialWarningCount": "{{total}}个音频片段中有{{failed}}个无法转写。",
+      "diarizationWarning": "无法应用说话人识别。转写已保存，但不包含说话人标签。",
       "chunkLossExceeded": "由于网络问题丢失了过多音频。请检查网络连接后重试。",
       "openNote": "打开笔记",
       "uploadAnother": "上传另一个",

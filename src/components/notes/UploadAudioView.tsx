@@ -70,6 +70,7 @@ import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
 import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
+import { UploadDiarizationWarning, UploadModelSettingsButton } from "./UploadAudioFeedback";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
@@ -148,6 +149,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const [partialWarning, setPartialWarning] = useState<{ failed: number; total: number } | null>(
     null
   );
+  const [diarizationWarning, setDiarizationWarning] = useState(false);
   const [noteId, setNoteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -586,6 +588,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setFile(null);
     setResult(null);
     setPartialWarning(null);
+    setDiarizationWarning(false);
     setNoteId(null);
     setError(null);
     setProgress(0);
@@ -622,6 +625,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setError(null);
     setProgress(0);
     setChunkProgress(null);
+    setDiarizationWarning(false);
 
     const useChunkProgress = isOpenWhisprCloud && isLargeFile;
 
@@ -678,6 +682,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             ? { failed: res.failedChunks, total: res.totalChunks }
             : null
         );
+        setDiarizationWarning(!!res.diarizationWarning);
 
         let title: string;
         if (currentFile.fromUrl) {
@@ -935,6 +940,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 handleBrowse={handleBrowse}
                 isDragOver={isDragOver}
                 setIsDragOver={setIsDragOver}
+                onOpenSettings={onOpenSettings}
               />
 
               <div className="flex items-center gap-3 my-3">
@@ -1115,6 +1121,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               onUpgrade={() => usage?.openCheckout()}
               onCreateAccount={handleCreateAccount}
               onSwitchToCloud={switchToCloud}
+              onOpenSettings={onOpenSettings}
             />
           )}
 
@@ -1194,6 +1201,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               t={t}
               result={result}
               partialWarning={partialWarning}
+              diarizationWarning={diarizationWarning}
               folders={folders}
               selectedFolderId={selectedFolderId}
               handleFolderChange={handleFolderChange}
@@ -1413,6 +1421,7 @@ interface IdleViewProps {
   handleBrowse: () => void;
   isDragOver: boolean;
   setIsDragOver: (v: boolean) => void;
+  onOpenSettings?: (section: string) => void;
 }
 
 function IdleView({
@@ -1422,6 +1431,7 @@ function IdleView({
   handleBrowse,
   isDragOver,
   setIsDragOver,
+  onOpenSettings,
 }: IdleViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1453,9 +1463,12 @@ function IdleView({
           />
         </div>
         <h2 className="text-xs font-semibold text-foreground mb-1">{t("notes.upload.title")}</h2>
-        <p className="text-xs text-foreground/25">
-          {t("notes.upload.using", { model: getActiveModelLabel() })}
-        </p>
+        <UploadModelSettingsButton
+          label={t("notes.upload.using", { model: getActiveModelLabel() })}
+          ariaLabel={t("notes.upload.noProviderAction")}
+          onOpenSettings={onOpenSettings}
+          className="text-xs text-foreground/70 underline underline-offset-2 decoration-foreground/30 hover:text-foreground hover:decoration-foreground/50"
+        />
       </div>
 
       <input
@@ -1544,6 +1557,7 @@ interface SelectedViewProps {
   onUpgrade: () => void;
   onCreateAccount: () => void;
   onSwitchToCloud: () => void;
+  onOpenSettings?: (section: string) => void;
 }
 
 function SelectedView({
@@ -1564,6 +1578,7 @@ function SelectedView({
   onUpgrade,
   onCreateAccount,
   onSwitchToCloud,
+  onOpenSettings,
 }: SelectedViewProps) {
   const canTranscribe = !fileTooLarge && !requiresUpgrade && !byokTooLarge;
 
@@ -1577,7 +1592,12 @@ function SelectedView({
           <div className="min-w-0 flex-1">
             <p className="text-xs text-foreground/70 truncate font-medium">{file.name}</p>
             {file.size && <p className="text-xs text-foreground/25 mt-0.5">{file.size}</p>}
-            <p className="text-xs text-foreground/20 mt-0.5">{getActiveModelLabel()}</p>
+            <UploadModelSettingsButton
+              label={getActiveModelLabel()}
+              ariaLabel={t("notes.upload.noProviderAction")}
+              onOpenSettings={onOpenSettings}
+              className="block max-w-full truncate text-left text-xs text-foreground/70 mt-0.5 underline underline-offset-2 decoration-foreground/30 hover:text-foreground hover:decoration-foreground/50"
+            />
           </div>
           <button
             onClick={reset}
@@ -1830,6 +1850,7 @@ interface CompleteViewProps {
   t: (key: string, options?: Record<string, unknown>) => string;
   result: string;
   partialWarning: { failed: number; total: number } | null;
+  diarizationWarning: boolean;
   folders: FolderItem[];
   selectedFolderId: string;
   handleFolderChange: (val: string) => void;
@@ -1842,6 +1863,7 @@ function CompleteView({
   t,
   result,
   partialWarning,
+  diarizationWarning,
   folders,
   selectedFolderId,
   handleFolderChange,
@@ -1903,6 +1925,10 @@ function CompleteView({
             total: partialWarning.total,
           })}
         </p>
+      )}
+
+      {diarizationWarning && (
+        <UploadDiarizationWarning message={t("notes.upload.diarizationWarning")} />
       )}
 
       {folders.length > 0 && (

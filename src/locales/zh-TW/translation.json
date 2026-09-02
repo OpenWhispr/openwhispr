@@ -2897,6 +2897,7 @@
       "transcriptionComplete": "轉錄完成",
       "partialWarning": "部分音訊內容無法轉錄。",
       "partialWarningCount": "{{total}}個音訊片段中有{{failed}}個無法轉錄。",
+      "diarizationWarning": "無法套用說話者識別。轉錄已儲存，但不包含說話者標籤。",
       "chunkLossExceeded": "由於網路問題遺失了過多音訊。請檢查網路連線後重試。",
       "openNote": "開啟筆記",
       "uploadAnother": "上傳另一個",
