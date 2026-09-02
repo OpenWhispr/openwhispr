@@ -44,6 +44,7 @@ export interface CommandSearchProps {
   onOpenChange: (open: boolean) => void;
   mode?: "all" | "conversations";
   transcriptions?: TranscriptionItem[];
+  includeDiscarded?: boolean;
   onNoteSelect?: (noteId: number, folderId: number | null, spaceId?: number) => void;
   onContainerSelect?: (spaceId: number, folderId: number | null) => void;
   onTranscriptSelect?: (transcriptId: number) => void;
@@ -70,6 +71,7 @@ export default function CommandSearch({
   onOpenChange,
   mode = "all",
   transcriptions = [],
+  includeDiscarded = false,
   onNoteSelect,
   onContainerSelect,
   onTranscriptSelect,
@@ -82,6 +84,7 @@ export default function CommandSearch({
   const [spaces, setSpaces] = useState<SpaceItem[]>([]);
   const [scopeSpaceId, setScopeSpaceId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ConversationResult[]>([]);
+  const [searchedTranscripts, setSearchedTranscripts] = useState<TranscriptionItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -91,6 +94,7 @@ export default function CommandSearch({
   const [prevOpen, setPrevOpen] = useState(open);
   const [prevNotes, setPrevNotes] = useState(notes);
   const [prevQuery, setPrevQuery] = useState(query);
+  const [prevSearchedTranscripts, setPrevSearchedTranscripts] = useState(searchedTranscripts);
 
   useEffect(() => {
     if (isConversationsMode) return;
@@ -128,9 +132,12 @@ export default function CommandSearch({
           );
       });
     } else {
+      const version = searchVersionRef.current;
       window.electronAPI
         .getNotes()
-        .then(setNotes)
+        .then((results) => {
+          if (searchVersionRef.current === version) setNotes(results);
+        })
         .catch(() => {});
     }
   }, [open, isConversationsMode]);
@@ -176,28 +183,43 @@ export default function CommandSearch({
       if (!query.trim()) {
         window.electronAPI
           .getNotes()
-          .then(setNotes)
+          .then((results) => {
+            if (searchVersionRef.current === version) setNotes(results);
+          })
           .catch(() => {});
+        setSearchedTranscripts([]);
         return;
       }
+      setSearchedTranscripts([]);
       searchTimerRef.current = setTimeout(async () => {
-        try {
-          const results = await window.electronAPI.searchNotes(query, undefined, scopeSpaceId);
-          setNotes(results);
-        } catch {
-          /* keep current */
-        }
+        void window.electronAPI
+          .searchNotes(query, undefined, scopeSpaceId)
+          .then((results) => {
+            if (searchVersionRef.current === version) setNotes(results);
+          })
+          .catch(() => {});
+        void window.electronAPI
+          .searchTranscriptions(query, 20, { includeDiscarded })
+          .then((transcripts) => {
+            if (searchVersionRef.current === version) setSearchedTranscripts(transcripts);
+          })
+          .catch(() => {});
       }, 200);
     }
 
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [query, isConversationsMode, scopeSpaceId]);
+  }, [query, isConversationsMode, scopeSpaceId, includeDiscarded]);
 
-  if (notes !== prevNotes || query !== prevQuery) {
+  if (
+    notes !== prevNotes ||
+    query !== prevQuery ||
+    searchedTranscripts !== prevSearchedTranscripts
+  ) {
     setPrevNotes(notes);
     setPrevQuery(query);
+    setPrevSearchedTranscripts(searchedTranscripts);
     setSelectedIndex(0);
   }
 
@@ -261,12 +283,12 @@ export default function CommandSearch({
     return targets.slice(0, 5);
   }, [query, spaces, folders, spaceMap, spaceLabel, isConversationsMode]);
 
+  // Empty query shows the newest transcripts already in memory; a typed query
+  // swaps in DB results spanning the full history.
   const filteredTranscripts = useMemo(() => {
-    const slice = query.trim()
-      ? transcriptions.filter((tr) => tr.text.toLowerCase().includes(query.toLowerCase()))
-      : transcriptions;
-    return slice.slice(0, 5);
-  }, [transcriptions, query]);
+    if (!query.trim()) return transcriptions.slice(0, 20);
+    return searchedTranscripts;
+  }, [transcriptions, query, searchedTranscripts]);
 
   const flatItems = useMemo<FlatItem[]>(() => {
     if (isConversationsMode) {

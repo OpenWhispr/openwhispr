@@ -152,6 +152,17 @@ export interface TranscriptionItem {
   deleted_at: string | null;
 }
 
+export interface TranscriptionCursor {
+  timestamp: string;
+  id: number;
+}
+
+export interface TranscriptionPage {
+  items: TranscriptionItem[];
+  hasMore: boolean;
+  nextCursor: TranscriptionCursor | null;
+}
+
 export interface NoteItem {
   id: number;
   title: string;
@@ -1097,7 +1108,13 @@ declare global {
           clientTranscriptionId?: string;
         }
       ) => Promise<{ id: number; success: boolean; transcription?: TranscriptionItem }>;
-      getTranscriptions: (
+      getTranscriptionsPage: (params?: {
+        limit?: number;
+        cursor?: TranscriptionCursor | null;
+        includeDiscarded?: boolean;
+      }) => Promise<TranscriptionPage>;
+      searchTranscriptions: (
+        query: string,
         limit?: number,
         options?: { includeDiscarded?: boolean }
       ) => Promise<TranscriptionItem[]>;

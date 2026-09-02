@@ -622,6 +622,7 @@
     "history": {
       "couldNotLoadTitle": "Couldn't load your history",
       "couldNotLoadDescription": "Something went wrong loading your transcriptions. Try closing and reopening the app.",
+      "loadingMore": "Loading more transcripts…",
       "copiedTitle": "Copied!",
       "copiedDescription": "Text copied to your clipboard",
       "couldNotCopyTitle": "Couldn't copy",

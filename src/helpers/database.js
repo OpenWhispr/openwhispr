@@ -11,6 +11,13 @@ const { app } = require("electron");
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
 // trigger can't 400 the whole sync batch.
 const MAX_SNIPPET_TRIGGER_LENGTH = 100;
+const MAX_TRANSCRIPTION_QUERY_LIMIT = 100;
+
+function normalizeTranscriptionQueryLimit(limit, fallback) {
+  const value = Number(limit);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(Math.floor(value), 1), MAX_TRANSCRIPTION_QUERY_LIMIT);
+}
 
 // Every local field a note create (POST) carries; the acknowledgement compares
 // these atomically against the pushed snapshot. Must mirror NotePushSnapshot
@@ -267,6 +274,43 @@ class DatabaseManager {
         this.db.exec("ALTER TABLE transcriptions ADD COLUMN route_kind TEXT");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
+      }
+
+      const transcriptionFtsExists = this.db
+        .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'transcriptions_fts'")
+        .get();
+      const createTranscriptionFtsTriggers = () =>
+        this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS transcriptions_fts_insert AFTER INSERT ON transcriptions BEGIN
+          INSERT INTO transcriptions_fts(rowid, text) VALUES (new.id, new.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS transcriptions_fts_update AFTER UPDATE OF text ON transcriptions BEGIN
+          INSERT INTO transcriptions_fts(transcriptions_fts, rowid, text)
+          VALUES ('delete', old.id, old.text);
+          INSERT INTO transcriptions_fts(rowid, text) VALUES (new.id, new.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS transcriptions_fts_delete AFTER DELETE ON transcriptions BEGIN
+          INSERT INTO transcriptions_fts(transcriptions_fts, rowid, text)
+          VALUES ('delete', old.id, old.text);
+        END;
+      `);
+
+      if (!transcriptionFtsExists) {
+        // Triggers only index later writes. FTS5's rebuild command indexes
+        // transcripts that existed before this feature was introduced.
+        this.db.transaction(() => {
+          this.db.exec(`
+            CREATE VIRTUAL TABLE transcriptions_fts USING fts5(
+              text,
+              content='transcriptions',
+              content_rowid='id'
+            );
+          `);
+          createTranscriptionFtsTriggers();
+          this.db.exec("INSERT INTO transcriptions_fts(transcriptions_fts) VALUES ('rebuild')");
+        })();
+      } else {
+        createTranscriptionFtsTriggers();
       }
 
       this.db.exec(`
@@ -957,6 +1001,11 @@ class DatabaseManager {
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_transcriptions_client_id ON transcriptions(client_transcription_id)"
       );
+      // Covers the keyset pagination of getTranscriptionsPage: (timestamp, id)
+      // is the cursor because timestamp only has 1-second resolution.
+      this.db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_transcriptions_timestamp_id ON transcriptions(timestamp DESC, id DESC) WHERE deleted_at IS NULL"
+      );
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_client_id ON custom_dictionary(client_dict_id)"
       );
@@ -1268,6 +1317,64 @@ class DatabaseManager {
       return transcriptions;
     } catch (error) {
       debugLogger.error("Error getting transcriptions", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  /** Keyset-paginated list. The cursor is the (timestamp, id) of the last
+   *  loaded row; fetches limit + 1 rows to derive hasMore. */
+  getTranscriptionsPage({ limit = 50, cursor = null, includeDiscarded = false } = {}) {
+    try {
+      if (!this.db) {
+        throw new Error("Database not initialized");
+      }
+      const pageLimit = normalizeTranscriptionQueryLimit(limit, 50);
+      const validCursor =
+        cursor &&
+        typeof cursor.timestamp === "string" &&
+        Number.isSafeInteger(cursor.id) &&
+        cursor.id > 0;
+      const statusFilter = includeDiscarded === true ? "" : " AND status != 'discarded'";
+      const cursorFilter = validCursor ? " AND (timestamp, id) < (?, ?)" : "";
+      const params = validCursor ? [cursor.timestamp, cursor.id] : [];
+      const rows = this.db
+        .prepare(
+          `SELECT * FROM transcriptions WHERE deleted_at IS NULL${statusFilter}${cursorFilter} ORDER BY timestamp DESC, id DESC LIMIT ?`
+        )
+        .all(...params, pageLimit + 1);
+      const hasMore = rows.length > pageLimit;
+      const items = hasMore ? rows.slice(0, pageLimit) : rows;
+      const last = items[items.length - 1];
+      return {
+        items,
+        hasMore,
+        nextCursor: hasMore ? { timestamp: last.timestamp, id: last.id } : null,
+      };
+    } catch (error) {
+      debugLogger.error("Error getting transcription page", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  searchTranscriptions(query, limit = 20, { includeDiscarded = false } = {}) {
+    try {
+      if (!this.db) {
+        throw new Error("Database not initialized");
+      }
+      const ftsQuery = buildNoteSearchQuery(query);
+      if (!ftsQuery) return [];
+      const searchLimit = normalizeTranscriptionQueryLimit(limit, 20);
+      const statusFilter = includeDiscarded === true ? "" : " AND t.status != 'discarded'";
+      const orderBy = "ORDER BY t.timestamp DESC, t.id DESC LIMIT ?";
+      return this.db
+        .prepare(
+          `SELECT t.* FROM transcriptions t
+           JOIN transcriptions_fts ON transcriptions_fts.rowid = t.id
+           WHERE transcriptions_fts MATCH ? AND t.deleted_at IS NULL${statusFilter} ${orderBy}`
+        )
+        .all(ftsQuery, searchLimit);
+    } catch (error) {
+      debugLogger.error("Error searching transcriptions", { error: error.message }, "database");
       throw error;
     }
   }

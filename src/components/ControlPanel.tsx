@@ -29,7 +29,10 @@ import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
 import {
   useTranscriptions,
   useShowDiscarded,
+  useHasMoreTranscriptions,
+  useIsLoadingMoreTranscriptions,
   initializeTranscriptions,
+  loadMoreTranscriptions,
   removeTranscription as removeFromStore,
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
@@ -115,6 +118,9 @@ interface ControlPanelProps {
 export default function ControlPanel({ initialSettingsSection }: ControlPanelProps = {}) {
   const { t } = useTranslation();
   const history = useTranscriptions();
+  const hasMoreHistory = useHasMoreTranscriptions();
+  const isLoadingMoreHistory = useIsLoadingMoreTranscriptions();
+  const historyScrollRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(!!initialSettingsSection);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
@@ -941,6 +947,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             open={showSearch}
             onOpenChange={setShowSearch}
             transcriptions={history}
+            includeDiscarded={showDiscarded}
             onNoteSelect={(id, folderId, spaceId) => {
               if (folderId != null) setActiveFolderId(folderId);
               else if (spaceId != null) navigateToContainer(spaceId, null);
@@ -1045,7 +1052,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               </div>
             )}
           </div>
-          <div className="flex-1 overflow-y-auto pt-1">
+          <div ref={historyScrollRef} className="flex-1 overflow-y-auto pt-1">
             {updateRequiredByOrg && (
               <div className="max-w-3xl mx-auto w-full mb-3">
                 <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
@@ -1166,6 +1173,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 onRetryTranscription={retryTranscription}
                 showDiscarded={showDiscarded}
                 onToggleDiscarded={toggleShowDiscarded}
+                hasMore={hasMoreHistory}
+                isLoadingMore={isLoadingMoreHistory}
+                onLoadMore={loadMoreTranscriptions}
+                scrollContainerRef={historyScrollRef}
                 onOpenSettings={(section) => {
                   setSettingsSection(section);
                   setShowSettings(true);
