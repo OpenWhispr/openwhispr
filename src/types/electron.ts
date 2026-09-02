@@ -936,7 +936,7 @@ declare global {
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
         }
-      ) => Promise<void>;
+      ) => Promise<{ success: true; pasted: boolean }>;
       captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
@@ -1625,7 +1625,24 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string; retryable?: boolean }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
+        action?: string;
+        actionKey?: string;
+        copyCommand?: string;
+        retryable?: boolean;
+        technicalDetails?: {
+          status?: number;
+          exceptionType?: string;
+          requestId?: string;
+          underlyingError?: string;
+        };
+      }>;
+      cancelEnterpriseReasoning?: () => void;
       enterpriseStreamStart?: (payload: {
         streamId: string;
         provider: string;
@@ -1897,7 +1914,21 @@ declare global {
       testEnterpriseConnection?: (
         provider: string,
         config: Record<string, unknown>
-      ) => Promise<{ success: boolean; error?: string; action?: string; copyCommand?: string }>;
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
+        action?: string;
+        actionKey?: string;
+        copyCommand?: string;
+        technicalDetails?: {
+          status?: number;
+          exceptionType?: string;
+          requestId?: string;
+          underlyingError?: string;
+        };
+      }>;
       getManagedEnterpriseConfig?: (
         accountId: string,
         workspaceId: string,
