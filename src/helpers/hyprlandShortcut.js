@@ -38,12 +38,24 @@ const ELECTRON_TO_HYPRLAND_KEY = {
   backquote: "grave",
   "`": "grave",
   " ": "space",
+  // Punctuation must be XKB names; a literal "," is the bind delimiter.
+  ",": "comma",
+  ".": "period",
+  "/": "slash",
+  "-": "minus",
+  "=": "equal",
+  ";": "semicolon",
+  "'": "apostrophe",
+  "[": "bracketleft",
+  "]": "bracketright",
+  "\\": "backslash",
+  plus: "plus",
 };
 
 // Valid Electron-format hotkey: optional modifiers joined by +, ending with a key
 // Supports: standalone keys (F4, Space), modifier+key combos, and modifier-only combos (Control+Super)
 const VALID_HOTKEY_PATTERN =
-  /^((CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd)(\+(CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd))*(\+)?)?(F([1-9]|1[0-9]|2[0-4])|[A-Za-z0-9]|Space|Escape|Tab|Backspace|Delete|Insert|Home|End|PageUp|PageDown|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Enter|PrintScreen|ScrollLock|Pause|Backquote|`)?$/i;
+  /^((CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd)(\+(CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd))*(\+)?)?(F([1-9]|1[0-9]|2[0-4])|[A-Za-z0-9]|Space|Escape|Tab|Backspace|Delete|Insert|Home|End|PageUp|PageDown|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Enter|PrintScreen|ScrollLock|Pause|Backquote|`|,|\.|\/|-|=|;|'|\[|\]|\\|Plus)?$/i;
 
 const BINDS_FILENAMES = {
   conf: "openwhispr-binds.conf",

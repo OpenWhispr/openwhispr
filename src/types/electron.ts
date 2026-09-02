@@ -5,7 +5,7 @@ import type { OrgPolicy } from "./policy";
 import type { ManagedEnterpriseConfig } from "./enterpriseIdentity";
 import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./calendar";
 
-export type LocalTranscriptionProvider = "whisper" | "nvidia";
+export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 
 export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcribed";
 
@@ -936,7 +936,7 @@ declare global {
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
         }
-      ) => Promise<void>;
+      ) => Promise<{ success: true; pasted: boolean }>;
       captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
@@ -1139,6 +1139,7 @@ declare global {
           cortiEnvironment?: string;
           cortiTenant?: string;
           parakeetModel: string;
+          cohereModel: string;
           whisperModel: string;
           preferredLanguage?: string;
           transcriptionMode?: InferenceMode;
@@ -1383,7 +1384,7 @@ declare global {
       transcribeAudioFile: (
         filePath: string,
         options?: {
-          provider?: "whisper" | "nvidia";
+          provider?: LocalTranscriptionProvider;
           model?: string;
           language?: string;
           requestId?: string;
@@ -1448,6 +1449,7 @@ declare global {
         useLocalWhisper: boolean;
         localTranscriptionProvider: LocalTranscriptionProvider;
         model?: string;
+        language?: string;
         useCleanupModel: boolean;
         cleanupMode: InferenceMode;
         cleanupModel?: string;
@@ -1542,7 +1544,7 @@ declare global {
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
         audioBlob: ArrayBuffer,
-        options?: { model?: string }
+        options?: { model?: string; language?: string }
       ) => Promise<ParakeetTranscriptionResult>;
       checkParakeetInstallation: () => Promise<ParakeetCheckResult>;
       downloadParakeetModel: (modelName: string) => Promise<ParakeetModelResult>;
@@ -1623,7 +1625,24 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string; retryable?: boolean }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
+        action?: string;
+        actionKey?: string;
+        copyCommand?: string;
+        retryable?: boolean;
+        technicalDetails?: {
+          status?: number;
+          exceptionType?: string;
+          requestId?: string;
+          underlyingError?: string;
+        };
+      }>;
+      cancelEnterpriseReasoning?: () => void;
       enterpriseStreamStart?: (payload: {
         streamId: string;
         provider: string;
@@ -1895,7 +1914,21 @@ declare global {
       testEnterpriseConnection?: (
         provider: string,
         config: Record<string, unknown>
-      ) => Promise<{ success: boolean; error?: string; action?: string; copyCommand?: string }>;
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
+        action?: string;
+        actionKey?: string;
+        copyCommand?: string;
+        technicalDetails?: {
+          status?: number;
+          exceptionType?: string;
+          requestId?: string;
+          underlyingError?: string;
+        };
+      }>;
       getManagedEnterpriseConfig?: (
         accountId: string,
         workspaceId: string,
@@ -2625,6 +2658,7 @@ declare global {
       onMeetingSystemAudioSilent?: (
         callback: (data: { systemAudioStrategy: SystemAudioStrategy }) => void
       ) => () => void;
+      onMeetingSystemAudioDegraded?: (callback: () => void) => () => void;
 
       // Speaker diarization
       downloadDiarizationModels?: () => Promise<{ success: boolean; error?: string }>;

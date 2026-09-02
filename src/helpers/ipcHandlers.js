@@ -5,6 +5,7 @@ const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
+const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
@@ -596,6 +597,7 @@ class IPCHandlers {
     this._agentStreamRequests = new AgentStreamRequestRegistry();
     this._cloudReasonRequests = new AgentStreamRequestRegistry();
     this._cloudTranscriptionRequests = new AgentStreamRequestRegistry();
+    this._enterpriseReasoningRequests = new AgentStreamRequestRegistry();
     // webContents id -> its release listener, for renderers holding the mic open.
     this._micHoldSenders = new Map();
     this.assemblyAiStreaming = null;
@@ -2683,7 +2685,7 @@ class IPCHandlers {
         const real = resolveAllowedAudioPath(filePath);
         if (!real) return { success: false, error: "File path not allowed" };
         const audioBuffer = fs.readFileSync(real);
-        if (options.provider === "nvidia") {
+        if (isSherpaLocalProvider(options.provider)) {
           const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, {
             ...options,
             signal,
@@ -2745,10 +2747,11 @@ class IPCHandlers {
     ipcMain.handle("paste-text", async (event, text, options) => {
       // An onboarding demo already puts the transcript in its own textarea from
       // the demo event, and that textarea is what has focus — pasting on top of
-      // it appends the same sentence a second time. Reported as success because
-      // nothing failed and the caller would otherwise toast a paste error.
+      // it appends the same sentence a second time. This is a successful no-op,
+      // not a completed paste, so callers can avoid reporting paste-dependent
+      // fallbacks as if text reached another application.
       if (this.windowManager?.isOnboardingDemoActive()) {
-        return { success: true };
+        return { success: true, pasted: false };
       }
 
       const mainWindow = this.windowManager?.mainWindow;
@@ -2787,17 +2790,19 @@ class IPCHandlers {
           ? ((await this.selectionManager?.getWinTargetHwnd?.()) ?? null)
           : null;
 
-      await this.clipboardManager.pasteText(textToPaste, {
+      const pasteResult = await this.clipboardManager.pasteText(textToPaste, {
         ...options,
         webContents: event.sender,
         targetWindow,
       });
+      const pasted = pasteResult?.pasted !== false;
       debugLogger.debug("[AutoLearn] Paste completed", {
         autoLearnEnabled: this._autoLearnEnabled,
         hasMonitor: !!this.textEditMonitor,
         targetPid,
+        pasted,
       });
-      if (this.textEditMonitor && this._autoLearnEnabled) {
+      if (pasted && this.textEditMonitor && this._autoLearnEnabled) {
         setTimeout(() => {
           try {
             debugLogger.debug("[AutoLearn] Starting monitoring", {
@@ -2812,8 +2817,10 @@ class IPCHandlers {
       // ClipboardManager returns `restoreComplete` so main-process callers can
       // serialize subsequent clipboard work behind its delayed restore. A
       // Promise cannot cross Electron's IPC boundary, though, and renderer
-      // callers only need to know that the paste was accepted.
-      return { success: true };
+      // callers need to know whether text was pasted, but not the delayed
+      // clipboard restoration promise. Successful platform paths predate the
+      // explicit `pasted` outcome; only the clipboard-only fallback sets false.
+      return { success: true, pasted };
     });
 
     ipcMain.handle("check-accessibility-permission", async (_event, silent = false) => {
@@ -3348,7 +3355,8 @@ class IPCHandlers {
       // Persisting a provider that failed to start would wedge every launch
       // into a failing pre-warm.
       if (result.success) {
-        process.env.LOCAL_TRANSCRIPTION_PROVIDER = "nvidia";
+        process.env.LOCAL_TRANSCRIPTION_PROVIDER =
+          getModelType(modelName) === "cohere-transcribe" ? "cohere" : "nvidia";
         process.env.PARAKEET_MODEL = modelName;
         await this.environmentManager.saveAllKeysToEnvFile();
       }
@@ -4349,42 +4357,71 @@ class IPCHandlers {
     ipcMain.handle("test-enterprise-connection", async (event, provider, config) => {
       const {
         mapEnterpriseError,
+        runAbortableOperation,
+        runBedrockRequest,
         validateEnterpriseEndpoint,
       } = require("./enterpriseProviderErrors");
+      let runtime;
       try {
-        const runtime = await resolveEnterpriseRuntime(
-          event,
-          provider,
-          config?.model || "test",
-          config
-        );
-        validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
-
         const { generateText } = require("ai");
         const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
 
-        const model = getEnterpriseAIModel(
-          runtime.provider,
-          runtime.model,
-          runtime.apiKey,
-          runtime.enterprise
-        );
+        const resolveModel = (abortSignal) =>
+          runAbortableOperation(async () => {
+            runtime = await resolveEnterpriseRuntime(
+              event,
+              provider,
+              config?.model || "test",
+              config
+            );
+            abortSignal?.throwIfAborted();
+            validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
+            return getEnterpriseAIModel(
+              runtime.provider,
+              runtime.model,
+              runtime.apiKey,
+              runtime.enterprise
+            );
+          }, abortSignal);
 
-        await generateText({
-          model,
-          prompt: "Say hello in one word.",
-          maxOutputTokens: 10,
-        });
+        if (provider === "bedrock") {
+          await runBedrockRequest(async () => {
+            const abortSignal = AbortSignal.timeout(config?.timeoutMs || 30_000);
+            const model = await resolveModel(abortSignal);
+            return generateText({
+              model,
+              prompt: "Say hello in one word.",
+              maxOutputTokens: 10,
+              abortSignal,
+              maxRetries: 0,
+            });
+          });
+        } else {
+          const model = await resolveModel();
+          await generateText({
+            model,
+            prompt: "Say hello in one word.",
+            maxOutputTokens: 10,
+          });
+        }
 
         return { success: true };
       } catch (err) {
-        const mapped = mapEnterpriseError(provider, err, config);
+        const mappingConfig =
+          runtime?.provider === "bedrock" && runtime.enterprise?.bedrockRegion
+            ? { ...(config || {}), bedrockRegion: runtime.enterprise.bedrockRegion }
+            : config;
+        const mapped = mapEnterpriseError(provider, err, mappingConfig);
         return {
           success: false,
           error: mapped.message,
+          messageKey: mapped.messageKey,
+          messageParams: mapped.messageParams,
           action: mapped.action,
+          actionKey: mapped.actionKey,
           copyCommand: mapped.copyCommand,
           retryable: mapped.retryable,
+          technicalDetails: mapped.technicalDetails,
         };
       }
     });
@@ -4395,55 +4432,121 @@ class IPCHandlers {
         const {
           isEnterpriseProvider,
           mapEnterpriseError,
+          runAbortableOperation,
+          runBedrockRequest,
           validateEnterpriseEndpoint,
         } = require("./enterpriseProviderErrors");
         const provider = config?.provider;
+        let runtime;
         try {
           if (!isEnterpriseProvider(provider)) {
             throw new Error(`Unsupported enterprise provider: ${provider}`);
           }
-          const runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
-          if (!runtime.model) throw new Error("No model specified for enterprise reasoning");
-          validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
+          const isBedrockCleanup =
+            provider === "bedrock" && config?.inferenceScope === "dictationCleanup";
+          const sender = isBedrockCleanup ? event.sender : null;
+          const senderId = sender?.id;
+          const requestId = isBedrockCleanup ? crypto.randomUUID() : null;
+          const controller = isBedrockCleanup
+            ? this._enterpriseReasoningRequests.begin(senderId, requestId)
+            : null;
+          const cancelSenderRequests = () =>
+            this._enterpriseReasoningRequests.cancelSender(senderId);
+          try {
+            if (controller) {
+              sender.once("destroyed", cancelSenderRequests);
+              if (sender.isDestroyed()) controller.abort();
+            }
+            controller?.signal.throwIfAborted();
 
-          const { generateText } = require("ai");
-          const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
+            const { generateText } = require("ai");
+            const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
+            const timeoutMs = config?.timeoutMs || 60000;
+            // Opus 4.7 / GPT-5 / o-series dropped `temperature`; renderer
+            // derives support from the model registry and we honor that here.
+            const useTemperature = config?.supportsTemperature !== false;
+            const resolveModel = (abortSignal) =>
+              runAbortableOperation(async () => {
+                runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
+                abortSignal?.throwIfAborted();
+                if (!runtime.model) throw new Error("No model specified for enterprise reasoning");
+                validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
+                return getEnterpriseAIModel(
+                  runtime.provider,
+                  runtime.model,
+                  runtime.apiKey,
+                  runtime.enterprise
+                );
+              }, abortSignal);
+            const generate = (model, abortSignal, disableNestedRetries = false) => {
+              return generateText({
+                model,
+                system: config?.systemPrompt || "",
+                prompt: text,
+                maxOutputTokens: config?.maxTokens || 4096,
+                ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
+                abortSignal,
+                ...(disableNestedRetries ? { maxRetries: 0 } : {}),
+              });
+            };
+            let result;
+            if (isBedrockCleanup) {
+              result = await runBedrockRequest(
+                async () => {
+                  const abortSignal = AbortSignal.any([
+                    controller.signal,
+                    AbortSignal.timeout(timeoutMs),
+                  ]);
+                  const model = await resolveModel(abortSignal);
+                  return generate(model, abortSignal, true);
+                },
+                { signal: controller.signal }
+              );
+            } else {
+              const model = await resolveModel();
+              result = await generate(model, AbortSignal.timeout(timeoutMs));
+            }
+            const { text: generated, finishReason } = result;
 
-          const model = getEnterpriseAIModel(
-            runtime.provider,
-            runtime.model,
-            runtime.apiKey,
-            runtime.enterprise
-          );
+            if (
+              config?.requireCompleteOutput &&
+              ["length", "max-tokens", "max_tokens"].includes(finishReason)
+            ) {
+              throw new Error("Model output was truncated before the selection edit completed");
+            }
 
-          const timeoutMs = config?.timeoutMs || 60000;
-          // Opus 4.7 / GPT-5 / o-series dropped `temperature`; renderer
-          // derives support from the model registry and we honor that here.
-          const useTemperature = config?.supportsTemperature !== false;
-          const { text: generated, finishReason } = await generateText({
-            model,
-            system: config?.systemPrompt || "",
-            prompt: text,
-            maxOutputTokens: config?.maxTokens || 4096,
-            ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
-            abortSignal: AbortSignal.timeout(timeoutMs),
-          });
-
-          if (
-            config?.requireCompleteOutput &&
-            ["length", "max-tokens", "max_tokens"].includes(finishReason)
-          ) {
-            throw new Error("Model output was truncated before the selection edit completed");
+            return { success: true, text: (generated || "").trim() };
+          } finally {
+            if (controller) {
+              sender.removeListener("destroyed", cancelSenderRequests);
+              this._enterpriseReasoningRequests.complete(senderId, requestId, controller);
+            }
           }
-
-          return { success: true, text: (generated || "").trim() };
         } catch (err) {
           debugLogger.error("Enterprise reasoning error:", err);
-          const mapped = mapEnterpriseError(provider, err, config || {});
-          return { success: false, error: mapped.message, retryable: mapped.retryable };
+          const mappingConfig =
+            runtime?.provider === "bedrock" && runtime.enterprise?.bedrockRegion
+              ? { ...(config || {}), bedrockRegion: runtime.enterprise.bedrockRegion }
+              : config || {};
+          const mapped = mapEnterpriseError(provider, err, mappingConfig);
+          return {
+            success: false,
+            error: mapped.message,
+            messageKey: mapped.messageKey,
+            messageParams: mapped.messageParams,
+            action: mapped.action,
+            actionKey: mapped.actionKey,
+            copyCommand: mapped.copyCommand,
+            retryable: mapped.retryable,
+            technicalDetails: mapped.technicalDetails,
+          };
         }
       }
     );
+
+    ipcMain.on("enterprise-reasoning-cancel", (event) => {
+      this._enterpriseReasoningRequests.cancelSender(event.sender.id);
+    });
 
     // Runs doStream for the renderer's enterprise chat model shim; parts are
     // relayed verbatim over enterprise-stream-part, ending with {done}/{error}.
@@ -4455,6 +4558,7 @@ class IPCHandlers {
         validateEnterpriseEndpoint,
       } = require("./enterpriseProviderErrors");
       const { streamId, provider, modelId, config, options } = payload || {};
+      let runtime;
       const send = (message) => {
         if (!event.sender.isDestroyed()) {
           event.sender.send("enterprise-stream-part", { streamId, ...message });
@@ -4475,12 +4579,12 @@ class IPCHandlers {
         if (!streamId || !isEnterpriseProvider(provider)) {
           throw new Error(`Unsupported enterprise provider: ${provider}`);
         }
-        const runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
+        runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
         if (!runtime.model) throw new Error("No model specified for enterprise streaming");
         validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
 
         const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
-        const model = getEnterpriseAIModel(
+        const model = await getEnterpriseAIModel(
           runtime.provider,
           runtime.model,
           runtime.apiKey,
@@ -4509,7 +4613,11 @@ class IPCHandlers {
         return { success: true };
       } catch (err) {
         debugLogger.error("Enterprise stream error:", err);
-        const mapped = mapEnterpriseError(provider, err, config || {});
+        const mappingConfig =
+          runtime?.provider === "bedrock" && runtime.enterprise?.bedrockRegion
+            ? { ...(config || {}), bedrockRegion: runtime.enterprise.bedrockRegion }
+            : config || {};
+        const mapped = mapEnterpriseError(provider, err, mappingConfig);
         send({ error: mapped.message });
         return { success: false, error: mapped.message };
       } finally {
@@ -4642,7 +4750,8 @@ class IPCHandlers {
       if (prefs.useLocalWhisper && prefs.model) {
         // Local mode with model selected - set provider and model for pre-warming
         setVars.LOCAL_TRANSCRIPTION_PROVIDER = prefs.localTranscriptionProvider;
-        if (prefs.localTranscriptionProvider === "nvidia") {
+        if (prefs.language) setVars.DICTATION_LANGUAGE = prefs.language;
+        if (isSherpaLocalProvider(prefs.localTranscriptionProvider)) {
           setVars.PARAKEET_MODEL = prefs.model;
           clearVars.push("LOCAL_WHISPER_MODEL");
           this.whisperManager.stopServer().catch((err) => {
@@ -5814,10 +5923,17 @@ class IPCHandlers {
             };
           }
         } else if (route.transport === "local") {
-          if (settings.localTranscriptionProvider === "nvidia") {
+          if (isSherpaLocalProvider(settings.localTranscriptionProvider)) {
             const model =
-              settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3";
-            result = await this.parakeetManager.transcribeLocalParakeet(buffer, { model });
+              (settings.localTranscriptionProvider === "cohere"
+                ? settings.cohereModel
+                : settings.parakeetModel) ||
+              process.env.PARAKEET_MODEL ||
+              "parakeet-tdt-0.6b-v3";
+            result = await this.parakeetManager.transcribeLocalParakeet(buffer, {
+              model,
+              language,
+            });
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
             const vadOptions = this._resolveWhisperVadOptions("noteRecording");
             result = await this.whisperManager.transcribeLocalWhisper(buffer, {
@@ -6253,6 +6369,7 @@ class IPCHandlers {
       meetingMicDiarizationPath = null;
       meetingMicDiarizationStartedAt = null;
       meetingSystemAudioHeard = false;
+      meetingSystemAudioDegraded = false;
       meetingDiarizationSegments = [];
       const { pcmPath, startedAt, diarizedSource, cleanupPcmPaths } = resolveDiarizationInput({
         systemPcmPath,
@@ -6799,6 +6916,7 @@ class IPCHandlers {
     let meetingMicDiarizationPath = null;
     let meetingMicDiarizationStartedAt = null;
     let meetingSystemAudioHeard = false;
+    let meetingSystemAudioDegraded = false;
     let meetingDiarizationSegments = [];
     let meetingLiveSpeakerActive = false;
     let meetingLiveSpeakerState = null;
@@ -7204,9 +7322,10 @@ class IPCHandlers {
 
       try {
         let result;
-        if (meetingLocalProvider === "nvidia") {
+        if (isSherpaLocalProvider(meetingLocalProvider)) {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: meetingLocalModel,
+            language: meetingLocalLanguage,
           });
         } else {
           const vadOptions = this._resolveWhisperVadOptions("meeting");
@@ -7399,6 +7518,7 @@ class IPCHandlers {
       meetingDiarizationStartedAt = null;
       dropMeetingMicDiarizationCapture();
       meetingSystemAudioHeard = false;
+      meetingSystemAudioDegraded = false;
       meetingDiarizationSegments = [];
       meetingLocalWin = null;
       meetingLocalTranscript = "";
@@ -7498,9 +7618,10 @@ class IPCHandlers {
         const wav = pcm16ToWav(pcm);
 
         let result;
-        if (dictationPreviewProvider === "nvidia") {
+        if (isSherpaLocalProvider(dictationPreviewProvider)) {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: dictationPreviewModel,
+            language: dictationPreviewLanguage,
           });
         } else {
           const vadOptions = this._resolveWhisperVadOptions("dictation");
@@ -8031,7 +8152,26 @@ class IPCHandlers {
       }
     };
 
-    const startManagedMeetingSystemAudio = (event, manager, warningLabel) => {
+    // The Windows helper reports capture_silent when its own stream is silent
+    // while a render endpoint is playing: activation succeeded but no audio
+    // will ever arrive, so hand the live session to Chromium's renderer
+    // loopback. The silence watchdog stays armed in case that fails too.
+    const degradeMeetingSystemAudioToLoopback = async (event) => {
+      if (meetingSystemAudioDegraded || meetingSystemAudioHeard) return;
+      meetingSystemAudioDegraded = true;
+      debugLogger.warn(
+        "Windows system audio helper captured only silence, switching to renderer loopback",
+        {},
+        "meeting"
+      );
+      await this.windowsLoopbackAudioManager?.stop().catch(() => {});
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("meeting-system-audio-degraded");
+      }
+    };
+
+    const startManagedMeetingSystemAudio = (event, manager, warningLabel, onWarningCode) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       return manager.start({
         onChunk: (chunk) => {
@@ -8048,6 +8188,7 @@ class IPCHandlers {
             { code: warning.code, message: warning.message },
             "meeting"
           );
+          onWarningCode?.(warning.code);
         },
       });
     };
@@ -8096,7 +8237,12 @@ class IPCHandlers {
           await startManagedMeetingSystemAudio(
             event,
             this.windowsLoopbackAudioManager,
-            "Windows system audio warning"
+            "Windows system audio warning",
+            (code) => {
+              if (code === "capture_silent") {
+                void degradeMeetingSystemAudioToLoopback(event);
+              }
+            }
           );
           return { systemAudioMode, systemAudioStrategy };
         } catch (error) {

@@ -17,6 +17,7 @@ import {
 import {
   getTranscriptionProviders,
   getParakeetModels,
+  isCohereTranscribeModel,
   getWhisperModels,
   modelRegistry,
   type CloudProviderData,
@@ -661,13 +662,17 @@ export function LocalModelSetupStep({
       }));
     }
     if (selectedProvider === "nvidia") {
-      return Object.entries(getParakeetModels()).map(([id, model]) => ({
-        id,
-        name: model.name,
-        size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
-        recommended: model.recommended,
-        icon: "nvidia",
-      }));
+      // Onboarding offers only the whisper/NVIDIA providers; Cohere models
+      // would otherwise commit provider "nvidia" with a Cohere model id.
+      return Object.entries(getParakeetModels())
+        .filter(([id]) => !isCohereTranscribeModel(id))
+        .map(([id, model]) => ({
+          id,
+          name: model.name,
+          size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
+          recommended: model.recommended,
+          icon: "nvidia",
+        }));
     }
     return Object.entries(getWhisperModels()).map(([id, model]) => ({
       id,

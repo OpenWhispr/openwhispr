@@ -694,3 +694,75 @@ test("a notification raised from the timeout handler survives the dismissal that
     timers.restore();
   }
 });
+
+test("unexpected detection card closure releases that detection", async () => {
+  const manager = createNormalWindowManager();
+  const closedDetections = [];
+  manager.meetingDetectionEngine = {
+    handleDetectionNotificationClosed: (detectionId) => closedDetections.push(detectionId),
+  };
+
+  const showPromise = manager.showMeetingNotification({
+    kind: "detection",
+    detectionId: "audio:sustained-audio",
+    source: "audio",
+  });
+  const notificationWindow = createdWindows[0];
+  notificationWindow.loadDeferred.resolve();
+  await showPromise;
+
+  // A compositor window kill never reaches the renderer's response IPC.
+  notificationWindow.close();
+
+  assert.deepEqual(closedDetections, ["audio:sustained-audio"]);
+});
+
+test("an expired detection reports the timeout once, not also as a close", async () => {
+  const timers = installFakeTimers();
+  const manager = createNormalWindowManager();
+  const closedDetections = [];
+  let timeouts = 0;
+  manager.meetingDetectionEngine = {
+    handleDetectionNotificationClosed: (detectionId) => closedDetections.push(detectionId),
+    handleNotificationTimeout: () => {
+      timeouts += 1;
+    },
+  };
+
+  const showPromise = manager.showMeetingNotification({
+    kind: "detection",
+    detectionId: "audio:sustained-audio",
+    source: "audio",
+  });
+  createdWindows[0].loadDeferred.resolve();
+  await showPromise;
+
+  try {
+    timers.runDelay(30_000);
+    assert.equal(timeouts, 1, "the countdown owns this dismissal");
+    assert.deepEqual(closedDetections, [], "the close must not double-report the same card");
+  } finally {
+    manager.dismissMeetingNotification();
+    timers.restore();
+  }
+});
+
+test("a detection card whose load fails releases that detection", async () => {
+  const manager = createNormalWindowManager();
+  const closedDetections = [];
+  manager.meetingDetectionEngine = {
+    handleDetectionNotificationClosed: (detectionId) => closedDetections.push(detectionId),
+  };
+
+  const showPromise = manager.showMeetingNotification({
+    kind: "detection",
+    detectionId: "audio:sustained-audio",
+    source: "audio",
+  });
+  createdWindows[0].loadDeferred.reject(new Error("load failed"));
+
+  // The card never appeared and no countdown ever started, so nothing else
+  // would ever settle this detection.
+  await assert.rejects(showPromise, /load failed/);
+  assert.deepEqual(closedDetections, ["audio:sustained-audio"]);
+});

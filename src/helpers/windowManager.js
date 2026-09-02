@@ -71,8 +71,11 @@ class WindowManager {
       const notification = this._pendingNotificationData;
       // Dismiss first: an expiring restart offer lets the engine flush the
       // detections it was holding, and a prompt raised from that handler must
-      // not be closed by this dismissal.
-      this.dismissMeetingNotification();
+      // not be closed by this dismissal. The engine is not told the card closed
+      // either — handleNotificationTimeout below settles this expiry, and a
+      // close report here would flush the queue into a card that handler is
+      // about to clear.
+      this.dismissMeetingNotification({ notifyEngine: false });
       if (this.meetingDetectionEngine) {
         this.meetingDetectionEngine.handleNotificationTimeout(notification);
       }
@@ -1500,7 +1503,7 @@ class WindowManager {
     this.hideDictationPanel();
     this.hideTranscriptionPreview();
     this.hideAgentDictationPill();
-    this.dismissMeetingNotification();
+    this.dismissMeetingNotification({ flushQueued: false });
 
     if (this._pendingUpdateNotificationData) {
       this._deferredUpdateNotificationInfo = { ...this._pendingUpdateNotificationData };
@@ -1963,10 +1966,11 @@ class WindowManager {
     // after the replacement already took over the reference and the countdown.
     win.on("closed", () => {
       if (this.notificationWindow !== win) return;
+      const closedNotification = this._pendingNotificationData;
       const closedAutoEndSessionId =
-        this._pendingNotificationData?.kind === "auto-end"
-          ? this._pendingNotificationData.sessionId
-          : null;
+        closedNotification?.kind === "auto-end" ? closedNotification.sessionId : null;
+      const closedDetectionId =
+        closedNotification?.kind === "detection" ? closedNotification.detectionId : null;
       this.notificationWindow = null;
       this._pendingNotificationData = null;
       this._notificationDismissTimer.cancel();
@@ -1980,6 +1984,8 @@ class WindowManager {
       }
       if (closedAutoEndSessionId) {
         this.meetingDetectionEngine?.handleAutoEndNotificationClosed?.(closedAutoEndSessionId);
+      } else if (closedDetectionId) {
+        this.meetingDetectionEngine?.handleDetectionNotificationClosed?.(closedDetectionId);
       }
     });
 
@@ -2083,7 +2089,8 @@ class WindowManager {
     win.showInactive();
   }
 
-  dismissMeetingNotification() {
+  dismissMeetingNotification({ notifyEngine = true, flushQueued = true } = {}) {
+    const notification = this._pendingNotificationData;
     this._pendingNotificationData = null;
     if (this._notificationReadyFallback) {
       clearTimeout(this._notificationReadyFallback);
@@ -2097,6 +2104,11 @@ class WindowManager {
     const win = this.notificationWindow;
     this.notificationWindow = null;
     if (win && !win.isDestroyed()) win.close();
+    if (notifyEngine && notification?.kind === "detection") {
+      this.meetingDetectionEngine?.handleDetectionNotificationClosed?.(notification.detectionId, {
+        flushQueued,
+      });
+    }
   }
 
   showMeetingAutoEndNotification({ sessionId, expiresAt, reason }) {

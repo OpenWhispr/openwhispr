@@ -40,6 +40,7 @@ import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
   getTranscriptionProviders,
+  isSherpaLocalProvider,
 } from "../../models/ModelRegistry";
 import {
   useSettingsStore,
@@ -263,6 +264,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     whisperModel,
     localTranscriptionProvider,
     parakeetModel,
+    cohereModel,
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
@@ -416,7 +418,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         }
         return;
       }
-      if (localTranscriptionProvider === "nvidia") {
+      if (isSherpaLocalProvider(localTranscriptionProvider)) {
         const r = await window.electronAPI.listParakeetModels?.();
         if (!cancelled)
           setProviderReady(
@@ -458,6 +460,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (useLocalWhisper) {
       if (localTranscriptionProvider === "nvidia")
         return `Parakeet · ${parakeetModel || "default"}`;
+      if (localTranscriptionProvider === "cohere") return `Cohere · ${cohereModel || "default"}`;
       return `Whisper · ${whisperModel || "base"}`;
     }
     if (isSelfHosted) {
@@ -477,6 +480,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     localTranscriptionProvider: localTranscriptionProvider as string,
     whisperModel,
     parakeetModel,
+    cohereModel,
     isOpenWhisprCloud,
     getApiKey: () => getTranscriptionApiKey(cloudTranscriptionProvider, apiKeys),
     cloudTranscriptionProvider: cloudTranscriptionProvider as string,

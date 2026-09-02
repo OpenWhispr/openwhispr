@@ -768,6 +768,22 @@ class MeetingDetectionEngine {
     });
   }
 
+  // A card can vanish without a response — a compositor kill, a load failure,
+  // onboarding taking the screen. Only this detection is released, unlike a
+  // response or an expiry which settle every pending one: clearing them all
+  // would strand _notificationQueue, whose entries the flush below looks up in
+  // activeDetections.
+  handleDetectionNotificationClosed(detectionId, { flushQueued = true } = {}) {
+    if (!this.activeDetections.has(detectionId)) return;
+    this.activeDetections.delete(detectionId);
+    debugLogger.info(
+      "Detection notification closed without a response",
+      { detectionId },
+      "meeting"
+    );
+    if (flushQueued) this._flushNotificationQueue();
+  }
+
   handleNotificationTimeout(notification = null) {
     if (notification?.kind === "auto-end") {
       this.handleAutoEndNotificationClosed(notification.sessionId);

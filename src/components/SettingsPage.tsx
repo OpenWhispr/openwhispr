@@ -493,6 +493,8 @@ interface TranscriptionSectionProps {
   setWhisperModel: (model: string) => void;
   parakeetModel: string;
   setParakeetModel: (model: string) => void;
+  cohereModel: string;
+  setCohereModel: (model: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl: (url: string) => void;
   transcriptionMode: InferenceMode;
@@ -529,6 +531,8 @@ function TranscriptionSection({
   setWhisperModel,
   parakeetModel,
   setParakeetModel,
+  cohereModel,
+  setCohereModel,
   cloudTranscriptionBaseUrl,
   setCloudTranscriptionBaseUrl,
   transcriptionMode,
@@ -607,13 +611,16 @@ function TranscriptionSection({
 
   const handleLocalModelSelect = useCallback(
     (modelId: string, providerId?: string) => {
-      if (providerId === "nvidia" || (!providerId && localTranscriptionProvider === "nvidia")) {
+      const provider = providerId ?? localTranscriptionProvider;
+      if (provider === "nvidia") {
         setParakeetModel(modelId);
+      } else if (provider === "cohere") {
+        setCohereModel(modelId);
       } else {
         setWhisperModel(modelId);
       }
     },
-    [localTranscriptionProvider, setParakeetModel, setWhisperModel]
+    [localTranscriptionProvider, setParakeetModel, setCohereModel, setWhisperModel]
   );
 
   const selectedCloudModelStreams = Boolean(
@@ -645,7 +652,13 @@ function TranscriptionSection({
       onCloudProviderSelect={setCloudTranscriptionProvider}
       selectedCloudModel={cloudTranscriptionModel}
       onCloudModelSelect={setCloudTranscriptionModel}
-      selectedLocalModel={localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel}
+      selectedLocalModel={
+        localTranscriptionProvider === "nvidia"
+          ? parakeetModel
+          : localTranscriptionProvider === "cohere"
+            ? cohereModel
+            : whisperModel
+      }
       onLocalModelSelect={handleLocalModelSelect}
       selectedLocalProvider={localTranscriptionProvider}
       onLocalProviderSelect={setLocalTranscriptionProvider}
@@ -1054,6 +1067,7 @@ export default function SettingsPage({
     whisperModel,
     localTranscriptionProvider,
     parakeetModel,
+    cohereModel,
     uiLanguage,
     preferredLanguage,
     chineseScriptPreference,
@@ -1076,6 +1090,7 @@ export default function SettingsPage({
     setWhisperModel,
     setLocalTranscriptionProvider,
     setParakeetModel,
+    setCohereModel,
     setCloudTranscriptionProvider,
     setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl,
@@ -4647,6 +4662,8 @@ EOF`,
                   setWhisperModel={setWhisperModel}
                   parakeetModel={parakeetModel}
                   setParakeetModel={setParakeetModel}
+                  cohereModel={cohereModel}
+                  setCohereModel={setCohereModel}
                   cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
                   setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
                   transcriptionMode={transcriptionMode}
@@ -4660,7 +4677,7 @@ EOF`,
                   toast={toast}
                 />
                 {transcriptionMode === "local" &&
-                  localTranscriptionProvider !== "nvidia" &&
+                  localTranscriptionProvider === "whisper" &&
                   renderWhisperVadSettings()}
               </div>
             )}
@@ -4668,7 +4685,7 @@ EOF`,
               <div className="space-y-6">
                 <MeetingTranscriptionPanel />
                 {transcriptionMode === "local" &&
-                  localTranscriptionProvider !== "nvidia" &&
+                  localTranscriptionProvider === "whisper" &&
                   renderWhisperVadSettings()}
               </div>
             )}
