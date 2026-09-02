@@ -158,6 +158,27 @@ test("local model rows distinguish downloading, selectable, and selected states"
     (node) => node.type?.name === "StepPrimaryAction"
   )[0];
   assert.equal(selectedProceed.props.disabled, false);
+  // Skip is the "don't wait for this download" escape hatch, so it stays off the
+  // card whenever nothing is downloading.
+  assert.equal(
+    findElements(selected, (node) => node.type?.name === "StepSecondaryAction").length,
+    0
+  );
+
+  harness.values = {
+    0: "qwen",
+    1: "",
+    2: new Set(),
+    3: new Set(),
+    4: new Set(),
+  };
+  const idle = render();
+  const idleProceed = findElements(idle, (node) => node.type?.name === "StepPrimaryAction")[0];
+  assert.equal(idleProceed.props.disabled, true);
+  // Neither action is available with no model on disk and no transfer running:
+  // skipping here would finish onboarding on local transcription with nothing to
+  // transcribe with. Back is the way out.
+  assert.equal(findElements(idle, (node) => node.type?.name === "StepSecondaryAction").length, 0);
 
   harness.values = {
     0: "qwen",

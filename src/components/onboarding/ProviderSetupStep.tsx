@@ -816,10 +816,10 @@ export function LocalModelSetupStep({
     onProceed();
   };
 
+  // Only reachable while a download runs (see the action row), so the transfer
+  // always needs the tray to apply its pending selection once it lands.
   const skip = () => {
-    if (anyDownloadActive) {
-      localStorage.setItem("localSetupPending", "true");
-    }
+    localStorage.setItem("localSetupPending", "true");
     onSkip();
   };
 
@@ -943,9 +943,14 @@ export function LocalModelSetupStep({
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-2">
-        <StepSecondaryAction onClick={skip} className="h-10!">
-          {t("common.skip")}
-        </StepSecondaryAction>
+        {/* Skip means "don't wait for this download", never "set up local with no
+            model": leaving with nothing on disk still commits useLocalWhisper,
+            and whisper.js then refuses to load the selected model. */}
+        {anyDownloadActive && (
+          <StepSecondaryAction onClick={skip} className="h-10!">
+            {t("common.skip")}
+          </StepSecondaryAction>
+        )}
         <StepPrimaryAction onClick={proceed} disabled={!canProceed} className="h-10!">
           {t("onboarding.rehaul.provider.proceed")}
         </StepPrimaryAction>
