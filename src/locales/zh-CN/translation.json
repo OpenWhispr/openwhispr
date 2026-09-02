@@ -2826,6 +2826,11 @@
       "reopen": "了解空间的组织方式"
     },
     "folders": {
+      "defaults": {
+        "personal": "个人",
+        "meetings": "会议",
+        "videos": "视频"
+      },
       "title": "文件夹",
       "soon": "即将推出",
       "folderName": "文件夹名称",

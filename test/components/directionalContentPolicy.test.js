@@ -25,10 +25,6 @@ test("dynamic prose and identity values keep their own direction", () => {
       "src/components/notes/SpacesTree.tsx",
       /<span\s+dir="auto"[^>]*>\s*\{displayName\}\s*<\/span>/,
     ],
-    [
-      "src/components/notes/SpacesTree.tsx",
-      /<span\s+dir="auto"[^>]*>\s*\{folder\.name\}\s*<\/span>/,
-    ],
     ["src/components/notes/SpacesTree.tsx", /<span\s+dir="auto"[^>]*>\s*\{title\}\s*<\/span>/],
     [
       "src/components/notes/SpacesTree.tsx",
@@ -59,6 +55,15 @@ test("dynamic prose and identity values keep their own direction", () => {
   for (const [file, pattern] of expectations) {
     assert.match(source(file), pattern, `${file} lost its content-direction policy`);
   }
+
+  const treeContainerLabels = source("src/components/notes/SpacesTree.tsx").match(
+    /<span\s+dir="auto"[^>]*>[\s\S]*?\{displayName\}\s*<\/span>/g
+  );
+  assert.equal(
+    treeContainerLabels?.length,
+    2,
+    "space and localized folder labels must both detect their content direction"
+  );
 });
 
 test("technical output values remain LTR inside an Arabic document", () => {
@@ -203,7 +208,10 @@ test("user-authored names and previews detect direction at their display boundar
     ["src/components/settings/WorkspaceSection.tsx", /<span\s+dir="auto"[^>]*>\s*\{w\.name\}/],
     ["src/components/notes/NoteEditor.tsx", /<span\s+dir="auto"[^>]*>\s*\{space\.name\}/],
     ["src/components/notes/NoteEditor.tsx", /<span\s+dir="auto"[^>]*>\s*\{folderName\}/],
-    ["src/components/notes/NoteEditor.tsx", /<span\s+dir="auto"[^>]*>\s*\{folder\.name\}/],
+    [
+      "src/components/notes/NoteEditor.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{defaultFolderDisplayName\(folder, t\)\}/,
+    ],
   ];
 
   for (const [file, pattern] of expectations) {

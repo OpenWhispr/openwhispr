@@ -26,7 +26,8 @@ export function ConversationPicker({
   onNewChat,
   titleClassName,
 }: ConversationPickerProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const activeConversation = conversations.find((item) => item.id === activeConversationId);
 
   return (
@@ -61,7 +62,7 @@ export function ConversationPicker({
               >
                 <span className="truncate flex-1">{conversation.title}</span>
                 <span className="text-[10px] text-foreground/30 shrink-0">
-                  {formatShortDate(conversation.updated_at)}
+                  {formatShortDate(conversation.updated_at, locale)}
                 </span>
               </DropdownMenuItem>
             ))}

@@ -23,7 +23,8 @@ export function OverviewNoteList({
   onNewNote,
   onAddExisting,
 }: OverviewNoteListProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const { user } = useAuth();
   const isTeamSpace = space.kind === "team";
   const roster = useSpaceRoster(isTeamSpace ? space.cloud_space_id : null);
@@ -98,7 +99,7 @@ export function OverviewNoteList({
                   </span>
                 )}
                 <span className="text-[11px] text-foreground/35 dark:text-foreground/25 shrink-0 tabular-nums">
-                  {formatRelativeTime(note.updated_at, t)}
+                  {formatRelativeTime(note.updated_at, t, locale)}
                 </span>
               </button>
             );

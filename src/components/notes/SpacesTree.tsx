@@ -60,7 +60,8 @@ import { getCachedPlatform } from "../../utils/platform";
 import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import SpaceMembersDialog from "./SpaceMembersDialog";
-import { treeHorizontalIntent } from "./treeDirection";
+import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
+import { defaultFolderDisplayName } from "./shared";
 import type { FolderItem, NoteItem, SpaceItem, WorkspaceRole } from "../../types/electron";
 import {
   folderContainerKey,
@@ -447,6 +448,7 @@ function SpaceRow({
       onClick={onActivate}
       title={isPrivate ? t("notes.spaces.privateTooltip") : displayName}
       {...dropHandlers}
+      style={treeRowActionClearanceStyle()}
       className={cn(
         ROW_BASE_CLASS,
         "h-[30px] px-2",
@@ -629,6 +631,7 @@ function FolderRow({
   t: TFn;
 }) {
   const [spaceSearch, setSpaceSearch] = useState("");
+  const displayName = defaultFolderDisplayName(folder, t);
   const canMoveToSpace = canManageDestructive && !folder.is_default && spaces.length > 1;
   const filteredSpaces = useMemo(
     () =>
@@ -647,15 +650,16 @@ function FolderRow({
       aria-expanded={isExpanded}
       aria-selected={isActive}
       aria-label={
-        count > 0 ? `${folder.name}, ${t("notes.spaces.noteCount", { count })}` : folder.name
+        count > 0 ? `${displayName}, ${t("notes.spaces.noteCount", { count })}` : displayName
       }
       tabIndex={a11y.tabIndex}
       ref={a11y.rowRef}
       onKeyDown={a11y.onKeyDown}
       onFocus={a11y.onFocus}
       onClick={onActivate}
-      title={folder.name}
+      title={displayName}
       {...dropHandlers}
+      style={treeRowActionClearanceStyle()}
       className={cn(
         ROW_BASE_CLASS,
         "h-7 pe-2",
@@ -689,7 +693,7 @@ function FolderRow({
             : "text-foreground/50 group-hover:text-foreground/70"
         )}
       >
-        {folder.name}
+        {displayName}
       </span>
       <DropSuccessCheck isDropSuccess={isDropSuccess} />
       <span className="absolute end-1.5 flex items-center gap-px">
@@ -880,7 +884,7 @@ function NoteLeaf({
       for (const folder of folders.filter((f) => f.space_id === space.id)) {
         options.push({
           key: folderContainerKey(folder.id),
-          label: folder.name,
+          label: defaultFolderDisplayName(folder, t),
           space,
           target: { spaceId: space.id, folderId: folder.id },
           isCurrent: note.folder_id === folder.id,
@@ -1302,7 +1306,8 @@ export default function SpacesTree({
 
   const targetLabel = (target: NoteMoveTarget): string => {
     if (target.folderId != null) {
-      return folders.find((f) => f.id === target.folderId)?.name ?? "";
+      const folder = folders.find((f) => f.id === target.folderId);
+      return folder ? defaultFolderDisplayName(folder, t) : "";
     }
     const space = spaces.find((s) => s.id === target.spaceId);
     return space ? spaceDisplayName(space, t) : "";

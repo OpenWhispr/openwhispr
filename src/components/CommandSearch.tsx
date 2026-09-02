@@ -75,7 +75,8 @@ export default function CommandSearch({
   onTranscriptSelect,
   onConversationSelect,
 }: CommandSearchProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const [query, setQuery] = useState("");
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
@@ -460,7 +461,7 @@ export default function CommandSearch({
                     )}
                   </div>
                   <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-                    {formatRelativeTime(conv.updated_at, t)}
+                    {formatRelativeTime(conv.updated_at, t, locale)}
                   </span>
                 </button>
               ))
@@ -512,6 +513,7 @@ export default function CommandSearch({
                           onSelect={() => selectItem({ kind: "note", note })}
                           onHover={() => setSelectedIndex(idx)}
                           t={t}
+                          locale={locale}
                         />
                       );
                     })}
@@ -537,6 +539,7 @@ export default function CommandSearch({
                           onSelect={() => selectItem({ kind: "transcript", transcript })}
                           onHover={() => setSelectedIndex(idx)}
                           t={t}
+                          locale={locale}
                         />
                       );
                     })}
@@ -638,6 +641,7 @@ function NoteRow({
   onSelect,
   onHover,
   t,
+  locale,
 }: {
   note: NoteItem;
   breadcrumb: string;
@@ -646,6 +650,7 @@ function NoteRow({
   onSelect: () => void;
   onHover: () => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
+  locale?: string;
 }) {
   const preview = stripMarkdownPreview(note.content).slice(0, 90);
   const NoteIcon =
@@ -697,7 +702,7 @@ function NoteRow({
         )}
       </div>
       <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-        {formatRelativeTime(note.updated_at, t)}
+        {formatRelativeTime(note.updated_at, t, locale)}
       </span>
     </button>
   );
@@ -710,6 +715,7 @@ function TranscriptRow({
   onSelect,
   onHover,
   t,
+  locale,
 }: {
   transcript: TranscriptionItem;
   idx: number;
@@ -717,6 +723,7 @@ function TranscriptRow({
   onSelect: () => void;
   onHover: () => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
+  locale?: string;
 }) {
   return (
     <button
@@ -742,7 +749,7 @@ function TranscriptRow({
         {transcript.text}
       </p>
       <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-        {formatRelativeTime(transcript.created_at, t)}
+        {formatRelativeTime(transcript.created_at, t, locale)}
       </span>
     </button>
   );

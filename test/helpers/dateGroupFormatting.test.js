@@ -137,3 +137,33 @@ test("formatShortDate and formatRelativeTime return empty string for nullish or 
   assert.equal(formatRelativeTime("", t), "");
   assert.equal(formatRelativeTime("invalid", t), "");
 });
+
+test("note date formatters use an explicit Arabic locale", async () => {
+  const { formatNoteDate, formatShortDate } = await load();
+  const previousTimezone = process.env.TZ;
+  process.env.TZ = "UTC";
+
+  try {
+    const timestamp = "2026-09-02T12:34:00Z";
+    assert.equal(formatShortDate(timestamp, "ar"), "2 سبتمبر");
+    assert.equal(formatNoteDate(timestamp, "ar"), "2 سبتمبر 2026 · 12:34 م");
+  } finally {
+    if (previousTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  }
+});
+
+test("note date formatters retain their English output with an explicit locale", async () => {
+  const { formatNoteDate, formatShortDate } = await load();
+  const previousTimezone = process.env.TZ;
+  process.env.TZ = "UTC";
+
+  try {
+    const timestamp = "2026-09-02T12:34:00Z";
+    assert.equal(formatShortDate(timestamp, "en"), "Sep 2");
+    assert.equal(formatNoteDate(timestamp, "en"), "Sep 2, 2026 · 12:34 PM");
+  } finally {
+    if (previousTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  }
+});

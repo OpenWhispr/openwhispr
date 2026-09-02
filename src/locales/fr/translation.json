@@ -3037,6 +3037,11 @@
       "reopen": "Comprendre l'organisation des espaces"
     },
     "folders": {
+      "defaults": {
+        "personal": "Personnel",
+        "meetings": "Réunions",
+        "videos": "Vidéos"
+      },
       "title": "Dossiers",
       "soon": "Bientôt",
       "folderName": "Nom du dossier",
