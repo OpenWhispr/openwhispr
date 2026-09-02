@@ -98,9 +98,7 @@ export function buildInferenceFields(variant) {
 }
 
 export function parseWhisperDiagnostics(stderr) {
-  const languageMatches = [
-    ...stderr.matchAll(/auto-detected language:\s*([\w-]+)\s*\(p\s*=\s*([\d.]+)\)/gi),
-  ];
+  const languageMatches = parseLanguageDetections(stderr);
   const language = languageMatches.at(-1);
   const timingsMs = {};
   for (const stage of ["load", "sample", "encode", "decode", "total"]) {
@@ -112,10 +110,27 @@ export function parseWhisperDiagnostics(stderr) {
     if (matches.length) timingsMs[stage] = Number(matches.at(-1)[1]);
   }
   return {
-    detectedLanguage: language?.[1] ?? null,
-    detectedLanguageProbability: language ? Number(language[2]) : null,
+    detectedLanguage: language?.language ?? null,
+    detectedLanguageProbability: language?.probability ?? null,
     timingsMs,
   };
+}
+
+function parseLanguageDetections(stderr) {
+  return [...stderr.matchAll(/auto-detected language:\s*([\w-]+)\s*\(p\s*=\s*([\d.]+)\)/gi)].map(
+    (match) => ({ language: match[1], probability: Number(match[2]) })
+  );
+}
+
+function attachRequestLanguageEvidence(result, requestedLanguage, stderr) {
+  const languageDetections = parseLanguageDetections(stderr);
+  const requests = [...result.warmup, ...result.requests];
+  for (const [index, request] of requests.entries()) {
+    const detection = requestedLanguage === "auto" ? languageDetections[index] : null;
+    request.requestedLanguage = requestedLanguage;
+    request.detectedLanguage = detection?.language ?? null;
+    request.detectedLanguageProbability = detection?.probability ?? null;
+  }
 }
 
 function quantile(sorted, fraction) {
@@ -127,11 +142,14 @@ export function summarizeDurations(durations) {
   const sorted = durations.toSorted((left, right) => left - right);
   const p25 = quantile(sorted, 0.25);
   const p75 = quantile(sorted, 0.75);
+  const middle = Math.floor(sorted.length / 2);
+  const median =
+    sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
   return {
     count: sorted.length,
     minMs: sorted[0],
     p25Ms: p25,
-    medianMs: quantile(sorted, 0.5),
+    medianMs: median,
     p75Ms: p75,
     maxMs: sorted.at(-1),
     iqrMs: p75 - p25,
@@ -145,7 +163,7 @@ export function evaluateBaselineDrift(startMedianMs, endMedianMs) {
     endMedianMs,
     changePercent: Number(changePercent.toFixed(2)),
     thresholdPercent: 15,
-    stable: changePercent <= 15,
+    stable: Math.abs(changePercent) <= 15,
   };
 }
 
@@ -178,6 +196,7 @@ export async function executeVariant(variant, operations, { warmups = 1, measure
       }
     }
   }
+  attachRequestLanguageEvidence(result, variant.language, result.stderr ?? "");
   if (result.stderr !== undefined) result.diagnostics = parseWhisperDiagnostics(result.stderr);
   return result;
 }

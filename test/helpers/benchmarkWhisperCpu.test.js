@@ -155,6 +155,14 @@ test("duration summary reports a literal median and interquartile spread", async
   });
 });
 
+test("duration summary averages the two middle values for ten measured runs", async () => {
+  const { summarizeDurations } = await loadHarness();
+
+  const summary = summarizeDurations([1, 2, 3, 4, 5, 100, 101, 102, 103, 104]);
+
+  assert.equal(summary.medianMs, 52.5);
+});
+
 test("baseline drift above fifteen percent marks the run unstable", async () => {
   const { evaluateBaselineDrift } = await loadHarness();
 
@@ -166,6 +174,7 @@ test("baseline drift above fifteen percent marks the run unstable", async () => 
     stable: false,
   });
   assert.equal(evaluateBaselineDrift(1000, 850).stable, true);
+  assert.equal(evaluateBaselineDrift(1000, 800).stable, false);
 });
 
 test("variant execution always stops the server and preserves a request failure", async () => {
@@ -196,6 +205,67 @@ test("variant execution always stops the server and preserves a request failure"
   assert.equal(result.error, "connection reset");
   assert.equal(result.exitCode, 0);
   assert.equal(result.stderr, "native diagnostics");
+});
+
+test("variant execution attaches each auto-detected language to its request", async () => {
+  const { executeVariant } = await loadHarness();
+  const detections = [
+    ["es", "0.99"],
+    ["es", "0.98"],
+    ["fr", "0.60"],
+  ];
+
+  const result = await executeVariant(
+    { id: "baseline-start", language: "auto" },
+    {
+      start: async () => ({ readyMs: 42 }),
+      request: async (_server, _variant, index) => ({
+        index: index + 1,
+        durationMs: 100 + index,
+        status: 200,
+        transcript: "Hola",
+      }),
+      stop: async () => ({
+        exitCode: 0,
+        stderr: detections
+          .map(
+            ([language, probability]) =>
+              `whisper_full_with_state: auto-detected language: ${language} (p = ${probability})`
+          )
+          .join("\n"),
+      }),
+    },
+    { warmups: 1, measuredRuns: 2 }
+  );
+
+  assert.deepEqual(result.warmup[0], {
+    index: 1,
+    durationMs: 100,
+    status: 200,
+    transcript: "Hola",
+    requestedLanguage: "auto",
+    detectedLanguage: "es",
+    detectedLanguageProbability: 0.99,
+  });
+  assert.deepEqual(
+    result.requests.map(({ requestedLanguage, detectedLanguage, detectedLanguageProbability }) => ({
+      requestedLanguage,
+      detectedLanguage,
+      detectedLanguageProbability,
+    })),
+    [
+      {
+        requestedLanguage: "auto",
+        detectedLanguage: "es",
+        detectedLanguageProbability: 0.98,
+      },
+      {
+        requestedLanguage: "auto",
+        detectedLanguage: "fr",
+        detectedLanguageProbability: 0.6,
+      },
+    ]
+  );
 });
 
 test("report schema keeps provenance, environment, rows, and drift explicit", async () => {
