@@ -305,8 +305,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     (s) => s.enterpriseTranscriptionSetupMode
   );
   const managedActive =
-    useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode).kind ===
-    "managed";
+    useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode).kind === "managed";
 
   const isOpenWhisprCloud =
     isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
