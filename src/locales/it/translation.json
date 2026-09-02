@@ -2162,7 +2162,9 @@
         "openwhisprDesc": "Risultati affidabili. Nessuna configurazione necessaria.",
         "providersDesc": "Usa la tua chiave API.",
         "localDesc": "Modelli sul dispositivo. Totalmente privato.",
-        "selfHostedDesc": "Il tuo server nella tua rete."
+        "selfHostedDesc": "Il tuo server nella tua rete.",
+        "enterprise": "Cloud aziendale",
+        "enterpriseDesc": "L'audio viene inviato al cloud della tua organizzazione."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Risultati affidabili. Nessuna configurazione necessaria.",
@@ -2187,6 +2189,10 @@
         "switchedSelfHosted": {
           "title": "Self-hosted",
           "description": "Utilizzo del tuo server."
+        },
+        "switchedEnterprise": {
+          "title": "Cloud aziendale selezionato",
+          "description": "La dettatura ora usa la trascrizione gestita dalla tua organizzazione."
         }
       },
       "gpuDevice": {
@@ -2244,7 +2250,8 @@
             "info": "Audio esteso da un segmento al successivo per evitare tagli netti nella concatenazione."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "La tua organizzazione consente solo la trascrizione su cloud aziendale, che non copre ancora la registrazione delle riunioni."
     },
     "intelligence": {
       "gpuDevice": {

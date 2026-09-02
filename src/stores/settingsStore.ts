@@ -73,9 +73,13 @@ export const LLM_POLICY_PROVIDER_IDS = [
 // Azure and Vertex remain intentionally unavailable in the desktop picker.
 export const LLM_ENTERPRISE_POLICY_PROVIDER_IDS = ["bedrock"] as const;
 
+// Managed transcription is Azure-only in this phase.
+export const TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS = ["azure"] as const;
+
 const TRANSCRIPTION_POLICY_CATALOG = {
-  modes: ["openwhispr", "providers", "local", "self-hosted"] as const,
+  modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"] as const,
   byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS,
+  enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
 };
 
 const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
@@ -2772,6 +2776,11 @@ export function selectPolicyEffectiveSettings(
         // as user authorization to send content there.
         writable[keys.baseUrl] = "";
       }
+    } else if (selection.mode === "enterprise") {
+      // The managed deployment/endpoint is resolved separately by
+      // enterpriseIdentityStore; the provider id here only needs to satisfy
+      // the policy gate (isTranscriptionContextAllowed).
+      writable[keys.provider] = selection.provider;
     }
   }
 

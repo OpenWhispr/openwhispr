@@ -157,6 +157,11 @@ export function MeetingTranscriptionPanel() {
 
   return (
     <div className="space-y-3">
+      {transcriptionModes.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          {t("settingsPage.transcription.meetingEnterpriseOnly")}
+        </p>
+      )}
       <InferenceModeSelector
         modes={transcriptionModes}
         activeMode={effectiveTranscriptionMode}

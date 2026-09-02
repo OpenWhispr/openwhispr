@@ -123,6 +123,7 @@ import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import {
   clearMissingLocalModelSelections,
+  TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
 } from "../stores/settingsStore";
@@ -588,10 +589,19 @@ function TranscriptionSection({
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
       },
+      {
+        id: "enterprise",
+        label: t("settingsPage.transcription.modes.enterprise"),
+        description: t("settingsPage.transcription.modes.enterpriseDesc"),
+        icon: <ShieldCheck className="w-4 h-4" />,
+      },
     ],
     "transcription",
     transcriptionMode,
-    { byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS }
+    {
+      byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS,
+      enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
+    }
   );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
@@ -604,12 +614,14 @@ function TranscriptionSection({
     setUseLocalWhisper(mode === "local");
     updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
     setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
 
     const toastKey = {
       openwhispr: "switchedCloud",
       providers: "switchedProviders",
       local: "switchedLocal",
       "self-hosted": "switchedSelfHosted",
+      enterprise: "switchedEnterprise",
     }[mode];
     toast({
       title: t(`settingsPage.transcription.toasts.${toastKey}.title`),

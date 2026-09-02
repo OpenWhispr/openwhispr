@@ -2162,7 +2162,9 @@
         "openwhisprDesc": "準確可靠，無需設定。",
         "providersDesc": "使用你自己的 API Key。",
         "localDesc": "裝置端模型，完全私密。",
-        "selfHostedDesc": "你的伺服器，在你的網路上。"
+        "selfHostedDesc": "你的伺服器，在你的網路上。",
+        "enterprise": "企業雲端",
+        "enterpriseDesc": "音訊會傳送到貴組織自己的雲端。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "準確可靠，無需設定。",
@@ -2187,6 +2189,10 @@
         "switchedSelfHosted": {
           "title": "自架主機",
           "description": "使用你自己的伺服器。"
+        },
+        "switchedEnterprise": {
+          "title": "已選擇企業雲端",
+          "description": "聽寫現在使用貴組織管理的轉錄部署。"
         }
       },
       "gpuDevice": {
@@ -2244,7 +2250,8 @@
             "info": "將每個片段延伸到下一個片段的音訊量，避免拼接時出現突兀截斷。"
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "貴組織僅允許企業雲端轉錄，尚不支援會議錄音。"
     },
     "intelligence": {
       "gpuDevice": {

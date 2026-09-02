@@ -831,3 +831,25 @@ test("missing required models is a pure set difference over disk truth", async (
   );
   assert.deepEqual(missingRequiredLocalModels(["base"], ["base"]), []);
 });
+
+test("enterprise transcription resolves through the transcription policy section", async () => {
+  const { resolveEffectivePolicySelection, filterModeOptionsByPolicy } = await load();
+  const enterpriseOnly = {
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: {
+      ...policy,
+      transcription: { allowedModes: ["enterprise"], allowedByokProviders: [], allowedEnterpriseProviders: ["azure"] },
+    },
+  };
+  const catalog = { modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"], byokProviders: ["openai"], enterpriseProviders: ["azure"] };
+  assert.deepEqual(
+    resolveEffectivePolicySelection(enterpriseOnly, "transcription", { mode: "openwhispr", provider: "" }, catalog),
+    { mode: "enterprise", provider: "azure" }
+  );
+  const options = filterModeOptionsByPolicy(catalog.modes.map((id) => ({ id })), "transcription", enterpriseOnly, catalog);
+  assert.deepEqual(options.map((o) => o.id), ["enterprise"]);
+  // The meeting catalog has no enterprise lane, so meetings stay unresolvable (documented).
+  const meetingCatalog = { modes: ["openwhispr", "providers", "local"], byokProviders: ["openai"] };
+  assert.equal(resolveEffectivePolicySelection(enterpriseOnly, "transcription", { mode: "local", provider: "" }, meetingCatalog), null);
+});

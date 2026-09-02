@@ -218,13 +218,13 @@ export function resolveEffectivePolicySelection(
     policy[scope].allowedByokProviders.includes(provider)
   );
   const allowedEnterpriseProviders = (catalog.enterpriseProviders ?? []).filter((provider) =>
-    policy.llm.allowedEnterpriseProviders.includes(provider)
+    (policy[scope].allowedEnterpriseProviders ?? []).includes(provider)
   );
   const modeIsUsable = (mode: InferenceMode): boolean => {
     if (!catalog.modes.includes(mode)) return false;
     if (!policy[scope].allowedModes.includes(mode)) return false;
     if (mode === "providers") return allowedByokProviders.length > 0;
-    if (mode === "enterprise") return scope === "llm" && allowedEnterpriseProviders.length > 0;
+    if (mode === "enterprise") return allowedEnterpriseProviders.length > 0;
     return true;
   };
 
@@ -412,13 +412,10 @@ function policyModeHasAvailableProvider(
       : policy[scope].allowedByokProviders.length > 0;
   }
   if (mode === "enterprise") {
-    if (scope === "transcription") {
-      return (policy.transcription.allowedEnterpriseProviders ?? []).length > 0;
-    }
-    const selectableProviders = providerCatalog?.enterpriseProviders ?? ["bedrock"];
-    return selectableProviders.some((provider) =>
-      policy.llm.allowedEnterpriseProviders.includes(provider)
-    );
+    const allowed = policy[scope].allowedEnterpriseProviders ?? [];
+    const selectable =
+      providerCatalog?.enterpriseProviders ?? (scope === "llm" ? ["bedrock"] : ["azure"]);
+    return selectable.some((provider) => allowed.includes(provider));
   }
   return true;
 }

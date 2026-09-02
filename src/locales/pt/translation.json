@@ -2141,7 +2141,9 @@
         "openwhisprDesc": "Resultados confiáveis. Sem configuração.",
         "providersDesc": "Use sua própria chave API.",
         "localDesc": "Modelos no dispositivo. Privado.",
-        "selfHostedDesc": "Seu servidor na sua rede."
+        "selfHostedDesc": "Seu servidor na sua rede.",
+        "enterprise": "Nuvem corporativa",
+        "enterpriseDesc": "O áudio vai para a nuvem da sua organização."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Resultados confiáveis. Sem configuração.",
@@ -2166,6 +2168,10 @@
         "switchedSelfHosted": {
           "title": "Auto-hospedado",
           "description": "Usando seu próprio servidor."
+        },
+        "switchedEnterprise": {
+          "title": "Nuvem corporativa selecionada",
+          "description": "A ditado agora usa a transcrição gerida pela sua organização."
         }
       },
       "gpuDevice": {
@@ -2223,7 +2229,8 @@
             "info": "Áudio estendido de um segmento para o próximo, evitando cortes bruscos na concatenação."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "A sua organização só permite transcrição em nuvem corporativa, que ainda não abrange a gravação de reuniões."
     },
     "intelligence": {
       "gpuDevice": {

@@ -2162,7 +2162,9 @@
         "openwhisprDesc": "信頼できる精度。設定不要。",
         "providersDesc": "自分のAPIキーを使用。",
         "localDesc": "端末上のモデル。完全プライベート。",
-        "selfHostedDesc": "自前サーバーをネットワーク上に。"
+        "selfHostedDesc": "自前サーバーをネットワーク上に。",
+        "enterprise": "エンタープライズクラウド",
+        "enterpriseDesc": "音声は組織自身のクラウドに送信されます。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "信頼できる精度。設定不要。",
@@ -2187,6 +2189,10 @@
         "switchedSelfHosted": {
           "title": "セルフホスト",
           "description": "独自のサーバーを使用します。"
+        },
+        "switchedEnterprise": {
+          "title": "エンタープライズクラウドを選択しました",
+          "description": "音声入力は組織が管理する文字起こしを使用します。"
         }
       },
       "gpuDevice": {
@@ -2244,7 +2250,8 @@
             "info": "区間を連結するときに途切れないよう、次の区間に延長する音声の長さです。"
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "組織はエンタープライズクラウドの文字起こしのみを許可しており、会議の録音にはまだ対応していません。"
     },
     "intelligence": {
       "gpuDevice": {

@@ -2451,7 +2451,9 @@
         "openwhisprDesc": "Reliable accuracy. No setup needed.",
         "providersDesc": "Bring your own API key.",
         "localDesc": "On-device models. Fully private.",
-        "selfHostedDesc": "Your own server on your network."
+        "selfHostedDesc": "Your own server on your network.",
+        "enterprise": "Enterprise cloud",
+        "enterpriseDesc": "Audio goes to your organization's own cloud."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
@@ -2476,6 +2478,10 @@
         "switchedSelfHosted": {
           "title": "Self-Hosted",
           "description": "Using your own server."
+        },
+        "switchedEnterprise": {
+          "title": "Enterprise cloud selected",
+          "description": "Dictation now uses the transcription deployment your organization manages."
         }
       },
       "gpuDevice": {
@@ -2533,7 +2539,8 @@
             "info": "Audio carried from each segment into the next to avoid abrupt cuts when concatenating."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet."
     },
     "intelligence": {
       "gpuDevice": {

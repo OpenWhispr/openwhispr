@@ -233,6 +233,16 @@ export function resolveTranscriptionRoute({
     };
   }
 
+  // A policy-effective "enterprise" selection with no managed resolution means
+  // the managed config has not resolved (loading, evicted, or absent). Never
+  // fall through to a personal lane in that state.
+  if (s.transcriptionMode === "enterprise") {
+    return error(
+      "Managed transcription is not available right now. Try again in a moment.",
+      "MANAGED_CONFIG_UNAVAILABLE"
+    );
+  }
+
   // Fail-closed floor only: callers pass policy-effective settings, so a
   // disallowed selection here means the policy layer was bypassed upstream.
   if (

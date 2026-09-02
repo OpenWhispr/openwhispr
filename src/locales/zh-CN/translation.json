@@ -2162,7 +2162,9 @@
         "openwhisprDesc": "准确可靠，无需设置。",
         "providersDesc": "使用你自己的 API Key。",
         "localDesc": "设备端模型，完全私密。",
-        "selfHostedDesc": "你的服务器，在你的网络上。"
+        "selfHostedDesc": "你的服务器，在你的网络上。",
+        "enterprise": "企业云",
+        "enterpriseDesc": "音频将发送到贵组织自己的云。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "准确可靠，无需设置。",
@@ -2187,6 +2189,10 @@
         "switchedSelfHosted": {
           "title": "自托管",
           "description": "使用你自己的服务器。"
+        },
+        "switchedEnterprise": {
+          "title": "已选择企业云",
+          "description": "听写现在使用贵组织管理的转录部署。"
         }
       },
       "gpuDevice": {
@@ -2244,7 +2250,8 @@
             "info": "将每个片段延伸到下一个片段的音频量，避免拼接时出现突兀的截断。"
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "贵组织仅允许企业云转录，暂不支持会议录音。"
     },
     "intelligence": {
       "gpuDevice": {

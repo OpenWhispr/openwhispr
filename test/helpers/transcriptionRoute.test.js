@@ -356,3 +356,9 @@ test("a managed resolution error becomes an error route", async () => {
   assert.equal(route.transport, "error");
   assert.equal(route.code, "MANAGED_CONFIG_UNAVAILABLE");
 });
+
+test("an enterprise transcription mode without a managed resolution fails closed", async () => {
+  const route = await resolve({ transcriptionMode: "enterprise", cloudTranscriptionProvider: "openai" });
+  assert.equal(route.transport, "error");
+  assert.equal(route.code, "MANAGED_CONFIG_UNAVAILABLE");
+});
