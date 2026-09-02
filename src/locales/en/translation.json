@@ -125,7 +125,6 @@
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
       "trySuggestions": "Try: {{suggestions}}",
       "slotConflict": "This hotkey is already used for {{slot}}.",
-      "holdNeedsReleaseSourceMac": "Hold isn't available for \"{{hotkey}}\" on macOS because a single key can't report its release. Use a key combination, the Globe/Fn key, a right-side modifier, or a mouse button.",
       "holdUnsupportedOnHyprland": "On Hyprland, Hold is only available for the dictation hotkey."
     },
     "portal": {

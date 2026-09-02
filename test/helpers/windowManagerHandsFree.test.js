@@ -384,7 +384,10 @@ test("slot activation modes default to tap and follow the hotkey manager's verdi
   assert.equal(await manager.setSlotActivationModeCache("meeting", "push"), false);
 });
 
-test("reconcileNativeKeyListeners passes the per-slot activation modes", async () => {
+test("reconcileNativeKeyListeners passes the per-slot activation modes", async (t) => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+  t.after(() => Object.defineProperty(process, "platform", originalPlatform));
   const { manager } = makeManager();
   let captured = null;
   manager.hotkeyManager.isUsingNativeShortcut = () => false;
@@ -398,6 +401,28 @@ test("reconcileNativeKeyListeners passes the per-slot activation modes", async (
 
   assert.equal(captured.slotModes.voiceAgent, "push");
   assert.equal(captured.slotModes.translation, "tap");
+});
+
+test("on macOS reconcileNativeKeyListeners hands off to the listener sync hook", (t) => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+  t.after(() => Object.defineProperty(process, "platform", originalPlatform));
+  const { manager } = makeManager();
+  let synced = 0;
+  manager.onMacListenerReconcile = () => {
+    synced += 1;
+  };
+  manager.hotkeyManager.getNativeListenerKeys = () => {
+    throw new Error("the Windows/Linux listener path must not run on macOS");
+  };
+
+  manager.reconcileNativeKeyListeners();
+  assert.equal(synced, 1);
+
+  // Hotkey capture stops every listener; the hook is not called then.
+  manager.hotkeyManager.isInListeningMode = () => true;
+  manager.reconcileNativeKeyListeners();
+  assert.equal(synced, 1);
 });
 
 test("a renderer idle report clears the hands-free latch", (t) => {
