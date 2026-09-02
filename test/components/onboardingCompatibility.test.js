@@ -156,18 +156,18 @@ test("permissions replaces Back with Logout, keeps Continue at the bottom, and g
     "/components/onboarding/CompactPermissionsStep.tsx"
   );
 
-  const render = (micPermissionGranted) =>
+  const render = (micPermissionGranted, onLogout) =>
     renderToStaticMarkup(
       React.createElement(CompactPermissionsStep, {
         permissions: permissions({ micPermissionGranted }),
         systemAudio,
         screenContext,
-        onLogout: asyncNoop,
+        onLogout,
         onContinue: noop,
       })
     );
 
-  const blocked = render(false);
+  const blocked = render(false, asyncNoop);
   assert.match(blocked, /relative flex h-full flex-col overflow-y-auto px-5 pb-6 pt-38/);
   assert.doesNotMatch(blocked, />common\.back<\/button>/);
   assert.match(blocked, /mt-auto flex w-full[^>]+>.*common\.logout.*common\.continue/s);
@@ -177,9 +177,14 @@ test("permissions replaces Back with Logout, keeps Continue at the bottom, and g
   );
   assert.doesNotMatch(blocked, /fixed top-4/);
 
-  const ready = render(true);
+  const ready = render(true, asyncNoop);
   assert.match(ready, /class="onboarding-pressable h-10 flex-1[^>]+>common\.continue/);
   assert.doesNotMatch(ready, /disabled="" class="onboarding-pressable h-10 flex-1/);
+
+  // Guests reach this step without ever signing in, so they get no Logout.
+  const guest = render(true);
+  assert.doesNotMatch(guest, /common\.logout/);
+  assert.match(guest, /common\.continue/);
 });
 
 test("macOS onboarding offers optional Screen Context setup", async (t) => {

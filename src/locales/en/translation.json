@@ -410,11 +410,9 @@
         "descriptionLineOne": "Choose the models you want",
         "descriptionLineTwo": "to run on your device.",
         "providerLabel": "Provider",
-        "agent": "Assistant",
         "download": "Download",
         "downloadingShort": "Downloading",
         "selected": "Selected",
-        "use": "Use",
         "selectModel": "Select model",
         "downloadInProgress": "Download in progress",
         "cancelDownload": "Cancel download of {{model}}",
@@ -1102,9 +1100,7 @@
       "welcomeBack": "Welcome back"
     },
     "signedIn": {
-      "ready": "Ready",
-      "welcomeBack": "Welcome back",
-      "welcomeBackName": "Welcome back, {{name}}"
+      "welcomeBack": "Welcome back"
     },
     "sso": {
       "continueWithSSO": "Sign in with SSO",

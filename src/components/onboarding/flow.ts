@@ -49,7 +49,6 @@ export interface OnboardingByokDraft {
   selectedModel: string;
   baseUrl: string;
   customModel: string;
-  cortiClientId: string;
 }
 
 export interface OnboardingLocalModelDraft {
@@ -272,7 +271,6 @@ function parseByokDraft(value: unknown): OnboardingByokDraft | undefined {
     selectedModel: readDraftString(value.selectedModel),
     baseUrl: readDraftString(value.baseUrl),
     customModel: readDraftString(value.customModel),
-    cortiClientId: readDraftString(value.cortiClientId),
   };
 }
 

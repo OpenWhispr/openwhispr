@@ -410,11 +410,9 @@
         "descriptionLineOne": "デバイス上で実行する",
         "descriptionLineTwo": "モデルを選択してください。",
         "providerLabel": "プロバイダー",
-        "agent": "エージェント",
         "download": "ダウンロード",
         "downloadingShort": "ダウンロード中",
         "selected": "選択済み",
-        "use": "使用",
         "selectModel": "モデルを選択",
         "downloadInProgress": "ダウンロード中",
         "cancelDownload": "{{model}} のダウンロードをキャンセル",
@@ -1103,9 +1101,7 @@
       "welcomeBack": "おかえりなさい"
     },
     "signedIn": {
-      "ready": "準備完了",
-      "welcomeBack": "おかえりなさい",
-      "welcomeBackName": "おかえりなさい、{{name}} さん"
+      "welcomeBack": "おかえりなさい"
     },
     "sso": {
       "continueWithSSO": "SSO でサインイン",

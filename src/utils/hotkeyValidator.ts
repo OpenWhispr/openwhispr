@@ -293,7 +293,7 @@ const LINUX_RESERVED_SHORTCUTS = [
 
 const MAC_RECOMMENDED = [
   "Fn",
-  "Command + K",
+  "Ctrl + Q",
   "Option + Cmd",
   "Right Cmd or Right Option",
   "Modifier + unused key (e.g., Ctrl + Page Up)",

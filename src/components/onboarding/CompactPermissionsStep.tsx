@@ -29,7 +29,8 @@ interface CompactPermissionsStepProps {
     needsRelaunch: boolean;
     request: () => Promise<boolean>;
   };
-  onLogout: () => Promise<void>;
+  /** Omitted on the guest route, which never signed in. */
+  onLogout?: () => Promise<void>;
   onContinue: () => void;
 }
 
@@ -218,14 +219,16 @@ export default function CompactPermissionsStep({
         </div>
 
         <div className="mt-auto flex w-full shrink-0 items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => void onLogout()}
-            className="onboarding-pressable inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 text-sm font-medium text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
-          >
-            <LogOut className="size-3.5" aria-hidden="true" />
-            {t("common.logout")}
-          </button>
+          {onLogout && (
+            <button
+              type="button"
+              onClick={() => void onLogout()}
+              className="onboarding-pressable inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 text-sm font-medium text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
+            >
+              <LogOut className="size-3.5" aria-hidden="true" />
+              {t("common.logout")}
+            </button>
+          )}
 
           <button
             type="button"

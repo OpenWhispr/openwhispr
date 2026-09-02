@@ -389,11 +389,9 @@
         "descriptionLineOne": "Escolha os modelos que você quer",
         "descriptionLineTwo": "executar no seu dispositivo.",
         "providerLabel": "Provedor",
-        "agent": "Agente",
         "download": "Baixar",
         "downloadingShort": "Baixando",
         "selected": "Selecionado",
-        "use": "Usar",
         "selectModel": "Selecionar modelo",
         "downloadInProgress": "Download em andamento",
         "cancelDownload": "Cancelar o download de {{model}}",
@@ -1082,9 +1080,7 @@
       "welcomeBack": "Que bom ter você de volta"
     },
     "signedIn": {
-      "ready": "Pronto",
-      "welcomeBack": "Que bom ter você de volta",
-      "welcomeBackName": "Que bom ter você de volta, {{name}}"
+      "welcomeBack": "Que bom ter você de volta"
     },
     "sso": {
       "continueWithSSO": "Entrar com SSO",

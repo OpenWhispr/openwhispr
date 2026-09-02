@@ -32,54 +32,42 @@ import {
 } from "./pendingLocalModels";
 import { isLocalStageDownloadActive } from "./localDownloadState";
 
-export function SetupStageStepper({
-  stepId,
-  large = true,
-}: {
-  stepId: OnboardingStepId;
-  large?: boolean;
-}) {
+export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
   const { t } = useTranslation();
   const assistant = stepId.endsWith("assistant");
   return (
     <div
-      className={`relative mx-auto flex items-start justify-between ${large ? "w-40" : "w-36"}`}
+      className="relative mx-auto flex items-start justify-between w-40"
       aria-label={t("onboarding.rehaul.provider.progress")}
     >
-      <span
-        className={`absolute left-8 right-8 border-t border-dashed border-[var(--onboarding-control-border)] ${large ? "top-4" : "top-3.5"}`}
-      />
+      <span className="absolute left-8 right-8 border-t border-dashed border-[var(--onboarding-control-border)] top-4" />
       <div className="relative z-10 flex w-14 flex-col items-center gap-1.5 text-[var(--onboarding-text-secondary)]">
         <span
-          className={`flex items-center justify-center rounded-full ${large ? "size-8" : "size-7"} ${
+          className={`flex items-center justify-center rounded-full size-8 ${
             assistant
               ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)]"
               : "bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]"
           }`}
         >
           {assistant ? (
-            <CircleCheck className={large ? "size-4" : "size-3.5"} strokeWidth={2} />
+            <CircleCheck className="size-4" strokeWidth={2} />
           ) : (
-            <AudioLines className={large ? "size-4" : "size-3.5"} />
+            <AudioLines className="size-4" />
           )}
         </span>
-        <span className={large ? "text-xs" : "text-[0.6875rem]"}>
-          {t("onboarding.rehaul.provider.dictation")}
-        </span>
+        <span className="text-xs">{t("onboarding.rehaul.provider.dictation")}</span>
       </div>
       <div className="relative z-10 flex w-14 flex-col items-center gap-1.5 text-[var(--onboarding-text-secondary)]">
         <span
-          className={`flex items-center justify-center rounded-full ${large ? "size-8" : "size-7"} ${
+          className={`flex items-center justify-center rounded-full size-8 ${
             assistant
               ? "bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)]"
               : "border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]"
           }`}
         >
-          <MousePointer2 className={large ? "size-4" : "size-3.5"} />
+          <MousePointer2 className="size-4" />
         </span>
-        <span className={large ? "text-xs" : "text-[0.6875rem]"}>
-          {t("onboarding.rehaul.provider.assistant")}
-        </span>
+        <span className="text-xs">{t("onboarding.rehaul.provider.assistant")}</span>
       </div>
     </div>
   );
@@ -285,7 +273,7 @@ export function ByokProviderStep({
   const [draftBaseUrl, setDraftBaseUrl] = useState(resumeState?.baseUrl ?? "");
   const [draftCustomModel, setDraftCustomModel] = useState(resumeState?.customModel ?? "");
   const [draftCortiClientId, setDraftCortiClientId] = useState(
-    resumeState?.cortiClientId || store.cortiClientId
+    initialProvider === "corti" ? store.cortiClientId : ""
   );
   const [draftCortiClientSecret, setDraftCortiClientSecret] = useState(store.cortiClientSecret);
   const [connected, setConnected] = useState(false);
@@ -300,16 +288,8 @@ export function ByokProviderStep({
       selectedModel,
       baseUrl: draftBaseUrl,
       customModel: draftCustomModel,
-      cortiClientId: draftCortiClientId,
     });
-  }, [
-    draftBaseUrl,
-    draftCortiClientId,
-    draftCustomModel,
-    onResumeStateChange,
-    selectedModel,
-    selectedProvider,
-  ]);
+  }, [draftBaseUrl, draftCustomModel, onResumeStateChange, selectedModel, selectedProvider]);
 
   // A live policy update can remove self-hosting while this card is open.
   useEffect(() => {
@@ -421,7 +401,7 @@ export function ByokProviderStep({
 
   return (
     <section className={`mt-5 ${SETUP_CARD_CLASS}`}>
-      <SetupStageStepper stepId={stepId} large />
+      <SetupStageStepper stepId={stepId} />
 
       <div className="mt-3 space-y-3">
         {selfHostedAllowed && (
@@ -808,7 +788,6 @@ export function LocalModelSetupStep({
     // runs; recording the pending selection for a refused download leaves a
     // stale entry that a much later download would silently activate.
     if (!activeDownload.isDownloading) {
-      setSelectedModel(modelId);
       rememberPendingLocalModel(assistant ? "assistant" : "dictation", {
         provider: selectedProvider,
         modelId,

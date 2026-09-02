@@ -172,7 +172,6 @@ test("v2 sessions retain safe within-step state without accepting secrets", asyn
     selectedModel: "gpt-4o-mini-transcribe",
     baseUrl: "https://self-hosted.example.com",
     customModel: "whisper-local",
-    cortiClientId: "client-id",
   };
   session.resume.localModels["local-assistant"] = {
     provider: "qwen",
@@ -180,8 +179,14 @@ test("v2 sessions retain safe within-step state without accepting secrets", asyn
   };
 
   const serialized = JSON.stringify(session);
-  assert.doesNotMatch(serialized, /password|apiKey|clientSecret/);
+  assert.doesNotMatch(serialized, /password|apiKey|cortiClientId|clientSecret/);
   assert.deepEqual(parseOnboardingSession(serialized), session);
+
+  // Corti's client id is one of the safeStorage-encrypted secrets, so a draft
+  // written by an older build has to be dropped rather than read back.
+  const legacyDraft = JSON.parse(serialized);
+  legacyDraft.resume.byok["byok-dictation"].cortiClientId = "client-id";
+  assert.deepEqual(parseOnboardingSession(JSON.stringify(legacyDraft)), session);
 
   const malformedDraft = JSON.parse(serialized);
   malformedDraft.resume.auth.authMode = "unknown";

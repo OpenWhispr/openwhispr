@@ -410,11 +410,9 @@
         "descriptionLineOne": "选择你想在设备上",
         "descriptionLineTwo": "运行的模型。",
         "providerLabel": "服务商",
-        "agent": "智能体",
         "download": "下载",
         "downloadingShort": "下载中",
         "selected": "已选择",
-        "use": "使用",
         "selectModel": "选择模型",
         "downloadInProgress": "下载进行中",
         "cancelDownload": "取消下载 {{model}}",
@@ -1102,9 +1100,7 @@
       "welcomeBack": "欢迎回来"
     },
     "signedIn": {
-      "ready": "就绪",
-      "welcomeBack": "欢迎回来",
-      "welcomeBackName": "欢迎回来，{{name}}"
+      "welcomeBack": "欢迎回来"
     },
     "sso": {
       "continueWithSSO": "使用 SSO 登录",

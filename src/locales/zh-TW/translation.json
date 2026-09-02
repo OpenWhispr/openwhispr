@@ -410,11 +410,9 @@
         "descriptionLineOne": "選擇你想在裝置上",
         "descriptionLineTwo": "執行的模型。",
         "providerLabel": "服務商",
-        "agent": "代理程式",
         "download": "下載",
         "downloadingShort": "下載中",
         "selected": "已選擇",
-        "use": "使用",
         "selectModel": "選擇模型",
         "downloadInProgress": "下載進行中",
         "cancelDownload": "取消下載 {{model}}",
@@ -1102,9 +1100,7 @@
       "welcomeBack": "歡迎回來"
     },
     "signedIn": {
-      "ready": "準備就緒",
-      "welcomeBack": "歡迎回來",
-      "welcomeBackName": "歡迎回來，{{name}}"
+      "welcomeBack": "歡迎回來"
     },
     "sso": {
       "continueWithSSO": "使用 SSO 登入",

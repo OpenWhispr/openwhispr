@@ -410,11 +410,9 @@
         "descriptionLineOne": "Выберите модели, которые хотите",
         "descriptionLineTwo": "запускать на своём устройстве.",
         "providerLabel": "Провайдер",
-        "agent": "Агент",
         "download": "Скачать",
         "downloadingShort": "Загрузка",
         "selected": "Выбрано",
-        "use": "Использовать",
         "selectModel": "Выбрать модель",
         "downloadInProgress": "Загрузка выполняется",
         "cancelDownload": "Отменить загрузку {{model}}",
@@ -1102,9 +1100,7 @@
       "welcomeBack": "С возвращением"
     },
     "signedIn": {
-      "ready": "Готово",
-      "welcomeBack": "С возвращением",
-      "welcomeBackName": "С возвращением, {{name}}"
+      "welcomeBack": "С возвращением"
     },
     "sso": {
       "continueWithSSO": "Войти через SSO",

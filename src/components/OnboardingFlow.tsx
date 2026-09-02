@@ -787,7 +787,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 : undefined
             }
-            onLogout={handleLogout}
+            // Guests never signed in, so there is nothing for them to log out of.
+            onLogout={session.authPath === "account" ? handleLogout : undefined}
             onContinue={() => void continueFromCurrentStep()}
           />
         );
