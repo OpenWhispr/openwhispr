@@ -309,7 +309,10 @@ test("an enterprise-only transcription policy resolves for dictation and upload"
   assert.equal(effective.transcriptionMode, "enterprise");
   assert.equal(effective.useLocalWhisper, false);
   assert.equal(effective.uploadTranscriptionMode, "enterprise");
-  assert.equal(isTranscriptionContextAllowed(usePolicyStore.getState(), effective, "dictation"), true);
+  assert.equal(
+    isTranscriptionContextAllowed(usePolicyStore.getState(), effective, "dictation"),
+    true
+  );
   assert.equal(isTranscriptionContextAllowed(usePolicyStore.getState(), effective, "upload"), true);
   // Raw preferences are untouched.
   assert.equal(useSettingsStore.getState().transcriptionMode, "providers");

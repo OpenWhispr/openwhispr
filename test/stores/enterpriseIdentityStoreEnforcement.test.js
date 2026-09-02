@@ -244,13 +244,26 @@ test("the transcription opt-out is independent of the LLM setup mode", async (t)
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-stt-setup-mode-" });
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule("/stores/enterpriseIdentityStore.ts");
-  const { getManagedTranscriptionResolution } = await vite.ssrLoadModule("/services/managedTranscription.ts");
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  const { getManagedTranscriptionResolution } = await vite.ssrLoadModule(
+    "/services/managedTranscription.ts"
+  );
   usePolicyStore.setState({ status: "managed", appVersion: "1.10.0", policy });
   const sttDefault = structuredClone(azureSttRequired);
   sttDefault.providers[0].mode = "managed_default";
   sttDefault.providers[0].allowManualSetup = true;
-  useEnterpriseIdentityStore.setState({ accountId: "account-a", workspaceId: "workspace-a", authGeneration: 1, status: "ready", config: sttDefault, error: null, managedScopes: ["transcription"], enforcedScopes: [] });
+  useEnterpriseIdentityStore.setState({
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+    status: "ready",
+    config: sttDefault,
+    error: null,
+    managedScopes: ["transcription"],
+    enforcedScopes: [],
+  });
   assert.equal(useSettingsStore.getState().enterpriseSetupMode, "manual");
   assert.equal(useSettingsStore.getState().enterpriseTranscriptionSetupMode, "auto");
   assert.equal(getManagedTranscriptionResolution()?.kind, "managed");
