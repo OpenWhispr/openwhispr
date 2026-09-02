@@ -3719,7 +3719,22 @@ class IPCHandlers {
     });
 
     ipcMain.handle("update-hotkey", async (event, hotkey) => {
-      return await this.windowManager.updateHotkey(hotkey);
+      const result = await this.windowManager.updateHotkey(hotkey);
+      // A Hold the new hotkey cannot deliver converged to Tap in the manager:
+      // persist it and tell every renderer, the same way a rejected
+      // activation-mode change is echoed back.
+      if (result?.success && result.activationMode) {
+        this.environmentManager.saveActivationMode(result.activationMode);
+        for (const browserWindow of BrowserWindow.getAllWindows()) {
+          if (!browserWindow.isDestroyed()) {
+            browserWindow.webContents.send("setting-updated", {
+              key: "activationMode",
+              value: result.activationMode,
+            });
+          }
+        }
+      }
+      return result;
     });
 
     ipcMain.handle("set-hotkey-listening-mode", async (event, enabled) => {

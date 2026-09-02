@@ -12,6 +12,13 @@ const APP_ID = "open-whispr";
 const DBUS_CALL_TIMEOUT_MS = 5000;
 const PORTAL_REQUEST_TIMEOUT_MS = 120000;
 
+// What the portal's bind dialog shows next to each shortcut id.
+const SHORTCUT_DESCRIPTION_KEYS = {
+  dictation: "onboarding.activation.holdDescription",
+  voiceAgent: "hotkey.portal.voiceAgentHold",
+  translation: "hotkey.portal.translationHold",
+};
+
 let dbus = null;
 
 function getDBus() {
@@ -44,7 +51,11 @@ class GnomeGlobalShortcutsPortal {
   } = {}) {
     this.bus = null;
     this.sessionHandle = null;
-    this.callback = null;
+    // shortcut id -> { trigger, callback }. One session carries every Hold
+    // slot, because a session binds its shortcuts exactly once: any change to
+    // this set means a fresh session bound with the full set.
+    this.shortcuts = new Map();
+    this._pending = null;
     this.available = false;
     this.activationListener = null;
     this.deactivationListener = null;
@@ -99,71 +110,120 @@ class GnomeGlobalShortcutsPortal {
     return this.available;
   }
 
-  async registerKeybinding(preferredTrigger, callback) {
-    if (!(await this.init())) return false;
+  // Register (or replace) one slot's shortcut. Serialised with every other
+  // register/unregister so two callers can never race two sessions into life.
+  registerKeybinding(preferredTrigger, callback, shortcutId = "dictation") {
+    return this._serialize(async () => {
+      if (!(await this.init())) return false;
 
-    await this.unregisterKeybinding();
-    this.callback = callback;
-
-    try {
-      const sessionToken = this._newToken();
-      const createRequestToken = this._newToken();
-      const session = await this._request(
-        "CreateSession",
-        "a{sv}",
-        [
-          vardict([
-            ["handle_token", "s", createRequestToken],
-            ["session_handle_token", "s", sessionToken],
-          ]),
-        ],
-        createRequestToken
-      );
-      this.sessionHandle = readDict(session).get("session_handle");
-      if (!this.sessionHandle) throw new Error("Portal did not return a session handle");
-
-      await this._listenForShortcutEvents();
-      const bindRequestToken = this._newToken();
-      const result = await this._request(
-        "BindShortcuts",
-        "oa(sa{sv})sa{sv}",
-        [
-          this.sessionHandle,
-          [
-            [
-              "dictation",
-              vardict([
-                ["description", "s", i18nMain.t("onboarding.activation.holdDescription")],
-                ["preferred_trigger", "s", preferredTrigger],
-              ]),
-            ],
-          ],
-          "",
-          vardict([["handle_token", "s", bindRequestToken]]),
-        ],
-        bindRequestToken
-      );
-      const shortcuts = readDict(result).get("shortcuts") || [];
-      if (!shortcuts.some(([id]) => id === "dictation")) {
-        throw new Error("Portal did not bind the dictation shortcut");
+      this.shortcuts.set(shortcutId, { trigger: preferredTrigger, callback });
+      try {
+        await this._bindAll();
+        debugLogger.log(`[GnomeGlobalShortcutsPortal] "${shortcutId}" shortcut registered`);
+        return true;
+      } catch (err) {
+        debugLogger.log(
+          `[GnomeGlobalShortcutsPortal] Failed to register "${shortcutId}" shortcut:`,
+          err.message
+        );
+        // Keep the slots that did bind; only the refused one is dropped.
+        this.shortcuts.delete(shortcutId);
+        await this._bindAll().catch(() => this._closeSession());
+        return false;
       }
+    });
+  }
 
-      debugLogger.log("[GnomeGlobalShortcutsPortal] Dictation shortcut registered");
-      return true;
-    } catch (err) {
-      debugLogger.log(
-        "[GnomeGlobalShortcutsPortal] Failed to register dictation shortcut:",
-        err.message
-      );
-      await this.unregisterKeybinding();
-      return false;
+  // Drop one slot's shortcut; with no id, drop every shortcut and the session.
+  unregisterKeybinding(shortcutId) {
+    return this._serialize(async () => {
+      if (shortcutId === undefined) {
+        this.shortcuts.clear();
+        await this._closeSession();
+        return;
+      }
+      if (!this.shortcuts.delete(shortcutId)) return;
+      try {
+        await this._bindAll();
+      } catch (err) {
+        debugLogger.log(
+          `[GnomeGlobalShortcutsPortal] Rebind after dropping "${shortcutId}" failed:`,
+          err.message
+        );
+        await this._closeSession();
+      }
+    });
+  }
+
+  // Run tasks one at a time. An idle queue starts the task right away (its
+  // first D-Bus call goes out synchronously); a busy one chains behind the
+  // task in flight.
+  _serialize(task) {
+    const previous = this._pending;
+    const run = previous ? previous.then(task, task) : (async () => task())();
+    const settled = run
+      .catch(() => undefined)
+      .then(() => {
+        if (this._pending === settled) this._pending = null;
+      });
+    this._pending = settled;
+    return run;
+  }
+
+  // Replace the session with one bound to the current shortcut set. Throws
+  // when the portal binds fewer shortcuts than asked.
+  async _bindAll() {
+    await this._closeSession();
+    if (this.shortcuts.size === 0) return;
+
+    const sessionToken = this._newToken();
+    const createRequestToken = this._newToken();
+    const session = await this._request(
+      "CreateSession",
+      "a{sv}",
+      [
+        vardict([
+          ["handle_token", "s", createRequestToken],
+          ["session_handle_token", "s", sessionToken],
+        ]),
+      ],
+      createRequestToken
+    );
+    this.sessionHandle = readDict(session).get("session_handle");
+    if (!this.sessionHandle) throw new Error("Portal did not return a session handle");
+
+    await this._listenForShortcutEvents();
+    const bindRequestToken = this._newToken();
+    const entries = [...this.shortcuts].map(([id, { trigger }]) => [
+      id,
+      vardict([
+        [
+          "description",
+          "s",
+          i18nMain.t(SHORTCUT_DESCRIPTION_KEYS[id] || SHORTCUT_DESCRIPTION_KEYS.dictation),
+        ],
+        ["preferred_trigger", "s", trigger],
+      ]),
+    ]);
+    const result = await this._request(
+      "BindShortcuts",
+      "oa(sa{sv})sa{sv}",
+      [this.sessionHandle, entries, "", vardict([["handle_token", "s", bindRequestToken]])],
+      bindRequestToken
+    );
+    const bound = new Set((readDict(result).get("shortcuts") || []).map(([id]) => id));
+    const missing = [...this.shortcuts.keys()].filter((id) => !bound.has(id));
+    if (missing.length > 0) {
+      throw new Error(`Portal did not bind: ${missing.join(", ")}`);
     }
   }
 
-  async unregisterKeybinding() {
+  async _closeSession() {
     this._removeShortcutListeners();
-    this.callback = null;
-    if (!this.sessionHandle || !this.bus) return;
+    if (!this.sessionHandle || !this.bus) {
+      this.sessionHandle = null;
+      return;
+    }
 
     const sessionHandle = this.sessionHandle;
     this.sessionHandle = null;
@@ -196,13 +256,13 @@ class GnomeGlobalShortcutsPortal {
       "Deactivated"
     );
     this.activationListener = ([sessionHandle, shortcutId]) => {
-      if (sessionHandle === this.sessionHandle && shortcutId === "dictation") {
-        this.callback?.(undefined, "down");
+      if (sessionHandle === this.sessionHandle) {
+        this.shortcuts.get(shortcutId)?.callback?.(undefined, "down");
       }
     };
     this.deactivationListener = ([sessionHandle, shortcutId]) => {
-      if (sessionHandle === this.sessionHandle && shortcutId === "dictation") {
-        this.callback?.(undefined, "up");
+      if (sessionHandle === this.sessionHandle) {
+        this.shortcuts.get(shortcutId)?.callback?.(undefined, "up");
       }
     };
     bus.signals.on(activationSignal, this.activationListener);

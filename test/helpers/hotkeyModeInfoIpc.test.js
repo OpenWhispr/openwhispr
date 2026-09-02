@@ -70,6 +70,9 @@ function anything() {
   });
 }
 
+let updateHotkeyResult = { success: true, message: "ok" };
+const savedActivationModes = [];
+
 function buildFakeThis(hotkeyManager) {
   const windowManager = new Proxy(
     {
@@ -78,25 +81,35 @@ function buildFakeThis(hotkeyManager) {
       isUsingGnomeHotkeys: () => false,
       isUsingHyprlandHotkeys: () => false,
       isUsingKDEHotkeys: () => false,
+      updateHotkey: async () => updateHotkeyResult,
     },
     { get: (t, prop) => (prop in t ? t[prop] : anything()) }
   );
-  const target = { windowManager, linuxKeyManager: null };
+  const environmentManager = new Proxy(
+    { saveActivationMode: (mode) => savedActivationModes.push(mode) },
+    { get: (t, prop) => (prop in t ? t[prop] : anything()) }
+  );
+  const target = { windowManager, environmentManager, linuxKeyManager: null };
   return new Proxy(target, {
     get: (t, prop) => (prop in t ? t[prop] : anything()),
   });
 }
 
 let modeInfoHandler;
+let updateHotkeyHandler;
 let HotkeyManager;
+let sharedHotkeyManager;
 test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   HotkeyManager = require("../../src/helpers/hotkeyManager");
-  Ctor.prototype.setupHandlers.call(buildFakeThis(new HotkeyManager()));
+  sharedHotkeyManager = new HotkeyManager();
+  Ctor.prototype.setupHandlers.call(buildFakeThis(sharedHotkeyManager));
   modeInfoHandler = handlers.get("get-hotkey-mode-info");
+  updateHotkeyHandler = handlers.get("update-hotkey");
   assert.ok(modeInfoHandler, "get-hotkey-mode-info must be registered");
+  assert.ok(updateHotkeyHandler, "update-hotkey must be registered");
 });
 
 test.after(() => {
@@ -145,4 +158,45 @@ test("Windows mode info keeps every regular hotkey Hold-capable", async () => {
       assert.equal(info.supportsPushToTalk, true, `${hotkey}/${slot} should support Hold`);
     }
   });
+});
+
+test("Linux DE-native mode info offers Hold to the assistant and translation slots", async () => {
+  await withPlatform("linux", async () => {
+    sharedHotkeyManager.useKDE = true;
+    try {
+      for (const [hotkey, slot] of [
+        ["F9", "voiceAgent"],
+        ["Control+Shift+T", "translation"],
+      ]) {
+        const info = await modeInfoHandler({ sender: {} }, hotkey, slot);
+        assert.equal(info.supportsPushToTalk, true, `${hotkey}/${slot} should support Hold`);
+      }
+      const modifierOnly = await modeInfoHandler({ sender: {} }, "Control+Super", "voiceAgent");
+      assert.equal(modifierOnly.supportsPushToTalk, false);
+    } finally {
+      sharedHotkeyManager.useKDE = false;
+    }
+
+    sharedHotkeyManager.useHyprland = true;
+    try {
+      const info = await modeInfoHandler({ sender: {} }, "F9", "voiceAgent");
+      assert.equal(info.supportsPushToTalk, false);
+      assert.equal(typeof info.pushToTalkUnavailableReason, "string");
+    } finally {
+      sharedHotkeyManager.useHyprland = false;
+    }
+  });
+});
+
+test("update-hotkey persists a Hold-to-Tap convergence reported by the manager", async () => {
+  updateHotkeyResult = { success: true, message: "ok", activationMode: "tap" };
+  savedActivationModes.length = 0;
+  const result = await updateHotkeyHandler({ sender: {} }, "F13");
+  assert.equal(result.activationMode, "tap");
+  assert.deepEqual(savedActivationModes, ["tap"]);
+
+  // An ordinary update touches no mode.
+  updateHotkeyResult = { success: true, message: "ok" };
+  await updateHotkeyHandler({ sender: {} }, "Command+Period");
+  assert.deepEqual(savedActivationModes, ["tap"]);
 });

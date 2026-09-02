@@ -86,7 +86,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       dialog: {},
     };
   }
-  if (request === "./debugLogger") return { warn: () => undefined };
+  if (request === "./debugLogger") return { warn: () => undefined, debug: () => undefined };
   if (request === "./hotkeyManager") return FakeHotkeyManager;
   if (request === "./dragManager") return FakeDragManager;
   if (request === "./menuManager") return {};

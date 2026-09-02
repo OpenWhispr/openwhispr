@@ -97,6 +97,7 @@ function makeManager() {
     getCurrentHotkey: () => "F8",
     supportsPushToTalk: () => true,
     getSlotHotkey: () => "F9",
+    setSlotActivationMode: async () => true,
   };
   manager.showDictationPanel = () => undefined;
   manager.hideDictationPanel = () => {
@@ -353,8 +354,13 @@ test("listening mode blocks a native hold press before any side effects", (t) =>
   assert.equal(manager.nativePushState, null);
 });
 
-test("slot activation modes default to tap and are cached per slot", async () => {
+test("slot activation modes default to tap and follow the hotkey manager's verdict", async () => {
   const { manager } = makeManager();
+  const requests = [];
+  manager.hotkeyManager.setSlotActivationMode = async (slotName, mode, options) => {
+    requests.push([slotName, mode, options?.notifyFailure]);
+    return slotName !== "translation";
+  };
 
   assert.equal(manager.getSlotActivationMode("voiceAgent"), "tap");
   assert.equal(manager.getSlotActivationMode("translation"), "tap");
@@ -362,31 +368,20 @@ test("slot activation modes default to tap and are cached per slot", async () =>
 
   assert.equal(await manager.setSlotActivationModeCache("voiceAgent", "push"), true);
   assert.equal(manager.getSlotActivationMode("voiceAgent"), "push");
-  assert.equal(manager.getSlotActivationMode("translation"), "tap");
-});
 
-test("an unsupported Hold request is rejected and reported", async () => {
-  const { manager } = makeManager();
-  const failures = [];
-  manager.hotkeyManager.supportsPushToTalk = () => false;
-  manager.hotkeyManager.getPushToTalkUnavailableReason = () => "no hold here";
-  manager.hotkeyManager.notifyHotkeyFailure = (hotkey, result) => failures.push({ hotkey, result });
-
-  assert.equal(await manager.setSlotActivationModeCache("voiceAgent", "push"), false);
-  assert.equal(manager.getSlotActivationMode("voiceAgent"), "tap");
-  assert.equal(failures.length, 1);
-
-  // A slot with no hotkey cannot be verified: Hold is refused, not assumed.
-  manager.hotkeyManager.getSlotHotkey = () => null;
-  assert.equal(await manager.setSlotActivationModeCache("voiceAgent", "push"), false);
-
-  // The startup restore validates silently — no toast on every launch.
-  manager.hotkeyManager.getSlotHotkey = () => "F9";
+  // The hotkey manager owns the capability check and the backend rebind; a
+  // refusal leaves the cache untouched.
   assert.equal(
-    await manager.setSlotActivationModeCache("voiceAgent", "push", { notifyFailure: false }),
+    await manager.setSlotActivationModeCache("translation", "push", { notifyFailure: false }),
     false
   );
-  assert.equal(failures.length, 1);
+  assert.equal(manager.getSlotActivationMode("translation"), "tap");
+  assert.deepEqual(requests, [
+    ["voiceAgent", "push", true],
+    ["translation", "push", false],
+  ]);
+
+  assert.equal(await manager.setSlotActivationModeCache("meeting", "push"), false);
 });
 
 test("reconcileNativeKeyListeners passes the per-slot activation modes", async () => {
