@@ -585,9 +585,46 @@
   }
 }
 
+/* Hands-free tip: the post-hold nudge that rests above (or in place of) the
+   docked pill. Same enter/exit as the dictation error card. */
+.hands-free-tip-card {
+  animation: hands-free-tip-enter 200ms ease-out both;
+  transition:
+    opacity 200ms ease-out,
+    transform 200ms ease-out;
+}
+
+.hands-free-tip-card[data-exiting="true"] {
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+}
+
+@keyframes hands-free-tip-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.hands-free-tip-badge {
+  background: color-mix(in oklch, var(--color-agent-brand) 18%, white);
+  color: oklch(0.38 0.16 285);
+}
+
+.dark .hands-free-tip-badge {
+  background: color-mix(in oklch, var(--color-agent-brand) 38%, white);
+  color: oklch(0.27 0.09 285);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .expanding-panel-surface {
     transition-duration: 1ms;
+  }
+
+  .hands-free-tip-card {
+    animation: none;
+    transition: none;
   }
 
   .expanding-panel-surface[data-panel-mode="live-transcript"]::before,

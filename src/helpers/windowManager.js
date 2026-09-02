@@ -670,11 +670,12 @@ class WindowManager {
       clearTimeout(this.macCompoundPushState.safetyTimeoutId);
     }
 
-    const { isRecording: wasRecording, inputKind } = this.macCompoundPushState;
+    const { isRecording: wasRecording, inputKind, downTime } = this.macCompoundPushState;
     this.macCompoundPushState = null;
 
     if (wasRecording) {
       this.sendStopDictation();
+      this._notifyHoldDictationEnded(inputKind, downTime);
     } else {
       this.handlePushGestureQuickRelease(inputKind);
     }
@@ -824,14 +825,30 @@ class WindowManager {
       clearTimeout(this.nativePushState.safetyTimeoutId);
     }
 
-    const { isRecording: wasRecording, inputKind } = this.nativePushState;
+    const { isRecording: wasRecording, inputKind, downTime } = this.nativePushState;
     this.nativePushState = null;
 
     if (wasRecording) {
       this.sendStopDictation();
+      this._notifyHoldDictationEnded(inputKind, downTime);
     } else {
       this.handlePushGestureQuickRelease(inputKind);
     }
+  }
+
+  // A deliberately released hold tells the renderer how long the key was
+  // down; the hands-free tip decides from that whether it is worth offering.
+  _notifyHoldDictationEnded(inputKind, downTime) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("hold-dictation-ended", {
+      inputKind,
+      heldMs: Date.now() - downTime,
+    });
+  }
+
+  _notifyHandsFreeLatched(inputKind) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("hands-free-latched", { inputKind });
   }
 
   // The session's key stopped meaning "talk" mid-press (Fn became a navigation
@@ -939,6 +956,7 @@ class WindowManager {
       this._clearPushPrepCancelTimer(inputKind);
       debugLogger.debug("Double press latched hands-free recording", { inputKind }, "ptt");
       this.sendStartDictation({ inputKind });
+      this._notifyHandsFreeLatched(inputKind);
     }
     return verdict;
   }

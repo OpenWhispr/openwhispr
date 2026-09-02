@@ -150,6 +150,7 @@ test("an assistant push session prepares, starts and stops with its own input ki
     { channel: "prepare-dictation", payload: { inputKind: "assistant" } },
     { channel: "start-dictation", payload: { inputKind: "assistant" } },
     { channel: "stop-dictation", payload: undefined },
+    { channel: "hold-dictation-ended", payload: { inputKind: "assistant", heldMs: 150 } },
   ]);
 });
 
@@ -521,6 +522,7 @@ test("the dictation hotkey callback drives compound push-to-talk with the slot's
     { channel: "prepare-dictation", payload: { inputKind: "assistant" } },
     { channel: "start-dictation", payload: { inputKind: "assistant" } },
     { channel: "stop-dictation", payload: undefined },
+    { channel: "hold-dictation-ended", payload: { inputKind: "assistant", heldMs: 150 } },
   ]);
 });
 
@@ -531,4 +533,79 @@ test("the assistant hotkey callback toggles normally while its slot stays on tap
   await callback("F9", undefined);
 
   assert.equal(channels(sent).includes("toggle-voice-agent"), true);
+});
+
+test("releasing a hold after recording reports the held duration to the renderer", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  manager.startNativePushToTalk("F8", "dictation");
+  t.mock.timers.tick(150);
+  t.mock.timers.tick(120000);
+  manager.handleNativePushKeyUp("F8");
+
+  assert.deepEqual(sent.at(-1), {
+    channel: "hold-dictation-ended",
+    payload: { inputKind: "dictation", heldMs: 120150 },
+  });
+  assert.equal(
+    channels(sent).indexOf("stop-dictation") < channels(sent).indexOf("hold-dictation-ended"),
+    true
+  );
+});
+
+test("releasing a compound hold on macOS reports the held duration too", async (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+  await manager.setSlotActivationModeCache("translation", "push");
+
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  try {
+    const callback = manager.createHotkeyCallback("translation");
+    await callback("Command+Period", undefined);
+    t.mock.timers.tick(150);
+    t.mock.timers.tick(90000);
+    manager.handleMacPushModifierUp("command");
+  } finally {
+    Object.defineProperty(process, "platform", originalPlatform);
+  }
+
+  assert.deepEqual(sent.at(-1), {
+    channel: "hold-dictation-ended",
+    payload: { inputKind: "translation", heldMs: 90150 },
+  });
+});
+
+test("a quick release and an interrupted hold report no hold end", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  manager.startNativePushToTalk("F8", "dictation");
+  t.mock.timers.tick(80);
+  manager.handleNativePushKeyUp("F8");
+  t.mock.timers.tick(1000);
+
+  manager.startNativePushToTalk("GLOBE", "assistant");
+  t.mock.timers.tick(150);
+  manager.interruptNativePushSession("GLOBE");
+
+  assert.equal(channels(sent).includes("hold-dictation-ended"), false);
+});
+
+test("a hands-free latch is reported to the renderer", (t) => {
+  useGestureTimers(t);
+  const { manager, sent } = makeManager();
+
+  manager.startNativePushToTalk("F8", "dictation");
+  manager.setDictationLifecycleState("preparing", "dictation");
+  t.mock.timers.tick(80);
+  manager.handleNativePushKeyUp("F8");
+  t.mock.timers.tick(170);
+  manager.startNativePushToTalk("F8", "dictation");
+
+  assert.deepEqual(
+    sent.find((message) => message.channel === "hands-free-latched"),
+    { channel: "hands-free-latched", payload: { inputKind: "dictation" } }
+  );
 });

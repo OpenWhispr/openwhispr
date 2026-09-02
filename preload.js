@@ -98,6 +98,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
   onCancelDictation: registerListener("cancel-dictation", (callback) => () => callback()),
+  onHoldDictationEnded: registerListener(
+    "hold-dictation-ended",
+    (callback) => (_event, report) => callback(report)
+  ),
+  onHandsFreeLatched: registerListener(
+    "hands-free-latched",
+    (callback) => (_event, report) => callback(report)
+  ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
   dictationLifecycleStateChanged: (state, inputKind) =>
     ipcRenderer.send("dictation-lifecycle-state-changed", state, inputKind),

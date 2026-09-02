@@ -3,6 +3,7 @@ import { RotateCcw, ScrollText } from "lucide-react";
 import { ASSISTANT_PANEL_SIZE_LIMITS } from "../../helpers/voiceSurfaceGeometry.mjs";
 import { cn } from "../lib/utils";
 import type { ToastActionConfig } from "../ui/useToast";
+import { CardCountdownArc } from "./CardCountdownArc";
 
 interface DictationErrorCardProps {
   title?: string;
@@ -130,27 +131,12 @@ export function DictationErrorCard({
       )}
     >
       {progressDuration > 0 && (
-        <svg
-          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-4 w-full overflow-visible text-foreground"
-          viewBox="0 0 442 17"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M 1 16 A 15 15 0 0 1 16 1 H 426 A 15 15 0 0 1 441 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            vectorEffect="non-scaling-stroke"
-            strokeLinecap="butt"
-            pathLength="1"
-            strokeDasharray="1"
-            style={{
-              animation: `toast-border-progress ${progressDuration}ms linear forwards`,
-              animationPlayState: progressPaused ? "paused" : "running",
-            }}
-          />
-        </svg>
+        <CardCountdownArc
+          width={ASSISTANT_PANEL_SIZE_LIMITS.ratioWidth}
+          radius={15}
+          durationMs={progressDuration}
+          paused={progressPaused}
+        />
       )}
       {hasSecondaryAction ? (
         <div className="px-2 py-3">
