@@ -3572,6 +3572,11 @@
       "startListening": "Start listening",
       "hideForNow": "Hide for now",
       "askAssistant": "Ask Assistant"
+    },
+    "handsFreeTip": {
+      "badge": "Tip",
+      "title": "Switch to hands-free mode",
+      "description": "Double tap {{hotkey}} to start hands-free mode."
     }
   },
   "dictationAgent": {

@@ -47,6 +47,9 @@ export const useAudioRecording = (toast, options = {}) => {
   const [micCaptureStatus, setMicCaptureStatus] = useState("inactive");
   const [transcript, setTranscript] = useState("");
   const [partialTranscript, setPartialTranscript] = useState("");
+  // Counts runs that produced text, so surfaces keyed to a finished dictation
+  // (the hands-free tip) can tell success from an error or an empty result.
+  const [completedRuns, setCompletedRuns] = useState(0);
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopRequestedDuringStartRef = useRef(false);
@@ -513,6 +516,7 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           setTranscript(result.text);
+          setCompletedRuns((runs) => runs + 1);
           onDemoEventRef.current?.({
             kind: demoKindRef.current,
             status: "success",
@@ -908,6 +912,7 @@ export const useAudioRecording = (toast, options = {}) => {
     micCaptureStatus,
     transcript,
     partialTranscript,
+    completedRuns,
     startRecording: performStartRecording,
     stopRecording: performStopRecording,
     cancelRecording,

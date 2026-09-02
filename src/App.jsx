@@ -9,6 +9,7 @@ import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useAssistantPanel } from "./hooks/useAssistantPanel";
 import { useLiveTranscriptPanel } from "./hooks/useLiveTranscriptPanel";
 import { useMainWindowSizeOwner } from "./hooks/useMainWindowSizeOwner";
+import { useHandsFreeTip } from "./hooks/useHandsFreeTip";
 import { useMainProcessNotifications } from "./hooks/useMainProcessNotifications";
 import { useListeningEntrancePhase } from "./hooks/useListeningEntrancePhase";
 import { useWindowResizeCompensation } from "./hooks/useWindowResizeCompensation";
@@ -22,6 +23,8 @@ import { VoiceModePanelCore } from "./components/dictation/VoiceModePanelCore";
 import { PillTooltip } from "./components/dictation/PillTooltip";
 import { PillCommandMenu } from "./components/dictation/PillCommandMenu";
 import { LiquidCancelButton } from "./components/dictation/LiquidCancelButton";
+import { HandsFreeTipCard } from "./components/dictation/HandsFreeTipCard";
+import { HANDS_FREE_TIP_DURATION_MS, resolveHandsFreeTipHotkey } from "./helpers/handsFreeTip";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
@@ -71,6 +74,8 @@ export default function App() {
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
+  const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
+  const translationKey = useSettingsStore((s) => s.translationKey);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
   const [voiceHorizontalDirection, setVoiceHorizontalDirection] = useState(() =>
     resolveVoiceHorizontalDirection(panelStartPosition)
@@ -183,6 +188,7 @@ export default function App() {
     isPreparing,
     isStopping,
     micCaptureStatus,
+    completedRuns,
     toggleListening,
     cancelRecording,
     cancelProcessing,
@@ -294,12 +300,26 @@ export default function App() {
   // a menu opening over the compact pill resolves to EXPANDED geometry.
   const windowFitsCompactPill = voicePillIsRecording || voiceActivity.compactPill;
 
+  const handsFreeTip = useHandsFreeTip({
+    completedRuns,
+    recording: isRecording || isPreparing,
+    atRest:
+      !isRecording &&
+      !isVisuallyProcessing &&
+      toastCount === 0 &&
+      !isCommandMenuOpen &&
+      !assistant.mounted &&
+      !liveTranscript.mounted,
+  });
+  const handsFreeTipInPlaceOfPill = handsFreeTip.tip !== null && floatingIconAutoHide;
+
   const { dictationErrorPillHandoffActive, panelReturnResizeActive } = useMainWindowSizeOwner({
     requestMainWindowSize,
     dictationErrorActionCount,
     toastCount,
     isCommandMenuOpen,
     isCompactPill: windowFitsCompactPill,
+    handsFreeTipVisible: handsFreeTip.tip !== null,
     assistantOpen: assistant.open,
     assistantMounted: assistant.mounted,
     assistantOpenRef,
@@ -371,6 +391,7 @@ export default function App() {
       !isVisuallyProcessing &&
       toastCount === 0 &&
       !dictationErrorPillHandoffActive &&
+      handsFreeTip.tip === null &&
       !assistant.mounted &&
       !liveTranscript.mounted
     ) {
@@ -390,6 +411,7 @@ export default function App() {
     floatingIconAutoHide,
     toastCount,
     dictationErrorPillHandoffActive,
+    handsFreeTip.tip,
     assistant.mounted,
     liveTranscript.mounted,
   ]);
@@ -592,7 +614,9 @@ export default function App() {
         aria-hidden={pillVisuallySuppressed || undefined}
       >
         <div
-          className="assistant-pill-presence relative flex items-center"
+          className={`assistant-pill-presence relative flex items-center transition-opacity duration-150 ease-out ${
+            handsFreeTipInPlaceOfPill ? "pointer-events-none opacity-0" : ""
+          }`}
           data-assistant-footer-phase={assistant.open ? assistant.footerPhase : undefined}
           data-horizontal-direction={voiceHorizontalDirection}
           style={{
@@ -730,6 +754,31 @@ export default function App() {
             />
           )}
         </div>
+        {handsFreeTip.tip && (
+          <HandsFreeTipCard
+            hotkey={resolveHandsFreeTipHotkey(handsFreeTip.tip.inputKind, {
+              dictationKey: hotkey,
+              voiceAgentKey,
+              translationKey,
+            })}
+            align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
+            inPlaceOfPill={handsFreeTipInPlaceOfPill}
+            exiting={handsFreeTip.exiting}
+            progressDuration={HANDS_FREE_TIP_DURATION_MS}
+            progressPaused={handsFreeTip.timerPaused}
+            onDismiss={handsFreeTip.dismiss}
+            onMouseEnter={() => {
+              setWindowInteractivity(true);
+              handsFreeTip.pauseTimer();
+            }}
+            onMouseLeave={() => {
+              handsFreeTip.resumeTimer();
+              if (!isCommandMenuOpen && !assistant.mounted) {
+                setWindowInteractivity(false);
+              }
+            }}
+          />
+        )}
       </div>
 
       <VoiceModePanelCore
