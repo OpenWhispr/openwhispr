@@ -29,7 +29,7 @@ export function ActivationModeSelector({
           absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded
           bg-surface-raised border border-border-subtle
           transition-transform duration-200 ease-out
-          ${value === "push" ? "translate-x-[calc(100%+4px)]" : "translate-x-0"}
+          ${value === "push" ? "translate-x-full" : "translate-x-0"}
         `}
       />
 
