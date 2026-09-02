@@ -1033,7 +1033,7 @@ class WindowManager {
     );
   }
 
-  _sendDictationToggle(channel, inputKind, { applyPressGesture = true } = {}) {
+  _sendDictationToggle(channel, inputKind) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
     if (this._shouldBlockDictationInput(inputKind)) {
       return;
@@ -1049,24 +1049,6 @@ class WindowManager {
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       const isStarting = !this._isDictatingToggle;
-      // A double press within the gesture window means "keep recording
-      // hands-free": swallow the stop-toggle the second press would have sent.
-      // Only hotkey presses take part — a UI click (the companion pill) must
-      // always act — and only when the pipeline visibly runs this kind, so a
-      // declined start leaves the retry press working. The renderer stays
-      // authoritative — nothing else changes hands.
-      if (
-        applyPressGesture &&
-        this._pressGesture.handleTogglePress(
-          inputKind,
-          Date.now(),
-          isStarting,
-          this._isPipelineActiveFor(inputKind)
-        )
-      ) {
-        debugLogger.debug("Double press latched hands-free; toggle suppressed", { channel });
-        return;
-      }
       // Capture the paste target and any selection on every toggle press,
       // before the overlay steals focus — the paste can't refocus the target
       // otherwise (#668). The renderer owns the real recording state and may
@@ -1153,8 +1135,8 @@ class WindowManager {
     return shouldIgnoreDictationHotkey(this._dictationLifecycleState);
   }
 
-  sendToggleDictation(options) {
-    this._sendDictationToggle("toggle-dictation", "dictation", options);
+  sendToggleDictation() {
+    this._sendDictationToggle("toggle-dictation", "dictation");
   }
 
   sendToggleVoiceAgent() {

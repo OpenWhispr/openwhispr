@@ -10,64 +10,6 @@ const {
 const T0 = 100000;
 const IN_WINDOW = DOUBLE_PRESS_MIN_GAP_MS + 100; // 250ms with the shipped constants
 
-test("a quick second toggle press after a start press is suppressed (hands-free latch)", () => {
-  const tracker = new PressGestureTracker();
-
-  assert.equal(tracker.handleTogglePress("dictation", T0, true, false), false);
-  assert.equal(tracker.handleTogglePress("dictation", T0 + IN_WINDOW, false, true), true);
-});
-
-test("the toggle press after a latch flows through so it stops the recording", () => {
-  const tracker = new PressGestureTracker();
-
-  tracker.handleTogglePress("dictation", T0, true, false);
-  tracker.handleTogglePress("dictation", T0 + IN_WINDOW, false, true);
-  assert.equal(tracker.handleTogglePress("dictation", T0 + IN_WINDOW * 2, false, true), false);
-});
-
-test("a second press is not suppressed when the renderer declined the start", () => {
-  // The first press was a start-edge, but nothing is preparing or recording
-  // (mic in use, permission denied): the retry press must go through.
-  const tracker = new PressGestureTracker();
-
-  tracker.handleTogglePress("dictation", T0, true, false);
-  assert.equal(tracker.handleTogglePress("dictation", T0 + IN_WINDOW, true, false), false);
-});
-
-test("a second toggle press after a stop press is never suppressed", () => {
-  const tracker = new PressGestureTracker();
-
-  tracker.handleTogglePress("dictation", T0, false, true);
-  assert.equal(tracker.handleTogglePress("dictation", T0 + IN_WINDOW, true, false), false);
-});
-
-test("toggle presses beyond the double-press window flow through", () => {
-  const tracker = new PressGestureTracker();
-
-  tracker.handleTogglePress("dictation", T0, true, false);
-  assert.equal(
-    tracker.handleTogglePress("dictation", T0 + DOUBLE_PRESS_MAX_GAP_MS + 1, false, true),
-    false
-  );
-});
-
-test("toggle presses closer than the duplicate-delivery floor flow through", () => {
-  const tracker = new PressGestureTracker();
-
-  tracker.handleTogglePress("dictation", T0, true, false);
-  assert.equal(
-    tracker.handleTogglePress("dictation", T0 + DOUBLE_PRESS_MIN_GAP_MS - 1, false, true),
-    false
-  );
-});
-
-test("toggle presses of different input kinds never latch each other", () => {
-  const tracker = new PressGestureTracker();
-
-  tracker.handleTogglePress("dictation", T0, true, false);
-  assert.equal(tracker.handleTogglePress("assistant", T0 + IN_WINDOW, false, true), false);
-});
-
 test("a push down with no primed quick release proceeds normally", () => {
   const tracker = new PressGestureTracker();
 
@@ -233,13 +175,11 @@ test("an interrupt long after a latch leaves the hands-free session running", ()
 test("reset clears primes, latches and hands-free state", () => {
   const tracker = new PressGestureTracker();
 
-  tracker.handleTogglePress("dictation", T0, true, false);
   tracker.handlePushDown("assistant", T0);
   tracker.handlePushQuickRelease("assistant", T0 + 80);
   tracker.handlePushDown("assistant", T0 + IN_WINDOW);
   tracker.reset();
 
   assert.equal(tracker.isHandsFreeActive("assistant"), false);
-  assert.equal(tracker.handleTogglePress("dictation", T0 + IN_WINDOW, false, true), false);
   assert.equal(tracker.handlePushDown("assistant", T0 + IN_WINDOW + 10), "proceed");
 });
