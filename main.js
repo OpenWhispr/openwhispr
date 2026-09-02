@@ -362,9 +362,12 @@ const AUTH_BRIDGE_HOST = "127.0.0.1";
 const AUTH_BRIDGE_PORT = parseAuthBridgePort();
 const AUTH_BRIDGE_PATH = "/oauth/callback";
 
-// Set up PATH for production builds to find system tools (whisper.cpp, ffmpeg)
+// Set up PATH for production builds to find system tools (whisper.cpp, ffmpeg,
+// ffprobe). GUI launch never sources shell rc, so Nix prefixes are otherwise
+// invisible even when the binaries exist on disk (#912).
 function setupProductionPath() {
   if (process.platform === "darwin" && process.env.NODE_ENV !== "development") {
+    const { getUnixToolBinDirs } = require("./src/helpers/unixToolBinDirs");
     const commonPaths = [
       "/usr/local/bin",
       "/opt/homebrew/bin",
@@ -372,10 +375,11 @@ function setupProductionPath() {
       "/bin",
       "/usr/sbin",
       "/sbin",
+      ...getUnixToolBinDirs({ platform: "darwin" }),
     ];
 
     const currentPath = process.env.PATH || "";
-    const pathsToAdd = commonPaths.filter((p) => !currentPath.includes(p));
+    const pathsToAdd = [...new Set(commonPaths)].filter((p) => !currentPath.includes(p));
 
     if (pathsToAdd.length > 0) {
       process.env.PATH = `${currentPath}:${pathsToAdd.join(":")}`;
