@@ -8,6 +8,8 @@
 // app startup doesn't eager-load ~100 MB of AWS/Azure/Google SDKs for users
 // who never select an enterprise provider.
 
+const { isAllowedAzureEndpoint } = require("./enterpriseManagedConfig.mjs");
+
 async function getEnterpriseAIModel(provider, model, apiKey, enterprise) {
   switch (provider) {
     case "bedrock":
@@ -82,23 +84,13 @@ function createAzureModel(model, apiKey, enterprise) {
   })(model);
 }
 
+// One allowlist for managed Azure hosts (resource, AI Services, and Foundry),
+// shared with the envelope validator so the two can never disagree.
 function toAzureOpenAIBaseUrl(endpoint) {
-  const url = new URL(endpoint);
-  const hostname = url.hostname.toLowerCase();
-  if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    (url.port && url.port !== "443") ||
-    !hostname.endsWith(".openai.azure.com") ||
-    hostname.length <= ".openai.azure.com".length ||
-    (url.pathname !== "" && url.pathname !== "/") ||
-    url.search ||
-    url.hash
-  ) {
+  if (!isAllowedAzureEndpoint(endpoint)) {
     throw new Error("Managed Azure OpenAI requires a public Azure resource origin");
   }
-  return `${url.origin}/openai`;
+  return `${new URL(endpoint).origin}/openai`;
 }
 
 function createVertexModel(model, apiKey, enterprise) {

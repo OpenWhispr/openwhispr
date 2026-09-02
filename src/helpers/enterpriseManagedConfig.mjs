@@ -212,9 +212,11 @@ function resolveManagedEnterpriseScope(envelope, scope, setupMode = "auto") {
 }
 
 export {
+  AZURE_HOST_SUFFIXES,
   ENTERPRISE_INFERENCE_SCOPES,
   ENTERPRISE_TRANSCRIPTION_SCOPE,
   ENTERPRISE_PROVIDERS,
+  isAllowedAzureEndpoint,
   validateManagedEnterpriseEnvelope,
   resolveManagedEnterpriseScope,
 };
