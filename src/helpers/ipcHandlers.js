@@ -5301,9 +5301,7 @@ class IPCHandlers {
       if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
         return { success: false };
       }
-      // A pill click is a deliberate UI action: a fast second click must stop
-      // the recording, never latch it hands-free like a hotkey double press.
-      this.windowManager.sendToggleDictation({ applyPressGesture: false });
+      this.windowManager.sendToggleDictation();
       return { success: true };
     });
 

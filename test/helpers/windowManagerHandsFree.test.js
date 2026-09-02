@@ -108,57 +108,19 @@ function makeManager() {
 const channels = (sent) => sent.map((message) => message.channel);
 const useGestureTimers = (t) => t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 
-test("a fast second dictation toggle press latches instead of stopping", (t) => {
+test("tap mode never latches: a fast second toggle press stops the recording", (t) => {
   useGestureTimers(t);
   const { manager, sent } = makeManager();
 
-  manager.sendToggleDictation();
-  manager.setDictationLifecycleState("preparing", "dictation");
-  t.mock.timers.tick(250);
-  manager.sendToggleDictation();
-
-  assert.deepEqual(channels(sent).filter((channel) => channel === "toggle-dictation").length, 1);
-
-  t.mock.timers.tick(600);
-  manager.sendToggleDictation();
-  assert.deepEqual(channels(sent).filter((channel) => channel === "toggle-dictation").length, 2);
-});
-
-test("a declined start leaves the retry press working", (t) => {
-  useGestureTimers(t);
-  const { manager, sent } = makeManager();
-
-  // The renderer never reported preparing/recording (mic in use, permission
-  // denied): the second press must not be swallowed as a latch.
-  manager.sendToggleDictation();
-  t.mock.timers.tick(250);
-  manager.sendToggleDictation();
-
-  assert.equal(channels(sent).filter((channel) => channel === "toggle-dictation").length, 2);
-});
-
-test("a companion-pill toggle is never treated as a double press", (t) => {
-  useGestureTimers(t);
-  const { manager, sent } = makeManager();
-
-  manager.sendToggleDictation();
-  manager.setDictationLifecycleState("preparing", "dictation");
-  t.mock.timers.tick(250);
-  manager.sendToggleDictation({ applyPressGesture: false });
-
-  assert.equal(channels(sent).filter((channel) => channel === "toggle-dictation").length, 2);
-});
-
-test("the tap latch also works once the renderer reports the recording", (t) => {
-  useGestureTimers(t);
-  const { manager, sent } = makeManager();
-
+  // Hands-free lives in Hold mode only. In Tap mode a single press already
+  // starts an unlimited recording, so a fast second press must keep its
+  // ordinary meaning (stop) instead of being swallowed as a double press.
   manager.sendToggleDictation();
   manager.setDictationLifecycleState("recording", "dictation");
   t.mock.timers.tick(250);
   manager.sendToggleDictation();
 
-  assert.equal(channels(sent).filter((channel) => channel === "toggle-dictation").length, 1);
+  assert.equal(channels(sent).filter((channel) => channel === "toggle-dictation").length, 2);
 });
 
 test("toggle presses of different kinds keep their normal meaning", (t) => {
