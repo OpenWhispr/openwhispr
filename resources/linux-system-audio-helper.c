@@ -754,10 +754,22 @@ static gboolean run_pipewire_capture(Helper *app)
     }
 
     gchar *target_sink_name = resolve_default_audio_sink_name();
+    /* media.role must NOT be "Communication" here.
+     *
+     * WirePlumber 0.4.x treats a capture stream with the Communication role
+     * as telephony voice input and force-links it to the default *source*
+     * (the mic), ignoring PW_KEY_TARGET_OBJECT and PW_KEY_STREAM_CAPTURE_SINK
+     * (see WirePlumber's intended-roles / endpoint policy). The result: with
+     * e.g. a Bluetooth headset as default device, system-audio capture
+     * recorded the headset mic instead of the sink monitor -> digital silence.
+     *
+     * "Music" is a regular-media role: the stream links to the sink monitor
+     * as stream.capture.sink + target.object request. Verified on Ubuntu
+     * 24.04 (WirePlumber 0.4.17) and Fedora/GNOME with a Yealink BT headset. */
     struct pw_properties *props = pw_properties_new(
         PW_KEY_MEDIA_TYPE, "Audio",
         PW_KEY_MEDIA_CATEGORY, "Capture",
-        PW_KEY_MEDIA_ROLE, "Communication",
+        PW_KEY_MEDIA_ROLE, "Music",
         PW_KEY_STREAM_CAPTURE_SINK, "true",
         NULL);
     if (props && target_sink_name) {
