@@ -840,10 +840,9 @@ class WindowManager {
   // down; the hands-free tip decides from that whether it is worth offering.
   _notifyHoldDictationEnded(inputKind, downTime) {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
-    this.mainWindow.webContents.send("hold-dictation-ended", {
-      inputKind,
-      heldMs: Date.now() - downTime,
-    });
+    const heldMs = Date.now() - downTime;
+    debugLogger.debug("Hold released after recording", { inputKind, heldMs }, "ptt");
+    this.mainWindow.webContents.send("hold-dictation-ended", { inputKind, heldMs });
   }
 
   _notifyHandsFreeLatched(inputKind) {
