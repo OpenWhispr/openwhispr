@@ -124,7 +124,13 @@
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
       "updateFailedCheckFormat": "Impossible de mettre à jour le raccourci vers \"{{hotkey}}\". Vérifiez que le format est valide.",
       "trySuggestions": "Essayez : {{suggestions}}",
-      "slotConflict": "Ce raccourci est déjà utilisé pour {{slot}}."
+      "slotConflict": "Ce raccourci est déjà utilisé pour {{slot}}.",
+      "holdNeedsReleaseSourceMac": "Maintenir n'est pas disponible pour \"{{hotkey}}\" sur macOS, car une touche seule ne peut pas signaler son relâchement. Utilisez une combinaison de touches, la touche Globe/Fn, un modificateur de droite ou un bouton de souris.",
+      "holdUnsupportedOnHyprland": "Sur Hyprland, Maintenir n'est disponible que pour le raccourci de dictée."
+    },
+    "portal": {
+      "voiceAgentHold": "Maintenir pour parler à l'assistant",
+      "translationHold": "Maintenir pour dicter un texte à traduire"
     }
   },
   "systemSettings": {
@@ -940,7 +946,8 @@
         "failedToRegister": "Impossible d'enregistrer le raccourci. Réessayez."
       },
       "messages": {
-        "nowUsing": "Utilisation de {{hotkey}} pour la dictée"
+        "nowUsing": "Utilisation de {{hotkey}} pour la dictée",
+        "holdSwitchedToTap": "Maintenir n'est pas disponible pour {{hotkey}} sur cet appareil, l'activation est donc passée en mode Appui."
       }
     },
     "modelDownload": {

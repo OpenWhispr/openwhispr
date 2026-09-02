@@ -124,7 +124,13 @@
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
       "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
       "trySuggestions": "お試しください: {{suggestions}}",
-      "slotConflict": "このホットキーは既に{{slot}}で使用されています。"
+      "slotConflict": "このホットキーは既に{{slot}}で使用されています。",
+      "holdNeedsReleaseSourceMac": "macOS では単一キーは離したことを検知できないため、\"{{hotkey}}\" でホールドは使用できません。キーの組み合わせ、Globe/Fn キー、右側の修飾キー、またはマウスボタンを使用してください。",
+      "holdUnsupportedOnHyprland": "Hyprland では、ホールドはディクテーションのホットキーでのみ使用できます。"
+    },
+    "portal": {
+      "voiceAgentHold": "押しながらアシスタントに話す",
+      "translationHold": "押しながら翻訳用に口述する"
     }
   },
   "systemSettings": {
@@ -940,7 +946,8 @@
         "failedToRegister": "ホットキーの登録に失敗しました。もう一度お試しください。"
       },
       "messages": {
-        "nowUsing": "ディクテーションに {{hotkey}} を使用します"
+        "nowUsing": "ディクテーションに {{hotkey}} を使用します",
+        "holdSwitchedToTap": "このデバイスでは {{hotkey}} でホールドを使用できないため、起動モードをタップに切り替えました。"
       }
     },
     "modelDownload": {

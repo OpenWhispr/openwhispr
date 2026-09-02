@@ -1762,7 +1762,9 @@ declare global {
       openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
 
       // Hotkey management
-      updateHotkey: (key: string) => Promise<{ success: boolean; message: string }>;
+      updateHotkey: (
+        key: string
+      ) => Promise<{ success: boolean; message: string; activationMode?: "tap" | "push" }>;
       setHotkeyListeningMode?: (enabled: boolean) => Promise<{ success: boolean }>;
       getHotkeyModeInfo?: (
         hotkey?: string,

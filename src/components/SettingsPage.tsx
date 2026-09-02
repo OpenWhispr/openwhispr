@@ -259,20 +259,26 @@ function ActivationModeRow({
     slot
   );
 
+  const pushDisabledReason = !supportsPushToTalk
+    ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
+    : undefined;
+
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-xs text-muted-foreground/80">
-        {t("settingsPage.general.hotkey.activationMode")}
-      </span>
-      <ActivationModeSelector
-        value={value}
-        onChange={onChange}
-        pushDisabledReason={
-          !supportsPushToTalk
-            ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-            : undefined
-        }
-      />
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground/80">
+          {t("settingsPage.general.hotkey.activationMode")}
+        </span>
+        <ActivationModeSelector
+          value={value}
+          onChange={onChange}
+          pushDisabledReason={pushDisabledReason}
+        />
+      </div>
+      {/* A greyed-out Hold with only a hover tooltip reads as broken; say why in place. */}
+      {pushDisabledReason && (
+        <p className="text-[11px] leading-snug text-muted-foreground/70">{pushDisabledReason}</p>
+      )}
     </div>
   );
 }

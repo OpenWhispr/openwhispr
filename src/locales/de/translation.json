@@ -124,7 +124,13 @@
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
       "updateFailedCheckFormat": "Hotkey konnte nicht auf \"{{hotkey}}\" aktualisiert werden. Prüfen Sie, ob das Format gültig ist.",
       "trySuggestions": "Versuchen Sie: {{suggestions}}",
-      "slotConflict": "Diese Tastenkombination wird bereits für {{slot}} verwendet."
+      "slotConflict": "Diese Tastenkombination wird bereits für {{slot}} verwendet.",
+      "holdNeedsReleaseSourceMac": "Halten ist für \"{{hotkey}}\" unter macOS nicht verfügbar, weil eine einzelne Taste ihr Loslassen nicht melden kann. Verwenden Sie eine Tastenkombination, die Globus-/Fn-Taste, eine rechte Modifikatortaste oder eine Maustaste.",
+      "holdUnsupportedOnHyprland": "Unter Hyprland ist Halten nur für den Diktat-Hotkey verfügbar."
+    },
+    "portal": {
+      "voiceAgentHold": "Gedrückt halten, um mit dem Assistenten zu sprechen",
+      "translationHold": "Gedrückt halten, um für die Übersetzung zu diktieren"
     }
   },
   "systemSettings": {
@@ -940,7 +946,8 @@
         "failedToRegister": "Hotkey konnte nicht registriert werden. Bitte versuchen Sie es erneut."
       },
       "messages": {
-        "nowUsing": "{{hotkey}} wird jetzt für das Diktat verwendet"
+        "nowUsing": "{{hotkey}} wird jetzt für das Diktat verwendet",
+        "holdSwitchedToTap": "Halten ist für {{hotkey}} auf diesem Gerät nicht verfügbar, daher wurde die Aktivierung auf Tippen umgestellt."
       }
     },
     "modelDownload": {
