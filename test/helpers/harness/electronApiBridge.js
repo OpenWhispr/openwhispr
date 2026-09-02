@@ -36,6 +36,15 @@ function inertSnippetApi() {
   };
 }
 
+function inertAnalyticsApi() {
+  return {
+    getPendingAnalyticsDeletes: async () => [],
+    hardDeleteAnalyticsEvents: async () => ({ success: true, deleted: 0 }),
+    getPendingAnalyticsEvents: async () => [],
+    markAnalyticsEventsSynced: async () => ({ success: true, updated: 0 }),
+  };
+}
+
 function createElectronApi(db, options = {}) {
   if (!db) throw new TypeError("createElectronApi requires a DatabaseManager");
   const cloud = options.cloud;
@@ -67,8 +76,22 @@ function createElectronApi(db, options = {}) {
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
     upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId) =>
       db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
-    acknowledgeNoteCreate: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, settleIfUnchanged) =>
-      db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, settleIfUnchanged),
+    acknowledgeNoteCreate: async (
+      id,
+      snapshot,
+      cloudId,
+      cloudUpdatedAt,
+      ownerUserId,
+      settleIfUnchanged
+    ) =>
+      db.acknowledgeNoteCreate(
+        id,
+        snapshot,
+        cloudId,
+        cloudUpdatedAt,
+        ownerUserId,
+        settleIfUnchanged
+      ),
     markNoteSyncedIfUnchanged: async (id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId) =>
       db.markNoteSyncedIfUnchanged(id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId),
     markNoteSyncError: async (id) => db.markNoteSyncError(id),
@@ -151,6 +174,7 @@ function createElectronApi(db, options = {}) {
 
     ...inertDictionaryApi(),
     ...inertSnippetApi(),
+    ...inertAnalyticsApi(),
   };
 }
 

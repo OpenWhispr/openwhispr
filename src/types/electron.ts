@@ -1152,6 +1152,10 @@ declare global {
       markAnalyticsEventsSynced: (
         eventIds: string[]
       ) => Promise<{ success: boolean; updated: number }>;
+      getPendingAnalyticsDeletes: (limit?: number) => Promise<Array<{ event_id: string }>>;
+      hardDeleteAnalyticsEvents: (
+        eventIds: string[]
+      ) => Promise<{ success: boolean; deleted: number }>;
       countUnclaimedAnalyticsEvents: () => Promise<number>;
       claimAnonymousAnalyticsEvents: () => Promise<{ success: boolean; claimed: number }>;
       clearTranscriptions: () => Promise<{ cleared: number; success: boolean }>;
@@ -2148,6 +2152,7 @@ declare global {
           clientTranscriptionId?: string;
           localDate?: string;
           analyticsWordCount?: number;
+          analyticsCounterVersion?: number;
         }
       ) => Promise<{
         success: boolean;

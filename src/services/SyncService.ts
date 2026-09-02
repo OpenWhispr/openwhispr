@@ -28,7 +28,11 @@ import {
 } from "../lib/teamSpacesCapability";
 import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag";
 import { readNoteConflictIds } from "../lib/noteConflictRegistry";
-import { cloudBackupResumed, isCloudBackupAllowed } from "../stores/policyRules";
+import {
+  cloudBackupResumed,
+  effectiveLocalHistoryEnabled,
+  isCloudBackupAllowed,
+} from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import {
   buildNoteCreatePayload,
@@ -128,7 +132,13 @@ const SYNC_ALL_LOCK = "openwhispr-sync-all";
 // localStorage keys gating what a pass may sync; a change in another window
 // means sync may have just become possible (sign-in, subscription, backup
 // enabled, Insights opt-in).
-const CAN_SYNC_KEYS = ["isSignedIn", "cloudBackupEnabled", "isSubscribed", "insightsSyncEnabled"];
+const CAN_SYNC_KEYS = [
+  "isSignedIn",
+  "cloudBackupEnabled",
+  "isSubscribed",
+  "insightsSyncEnabled",
+  "dataRetentionEnabled",
+];
 
 // Cross-window guard against a space purge racing an in-flight pull: every
 // purge initiator records the cloud space id here, and pull/upsert paths park
@@ -250,12 +260,17 @@ export class SyncService {
   private analyticsPassMovedWork = false;
 
   private consent(): SyncConsent {
+    const policyState = usePolicyStore.getState();
     return resolveSyncConsent({
       authValidated: hasValidatedAuthContext(),
       signedIn: localStorage.getItem("isSignedIn") === "true",
       backupEnabled: localStorage.getItem("cloudBackupEnabled") === "true",
       subscribed: readIsSubscribed(),
-      backupAllowedByPolicy: isCloudBackupAllowed(usePolicyStore.getState()),
+      backupAllowedByPolicy: isCloudBackupAllowed(policyState),
+      dataRetentionEnabled: effectiveLocalHistoryEnabled(
+        policyState,
+        localStorage.getItem("dataRetentionEnabled") !== "false"
+      ),
       insightsSyncEnabled: localStorage.getItem("insightsSyncEnabled") === "true",
     });
   }
@@ -510,8 +525,8 @@ export class SyncService {
           await this.syncNotes(true);
         }
         if (!hasValidatedAuthContext()) return;
-        // Outside the branch above: Insights counters are free and content-free,
-        // so they ride their own opt-in rather than backup's plan and toggle.
+        // Outside the branch above: Insights uploads ride their own opt-in,
+        // while queued erasures run for every authenticated account.
         await this.syncAnalytics();
         // Stamped after the push, so a pass that moved counters is recorded as
         // work rather than as another empty one. A pass that loses auth before
@@ -2181,9 +2196,14 @@ export class SyncService {
   // Push-only: the account summary is read live by the Insights view, so there
   // is nothing to pull back into the device's own counters.
   private async syncAnalytics(): Promise<void> {
-    if (!this.consent().analytics) return;
+    const consent = this.consent();
+    if (!consent.shared) return;
     try {
-      if ((await syncPendingAnalytics()) > 0) this.analyticsPassMovedWork = true;
+      // Revoking retention/Insights consent blocks new uploads, never deletion
+      // of rows that may already exist in the account.
+      if ((await syncPendingAnalytics({ uploadAllowed: consent.analytics })) > 0) {
+        this.analyticsPassMovedWork = true;
+      }
     } catch (err) {
       if (isAuthContextError(err)) throw err;
       // A rejected batch stays pending for the next pass; the rest of this one

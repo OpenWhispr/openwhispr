@@ -6,7 +6,7 @@ const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { parseEventTime } = require("./calendarAvailability");
-const { summarizeAnalyticsDays } = require("./analytics");
+const { ANALYTICS_COUNTER_VERSION, summarizeAnalyticsDays } = require("./analytics");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -972,11 +972,19 @@ class DatabaseManager {
           model TEXT,
           counter_version INTEGER NOT NULL DEFAULT 1,
           sync_status TEXT NOT NULL DEFAULT 'pending',
+          deleted_at TEXT,
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_analytics_events_account_date
           ON analytics_events(account_id, local_date);
       `);
+      // Repair databases created before analytics deletion tombstones were
+      // introduced. SQLite has no ADD COLUMN IF NOT EXISTS syntax.
+      try {
+        this.db.exec("ALTER TABLE analytics_events ADD COLUMN deleted_at TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_client_id ON custom_dictionary(client_dict_id)"
       );
@@ -1292,8 +1300,8 @@ class DatabaseManager {
         .prepare(
           `INSERT INTO analytics_events (
              event_id, account_id, occurred_at, local_date, word_count,
-             spoken_duration_ms, mode, provider, model
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             spoken_duration_ms, mode, provider, model, counter_version
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(event_id) DO UPDATE SET
              account_id = COALESCE(analytics_events.account_id, excluded.account_id),
              occurred_at = excluded.occurred_at,
@@ -1306,7 +1314,9 @@ class DatabaseManager {
              mode = excluded.mode,
              provider = COALESCE(excluded.provider, analytics_events.provider),
              model = COALESCE(excluded.model, analytics_events.model),
-             sync_status = 'pending'`
+             counter_version = excluded.counter_version,
+             sync_status = 'pending'
+           WHERE analytics_events.deleted_at IS NULL`
         )
         .run(
           eventId,
@@ -1317,7 +1327,8 @@ class DatabaseManager {
           Number(spokenDurationMs) > 0 ? Number(spokenDurationMs) : null,
           mode,
           provider,
-          model
+          model,
+          ANALYTICS_COUNTER_VERSION
         );
       return { success: true, eventId };
     } catch (error) {
@@ -1343,6 +1354,7 @@ class DatabaseManager {
                   SUM(CASE WHEN spoken_duration_ms > 0 THEN word_count ELSE 0 END)
                     AS coveredWords
            FROM analytics_events
+           WHERE deleted_at IS NULL
            GROUP BY local_date`
         )
         .all();
@@ -1367,7 +1379,7 @@ class DatabaseManager {
           `SELECT event_id, occurred_at, local_date, word_count, spoken_duration_ms,
                   mode, provider, model, counter_version
            FROM analytics_events
-           WHERE account_id = ? AND sync_status = 'pending'
+           WHERE account_id = ? AND sync_status = 'pending' AND deleted_at IS NULL
            ORDER BY occurred_at ASC LIMIT ?`
         )
         .all(this.activeAccountId, safeLimit);
@@ -1387,7 +1399,8 @@ class DatabaseManager {
       const result = this.db
         .prepare(
           `UPDATE analytics_events SET sync_status = 'synced'
-           WHERE account_id = ? AND event_id IN (${placeholders})`
+           WHERE account_id = ? AND deleted_at IS NULL
+             AND event_id IN (${placeholders})`
         )
         .run(this.activeAccountId, ...eventIds);
       return { success: true, updated: result.changes };
@@ -1397,10 +1410,59 @@ class DatabaseManager {
     }
   }
 
+  getPendingAnalyticsDeletes(limit = 200) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this.activeAccountId) return [];
+      const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 200));
+      return this.db
+        .prepare(
+          `SELECT event_id FROM analytics_events
+           WHERE account_id = ? AND deleted_at IS NOT NULL AND sync_status = 'pending'
+           ORDER BY occurred_at ASC LIMIT ?`
+        )
+        .all(this.activeAccountId, safeLimit);
+    } catch (error) {
+      debugLogger.error(
+        "Error reading pending analytics deletes",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  hardDeleteAnalyticsEvents(eventIds) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this.activeAccountId || !Array.isArray(eventIds) || eventIds.length === 0) {
+        return { success: true, deleted: 0 };
+      }
+      const placeholders = eventIds.map(() => "?").join(", ");
+      const result = this.db
+        .prepare(
+          `DELETE FROM analytics_events
+           WHERE account_id = ? AND deleted_at IS NOT NULL
+             AND event_id IN (${placeholders})`
+        )
+        .run(this.activeAccountId, ...eventIds);
+      return { success: true, deleted: result.changes };
+    } catch (error) {
+      debugLogger.error(
+        "Error deleting synced analytics tombstones",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
   countUnclaimedAnalyticsEvents() {
     if (!this.db) throw new Error("Database not initialized");
     return this.db
-      .prepare("SELECT COUNT(*) AS count FROM analytics_events WHERE account_id IS NULL")
+      .prepare(
+        "SELECT COUNT(*) AS count FROM analytics_events WHERE account_id IS NULL AND deleted_at IS NULL"
+      )
       .get().count;
   }
 
@@ -1411,7 +1473,9 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.activeAccountId) return { success: false, claimed: 0 };
       const result = this.db
-        .prepare("UPDATE analytics_events SET account_id = ? WHERE account_id IS NULL")
+        .prepare(
+          "UPDATE analytics_events SET account_id = ? WHERE account_id IS NULL AND deleted_at IS NULL"
+        )
         .run(this.activeAccountId);
       return { success: true, claimed: result.changes };
     } catch (error) {
@@ -1446,16 +1510,21 @@ class DatabaseManager {
         "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL"
       );
       const hardDelete = this.db.prepare("DELETE FROM transcriptions WHERE cloud_id IS NULL");
-      // Clearing history erases the device copy outright rather than
-      // tombstoning it: the client never calls the cloud's analytics delete
-      // route, so a tombstone would have nowhere to go. Counters already
-      // uploaded stay in the account until it is deleted -- see settingsPage
-      // .privacy.insightsSyncDescription, which tells the user so before they
-      // opt in.
-      const hardDeleteAnalytics = this.db.prepare("DELETE FROM analytics_events");
+      // Anonymous counters have never left this device. Attributed counters
+      // may already be uploaded or in flight, so every one becomes a durable
+      // cloud-delete tombstone before it can be removed locally.
+      const hardDeleteAnonymousAnalytics = this.db.prepare(
+        "DELETE FROM analytics_events WHERE account_id IS NULL"
+      );
+      const tombstoneAttributedAnalytics = this.db.prepare(
+        `UPDATE analytics_events
+         SET deleted_at = datetime('now'), sync_status = 'pending'
+         WHERE account_id IS NOT NULL AND deleted_at IS NULL`
+      );
       const clearAll = this.db.transaction(() => {
         const cleared = tombstone.run().changes + hardDelete.run().changes;
-        hardDeleteAnalytics.run();
+        hardDeleteAnonymousAnalytics.run();
+        tombstoneAttributedAnalytics.run();
         return cleared;
       });
       return { cleared: clearAll(), success: true };
@@ -1490,21 +1559,25 @@ class DatabaseManager {
       );
       // Counters follow the transcripts they describe, on the same cutoff and
       // in the same transaction. Matched on created_at, never occurred_at:
-      // created_at is CURRENT_TIMESTAMP ("2026-08-30 10:00:00"), the same
-      // format as the cutoff, while occurred_at is a renderer ISO string whose
-      // "T" sorts above a space and would spare every same-day row. Pending
-      // rows go too, and the purge stays local: pushing them first would make
-      // a retention setting cause an upload, and the client never calls the
-      // cloud's analytics delete route, so nothing is erased server-side
-      // either. Anything already uploaded stays in the account, as
-      // settingsPage.privacy.insightsSyncDescription says before the user opts
-      // in.
-      const purgeAnalytics = this.db.prepare("DELETE FROM analytics_events WHERE created_at < ?");
+      // created_at uses the same SQLite timestamp format as the cutoff. Rows
+      // attributed to an account may already be uploaded or in flight, so
+      // retain them as pending cloud-delete tombstones; anonymous rows can be
+      // removed immediately because they never left the device.
+      const purgeAnonymousAnalytics = this.db.prepare(
+        "DELETE FROM analytics_events WHERE account_id IS NULL AND created_at < ?"
+      );
+      const tombstoneAttributedAnalytics = this.db.prepare(
+        `UPDATE analytics_events
+         SET deleted_at = datetime('now'), sync_status = 'pending'
+         WHERE account_id IS NOT NULL AND deleted_at IS NULL AND created_at < ?`
+      );
       let analyticsPurged = 0;
       this.db.transaction(() => {
         tombstone.run(cutoff);
         hardDelete.run(cutoff);
-        analyticsPurged = purgeAnalytics.run(cutoff).changes;
+        analyticsPurged =
+          purgeAnonymousAnalytics.run(cutoff).changes +
+          tombstoneAttributedAnalytics.run(cutoff).changes;
       })();
       return { ids: expired, analyticsPurged };
     } catch (error) {

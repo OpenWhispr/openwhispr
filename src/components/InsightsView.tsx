@@ -4,7 +4,11 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
-import { getAccountAnalyticsSummary, syncPendingAnalytics } from "../services/AnalyticsService";
+import {
+  getAccountAnalyticsSummary,
+  subscribeToAnalyticsRefresh,
+  syncPendingAnalytics,
+} from "../services/AnalyticsService";
 import { buildAnalyticsActivityDays } from "../helpers/analytics";
 import { canOfferAnalyticsClaim } from "../services/syncPassPolicy";
 import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
@@ -209,7 +213,8 @@ export default function InsightsView() {
     useInsightsSyncOptIn();
   // A managed workspace that forbids cloud backup forbids these counters with
   // it, so the view stays device-scoped even with the preference left on.
-  const syncActive = isSignedIn && insightsSyncEnabled && syncAllowedByPolicy;
+  const syncActive =
+    isSignedIn && insightsSyncEnabled && syncAllowedByPolicy && dataRetentionEnabled;
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
@@ -245,10 +250,7 @@ export default function InsightsView() {
     }
   }, [isLoaded, syncActive]);
 
-  useEffect(() => {
-    void load();
-    return window.electronAPI.onAnalyticsChanged?.(() => void load());
-  }, [load]);
+  useEffect(() => subscribeToAnalyticsRefresh(load, syncActive), [load, syncActive]);
 
   const number = useMemo(
     () => new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }),

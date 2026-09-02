@@ -1421,6 +1421,14 @@ class IPCHandlers {
       return this.databaseManager.markAnalyticsEventsSynced(eventIds);
     });
 
+    ipcMain.handle("analytics-get-pending-deletes", async (_event, limit) => {
+      return this.databaseManager.getPendingAnalyticsDeletes(limit);
+    });
+
+    ipcMain.handle("analytics-hard-delete", async (_event, eventIds) => {
+      return this.databaseManager.hardDeleteAnalyticsEvents(eventIds);
+    });
+
     ipcMain.handle("analytics-count-unclaimed", async () => {
       return this.databaseManager.countUnclaimedAnalyticsEvents();
     });
@@ -8864,10 +8872,10 @@ class IPCHandlers {
 
           const response = await proxyFetch(`${apiUrl}/api/streaming-usage`, {
             method: "POST",
-            headers: {
+            headers: withPolicyHeaders({
               "Content-Type": "application/json",
               ...authHeader,
-            },
+            }),
             body: JSON.stringify({
               text,
               audioDurationSeconds,
@@ -8886,6 +8894,7 @@ class IPCHandlers {
               clientTranscriptionId: opts.clientTranscriptionId,
               localDate: opts.localDate,
               analyticsWordCount: opts.analyticsWordCount,
+              analyticsCounterVersion: opts.analyticsCounterVersion,
             }),
           });
 

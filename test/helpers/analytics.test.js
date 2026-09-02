@@ -30,7 +30,14 @@ test("analytics activity covers this month and the previous five calendar months
 
 test("analytics counts raw whitespace-delimited spoken words", () => {
   assert.equal(countSpokenWords("  one two\nthree  "), 3);
+  assert.equal(countSpokenWords("hello,world"), 1);
   assert.equal(countSpokenWords(""), 0);
+});
+
+test("analytics segments Chinese and Japanese speech without requiring spaces", () => {
+  assert.equal(countSpokenWords("今天我们测试语音输入"), 5);
+  assert.equal(countSpokenWords("今日は良い天気です"), 5);
+  assert.equal(countSpokenWords("OpenWhisprで音声入力を試します"), 7);
 });
 
 test("analytics resolves local, cloud, and BYOK modes", () => {

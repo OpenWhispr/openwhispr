@@ -14,6 +14,7 @@ const SIGNED_IN = {
   backupEnabled: true,
   subscribed: true,
   backupAllowedByPolicy: true,
+  dataRetentionEnabled: true,
   insightsSyncEnabled: true,
 };
 
@@ -71,6 +72,11 @@ test("consent: Insights counters answer to their own opt-in, not the plan", asyn
       `analytics must not run with ${off} off`
     );
   }
+});
+
+test("consent: disabling local history stops pending Insights uploads", async () => {
+  const { resolveSyncConsent } = await load();
+  assert.equal(resolveSyncConsent({ ...SIGNED_IN, dataRetentionEnabled: false }).analytics, false);
 });
 
 // --- canOfferAnalyticsClaim -------------------------------------------------

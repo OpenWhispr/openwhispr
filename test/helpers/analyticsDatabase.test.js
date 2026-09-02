@@ -40,6 +40,11 @@ test("analytics stays content-free and idempotent, and only syncs the signed-in 
   const pending = db.getPendingAnalyticsEvents();
   assert.equal(pending.length, 1);
   assert.equal(pending[0].event_id, "event-2");
+  assert.equal(
+    pending[0].counter_version,
+    2,
+    "new rows identify the Unicode-aware counting rule"
+  );
   assert.equal(db.markAnalyticsEventsSynced(["event-2"]).updated, 1);
   assert.deepEqual(db.getPendingAnalyticsEvents(), []);
 });
@@ -66,7 +71,7 @@ test("clearing history and deleting account data both erase analytics rows", (t)
   );
 });
 
-test("clearing history erases every analytics row, attributed or not", (t) => {
+test("clearing history erases anonymous analytics and tombstones attributed analytics", (t) => {
   const db = createDb(t);
   if (!db) return;
 
@@ -81,12 +86,36 @@ test("clearing history erases every analytics row, attributed or not", (t) => {
   assert.equal(db.getAnalyticsSummary().totalDictations, 0);
   assert.deepEqual(db.getPendingAnalyticsEvents(), []);
   assert.equal(db.countUnclaimedAnalyticsEvents(), 0);
-  assert.deepEqual(db.db.prepare("SELECT event_id FROM analytics_events").all(), []);
+  assert.deepEqual(
+    db.db
+      .prepare("SELECT event_id FROM analytics_events WHERE deleted_at IS NOT NULL")
+      .all()
+      .map((row) => row.event_id)
+      .sort(),
+    ["pending-1", "synced-1"]
+  );
 
   // A batch already in flight when the clear landed still gets accepted; the
-  // late ack must not resurrect an erased row.
+  // late ack must not retire the delete tombstone.
   assert.equal(db.markAnalyticsEventsSynced(["pending-1"]).updated, 0);
-  assert.deepEqual(db.db.prepare("SELECT event_id FROM analytics_events").all(), []);
+  assert.deepEqual(
+    db
+      .getPendingAnalyticsDeletes()
+      .map((row) => row.event_id)
+      .sort(),
+    ["pending-1", "synced-1"]
+  );
+
+  // A delayed producer for the same dictation must not revive a tombstone.
+  recordEvent(db, "pending-1", { wordCount: 99 });
+  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
+  assert.deepEqual(
+    db
+      .getPendingAnalyticsDeletes()
+      .map((row) => row.event_id)
+      .sort(),
+    ["pending-1", "synced-1"]
+  );
 });
 
 test("pre-sign-in analytics are attributed only by an explicit claim", (t) => {

@@ -19,8 +19,9 @@ export interface SyncConsent {
  * stranded free teammates in workspaces they had already been added to.
  *
  * Insights counters carry no content and are free, so they answer to their own
- * opt-in rather than the backup toggle or the plan — but they are still user
- * data leaving the device, so org policy gates them exactly like backup.
+ * opt-in rather than the backup toggle or the plan. They still require local
+ * history and are user data leaving the device, so org policy gates them like
+ * backup.
  */
 export function resolveSyncConsent(state: {
   authValidated: boolean;
@@ -28,13 +29,18 @@ export function resolveSyncConsent(state: {
   backupEnabled: boolean;
   subscribed: boolean;
   backupAllowedByPolicy: boolean;
+  dataRetentionEnabled: boolean;
   insightsSyncEnabled: boolean;
 }): SyncConsent {
   const shared = state.authValidated && state.signedIn;
   return {
     shared,
     backup: shared && state.backupEnabled && state.subscribed && state.backupAllowedByPolicy,
-    analytics: shared && state.insightsSyncEnabled && state.backupAllowedByPolicy,
+    analytics:
+      shared &&
+      state.insightsSyncEnabled &&
+      state.backupAllowedByPolicy &&
+      state.dataRetentionEnabled,
   };
 }
 
