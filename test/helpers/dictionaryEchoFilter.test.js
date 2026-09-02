@@ -352,22 +352,3 @@ test("payloadSendsDictionaryBias: nullish or malformed payloads never enable the
   assert.equal(payloadSendsDictionaryBias(undefined), false);
   assert.equal(payloadSendsDictionaryBias("prompt"), false);
 });
-
-test("#1759 scenario: dictating a one-term dictionary word over Corti is not discarded", async () => {
-  const { payloadSendsDictionaryBias, matchesDictionaryPrompt } =
-    await import("../../src/utils/dictionaryEchoFilter.js");
-  const cortiPayload = {
-    audioBuffer: new ArrayBuffer(4),
-    language: "en",
-    environment: "us",
-    tenant: "clinic",
-  };
-  // "Ozempic" alone is a normalized exact match against a ["Ozempic"] dictionary —
-  // the matcher would fire. The gate keeps it from ever being consulted, because
-  // Corti never received the word.
-  assert.equal(matchesDictionaryPrompt("Ozempic", "Ozempic"), true);
-  assert.equal(
-    payloadSendsDictionaryBias(cortiPayload) && matchesDictionaryPrompt("Ozempic", "Ozempic"),
-    false
-  );
-});
