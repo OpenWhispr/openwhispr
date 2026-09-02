@@ -130,16 +130,22 @@ async function withWaylandEnvironment(desktop, callback) {
   const previous = {
     XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE,
     XDG_CURRENT_DESKTOP: process.env.XDG_CURRENT_DESKTOP,
+    XDG_SESSION_DESKTOP: process.env.XDG_SESSION_DESKTOP,
+    DESKTOP_SESSION: process.env.DESKTOP_SESSION,
     WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY,
     HYPRLAND_INSTANCE_SIGNATURE: process.env.HYPRLAND_INSTANCE_SIGNATURE,
+    SWAYSOCK: process.env.SWAYSOCK,
     DISPLAY: process.env.DISPLAY,
   };
   process.env.XDG_SESSION_TYPE = "wayland";
   process.env.XDG_CURRENT_DESKTOP = desktop;
+  process.env.XDG_SESSION_DESKTOP = desktop;
+  process.env.DESKTOP_SESSION = desktop;
   process.env.WAYLAND_DISPLAY = "wayland-1";
   delete process.env.DISPLAY;
   if (desktop === "Hyprland") process.env.HYPRLAND_INSTANCE_SIGNATURE = "test";
   else delete process.env.HYPRLAND_INSTANCE_SIGNATURE;
+  delete process.env.SWAYSOCK;
   try {
     return await callback();
   } finally {
@@ -311,6 +317,30 @@ test("Hyprland paste uses the current symbolic shortcut dispatcher", async () =>
   ]);
 });
 
+test("known Wayland GUIs use Ctrl+V without an AT-SPI probe", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0], { stdout: ["ok\n"] }),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "hyprctl";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._detectHyprlandWindowClass = () => "firefox";
+  manager._getLinuxAtspiPasteMode = () => assert.fail("AT-SPI should not run for a known GUI");
+
+  await withWaylandEnvironment("Hyprland", () => manager.pasteLinux(null));
+
+  assert.deepEqual(spawnCalls, [
+    {
+      command: "hyprctl",
+      args: [
+        "dispatch",
+        'hl.dsp.send_shortcut({ mods = "CTRL", key = "V", window = "activewindow" })',
+      ],
+    },
+  ]);
+});
+
 test("Hyprland paste falls back to the legacy symbolic shortcut dispatcher", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({
@@ -421,6 +451,24 @@ test("GNOME tries uinput before a tokenless portal", async () => {
 
   assert.deepEqual(spawnCalls, [
     { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+  ]);
+});
+
+test("GNOME skips uinput when it is inaccessible", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [0]),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = () => false;
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._canAccessUinput = () => false;
+
+  await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+
+  assert.deepEqual(spawnCalls, [
+    { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
   ]);
 });
 
@@ -581,6 +629,71 @@ test("portal exit six reports unavailable symbolic input", async () => {
     manager._runPortalPaste("/tmp/linux-fast-paste"),
     /portal symbolic keyboard input unavailable/
   );
+});
+
+test("COSMIC uses wtype for AT-SPI-classified native Wayland targets", async () => {
+  const calls = [];
+
+  for (const [atspiMode, expected] of [
+    [
+      "terminal",
+      {
+        command: "wtype",
+        args: ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"],
+      },
+    ],
+    ["gui", { command: "wtype", args: ["-M", "ctrl", "-k", "v", "-m", "ctrl"] }],
+    ["unknown", { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] }],
+  ]) {
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSuccessfulSpawn(calls),
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => command === "wtype";
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+    manager._getLinuxAtspiPasteMode = () => atspiMode;
+
+    await withWaylandEnvironment("COSMIC", () => manager.pasteLinux(null));
+    assert.deepEqual(calls.at(-1), expected);
+  }
+});
+
+test("failed COSMIC wtype falls back to layout-safe physical input", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [1, 0]),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "wtype";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._getLinuxAtspiPasteMode = () => "terminal";
+
+  await withWaylandEnvironment("COSMIC", () => manager.pasteLinux(null));
+
+  assert.deepEqual(spawnCalls, [
+    {
+      command: "wtype",
+      args: ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"],
+    },
+    { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+  ]);
+});
+
+test("physical Wayland fallback keeps Shift+Insert for a classified target", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = () => false;
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._getLinuxAtspiPasteMode = () => "terminal";
+
+  await withWaylandEnvironment("COSMIC", () => manager.pasteLinux(null));
+
+  assert.deepEqual(spawnCalls, [
+    { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+  ]);
 });
 
 test("Wayland ydotool uses raw Shift+Insert keycodes", async () => {
