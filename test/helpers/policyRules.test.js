@@ -853,3 +853,62 @@ test("enterprise transcription resolves through the transcription policy section
   const meetingCatalog = { modes: ["openwhispr", "providers", "local"], byokProviders: ["openai"] };
   assert.equal(resolveEffectivePolicySelection(enterpriseOnly, "transcription", { mode: "local", provider: "" }, meetingCatalog), null);
 });
+
+// Mirrors what TranscriptionSection/UploadTranscriptionPanel do: the
+// "enterprise" tile is only appended to the raw option list when the policy
+// snapshot is managed, before that list is ever handed to
+// filterModeOptionsByPolicy. Selecting it with no managed org behind it
+// writes a mode with no personal configuration surface and no managed
+// resolution, which then fails every dictation/upload closed.
+test("the enterprise transcription tile is offered only to a managed policy snapshot", async () => {
+  const { isEnterpriseTranscriptionOfferable, filterModeOptionsByPolicy } = await load();
+  const baseOptions = [{ id: "openwhispr" }, { id: "providers" }, { id: "local" }, { id: "self-hosted" }];
+  const enterpriseOption = { id: "enterprise" };
+  const catalog = { byokProviders: ["openai"], enterpriseProviders: ["azure"] };
+  const buildOptions = (state) => [
+    ...baseOptions,
+    ...(isEnterpriseTranscriptionOfferable(state) ? [enterpriseOption] : []),
+  ];
+
+  const idle = { status: "idle", policy: null, appVersion: null };
+  const unmanaged = { status: "unmanaged", policy: null, appVersion: "1.10.0" };
+  const managedEnterpriseAzure = {
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: {
+      ...policy,
+      transcription: {
+        allowedModes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"],
+        allowedByokProviders: ["openai"],
+        allowedEnterpriseProviders: ["azure"],
+      },
+    },
+  };
+
+  assert.equal(isEnterpriseTranscriptionOfferable(idle), false);
+  assert.equal(isEnterpriseTranscriptionOfferable(unmanaged), false);
+  assert.equal(isEnterpriseTranscriptionOfferable(managedEnterpriseAzure), true);
+
+  for (const state of [idle, unmanaged]) {
+    const options = filterModeOptionsByPolicy(buildOptions(state), "transcription", state, catalog);
+    assert.deepEqual(
+      options.map((o) => o.id),
+      ["openwhispr", "providers", "local", "self-hosted"],
+      state.status
+    );
+  }
+
+  const managedOptions = filterModeOptionsByPolicy(
+    buildOptions(managedEnterpriseAzure),
+    "transcription",
+    managedEnterpriseAzure,
+    catalog
+  );
+  assert.deepEqual(managedOptions.map((o) => o.id), [
+    "openwhispr",
+    "providers",
+    "local",
+    "self-hosted",
+    "enterprise",
+  ]);
+});

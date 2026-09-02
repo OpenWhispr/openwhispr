@@ -136,6 +136,7 @@ import {
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
   isCloudBackupAllowed,
+  isEnterpriseTranscriptionOfferable,
   lockedLocalHistoryValue,
   maxAudioRetentionDays,
 } from "../stores/policyRules";
@@ -549,6 +550,7 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
+  const policySnapshot = usePolicySnapshot();
   const enterpriseTranscriptionSetupMode = useSettingsStore(
     (s) => s.enterpriseTranscriptionSetupMode
   );
@@ -589,12 +591,16 @@ function TranscriptionSection({
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
       },
-      {
-        id: "enterprise",
-        label: t("settingsPage.transcription.modes.enterprise"),
-        description: t("settingsPage.transcription.modes.enterpriseDesc"),
-        icon: <ShieldCheck className="w-4 h-4" />,
-      },
+      ...(isEnterpriseTranscriptionOfferable(policySnapshot)
+        ? [
+            {
+              id: "enterprise" as const,
+              label: t("settingsPage.transcription.modes.enterprise"),
+              description: t("settingsPage.transcription.modes.enterpriseDesc"),
+              icon: <ShieldCheck className="w-4 h-4" />,
+            },
+          ]
+        : []),
     ],
     "transcription",
     transcriptionMode,

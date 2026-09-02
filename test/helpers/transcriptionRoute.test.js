@@ -362,3 +362,13 @@ test("an enterprise transcription mode without a managed resolution fails closed
   assert.equal(route.transport, "error");
   assert.equal(route.code, "MANAGED_CONFIG_UNAVAILABLE");
 });
+
+test("an enterprise transcription mode WITH a managed resolution takes the managed transport, not the fail-closed guard", async () => {
+  const route = await resolve(
+    { transcriptionMode: "enterprise", cloudTranscriptionProvider: "openai" },
+    { managed: MANAGED_STT }
+  );
+  assert.equal(route.transport, "managed");
+  assert.equal(route.provider, "azure");
+  assert.equal(route.deployment, "gpt-4o-transcribe");
+});

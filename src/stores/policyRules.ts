@@ -116,6 +116,20 @@ export function isTranscriptionEnterpriseProviderAllowed(
   );
 }
 
+/**
+ * Whether the "Enterprise cloud" transcription tile should ever be shown as
+ * a selectable option. Unlike every other mode, "enterprise" can only ever
+ * resolve for a managed org — resolveEffectivePolicySelection requires a
+ * managed policy with a matching allowedEnterpriseProviders entry. Offering
+ * the tile to an unmanaged/idle user would let them pick a mode with no
+ * personal configuration surface and no managed resolution, which then
+ * fails every dictation and upload closed via the transcription route's
+ * fail-closed guard.
+ */
+export function isEnterpriseTranscriptionOfferable(state: PolicyDecisionSnapshot): boolean {
+  return state.status === "managed";
+}
+
 /** Whether the AI agent (dictation, voice, and chat) is allowed. */
 export function isAgentAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.agentEnabled);

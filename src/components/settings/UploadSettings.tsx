@@ -6,7 +6,8 @@ import {
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
 } from "../../stores/settingsStore";
-import { usePolicyModeOptions } from "../../hooks/usePolicy";
+import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
+import { isEnterpriseTranscriptionOfferable } from "../../stores/policyRules";
 import { InferenceModeSelector } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
@@ -17,6 +18,7 @@ import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 export function UploadTranscriptionPanel() {
   const { t } = useTranslation();
   const startOnboarding = useStartOnboarding();
+  const policySnapshot = usePolicySnapshot();
 
   const {
     isSignedIn,
@@ -38,6 +40,7 @@ export function UploadTranscriptionPanel() {
     uploadCloudTranscriptionBaseUrl,
     setUploadCloudTranscriptionBaseUrl,
     setUploadCloudTranscriptionMode,
+    setEnterpriseTranscriptionSetupMode,
     remoteTranscriptionUrl,
     setRemoteTranscriptionUrl,
     remoteTranscriptionModel,
@@ -75,12 +78,16 @@ export function UploadTranscriptionPanel() {
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
       },
-      {
-        id: "enterprise",
-        label: t("settingsPage.transcription.modes.enterprise"),
-        description: t("settingsPage.transcription.modes.enterpriseDesc"),
-        icon: <ShieldCheck className="w-4 h-4" />,
-      },
+      ...(isEnterpriseTranscriptionOfferable(policySnapshot)
+        ? [
+            {
+              id: "enterprise" as const,
+              label: t("settingsPage.transcription.modes.enterprise"),
+              description: t("settingsPage.transcription.modes.enterpriseDesc"),
+              icon: <ShieldCheck className="w-4 h-4" />,
+            },
+          ]
+        : []),
     ],
     "transcription",
     uploadTranscriptionMode,
@@ -99,6 +106,7 @@ export function UploadTranscriptionPanel() {
     setUploadTranscriptionMode(mode);
     setUploadUseLocalWhisper(mode === "local");
     setUploadCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
   };
 
   const handleLocalTranscriptionModelSelect = useCallback(
