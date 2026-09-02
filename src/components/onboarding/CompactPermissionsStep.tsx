@@ -146,15 +146,6 @@ export default function CompactPermissionsStep({
   return (
     <CompactOnboardingFrame showLegalNotice={false}>
       <div className="onboarding-shell-scroll relative flex h-full flex-col overflow-y-auto px-5 pb-6 pt-38 text-center">
-        <button
-          type="button"
-          onClick={() => void onLogout()}
-          className="onboarding-pressable absolute right-5 top-13 inline-flex h-9 min-w-24 items-center justify-center gap-1.5 rounded-full bg-white/14 px-4 text-sm font-medium text-white transition-colors hover:bg-white/22 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/55"
-        >
-          <LogOut className="size-3.5" aria-hidden="true" />
-          {t("common.logout")}
-        </button>
-
         {/* text-balance evens the two lines out ("Set up OpenWhispr" / "in 3
             minutes") instead of leaving one word stranded. Preferred over a
             hardcoded <br> because the break point stays correct in all 9
@@ -226,14 +217,25 @@ export default function CompactPermissionsStep({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={onContinue}
-          disabled={!requiredGranted}
-          className="onboarding-pressable mt-auto h-10 min-w-28 shrink-0 self-center rounded-full bg-[var(--onboarding-accent)] px-5 text-sm font-medium text-[var(--onboarding-accent-foreground)] transition-colors hover:bg-[var(--onboarding-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)]"
-        >
-          {t("common.continue")}
-        </button>
+        <div className="mt-auto flex w-full shrink-0 items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => void onLogout()}
+            className="onboarding-pressable inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 text-sm font-medium text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
+          >
+            <LogOut className="size-3.5" aria-hidden="true" />
+            {t("common.logout")}
+          </button>
+
+          <button
+            type="button"
+            onClick={onContinue}
+            disabled={!requiredGranted}
+            className="onboarding-pressable h-10 flex-1 rounded-full bg-[var(--onboarding-accent)] px-5 text-sm font-medium text-[var(--onboarding-accent-foreground)] transition-colors hover:bg-[var(--onboarding-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)]"
+          >
+            {t("common.continue")}
+          </button>
+        </div>
 
         {platform === "darwin" && screenContext?.enabled && screenContext.needsRelaunch && (
           <p className="mt-2 text-left text-xs leading-4 text-warning/80">

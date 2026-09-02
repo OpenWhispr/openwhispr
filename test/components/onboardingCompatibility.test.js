@@ -170,14 +170,16 @@ test("permissions replaces Back with Logout, keeps Continue at the bottom, and g
   const blocked = render(false);
   assert.match(blocked, /relative flex h-full flex-col overflow-y-auto px-5 pb-6 pt-38/);
   assert.doesNotMatch(blocked, />common\.back<\/button>/);
-  assert.match(blocked, />common\.logout<\/button>/);
-  assert.match(blocked, /disabled="" class="onboarding-pressable mt-auto[^>]+>common\.continue/);
-  assert.match(blocked, /mt-auto[^>]*self-center/);
+  assert.match(blocked, /mt-auto flex w-full[^>]+>.*common\.logout.*common\.continue/s);
+  assert.match(
+    blocked,
+    /disabled="" class="onboarding-pressable h-10 flex-1[^>]+>common\.continue/
+  );
   assert.doesNotMatch(blocked, /fixed top-4/);
 
   const ready = render(true);
-  assert.match(ready, /class="onboarding-pressable mt-auto[^>]+>common\.continue/);
-  assert.doesNotMatch(ready, /disabled="" class="onboarding-pressable mt-auto/);
+  assert.match(ready, /class="onboarding-pressable h-10 flex-1[^>]+>common\.continue/);
+  assert.doesNotMatch(ready, /disabled="" class="onboarding-pressable h-10 flex-1/);
 });
 
 test("macOS onboarding offers optional Screen Context setup", async (t) => {
