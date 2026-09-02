@@ -500,12 +500,16 @@ class ClipboardManager {
     }
   }
 
-  _runPortalPaste(fastPasteBinary, { shiftInsert = false, terminal = false, copy = false } = {}) {
+  _runPortalPaste(
+    fastPasteBinary,
+    { shiftInsert = false, terminal = false, ctrlV = false, copy = false } = {}
+  ) {
     return new Promise((resolve, reject) => {
       const args = ["--portal"];
       if (copy) args.push("--copy");
       if (shiftInsert) args.push("--shift-insert");
       else if (terminal) args.push("--terminal");
+      else if (ctrlV) args.push("--ctrl-v");
 
       const restoreToken = this._readPortalToken();
       if (restoreToken) {
@@ -668,6 +672,19 @@ class ClipboardManager {
     }
 
     return null;
+  }
+
+  _getLinuxAtspiPasteMode(binary) {
+    try {
+      const result = spawnSync(binary, ["--atspi-paste-mode"], {
+        encoding: "utf8",
+        timeout: 100,
+      });
+      const mode = result.status === 0 ? result.stdout.trim() : "unknown";
+      return ["terminal", "gui"].includes(mode) ? mode : "unknown";
+    } catch {
+      return "unknown";
+    }
   }
 
   _detectHyprlandWindowClass() {
@@ -1550,24 +1567,36 @@ class ClipboardManager {
     const signalsMatch = (needle) => windowSignals.some((signal) => signal.includes(needle));
     const detectedIsKonsole = signalsMatch("konsole");
 
-    // Shift+Insert is the universal Linux paste shortcut — works in terminals and
-    // GUI apps, and (unlike Ctrl+V) is not intercepted by TUI agents like Codex,
-    // Claude Code, or OpenCode as "paste image". Use it whenever the target window
-    // can't be classified, or for Konsole which silently drops simulated Ctrl+Shift+V.
-    // Electron apps (VS Code, Cursor) host TUI terminals too, so route them to
-    // Shift+Insert on any desktop environment, even when their class is detected.
-    const useShiftInsert =
-      detectedIsKonsole || detectedIsElectron || (isWayland && windowSignals.length === 0);
+    // Konsole drops simulated Ctrl+Shift+V; Electron-hosted TUIs may treat
+    // Ctrl+V as "paste image". Shift+Insert is also the safe unknown-Wayland
+    // fallback. AT-SPI resolves the remaining native-Wayland targets.
     const isTerminalTarget =
       windowSignals.length > 0 && LINUX_TERMINAL_CLASSES.some((term) => signalsMatch(term));
+    let directPasteMode = null;
+    if (detectedIsKonsole || detectedIsElectron) {
+      directPasteMode = "shift-insert";
+    } else if (isTerminalTarget) {
+      directPasteMode = "terminal";
+    } else if (windowSignals.length > 0) {
+      directPasteMode = "gui";
+    }
+
+    let atspiPasteMode = "unknown";
+    if (isWayland && !directPasteMode && linuxFastPaste) {
+      atspiPasteMode = this._getLinuxAtspiPasteMode(linuxFastPaste);
+    }
+
+    const pasteMode = directPasteMode || (isWayland ? atspiPasteMode : "gui");
+    const useShiftInsert = pasteMode === "shift-insert" || pasteMode === "unknown";
+    const terminalPaste = pasteMode === "terminal";
     const hyprlandShortcut = useShiftInsert
       ? { modifiers: "SHIFT", key: "Insert" }
-      : isTerminalTarget
+      : terminalPaste
         ? { modifiers: "CTRL SHIFT", key: "V" }
         : { modifiers: "CTRL", key: "V" };
     const wtypeArgs = useShiftInsert
       ? ["-M", "shift", "-k", "Insert", "-m", "shift"]
-      : isTerminalTarget
+      : terminalPaste
         ? ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"]
         : ["-M", "ctrl", "-k", "v", "-m", "ctrl"];
 
@@ -1579,10 +1608,14 @@ class ClipboardManager {
 
     const appendModeFlag = (args) => {
       if (useShiftInsert) args.push("--shift-insert");
-      else if (isTerminalTarget) args.push("--terminal");
+      else if (terminalPaste) args.push("--terminal");
+      else args.push("--ctrl-v");
     };
 
-    if (isWayland && isWlroots && wtypeExists) {
+    // wtype sends symbolic shortcuts through the compositor's virtual keyboard.
+    // Try it for an AT-SPI-classified target rather than inferring protocol
+    // support only from compositor family; a failed dispatch falls through.
+    if (isWayland && wtypeExists && (isWlroots || atspiPasteMode !== "unknown")) {
       try {
         await this._runLinuxPasteCommand("wtype", wtypeArgs, "wtype");
         this.safeLog("✅ Paste successful using wtype");
@@ -1647,9 +1680,14 @@ class ClipboardManager {
 
       if (isWayland) {
         const tryUinputPaste = async () => {
+          if (!this._canAccessUinput()) {
+            throw new Error("/dev/uinput is not writable, skipping uinput");
+          }
           if (this.uinputTimedOut) {
             throw new Error("uinput timed out earlier this session, skipping");
           }
+          // uinput emits physical KEY_V, which is layout-sensitive. Keep the
+          // legacy layout-safe fallback for physical Wayland injectors.
           const args = ["--uinput", "--shift-insert"];
           try {
             await spawnFastPaste(args, "uinput");
@@ -1661,10 +1699,10 @@ class ClipboardManager {
             }
             throw error;
           }
-          this.safeLog("✅ Paste successful using native linux-fast-paste (uinput)");
+          this.safeLog("✅ Paste injection dispatched using native linux-fast-paste (uinput)");
           debugLogger.info(
-            "Paste successful",
-            { tool: "linux-fast-paste", method: "uinput", detectedWindowClass },
+            "Paste injection dispatched",
+            { tool: "linux-fast-paste", method: "uinput", pasteMode, detectedWindowClass },
             "clipboard"
           );
           return { restoreComplete: restoreClipboard() };
@@ -1674,7 +1712,8 @@ class ClipboardManager {
           try {
             await this._runPortalPaste(linuxFastPaste, {
               shiftInsert: useShiftInsert,
-              terminal: isTerminalTarget,
+              terminal: terminalPaste,
+              ctrlV: !useShiftInsert && !terminalPaste,
             });
             this.safeLog("✅ Paste successful using linux-fast-paste --portal (RemoteDesktop)");
             return { restoreComplete: restoreClipboard() };
@@ -1806,11 +1845,7 @@ class ClipboardManager {
     if (isTerminalTarget) {
       this.safeLog(`🖥️ Terminal detected: ${windowSignals.join(" | ")}`);
     }
-    const pasteKeys = useShiftInsert
-      ? "shift+Insert"
-      : isTerminalTarget
-        ? "ctrl+shift+v"
-        : "ctrl+v";
+    const pasteKeys = useShiftInsert ? "shift+Insert" : terminalPaste ? "ctrl+shift+v" : "ctrl+v";
 
     const canUseYdotool = ydotoolDaemonRunning;
     const canUseXdotool = isWayland ? xwaylandAvailable && xdotoolExists : xdotoolExists;
@@ -1827,14 +1862,14 @@ class ClipboardManager {
     }
 
     // ydotool 0.1.x (Ubuntu 24.04) uses key names; 1.0.x uses raw keycodes.
-    // Wayland's physical fallback is always Shift+Insert to avoid KEY_V's layout-sensitive position.
+    // Wayland physical input stays on Shift+Insert because KEY_V is layout-sensitive.
     const legacyYdotool = this._isYdotoolLegacy();
     let ydotoolArgs;
     if (isWayland || useShiftInsert) {
       ydotoolArgs = legacyYdotool
         ? ["key", "shift+Insert"]
         : ["key", "42:1", "110:1", "110:0", "42:0"];
-    } else if (isTerminalTarget) {
+    } else if (terminalPaste) {
       ydotoolArgs = legacyYdotool
         ? ["key", "ctrl+shift+v"]
         : ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"];
@@ -1865,7 +1900,9 @@ class ClipboardManager {
         targetWindowId,
         detectedWindowClass,
         detectedWindowComm,
-        inTerminal: isTerminalTarget,
+        atspiPasteMode,
+        pasteMode,
+        inTerminal: terminalPaste,
         useShiftInsert,
         pasteKeys,
       },

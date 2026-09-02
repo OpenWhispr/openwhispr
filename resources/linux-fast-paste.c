@@ -396,6 +396,7 @@ static int check_parent_terminal(Display *dpy, Window win) {
 }
 
 #ifdef HAVE_ATSPI
+/* Returns terminal (1), known GUI (0), or unknown (-1). */
 static int detect_terminal_atspi(void) {
     atspi_init();
     AtspiAccessible *desktop = atspi_get_desktop(0);
@@ -410,11 +411,11 @@ static int detect_terminal_atspi(void) {
             AtspiAccessible *win = atspi_accessible_get_child_at_index(app, j, NULL);
             if (!win) continue;
             AtspiStateSet *states = atspi_accessible_get_state_set(win);
-            gboolean active = atspi_state_set_contains(states, ATSPI_STATE_ACTIVE);
-            g_object_unref(states);
+            gboolean active = states && atspi_state_set_contains(states, ATSPI_STATE_ACTIVE);
+            if (states) g_object_unref(states);
             if (active) {
                 char *name = atspi_accessible_get_name(app, NULL);
-                int result = name ? is_terminal(name) : 0;
+                int result = name ? is_terminal(name) : -1;
                 g_free(name);
                 g_object_unref(win);
                 g_object_unref(app);
@@ -425,6 +426,12 @@ static int detect_terminal_atspi(void) {
         g_object_unref(app);
     }
     return -1;
+}
+
+static int print_atspi_paste_mode(void) {
+    int result = detect_terminal_atspi();
+    printf("%s\n", result == 1 ? "terminal" : result == 0 ? "gui" : "unknown");
+    return 0;
 }
 
 /* Native Wayland compositors do not expose an X11 window id.  AT-SPI gives us
@@ -751,14 +758,14 @@ static int send_media_play_pause(void) {
     return 0;
 }
 
-/* Resolve the paste key sequence. --shift-insert wins outright (used when the
- * caller already knows context is unknown or Konsole). Otherwise: terminal
- * detection via atspi, then X11 class, then parent class — same fallback
- * chain the binary used before this enum existed. */
+/* Resolve the paste key sequence. Explicit modes win; Shift+Insert handles
+ * unknown targets and Konsole. Otherwise detect a terminal via AT-SPI, X11
+ * class, then parent class. */
 static paste_mode_t resolve_paste_mode(int force_terminal, int force_shift_insert,
-                                       Window target_window)
+                                       int force_ctrl_v, Window target_window)
 {
     if (force_shift_insert) return PASTE_MODE_SHIFT_INSERT;
+    if (force_ctrl_v) return PASTE_MODE_CTRL_V;
 
     int is_term = force_terminal;
 #ifdef HAVE_ATSPI
@@ -794,6 +801,8 @@ int main(int argc, char *argv[]) {
     int capabilities_only = 0;
     int atspi_target_only = 0;
     int atspi_selection = 0;
+    int atspi_paste_mode = 0;
+    int force_ctrl_v = 0;
     const char *restore_token = NULL;
     Window target_window = None;
 
@@ -802,6 +811,8 @@ int main(int argc, char *argv[]) {
             force_terminal = 1;
         } else if (strcmp(argv[i], "--shift-insert") == 0) {
             force_shift_insert = 1;
+        } else if (strcmp(argv[i], "--ctrl-v") == 0) {
+            force_ctrl_v = 1;
         } else if (strcmp(argv[i], "--uinput") == 0) {
             use_uinput = 1;
         } else if (strcmp(argv[i], "--portal") == 0) {
@@ -816,6 +827,8 @@ int main(int argc, char *argv[]) {
             atspi_target_only = 1;
         } else if (strcmp(argv[i], "--atspi-selection") == 0) {
             atspi_selection = 1;
+        } else if (strcmp(argv[i], "--atspi-paste-mode") == 0) {
+            atspi_paste_mode = 1;
         } else if (strcmp(argv[i], "--restore-token") == 0 && i + 1 < argc) {
             restore_token = argv[++i];
         } else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
@@ -829,7 +842,7 @@ int main(int argc, char *argv[]) {
         printf(" portal-keysym-v1");
 #endif
 #ifdef HAVE_ATSPI
-        printf(" atspi-selection-v1");
+        printf(" atspi-selection-v1 atspi-paste-mode-v1");
 #endif
         printf("\n");
         return 0;
@@ -851,13 +864,22 @@ int main(int argc, char *argv[]) {
 #endif
     }
 
+    if (atspi_paste_mode) {
+#ifdef HAVE_ATSPI
+        return print_atspi_paste_mode();
+#else
+        return 5;
+#endif
+    }
+
     if (media_play_pause) {
         return send_media_play_pause();
     }
 
     if (use_portal) {
 #ifdef HAVE_GIO
-        paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
+        paste_mode_t mode = resolve_paste_mode(
+            force_terminal, force_shift_insert, force_ctrl_v, target_window);
         return paste_via_portal(mode, restore_token, copy_mode);
 #else
         fprintf(stderr, "portal support not compiled in\n");
@@ -867,7 +889,8 @@ int main(int argc, char *argv[]) {
 
     if (use_uinput) {
 #ifdef HAVE_UINPUT
-        paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
+        paste_mode_t mode = resolve_paste_mode(
+            force_terminal, force_shift_insert, force_ctrl_v, target_window);
         return paste_via_uinput(mode, copy_mode);
 #else
         fprintf(stderr, "uinput support not compiled in\n");
@@ -888,7 +911,8 @@ int main(int argc, char *argv[]) {
         activate_window(dpy, target_window);
     }
 
-    paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
+    paste_mode_t mode = resolve_paste_mode(
+        force_terminal, force_shift_insert, force_ctrl_v, target_window);
 
     if (!copy_mode && mode == PASTE_MODE_SHIFT_INSERT) {
         KeyCode shift  = XKeysymToKeycode(dpy, XK_Shift_L);
