@@ -598,7 +598,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         const s = getSettings();
         const managed = getManagedTranscriptionResolution();
         if (managed?.kind === "error") {
-          toast({ title: managed.message, variant: "destructive" });
+          toast({
+            title: managed.messageKey ? t(managed.messageKey) : managed.message,
+            variant: "destructive",
+          });
           return;
         }
         if (!managed && !isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
@@ -780,7 +783,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         } else {
           toast({
             title: t("controlPanel.history.retryError"),
-            description: result.error,
+            description: result.messageKey ? t(result.messageKey) : result.error,
             variant: "destructive",
           });
         }

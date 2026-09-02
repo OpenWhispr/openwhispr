@@ -286,12 +286,14 @@ function resolveScope(
           kind: "error",
           code: "MANAGED_CONFIG_LOADING",
           message: "Checking your organization's managed setup. Try again in a moment.",
+          messageKey: "common.managedConfigLoading",
         }
       : {
           kind: "error",
           code: "MANAGED_CONFIG_UNAVAILABLE",
           message:
             "Managed enterprise access is unavailable. Sign in again or contact your IT administrator.",
+          messageKey: "common.managedConfigUnavailable",
         };
   }
   const resolution = resolveManagedEnterpriseScope(
@@ -315,6 +317,7 @@ function resolveScope(
           code: "PROVIDER_POLICY_CONFLICT",
           message:
             "Managed access is blocked by your workspace policy. Contact your IT administrator.",
+          messageKey: "common.managedPolicyConflict",
         }
       : { kind: "manual" };
   }

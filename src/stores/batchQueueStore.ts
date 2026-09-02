@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import i18n from "../i18n";
 import { transcribeFileWithSpeakers } from "../services/fileTranscription";
 import type { FileTranscriptionConfig, DiarizationSettings } from "../services/fileTranscription";
 import { DOWNLOAD_ERROR_KEYS, transcriptionErrorKey } from "../components/notes/shared";
@@ -216,6 +217,7 @@ export function processBatchQueue(
           status: "error",
           error:
             transcriptionErrorKey(transcriptionResult) ||
+            (transcriptionResult.messageKey ? i18n.t(transcriptionResult.messageKey) : undefined) ||
             transcriptionResult.error ||
             "batchTranscriptionFailed",
         });

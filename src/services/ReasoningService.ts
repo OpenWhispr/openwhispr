@@ -148,7 +148,12 @@ class ReasoningService extends BaseReasoningService {
   ): { model: string; provider: P; config: T; isManaged: boolean } {
     const inferenceScope = config.inferenceScope || fallbackScope;
     const managed = getManagedScopeResolution(inferenceScope, getSettings().enterpriseSetupMode);
-    if (managed.kind === "error") throw new Error(managed.message);
+    if (managed.kind === "error") {
+      throw Object.assign(new Error(managed.message), {
+        code: managed.code,
+        messageKey: managed.messageKey,
+      });
+    }
     if (managed.kind !== "managed") {
       return { model, provider, config: { ...config, inferenceScope }, isManaged: false };
     }

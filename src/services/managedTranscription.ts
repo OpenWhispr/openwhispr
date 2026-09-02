@@ -6,12 +6,6 @@ import {
 } from "../stores/enterpriseIdentityStore";
 
 /**
- * Managed enterprise STT outcome for the current user, as a
- * `TranscriptionRouteInput.managed` value. Undefined means no managed
- * transcription applies and personal routing proceeds; the context mirrors
- * `getEnterpriseCallSettings` so the main process can re-validate it.
- */
-/**
  * True when managed STT resolves for this user. Dictation gates OR this with
  * the personal-selection policy check: a policy that only allows the
  * enterprise mode blocks every personal setting, yet dictation must proceed
@@ -21,6 +15,12 @@ export function isManagedTranscriptionActive(): boolean {
   return getManagedTranscriptionResolution()?.kind === "managed";
 }
 
+/**
+ * Managed enterprise STT outcome for the current user, as a
+ * `TranscriptionRouteInput.managed` value. Undefined means no managed
+ * transcription applies and personal routing proceeds; the context mirrors
+ * `getEnterpriseCallSettings` so the main process can re-validate it.
+ */
 export function getManagedTranscriptionResolution(): ManagedTranscriptionResolution | undefined {
   const settings = getSettings();
   const state = useEnterpriseIdentityStore.getState();
@@ -29,7 +29,12 @@ export function getManagedTranscriptionResolution(): ManagedTranscriptionResolut
     settings.enterpriseTranscriptionSetupMode
   );
   if (resolution.kind === "error") {
-    return { kind: "error", message: resolution.message, code: resolution.code };
+    return {
+      kind: "error",
+      message: resolution.message,
+      code: resolution.code,
+      messageKey: resolution.messageKey,
+    };
   }
   if (
     resolution.kind !== "managed" ||

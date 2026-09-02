@@ -18,6 +18,7 @@ function createManagedTranscriptionExecutor({
     if (route?.provider !== "azure" || route?.context?.inferenceScope !== "transcription") {
       throw Object.assign(new Error("Managed transcription route is invalid"), {
         code: "MANAGED_ROUTE_INVALID",
+        messageKey: "hooks.audioRecording.errorDescriptions.managedRouteInvalid",
       });
     }
     const runtime = await resolveEnterpriseRuntime(event, route.provider, null, {
@@ -53,6 +54,7 @@ function createManagedTranscriptionExecutor({
         err.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";
       } else if (response.status === 401 || response.status === 403) {
         err.code = "MANAGED_AUTH_REJECTED";
+        err.messageKey = "hooks.audioRecording.errorDescriptions.managedAuthRejected";
       } else if (response.status >= 500) {
         err.code = "SERVER_ERROR";
       }

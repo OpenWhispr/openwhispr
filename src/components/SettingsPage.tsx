@@ -707,8 +707,11 @@ function TranscriptionSection({
     />
   );
 
-  if (managed.kind === "error") {
-    return (
+  // Local decoding still serves meetings and uploads under a managed-config
+  // error, so this stays a card alongside the rest of the section (including
+  // the GPU selector below) instead of an early return that hides it.
+  const errorCard =
+    managed.kind === "error" ? (
       <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3" role="alert">
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
@@ -716,12 +719,13 @@ function TranscriptionSection({
             <p className="text-sm font-medium">
               {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{managed.message}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {managed.messageKey ? t(managed.messageKey) : managed.message}
+            </p>
           </div>
         </div>
       </div>
-    );
-  }
+    ) : null;
 
   const managedCard =
     managed.kind === "managed" ? (
@@ -760,8 +764,9 @@ function TranscriptionSection({
 
   return (
     <div className="space-y-4">
+      {errorCard}
       {managedCard}
-      {!managedCard && (
+      {!errorCard && !managedCard && (
         <>
           {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (
             <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">

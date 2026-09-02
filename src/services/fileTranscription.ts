@@ -12,6 +12,7 @@ export interface FileTranscriptionResult {
   text?: string;
   error?: string;
   code?: string;
+  messageKey?: string;
   diarized?: boolean;
   warning?: string;
   // Set alongside `warning` by the chunked cloud path: how much audio was lost.
@@ -94,7 +95,12 @@ export async function transcribeFile(
   // local included: under managed_required no audio may leave the tenant.
   const managed = getManagedTranscriptionResolution();
   if (managed?.kind === "error") {
-    return { success: false, error: managed.message, code: managed.code };
+    return {
+      success: false,
+      error: managed.message,
+      code: managed.code,
+      messageKey: managed.messageKey,
+    };
   }
 
   if (!managed && cfg.isOpenWhisprCloud) {
@@ -146,7 +152,12 @@ export async function transcribeFile(
     request: { effectiveLanguage: cfg.language || undefined },
   });
   if (route.transport === "error") {
-    return { success: false, error: route.message, code: route.code };
+    return {
+      success: false,
+      error: route.message,
+      code: route.code,
+      messageKey: route.messageKey,
+    };
   }
 
   // Self-hosted fields make the handler route to the configured server

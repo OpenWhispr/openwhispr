@@ -3377,6 +3377,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (managedResolution?.kind === "error") {
         throw Object.assign(new Error(managedResolution.message), {
           code: managedResolution.code,
+          messageKey: managedResolution.messageKey,
         });
       }
 

@@ -59,7 +59,7 @@ export type ManagedEnterpriseScopeResolution =
       allowManualSetup: boolean;
       record: ManagedEnterpriseProviderRecord;
     }
-  | { kind: "error"; code: string; message: string };
+  | { kind: "error"; code: string; message: string; messageKey?: string };
 
 export interface ManagedEnterpriseRequestContext {
   accountId: string;

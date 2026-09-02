@@ -1161,6 +1161,7 @@ declare global {
         transcription?: TranscriptionItem;
         error?: string;
         code?: TranscriptionErrorCode;
+        messageKey?: string;
       }>;
       updateTranscriptionText: (
         id: number,

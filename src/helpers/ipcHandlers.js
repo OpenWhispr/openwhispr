@@ -9313,7 +9313,12 @@ class IPCHandlers {
 
           // Fail closed: a misconfigured route must never fall through to a default.
           if (route.transport === "error") {
-            return { success: false, error: route.message, code: route.code };
+            return {
+              success: false,
+              error: route.message,
+              code: route.code,
+              messageKey: route.messageKey,
+            };
           }
 
           if (route.transport === "managed") {
@@ -9522,7 +9527,12 @@ class IPCHandlers {
           return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
         } catch (error) {
           debugLogger.error("BYOK audio file transcription error", { error: error.message });
-          return { success: false, error: error.message };
+          return {
+            success: false,
+            error: error.message,
+            code: error.code,
+            messageKey: error.messageKey,
+          };
         }
       }
     );

@@ -40,6 +40,8 @@ export function byokFileSizeLimit(provider: string): number {
 
 const CUSTOM_ENDPOINT_INVALID_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.customEndpointInvalid";
+const MANAGED_TRANSCRIPTION_UNAVAILABLE_MESSAGE_KEY =
+  "hooks.audioRecording.errorDescriptions.managedTranscriptionUnavailable";
 
 export interface TranscriptionRouteSettings {
   transcriptionMode?: string;
@@ -66,7 +68,7 @@ export type ManagedTranscriptionResolution =
       deployment: string;
       context: ManagedEnterpriseRequestContext;
     }
-  | { kind: "error"; message: string; code: string };
+  | { kind: "error"; message: string; code: string; messageKey?: string };
 
 export interface TranscriptionRouteInput {
   /** Policy-EFFECTIVE, scope-resolved snapshot — the resolver never re-maps selections. */
@@ -221,7 +223,7 @@ export function resolveTranscriptionRoute({
   // enterpriseIdentityManager), so the selection floor below does not apply.
   if (managedResolution) {
     if (managedResolution.kind === "error") {
-      return error(managedResolution.message, managedResolution.code);
+      return error(managedResolution.message, managedResolution.code, managedResolution.messageKey);
     }
     return {
       transport: "managed",
@@ -239,7 +241,8 @@ export function resolveTranscriptionRoute({
   if (s.transcriptionMode === "enterprise") {
     return error(
       "Managed transcription is not available right now. Try again in a moment.",
-      "MANAGED_CONFIG_UNAVAILABLE"
+      "MANAGED_CONFIG_UNAVAILABLE",
+      MANAGED_TRANSCRIPTION_UNAVAILABLE_MESSAGE_KEY
     );
   }
 
