@@ -126,20 +126,20 @@ const withPlatform = async (platform, fn) => {
   }
 };
 
-test("macOS mode info reports a plain single key as Hold-incapable, with a reason", async () => {
+test("macOS mode info reports a plain single key as Hold-capable (listener key watch)", async () => {
   await withPlatform("darwin", async () => {
     const info = await modeInfoHandler({ sender: {} }, "F13", "dictation");
-    assert.equal(info.supportsPushToTalk, false);
-    assert.equal(typeof info.pushToTalkUnavailableReason, "string");
+    assert.equal(info.supportsPushToTalk, true);
+    assert.equal(info.pushToTalkUnavailableReason, null);
 
     const slotInfo = await modeInfoHandler({ sender: {} }, "F13", "voiceAgent");
-    assert.equal(slotInfo.supportsPushToTalk, false);
+    assert.equal(slotInfo.supportsPushToTalk, true);
   });
 });
 
 test("macOS mode info keeps Hold available for hotkeys with release detection", async () => {
   await withPlatform("darwin", async () => {
-    for (const hotkey of ["Command+Period", "GLOBE", "RightOption", "MouseButton4"]) {
+    for (const hotkey of ["Command+Period", "GLOBE", "RightOption", "MouseButton4", "F9"]) {
       const info = await modeInfoHandler({ sender: {} }, hotkey, "dictation");
       assert.equal(info.supportsPushToTalk, true, `${hotkey} should support Hold`);
       assert.equal(info.pushToTalkUnavailableReason, null);

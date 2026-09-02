@@ -125,7 +125,6 @@
       "updateFailedCheckFormat": "无法将快捷键更新为 \"{{hotkey}}\"，请检查格式是否有效。",
       "trySuggestions": "建议尝试：{{suggestions}}",
       "slotConflict": "此快捷键已用于{{slot}}。",
-      "holdNeedsReleaseSourceMac": "在 macOS 上，单个按键无法报告松开事件，因此 \"{{hotkey}}\" 不支持按住模式。请使用组合键、Globe/Fn 键、右侧修饰键或鼠标按钮。",
       "holdUnsupportedOnHyprland": "在 Hyprland 上，按住模式仅适用于听写快捷键。"
     },
     "portal": {

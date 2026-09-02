@@ -1652,6 +1652,9 @@ async function startApp() {
         hotkeyManager.getMacNativeListenerConfig(MAC_NATIVE_HOTKEY_SLOTS)
       );
     };
+    // Mode changes re-derive the watched plain keys (windowManager's
+    // reconcileNativeKeyListeners is the platform-neutral entry point).
+    windowManager.onMacListenerReconcile = syncMacNativeHotkeyConfiguration;
 
     // Mouse Button 4/5 handling (e.g., Logitech MX Master side buttons)
     let mouseButtonDownTime = 0;
@@ -1739,6 +1742,35 @@ async function startApp() {
           }
         }
       }
+    });
+
+    // Plain keys on a Hold slot are watched by the listener's event tap (a
+    // Carbon hot key would hide their release), and ride the same native push
+    // machine as the Windows/Linux hooks.
+    globeKeyManager.on("key-down", (key) => {
+      if (hotkeyManager.isInListeningMode()) return;
+      if (!isLiveWindow(windowManager.mainWindow)) return;
+      const slotName = hotkeyManager.findSlotByHotkey(key);
+      debugLogger.debug("[Push-to-Talk] macOS watched key-down", { key, slot: slotName }, "ptt");
+      if (slotName === "dictation") {
+        if (windowManager.getActivationMode() === "push") {
+          windowManager.startNativePushToTalk(key);
+        } else {
+          windowManager.sendToggleDictation();
+        }
+      } else if (slotName === "voiceAgent") {
+        dispatchMacSlotPress("voiceAgent", "assistant", key, () =>
+          windowManager.sendToggleVoiceAgent()
+        );
+      } else if (slotName === "translation") {
+        dispatchMacSlotPress("translation", "translation", key, () =>
+          windowManager.sendToggleTranslation()
+        );
+      }
+    });
+    globeKeyManager.on("key-up", (key) => {
+      if (hotkeyManager.isInListeningMode()) return;
+      windowManager.handleNativePushKeyUp(key);
     });
 
     syncMacNativeHotkeyConfiguration();

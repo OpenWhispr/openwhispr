@@ -5,10 +5,57 @@ var fnIsDown = false
 var fnInterrupted = false
 var lastModifierFlags: NSEvent.ModifierFlags = []
 var suppressedMouseButtons: Set<String> = []
+// Plain keys owned by a Hold slot: keycode -> the app's key name. A Carbon hot
+// key (Electron's globalShortcut) hides both edges of a key from every monitor,
+// so these keys are not registered as hot keys at all — the event tap below
+// reports their press and release and swallows them, as the low-level hooks do
+// on Windows and Linux.
+var watchedKeyCodes: [Int64: String] = [:]
 
 struct ListenerConfig: Decodable {
     var mouseButtons: Set<String> = []
     var suppressGlobeAction: Bool = false
+    var watchKeys: Set<String> = []
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case mouseButtons, suppressGlobeAction, watchKeys
+    }
+
+    // Older app builds send only the first two keys.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mouseButtons = try container.decodeIfPresent(Set<String>.self, forKey: .mouseButtons) ?? []
+        suppressGlobeAction = try container.decodeIfPresent(Bool.self, forKey: .suppressGlobeAction) ?? false
+        watchKeys = try container.decodeIfPresent(Set<String>.self, forKey: .watchKeys) ?? []
+    }
+}
+
+// The app's key names (HotkeyInput: "F9", "Space", "`", "A", "[" ...) mapped to
+// macOS virtual keycodes (ANSI layout, HIToolbox Events.h).
+let keyCodesByName: [String: Int64] = [
+    "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,
+    "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17,
+    "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "=": 24, "equal": 24,
+    "9": 25, "7": 26, "-": 27, "minus": 27, "8": 28, "0": 29,
+    "]": 30, "o": 31, "u": 32, "[": 33, "i": 34, "p": 35,
+    "enter": 36, "return": 36, "l": 37, "j": 38, "'": 39, "quote": 39, "k": 40,
+    ";": 41, "semicolon": 41, "\\": 42, "backslash": 42, ",": 43, "comma": 43,
+    "/": 44, "slash": 44, "n": 45, "m": 46, ".": 47, "period": 47,
+    "tab": 48, "space": 49, "`": 50, "backquote": 50,
+    "backspace": 51, "delete": 51, "esc": 53, "escape": 53,
+    "f17": 64, "f18": 79, "f19": 80, "f20": 90,
+    "f5": 96, "f6": 97, "f7": 98, "f3": 99, "f8": 100, "f9": 101, "f11": 103,
+    "f13": 105, "f16": 106, "f14": 107, "f10": 109, "f12": 111, "f15": 113,
+    "insert": 114, "help": 114, "home": 115, "pageup": 116, "forwarddelete": 117,
+    "f4": 118, "end": 119, "f2": 120, "pagedown": 121, "f1": 122,
+    "left": 123, "arrowleft": 123, "right": 124, "arrowright": 124,
+    "down": 125, "arrowdown": 125, "up": 126, "arrowup": 126,
+]
+
+func keyCode(forKeyName name: String) -> Int64? {
+    keyCodesByName[name.lowercased()]
 }
 
 func emit(_ message: String) {
@@ -33,6 +80,12 @@ func parseArguments() -> (config: ListenerConfig, statePath: String?) {
             config.suppressGlobeAction = true
         case "--globe-preference-state":
             statePath = arguments.next()
+        case "--watch-keys":
+            config.watchKeys.formUnion(
+                (arguments.next() ?? "").split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+            )
         default:
             config.mouseButtons.formUnion(
                 argument.split(separator: ",")
@@ -173,8 +226,80 @@ enum GlobeSystemAction {
     }
 }
 
+var keyEventTapPort: CFMachPort?
+var keyRunLoopSource: CFRunLoopSource?
+
+// The keyboard tap exists only while a key is watched: every keystroke on the
+// system passes through it, so it is not worth holding open for nothing.
+func updateKeyboardTap() {
+    if watchedKeyCodes.isEmpty {
+        if let keyEventTapPort {
+            CGEvent.tapEnable(tap: keyEventTapPort, enable: false)
+            if let keyRunLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), keyRunLoopSource, .commonModes)
+            }
+        }
+        keyEventTapPort = nil
+        keyRunLoopSource = nil
+        return
+    }
+    if keyEventTapPort != nil { return }
+
+    let keyEventMask =
+        (1 << CGEventType.keyDown.rawValue) |
+        (1 << CGEventType.keyUp.rawValue)
+    guard let tap = CGEvent.tapCreate(
+        tap: .cgSessionEventTap,
+        place: .headInsertEventTap,
+        options: .defaultTap,
+        eventsOfInterest: CGEventMask(keyEventMask),
+        callback: { _, type, event, _ in
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                if let keyEventTapPort {
+                    CGEvent.tapEnable(tap: keyEventTapPort, enable: true)
+                }
+                return Unmanaged.passUnretained(event)
+            }
+
+            let code = event.getIntegerValueField(.keyboardEventKeycode)
+            guard let name = watchedKeyCodes[code] else {
+                return Unmanaged.passUnretained(event)
+            }
+            if type == .keyDown {
+                // Auto-repeat is one physical press.
+                if event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
+                    emit("KEY_DOWN:\(name)")
+                }
+            } else if type == .keyUp {
+                emit("KEY_UP:\(name)")
+            }
+            // Swallowed: the key is a hotkey, never text.
+            return nil
+        },
+        userInfo: nil
+    ) else {
+        emitWarning("Failed to create keyboard event tap")
+        return
+    }
+
+    keyEventTapPort = tap
+    keyRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+    CFRunLoopAddSource(CFRunLoopGetMain(), keyRunLoopSource, .commonModes)
+    CGEvent.tapEnable(tap: tap, enable: true)
+}
+
 func applyConfiguration(_ config: ListenerConfig) {
     suppressedMouseButtons = config.mouseButtons
+    var codes: [Int64: String] = [:]
+    for name in config.watchKeys {
+        if let code = keyCode(forKeyName: name) {
+            codes[code] = name
+        } else {
+            emitWarning("Ignoring unknown watch key \"\(name)\"")
+        }
+    }
+    watchedKeyCodes = codes
+    updateKeyboardTap()
     if config.suppressGlobeAction {
         GlobeSystemAction.apply()
     } else {
@@ -316,6 +441,9 @@ func shutdownListener() -> Never {
     }
     if let mouseEventTap {
         CGEvent.tapEnable(tap: mouseEventTap, enable: false)
+    }
+    if let keyEventTapPort {
+        CGEvent.tapEnable(tap: keyEventTapPort, enable: false)
     }
     if let mouseRunLoopSource {
         CFRunLoopRemoveSource(CFRunLoopGetMain(), mouseRunLoopSource, .commonModes)

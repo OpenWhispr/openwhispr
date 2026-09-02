@@ -3769,7 +3769,8 @@ class IPCHandlers {
         isGlobeLikeHotkey(hotkey) ||
         isMouseButtonHotkey(hotkey) ||
         isModifierOnlyHotkey(hotkey) ||
-        isRightSideModifier(hotkey);
+        isRightSideModifier(hotkey) ||
+        hotkeyManager.isMacListenerOwnedKey?.(hotkey, "dictation") === true;
 
       if (enabled) {
         // Entering capture mode — unregister ALL slots so none intercept keypresses.

@@ -125,7 +125,6 @@
       "updateFailedCheckFormat": "Não foi possível atualizar o atalho para \"{{hotkey}}\". Verifique se o formato é válido.",
       "trySuggestions": "Tente: {{suggestions}}",
       "slotConflict": "Este atalho já está sendo usado para {{slot}}.",
-      "holdNeedsReleaseSourceMac": "Segurar não está disponível para \"{{hotkey}}\" no macOS porque uma tecla única não consegue informar quando é solta. Use uma combinação de teclas, a tecla Globo/Fn, um modificador direito ou um botão do mouse.",
       "holdUnsupportedOnHyprland": "No Hyprland, Segurar só está disponível para o atalho de ditado."
     },
     "portal": {

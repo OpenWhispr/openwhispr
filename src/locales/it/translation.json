@@ -125,7 +125,6 @@
       "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
       "trySuggestions": "Prova: {{suggestions}}",
       "slotConflict": "Questa scorciatoia è già utilizzata per {{slot}}.",
-      "holdNeedsReleaseSourceMac": "Tieni premuto non è disponibile per \"{{hotkey}}\" su macOS perché un tasto singolo non può segnalare il rilascio. Usa una combinazione di tasti, il tasto Globo/Fn, un modificatore destro o un pulsante del mouse.",
       "holdUnsupportedOnHyprland": "Su Hyprland, Tieni premuto è disponibile solo per la scorciatoia di dettatura."
     },
     "portal": {

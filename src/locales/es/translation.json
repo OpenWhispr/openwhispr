@@ -125,7 +125,6 @@
       "updateFailedCheckFormat": "No se pudo actualizar el atajo a \"{{hotkey}}\". Comprueba que el formato sea válido.",
       "trySuggestions": "Prueba: {{suggestions}}",
       "slotConflict": "Este atajo ya está asignado a {{slot}}.",
-      "holdNeedsReleaseSourceMac": "Mantener no está disponible para \"{{hotkey}}\" en macOS porque una tecla sola no puede informar cuándo se suelta. Usa una combinación de teclas, la tecla Globo/Fn, un modificador derecho o un botón del ratón.",
       "holdUnsupportedOnHyprland": "En Hyprland, Mantener solo está disponible para el atajo de dictado."
     },
     "portal": {
