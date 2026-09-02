@@ -89,17 +89,18 @@ export default function AddNotesToFolderDialog({
       <DialogContent className="sm:max-w-96 p-0 gap-0 overflow-hidden" aria-describedby={undefined}>
         <DialogTitle className="sr-only">{t("notes.addToFolder.title")}</DialogTitle>
 
-        <div className="px-4 pr-12 pt-4 pb-2">
+        <div className="px-4 pe-12 pt-4 pb-2">
           <div className="relative">
             <Search
               size={13}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/20"
+              className="absolute start-2.5 top-1/2 -translate-y-1/2 text-foreground/20"
             />
             <input
+              dir="auto"
               placeholder={t("notes.addToFolder.searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-8 rounded-md bg-foreground/[0.03] dark:bg-white/[0.04] border border-foreground/8 dark:border-white/8 pl-8 pr-3 text-xs text-foreground placeholder:text-foreground/20 outline-none focus:border-primary/30 transition-colors"
+              className="w-full h-8 rounded-md bg-foreground/[0.03] dark:bg-white/[0.04] border border-foreground/8 dark:border-white/8 ps-8 pe-3 text-xs text-foreground placeholder:text-foreground/20 outline-none focus:border-primary/30 transition-colors"
               autoFocus
             />
           </div>
@@ -135,7 +136,7 @@ export default function AddNotesToFolderDialog({
                       <div className="w-7 h-7 rounded-md bg-foreground/[0.03] dark:bg-white/[0.04] border border-foreground/6 dark:border-white/6 flex items-center justify-center shrink-0">
                         <FileText size={12} className="text-foreground/20" />
                       </div>
-                      <div className="flex-1 min-w-0 text-left">
+                      <div className="flex-1 min-w-0 text-start">
                         <p className="text-xs text-foreground/80 truncate">
                           {note.title || t("notes.list.untitled")}
                         </p>

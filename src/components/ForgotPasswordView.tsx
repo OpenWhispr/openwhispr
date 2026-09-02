@@ -56,7 +56,7 @@ export default function ForgotPasswordView({
           variant="outline"
           className="mt-3 h-10 w-full rounded-full border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]"
         >
-          <ArrowLeft className="size-3.5" />
+          <ArrowLeft className="size-3.5 rtl:rotate-180" />
           <span className="text-sm font-medium">{t("forgotPassword.goBack")}</span>
         </Button>
       </div>
@@ -72,7 +72,9 @@ export default function ForgotPasswordView({
         <h1 className="onboarding-display-title mt-7">{t("forgotPassword.success.title")}</h1>
         <p className="mx-auto mt-2 max-w-xs text-sm leading-5 text-[var(--onboarding-text-secondary)]">
           {t("forgotPassword.success.description")}{" "}
-          <span className="font-medium text-[var(--onboarding-text-primary)]">{email}</span>
+          <span dir="ltr" className="font-medium text-[var(--onboarding-text-primary)]">
+            {email}
+          </span>
         </p>
 
         <p className="mx-auto mt-3 max-w-xs text-xs leading-4 text-[var(--onboarding-text-secondary)]">
@@ -94,7 +96,7 @@ export default function ForgotPasswordView({
             onClick={onBack}
             className="inline-flex h-8 items-center justify-center gap-1.5 text-xs text-[var(--onboarding-text-secondary)] transition-colors hover:text-[var(--onboarding-text-primary)]"
           >
-            <ArrowLeft className="size-3.5" />
+            <ArrowLeft className="size-3.5 rtl:rotate-180" />
             {t("forgotPassword.backToSignIn")}
           </button>
         </div>
@@ -109,12 +111,13 @@ export default function ForgotPasswordView({
         {t("forgotPassword.subtitle")}
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-4 space-y-3 text-left">
+      <form onSubmit={handleSubmit} className="mt-4 space-y-3 text-start">
         <label className="block space-y-2">
           <span className="text-xs text-[var(--onboarding-text-secondary)]">
             {t("auth.emailStep.emailLabel")}
           </span>
           <Input
+            dir="ltr"
             type="email"
             placeholder={t("forgotPassword.emailPlaceholder")}
             value={email}
@@ -154,7 +157,7 @@ export default function ForgotPasswordView({
         onClick={onBack}
         className="mt-3 inline-flex h-8 items-center justify-center gap-1.5 text-xs text-[var(--onboarding-text-secondary)] transition-colors hover:text-[var(--onboarding-text-primary)]"
       >
-        <ArrowLeft className="size-3.5" />
+        <ArrowLeft className="size-3.5 rtl:rotate-180" />
         {t("forgotPassword.backToSignIn")}
       </button>
     </div>

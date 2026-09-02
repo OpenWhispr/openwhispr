@@ -104,11 +104,11 @@ export default function HistoryView({
                 localStorage.setItem("cloudMigrationShown", "true");
               }}
               aria-label={t("common.close")}
-              className="absolute top-2 right-2 p-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="absolute top-2 end-2 p-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
               <X size={14} />
             </button>
-            <div className="flex items-start gap-3 pr-6">
+            <div className="flex items-start gap-3 pe-6">
               <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
                 <Cloud size={16} className="text-primary" />
               </div>
@@ -144,11 +144,11 @@ export default function HistoryView({
                 setAiCTADismissed(true);
               }}
               aria-label={t("common.close")}
-              className="absolute top-2 right-2 p-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="absolute top-2 end-2 p-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
               <X size={14} />
             </button>
-            <div className="flex items-start gap-3 pr-6">
+            <div className="flex items-start gap-3 pe-6">
               <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
                 <Sparkles size={16} className="text-primary" />
               </div>
@@ -287,14 +287,16 @@ export default function HistoryView({
                   </h3>
                   <div className="flex items-center gap-2 text-xs text-foreground/50 dark:text-foreground/25">
                     <span>{t("controlPanel.history.press")}</span>
-                    {parseHotkeyList(hotkey).map((hk, index) => (
-                      <Fragment key={hk}>
-                        {index > 0 && <span className="text-foreground/30">/</span>}
-                        <kbd className="inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-1 dark:bg-white/6 border border-border/50 text-xs font-mono font-medium text-foreground/60 dark:text-foreground/40">
-                          {formatHotkeyLabel(hk)}
-                        </kbd>
-                      </Fragment>
-                    ))}
+                    <span dir="ltr" className="inline-flex items-center gap-2">
+                      {parseHotkeyList(hotkey).map((hk, index) => (
+                        <Fragment key={hk}>
+                          {index > 0 && <span className="text-foreground/30">/</span>}
+                          <kbd className="inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-1 dark:bg-white/6 border border-border/50 text-xs font-mono font-medium text-foreground/60 dark:text-foreground/40">
+                            {formatHotkeyLabel(hk)}
+                          </kbd>
+                        </Fragment>
+                      ))}
+                    </span>
                     <span>{t("controlPanel.history.toStart")}</span>
                   </div>
                 </div>

@@ -84,7 +84,7 @@ function Feature({
 // Compact setup card: content stays pinned to the top and the action to the bottom.
 function SetupCard({ children }: { children: React.ReactNode }) {
   return (
-    <section className="relative flex h-[350px] w-68 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 pb-5 pt-4 text-left">
+    <section className="relative flex h-[350px] w-68 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 pb-5 pt-4 text-start">
       {children}
     </section>
   );
@@ -225,7 +225,7 @@ export default function SetupChoiceStep({
               <div className="flex items-center justify-between">
                 {/* Frame 2147259034: the two model marks overlap by 8, each on a
                     1.33px white ring so the stack reads front-to-back. */}
-                <span className="flex -space-x-2">
+                <span className="flex -space-x-2 rtl:space-x-reverse">
                   <span className="flex size-9 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] ring-[1.33px] ring-[var(--onboarding-surface)]">
                     <img
                       src={openAIIcon}
@@ -376,7 +376,7 @@ export default function SetupChoiceStep({
       <Dialog open={showMore} onOpenChange={(open) => !open && setShowMore(false)}>
         <DialogContent
           overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
-          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-left [&>button]:hidden"
+          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-start [&>button]:hidden"
         >
           {/* Frame 2147258979: 238 tall, radius 20, image fill. Source is 840x477,
               so it lands at ~2x for the 420x238 slot. */}
@@ -422,7 +422,7 @@ export default function SetupChoiceStep({
                     // starting it with the self-hosted field set on.
                     onSelect("byok", { selfHosted: row.id === "self-hosted" });
                   }}
-                  className={`onboarding-pressable flex w-full items-center gap-[14px] text-left ${
+                  className={`onboarding-pressable flex w-full items-center gap-[14px] text-start ${
                     index === 0 ? "pb-4" : "border-t border-[var(--onboarding-control-border)] pt-4"
                   }`}
                 >
@@ -439,7 +439,7 @@ export default function SetupChoiceStep({
                   </span>
                   {/* Frame 25: 32px surface-tertiary disc with a tertiary chevron. */}
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--onboarding-surface-tertiary)] text-[var(--onboarding-text-tertiary)]">
-                    <ChevronRight className="size-4" strokeWidth={1.667} />
+                    <ChevronRight className="size-4 rtl:rotate-180" strokeWidth={1.667} />
                   </span>
                 </button>
               ))}
@@ -451,7 +451,7 @@ export default function SetupChoiceStep({
       <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <DialogContent
           overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
-          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-left text-[var(--onboarding-text-primary)] [&>button]:hidden"
+          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-start text-[var(--onboarding-text-primary)] [&>button]:hidden"
           onOpenAutoFocus={handleWarningAutoFocus}
         >
           {/* Frame 2147258979: 238 tall, radius 20, image crop. The three marks

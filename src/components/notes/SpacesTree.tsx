@@ -60,6 +60,7 @@ import { getCachedPlatform } from "../../utils/platform";
 import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import SpaceMembersDialog from "./SpaceMembersDialog";
+import { treeHorizontalIntent } from "./treeDirection";
 import type { FolderItem, NoteItem, SpaceItem, WorkspaceRole } from "../../types/electron";
 import {
   folderContainerKey,
@@ -100,7 +101,7 @@ const KEBAB_BUTTON_CLASS =
   "transition-opacity text-muted-foreground/60 dark:text-muted-foreground/40 " +
   "hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8";
 
-const KEBAB_TRIGGER_CLASS = cn(KEBAB_BUTTON_CLASS, "absolute right-1.5");
+const KEBAB_TRIGGER_CLASS = cn(KEBAB_BUTTON_CLASS, "absolute end-1.5");
 
 const HOVER_REVEAL_BUTTON_CLASS =
   "h-5 w-5 rounded-sm opacity-0 focus-visible:opacity-100 transition-opacity " +
@@ -227,7 +228,7 @@ function SectionHeader({
               size={11}
               className={cn(
                 "text-foreground/40 transition-all duration-150",
-                expanded && "rotate-90",
+                expanded ? "rotate-90" : "rtl:rotate-180",
                 icon && "opacity-0 group-hover:opacity-100"
               )}
             />
@@ -303,7 +304,7 @@ function RowToggle({
         size={12}
         className={cn(
           "transition-all duration-150",
-          isExpanded && "rotate-90",
+          isExpanded ? "rotate-90" : "rtl:rotate-180",
           icon && "opacity-0 group-hover:opacity-100"
         )}
       />
@@ -352,14 +353,15 @@ function SearchableMoveSubmenu({
             <div className="relative px-1.5 py-0.5">
               <Search
                 size={9}
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-foreground/15 pointer-events-none"
+                className="absolute start-3.5 top-1/2 -translate-y-1/2 text-foreground/15 pointer-events-none"
               />
               <input
+                dir="auto"
                 value={search}
                 onChange={(event) => onSearchChange(event.target.value)}
                 onKeyDown={(event) => event.stopPropagation()}
                 placeholder={searchPlaceholder}
-                className="input-inline w-full pl-4.5 pr-1 py-0.5 text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
+                className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
               />
             </div>
             <DropdownMenuSeparator />
@@ -485,6 +487,7 @@ function SpaceRow({
         }
       />
       <span
+        dir="auto"
         className={cn(
           "text-xs truncate flex-1 transition-colors duration-150",
           isDragOver || isActive ? "text-foreground font-medium" : "text-foreground/70"
@@ -493,7 +496,7 @@ function SpaceRow({
         {displayName}
       </span>
       <DropSuccessCheck isDropSuccess={isDropSuccess} />
-      <span className="absolute right-1.5 flex items-center gap-px">
+      <span className="absolute end-1.5 flex items-center gap-px">
         <Button
           variant="ghost"
           size="icon"
@@ -655,8 +658,8 @@ function FolderRow({
       {...dropHandlers}
       className={cn(
         ROW_BASE_CLASS,
-        "h-7 pr-2",
-        level === 1 ? "pl-2" : "pl-[14px]",
+        "h-7 pe-2",
+        level === 1 ? "ps-2" : "ps-[14px]",
         isActive
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4",
@@ -678,6 +681,7 @@ function FolderRow({
         }
       />
       <span
+        dir="auto"
         className={cn(
           "text-xs truncate flex-1 transition-colors duration-150",
           isDragOver || isActive
@@ -688,7 +692,7 @@ function FolderRow({
         {folder.name}
       </span>
       <DropSuccessCheck isDropSuccess={isDropSuccess} />
-      <span className="absolute right-1.5 flex items-center gap-px">
+      <span className="absolute end-1.5 flex items-center gap-px">
         <Button
           variant="ghost"
           size="icon"
@@ -762,7 +766,9 @@ function FolderRow({
                             className={MENU_ITEM_CLASS}
                           >
                             <SpaceMenuIcon space={space} />
-                            <span className="truncate flex-1">{spaceDisplayName(space, t)}</span>
+                            <span dir="auto" className="truncate flex-1">
+                              {spaceDisplayName(space, t)}
+                            </span>
                             {isCurrent && <Check size={9} className="text-primary shrink-0" />}
                           </DropdownMenuItem>
                         );
@@ -904,7 +910,9 @@ function NoteLeaf({
       }}
       className={MENU_ITEM_CLASS}
     >
-      <span className="truncate flex-1">{label}</span>
+      <span dir="auto" className="truncate flex-1">
+        {label}
+      </span>
       {option.isCurrent && <Check size={9} className="text-primary shrink-0" />}
     </DropdownMenuItem>
   );
@@ -925,8 +933,8 @@ function NoteLeaf({
       {...(canMove ? dragHandlers : {})}
       className={cn(
         ROW_BASE_CLASS,
-        "h-7 pr-2",
-        indentClassName ?? (level === 3 ? "pl-10" : "pl-[14px]"),
+        "h-7 pe-2",
+        indentClassName ?? (level === 3 ? "ps-10" : "ps-[14px]"),
         isActive
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4",
@@ -943,6 +951,7 @@ function NoteLeaf({
         )}
       />
       <span
+        dir="auto"
         className={cn(
           "text-xs truncate flex-1 transition-colors duration-150",
           isActive
@@ -1009,6 +1018,7 @@ function NoteLeaf({
                   isCreating ? (
                     <div className="px-1">
                       <input
+                        dir="auto"
                         autoFocus
                         value={newFolderName}
                         onChange={(e) => setNewFolderName(e.target.value)}
@@ -1068,7 +1078,9 @@ function NoteLeaf({
                       <DropdownMenuSub key={space.id}>
                         <DropdownMenuSubTrigger className={SUB_TRIGGER_CLASS}>
                           <SpaceMenuIcon space={space} />
-                          <span className="truncate flex-1">{spaceDisplayName(space, t)}</span>
+                          <span dir="auto" className="truncate flex-1">
+                            {spaceDisplayName(space, t)}
+                          </span>
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent
                           sideOffset={4}
@@ -1120,7 +1132,7 @@ function SkeletonRows() {
   return (
     <div className="space-y-px" aria-hidden="true">
       {["w-3/5", "w-2/5", "w-1/2"].map((width) => (
-        <div key={width} className="flex items-center h-7 pl-[18px] pr-2">
+        <div key={width} className="flex items-center h-7 ps-[18px] pe-2">
           <div
             className={cn(
               "h-2.5 rounded-full bg-foreground/6 dark:bg-white/6 animate-pulse",
@@ -1140,7 +1152,7 @@ export default function SpacesTree({
   onNewNote,
   onShowStructureIntro,
 }: SpacesTreeProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast, dismiss } = useToast();
   const fileManagerName = getFileManagerName();
 
@@ -1631,6 +1643,26 @@ export default function SpacesTree({
       if (activeContext) onNewNote(activeContext.spaceId, activeContext.folderId);
       return;
     }
+    const horizontalIntent = treeHorizontalIntent(e.key, i18n.dir());
+    if (horizontalIntent === "inward") {
+      e.preventDefault();
+      if (row.type === "note") return;
+      if (!expanded.has(row.key)) {
+        setContainerExpanded(row.key, true);
+      } else if (visibleRows[idx + 1]?.parentKey === row.key) {
+        focusRow(visibleRows[idx + 1]?.key);
+      }
+      return;
+    }
+    if (horizontalIntent === "outward") {
+      e.preventDefault();
+      if (row.type !== "note" && expanded.has(row.key)) {
+        setContainerExpanded(row.key, false);
+      } else if (row.parentKey) {
+        focusRow(row.parentKey);
+      }
+      return;
+    }
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
@@ -1639,23 +1671,6 @@ export default function SpacesTree({
       case "ArrowUp":
         e.preventDefault();
         focusRow(visibleRows[idx - 1]?.key);
-        break;
-      case "ArrowRight":
-        e.preventDefault();
-        if (row.type === "note") break;
-        if (!expanded.has(row.key)) {
-          setContainerExpanded(row.key, true);
-        } else if (visibleRows[idx + 1]?.parentKey === row.key) {
-          focusRow(visibleRows[idx + 1]?.key);
-        }
-        break;
-      case "ArrowLeft":
-        e.preventDefault();
-        if (row.type !== "note" && expanded.has(row.key)) {
-          setContainerExpanded(row.key, false);
-        } else if (row.parentKey) {
-          focusRow(row.parentKey);
-        }
         break;
       case "F2":
         e.preventDefault();
@@ -1814,8 +1829,9 @@ export default function SpacesTree({
 
     if (isRenaming) {
       return (
-        <div key={folder.id} role="none" className={cn(level === 1 ? "pl-2" : "pl-[14px]", "pr-2")}>
+        <div key={folder.id} role="none" className={cn(level === 1 ? "ps-2" : "ps-[14px]", "pe-2")}>
           <input
+            dir="auto"
             autoFocus
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
@@ -1872,7 +1888,7 @@ export default function SpacesTree({
         <TreeChildren open={isExpanded}>
           <div className="space-y-px">
             {(notesByContainer[folderKey] ?? []).map((note) =>
-              level === 1 ? renderNote(note, 2, folderKey, "pl-8") : renderNote(note, 3, folderKey)
+              level === 1 ? renderNote(note, 2, folderKey, "ps-8") : renderNote(note, 3, folderKey)
             )}
           </div>
         </TreeChildren>
@@ -1898,8 +1914,9 @@ export default function SpacesTree({
           flattened ? renderFolder(folder, undefined, 1) : renderFolder(folder, spaceKey)
         )}
         {creatingFolderSpaceId === space.id && (
-          <div className={cn(flattened ? "pl-2" : "pl-[14px]", "pr-2")}>
+          <div className={cn(flattened ? "ps-2" : "ps-[14px]", "pe-2")}>
             <input
+              dir="auto"
               autoFocus
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
@@ -1921,11 +1938,11 @@ export default function SpacesTree({
           </div>
         )}
         {(rootNotes ?? []).map((note) =>
-          flattened ? renderNote(note, 1, undefined, "pl-[30px]") : renderNote(note, 2, spaceKey)
+          flattened ? renderNote(note, 1, undefined, "ps-[30px]") : renderNote(note, 2, spaceKey)
         )}
         {showSkeletons && <SkeletonRows />}
         {showEmptySpace && (
-          <div className="pl-[18px] pr-2 py-1">
+          <div className="ps-[18px] pe-2 py-1">
             <p className="text-xs text-foreground/40 leading-relaxed mb-1.5">
               {t("notes.spaces.emptySpace", { space: space.name })}
             </p>
@@ -1993,6 +2010,7 @@ export default function SpacesTree({
               }}
             />
             <input
+              dir="auto"
               autoFocus={spaceRenameFocus === "name"}
               value={renameSpaceName}
               onChange={(e) => setRenameSpaceName(e.target.value)}
@@ -2145,9 +2163,10 @@ export default function SpacesTree({
                       >
                         <div
                           role="none"
-                          className="flex items-center justify-between h-5 pl-4 pr-2"
+                          className="flex items-center justify-between h-5 ps-4 pe-2"
                         >
                           <span
+                            dir="auto"
                             title={workspace.name}
                             className="min-w-0 text-[10px] font-medium text-foreground/40 truncate"
                           >
@@ -2179,7 +2198,7 @@ export default function SpacesTree({
                   (canCreateTeamSpace ? (
                     // Grouped view already offers a + on each manageable workspace row.
                     !showWorkspaceGroups && (
-                      <div className="pl-[18px] pr-2 py-1">
+                      <div className="ps-[18px] pe-2 py-1">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -2192,7 +2211,7 @@ export default function SpacesTree({
                       </div>
                     )
                   ) : (
-                    <p className="pl-[18px] pr-2 py-1 text-xs text-foreground/40 leading-relaxed">
+                    <p className="ps-[18px] pe-2 py-1 text-xs text-foreground/40 leading-relaxed">
                       {t("notes.spaces.emptyTeamHint")}
                     </p>
                   ))}

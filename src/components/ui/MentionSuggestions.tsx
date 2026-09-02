@@ -60,14 +60,18 @@ const MentionSuggestions = forwardRef<MentionSuggestionsHandle, MentionSuggestio
             onClick={() => command(item)}
             onMouseEnter={() => setSelectedIndex(index)}
             className={cn(
-              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground/70 transition-colors cursor-pointer",
+              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-xs text-foreground/70 transition-colors cursor-pointer",
               index === selectedIndex && "bg-foreground/5 text-foreground"
             )}
           >
             <PersonAvatar email={item.email} displayName={item.label} size={20} />
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            <span dir="auto" className="min-w-0 flex-1 truncate">
+              {item.label}
+            </span>
             {item.email && (
-              <span className="truncate text-[11px] text-foreground/30">{item.email}</span>
+              <span dir="ltr" className="truncate text-[11px] text-foreground/30">
+                {item.email}
+              </span>
             )}
           </button>
         ))}

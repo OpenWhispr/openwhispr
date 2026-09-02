@@ -369,18 +369,21 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 >
                   {copiedPrompt ? (
                     <>
-                      <Check className="w-3 h-3 mr-1 text-success" />{" "}
+                      <Check className="w-3 h-3 me-1 text-success" />{" "}
                       {t("promptStudio.common.copied")}
                     </>
                   ) : (
                     <>
-                      <Copy className="w-3 h-3 mr-1" /> {t("promptStudio.common.copy")}
+                      <Copy className="w-3 h-3 me-1" /> {t("promptStudio.common.copy")}
                     </>
                   )}
                 </Button>
               </div>
               <div className="bg-muted/30 dark:bg-surface-raised/30 border border-border/30 rounded-lg p-4 max-h-80 overflow-y-auto">
-                <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                <pre
+                  dir="auto"
+                  className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed"
+                >
                   {currentPrompt.replace(/\{\{agentName\}\}/g, agentName)}
                 </pre>
               </div>
@@ -397,7 +400,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                   {t("promptStudio.edit.cautionLabel")}
                 </span>{" "}
                 {t("promptStudio.edit.cautionTextPrefix")}{" "}
-                <code className="text-xs bg-muted/50 px-1 py-0.5 rounded font-mono">
+                <code dir="ltr" className="text-xs bg-muted/50 px-1 py-0.5 rounded font-mono">
                   {"{{agentName}}"}
                 </code>{" "}
                 {t("promptStudio.edit.cautionTextSuffix")}
@@ -406,6 +409,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
             <div className="px-5 py-4">
               <Textarea
+                dir="auto"
                 value={editedPrompt}
                 onChange={(e) => setEditedPrompt(e.target.value)}
                 rows={16}
@@ -414,18 +418,20 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
               />
               <p className="text-xs text-muted-foreground/50 mt-2">
                 {t("promptStudio.edit.agentNameLabel")}{" "}
-                <span className="font-medium text-foreground">{agentName}</span>
+                <span dir="auto" className="font-medium text-foreground">
+                  {agentName}
+                </span>
               </p>
             </div>
 
             <div className="px-5 py-4">
               <div className="flex gap-2">
                 <Button onClick={savePrompt} size="sm" className="flex-1">
-                  <Save className="w-3.5 h-3.5 mr-2" />
+                  <Save className="w-3.5 h-3.5 me-2" />
                   {t("promptStudio.common.save")}
                 </Button>
                 <Button onClick={resetToDefault} variant="outline" size="sm">
-                  <RotateCcw className="w-3.5 h-3.5 mr-2" />
+                  <RotateCcw className="w-3.5 h-3.5 me-2" />
                   {t("promptStudio.common.reset")}
                 </Button>
               </div>
@@ -515,7 +521,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                       <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">
                         {t("promptStudio.test.modelLabel")}
                       </p>
-                      <p className="text-xs font-medium text-foreground font-mono">
+                      <p dir="ltr" className="text-xs font-medium text-foreground font-mono">
                         {displayModel}
                       </p>
                     </div>
@@ -524,7 +530,9 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                       <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">
                         {t("promptStudio.test.providerLabel")}
                       </p>
-                      <p className="text-xs font-medium text-foreground">{displayProvider}</p>
+                      <p dir="ltr" className="text-xs font-medium text-foreground">
+                        {displayProvider}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -551,6 +559,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     )}
                   </div>
                   <Textarea
+                    dir="auto"
                     value={testText}
                     onChange={(e) => setTestText(e.target.value)}
                     rows={3}
@@ -580,7 +589,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                     size="sm"
                     className="w-full"
                   >
-                    <Play className="w-3.5 h-3.5 mr-2" />
+                    <Play className="w-3.5 h-3.5 me-2" />
                     {isLoading ? t("promptStudio.test.processing") : t("promptStudio.test.run")}
                   </Button>
                 </div>
@@ -601,7 +610,10 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                       </Button>
                     </div>
                     <div className="bg-muted/30 dark:bg-surface-raised/30 border border-border/30 rounded-lg p-4 max-h-48 overflow-y-auto">
-                      <pre className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">
+                      <pre
+                        dir="auto"
+                        className="text-xs text-foreground whitespace-pre-wrap leading-relaxed"
+                      >
                         {testResult}
                       </pre>
                     </div>

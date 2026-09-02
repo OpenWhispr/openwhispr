@@ -265,7 +265,7 @@ export default function DemoStep({
                 {/* Frame 32: the first bubble carries the avatar gutter as padding
                     (40 avatar + 10 gap) so both messages share one left edge and
                     the avatar rides the newest row. */}
-                <div className="flex items-end gap-2.5 pl-11">
+                <div className="flex items-end gap-2.5 ps-11">
                   <FounderBubble>{firstMessage}</FounderBubble>
                 </div>
                 {/* Frame 33 */}
@@ -299,7 +299,7 @@ export default function DemoStep({
         </div>
       ) : (
         // No shadow: the tokenized stroke carries the edge of the compact card.
-        <article className="flex h-[340px] flex-col gap-5 rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-4 text-left">
+        <article className="flex h-[340px] flex-col gap-5 rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-4 py-4 text-start">
           {/* Frame 2147259013: 44px avatar, 16 gap, and a column that keeps the
               body copy on the text's left edge rather than the avatar's. */}
           <div className="flex gap-3">
@@ -319,7 +319,7 @@ export default function DemoStep({
                   <span className="font-medium text-[var(--onboarding-text-primary)]">
                     {assistantSenderName}
                   </span>
-                  <span className="truncate text-[var(--onboarding-text-secondary)]">
+                  <span dir="ltr" className="truncate text-[var(--onboarding-text-secondary)]">
                     &lt;{assistantSenderEmail}&gt;
                   </span>
                 </p>
@@ -406,6 +406,7 @@ function VoiceSurface({
       }`}
     >
       <textarea
+        dir="auto"
         ref={inputRef}
         value={value}
         onChange={(inputEvent) => onChange(inputEvent.target.value)}
@@ -413,7 +414,7 @@ function VoiceSurface({
         // Placeholder is text-tertiary at 38% — 16/140% in the mail card, 18/140%
         // in the dictation one. The caret takes the brand colour, which is what
         // Figma draws as the 3x18 bar.
-        className={`input-inline min-h-0 w-full flex-1 resize-none bg-transparent pr-10 leading-[1.4] text-[var(--onboarding-text-primary)] caret-[var(--onboarding-accent)] outline-none placeholder:text-[color-mix(in_srgb,var(--onboarding-text-tertiary)_38%,transparent)] ${
+        className={`input-inline min-h-0 w-full flex-1 resize-none bg-transparent pe-10 leading-[1.4] text-[var(--onboarding-text-primary)] caret-[var(--onboarding-accent)] outline-none placeholder:text-[color-mix(in_srgb,var(--onboarding-text-tertiary)_38%,transparent)] ${
           embedded ? "text-sm" : "text-base"
         }`}
       />
@@ -424,7 +425,7 @@ function VoiceSurface({
         aria-label={stopLabel}
         title={event?.status === "listening" ? stopLabel : undefined}
         // Figma places the 32px control 10 from the card's bottom-right corner.
-        className="absolute bottom-2.5 right-2.5 flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)] transition-colors hover:bg-[var(--onboarding-inverse-surface-secondary)] disabled:cursor-default disabled:hover:bg-[var(--onboarding-inverse-surface)]"
+        className="absolute bottom-2.5 end-2.5 flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-inverse-surface)] text-[var(--onboarding-inverse-text)] transition-colors hover:bg-[var(--onboarding-inverse-surface-secondary)] disabled:cursor-default disabled:hover:bg-[var(--onboarding-inverse-surface)]"
       >
         {event?.status === "processing" ? (
           <Loader2 className="size-4 animate-spin" />
@@ -435,7 +436,7 @@ function VoiceSurface({
         )}
       </button>
       <div
-        className="absolute bottom-3 left-3 max-w-[15rem] text-xs text-[var(--onboarding-text-secondary)]"
+        className="absolute bottom-3 start-3 max-w-[15rem] text-xs text-[var(--onboarding-text-secondary)]"
         aria-live="polite"
       >
         {event?.status === "listening" && listeningLabel}

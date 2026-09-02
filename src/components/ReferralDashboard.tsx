@@ -419,7 +419,10 @@ export function ReferralDashboard() {
                 <div className="flex items-center gap-2">
                   <div className="flex-1 flex items-center gap-2 h-8 px-3 rounded-md bg-foreground/4 border border-foreground/7 overflow-hidden">
                     <Link className="w-3 h-3 text-foreground/20 shrink-0" />
-                    <span className="text-xs text-foreground/50 font-mono truncate select-all">
+                    <span
+                      dir="ltr"
+                      className="text-xs text-foreground/50 font-mono truncate select-all"
+                    >
                       {stats.referralLink}
                     </span>
                   </div>
@@ -445,6 +448,7 @@ export function ReferralDashboard() {
                 </h4>
                 <div className="flex items-center gap-2">
                   <input
+                    dir="ltr"
                     type="email"
                     placeholder={t("referral.sendInvites.placeholder")}
                     value={emailInput}
@@ -514,19 +518,19 @@ export function ReferralDashboard() {
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center gap-2 min-w-0 flex-1">
                             <User className="w-3 h-3 text-foreground/20 shrink-0" />
-                            <span className="text-xs text-foreground/60 truncate">
+                            <span dir="auto" className="text-xs text-foreground/60 truncate">
                               {displayName}
                             </span>
                           </div>
                           {isComplete ? (
-                            <div className="flex items-center gap-1 ml-2 shrink-0">
+                            <div className="flex items-center gap-1 ms-2 shrink-0">
                               <CheckCircle2 className="w-3 h-3 text-emerald-400/80" />
                               <span className="text-xs text-emerald-400/80 font-medium">
                                 {t("referral.friends.completed")}
                               </span>
                             </div>
                           ) : (
-                            <span className="text-xs text-foreground/30 tabular-nums ml-2 shrink-0">
+                            <span className="text-xs text-foreground/30 tabular-nums ms-2 shrink-0">
                               {wordsUsed.toLocaleString()} / {REFERRAL_WORD_GOAL.toLocaleString()}
                             </span>
                           )}
@@ -564,14 +568,14 @@ export function ReferralDashboard() {
                       >
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <Mail className="w-3 h-3 text-foreground/20 shrink-0" />
-                          <span className="text-xs text-foreground/60 truncate">
+                          <span dir="ltr" className="text-xs text-foreground/60 truncate">
                             {invite.recipientEmail}
                           </span>
                           <span className="text-xs text-foreground/15 shrink-0">
                             {formatDate(invite.sentAt)}
                           </span>
                         </div>
-                        <Badge variant={variant} className="ml-2 text-xs shrink-0">
+                        <Badge variant={variant} className="ms-2 text-xs shrink-0">
                           {label}
                         </Badge>
                       </div>

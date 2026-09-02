@@ -168,7 +168,7 @@ export default function LanguageSelector({
         onKeyDown={handleKeyDown}
         className={`
           group relative w-full flex items-center justify-between gap-2
-          h-7 px-2.5 text-left
+          h-7 px-2.5 text-start
           rounded text-xs font-medium
           border shadow-sm backdrop-blur-sm
           transition-[background-color,border-color,transform] duration-200 ease-out
@@ -183,7 +183,7 @@ export default function LanguageSelector({
         aria-expanded={isOpen}
       >
         <span className={`truncate ${selected ? "text-foreground" : "text-muted-foreground"}`}>
-          <span className="mr-1.5">{selected?.flag ?? "\uD83C\uDF10"}</span>
+          <span className="me-1.5">{selected?.flag ?? "\uD83C\uDF10"}</span>
           {selected?.label ?? (value || placeholder || "")}
         </span>
         <ChevronDown
@@ -210,21 +210,22 @@ export default function LanguageSelector({
             {showSearch && (
               <div className="px-2 pt-2 pb-1.5 border-b border-border/50">
                 <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                  <Search className="absolute start-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
                   <input
+                    dir="auto"
                     ref={searchInputRef}
                     type="text"
                     value={searchQuery}
                     onChange={(e) => handleSearchQueryChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={t("languageSelector.searchPlaceholder")}
-                    className="w-full h-7 pl-7 pr-6 text-xs bg-transparent text-foreground border-0 focus:outline-none placeholder:text-muted-foreground/50"
+                    className="w-full h-7 ps-7 pe-6 text-xs bg-transparent text-foreground border-0 focus:outline-none placeholder:text-muted-foreground/50"
                   />
                   {searchQuery && (
                     <button
                       type="button"
                       onClick={clearSearch}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors rounded p-0.5 hover:bg-muted/50"
+                      className="absolute end-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors rounded p-0.5 hover:bg-muted/50"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -252,7 +253,7 @@ export default function LanguageSelector({
                         onClick={() => handleSelect(language.value)}
                         className={`
                           group w-full flex items-center justify-between gap-2
-                          h-7 px-2.5 text-left text-xs font-medium
+                          h-7 px-2.5 text-start text-xs font-medium
                           rounded transition-[background-color,color,transform] duration-150 ease-out
                           ${
                             isSelected
@@ -266,7 +267,7 @@ export default function LanguageSelector({
                         aria-selected={isSelected}
                       >
                         <span className="truncate">
-                          <span className="mr-1.5">{language.flag}</span>
+                          <span className="me-1.5">{language.flag}</span>
                           {language.label}
                         </span>
                         {isSelected && <Check className="w-3 h-3 shrink-0" />}

@@ -126,7 +126,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
               {t("settingsPage.workspace.loadError.description")}
             </p>
             <Button size="sm" variant="outline" onClick={() => void refresh()} disabled={loading}>
-              {loading && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {loading && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
               {t("settingsPage.workspace.loadError.retry")}
             </Button>
           </div>
@@ -140,7 +140,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
               {t("settingsPage.workspace.empty.description")}
             </p>
             <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+              <UserPlus className="me-1.5 h-3.5 w-3.5" />
               {t("settingsPage.workspace.empty.create")}
             </Button>
           </div>
@@ -168,7 +168,9 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
                 "hover:bg-foreground/5 dark:hover:bg-white/5 focus-visible:ring-1 focus-visible:ring-primary/30"
               )}
             >
-              <h2 className="text-sm font-semibold text-foreground truncate">{workspace.name}</h2>
+              <h2 dir="auto" className="text-sm font-semibold text-foreground truncate">
+                {workspace.name}
+              </h2>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
@@ -181,12 +183,12 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
                   onSelect={() => setActiveWorkspaceId(w.id)}
                   className="text-xs"
                 >
-                  {w.name}
+                  <span dir="auto">{w.name}</span>
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setCreateOpen(true)} className="text-xs">
-                <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                <UserPlus className="me-1.5 h-3.5 w-3.5" />
                 {t("workspaces.switcher.create")}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -328,6 +330,7 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
           <SettingsRow label={t("settingsPage.workspace.general.nameLabel")}>
             <div className="flex gap-2">
               <Input
+                dir="auto"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 aria-label={t("settingsPage.workspace.general.nameLabel")}
@@ -362,9 +365,9 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
                 className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
               >
                 {deleting ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  <Trash2 className="me-1.5 h-3.5 w-3.5" />
                 )}
                 {deleting
                   ? t("settingsPage.workspace.general.deleting")
@@ -388,9 +391,9 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
                 className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
               >
                 {leaving ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <LogOut className="mr-1.5 h-3.5 w-3.5" />
+                  <LogOut className="me-1.5 h-3.5 w-3.5" />
                 )}
                 {leaving
                   ? t("settingsPage.workspace.general.leaving")

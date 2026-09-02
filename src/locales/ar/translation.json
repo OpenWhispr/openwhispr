@@ -41,7 +41,7 @@
         "chunkLoss": "أدت مشكلة في الشبكة إلى فقدان جزء كبير من التسجيل. أعد نسخه من السجل.",
         "agentReasoningFailed": "لم يتمكن المساعد الصوتي من معالجة الأمر — تم إدراج النص الخام بدلاً من ذلك.",
         "screenContextSkipped": "تعذر إرسال لقطة الشاشة، لذا تم تشغيل أمرك بدون سياق الشاشة.",
-        "customEndpointInvalid": "نقطة نهاية النسخ المخصصة غير مكونة أو أن عنوان URL الخاص بها غير صالح. قم بتحديثها في الإعدادات -> تحويل الكلام إلى نص (Speech to Text)."
+        "customEndpointInvalid": "نقطة نهاية النسخ المخصصة غير مكونة أو أن عنوان URL الخاص بها غير صالح. قم بتحديثها في الإعدادات ← تحويل الكلام إلى نص (Speech to Text)."
       },
       "translationFallback": {
         "unreachableTitle": "الترجمة غير متاحة",
@@ -120,11 +120,11 @@
     },
     "permissions": {
       "paths": {
-        "windowsMicrophone": "الإعدادات -> الخصوصية -> الميكروفون",
+        "windowsMicrophone": "الإعدادات ← الخصوصية ← الميكروفون",
         "linuxSound": "إعدادات صوت النظام الخاص بك",
-        "defaultSound": "إعدادات النظام -> الصوت -> الإدخال",
+        "defaultSound": "إعدادات النظام ← الصوت ← الإدخال",
         "linuxPrivacy": "إعدادات خصوصية النظام الخاص بك",
-        "defaultPrivacy": "إعدادات النظام -> الخصوصية والأمان -> الميكروفون"
+        "defaultPrivacy": "إعدادات النظام ← الخصوصية والأمان ← الميكروفون"
       },
       "micErrors": {
         "accessFailed": "فشل الوصول إلى الميكروفون. يرجى المحاولة مرة أخرى.",
@@ -188,6 +188,9 @@
     "learnMore": "اعرف المزيد",
     "noneAvailable": "لا توجد نماذج متاحة",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "أدق نموذج ASR محلي (متوسط WER يبلغ 5.42%، ويدعم 14 لغة). لا يدعم الكشف التلقائي عن اللغة"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "تعرف سريع على الكلام متعدد اللغات مع اكتشاف تلقائي للغة (25 لغة)",
         "parakeet_unified_en_0_6b": "تعرف على الكلام باللغة الإنجليزية فقط بدقة رائدة (5.91% متوسط معدل خطأ الكلمة)",
@@ -213,6 +216,7 @@
         "groq_whisper_large_v3": "تعرف على الكلام بدقة عالية",
         "groq_whisper_large_v3_turbo": "سرعة 216x في الوقت الفعلي",
         "mistral_voxtral_mini_latest": "نسخ سريع متعدد اللغات",
+        "gemini_3_5_transcribe": "تحويل الكلام إلى نص من Google Gemini",
         "corti_transcribe": "نسخ طبي بدرجة سريرية",
         "xai_grok_stt": "تعرف على الكلام بدقة عالية من xAI",
         "tinfoil_voxtral": "نسخ خاص يمكن التحقق منه"
@@ -287,7 +291,7 @@
         "mistral_mistral_7b_instruct_v0_3_q4_k_m": "نموذج تعليمات سريع وفعال",
         "mistral_mistral_7b_instruct_v0_3_q5_k_m": "نموذج تعليمات بجودة أعلى",
         "mistral_nemo_12b_instruct_q4_k_m": "نموذج Mistral بحجم 12B، أداء قوي متعدد اللغات",
-        "llama_llama_3_2_1b_instruct_q4_k_m": "نموذج صغير جداً لأجهزة الحافة (edge devices)",
+        "llama_llama_3_2_1b_instruct_q4_k_m": "نموذج صغير جداً لأجهزة الحافة",
         "llama_llama_3_2_3b_instruct_q4_k_m": "نموذج صغير ولكنه قادر ومتعدد اللغات",
         "llama_llama_3_1_8b_instruct_q4_k_m": "نموذج قوي بأداء رائع",
         "openai_oss_gpt_oss_20b_mxfp4": "نموذج مفتوح الوزن من OpenAI لأجهزة المستهلكين",
@@ -322,7 +326,7 @@
     "custom": {
       "endpointWithProtocol": "أدخل عنوان URL أساسي كامل يتضمن البروتوكول (على سبيل المثال، https://server/v1).",
       "httpsRequired": "يتطلب HTTPS (يُسمح بـ HTTP للشبكة المحلية فقط).",
-      "endpointInvalid": "نقطة النهاية المخصصة غير صالحة أو غير مهيأة. تحقق من عنوان URL لنقطة النهاية في الإعدادات -> نماذج الذكاء الاصطناعي (AI Models).",
+      "endpointInvalid": "نقطة النهاية المخصصة غير صالحة أو غير مهيأة. تحقق من عنوان URL لنقطة النهاية في الإعدادات ← نماذج الذكاء الاصطناعي (AI Models).",
       "endpointUnauthorized": "رفضت نقطة النهاية الطلب (401/403). أضف مفتاح API أو اضبط إعدادات مصادقة الخادم.",
       "endpointTitle": "عنوان URL لنقطة النهاية",
       "endpointExamples": "أمثلة:",
@@ -347,7 +351,7 @@
       "selectModelHint": "لم يتم تحديد أي نموذج بعد — اختر واحداً من القائمة أدناه.",
       "keyRequiredHint": "مفتاح API مطلوب للاستنتاج — أضف واحداً لاستخدام هذا المزود."
     },
-    "getApiKey": "احصل على مفتاح API الخاص بك ->",
+    "getApiKey": "احصل على مفتاح API الخاص بك ←",
     "selectModel": "تحديد النموذج",
     "availableModels": "النماذج المتاحة",
     "disableThinking": {
@@ -389,6 +393,35 @@
       "bedrock": {
         "ssoHelp": "يستخدم تكوين AWS CLI SSO الخاص بك. تأكد من أنك قمت بتشغيل 'aws sso login'.",
         "keysHelp": "أدخل مفاتيح وصول AWS IAM الخاصة بك."
+      },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "انتهت صلاحية الوصول المؤقت إلى AWS.",
+          "ssoExpired": "انتهت صلاحية جلسة AWS SSO.",
+          "credentialsRejected": "رفضت AWS بيانات الاعتماد. تحقق من معرّف مفتاح الوصول والمفتاح السري ورمز الجلسة.",
+          "accessDenied": "رفضت AWS Bedrock هذا الطلب. اطلب من مسؤول AWS منح إذن لاستدعاء النموذج المحدد في المنطقة {{region}}.",
+          "modelNotFound": "تعذر على AWS Bedrock العثور على النموذج المحدد في المنطقة {{region}}. تحقق من معرّف النموذج ومن توفره في تلك المنطقة.",
+          "configurationRejected": "رفضت AWS Bedrock تهيئة النموذج للمنطقة {{region}}. تحقق من معرّف النموذج وملف تعريف الاستدلال والمنطقة.",
+          "notConfigured": "لم يتم تكوين AWS Bedrock بشكل صحيح. تحقق من المنطقة وبيانات اعتماد AWS.",
+          "serviceUnavailable": "خدمة AWS Bedrock غير متاحة مؤقتًا بسبب ارتفاع الطلب. هذه مشكلة في خدمة AWS وليست انقطاعًا في OpenWhispr. يُرجى المحاولة مرة أخرى بعد بضع دقائق.",
+          "throttled": "تقيّد AWS Bedrock الطلبات مؤقتًا لأنها تتلقى عددًا كبيرًا منها. انتظر لحظة وحاول مرة أخرى. إذا استمر ذلك، فاطلب من مسؤول AWS التحقق من استخدام Bedrock وحصصها.",
+          "timeout": "لم تستجب AWS Bedrock ضمن المهلة. حاول مرة أخرى. إذا استمر ذلك، فتحقق من اتصالك بالإنترنت وحالة خدمة AWS Bedrock.",
+          "network": "تعذر الوصول إلى AWS Bedrock. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.",
+          "unknown": "خطأ في AWS Bedrock: {{error}}",
+          "actions": {
+            "refreshManagedAccess": "سجّل الخروج ثم سجّل الدخول مرة أخرى لتحديث صلاحيات وصول الشركة، ثم أعد المحاولة.",
+            "reauthenticate": "شغّل الأمر أدناه في الوحدة الطرفية لإعادة المصادقة:"
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "التفاصيل التقنية",
+        "httpStatus": "حالة HTTP",
+        "awsException": "استثناء AWS",
+        "awsRequestId": "معرّف طلب AWS",
+        "underlyingError": "الخطأ الأساسي",
+        "copy": "نسخ التفاصيل التقنية",
+        "copyCommand": "نسخ أمر الاسترداد"
       },
       "azure": {
         "endpointHelp": "نقطة نهاية مورد Azure OpenAI الخاصة بك (على سبيل المثال، https://myresource.openai.azure.com).",
@@ -570,7 +603,7 @@
       "disconnectConfirm": "هل تريد قطع اتصال تقويم Apple؟",
       "disconnectDescription": "لن يتم تسجيل ملاحظات الاجتماع من تقويم Apple الخاص بك بعد الآن.",
       "permissionDenied": "الوصول إلى التقويم مطلوب",
-      "permissionDeniedDescription": "يحتاج OpenWhispr إلى الوصول إلى التقويم لاكتشاف الاجتماعات. قم بتمكين OpenWhispr في إعدادات النظام ضمن الخصوصية والأمان -> التقاويم.",
+      "permissionDeniedDescription": "يحتاج OpenWhispr إلى الوصول إلى التقويم لاكتشاف الاجتماعات. قم بتمكين OpenWhispr في إعدادات النظام ضمن الخصوصية والأمان ← التقاويم.",
       "openSettings": "فتح إعدادات النظام",
       "connectFailed": "فشل الاتصال",
       "connectFailedDescription": "حدث خطأ ما أثناء الاتصال بتطبيق Calendar.app. يرجى إعادة تشغيل OpenWhispr والمحاولة مرة أخرى."
@@ -738,7 +771,7 @@
       "emailLabel": "البريد الإلكتروني",
       "emailPlaceholder": "الزميل@example.com",
       "roleLabel": "الدور",
-      "seatUsage": "استخدام {{used}} من {{seats}} مقعدًا",
+      "seatUsage": "المقاعد المستخدمة: {{used}} من أصل {{seats}}",
       "seatCost": "إذا تم القبول، سيتم إضافة مقعد إلى خطتك · التكلفة التقديرية التناسبية {{amount}}.",
       "submit": "إرسال دعوة",
       "submitting": "جاري الإرسال…",
@@ -762,8 +795,12 @@
       "description": "تحتوي مساحات العمل هذه على شخص من نطاق بريدك الإلكتروني.",
       "invitedDescription": "لقد تمت دعوتك إلى مساحة عمل.",
       "invitedBy": "تمت دعوتك بواسطة {{inviter}} كـ {{role}}",
-      "memberCount_one": "عضو {{count}}",
-      "memberCount_other": "{{count}} أعضاء",
+      "memberCount_zero": "{{count}} أعضاء",
+      "memberCount_one": "{{count}} عضو",
+      "memberCount_two": "{{count}} عضوان",
+      "memberCount_few": "{{count}} أعضاء",
+      "memberCount_many": "{{count}} عضوًا",
+      "memberCount_other": "{{count}} عضو",
       "join": "انضمام",
       "requestErrorTitle": "تعذر إرسال الطلب",
       "requestedDescription": "سيقوم أحد مسؤولي {{workspace}} بمراجعته.",
@@ -801,8 +838,12 @@
     "importWords": "استيراد كلمات",
     "importPlaceholder": "الصق الكلمات مفصولة بفواصل أو أسطر جديدة...",
     "separateWithCommas": "كلمة واحدة في كل سطر، أو مفصولة بفواصل",
-    "wordsReady_one": "كلمة {{count}} جاهزة",
-    "wordsReady_other": "{{count}} كلمات جاهزة",
+    "wordsReady_zero": "{{count}} كلمات جاهزة",
+    "wordsReady_one": "{{count}} كلمة جاهزة",
+    "wordsReady_two": "{{count}} كلمتان جاهزتان",
+    "wordsReady_few": "{{count}} كلمات جاهزة",
+    "wordsReady_many": "{{count}} كلمةً جاهزةً",
+    "wordsReady_other": "{{count}} كلمة جاهزة",
     "import": "استيراد",
     "yourDictionary": "قاموسك",
     "exportDictionary": "تصدير القاموس",
@@ -834,7 +875,7 @@
         "rewriteText": "أعد كتابة هذا ليكون أكثر إيجازًا واحترافية",
         "introTrigger": "بريد المقدمة",
         "introText": "مرحبًا، أود أن نجد بعض الوقت للدردشة في وقت لاحق من هذا الأسبوع…",
-        "signoffTrigger": "تسجيل الخروج",
+        "signoffTrigger": "ختام الرسالة",
         "signoffText": "أطيب التحيات، Alex · alex@example.com"
       },
       "addPlaceholder": "أضف عبارة مفتاحية — \"طلب مستثمر\"، \"رابط التقويم\""
@@ -1252,7 +1293,8 @@
       },
       "gpuFallback": {
         "title": "تسريع GPU غير متوفر",
-        "description": "يستخدم التفريغ الصوتي وحدة المعالجة المركزية (CPU) بدلاً من ذلك. يمكنك تعطيل تسريع GPU في الإعدادات."
+        "description": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للتفريغ الصوتي.",
+        "retry": "إعادة محاولة تفعيل GPU"
       },
       "gpuPackMigration": {
         "title": "تحتاج حزمة GPU إلى إعادة التنزيل",
@@ -1260,7 +1302,7 @@
       },
       "cleanupFailed": {
         "title": "فشل التنظيف",
-        "description": "تم لصق إملاءك بدون تنظيف الذكاء الاصطناعي."
+        "description": "تم لصق الإملاء الأصلي دون تنقيح بالذكاء الاصطناعي."
       }
     },
     "mic": {
@@ -1381,8 +1423,12 @@
       "undo": "تراجع",
       "emptySpace": "لا توجد ملاحظات بعد. الملاحظات هنا مرئية للجميع في {{space}}.",
       "emptyTeamHint": "ستظهر المساحات المشتركة معك هنا.",
-      "noteCount_one": "ملاحظة واحدة",
-      "noteCount_other": "{{count}} ملاحظات",
+      "noteCount_zero": "{{count}} ملاحظات",
+      "noteCount_one": "{{count}} ملاحظة",
+      "noteCount_two": "{{count}} ملاحظتان",
+      "noteCount_few": "{{count}} ملاحظات",
+      "noteCount_many": "{{count}} ملاحظةً",
+      "noteCount_other": "{{count}} ملاحظة",
       "accessRevoked": "لم يعد لديك وصول إلى {{space}}",
       "accessRevokedActiveNote": "لم يعد لديك وصول إلى {{space}} — \"{{title}}\" لم تعد متوفرة على هذا الجهاز",
       "movedToPersonal": "لم يعد لديك وصول إلى {{space}} — تم نقل “{{title}}” إلى مساحتك الشخصية",
@@ -1400,7 +1446,7 @@
         "removedFromTeam": "تمت إزالة {{name}} من {{team}}",
         "roleUpdated": "تم تحديث الدور",
         "you": "أنت",
-        "addFailed": "تعذر إضافة {{failed}} من أصل {{total}} أشخاص",
+        "addFailed": "عدد الأشخاص الذين تعذرت إضافتهم: {{failed}} من أصل {{total}}",
         "searchPlaceholder": "البحث عن أشخاص…",
         "noResults": "لم يتم العثور على أشخاص",
         "roleAdmin": "مسؤول",
@@ -1411,8 +1457,12 @@
         "inviteFooter": "دعوة {{email}} إلى مساحة العمل…",
         "empty": "لم تتم إضافة أحد بعد"
       },
-      "invitedTo_one": "ستنضم إلى مساحة فريق واحدة",
-      "invitedTo_other": "ستنضم إلى {{count}} مساحات فريق",
+      "invitedTo_zero": "ستنضم إلى {{count}} مساحات فريق",
+      "invitedTo_one": "ستنضم إلى {{count}} مساحة فريق",
+      "invitedTo_two": "ستنضم إلى {{count}} مساحتي فريق",
+      "invitedTo_few": "ستنضم إلى {{count}} مساحات فريق",
+      "invitedTo_many": "ستنضم إلى {{count}} مساحة فريق",
+      "invitedTo_other": "ستنضم إلى {{count}} مساحة فريق",
       "teamsMembers": {
         "menu": "الفرق والأعضاء…",
         "title": "الفرق والأعضاء في {{space}}",
@@ -1425,8 +1475,12 @@
         "removeTeamConfirm": "إزالة {{team}} من {{space}}؟",
         "removeTeamConfirmDescription": "سيفقد أعضاؤه إمكانية الوصول إلى هذه المساحة ما لم يشملهم فريق آخر معين.",
         "lastTeamWarning": "هذا هو الفريق الوحيد الذي لديه وصول إلى هذه المساحة. بعد إزالته، سيحتفظ مسؤولو مساحة العمل فقط بإمكانية الوصول.",
-        "affectsOtherSpaces_one": "التغييرات على {{team}} تنطبق أيضاً على مساحة أخرى لديه وصول إليها.",
-        "affectsOtherSpaces_other": "التغييرات على {{team}} تنطبق أيضاً على {{count}} مساحات أخرى لديه وصول إليها.",
+        "affectsOtherSpaces_zero": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحات أخرى يمكنه الوصول إليها.",
+        "affectsOtherSpaces_one": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحة أخرى يمكنه الوصول إليها.",
+        "affectsOtherSpaces_two": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحتين أخريين يمكنه الوصول إليهما.",
+        "affectsOtherSpaces_few": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحات أخرى يمكنه الوصول إليها.",
+        "affectsOtherSpaces_many": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحةً أخرى يمكنه الوصول إليها.",
+        "affectsOtherSpaces_other": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحة أخرى يمكنه الوصول إليها.",
         "accessLabel": "وصول المساحة",
         "accessAdmin": "مسؤول",
         "accessMember": "عضو",
@@ -1530,7 +1584,7 @@
       "cancelTranscription": "إلغاء النسخ",
       "transcriptionComplete": "اكتمل النسخ",
       "partialWarning": "تعذر نسخ جزء من الصوت.",
-      "partialWarningCount": "تعذر نسخ {{failed}} من أصل {{total}} أجزاء صوتية.",
+      "partialWarningCount": "عدد الأجزاء الصوتية التي تعذر نسخها: {{failed}} من أصل {{total}}.",
       "chunkLossExceeded": "فُقد جزء كبير من الصوت بسبب مشكلة في الشبكة. تحقق من اتصالك وحاول مرة أخرى.",
       "openNote": "فتح الملاحظة",
       "uploadAnother": "رفع ملف آخر",
@@ -1552,8 +1606,8 @@
       "paidPlanRequired": "النسخ السحابي للملفات التي يزيد حجمها عن 25 ميغابايت يتطلب خطة مدفوعة. تتم معالجة الملفات الكبيرة باستخدام OpenWhispr Cloud للحصول على نتائج موثوقة وعالية الجودة.",
       "largeFileNote": "يتم تقسيم الملفات الكبيرة ونسخها بالتوازي.",
       "chunkProgress": "جاري نسخ الجزء {{completed}} من {{total}}...",
-      "byokTooLarge": "تدعم مفاتيح API الخاصة بجهات خارجية ملفات يصل حجمها إلى 25 ميغابايت فقط.",
-      "byokTooLargeDetail": "بالنسبة للملفات التي يزيد حجمها عن 25 ميغابايت، يتعامل OpenWhispr Cloud مع التقسيم والمعالجة المتوازية وإعادة التجميع — حتى تحصل على نتائج موثوقة دون الاعتماد على حدود مزود الجهة الخارجية.",
+      "byokTooLarge": "تدعم مفاتيح API التابعة لجهات خارجية ملفات يصل حجمها إلى {{size}} ميغابايت فقط.",
+      "byokTooLargeDetail": "بالنسبة إلى الملفات التي يزيد حجمها على {{size}} ميغابايت، يتولى OpenWhispr Cloud تقسيمها ومعالجتها بالتوازي وإعادة تجميعها — لتحصل على نتائج موثوقة دون الاعتماد على حدود مزودي الجهات الخارجية.",
       "byokTooLargeNeedsAccount": "أنشئ حساباً وقم بالترقية إلى خطة مدفوعة لنسخ الملفات الأكبر حجماً باستخدام OpenWhispr Cloud.",
       "byokTooLargeNeedsUpgrade": "قم بالترقية إلى خطة مدفوعة لنسخ الملفات الأكبر حجماً باستخدام OpenWhispr Cloud.",
       "switchToCloudForLargeFiles": "قم بالتبديل إلى OpenWhispr Cloud لنسخ هذا الملف.",
@@ -1602,7 +1656,12 @@
       "description": "نصوص مكتوبة وملخصات مهيكلة",
       "back": "رجوع",
       "restrictedByOrg": "نسخ الاجتماعات مقيد بواسطة مؤسستك.",
-      "autoEnded": "توقف التسجيل تلقائياً بعد انتهاء اجتماعك."
+      "autoEnded": "توقف التسجيل تلقائياً بعد انتهاء اجتماعك.",
+      "restartFailed": "تعذرت إعادة تشغيل تسجيل الاجتماع.",
+      "systemAudioSilent": {
+        "title": "لم يتم اكتشاف صوت الاجتماع بعد",
+        "description": "لم يلتقط الصوت حتى الآن سوى ميكروفونك. هل أنت في مكالمة فيديو؟ تحقق من أن صوت الاجتماع يُشغَّل على هذا الكمبيوتر وأنه غير مكتوم. هل تسجّل اجتماعًا حضوريًا؟ يمكنك تجاهل هذا — فالميكروفون يلتقط صوت الغرفة."
+      }
     },
     "meetingPill": {
       "returnToNote": "العودة إلى التسجيل",
@@ -1621,6 +1680,12 @@
       "searchPlaceholder": "البحث عن ملاحظات لإضافتها...",
       "addExisting": "إضافة موجودة",
       "addCount": "إضافة {{count}} ملاحظات",
+      "addCount_zero": "إضافة {{count}} ملاحظات",
+      "addCount_one": "إضافة {{count}} ملاحظة",
+      "addCount_two": "إضافة {{count}} ملاحظتين",
+      "addCount_few": "إضافة {{count}} ملاحظات",
+      "addCount_many": "إضافة {{count}} ملاحظةً",
+      "addCount_other": "إضافة {{count}} ملاحظة",
       "noResults": "لا توجد ملاحظات مطابقة",
       "noNotesAvailable": "لا توجد ملاحظات أخرى متاحة"
     },
@@ -1743,10 +1808,18 @@
         "private": "أنت فقط من يمكنه رؤية هذه الملاحظات."
       },
       "meta": {
-        "folders_one": "مجلد واحد",
-        "folders_other": "{{count}} مجلدات",
-        "members_one": "عضو واحد",
-        "members_other": "{{count}} أعضاء"
+        "folders_zero": "{{count}} مجلدات",
+        "folders_one": "{{count}} مجلد",
+        "folders_two": "{{count}} مجلدان",
+        "folders_few": "{{count}} مجلدات",
+        "folders_many": "{{count}} مجلدًا",
+        "folders_other": "{{count}} مجلد",
+        "members_zero": "{{count}} أعضاء",
+        "members_one": "{{count}} عضو",
+        "members_two": "{{count}} عضوان",
+        "members_few": "{{count}} أعضاء",
+        "members_many": "{{count}} عضوًا",
+        "members_other": "{{count}} عضو"
       },
       "banner": {
         "title": {
@@ -2028,7 +2101,7 @@
       "systemAudioDescription": "يتيح لمسجل الاجتماع سماع الجانب الآخر من مكالماتك — الاجتماعات، المحاضرات، البودكاست. يمكنك تشغيل هذا لاحقاً في الإعدادات.",
       "optional": "اختياري",
       "recommended": "موصى به",
-      "accessibilityTroubleshooting": "في إعدادات النظام -> إمكانية الوصول، قم بإيقاف تشغيل مفتاح OpenWhispr ثم أعد تشغيله. إذا لم يكن OpenWhispr موجوداً في القائمة على الإطلاق، انقر فوق + وأضفه من مجلد التطبيقات الخاص بك. هل ما زلت تواجه مشكلة؟ أرسل بريداً إلكترونياً إلى support@openwhispr.com."
+      "accessibilityTroubleshooting": "في إعدادات النظام ← إمكانية الوصول، قم بإيقاف تشغيل مفتاح OpenWhispr ثم أعد تشغيله. إذا لم يكن OpenWhispr موجوداً في القائمة على الإطلاق، انقر فوق + وأضفه من مجلد التطبيقات الخاص بك. هل ما زلت تواجه مشكلة؟ أرسل بريداً إلكترونياً إلى support@openwhispr.com."
     },
     "transcription": {
       "title": "إعداد النسخ",
@@ -2051,7 +2124,7 @@
       "title": "إعداد المساعد الصوتي",
       "description": "تحدث إلى مساعد الذكاء الاصطناعي الخاص بك بضغطة مفتاح واحدة",
       "hotkey": "اختصار لوحة المفاتيح",
-      "howItWorks": "اضغط على المفتاح وقل ما تريده — على سبيل المثال “اكتب رسالة شكر قصيرة”. إذا تم تمييز نص، سيقوم {{agentName}} بتحرير هذا التحديد واستبداله؛ وإلا ستفتح الإجابة في لوحة عائمة. لا حاجة لقول “مرحباً {{agentName}}” أولاً.",
+      "howItWorks": "اضغط على المفتاح وقل ما تريد — مثلاً: «اكتب رسالة شكر قصيرة». إذا كان هناك نص محدد، فسيحرره {{agentName}} ويستبدله. وإذا كان التركيز على حقل نصي قابل للكتابة، فستُلصق الإجابة عند المؤشر؛ وإلا فستفتح في لوحة عائمة. لا حاجة لقول «مرحبًا {{agentName}}» أولاً.",
       "test": "جربه",
       "testInstruction": "حدد نموذج النص أدناه، ثم اضغط على {{hotkey}} وقل “اجعل هذا أقصر” — سيظهر التعديل مباشرة في مربع النص",
       "testSetHotkey": "قم بتعيين اختصار أعلاه لتجربته",
@@ -2193,6 +2266,12 @@
       "members": {
         "title": "الأعضاء",
         "description": "تم استخدام {{count}} من {{seats}} مقاعد.",
+        "description_zero": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
+        "description_one": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
+        "description_two": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
+        "description_few": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
+        "description_many": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
+        "description_other": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "invite": "دعوة",
         "empty": "لا يوجد أعضاء بعد.",
         "loadError": "تعذر تحميل الأعضاء.",
@@ -2228,18 +2307,30 @@
         "addMembersLabel": "إضافة أعضاء",
         "createTitle": "إنشاء فريق",
         "nameLabel": "اسم الفريق",
-        "memberCount_one": "عضو واحد",
-        "memberCount_other": "{{count}} أعضاء",
+        "memberCount_zero": "{{count}} أعضاء",
+        "memberCount_one": "{{count}} عضو",
+        "memberCount_two": "{{count}} عضوان",
+        "memberCount_few": "{{count}} أعضاء",
+        "memberCount_many": "{{count}} عضوًا",
+        "memberCount_other": "{{count}} عضو",
         "membersButton": "الأعضاء",
-        "grantsAccessToSpaces_one": "يمنح الوصول إلى مساحة واحدة",
-        "grantsAccessToSpaces_other": "يمنح الوصول إلى {{count}} مساحات",
+        "grantsAccessToSpaces_zero": "يمنح الوصول إلى {{count}} مساحات",
+        "grantsAccessToSpaces_one": "يمنح الوصول إلى {{count}} مساحة",
+        "grantsAccessToSpaces_two": "يمنح الوصول إلى {{count}} مساحتين",
+        "grantsAccessToSpaces_few": "يمنح الوصول إلى {{count}} مساحات",
+        "grantsAccessToSpaces_many": "يمنح الوصول إلى {{count}} مساحةً",
+        "grantsAccessToSpaces_other": "يمنح الوصول إلى {{count}} مساحة",
         "couldNotCreate": "تعذر إنشاء الفريق",
         "created": "تم إنشاء {{team}}",
         "deleted": "تم حذف {{team}}",
         "deleteConfirmTitle": "حذف {{team}}؟",
         "deleteConfirmDescription": "هذا يؤرشف الفريق. سيفقد أعضاؤه أي وصول منحه إياهم.",
-        "deleteConfirmSpaceAccess_one": "يمنح هذا الفريق الوصول إلى مساحة واحدة. سيفقد أعضاؤه هذا الوصول.",
-        "deleteConfirmSpaceAccess_other": "يمنح هذا الفريق الوصول إلى {{count}} مساحات. سيفقد أعضاؤه هذا الوصول.",
+        "deleteConfirmSpaceAccess_zero": "يمنح هذا الفريق الوصول إلى {{count}} مساحات. سيفقد أعضاؤه هذا الوصول.",
+        "deleteConfirmSpaceAccess_one": "يمنح هذا الفريق الوصول إلى {{count}} مساحة. سيفقد أعضاؤه هذا الوصول.",
+        "deleteConfirmSpaceAccess_two": "يمنح هذا الفريق الوصول إلى {{count}} مساحتين. سيفقد أعضاؤه هذا الوصول.",
+        "deleteConfirmSpaceAccess_few": "يمنح هذا الفريق الوصول إلى {{count}} مساحات. سيفقد أعضاؤه هذا الوصول.",
+        "deleteConfirmSpaceAccess_many": "يمنح هذا الفريق الوصول إلى {{count}} مساحةً. سيفقد أعضاؤه هذا الوصول.",
+        "deleteConfirmSpaceAccess_other": "يمنح هذا الفريق الوصول إلى {{count}} مساحة. سيفقد أعضاؤه هذا الوصول.",
         "members": {
           "title": "أعضاء {{team}}",
           "removeConfirm": "إزالة {{name}} من {{team}}؟",
@@ -2251,8 +2342,12 @@
       },
       "invites": {
         "title": "الدعوات المعلقة",
-        "expiresIn_one": "تنتهي صلاحيته في يوم واحد",
-        "expiresIn_other": "تنتهي صلاحيته في {{count}} أيام",
+        "expiresIn_zero": "تنتهي صلاحيته خلال {{count}} أيام",
+        "expiresIn_one": "تنتهي صلاحيته خلال {{count}} يوم",
+        "expiresIn_two": "تنتهي صلاحيته خلال {{count}} يومين",
+        "expiresIn_few": "تنتهي صلاحيته خلال {{count}} أيام",
+        "expiresIn_many": "تنتهي صلاحيته خلال {{count}} يومًا",
+        "expiresIn_other": "تنتهي صلاحيته خلال {{count}} يوم",
         "expired": "منتهية الصلاحية",
         "loadError": "تعذر تحميل الدعوات.",
         "resend": "إعادة الإرسال",
@@ -2353,16 +2448,24 @@
       "nonBillableSeat": "وصول للمسؤول فقط · بدون مقعد مدفوع",
       "managedBy": "تتم إدارة الفوترة بواسطة {{owner}}.",
       "addSeat": "إضافة مقعد",
-      "seatUpdated_one": "تم تحديث سعة مساحة العمل إلى مقعد واحد",
-      "seatUpdated_other": "تم تحديث سعة مساحة العمل إلى {{count}} مقاعد",
+      "seatUpdated_zero": "تم تحديث سعة مساحة العمل إلى {{count}} مقاعد",
+      "seatUpdated_one": "تم تحديث سعة مساحة العمل إلى {{count}} مقعد",
+      "seatUpdated_two": "تم تحديث سعة مساحة العمل إلى {{count}} مقعدين",
+      "seatUpdated_few": "تم تحديث سعة مساحة العمل إلى {{count}} مقاعد",
+      "seatUpdated_many": "تم تحديث سعة مساحة العمل إلى {{count}} مقعدًا",
+      "seatUpdated_other": "تم تحديث سعة مساحة العمل إلى {{count}} مقعد",
       "seatUpdateFailed": "تعذر تحديث مقاعد مساحة العمل",
       "businessWorkspaceOnly": "متاح لمساحات العمل",
       "personalPlanTitle": "الخطة الشخصية",
       "providedBy": "الخطة الشخصية: Free · الوصول المدفوع مقدم من {{workspaces}}",
       "confirmSeats": {
         "title": "إضافة مقعد لمساحة العمل؟",
-        "description_one": "زيادة {{workspace}} إلى مقعد واحد. سيقوم Stripe بحساب التغيير نسبيًا.",
-        "description_other": "زيادة {{workspace}} إلى {{count}} مقاعد. سيقوم Stripe بحساب التغيير نسبيًا.",
+        "description_zero": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيقوم Stripe بحساب التغيير نسبيًا.",
+        "description_one": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيقوم Stripe بحساب التغيير نسبيًا.",
+        "description_two": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدين. سيقوم Stripe بحساب التغيير نسبيًا.",
+        "description_few": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيقوم Stripe بحساب التغيير نسبيًا.",
+        "description_many": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدًا. سيقوم Stripe بحساب التغيير نسبيًا.",
+        "description_other": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيقوم Stripe بحساب التغيير نسبيًا.",
         "newCapacity": "السعة الجديدة",
         "chargeToday": "رسوم اليوم",
         "confirm": "إضافة مقعد"
@@ -2407,7 +2510,7 @@
         "freeUsage": "{{used}} / {{limit}} كلمة هذا الأسبوع",
         "nextBilling": "الفوترة القادمة: {{date}}",
         "pastDue": "{{used}} / {{limit}} كلمة مجانية هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
-        "trial": "{{days}} أيام متبقية - نسخ نصية غير محدودة",
+        "trial": "عدد الأيام المتبقية: {{days}} - نسخ نصية غير محدودة",
         "unlimited": "غير محدود"
       },
       "planLabels": {
@@ -2538,16 +2641,20 @@
       "wordsRemaining": "متبقي {{remaining}}",
       "deleteAccount": {
         "label": "حذف الحساب",
-        "labelDescription": "حذف حسابك وجميع البيانات السحابية والبيانات المحلية نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+        "labelDescription": "حذف حسابك وبياناتك السحابية الشخصية نهائيًا. ستبقى بيانات المستخدمين المحليين الآخرين والمحتوى المملوك لمساحة العمل محفوظة.",
         "button": "حذف حسابي",
         "deleting": "جاري الحذف...",
         "title": "هل تريد حذف حسابك؟",
-        "description": "سيؤدي هذا إلى حذف حساب OpenWhispr الخاص بك بشكل دائم، وجميع الملاحظات المتزامنة مع السحابة، وجميع البيانات المحلية بما في ذلك النسخ النصية والتسجيلات الصوتية والنماذج التي تم تنزيلها واتصالات التقويم والإعدادات. لا يمكن التراجع عن هذا الإجراء.",
-        "confirmText": "حذف كل شيء",
+        "description": "يؤدي هذا إلى حذف حساب OpenWhispr وبياناتك الشخصية نهائيًا. سيبقى المحتوى المملوك لمساحة العمل وبيانات المستخدمين المحليين الآخرين على هذا الجهاز.",
+        "eraseDeviceLabel": "مسح جميع البيانات من هذا الجهاز أيضًا",
+        "eraseDeviceDescription": "يحذف ملاحظات جميع المستخدمين المحليين وبيانات مساحة العمل المخزنة مؤقتًا والنماذج التي تم تنزيلها والإعدادات واتصالات التقويم وبيانات الاعتماد والتسجيلات.",
+        "eraseDeviceWarning": "لا يمكن التراجع عن هذا المسح الشامل للجهاز، وهو يؤثر على جميع المستخدمين المحليين.",
+        "confirmText": "حذف الحساب",
         "successTitle": "تم حذف الحساب",
-        "successDescription": "تم حذف حسابك وجميع بياناتك. سيتم إعادة تحميل التطبيق الآن.",
+        "successDescription": "تم حذف حسابك وبياناتك الشخصية. بقيت بيانات المستخدمين المحليين الآخرين ومساحات العمل والنماذج وإعدادات الجهاز محفوظة.",
         "failedTitle": "فشل الحذف",
-        "failedDescription": "حدث خطأ ما أثناء حذف حسابك. ربما تمت إزالة بياناتك المحلية جزئيًا. يرجى المحاولة مرة أخرى."
+        "failedDescription": "تعذر إكمال حذف الحساب. لم تبدأ عملية مسح شاملة للجهاز. يُرجى المحاولة مرة أخرى.",
+        "partialCleanupDescription": "تم حذف حسابك، لكن تعذر إكمال بعض عمليات التنظيف المحلي. تم الاحتفاظ ببيانات المستخدمين الآخرين والمحتوى المملوك لمساحة العمل."
       },
       "profile": {
         "name": {
@@ -2597,7 +2704,7 @@
       },
       "examplesTitle": "أمثلة",
       "helper": "اختر شيئًا قصيرًا وطبيعيًا لقوله بصوت عالٍ",
-      "howItWorksDescription": "عندما تقول \"يا {{agentName}}\" متبوعًا بتعليمات، تفتح الإجابة في لوحة المساعد العائمة. إذا تم تحديد نص، يتم إرسال هذا النص إلى نموذج Voice Assistant الذي قمت بتكوينه واستبداله بأمان بالنتيجة.",
+      "howItWorksDescription": "عندما تقول \"يا {{agentName}}\" متبوعًا بتعليمات، يُستبدل النص المحدد بالنتيجة بأمان. عند تفعيل اللصق التلقائي، تُلصق الإجابة عند موضع المؤشر في حقل قابل للكتابة؛ وإلا فتُفتح في لوحة المساعد العائمة.",
       "howItWorksTitle": "كيف يعمل",
       "instructionMode": "التعليمات",
       "placeholder": "على سبيل المثال Jarvis، Nova، Atlas...",
@@ -2606,7 +2713,7 @@
       "examples": {
         "formalEmail": "يا {{agentName}}، اكتب بريدًا إلكترونيًا رسميًا حول الميزانية",
         "professional": "حدد النص، ثم قل: يا {{agentName}}، اجعل هذا أكثر احترافية",
-        "bulletPoints": "يا {{agentName}}، حوّل هذا إلى نقاط نقطية"
+        "bulletPoints": "يا {{agentName}}، حوّل هذا إلى نقاط تعداد"
       }
     },
     "aiModels": {
@@ -2761,7 +2868,7 @@
       },
       "voiceAgentHotkey": {
         "title": "مفتاح اختصار المساعد الصوتي",
-        "description": "انطق أمرًا ويجيب المساعد في لوحة عائمة بملاحظاتك والتقويم وأدوات الويب. حدد نصًا أولاً لتحريره في مكانه."
+        "description": "انطق أمرًا وسيستخدم المساعد ملاحظاتك وتقويمك وأدوات الويب. ستُلصق إجابته عند موضع المؤشر في حقل قابل للكتابة، أو تستبدل النص المحدد، أو تُفتح في اللوحة العائمة."
       },
       "microphone": {
         "description": "حدد جهاز الإدخال الذي تريد استخدامه للإملاء",
@@ -2950,7 +3057,7 @@
       "microphoneDescription": "يلتقط صوتك للإملاء والنسخ النصي",
       "microphoneTitle": "الميكروفون",
       "resetAccessibility": {
-        "description": "سيؤدي هذا إلى إزالة OpenWhispr من أذونات إمكانية الوصول. ستحتاج إلى إعادة منح الوصول في إعدادات النظام > الخصوصية والأمان > إمكانية الوصول.",
+        "description": "سيؤدي هذا إلى إزالة OpenWhispr من أذونات إمكانية الوصول. ستحتاج إلى إعادة منح الوصول من قسم إمكانية الوصول ضمن الخصوصية والأمان في إعدادات النظام.",
         "label": "إعادة تعيين أذونات إمكانية الوصول",
         "rowDescription": "إصلاح المشكلات بعد إعادة تثبيت التطبيق أو إعادة بنائه عن طريق إزالة وإضافة OpenWhispr في إعدادات النظام",
         "title": "إعادة تعيين أذونات إمكانية الوصول"
@@ -2978,11 +3085,21 @@
       "audioRetention": "الاحتفاظ بالصوت",
       "audioRetentionDescription": "تخزين صوت الإملاء محليًا لإعادة النسخ والتنزيل. يتم حذف الملفات تلقائيًا بعد فترة الاحتفاظ. لا يتم تخزين صوت الاجتماعات أبدًا.",
       "audioRetentionDisabled": "معطل",
-      "retentionDays_one": "يوم واحد",
-      "retentionDays_other": "{{count}} أيام",
+      "retentionDays_zero": "{{count}} أيام",
+      "retentionDays_one": "{{count}} يوم",
+      "retentionDays_two": "{{count}} يومان",
+      "retentionDays_few": "{{count}} أيام",
+      "retentionDays_many": "{{count}} يومًا",
+      "retentionDays_other": "{{count}} يوم",
       "audioStorageUsage": "استخدام التخزين",
       "audioStorageUsageDescription": "الملفات الصوتية المخزنة على هذا الجهاز",
       "audioStorageFiles": "{{count}} ملفات، {{size}}",
+      "audioStorageFiles_zero": "{{count}} ملفات، {{size}}",
+      "audioStorageFiles_one": "{{count}} ملف، {{size}}",
+      "audioStorageFiles_two": "{{count}} ملفان، {{size}}",
+      "audioStorageFiles_few": "{{count}} ملفات، {{size}}",
+      "audioStorageFiles_many": "{{count}} ملفًا، {{size}}",
+      "audioStorageFiles_other": "{{count}} ملف، {{size}}",
       "audioStorageEmpty": "لا توجد ملفات صوتية مخزنة",
       "clearAllAudio": "مسح كل الصوت",
       "clearAllAudioConfirm": "هل تريد حذف جميع الملفات الصوتية المخزنة؟ لا يمكن التراجع عن هذا.",
@@ -2992,9 +3109,21 @@
       "transcriptRetentionDescription": "حذف النسخ النصية المحفوظة وصوتها تلقائيًا بعد هذه الفترة.",
       "transcriptRetentionForever": "للأبد",
       "hoursAgo": "منذ {{count}} ساعة",
+      "hoursAgo_zero": "منذ {{count}} ساعات",
+      "hoursAgo_one": "منذ {{count}} ساعة",
+      "hoursAgo_two": "منذ {{count}} ساعتين",
+      "hoursAgo_few": "منذ {{count}} ساعات",
+      "hoursAgo_many": "منذ {{count}} ساعةً",
+      "hoursAgo_other": "منذ {{count}} ساعة",
       "justNow": "الآن",
       "lastSynced": "آخر مزامنة {{time}}",
       "minutesAgo": "منذ {{count}} دقيقة",
+      "minutesAgo_zero": "منذ {{count}} دقائق",
+      "minutesAgo_one": "منذ {{count}} دقيقة",
+      "minutesAgo_two": "منذ {{count}} دقيقتين",
+      "minutesAgo_few": "منذ {{count}} دقائق",
+      "minutesAgo_many": "منذ {{count}} دقيقةً",
+      "minutesAgo_other": "منذ {{count}} دقيقة",
       "saveDiscarded": "حفظ الإملاءات المهملة",
       "saveDiscardedDescription": "عندما تلغي إملاء باستخدام مفتاح Escape، احتفظ بصوته في السجل حتى تتمكن من استعادته. يتطلب تشغيل الاحتفاظ بالبيانات والصوت."
     },
@@ -3140,8 +3269,12 @@
       "allSubscribed": "مساحات العمل التي تمتلكها موجودة بالفعل في Enterprise أو لا يمكن تغييرها هنا. لإجراء تغييرات على الخطة، اتصل بالمبيعات.",
       "workspaceLabel": "مساحة العمل",
       "seatsLabel": "المقاعد",
-      "seatsHint_one": "مقعد واحد قيد الاستخدام حاليًا",
-      "seatsHint_other": "{{count}} مقاعد قيد الاستخدام حاليًا",
+      "seatsHint_zero": "{{count}} مقاعد قيد الاستخدام حاليًا",
+      "seatsHint_one": "{{count}} مقعد قيد الاستخدام حاليًا",
+      "seatsHint_two": "{{count}} مقعدان قيد الاستخدام حاليًا",
+      "seatsHint_few": "{{count}} مقاعد قيد الاستخدام حاليًا",
+      "seatsHint_many": "{{count}} مقعدًا قيد الاستخدام حاليًا",
+      "seatsHint_other": "{{count}} مقعد قيد الاستخدام حاليًا",
       "intervalLabel": "دورة الفوترة",
       "interval": {
         "monthly": "شهريًا",
@@ -3164,6 +3297,31 @@
     }
   },
   "settings": {
+    "granolaImport": {
+      "title": "استيراد من Granola",
+      "description": "استيراد ملاحظات اجتماعاتك من ملف CSV مُصدَّر من Granola",
+      "howTo": "في Granola، افتح Settings، ثم Profile، ثم Export historical data، ثم Generate CSV. يُرسَل ملف التصدير إلى بريدك الإلكتروني، عادةً خلال بضع ساعات.",
+      "chooseFile": "اختيار ملف CSV",
+      "preview": {
+        "title": "استيراد من Granola",
+        "summary": "الملاحظات: الإجمالي {{total}}، الجديدة {{newCount}}، المستوردة سابقًا {{duplicateCount}}",
+        "warnings": "عدد الصفوف التي بها مشكلات: {{warningCount}} (تم تخطيها أو استيرادها من دون تاريخ)",
+        "confirm": "استيراد الملاحظات الجديدة ({{newCount}})",
+        "nothingNew": "سبق استيراد جميع الملاحظات الموجودة في هذا الملف."
+      },
+      "done": {
+        "title": "اكتمل الاستيراد",
+        "summary": "تم الاستيراد إلى مجلد \"Imported\": عدد الملاحظات المستوردة {{imported}}، وعدد الملاحظات المكررة التي تم تخطيها {{skipped}}"
+      },
+      "error": {
+        "title": "فشل الاستيراد",
+        "EMPTY_FILE": "الملف فارغ.",
+        "HEADERS_UNRECOGNIZED": "لا يبدو أن هذا ملف CSV مُصدَّر من Granola.",
+        "NO_DATA_ROWS": "لم يتم العثور على أي ملاحظات في هذا الملف.",
+        "FILE_TOO_LARGE": "هذا الملف كبير جدًا بحيث يتعذر استيراده.",
+        "generic": "حدث خطأ أثناء قراءة الملف."
+      }
+    },
     "language": {
       "sectionTitle": "اللغة",
       "sectionDescription": "تعيين لغات الواجهة والتفريغ الصوتي بشكل مستقل",
@@ -3367,7 +3525,7 @@
       "unavailable": "غير متوفر"
     },
     "apiKeyOptional": "API Key (اختياري)",
-    "getKey": "الحصول على مفتاح ->",
+    "getKey": "الحصول على مفتاح ←",
     "endpointUrl": "عنوان URL لنقطة النهاية",
     "azureHint": "Azure AI Foundry: أدخل نقطة نهاية موردك (مثال: https://your-resource.cognitiveservices.azure.com) وقم بتعيين النموذج إلى اسم النشر الدقيق الخاص بك.",
     "customProvider": "مخصص",
@@ -3398,7 +3556,7 @@
       "serverUnreachable": "تعذر الوصول إلى الخادم. تحقق من اتصالك وحاول مرة أخرى."
     },
     "resendButton": "إعادة إرسال بريد التحقق",
-    "resendIn": "إعادة الإرسال بعد {{seconds}} ثانية",
+    "resendIn": "إعادة الإرسال بعد {{seconds}} ث",
     "verifiedDescription": "حسابك جاهز تماماً.",
     "verifiedTitle": "تم التحقق",
     "waiting": "في انتظار التحقق",
@@ -3674,8 +3832,10 @@
     "active": "تسريع GPU نشط",
     "ready": "تسريع GPU جاهز",
     "activating": "جاري تفعيل GPU...",
-    "activationFailed": "تعذر تفعيل GPU",
-    "retry": "إعادة المحاولة",
+    "activationFailed": "تسريع GPU غير متاح",
+    "activationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للتفريغ الصوتي.",
+    "reasoningActivationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للمعالجة.",
+    "retryActivation": "إعادة محاولة تفعيل GPU",
     "remove": "إزالة",
     "dismiss": "ليس الآن",
     "cancel": "إلغاء"
@@ -3808,13 +3968,13 @@
     "start": "تدوين الملاحظات",
     "join": "انضمام وتفريغ صوتي",
     "autoEnd": {
-      "title": "قد يكون الاجتماع قد انتهى",
+      "title": "انتهى تسجيل الاجتماع",
       "body": {
-        "micReleased": "لا يوجد تطبيق آخر يستخدم الميكروفون الخاص بك. سيتوقف التسجيل خلال {{seconds}} ثانية.",
-        "silence": "لم يتم اكتشاف أي صوت. سيتوقف التسجيل خلال {{seconds}} ثانية.",
-        "processExit": "تم إغلاق تطبيق الاجتماع الخاص بك. سيتوقف التسجيل خلال {{seconds}} ثانية."
+        "micReleased": "لا يستخدم أي تطبيق آخر ميكروفونك، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
+        "silence": "لم يُكتشف أي صوت، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
+        "processExit": "أُغلق تطبيق الاجتماع، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث."
       },
-      "keep": "مواصلة التسجيل"
+      "restart": "إعادة تشغيل التسجيل"
     }
   }
 }

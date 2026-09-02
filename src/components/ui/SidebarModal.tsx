@@ -84,12 +84,12 @@ export default function SidebarModal<T extends string>({
     if (!item.badge && item.badgeVariant !== "dot") return null;
 
     if (item.badgeVariant === "dot") {
-      return <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary shrink-0" />;
+      return <span className="ms-auto h-1.5 w-1.5 rounded-full bg-primary shrink-0" />;
     }
 
     return (
       <span
-        className={`ml-auto text-xs font-semibold uppercase tracking-wider px-1.5 py-px rounded-sm shrink-0 ${
+        className={`ms-auto text-xs font-semibold uppercase tracking-wider px-1.5 py-px rounded-sm shrink-0 ${
           item.badgeVariant === "new"
             ? "bg-primary/10 text-primary dark:bg-primary/15"
             : item.badgeVariant === "update"
@@ -132,7 +132,7 @@ export default function SidebarModal<T extends string>({
 
               {/* Sidebar */}
               <div
-                className={`${actualSidebarWidth} shrink-0 border-r border-border/40 dark:border-border-subtle flex flex-col bg-surface-1 dark:bg-surface-0 transition-[width] duration-200 ease-out`}
+                className={`${actualSidebarWidth} shrink-0 border-e border-border/40 dark:border-border-subtle flex flex-col bg-surface-1 dark:bg-surface-0 transition-[width] duration-200 ease-out`}
               >
                 {/* Identity / custom header */}
                 {header && !isCompact && <div className="px-4 pt-5 pb-1">{header}</div>}
@@ -187,7 +187,10 @@ export default function SidebarModal<T extends string>({
                                   </span>
                                   {renderBadge(item)}
                                   {item.shortcut && !item.badge && (
-                                    <kbd className="ms-auto text-xs text-muted-foreground/25 font-mono shrink-0">
+                                    <kbd
+                                      dir="ltr"
+                                      className="ms-auto text-xs text-muted-foreground/25 font-mono shrink-0"
+                                    >
                                       {item.shortcut}
                                     </kbd>
                                   )}
@@ -214,7 +217,10 @@ export default function SidebarModal<T extends string>({
                     <div className="flex items-center gap-1.5">
                       <div className="h-1 w-1 rounded-full bg-success/60" />
                       {!isCompact && (
-                        <span className="text-xs text-muted-foreground/40 tabular-nums tracking-wide">
+                        <span
+                          dir="ltr"
+                          className="text-xs text-muted-foreground/40 tabular-nums tracking-wide"
+                        >
                           v{version}
                         </span>
                       )}

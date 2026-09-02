@@ -810,6 +810,7 @@ export default function NoteEditor({
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="px-5 pt-4 pb-0">
           <div
+            dir="auto"
             ref={titleRef}
             contentEditable={canEditNote}
             suppressContentEditableWarning
@@ -852,7 +853,9 @@ export default function NoteEditor({
                   ) : (
                     <Users size={11} className="shrink-0" />
                   )}
-                  <span className="truncate max-w-32">{space.name}</span>
+                  <span dir="auto" className="truncate max-w-32">
+                    {space.name}
+                  </span>
                 </button>
                 {folders && onMoveToFolder && (canMoveToFolders || folderName) && (
                   <span aria-hidden="true" className="text-[11px] text-foreground/25">
@@ -864,7 +867,7 @@ export default function NoteEditor({
             {folders && onMoveToFolder && !canMoveToFolders && folderName && (
               <span className={cn(CHIP_BUTTON_CLASS, "cursor-default")}>
                 <FolderOpen size={11} className="shrink-0" />
-                {folderName}
+                <span dir="auto">{folderName}</span>
               </span>
             )}
             {folders && onMoveToFolder && canMoveToFolders && (
@@ -880,7 +883,7 @@ export default function NoteEditor({
                 <DropdownMenuTrigger asChild>
                   <button className={CHIP_BUTTON_CLASS}>
                     <FolderOpen size={11} className="shrink-0" />
-                    {folderName || t("notes.editor.noFolder")}
+                    {folderName ? <span dir="auto">{folderName}</span> : t("notes.editor.noFolder")}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" sideOffset={6} className="min-w-44 p-1">
@@ -889,14 +892,15 @@ export default function NoteEditor({
                       <div className="relative px-1.5 py-0.5">
                         <Search
                           size={9}
-                          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-foreground/15 pointer-events-none"
+                          className="absolute start-3.5 top-1/2 -translate-y-1/2 text-foreground/15 pointer-events-none"
                         />
                         <input
+                          dir="auto"
                           value={folderSearch}
                           onChange={(e) => setFolderSearch(e.target.value)}
                           onKeyDown={(e) => e.stopPropagation()}
                           placeholder={t("notes.context.searchFolders")}
-                          className="input-inline w-full pl-4.5 pr-1 py-0.5 text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
+                          className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
                         />
                       </div>
                       <DropdownMenuSeparator />
@@ -913,7 +917,9 @@ export default function NoteEditor({
                           className="text-xs gap-2 rounded-md px-2 py-1.5"
                         >
                           <FolderOpen size={11} className="text-foreground/30 shrink-0" />
-                          <span className="truncate flex-1">{folder.name}</span>
+                          <span dir="auto" className="truncate flex-1">
+                            {folder.name}
+                          </span>
                           {isCurrent && <Check size={9} className="text-primary shrink-0" />}
                         </DropdownMenuItem>
                       );
@@ -930,6 +936,7 @@ export default function NoteEditor({
                       {isCreatingFolder ? (
                         <div className="px-1">
                           <input
+                            dir="auto"
                             autoFocus
                             value={newFolderName}
                             onChange={(e) => setNewFolderName(e.target.value)}

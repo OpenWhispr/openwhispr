@@ -116,7 +116,9 @@ export default function EmailVerificationStep({
         </h1>
         <p className="mx-auto mt-2 max-w-xs text-sm leading-5 text-[var(--onboarding-text-secondary)]">
           {t("emailVerification.checkEmailDescription")}{" "}
-          <span className="font-medium text-[var(--onboarding-text-primary)]">{email}</span>
+          <span dir="ltr" className="font-medium text-[var(--onboarding-text-primary)]">
+            {email}
+          </span>
         </p>
 
         <div

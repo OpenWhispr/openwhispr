@@ -17,13 +17,13 @@ import {
 const BUBBLE_STYLES = {
   mic: {
     align: "justify-start",
-    radius: "rounded-bl-sm",
+    radius: "rounded-es-sm",
     bg: "bg-primary/60 text-primary-foreground/80",
     cursor: "bg-primary-foreground/60",
   },
   system: {
     align: "justify-end",
-    radius: "rounded-br-sm",
+    radius: "rounded-ee-sm",
     bg: "bg-surface-2/70 border border-border/20 text-foreground/80",
     cursor: "bg-foreground/40",
   },
@@ -41,14 +41,14 @@ const SPEAKER_COLORS = [
 ];
 
 const SPEAKER_BORDER_COLORS = [
-  "border-l-blue-400/50",
-  "border-l-green-400/50",
-  "border-l-purple-400/50",
-  "border-l-orange-400/50",
-  "border-l-pink-400/50",
-  "border-l-cyan-400/50",
-  "border-l-yellow-400/50",
-  "border-l-red-400/50",
+  "border-s-blue-400/50",
+  "border-s-green-400/50",
+  "border-s-purple-400/50",
+  "border-s-orange-400/50",
+  "border-s-pink-400/50",
+  "border-s-cyan-400/50",
+  "border-s-yellow-400/50",
+  "border-s-red-400/50",
 ];
 
 // One unlabelled line of transcript; measureElement corrects each row on mount.
@@ -108,7 +108,9 @@ function PartialBubble({
       <div className="max-w-[80%] flex flex-col">
         {speakerLabel && (
           <div className="mb-0.5 flex items-center gap-1 px-1">
-            <span className="text-[11px] font-medium text-muted-foreground/70">{speakerLabel}</span>
+            <span dir="auto" className="text-[11px] font-medium text-muted-foreground/70">
+              {speakerLabel}
+            </span>
             {speakerState === "provisional" && (
               <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground/40">
                 <Sparkles size={9} />
@@ -125,9 +127,9 @@ function PartialBubble({
             "text-[13px] leading-relaxed italic"
           )}
         >
-          {text}
+          <span dir="auto">{text}</span>
           <span
-            className={cn("inline-block w-[2px] h-[13px] align-middle ml-0.5", s.cursor)}
+            className={cn("inline-block w-[2px] h-[13px] align-middle ms-0.5", s.cursor)}
             style={{ animation: "agent-cursor-blink 800ms steps(1) infinite" }}
           />
         </div>
@@ -194,10 +196,11 @@ function AddContactButton({
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-3">
-        <div className="text-xs font-medium text-foreground truncate mb-2">
+        <div dir="auto" className="text-xs font-medium text-foreground truncate mb-2">
           {profile.display_name}
         </div>
         <input
+          dir="ltr"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -298,6 +301,7 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
     <>
       <div className="p-2 border-b border-border/50">
         <input
+          dir="auto"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -318,9 +322,13 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
                 onClick={() => onSelectName(p.displayName || p.email.split("@")[0], p.email)}
                 className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
               >
-                <span className="truncate flex-1 text-left">{p.displayName || p.email}</span>
+                <span dir="auto" className="truncate flex-1 text-start">
+                  {p.displayName || p.email}
+                </span>
                 {p.displayName && (
-                  <span className="text-foreground/30 truncate text-[11px]">{p.email}</span>
+                  <span dir="ltr" className="text-foreground/30 truncate text-[11px]">
+                    {p.email}
+                  </span>
                 )}
               </button>
             ))}
@@ -337,9 +345,13 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
                 onClick={() => onSelectName(p.display_name, p.email, p.id)}
                 className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
               >
-                <span className="truncate flex-1 text-left">{p.display_name}</span>
+                <span dir="auto" className="truncate flex-1 text-start">
+                  {p.display_name}
+                </span>
                 {p.email && (
-                  <span className="text-foreground/30 truncate text-[11px]">{p.email}</span>
+                  <span dir="ltr" className="text-foreground/30 truncate text-[11px]">
+                    {p.email}
+                  </span>
                 )}
               </button>
             ))}
@@ -356,13 +368,17 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
               </span>
               {inputIsEmail ? (
                 <>
-                  <span className="text-foreground truncate">{nameFromEmail(trimmed)}</span>
-                  <span className="text-foreground/30 truncate text-[11px]">
+                  <span dir="auto" className="text-foreground truncate">
+                    {nameFromEmail(trimmed)}
+                  </span>
+                  <span dir="ltr" className="text-foreground/30 truncate text-[11px]">
                     {trimmed.toLowerCase()}
                   </span>
                 </>
               ) : (
-                <span className="text-foreground truncate">{trimmed}</span>
+                <span dir="auto" className="text-foreground truncate">
+                  {trimmed}
+                </span>
               )}
             </button>
           </div>
@@ -420,7 +436,7 @@ function SpeakerLabel({
   if (hasSuggestion) {
     return (
       <span className="group inline-flex items-center gap-1 mb-0.5 px-1">
-        <span className="text-[11px] font-medium italic text-muted-foreground/60">
+        <span dir="auto" className="text-[11px] font-medium italic text-muted-foreground/60">
           {segment.suggestedName}
         </span>
         <button
@@ -463,7 +479,7 @@ function SpeakerLabel({
             speakerState === "provisional" && "italic"
           )}
         >
-          {displayLabel}
+          <span dir="auto">{displayLabel}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0">
@@ -654,7 +670,7 @@ const SegmentRow = memo(function SegmentRow({
         "group flex flex-col",
         selfSide ? "items-start" : "items-end",
         !sameSpeaker && !isFirst && "mt-2",
-        selectable && (selfSide ? "pl-6" : "pr-6")
+        selectable && (selfSide ? "ps-6" : "pe-6")
       )}
       style={isNewest ? { animation: "agent-message-in 200ms ease-out both" } : undefined}
     >
@@ -677,23 +693,23 @@ const SegmentRow = memo(function SegmentRow({
             selfSide
               ? cn(
                   "bg-primary/90 text-primary-foreground",
-                  sameSpeaker ? "rounded-lg rounded-tl-sm" : "rounded-lg rounded-bl-sm"
+                  sameSpeaker ? "rounded-lg rounded-ss-sm" : "rounded-lg rounded-es-sm"
                 )
               : cn(
                   "bg-surface-2 border border-border/30 text-foreground",
-                  sameSpeaker ? "rounded-lg rounded-tr-sm" : "rounded-lg rounded-br-sm",
-                  isSystemSpeaker && cn("border-l-2", SPEAKER_BORDER_COLORS[colorIdx])
+                  sameSpeaker ? "rounded-lg rounded-se-sm" : "rounded-lg rounded-ee-sm",
+                  isSystemSpeaker && cn("border-s-2", SPEAKER_BORDER_COLORS[colorIdx])
                 ),
             isSelected && "ring-2 ring-primary/60"
           )}
         >
-          {segment.text}
+          <span dir="auto">{segment.text}</span>
         </div>
         {selectable && (
           <SelectCheckbox
             isSelected={isSelected}
             onToggle={() => onToggleSelect?.(segment.id)}
-            className={cn("absolute top-1.5", selfSide ? "-left-6" : "-right-6")}
+            className={cn("absolute top-1.5", selfSide ? "-start-6" : "-end-6")}
           />
         )}
       </div>
@@ -902,7 +918,7 @@ export function MeetingTranscriptChat({
                 <button
                   onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount - 1)}
                   disabled={sessionExpectedCount <= 1}
-                  className="px-1.5 py-0.5 rounded-l-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                  className="px-1.5 py-0.5 rounded-s-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                   aria-label={t("notes.speaker.pill.decAria")}
                 >
                   −
@@ -915,7 +931,7 @@ export function MeetingTranscriptChat({
                 <button
                   onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount + 1)}
                   disabled={sessionExpectedCount >= MAX_SPEAKER_COUNT}
-                  className="px-1.5 py-0.5 rounded-r-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                  className="px-1.5 py-0.5 rounded-e-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                   aria-label={t("notes.speaker.pill.incAria")}
                 >
                   +

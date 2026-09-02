@@ -24,7 +24,19 @@ const jaPrompts = require("../locales/ja/prompts.json");
 const zhCNPrompts = require("../locales/zh-CN/prompts.json");
 const zhTWPrompts = require("../locales/zh-TW/prompts.json");
 
-const SUPPORTED_UI_LANGUAGES = ["en", "ar", "es", "fr", "de", "pt", "it", "ru", "ja", "zh-CN", "zh-TW"];
+const SUPPORTED_UI_LANGUAGES = [
+  "en",
+  "ar",
+  "es",
+  "fr",
+  "de",
+  "pt",
+  "it",
+  "ru",
+  "ja",
+  "zh-CN",
+  "zh-TW",
+];
 
 function normalizeUiLanguage(language) {
   const candidate = (language || "").trim();

@@ -202,6 +202,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
               {t("reasoning.enterprise.profile", { defaultValue: "Profile Name" })}
             </FieldLabel>
             <Input
+              dir="ltr"
               value={store.bedrockProfile}
               onChange={(e) => store.setBedrockProfile(e.target.value)}
               placeholder="default"
@@ -245,6 +246,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
               })}
             </FieldLabel>
             <Input
+              dir="ltr"
               value={store.bedrockSessionToken}
               onChange={(e) => store.setBedrockSessionToken(e.target.value)}
               placeholder=""
@@ -257,6 +259,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
       <div className="space-y-1.5">
         <FieldLabel>{t("reasoning.enterprise.region", { defaultValue: "Region" })}</FieldLabel>
         <select
+          dir="ltr"
           value={store.bedrockRegion}
           onChange={(e) => handleRegionChange(e.target.value)}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -310,9 +313,9 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
             }}
           >
             {catalog.status === "loading" ? (
-              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 me-1.5 animate-spin" />
             ) : (
-              <Search className="w-3.5 h-3.5 mr-1.5" />
+              <Search className="w-3.5 h-3.5 me-1.5" />
             )}
             {catalog.status === "loading"
               ? t("reasoning.enterprise.loadingModels", { defaultValue: "Fetching models..." })
@@ -355,6 +358,7 @@ function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderCo
           {t("reasoning.enterprise.endpoint", { defaultValue: "Endpoint URL" })}
         </FieldLabel>
         <Input
+          dir="ltr"
           value={store.azureEndpoint}
           onChange={(e) => store.setAzureEndpoint(e.target.value)}
           placeholder="https://yourresource.openai.azure.com"
@@ -378,6 +382,7 @@ function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderCo
           {t("reasoning.enterprise.deploymentName", { defaultValue: "Deployment Name" })}
         </FieldLabel>
         <Input
+          dir="ltr"
           value={store.azureDeploymentName}
           onChange={(e) => {
             store.setAzureDeploymentName(e.target.value);
@@ -398,6 +403,7 @@ function AzureConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderCo
           {t("reasoning.enterprise.apiVersion", { defaultValue: "API Version" })}
         </FieldLabel>
         <Input
+          dir="ltr"
           value={store.azureApiVersion}
           onChange={(e) => store.setAzureApiVersion(e.target.value)}
           placeholder="2024-10-21"
@@ -472,6 +478,7 @@ function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderC
           {t("reasoning.enterprise.projectId", { defaultValue: "Project ID" })}
         </FieldLabel>
         <Input
+          dir="ltr"
           value={store.vertexProject}
           onChange={(e) => store.setVertexProject(e.target.value)}
           placeholder="my-gcp-project-123"
@@ -482,6 +489,7 @@ function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderC
       <div className="space-y-1.5">
         <FieldLabel>{t("reasoning.enterprise.location", { defaultValue: "Location" })}</FieldLabel>
         <select
+          dir="ltr"
           value={store.vertexLocation}
           onChange={(e) => store.setVertexLocation(e.target.value)}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"

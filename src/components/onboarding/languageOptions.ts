@@ -19,7 +19,7 @@ const NATIVE_LABELS: Record<string, string> = {
 
 const LANGUAGE_LABELS: Record<string, string> = {
   "en-US": "English",
-  "ar": "Arabic",
+  ar: "Arabic",
   "zh-CN": "Chinese - Simplified",
   "zh-TW": "Chinese - Traditional",
 };

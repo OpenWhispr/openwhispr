@@ -49,6 +49,7 @@ export default function DeleteSpaceDialog({ space, onClose, onConfirm }: DeleteS
             {t("notes.spaces.deleteTypeName", { space: space.name })}
           </label>
           <Input
+            dir="auto"
             id="delete-space-name"
             autoFocus
             value={nameInput}

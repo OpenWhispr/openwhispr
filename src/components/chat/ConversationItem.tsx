@@ -60,14 +60,17 @@ export default function ConversationItem({
       type="button"
       onClick={onClick}
       className={cn(
-        "group relative w-full text-left px-3 py-2 cursor-pointer transition-all duration-150",
+        "group relative w-full text-start px-3 py-2 cursor-pointer transition-all duration-150",
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
         isActive ? "bg-primary/8 dark:bg-primary/10" : "hover:bg-foreground/4 dark:hover:bg-white/4"
       )}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <p className={cn("text-xs truncate text-foreground", isActive && "font-medium")}>
+          <p
+            dir="auto"
+            className={cn("text-xs truncate text-foreground", isActive && "font-medium")}
+          >
             {conversation.title}
           </p>
           <div className="flex items-center gap-0.5 shrink-0">
@@ -80,7 +83,7 @@ export default function ConversationItem({
                   size="icon"
                   variant="ghost"
                   onClick={(e) => e.stopPropagation()}
-                  className="h-5 w-5 rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity absolute right-2 text-muted-foreground/60 dark:text-muted-foreground/40 hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
+                  className="h-5 w-5 rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity absolute end-2 text-muted-foreground/60 dark:text-muted-foreground/40 hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
                 >
                   <MoreHorizontal size={12} />
                 </Button>
@@ -121,7 +124,7 @@ export default function ConversationItem({
           </div>
         </div>
         {conversation.preview && (
-          <p className="text-[11px] text-muted-foreground/50 line-clamp-1 mt-0.5">
+          <p dir="auto" className="text-[11px] text-muted-foreground/50 line-clamp-1 mt-0.5">
             {conversation.preview}
           </p>
         )}

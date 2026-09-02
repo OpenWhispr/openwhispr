@@ -58,7 +58,7 @@ export const SettingsGroup: React.FC<SettingsGroupProps> = ({
 
 interface SettingsRowProps {
   label: string;
-  description?: string;
+  description?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }
@@ -163,7 +163,7 @@ export function InferenceModeSelector({
           >
             <button
               onClick={() => onSelect(mode.id)}
-              className={`w-full flex items-center gap-3 text-left cursor-pointer group ${
+              className={`w-full flex items-center gap-3 text-start cursor-pointer group ${
                 isDisabled ? "opacity-60" : ""
               }`}
             >

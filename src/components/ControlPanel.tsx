@@ -2,6 +2,7 @@ import React, { Suspense, useState, useEffect, useRef, useCallback } from "react
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import {
   Download,
   RefreshCw,
@@ -75,6 +76,7 @@ import {
   shouldRunTranslateStep,
 } from "../helpers/translationChain";
 import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
+import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
@@ -96,7 +98,7 @@ const SIDEBAR_WIDTH_PX = 192;
 const SEMANTIC_REINDEX_VERSION = 2;
 
 const toggleIconClass =
-  "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150";
+  "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150 rtl:scale-x-[-1]";
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
@@ -637,7 +639,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 import("../stores/settingsStore"),
               ]);
               const settings = getEffectiveSettings();
-              const agentName = localStorage.getItem("agentName") || null;
+              const agentName = getAgentName();
               const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
               if (route.kind === "translation") {
                 const { text, translated } = await executeTranslationChain({
@@ -708,7 +710,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               const model = getEffectiveCleanupModel();
               const isCloud = isCloudCleanupMode();
               if (model || isCloud) {
-                const agentName = localStorage.getItem("agentName") || null;
+                const agentName = getAgentName();
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,
                 });
@@ -966,7 +968,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         <div
           className={`absolute inset-y-0 start-0 z-30 transition-transform duration-300 ease-out${
             sidebarCollapsed && sidebarPeek && !isSidePanelLayout
-              ? " shadow-[10px_0_40px_-18px_rgba(0,0,0,0.2)]"
+              ? " shadow-[10px_0_40px_-18px_rgba(0,0,0,0.2)] rtl:shadow-[-10px_0_40px_-18px_rgba(0,0,0,0.2)]"
               : ""
           }`}
           style={{
@@ -974,8 +976,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               !isSidePanelLayout && (!sidebarCollapsed || sidebarPeek)
                 ? "translateX(0)"
                 : document.documentElement.dir === "rtl"
-                ? "translateX(100%)"
-                : "translateX(-100%)",
+                  ? "translateX(100%)"
+                  : "translateX(-100%)",
           }}
           onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
           onMouseLeave={sidebarCollapsed ? hideSidebarPeek : undefined}
@@ -1026,7 +1028,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           >
             {isSidePanelLayout && (
               <div
-                className={platform === "darwin" ? "ms-[84px] mt-[16px]" : "ms-2"}
+                className={platform === "darwin" ? "ltr:ml-[84px] rtl:mr-2 mt-[16px]" : "ms-2"}
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
                 <Button
@@ -1035,7 +1037,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   onClick={handleExitMeetingMode}
                   className="h-7 px-2.5 ps-1.5 gap-1"
                 >
-                  <ChevronLeft size={14} strokeWidth={1.8} />
+                  <ChevronLeft size={14} strokeWidth={1.8} className="rtl:rotate-180" />
                   {t("controlPanel.backToNotes")}
                 </Button>
               </div>
@@ -1060,9 +1062,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                         {t("controlPanel.updateRequiredByOrg.title")}
                       </p>
                       <p className="text-xs text-amber-700 dark:text-amber-300/80">
-                        {t("controlPanel.updateRequiredByOrg.description", {
-                          version: policyMinAppVersion,
-                        })}
+                        <BidiInterpolatedText
+                          text={t("controlPanel.updateRequiredByOrg.description", {
+                            version: BIDI_VALUE_TOKEN,
+                          })}
+                          value={policyMinAppVersion}
+                        />
                       </p>
                     </div>
                   </div>
@@ -1230,7 +1235,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         {!isSidePanelLayout && (
           <div
             className={`absolute z-40 flex h-10 items-center ${
-              platform === "darwin" ? "start-[84px] top-2" : "start-2 top-0"
+              platform === "darwin" ? "ltr:left-[84px] rtl:right-2 top-2" : "start-2 top-0"
             }`}
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}

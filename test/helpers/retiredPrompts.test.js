@@ -42,6 +42,15 @@ const makeStorage = (initial = {}) => {
   };
 };
 
+test("Arabic keeps every security-sensitive system prompt byte-identical to English", () => {
+  const bundles = readLocaleBundles();
+  assert.deepEqual(
+    bundles.ar,
+    bundles.en,
+    "CLAUDE.md requires AI system prompts to remain untranslated"
+  );
+});
+
 test("flags the retired English two-mode fullPrompt that shadows hardened defaults", async () => {
   const { isRetiredDefaultPrompt } = await load();
   assert.equal(await isRetiredDefaultPrompt(fixtures.enTwoModeFullPrompt), true);

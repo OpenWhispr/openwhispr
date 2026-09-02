@@ -220,7 +220,7 @@ function GpuStatusBadge() {
         <button
           type="button"
           onClick={() => setError(null)}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors ms-1"
         >
           {t("gpu.dismiss")}
         </button>
@@ -288,7 +288,7 @@ function GpuStatusBadge() {
         <button
           type="button"
           onClick={handleDelete}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors ms-auto"
         >
           {t("gpu.remove")}
         </button>

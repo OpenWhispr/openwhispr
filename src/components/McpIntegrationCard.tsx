@@ -59,10 +59,13 @@ export default function McpIntegrationCard({ isPaid, onUpgrade }: McpIntegration
       </p>
 
       {isPaid && (
-        <ol className="space-y-1.5 text-xs text-muted-foreground mb-4 list-decimal pl-4 marker:text-muted-foreground/40">
+        <ol className="space-y-1.5 text-xs text-muted-foreground mb-4 list-decimal ps-4 marker:text-muted-foreground/40">
           <li className="leading-relaxed">
             {t("integrations.mcp.step1")}{" "}
-            <span className="inline-flex items-center gap-1 rounded-md border border-primary/15 bg-primary/5 px-1.5 py-0.5 font-mono text-[10.5px] text-foreground align-middle">
+            <span
+              dir="ltr"
+              className="inline-flex items-center gap-1 rounded-md border border-primary/15 bg-primary/5 px-1.5 py-0.5 font-mono text-[10.5px] text-foreground align-middle"
+            >
               {MCP_URL}
               <button
                 type="button"

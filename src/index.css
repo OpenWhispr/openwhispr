@@ -1079,6 +1079,34 @@ a:hover {
     0 2px 8px -2px oklch(0 0 0 / 0.3);
 }
 
+/* Enter from the physical outer edge of the direction-aware toast stack. */
+.toast-enter {
+  --toast-enter-x: 1rem;
+  animation: toast-enter 300ms ease-out;
+}
+
+[dir="rtl"] .toast-enter {
+  --toast-enter-x: -1rem;
+}
+
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateX(var(--toast-enter-x)) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-enter {
+    animation: none;
+  }
+}
+
 @keyframes toast-progress {
   from {
     width: 100%;
@@ -1603,6 +1631,7 @@ a:hover {
 
 .rich-text-editor-content {
   outline: none;
+  unicode-bidi: plaintext;
   padding: 0.75rem 1.25rem 5rem;
   font-size: 0.875rem;
   line-height: 1.7;
@@ -1637,7 +1666,7 @@ a:hover {
 
 .rich-text-editor-content ul,
 .rich-text-editor-content ol {
-  padding-left: 1.25rem;
+  padding-inline-start: 1.25rem;
   margin-bottom: 0.25rem;
 }
 
@@ -1666,11 +1695,17 @@ a:hover {
 }
 
 .rich-text-editor-content blockquote {
-  border-left: 2px solid oklch(0.5 0 0 / 0.15);
-  padding-left: 0.75rem;
+  border-inline-start: 2px solid oklch(0.5 0 0 / 0.15);
+  padding-inline-start: 0.75rem;
   color: oklch(0.5 0 0 / 0.6);
   font-style: italic;
   margin: 0.375rem 0;
+}
+
+.rich-text-editor-content code,
+.rich-text-editor-content pre {
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .rich-text-editor-content code {
@@ -1694,7 +1729,7 @@ a:hover {
 /* Task list (checkboxes) */
 .rich-text-editor-content ul[data-type="taskList"] {
   list-style: none;
-  padding-left: 0;
+  padding-inline-start: 0;
 }
 
 .rich-text-editor-content ul[data-type="taskList"] li {
@@ -1747,7 +1782,7 @@ a:hover {
 }
 
 .dark .rich-text-editor-content blockquote {
-  border-left-color: oklch(0.7 0 0 / 0.2);
+  border-inline-start-color: oklch(0.7 0 0 / 0.2);
   color: oklch(0.7 0 0 / 0.6);
 }
 
@@ -1766,5 +1801,3 @@ a:hover {
 .dark .rich-text-editor-content p.is-editor-empty:first-child::before {
   color: oklch(0.7 0 0 / 0.2);
 }
-
-[dir="rtl"] .rich-text-editor-content p.is-editor-empty:first-child::before { float: right !important; }

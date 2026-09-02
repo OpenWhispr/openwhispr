@@ -23,7 +23,10 @@ export function CopyableCommand({ command, label, className = "" }: CopyableComm
   return (
     <div className={className}>
       {label && <div className="text-xs text-muted-foreground mb-1">{label}</div>}
-      <div className="relative bg-card border border-border p-3 rounded-md font-mono text-xs overflow-x-auto">
+      <div
+        dir="ltr"
+        className="relative bg-card border border-border p-3 rounded-md font-mono text-xs overflow-x-auto"
+      >
         <span className="text-foreground pr-8">{command}</span>
         <button
           type="button"
