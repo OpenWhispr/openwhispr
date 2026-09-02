@@ -210,7 +210,7 @@ export async function transcribeFileWithSpeakers(
     const merged = await window.electronAPI.mergeSpeakerText?.(
       diar.segments,
       result.text,
-      durationSeconds || 0
+      measuredDuration || 0
     );
     if (merged?.success && merged.text) return { ...result, text: merged.text };
   } catch {
