@@ -334,7 +334,10 @@ test("a managed resolution bypasses the personal-selection policy floor", async 
   );
   assert.equal(route.transport, "managed");
   // Without the managed resolution the same settings fail closed.
-  const blocked = await resolve({ cloudTranscriptionProvider: "openai" }, { policy: enterpriseOnly });
+  const blocked = await resolve(
+    { cloudTranscriptionProvider: "openai" },
+    { policy: enterpriseOnly }
+  );
   assert.equal(blocked.transport, "error");
   assert.equal(blocked.code, "POLICY_RESTRICTED");
 });
@@ -342,7 +345,13 @@ test("a managed resolution bypasses the personal-selection policy floor", async 
 test("a managed resolution error becomes an error route", async () => {
   const route = await resolve(
     { cloudTranscriptionProvider: "openai" },
-    { managed: { kind: "error", message: "Managed access unavailable", code: "MANAGED_CONFIG_UNAVAILABLE" } }
+    {
+      managed: {
+        kind: "error",
+        message: "Managed access unavailable",
+        code: "MANAGED_CONFIG_UNAVAILABLE",
+      },
+    }
   );
   assert.equal(route.transport, "error");
   assert.equal(route.code, "MANAGED_CONFIG_UNAVAILABLE");

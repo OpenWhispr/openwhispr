@@ -116,7 +116,8 @@ function isValidProviderConfig(record) {
   }
   // Azure carries independent text and transcription sections; at least one
   // must be present and every present section must be complete.
-  const hasLlmSection = config.allowedDeployments !== undefined || config.scopeDefaults !== undefined;
+  const hasLlmSection =
+    config.allowedDeployments !== undefined || config.scopeDefaults !== undefined;
   if (!hasLlmSection && config.transcription === undefined) return false;
   if (hasLlmSection && !isValidLlmSection(config.allowedDeployments, config.scopeDefaults)) {
     return false;

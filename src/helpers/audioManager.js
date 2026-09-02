@@ -1866,7 +1866,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // processWithOpenAIAPI with their own code.
       const managedTranscription = getManagedTranscriptionResolution();
       if (managedTranscription) {
-        activeModel = managedTranscription.kind === "managed" ? managedTranscription.deployment : null;
+        activeModel =
+          managedTranscription.kind === "managed" ? managedTranscription.deployment : null;
         result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
       } else if (useLocalWhisper) {
         if (isSherpaLocalProvider(localProvider)) {
