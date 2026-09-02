@@ -370,6 +370,59 @@ test("parseGranolaCsv generates distinct fallback keys for notes sharing title a
   assert.notEqual(result.notes[0].sourceFile, result.notes[1].sourceFile);
 });
 
+test("parseGranolaCsv keeps a colliding note id when its summary changes", async () => {
+  const { parseGranolaCsv } = await load();
+  const originalCsv = [
+    "title,summary,created_at",
+    'Sync,"First meeting",2026-07-15T14:30:00Z',
+    'Sync,"Original second meeting",2026-07-15T14:30:00Z',
+  ].join("\n");
+  const editedCsv = [
+    "title,summary,created_at",
+    'Sync,"First meeting",2026-07-15T14:30:00Z',
+    'Sync,"Edited second meeting",2026-07-15T14:30:00Z',
+  ].join("\n");
+
+  const original = parseGranolaCsv(originalCsv);
+  const edited = parseGranolaCsv(editedCsv);
+
+  assert.equal(edited.notes[1].clientNoteId, original.notes[1].clientNoteId);
+});
+
+test("createGranolaNoteKeyAllocator disambiguates legacy title and date tuples", async () => {
+  const { createGranolaNoteKeyAllocator } = await load();
+  const sharedFields = { id: "" };
+  const leftFields = { ...sharedFields, title: "A|B", rawDate: "C" };
+  const rightFields = { ...sharedFields, title: "A", rawDate: "B|C" };
+
+  const leftFirstAllocator = createGranolaNoteKeyAllocator();
+  const leftLegacyKey = leftFirstAllocator(leftFields);
+  const rightVersionedKey = leftFirstAllocator(rightFields);
+  const rightFirstAllocator = createGranolaNoteKeyAllocator();
+  const rightLegacyKey = rightFirstAllocator(rightFields);
+  const leftVersionedKey = rightFirstAllocator(leftFields);
+
+  assert.equal(leftLegacyKey, rightLegacyKey);
+  assert.notEqual(leftVersionedKey, rightVersionedKey);
+});
+
+test("createGranolaNoteKeyAllocator counts delimiter-colliding tuples independently", async () => {
+  const { createGranolaNoteKeyAllocator } = await load();
+  const leftFields = { id: "", title: "A|B", rawDate: "C" };
+  const rightFields = { id: "", title: "A", rawDate: "B|C" };
+
+  const allocatorWithCollision = createGranolaNoteKeyAllocator();
+  allocatorWithCollision(leftFields);
+  allocatorWithCollision(rightFields);
+  const secondLeftKeyAfterCollision = allocatorWithCollision(leftFields);
+
+  const allocatorWithoutCollision = createGranolaNoteKeyAllocator();
+  allocatorWithoutCollision(leftFields);
+  const secondLeftKey = allocatorWithoutCollision(leftFields);
+
+  assert.equal(secondLeftKeyAfterCollision, secondLeftKey);
+});
+
 test("parseGranolaCsv distinguishes notes with matching content but different transcripts", async () => {
   const { parseGranolaCsv } = await load();
   const csv = [

@@ -280,43 +280,26 @@ const shortHash = (value) => createHash("sha256").update(value).digest("hex").sl
  *   id: string,
  *   title: string,
  *   rawDate: string,
- *   content: string,
- *   rawTranscript: string,
- *   rawAttendees: string,
  * }) => string}
  */
 export function createGranolaNoteKeyAllocator() {
-  const seenLegacyFallbackKeys = new Set();
-  const fallbackSignatureOccurrences = new Map();
+  const claimedLegacyFallbackKeys = new Set();
+  const fallbackOccurrences = new Map();
 
-  return ({ id, title, rawDate, content, rawTranscript, rawAttendees }) => {
+  return ({ id, title, rawDate }) => {
     if (id) return id;
 
     const legacyFallbackKey = shortHash(`${title}|${rawDate}`);
-    const fallbackSignature = JSON.stringify([
-      legacyFallbackKey,
-      content,
-      rawTranscript,
-      rawAttendees,
-    ]);
-    const signatureOccurrence = fallbackSignatureOccurrences.get(fallbackSignature) ?? 0;
-    fallbackSignatureOccurrences.set(fallbackSignature, signatureOccurrence + 1);
+    const fallbackTuple = JSON.stringify([title, rawDate]);
+    const occurrence = fallbackOccurrences.get(fallbackTuple) ?? 0;
+    fallbackOccurrences.set(fallbackTuple, occurrence + 1);
 
-    if (!seenLegacyFallbackKeys.has(legacyFallbackKey)) {
-      seenLegacyFallbackKeys.add(legacyFallbackKey);
+    if (!claimedLegacyFallbackKeys.has(legacyFallbackKey)) {
+      claimedLegacyFallbackKeys.add(legacyFallbackKey);
       return legacyFallbackKey;
     }
 
-    return shortHash(
-      JSON.stringify([
-        "v2",
-        legacyFallbackKey,
-        content,
-        rawTranscript,
-        rawAttendees,
-        signatureOccurrence,
-      ])
-    );
+    return shortHash(JSON.stringify(["v2", title, rawDate, occurrence]));
   };
 }
 
@@ -434,9 +417,6 @@ export function parseGranolaCsv(text, { allocateNoteKey = createGranolaNoteKeyAl
       id,
       title,
       rawDate,
-      content,
-      rawTranscript,
-      rawAttendees,
     });
 
     const anchorMs = createdAt ? Date.parse(`${createdAt.replace(" ", "T")}Z`) : 0;
