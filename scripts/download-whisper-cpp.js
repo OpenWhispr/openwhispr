@@ -11,14 +11,16 @@ const {
   setExecutable,
   cleanupFiles,
 } = require("./lib/download-utils");
+const {
+  WHISPER_CPP_TAG,
+  WINDOWS_MSVC_RUNTIME_LIBRARIES,
+} = require("../src/helpers/whisperCppRelease");
 
 const WHISPER_CPP_REPO = "OpenWhispr/whisper.cpp";
 
 // Pinned to a tested build. Tracking the latest release let an upstream whisper.cpp bump
 // change transcription output between app releases with no diff to review. See #1348.
 // 0.0.10 is the first release whose win32 zips bundle the MSVC runtime DLLs (CUS-113).
-const WHISPER_CPP_TAG = process.env.WHISPER_CPP_VERSION || "0.0.10";
-
 const BINARIES = {
   "darwin-arm64": {
     zipName: "whisper-server-darwin-arm64.zip",
@@ -37,7 +39,7 @@ const BINARIES = {
     // MSVC runtime DLLs the exe links dynamically; without them beside the exe,
     // machines lacking the VC++ redistributable die at load with 0xC0000135 (CUS-113)
     libPattern: "*.dll",
-    requiredLibraries: ["msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll", "vcomp140.dll"],
+    requiredLibraries: WINDOWS_MSVC_RUNTIME_LIBRARIES,
   },
   "linux-x64": {
     zipName: "whisper-server-linux-x64-cpu.zip",
