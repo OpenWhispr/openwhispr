@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   resolveManagedEnterpriseScope,
   validateManagedEnterpriseEnvelope,
+  managedScopesForConfig,
 } = require("../../src/helpers/enterpriseManagedConfig.mjs");
 
 const scopes = {
@@ -260,4 +261,31 @@ test("the transcription scope resolves from the Azure transcription section only
   assert.equal(resolveManagedEnterpriseScope(sttOnly, "transcription", "manual").kind, "manual");
   const enforced = envelope([azureProvider({ transcription }, { mode: "managed_required" })]);
   assert.equal(resolveManagedEnterpriseScope(enforced, "transcription", "manual").kind, "managed");
+});
+
+test("managedScopesForConfig lists the scopes each active record carries, split by enforcement", () => {
+  const transcription = {
+    allowedDeployments: ["gpt-4o-transcribe"],
+    defaultDeployment: "gpt-4o-transcribe",
+  };
+  const llmRequired = envelope([provider({ mode: "managed_required", allowManualSetup: false })]);
+  assert.deepEqual(managedScopesForConfig(llmRequired), {
+    managed: Object.keys(scopes),
+    enforced: Object.keys(scopes),
+  });
+  const sttDefault = envelope([azureProvider({ transcription })]);
+  assert.deepEqual(managedScopesForConfig(sttDefault), {
+    managed: ["transcription"],
+    enforced: [],
+  });
+  const sttLocked = envelope([azureProvider({ transcription }, { allowManualSetup: false })]);
+  assert.deepEqual(managedScopesForConfig(sttLocked), {
+    managed: ["transcription"],
+    enforced: ["transcription"],
+  });
+  assert.deepEqual(managedScopesForConfig(null), { managed: [], enforced: [] });
+  assert.deepEqual(managedScopesForConfig(envelope([provider({ mode: "disabled" })])), {
+    managed: [],
+    enforced: [],
+  });
 });

@@ -211,6 +211,26 @@ function resolveManagedEnterpriseScope(envelope, scope, setupMode = "auto") {
   };
 }
 
+/**
+ * Scopes any active record resolves a managed model for, and the subset that
+ * is enforced (managed_required or manual setup disallowed). Enforcement is
+ * per scope: a text-only workspace must never fail transcription closed.
+ */
+function managedScopesForConfig(config) {
+  const managed = [];
+  const enforced = [];
+  for (const record of config?.providers ?? []) {
+    if (record.mode === "disabled") continue;
+    const isEnforced = record.mode === "managed_required" || !record.allowManualSetup;
+    for (const scope of [...ENTERPRISE_INFERENCE_SCOPES, ENTERPRISE_TRANSCRIPTION_SCOPE]) {
+      if (!isNonEmptyString(managedModelFor(record, scope))) continue;
+      if (!managed.includes(scope)) managed.push(scope);
+      if (isEnforced && !enforced.includes(scope)) enforced.push(scope);
+    }
+  }
+  return { managed, enforced };
+}
+
 export {
   AZURE_HOST_SUFFIXES,
   ENTERPRISE_INFERENCE_SCOPES,
@@ -219,4 +239,5 @@ export {
   isAllowedAzureEndpoint,
   validateManagedEnterpriseEnvelope,
   resolveManagedEnterpriseScope,
+  managedScopesForConfig,
 };

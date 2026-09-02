@@ -1953,6 +1953,7 @@ declare global {
         code?: string;
         error?: string;
         enforcementRequired?: boolean;
+        enforcedScopes?: string[];
       }>;
       onManagedEnterpriseConfigChanged?: (
         callback: (snapshot: {
@@ -1962,6 +1963,7 @@ declare global {
           config: ManagedEnterpriseConfig | null;
           code: string | null;
           enforcementRequired?: boolean;
+          enforcedScopes?: string[];
         }) => void
       ) => () => void;
       clearManagedEnterpriseIdentity?: () => Promise<void>;

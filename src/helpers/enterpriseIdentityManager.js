@@ -3,6 +3,7 @@ const fs = require("fs");
 const {
   resolveManagedEnterpriseScope,
   validateManagedEnterpriseEnvelope,
+  managedScopesForConfig,
 } = require("./enterpriseManagedConfig.mjs");
 const { AuthContextError } = require("./cloudApiRequest");
 
@@ -102,7 +103,7 @@ function requiresEnforcedManagedAccess(config) {
   );
 }
 
-function responseError(code, error, identity = null, enforcementRequired) {
+function responseError(code, error, identity = null, enforcementRequired, enforcedScopes) {
   return {
     success: false,
     status: "error",
@@ -112,6 +113,7 @@ function responseError(code, error, identity = null, enforcementRequired) {
     code,
     error,
     ...(typeof enforcementRequired === "boolean" ? { enforcementRequired } : {}),
+    ...(Array.isArray(enforcedScopes) ? { enforcedScopes } : {}),
   };
 }
 
@@ -145,7 +147,7 @@ function createEnterpriseIdentityManager({
     }
   }
 
-  function evictIdentity(identity, code, enforcementRequired = false) {
+  function evictIdentity(identity, code, enforcementRequired = false, enforcedScopes = []) {
     configs.delete(identity.cacheKey);
     configRequests.delete(identity.cacheKey);
     clearIdentityCredentials(identity);
@@ -157,6 +159,7 @@ function createEnterpriseIdentityManager({
       config: null,
       code,
       enforcementRequired,
+      enforcedScopes,
     });
   }
 
@@ -306,7 +309,14 @@ function createEnterpriseIdentityManager({
           const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
           error.enforcementRequired =
             error?.code === "ENTERPRISE_REQUIRED" ? false : requiresEnforcedManagedAccess(prior);
-          evictIdentity(identity, error.code || "MANAGED_CONFIG_FAILED", error.enforcementRequired);
+          error.enforcedScopes =
+            error?.code === "ENTERPRISE_REQUIRED" ? [] : managedScopesForConfig(prior).enforced;
+          evictIdentity(
+            identity,
+            error.code || "MANAGED_CONFIG_FAILED",
+            error.enforcementRequired,
+            error.enforcedScopes
+          );
           throw error;
         }
         if (!isTransientConfigError(error)) throw error;
@@ -345,7 +355,8 @@ function createEnterpriseIdentityManager({
         error.code || "MANAGED_CONFIG_FAILED",
         error.message,
         identity,
-        error.enforcementRequired
+        error.enforcementRequired,
+        error.enforcedScopes
       );
     }
   }
@@ -370,7 +381,9 @@ function createEnterpriseIdentityManager({
         const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
         error.enforcementRequired =
           error.code === "ENTERPRISE_REQUIRED" ? false : requiresEnforcedManagedAccess(prior);
-        evictIdentity(identity, error.code, error.enforcementRequired);
+        error.enforcedScopes =
+          error.code === "ENTERPRISE_REQUIRED" ? [] : managedScopesForConfig(prior).enforced;
+        evictIdentity(identity, error.code, error.enforcementRequired, error.enforcedScopes);
       }
       throw error;
     }
