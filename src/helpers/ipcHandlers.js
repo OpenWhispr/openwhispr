@@ -5707,62 +5707,15 @@ class IPCHandlers {
         },
       };
     };
-    // Managed Azure STT shared by dictation, file upload, and history retry:
-    // re-validates the renderer's managed context (MANAGED_CONFIG_CHANGED on
-    // mismatch), mints an Entra token, and posts the audio straight to the
-    // workspace's Azure resource. No user-owned API key is involved.
-    const executeManagedTranscription = async (
-      event,
-      route,
-      { audioBuffer, fileName, contentType, prompt }
-    ) => {
-      const runtime = await resolveEnterpriseRuntime(event, route.provider, null, {
-        managedContext: route.context,
-      });
-      const { azureEndpoint, azureApiVersion, managedTokenProvider } = runtime.enterprise;
-      // The workspace's default deployment wins over anything the renderer sent.
-      const deployment = runtime.model;
-      let endpoint;
-      if (azureApiVersion === "v1" || azureApiVersion === "preview") {
-        const suffix = azureApiVersion === "preview" ? "?api-version=preview" : "";
-        endpoint = `${new URL(azureEndpoint).origin}/openai/v1/audio/transcriptions${suffix}`;
-      } else {
-        const { buildAzureTranscriptionUrl } = await import("../utils/urlUtils.ts");
-        endpoint = buildAzureTranscriptionUrl(azureEndpoint, deployment, azureApiVersion);
-      }
-      if (!endpoint) {
-        throw new Error("Managed Azure transcription endpoint could not be built");
-      }
-      const token = await managedTokenProvider();
-      const formData = new FormData();
-      formData.append("file", new Blob([audioBuffer], { type: contentType }), fileName);
-      formData.append("model", deployment);
-      if (route.language && route.language !== "auto") {
-        formData.append("language", route.language);
-      }
-      if (prompt) formData.append("prompt", prompt);
-      const response = await proxyFetch(endpoint, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        const err = new Error(`Azure transcription error: ${response.status} ${errorText}`);
-        if (response.status === 429) {
-          err.code = "PROVIDER_RATE_LIMITED";
-          err.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";
-        } else if (response.status >= 500) {
-          err.code = "SERVER_ERROR";
-        }
-        throw err;
-      }
-      const result = await response.json();
-      if (typeof result?.text !== "string" || !result.text.trim()) {
-        throw new Error("Managed transcription response was empty");
-      }
-      return result.text;
-    };
+    const { createManagedTranscriptionExecutor } = require("./managedTranscriptionExecutor");
+    const executeManagedTranscription = createManagedTranscriptionExecutor({
+      resolveEnterpriseRuntime,
+      proxyFetch,
+      buildUrl: async (endpoint, deployment, apiVersion) => {
+        const { buildManagedAzureTranscriptionUrl } = await import("../utils/urlUtils.ts");
+        return buildManagedAzureTranscriptionUrl(endpoint, deployment, apiVersion);
+      },
+    });
     this.executeManagedTranscription = executeManagedTranscription;
 
     ipcMain.handle(
