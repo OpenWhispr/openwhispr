@@ -620,3 +620,112 @@ test("an Agent follow-up keeps the existing response modal open while thinking",
     thinking: true,
   });
 });
+
+test("a collapsed transcript stays reopenable while its result is processing", async () => {
+  const { resolveCompanionPillInteractive } = await load();
+
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: true,
+      surfaceInteractive: true,
+      isProcessing: true,
+      canReopenLiveTranscript: true,
+    }),
+    true
+  );
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: true,
+      surfaceInteractive: true,
+      isProcessing: true,
+      canReopenLiveTranscript: false,
+    }),
+    false
+  );
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: false,
+      surfaceInteractive: true,
+      isProcessing: false,
+      canReopenLiveTranscript: true,
+    }),
+    false
+  );
+  assert.equal(
+    resolveCompanionPillInteractive({
+      mainProcessInteractive: true,
+      surfaceInteractive: false,
+      isProcessing: false,
+      canReopenLiveTranscript: false,
+    }),
+    false
+  );
+});
+
+test("final Agent actions keep the idle pill hidden until the panel finishes closing", async () => {
+  const { shouldSuppressPillForAssistantActions } = await load();
+
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: true,
+      footerPillVisible: false,
+      assistantClosing: false,
+      hasLiveActivity: false,
+    }),
+    true
+  );
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: true,
+      footerPillVisible: false,
+      assistantClosing: true,
+      hasLiveActivity: false,
+    }),
+    true
+  );
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: true,
+      footerPillVisible: true,
+      assistantClosing: false,
+      hasLiveActivity: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: false,
+      footerPillVisible: false,
+      assistantClosing: false,
+      hasLiveActivity: true,
+    }),
+    false
+  );
+});
+
+test("activity handed back at close intent stays visible through the content fade", async () => {
+  const { shouldSuppressPillForAssistantActions } = await load();
+
+  // The companion hides at close INTENT while `assistantOpen` stays true until
+  // the fade completes: suppressing here is the both-hidden gap.
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: true,
+      footerPillVisible: false,
+      assistantClosing: true,
+      hasLiveActivity: true,
+    }),
+    false
+  );
+  // Before close intent the footer still owns the visuals, so a companion
+  // recording must not surface a second pill here.
+  assert.equal(
+    shouldSuppressPillForAssistantActions({
+      assistantOpen: true,
+      footerPillVisible: false,
+      assistantClosing: false,
+      hasLiveActivity: true,
+    }),
+    true
+  );
+});

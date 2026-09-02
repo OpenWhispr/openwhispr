@@ -14,14 +14,26 @@ export function resolveDiarizationTarget(params: {
   payloadNoteId?: number | null;
   payloadSessionId?: string | null;
   currentSessionId: string | null;
+  // The note a *live* recording is writing to, or null when nothing is
+  // recording. Not simply the store's recordingNoteId, which outlives the
+  // recording that set it.
+  activeRecordingNoteId?: number | null;
 }): DiarizationCompletionPlan {
-  const { payloadNoteId, payloadSessionId, currentSessionId } = params;
+  const { payloadNoteId, payloadSessionId, currentSessionId, activeRecordingNoteId } = params;
+  const targetNoteId = payloadNoteId ?? null;
+  // Resuming a note starts a recording that resets currentSessionId to null, so
+  // "nothing pending" alone no longer means "safe to publish": the result would
+  // paint the finished half over the recording that is still appending to the
+  // same note, and the editor prefers that overlay to the note's own text.
+  const supersededByLiveRecording = targetNoteId !== null && activeRecordingNoteId === targetNoteId;
 
   return {
-    targetNoteId: payloadNoteId ?? null,
-    // A null current session means nothing newer is pending, so publishing is
-    // safe and clearing a waiting spinner prevents it from getting stuck.
-    isCurrentSession: currentSessionId == null || payloadSessionId === currentSessionId,
+    targetNoteId,
+    // A null current session otherwise means nothing newer is pending, so
+    // publishing is safe and clearing a waiting spinner prevents it sticking.
+    isCurrentSession:
+      !supersededByLiveRecording &&
+      (currentSessionId == null || payloadSessionId === currentSessionId),
   };
 }
 

@@ -5,7 +5,7 @@ import { compareAppVersions } from "../utils/version.ts";
 // The registry JSON directly (like policyValidation.js), NOT ModelRegistry:
 // that module pulls the settings/identity stores, whose module scope needs
 // real browser globals, and this file is imported by node-run sync tests.
-import modelRegistryData from "../models/modelRegistryData.json";
+import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
 
 export type PolicyStatus = "idle" | "loading" | "managed" | "unmanaged" | "error";
 

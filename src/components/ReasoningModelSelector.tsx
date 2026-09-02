@@ -8,7 +8,7 @@ import type {
   InferenceMode,
 } from "../types/electron";
 import { Button } from "./ui/button";
-import { Cloud, Lock, Zap } from "lucide-react";
+import { CircleAlert, Cloud, Lock, Zap } from "lucide-react";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
@@ -245,23 +245,33 @@ function GpuStatusBadge() {
     // State 6: Activation failed
     if (!isGpu && activationFailed) {
       return (
-        <div className="flex items-center gap-1.5 mt-2 px-1">
-          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-warning" />
-          <span className="text-xs text-muted-foreground">{t("gpu.activationFailed")}</span>
-          <button
-            type="button"
-            onClick={handleRetry}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
-          >
-            {t("gpu.retry")}
-          </button>
-          <button
+        <div className="mt-2 flex items-start justify-between gap-3 rounded-md border border-warning/40 bg-warning/5 p-2.5">
+          <div className="flex min-w-0 items-start gap-2">
+            <CircleAlert size={15} className="mt-0.5 shrink-0 text-warning" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-foreground">{t("gpu.activationFailed")}</p>
+              <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                {t("gpu.reasoningActivationFailedDescription")}
+              </p>
+              <Button
+                type="button"
+                onClick={handleRetry}
+                size="sm"
+                className="mt-2 h-7 px-3 text-xs"
+              >
+                {t("gpu.retryActivation")}
+              </Button>
+            </div>
+          </div>
+          <Button
             type="button"
             onClick={handleDelete}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
+            size="sm"
+            variant="ghost"
+            className="h-6 shrink-0 px-2 text-xs text-muted-foreground hover:text-destructive"
           >
             {t("gpu.remove")}
-          </button>
+          </Button>
         </div>
       );
     }

@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/components/meetingNotificationModel.ts");
 
-test("auto-end presentation has countdown copy, Keep action, and no dismissal", async () => {
+test("auto-end presentation has countdown copy, Restart action, and dismissal", async () => {
   const { getMeetingNotificationPresentation } = await load();
 
   assert.deepEqual(
@@ -15,9 +15,9 @@ test("auto-end presentation has countdown copy, Keep action, and no dismissal", 
       titleKey: "meetingNotification.autoEnd.title",
       bodyKey: "meetingNotification.autoEnd.body.micReleased",
       bodyValues: { seconds: 30 },
-      actionKey: "meetingNotification.autoEnd.keep",
-      action: "keep",
-      dismissible: false,
+      actionKey: "meetingNotification.autoEnd.restart",
+      action: "restart",
+      dismissible: true,
       allowTitleWrap: true,
     }
   );
@@ -62,6 +62,22 @@ test("detection presentation preserves event title, join action, and dismissal",
       allowTitleWrap: false,
     }
   );
+});
+
+test("a dismissible meeting notification closes after an 80px horizontal swipe", async () => {
+  const { shouldDismissMeetingNotificationSwipe } = await load();
+
+  assert.equal(shouldDismissMeetingNotificationSwipe(true, 80), true);
+  assert.equal(shouldDismissMeetingNotificationSwipe(true, -80), true);
+  assert.equal(shouldDismissMeetingNotificationSwipe(true, 79), false);
+});
+
+// The card on screen when the pointer is released decides, not the one the
+// swipe started on: a newer prompt can replace it mid-drag.
+test("non-dismissible meeting notifications ignore horizontal swipes", async () => {
+  const { shouldDismissMeetingNotificationSwipe } = await load();
+
+  assert.equal(shouldDismissMeetingNotificationSwipe(false, 200), false);
 });
 
 test("countdown rounds up and emits updated seconds until expiration", async () => {
@@ -152,4 +168,19 @@ test("overlay initialization cleanup cancels reveal and invalidates a pending pu
   assert.equal(visibleCount, 0);
   assert.equal(readyCount, 0);
   assert.equal(unsubscribeCount, 1);
+});
+
+// The overlay hides its card optimistically and relies on main closing the
+// window. Anything short of an explicit success leaves the window open, so the
+// card has to come back or the user is left with an invisible, unclickable
+// always-on-top window over their screen.
+test("only an explicit success keeps the auto-end card hidden", async () => {
+  const { shouldRestoreAutoEndCard } = await load();
+
+  assert.equal(shouldRestoreAutoEndCard({ success: true }), false);
+  assert.equal(shouldRestoreAutoEndCard({ success: false, reason: "stale-session" }), true);
+  // The IPC method is optional on the preload surface: an older or partially
+  // wired bridge resolves undefined, which is not a success.
+  assert.equal(shouldRestoreAutoEndCard(undefined), true);
+  assert.equal(shouldRestoreAutoEndCard(null), true);
 });

@@ -42,7 +42,7 @@ test("self-hosted routes to the configured server and wins over stale flags", as
 });
 
 test("self-hosted mode without a URL fails closed unless the provider is custom", async () => {
-  for (const provider of ["openai", "groq", "mistral", "xai", "corti", "tinfoil"]) {
+  for (const provider of ["openai", "groq", "mistral", "xai", "corti", "gemini", "tinfoil"]) {
     const route = await resolve({
       transcriptionMode: "self-hosted",
       remoteTranscriptionUrl: "",
@@ -115,6 +115,21 @@ test("proxied providers carry their quirks as route data", async () => {
   assert.equal(corti.language, "en", "Corti needs a concrete language even on auto");
   assert.equal(corti.cortiEnvironment, "us");
   assert.equal(corti.cortiTenant, "acme");
+
+  const gemini = await resolve({ cloudTranscriptionProvider: "gemini" });
+  assert.equal(gemini.transport, "proxied");
+  assert.equal(gemini.model, "gemini-3.5-transcribe");
+  assert.equal(
+    gemini.sizeCapBytes,
+    14 * 1024 * 1024,
+    "inline base64 audio must fit Gemini's 20 MB request cap"
+  );
+});
+
+test("byokFileSizeLimit matches the per-provider route caps", async () => {
+  const { byokFileSizeLimit } = await load();
+  assert.equal(byokFileSizeLimit("gemini"), 14 * 1024 * 1024);
+  assert.equal(byokFileSizeLimit("openai"), 25 * 1024 * 1024);
 });
 
 test("custom requires a configured secure endpoint (empty, sentinel, garbage all fail)", async () => {

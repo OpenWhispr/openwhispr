@@ -1,5 +1,6 @@
 import * as React from "react";
 import { X, Copy, Check } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import {
   ToastContext,
@@ -15,6 +16,7 @@ import {
 } from "../../helpers/toastPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { DictationErrorCard } from "../dictation/DictationErrorCard";
+import { TechnicalErrorDetails } from "./TechnicalErrorDetails";
 
 interface ToastState extends ToastProps {
   id: string;
@@ -243,6 +245,9 @@ const Toast: React.FC<
 > = ({
   title,
   description,
+  secondaryDescription,
+  copyCommand,
+  technicalDetails,
   action,
   actions,
   presentation = "standard",
@@ -259,6 +264,10 @@ const Toast: React.FC<
   const remainingDurationRef = React.useRef(duration);
   const timerStartedAtRef = React.useRef(createdAt);
   const { copied, copy } = useCopyFeedback(description ?? "", { resetMs: 2000 });
+  const { copied: commandCopied, copy: copyRecoveryCommand } = useCopyFeedback(copyCommand ?? "", {
+    resetMs: 2000,
+  });
+  const { t } = useTranslation();
   const [timerPaused, setTimerPaused] = React.useState(false);
   const [errorSurfaceReady, setErrorSurfaceReady] = React.useState(false);
   const isDestructive = variant === "destructive";
@@ -360,6 +369,9 @@ const Toast: React.FC<
           {message && (
             <div className="text-xs font-medium leading-tight text-white/90">{message}</div>
           )}
+          {secondaryDescription && (
+            <div className="mt-1 text-xs leading-snug text-white/45">{secondaryDescription}</div>
+          )}
           {detail &&
             (isDestructive ? (
               <div
@@ -388,6 +400,22 @@ const Toast: React.FC<
             ) : (
               <div className="text-xs leading-snug mt-0.5 text-white/45">{detail}</div>
             ))}
+          {copyCommand && (
+            <div className="mt-1.5 flex items-center gap-1.5 rounded-[3px] border border-white/6 bg-white/4 px-1.5 py-1">
+              <code className="min-w-0 flex-1 wrap-break-word font-mono text-[11px] text-white/60 select-all">
+                {copyCommand}
+              </code>
+              <button
+                type="button"
+                onClick={() => void copyRecoveryCommand()}
+                className="shrink-0 rounded-xs p-1 text-white/30 transition-colors hover:bg-white/6 hover:text-white/70"
+                aria-label={t("reasoning.enterprise.technicalDetails.copyCommand")}
+              >
+                {commandCopied ? <Check className="size-3" /> : <Copy className="size-3" />}
+              </button>
+            </div>
+          )}
+          <TechnicalErrorDetails details={technicalDetails} onDark />
         </div>
 
         {action && <div className="shrink-0 self-center">{action}</div>}

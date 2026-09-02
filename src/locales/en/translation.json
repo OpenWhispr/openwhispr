@@ -780,6 +780,35 @@
         "ssoHelp": "Uses your AWS CLI SSO configuration. Ensure you have run 'aws sso login'.",
         "keysHelp": "Enter your AWS IAM access keys."
       },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "Temporary AWS access expired.",
+          "ssoExpired": "AWS SSO session expired.",
+          "credentialsRejected": "AWS credentials were rejected. Check the access key ID, secret, and session token.",
+          "accessDenied": "AWS Bedrock denied this request. Ask your AWS administrator to grant permission to invoke the selected model in region {{region}}.",
+          "modelNotFound": "AWS Bedrock could not find the selected model in region {{region}}. Check the model ID and whether it is available in that region.",
+          "configurationRejected": "AWS Bedrock rejected the model configuration for region {{region}}. Check the model ID, inference profile, and region.",
+          "notConfigured": "AWS Bedrock is not configured correctly. Check the region and AWS credentials.",
+          "serviceUnavailable": "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an OpenWhispr outage. Please try again in a few minutes.",
+          "throttled": "AWS Bedrock is temporarily limiting requests because it is receiving too many. Please wait a moment and try again. If this continues, ask your AWS administrator to check your Bedrock usage and quotas.",
+          "timeout": "AWS Bedrock did not respond in time. Please try again. If this continues, check your internet connection and AWS Bedrock service status.",
+          "network": "AWS Bedrock could not be reached. Check your internet connection and try again.",
+          "unknown": "AWS Bedrock error: {{error}}",
+          "actions": {
+            "refreshManagedAccess": "Sign out and sign back in to refresh company access, then retry.",
+            "reauthenticate": "Run the command below in your terminal to re-authenticate:"
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "Technical details",
+        "httpStatus": "HTTP status",
+        "awsException": "AWS exception",
+        "awsRequestId": "AWS request ID",
+        "underlyingError": "Underlying error",
+        "copy": "Copy technical details",
+        "copyCommand": "Copy recovery command"
+      },
       "azure": {
         "endpointHelp": "Your Azure OpenAI resource endpoint (e.g., https://myresource.openai.azure.com).",
         "deploymentHelp": "The name of your model deployment in Azure OpenAI."
@@ -2550,6 +2579,9 @@
     "learnMore": "Learn more",
     "noneAvailable": "No models available",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "Most accurate local ASR (5.42% avg WER, 14 languages). No auto language detection"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)",
         "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)",
@@ -2575,6 +2607,7 @@
         "groq_whisper_large_v3": "High accuracy speech recognition",
         "groq_whisper_large_v3_turbo": "216x real-time speed",
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
+        "gemini_3_5_transcribe": "Google's Gemini speech-to-text",
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
         "tinfoil_voxtral": "Verifiably private transcription"
@@ -3096,8 +3129,8 @@
       "paidPlanRequired": "Cloud transcription for files over 25 MB requires a paid plan. Large files are processed with OpenWhispr Cloud for reliable, high-quality results.",
       "largeFileNote": "Large files are split and transcribed in parallel.",
       "chunkProgress": "Transcribing part {{completed}} of {{total}}...",
-      "byokTooLarge": "Third-party API keys only support files up to 25 MB.",
-      "byokTooLargeDetail": "For files over 25 MB, OpenWhispr Cloud handles splitting, parallel processing, and reassembly — so you get reliable results without depending on third-party provider limits.",
+      "byokTooLarge": "Third-party API keys only support files up to {{size}} MB.",
+      "byokTooLargeDetail": "For files over {{size}} MB, OpenWhispr Cloud handles splitting, parallel processing, and reassembly — so you get reliable results without depending on third-party provider limits.",
       "byokTooLargeNeedsAccount": "Create an account and upgrade to a paid plan to transcribe larger files with OpenWhispr Cloud.",
       "byokTooLargeNeedsUpgrade": "Upgrade to a paid plan to transcribe larger files with OpenWhispr Cloud.",
       "switchToCloudForLargeFiles": "Switch to OpenWhispr Cloud to transcribe this file.",
@@ -3147,6 +3180,7 @@
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
       "autoEnded": "Recording stopped automatically after your meeting ended.",
+      "restartFailed": "Couldn't restart the meeting recording.",
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",
         "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
@@ -3408,8 +3442,10 @@
     "active": "GPU acceleration active",
     "ready": "GPU acceleration ready",
     "activating": "Activating GPU...",
-    "activationFailed": "GPU could not be activated",
-    "retry": "Retry",
+    "activationFailed": "GPU acceleration unavailable",
+    "activationFailedDescription": "OpenWhispr switched to CPU transcription.",
+    "reasoningActivationFailedDescription": "OpenWhispr switched to CPU processing.",
+    "retryActivation": "Retry GPU acceleration",
     "remove": "Remove",
     "dismiss": "Not now",
     "cancel": "Cancel"
@@ -3432,7 +3468,8 @@
       },
       "gpuFallback": {
         "title": "GPU acceleration unavailable",
-        "description": "Transcription is using the CPU instead. You can disable GPU acceleration in Settings."
+        "description": "OpenWhispr switched to CPU transcription.",
+        "retry": "Retry GPU"
       },
       "gpuPackMigration": {
         "title": "GPU pack needs re-downloading",
@@ -3440,7 +3477,7 @@
       },
       "cleanupFailed": {
         "title": "Cleanup failed",
-        "description": "Your dictation was pasted without AI cleanup."
+        "description": "Original dictation pasted without AI cleanup."
       }
     },
     "mic": {
@@ -3841,13 +3878,13 @@
     "start": "Take notes",
     "join": "Join & transcribe",
     "autoEnd": {
-      "title": "Meeting may have ended",
+      "title": "Meeting recording ended",
       "body": {
-        "micReleased": "No other app is using your microphone. Recording will stop in {{seconds}}s.",
-        "silence": "No audio detected. Recording will stop in {{seconds}}s.",
-        "processExit": "Your meeting app closed. Recording will stop in {{seconds}}s."
+        "micReleased": "No other app is using your microphone, so recording stopped automatically. Restart within {{seconds}}s.",
+        "silence": "No audio was detected, so recording stopped automatically. Restart within {{seconds}}s.",
+        "processExit": "Your meeting app closed, so recording stopped automatically. Restart within {{seconds}}s."
       },
-      "keep": "Keep recording"
+      "restart": "Restart recording"
     }
   }
 }

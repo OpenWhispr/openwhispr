@@ -436,13 +436,18 @@ test(
 
     assert.equal(await manager.stopStreamingRecording(), true);
 
-    assert.deepEqual(
-      globalThis.__streamingLeakCleanupFailureCalls,
-      ["genuine cloud reasoning failure"],
-      "a genuine cloud-reasoning failure in the streaming fallback must still be recorded"
-    );
     assert.equal(completions.length, 1);
     assert.equal(completions[0].text, "the raw transcript");
+    assert.equal(
+      completions[0].cleanupFailure?.message,
+      "genuine cloud reasoning failure",
+      "a genuine cloud-reasoning failure in the streaming fallback must survive until paste"
+    );
+    assert.deepEqual(
+      globalThis.__streamingLeakCleanupFailureCalls,
+      [],
+      "cleanup failure must not be surfaced before the raw dictation is pasted"
+    );
   }
 );
 

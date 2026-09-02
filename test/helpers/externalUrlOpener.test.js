@@ -119,9 +119,59 @@ test("explorer.exe receives a single percent-encoded argv token", async () => {
   const { openExternalUrl, spawnCalls } = loadOpener();
   setPlatform("win32");
 
-  await openExternalUrl('https://example.com/join?name=a b"c');
+  await openExternalUrl('https://example.com/join room "4"');
 
-  assert.deepEqual(spawnCalls[0].args, ["https://example.com/join?name=a%20b%22c"]);
+  assert.deepEqual(spawnCalls[0].args, ["https://example.com/join%20room%20%224%22"]);
+});
+
+test("win32 query-string URLs go to shell.openExternal — explorer.exe opens File Explorer instead of the browser for them", async () => {
+  const { openExternalUrl, spawnCalls, openExternalCalls } = loadOpener();
+  setPlatform("win32");
+
+  const oauthUrl =
+    "https://auth.openwhispr.com/api/desktop-signin/google?callbackURL=openwhispr%3A%2F%2Fauth";
+  await openExternalUrl(oauthUrl);
+
+  assert.equal(spawnCalls.length, 0);
+  assert.deepEqual(openExternalCalls, [oauthUrl]);
+});
+
+test("a bare trailing ? still counts as a query string for the explorer.exe gate", async () => {
+  const { openExternalUrl, spawnCalls, openExternalCalls } = loadOpener();
+  setPlatform("win32");
+
+  // URL.search reports "" here, but the serialized href explorer.exe receives
+  // keeps the "?" — the gate must judge the delivered token, not the parse.
+  await openExternalUrl("https://example.com/checkout?");
+
+  assert.equal(spawnCalls.length, 0);
+  assert.deepEqual(openExternalCalls, ["https://example.com/checkout?"]);
+});
+
+test("win32 fragment URLs go to shell.openExternal — explorer.exe mishandles them too", async () => {
+  const { openExternalUrl, spawnCalls, openExternalCalls } = loadOpener();
+  setPlatform("win32");
+
+  await openExternalUrl("https://docs.openwhispr.com/changelog#windows");
+
+  assert.equal(spawnCalls.length, 0);
+  assert.deepEqual(openExternalCalls, ["https://docs.openwhispr.com/changelog#windows"]);
+});
+
+test("win32 URLs with explorer's = or , argv separators go to shell.openExternal", async () => {
+  const { openExternalUrl, spawnCalls, openExternalCalls } = loadOpener();
+  setPlatform("win32");
+
+  // Neither URL has a query string or fragment — the separator alone breaks
+  // explorer.exe's argument parsing (rauschma/openurl#2, superuser 1552619).
+  await openExternalUrl("https://example.com/products/id=42");
+  await openExternalUrl("https://example.com/maps/@37.77,-122.41");
+
+  assert.equal(spawnCalls.length, 0);
+  assert.deepEqual(openExternalCalls, [
+    "https://example.com/products/id=42",
+    "https://example.com/maps/@37.77,-122.41",
+  ]);
 });
 
 test("win32 mailto URLs fall through to shell.openExternal untouched", async () => {

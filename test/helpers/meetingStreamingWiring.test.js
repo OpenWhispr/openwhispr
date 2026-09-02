@@ -53,3 +53,34 @@ test("silent system audio warning arms on start and clears on every teardown pat
   );
   assert.match(stopSection, /clearMeetingSystemAudioSilenceTimer\(\);/);
 });
+
+test("a silent Windows capture hands the live session to renderer loopback", () => {
+  // probe/activation success cannot see this failure, so the helper's own
+  // capture_silent warning is the only trigger back to the Chromium fallback.
+  assert.match(
+    source,
+    /if \(code === "capture_silent"\) \{\s*void degradeMeetingSystemAudioToLoopback\(event\);/
+  );
+
+  const degradeStart = source.indexOf("const degradeMeetingSystemAudioToLoopback");
+  assert.ok(degradeStart >= 0);
+  const degradeSection = source.slice(
+    degradeStart,
+    source.indexOf("const startManagedMeetingSystemAudio")
+  );
+  // One-shot, and never fires once the helper has proven it can hear audio.
+  assert.match(
+    degradeSection,
+    /if \(meetingSystemAudioDegraded \|\| meetingSystemAudioHeard\) return;/
+  );
+  assert.match(degradeSection, /windowsLoopbackAudioManager\?\.stop\(\)/);
+  assert.match(degradeSection, /send\("meeting-system-audio-degraded"\)/);
+
+  // Leaking the latch across sessions would pin the fallback off for the rest
+  // of the app's life, so it resets everywhere the heard-audio latch does.
+  assert.equal(
+    (source.match(/meetingSystemAudioHeard = false;\s*\n\s*meetingSystemAudioDegraded = false;/g) ?? [])
+      .length,
+    2
+  );
+});

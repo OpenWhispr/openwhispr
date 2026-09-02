@@ -730,3 +730,16 @@ test("wake-word language is undefined when no usable hint exists", async () => {
   );
   assert.equal(resolveWakeWordLanguage({}), undefined);
 });
+
+test("lifecycle input kind prefers assistant, then translation, then dictation", async () => {
+  const { resolveLifecycleInputKind } = await load();
+  assert.equal(
+    resolveLifecycleInputKind({ voiceAgentRequested: true, translationRequested: true }),
+    "assistant"
+  );
+  assert.equal(
+    resolveLifecycleInputKind({ voiceAgentRequested: false, translationRequested: true }),
+    "translation"
+  );
+  assert.equal(resolveLifecycleInputKind({}), "dictation");
+});

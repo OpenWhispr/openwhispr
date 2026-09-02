@@ -13,6 +13,7 @@ const { getSafeTempDir } = require("./safeTempDir");
 const { createAbortError } = require("./abortError");
 const sidecarPidFile = require("./sidecarPidFile");
 const { parseOfflineMessage, createOnlineAccumulator } = require("./parakeetWsResult");
+const { getModelType } = require("./parakeetModelInfo");
 const { pcm16ToFloat32 } = require("../utils/audioUtils");
 const {
   computeTranscriptionTimeoutMs,
@@ -41,8 +42,12 @@ class ParakeetWsServer {
     this.modelName = null;
     this.modelDir = null;
     this.modelRuntime = "offline";
+    // Only set for models started for a single language (Cohere Transcribe);
+    // part of the server identity, so a language change restarts the server.
+    this.language = null;
     this.startupPromise = null;
     this.startingModelName = null;
+    this.startingLanguage = null;
     this.healthCheckInterval = null;
     this.cachedBinaryPaths = {};
   }
@@ -68,29 +73,33 @@ class ParakeetWsServer {
     return this.isAvailable("offline") || this.isAvailable("online");
   }
 
-  async start(modelName, modelDir, runtime = "offline") {
+  async start(modelName, modelDir, runtime = "offline", language = null) {
     // Serialize with any in-flight startup; join it only when it's for the same model.
     while (this.startupPromise) {
-      if (this.startingModelName === modelName) return this.startupPromise;
+      if (this.startingModelName === modelName && this.startingLanguage === language) {
+        return this.startupPromise;
+      }
       await this.startupPromise.catch(() => {});
     }
-    if (this.ready && this.modelName === modelName) return;
+    if (this.ready && this.modelName === modelName && this.language === language) return;
 
     this.startingModelName = modelName;
+    this.startingLanguage = language;
     // Assigned before any await so concurrent callers can never double-spawn.
     this.startupPromise = (async () => {
       try {
         if (this.process) await this.stop();
-        await this._doStart(modelName, modelDir, runtime);
+        await this._doStart(modelName, modelDir, runtime, language);
       } finally {
         this.startupPromise = null;
         this.startingModelName = null;
+        this.startingLanguage = null;
       }
     })();
     return this.startupPromise;
   }
 
-  async _doStart(modelName, modelDir, runtime) {
+  async _doStart(modelName, modelDir, runtime, language) {
     const wsBinary = this.getWsBinaryPath(runtime);
     if (!wsBinary) throw new Error(`sherpa-onnx ${runtime} WS server binary not found`);
     if (!fs.existsSync(modelDir)) throw new Error(`Model directory not found: ${modelDir}`);
@@ -99,13 +108,24 @@ class ParakeetWsServer {
     this.modelName = modelName;
     this.modelDir = modelDir;
     this.modelRuntime = runtime;
+    this.language = language;
 
     const threads = Math.max(1, Math.min(4, Math.floor(os.cpus().length * 0.75)));
+    const modelArgs =
+      getModelType(modelName) === "cohere-transcribe"
+        ? [
+            `--cohere-transcribe-encoder=${path.join(modelDir, "encoder.int8.onnx")}`,
+            `--cohere-transcribe-decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
+            `--cohere-transcribe-language=${language}`,
+          ]
+        : [
+            `--encoder=${path.join(modelDir, "encoder.int8.onnx")}`,
+            `--decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
+            `--joiner=${path.join(modelDir, "joiner.int8.onnx")}`,
+          ];
     const args = [
       `--tokens=${path.join(modelDir, "tokens.txt")}`,
-      `--encoder=${path.join(modelDir, "encoder.int8.onnx")}`,
-      `--decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
-      `--joiner=${path.join(modelDir, "joiner.int8.onnx")}`,
+      ...modelArgs,
       `--port=${this.port}`,
       ...(runtime === "online"
         ? [
@@ -576,6 +596,7 @@ class ParakeetWsServer {
     this.modelName = null;
     this.modelDir = null;
     this.modelRuntime = "offline";
+    this.language = null;
   }
 
   getStatus() {
