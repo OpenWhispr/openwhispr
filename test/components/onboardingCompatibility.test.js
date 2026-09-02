@@ -150,7 +150,7 @@ test("Linux onboarding shows paste-tool installation and recheck guidance", asyn
   assert.match(markup, />pasteToolsInfo.recheck<\/button>/);
 });
 
-test("permissions keeps Continue at the bottom and gates it on microphone access", async (t) => {
+test("permissions omits Back, keeps Continue at the bottom, and gates it on microphone access", async (t) => {
   const vite = await createOnboardingRenderer(t, "darwin");
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(
     "/components/onboarding/CompactPermissionsStep.tsx"
@@ -162,14 +162,13 @@ test("permissions keeps Continue at the bottom and gates it on microphone access
         permissions: permissions({ micPermissionGranted }),
         systemAudio,
         screenContext,
-        onBack: noop,
         onContinue: noop,
       })
     );
 
   const blocked = render(false);
   assert.match(blocked, /relative flex h-full flex-col overflow-y-auto px-5 pb-6 pt-38/);
-  assert.match(blocked, />common\.back<\/button>/);
+  assert.doesNotMatch(blocked, />common\.back<\/button>/);
   assert.match(blocked, /disabled="" class="onboarding-pressable mt-auto[^>]+>common\.continue/);
   assert.match(blocked, /mt-auto[^>]*self-center/);
   assert.doesNotMatch(blocked, /fixed top-4/);

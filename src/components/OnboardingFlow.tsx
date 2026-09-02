@@ -779,7 +779,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 : undefined
             }
-            onBack={session.history.length > 0 ? goBack : undefined}
             onContinue={() => void continueFromCurrentStep()}
           />
         );

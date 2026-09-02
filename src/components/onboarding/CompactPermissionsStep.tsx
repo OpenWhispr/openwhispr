@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { CircleCheck, Laptop, Undo2 } from "lucide-react";
+import { CircleCheck, Laptop } from "lucide-react";
 import { useTranslation } from "react-i18next";
 // Imported (not referenced by path) so Vite fingerprints them and they resolve
 // under the packaged app's file:// origin. Authored at 88px (2x the original
@@ -29,7 +29,6 @@ interface CompactPermissionsStepProps {
     needsRelaunch: boolean;
     request: () => Promise<boolean>;
   };
-  onBack?: () => void;
   onContinue: () => void;
 }
 
@@ -112,7 +111,6 @@ export default function CompactPermissionsStep({
   permissions,
   systemAudio,
   screenContext,
-  onBack,
   onContinue,
 }: CompactPermissionsStepProps) {
   const { t } = useTranslation();
@@ -146,17 +144,6 @@ export default function CompactPermissionsStep({
   return (
     <CompactOnboardingFrame showLegalNotice={false}>
       <div className="onboarding-shell-scroll relative flex h-full flex-col overflow-y-auto px-5 pb-6 pt-38 text-center">
-        {onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            className="onboarding-pressable absolute right-5 top-13 inline-flex h-9 min-w-24 items-center justify-center gap-1.5 rounded-full bg-white/14 px-4 text-sm font-medium text-white transition-colors hover:bg-white/22 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/55"
-          >
-            <Undo2 className="size-3.5" aria-hidden="true" />
-            {t("common.back")}
-          </button>
-        )}
-
         {/* text-balance evens the two lines out ("Set up OpenWhispr" / "in 3
             minutes") instead of leaving one word stranded. Preferred over a
             hardcoded <br> because the break point stays correct in all 9
