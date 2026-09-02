@@ -723,8 +723,8 @@ function TranscriptionSection({
     );
   }
 
-  if (managed.kind === "managed") {
-    return (
+  const managedCard =
+    managed.kind === "managed" ? (
       <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
         <div className="flex items-start gap-2.5">
           <div className="rounded-md bg-primary/10 p-1.5 text-primary">
@@ -756,54 +756,59 @@ function TranscriptionSection({
           </div>
         )}
       </div>
-    );
-  }
+    ) : null;
 
   return (
     <div className="space-y-4">
-      {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">
-              {t("settingsPage.aiModels.managedEnterprise.availableTitle")}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {t("settingsPage.aiModels.managedEnterprise.availableDescription", {
-                provider: enterpriseProviderName(managedAvailable.provider),
-              })}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            onClick={() => setEnterpriseTranscriptionSetupMode("managed")}
-          >
-            {t("settingsPage.aiModels.managedEnterprise.useManaged")}
-          </Button>
-        </div>
+      {managedCard}
+      {!managedCard && (
+        <>
+          {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  {t("settingsPage.aiModels.managedEnterprise.availableTitle")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settingsPage.aiModels.managedEnterprise.availableDescription", {
+                    provider: enterpriseProviderName(managedAvailable.provider),
+                  })}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setEnterpriseTranscriptionSetupMode("managed")}
+              >
+                {t("settingsPage.aiModels.managedEnterprise.useManaged")}
+              </Button>
+            </div>
+          )}
+          <InferenceModeSelector
+            modes={transcriptionModes}
+            activeMode={effectiveTranscriptionMode}
+            onSelect={handleTranscriptionModeSelect}
+          />
+
+          {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+          {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+          {previewAvailable && renderPreviewToggle()}
+
+          {effectiveTranscriptionMode === "self-hosted" && (
+            <SelfHostedPanel
+              service="transcription"
+              url={remoteTranscriptionUrl}
+              onUrlChange={setRemoteTranscriptionUrl}
+              model={remoteTranscriptionModel}
+              onModelChange={setRemoteTranscriptionModel}
+            />
+          )}
+        </>
       )}
-      <InferenceModeSelector
-        modes={transcriptionModes}
-        activeMode={effectiveTranscriptionMode}
-        onSelect={handleTranscriptionModeSelect}
-      />
 
-      {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
-      {previewAvailable && renderPreviewToggle()}
-
-      {effectiveTranscriptionMode === "self-hosted" && (
-        <SelfHostedPanel
-          service="transcription"
-          url={remoteTranscriptionUrl}
-          onUrlChange={setRemoteTranscriptionUrl}
-          model={remoteTranscriptionModel}
-          onModelChange={setRemoteTranscriptionModel}
-        />
-      )}
-
+      {/* Local decoding still serves meetings and uploads, so the GPU choice stays reachable. */}
       <GpuDeviceSelector purpose="transcription" />
     </div>
   );
