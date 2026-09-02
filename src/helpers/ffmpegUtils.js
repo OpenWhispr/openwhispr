@@ -4,6 +4,7 @@ const os = require("os");
 const path = require("path");
 const debugLogger = require("./debugLogger");
 const { createAbortError } = require("./abortError");
+const { getSystemFfmpegCandidates } = require("./unixToolBinDirs");
 
 let cachedFFmpegPath = null;
 
@@ -57,12 +58,7 @@ function getFFmpegPath() {
     debugLogger.debug("Bundled FFmpeg not available", { error: err.message });
   }
 
-  const systemCandidates =
-    process.platform === "darwin"
-      ? ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
-      : process.platform === "win32"
-        ? ["C:\\ffmpeg\\bin\\ffmpeg.exe"]
-        : ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"];
+  const systemCandidates = getSystemFfmpegCandidates();
 
   for (const candidate of systemCandidates) {
     if (fs.existsSync(candidate)) {

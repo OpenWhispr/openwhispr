@@ -13,6 +13,7 @@ const {
 const WhisperServerManager = require("./whisperServer");
 const { createAbortError } = require("./abortError");
 const { getModelsDirForService } = require("./modelDirUtils");
+const { getSystemFfmpegCandidates } = require("./unixToolBinDirs");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 
@@ -850,12 +851,7 @@ class WhisperManager {
     }
 
     // Try system FFmpeg paths
-    const systemCandidates =
-      process.platform === "darwin"
-        ? ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
-        : process.platform === "win32"
-          ? ["C:\\ffmpeg\\bin\\ffmpeg.exe"]
-          : ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"];
+    const systemCandidates = getSystemFfmpegCandidates();
 
     debugLogger.debug("Trying system FFmpeg candidates", { candidates: systemCandidates });
 

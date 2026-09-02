@@ -13,6 +13,7 @@ const { convertToWav } = require("./ffmpegUtils");
 const { createAbortError } = require("./abortError");
 const sidecarPidFile = require("./sidecarPidFile");
 const { BIN_SUBDIR: CUDA_BIN_SUBDIR } = require("./whisperCudaManager");
+const { getSystemFfmpegCandidates } = require("./unixToolBinDirs");
 const { BIN_SUBDIR: VULKAN_BIN_SUBDIR } = require("./whisperVulkanManager");
 const { sanitizeWhisperVadConfig, DEFAULT_WHISPER_VAD_CONFIG } = require("./whisperVadConfig");
 const {
@@ -365,12 +366,7 @@ class WhisperServerManager extends EventEmitter {
     }
 
     // Try system FFmpeg locations
-    const systemCandidates =
-      process.platform === "darwin"
-        ? ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
-        : process.platform === "win32"
-          ? ["C:\\ffmpeg\\bin\\ffmpeg.exe"]
-          : ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"];
+    const systemCandidates = getSystemFfmpegCandidates();
 
     for (const candidate of systemCandidates) {
       if (fs.existsSync(candidate)) {
