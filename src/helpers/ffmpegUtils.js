@@ -267,6 +267,28 @@ function computeFloat32RMS(float32Buffer) {
   return Math.sqrt(sumSquares / numSamples);
 }
 
+// Scales samples in place toward targetRms, capped so no sample exceeds
+// maxPeak. Never attenuates. Returns the gain applied (1 = unchanged).
+function boostFloat32SamplesToRms(float32Buffer, targetRms, maxPeak) {
+  const numSamples = float32Buffer.length / 4;
+  const rms = computeFloat32RMS(float32Buffer);
+  if (numSamples === 0 || rms === 0) return 1;
+
+  let peak = 0;
+  for (let i = 0; i < numSamples; i++) {
+    const val = Math.abs(float32Buffer.readFloatLE(i * 4));
+    if (val > peak) peak = val;
+  }
+
+  const gain = Math.min(targetRms / rms, maxPeak / peak);
+  if (gain <= 1) return 1;
+
+  for (let i = 0; i < numSamples; i++) {
+    float32Buffer.writeFloatLE(float32Buffer.readFloatLE(i * 4) * gain, i * 4);
+  }
+  return gain;
+}
+
 function parseFfmpegDuration(stderr) {
   const match = stderr?.match(/Duration:\s*(\d+):([0-5]\d):([0-5]\d(?:\.\d+)?)/);
   if (!match) return null;
@@ -463,6 +485,7 @@ module.exports = {
   parseFfmpegDuration,
   wavToFloat32Samples,
   computeFloat32RMS,
+  boostFloat32SamplesToRms,
   mergeAudioSegments,
   clearCache,
 };

@@ -9,6 +9,7 @@ const {
   convertToWav,
   wavToFloat32Samples,
   computeFloat32RMS,
+  boostFloat32SamplesToRms,
 } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { createAbortError } = require("./abortError");
@@ -30,6 +31,15 @@ const COHERE_MAX_SEGMENT_SECONDS = 30;
 // bound only caps memory when transcribing very long files.
 const ONLINE_MAX_SEGMENT_SECONDS = 600;
 const SILENCE_RMS_THRESHOLD = 0.001;
+// Quiet-but-audible recordings (quiet mics, no OS input AGC) make the int8
+// parakeet transducers deterministically decode segments longer than ~12s to
+// empty text, while short segments still decode — the final transcript keeps
+// only the tail of the dictation, and retrying cannot heal it (#1435). Boosting
+// the decode-time samples to normal speech level avoids the failure entirely;
+// the recording saved to history is untouched.
+const QUIET_RMS_THRESHOLD = 0.02;
+const QUIET_BOOST_TARGET_RMS = 0.08;
+const QUIET_BOOST_MAX_PEAK = 0.95;
 
 class ParakeetServerManager {
   constructor() {
@@ -141,6 +151,24 @@ class ParakeetServerManager {
         return { text: "", elapsed: 0 };
       }
 
+      let appliedGain = 1;
+      if (rms < QUIET_RMS_THRESHOLD) {
+        appliedGain = boostFloat32SamplesToRms(
+          samples,
+          QUIET_BOOST_TARGET_RMS,
+          QUIET_BOOST_MAX_PEAK
+        );
+        if (appliedGain > 1) {
+          debugLogger.debug("Parakeet boosted quiet audio for decode", {
+            rms,
+            appliedGain,
+          });
+        }
+      }
+      // Segment RMS is measured on boosted samples, so the silence cutoff
+      // scales with the gain — boosted room noise must still read as silence.
+      const segmentSilenceRms = SILENCE_RMS_THRESHOLD * appliedGain;
+
       const maxSegmentSeconds =
         runtime === "online"
           ? ONLINE_MAX_SEGMENT_SECONDS
@@ -179,7 +207,7 @@ class ParakeetServerManager {
         const segment = samples.subarray(offset, end);
         let result = await this.wsServer.transcribe(segment, SAMPLE_RATE, { signal });
         totalElapsed += result.elapsed || 0;
-        if (!result.text && computeFloat32RMS(segment) >= SILENCE_RMS_THRESHOLD) {
+        if (!result.text && computeFloat32RMS(segment) >= segmentSilenceRms) {
           throwIfAborted();
           // An empty decode of audible audio silently amputates the transcript
           // (#1435: dictation openings dropped); retry once before conceding.
