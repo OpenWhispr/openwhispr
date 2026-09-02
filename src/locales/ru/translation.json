@@ -3365,6 +3365,11 @@
       "startListening": "Начать запись",
       "hideForNow": "Скрыть",
       "askAssistant": "Спросить помощника"
+    },
+    "handsFreeTip": {
+      "badge": "Совет",
+      "title": "Перейдите в режим без рук",
+      "description": "Дважды нажмите {{hotkey}}, чтобы запустить режим без рук."
     }
   },
   "dictationAgent": {

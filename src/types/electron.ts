@@ -1000,6 +1000,15 @@ declare global {
       ) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
       onCancelDictation?: (callback: () => void) => () => void;
+      onHoldDictationEnded?: (
+        callback: (report: {
+          inputKind: "dictation" | "assistant" | "translation";
+          heldMs: number;
+        }) => void
+      ) => () => void;
+      onHandsFreeLatched?: (
+        callback: (report: { inputKind: "dictation" | "assistant" | "translation" }) => void
+      ) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (
         state: "idle" | "preparing" | "recording" | "processing",

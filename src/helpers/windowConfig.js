@@ -137,6 +137,9 @@ const WINDOW_SIZES = {
     width: DICTATION_ERROR_WINDOW_LIMITS.width,
     height: 168,
   },
+  // The hands-free tip card (320px, HANDS_FREE_TIP_CARD_WIDTH) above the
+  // docked pill, inside the same 12px dock insets.
+  HANDS_FREE_TIP: { width: 344, height: 240 },
   WITH_MENU: { width: 240, height: 280 },
   WITH_TOAST: { width: 400, height: 500 },
   EXPANDED: { width: 400, height: 500 },

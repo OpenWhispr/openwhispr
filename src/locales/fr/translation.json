@@ -3502,6 +3502,11 @@
       "startListening": "Commencer l’écoute",
       "hideForNow": "Masquer pour l’instant",
       "askAssistant": "Demander à l'assistant"
+    },
+    "handsFreeTip": {
+      "badge": "Astuce",
+      "title": "Passez en mode mains libres",
+      "description": "Appuyez deux fois sur {{hotkey}} pour démarrer le mode mains libres."
     }
   },
   "dictationAgent": {
