@@ -428,12 +428,10 @@ export default function AuthenticationStep({
             <Check className="size-5 text-success" />
           </div>
           <p className="mt-6 text-2xl font-medium leading-tight tracking-tight">
-            {user?.name
-              ? t("auth.signedIn.welcomeBackName", { name: user.name })
-              : t("auth.signedIn.welcomeBack")}
+            <span className="block">{t("auth.signedIn.welcomeBack")}</span>
+            {user?.name && <span className="mt-1 block">{user.name}</span>}
           </p>
-          <p className="mt-2 text-sm text-muted-foreground">{t("auth.signedIn.ready")}</p>
-          <Button onClick={onAuthComplete} className="mt-7 h-12 w-full rounded-full">
+          <Button onClick={onAuthComplete} className="mt-7 h-12 w-fit min-w-32 rounded-full px-6">
             {t("auth.common.continue")}
             <ArrowRight className="size-4" />
           </Button>

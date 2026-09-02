@@ -31,6 +31,14 @@ async function createOnboardingRenderer(t, platform = "linux") {
         export function getPlatform() { return "${platform}"; }
         export function getCachedPlatform() { return "${platform}"; }
       `,
+      "/stores/settingsStore": `
+        export function useSettingsStore() { return {}; }
+        useSettingsStore.getState = () => ({});
+      `,
+      "/ui/ProviderIcon": `
+        import React from "react";
+        export function ProviderIcon() { return React.createElement("span"); }
+      `,
     },
   });
 }
@@ -154,18 +162,21 @@ test("permissions keeps Continue at the bottom and gates it on microphone access
         permissions: permissions({ micPermissionGranted }),
         systemAudio,
         screenContext,
+        onBack: noop,
         onContinue: noop,
       })
     );
 
   const blocked = render(false);
-  assert.match(blocked, /overflow-y-auto px-5 pb-6 pt-38/);
-  assert.match(blocked, /disabled="" class="onboarding-pressable mt-4[^>]+>common\.continue/);
+  assert.match(blocked, /relative flex h-full flex-col overflow-y-auto px-5 pb-6 pt-38/);
+  assert.match(blocked, />common\.back<\/button>/);
+  assert.match(blocked, /disabled="" class="onboarding-pressable mt-auto[^>]+>common\.continue/);
+  assert.match(blocked, /mt-auto[^>]*self-center/);
   assert.doesNotMatch(blocked, /fixed top-4/);
 
   const ready = render(true);
-  assert.match(ready, /class="onboarding-pressable mt-4[^>]+>common\.continue/);
-  assert.doesNotMatch(ready, /disabled="" class="onboarding-pressable mt-4/);
+  assert.match(ready, /class="onboarding-pressable mt-auto[^>]+>common\.continue/);
+  assert.doesNotMatch(ready, /disabled="" class="onboarding-pressable mt-auto/);
 });
 
 test("macOS onboarding offers optional Screen Context setup", async (t) => {
@@ -270,4 +281,20 @@ test("Linux onboarding does not show Screen Context", async (t) => {
   );
 
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.title/);
+});
+
+test("provider setup stages use one size and mark dictation complete before Assistant", async (t) => {
+  const vite = await createOnboardingRenderer(t);
+  const { SetupStageStepper } = await vite.ssrLoadModule(
+    "/components/onboarding/ProviderSetupStep.tsx"
+  );
+
+  for (const stepId of ["byok-assistant", "local-assistant"]) {
+    const markup = renderToStaticMarkup(React.createElement(SetupStageStepper, { stepId }));
+
+    assert.match(markup, /\bw-40\b/);
+    assert.match(markup, /\bsize-8\b/);
+    assert.match(markup, /lucide-circle-check/);
+    assert.doesNotMatch(markup, /lucide-audio-lines/);
+  }
 });

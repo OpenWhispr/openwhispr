@@ -129,13 +129,10 @@ export default function SetupChoiceStep({
   const [showMore, setShowMore] = useState(false);
 
   const localReferenceModel = getParakeetModelInfo(REFERENCE_LOCAL_MODEL_ID);
-  const localModelSize = (localReferenceModel?.size ?? t("common.unknown")).replace(
-    /(\d)([A-Za-z])/,
-    "$1 $2"
-  );
   // The model arrives as an archive and needs room to unpack, so quoting only
   // its compressed size can send a user into a setup that runs out of disk.
   const minimumLocalSpaceGb = Math.max(2, Math.ceil((localReferenceModel?.sizeMb ?? 0) / 1000));
+  const localModelSize = `${minimumLocalSpaceGb} GB`;
 
   const availability = getOnboardingSetupAvailability({
     policy,
@@ -311,7 +308,7 @@ export default function SetupChoiceStep({
               <div className="flex items-center justify-between">
                 {/* Frame 48: 40px mark on the brand gradient. */}
                 <span className="flex size-9 items-center justify-center rounded-full bg-gradient-to-b from-[#4079ed] to-[#244587] text-white">
-                  <BrandMark className="size-5" />
+                  <BrandMark className="size-6" />
                 </span>
                 {/* Frame 49: the "Recommended" chip. Figma has white text on a
                     glass fill over the card's background artwork ("Vector 1",

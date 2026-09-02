@@ -1,10 +1,11 @@
-import { formatHotkeyLabel } from "../../utils/hotkeys";
+import { formatHotkeyLabel, isGlobeLikeHotkey } from "../../utils/hotkeys";
 import type { Platform } from "../../utils/platform";
 
 export interface HotkeyKeycapDescriptor {
   id: string;
   label: string;
   symbol: string;
+  icon?: "globe";
 }
 
 const SYMBOLS: Record<string, string> = {
@@ -71,7 +72,7 @@ const LABELS: Record<string, string> = {
  * "Right Option" keeps ⌥ as its symbol and says which side in the label, so a
  * side-specific binding is readable on a cap sized for one glyph.
  */
-function describeKeycap(part: string): { label: string; symbol: string } {
+function describeKeycap(part: string): Omit<HotkeyKeycapDescriptor, "id"> {
   const sided = /^(Right|Left) (.+)$/.exec(part);
   if (sided) {
     const [, side, base] = sided;
@@ -79,6 +80,10 @@ function describeKeycap(part: string): { label: string; symbol: string } {
       label: `${side} ${LABELS[base] ?? base}`.toLocaleLowerCase(),
       symbol: SYMBOLS[base] ?? base,
     };
+  }
+
+  if (part === "Globe/Fn" || part === "Fn") {
+    return { label: "fn", symbol: "◎", icon: "globe" };
   }
 
   return {
@@ -97,5 +102,8 @@ export function getHotkeyKeycaps(value: string): HotkeyKeycapDescriptor[] {
 export const formatHotkeyInstruction = (value: string) =>
   formatHotkeyLabel(value).split("+").join(" + ");
 
+export const formatRecommendedHotkey = (value: string) =>
+  isGlobeLikeHotkey(value) ? "fn/Globe" : formatHotkeyInstruction(value);
+
 export const getRecommendedDictationHotkey = (platform: Platform, effectiveDefault: string) =>
-  platform === "darwin" ? "Command+K" : effectiveDefault;
+  platform === "darwin" ? "GLOBE" : effectiveDefault;

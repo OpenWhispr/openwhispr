@@ -61,11 +61,15 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
           return { t(key, options) { return options?.hotkey ? key + ":" + options.hotkey : key; } };
         }
       `,
-      "lucide-react": `export function Loader2() { return null; }`,
+      "lucide-react": `
+        export function Globe() { return null; }
+        export function Loader2() { return null; }
+      `,
       "/ui/HotkeyInput": `export function HotkeyInput() { return null; }`,
       "/utils/hotkeys": `export function formatHotkeyLabel(value) { return value; }`,
       "/hotkeyPresentation": `
         export function formatHotkeyInstruction(value) { return value.split("+").join(" + "); }
+        export function formatRecommendedHotkey(value) { return value.split("+").join(" + "); }
         export function getHotkeyKeycaps(value) {
           return value.split("+").filter(Boolean).map((part, index) => ({
             id: part + "-" + index,

@@ -24,7 +24,7 @@ export default function AssistantHotkeyPreview() {
       height={318}
       decoding="async"
       draggable={false}
-      className="mx-auto mt-6 h-auto min-h-0 w-full max-w-[26rem] shrink select-none rounded-2xl border border-[var(--onboarding-control-border)] object-cover"
+      className="mx-auto mt-6 h-auto min-h-0 w-full max-w-[32rem] shrink select-none rounded-2xl border border-[var(--onboarding-control-border)] object-cover"
     />
   );
 }

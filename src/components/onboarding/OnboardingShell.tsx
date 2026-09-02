@@ -331,7 +331,7 @@ export function CompactOnboardingFrame({
   return (
     <section className="relative flex h-full min-h-screen w-full flex-col overflow-hidden bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]">
       <div
-        className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-48"
+        className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-52"
         // Both strips are handed over as custom properties and .onboarding-compact-hero
         // picks one per theme; the URLs have to come from here because only an import
         // gets fingerprinted by Vite and resolves under the packaged file:// origin.

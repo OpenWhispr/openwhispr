@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "lucide-react";
+import { Globe, Loader2 } from "lucide-react";
 import { HotkeyInput } from "../ui/HotkeyInput";
 import { formatHotkeyLabel } from "../../utils/hotkeys";
-import { formatHotkeyInstruction, getHotkeyKeycaps } from "./hotkeyPresentation";
+import {
+  formatHotkeyInstruction,
+  formatRecommendedHotkey,
+  getHotkeyKeycaps,
+} from "./hotkeyPresentation";
 
 function HotkeyChord({ value, compact = false }: { value: string; compact?: boolean }) {
   const keycaps = getHotkeyKeycaps(value);
@@ -13,7 +17,7 @@ function HotkeyChord({ value, compact = false }: { value: string; compact?: bool
       className={`flex flex-wrap items-center justify-center ${compact ? "gap-1.5" : "gap-3"}`}
       aria-label={formatHotkeyLabel(value)}
     >
-      {keycaps.map(({ id, label, symbol }) => (
+      {keycaps.map(({ id, icon, label, symbol }) => (
         <kbd
           key={id}
           // Surface, bevel and border live in .onboarding-keycap so the cap is
@@ -26,7 +30,15 @@ function HotkeyChord({ value, compact = false }: { value: string; compact?: bool
             className={`self-end font-medium leading-none ${compact ? "text-base" : "text-xl"}`}
             aria-hidden="true"
           >
-            {symbol}
+            {icon === "globe" ? (
+              <Globe
+                className={compact ? "size-4" : "size-5"}
+                strokeWidth={1.8}
+                aria-hidden="true"
+              />
+            ) : (
+              symbol
+            )}
           </span>
           <span className="self-start font-medium leading-none text-[var(--onboarding-text-secondary)]">
             {label}
@@ -201,7 +213,7 @@ export default function ShortcutSetupStep({
           <p className="mt-6 flex items-center justify-center gap-3 text-base leading-[1.4] text-[var(--onboarding-text-tertiary)]">
             {recommendedLabel}
             <span className="rounded-full bg-[var(--onboarding-surface-tertiary)] px-3 py-1.5 text-sm text-[var(--onboarding-text-secondary)]">
-              {formatHotkeyInstruction(recommended)}
+              {formatRecommendedHotkey(recommended)}
             </span>
           </p>
         </>

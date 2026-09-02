@@ -429,7 +429,7 @@ export default function BackgroundModelDownloadTray({
                   {downloadDisplay(download).name}
                 </span>
               </span>
-              <span className="shrink-0 font-medium text-muted-foreground">
+              <span className="shrink-0 font-medium tabular-nums text-muted-foreground">
                 {Math.round(download.percentage)}%
               </span>
             </div>

@@ -6,7 +6,9 @@ const load = () => import("../../src/components/onboarding/hotkeyPresentation.ts
 test("Globe/Fn renders as one reusable physical key", async () => {
   const { getHotkeyKeycaps } = await load();
 
-  assert.deepEqual(getHotkeyKeycaps("GLOBE"), [{ id: "Globe/Fn-0", label: "fn", symbol: "◎" }]);
+  assert.deepEqual(getHotkeyKeycaps("GLOBE"), [
+    { id: "Globe/Fn-0", label: "fn", symbol: "◎", icon: "globe" },
+  ]);
 });
 
 test("compound shortcuts produce ordered keycaps and readable instructions", async () => {
@@ -19,12 +21,12 @@ test("compound shortcuts produce ordered keycaps and readable instructions", asy
   assert.equal(formatHotkeyInstruction("Control+Shift+K"), "Ctrl + Shift + K");
 });
 
-test("macOS recommends Cmd + K while other platforms keep their effective default", async () => {
-  const { formatHotkeyInstruction, getRecommendedDictationHotkey } = await load();
+test("macOS recommends fn/Globe while other platforms keep their effective default", async () => {
+  const { formatRecommendedHotkey, getRecommendedDictationHotkey } = await load();
 
   assert.equal(
-    formatHotkeyInstruction(getRecommendedDictationHotkey("darwin", "GLOBE")),
-    "Cmd + K"
+    formatRecommendedHotkey(getRecommendedDictationHotkey("darwin", "Command+K")),
+    "fn/Globe"
   );
   assert.equal(getRecommendedDictationHotkey("linux", "Control+Super"), "Control+Super");
   assert.equal(

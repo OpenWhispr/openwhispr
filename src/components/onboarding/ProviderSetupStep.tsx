@@ -34,14 +34,13 @@ import { isLocalStageDownloadActive } from "./localDownloadState";
 
 export function SetupStageStepper({
   stepId,
-  large = false,
+  large = true,
 }: {
   stepId: OnboardingStepId;
   large?: boolean;
 }) {
   const { t } = useTranslation();
   const assistant = stepId.endsWith("assistant");
-  const local = stepId.startsWith("local");
   return (
     <div
       className={`relative mx-auto flex items-start justify-between ${large ? "w-40" : "w-36"}`}
@@ -59,11 +58,7 @@ export function SetupStageStepper({
           }`}
         >
           {assistant ? (
-            local ? (
-              <AudioLines className={large ? "size-4" : "size-3.5"} />
-            ) : (
-              <CircleCheck className={large ? "size-4" : "size-3.5"} strokeWidth={2} />
-            )
+            <CircleCheck className={large ? "size-4" : "size-3.5"} strokeWidth={2} />
           ) : (
             <AudioLines className={large ? "size-4" : "size-3.5"} />
           )}
@@ -147,7 +142,7 @@ function StepSecondaryAction({
 const SETUP_CARD_BASE_CLASS =
   "mx-auto w-full rounded-[1.125rem] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]";
 
-export const SETUP_CARD_CLASS = `${SETUP_CARD_BASE_CLASS} max-w-[22rem] px-3 py-4`;
+export const SETUP_CARD_CLASS = `${SETUP_CARD_BASE_CLASS} max-w-[30rem] px-3 py-4`;
 const LOCAL_MODEL_CARD_CLASS = `${SETUP_CARD_BASE_CLASS} max-w-[30rem] px-4 py-4`;
 
 /** The field trigger. Call sites that can be disabled add the disabled: variants. */
@@ -426,7 +421,7 @@ export function ByokProviderStep({
 
   return (
     <section className={`mt-5 ${SETUP_CARD_CLASS}`}>
-      <SetupStageStepper stepId={stepId} />
+      <SetupStageStepper stepId={stepId} large />
 
       <div className="mt-3 space-y-3">
         {selfHostedAllowed && (
@@ -851,7 +846,7 @@ export function LocalModelSetupStep({
 
   return (
     <section className={`mt-8 ${LOCAL_MODEL_CARD_CLASS}`}>
-      <SetupStageStepper stepId={stepId} large />
+      <SetupStageStepper stepId={stepId} />
 
       <div className="mt-6">
         <FieldLabel>{t("onboarding.rehaul.local.providerLabel")}</FieldLabel>
@@ -900,7 +895,7 @@ export function LocalModelSetupStep({
                 type="button"
                 disabled={!isDownloaded}
                 onClick={() => selectInstalledModel(model.id)}
-                className="min-w-0 flex-1 text-left disabled:cursor-default"
+                className="min-w-0 flex-1 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default"
               >
                 <span className="block truncate text-base font-medium text-[var(--onboarding-text-primary)]">
                   {model.name}
@@ -917,7 +912,11 @@ export function LocalModelSetupStep({
                 // text-secondary. Progress is a light/surface-tertiary fill
                 // growing from the left behind them, not a fixed-width segment
                 // around the percentage.
-                <span className="relative flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                <span
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="relative flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 text-sm font-medium leading-[1.4] tabular-nums text-[var(--onboarding-text-secondary)]"
+                >
                   {/* Figma draws the rect taller than the pill so it bleeds top
                       and bottom; inset-y-0 does that without a magic height. */}
                   <span

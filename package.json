@@ -189,6 +189,7 @@
   },
   "overrides": {
     "adm-zip": "^0.6.0",
+    "browserslist": "^4.28.8",
     "@tiptap/extension-blockquote": "3.30.4",
     "@tiptap/extension-bold": "3.30.4",
     "@tiptap/extension-bubble-menu": "3.30.4",
