@@ -1,0 +1,49 @@
+name: DES-165 whisper.cpp CPU RCA
+
+on:
+  workflow_dispatch:
+    inputs:
+      sidecar_version:
+        description: Released OpenWhispr whisper.cpp sidecar to benchmark
+        required: true
+        default: "0.0.8"
+        type: choice
+        options:
+          - "0.0.8"
+          - "0.0.6"
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-cpu:
+    name: Ubuntu 22.04 x64 CPU
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out the selected commit
+        uses: actions/checkout@v4
+
+      - name: Use repository Node version
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Run controlled benchmark
+        run: >-
+          node scripts/benchmark-whisper-cpu.mjs
+          --sidecar-version "${{ inputs.sidecar_version }}"
+          --output-dir artifacts/whisper-cpu-rca
+
+      - name: Upload compact diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: whisper-cpu-rca-${{ inputs.sidecar_version }}-${{ github.run_id }}
+          path: |
+            artifacts/whisper-cpu-rca/report.json
+            artifacts/whisper-cpu-rca/report.md
+            artifacts/whisper-cpu-rca/stderr/*.log
+          if-no-files-found: warn
+          retention-days: 14
