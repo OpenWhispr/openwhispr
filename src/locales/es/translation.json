@@ -3385,6 +3385,11 @@
       "startListening": "Empezar a escuchar",
       "hideForNow": "Ocultar por ahora",
       "askAssistant": "Preguntar al asistente"
+    },
+    "handsFreeTip": {
+      "badge": "Consejo",
+      "title": "Cambia al modo manos libres",
+      "description": "Pulsa {{hotkey}} dos veces para iniciar el modo manos libres."
     }
   },
   "dictationAgent": {

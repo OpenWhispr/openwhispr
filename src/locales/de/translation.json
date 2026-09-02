@@ -3502,6 +3502,11 @@
       "startListening": "Aufnahme starten",
       "hideForNow": "Vorerst ausblenden",
       "askAssistant": "Assistent fragen"
+    },
+    "handsFreeTip": {
+      "badge": "Tipp",
+      "title": "Zum Freihandmodus wechseln",
+      "description": "Tippe {{hotkey}} zweimal, um den Freihandmodus zu starten."
     }
   },
   "dictationAgent": {

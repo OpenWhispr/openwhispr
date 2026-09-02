@@ -3337,6 +3337,11 @@
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏",
       "askAssistant": "询问助手"
+    },
+    "handsFreeTip": {
+      "badge": "提示",
+      "title": "切换到免提模式",
+      "description": "连按两次 {{hotkey}} 即可开始免提模式。"
     }
   },
   "dictationAgent": {
