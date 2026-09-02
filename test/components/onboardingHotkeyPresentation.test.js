@@ -21,12 +21,12 @@ test("compound shortcuts produce ordered keycaps and readable instructions", asy
   assert.equal(formatHotkeyInstruction("Control+Shift+K"), "Ctrl + Shift + K");
 });
 
-test("macOS recommends Ctrl + ` while other platforms keep their effective default", async () => {
+test("macOS recommends Ctrl + Q while other platforms keep their effective default", async () => {
   const { formatRecommendedHotkey, getRecommendedDictationHotkey } = await load();
 
   assert.equal(
     formatRecommendedHotkey(getRecommendedDictationHotkey("darwin", "Command+K")),
-    "Ctrl + `"
+    "Ctrl + Q"
   );
   assert.equal(getRecommendedDictationHotkey("linux", "Control+Super"), "Control+Super");
   assert.equal(
