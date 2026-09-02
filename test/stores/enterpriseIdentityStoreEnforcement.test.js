@@ -271,3 +271,67 @@ test("the transcription opt-out is independent of the LLM setup mode", async (t)
   assert.equal(getManagedTranscriptionResolution(), undefined);
   assert.equal(useSettingsStore.getState().enterpriseSetupMode, "manual");
 });
+
+test("a cold start (status idle, no config yet) holds only the scopes a persisted hint enforces", async (t) => {
+  const { useEnterpriseIdentityStore, getManagedScopeResolution } = await boot(t, {
+    initialStorage: {
+      "managedEnterpriseScopes:account-a:workspace-a": JSON.stringify({
+        managed: ["transcription"],
+        enforced: ["transcription"],
+      }),
+    },
+  });
+  // The window between app start (or a workspace switch) and the first
+  // refresh() call resolving: the store's initial status is "idle", not
+  // "loading", but the identity is already known (e.g. restored from a
+  // prior session) and no config has arrived yet.
+  useEnterpriseIdentityStore.setState({
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+  });
+  assert.equal(useEnterpriseIdentityStore.getState().status, "idle");
+  assert.equal(useEnterpriseIdentityStore.getState().config, null);
+  assert.equal(getManagedScopeResolution("transcription", "auto").code, "MANAGED_CONFIG_LOADING");
+  assert.equal(getManagedScopeResolution("dictationCleanup", "auto").kind, "manual");
+});
+
+test("clear() never strands a signed-out user under a stale persisted hint", async (t) => {
+  const { useEnterpriseIdentityStore, getManagedScopeResolution } = await boot(t, {
+    initialStorage: {
+      "managedEnterpriseScopes:account-a:workspace-a": JSON.stringify({
+        managed: ["transcription"],
+        enforced: ["transcription"],
+      }),
+    },
+    electronAPI: {
+      getManagedEnterpriseConfig: async (a, w, g) => ({
+        success: true,
+        status: "network",
+        accountId: a,
+        workspaceId: w,
+        authGeneration: g,
+        config: azureSttRequired,
+      }),
+    },
+  });
+  await useEnterpriseIdentityStore.getState().refresh("account-a", "workspace-a", 1);
+  assert.equal(
+    getManagedScopeResolution("transcription", "auto").kind,
+    "managed",
+    "sanity check: the workspace really does enforce transcription while signed in"
+  );
+
+  useEnterpriseIdentityStore.getState().clear();
+
+  const state = useEnterpriseIdentityStore.getState();
+  assert.equal(state.status, "idle");
+  assert.equal(state.accountId, null);
+  assert.equal(state.workspaceId, null);
+  assert.equal(state.config, null);
+  // No accountId/workspaceId means the persisted hint for account-a/workspace-a
+  // can't be looked up, so a signed-out user is never held for someone else's
+  // (or their own former) organization's enforcement.
+  assert.equal(getManagedScopeResolution("transcription", "auto").kind, "manual");
+  assert.equal(getManagedScopeResolution("dictationCleanup", "auto").kind, "manual");
+});

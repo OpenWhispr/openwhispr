@@ -339,11 +339,14 @@ function scopeFailsClosed(
   setupMode: EnterpriseSetupMode
 ): false | "unavailable" | "loading" {
   const scope = MANAGED_SCOPE_ALIASES[requestedScope] ?? requestedScope;
-  if (state.status === "loading" && !state.config) {
-    // Prefer the in-memory enforcement carried forward from a prior error
-    // (the only case producing this status/config combination is a retry
-    // after an error for the same identity); fall back to the persisted
-    // cold-start hint only when nothing was carried forward yet.
+  if ((state.status === "idle" || state.status === "loading") && !state.config) {
+    // Covers both the very first fetch for an identity ("idle", right after
+    // app start or a workspace switch, before refresh() has even been
+    // called) and a retry after an error ("loading" with in-memory
+    // enforcement carried forward). Prefer that in-memory enforcement; fall
+    // back to the persisted cold-start hint only when nothing was carried
+    // forward yet. After clear() there is no accountId/workspaceId, so the
+    // hint lookup finds nothing and a signed-out user is never held.
     const enforced = state.enforcedScopes.length
       ? state.enforcedScopes
       : readPersistedScopes(state.accountId, state.workspaceId).enforced;
