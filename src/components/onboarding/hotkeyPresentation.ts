@@ -106,4 +106,4 @@ export const formatRecommendedHotkey = (value: string) =>
   isGlobeLikeHotkey(value) ? "fn/Globe" : formatHotkeyInstruction(value);
 
 export const getRecommendedDictationHotkey = (platform: Platform, effectiveDefault: string) =>
-  platform === "darwin" ? "GLOBE" : effectiveDefault;
+  platform === "darwin" ? "Control+`" : effectiveDefault;
