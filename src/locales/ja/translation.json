@@ -125,7 +125,6 @@
       "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
       "trySuggestions": "お試しください: {{suggestions}}",
       "slotConflict": "このホットキーは既に{{slot}}で使用されています。",
-      "holdNeedsReleaseSourceMac": "macOS では単一キーは離したことを検知できないため、\"{{hotkey}}\" でホールドは使用できません。キーの組み合わせ、Globe/Fn キー、右側の修飾キー、またはマウスボタンを使用してください。",
       "holdUnsupportedOnHyprland": "Hyprland では、ホールドはディクテーションのホットキーでのみ使用できます。"
     },
     "portal": {

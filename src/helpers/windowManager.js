@@ -1296,6 +1296,12 @@ class WindowManager {
   reconcileNativeKeyListeners() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     if (this.hotkeyManager.isInListeningMode()) return;
+    if (process.platform === "darwin") {
+      // main.js owns the macOS listener; it re-derives the watched plain keys
+      // from the slots and their modes.
+      this.onMacListenerReconcile?.();
+      return;
+    }
     const activationMode = this.getActivationMode();
     const slotModes = this._getSlotActivationModes();
     const nativeListenerKeys = this.hotkeyManager.getNativeListenerKeys(activationMode, slotModes);
