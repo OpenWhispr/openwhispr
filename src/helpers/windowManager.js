@@ -675,7 +675,7 @@ class WindowManager {
 
     if (wasRecording) {
       this.sendStopDictation();
-      this._notifyHoldDictationEnded(inputKind, downTime);
+      this.notifyHoldDictationEnded(inputKind, downTime);
     } else {
       this.handlePushGestureQuickRelease(inputKind);
     }
@@ -830,7 +830,7 @@ class WindowManager {
 
     if (wasRecording) {
       this.sendStopDictation();
-      this._notifyHoldDictationEnded(inputKind, downTime);
+      this.notifyHoldDictationEnded(inputKind, downTime);
     } else {
       this.handlePushGestureQuickRelease(inputKind);
     }
@@ -838,7 +838,9 @@ class WindowManager {
 
   // A deliberately released hold tells the renderer how long the key was
   // down; the hands-free tip decides from that whether it is worth offering.
-  _notifyHoldDictationEnded(inputKind, downTime) {
+  // Public: main.js owns the macOS bare-Globe and right-modifier dictation
+  // holds and stops them without passing through the key-up methods above.
+  notifyHoldDictationEnded(inputKind, downTime) {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     const heldMs = Date.now() - downTime;
     debugLogger.debug("Hold released after recording", { inputKind, heldMs }, "ptt");
