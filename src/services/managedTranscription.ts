@@ -24,7 +24,10 @@ export function isManagedTranscriptionActive(): boolean {
 export function getManagedTranscriptionResolution(): ManagedTranscriptionResolution | undefined {
   const settings = getSettings();
   const state = useEnterpriseIdentityStore.getState();
-  const resolution = getManagedScopeResolution("transcription", settings.enterpriseSetupMode);
+  const resolution = getManagedScopeResolution(
+    "transcription",
+    settings.enterpriseTranscriptionSetupMode
+  );
   if (resolution.kind === "error") {
     return { kind: "error", message: resolution.message, code: resolution.code };
   }
@@ -46,7 +49,7 @@ export function getManagedTranscriptionResolution(): ManagedTranscriptionResolut
       accountId: state.accountId,
       workspaceId: state.workspaceId,
       authGeneration: state.authGeneration,
-      setupMode: settings.enterpriseSetupMode,
+      setupMode: settings.enterpriseTranscriptionSetupMode,
       inferenceScope: "transcription",
       provider: "azure",
       generation: state.config.generation,

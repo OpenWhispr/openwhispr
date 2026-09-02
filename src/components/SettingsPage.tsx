@@ -548,9 +548,13 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
-  const enterpriseSetupMode = useSettingsStore((s) => s.enterpriseSetupMode);
-  const setEnterpriseSetupMode = useSettingsStore((s) => s.setEnterpriseSetupMode);
-  const managed = useManagedScopeResolution("transcription", enterpriseSetupMode);
+  const enterpriseTranscriptionSetupMode = useSettingsStore(
+    (s) => s.enterpriseTranscriptionSetupMode
+  );
+  const setEnterpriseTranscriptionSetupMode = useSettingsStore(
+    (s) => s.setEnterpriseTranscriptionSetupMode
+  );
+  const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
   const managedAvailable = useManagedScopeResolution("transcription", "managed");
   const {
     modes: transcriptionModes,
@@ -727,7 +731,7 @@ function TranscriptionSection({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setEnterpriseSetupMode("manual")}
+              onClick={() => setEnterpriseTranscriptionSetupMode("manual")}
             >
               {t("settingsPage.aiModels.managedEnterprise.usePersonalSetup")}
             </Button>
@@ -739,7 +743,7 @@ function TranscriptionSection({
 
   return (
     <div className="space-y-4">
-      {enterpriseSetupMode === "manual" && managedAvailable.kind === "managed" && (
+      {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (
         <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
           <div className="min-w-0">
             <p className="text-sm font-medium">
@@ -756,7 +760,7 @@ function TranscriptionSection({
             variant="outline"
             size="sm"
             className="shrink-0"
-            onClick={() => setEnterpriseSetupMode("managed")}
+            onClick={() => setEnterpriseTranscriptionSetupMode("managed")}
           >
             {t("settingsPage.aiModels.managedEnterprise.useManaged")}
           </Button>

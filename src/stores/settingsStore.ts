@@ -882,6 +882,7 @@ export interface SettingsState
 
   // Enterprise providers
   enterpriseSetupMode: EnterpriseSetupMode;
+  enterpriseTranscriptionSetupMode: EnterpriseSetupMode;
   bedrockAuthMode: string;
   bedrockRegion: string;
   bedrockProfile: string;
@@ -898,6 +899,7 @@ export interface SettingsState
   vertexApiKey: string;
   setBedrockAuthMode: (value: string) => void;
   setEnterpriseSetupMode: (value: EnterpriseSetupMode) => void;
+  setEnterpriseTranscriptionSetupMode: (value: EnterpriseSetupMode) => void;
   setBedrockRegion: (value: string) => void;
   setBedrockProfile: (value: string) => void;
   setBedrockAccessKeyId: (key: string) => void;
@@ -1286,6 +1288,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   // Enterprise providers
   enterpriseSetupMode: (() => {
     const v = readString("enterpriseSetupMode", "auto");
+    if (v === "auto" || v === "managed" || v === "manual") return v;
+    return "auto" as EnterpriseSetupMode;
+  })(),
+  enterpriseTranscriptionSetupMode: (() => {
+    const v = readString("enterpriseTranscriptionSetupMode", "auto");
     if (v === "auto" || v === "managed" || v === "manual") return v;
     return "auto" as EnterpriseSetupMode;
   })(),
@@ -1927,6 +1934,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   // Enterprise provider setters
   setEnterpriseSetupMode: createStringSetter("enterpriseSetupMode") as (
+    value: EnterpriseSetupMode
+  ) => void,
+  setEnterpriseTranscriptionSetupMode: createStringSetter("enterpriseTranscriptionSetupMode") as (
     value: EnterpriseSetupMode
   ) => void,
   setBedrockAuthMode: (value: string) => {
