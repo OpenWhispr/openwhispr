@@ -82,7 +82,11 @@ function loadClipboardManager({ spawn } = {}) {
   };
 
   try {
-    return require("../../src/helpers/clipboard");
+    const ClipboardManager = require("../../src/helpers/clipboard");
+    // Paste-dispatch tests provide their own process mocks, so do not depend on
+    // the CI runner's real /dev/uinput permission. The denial test overrides this.
+    ClipboardManager.prototype._canAccessUinput = () => true;
+    return ClipboardManager;
   } finally {
     Module._load = originalLoad;
   }
