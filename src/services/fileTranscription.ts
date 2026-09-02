@@ -1,6 +1,9 @@
 import { withSessionRefresh } from "../lib/auth";
 import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
-import { getManagedTranscriptionResolution } from "./managedTranscription";
+import {
+  getManagedTranscriptionResolution,
+  isManagedTranscriptionActive,
+} from "./managedTranscription";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
 import type { LocalTranscriptionProvider } from "../types/electron";
 
@@ -87,7 +90,14 @@ export async function transcribeFile(
   diarize: boolean,
   opts: { requestId?: string; timestamps?: boolean } = {}
 ): Promise<FileTranscriptionResult> {
-  if (cfg.isOpenWhisprCloud) {
+  // Managed enterprise STT outranks every personal lane, OpenWhispr Cloud and
+  // local included: under managed_required no audio may leave the tenant.
+  const managed = getManagedTranscriptionResolution();
+  if (managed?.kind === "error") {
+    return { success: false, error: managed.message, code: managed.code };
+  }
+
+  if (!managed && cfg.isOpenWhisprCloud) {
     return withSessionRefresh(async () => {
       const r = await window.electronAPI.transcribeAudioFileCloud!(filePath, opts);
       if (!r.success && r.code) {
@@ -99,7 +109,7 @@ export async function transcribeFile(
     });
   }
 
-  if (cfg.useLocalWhisper) {
+  if (!managed && cfg.useLocalWhisper) {
     const provider = cfg.localTranscriptionProvider as LocalTranscriptionProvider;
     return window.electronAPI.transcribeAudioFile(filePath, {
       provider,
@@ -115,9 +125,6 @@ export async function transcribeFile(
       requestId: opts.requestId,
     });
   }
-
-  // Managed enterprise STT outranks personal BYOK settings on this lane too.
-  const managed = getManagedTranscriptionResolution();
 
   // Pre-flight through the shared resolver: code-carrying errors (incl. the
   // Tinfoil-URL and fail-closed custom guards) surface here without an IPC
@@ -169,6 +176,7 @@ export function shouldUseByokDiarize(
   cfg: FileTranscriptionConfig,
   diarizationEnabled: boolean
 ): boolean {
+  if (isManagedTranscriptionActive()) return false;
   return (
     diarizationEnabled &&
     !cfg.useLocalWhisper &&

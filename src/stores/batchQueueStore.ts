@@ -6,6 +6,7 @@ import { saveUploadNote, uploadTitleFallback } from "../services/uploadNotes";
 import { getSettings } from "./settingsStore";
 import { isTranscriptionContextAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
+import { isManagedTranscriptionActive } from "../services/managedTranscription";
 
 export type QueueItemStatus = "queued" | "downloading" | "transcribing" | "done" | "error";
 
@@ -120,7 +121,11 @@ export function processBatchQueue(
   diarization: DiarizationSettings
 ): void {
   if (useBatchQueueStore.getState().isProcessing) return;
-  if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) return;
+  if (
+    !isManagedTranscriptionActive() &&
+    !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
+  )
+    return;
   const run = ++runId;
   useBatchQueueStore.setState({ isProcessing: true });
 
