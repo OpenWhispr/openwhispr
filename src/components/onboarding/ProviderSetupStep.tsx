@@ -942,7 +942,7 @@ export function LocalModelSetupStep({
         })}
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-2">
+      <div className={`mt-5 grid gap-2 ${anyDownloadActive ? "grid-cols-2" : "grid-cols-1"}`}>
         {/* Skip means "don't wait for this download", never "set up local with no
             model": leaving with nothing on disk still commits useLocalWhisper,
             and whisper.js then refuses to load the selected model. */}

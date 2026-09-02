@@ -62,6 +62,16 @@ function permissions(overrides = {}) {
   };
 }
 
+// The action row carries mt-auto, so anything rendered after it rides down on
+// that auto margin and lands under the buttons — below the fold on the compact
+// frame. Contextual guidance has to precede it in the DOM, and so in tab order.
+function assertGuidancePrecedesActions(markup, guidance) {
+  assert.ok(
+    markup.indexOf(guidance) < markup.indexOf("common.continue"),
+    `${guidance} should render before the action row`
+  );
+}
+
 const systemAudio = {
   granted: false,
   mode: "portal",
@@ -119,6 +129,7 @@ test("a denied microphone exposes the existing Linux settings recovery", async (
 
   assert.match(markup, /Microphone blocked by the OS/);
   assert.match(markup, />hooks.permissions.warning.soundLabel<\/button>/);
+  assertGuidancePrecedesActions(markup, "Microphone blocked by the OS");
 });
 
 test("Linux onboarding shows paste-tool installation and recheck guidance", async (t) => {
@@ -148,6 +159,7 @@ test("Linux onboarding shows paste-tool installation and recheck guidance", asyn
 
   assert.match(markup, /sudo apt install xdotool/);
   assert.match(markup, />pasteToolsInfo.recheck<\/button>/);
+  assertGuidancePrecedesActions(markup, "sudo apt install xdotool");
 });
 
 test("permissions replaces Back with Logout, keeps Continue at the bottom, and gates it on microphone access", async (t) => {
@@ -229,6 +241,7 @@ test("macOS onboarding shows the Screen Context relaunch guidance when needed", 
 
   assert.match(markup, /dictationAgent\.screenContext\.relaunchHint/);
   assert.match(markup, />onboarding\.rehaul\.permissions\.enabled<\/button>/);
+  assertGuidancePrecedesActions(markup, "dictationAgent.screenContext.relaunchHint");
 });
 
 test("macOS onboarding omits Screen Context when the flow does not offer it", async (t) => {

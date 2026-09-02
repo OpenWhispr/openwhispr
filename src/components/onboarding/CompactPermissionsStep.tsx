@@ -218,28 +218,6 @@ export default function CompactPermissionsStep({
           )}
         </div>
 
-        <div className="mt-auto flex w-full shrink-0 items-center justify-between gap-3">
-          {onLogout && (
-            <button
-              type="button"
-              onClick={() => void onLogout()}
-              className="onboarding-pressable inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 text-sm font-medium text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
-            >
-              <LogOut className="size-3.5" aria-hidden="true" />
-              {t("common.logout")}
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={onContinue}
-            disabled={!requiredGranted}
-            className="onboarding-pressable h-10 flex-1 rounded-full bg-[var(--onboarding-accent)] px-5 text-sm font-medium text-[var(--onboarding-accent-foreground)] transition-colors hover:bg-[var(--onboarding-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)]"
-          >
-            {t("common.continue")}
-          </button>
-        </div>
-
         {platform === "darwin" && screenContext?.enabled && screenContext.needsRelaunch && (
           <p className="mt-2 text-left text-xs leading-4 text-warning/80">
             {t("dictationAgent.screenContext.relaunchHint")}
@@ -265,6 +243,32 @@ export default function CompactPermissionsStep({
             />
           </div>
         )}
+
+        {/* Last child so mt-auto actually pins the actions to the bottom: any
+            element after them rides along on that auto margin, which put the
+            relaunch hint and the two warnings below the buttons — and, on Linux
+            where the paste guidance is the point of the screen, out of view. */}
+        <div className="mt-auto flex w-full shrink-0 items-center justify-between gap-3 pt-5">
+          {onLogout && (
+            <button
+              type="button"
+              onClick={() => void onLogout()}
+              className="onboarding-pressable inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 text-sm font-medium text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
+            >
+              <LogOut className="size-3.5" aria-hidden="true" />
+              {t("common.logout")}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onContinue}
+            disabled={!requiredGranted}
+            className="onboarding-pressable h-10 flex-1 rounded-full bg-[var(--onboarding-accent)] px-5 text-sm font-medium text-[var(--onboarding-accent-foreground)] transition-colors hover:bg-[var(--onboarding-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)]"
+          >
+            {t("common.continue")}
+          </button>
+        </div>
       </div>
     </CompactOnboardingFrame>
   );

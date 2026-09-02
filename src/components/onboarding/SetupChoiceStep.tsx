@@ -129,10 +129,16 @@ export default function SetupChoiceStep({
   const [showMore, setShowMore] = useState(false);
 
   const localReferenceModel = getParakeetModelInfo(REFERENCE_LOCAL_MODEL_ID);
-  // The model arrives as an archive and needs room to unpack, so quoting only
-  // its compressed size can send a user into a setup that runs out of disk.
+  // Two deliberately different numbers: the setup steps quote the transfer, so
+  // they get the model's own download size, while the disk figure is rounded up
+  // and floored at 2 GB because the model arrives as an archive and needs room
+  // to unpack — quoting only the compressed size as the space requirement can
+  // send a user into a setup that runs out of disk.
+  const localModelSize = (localReferenceModel?.size ?? t("common.unknown")).replace(
+    /(\d)([A-Za-z])/,
+    "$1 $2"
+  );
   const minimumLocalSpaceGb = Math.max(2, Math.ceil((localReferenceModel?.sizeMb ?? 0) / 1000));
-  const localModelSize = `${minimumLocalSpaceGb} GB`;
 
   const availability = getOnboardingSetupAvailability({
     policy,

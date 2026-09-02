@@ -13,6 +13,17 @@ function findElements(node, predicate, matches = []) {
   return matches;
 }
 
+// The action row is the only grid in this step's tree; its column count has to
+// follow Skip, or Proceed sits half-width in the left column on its own.
+function actionRowColumns(tree) {
+  const [row] = findElements(
+    tree,
+    (node) =>
+      typeof node.props?.className === "string" && node.props.className.includes("grid-cols")
+  );
+  return row.props.className.match(/grid-cols-\d/)[0];
+}
+
 function textContent(node) {
   if (Array.isArray(node)) return node.map(textContent).join("");
   if (typeof node === "string") return node;
@@ -164,6 +175,7 @@ test("local model rows distinguish downloading, selectable, and selected states"
     findElements(selected, (node) => node.type?.name === "StepSecondaryAction").length,
     0
   );
+  assert.equal(actionRowColumns(selected), "grid-cols-1");
 
   harness.values = {
     0: "qwen",
@@ -179,6 +191,7 @@ test("local model rows distinguish downloading, selectable, and selected states"
   // skipping here would finish onboarding on local transcription with nothing to
   // transcribe with. Back is the way out.
   assert.equal(findElements(idle, (node) => node.type?.name === "StepSecondaryAction").length, 0);
+  assert.equal(actionRowColumns(idle), "grid-cols-1");
 
   harness.values = {
     0: "qwen",
@@ -200,6 +213,7 @@ test("local model rows distinguish downloading, selectable, and selected states"
     findElements(downloading, (node) => node.type?.name === "StepSecondaryAction").length,
     1
   );
+  assert.equal(actionRowColumns(downloading), "grid-cols-2");
 
   harness.values = {};
   harness.downloadActive = false;
