@@ -190,3 +190,51 @@ test("a successful fetch persists the scope summary for the next cold start", as
   assert.deepEqual(useEnterpriseIdentityStore.getState().enforcedScopes, []);
   assert.deepEqual(useEnterpriseIdentityStore.getState().managedScopes, ["transcription"]);
 });
+
+test("a retry after an error holds the scopes carried in memory even with no persisted hint", async (t) => {
+  let call = 0;
+  const { useEnterpriseIdentityStore, getManagedScopeResolution } = await boot(t, {
+    electronAPI: {
+      getManagedEnterpriseConfig: (accountId, workspaceId, authGeneration) => {
+        call += 1;
+        if (call === 1) {
+          return Promise.resolve({
+            success: false,
+            status: "error",
+            accountId,
+            workspaceId,
+            authGeneration,
+            code: "AUTH_EXPIRED",
+            error: "expired",
+            enforcementRequired: true,
+            enforcedScopes: SCOPES,
+          });
+        }
+        // The retry: never resolves, so the store stays in "loading" for the
+        // duration of the assertions below.
+        return new Promise(() => {});
+      },
+    },
+  });
+
+  // First fetch fails; nothing has ever been persisted for this identity.
+  await useEnterpriseIdentityStore.getState().refresh("account-a", "workspace-a", 1);
+  assert.equal(useEnterpriseIdentityStore.getState().status, "error");
+  assert.deepEqual(useEnterpriseIdentityStore.getState().enforcedScopes, SCOPES);
+  assert.equal(
+    globalThis.localStorage.getItem("managedEnterpriseScopes:account-a:workspace-a"),
+    null
+  );
+
+  // A retry for the same identity carries the in-memory enforcedScopes
+  // forward into the "loading" window — it must not fail open just because
+  // there is no persisted hint to fall back on.
+  void useEnterpriseIdentityStore.getState().refresh("account-a", "workspace-a", 1);
+  assert.equal(useEnterpriseIdentityStore.getState().status, "loading");
+  assert.equal(useEnterpriseIdentityStore.getState().config, null);
+  assert.equal(
+    getManagedScopeResolution("dictationCleanup", "auto").code,
+    "MANAGED_CONFIG_LOADING"
+  );
+  assert.equal(getManagedScopeResolution("transcription", "auto").kind, "manual");
+});

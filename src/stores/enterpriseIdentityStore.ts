@@ -277,11 +277,11 @@ function resolveScope(
   config: ManagedEnterpriseConfig | null,
   requestedScope: ManagedEnterpriseScope,
   setupMode: EnterpriseSetupMode,
-  closureState: false | "unavailable" | "loading"
+  scopeHold: false | "unavailable" | "loading"
 ): ManagedEnterpriseScopeResolution {
   const scope = MANAGED_SCOPE_ALIASES[requestedScope] ?? requestedScope;
-  if (!config && closureState) {
-    return closureState === "loading"
+  if (!config && scopeHold) {
+    return scopeHold === "loading"
       ? {
           kind: "error",
           code: "MANAGED_CONFIG_LOADING",
@@ -340,9 +340,14 @@ function scopeFailsClosed(
 ): false | "unavailable" | "loading" {
   const scope = MANAGED_SCOPE_ALIASES[requestedScope] ?? requestedScope;
   if (state.status === "loading" && !state.config) {
-    return readPersistedScopes(state.accountId, state.workspaceId).enforced.includes(scope)
-      ? "loading"
-      : false;
+    // Prefer the in-memory enforcement carried forward from a prior error
+    // (the only case producing this status/config combination is a retry
+    // after an error for the same identity); fall back to the persisted
+    // cold-start hint only when nothing was carried forward yet.
+    const enforced = state.enforcedScopes.length
+      ? state.enforcedScopes
+      : readPersistedScopes(state.accountId, state.workspaceId).enforced;
+    return enforced.includes(scope) ? "loading" : false;
   }
   if (state.enforcedScopes.includes(scope)) return "unavailable";
   if (setupMode === "managed" && state.status === "error" && state.managedScopes.includes(scope)) {
@@ -366,8 +371,8 @@ export function useManagedScopeResolution(
   setupMode: EnterpriseSetupMode
 ): ManagedEnterpriseScopeResolution {
   const config = useEnterpriseIdentityStore((state) => state.config);
-  const closureState = useEnterpriseIdentityStore((state) =>
+  const scopeHold = useEnterpriseIdentityStore((state) =>
     scopeFailsClosed(state, scope, setupMode)
   );
-  return resolveScope(config, scope, setupMode, closureState);
+  return resolveScope(config, scope, setupMode, scopeHold);
 }
