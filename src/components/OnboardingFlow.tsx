@@ -39,6 +39,7 @@ import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform } from "../utils/platform";
 import { ACCESSIBILITY_SKIPPED_KEY, areRequiredPermissionsMet } from "../utils/permissions";
 import { cloudPost } from "../services/cloudApi";
+import { signOut } from "../lib/auth";
 import logger from "../utils/logger";
 import {
   COMPACT_STEPS,
@@ -46,6 +47,7 @@ import {
   getOnboardingProgress,
   getOnboardingRoute,
   reconcileStepWithRoute,
+  resetOnboardingProgress,
   resolveEnterpriseWorkspaceForOnboarding,
   shouldSkipOnboardingSetupChoice,
   type OnboardingAuthDraft,
@@ -98,6 +100,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setSelfHostedRequested,
     clearSession,
   } = useOnboardingSession();
+
+  const handleLogout = useCallback(async () => {
+    await signOut();
+    resetOnboardingProgress(localStorage);
+    window.location.reload();
+  }, []);
 
   const [dictationHotkey, setDictationHotkey] = useState(
     () => parseHotkeyList(settings.dictationKey)[0] || getDefaultHotkey()
@@ -779,6 +787,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 : undefined
             }
+            onLogout={handleLogout}
             onContinue={() => void continueFromCurrentStep()}
           />
         );
