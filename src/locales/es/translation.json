@@ -3319,6 +3319,7 @@
       "checkingParticipation": "Comprobando tu participación en la clasificación…",
       "join": "Unirse a la clasificación",
       "leave": "Salir de la clasificación",
+      "leavePending": "Has salido de esta clasificación. Terminaremos de quitarte de la cuenta en cuanto vuelvas a estar en línea.",
       "allTime": "Todo el tiempo",
       "thisWeek": "Esta semana",
       "wpmValue": "{{count}} PPM",

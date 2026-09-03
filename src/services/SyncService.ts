@@ -15,8 +15,10 @@ import { syncPendingAnalytics } from "./AnalyticsService.js";
 import { DictionaryService } from "./DictionaryService.js";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError, isAuthContextError } from "./cloudApi.js";
+import { LeaderboardService } from "./LeaderboardService";
 import {
   assertAuthGenerationCurrent,
+  getAuthRequestContextSnapshot,
   getValidatedAuthGeneration,
   hasValidatedAuthContext,
 } from "../lib/authRequestContext";
@@ -2198,6 +2200,9 @@ export class SyncService {
   private async syncAnalytics(): Promise<void> {
     const consent = this.consent();
     if (!consent.shared) return;
+    // A leaderboard opt-out outlives the window that made it, so every pass
+    // retries the one this account is still waiting for. It only ever leaves.
+    await LeaderboardService.flushPendingLeave(getAuthRequestContextSnapshot().sessionUserId);
     try {
       // Revoking retention/Insights consent blocks new uploads, never deletion
       // of rows that may already exist in the account.

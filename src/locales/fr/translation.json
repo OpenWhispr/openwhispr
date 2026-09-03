@@ -2773,6 +2773,7 @@
       "checkingParticipation": "Vérification de votre participation au classement…",
       "join": "Rejoindre le classement",
       "leave": "Quitter le classement",
+      "leavePending": "Vous avez quitté ce classement. Nous finirons de vous retirer du compte dès que vous serez de nouveau en ligne.",
       "allTime": "Depuis toujours",
       "thisWeek": "Cette semaine",
       "wpmValue": "{{count}} MPM",

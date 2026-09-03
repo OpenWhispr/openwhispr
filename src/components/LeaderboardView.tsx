@@ -63,7 +63,7 @@ export default function LeaderboardView({ onSignIn, onUpgrade }: LeaderboardView
         participationUpdating={participationUpdating}
         onJoin={() => void joinLeaderboard()}
         onLeave={leaveLeaderboard}
-        onParticipationStale={refreshParticipation}
+        onRefreshParticipation={refreshParticipation}
         onSignIn={onSignIn}
         onUpgrade={onUpgrade}
       />

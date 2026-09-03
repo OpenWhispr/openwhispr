@@ -33,6 +33,7 @@ import type {
   LeaderboardMetric,
   LeaderboardRange,
 } from "../types/electron";
+import { cn } from "./lib/utils";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import InviteTeammateDialog from "./InviteTeammateDialog";
 import MemberAvatar from "./MemberAvatar";
@@ -55,13 +56,40 @@ interface LeaderboardSectionProps {
   participating: boolean;
   canJoin: boolean;
   participationReady: boolean;
-  participationError: boolean;
+  participationError: "read" | "write" | null;
   participationUpdating: boolean;
   onJoin: () => void;
   onLeave: () => Promise<boolean>;
-  onParticipationStale: () => void;
+  onRefreshParticipation: () => void;
   onSignIn: () => void;
   onUpgrade: () => void;
+}
+
+const ERROR_CARD_CHROME = "mt-8 rounded-2xl border border-border/50 bg-card/70 dark:border-white/8";
+
+function LeaderboardRetryCard({
+  className,
+  message,
+  onRetry,
+}: {
+  className?: string;
+  message: string;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className={cn(
+        "flex min-h-48 flex-col items-center justify-center gap-3 px-5 py-10 text-center",
+        className
+      )}
+    >
+      <p className="text-sm font-medium">{message}</p>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        {t("insights.leaderboard.retry")}
+      </Button>
+    </div>
+  );
 }
 
 function scrollToRank(rank: number) {
@@ -83,7 +111,7 @@ export default function LeaderboardSection({
   participationUpdating,
   onJoin,
   onLeave,
-  onParticipationStale,
+  onRefreshParticipation,
   onSignIn,
   onUpgrade,
 }: LeaderboardSectionProps) {
@@ -189,7 +217,7 @@ export default function LeaderboardSection({
       const code = loadError instanceof CloudApiError ? loadError.code : undefined;
       if (code === "LEADERBOARD_SYNC_REQUIRED") {
         setLeaderboard(null);
-        onParticipationStale();
+        onRefreshParticipation();
         return;
       }
       if (code === "LEADERBOARD_PLAN_REQUIRED" || code === "LEADERBOARD_DOMAIN_REQUIRED") {
@@ -204,7 +232,7 @@ export default function LeaderboardSection({
   }, [
     loadAccess,
     metric,
-    onParticipationStale,
+    onRefreshParticipation,
     page,
     participating,
     participationReady,
@@ -340,12 +368,11 @@ export default function LeaderboardSection({
   }
   if (accessError && !access) {
     return (
-      <section className="mt-8 flex min-h-48 flex-col items-center justify-center gap-3 rounded-2xl border border-border/50 bg-card/70 px-5 py-10 text-center dark:border-white/8">
-        <p className="text-sm font-medium">{t("insights.leaderboard.accessError")}</p>
-        <Button variant="outline" size="sm" onClick={() => void loadAccess()}>
-          {t("insights.leaderboard.retry")}
-        </Button>
-      </section>
+      <LeaderboardRetryCard
+        className={ERROR_CARD_CHROME}
+        message={t("insights.leaderboard.accessError")}
+        onRetry={() => void loadAccess()}
+      />
     );
   }
   if (!access) return null;
@@ -446,6 +473,17 @@ export default function LeaderboardSection({
   const podiumOrder = leaderboard?.leaders.length === 1 ? [0] : [1, 0, 2];
 
   if (!participating || !participationReady) {
+    // An unknown answer must not offer Join: the account it would publish may
+    // already be on this leaderboard. Re-reading it is the only way forward.
+    if (participationError === "read") {
+      return (
+        <LeaderboardRetryCard
+          className={ERROR_CARD_CHROME}
+          message={t("insights.leaderboard.activationError")}
+          onRetry={onRefreshParticipation}
+        />
+      );
+    }
     return (
       <section className="mt-8 rounded-2xl border border-primary/20 bg-primary/5 p-6">
         <div className="flex items-start justify-between gap-5">
@@ -500,12 +538,7 @@ export default function LeaderboardSection({
             size="sm"
             onClick={() =>
               void onLeave().then((left) => {
-                if (!left) {
-                  toast({
-                    title: t("insights.leaderboard.activationError"),
-                    variant: "destructive",
-                  });
-                }
+                if (!left) toast({ title: t("insights.leaderboard.leavePending") });
               })
             }
             disabled={participationUpdating}
@@ -526,12 +559,10 @@ export default function LeaderboardSection({
       </div>
 
       {error && !leaderboard ? (
-        <div className="flex min-h-48 flex-col items-center justify-center gap-3 px-5 py-10 text-center">
-          <p className="text-sm font-medium">{t("insights.leaderboard.error")}</p>
-          <Button variant="outline" size="sm" onClick={() => void load()}>
-            {t("insights.leaderboard.retry")}
-          </Button>
-        </div>
+        <LeaderboardRetryCard
+          message={t("insights.leaderboard.error")}
+          onRetry={() => void load()}
+        />
       ) : !leaderboard ? (
         <div className="flex min-h-48 items-center justify-center text-muted-foreground">
           <Loader2 size={18} className="animate-spin" />

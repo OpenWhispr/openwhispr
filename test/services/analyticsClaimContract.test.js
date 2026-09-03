@@ -158,6 +158,69 @@ test("a participation read that fails cannot leave the board looking joined", ()
     false,
     "reading participation must never write it back to the account"
   );
+  // The one write the read may make is the leave the user already asked for,
+  // and flushPendingLeave can only send `false` (see leaderboardService.test).
+  assert.ok(
+    refresh.includes("LeaderboardService.flushPendingLeave(userId)"),
+    "an undelivered opt-out must land before the read reports the account joined"
+  );
+});
+
+// A failed read leaves participation unknown, and offering Join there asks an
+// account that may already be on this leaderboard to publish itself again.
+test("an unknown participation answer offers a retry instead of a join", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const section = read("src/components/LeaderboardSection.tsx");
+  const refresh = hook.slice(
+    hook.indexOf("const refreshParticipation"),
+    hook.indexOf("const publishParticipationAnswer")
+  );
+  assert.ok(refresh.includes('setParticipationError("read")'));
+  const card = section.slice(
+    section.indexOf("if (!participating || !participationReady)"),
+    section.indexOf('t("insights.leaderboard.join")')
+  );
+  assert.ok(card.includes('participationError === "read"'));
+  assert.ok(card.includes("onRetry={onRefreshParticipation}"));
+  assert.ok(
+    card.indexOf("LeaderboardRetryCard") < card.indexOf("onJoin"),
+    "the retry has to return before the Join button is ever reached"
+  );
+});
+
+// An opt-out the network refused is still an opt-out. It holds on the device
+// and is retried against the account until it lands -- only ever leaving, since
+// an automatic join would let one device's preference publish the account.
+test("a leave the account never took is kept and retried until it does", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const service = read("src/services/LeaderboardService.ts");
+  const leave = hook.slice(
+    hook.indexOf("const leaveLeaderboard"),
+    hook.indexOf("const disableInsightsSync")
+  );
+  assert.ok(leave.includes("writePendingLeaderboardLeave(userId)"));
+  assert.ok(
+    leave.includes("publishParticipationAnswer(false)"),
+    "a pending leave must stop showing the user as participating"
+  );
+  const join = hook.slice(
+    hook.indexOf("const joinLeaderboard"),
+    hook.indexOf("const answerClaimPrompt")
+  );
+  assert.ok(
+    join.includes("clearPendingLeaderboardLeave(userId)"),
+    "an explicit join is the account's newest answer, so it retires the leave"
+  );
+  const flush = service.slice(
+    service.indexOf("async function flushPendingLeave"),
+    service.indexOf("async function getAccess")
+  );
+  assert.ok(flush.includes("setParticipation(false)"));
+  assert.equal(flush.includes("setParticipation(true)"), false, "the retry may only leave");
+  assert.ok(
+    read("src/services/SyncService.ts").includes("LeaderboardService.flushPendingLeave("),
+    "every sync pass has to retry it, so the opt-out outlives the window that made it"
+  );
 });
 
 // The sync toggle re-reads participation, and joining flips that toggle — so a

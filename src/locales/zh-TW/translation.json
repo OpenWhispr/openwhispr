@@ -3271,6 +3271,7 @@
       "checkingParticipation": "正在檢查排行榜參與狀態…",
       "join": "加入排行榜",
       "leave": "退出排行榜",
+      "leavePending": "你已退出此排行榜。等你重新連線後，我們會完成從帳戶中移除的操作。",
       "allTime": "全部時間",
       "thisWeek": "本週",
       "wpmValue": "{{count}} 字/分鐘",

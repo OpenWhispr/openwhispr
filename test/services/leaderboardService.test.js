@@ -110,3 +110,59 @@ test("leaderboard requests carry scope, pagination, filters and no body data", a
     "/api/leaderboard/domain?metric=total_words&range=all&timeZone=UTC&page=0"
   );
 });
+
+// An opt-out the network never delivered has to reach the account eventually,
+// and only ever in the leaving direction: the account preference is the one
+// source of truth for who is on a leaderboard, so a device may take itself off
+// but never put another account on.
+test("a pending leave is retried for the account that asked and cleared once it lands", async (t) => {
+  const requests = [];
+  const { storage } = installBrowserGlobals(t, {
+    initialStorage: { leaderboardLeavePendingUserId: "user_1" },
+    window: {
+      electronAPI: {
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return {
+            success: true,
+            data: { data: { configured: true, enabled: false, updatedAt: null } },
+          };
+        },
+      },
+    },
+  });
+  const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+  assert.equal(await LeaderboardService.flushPendingLeave(null), false);
+  assert.equal(await LeaderboardService.flushPendingLeave("user_2"), false);
+  assert.deepEqual(requests, [], "a leave another account recorded is never sent for this one");
+
+  assert.equal(await LeaderboardService.flushPendingLeave("user_1"), false);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].method, "PATCH");
+  assert.equal(requests[0].path, "/api/analytics/participation");
+  assert.deepEqual(requests[0].body, { enabled: false });
+  assert.equal(storage.getItem("leaderboardLeavePendingUserId"), null);
+
+  assert.equal(await LeaderboardService.flushPendingLeave("user_1"), false);
+  assert.equal(requests.length, 1, "nothing is retried once the account has taken the leave");
+});
+
+test("a retry that fails keeps the leave pending for the next trigger", async (t) => {
+  const { storage } = installBrowserGlobals(t, {
+    initialStorage: { leaderboardLeavePendingUserId: "user_1" },
+    window: {
+      electronAPI: {
+        cloudApiRequest: async () => ({ success: false, status: 0, error: "offline" }),
+      },
+    },
+  });
+  const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+  assert.equal(
+    await LeaderboardService.flushPendingLeave("user_1"),
+    true,
+    "the caller has to know the account is still on the leaderboard the user left"
+  );
+  assert.equal(storage.getItem("leaderboardLeavePendingUserId"), "user_1");
+});

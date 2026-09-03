@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/ui/dialog";
+import {
+  clearPendingLeaderboardLeave,
+  writePendingLeaderboardLeave,
+} from "../lib/pendingLeaderboardLeave";
 import { canChangeCloudBackupPreference, isCloudBackupAllowed } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import { syncService } from "../services/SyncService.js";
@@ -34,16 +38,23 @@ import { useSettings } from "./useSettings";
  * and email to teammates — so syncing never implies it. Only joinLeaderboard
  * turns it on, and it waits for the sync opt-in to actually land first, because
  * a claim prompt the user declines is a join the user never agreed to.
+ *
+ * Leaving is the opposite: it holds on the device the moment it is asked for
+ * and is retried against the account until it lands, so an opt-out is never
+ * lost to a network that happened to be down.
  */
 export function useInsightsSyncOptIn() {
   const { t } = useTranslation();
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, user } = useAuth();
+  const userId = user?.id ?? null;
   const { insightsSyncEnabled, setInsightsSyncEnabled } = useSettings();
   const [unclaimedCount, setUnclaimedCount] = useState(0);
   const [awaitingUploadCount, setAwaitingUploadCount] = useState(0);
   const [participationReady, setParticipationReady] = useState(false);
   const [participationEnabled, setParticipationEnabled] = useState(false);
-  const [participationError, setParticipationError] = useState(false);
+  // Which side failed, because they need different offers: an unknown answer
+  // gets a Retry, a refused write gets the action that failed back.
+  const [participationError, setParticipationError] = useState<"read" | "write" | null>(null);
   const [participationUpdating, setParticipationUpdating] = useState(false);
   const participationReadIdRef = useRef(0);
   // Settles when the claim prompt is answered, so an opt-in that opens it can
@@ -67,28 +78,33 @@ export function useInsightsSyncOptIn() {
     if (!isLoaded || !isSignedIn) {
       setParticipationReady(false);
       setParticipationEnabled(false);
-      setParticipationError(false);
+      setParticipationError(null);
       return;
     }
 
     setParticipationReady(false);
-    setParticipationError(false);
+    setParticipationError(null);
     try {
+      // An opt-out the network never delivered is retried first, so the answer
+      // below is the one the user asked for rather than the row it left behind.
+      const stillLeaving = await LeaderboardService.flushPendingLeave(userId);
       const participation = await LeaderboardService.getParticipation();
       if (readId !== participationReadIdRef.current) return;
-      setParticipationEnabled(participation.enabled);
+      setParticipationEnabled(participation.enabled && !stillLeaving);
     } catch (error) {
       if (readId !== participationReadIdRef.current) return;
       console.error("Reading leaderboard participation failed:", error);
       // A read that failed leaves participation unknown, so it has to fail
       // closed. Keeping the last answer would also let the leaderboard's 403
       // recovery re-read, fail, and immediately re-issue the same 403 forever.
+      // The surface offers a Retry rather than a Join, which would ask an
+      // account that may already be on a leaderboard to join it again.
       setParticipationEnabled(false);
-      setParticipationError(true);
+      setParticipationError("read");
     } finally {
       if (readId === participationReadIdRef.current) setParticipationReady(true);
     }
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, userId]);
 
   // A completed write is the newest answer there is, so it retires every read
   // still in flight — including one the sync toggle started after the request
@@ -98,7 +114,7 @@ export function useInsightsSyncOptIn() {
     participationReadIdRef.current += 1;
     setParticipationEnabled(enabled);
     setParticipationReady(true);
-    setParticipationError(false);
+    setParticipationError(null);
   }, []);
 
   // The claim lands before the pass is requested so the rows it adopts go up
@@ -120,16 +136,21 @@ export function useInsightsSyncOptIn() {
     setParticipationUpdating(true);
     try {
       const participation = await LeaderboardService.setParticipation(false);
+      if (userId) clearPendingLeaderboardLeave(userId);
       publishParticipationAnswer(participation.enabled);
       return true;
     } catch (error) {
       console.error("Leaving the leaderboard failed:", error);
-      setParticipationError(true);
+      // The opt-out is kept and retried until the account takes it, so this
+      // device stops showing the user as participating straight away rather
+      // than asking them to remember to try again.
+      if (userId) writePendingLeaderboardLeave(userId);
+      publishParticipationAnswer(false);
       return false;
     } finally {
       setParticipationUpdating(false);
     }
-  }, [publishParticipationAnswer]);
+  }, [publishParticipationAnswer, userId]);
 
   const disableInsightsSync = useCallback(async () => {
     // The device stops uploading straight away: an opt-out that waits on the
@@ -189,14 +210,22 @@ export function useInsightsSyncOptIn() {
     setParticipationUpdating(true);
     try {
       const participation = await LeaderboardService.setParticipation(true);
+      // The account said yes here, which retires any leave still queued for it.
+      if (userId) clearPendingLeaderboardLeave(userId);
       publishParticipationAnswer(participation.enabled);
     } catch (error) {
       console.error("Joining the leaderboard failed:", error);
-      setParticipationError(true);
+      setParticipationError("write");
     } finally {
       setParticipationUpdating(false);
     }
-  }, [enableInsightsSync, insightsSyncEnabled, publishParticipationAnswer, syncAllowedByPolicy]);
+  }, [
+    enableInsightsSync,
+    insightsSyncEnabled,
+    publishParticipationAnswer,
+    syncAllowedByPolicy,
+    userId,
+  ]);
 
   const claiming = promptKind === "claim";
   const answerClaimPrompt = (claimed: boolean) => {

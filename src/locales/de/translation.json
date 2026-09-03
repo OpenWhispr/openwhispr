@@ -2773,6 +2773,7 @@
       "checkingParticipation": "Teilnahme an der Bestenliste wird geprüft…",
       "join": "Bestenliste beitreten",
       "leave": "Bestenliste verlassen",
+      "leavePending": "Du hast diese Bestenliste verlassen. Wir entfernen dich vollständig aus dem Konto, sobald du wieder online bist.",
       "allTime": "Gesamt",
       "thisWeek": "Diese Woche",
       "wpmValue": "{{count}} WPM",
