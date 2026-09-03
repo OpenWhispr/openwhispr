@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/ui/dialog";
 import { canChangeCloudBackupPreference, isCloudBackupAllowed } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import { syncService } from "../services/SyncService.js";
+import { LeaderboardService } from "../services/LeaderboardService";
+import { reconcileLeaderboardParticipation } from "../helpers/leaderboard";
+import { useAuth } from "./useAuth";
 import { useSettings } from "./useSettings";
 
 /**
@@ -30,31 +33,108 @@ import { useSettings } from "./useSettings";
  */
 export function useInsightsSyncOptIn() {
   const { t } = useTranslation();
+  const { isLoaded, isSignedIn } = useAuth();
   const { insightsSyncEnabled, setInsightsSyncEnabled } = useSettings();
   const [unclaimedCount, setUnclaimedCount] = useState(0);
   const [awaitingUploadCount, setAwaitingUploadCount] = useState(0);
+  const [participationReady, setParticipationReady] = useState(false);
+  const [participationEnabled, setParticipationEnabled] = useState(false);
+  const [participationError, setParticipationError] = useState(false);
+  const [participationUpdating, setParticipationUpdating] = useState(false);
+  const reconciliationIdRef = useRef(0);
   // Separate from the counts: a live count must never be what holds the dialog
   // open, or it reopens itself on mount for anyone with rows left behind.
   // "enable" asks about everything the first pass would upload; "claim" is the
   // narrower question that is left once sync is already on.
   const [promptKind, setPromptKind] = useState<"enable" | "claim" | null>(null);
   const syncAllowedByPolicy = usePolicyStore(isCloudBackupAllowed);
-  const canToggleSync = canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled);
+  const canToggleSync =
+    canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled) &&
+    participationReady &&
+    !participationUpdating;
+
+  // The account preference is authoritative once it exists. This lets the
+  // existing device-local Sync switch roam safely without a newly signed-in
+  // device silently opting the account out with its default `false` value.
+  useEffect(() => {
+    const reconciliationId = ++reconciliationIdRef.current;
+    if (!isLoaded || !isSignedIn) {
+      setParticipationReady(false);
+      setParticipationEnabled(false);
+      setParticipationError(false);
+      return;
+    }
+
+    setParticipationReady(false);
+    setParticipationError(false);
+    void (async () => {
+      try {
+        let participation = await LeaderboardService.getParticipation();
+        const reconciliation = reconcileLeaderboardParticipation(
+          participation,
+          insightsSyncEnabled
+        );
+        if (reconciliation.publish !== null) {
+          participation = await LeaderboardService.setParticipation(reconciliation.publish);
+        }
+        if (reconciliationId !== reconciliationIdRef.current) return;
+        setParticipationEnabled(participation.enabled);
+        if (reconciliation.enabled !== insightsSyncEnabled) {
+          setInsightsSyncEnabled(reconciliation.enabled);
+        }
+        setParticipationReady(true);
+      } catch (error) {
+        if (reconciliationId !== reconciliationIdRef.current) return;
+        console.error("Reconciling leaderboard participation failed:", error);
+        setParticipationError(true);
+        setParticipationReady(true);
+      }
+    })();
+  }, [insightsSyncEnabled, isLoaded, isSignedIn, setInsightsSyncEnabled]);
 
   // The claim lands before the pass is requested so the rows it adopts go up
   // with it, rather than waiting for the next ambient one.
   const activate = useCallback(
     async (claimAnonymous: boolean) => {
+      setParticipationUpdating(true);
       if (claimAnonymous) {
         await window.electronAPI.claimAnonymousAnalyticsEvents().catch((error) => {
           console.error("Claiming earlier Insights events failed:", error);
         });
       }
-      setInsightsSyncEnabled(true);
-      syncService.requestSyncAll("manual");
+      try {
+        const participation = await LeaderboardService.setParticipation(true);
+        setParticipationEnabled(participation.enabled);
+        setParticipationError(false);
+        setInsightsSyncEnabled(true);
+        syncService.requestSyncAll("manual");
+      } catch (error) {
+        console.error("Enabling Insights sync failed:", error);
+        setParticipationError(true);
+      } finally {
+        setParticipationUpdating(false);
+      }
     },
     [setInsightsSyncEnabled]
   );
+
+  const disableInsightsSync = useCallback(async () => {
+    setParticipationUpdating(true);
+    try {
+      const participation = await LeaderboardService.setParticipation(false);
+      setParticipationEnabled(participation.enabled);
+      setParticipationError(false);
+      setInsightsSyncEnabled(false);
+    } catch (error) {
+      // Keep the toggle on when the account-level opt-out did not reach the
+      // server; showing it as off while old totals remain ranked would be a
+      // privacy-breaking lie.
+      console.error("Disabling Insights sync failed:", error);
+      setParticipationError(true);
+    } finally {
+      setParticipationUpdating(false);
+    }
+  }, [setInsightsSyncEnabled]);
 
   const refreshCounts = useCallback(async () => {
     const [unclaimed, awaitingUpload] = await Promise.all([
@@ -107,5 +187,16 @@ export function useInsightsSyncOptIn() {
     />
   );
 
-  return { canToggleSync, enableInsightsSync, optInDialog, syncAllowedByPolicy, unclaimedCount };
+  return {
+    canToggleSync,
+    disableInsightsSync,
+    enableInsightsSync,
+    optInDialog,
+    participationEnabled,
+    participationError,
+    participationReady,
+    participationUpdating,
+    syncAllowedByPolicy,
+    unclaimedCount,
+  };
 }

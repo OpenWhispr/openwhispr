@@ -1702,8 +1702,10 @@ export default function SettingsPage({
   const { isSignedIn, isLoaded, user, refetch } = useAuth();
   const {
     canToggleSync: canToggleInsightsSync,
+    disableInsightsSync,
     enableInsightsSync,
     optInDialog: insightsOptInDialog,
+    participationError: insightsParticipationError,
     syncAllowedByPolicy: insightsSyncAllowedByPolicy,
   } = useInsightsSyncOptIn();
   // Signed out there is nothing to load and the plan grid is purely
@@ -4087,9 +4089,11 @@ EOF`,
                         ? t("settingsPage.privacy.insightsSyncRequiresAccount")
                         : !insightsSyncAllowedByPolicy
                           ? t("common.managedByOrg")
-                          : effectiveDataRetentionEnabled
-                            ? t("settingsPage.privacy.insightsSyncDescription")
-                            : t("settingsPage.privacy.insightsSyncRequiresHistory")
+                          : insightsParticipationError
+                            ? t("insights.leaderboard.activationError")
+                            : effectiveDataRetentionEnabled
+                              ? t("settingsPage.privacy.insightsSyncDescription")
+                              : t("settingsPage.privacy.insightsSyncRequiresHistory")
                     }
                   >
                     {/* With history off nothing is counted anywhere: this
@@ -4106,7 +4110,7 @@ EOF`,
                         (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
                       }
                       onChange={(enabled) =>
-                        enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)
+                        enabled ? enableInsightsSync() : void disableInsightsSync()
                       }
                     />
                   </SettingsRow>
