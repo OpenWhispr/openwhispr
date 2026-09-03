@@ -21,18 +21,25 @@ test("compound shortcuts produce ordered keycaps and readable instructions", asy
   assert.equal(formatHotkeyInstruction("Control+Shift+K"), "Ctrl + Shift + K");
 });
 
-test("macOS recommends Ctrl + Q while other platforms keep their effective default", async () => {
-  const { formatRecommendedHotkey, getRecommendedDictationHotkey } = await load();
+test("macOS recommends Right Option first, followed by Globe/Fn and Ctrl + R", async () => {
+  const {
+    DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
+    formatRecommendedHotkey,
+    getDefaultOnboardingDictationHotkey,
+    getRecommendedDictationHotkeys,
+  } = await load();
 
-  assert.equal(
-    formatRecommendedHotkey(getRecommendedDictationHotkey("darwin", "Command+K")),
-    "Ctrl + Q"
+  assert.equal(getDefaultOnboardingDictationHotkey("darwin", "GLOBE"), "RightOption");
+  assert.deepEqual(
+    getRecommendedDictationHotkeys("darwin", "Command+K").map(formatRecommendedHotkey),
+    ["Right Option", "Globe/Fn", "Ctrl + R"]
   );
-  assert.equal(getRecommendedDictationHotkey("linux", "Control+Super"), "Control+Super");
-  assert.equal(
-    getRecommendedDictationHotkey("win32", "Control+Shift+Space"),
-    "Control+Shift+Space"
-  );
+  assert.deepEqual(getRecommendedDictationHotkeys("linux", "Control+Super"), ["Control+Super"]);
+  assert.deepEqual(getRecommendedDictationHotkeys("win32", "Control+Shift+Space"), [
+    "Control+Shift+Space",
+  ]);
+  assert.equal(DEFAULT_ASSISTANT_ONBOARDING_HOTKEY, "CommandOrControl+Shift+Space");
+  assert.equal(formatRecommendedHotkey(DEFAULT_ASSISTANT_ONBOARDING_HOTKEY), "Cmd + Shift + Space");
 });
 
 test("a side-specific modifier keeps its glyph and says which side in the label", async () => {

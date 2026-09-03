@@ -103,7 +103,20 @@ export const formatHotkeyInstruction = (value: string) =>
   formatHotkeyLabel(value).split("+").join(" + ");
 
 export const formatRecommendedHotkey = (value: string) =>
-  isGlobeLikeHotkey(value) ? "fn/Globe" : formatHotkeyInstruction(value);
+  isGlobeLikeHotkey(value) ? "Globe/Fn" : formatHotkeyInstruction(value);
 
-export const getRecommendedDictationHotkey = (platform: Platform, effectiveDefault: string) =>
-  platform === "darwin" ? "Control+Q" : effectiveDefault;
+export const MACOS_DEFAULT_ONBOARDING_HOTKEY = "RightOption";
+export const DEFAULT_ASSISTANT_ONBOARDING_HOTKEY = "CommandOrControl+Shift+Space";
+
+export const getDefaultOnboardingDictationHotkey = (
+  platform: Platform,
+  effectiveDefault: string
+): string => (platform === "darwin" ? MACOS_DEFAULT_ONBOARDING_HOTKEY : effectiveDefault);
+
+export const getRecommendedDictationHotkeys = (
+  platform: Platform,
+  effectiveDefault: string
+): string[] =>
+  platform === "darwin"
+    ? [MACOS_DEFAULT_ONBOARDING_HOTKEY, "GLOBE", "Control+R"]
+    : [effectiveDefault];

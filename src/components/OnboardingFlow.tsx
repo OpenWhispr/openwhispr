@@ -31,8 +31,10 @@ import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import {
+  DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
   formatHotkeyInstruction,
-  getRecommendedDictationHotkey,
+  getDefaultOnboardingDictationHotkey,
+  getRecommendedDictationHotkeys,
 } from "./onboarding/hotkeyPresentation";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
@@ -85,6 +87,7 @@ function DemoHotkeyDescription({ text, hotkey }: { text: string; hotkey: string 
 
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
+  const platform = getPlatform();
   const { isSignedIn } = useAuth();
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
@@ -107,13 +110,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     window.location.reload();
   }, []);
 
-  const [dictationHotkey, setDictationHotkey] = useState(
-    () => parseHotkeyList(settings.dictationKey)[0] || getDefaultHotkey()
-  );
-  const [assistantHotkey, setAssistantHotkey] = useState(
-    () => parseHotkeyList(settings.voiceAgentKey)[0] || "CommandOrControl+Shift+Space"
-  );
   const { dictationHotkeyConfirmed, assistantHotkeyConfirmed } = session.resume;
+  const [dictationHotkey, setDictationHotkey] = useState(() => {
+    const savedHotkey = parseHotkeyList(settings.dictationKey)[0];
+    if (dictationHotkeyConfirmed && savedHotkey) return savedHotkey;
+    return getDefaultOnboardingDictationHotkey(platform, savedHotkey || getDefaultHotkey());
+  });
+  const [assistantHotkey, setAssistantHotkey] = useState(() => {
+    const savedHotkey = parseHotkeyList(settings.voiceAgentKey)[0];
+    if (assistantHotkeyConfirmed && savedHotkey) return savedHotkey;
+    return DEFAULT_ASSISTANT_ONBOARDING_HOTKEY;
+  });
   // Seeded from main rather than getDefaultHotkey(): main already knows when the
   // platform default can't bind (GNOME/X11 reject modifier-only combos) and
   // registered a fallback instead — recommending the unregistrable default would
@@ -414,8 +421,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   });
 
   const validateDictationHotkey = useCallback(
-    (value: string) => getValidationMessage(value, getPlatform()),
-    []
+    (value: string) => getValidationMessage(value, platform),
+    [platform]
   );
   const validateAssistantHotkey = useCallback(
     (value: string) =>
@@ -604,7 +611,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setFatalError(null);
     if (currentStepId === "notes" && workspaceResolutionPending) return;
     if (currentStepId === "permissions") {
-      if (getPlatform() === "darwin" && !permissions.accessibilityPermissionGranted) {
+      if (platform === "darwin" && !permissions.accessibilityPermissionGranted) {
         setAccessibilitySkipped(true);
       }
     } else if (currentStepId === "languages") {
@@ -619,6 +626,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         setFatalError(t("onboarding.hotkey.couldNotRegisterDescription"));
         return;
       }
+      setDictationHotkeyConfirmed(true);
     } else if (currentStepId === "assistant-hotkey") {
       if (parseHotkeyList(settings.voiceAgentKey)[0] !== assistantHotkey) {
         const registered = await settings.setVoiceAgentKey(
@@ -675,10 +683,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     finalizeOnboarding,
     goTo,
     permissions.accessibilityPermissionGranted,
+    platform,
     registerHotkey,
     route,
     session.setupMode,
     setAccessibilitySkipped,
+    setDictationHotkeyConfirmed,
     settings,
     settingsStore,
     syncUseCases,
@@ -859,13 +869,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             {assistant && <AssistantHotkeyPreview />}
             <ShortcutSetupStep
-              value={
-                (assistant ? assistantHotkeyConfirmed : dictationHotkeyConfirmed)
-                  ? assistant
-                    ? assistantHotkey
-                    : dictationHotkey
-                  : ""
-              }
+              value={assistant ? assistantHotkey : dictationHotkey}
+              initiallyConfirmed={assistant ? assistantHotkeyConfirmed : dictationHotkeyConfirmed}
               onChange={(value) => {
                 if (assistant) {
                   setAssistantHotkey(value);
@@ -877,15 +882,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               }}
               onClearSelection={() => {
                 if (assistant) {
+                  setAssistantHotkey("");
                   setAssistantHotkeyConfirmed(false);
                 } else {
+                  setDictationHotkey("");
                   setDictationHotkeyConfirmed(false);
                 }
               }}
               recommended={
                 assistant
-                  ? "CommandOrControl+Shift+Space"
-                  : getRecommendedDictationHotkey(getPlatform(), recommendedDictationHotkey)
+                  ? DEFAULT_ASSISTANT_ONBOARDING_HOTKEY
+                  : getRecommendedDictationHotkeys(platform, recommendedDictationHotkey)
               }
               captureLabel={t("onboarding.rehaul.hotkey.capture")}
               recommendedLabel={t("common.recommended")}
@@ -930,7 +937,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 />
               </div>
-              {getPlatform() === "linux" && activationMode === "push" && (
+              {platform === "linux" && activationMode === "push" && (
                 <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
               )}
             </div>
@@ -1123,6 +1130,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const hasShellNavigation = !compact;
   const hotkeyStep = currentStepId === "dictation-hotkey" || currentStepId === "assistant-hotkey";
   const demoStep = currentStepId === "dictation-demo" || currentStepId === "assistant-demo";
+  const notesStep = currentStepId === "notes";
   const inlineGatedStep = hotkeyStep || demoStep;
   const choiceStep = currentStepId === "setup-choice";
   const inlineProviderStep =
@@ -1134,9 +1142,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // withhold Continue until their task is complete.
   const showsContinue =
     hasShellNavigation && !choiceStep && !inlineProviderStep && (!inlineGatedStep || canContinue);
-  // Keep this branch's demo escape hatch: practice must remain skippable when a
-  // microphone or backend problem prevents completion.
-  const showsSkip = demoStep && !canContinue;
+  // Practice must remain skippable when a microphone or backend problem
+  // prevents completion. Calendar connections are optional, so Notes also
+  // offers Skip once workspace routing is ready.
+  const showsSkip = (demoStep && !canContinue) || (notesStep && canContinue);
 
   return (
     <>
@@ -1153,9 +1162,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             : undefined
         }
         onContinue={showsContinue ? () => void continueFromCurrentStep() : undefined}
-        // The demos are practice, not configuration — a mic problem or an
-        // unreachable transcription backend must never dead-end setup, so they
-        // stay skippable until they succeed.
+        // Demos are optional practice, and calendar connections on Notes are
+        // optional setup. Both advance through the same persisted route.
         onSkip={showsSkip ? () => void continueFromCurrentStep() : undefined}
         continueLabel={
           currentStepId === "use-cases"

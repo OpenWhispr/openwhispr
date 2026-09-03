@@ -51,8 +51,9 @@ function HotkeyChord({ value, compact = false }: { value: string; compact?: bool
 
 interface ShortcutSetupStepProps {
   value: string;
+  initiallyConfirmed?: boolean;
   onChange: (value: string) => void;
-  recommended: string;
+  recommended: string | string[];
   captureLabel: string;
   recommendedLabel: string;
   chooseAnotherLabel: string;
@@ -67,6 +68,7 @@ interface ShortcutSetupStepProps {
 
 export default function ShortcutSetupStep({
   value,
+  initiallyConfirmed,
   onChange,
   recommended,
   captureLabel,
@@ -79,8 +81,9 @@ export default function ShortcutSetupStep({
   showCandidateActions = true,
 }: ShortcutSetupStepProps) {
   const { t } = useTranslation();
+  const recommendations = Array.isArray(recommended) ? recommended : [recommended];
   const [candidate, setCandidate] = useState(value);
-  const [confirmed, setConfirmed] = useState(Boolean(value));
+  const [confirmed, setConfirmed] = useState(initiallyConfirmed ?? Boolean(value));
   const [error, setError] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [captureKey, setCaptureKey] = useState(0);
@@ -165,7 +168,7 @@ export default function ShortcutSetupStep({
             {confirmed ? (
               <p className="sr-only">{formatHotkeyInstruction(candidate)}</p>
             ) : (
-              <p className="rounded-full bg-[var(--onboarding-surface-tertiary)] px-5 py-2 text-sm text-[var(--onboarding-text-tertiary)]">
+              <p className="mt-6 rounded-full bg-[var(--onboarding-surface-tertiary)] px-5 py-2 text-sm text-[var(--onboarding-text-tertiary)]">
                 {t("onboarding.rehaul.hotkey.confirmAgain", {
                   hotkey: formatHotkeyInstruction(candidate),
                 })}
@@ -210,12 +213,17 @@ export default function ShortcutSetupStep({
             )}
           </div>
 
-          <p className="mt-6 flex items-center justify-center gap-3 text-base leading-[1.4] text-[var(--onboarding-text-tertiary)]">
-            {recommendedLabel}
-            <span className="rounded-full bg-[var(--onboarding-surface-tertiary)] px-3 py-1.5 text-sm text-[var(--onboarding-text-secondary)]">
-              {formatRecommendedHotkey(recommended)}
-            </span>
-          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-base leading-[1.4] text-[var(--onboarding-text-tertiary)]">
+            <span>{recommendedLabel}</span>
+            {recommendations.map((hotkey) => (
+              <span
+                key={hotkey}
+                className="rounded-full bg-[var(--onboarding-surface-tertiary)] px-3 py-1.5 text-sm text-[var(--onboarding-text-secondary)]"
+              >
+                {formatRecommendedHotkey(hotkey)}
+              </span>
+            ))}
+          </div>
         </>
       )}
     </div>

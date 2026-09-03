@@ -69,7 +69,11 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
       "/utils/hotkeys": `export function formatHotkeyLabel(value) { return value; }`,
       "/hotkeyPresentation": `
         export function formatHotkeyInstruction(value) { return value.split("+").join(" + "); }
-        export function formatRecommendedHotkey(value) { return value.split("+").join(" + "); }
+        export function formatRecommendedHotkey(value) {
+          return value === "GLOBE"
+            ? "Globe/Fn"
+            : value.replace("RightOption", "Right Option").replace(/^Control/, "Ctrl").split("+").join(" + ");
+        }
         export function getHotkeyKeycaps(value) {
           return value.split("+").filter(Boolean).map((part, index) => ({
             id: part + "-" + index,
@@ -85,8 +89,9 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
   );
   const harness = globalThis.__shortcutSetupHarness;
   const props = {
-    value: "",
-    recommended: "Control+Alt",
+    value: "RightOption",
+    initiallyConfirmed: false,
+    recommended: ["RightOption", "GLOBE", "Control+R"],
     captureLabel: "Capture",
     recommendedLabel: "Recommended",
     chooseAnotherLabel: "Choose another shortcut",
@@ -105,7 +110,27 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
   };
   const input = (tree) => findElement(tree, (node) => node.type?.name === "HotkeyInput");
 
-  input(render()).props.onChange("Control+Alt");
+  const initialTree = render();
+  assert.match(textContent(initialTree), /onboarding\.rehaul\.hotkey\.confirmAgain:RightOption/);
+  input(initialTree).props.onChange("RightOption");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(harness.confirmed, ["RightOption"]);
+  assert.deepEqual(harness.changed, ["RightOption"]);
+
+  const confirmedTree = render();
+  const chooseAnother = findElement(
+    confirmedTree,
+    (node) => node.type === "button" && textContent(node) === "Choose another shortcut"
+  );
+  assert.ok(chooseAnother);
+  chooseAnother.props.onClick();
+  harness.confirmed.length = 0;
+  harness.changed.length = 0;
+
+  const emptyTree = render();
+  assert.match(textContent(emptyTree), /RecommendedRight OptionGlobe\/FnCtrl \+ R/);
+
+  input(emptyTree).props.onChange("Control+Alt");
   assert.deepEqual(harness.confirmed, []);
   assert.deepEqual(harness.changed, []);
 
