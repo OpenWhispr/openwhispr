@@ -25,7 +25,7 @@ interface LeaderboardParticipationState {
   updating: boolean;
   reset: () => void;
   refresh: (userId: string | null) => Promise<void>;
-  publishAnswer: (enabled: boolean) => void;
+  publishAnswer: (enabled: boolean, generation: number) => void;
   join: (userId: string | null) => Promise<void>;
   leave: (userId: string | null) => Promise<boolean>;
 }
@@ -33,6 +33,8 @@ interface LeaderboardParticipationState {
 // A completed write is the newest answer there is, so it retires every read
 // still in flight — including one the sync toggle started after the request
 // went out, which would otherwise settle the account on pre-write state.
+// Writes read the same counter: one taken out for the departing account has no
+// answer to give about the account that replaced it.
 let readId = 0;
 
 export const useLeaderboardParticipationStore = create<LeaderboardParticipationState>(
@@ -44,11 +46,15 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
 
     reset: () => {
       readId += 1;
-      set({ enabled: false, ready: false, error: null });
+      // updating with it: a write left running for the departing account would
+      // otherwise keep refresh() deferring the new account's read for as long
+      // as its request takes to settle.
+      set({ enabled: false, ready: false, error: null, updating: false });
     },
 
     // The retired read never reports itself finished either, hence the ready flag.
-    publishAnswer: (enabled) => {
+    publishAnswer: (enabled, generation) => {
+      if (generation !== readId) return;
       readId += 1;
       set({ enabled, ready: true, error: null });
     },
@@ -84,6 +90,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     },
 
     join: async (userId) => {
+      const generation = readId;
       set({ updating: true });
       // The account says yes here, which retires any leave still queued for it —
       // before the request goes out, not after it lands, because turning the sync
@@ -94,21 +101,24 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
       if (userId) clearPendingLeaderboardLeave(userId);
       try {
         const participation = await LeaderboardService.setParticipation(true);
-        get().publishAnswer(participation.enabled);
+        get().publishAnswer(participation.enabled, generation);
       } catch (error) {
         console.error("Joining the leaderboard failed:", error);
-        set({ error: "write" });
+        if (generation === readId) set({ error: "write" });
       } finally {
         set({ updating: false });
       }
     },
 
     leave: async (userId) => {
+      const generation = readId;
       set({ updating: true });
       try {
         const participation = await LeaderboardService.setParticipation(false);
+        // The record is tagged with the account that asked, so it is retired —
+        // or, below, kept — whatever this store has moved on to since.
         if (userId) clearPendingLeaderboardLeave(userId);
-        get().publishAnswer(participation.enabled);
+        get().publishAnswer(participation.enabled, generation);
         return true;
       } catch (error) {
         console.error("Leaving the leaderboard failed:", error);
@@ -116,7 +126,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
         // device stops showing the user as participating straight away rather
         // than asking them to remember to try again.
         if (userId) writePendingLeaderboardLeave(userId);
-        get().publishAnswer(false);
+        get().publishAnswer(false, generation);
         return false;
       } finally {
         set({ updating: false });

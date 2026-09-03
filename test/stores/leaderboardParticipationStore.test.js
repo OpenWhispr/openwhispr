@@ -181,3 +181,36 @@ test("signing out drops the previous account's answer", async (t) => {
   assert.equal(store.getState().ready, false);
   assert.equal(store.getState().error, null);
 });
+
+// An account switch resets the store while a write is still out. Its answer is
+// about the account that left, so it must not settle the one that replaced it,
+// and the read it defers must not stay deferred for as long as it takes to fail.
+test("a write left over from the departing account cannot settle the next one", async (t) => {
+  let releaseLeave;
+  const { storage, store } = loadStore(t, {
+    cloudApiRequest: async () => {
+      await new Promise((resolve) => {
+        releaseLeave = resolve;
+      });
+      return { success: false, status: 0, error: "offline" };
+    },
+  });
+
+  const leaving = store.getState().leave("user_1");
+  store.getState().reset();
+  assert.equal(
+    store.getState().updating,
+    false,
+    "the departed account's write must stop deferring the next account's read"
+  );
+
+  releaseLeave();
+  assert.equal(await leaving, false);
+  assert.equal(store.getState().enabled, false);
+  assert.equal(store.getState().ready, false, "the stale write must not report an answer");
+  assert.deepEqual(
+    pendingUserIds(storage),
+    ["user_1"],
+    "the opt-out is tagged with the account that asked, so the reset cannot drop it"
+  );
+});
