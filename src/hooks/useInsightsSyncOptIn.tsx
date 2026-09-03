@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/ui/dialog";
-import {
-  clearPendingLeaderboardLeave,
-  writePendingLeaderboardLeave,
-} from "../lib/pendingLeaderboardLeave";
+import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipationStore";
 import { canChangeCloudBackupPreference, isCloudBackupAllowed } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import { syncService } from "../services/SyncService.js";
-import { LeaderboardService } from "../services/LeaderboardService";
 import { useAuth } from "./useAuth";
 import { useSettings } from "./useSettings";
 
@@ -42,6 +38,10 @@ import { useSettings } from "./useSettings";
  * Leaving is the opposite: it holds on the device the moment it is asked for
  * and is retried against the account until it lands, so an opt-out is never
  * lost to a network that happened to be down.
+ *
+ * Participation itself lives in leaderboardParticipationStore rather than here:
+ * Settings and the leaderboard both mount this hook, and an opt-out taken in
+ * one has to reach the other.
  */
 export function useInsightsSyncOptIn() {
   const { t } = useTranslation();
@@ -50,13 +50,10 @@ export function useInsightsSyncOptIn() {
   const { insightsSyncEnabled, setInsightsSyncEnabled } = useSettings();
   const [unclaimedCount, setUnclaimedCount] = useState(0);
   const [awaitingUploadCount, setAwaitingUploadCount] = useState(0);
-  const [participationReady, setParticipationReady] = useState(false);
-  const [participationEnabled, setParticipationEnabled] = useState(false);
-  // Which side failed, because they need different offers: an unknown answer
-  // gets a Retry, a refused write gets the action that failed back.
-  const [participationError, setParticipationError] = useState<"read" | "write" | null>(null);
-  const [participationUpdating, setParticipationUpdating] = useState(false);
-  const participationReadIdRef = useRef(0);
+  const participationReady = useLeaderboardParticipationStore((state) => state.ready);
+  const participationEnabled = useLeaderboardParticipationStore((state) => state.enabled);
+  const participationError = useLeaderboardParticipationStore((state) => state.error);
+  const participationUpdating = useLeaderboardParticipationStore((state) => state.updating);
   // Settles when the claim prompt is answered, so an opt-in that opens it can
   // wait for the answer instead of racing ahead of the user.
   const claimAnswerRef = useRef<((claimed: boolean) => void) | null>(null);
@@ -70,52 +67,16 @@ export function useInsightsSyncOptIn() {
     canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled) &&
     !participationUpdating;
 
-  // Read-only, and only when a caller asks: the account preference is the one
-  // source of truth for who is on a leaderboard, and nothing here may join or
-  // leave one on the user's behalf.
+  // Signed out there is no account to read, so the store goes back to unknown
+  // rather than keeping the previous user's answer.
   const refreshParticipation = useCallback(async () => {
-    const readId = ++participationReadIdRef.current;
+    const { refresh, reset } = useLeaderboardParticipationStore.getState();
     if (!isLoaded || !isSignedIn) {
-      setParticipationReady(false);
-      setParticipationEnabled(false);
-      setParticipationError(null);
+      reset();
       return;
     }
-
-    setParticipationReady(false);
-    setParticipationError(null);
-    try {
-      // An opt-out the network never delivered is retried first, so the answer
-      // below is the one the user asked for rather than the row it left behind.
-      const stillLeaving = await LeaderboardService.flushPendingLeave(userId);
-      const participation = await LeaderboardService.getParticipation();
-      if (readId !== participationReadIdRef.current) return;
-      setParticipationEnabled(participation.enabled && !stillLeaving);
-    } catch (error) {
-      if (readId !== participationReadIdRef.current) return;
-      console.error("Reading leaderboard participation failed:", error);
-      // A read that failed leaves participation unknown, so it has to fail
-      // closed. Keeping the last answer would also let the leaderboard's 403
-      // recovery re-read, fail, and immediately re-issue the same 403 forever.
-      // The surface offers a Retry rather than a Join, which would ask an
-      // account that may already be on a leaderboard to join it again.
-      setParticipationEnabled(false);
-      setParticipationError("read");
-    } finally {
-      if (readId === participationReadIdRef.current) setParticipationReady(true);
-    }
+    await refresh(userId);
   }, [isLoaded, isSignedIn, userId]);
-
-  // A completed write is the newest answer there is, so it retires every read
-  // still in flight — including one the sync toggle started after the request
-  // went out, which would otherwise settle the account on pre-write state. That
-  // read no longer gets to report itself finished either, hence the ready flag.
-  const publishParticipationAnswer = useCallback((enabled: boolean) => {
-    participationReadIdRef.current += 1;
-    setParticipationEnabled(enabled);
-    setParticipationReady(true);
-    setParticipationError(null);
-  }, []);
 
   // The claim lands before the pass is requested so the rows it adopts go up
   // with it, rather than waiting for the next ambient one.
@@ -132,25 +93,10 @@ export function useInsightsSyncOptIn() {
     [setInsightsSyncEnabled]
   );
 
-  const leaveLeaderboard = useCallback(async () => {
-    setParticipationUpdating(true);
-    try {
-      const participation = await LeaderboardService.setParticipation(false);
-      if (userId) clearPendingLeaderboardLeave(userId);
-      publishParticipationAnswer(participation.enabled);
-      return true;
-    } catch (error) {
-      console.error("Leaving the leaderboard failed:", error);
-      // The opt-out is kept and retried until the account takes it, so this
-      // device stops showing the user as participating straight away rather
-      // than asking them to remember to try again.
-      if (userId) writePendingLeaderboardLeave(userId);
-      publishParticipationAnswer(false);
-      return false;
-    } finally {
-      setParticipationUpdating(false);
-    }
-  }, [publishParticipationAnswer, userId]);
+  const leaveLeaderboard = useCallback(
+    () => useLeaderboardParticipationStore.getState().leave(userId),
+    [userId]
+  );
 
   const disableInsightsSync = useCallback(async () => {
     // The device stops uploading straight away: an opt-out that waits on the
@@ -207,30 +153,8 @@ export function useInsightsSyncOptIn() {
   const joinLeaderboard = useCallback(async () => {
     if (!syncAllowedByPolicy) return;
     if (!insightsSyncEnabled && !(await enableInsightsSync())) return;
-    setParticipationUpdating(true);
-    // The account says yes here, which retires any leave still queued for it —
-    // before the request goes out, not after it lands, because turning the sync
-    // toggle on re-reads participation and that read would flush the queued
-    // leave into a PATCH racing this join. A join that then fails leaves it
-    // retired too: re-arming would take the user off a board they just asked to
-    // join. A declined opt-in returns above, so its leave is never touched.
-    if (userId) clearPendingLeaderboardLeave(userId);
-    try {
-      const participation = await LeaderboardService.setParticipation(true);
-      publishParticipationAnswer(participation.enabled);
-    } catch (error) {
-      console.error("Joining the leaderboard failed:", error);
-      setParticipationError("write");
-    } finally {
-      setParticipationUpdating(false);
-    }
-  }, [
-    enableInsightsSync,
-    insightsSyncEnabled,
-    publishParticipationAnswer,
-    syncAllowedByPolicy,
-    userId,
-  ]);
+    await useLeaderboardParticipationStore.getState().join(userId);
+  }, [enableInsightsSync, insightsSyncEnabled, syncAllowedByPolicy, userId]);
 
   const claiming = promptKind === "claim";
   const answerClaimPrompt = (claimed: boolean) => {

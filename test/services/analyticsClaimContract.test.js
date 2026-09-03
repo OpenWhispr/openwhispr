@@ -50,19 +50,20 @@ test("the Insights view asks the predicate whether to offer the claim", () => {
 // must take it back down when it goes off.
 test("only an explicit join opts the account into a leaderboard", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const store = read("src/stores/leaderboardParticipationStore.ts");
   const settings = read("src/components/SettingsPage.tsx");
   const activate = hook.slice(
     hook.indexOf("const activate"),
     hook.indexOf("const leaveLeaderboard")
   );
   assert.equal(
-    activate.includes("setParticipation"),
+    activate.includes("LeaderboardParticipationStore"),
     false,
     "turning Insights sync on must not join a leaderboard"
   );
   assert.ok(hook.includes("const joinLeaderboard"));
-  assert.ok(hook.includes("LeaderboardService.setParticipation(true)"));
-  assert.ok(hook.includes("LeaderboardService.setParticipation(false)"));
+  assert.ok(store.includes("LeaderboardService.setParticipation(true)"));
+  assert.ok(store.includes("LeaderboardService.setParticipation(false)"));
   assert.ok(settings.includes("disableInsightsSync()"));
   assert.equal(
     settings.includes("enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)"),
@@ -80,7 +81,7 @@ test("a join publishes the account only after the sync opt-in has landed", () =>
     hook.indexOf("const answerClaimPrompt")
   );
   assert.ok(
-    join.indexOf("await enableInsightsSync()") < join.indexOf("setParticipation(true)"),
+    join.indexOf("await enableInsightsSync()") < join.indexOf(".join(userId)"),
     "the account must not be published before the opt-in the join depends on"
   );
   assert.ok(
@@ -93,13 +94,14 @@ test("a join publishes the account only after the sync opt-in has landed", () =>
 // published, not only through a switch labelled Insights sync.
 test("the leaderboard surface can leave without touching the sync switch", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const store = read("src/stores/leaderboardParticipationStore.ts");
   const section = read("src/components/LeaderboardSection.tsx");
   const view = read("src/components/LeaderboardView.tsx");
   const leave = hook.slice(
     hook.indexOf("const leaveLeaderboard"),
     hook.indexOf("const disableInsightsSync")
   );
-  assert.ok(leave.includes("LeaderboardService.setParticipation(false)"));
+  assert.ok(store.slice(store.indexOf("leave: async")).includes("setParticipation(false)"));
   assert.equal(
     leave.includes("setInsightsSyncEnabled"),
     false,
@@ -119,8 +121,8 @@ test("the leaderboard surface can leave without touching the sync switch", () =>
     false,
     "the leaderboard must follow the account's participation, not this device's sync toggle"
   );
-  // Settings owns its own copy of the hook, so its opt-out cannot reach this
-  // view's participation state on its own — the shared toggle is the signal.
+  // The opt-out itself reaches this view through the shared participation
+  // store; the toggle stays a re-read trigger for changes made off-device.
   assert.ok(
     view.includes("[insightsSyncEnabled, refreshParticipation]"),
     "flipping the device toggle off must re-read the account instead of leaving a roster up"
@@ -144,13 +146,10 @@ test("turning Insights sync off stops the device before it calls the account", (
 // the last answer would leave the board looking joined, re-issue the same load,
 // take the same 403 and re-read again — an unbounded loop against two endpoints.
 test("a participation read that fails cannot leave the board looking joined", () => {
-  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
-  const refresh = hook.slice(
-    hook.indexOf("const refreshParticipation"),
-    hook.indexOf("const activate")
-  );
+  const store = read("src/stores/leaderboardParticipationStore.ts");
+  const refresh = store.slice(store.indexOf("refresh: async"), store.indexOf("join: async"));
   assert.ok(
-    refresh.slice(refresh.indexOf("} catch")).includes("setParticipationEnabled(false)"),
+    refresh.slice(refresh.indexOf("} catch")).includes("enabled: false"),
     "an unknown answer must fail closed rather than keep the stale one"
   );
   assert.equal(
@@ -169,13 +168,10 @@ test("a participation read that fails cannot leave the board looking joined", ()
 // A failed read leaves participation unknown, and offering Join there asks an
 // account that may already be on this leaderboard to publish itself again.
 test("an unknown participation answer offers a retry instead of a join", () => {
-  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const store = read("src/stores/leaderboardParticipationStore.ts");
   const section = read("src/components/LeaderboardSection.tsx");
-  const refresh = hook.slice(
-    hook.indexOf("const refreshParticipation"),
-    hook.indexOf("const publishParticipationAnswer")
-  );
-  assert.ok(refresh.includes('setParticipationError("read")'));
+  const refresh = store.slice(store.indexOf("refresh: async"), store.indexOf("join: async"));
+  assert.ok(refresh.includes('error: "read"'));
   const card = section.slice(
     section.indexOf("if (!participating || !participationReady)"),
     section.indexOf('t("insights.leaderboard.join")')
@@ -193,25 +189,23 @@ test("an unknown participation answer offers a retry instead of a join", () => {
 // an automatic join would let one device's preference publish the account.
 test("a leave the account never took is kept and retried until it does", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const store = read("src/stores/leaderboardParticipationStore.ts");
   const service = read("src/services/LeaderboardService.ts");
-  const leave = hook.slice(
-    hook.indexOf("const leaveLeaderboard"),
-    hook.indexOf("const disableInsightsSync")
-  );
+  const leave = store.slice(store.indexOf("leave: async"));
   assert.ok(leave.includes("writePendingLeaderboardLeave(userId)"));
   assert.ok(
-    leave.includes("publishParticipationAnswer(false)"),
+    leave.includes("publishAnswer(false)"),
     "a pending leave must stop showing the user as participating"
   );
-  const join = hook.slice(
+  const hookJoin = hook.slice(
     hook.indexOf("const joinLeaderboard"),
     hook.indexOf("const answerClaimPrompt")
   );
   assert.ok(
-    join.indexOf("clearPendingLeaderboardLeave(userId)") >
-      join.indexOf("await enableInsightsSync()"),
+    hookJoin.indexOf(".join(userId)") > hookJoin.indexOf("await enableInsightsSync()"),
     "a declined opt-in never joins, so the leave it stopped short of must survive"
   );
+  const join = store.slice(store.indexOf("join: async"), store.indexOf("leave: async"));
   assert.ok(
     join.indexOf("clearPendingLeaderboardLeave(userId)") < join.indexOf("setParticipation(true)"),
     "an explicit join is the account's newest answer, and retiring the leave only after the join lands lets the read the sync toggle fires flush it into a PATCH racing that join"
@@ -232,29 +226,65 @@ test("a leave the account never took is kept and retried until it does", () => {
 // join fires a read of its own right after the write goes out. The write is the
 // newer answer whatever order the two land in, so it has to retire that read.
 test("a completed participation write outranks every read still in flight", () => {
-  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
-  const publish = hook.slice(
-    hook.indexOf("const publishParticipationAnswer"),
-    hook.indexOf("const activate")
+  const store = read("src/stores/leaderboardParticipationStore.ts");
+  const publish = store.slice(
+    store.indexOf("publishAnswer: (enabled)"),
+    store.indexOf("refresh: async")
   );
   assert.ok(
-    publish.indexOf("participationReadIdRef.current += 1") <
-      publish.indexOf("setParticipationEnabled("),
+    publish.indexOf("readId += 1") < publish.indexOf("set({ enabled"),
     "a read started before the write must be retired before the answer is published"
   );
   assert.ok(
-    publish.includes("setParticipationReady(true)"),
+    publish.includes("ready: true"),
     "the retired read never reports itself finished, so the write has to"
   );
   for (const [name, end] of [
-    ["const joinLeaderboard", "const answerClaimPrompt"],
-    ["const leaveLeaderboard", "const disableInsightsSync"],
+    ["join: async", "leave: async"],
+    ["leave: async", ""],
   ]) {
     assert.ok(
-      hook.slice(hook.indexOf(name), hook.indexOf(end)).includes("publishParticipationAnswer("),
+      store
+        .slice(store.indexOf(name), end ? store.indexOf(end) : undefined)
+        .includes("publishAnswer("),
       `${name} must publish through the path that retires in-flight reads`
     );
   }
+});
+
+// Settings and the leaderboard each mount this hook, so participation cannot
+// live in it: an opt-out taken behind the Settings modal has to reach the board
+// rendered under it, including when the leave fails and is only queued.
+test("every surface reads one participation source, not a copy per hook instance", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  for (const field of ["Enabled", "Ready", "Error", "Updating"]) {
+    assert.ok(
+      hook.includes(`const participation${field} = useLeaderboardParticipationStore(`),
+      `participation${field} must come from the shared store`
+    );
+  }
+  assert.equal(
+    /useState[^\n]*[Pp]articipation/.test(hook),
+    false,
+    "a per-instance copy is what left one surface showing a roster the other had left"
+  );
+  assert.equal(
+    hook.includes("participationReadIdRef"),
+    false,
+    "the read-id guard has to be shared too, or a write only retires its own instance's reads"
+  );
+});
+
+// Turning the sync switch off flips insightsSyncEnabled synchronously, which
+// fires the leaderboard's re-read while the leave PATCH is still in flight. The
+// read has to defer to the write rather than report the row it is changing.
+test("a participation read defers to a write already in flight", () => {
+  const store = read("src/stores/leaderboardParticipationStore.ts");
+  const refresh = store.slice(store.indexOf("refresh: async"), store.indexOf("join: async"));
+  assert.ok(
+    refresh.indexOf("if (get().updating) return;") < refresh.indexOf("++readId"),
+    "the write in flight is the newer answer, so the read must not even take an id"
+  );
 });
 
 // Signed out there is no account row to clear, and the PATCH could only fail
