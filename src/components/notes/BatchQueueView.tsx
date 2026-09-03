@@ -49,8 +49,8 @@ export function BatchWarningIndicator({
 
   const label = messages.join(" ");
   return (
-    <span className="flex shrink-0" role="img" tabIndex={0} title={label} aria-label={label}>
-      <AlertTriangle size={11} className="text-amber-600 dark:text-amber-300" />
+    <span className="flex shrink-0" role="img" title={label} aria-label={label}>
+      <AlertTriangle size={11} className="text-warning" />
     </span>
   );
 }

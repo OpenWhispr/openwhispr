@@ -53,6 +53,7 @@ import { useBatchQueue } from "../../stores/batchQueueStore";
 import type { TranscribeOptions } from "../../stores/batchQueueStore";
 import {
   transcribeFileWithSpeakers,
+  resolveDiarizationSettings,
   shouldUseByokDiarize,
   getTranscriptionApiKey,
 } from "../../services/fileTranscription";
@@ -70,7 +71,7 @@ import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
 import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
-import { UploadDiarizationWarning, UploadModelSettingsButton } from "./UploadAudioFeedback";
+import { UploadCompleteWarnings, UploadModelSettingsButton } from "./UploadAudioFeedback";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
@@ -199,22 +200,37 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     localStorage.setItem("uploadDiarizationNumSpeakers", diarizationNumSpeakers);
   }, [diarizationNumSpeakers]);
 
-  const diarizationDownloadRef = useRef(false);
-  const ensureDiarizationModels = async (): Promise<boolean> => {
-    if (diarizationDownloadRef.current) return false;
-    diarizationDownloadRef.current = true;
+  const diarizationDownloadRef = useRef<Promise<boolean> | null>(null);
+  // Callers share one in-flight download: a transcribe started while the
+  // mount-time heal is still fetching has to wait for it, not give up and
+  // report that speaker detection couldn't be applied.
+  const ensureDiarizationModels = (): Promise<boolean> => {
+    if (diarizationDownloadRef.current) return diarizationDownloadRef.current;
     setDiarizationDownloading(true);
-    try {
-      await window.electronAPI.downloadDiarizationModels?.();
-      const status = await window.electronAPI.getDiarizationModelStatus?.();
-      const ready = status?.modelsDownloaded ?? false;
-      setDiarizationModelsReady(ready);
-      return ready;
-    } finally {
-      diarizationDownloadRef.current = false;
-      setDiarizationDownloading(false);
-    }
+    const pending = (async () => {
+      try {
+        await window.electronAPI.downloadDiarizationModels?.();
+        const status = await window.electronAPI.getDiarizationModelStatus?.();
+        const ready = status?.modelsDownloaded ?? false;
+        setDiarizationModelsReady(ready);
+        return ready;
+      } finally {
+        diarizationDownloadRef.current = null;
+        setDiarizationDownloading(false);
+      }
+    })();
+    diarizationDownloadRef.current = pending;
+    return pending;
   };
+
+  const buildDiarizationSettings = (): Promise<DiarizationSettings> =>
+    resolveDiarizationSettings({
+      enabled: diarizationEnabled,
+      modelsReady: !!diarizationModelsReady,
+      numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
+      config: buildTranscriptionConfig(),
+      ensureModels: ensureDiarizationModels,
+    });
 
   useEffect(() => {
     window.electronAPI.getDiarizationModelStatus?.().then((status) => {
@@ -653,11 +669,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
 
     try {
-      const diarization: DiarizationSettings = {
-        enabled: diarizationEnabled,
-        localModelsReady: !!diarizationModelsReady,
-        numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
-      };
+      const diarization = await buildDiarizationSettings();
       const res: FileTranscriptionResult = await transcribeFileWithSpeakers(
         currentFile.path,
         buildTranscriptionConfig(),
@@ -850,7 +862,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setBatchUrlNotice(skipped > 0 ? t("notes.upload.urlsSkipped", { n: skipped }) : null);
   };
 
-  const startBatchProcessing = () => {
+  const startBatchProcessing = async () => {
     if (state === "downloading" || state === "transcribing") return;
     if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) {
       setBatchUrlNotice(t("common.managedByOrg"));
@@ -865,13 +877,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       generateTitle: async (text) => (await generateTitle(text)) || null,
     };
 
-    const diarization: DiarizationSettings = {
-      enabled: diarizationEnabled,
-      localModelsReady: !!diarizationModelsReady,
-      numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
-    };
-
-    batch.processQueue(transcribeOpts, diarization);
+    batch.processQueue(transcribeOpts, await buildDiarizationSettings());
   };
 
   const handleCreateFolder = async () => {
@@ -1465,9 +1471,9 @@ function IdleView({
         <h2 className="text-xs font-semibold text-foreground mb-1">{t("notes.upload.title")}</h2>
         <UploadModelSettingsButton
           label={t("notes.upload.using", { model: getActiveModelLabel() })}
-          ariaLabel={t("notes.upload.noProviderAction")}
+          actionLabel={t("notes.upload.noProviderAction")}
           onOpenSettings={onOpenSettings}
-          className="text-xs text-foreground/70 underline underline-offset-2 decoration-foreground/30 hover:text-foreground hover:decoration-foreground/50"
+          className="text-xs text-foreground/70"
         />
       </div>
 
@@ -1594,9 +1600,9 @@ function SelectedView({
             {file.size && <p className="text-xs text-foreground/25 mt-0.5">{file.size}</p>}
             <UploadModelSettingsButton
               label={getActiveModelLabel()}
-              ariaLabel={t("notes.upload.noProviderAction")}
+              actionLabel={t("notes.upload.noProviderAction")}
               onOpenSettings={onOpenSettings}
-              className="block max-w-full truncate text-left text-xs text-foreground/70 mt-0.5 underline underline-offset-2 decoration-foreground/30 hover:text-foreground hover:decoration-foreground/50"
+              className="block max-w-full truncate text-left text-xs text-foreground/70 mt-0.5"
             />
           </div>
           <button
@@ -1918,18 +1924,11 @@ function CompleteView({
         {result.slice(0, 150)}
       </p>
 
-      {partialWarning && (
-        <p className="text-xs text-destructive/50 max-w-[240px] text-center mb-4 -mt-2">
-          {t("notes.upload.partialWarningCount", {
-            failed: partialWarning.failed,
-            total: partialWarning.total,
-          })}
-        </p>
-      )}
-
-      {diarizationWarning && (
-        <UploadDiarizationWarning message={t("notes.upload.diarizationWarning")} />
-      )}
+      <UploadCompleteWarnings
+        partialWarning={partialWarning}
+        diarizationWarning={diarizationWarning}
+        t={t}
+      />
 
       {folders.length > 0 && (
         <FolderSelect

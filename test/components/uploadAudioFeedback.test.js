@@ -1,83 +1,158 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const React = require("react");
+const { createElement } = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-test("the upload model control opens its settings and diarization failures render a warning", async (t) => {
+async function loadFeedback(t) {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-upload-audio-feedback-test-",
-    mockModules: {
-      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
-    },
   });
-  const { UploadModelSettingsButton, UploadDiarizationWarning } = await vite.ssrLoadModule(
-    "/components/notes/UploadAudioFeedback.tsx"
-  );
+  return vite.ssrLoadModule("/components/notes/UploadAudioFeedback.tsx");
+}
 
-  assert.equal(typeof UploadModelSettingsButton, "function");
-  assert.equal(typeof UploadDiarizationWarning, "function");
-
-  const openedSections = [];
-  const modelButton = UploadModelSettingsButton({
-    label: "Using Parakeet",
-    ariaLabel: "Open Transcription Settings",
-    onOpenSettings: (section) => openedSections.push(section),
-  });
-  modelButton.props.onClick();
-
-  assert.deepEqual(openedSections, ["uploadTranscription"]);
-  assert.equal(modelButton.props.type, "button");
-  assert.equal(modelButton.props["aria-label"], "Open Transcription Settings");
-
-  const warningMarkup = renderToStaticMarkup(
-    React.createElement(UploadDiarizationWarning, {
-      message: "Speaker identification couldn't be applied. The transcript was saved without speaker labels.",
-    })
-  );
-  assert.match(warningMarkup, /Speaker identification couldn&#x27;t be applied/);
-});
-
-test("upload and batch views preserve accurate warning wiring", async (t) => {
+async function loadBatchQueueView(t) {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
-    cachePrefix: "openwhispr-upload-warning-wiring-test-",
+    cachePrefix: "openwhispr-batch-warning-indicator-test-",
   });
-  const { BatchWarningIndicator } = await vite.ssrLoadModule(
-    "/components/notes/BatchQueueView.tsx"
+  return vite.ssrLoadModule("/components/notes/BatchQueueView.tsx");
+}
+
+test("the model button announces the model it names, not just the action", async (t) => {
+  const { UploadModelSettingsButton } = await loadFeedback(t);
+
+  const markup = renderToStaticMarkup(
+    createElement(UploadModelSettingsButton, {
+      label: "Using Whisper · base",
+      actionLabel: "Open Transcription Settings",
+      onOpenSettings: () => {},
+    })
   );
 
-  assert.equal(typeof BatchWarningIndicator, "function");
-  const indicator = BatchWarningIndicator({
-    transcriptionWarning: false,
-    diarizationWarning: true,
-    t: (key) => key,
+  // WCAG 2.5.3: the accessible name must contain the visible label, or voice
+  // control cannot target the button and screen readers never hear the model.
+  const ariaLabel = markup.match(/aria-label="([^"]*)"/)?.[1];
+  assert.ok(ariaLabel, "expected an aria-label");
+  assert.ok(
+    ariaLabel.includes("Using Whisper · base"),
+    `accessible name "${ariaLabel}" must contain the visible label`
+  );
+  assert.ok(ariaLabel.includes("Open Transcription Settings"));
+});
+
+test("the model button opens the upload-scoped transcription settings", async (t) => {
+  const { UploadModelSettingsButton } = await loadFeedback(t);
+
+  const openedSections = [];
+  const element = UploadModelSettingsButton({
+    label: "Using Whisper · base",
+    actionLabel: "Open Transcription Settings",
+    onOpenSettings: (section) => openedSections.push(section),
   });
-  assert.equal(indicator.props.title, "notes.upload.diarizationWarning");
-  assert.equal(indicator.props["aria-label"], "notes.upload.diarizationWarning");
+  element.props.onClick();
 
-  const sourceRoot = path.join(__dirname, "../..");
-  const uploadViewSource = fs.readFileSync(
-    path.join(sourceRoot, "src/components/notes/UploadAudioView.tsx"),
-    "utf8"
-  );
-  const batchStoreSource = fs.readFileSync(
-    path.join(sourceRoot, "src/stores/batchQueueStore.ts"),
-    "utf8"
+  assert.deepEqual(openedSections, ["uploadTranscription"]);
+  assert.equal(element.props.type, "button");
+});
+
+test("the batch warning indicator renders nothing when neither warning is set", async (t) => {
+  const { BatchWarningIndicator } = await loadBatchQueueView(t);
+
+  const markup = renderToStaticMarkup(
+    createElement(BatchWarningIndicator, {
+      transcriptionWarning: false,
+      diarizationWarning: false,
+      t: (key) => key,
+    })
   );
 
-  assert.equal((uploadViewSource.match(/<UploadModelSettingsButton/g) || []).length, 2);
-  assert.match(uploadViewSource, /setDiarizationWarning\(!!res\.diarizationWarning\)/);
-  assert.match(
-    uploadViewSource,
-    /<UploadDiarizationWarning message=\{t\("notes\.upload\.diarizationWarning"\)\}/
+  assert.equal(markup, "");
+});
+
+test("the batch warning indicator combines both warnings into one label", async (t) => {
+  const { BatchWarningIndicator } = await loadBatchQueueView(t);
+
+  const markup = renderToStaticMarkup(
+    createElement(BatchWarningIndicator, {
+      transcriptionWarning: true,
+      diarizationWarning: true,
+      t: (key) => key,
+    })
   );
-  assert.match(batchStoreSource, /warning: !!transcriptionResult\.warning/);
-  assert.match(
-    batchStoreSource,
-    /diarizationWarning: !!transcriptionResult\.diarizationWarning/
+
+  const ariaLabel = markup.match(/aria-label="([^"]*)"/)?.[1];
+  assert.equal(ariaLabel, "notes.upload.partialWarning notes.upload.diarizationWarning");
+  assert.match(markup, /text-warning/);
+  // A non-widget span in the tab order is a dead stop: `title` tooltips do not
+  // open on keyboard focus, so there is nothing to read once you land there.
+  assert.doesNotMatch(markup, /tabindex/i);
+});
+
+test("the batch warning indicator reports a transcription-only warning", async (t) => {
+  const { BatchWarningIndicator } = await loadBatchQueueView(t);
+
+  const markup = renderToStaticMarkup(
+    createElement(BatchWarningIndicator, {
+      transcriptionWarning: true,
+      diarizationWarning: false,
+      t: (key) => key,
+    })
   );
+
+  assert.match(markup, /aria-label="notes\.upload\.partialWarning"/);
+});
+
+test("the completed upload stays quiet when nothing went wrong", async (t) => {
+  const { UploadCompleteWarnings } = await loadFeedback(t);
+
+  const markup = renderToStaticMarkup(
+    createElement(UploadCompleteWarnings, {
+      partialWarning: null,
+      diarizationWarning: false,
+      t: (key) => key,
+    })
+  );
+
+  assert.equal(markup, "");
+});
+
+test("the completed upload shows the diarization warning only when it is flagged", async (t) => {
+  const { UploadCompleteWarnings } = await loadFeedback(t);
+
+  const warned = renderToStaticMarkup(
+    createElement(UploadCompleteWarnings, {
+      partialWarning: null,
+      diarizationWarning: true,
+      t: (key) => key,
+    })
+  );
+  assert.match(warned, /notes\.upload\.diarizationWarning/);
+  assert.match(warned, /text-warning/);
+  assert.doesNotMatch(warned, /amber/, "use the --color-warning token, not a hand-rolled amber");
+
+  const quiet = renderToStaticMarkup(
+    createElement(UploadCompleteWarnings, {
+      partialWarning: null,
+      diarizationWarning: false,
+      t: (key) => key,
+    })
+  );
+  assert.doesNotMatch(quiet, /notes\.upload\.diarizationWarning/);
+});
+
+test("a chunk loss and a diarization failure are reported together", async (t) => {
+  const { UploadCompleteWarnings } = await loadFeedback(t);
+
+  const markup = renderToStaticMarkup(
+    createElement(UploadCompleteWarnings, {
+      partialWarning: { failed: 2, total: 9 },
+      diarizationWarning: true,
+      t: (key) => key,
+    })
+  );
+
+  assert.match(markup, /notes\.upload\.partialWarningCount/);
+  assert.match(markup, /notes\.upload\.diarizationWarning/);
 });

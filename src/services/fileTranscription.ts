@@ -174,6 +174,33 @@ export function shouldUseByokDiarize(
   );
 }
 
+interface DiarizationSettingsRequest {
+  enabled: boolean;
+  modelsReady: boolean;
+  numSpeakers: number | null;
+  config: FileTranscriptionConfig;
+  ensureModels: () => Promise<boolean>;
+}
+
+// Speaker detection is opt-in but its local models download lazily, so a run
+// started before they land would report "couldn't be applied" without the
+// diarizer ever being invoked. Fetch them first; only the routes that diarize
+// server-side can skip the download.
+export async function resolveDiarizationSettings({
+  enabled,
+  modelsReady,
+  numSpeakers,
+  config,
+  ensureModels,
+}: DiarizationSettingsRequest): Promise<DiarizationSettings> {
+  const needsLocalModels = enabled && !modelsReady && !shouldUseByokDiarize(config, enabled);
+  return {
+    enabled,
+    localModelsReady: needsLocalModels ? await ensureModels() : modelsReady,
+    numSpeakers,
+  };
+}
+
 // Transcribe and diarize in parallel, then merge speaker labels into the text.
 // Shared by the single-file flow and the batch queue. `durationSeconds` (when the
 // source knows it, e.g. URL downloads) beats inferring duration from segments.
