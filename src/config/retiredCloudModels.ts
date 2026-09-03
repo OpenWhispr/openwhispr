@@ -12,11 +12,13 @@
  * selection the user never chose is a repair, but doing it again to a model
  * they picked back would be the app arguing with them.
  *
- * When a provider retires a model, add `retired id -> replacement id` under
- * that provider, with a sentinel no other provider uses.
+ * That makes the sentinel, not the table, the unit of work: an id added under a
+ * key a released build already writes reaches nobody who has launched it, so
+ * add the id AND rotate that provider's `migratedKey`. The snapshot in
+ * test/helpers/retiredCloudModels.test.js trips on either edit, which forces
+ * the decision into the diff but cannot check you made it.
  */
 export interface RetiredProviderModels {
-  /** localStorage flag marking this provider's remap as already done. */
   migratedKey: string;
   models: Record<string, string>;
 }
@@ -32,10 +34,16 @@ export const RETIRED_CLOUD_MODELS: Record<string, RetiredProviderModels> = {
       "llama-3.1-8b-instant": "openai/gpt-oss-20b",
     },
   },
-  // Retired 2026-09-10, and already absent from Tinfoil's live /v1/models.
+  // All three shipped as seed entries — deepseek-v4-pro and kimi-k2-6 through
+  // v1.7.6, glm-5-2 until this release — so anyone who simply took a default
+  // can be on one. This key has not shipped yet, so the set could still grow.
   tinfoil: {
     migratedKey: "_retiredTinfoilModelsMigrated",
-    models: { "glm-5-2": "glm-5-3" },
+    models: {
+      "glm-5-2": "glm-5-3",
+      "deepseek-v4-pro": "deepseek-v4-flash",
+      "kimi-k2-6": "kimi-k3",
+    },
   },
 };
 
@@ -49,29 +57,41 @@ interface ScopeStorageKeys {
   model: string;
 }
 
+export interface SweptModelSelection {
+  storeKey: string;
+  provider: string;
+  from: string;
+  to: string;
+}
+
 /**
- * Repoints every scope selecting a retired model at its replacement. Returns
- * the model keys it rewrote, so the caller can say so in the log.
+ * Repoints every scope selecting a retired model at its replacement, reporting
+ * what it rewrote so the caller can log it and tell the user.
  */
 export function sweepRetiredCloudModelSelections(
   storage: RetiredModelStorage,
   scopes: readonly ScopeStorageKeys[]
-): string[] {
-  const swept: string[] = [];
+): SweptModelSelection[] {
+  const swept: SweptModelSelection[] = [];
 
   for (const [providerId, entry] of Object.entries(RETIRED_CLOUD_MODELS)) {
-    if (storage.getItem(entry.migratedKey) === "1") continue;
+    try {
+      if (storage.getItem(entry.migratedKey) === "1") continue;
 
-    for (const keys of scopes) {
-      if (storage.getItem(keys.provider) !== providerId) continue;
-      const model = storage.getItem(keys.model);
-      const replacement = model ? entry.models[model] : undefined;
-      if (!replacement) continue;
-      storage.setItem(keys.model, replacement);
-      swept.push(keys.model);
+      for (const keys of scopes) {
+        if (storage.getItem(keys.provider) !== providerId) continue;
+        const from = storage.getItem(keys.model);
+        const to = from ? entry.models[from] : undefined;
+        if (!from || !to) continue;
+        storage.setItem(keys.model, to);
+        swept.push({ storeKey: keys.model, provider: providerId, from, to });
+      }
+
+      storage.setItem(entry.migratedKey, "1");
+    } catch {
+      // A storage failure leaves this provider's sentinel unset, so the next
+      // launch retries; a scope repointed before the failure is then a no-op.
     }
-
-    storage.setItem(entry.migratedKey, "1");
   }
 
   return swept;

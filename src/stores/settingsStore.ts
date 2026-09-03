@@ -30,7 +30,11 @@ import {
 import { normalizeChineseScriptPreference } from "../utils/chineseScript";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import modelRegistryData from "../models/modelRegistryData.json";
-import { pickProviderDefaultModel } from "../models/providerDefaultModel";
+import { pickDefaultModelId } from "../models/providerDefaultModel";
+// Both are leaves: tinfoilModelCache imports only a type from ModelRegistry and
+// the switch store only zustand, so neither reopens the ModelRegistry cycle.
+import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
+import { recordTinfoilModelSwitch } from "./tinfoilModelSwitchStore";
 import {
   getTranscriptionSelection,
   isScreenContextAllowed,
@@ -150,10 +154,7 @@ function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion:
       : mode === "enterprise"
         ? modelRegistryData.enterpriseProviders
         : modelRegistryData.cloudProviders;
-  const provider = providers.find((candidate) => candidate.id === providerId);
-  // Only providers with a live catalog name a default; the rest lead their list with it.
-  const namedDefault = provider && "defaultModel" in provider ? provider.defaultModel : undefined;
-  const defaultModel = pickProviderDefaultModel(provider?.models, namedDefault)?.id ?? "";
+  const defaultModel = pickDefaultModelId(providers.find(({ id }) => id === providerId));
   return mode === "enterprise" && providerId === "bedrock"
     ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)
     : defaultModel;
@@ -595,6 +596,18 @@ function migrateLLMScopeKeys() {
 
 migrateLLMScopeKeys();
 
+// Resolved offline, so a retired model's name survives only in the user's own
+// catalog cache and a replacement's only if we seed it. The raw-id fallback is
+// what the live-catalog reconcile shows too.
+function tinfoilModelName(modelId: string): string {
+  const named =
+    readCachedTinfoilModels().models.find((model) => model.id === modelId) ??
+    modelRegistryData.cloudProviders
+      .find((provider) => provider.id === "tinfoil")
+      ?.models.find((model) => model.id === modelId);
+  return named?.name ?? modelId;
+}
+
 // A scope still pointing at a model its provider has retired 404s on every
 // request. Runs after migrateLLMScopeKeys so scope values live under their
 // final keys, and before the store reads them, so the first request of the
@@ -605,8 +618,21 @@ function migrateRetiredCloudModels() {
     localStorage,
     Object.values(INFERENCE_SCOPES).map(({ storeKeys }) => storeKeys)
   );
-  if (swept.length > 0) {
-    logger.info("Repointed retired cloud model selections", { scopes: swept }, "settings");
+  if (swept.length === 0) return;
+
+  logger.info(
+    "Repointed retired cloud model selections",
+    { scopes: swept.map(({ storeKey }) => storeKey) },
+    "settings"
+  );
+
+  // Tinfoil is the one provider that tells the user their model was switched
+  // out, and getting here first means reconcileSelectedModels no longer will.
+  const announced = new Set<string>();
+  for (const { provider, from, to } of swept) {
+    if (provider !== "tinfoil" || announced.has(from)) continue;
+    announced.add(from);
+    recordTinfoilModelSwitch({ from: tinfoilModelName(from), to: tinfoilModelName(to) });
   }
 }
 
@@ -2864,7 +2890,7 @@ export function reconcileRetiredCloudModelSelections(): void {
     if (!provider || !model || provider === "tinfoil") continue;
     const providerDef = modelRegistryData.cloudProviders.find((p) => p.id === provider);
     if (!providerDef || reasoningModelBelongsToProvider(provider, model)) continue;
-    const replacement = providerDef.models[0]?.id;
+    const replacement = pickDefaultModelId(providerDef);
     if (!replacement) continue;
     setStringSetting(scope.storeKeys.model as keyof SettingsState, replacement);
     logger.info(

@@ -23,7 +23,7 @@ import {
   type CloudProviderData,
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
-import { pickProviderDefaultModel } from "../../models/providerDefaultModel";
+import { pickDefaultModelId } from "../../models/providerDefaultModel";
 import type { OnboardingStepId } from "./flow";
 import { forgetPendingLocalModel, rememberPendingLocalModel } from "./pendingLocalModels";
 import { isLocalStageDownloadActive } from "./localDownloadState";
@@ -287,10 +287,7 @@ export function ByokProviderStep({
   };
 
   const chooseProvider = (providerId: string) => {
-    const provider = providers.find((item) => item.id === providerId);
-    // Only providers with a live catalog name a default; the rest lead their list with it.
-    const namedDefault = provider && "defaultModel" in provider ? provider.defaultModel : undefined;
-    const fallbackModel = pickProviderDefaultModel(provider?.models, namedDefault)?.id ?? "";
+    const fallbackModel = pickDefaultModelId(providers.find((item) => item.id === providerId));
     setSelectedProvider(providerId);
     setSelectedModel(fallbackModel);
     setDraftApiKey(providerCredential(providerId, store).value);

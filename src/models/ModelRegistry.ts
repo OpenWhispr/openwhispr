@@ -307,7 +307,6 @@ export function getTinfoilModels(): CloudModelDefinition[] {
   return getTinfoilCloudProvider()?.models ?? [];
 }
 
-/** The model id a provider names as its default, for pickProviderDefaultModel. */
 export function getCloudProviderDefaultModelId(providerId: string): string | undefined {
   return modelData.cloudProviders.find((provider) => provider.id === providerId)?.defaultModel;
 }

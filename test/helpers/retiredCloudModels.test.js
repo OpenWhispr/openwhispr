@@ -23,8 +23,27 @@ test("remaps a scope pinned to a model Tinfoil retired", async () => {
   const { sweepRetiredCloudModelSelections } = await load();
   const storage = makeStorage({ cleanupProvider: "tinfoil", cleanupModel: "glm-5-2" });
 
-  assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP]), ["cleanupModel"]);
+  assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP]), [
+    { storeKey: "cleanupModel", provider: "tinfoil", from: "glm-5-2", to: "glm-5-3" },
+  ]);
   assert.equal(storage.map.get("cleanupModel"), "glm-5-3");
+});
+
+test("remaps every other Tinfoil model the app has offered and Tinfoil has since retired", async () => {
+  const { sweepRetiredCloudModelSelections } = await load();
+  // Both shipped as seed defaults and are both gone from the live catalog now,
+  // so they 404 exactly like glm-5-2 did.
+  const storage = makeStorage({
+    cleanupProvider: "tinfoil",
+    cleanupModel: "deepseek-v4-pro",
+    chatAgentProvider: "tinfoil",
+    chatAgentModel: "kimi-k2-6",
+  });
+
+  sweepRetiredCloudModelSelections(storage, [CLEANUP, CHAT]);
+
+  assert.equal(storage.map.get("cleanupModel"), "deepseek-v4-flash");
+  assert.equal(storage.map.get("chatAgentModel"), "kimi-k3");
 });
 
 test("still remaps the models Groq retired", async () => {
@@ -79,7 +98,9 @@ test("Groq's already-shipped sentinel does not suppress another provider's remap
     cleanupModel: "glm-5-2",
   });
 
-  assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP]), ["cleanupModel"]);
+  assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP]), [
+    { storeKey: "cleanupModel", provider: "tinfoil", from: "glm-5-2", to: "glm-5-3" },
+  ]);
   assert.equal(storage.map.get("cleanupModel"), "glm-5-3");
 });
 
@@ -111,4 +132,42 @@ test("no replacement is itself retired, and every provider has its own sentinel"
       );
     }
   }
+});
+
+// The sweep is one-shot per sentinel, so an id added under a key installed apps
+// already carry never runs. Tripping on either edit is what forces the rotation
+// into the diff — this cannot check it happened.
+test("each provider's sentinel is pinned to the exact set of ids it covers", async () => {
+  const { RETIRED_CLOUD_MODELS } = await load();
+
+  const covered = Object.fromEntries(
+    Object.entries(RETIRED_CLOUD_MODELS).map(([provider, entry]) => [
+      provider,
+      { migratedKey: entry.migratedKey, retired: Object.keys(entry.models).sort() },
+    ])
+  );
+
+  assert.deepEqual(covered, {
+    groq: {
+      migratedKey: "_retiredGroqModelsMigrated",
+      retired: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "qwen/qwen3-32b"],
+    },
+    tinfoil: {
+      migratedKey: "_retiredTinfoilModelsMigrated",
+      retired: ["deepseek-v4-pro", "glm-5-2", "kimi-k2-6"],
+    },
+  });
+});
+
+test("a storage that cannot be written leaves the sentinel unset, so the next launch retries", async () => {
+  const { sweepRetiredCloudModelSelections } = await load();
+  const storage = makeStorage({ cleanupProvider: "tinfoil", cleanupModel: "glm-5-2" });
+  storage.setItem = () => {
+    throw new Error("QuotaExceededError");
+  };
+
+  assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP]), []);
+  assert.equal(storage.map.get("_retiredTinfoilModelsMigrated"), undefined);
+  // Groq shares the storage but not the failure's blast radius.
+  assert.equal(storage.map.get("_retiredGroqModelsMigrated"), undefined);
 });
