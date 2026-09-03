@@ -56,13 +56,14 @@ const ALL_TIME_METRICS: LeaderboardMetric[] = [
 interface LeaderboardSectionProps {
   accountId: string | null;
   isSignedIn: boolean;
-  syncActive: boolean;
+  /** The account row says joined — what the roster and Leave hang on, not the device toggle. */
+  participating: boolean;
   canJoin: boolean;
   participationReady: boolean;
   participationError: boolean;
   participationUpdating: boolean;
   onJoin: () => void;
-  onLeave: () => void;
+  onLeave: () => Promise<boolean>;
   onParticipationStale: () => void;
   onSignIn: () => void;
   onUpgrade: () => void;
@@ -80,7 +81,7 @@ function scrollToRank(rank: number) {
 export default function LeaderboardSection({
   accountId,
   isSignedIn,
-  syncActive,
+  participating,
   canJoin,
   participationReady,
   participationError,
@@ -95,7 +96,6 @@ export default function LeaderboardSection({
   const { toast } = useToast();
   const loaded = useWorkspaceStore((state) => state.loaded);
   const refresh = useWorkspaceStore((state) => state.refresh);
-  const setActiveWorkspaceId = useWorkspaceStore((state) => state.setActiveWorkspaceId);
   const [access, setAccess] = useState<LeaderboardAccess | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessError, setAccessError] = useState(false);
@@ -164,11 +164,11 @@ export default function LeaderboardSection({
   }, [scopeKey]);
 
   useEffect(() => {
-    if (!syncActive) requestIdRef.current += 1;
-  }, [syncActive]);
+    if (!participating) requestIdRef.current += 1;
+  }, [participating]);
 
   const load = useCallback(async () => {
-    if (!selectedScope || selectedScope.state !== "ready" || !syncActive || !participationReady)
+    if (!selectedScope || selectedScope.state !== "ready" || !participating || !participationReady)
       return;
     const requestId = ++requestIdRef.current;
     setLoading(true);
@@ -211,10 +211,10 @@ export default function LeaderboardSection({
     metric,
     onParticipationStale,
     page,
+    participating,
     participationReady,
     range,
     selectedScope,
-    syncActive,
     weekStart,
   ]);
 
@@ -230,7 +230,7 @@ export default function LeaderboardSection({
     : LEADERBOARD_REFRESH_INTERVAL_MS;
 
   useEffect(() => {
-    if (!selectedScope || selectedScope.state !== "ready" || !syncActive || !participationReady)
+    if (!selectedScope || selectedScope.state !== "ready" || !participating || !participationReady)
       return;
     const refreshIfStale = () => {
       if (
@@ -248,7 +248,7 @@ export default function LeaderboardSection({
       window.removeEventListener("focus", refreshIfStale);
       document.removeEventListener("visibilitychange", refreshIfStale);
     };
-  }, [load, participationReady, refreshIntervalMs, selectedScope, syncActive]);
+  }, [load, participating, participationReady, refreshIntervalMs, selectedScope]);
 
   const pages = pageCount(leaderboard?.totalMembers ?? 0, pageSize);
   useEffect(() => setPage((current) => Math.min(current, pages - 1)), [pages]);
@@ -363,7 +363,6 @@ export default function LeaderboardSection({
           <LeaderboardInvitePreview
             onInvite={() => {
               if (selectedScope.kind === "workspace") {
-                setActiveWorkspaceId(selectedScope.id);
                 setInviteWorkspace({ id: selectedScope.id, name: selectedScope.name });
               } else {
                 setCreateWorkspaceOpen(true);
@@ -451,7 +450,7 @@ export default function LeaderboardSection({
   };
   const podiumOrder = leaderboard?.leaders.length === 1 ? [0] : [1, 0, 2];
 
-  if (!syncActive || !participationReady) {
+  if (!participating || !participationReady) {
     return (
       <section className="mt-8 rounded-2xl border border-primary/20 bg-primary/5 p-6">
         <div className="flex items-start justify-between gap-5">
@@ -501,7 +500,21 @@ export default function LeaderboardSection({
           )}
           {/* The mirror of Join: publishing a name and an email to colleagues
               has to be undoable from the surface that publishes it. */}
-          <Button variant="outline" size="sm" onClick={onLeave} disabled={participationUpdating}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              void onLeave().then((left) => {
+                if (!left) {
+                  toast({
+                    title: t("insights.leaderboard.activationError"),
+                    variant: "destructive",
+                  });
+                }
+              })
+            }
+            disabled={participationUpdating}
+          >
             <LogOut size={14} />
             {t("insights.leaderboard.leave")}
           </Button>

@@ -94,6 +94,7 @@ test("a join publishes the account only after the sync opt-in has landed", () =>
 test("the leaderboard surface can leave without touching the sync switch", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
   const section = read("src/components/LeaderboardSection.tsx");
+  const view = read("src/components/LeaderboardView.tsx");
   const leave = hook.slice(
     hook.indexOf("const leaveLeaderboard"),
     hook.indexOf("const disableInsightsSync")
@@ -105,7 +106,17 @@ test("the leaderboard surface can leave without touching the sync switch", () =>
     "leaving a leaderboard must not be entangled with the device sync switch"
   );
   assert.ok(section.includes('t("insights.leaderboard.leave")'));
-  assert.ok(section.includes("onClick={onLeave}"));
+  assert.ok(section.includes("onLeave()"));
+  // The device toggle is per device and can be off while the account row still
+  // says joined — gating on it would hide Leave from an account that is ranked.
+  assert.ok(
+    view.includes("participating={isSignedIn && syncAllowedByPolicy && participationEnabled}")
+  );
+  assert.equal(
+    view.includes("insightsSyncEnabled"),
+    false,
+    "the leaderboard must follow the account's participation, not this device's sync toggle"
+  );
 });
 
 // An opt-out that waits on the network is one the user loses when it is down.

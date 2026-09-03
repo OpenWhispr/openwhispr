@@ -15,7 +15,7 @@ interface LeaderboardViewProps {
 export default function LeaderboardView({ onSignIn, onUpgrade }: LeaderboardViewProps) {
   const { t } = useTranslation();
   const { isSignedIn, user } = useAuth();
-  const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
+  const { dataRetentionEnabled: personalDataRetentionEnabled } = useSettings();
   const dataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );
@@ -52,9 +52,7 @@ export default function LeaderboardView({ onSignIn, onUpgrade }: LeaderboardView
         key={user?.id ?? "guest"}
         accountId={user?.id ?? null}
         isSignedIn={isSignedIn}
-        syncActive={
-          isSignedIn && insightsSyncEnabled && syncAllowedByPolicy && participationEnabled
-        }
+        participating={isSignedIn && syncAllowedByPolicy && participationEnabled}
         canJoin={
           isSignedIn && syncAllowedByPolicy && dataRetentionEnabled && !participationUpdating
         }
@@ -62,7 +60,7 @@ export default function LeaderboardView({ onSignIn, onUpgrade }: LeaderboardView
         participationError={participationError}
         participationUpdating={participationUpdating}
         onJoin={() => void joinLeaderboard()}
-        onLeave={() => void leaveLeaderboard()}
+        onLeave={leaveLeaderboard}
         onParticipationStale={refreshParticipation}
         onSignIn={onSignIn}
         onUpgrade={onUpgrade}
