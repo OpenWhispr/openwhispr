@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-09-03
+
+### Fixed
+- **Generating notes with a local model failed every time on some machines.** Every meeting stopped with "Prompt is too long for this model", and the queue behind it failed the same way. The app was working out how much memory a model's context needs by assuming every layer of the model grows with the length of the conversation. Newer models — Gemma among them — keep most of their layers at a fixed size no matter how long the conversation gets, so the app was overstating the cost by more than six times and then giving the model a context far too small to hold a single meeting. It now reads the model's own description of how it works. On the machine this was reported from, the model went from a 2,048-token context to 16,384 — from refusing a two-minute meeting to comfortably handling an hour.
+- **The app no longer refuses a model the little memory it needs while handing it gigabytes.** When a model was larger than the memory reported free, the amount set aside for the conversation collapsed to a fixed minimum too small to be useful — while the app went ahead and loaded the multi-gigabyte model anyway. What it sets aside now scales with the model it has already committed to loading, and is still capped so a large model on a small machine cannot take more than its share.
+- **The app now asks the model server how much context it actually got** rather than trusting its own estimate. Notes were being refused against a guess, so an estimate that read high rejected meetings the model would have handled.
+- **Long meetings no longer lose their ending.** The notes step only ever looked at the first 8,000 characters of a transcript — roughly the first 25 minutes — and silently discarded the rest. Local models now work through the whole transcript in passes, as the manual "regenerate notes" action already did, and cloud models get the complete transcript instead of the first quarter of it.
+- **A damaged or hand-edited model file can no longer talk the app into over-allocating memory.** Model files are downloaded, and several kinds of corruption inside one made its memory cost look far smaller than it is — in the worst case free — which would have had the app reserve far more than the machine could give and hang it, the same way a bad estimate did in August. A model whose description of itself does not add up is now treated as unreadable rather than trusted.
+- **"Prompt is too long" now says what to do about it** — which model, how much context it was given, and that freeing memory or choosing a smaller model is the fix — instead of two bare numbers.
+
 ## [1.16.1] - 2026-08-12
 
 ### Fixed

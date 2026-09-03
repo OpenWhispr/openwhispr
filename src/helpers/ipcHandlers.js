@@ -3841,6 +3841,10 @@ class IPCHandlers {
       diarizationManager: this.diarizationManager,
       inference,
       convertToWav,
+      // Lets the notes step size its chunks against the context the local server
+      // actually has, instead of truncating the transcript to fit a guess.
+      resolveModelContext: (modelId) =>
+        require("./modelManagerBridge").default.resolveModelContext(modelId),
     });
 
     // Observe pipeline status events for pending retranscription tracking

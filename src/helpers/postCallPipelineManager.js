@@ -3,6 +3,8 @@ const debugLogger = require("./debugLogger");
 const { computeTranscriptDiff } = require("./transcriptDiff");
 const { retranscribeNoteTranscript } = require("./retranscribeNoteTranscript");
 const { i18nMain, SUPPORTED_UI_LANGUAGES } = require("./i18nMain");
+const { MainProcessInference } = require("./mainProcessInference");
+const { runNoteAction } = require("./noteActionRunner");
 
 const STEP_ORDER = ["retranscribe", "title", "classify", "notes"];
 
@@ -111,13 +113,24 @@ const TITLE_PROMPT =
   "Generate a concise 3-8 word title for this meeting transcript. Return ONLY the title text, nothing else — no quotes, no prefix, no explanation.";
 
 class PostCallPipelineManager {
-  constructor({ broadcast, databaseManager, whisperManager, diarizationManager, inference, convertToWav }) {
+  constructor({
+    broadcast,
+    databaseManager,
+    whisperManager,
+    diarizationManager,
+    inference,
+    convertToWav,
+    resolveModelContext = null,
+  }) {
     this._broadcast = broadcast;
     this._db = databaseManager;
     this._whisper = whisperManager;
     this._diarization = diarizationManager;
     this._inference = inference;
     this._convertToWav = convertToWav;
+    // Absent in the tests that construct this manager directly, and absent for
+    // any caller with no local model available; both fall back to one call.
+    this._resolveModelContext = resolveModelContext;
   }
 
   async run(noteId, options = {}) {
@@ -445,10 +458,74 @@ Reply with ONLY the numeric id of the best matching meeting type. If none match 
     }
 
     const text = this._flattenTranscript(transcript);
-    return this._inference.processText(text.slice(0, 8000), {
-      ...config,
+
+    // `resolveProvider` and not `config.provider`: Settings has been observed
+    // persisting a model family ("gemma") into the provider field, and a local
+    // model down the single-call path is the failure this method exists to fix.
+    const servedLocally =
+      MainProcessInference.resolveProvider(config.provider, config.model) === "local";
+
+    if (servedLocally && this._resolveModelContext) {
+      return this._generateNotesInPasses({ noteId, config, systemPrompt, transcript, text });
+    }
+
+    // A cloud model has context to spare, so it takes one call — but it no longer
+    // takes only the first 8000 characters, which quietly ended every note at
+    // about the 25-minute mark.
+    return this._inference.processText(text, { ...config, systemPrompt });
+  }
+
+  /**
+   * Extracts from each chunk of the transcript, then writes the notes once from
+   * everything extracted. A meeting longer than the local model's context is the
+   * normal case, not an error.
+   */
+  async _generateNotesInPasses({ noteId, config, systemPrompt, transcript, text }) {
+    const { contextSize, isGpuBackend } = await this._resolveModelContext(config.model);
+    const segments = this._transcriptSegments(transcript);
+
+    const result = await runNoteAction({
       systemPrompt,
+      segments,
+      // Chunking the same text twice would double it into the compose step.
+      noteContent: segments.length > 0 ? "" : text,
+      contextSize,
+      isGpuBackend,
+      infer: (prompt, options) =>
+        this._inference.processText(prompt, { ...config, ...options }),
     });
+
+    debugLogger.notice(
+      "Pipeline: notes generated over multiple passes",
+      {
+        noteId,
+        passes: result.passes,
+        partial: result.partial,
+        gapCount: result.gapCount,
+        contextSize,
+      },
+      "meeting"
+    );
+
+    return result.text;
+  }
+
+  /**
+   * The transcript as speaker-labelled segments, or an empty array when it is
+   * plain text. Segments chunk on speaker turns; plain text can only chunk on
+   * sentences.
+   */
+  _transcriptSegments(transcript) {
+    if (typeof transcript !== "string" || !transcript.startsWith("[")) return [];
+    try {
+      const parsed = JSON.parse(transcript);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((s) => ({ label: s.speakerName || s.speaker || "", text: String(s.text ?? "") }))
+        .filter((s) => s.text.trim());
+    } catch {
+      return [];
+    }
   }
 
   _getInferenceConfig() {
