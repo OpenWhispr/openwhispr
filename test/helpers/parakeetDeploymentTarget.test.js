@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const path = require("node:path");
 
 const sherpaDownloader = require("../../scripts/download-sherpa-onnx");
 
@@ -60,22 +61,46 @@ test("rejects a packaged ONNX Runtime library missing a universal architecture s
   );
 });
 
-test("validates the versioned ONNX Runtime library from a packaged app", () => {
+test("prefers the versioned ONNX Runtime library from a packaged app", () => {
   const appPath = "/tmp/OpenWhispr.app";
+  const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
+  const libraryPath = path.join(binDirectory, "libonnxruntime.1.27.0.dylib");
   const result = sherpaDownloader.verifyPackagedMacosParakeet?.(appPath, {
     readDirectory(directory) {
-      assert.equal(directory, `${appPath}/Contents/Resources/bin`);
+      assert.equal(directory, binDirectory);
       return ["libonnxruntime.dylib", "libonnxruntime.1.27.0.dylib"];
     },
-    runVtool(libraryPath) {
-      assert.equal(libraryPath, `${appPath}/Contents/Resources/bin/libonnxruntime.1.27.0.dylib`);
+    runVtool(actualLibraryPath) {
+      assert.equal(actualLibraryPath, libraryPath);
       return UNIVERSAL_VTOOL_OUTPUT;
     },
   });
 
   assert.deepEqual(result, {
     architectures: ["x86_64", "arm64"],
-    libraryPath: `${appPath}/Contents/Resources/bin/libonnxruntime.1.27.0.dylib`,
+    libraryPath,
+    minimumVersion: "15.5",
+  });
+});
+
+test("validates an unversioned ONNX Runtime library from a packaged app", () => {
+  const appPath = "/tmp/OpenWhispr.app";
+  const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
+  const libraryPath = path.join(binDirectory, "libonnxruntime.dylib");
+  const result = sherpaDownloader.verifyPackagedMacosParakeet?.(appPath, {
+    readDirectory(directory) {
+      assert.equal(directory, binDirectory);
+      return ["libonnxruntime.dylib"];
+    },
+    runVtool(actualLibraryPath) {
+      assert.equal(actualLibraryPath, libraryPath);
+      return UNIVERSAL_VTOOL_OUTPUT;
+    },
+  });
+
+  assert.deepEqual(result, {
+    architectures: ["x86_64", "arm64"],
+    libraryPath,
     minimumVersion: "15.5",
   });
 });

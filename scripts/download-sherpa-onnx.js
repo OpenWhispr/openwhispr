@@ -66,6 +66,8 @@ const BINARIES = {
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 
 const VERSIONED_LIB_PATTERN = /^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/;
+const VERSIONED_ONNX_RUNTIME_DYLIB_PATTERN = /^libonnxruntime\.\d+(?:\.\d+)*\.dylib$/;
+const UNVERSIONED_ONNX_RUNTIME_DYLIB = "libonnxruntime.dylib";
 const REQUIRED_MACOS_ARCHITECTURES = ["x86_64", "arm64"];
 
 // Upstream 1.13.4 ships an invalid arm64 signature on libonnxruntime; dyld SIGKILLs unsigned loads.
@@ -137,13 +139,18 @@ function verifyPackagedMacosParakeet(
   } = {}
 ) {
   const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
-  const libraries = readDirectory(binDirectory).filter((fileName) =>
-    /^libonnxruntime\.\d+(?:\.\d+)*\.dylib$/.test(fileName)
+  const directoryEntries = readDirectory(binDirectory);
+  const versionedLibraries = directoryEntries.filter((fileName) =>
+    VERSIONED_ONNX_RUNTIME_DYLIB_PATTERN.test(fileName)
   );
+  const libraries =
+    versionedLibraries.length > 0
+      ? versionedLibraries
+      : directoryEntries.filter((fileName) => fileName === UNVERSIONED_ONNX_RUNTIME_DYLIB);
 
   if (libraries.length !== 1) {
     throw new Error(
-      `Expected one versioned ONNX Runtime library in ${binDirectory}, found ${libraries.length}`
+      `Expected one ONNX Runtime library in ${binDirectory}, found ${libraries.length}`
     );
   }
 
