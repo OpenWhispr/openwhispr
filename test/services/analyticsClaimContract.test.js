@@ -3,8 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const read = (relativePath) =>
-  fs.readFileSync(path.join(__dirname, "../..", relativePath), "utf8");
+const read = (relativePath) => fs.readFileSync(path.join(__dirname, "../..", relativePath), "utf8");
 
 // Adopting unattributed counters is a consent decision, not a sync step. The
 // device-local rows carry no account precisely because nobody was signed in
@@ -43,5 +42,18 @@ test("the Insights view asks the predicate whether to offer the claim", () => {
     view.includes("!insightsSyncEnabled &&"),
     false,
     "gating the offer on the toggle alone strands counters recorded while signed out"
+  );
+});
+
+test("the same Analytics Sync control owns leaderboard participation", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const settings = read("src/components/SettingsPage.tsx");
+  assert.ok(hook.includes("LeaderboardService.setParticipation(true)"));
+  assert.ok(hook.includes("LeaderboardService.setParticipation(false)"));
+  assert.ok(settings.includes("void disableInsightsSync()"));
+  assert.equal(
+    settings.includes("enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)"),
+    false,
+    "Settings must not bypass the account-level opt-out"
   );
 });

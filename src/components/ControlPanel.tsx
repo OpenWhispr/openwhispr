@@ -75,6 +75,7 @@ import {
   shouldRunTranslateStep,
 } from "../helpers/translationChain";
 import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
+import { LEADERBOARD_DEMO_ENABLED } from "../helpers/leaderboardDemo";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
@@ -137,7 +138,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
-  const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  const [activeView, setActiveView] = useState<ControlPanelView>(
+    LEADERBOARD_DEMO_ENABLED ? "insights" : "home"
+  );
   const {
     collapsed: sidebarCollapsed,
     peek: sidebarPeek,
@@ -1180,7 +1183,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
             {activeView === "insights" && (
               <Suspense fallback={null}>
-                <InsightsView />
+                <InsightsView
+                  onUpgrade={() => {
+                    setSettingsSection("plansBilling");
+                    setShowSettings(true);
+                  }}
+                />
               </Suspense>
             )}
             {activeView === "chat" && agentAllowedByPolicy && (

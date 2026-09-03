@@ -98,6 +98,7 @@ function createCloudApiRequestHandler({
       const headers = fence
         ? withPolicyRequestHeaders({ Authorization: fence.authorization }, getAppVersion())
         : { "x-openwhispr-version": getAppVersion() };
+      headers["x-openwhispr-source"] = "desktop";
       const fetchOptions = {
         method,
         headers,

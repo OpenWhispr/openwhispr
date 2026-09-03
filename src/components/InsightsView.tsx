@@ -10,12 +10,14 @@ import {
   syncPendingAnalytics,
 } from "../services/AnalyticsService";
 import { buildAnalyticsActivityDays } from "../helpers/analytics";
+import { LEADERBOARD_DEMO_ENABLED } from "../helpers/leaderboardDemo";
 import { canOfferAnalyticsClaim } from "../services/syncPassPolicy";
 import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
 import { Tooltip } from "./ui/tooltip";
+import LeaderboardSection from "./LeaderboardSection";
 
 type ActivityDay = { date: string; words: number };
 
@@ -207,15 +209,23 @@ function MetricCard({
   );
 }
 
-export default function InsightsView() {
+export default function InsightsView({ onUpgrade }: { onUpgrade: () => void }) {
   const { t, i18n } = useTranslation();
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, user } = useAuth();
   const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
   const dataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );
-  const { enableInsightsSync, optInDialog, syncAllowedByPolicy, unclaimedCount } =
-    useInsightsSyncOptIn();
+  const {
+    enableInsightsSync,
+    optInDialog,
+    participationEnabled,
+    participationError,
+    participationReady,
+    participationUpdating,
+    syncAllowedByPolicy,
+    unclaimedCount,
+  } = useInsightsSyncOptIn();
   // A managed workspace that forbids cloud backup forbids these counters with
   // it, so the view stays device-scoped even with the preference left on.
   const syncActive =
@@ -412,6 +422,24 @@ export default function InsightsView() {
           </div>
         </>
       )}
+
+      <LeaderboardSection
+        key={user?.id ?? "guest"}
+        accountId={user?.id ?? null}
+        isSignedIn={isSignedIn || LEADERBOARD_DEMO_ENABLED}
+        syncActive={
+          LEADERBOARD_DEMO_ENABLED ||
+          (isSignedIn && insightsSyncEnabled && syncAllowedByPolicy && participationEnabled)
+        }
+        syncCanBeEnabled={
+          LEADERBOARD_DEMO_ENABLED ||
+          (isSignedIn && syncAllowedByPolicy && dataRetentionEnabled && !participationUpdating)
+        }
+        participationReady={LEADERBOARD_DEMO_ENABLED || participationReady}
+        participationError={!LEADERBOARD_DEMO_ENABLED && participationError}
+        onEnableSync={enableInsightsSync}
+        onUpgrade={onUpgrade}
+      />
 
       {optInDialog}
     </div>
