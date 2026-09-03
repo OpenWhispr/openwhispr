@@ -67,3 +67,25 @@ test("user-authored and non-canonical folder names are displayed verbatim", asyn
     ["Personal", "Client Work", "مشاريعي", "Archive"]
   );
 });
+
+test("command search matches default folders on the localized label and the stored name", async () => {
+  const { folderMatchesQuery } = await load();
+  const t = translator("ar");
+  const meetings = { name: "Meetings", is_default: 1 };
+
+  assert.equal(folderMatchesQuery(meetings, t, "اجتماع"), true);
+  assert.equal(folderMatchesQuery(meetings, t, "meet"), true);
+  assert.equal(folderMatchesQuery(meetings, t, "MEET"), true);
+  assert.equal(folderMatchesQuery(meetings, t, "video"), false);
+});
+
+test("command search matches user-authored folders on their own name only", async () => {
+  const { folderMatchesQuery } = await load();
+  const t = translator("ar");
+  const userMeetings = { name: "Meetings", is_default: 0 };
+  const arabicFolder = { name: "مشاريعي", is_default: false };
+
+  assert.equal(folderMatchesQuery(userMeetings, t, "meet"), true);
+  assert.equal(folderMatchesQuery(userMeetings, t, "اجتماع"), false);
+  assert.equal(folderMatchesQuery(arabicFolder, t, "مشاريع"), true);
+});

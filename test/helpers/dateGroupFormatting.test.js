@@ -167,3 +167,18 @@ test("note date formatters retain their English output with an explicit locale",
     else process.env.TZ = previousTimezone;
   }
 });
+
+test("history group fallback dates use the explicit Arabic locale", async (t2) => {
+  const { formatDateGroup } = await load();
+  t2.mock.timers.enable({ apis: ["Date"], now: NOON_JUNE_15 });
+
+  assert.equal(formatDateGroup(new Date(2024, 0, 10, 12), t, "ar"), "10 يناير 2024");
+});
+
+test("history group fallback dates retain their English output with an explicit locale", async (t2) => {
+  const { formatDateGroup } = await load();
+  t2.mock.timers.enable({ apis: ["Date"], now: NOON_JUNE_15 });
+
+  assert.equal(formatDateGroup(new Date(2024, 0, 10, 12), t, "en"), "Jan 10, 2024");
+  assert.equal(formatDateGroup(new Date(2024, 5, 15, 8), t, "ar"), "Today");
+});

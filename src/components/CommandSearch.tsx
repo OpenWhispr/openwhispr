@@ -23,6 +23,7 @@ import {
 } from "./ui/dropdown-menu";
 import type { NoteItem, FolderItem, SpaceItem, TranscriptionItem } from "../types/electron.js";
 import { formatRelativeTime } from "../utils/dateFormatting";
+import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
 
 interface ConversationResult {
   id: number;
@@ -232,10 +233,11 @@ export default function CommandSearch({
     (note: NoteItem) => {
       const space = spaceMap.get(note.space_id);
       const folder = note.folder_id != null ? folderMap.get(note.folder_id) : undefined;
-      if (!space) return folder?.name ?? "";
-      return folder ? `${spaceLabel(space)} / ${folder.name}` : spaceLabel(space);
+      const folderLabel = folder ? defaultFolderDisplayName(folder, t) : "";
+      if (!space) return folderLabel;
+      return folder ? `${spaceLabel(space)} / ${folderLabel}` : spaceLabel(space);
     },
-    [spaceMap, folderMap, spaceLabel]
+    [spaceMap, folderMap, spaceLabel, t]
   );
 
   const jumpTargets = useMemo<JumpTarget[]>(() => {
@@ -249,18 +251,18 @@ export default function CommandSearch({
       }
     }
     for (const folder of folders) {
-      if (folder.name.toLowerCase().includes(q)) {
+      if (folderMatchesQuery(folder, t, q)) {
         targets.push({
           key: `f:${folder.id}`,
           spaceId: folder.space_id,
           folderId: folder.id,
-          label: folder.name,
+          label: defaultFolderDisplayName(folder, t),
           space: spaceMap.get(folder.space_id),
         });
       }
     }
     return targets.slice(0, 5);
-  }, [query, spaces, folders, spaceMap, spaceLabel, isConversationsMode]);
+  }, [query, spaces, folders, spaceMap, spaceLabel, isConversationsMode, t]);
 
   const filteredTranscripts = useMemo(() => {
     const slice = query.trim()

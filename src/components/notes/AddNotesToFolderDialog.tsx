@@ -14,10 +14,14 @@ interface AddNotesToFolderDialogProps {
   onNotesAdded: () => void;
 }
 
-function groupNotesByDate(notes: NoteItem[], t: (key: string) => string): [string, NoteItem[]][] {
+function groupNotesByDate(
+  notes: NoteItem[],
+  t: (key: string) => string,
+  locale: string
+): [string, NoteItem[]][] {
   const groups = new Map<string, NoteItem[]>();
   for (const note of notes) {
-    const key = formatDateGroup(note.updated_at, t);
+    const key = formatDateGroup(note.updated_at, t, locale);
     const arr = groups.get(key) || [];
     arr.push(note);
     groups.set(key, arr);
@@ -31,7 +35,8 @@ export default function AddNotesToFolderDialog({
   targetFolderId,
   onNotesAdded,
 }: AddNotesToFolderDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const [allNotes, setAllNotes] = useState<NoteItem[]>([]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -57,7 +62,10 @@ export default function AddNotesToFolderDialog({
     );
   }, [availableNotes, search]);
 
-  const grouped = useMemo(() => groupNotesByDate(filteredNotes, t), [filteredNotes, t]);
+  const grouped = useMemo(
+    () => groupNotesByDate(filteredNotes, t, locale),
+    [filteredNotes, t, locale]
+  );
 
   const toggleNote = useCallback((id: number) => {
     setSelected((prev) => {

@@ -51,7 +51,8 @@ export default function HistoryView({
   showDiscarded,
   onToggleDiscarded,
 }: HistoryViewProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const personalDataRetentionEnabled = useSettingsStore((s) => s.dataRetentionEnabled);
   const dataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
@@ -65,7 +66,7 @@ export default function HistoryView({
     let currentLabel: string | null = null;
 
     for (const item of history) {
-      const label = formatDateGroup(item.timestamp, t);
+      const label = formatDateGroup(item.timestamp, t, locale);
 
       if (label !== currentLabel) {
         groups.push({ label, items: [item] });
@@ -76,7 +77,7 @@ export default function HistoryView({
     }
 
     return groups;
-  }, [history, t]);
+  }, [history, t, locale]);
 
   const discardedToggle = (
     <button

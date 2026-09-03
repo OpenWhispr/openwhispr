@@ -58,7 +58,11 @@ export function formatRelativeTime(
   return formatShortDate(dateStr, locale);
 }
 
-export function formatDateGroup(date: Date | string, t: (key: string) => string): string {
+export function formatDateGroup(
+  date: Date | string,
+  t: (key: string) => string,
+  locale?: string
+): string {
   if (!date) return "";
   const d = typeof date === "string" ? normalizeDbDate(date) : date;
   if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
@@ -71,5 +75,5 @@ export function formatDateGroup(date: Date | string, t: (key: string) => string)
   if (target.getTime() === today.getTime()) return t("controlPanel.history.dateGroups.today");
   if (target.getTime() === yesterday.getTime())
     return t("controlPanel.history.dateGroups.yesterday");
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" });
 }

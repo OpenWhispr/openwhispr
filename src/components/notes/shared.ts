@@ -20,6 +20,20 @@ export function defaultFolderDisplayName(
   return key ? t(key) : folder.name;
 }
 
+// Command search accepts either the presented label or the canonical stored
+// name, so "meet" and "اجتماع" both find the default Meetings folder.
+export function folderMatchesQuery(
+  folder: Pick<FolderItem, "name" | "is_default">,
+  t: (key: string) => string,
+  query: string
+): boolean {
+  const q = query.toLowerCase();
+  return (
+    folder.name.toLowerCase().includes(q) ||
+    defaultFolderDisplayName(folder, t).toLowerCase().includes(q)
+  );
+}
+
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {
   return folders.find((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
 }
