@@ -47,6 +47,17 @@ test("matches a stale sibling by base name when only versioned libraries were co
   assert.deepEqual(stale, ["libonnxruntime.1.26.0.dylib"]);
 });
 
+// The packaging check spots any versioned ONNX Runtime naming, so the prune has to remove the
+// same shapes -- a two-component leftover included.
+test("removes a leftover whose version has two components", () => {
+  const stale = findStaleVersionedLibraries(
+    ["libonnxruntime.dylib", "libonnxruntime.1.27.dylib"],
+    ["libonnxruntime.dylib"]
+  );
+
+  assert.deepEqual(stale, ["libonnxruntime.1.27.dylib"]);
+});
+
 test("leaves libraries from another platform's download alone", () => {
   const stale = findStaleVersionedLibraries(
     ["libonnxruntime.1.27.0.dylib", "libonnxruntime.dylib", "onnxruntime.dll"],

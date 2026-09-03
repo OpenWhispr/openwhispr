@@ -65,19 +65,17 @@ const BINARIES = {
 
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 
-// Deliberately different shapes: the copy/prune pattern is strict about the three-component
-// versions upstream ships, since it decides what to delete from a resources/bin shared with the
-// other sidecars; the packaging check is loose, so any versioned ONNX Runtime naming is recognized.
-const VERSIONED_LIB_PATTERN = /^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/;
+// Both patterns accept the same version shapes, so every leftover the packaging check can spot
+// is one the prune can remove.
+const VERSIONED_LIB_PATTERN = /^(lib.+?)\.(\d+(?:\.\d+)*)\.(dylib|so|dll)$/;
 const VERSIONED_ONNX_RUNTIME_DYLIB_PATTERN = /^libonnxruntime\.\d+(?:\.\d+)*\.dylib$/;
 const UNVERSIONED_ONNX_RUNTIME_DYLIB = "libonnxruntime.dylib";
 const REQUIRED_MACOS_ARCHITECTURES = ["x86_64", "arm64"];
 
 // A versioned library is stale once this run copied one with the same base name but not that
-// file. 1.13.6 renamed the macOS ONNX Runtime from libonnxruntime.<version>.dylib to
-// libonnxruntime.dylib, so the 1.13.4 file no longer collides with a copy: without this it
-// lingers in resources/bin, gets packaged next to the library the app actually loads, and is
-// picked ahead of it by verifyPackagedMacosParakeet.
+// file. 1.13.5 dropped the versioned macOS ONNX Runtime in favour of libonnxruntime.dylib alone,
+// so the 1.13.4 file no longer collides with a copy: without this it lingers in resources/bin and
+// is packaged next to the library the app actually loads.
 function findStaleVersionedLibraries(entries, copiedLibraries) {
   const copied = new Set(copiedLibraries);
   const copiedBaseNames = new Set();
@@ -158,28 +156,46 @@ function verifyPackagedMacosParakeet(
   appPath,
   {
     readDirectory = fs.readdirSync,
+    resolveLibrary = fs.realpathSync,
     runVtool = (libraryPath) =>
       execFileSync("xcrun", ["vtool", "-show-build", libraryPath], { encoding: "utf8" }),
   } = {}
 ) {
   const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
-  const libraries = readDirectory(binDirectory).filter(
-    (fileName) =>
-      fileName === UNVERSIONED_ONNX_RUNTIME_DYLIB ||
-      VERSIONED_ONNX_RUNTIME_DYLIB_PATTERN.test(fileName)
-  );
+  const entries = readDirectory(binDirectory);
 
-  // The sherpa binaries link @rpath/libonnxruntime.dylib, so the bundle must carry that file and
-  // nothing else: a versioned sibling is a leftover from an older sherpa-onnx release that dyld
-  // never loads, and validating it would pass a bundle whose real runtime was never checked.
-  if (libraries.length !== 1 || libraries[0] !== UNVERSIONED_ONNX_RUNTIME_DYLIB) {
-    const found = libraries.length ? libraries.join(", ") : "no ONNX Runtime library";
+  // The sherpa binaries link @rpath/libonnxruntime.dylib, so that name is what dyld resolves and
+  // what has to be validated. Releases before 1.13.5 shipped it as a symlink to a versioned file,
+  // which the download script still reproduces for any archive that ships versioned libraries --
+  // so resolve the name and treat only the versioned files that are not its target as leftovers
+  // from an older release, dead weight that dyld never loads.
+  if (!entries.includes(UNVERSIONED_ONNX_RUNTIME_DYLIB)) {
+    const versioned = entries.filter((fileName) =>
+      VERSIONED_ONNX_RUNTIME_DYLIB_PATTERN.test(fileName)
+    );
     throw new Error(
-      `Expected ${UNVERSIONED_ONNX_RUNTIME_DYLIB} alone in ${binDirectory}, found ${found}`
+      `Expected ${UNVERSIONED_ONNX_RUNTIME_DYLIB} in ${binDirectory}, found ${
+        versioned.length ? versioned.join(", ") : "no ONNX Runtime library"
+      }`
     );
   }
 
-  const libraryPath = path.join(binDirectory, libraries[0]);
+  const libraryPath = path.join(binDirectory, UNVERSIONED_ONNX_RUNTIME_DYLIB);
+  let resolvedName;
+  try {
+    resolvedName = path.basename(resolveLibrary(libraryPath));
+  } catch {
+    throw new Error(`${UNVERSIONED_ONNX_RUNTIME_DYLIB} in ${binDirectory} does not resolve`);
+  }
+
+  const leftovers = entries.filter(
+    (fileName) => fileName !== resolvedName && VERSIONED_ONNX_RUNTIME_DYLIB_PATTERN.test(fileName)
+  );
+  if (leftovers.length > 0) {
+    throw new Error(
+      `Found ONNX Runtime libraries from an older release in ${binDirectory}: ${leftovers.join(", ")}`
+    );
+  }
   const targets = parseMacosDeploymentTargets(runVtool(libraryPath));
   return { ...validateMacosDeploymentTargets(targets), libraryPath };
 }
@@ -245,18 +261,31 @@ function copyBinary(extractDir, binaryName, outputPath, platformArch) {
   return true;
 }
 
-function isCompleteInstall(markerPath, binaryPaths) {
-  if (binaryPaths.some((binaryPath) => !fs.existsSync(binaryPath))) return false;
-
+function readInstallMarker(markerPath) {
   try {
-    const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
-    return (
-      marker.version === SHERPA_ONNX_VERSION &&
-      Array.isArray(marker.libraries) &&
-      marker.libraries.every((lib) => fs.existsSync(path.join(BIN_DIR, lib)))
-    );
+    return JSON.parse(fs.readFileSync(markerPath, "utf8"));
   } catch {
-    return false;
+    return null;
+  }
+}
+
+function isCompleteInstall(marker, binaryPaths) {
+  if (!marker || binaryPaths.some((binaryPath) => !fs.existsSync(binaryPath))) return false;
+
+  return (
+    marker.version === SHERPA_ONNX_VERSION &&
+    Array.isArray(marker.libraries) &&
+    marker.libraries.every((lib) => fs.existsSync(path.join(BIN_DIR, lib)))
+  );
+}
+
+// Drop the versioned libraries an earlier sherpa-onnx release left behind. Scoped to the base
+// names of the libraries installed, so the whisper.cpp/llama.cpp/qdrant libraries sharing
+// resources/bin are never candidates.
+function pruneStaleLibraries(platformArch, installedLibraries) {
+  for (const file of findStaleVersionedLibraries(fs.readdirSync(BIN_DIR), installedLibraries)) {
+    fs.rmSync(path.join(BIN_DIR, file), { force: true });
+    console.log(`  ${platformArch}: Removed stale ${file}`);
   }
 }
 
@@ -271,11 +300,14 @@ async function downloadBinary(platformArch, config, isForce = false) {
   const diarizeOutputPath = path.join(BIN_DIR, config.diarizeOutputName);
   const installMarkerPath = path.join(BIN_DIR, `.sherpa-onnx-${platformArch}.json`);
 
+  const installMarker = readInstallMarker(installMarkerPath);
   if (
     !isForce &&
-    isCompleteInstall(installMarkerPath, [outputPath, onlineOutputPath, diarizeOutputPath])
+    isCompleteInstall(installMarker, [outputPath, onlineOutputPath, diarizeOutputPath])
   ) {
     console.log(`  ${platformArch}: Already exists (use --force to re-download)`);
+    // An install written before the prune existed still carries the older release's libraries.
+    pruneStaleLibraries(platformArch, installMarker.libraries);
     return true;
   }
   if (isForce && fs.existsSync(installMarkerPath)) fs.unlinkSync(installMarkerPath);
@@ -337,13 +369,7 @@ async function downloadBinary(platformArch, config, isForce = false) {
         }
       }
 
-      // Drop the versioned libraries an earlier sherpa-onnx release left behind. Scoped to the
-      // base names this run copied, so the whisper.cpp/llama.cpp/qdrant libraries sharing
-      // resources/bin are never candidates.
-      for (const file of findStaleVersionedLibraries(fs.readdirSync(BIN_DIR), copiedLibraries)) {
-        fs.rmSync(path.join(BIN_DIR, file), { force: true });
-        console.log(`  ${platformArch}: Removed stale ${file}`);
-      }
+      pruneStaleLibraries(platformArch, copiedLibraries);
     }
 
     fs.writeFileSync(
