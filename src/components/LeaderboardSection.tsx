@@ -5,6 +5,7 @@ import {
   Cloud,
   Loader2,
   LocateFixed,
+  LogOut,
   RefreshCw,
   Share2,
   Trophy,
@@ -13,11 +14,13 @@ import { useTranslation } from "react-i18next";
 import {
   LEADERBOARD_PAGE_SIZE,
   LEADERBOARD_REFRESH_INTERVAL_MS,
+  memberValue,
   normalizeLeaderboardSelection,
   pageCount,
   pageForRank,
   selectionForRange,
 } from "../helpers/leaderboard";
+import { CloudApiError } from "../services/cloudApi";
 import { LeaderboardService } from "../services/LeaderboardService";
 import { WorkspacesService } from "../services/WorkspacesService";
 import { useWorkspaceStore } from "../stores/workspaceStore";
@@ -57,24 +60,12 @@ interface LeaderboardSectionProps {
   canJoin: boolean;
   participationReady: boolean;
   participationError: boolean;
+  participationUpdating: boolean;
   onJoin: () => void;
+  onLeave: () => void;
+  onParticipationStale: () => void;
   onSignIn: () => void;
   onUpgrade: () => void;
-}
-
-function memberValue(member: LeaderboardMember, metric: LeaderboardMetric): number | null {
-  switch (metric) {
-    case "words_per_minute":
-      return member.averageWpm;
-    case "current_daily_streak":
-      return member.currentStreakDays;
-    case "desktop_words":
-      return member.desktopWords;
-    case "mobile_words":
-      return member.mobileWords;
-    case "total_words":
-      return member.totalWords;
-  }
 }
 
 function scrollToRank(rank: number) {
@@ -93,7 +84,10 @@ export default function LeaderboardSection({
   canJoin,
   participationReady,
   participationError,
+  participationUpdating,
   onJoin,
+  onLeave,
+  onParticipationStale,
   onSignIn,
   onUpgrade,
 }: LeaderboardSectionProps) {
@@ -194,15 +188,46 @@ export default function LeaderboardSection({
     } catch (loadError) {
       if (requestId !== requestIdRef.current) return;
       console.error("Loading leaderboard failed:", loadError);
+      // A 403 names the gate that moved under us, and retrying the same call
+      // can never clear it. Re-read exactly that gate so the surface settles on
+      // the card that matches reality instead of a dead "Try again".
+      const code = loadError instanceof CloudApiError ? loadError.code : undefined;
+      if (code === "LEADERBOARD_SYNC_REQUIRED") {
+        setLeaderboard(null);
+        onParticipationStale();
+        return;
+      }
+      if (code === "LEADERBOARD_PLAN_REQUIRED" || code === "LEADERBOARD_DOMAIN_REQUIRED") {
+        setLeaderboard(null);
+        void loadAccess();
+        return;
+      }
       setError(true);
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [metric, page, participationReady, range, selectedScope, syncActive, weekStart]);
+  }, [
+    loadAccess,
+    metric,
+    onParticipationStale,
+    page,
+    participationReady,
+    range,
+    selectedScope,
+    syncActive,
+    weekStart,
+  ]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The server owns how big a page is and how long a snapshot stays fresh; the
+  // constants are only what to assume before the first response arrives.
+  const pageSize = leaderboard?.pageSize ?? LEADERBOARD_PAGE_SIZE;
+  const refreshIntervalMs = leaderboard
+    ? leaderboard.refreshAfterSeconds * 1000
+    : LEADERBOARD_REFRESH_INTERVAL_MS;
 
   useEffect(() => {
     if (!selectedScope || selectedScope.state !== "ready" || !syncActive || !participationReady)
@@ -210,12 +235,12 @@ export default function LeaderboardSection({
     const refreshIfStale = () => {
       if (
         document.visibilityState === "visible" &&
-        Date.now() - lastLoadedAtRef.current >= LEADERBOARD_REFRESH_INTERVAL_MS
+        Date.now() - lastLoadedAtRef.current >= refreshIntervalMs
       ) {
         void load();
       }
     };
-    const interval = window.setInterval(refreshIfStale, LEADERBOARD_REFRESH_INTERVAL_MS);
+    const interval = window.setInterval(refreshIfStale, refreshIntervalMs);
     window.addEventListener("focus", refreshIfStale);
     document.addEventListener("visibilitychange", refreshIfStale);
     return () => {
@@ -223,9 +248,9 @@ export default function LeaderboardSection({
       window.removeEventListener("focus", refreshIfStale);
       document.removeEventListener("visibilitychange", refreshIfStale);
     };
-  }, [load, participationReady, selectedScope, syncActive]);
+  }, [load, participationReady, refreshIntervalMs, selectedScope, syncActive]);
 
-  const pages = pageCount(leaderboard?.totalMembers ?? 0);
+  const pages = pageCount(leaderboard?.totalMembers ?? 0, pageSize);
   useEffect(() => setPage((current) => Math.min(current, pages - 1)), [pages]);
 
   const visibleMembers = useMemo(() => leaderboard?.members ?? [], [leaderboard]);
@@ -414,7 +439,7 @@ export default function LeaderboardSection({
   const jumpToRank = (rank: number) => {
     if (!leaderboard?.totalMembers) return;
     const resolvedRank = Math.max(1, Math.min(leaderboard.totalMembers, Math.trunc(rank) || 1));
-    const targetPage = pageForRank(resolvedRank, leaderboard.totalMembers);
+    const targetPage = pageForRank(resolvedRank, leaderboard.totalMembers, pageSize);
     // Staying on the page renders nothing new, so the row is already there and
     // the effect that scrolls after a page load never runs.
     if (targetPage === page) {
@@ -474,6 +499,12 @@ export default function LeaderboardSection({
               {t("insights.leaderboard.share")}
             </Button>
           )}
+          {/* The mirror of Join: publishing a name and an email to colleagues
+              has to be undoable from the surface that publishes it. */}
+          <Button variant="outline" size="sm" onClick={onLeave} disabled={participationUpdating}>
+            <LogOut size={14} />
+            {t("insights.leaderboard.leave")}
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -676,7 +707,7 @@ export default function LeaderboardSection({
               </Button>
             </Tooltip>
 
-            {leaderboard.totalMembers > LEADERBOARD_PAGE_SIZE && (
+            {leaderboard.totalMembers > pageSize && (
               <div className="flex items-center gap-1.5">
                 <Button
                   variant="ghost"
@@ -712,13 +743,13 @@ export default function LeaderboardSection({
                     type="button"
                     className="rounded px-2 py-1 text-xs tabular-nums text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={() => {
-                      setRankInput(String(page * LEADERBOARD_PAGE_SIZE + 1));
+                      setRankInput(String(page * pageSize + 1));
                       setEditingRank(true);
                     }}
                     title={t("insights.leaderboard.jumpToRank")}
                   >
-                    {page * LEADERBOARD_PAGE_SIZE + 1}–
-                    {Math.min((page + 1) * LEADERBOARD_PAGE_SIZE, leaderboard.totalMembers)} /{" "}
+                    {page * pageSize + 1}–
+                    {Math.min((page + 1) * pageSize, leaderboard.totalMembers)} /{" "}
                     {leaderboard.totalMembers}
                   </button>
                 )}

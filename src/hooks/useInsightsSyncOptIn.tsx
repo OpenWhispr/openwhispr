@@ -32,7 +32,8 @@ import { useSettings } from "./useSettings";
  *
  * Leaderboard participation is a second, narrower consent — it publishes a name
  * and email to teammates — so syncing never implies it. Only joinLeaderboard
- * turns it on, and turning sync off takes it back down with it.
+ * turns it on, and it waits for the sync opt-in to actually land first, because
+ * a claim prompt the user declines is a join the user never agreed to.
  */
 export function useInsightsSyncOptIn() {
   const { t } = useTranslation();
@@ -45,6 +46,9 @@ export function useInsightsSyncOptIn() {
   const [participationError, setParticipationError] = useState(false);
   const [participationUpdating, setParticipationUpdating] = useState(false);
   const participationReadIdRef = useRef(0);
+  // Settles when the claim prompt is answered, so an opt-in that opens it can
+  // wait for the answer instead of racing ahead of the user.
+  const claimAnswerRef = useRef<((claimed: boolean) => void) | null>(null);
   // Separate from the counts: a live count must never be what holds the dialog
   // open, or it reopens itself on mount for anyone with rows left behind.
   // "enable" asks about everything the first pass would upload; "claim" is the
@@ -55,9 +59,10 @@ export function useInsightsSyncOptIn() {
     canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled) &&
     !participationUpdating;
 
-  // Read-only: the account preference is the one source of truth for who is on
-  // a leaderboard, and nothing here may join or leave one on the user's behalf.
-  useEffect(() => {
+  // Read-only, and only when a caller asks: the account preference is the one
+  // source of truth for who is on a leaderboard, and nothing here may join or
+  // leave one on the user's behalf.
+  const refreshParticipation = useCallback(async () => {
     const readId = ++participationReadIdRef.current;
     if (!isLoaded || !isSignedIn) {
       setParticipationReady(false);
@@ -68,19 +73,17 @@ export function useInsightsSyncOptIn() {
 
     setParticipationReady(false);
     setParticipationError(false);
-    void (async () => {
-      try {
-        const participation = await LeaderboardService.getParticipation();
-        if (readId !== participationReadIdRef.current) return;
-        setParticipationEnabled(participation.enabled);
-      } catch (error) {
-        if (readId !== participationReadIdRef.current) return;
-        console.error("Reading leaderboard participation failed:", error);
-        setParticipationError(true);
-      } finally {
-        if (readId === participationReadIdRef.current) setParticipationReady(true);
-      }
-    })();
+    try {
+      const participation = await LeaderboardService.getParticipation();
+      if (readId !== participationReadIdRef.current) return;
+      setParticipationEnabled(participation.enabled);
+    } catch (error) {
+      if (readId !== participationReadIdRef.current) return;
+      console.error("Reading leaderboard participation failed:", error);
+      setParticipationError(true);
+    } finally {
+      if (readId === participationReadIdRef.current) setParticipationReady(true);
+    }
   }, [isLoaded, isSignedIn]);
 
   // The claim lands before the pass is requested so the rows it adopts go up
@@ -98,22 +101,28 @@ export function useInsightsSyncOptIn() {
     [setInsightsSyncEnabled]
   );
 
-  const disableInsightsSync = useCallback(async () => {
-    // The device stops uploading straight away: an opt-out that waits on the
-    // network is an opt-out the user loses whenever the network is down.
-    setInsightsSyncEnabled(false);
+  const leaveLeaderboard = useCallback(async () => {
     setParticipationUpdating(true);
     try {
       const participation = await LeaderboardService.setParticipation(false);
       setParticipationEnabled(participation.enabled);
       setParticipationError(false);
+      return true;
     } catch (error) {
       console.error("Leaving the leaderboard failed:", error);
       setParticipationError(true);
+      return false;
     } finally {
       setParticipationUpdating(false);
     }
-  }, [setInsightsSyncEnabled]);
+  }, []);
+
+  const disableInsightsSync = useCallback(async () => {
+    // The device stops uploading straight away: an opt-out that waits on the
+    // network is an opt-out the user loses whenever the network is down.
+    setInsightsSyncEnabled(false);
+    return leaveLeaderboard();
+  }, [leaveLeaderboard, setInsightsSyncEnabled]);
 
   const refreshCounts = useCallback(async () => {
     const [unclaimed, awaitingUpload] = await Promise.all([
@@ -132,33 +141,39 @@ export function useInsightsSyncOptIn() {
     return window.electronAPI.onAnalyticsChanged?.(() => void refreshCounts());
   }, [refreshCounts]);
 
-  const enableInsightsSync = useCallback(() => {
-    if (!syncAllowedByPolicy) return;
-    void (async () => {
-      const { unclaimed, awaitingUpload } = await refreshCounts();
-      // Already on: the pre-sign-in rows are the only thing still unanswered.
-      if (insightsSyncEnabled) {
-        if (unclaimed > 0) setPromptKind("claim");
-        else await activate(false);
-        return;
-      }
-      // Turning it on: ask about everything the first pass would send, not
-      // just the pre-sign-in slice. Nothing queued means nothing to disclose.
-      if (awaitingUpload > 0) setPromptKind("enable");
-      else await activate(false);
-    })();
+  // Resolves once the opt-in has settled, so a caller that needs sync on before
+  // it acts can wait for the user's answer rather than assume it.
+  const enableInsightsSync = useCallback(async () => {
+    if (!syncAllowedByPolicy) return false;
+    const { unclaimed, awaitingUpload } = await refreshCounts();
+    // Already on: the pre-sign-in rows are the only thing still unanswered.
+    // Turning it on: ask about everything the first pass would send, not just
+    // the pre-sign-in slice. Nothing queued means nothing to disclose.
+    const pending = insightsSyncEnabled ? unclaimed : awaitingUpload;
+    if (pending === 0) {
+      await activate(false);
+      return true;
+    }
+    const claimed = await new Promise<boolean>((resolve) => {
+      claimAnswerRef.current = resolve;
+      setPromptKind(insightsSyncEnabled ? "claim" : "enable");
+    });
+    if (claimed) await activate(true);
+    return claimed;
   }, [activate, insightsSyncEnabled, refreshCounts, syncAllowedByPolicy]);
 
-  // Joining publishes the account; the counters it ranks still have to reach
-  // the server, so a leaderboard opt-in turns the sync on when it is off.
+  // Joining publishes the account, and the counters it ranks still have to
+  // reach the server — so the sync opt-in has to land first. Declining it
+  // declines the join too, rather than leaving the account on a leaderboard it
+  // never feeds.
   const joinLeaderboard = useCallback(async () => {
     if (!syncAllowedByPolicy) return;
+    if (!insightsSyncEnabled && !(await enableInsightsSync())) return;
     setParticipationUpdating(true);
     try {
       const participation = await LeaderboardService.setParticipation(true);
       setParticipationEnabled(participation.enabled);
       setParticipationError(false);
-      if (!insightsSyncEnabled) enableInsightsSync();
     } catch (error) {
       console.error("Joining the leaderboard failed:", error);
       setParticipationError(true);
@@ -168,11 +183,19 @@ export function useInsightsSyncOptIn() {
   }, [enableInsightsSync, insightsSyncEnabled, syncAllowedByPolicy]);
 
   const claiming = promptKind === "claim";
+  const answerClaimPrompt = (claimed: boolean) => {
+    claimAnswerRef.current?.(claimed);
+    claimAnswerRef.current = null;
+  };
+
   const optInDialog = (
     <ConfirmDialog
       open={promptKind !== null}
       onOpenChange={(open) => {
-        if (!open) setPromptKind(null);
+        if (open) return;
+        setPromptKind(null);
+        // Also covers Esc and the overlay: a dismissed prompt is a declined one.
+        answerClaimPrompt(false);
       }}
       title={t(claiming ? "insights.claimTitle" : "insights.enableTitle")}
       description={t(claiming ? "insights.claimDescription" : "insights.enableDescription", {
@@ -180,7 +203,7 @@ export function useInsightsSyncOptIn() {
       })}
       confirmText={t(claiming ? "insights.claimInclude" : "insights.enableConfirm")}
       cancelText={t("insights.claimSkip")}
-      onConfirm={() => void activate(true)}
+      onConfirm={() => answerClaimPrompt(true)}
     />
   );
 
@@ -189,11 +212,13 @@ export function useInsightsSyncOptIn() {
     disableInsightsSync,
     enableInsightsSync,
     joinLeaderboard,
+    leaveLeaderboard,
     optInDialog,
     participationEnabled,
     participationError,
     participationReady,
     participationUpdating,
+    refreshParticipation,
     syncAllowedByPolicy,
     unclaimedCount,
   };

@@ -53,7 +53,7 @@ test("only an explicit join opts the account into a leaderboard", () => {
   const settings = read("src/components/SettingsPage.tsx");
   const activate = hook.slice(
     hook.indexOf("const activate"),
-    hook.indexOf("const disableInsightsSync")
+    hook.indexOf("const leaveLeaderboard")
   );
   assert.equal(
     activate.includes("setParticipation"),
@@ -63,12 +63,49 @@ test("only an explicit join opts the account into a leaderboard", () => {
   assert.ok(hook.includes("const joinLeaderboard"));
   assert.ok(hook.includes("LeaderboardService.setParticipation(true)"));
   assert.ok(hook.includes("LeaderboardService.setParticipation(false)"));
-  assert.ok(settings.includes("void disableInsightsSync()"));
+  assert.ok(settings.includes("disableInsightsSync()"));
   assert.equal(
     settings.includes("enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)"),
     false,
     "Settings must not bypass the account-level opt-out"
   );
+});
+
+// The claim prompt can still decline the whole opt-in, and a declined opt-in is
+// a join the user never agreed to — so the PATCH has to wait for the answer.
+test("a join publishes the account only after the sync opt-in has landed", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const join = hook.slice(
+    hook.indexOf("const joinLeaderboard"),
+    hook.indexOf("const answerClaimPrompt")
+  );
+  assert.ok(
+    join.indexOf("await enableInsightsSync()") < join.indexOf("setParticipation(true)"),
+    "the account must not be published before the opt-in the join depends on"
+  );
+  assert.ok(
+    join.includes("!(await enableInsightsSync())) return"),
+    "a declined opt-in must abandon the join instead of publishing anyway"
+  );
+});
+
+// Publishing a name and an email to colleagues has to be undoable where it is
+// published, not only through a switch labelled Insights sync.
+test("the leaderboard surface can leave without touching the sync switch", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const section = read("src/components/LeaderboardSection.tsx");
+  const leave = hook.slice(
+    hook.indexOf("const leaveLeaderboard"),
+    hook.indexOf("const disableInsightsSync")
+  );
+  assert.ok(leave.includes("LeaderboardService.setParticipation(false)"));
+  assert.equal(
+    leave.includes("setInsightsSyncEnabled"),
+    false,
+    "leaving a leaderboard must not be entangled with the device sync switch"
+  );
+  assert.ok(section.includes('t("insights.leaderboard.leave")'));
+  assert.ok(section.includes("onClick={onLeave}"));
 });
 
 // An opt-out that waits on the network is one the user loses when it is down.
@@ -79,7 +116,7 @@ test("turning Insights sync off stops the device before it calls the account", (
     hook.indexOf("const refreshUnclaimedCount")
   );
   assert.ok(
-    disable.indexOf("setInsightsSyncEnabled(false)") < disable.indexOf("setParticipation(false)"),
+    disable.indexOf("setInsightsSyncEnabled(false)") < disable.indexOf("leaveLeaderboard()"),
     "the local switch must go off before the account call, not after it succeeds"
   );
 });

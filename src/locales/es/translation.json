@@ -3318,6 +3318,7 @@
       "activationDescription": "Al unirte se activa la sincronización de analíticas y tus compañeros verán tu nombre, tu correo y tus contadores de actividad en esta clasificación. El contenido de las transcripciones nunca se comparte.",
       "checkingParticipation": "Comprobando tu participación en la clasificación…",
       "join": "Unirse a la clasificación",
+      "leave": "Salir de la clasificación",
       "allTime": "Todo el tiempo",
       "thisWeek": "Esta semana",
       "wpmValue": "{{count}} PPM",

@@ -1705,7 +1705,6 @@ export default function SettingsPage({
     disableInsightsSync,
     enableInsightsSync,
     optInDialog: insightsOptInDialog,
-    participationError: insightsParticipationError,
     syncAllowedByPolicy: insightsSyncAllowedByPolicy,
   } = useInsightsSyncOptIn();
   // Signed out there is nothing to load and the plan grid is purely
@@ -4089,11 +4088,9 @@ EOF`,
                         ? t("settingsPage.privacy.insightsSyncRequiresAccount")
                         : !insightsSyncAllowedByPolicy
                           ? t("common.managedByOrg")
-                          : insightsParticipationError
-                            ? t("insights.leaderboard.activationError")
-                            : effectiveDataRetentionEnabled
-                              ? t("settingsPage.privacy.insightsSyncDescription")
-                              : t("settingsPage.privacy.insightsSyncRequiresHistory")
+                          : effectiveDataRetentionEnabled
+                            ? t("settingsPage.privacy.insightsSyncDescription")
+                            : t("settingsPage.privacy.insightsSyncRequiresHistory")
                     }
                   >
                     {/* With history off nothing is counted anywhere: this
@@ -4109,9 +4106,23 @@ EOF`,
                         !canToggleInsightsSync ||
                         (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
                       }
-                      onChange={(enabled) =>
-                        enabled ? enableInsightsSync() : void disableInsightsSync()
-                      }
+                      onChange={(enabled) => {
+                        if (enabled) {
+                          void enableInsightsSync();
+                          return;
+                        }
+                        // The device is already off; only the account call can
+                        // still fail, and it is the one that keeps old totals
+                        // ranked until it lands.
+                        void disableInsightsSync().then((left) => {
+                          if (!left) {
+                            toast({
+                              title: t("insights.leaderboard.activationError"),
+                              variant: "destructive",
+                            });
+                          }
+                        });
+                      }}
                     />
                   </SettingsRow>
                 </SettingsPanelRow>

@@ -30,3 +30,12 @@ test("rank jumps and pagination clamp safely at 20 rows per page", async () => {
   assert.equal(pageForRank(21, 55), 1);
   assert.equal(pageForRank(10_000, 55), 2);
 });
+
+// The response carries the page size the server actually used, so a server that
+// pages differently must not send jump-to-rank to the wrong page.
+test("pagination follows the page size the response reports", async () => {
+  const { pageCount, pageForRank } = await load();
+  assert.equal(pageCount(55, 10), 6);
+  assert.equal(pageForRank(21, 55, 10), 2);
+  assert.equal(pageForRank(55, 55, 50), 1);
+});
