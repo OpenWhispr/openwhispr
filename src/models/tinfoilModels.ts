@@ -22,7 +22,7 @@ export interface TinfoilCatalogModel {
  */
 const DESCRIPTION_KEYS: Record<string, string> = {
   "deepseek-v4-pro": "models.descriptions.cloud.tinfoil_deepseek_v4_pro",
-  "glm-5-2": "models.descriptions.cloud.tinfoil_glm_5_2",
+  "glm-5-3": "models.descriptions.cloud.tinfoil_glm_5_3",
   "gemma4-31b": "models.descriptions.cloud.tinfoil_gemma4_31b",
   "gpt-oss-120b": "models.descriptions.cloud.tinfoil_gpt_oss_120b",
   "llama3-3-70b": "models.descriptions.cloud.tinfoil_llama3_3_70b",
@@ -40,7 +40,7 @@ function toCloudModels(catalog: TinfoilCatalogModel[]): CloudModelDefinition[] {
   }));
 }
 
-const DEFAULT_MODEL_ID = "glm-5-2";
+const DEFAULT_MODEL_ID = "glm-5-3";
 
 export function pickDefaultTinfoilModel(
   models: CloudModelDefinition[]
