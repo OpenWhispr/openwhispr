@@ -24,6 +24,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
 process.env.NODE_ENV = "test";
 
 const DatabaseManager = require("../../src/helpers/database.js");
+const loadGranolaImport = () => import("../../src/helpers/granolaImport.js");
 
 function isNativeBindingUnavailable(error) {
   const message = String(error?.message || error);
@@ -105,6 +106,52 @@ test("importNotes is idempotent across re-runs", (t) => {
   assert.equal(rerun.skipped, 2);
   const count = db.db.prepare("SELECT COUNT(*) AS n FROM notes").get().n;
   assert.equal(count, 2);
+  db.db.close();
+});
+
+test("a released Granola fallback id remains idempotent after the parser upgrade", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { parseGranolaCsv } = await loadGranolaImport();
+  const csv = 'title,summary,created_at\nSync,"Some notes",2026-07-15T14:30:00Z';
+  const legacyRow = {
+    clientNoteId: "d9182b86-aa74-4c1a-8dbe-5060160ef305",
+    sourceFile: "granola:0852623745d4c283",
+    title: "Sync",
+    content: "Some notes",
+    transcript: null,
+    participants: null,
+    createdAt: "2026-07-15 14:30:00",
+  };
+  db.importNotes([legacyRow]);
+
+  const result = db.importNotes(parseGranolaCsv(csv).notes);
+
+  assert.equal(result.imported, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count, 1);
+  db.db.close();
+});
+
+test("parsed Granola fallback collisions persist distinctly and remain idempotent", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { parseGranolaCsv } = await loadGranolaImport();
+  const csv = [
+    "title,summary,created_at,transcript",
+    'Sync,"Same summary",2026-07-15T14:30:00Z,"Alice: First meeting"',
+    'Sync,"Same summary",2026-07-15T14:30:00Z,"Bob: Second meeting"',
+    'Sync,"Same summary",2026-07-15T14:30:00Z,"Carol: Third meeting"',
+  ].join("\n");
+
+  const firstImport = db.importNotes(parseGranolaCsv(csv).notes);
+  const secondImport = db.importNotes(parseGranolaCsv(csv).notes);
+
+  assert.equal(firstImport.imported, 3);
+  assert.equal(firstImport.skipped, 0);
+  assert.equal(secondImport.imported, 0);
+  assert.equal(secondImport.skipped, 3);
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count, 3);
   db.db.close();
 });
 

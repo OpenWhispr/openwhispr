@@ -348,13 +348,132 @@ test("parseGranolaCsv reports header mapping and derives stable ids", async () =
   );
 });
 
-test("parseGranolaCsv falls back to a title+date hash key without an id column", async () => {
+test("parseGranolaCsv preserves the released title+date fallback key for the first note", async () => {
   const { parseGranolaCsv } = await load();
   const csv = 'title,summary,created_at\nSync,"Some notes",2026-07-15T14:30:00Z';
   const result = parseGranolaCsv(csv);
-  assert.match(result.notes[0].sourceFile, /^granola:[0-9a-f]{16}$/);
+  assert.equal(result.notes[0].sourceFile, "granola:0852623745d4c283");
   const again = parseGranolaCsv(csv);
   assert.equal(again.notes[0].clientNoteId, result.notes[0].clientNoteId);
+});
+
+test("parseGranolaCsv generates distinct fallback keys for notes sharing title and date without an id column", async () => {
+  const { parseGranolaCsv } = await load();
+  const csv = [
+    "title,summary,created_at",
+    'Sync,"Morning sync notes",2026-07-15T14:30:00Z',
+    'Sync,"Afternoon sync notes",2026-07-15T14:30:00Z',
+  ].join("\n");
+  const result = parseGranolaCsv(csv);
+  assert.equal(result.notes.length, 2);
+  assert.notEqual(result.notes[0].clientNoteId, result.notes[1].clientNoteId);
+  assert.notEqual(result.notes[0].sourceFile, result.notes[1].sourceFile);
+});
+
+test("parseGranolaCsv keeps a colliding note id when its summary changes", async () => {
+  const { parseGranolaCsv } = await load();
+  const originalCsv = [
+    "title,summary,created_at",
+    'Sync,"First meeting",2026-07-15T14:30:00Z',
+    'Sync,"Original second meeting",2026-07-15T14:30:00Z',
+  ].join("\n");
+  const editedCsv = [
+    "title,summary,created_at",
+    'Sync,"First meeting",2026-07-15T14:30:00Z',
+    'Sync,"Edited second meeting",2026-07-15T14:30:00Z',
+  ].join("\n");
+
+  const original = parseGranolaCsv(originalCsv);
+  const edited = parseGranolaCsv(editedCsv);
+
+  assert.equal(edited.notes[1].clientNoteId, original.notes[1].clientNoteId);
+});
+
+test("createGranolaNoteKeyAllocator disambiguates legacy title and date tuples", async () => {
+  const { createGranolaNoteKeyAllocator } = await load();
+  const sharedFields = { id: "" };
+  const leftFields = { ...sharedFields, title: "A|B", rawDate: "C" };
+  const rightFields = { ...sharedFields, title: "A", rawDate: "B|C" };
+
+  const leftFirstAllocator = createGranolaNoteKeyAllocator();
+  const leftLegacyKey = leftFirstAllocator(leftFields);
+  const rightVersionedKey = leftFirstAllocator(rightFields);
+  const rightFirstAllocator = createGranolaNoteKeyAllocator();
+  const rightLegacyKey = rightFirstAllocator(rightFields);
+  const leftVersionedKey = rightFirstAllocator(leftFields);
+
+  assert.equal(leftLegacyKey, rightLegacyKey);
+  assert.notEqual(leftVersionedKey, rightVersionedKey);
+});
+
+test("createGranolaNoteKeyAllocator counts delimiter-colliding tuples independently", async () => {
+  const { createGranolaNoteKeyAllocator } = await load();
+  const leftFields = { id: "", title: "A|B", rawDate: "C" };
+  const rightFields = { id: "", title: "A", rawDate: "B|C" };
+
+  const allocatorWithCollision = createGranolaNoteKeyAllocator();
+  allocatorWithCollision(leftFields);
+  allocatorWithCollision(rightFields);
+  const secondLeftKeyAfterCollision = allocatorWithCollision(leftFields);
+
+  const allocatorWithoutCollision = createGranolaNoteKeyAllocator();
+  allocatorWithoutCollision(leftFields);
+  const secondLeftKey = allocatorWithoutCollision(leftFields);
+
+  assert.equal(secondLeftKeyAfterCollision, secondLeftKey);
+});
+
+test("parseGranolaCsv distinguishes notes with matching content but different transcripts", async () => {
+  const { parseGranolaCsv } = await load();
+  const csv = [
+    "title,summary,created_at,transcript",
+    'Sync,"Same summary",2026-07-15T14:30:00Z,"Alice: First meeting"',
+    'Sync,"Same summary",2026-07-15T14:30:00Z,"Bob: Second meeting"',
+    'Sync,"Same summary",2026-07-15T14:30:00Z,"Carol: Third meeting"',
+  ].join("\n");
+  const result = parseGranolaCsv(csv);
+  assert.equal(result.notes.length, 3);
+  assert.equal(new Set(result.notes.map((note) => note.clientNoteId)).size, 3);
+  assert.equal(new Set(result.notes.map((note) => note.sourceFile)).size, 3);
+});
+
+test("parseGranolaCsv assigns distinct fallback keys to identical source rows", async () => {
+  const { parseGranolaCsv } = await load();
+  const csv = [
+    "title,summary,created_at",
+    'Sync,"Same summary",2026-07-15T14:30:00Z',
+    'Sync,"Same summary",2026-07-15T14:30:00Z',
+    'Sync,"Same summary",2026-07-15T14:30:00Z',
+  ].join("\n");
+  const result = parseGranolaCsv(csv);
+  assert.equal(result.notes.length, 3);
+  assert.equal(new Set(result.notes.map((note) => note.clientNoteId)).size, 3);
+  assert.equal(new Set(result.notes.map((note) => note.sourceFile)).size, 3);
+});
+
+test("parseGranolaCsv shares fallback collision allocation across CSV files", async () => {
+  const { createGranolaNoteKeyAllocator, parseGranolaCsv } = await load();
+  assert.equal(typeof createGranolaNoteKeyAllocator, "function");
+  const allocateNoteKey = createGranolaNoteKeyAllocator();
+  const csv = 'title,summary,created_at\nSync,"Same summary",2026-07-15T14:30:00Z';
+  const notes = [
+    ...parseGranolaCsv(csv, { allocateNoteKey }).notes,
+    ...parseGranolaCsv(csv, { allocateNoteKey }).notes,
+    ...parseGranolaCsv(csv, { allocateNoteKey }).notes,
+  ];
+  assert.equal(new Set(notes.map((note) => note.clientNoteId)).size, 3);
+  assert.equal(new Set(notes.map((note) => note.sourceFile)).size, 3);
+});
+
+test("parseGranolaCsv generates distinct fallback keys for multiple untitled notes without dates", async () => {
+  const { parseGranolaCsv } = await load();
+  const csv = ["summary", '"First untitled meeting"', '"Second untitled meeting"'].join("\n");
+  const result = parseGranolaCsv(csv);
+  assert.equal(result.notes.length, 2);
+  assert.equal(result.notes[0].title, "Untitled");
+  assert.equal(result.notes[1].title, "Untitled");
+  assert.notEqual(result.notes[0].clientNoteId, result.notes[1].clientNoteId);
+  assert.notEqual(result.notes[0].sourceFile, result.notes[1].sourceFile);
 });
 
 test("parseGranolaCsv warns once when the transcript column is missing", async () => {
