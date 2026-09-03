@@ -95,6 +95,7 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
     captureLabel: "Capture",
     recommendedLabel: "Recommended",
     chooseAnotherLabel: "Choose another shortcut",
+    dense: true,
     onConfirm: async (value) => {
       harness.confirmed.push(value);
       return null;
@@ -112,6 +113,13 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
 
   const initialTree = render();
   assert.match(textContent(initialTree), /onboarding\.rehaul\.hotkey\.confirmAgain:RightOption/);
+  assert.ok(
+    findElement(
+      initialTree,
+      (node) => node.type === "button" && textContent(node) === "Choose another shortcut"
+    ),
+    "an unconfirmed shortcut should still expose the reset action"
+  );
   input(initialTree).props.onChange("RightOption");
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(harness.confirmed, ["RightOption"]);

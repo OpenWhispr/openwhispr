@@ -840,9 +840,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "assistant-hotkey": {
         const assistant = currentStepId === "assistant-hotkey";
         return (
-          // Flex column: the preview illustration is allowed to shrink so the
-          // capture box below it always stays inside the shell, which is
-          // overflow-hidden.
           <div className="flex h-full min-h-0 w-full flex-col pt-2">
             <OnboardingStepHeader
               title={t(

@@ -140,13 +140,13 @@ export default function ShortcutSetupStep({
 
   return (
     <div
-      className={`mx-auto flex min-h-0 w-full flex-1 flex-col text-center ${
-        dense ? "mt-4 max-w-sm" : "mt-6 max-w-lg"
-      }`}
+      className={`mx-auto mt-6 flex min-h-0 w-full flex-1 flex-col text-center ${dense ? "max-w-sm" : "max-w-lg"}`}
     >
       {candidate ? (
         <>
-          <div className={`relative flex items-center justify-center ${dense ? "h-28" : "h-40"}`}>
+          <div
+            className={`relative flex items-center justify-center ${dense ? "h-12 shrink-0" : "h-40"}`}
+          >
             {captureInput}
             {error ? (
               <p
@@ -162,11 +162,16 @@ export default function ShortcutSetupStep({
             )}
           </div>
 
-          <div className="mt-auto flex flex-col items-center gap-2.5 pb-1 pt-8" aria-live="polite">
+          <div
+            className={`mt-auto flex flex-col items-center gap-2.5 pb-1 ${dense ? "translate-y-3 pt-5" : "pt-8"}`}
+            aria-live="polite"
+          >
             {confirmed ? (
               <p className="sr-only">{formatHotkeyInstruction(candidate)}</p>
             ) : (
-              <p className="mt-6 rounded-full bg-[var(--onboarding-surface-tertiary)] px-5 py-2 text-sm text-[var(--onboarding-text-tertiary)]">
+              <p
+                className={`rounded-full bg-[var(--onboarding-surface-tertiary)] px-5 py-2 text-sm text-[var(--onboarding-text-tertiary)] ${dense ? "" : "mt-6"}`}
+              >
                 {t("onboarding.rehaul.hotkey.confirmAgain", {
                   hotkey: formatHotkeyInstruction(candidate),
                 })}
