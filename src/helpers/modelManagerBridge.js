@@ -394,9 +394,10 @@ class ModelManager {
 
     // Refuse a prompt the server cannot hold rather than letting it grind. An
     // over-context prompt used to be accepted and processed for minutes on end.
+    const contextSize = this.serverManager.contextSize || 4096;
     const fit = checkPromptFitsContext({
       text: `${options.systemPrompt || ""}${prompt}`,
-      contextSize: this.serverManager.contextSize || 4096,
+      contextSize,
     });
     if (!fit.fits) {
       debugLogger.warn(
@@ -405,14 +406,25 @@ class ModelManager {
           modelId,
           estimatedTokens: fit.estimatedTokens,
           budgetTokens: fit.budgetTokens,
-          contextSize: this.serverManager.contextSize,
+          contextSize,
+          serverContextSize: this.serverManager.contextSize,
         },
         "llama"
       );
+      // Says only what it knows. The context can be small because memory was
+      // tight or because the model was trained that way, and this call site
+      // cannot tell which — so it names the limit rather than guessing a cause.
       throw new ModelError(
-        `Prompt is too long for this model: about ${fit.estimatedTokens} tokens against a budget of ${fit.budgetTokens}`,
+        `Prompt is too long for this model: about ${fit.estimatedTokens} tokens against a budget of ` +
+          `${fit.budgetTokens}. ${modelId} is running with a ${contextSize}-token context. ` +
+          `Shorten the note, or choose a model that fits more context on this machine.`,
         fit.code,
-        { estimatedTokens: fit.estimatedTokens, budgetTokens: fit.budgetTokens }
+        {
+          estimatedTokens: fit.estimatedTokens,
+          budgetTokens: fit.budgetTokens,
+          contextSize,
+          modelId,
+        }
       );
     }
 

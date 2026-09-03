@@ -366,9 +366,11 @@ class LlamaServerManager {
         pollCount++;
         if (await this.checkHealth()) {
           this.ready = true;
+          await this.reconcileContextSize();
           debugLogger.debug("llama-server ready", {
             startupTimeMs: Date.now() - startTime,
             pollCount,
+            contextSize: this.contextSize,
           });
           settle(() => resolve());
           return;
@@ -419,6 +421,62 @@ class LlamaServerManager {
 
     this.process = null;
     this.ready = false;
+  }
+
+  /**
+   * Replaces the estimated context with the one the server actually created.
+   *
+   * `contextSize` is what the prompt-budget guard measures against, so an
+   * estimator that reads high refuses prompts the server would have accepted.
+   * The server publishes the truth; nothing here may fail loudly, because by the
+   * time it runs the server is already healthy and serving.
+   */
+  async reconcileContextSize() {
+    const body = await this._readProps();
+    const actual = parseServerContextSize(body);
+    if (actual === null || actual === this.contextSize) return;
+
+    debugLogger.notice(
+      "Adopting the context llama-server actually created",
+      { estimated: this.contextSize, actual, port: this.port },
+      "llama"
+    );
+    this.contextSize = actual;
+  }
+
+  _readProps() {
+    return new Promise((resolve) => {
+      const req = http.request(
+        {
+          hostname: "127.0.0.1",
+          port: this.port,
+          path: "/props",
+          method: "GET",
+          timeout: HEALTH_CHECK_TIMEOUT_MS,
+        },
+        (res) => {
+          if (res.statusCode !== 200) {
+            res.resume();
+            resolve(null);
+            return;
+          }
+          let body = "";
+          res.setEncoding("utf8");
+          res.on("data", (chunk) => {
+            body += chunk;
+          });
+          res.on("end", () => resolve(body));
+          res.on("error", () => resolve(null));
+        }
+      );
+
+      req.on("error", () => resolve(null));
+      req.on("timeout", () => {
+        req.destroy();
+        resolve(null);
+      });
+      req.end();
+    });
   }
 
   checkHealth() {
@@ -659,6 +717,20 @@ class LlamaServerManager {
   }
 }
 
+/**
+ * The context out of a llama-server /props body, or null when the answer is not
+ * a usable one. Anything but a positive whole number means the estimate stands.
+ */
+function parseServerContextSize(body) {
+  try {
+    const n = JSON.parse(body)?.default_generation_settings?.n_ctx;
+    return Number.isInteger(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 module.exports = LlamaServerManager;
+module.exports.parseServerContextSize = parseServerContextSize;
 module.exports.DEFAULT_REQUEST_TIMEOUT_MS = DEFAULT_REQUEST_TIMEOUT_MS;
 module.exports.BATCH_REQUEST_TIMEOUT_MS = BATCH_REQUEST_TIMEOUT_MS;

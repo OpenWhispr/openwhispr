@@ -9,7 +9,7 @@
  * registry), so this module ignores both and decides from the model's own
  * geometry and the machine's memory.
  */
-const { kvBytesPerToken } = require("./ggufMetadata");
+const { kvBytesPerToken, kvCacheBytes } = require("./ggufMetadata");
 
 const MIN_CONTEXT = 2048;
 const FALLBACK_CONTEXT = 8192;
@@ -24,6 +24,14 @@ const MEMORY_SHARE = 0.35;
 const AVAILABLE_SHARE = 0.8;
 const MIN_KV_BUDGET = 256 * 1024 * 1024;
 const MAX_KV_BUDGET = 8 * 1024 ** 3;
+// A flat minimum is incoherent next to the weights: the app commits gigabytes to
+// those without hesitation, then refuses the cache a few hundred megabytes and
+// hands back a context too small to hold a prompt. Whenever the model is larger
+// than the available-memory share, that flat floor is the only thing left
+// deciding the context — so it scales with the commitment already made. Bounded
+// above by the polite total-RAM allowance, so a model too large for the machine
+// cannot use its own size to claim more.
+const WEIGHTS_KV_FLOOR_SHARE = 0.15;
 
 const roundDownToPowerOfTwo = (value) => 2 ** Math.floor(Math.log2(value));
 
@@ -53,10 +61,41 @@ function resolveContextSize({
     bounds.push(shareOfAvailable);
   }
 
-  const kvBudgetBytes = Math.min(
-    Math.max(Math.min(...bounds), MIN_KV_BUDGET),
-    MAX_KV_BUDGET
+  const politeCeiling = Math.max(MIN_KV_BUDGET, shareOfTotal - modelFileBytes);
+  const kvFloor = Math.min(
+    Math.max(Math.floor(modelFileBytes * WEIGHTS_KV_FLOOR_SHARE), MIN_KV_BUDGET),
+    politeCeiling
   );
+
+  const kvBudgetBytes = Math.min(Math.max(Math.min(...bounds), kvFloor), MAX_KV_BUDGET);
+
+  // `contextLength` drives the search's termination, so it is checked here and
+  // not only in the reader: an infinite one halves forever, and a fractional one
+  // never lands on the floor.
+  const priceable =
+    gguf &&
+    Number.isInteger(gguf.contextLength) &&
+    gguf.contextLength > 0 &&
+    kvCacheBytes(gguf, MIN_CONTEXT) > 0;
+
+  // Three different situations, deliberately answered differently. No header at
+  // all is the long-standing case and keeps its established default. A header we
+  // cannot price is not the same thing — it is positive evidence of corruption,
+  // so it gets the floor rather than the larger default a corrupt file could
+  // otherwise have aimed at. A header trained below the floor is priceable and
+  // keeps its own geometry; routing it here would hand it eight times the context
+  // it was trained for, with nothing costing it.
+  if (gguf && !priceable) {
+    return {
+      contextSize: MIN_CONTEXT,
+      trainedContext: null,
+      kvBytesPerToken: null,
+      estimatedKvBytes: null,
+      kvBudgetBytes,
+      source: "unpriceable-geometry",
+      requested: requested ?? null,
+    };
+  }
 
   if (!gguf) {
     // No readable header: pick something small enough to be safe anywhere. The
@@ -71,23 +110,29 @@ function resolveContextSize({
     };
   }
 
-  const perToken = kvBytesPerToken(gguf);
-  const affordable = Math.floor(kvBudgetBytes / perToken);
-  const bounded = Math.min(affordable, gguf.contextLength);
+  // A search rather than a division: on a sliding-window model the cache is not
+  // linear in the context, so `budget / bytesPerToken` would be meaningless.
+  let affordableContext = roundDownToPowerOfTwo(gguf.contextLength);
+  while (affordableContext > MIN_CONTEXT && kvCacheBytes(gguf, affordableContext) > kvBudgetBytes) {
+    affordableContext /= 2;
+  }
 
   // Below the floor the model is useless anyway; accept the overshoot and let
-  // the caller's budget check reject oversized prompts.
-  const contextSize =
-    bounded < MIN_CONTEXT ? MIN_CONTEXT : Math.max(roundDownToPowerOfTwo(bounded), MIN_CONTEXT);
+  // the caller's budget check reject oversized prompts. `source` says so, since
+  // "we chose 2048" and "2048 is more than this machine can hold" need different
+  // answers from whoever reads the log.
+  const belowFloor = kvCacheBytes(gguf, MIN_CONTEXT) > kvBudgetBytes;
+  const contextSize = Math.max(affordableContext, MIN_CONTEXT);
 
   return {
     contextSize,
     trainedContext: gguf.contextLength,
-    kvBytesPerToken: perToken,
-    estimatedKvBytes: contextSize * perToken,
+    kvBytesPerToken: kvBytesPerToken(gguf),
+    estimatedKvBytes: kvCacheBytes(gguf, contextSize),
     kvBudgetBytes,
-    source:
-      contextSize >= gguf.contextLength
+    source: belowFloor
+      ? "below-floor"
+      : contextSize >= gguf.contextLength
         ? "trained-context"
         : availableBound
           ? "available-bound"
