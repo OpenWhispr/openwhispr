@@ -99,17 +99,25 @@ test("getSelectedText identifies an empty writable field", darwinOnly, async () 
   assert.deepEqual(await m.getSelectedText(42), { state: "none", editable: true });
 });
 
-test("isFocusedEditable accepts only an explicit native editable verdict", darwinOnly, async () => {
-  const editable = new TextEditMonitor();
-  editable.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", 'echo "EDITABLE"'] });
-  const readOnly = new TextEditMonitor();
-  readOnly.resolveBinary = () => ({
-    command: "/bin/sh",
-    args: ["-c", 'echo "NOT_EDITABLE"'],
-  });
+test("isFocusedEditable maps the native verdicts, including the dormant-tree UNKNOWN", darwinOnly, async () => {
+  const withOutput = (line) => {
+    const m = new TextEditMonitor();
+    m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", `echo "${line}"`] });
+    return m;
+  };
 
-  assert.equal(await editable.isFocusedEditable({ kind: "mac-pid", pid: 42 }), true);
-  assert.equal(await readOnly.isFocusedEditable({ kind: "mac-pid", pid: 42 }), false);
+  assert.equal(
+    await withOutput("EDITABLE").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
+    "editable"
+  );
+  assert.equal(
+    await withOutput("NOT_EDITABLE").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
+    "not_editable"
+  );
+  assert.equal(
+    await withOutput("UNKNOWN").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
+    "unknown"
+  );
 });
 
 test("isFocusedEditable answers from a stale binary's first monitor line", darwinOnly, async () => {
@@ -123,8 +131,18 @@ test("isFocusedEditable answers from a stale binary's first monitor line", darwi
   });
 
   const startedAt = Date.now();
-  assert.equal(await m.isFocusedEditable({ kind: "mac-pid", pid: 42 }), false);
+  assert.equal(await m.isFocusedEditable({ kind: "mac-pid", pid: 42 }), "not_editable");
   assert.ok(Date.now() - startedAt < 900, "must resolve on the first output line");
+});
+
+// The bare window as the focused element is the dormant-Chromium signature —
+// the selection state is unreadable, not empty, so the caller must fall to the
+// synthetic-copy read instead of treating it as "no selection".
+test("getSelectedText surfaces the native UNKNOWN verdict", darwinOnly, async () => {
+  const m = new TextEditMonitor();
+  m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", 'echo "UNKNOWN:"'] });
+
+  assert.deepEqual(await m.getSelectedText(42), { state: "unknown" });
 });
 
 test("a non--25212 native failure is not cached", darwinOnly, async () => {
