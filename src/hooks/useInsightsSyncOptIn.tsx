@@ -90,6 +90,17 @@ export function useInsightsSyncOptIn() {
     }
   }, [isLoaded, isSignedIn]);
 
+  // A completed write is the newest answer there is, so it retires every read
+  // still in flight — including one the sync toggle started after the request
+  // went out, which would otherwise settle the account on pre-write state. That
+  // read no longer gets to report itself finished either, hence the ready flag.
+  const publishParticipationAnswer = useCallback((enabled: boolean) => {
+    participationReadIdRef.current += 1;
+    setParticipationEnabled(enabled);
+    setParticipationReady(true);
+    setParticipationError(false);
+  }, []);
+
   // The claim lands before the pass is requested so the rows it adopts go up
   // with it, rather than waiting for the next ambient one.
   const activate = useCallback(
@@ -109,8 +120,7 @@ export function useInsightsSyncOptIn() {
     setParticipationUpdating(true);
     try {
       const participation = await LeaderboardService.setParticipation(false);
-      setParticipationEnabled(participation.enabled);
-      setParticipationError(false);
+      publishParticipationAnswer(participation.enabled);
       return true;
     } catch (error) {
       console.error("Leaving the leaderboard failed:", error);
@@ -119,14 +129,17 @@ export function useInsightsSyncOptIn() {
     } finally {
       setParticipationUpdating(false);
     }
-  }, []);
+  }, [publishParticipationAnswer]);
 
   const disableInsightsSync = useCallback(async () => {
     // The device stops uploading straight away: an opt-out that waits on the
     // network is an opt-out the user loses whenever the network is down.
     setInsightsSyncEnabled(false);
+    // Signed out there is no account row to clear, and the call could only fail
+    // for want of a credential.
+    if (!isSignedIn) return true;
     return leaveLeaderboard();
-  }, [leaveLeaderboard, setInsightsSyncEnabled]);
+  }, [isSignedIn, leaveLeaderboard, setInsightsSyncEnabled]);
 
   const refreshCounts = useCallback(async () => {
     const [unclaimed, awaitingUpload] = await Promise.all([
@@ -176,15 +189,14 @@ export function useInsightsSyncOptIn() {
     setParticipationUpdating(true);
     try {
       const participation = await LeaderboardService.setParticipation(true);
-      setParticipationEnabled(participation.enabled);
-      setParticipationError(false);
+      publishParticipationAnswer(participation.enabled);
     } catch (error) {
       console.error("Joining the leaderboard failed:", error);
       setParticipationError(true);
     } finally {
       setParticipationUpdating(false);
     }
-  }, [enableInsightsSync, insightsSyncEnabled, syncAllowedByPolicy]);
+  }, [enableInsightsSync, insightsSyncEnabled, publishParticipationAnswer, syncAllowedByPolicy]);
 
   const claiming = promptKind === "claim";
   const answerClaimPrompt = (claimed: boolean) => {
