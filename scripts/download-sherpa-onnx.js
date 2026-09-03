@@ -70,7 +70,28 @@ const VERSIONED_ONNX_RUNTIME_DYLIB_PATTERN = /^libonnxruntime\.\d+(?:\.\d+)*\.dy
 const UNVERSIONED_ONNX_RUNTIME_DYLIB = "libonnxruntime.dylib";
 const REQUIRED_MACOS_ARCHITECTURES = ["x86_64", "arm64"];
 
-// Upstream 1.13.4 ships an invalid arm64 signature on libonnxruntime; dyld SIGKILLs unsigned loads.
+// A versioned library is stale once this run copied one with the same base name but not that
+// file. 1.13.6 renamed the macOS ONNX Runtime from libonnxruntime.<version>.dylib to
+// libonnxruntime.dylib, so the 1.13.4 file no longer collides with a copy: without this it
+// lingers in resources/bin, gets packaged next to the library the app actually loads, and is
+// picked ahead of it by verifyPackagedMacosParakeet.
+function findStaleVersionedLibraries(entries, copiedLibraries) {
+  const copied = new Set(copiedLibraries);
+  const copiedBaseNames = new Set();
+  for (const name of copied) {
+    const match = name.match(VERSIONED_LIB_PATTERN);
+    copiedBaseNames.add(match ? `${match[1]}.${match[3]}` : name);
+  }
+
+  return entries.filter((name) => {
+    if (copied.has(name)) return false;
+    const match = name.match(VERSIONED_LIB_PATTERN);
+    return Boolean(match) && copiedBaseNames.has(`${match[1]}.${match[3]}`);
+  });
+}
+
+// Upstream ad-hoc signatures were invalid on arm64 through 1.13.4 and dyld SIGKILLs unsigned
+// loads; re-signing keeps that from returning in a future release.
 function adhocSign(filePath, platformArch) {
   if (process.platform !== "darwin" || !platformArch.startsWith("darwin")) return;
   execFileSync("codesign", ["--force", "--sign", "-", filePath], { stdio: "ignore" });
@@ -309,15 +330,13 @@ async function downloadBinary(platformArch, config, isForce = false) {
           fs.rmSync(basePath, { force: true });
           fs.symlinkSync(versionedName, basePath);
           console.log(`  ${platformArch}: Symlinked ${baseName} -> ${versionedName}`);
-
-          for (const file of fs.readdirSync(BIN_DIR)) {
-            const match = file.match(VERSIONED_LIB_PATTERN);
-            if (match && `${match[1]}.${match[3]}` === baseName && file !== versionedName) {
-              fs.unlinkSync(path.join(BIN_DIR, file));
-              console.log(`  ${platformArch}: Removed stale ${file}`);
-            }
-          }
         }
+      }
+
+      // Drop the versioned libraries an earlier sherpa-onnx release left behind.
+      for (const file of findStaleVersionedLibraries(fs.readdirSync(BIN_DIR), copiedLibraries)) {
+        fs.rmSync(path.join(BIN_DIR, file), { force: true });
+        console.log(`  ${platformArch}: Removed stale ${file}`);
       }
     }
 
@@ -404,6 +423,7 @@ module.exports = {
   SHERPA_ONNX_VERSION,
   BINARIES,
   BIN_DIR,
+  findStaleVersionedLibraries,
   getDownloadUrl,
   parseMacosDeploymentTargets,
   validateMacosDeploymentTargets,
