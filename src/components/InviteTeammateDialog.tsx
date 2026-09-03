@@ -146,6 +146,7 @@ export default function InviteTeammateDialog({
               {t("workspaces.invite.emailLabel")}
             </Label>
             <Input
+              dir="ltr"
               id="invite-email"
               type="email"
               autoFocus
@@ -166,7 +167,7 @@ export default function InviteTeammateDialog({
                   aria-pressed={role === r}
                   onClick={() => setRole(r)}
                   className={cn(
-                    "flex-1 px-3 py-2 rounded-md border text-left transition-colors",
+                    "flex-1 px-3 py-2 rounded-md border text-start transition-colors",
                     "outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
                     role === r
                       ? "border-primary/40 bg-primary/8"
@@ -207,7 +208,7 @@ export default function InviteTeammateDialog({
               {cancelLabel ?? t("common.cancel")}
             </Button>
             <Button type="submit" disabled={!email.trim() || submitting}>
-              {showSpinner && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
               {submitting ? t("workspaces.invite.submitting") : t("workspaces.invite.submit")}
             </Button>
           </DialogFooter>

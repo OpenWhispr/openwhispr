@@ -160,7 +160,10 @@ export default function DeveloperSection() {
               {t("developerSection.currentLogFile")}
             </p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 text-xs text-muted-foreground font-mono break-all leading-relaxed bg-muted/30 dark:bg-surface-raised/30 px-3 py-2 rounded-lg border border-border/30">
+              <code
+                dir="ltr"
+                className="flex-1 text-xs text-muted-foreground font-mono break-all leading-relaxed bg-muted/30 dark:bg-surface-raised/30 px-3 py-2 rounded-lg border border-border/30"
+              >
                 {logPath}
               </code>
               <Button
@@ -183,7 +186,7 @@ export default function DeveloperSection() {
         {debugEnabled && (
           <div className="px-5 py-4">
             <Button onClick={handleOpenLogsFolder} variant="outline" size="sm" className="w-full">
-              <FolderOpen className="mr-2 h-3.5 w-3.5" />
+              <FolderOpen className="me-2 h-3.5 w-3.5" />
               {t("developerSection.openLogsFolder")}
             </Button>
           </div>
@@ -251,7 +254,7 @@ export default function DeveloperSection() {
                   t("developerSection.sharing.steps.2"),
                 ].map((step, i) => (
                   <div key={i} className="flex items-start gap-3">
-                    <span className="shrink-0 text-xs font-mono text-muted-foreground/40 mt-0.5 w-4 text-right">
+                    <span className="mt-0.5 w-4 shrink-0 text-end font-mono text-xs text-muted-foreground/40">
                       {i + 1}
                     </span>
                     <p className="text-xs text-muted-foreground leading-relaxed">{step}</p>

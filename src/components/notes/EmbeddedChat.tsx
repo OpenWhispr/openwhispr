@@ -106,7 +106,7 @@ export default function EmbeddedChat({
             className="h-6 w-6 flex items-center justify-center rounded-md text-foreground/25 hover:text-foreground/40 hover:bg-foreground/6 transition-colors"
             aria-label={t("embeddedChat.dock")}
           >
-            <PanelRight size={13} />
+            <PanelRight size={13} className="rtl:scale-x-[-1]" />
           </button>
         ) : (
           <button
@@ -114,7 +114,7 @@ export default function EmbeddedChat({
             className="h-6 w-6 flex items-center justify-center rounded-md text-foreground/25 hover:text-foreground/40 hover:bg-foreground/6 transition-colors"
             aria-label={t("embeddedChat.undock")}
           >
-            <PanelRightClose size={13} />
+            <PanelRightClose size={13} className="rtl:scale-x-[-1]" />
           </button>
         )}
         <button
@@ -171,7 +171,7 @@ export default function EmbeddedChat({
     <div
       className={cn(
         "w-85 shrink-0",
-        "border-l border-black/12 dark:border-white/14",
+        "border-s border-black/12 dark:border-white/14",
         "bg-surface-1 dark:bg-surface-2",
         "flex flex-col",
         "min-h-0"

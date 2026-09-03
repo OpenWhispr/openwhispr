@@ -23,6 +23,7 @@ import {
 } from "./ui/dropdown-menu";
 import type { NoteItem, FolderItem, SpaceItem, TranscriptionItem } from "../types/electron.js";
 import { formatRelativeTime } from "../utils/dateFormatting";
+import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
 
 interface ConversationResult {
   id: number;
@@ -75,7 +76,8 @@ export default function CommandSearch({
   onTranscriptSelect,
   onConversationSelect,
 }: CommandSearchProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const [query, setQuery] = useState("");
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
@@ -231,10 +233,11 @@ export default function CommandSearch({
     (note: NoteItem) => {
       const space = spaceMap.get(note.space_id);
       const folder = note.folder_id != null ? folderMap.get(note.folder_id) : undefined;
-      if (!space) return folder?.name ?? "";
-      return folder ? `${spaceLabel(space)} / ${folder.name}` : spaceLabel(space);
+      const folderLabel = folder ? defaultFolderDisplayName(folder, t) : "";
+      if (!space) return folderLabel;
+      return folder ? `${spaceLabel(space)} / ${folderLabel}` : spaceLabel(space);
     },
-    [spaceMap, folderMap, spaceLabel]
+    [spaceMap, folderMap, spaceLabel, t]
   );
 
   const jumpTargets = useMemo<JumpTarget[]>(() => {
@@ -248,18 +251,18 @@ export default function CommandSearch({
       }
     }
     for (const folder of folders) {
-      if (folder.name.toLowerCase().includes(q)) {
+      if (folderMatchesQuery(folder, t, q)) {
         targets.push({
           key: `f:${folder.id}`,
           spaceId: folder.space_id,
           folderId: folder.id,
-          label: folder.name,
+          label: defaultFolderDisplayName(folder, t),
           space: spaceMap.get(folder.space_id),
         });
       }
     }
     return targets.slice(0, 5);
-  }, [query, spaces, folders, spaceMap, spaceLabel, isConversationsMode]);
+  }, [query, spaces, folders, spaceMap, spaceLabel, isConversationsMode, t]);
 
   const filteredTranscripts = useMemo(() => {
     const slice = query.trim()
@@ -360,7 +363,11 @@ export default function CommandSearch({
                     )}
                   >
                     <span className="truncate max-w-32">
-                      {scopeSpace ? spaceLabel(scopeSpace) : t("commandSearch.allSpaces")}
+                      {scopeSpace ? (
+                        <span dir="auto">{spaceLabel(scopeSpace)}</span>
+                      ) : (
+                        t("commandSearch.allSpaces")
+                      )}
                     </span>
                     <ChevronDown size={11} className="shrink-0 text-muted-foreground/50" />
                   </button>
@@ -378,13 +385,14 @@ export default function CommandSearch({
                   <DropdownMenuSeparator />
                   {spaces.map((space) => (
                     <DropdownMenuItem key={space.id} onSelect={() => selectScope(space.id)}>
-                      {spaceLabel(space)}
+                      <span dir="auto">{spaceLabel(space)}</span>
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
             <input
+              dir="auto"
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -431,7 +439,7 @@ export default function CommandSearch({
                   onClick={() => selectItem({ kind: "conversation", conversation: conv })}
                   onMouseEnter={() => setSelectedIndex(idx)}
                   className={cn(
-                    "flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left transition-colors duration-100 outline-none",
+                    "flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-start transition-colors duration-100 outline-none",
                     selectedIndex === idx
                       ? "bg-primary/8 dark:bg-primary/10"
                       : "hover:bg-foreground/4 dark:hover:bg-white/4"
@@ -445,15 +453,17 @@ export default function CommandSearch({
                     )}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate">{conv.title}</p>
+                    <p dir="auto" className="text-xs font-medium text-foreground truncate">
+                      {conv.title}
+                    </p>
                     {conv.last_message && (
-                      <p className="text-[11px] text-muted-foreground/55 truncate mt-px">
+                      <p dir="auto" className="text-[11px] text-muted-foreground/55 truncate mt-px">
                         {conv.last_message.slice(0, 90)}
                       </p>
                     )}
                   </div>
                   <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-                    {formatRelativeTime(conv.updated_at, t)}
+                    {formatRelativeTime(conv.updated_at, t, locale)}
                   </span>
                 </button>
               ))
@@ -505,6 +515,7 @@ export default function CommandSearch({
                           onSelect={() => selectItem({ kind: "note", note })}
                           onHover={() => setSelectedIndex(idx)}
                           t={t}
+                          locale={locale}
                         />
                       );
                     })}
@@ -530,6 +541,7 @@ export default function CommandSearch({
                           onSelect={() => selectItem({ kind: "transcript", transcript })}
                           onHover={() => setSelectedIndex(idx)}
                           t={t}
+                          locale={locale}
                         />
                       );
                     })}
@@ -591,7 +603,7 @@ function ContainerRow({
       onClick={onSelect}
       onMouseEnter={onHover}
       className={cn(
-        "group flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left transition-colors duration-100 outline-none",
+        "group flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-start transition-colors duration-100 outline-none",
         isSelected
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4"
@@ -608,9 +620,14 @@ function ContainerRow({
       ) : (
         <Users size={13} className={iconClass} />
       )}
-      <p className="flex-1 text-xs font-medium text-foreground truncate min-w-0">{target.label}</p>
+      <p dir="auto" className="flex-1 text-xs font-medium text-foreground truncate min-w-0">
+        {target.label}
+      </p>
       {showSpaceHint && space && (
-        <span className="text-[10px] text-muted-foreground/45 truncate shrink-0 max-w-32">
+        <span
+          dir="auto"
+          className="text-[10px] text-muted-foreground/45 truncate shrink-0 max-w-32"
+        >
           {spaceLabel(space)}
         </span>
       )}
@@ -626,6 +643,7 @@ function NoteRow({
   onSelect,
   onHover,
   t,
+  locale,
 }: {
   note: NoteItem;
   breadcrumb: string;
@@ -634,6 +652,7 @@ function NoteRow({
   onSelect: () => void;
   onHover: () => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
+  locale?: string;
 }) {
   const preview = stripMarkdownPreview(note.content).slice(0, 90);
   const NoteIcon =
@@ -645,7 +664,7 @@ function NoteRow({
       onClick={onSelect}
       onMouseEnter={onHover}
       className={cn(
-        "group flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left transition-colors duration-100 outline-none",
+        "group flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-start transition-colors duration-100 outline-none",
         isSelected
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4"
@@ -660,6 +679,7 @@ function NoteRow({
       />
       <div className="flex-1 min-w-0">
         <p
+          dir="auto"
           className={cn(
             "text-xs font-medium truncate",
             note.title ? "text-foreground" : "italic text-muted-foreground/50"
@@ -669,14 +689,22 @@ function NoteRow({
         </p>
         {(breadcrumb || preview) && (
           <p className="text-[10px] truncate mt-px">
-            {breadcrumb && <span className="text-muted-foreground/45">{breadcrumb}</span>}
+            {breadcrumb && (
+              <span dir="auto" className="text-muted-foreground/45">
+                {breadcrumb}
+              </span>
+            )}
             {breadcrumb && preview && <span className="text-muted-foreground/35"> · </span>}
-            {preview && <span className="text-muted-foreground/55">{preview}</span>}
+            {preview && (
+              <span dir="auto" className="text-muted-foreground/55">
+                {preview}
+              </span>
+            )}
           </p>
         )}
       </div>
       <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-        {formatRelativeTime(note.updated_at, t)}
+        {formatRelativeTime(note.updated_at, t, locale)}
       </span>
     </button>
   );
@@ -689,6 +717,7 @@ function TranscriptRow({
   onSelect,
   onHover,
   t,
+  locale,
 }: {
   transcript: TranscriptionItem;
   idx: number;
@@ -696,6 +725,7 @@ function TranscriptRow({
   onSelect: () => void;
   onHover: () => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
+  locale?: string;
 }) {
   return (
     <button
@@ -704,7 +734,7 @@ function TranscriptRow({
       onClick={onSelect}
       onMouseEnter={onHover}
       className={cn(
-        "group flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left transition-colors duration-100 outline-none",
+        "group flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-start transition-colors duration-100 outline-none",
         isSelected
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4"
@@ -717,9 +747,11 @@ function TranscriptRow({
           isSelected ? "text-primary" : "text-muted-foreground/40"
         )}
       />
-      <p className="flex-1 text-xs text-foreground/75 truncate min-w-0">{transcript.text}</p>
+      <p dir="auto" className="flex-1 text-xs text-foreground/75 truncate min-w-0">
+        {transcript.text}
+      </p>
       <span className="text-[10px] text-muted-foreground/35 tabular-nums shrink-0">
-        {formatRelativeTime(transcript.created_at, t)}
+        {formatRelativeTime(transcript.created_at, t, locale)}
       </span>
     </button>
   );
@@ -728,15 +760,17 @@ function TranscriptRow({
 function FooterHint({ keys, label }: { keys: string[]; label: string }) {
   return (
     <div className="flex items-center gap-1">
-      {keys.map((k) => (
-        <kbd
-          key={k}
-          className="text-[10px] px-1 py-px rounded border border-border/40 bg-muted/50 text-muted-foreground/55 font-mono leading-tight"
-        >
-          {k}
-        </kbd>
-      ))}
-      <span className="text-[10px] text-muted-foreground/40 ml-0.5">{label}</span>
+      <span dir="ltr" className="inline-flex items-center gap-1">
+        {keys.map((k) => (
+          <kbd
+            key={k}
+            className="text-[10px] px-1 py-px rounded border border-border/40 bg-muted/50 text-muted-foreground/55 font-mono leading-tight"
+          >
+            {k}
+          </kbd>
+        ))}
+      </span>
+      <span className="text-[10px] text-muted-foreground/40 ms-0.5">{label}</span>
     </div>
   );
 }

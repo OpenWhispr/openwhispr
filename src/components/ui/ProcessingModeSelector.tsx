@@ -21,7 +21,9 @@ export default function ProcessingModeSelector({
       {/* Sliding indicator */}
       <div
         className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md bg-white/10 dark:bg-white/8 border border-white/10 transition-transform duration-200 ease-out ${
-          useLocalWhisper ? "translate-x-[calc(100%+4px)]" : "translate-x-0"
+          useLocalWhisper
+            ? "translate-x-[calc(100%+4px)] rtl:-translate-x-[calc(100%+4px)]"
+            : "translate-x-0"
         }`}
       />
 

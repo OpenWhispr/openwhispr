@@ -2844,6 +2844,11 @@
       "noNotesAvailable": "他のノートはありません"
     },
     "folders": {
+      "defaults": {
+        "personal": "個人",
+        "meetings": "ミーティング",
+        "videos": "ビデオ"
+      },
       "title": "フォルダ",
       "soon": "近日公開",
       "folderName": "フォルダ名",

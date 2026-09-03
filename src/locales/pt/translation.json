@@ -2826,6 +2826,11 @@
       "reopen": "Entenda como os espaços são organizados"
     },
     "folders": {
+      "defaults": {
+        "personal": "Pessoal",
+        "meetings": "Reuniões",
+        "videos": "Vídeos"
+      },
       "title": "Pastas",
       "soon": "Em breve",
       "folderName": "Nome da pasta",

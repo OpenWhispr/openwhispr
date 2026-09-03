@@ -112,6 +112,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
       <PopoverContent className="w-72 p-0">
         <div className="p-2 border-b border-border/50">
           <input
+            dir="auto"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -131,7 +132,9 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
                   className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
                 >
                   <PersonAvatar email={contact.email} displayName={contact.display_name} />
-                  <span className="truncate">{contact.display_name || contact.email}</span>
+                  <span dir="auto" className="truncate">
+                    {contact.display_name || contact.email}
+                  </span>
                 </button>
               ))}
             </div>
@@ -145,7 +148,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
 
           {grouped.map(([domain, members]) => (
             <div key={domain} className="p-1">
-              <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+              <div dir="ltr" className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
                 {domain}
               </div>
               {members.map((p) => (
@@ -155,10 +158,10 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
                 >
                   <PersonAvatar email={p.email} displayName={p.displayName} />
 
-                  <span className="flex-1 min-w-0 truncate text-xs text-foreground/70">
+                  <span dir="auto" className="flex-1 min-w-0 truncate text-xs text-foreground/70">
                     {p.displayName || p.email.split("@")[0]}
                     {p.self && (
-                      <span className="ml-1 text-foreground/30">
+                      <span className="ms-1 text-foreground/30">
                         {t("notes.participants.me", "(me)")}
                       </span>
                     )}

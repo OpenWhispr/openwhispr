@@ -101,7 +101,9 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
     <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-foreground truncate">{workspace.name}</p>
+          <p dir="auto" className="text-xs font-semibold text-foreground truncate">
+            {workspace.name}
+          </p>
           <p className="text-[10px] text-muted-foreground mt-0.5">
             {t(`settingsPage.workspace.role.${workspace.role}`)}
           </p>
@@ -143,7 +145,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
       <div>
         <div className="flex items-center justify-between text-xs mb-1.5">
           <span className="text-muted-foreground">{t("settingsPage.workspace.billing.seats")}</span>
-          <span className="text-foreground font-medium">
+          <span dir="ltr" className="text-foreground font-medium">
             {seatsUsed} / {seatsTotal}
           </span>
         </div>
@@ -155,7 +157,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
       {workspace.current_period_end && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{t("settingsPage.workspace.billing.nextInvoice")}</span>
-          <span className="text-foreground">
+          <span dir="ltr" className="text-foreground">
             {new Date(workspace.current_period_end).toLocaleDateString()}
           </span>
         </div>
@@ -180,9 +182,9 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
                   size="sm"
                 >
                   {busy === "preview" ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    <Plus className="me-1.5 h-3.5 w-3.5" />
                   )}
                   {t("settingsPage.unifiedBilling.addSeat")}
                 </Button>
@@ -196,9 +198,9 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
                 variant="outline"
               >
                 {busy === "portal" ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  <ExternalLink className="me-1.5 h-3.5 w-3.5" />
                 )}
                 {t("settingsPage.workspace.billing.manageStripe")}
               </Button>
@@ -213,7 +215,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
               disabled={busy !== null}
               size="sm"
             >
-              {busy === "checkout" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {busy === "checkout" && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
               {t("settingsPage.workspace.billing.startSubscription")}
             </Button>
           )}
@@ -261,7 +263,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
               onClick={() => void confirmSeatIncrease()}
               disabled={busy === "seats"}
             >
-              {busy === "seats" && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {busy === "seats" && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
               {t("settingsPage.unifiedBilling.confirmSeats.confirm")}
             </Button>
           </DialogFooter>

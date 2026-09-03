@@ -2874,6 +2874,11 @@
       "reopen": "Cómo se organizan los espacios"
     },
     "folders": {
+      "defaults": {
+        "personal": "Personal",
+        "meetings": "Reuniones",
+        "videos": "Vídeos"
+      },
       "title": "Carpetas",
       "soon": "Próximamente",
       "folderName": "Nombre de la carpeta",

@@ -23,7 +23,8 @@ export function OverviewNoteList({
   onNewNote,
   onAddExisting,
 }: OverviewNoteListProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const { user } = useAuth();
   const isTeamSpace = space.kind === "team";
   const roster = useSpaceRoster(isTeamSpace ? space.cloud_space_id : null);
@@ -75,7 +76,7 @@ export function OverviewNoteList({
               <button
                 key={note.id}
                 onClick={() => onOpenNote(note.id)}
-                className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-md text-left hover:bg-foreground/4 dark:hover:bg-white/4 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-md text-start hover:bg-foreground/4 dark:hover:bg-white/4 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               >
                 <FileText
                   size={14}
@@ -98,7 +99,7 @@ export function OverviewNoteList({
                   </span>
                 )}
                 <span className="text-[11px] text-foreground/35 dark:text-foreground/25 shrink-0 tabular-nums">
-                  {formatRelativeTime(note.updated_at, t)}
+                  {formatRelativeTime(note.updated_at, t, locale)}
                 </span>
               </button>
             );

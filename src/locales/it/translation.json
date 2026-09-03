@@ -2826,6 +2826,11 @@
       "reopen": "Scopri come sono organizzati gli spazi"
     },
     "folders": {
+      "defaults": {
+        "personal": "Personale",
+        "meetings": "Riunioni",
+        "videos": "Video"
+      },
       "title": "Cartelle",
       "soon": "Presto",
       "folderName": "Nome cartella",

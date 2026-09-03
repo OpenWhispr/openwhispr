@@ -177,7 +177,7 @@ const SELECT_PANEL_CLASS =
  * theme out here and would paint a square band behind the slab.
  */
 const SELECT_ITEM_CLASS =
-  "onboarding-select-item gap-2.5 rounded-none py-2.5 pl-1.5 pr-8 text-sm font-normal leading-[1.4] hover:bg-transparent focus:bg-transparent data-highlighted:bg-transparent dark:hover:bg-transparent dark:focus:bg-transparent dark:data-highlighted:bg-transparent [&>span:nth-child(2)]:w-full";
+  "onboarding-select-item gap-2.5 rounded-none py-2.5 ps-1.5 pe-8 text-sm font-normal leading-[1.4] hover:bg-transparent focus:bg-transparent data-highlighted:bg-transparent dark:hover:bg-transparent dark:focus:bg-transparent dark:data-highlighted:bg-transparent [&>span:nth-child(2)]:w-full";
 
 function providerCredential(provider: string, store: ReturnType<typeof useSettingsStore.getState>) {
   switch (provider) {
@@ -398,6 +398,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.endpointUrl")}</FieldLabel>
               <Input
+                dir="ltr"
                 value={draftBaseUrl}
                 onChange={(event) => setDraftBaseUrl(event.target.value)}
                 placeholder={t("onboarding.rehaul.provider.endpointPlaceholder")}
@@ -407,6 +408,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
               <Input
+                dir="ltr"
                 type="password"
                 value={draftApiKey}
                 onChange={(event) => setDraftApiKey(event.target.value)}
@@ -419,6 +421,7 @@ export function ByokProviderStep({
             <label className="block">
               <FieldLabel>{t("onboarding.rehaul.provider.modelId")}</FieldLabel>
               <Input
+                dir="ltr"
                 value={draftCustomModel}
                 onChange={(event) => setDraftCustomModel(event.target.value)}
                 placeholder={t("onboarding.rehaul.provider.modelIdPlaceholder")}
@@ -452,7 +455,7 @@ export function ByokProviderStep({
                         <ProviderIcon provider={provider.id} className="size-5" />
                         <span>{provider.name}</span>
                         {provider.id === "corti" && (
-                          <span className="ml-auto rounded bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-2 py-1 text-[0.625rem] text-[var(--onboarding-accent)]">
+                          <span className="ms-auto rounded bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-2 py-1 text-[0.625rem] text-[var(--onboarding-accent)]">
                             {t("onboarding.rehaul.provider.clinical")}
                           </span>
                         )}
@@ -474,7 +477,7 @@ export function ByokProviderStep({
                   className={`${SELECT_TRIGGER_CLASS} disabled:opacity-100 disabled:[&>svg]:hidden`}
                 >
                   {selectedModel ? (
-                    <span>
+                    <span dir="ltr">
                       {models.find((model) => model.id === selectedModel)?.name ?? selectedModel}
                     </span>
                   ) : (
@@ -498,6 +501,7 @@ export function ByokProviderStep({
                 <label className="block">
                   <FieldLabel>{t("onboarding.rehaul.provider.clientId")}</FieldLabel>
                   <Input
+                    dir="ltr"
                     value={draftCortiClientId}
                     onChange={(event) => setDraftCortiClientId(event.target.value)}
                     className={inputClass}
@@ -507,6 +511,7 @@ export function ByokProviderStep({
                 <label className="block">
                   <FieldLabel>{t("onboarding.rehaul.provider.clientSecret")}</FieldLabel>
                   <Input
+                    dir="ltr"
                     type="password"
                     value={draftCortiClientSecret}
                     onChange={(event) => setDraftCortiClientSecret(event.target.value)}
@@ -519,6 +524,7 @@ export function ByokProviderStep({
               <label className="block">
                 <FieldLabel>{t("onboarding.rehaul.provider.apiKey")}</FieldLabel>
                 <Input
+                  dir="ltr"
                   type="password"
                   value={draftApiKey}
                   onChange={(event) => setDraftApiKey(event.target.value)}
@@ -829,7 +835,7 @@ export function LocalModelSetupStep({
                 type="button"
                 disabled={!isDownloaded}
                 onClick={() => selectInstalledModel(model.id)}
-                className="min-w-0 flex-1 text-left disabled:cursor-default"
+                className="min-w-0 flex-1 text-start disabled:cursor-default"
               >
                 <span className="block truncate text-sm font-medium text-[var(--onboarding-text-primary)]">
                   {model.name}
@@ -846,11 +852,11 @@ export function LocalModelSetupStep({
                 // text-secondary. Progress is a light/surface-tertiary fill
                 // growing from the left behind them, not a fixed-width segment
                 // around the percentage.
-                <span className="relative -mr-2 flex shrink-0 items-center gap-2 overflow-hidden rounded-[38px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 py-1.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-secondary)]">
+                <span className="relative -me-2 flex shrink-0 items-center gap-2 overflow-hidden rounded-[38px] border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 py-1.5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-secondary)]">
                   {/* Figma draws the rect taller than the pill so it bleeds top
                       and bottom; inset-y-0 does that without a magic height. */}
                   <span
-                    className="absolute inset-y-0 left-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
+                    className="absolute inset-y-0 start-0 bg-[var(--onboarding-surface-tertiary)] transition-[width] duration-300 ease-out"
                     style={{ width: `${percentage}%` }}
                     aria-hidden="true"
                   />
@@ -864,7 +870,7 @@ export function LocalModelSetupStep({
               ) : isSelected ? (
                 // Same token as the Use pill it replaces on click — on blue-500 it
                 // was a visibly different blue sitting in the same slot.
-                <span className="-mr-2 flex h-7 shrink-0 items-center gap-1 rounded-full bg-[var(--onboarding-accent)] px-3 text-xs text-[var(--onboarding-accent-foreground)]">
+                <span className="-me-2 flex h-7 shrink-0 items-center gap-1 rounded-full bg-[var(--onboarding-accent)] px-3 text-xs text-[var(--onboarding-accent-foreground)]">
                   <Check className="size-3.5" />
                   {t("onboarding.rehaul.local.selected")}
                 </span>
@@ -875,7 +881,7 @@ export function LocalModelSetupStep({
                 <Button
                   type="button"
                   onClick={() => selectInstalledModel(model.id)}
-                  className="-mr-2 h-7 gap-1.5 rounded-full border-0! bg-[var(--onboarding-accent)] px-2.5 text-xs font-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none!"
+                  className="-me-2 h-7 gap-1.5 rounded-full border-0! bg-[var(--onboarding-accent)] px-2.5 text-xs font-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none!"
                 >
                   {t("onboarding.rehaul.local.use")}
                 </Button>
@@ -883,7 +889,7 @@ export function LocalModelSetupStep({
                 <Button
                   type="button"
                   onClick={() => downloadModel(model.id)}
-                  className="-mr-2 h-7 gap-1.5 rounded-full border-[var(--onboarding-inverse-surface)]! bg-[var(--onboarding-inverse-surface)] px-2.5 text-xs font-normal text-[var(--onboarding-inverse-text)] shadow-none! hover:shadow-none! hover:bg-[var(--onboarding-inverse-surface-secondary)] disabled:bg-[var(--onboarding-surface-tertiary-hover)] disabled:opacity-100"
+                  className="-me-2 h-7 gap-1.5 rounded-full border-[var(--onboarding-inverse-surface)]! bg-[var(--onboarding-inverse-surface)] px-2.5 text-xs font-normal text-[var(--onboarding-inverse-text)] shadow-none! hover:shadow-none! hover:bg-[var(--onboarding-inverse-surface-secondary)] disabled:bg-[var(--onboarding-surface-tertiary-hover)] disabled:opacity-100"
                 >
                   <Download className="size-3.5" />
                   {t("onboarding.rehaul.local.download")}

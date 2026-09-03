@@ -9,6 +9,7 @@ function HotkeyChord({ value, compact = false }: { value: string; compact?: bool
 
   return (
     <div
+      dir="ltr"
       className={`flex flex-wrap items-center justify-center ${compact ? "gap-1.5" : "gap-3"}`}
       aria-label={formatHotkeyLabel(value)}
     >

@@ -107,7 +107,7 @@ export function ModelCard({
   return (
     <div
       onClick={handleCardClick}
-      className={`relative w-full p-2 rounded-md border text-left transition-colors duration-200 group overflow-hidden ${
+      className={`relative w-full p-2 rounded-md border text-start transition-colors duration-200 group overflow-hidden ${
         isSelected ? styles.selected : styles.default
       } ${!isLocalMode || (isDownloaded && !isSelected) ? "cursor-pointer" : ""}`}
     >
@@ -134,6 +134,7 @@ export function ModelCard({
         )}
 
         <span
+          dir="ltr"
           className={cn(
             "text-sm font-semibold text-foreground truncate tracking-tight",
             truncateDescription && (model.description ? "shrink-0 max-w-[60%]" : "min-w-0 flex-1")
@@ -169,7 +170,7 @@ export function ModelCard({
           </span>
         )}
 
-        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+        <div className="ms-auto flex items-center gap-1.5 shrink-0">
           {isSelected && (
             <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
               {t("common.active")}
@@ -201,7 +202,7 @@ export function ModelCard({
                   variant="outline"
                   className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
                 >
-                  <X size={11} className="mr-0.5" />
+                  <X size={11} className="me-0.5" />
                   {isCancelling ? "..." : t("common.cancel")}
                 </Button>
               ) : (
@@ -214,7 +215,7 @@ export function ModelCard({
                   variant="default"
                   className="h-6 px-2.5 text-xs"
                 >
-                  <Download size={11} className="mr-1" />
+                  <Download size={11} className="me-1" />
                   {t("common.download")}
                 </Button>
               )}

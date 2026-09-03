@@ -73,7 +73,7 @@ function PermissionRow({
         className="size-10 shrink-0 select-none"
       />
 
-      <div className="min-w-0 flex-1 text-left">
+      <div className="min-w-0 flex-1 text-start">
         <p className="text-sm font-medium leading-5 text-[var(--onboarding-text-primary)]">
           {title}
         </p>
@@ -226,13 +226,13 @@ export default function CompactPermissionsStep({
         </div>
 
         {platform === "darwin" && screenContext?.enabled && screenContext.needsRelaunch && (
-          <p className="mt-2 text-left text-xs leading-4 text-warning/80">
+          <p className="mt-2 text-start text-xs leading-4 text-warning/80">
             {t("dictationAgent.screenContext.relaunchHint")}
           </p>
         )}
 
         {!permissions.micPermissionGranted && permissions.micPermissionError && (
-          <div className="mt-3 text-left">
+          <div className="mt-3 text-start">
             <MicPermissionWarning
               error={permissions.micPermissionError}
               onOpenSoundSettings={() => void permissions.openSoundInputSettings()}
@@ -242,7 +242,7 @@ export default function CompactPermissionsStep({
         )}
 
         {showLinuxPasteGuidance && (
-          <div className="mt-3 text-left">
+          <div className="mt-3 text-start">
             <PasteToolsInfo
               pasteToolsInfo={permissions.pasteToolsInfo}
               isChecking={permissions.isCheckingPasteTools}

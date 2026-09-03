@@ -2826,6 +2826,11 @@
       "reopen": "瞭解空間的組織方式"
     },
     "folders": {
+      "defaults": {
+        "personal": "個人",
+        "meetings": "會議",
+        "videos": "影片"
+      },
       "title": "資料夾",
       "soon": "即將推出",
       "folderName": "資料夾名稱",

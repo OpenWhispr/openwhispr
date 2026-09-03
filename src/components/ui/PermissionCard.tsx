@@ -53,7 +53,7 @@ export default function PermissionCard({
           <h3 className="text-xs font-medium text-foreground">
             {title}
             {badge && (
-              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-muted text-muted-foreground">
+              <span className="ms-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-muted text-muted-foreground">
                 {badge}
               </span>
             )}
@@ -69,7 +69,7 @@ export default function PermissionCard({
       </div>
 
       {hint && !granted && (
-        <p className="text-[11px] text-warning/80 leading-snug mt-2 pl-11">{hint}</p>
+        <p className="text-[11px] text-warning/80 leading-snug mt-2 ps-11">{hint}</p>
       )}
     </div>
   );

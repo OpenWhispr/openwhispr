@@ -133,7 +133,7 @@ export default function NoteBottomBar({
               "shrink-0 overflow-hidden",
               "transition-all duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
               isRecording ? "w-[284px]" : micHidden ? "w-0" : "w-11",
-              !hideInput && !micHidden ? "mr-2" : "mr-0"
+              !hideInput && !micHidden ? "me-2" : "me-0"
             )}
           >
             {isRecording ? (
@@ -142,7 +142,7 @@ export default function NoteBottomBar({
                 aria-label={t("notes.editor.stop")}
                 title={t("notes.editor.stop")}
                 className={cn(
-                  "group flex items-center gap-2.5 w-full h-11 pl-0.5 pr-3.5 rounded-full",
+                  "group flex items-center gap-2.5 w-full h-11 ps-0.5 pe-3.5 rounded-full",
                   RECORDING_SURFACE,
                   "border border-primary/15 dark:border-primary/25",
                   "transition-[border-color] duration-200",
@@ -178,7 +178,7 @@ export default function NoteBottomBar({
                   recordingDisabled && "opacity-40 saturate-0 pointer-events-none",
                   isProcessing && "pointer-events-none",
                   micHidden
-                    ? "translate-x-10 opacity-0 pointer-events-none"
+                    ? "translate-x-10 rtl:-translate-x-10 opacity-0 pointer-events-none"
                     : "translate-x-0 opacity-100"
                 )}
                 aria-label={t("notes.editor.transcribe")}
@@ -205,14 +205,15 @@ export default function NoteBottomBar({
             // backdrop-filter for 500ms — the exact cost being removed.
             "transition-[max-width,opacity,padding,border-color,box-shadow] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
             hideInput
-              ? "max-w-0 opacity-0 pl-0 pr-0 border-transparent shadow-none pointer-events-none"
-              : "max-w-[600px] opacity-100 pl-4 pr-1.5",
+              ? "max-w-0 opacity-0 ps-0 pe-0 border-transparent shadow-none pointer-events-none"
+              : "max-w-[600px] opacity-100 ps-4 pe-1.5",
             isExpanded
               ? "border-black/15 dark:border-white/22 ring-[3px] ring-primary/8"
               : !hideInput && "border-black/10 dark:border-white/14"
           )}
         >
           <input
+            dir="auto"
             ref={inputRef}
             type="text"
             value={inputText}
@@ -243,7 +244,7 @@ export default function NoteBottomBar({
               )}
               aria-label={t("embeddedChat.send")}
             >
-              <SendIcon size={28} className="block" />
+              <SendIcon size={28} className="block rtl:scale-x-[-1]" />
             </button>
           ) : !isExpanded ? (
             <div className="shrink-0">{actionPicker}</div>

@@ -32,7 +32,7 @@ const rowIconClass =
 const rowLabelClass =
   "text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150";
 const rowButtonClass =
-  "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
+  "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-start outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
 
 export type ControlPanelView =
   "home" | "chat" | "personal-notes" | "dictionary" | "upload" | "integrations";
@@ -99,7 +99,7 @@ export default function ControlPanelSidebar({
   ];
 
   return (
-    <div className="w-48 h-full shrink-0 border-r border-border/15 dark:border-white/6 flex flex-col bg-surface-1/60 dark:bg-surface-1">
+    <div className="w-48 h-full shrink-0 border-e border-border/15 dark:border-white/6 flex flex-col bg-surface-1/60 dark:bg-surface-1">
       <div
         className="w-full h-10 shrink-0"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
@@ -112,10 +112,10 @@ export default function ControlPanelSidebar({
             className="group flex items-center w-full h-7 px-2.5 rounded-md border border-border/70 dark:border-white/25 bg-transparent hover:bg-foreground/5 dark:hover:bg-white/5 transition-colors gap-2 outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
           >
             <Search size={11} className="text-muted-foreground/50 shrink-0" />
-            <span className="flex-1 text-[11px] text-left text-muted-foreground/50">
+            <span className="flex-1 text-[11px] text-start text-muted-foreground/50">
               {t("commandSearch.shortPlaceholder")}
             </span>
-            <div className="flex items-center gap-0.5 shrink-0">
+            <div dir="ltr" className="flex items-center gap-0.5 shrink-0">
               <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
                 {platform === "darwin" ? "⌘" : "Ctrl"}
               </kbd>
@@ -137,7 +137,7 @@ export default function ControlPanelSidebar({
               key={item.id}
               onClick={() => onViewChange(item.id)}
               className={cn(
-                "group relative flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md outline-none transition-colors duration-150 text-left",
+                "group relative flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md outline-none transition-colors duration-150 text-start",
                 "focus-visible:ring-1 focus-visible:ring-primary/30",
                 isActive
                   ? "bg-primary/8 dark:bg-primary/10"
@@ -201,7 +201,7 @@ export default function ControlPanelSidebar({
                 localStorage.setItem("upgradeProDismissed", "true");
               }}
               aria-label={t("common.dismiss")}
-              className="absolute top-2 right-2 p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="absolute top-2 end-2 p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
               <X size={12} />
             </button>
@@ -283,11 +283,17 @@ export default function ControlPanelSidebar({
           <div className="flex-1 min-w-0">
             {isSignedIn && (userName || userEmail) ? (
               <>
-                <p className="text-xs text-foreground/80 dark:text-foreground/80 truncate leading-tight">
+                <p
+                  dir="auto"
+                  className="text-xs text-foreground/80 dark:text-foreground/80 truncate leading-tight"
+                >
                   {userName || t("sidebar.defaultUser")}
                 </p>
                 {userEmail && (
-                  <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">
+                  <p
+                    dir="ltr"
+                    className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight"
+                  >
                     {userEmail}
                   </p>
                 )}

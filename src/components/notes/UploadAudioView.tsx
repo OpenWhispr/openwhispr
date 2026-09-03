@@ -948,6 +948,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               {urlExpanded ? (
                 <div>
                   <textarea
+                    dir="ltr"
                     value={urlInput}
                     onChange={(e) => setUrlInput(e.target.value)}
                     placeholder={t("notes.upload.pasteUrls")}
@@ -979,7 +980,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   </div>
                 </div>
               ) : (
-                <div className="relative">
+                <div dir="ltr" className="relative">
                   {isYouTubeUrl(urlInput) ? (
                     <svg
                       viewBox="0 0 28 20"
@@ -1000,6 +1001,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     />
                   )}
                   <input
+                    dir="ltr"
                     type="url"
                     value={urlInput}
                     onChange={(e) => setUrlInput(e.target.value)}
@@ -1162,7 +1164,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               </p>
 
               {downloadProgress.title && (
-                <p className="text-xs text-foreground/20 mt-1 truncate max-w-50">
+                <p dir="auto" className="text-xs text-foreground/20 mt-1 truncate max-w-50">
                   {downloadProgress.title}
                 </p>
               )}
@@ -1249,8 +1251,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               >
                 <div
                   className={cn(
-                    "absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform",
-                    diarizationEnabled ? "translate-x-3" : ""
+                    "absolute top-0.5 start-0.5 w-3 h-3 rounded-full bg-white transition-transform",
+                    diarizationEnabled ? "translate-x-3 rtl:-translate-x-3" : ""
                   )}
                 />
               </button>
@@ -1344,6 +1346,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               {t("notes.upload.folderName")}
             </label>
             <Input
+              dir="auto"
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
               placeholder={t("notes.folders.folderName")}
@@ -1575,7 +1578,9 @@ function SelectedView({
             <FileAudio size={15} className="text-primary/60" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-foreground/70 truncate font-medium">{file.name}</p>
+            <p dir="ltr" className="text-xs text-foreground/70 truncate font-medium">
+              {file.name}
+            </p>
             {file.size && <p className="text-xs text-foreground/25 mt-0.5">{file.size}</p>}
             <p className="text-xs text-foreground/20 mt-0.5">{getActiveModelLabel()}</p>
           </div>
@@ -1750,7 +1755,9 @@ function TranscribingView({
         </p>
       ) : null}
       {!hasChunkInfo && file ? (
-        <p className="text-xs text-foreground/20 mt-1 truncate max-w-50">{file.name}</p>
+        <p dir="ltr" className="text-xs text-foreground/20 mt-1 truncate max-w-50">
+          {file.name}
+        </p>
       ) : null}
       <Button
         variant="ghost"
@@ -1796,10 +1803,10 @@ function FolderSelect({
                 key={f.id}
                 value={String(f.id)}
                 disabled={isMeetings}
-                className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
+                className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
               >
                 <span className="flex items-center gap-1.5">
-                  {f.name}
+                  <span dir="auto">{f.name}</span>
                   {isMeetings && (
                     <span className="text-[8px] uppercase tracking-wider text-foreground/25 font-medium">
                       {t("notes.folders.soon")}
@@ -1812,7 +1819,7 @@ function FolderSelect({
           {includeCreateNew && (
             <>
               <SelectSeparator />
-              <SelectItem value="__create_new__" className="text-xs py-1.5 pl-2.5 pr-7 rounded-md">
+              <SelectItem value="__create_new__" className="text-xs py-1.5 ps-2.5 pe-7 rounded-md">
                 <span className="flex items-center gap-1.5 text-primary/60">
                   <Plus size={11} />
                   {t("notes.upload.newFolder")}

@@ -99,6 +99,7 @@ export default function ProfileSection({ name, onSessionRefresh }: ProfileSectio
           <SettingsRow label={t("settingsPage.account.profile.name.label")}>
             <div className="flex gap-2">
               <Input
+                dir="auto"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder={t("settingsPage.account.profile.name.placeholder")}
@@ -123,7 +124,7 @@ export default function ProfileSection({ name, onSessionRefresh }: ProfileSectio
               description={t("settingsPage.account.profile.password.description")}
             >
               <Button variant="outline" size="sm" onClick={() => setPasswordOpen(true)}>
-                <KeyRound className="mr-1.5 h-3.5 w-3.5" />
+                <KeyRound className="me-1.5 h-3.5 w-3.5" />
                 {t("settingsPage.account.profile.password.change")}
               </Button>
             </SettingsRow>
@@ -227,6 +228,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: ChangePassw
                 {t("settingsPage.account.profile.password.currentLabel")}
               </Label>
               <Input
+                dir="ltr"
                 id="profile-current-password"
                 type="password"
                 value={currentPassword}
@@ -241,6 +243,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: ChangePassw
                 {t("settingsPage.account.profile.password.newLabel")}
               </Label>
               <Input
+                dir="ltr"
                 id="profile-new-password"
                 type="password"
                 value={newPassword}
@@ -260,6 +263,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: ChangePassw
                 {t("settingsPage.account.profile.password.confirmLabel")}
               </Label>
               <Input
+                dir="ltr"
                 id="profile-confirm-password"
                 type="password"
                 value={confirmPassword}

@@ -117,7 +117,7 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
 
         <div className="flex h-120">
           {/* Left panel — action list */}
-          <div className="w-56 shrink-0 border-r border-border/15 dark:border-white/4 flex flex-col bg-card/50 dark:bg-surface-1/30">
+          <div className="w-56 shrink-0 border-e border-border/15 dark:border-white/4 flex flex-col bg-card/50 dark:bg-surface-1/30">
             {/* List header */}
             <div className="flex items-center justify-between px-3 pt-3.5 pb-2">
               <span className="text-xs font-semibold tracking-tight text-foreground/70">
@@ -160,7 +160,7 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
                       key={action.id}
                       onClick={() => handleSelectAction(action)}
                       className={cn(
-                        "flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-left group cursor-pointer",
+                        "flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-start group cursor-pointer",
                         "transition-colors duration-150",
                         selectedId === action.id && !isCreating
                           ? "bg-accent/8 dark:bg-accent/10"
@@ -224,8 +224,8 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
           <div className="flex-1 flex flex-col min-w-0">
             {showEditor ? (
               <>
-                {/* Editor header — pr-12 clears the dialog close X button */}
-                <div className="flex items-center justify-between pl-5 pr-12 pt-4 pb-3 border-b border-border/10 dark:border-white/3">
+                {/* Editor header — pe-12 clears the dialog close X button */}
+                <div className="flex items-center justify-between ps-5 pe-12 pt-4 pb-3 border-b border-border/10 dark:border-white/3">
                   <span className="text-xs font-medium text-muted-foreground/50">
                     {isCreating ? t("notes.actions.addAction") : t("notes.actions.editAction")}
                   </span>
@@ -266,6 +266,7 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
                 {/* Editor form */}
                 <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                   <Input
+                    dir="auto"
                     ref={nameInputRef}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -274,6 +275,7 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
                     className="h-9"
                   />
                   <Input
+                    dir="auto"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder={t("notes.actions.descriptionPlaceholder")}
@@ -287,6 +289,7 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
                       {t("notes.actions.promptLabel", { defaultValue: "Prompt" })}
                     </label>
                     <textarea
+                      dir="auto"
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       placeholder={t("notes.actions.promptPlaceholder")}

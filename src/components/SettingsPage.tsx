@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Badge } from "./ui/badge";
 import {
   RefreshCw,
@@ -170,6 +171,7 @@ interface SettingsPageProps {
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
   { value: "en", label: "English", flag: "🇺🇸" },
+  { value: "ar", label: "العربية", flag: "🇦🇪" },
   { value: "es", label: "Español", flag: "🇪🇸" },
   { value: "fr", label: "Français", flag: "🇫🇷" },
   { value: "de", label: "Deutsch", flag: "🇩🇪" },
@@ -1020,7 +1022,7 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
                 setSelectedUuid(uuid);
                 await window.electronAPI?.setGpuDeviceIndex?.(purpose, uuid);
               }}
-              className="w-full appearance-none rounded-md border border-border bg-background px-3 pr-10 py-2 text-sm"
+              className="w-full appearance-none rounded-md border border-border bg-background px-3 pe-10 py-2 text-sm"
             >
               {gpus.map((gpu) => (
                 <option key={gpu.uuid} value={gpu.uuid}>
@@ -1029,7 +1031,7 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
               ))}
             </select>
             <svg
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+              className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
               fill="none"
@@ -1917,6 +1919,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.threshold.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="0.01"
                 min="0.1"
@@ -1931,6 +1934,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="10"
                 min="50"
@@ -1945,6 +1949,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.minSilenceDurationMs.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="10"
                 min="50"
@@ -1959,6 +1964,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="1"
                 min="5"
@@ -1973,6 +1979,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.speechPadMs.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="10"
                 min="0"
@@ -1987,6 +1994,7 @@ export default function SettingsPage({
                 description={t("settingsPage.transcription.vad.fields.samplesOverlap.info")}
               />
               <Input
+                dir="ltr"
                 type="number"
                 step="0.01"
                 min="0"
@@ -2042,7 +2050,7 @@ export default function SettingsPage({
                       size="sm"
                       className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
                     >
-                      <LogOut className="mr-1.5 h-3.5 w-3.5" />
+                      <LogOut className="me-1.5 h-3.5 w-3.5" />
                       {isSigningOut
                         ? t("settingsPage.account.signOut.signingOut")
                         : t("settingsPage.account.signOut.signOut")}
@@ -2063,7 +2071,7 @@ export default function SettingsPage({
                         size="sm"
                         className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
                       >
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                        <Trash2 className="me-1.5 h-3.5 w-3.5" />
                         {isDeletingAccount
                           ? t("settingsPage.account.deleteAccount.deleting")
                           : t("settingsPage.account.deleteAccount.button")}
@@ -2101,7 +2109,7 @@ export default function SettingsPage({
                         </p>
                       </div>
                       <Button onClick={startOnboarding} size="sm" className="w-full">
-                        <UserCircle className="mr-1.5 h-3.5 w-3.5" />
+                        <UserCircle className="me-1.5 h-3.5 w-3.5" />
                         {t("settingsPage.account.trialCta.button")}
                       </Button>
                     </div>
@@ -2478,7 +2486,7 @@ export default function SettingsPage({
                           className={`relative w-7 h-4 rounded-full transition-colors ${billingState.pro ? "bg-primary" : "bg-muted"}`}
                         >
                           <div
-                            className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.pro ? "translate-x-3" : ""}`}
+                            className={`absolute top-0.5 start-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.pro ? "translate-x-3 rtl:-translate-x-3" : ""}`}
                           />
                         </div>
                         <span className="text-[9px] text-muted-foreground">
@@ -2586,7 +2594,7 @@ export default function SettingsPage({
                           className={`relative w-7 h-4 rounded-full transition-colors ${billingState.business ? "bg-primary" : "bg-muted"}`}
                         >
                           <div
-                            className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.business ? "translate-x-3" : ""}`}
+                            className={`absolute top-0.5 start-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.business ? "translate-x-3 rtl:-translate-x-3" : ""}`}
                           />
                         </div>
                         <span className="text-[9px] text-muted-foreground">
@@ -3049,7 +3057,11 @@ export default function SettingsPage({
                     <SettingsPanelRow>
                       <SettingsRow
                         label={t("settings.noteFiles.path")}
-                        description={noteFilesPath || noteFilesDefaultPath || "..."}
+                        description={
+                          <span dir="ltr" className="block break-all">
+                            {noteFilesPath || noteFilesDefaultPath || "..."}
+                          </span>
+                        }
                       >
                         <Button
                           variant="outline"
@@ -3681,7 +3693,7 @@ EOF`,
                                     )}
                                     <div className="flex-1 min-w-0">
                                       <span className="text-sm font-medium">{item.label}</span>
-                                      <span className="text-xs text-muted-foreground ml-2">
+                                      <span className="text-xs text-muted-foreground ms-2">
                                         {item.desc}
                                       </span>
                                       {item.note && (
@@ -3757,7 +3769,10 @@ EOF`,
                                                   </p>
                                                 )}
                                                 <div className="flex items-start gap-1.5">
-                                                  <pre className="flex-1 text-[11px] bg-muted/60 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-all select-all overflow-x-auto">
+                                                  <pre
+                                                    dir="ltr"
+                                                    className="flex-1 text-[11px] bg-muted/60 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-all select-all overflow-x-auto"
+                                                  >
                                                     {c.cmd}
                                                   </pre>
                                                   <button
@@ -3804,9 +3819,12 @@ EOF`,
                   {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningTitle")}
                 </AlertTitle>
                 <AlertDescription>
-                  {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningDescription", {
-                    path: hyprlandConfigStatus.path,
-                  })}
+                  <BidiInterpolatedText
+                    text={t("settingsPage.general.hotkey.hyprlandConfigWriteWarningDescription", {
+                      path: BIDI_VALUE_TOKEN,
+                    })}
+                    value={hyprlandConfigStatus.path}
+                  />
                 </AlertDescription>
               </Alert>
             )}
@@ -3835,9 +3853,12 @@ EOF`,
                           disabled={isHotkeyRegistering}
                           className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
                         >
-                          {t("settingsPage.general.hotkey.resetToDefault", {
-                            hotkey: formatHotkeyLabel(effectiveDefaultHotkey),
-                          })}
+                          <BidiInterpolatedText
+                            text={t("settingsPage.general.hotkey.resetToDefault", {
+                              hotkey: BIDI_VALUE_TOKEN,
+                            })}
+                            value={formatHotkeyLabel(effectiveDefaultHotkey)}
+                          />
                         </button>
                       ) : null
                     }
@@ -3946,13 +3967,13 @@ EOF`,
                     <SelectContent>
                       <SelectItem
                         value="full-width"
-                        className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
+                        className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
                       >
                         {t("settingsPage.general.meetingHotkey.layoutFullWidth")}
                       </SelectItem>
                       <SelectItem
                         value="side-panel"
-                        className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
+                        className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
                       >
                         {t("settingsPage.general.meetingHotkey.layoutSidePanel")}
                       </SelectItem>
@@ -4317,7 +4338,10 @@ EOF`,
                     }
                   >
                     <div className="flex items-center gap-2.5">
-                      <span className="text-xs tabular-nums text-muted-foreground font-mono">
+                      <span
+                        dir="ltr"
+                        className="text-xs tabular-nums text-muted-foreground font-mono"
+                      >
                         {currentVersion || t("settingsPage.general.updates.versionPlaceholder")}
                       </span>
                       {updateStatus.isDevelopment ? (
@@ -4360,7 +4384,7 @@ EOF`,
                     >
                       <RefreshCw
                         size={13}
-                        className={`mr-1.5 ${checkingForUpdates ? "animate-spin" : ""}`}
+                        className={`me-1.5 ${checkingForUpdates ? "animate-spin" : ""}`}
                       />
                       {checkingForUpdates
                         ? t("settingsPage.general.updates.checking")
@@ -4391,7 +4415,7 @@ EOF`,
                         >
                           <Download
                             size={13}
-                            className={`mr-1.5 ${downloadingUpdate ? "animate-pulse" : ""}`}
+                            className={`me-1.5 ${downloadingUpdate ? "animate-pulse" : ""}`}
                           />
                           {downloadingUpdate
                             ? t("settingsPage.general.updates.downloading", {
@@ -4449,7 +4473,7 @@ EOF`,
                       >
                         <RefreshCw
                           size={14}
-                          className={`mr-2 ${installInitiated ? "animate-spin" : ""}`}
+                          className={`me-2 ${installInitiated ? "animate-spin" : ""}`}
                         />
                         {installInitiated
                           ? t("settingsPage.general.updates.restarting")
@@ -4461,12 +4485,15 @@ EOF`,
                   {updateInfo?.releaseNotes && (
                     <div className="mt-4 pt-4 border-t border-border/30">
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                        {t("settingsPage.general.updates.whatsNew", {
-                          version: updateInfo.version,
-                        })}
+                        <BidiInterpolatedText
+                          text={t("settingsPage.general.updates.whatsNew", {
+                            version: BIDI_VALUE_TOKEN,
+                          })}
+                          value={updateInfo.version}
+                        />
                       </p>
                       <div
-                        className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:space-y-1 [&_li]:pl-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
+                        className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
                         dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
                       />
                     </div>
@@ -4492,7 +4519,11 @@ EOF`,
                   <SettingsPanelRow>
                     <SettingsRow
                       label={t("settingsPage.developer.modelCache")}
-                      description={cachePathHint}
+                      description={
+                        <span dir="ltr" className="block break-all">
+                          {cachePathHint}
+                        </span>
+                      }
                     >
                       <div className="flex items-center gap-2">
                         <Button
@@ -4500,7 +4531,7 @@ EOF`,
                           size="sm"
                           onClick={() => window.electronAPI?.openWhisperModelsFolder?.()}
                         >
-                          <FolderOpen className="mr-1.5 h-3.5 w-3.5" />
+                          <FolderOpen className="me-1.5 h-3.5 w-3.5" />
                           {t("settingsPage.developer.open")}
                         </Button>
                         <Button

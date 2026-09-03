@@ -669,7 +669,7 @@ export function HotkeyInput({
             </div>
             {activeModifiers.length > 0 ? (
               <div className="flex flex-col items-center gap-1.5">
-                <div className="flex items-center gap-1.5">
+                <div dir="ltr" className="flex items-center gap-1.5">
                   {activeModifiers.map((token) => (
                     <kbd
                       key={token}
@@ -703,7 +703,7 @@ export function HotkeyInput({
         ) : value ? (
           /* Has value: show the hotkey prominently */
           <div className="flex flex-col items-center gap-2">
-            <div className="flex items-center gap-1.5">
+            <div dir="ltr" className="flex items-center gap-1.5">
               {hotkeyParts.length > 0 ? (
                 hotkeyParts.map((part, i) => (
                   <React.Fragment key={part}>
@@ -716,11 +716,17 @@ export function HotkeyInput({
                   </React.Fragment>
                 ))
               ) : isGlobe ? (
-                <kbd className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-lg shadow-sm">
+                <kbd
+                  dir="ltr"
+                  className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-lg shadow-sm"
+                >
                   🌐
                 </kbd>
               ) : (
-                <kbd className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-sm font-semibold text-foreground shadow-sm">
+                <kbd
+                  dir="ltr"
+                  className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-sm font-semibold text-foreground shadow-sm"
+                >
                   {displayValue}
                 </kbd>
               )}
@@ -735,7 +741,7 @@ export function HotkeyInput({
             <span className="text-sm font-medium">{t("hotkeyInput.clickToSet")}</span>
           </div>
         )}
-        {clearButton && <span className="absolute top-2.5 right-2.5">{clearButton}</span>}
+        {clearButton && <span className="absolute top-2.5 end-2.5">{clearButton}</span>}
       </div>
     );
   }
@@ -766,7 +772,7 @@ export function HotkeyInput({
       `}
     >
       {isCapturing && (
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary animate-pulse" />
+        <div className="absolute top-0 start-0 end-0 h-0.5 bg-primary animate-pulse" />
       )}
 
       <div className="px-4 py-3">
@@ -781,14 +787,16 @@ export function HotkeyInput({
               </div>
               {activeModifiers.length > 0 ? (
                 <div className="flex items-center gap-1">
-                  {activeModifiers.map((token) => (
-                    <kbd
-                      key={token}
-                      className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-sm text-xs font-semibold text-primary"
-                    >
-                      {heldModifierLabel(token, platform)}
-                    </kbd>
-                  ))}
+                  <span dir="ltr" className="inline-flex items-center gap-1">
+                    {activeModifiers.map((token) => (
+                      <kbd
+                        key={token}
+                        className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-sm text-xs font-semibold text-primary"
+                      >
+                        {heldModifierLabel(token, platform)}
+                      </kbd>
+                    ))}
+                  </span>
                   <span className="text-primary/40 text-xs">
                     {isFnHeld ? t("hotkeyInput.fnCaptureHint") : t("hotkeyInput.keyHint")}
                   </span>
@@ -815,7 +823,7 @@ export function HotkeyInput({
             </span>
             <div className="flex items-center gap-2">
               {hotkeyParts.length > 0 ? (
-                <div className="flex items-center gap-1">
+                <div dir="ltr" className="flex items-center gap-1">
                   {hotkeyParts.map((part, i) => (
                     <React.Fragment key={part}>
                       {i > 0 && <span className="text-muted-foreground/30 text-xs">+</span>}
@@ -827,13 +835,19 @@ export function HotkeyInput({
                 </div>
               ) : isGlobe ? (
                 <div className="flex items-center gap-1.5">
-                  <kbd className="px-2 py-0.5 bg-surface-raised border border-border rounded-sm text-base">
+                  <kbd
+                    dir="ltr"
+                    className="px-2 py-0.5 bg-surface-raised border border-border rounded-sm text-base"
+                  >
                     🌐
                   </kbd>
                   <span className="text-xs text-muted-foreground">{t("hotkeyInput.globe")}</span>
                 </div>
               ) : (
-                <kbd className="px-2.5 py-1 bg-surface-raised border border-border rounded-sm text-xs font-semibold text-foreground">
+                <kbd
+                  dir="ltr"
+                  className="px-2.5 py-1 bg-surface-raised border border-border rounded-sm text-xs font-semibold text-foreground"
+                >
                   {displayValue}
                 </kbd>
               )}

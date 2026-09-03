@@ -11,6 +11,44 @@ const NAMESPACES = ["translation", "prompts"];
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
 const T_CALL = /\bt\(\s*(['"`])([A-Za-z0-9_.-]+)\1/g;
 const INTERPOLATION = /\{\{\s*([\w.]+)/g;
+const ARABIC_PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"];
+const ARABIC_PLURAL_BASES = [
+  "settingsPage.workspace.members.description",
+  "settingsPage.workspace.teams.memberCount",
+  "settingsPage.workspace.teams.grantsAccessToSpaces",
+  "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
+  "settingsPage.workspace.invites.expiresIn",
+  "settingsPage.unifiedBilling.seatUpdated",
+  "settingsPage.unifiedBilling.confirmSeats.description",
+  "settingsPage.privacy.retentionDays",
+  "settingsPage.privacy.audioStorageFiles",
+  "settingsPage.privacy.hoursAgo",
+  "settingsPage.privacy.minutesAgo",
+  "settingsPage.enterpriseCheckout.seatsHint",
+  "workspaces.join.memberCount",
+  "notes.spaces.noteCount",
+  "notes.spaces.invitedTo",
+  "notes.spaces.teamsMembers.affectsOtherSpaces",
+  "notes.addToFolder.addCount",
+  "notes.overview.meta.folders",
+  "notes.overview.meta.members",
+  "dictionary.wordsReady",
+];
+const ARABIC_NUMBER_NEUTRAL_TEMPLATES = {
+  "workspaces.invite.seatUsage": "المقاعد المستخدمة: {{used}} من أصل {{seats}}",
+  "notes.spaces.members.addFailed": "عدد الأشخاص الذين تعذرت إضافتهم: {{failed}} من أصل {{total}}",
+  "notes.upload.partialWarningCount":
+    "عدد الأجزاء الصوتية التي تعذر تفريغها: {{failed}} من أصل {{total}}.",
+  "settingsPage.account.planDescriptions.trial":
+    "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
+  "emailVerification.resendIn": "إعادة الإرسال بعد {{seconds}} ث",
+  "meetingNotification.autoEnd.body.micReleased":
+    "لا يستخدم أي تطبيق آخر ميكروفونك، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
+  "meetingNotification.autoEnd.body.silence":
+    "لم يُكتشف أي صوت، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
+  "meetingNotification.autoEnd.body.processExit":
+    "أُغلق تطبيق الاجتماع، لذا توقف التسجيل تلقائيًا. أعد تشغيل التسجيل خلال {{seconds}} ث.",
+};
 
 const languages = fs
   .readdirSync(LOCALES)
@@ -132,6 +170,55 @@ test("interpolation variables match en in every language", () => {
           `${lang}/${namespace} ${key} has different {{variables}} than en`
         );
       }
+    }
+  }
+});
+
+test("Arabic defines every CLDR plural category for each counted message", () => {
+  const ar = flatten(load("ar", "translation"));
+  for (const base of ARABIC_PLURAL_BASES) {
+    for (const category of ARABIC_PLURAL_CATEGORIES) {
+      assert.equal(
+        typeof ar.get(`${base}_${category}`),
+        "string",
+        `ar/translation is missing ${base}_${category}`
+      );
+    }
+  }
+});
+
+test("Arabic non-count numeric templates remain number-neutral", () => {
+  const ar = flatten(load("ar", "translation"));
+  for (const [key, template] of Object.entries(ARABIC_NUMBER_NEUTRAL_TEMPLATES)) {
+    assert.equal(ar.get(key), template, `${key} reintroduced a fixed Arabic number form`);
+  }
+});
+
+test("Arabic plural counts resolve the exact CLDR form without English fallback", async () => {
+  const i18next = require("i18next");
+  const instance = i18next.createInstance();
+  await instance.init({
+    lng: "ar",
+    fallbackLng: "en",
+    resources: {
+      ar: { translation: load("ar", "translation") },
+      en: { translation: load("en", "translation") },
+    },
+    interpolation: { escapeValue: false },
+  });
+
+  const counts = [0, 1, 2, 3, 7, 11, 100, 101];
+  const pluralRules = new Intl.PluralRules("ar");
+  for (const base of ARABIC_PLURAL_BASES) {
+    for (const count of counts) {
+      const details = instance.t(base, { count, returnDetails: true });
+      const category = pluralRules.select(count);
+      assert.equal(details.usedLng, "ar", `${base} count=${count} used ${details.usedLng}`);
+      assert.equal(
+        details.exactUsedKey,
+        `${base}_${category}`,
+        `${base} count=${count} did not use the Arabic ${category} form`
+      );
     }
   }
 });

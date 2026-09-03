@@ -116,7 +116,7 @@ function OptionCard({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`w-full text-left p-4 rounded-lg border transition-shadow duration-150 hover:shadow-md flex items-center justify-between cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+      className={`w-full text-start p-4 rounded-lg border transition-shadow duration-150 hover:shadow-md flex items-center justify-between cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
         highlighted
           ? "bg-primary/5 dark:bg-primary/10 border-primary/20 dark:border-primary/15"
           : "bg-muted/50 dark:bg-surface-2 border-border dark:border-border-subtle hover:border-border-hover"
@@ -126,7 +126,7 @@ function OptionCard({
         <div className="font-medium text-foreground">{title}</div>
         <div className="text-sm text-muted-foreground">{description}</div>
       </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0" />
+      <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 rtl:rotate-180" />
     </button>
   );
 }

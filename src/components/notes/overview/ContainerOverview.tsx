@@ -16,6 +16,7 @@ import { ContainerIcon } from "./ContainerIcon";
 import { OverviewExplainerBanner } from "./OverviewExplainerBanner";
 import { OverviewAskSection } from "./OverviewAskSection";
 import { OverviewNoteList } from "./OverviewNoteList";
+import { defaultFolderDisplayName } from "../shared";
 import type { NoteItem, SpaceItem, FolderItem } from "../../../types/electron";
 
 const SPACE_NOTES_LIMIT = 50;
@@ -106,7 +107,7 @@ export function ContainerOverview({
             <ContainerIcon space={space} folder={folder} size={20} />
           </div>
           <h1 className="text-xl font-semibold text-foreground tracking-tight">
-            {folder?.name ?? space.name}
+            {folder ? defaultFolderDisplayName(folder, t) : space.name}
           </h1>
           <p className="text-[13px] text-foreground/50 dark:text-foreground/40">
             {t(`notes.overview.subtitle.${space.kind === "team" ? "team" : "private"}`)}
