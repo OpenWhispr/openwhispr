@@ -80,6 +80,10 @@ export function useInsightsSyncOptIn() {
     } catch (error) {
       if (readId !== participationReadIdRef.current) return;
       console.error("Reading leaderboard participation failed:", error);
+      // A read that failed leaves participation unknown, so it has to fail
+      // closed. Keeping the last answer would also let the leaderboard's 403
+      // recovery re-read, fail, and immediately re-issue the same 403 forever.
+      setParticipationEnabled(false);
       setParticipationError(true);
     } finally {
       if (readId === participationReadIdRef.current) setParticipationReady(true);

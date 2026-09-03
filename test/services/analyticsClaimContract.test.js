@@ -112,10 +112,18 @@ test("the leaderboard surface can leave without touching the sync switch", () =>
   assert.ok(
     view.includes("participating={isSignedIn && syncAllowedByPolicy && participationEnabled}")
   );
+  // The toggle may still be read as a re-read trigger, but it must never reach
+  // the section: that is what would hide Leave from an account that is ranked.
   assert.equal(
-    view.includes("insightsSyncEnabled"),
+    view.slice(view.indexOf("<LeaderboardSection")).includes("insightsSyncEnabled"),
     false,
     "the leaderboard must follow the account's participation, not this device's sync toggle"
+  );
+  // Settings owns its own copy of the hook, so its opt-out cannot reach this
+  // view's participation state on its own — the shared toggle is the signal.
+  assert.ok(
+    view.includes("[insightsSyncEnabled, refreshParticipation]"),
+    "flipping the device toggle off must re-read the account instead of leaving a roster up"
   );
 });
 
@@ -129,5 +137,25 @@ test("turning Insights sync off stops the device before it calls the account", (
   assert.ok(
     disable.indexOf("setInsightsSyncEnabled(false)") < disable.indexOf("leaveLeaderboard()"),
     "the local switch must go off before the account call, not after it succeeds"
+  );
+});
+
+// The leaderboard's 403 recovery re-reads participation. A failed read that kept
+// the last answer would leave the board looking joined, re-issue the same load,
+// take the same 403 and re-read again — an unbounded loop against two endpoints.
+test("a participation read that fails cannot leave the board looking joined", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const refresh = hook.slice(
+    hook.indexOf("const refreshParticipation"),
+    hook.indexOf("const activate")
+  );
+  assert.ok(
+    refresh.slice(refresh.indexOf("} catch")).includes("setParticipationEnabled(false)"),
+    "an unknown answer must fail closed rather than keep the stale one"
+  );
+  assert.equal(
+    refresh.includes("setParticipation("),
+    false,
+    "reading participation must never write it back to the account"
   );
 });

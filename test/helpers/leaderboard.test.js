@@ -19,6 +19,27 @@ test("lifetime metrics force all time and weekly selection hides them", async ()
   });
 });
 
+// The picker's two tiers and the rules that move a selection between them are
+// one fact, so a metric offered under "This week" must survive that range.
+test("the metric tiers agree with the selection rules", async () => {
+  const { ALL_TIME_METRICS, WEEKLY_METRICS, normalizeLeaderboardSelection, selectionForRange } =
+    await load();
+  assert.deepEqual(WEEKLY_METRICS, ["total_words", "desktop_words", "mobile_words"]);
+  assert.deepEqual(ALL_TIME_METRICS, [
+    ...WEEKLY_METRICS,
+    "words_per_minute",
+    "current_daily_streak",
+  ]);
+  for (const metric of WEEKLY_METRICS) {
+    assert.deepEqual(normalizeLeaderboardSelection(metric, "week"), { metric, range: "week" });
+    assert.deepEqual(selectionForRange(metric, "week"), { metric, range: "week" });
+  }
+  for (const metric of ALL_TIME_METRICS.filter((value) => !WEEKLY_METRICS.includes(value))) {
+    assert.equal(normalizeLeaderboardSelection(metric, "week").range, "all");
+    assert.equal(selectionForRange(metric, "week").metric, "total_words");
+  }
+});
+
 test("rank jumps and pagination clamp safely at 20 rows per page", async () => {
   const { LEADERBOARD_PAGE_SIZE, pageCount, pageForRank } = await load();
   assert.equal(LEADERBOARD_PAGE_SIZE, 20);
