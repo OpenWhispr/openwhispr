@@ -10,11 +10,11 @@
         "providerRateLimited": "تم تقييد المعدل من قبل المزود"
       },
       "fallback": {
-        "title": "وضع الاسترداد",
-        "description": "فشل Whisper المحلي. تم استخدام OpenAI API بدلاً من ذلك."
+        "title": "الوضع الاحتياطي",
+        "description": "فشل Whisper المحلي. تم استخدام OpenAI API بدلًا من ذلك."
       },
       "errorActions": {
-        "viewTranscript": "عرض النص"
+        "viewTranscript": "عرض النص المفرَّغ"
       },
       "noAudio": {
         "title": "لم نتمكن من التقاط الصوت",
@@ -22,26 +22,26 @@
       },
       "micDisconnected": {
         "title": "تم فصل الميكروفون",
-        "description": "التسجيل لا يزال نشطاً وسيتم استئنافه عند توفر ميكروفون.",
-        "meetingDescription": "لا يزال الاجتماع يسجل صوت النظام وسيستأنف التقاط الميكروفون تلقائياً."
+        "description": "التسجيل لا يزال نشطًا وسيتم استئنافه عند توفر ميكروفون.",
+        "meetingDescription": "لا يزال الاجتماع يسجل صوت النظام وسيستأنف التقاط الميكروفون تلقائيًا."
       },
       "micRestored": {
         "title": "تمت استعادة الميكروفون",
         "description": "تم استئناف التقاط الصوت."
       },
       "partialTranscription": {
-        "title": "نسخ جزئي",
-        "description": "تعذر نسخ جزء من التسجيل."
+        "title": "تفريغ جزئي",
+        "description": "تعذر تفريغ جزء من التسجيل."
       },
       "errorDescriptions": {
         "sessionExpired": "جلسة OpenWhispr Cloud الخاصة بك غير متاحة. يرجى تسجيل الدخول مرة أخرى من الإعدادات.",
-        "offline": "أنت غير متصل بالإنترنت. يتطلب النسخ السحابي اتصالاً بالإنترنت.",
-        "dailyLimitReached": "لقد وصلت إلى حد النسخ اليومي. حاول مرة أخرى غداً أو قم بترقية خطتك.",
-        "providerRateLimited": "قام مزود النسخ بتقييد معدل الطلب. انتظر لحظة وحاول مرة أخرى.",
-        "chunkLoss": "أدت مشكلة في الشبكة إلى فقدان جزء كبير من التسجيل. أعد نسخه من السجل.",
-        "agentReasoningFailed": "لم يتمكن المساعد الصوتي من معالجة الأمر — تم إدراج النص الخام بدلاً من ذلك.",
+        "offline": "أنت غير متصل بالإنترنت. يتطلب التفريغ السحابي اتصالًا بالإنترنت.",
+        "dailyLimitReached": "لقد وصلت إلى حد التفريغ اليومي. حاول مرة أخرى غدًا أو قم بترقية خطتك.",
+        "providerRateLimited": "قام مزود التفريغ بتقييد معدل الطلب. انتظر لحظة وحاول مرة أخرى.",
+        "chunkLoss": "أدت مشكلة في الشبكة إلى فقدان جزء كبير من التسجيل. أعد تفريغه من السجل.",
+        "agentReasoningFailed": "لم يتمكن المساعد الصوتي من معالجة الأمر — تم إدراج النص المفرَّغ الخام بدلًا من ذلك.",
         "screenContextSkipped": "تعذر إرسال لقطة الشاشة، لذا تم تشغيل أمرك بدون سياق الشاشة.",
-        "customEndpointInvalid": "نقطة نهاية النسخ المخصصة غير مكونة أو أن عنوان URL الخاص بها غير صالح. قم بتحديثها في الإعدادات ← تحويل الكلام إلى نص (Speech to Text)."
+        "customEndpointInvalid": "نقطة نهاية التفريغ المخصصة غير مهيأة أو عنوان URL الخاص بها غير صالح. حدّثها في الإعدادات ← تحويل الكلام إلى نص (Speech to Text)."
       },
       "translationFallback": {
         "unreachableTitle": "الترجمة غير متاحة",
@@ -52,10 +52,10 @@
       "selectionEditing": {
         "notAppliedTitle": "لم يتم تطبيق تعديل التحديد",
         "changed": "تم تغيير النص المحدد أو التطبيق المستهدف أثناء قيام OpenWhispr بالمعالجة. لم يتم استبدال أي شيء.",
-        "expired": "استغرق تعديل التحديد وقتاً طويلاً وانتهت صلاحيته. حدد النص وحاول مرة أخرى.",
+        "expired": "استغرق تعديل التحديد وقتًا طويلًا وانتهت صلاحيته. حدد النص وحاول مرة أخرى.",
         "pasteFailed": "قام OpenWhispr بإنشاء التعديل ولكنه لم يتمكن من استبدال النص المحدد.",
         "unavailable": "لم يتمكن OpenWhispr من قراءة النص المحدد بأمان. تحقق من أذونات إمكانية الوصول أو أتمتة الإدخال وحاول مرة أخرى.",
-        "tooLarge": "التحديد كبير جداً بحيث لا يمكن تعديله بأمان. حدد 6,000 حرف أو أقل.",
+        "tooLarge": "التحديد كبير جدًا بحيث لا يمكن تعديله بأمان. حدد 6,000 حرف أو أقل.",
         "reasoningFailed": "لم يتمكن الذكاء الاصطناعي من إكمال تعديل التحديد. لم يتم تغيير نصك الأصلي."
       }
     },
@@ -86,9 +86,9 @@
       "errors": {
         "timeout": "انتهت مهلة التنزيل. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.",
         "notFound": "تعذر الوصول إلى خادم التنزيل. تحقق من اتصالك بالإنترنت.",
-        "corrupted": "كان التنزيل غير مكتمل أو تالفاً. يرجى المحاولة مرة أخرى.",
+        "corrupted": "كان التنزيل غير مكتمل أو تالفًا. يرجى المحاولة مرة أخرى.",
         "rateLimited": "يقوم خادم التنزيل بتقييد المعدل. يرجى الانتظار بضع دقائق والمحاولة مرة أخرى.",
-        "server": "خطأ في الخادم ({{error}}). يرجى المحاولة مرة أخرى لاحقاً.",
+        "server": "خطأ في الخادم ({{error}}). يرجى المحاولة مرة أخرى لاحقًا.",
         "generic": "فشل التنزيل: {{error}}",
         "extractionFailed": "تم تنزيل النموذج ولكن فشل التثبيت. انقر فوق تنزيل لإعادة محاولة التثبيت دون إعادة التنزيل.",
         "tlsError": "خطأ في الشهادة — قد تستخدم شبكتك فحص SSL الذي يحظر التنزيلات. حاول التنزيل من شبكة مختلفة.",
@@ -102,7 +102,7 @@
       },
       "downloadInProgress": {
         "title": "التنزيل قيد التقدم",
-        "description": "يرجى الانتظار حتى يكتمل التنزيل الحالي أو قم بإلغائه أولاً."
+        "description": "يرجى الانتظار حتى يكتمل التنزيل الحالي أو قم بإلغائه أولًا."
       },
       "modelDeleted": {
         "title": "تم حذف النموذج",
@@ -131,48 +131,48 @@
         "noMicrophones": "لم يتم اكتشاف أي ميكروفونات. قم بتوصيل أو تحديد ميكروفون في {{settingsPath}}.",
         "permissionDenied": "تم رفض الإذن. افتح {{privacyPath}} واسمح لـ OpenWhispr.",
         "couldNotStart": "تعذر بدء تشغيل الميكروفون المحدد. اختر جهاز إدخال في {{settingsPath}}، ثم أعد تشغيل الاختبار.",
-        "noActiveInput": "لم يتم العثور على إدخال صوتي نشط. اختر ميكروفوناً في {{settingsPath}}.",
-        "unknown": "فشل الوصول إلى الميكروفون: {{error}}. حدد جهاز إدخال مختلفاً وحاول مرة أخرى.",
+        "noActiveInput": "لم يتم العثور على إدخال صوتي نشط. اختر ميكروفونًا في {{settingsPath}}.",
+        "unknown": "فشل الوصول إلى الميكروفون: {{error}}. حدد جهاز إدخال مختلفًا وحاول مرة أخرى.",
         "unknownFallback": "خطأ غير معروف"
       },
       "settingsTitles": {
         "microphone": "إعدادات الميكروفون",
         "sound": "إعدادات الصوت",
-        "accessibility": "إعدادات إمكانية الوصول"
+        "accessibility": "إعدادات تسهيلات الاستخدام"
       },
       "settingsErrors": {
-        "unableToOpenMicrophone": "تعذر فتح إعدادات الميكروفون. يرجى فتح إعدادات النظام يدوياً.",
-        "unableToOpenSound": "تعذر فتح إعدادات الصوت. يرجى فتح إعدادات النظام يدوياً.",
-        "unableToOpenAccessibility": "تعذر فتح إعدادات إمكانية الوصول. يرجى فتح إعدادات النظام يدوياً."
+        "unableToOpenMicrophone": "تعذر فتح إعدادات الميكروفون. يرجى فتح إعدادات النظام يدويًا.",
+        "unableToOpenSound": "تعذر فتح إعدادات الصوت. يرجى فتح إعدادات النظام يدويًا.",
+        "unableToOpenAccessibility": "تعذر فتح إعدادات تسهيلات الاستخدام. يرجى فتح إعدادات النظام يدويًا."
       },
       "micUnavailable": "واجهات برمجة تطبيقات الميكروفون (APIs) غير متوفرة في هذه البيئة. يرجى إعادة تشغيل التطبيق.",
       "titles": {
         "microphoneUnavailable": "الميكروفون غير متوفر",
         "microphonePermissionRequired": "إذن الميكروفون مطلوب",
-        "accessibilityNeeded": "أذونات إمكانية الوصول مطلوبة",
+        "accessibilityNeeded": "أذونات تسهيلات الاستخدام مطلوبة",
         "readyToGo": "جاهز للبدء!",
         "waylandClipboardMode": "وضع الحافظة في Wayland",
         "optionalPasteTool": "اختياري: تثبيت أداة اللصق"
       },
       "descriptions": {
-        "accessibilityNeeded": "يرجى منح أذونات إمكانية الوصول في إعدادات النظام لتمكين اللصق التلقائي للنص.",
+        "accessibilityNeeded": "يرجى منح أذونات تسهيلات الاستخدام في إعدادات النظام لتمكين اللصق التلقائي للنص.",
         "windowsReady": "لا يتطلب Windows أذونات خاصة للصق التلقائي. أنت جاهز للبدء!",
         "linuxReadyWithMethod": "اللصق التلقائي متاح باستخدام {{method}}. أنت جاهز للبدء!",
         "waylandClipboardMode": "اللصق التلقائي غير متوفر في جلسة Wayland هذه. سيقوم OpenWhispr بنسخ النص إلى الحافظة الخاصة بك ويمكنك لصقه باستخدام Ctrl+V.",
         "optionalPasteTool": "لتمكين اللصق التلقائي، قم بتثبيت {{tool}}:\n\n{{installCmd}}{{waylandNote}}\n\nبدون ذلك، لا يزال بإمكانك استخدام OpenWhispr - سيتم نسخ النص إلى الحافظة الخاصة بك ويمكنك لصقه باستخدام Ctrl+V."
       },
       "alerts": {
-        "accessibilityNeeded": "أذونات إمكانية الوصول مطلوبة! يرجى منحها في إعدادات النظام."
+        "accessibilityNeeded": "أذونات تسهيلات الاستخدام مطلوبة! يرجى منحها في إعدادات النظام."
       },
       "notes": {
-        "waylandWtype": "\n\nملاحظة: بالنسبة لتطبيقات XWayland، تعمل أداة xdotool أيضاً.",
+        "waylandWtype": "\n\nملاحظة: بالنسبة لتطبيقات XWayland، تعمل أداة xdotool أيضًا.",
         "waylandXwaylandOnly": "\n\nملاحظة: يعمل اللصق التلقائي لتطبيقات XWayland فقط."
       },
       "labels": {
         "defaultPasteTool": "xdotool",
         "xdotoolXwayland": "xdotool (تطبيقات XWayland)"
       },
-      "accessibilityTestText": "اختبار إمكانية الوصول لـ OpenWhispr",
+      "accessibilityTestText": "اختبار تسهيلات الاستخدام لـ OpenWhispr",
       "warning": {
         "messages": {
           "macos": "تحقق من إعدادات الصوت (Sound) لتحديد جهاز الإدخال الخاص بك",
@@ -189,7 +189,7 @@
     "noneAvailable": "لا توجد نماذج متاحة",
     "descriptions": {
       "cohere": {
-        "cohere_transcribe_03_2026": "أدق نموذج ASR محلي (متوسط WER يبلغ 5.42%، ويدعم 14 لغة). لا يدعم الكشف التلقائي عن اللغة"
+        "cohere_transcribe_03_2026": "أدق نموذج محلي للتعرف على الكلام (متوسط معدل خطأ الكلمة 5.42%، 14 لغة). بدون اكتشاف تلقائي للغة"
       },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "تعرف سريع على الكلام متعدد اللغات مع اكتشاف تلقائي للغة (25 لغة)",
@@ -210,16 +210,16 @@
         "turbo": "سريع بجودة جيدة"
       },
       "transcription": {
-        "openai_gpt_4o_mini_transcribe": "نسخ سريع ودقيق",
-        "openai_gpt_4o_transcribe": "النسخ الأكثر دقة",
+        "openai_gpt_4o_mini_transcribe": "تفريغ سريع ودقيق",
+        "openai_gpt_4o_transcribe": "التفريغ الأكثر دقة",
         "openai_whisper_1": "نموذج Whisper الأصلي",
         "groq_whisper_large_v3": "تعرف على الكلام بدقة عالية",
-        "groq_whisper_large_v3_turbo": "سرعة 216x في الوقت الفعلي",
-        "mistral_voxtral_mini_latest": "نسخ سريع متعدد اللغات",
+        "groq_whisper_large_v3_turbo": "أسرع من الوقت الفعلي بـ216 ضعفًا",
+        "mistral_voxtral_mini_latest": "تفريغ سريع متعدد اللغات",
         "gemini_3_5_transcribe": "تحويل الكلام إلى نص من Google Gemini",
-        "corti_transcribe": "نسخ طبي بدرجة سريرية",
+        "corti_transcribe": "تفريغ طبي بدرجة سريرية",
         "xai_grok_stt": "تعرف على الكلام بدقة عالية من xAI",
-        "tinfoil_voxtral": "نسخ خاص يمكن التحقق منه"
+        "tinfoil_voxtral": "تفريغ خاص يمكن التحقق منه"
       },
       "cloud": {
         "openai_gpt_5_2": "نموذج استنتاج قوي",
@@ -232,14 +232,14 @@
         "anthropic_claude_sonnet_5": "نموذج وكيل سريع وقادر بتكلفة أقل",
         "anthropic_claude_sonnet_4_6": "أداء متوازن",
         "anthropic_claude_sonnet_4_5": "جيل Sonnet السابق",
-        "anthropic_claude_haiku_4_5": "سريع بذكاء يقترب من الحدود",
+        "anthropic_claude_haiku_4_5": "سريع بذكاء يقترب من مستوى النماذج الرائدة",
         "gemini_gemini_3_5_flash": "أحدث نموذج Gemini سريع وعالي القدرة",
         "gemini_gemini_3_5_flash_lite": "نموذج 3.5 الأسرع والأكثر فعالية من حيث التكلفة",
         "gemini_gemini_3_1_pro_preview": "نموذج رائد من الجيل التالي للاستنتاج المعقد",
         "gemini_gemini_3_1_flash_lite": "أداء من الدرجة الأولى بتكلفة منخفضة",
         "gemini_gemini_3_flash_preview": "نموذج من الجيل التالي فائق السرعة وعالي القدرة",
         "gemini_gemini_2_5_flash_lite": "أقل زمن انتقال وتكلفة",
-        "gemini_gemma_4_31b_it": "أكبر نموذج Gemma 4 من Google، بكثافة 31B، سياق 256K",
+        "gemini_gemma_4_31b_it": "أكبر نموذج Gemma 4 من Google، نموذج كثيف بحجم 31B، سياق 256K",
         "gemini_gemma_4_26b_a4b_it": "نموذج Gemma 4 MoE من Google، بمعلمات نشطة 4B، سياق 256K",
         "groq_openai_gpt_oss_120b": "نموذج OpenAI مفتوح المصدر الرائد، 500 رمز/ثانية",
         "groq_openai_gpt_oss_20b": "نموذج سريع مفتوح المصدر، 1000 رمز/ثانية",
@@ -255,7 +255,7 @@
         "anthropic_claude_opus_4_6": "جيل Opus السابق، سياق 1 مليون",
         "anthropic_claude_opus_4_5": "نموذج Opus أقدم",
         "tinfoil_deepseek_v4_pro": "استنتاج خاص ذو سياق طويل في بيئات معزولة وآمنة، سياق 800K",
-        "tinfoil_glm_5_2": "نموذج هندسة وكيل خاص في بيئات معزولة وآمنة، سياق 384K",
+        "tinfoil_glm_5_2": "نموذج خاص للهندسة البرمجية بقدرات وكيلية في بيئات معزولة وآمنة، سياق 384K",
         "tinfoil_gemma4_31b": "نموذج استنتاج خاص متعدد اللغات مع استدعاء الأدوات، سياق 256K",
         "tinfoil_gpt_oss_120b": "نموذج استنتاج خاص مفتوح الوزن مع استخدام الأدوات، سياق 131K",
         "tinfoil_llama3_3_70b": "نموذج محادثة خاص مع استدعاء الأدوات، سياق 128K",
@@ -267,7 +267,7 @@
       "enterprise": {
         "bedrock_claude_fable_5": "نموذج Claude الأكثر قدرة. الأفضل لأصعب مهام وضع الوكيل (Agent Mode).",
         "bedrock_claude_haiku_4_5": "سريع ورخيص. خيار افتراضي رائع لتنظيف النص.",
-        "bedrock_claude_sonnet_5": "عنصر أساسي متوازن. أفضل خيار افتراضي لوضع الوكيل (Agent Mode).",
+        "bedrock_claude_sonnet_5": "نموذج موثوق متوازن للاستخدام اليومي. أفضل خيار افتراضي لوضع الوكيل (Agent Mode).",
         "bedrock_claude_opus_4_8": "أقصى درجات الذكاء. الأفضل لمهام وضع الوكيل المعقدة.",
         "bedrock_gpt_oss_120b": "نموذج OpenAI مفتوح الوزن. استنتاج قوي بتكلفة منخفضة.",
         "bedrock_deepseek_v3_2": "نموذج رائد مفتوح الوزن. قيمة رائعة لوضع الوكيل.",
@@ -280,7 +280,7 @@
         "qwen_qwen3_5_4b_q4_k_m": "نموذج Qwen3.5 متوازن للاستخدام العام",
         "qwen_qwen3_5_2b_q4_k_m": "نموذج Qwen3.5 صغير للمهام السريعة",
         "qwen_qwen3_8b_q4_k_m": "أحدث إصدار من Qwen3 مع دعم وضع التفكير",
-        "qwen_qwen3_8b_q5_k_m": "نموذج Qwen3 عالي الجودة مع وضع التفكير",
+        "qwen_qwen3_8b_q5_k_m": "نموذج Qwen3 بجودة أعلى مع وضع التفكير",
         "qwen_qwen3_4b_q4_k_m": "نموذج Qwen3 مدمج مع قدرات استنتاج",
         "qwen_qwen3_1_7b_q8_0": "نموذج Qwen3 صغير ولكنه قادر",
         "qwen_qwen3_32b_q4_k_m": "أقوى نموذج Qwen3 محلي باستنتاج عميق",
@@ -291,15 +291,15 @@
         "mistral_mistral_7b_instruct_v0_3_q4_k_m": "نموذج تعليمات سريع وفعال",
         "mistral_mistral_7b_instruct_v0_3_q5_k_m": "نموذج تعليمات بجودة أعلى",
         "mistral_nemo_12b_instruct_q4_k_m": "نموذج Mistral بحجم 12B، أداء قوي متعدد اللغات",
-        "llama_llama_3_2_1b_instruct_q4_k_m": "نموذج صغير جداً لأجهزة الحافة",
+        "llama_llama_3_2_1b_instruct_q4_k_m": "نموذج صغير جدًا لأجهزة الحافة",
         "llama_llama_3_2_3b_instruct_q4_k_m": "نموذج صغير ولكنه قادر ومتعدد اللغات",
         "llama_llama_3_1_8b_instruct_q4_k_m": "نموذج قوي بأداء رائع",
         "openai_oss_gpt_oss_20b_mxfp4": "نموذج مفتوح الوزن من OpenAI لأجهزة المستهلكين",
         "gemma_gemma_3_4b_it_q4_k_m": "نموذج مفتوح الوزن من Google، توازن رائع بين السرعة والجودة",
         "gemma_gemma_4_31b_it_q4_k_m": "أكبر نموذج Gemma 4 من Google، أفضل جودة",
-        "gemma_gemma_4_31b_it_qat_q4_0": "إصدار QAT الرسمي من Google، أصغر حجماً مع الحفاظ على الجودة",
+        "gemma_gemma_4_31b_it_qat_q4_0": "إصدار QAT الرسمي من Google، أصغر حجمًا مع الحفاظ على الجودة",
         "gemma_gemma_4_26b_a4b_it_q4_k_m": "نموذج MoE Gemma 4 من Google، سريع مع معلمات نشطة 4B",
-        "gemma_gemma_4_26b_a4b_it_qat_q4_0": "إصدار QAT MoE الرسمي من Google، أصغر حجماً مع الحفاظ على الجودة",
+        "gemma_gemma_4_26b_a4b_it_qat_q4_0": "إصدار QAT MoE الرسمي من Google، أصغر حجمًا مع الحفاظ على الجودة",
         "gemma_gemma_4_e4b_it_q4_k_m": "أحدث نموذج متعدد الوسائط من Google، استنتاج قوي",
         "gemma_gemma_4_e4b_it_qat_q4_0": "إصدار QAT الرسمي من Google، استنتاج قوي، حجم أصغر",
         "gemma_gemma_4_e2b_it_q4_k_m": "نموذج Gemma 4 المدمج من Google، سريع وفعال",
@@ -309,8 +309,8 @@
         "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "نموذج فعال على الجهاز من Liquid AI، اتباع ممتاز للتعليمات",
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "نموذج MoE من Liquid AI، جودة عالية مع معلمات نشطة 1.5B فقط",
         "liquidai_lfm2_2_6b_q4_k_m": "نموذج LFM2 متوازن لتنظيف بجودة أعلى",
-        "liquidai_lfm2_5_350m_q8_0": "نموذج خفيف للغاية لتنظيف الإملاء السريع",
-        "liquidai_lfm2_5_230m_q8_0": "نموذج صغير جداً، تنظيف فوري على الأجهزة المتواضعة"
+        "liquidai_lfm2_5_350m_q8_0": "نموذج خفيف للغاية للتنظيف السريع للإملاء",
+        "liquidai_lfm2_5_230m_q8_0": "نموذج صغير جدًا، تنظيف فوري على الأجهزة المتواضعة"
       }
     }
   },
@@ -320,8 +320,8 @@
       "local": "محلي (Local)",
       "enterprise": "مؤسسي (Enterprise)",
       "localDescription": "يعمل على جهازك. خصوصية تامة، يعمل بدون إنترنت.",
-      "cloudDescription": "نماذج متقدمة عبر API. سريع وقادر، يتطلب إنترنت.",
-      "enterpriseDescription": "استخدم بيانات اعتماد موفر السحابة الخاص بمؤسستك."
+      "cloudDescription": "نماذج متقدمة عبر API. سريعة وقادرة، وتتطلب اتصالًا بالإنترنت.",
+      "enterpriseDescription": "استخدم بيانات اعتماد مزود السحابة الخاص بمؤسستك."
     },
     "custom": {
       "endpointWithProtocol": "أدخل عنوان URL أساسي كامل يتضمن البروتوكول (على سبيل المثال، https://server/v1).",
@@ -335,11 +335,11 @@
       "apiKeyOptional": "مفتاح API (اختياري)",
       "apiKeyHelp": "اختياري. يتم إرساله كرمز Bearer للمصادقة. هذا منفصل عن مفتاح OpenAI API الخاص بك.",
       "applyAndRefresh": "تطبيق وتحديث",
-      "queryPrefix": "سنقوم بالاستعلام",
-      "querySuffix": "للحصول على النماذج المتاحة.",
-      "modelsReloadHint": "سيتم إعادة تحميل النماذج عند النقر بعيداً عن حقل عنوان URL أو النقر فوق \"تطبيق وتحديث\".",
+      "queryPrefix": "سنستعلم من",
+      "querySuffix": "عن النماذج المتاحة.",
+      "modelsReloadHint": "سيتم إعادة تحميل النماذج عند النقر بعيدًا عن حقل عنوان URL أو النقر فوق \"تطبيق وتحديث\".",
       "enterEndpoint": "أدخل عنوان URL لنقطة النهاية أعلاه لتحميل النماذج.",
-      "fetchingModels": "جلب قائمة النماذج من نقطة النهاية...",
+      "fetchingModels": "جاري جلب قائمة النماذج من نقطة النهاية...",
       "noModels": "لم يتم إرجاع أي نماذج. تحقق من عنوان URL لنقطة النهاية.",
       "providerName": "مخصص",
       "ownerLabel": "المالك: {{owner}}",
@@ -348,8 +348,8 @@
       "selectedGroup": "المحدد",
       "otherGroup": "أخرى",
       "noSearchResults": "لا توجد نماذج تتطابق مع \"{{query}}\"",
-      "selectModelHint": "لم يتم تحديد أي نموذج بعد — اختر واحداً من القائمة أدناه.",
-      "keyRequiredHint": "مفتاح API مطلوب للاستنتاج — أضف واحداً لاستخدام هذا المزود."
+      "selectModelHint": "لم يتم تحديد أي نموذج بعد — اختر واحدًا من القائمة أدناه.",
+      "keyRequiredHint": "مفتاح API مطلوب للاستدلال — أضف واحدًا لاستخدام هذا المزود."
     },
     "getApiKey": "احصل على مفتاح API الخاص بك ←",
     "selectModel": "تحديد النموذج",
@@ -359,11 +359,11 @@
       "help": "يتخطى رموز الاستنتاج للحصول على مخرجات أنظف. موصى به للتنظيف. تتجاهل بعض الخوادم هذا التلميح."
     },
     "selfHosted": {
-      "endpointHelp": "قم بالتوجيه إلى خادم متوافق مع OpenAI على شبكتك المحلية (مثل Ollama أو LM Studio أو vLLM أو llama-server)."
+      "endpointHelp": "أدخل عنوان خادم متوافق مع OpenAI على شبكتك المحلية (مثل Ollama أو LM Studio أو vLLM أو llama-server)."
     },
     "enterprise": {
-      "title": "مقدمو الخدمات للمؤسسات",
-      "description": "اتصل بموفري الخدمات السحابية باستخدام بيانات اعتماد مؤسستك.",
+      "title": "مزودو الخدمات للمؤسسات",
+      "description": "اتصل بمزودي الخدمات السحابية باستخدام بيانات اعتماد مؤسستك.",
       "testConnection": "اختبار الاتصال",
       "testing": "جاري الاختبار...",
       "testSuccess": "متصل",
@@ -387,7 +387,7 @@
       "customModelPlaceholder": "أدخل معرف النموذج أو اسم النشر",
       "suggestedModels": "النماذج المقترحة",
       "browseModels": "تصفح جميع النماذج",
-      "loadingModels": "جلب النماذج...",
+      "loadingModels": "جاري جلب النماذج...",
       "allModels": "جميع النماذج في {{region}}",
       "modelListError": "تعذر تحميل النماذج.",
       "bedrock": {
@@ -410,7 +410,7 @@
           "unknown": "خطأ في AWS Bedrock: {{error}}",
           "actions": {
             "refreshManagedAccess": "سجّل الخروج ثم سجّل الدخول مرة أخرى لتحديث صلاحيات وصول الشركة، ثم أعد المحاولة.",
-            "reauthenticate": "شغّل الأمر أدناه في الوحدة الطرفية لإعادة المصادقة:"
+            "reauthenticate": "شغّل الأمر أدناه في الطرفية (terminal) لإعادة المصادقة:"
           }
         }
       },
@@ -433,9 +433,9 @@
       }
     },
     "tinfoil": {
-      "modelRetiredTitle": "النموذج لم يعد متاحاً",
+      "modelRetiredTitle": "النموذج لم يعد متاحًا",
       "modelRetired": "قام Tinfoil بإيقاف {{from}}. تم التبديل إلى {{to}}.",
-      "refreshingModels": "تحديث النماذج..."
+      "refreshingModels": "جاري تحديث النماذج..."
     },
     "corti": {
       "euOnly": "نماذج Corti متوفرة فقط في منطقة الاتحاد الأوروبي."
@@ -448,9 +448,9 @@
     },
     "update": {
       "readyTitle": "التحديث جاهز للتثبيت",
-      "readyDescription": "انقر فوق 'تثبيت التحديث' لإعادة التشغيل باستخدام أحدث إصدار.",
+      "readyDescription": "انقر فوق «تثبيت التحديث» لإعادة التشغيل باستخدام أحدث إصدار.",
       "problemTitle": "واجه التحديث مشكلة",
-      "problemDescription": "لم نتمكن من إكمال التحديث. يرجى المحاولة مرة أخرى لاحقاً.",
+      "problemDescription": "لم نتمكن من إكمال التحديث. يرجى المحاولة مرة أخرى لاحقًا.",
       "installTitle": "تثبيت التحديث",
       "installDescription": "سيتم إعادة تشغيل OpenWhispr لتطبيق التحديث. سيتم حفظ أي عمل قيد التقدم.",
       "couldNotInstallTitle": "تعذر تثبيت التحديث",
@@ -466,29 +466,29 @@
       "weeklyDescription": "تتم إعادة تعيين الحد الخاص بك على أساس متجدد. قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود."
     },
     "accessibilityMissing": {
-      "title": "أذونات إمكانية الوصول مطلوبة",
-      "description": "لقد اكتشفنا أن OpenWhispr يحتاج إلى أذونات إمكانية الوصول للعمل بشكل صحيح. يرجى تمكينها أدناه."
+      "title": "أذونات تسهيلات الاستخدام مطلوبة",
+      "description": "لقد اكتشفنا أن OpenWhispr يحتاج إلى أذونات تسهيلات الاستخدام للعمل بشكل صحيح. يرجى تمكينها أدناه."
     },
     "billing": {
       "pastDueTitle": "لم نتمكن من معالجة دفعتك",
-      "pastDueDescription": "لا تقلق - أنت على الخطة المجانية في الوقت الحالي. قم بتحديث دفعتك في الإعدادات للعودة إلى Pro.",
-      "bannerDescription": "أنت على الخطة المجانية في الوقت الحالي - لا يزال لديك {{limit}} كلمة في الأسبوع. قم بتحديث دفعتك للعودة إلى Pro.",
+      "pastDueDescription": "لا تقلق - أنت ضمن الخطة المجانية في الوقت الحالي. حدّث بيانات الدفع في الإعدادات للعودة إلى Pro.",
+      "bannerDescription": "أنت ضمن الخطة المجانية في الوقت الحالي - لا يزال لديك {{limit}} كلمة في الأسبوع. حدّث بيانات الدفع للعودة إلى Pro.",
       "updatePayment": "تحديث الدفع"
     },
     "history": {
       "couldNotLoadTitle": "تعذر تحميل سجلك",
-      "couldNotLoadDescription": "حدث خطأ ما أثناء تحميل النسخ الخاصة بك. حاول إغلاق التطبيق وإعادة فتحه.",
+      "couldNotLoadDescription": "حدث خطأ ما أثناء تحميل نصوصك المفرَّغة. حاول إغلاق التطبيق وإعادة فتحه.",
       "copiedTitle": "تم النسخ!",
       "copiedDescription": "تم نسخ النص إلى الحافظة الخاصة بك",
       "couldNotCopyTitle": "تعذر النسخ",
       "couldNotCopyDescription": "حدث خطأ ما أثناء النسخ إلى الحافظة الخاصة بك. حاول مرة أخرى.",
-      "deleteTitle": "حذف النسخ",
-      "deleteDescription": "ستتم إزالة هذا النسخ بشكل دائم.",
+      "deleteTitle": "حذف النص المفرَّغ",
+      "deleteDescription": "ستتم إزالة هذا النص المفرَّغ بشكل دائم.",
       "couldNotDeleteTitle": "تعذر الحذف",
-      "couldNotDeleteDescription": "ربما تمت إزالة هذا النسخ بالفعل.",
+      "couldNotDeleteDescription": "ربما تمت إزالة هذا النص المفرَّغ بالفعل.",
       "couldNotDeleteDescriptionGeneric": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
-      "empty": "لا توجد أي نصوص منسوخة حتى الآن",
-      "dataRetentionDisabled": "الاحتفاظ بالبيانات قيد الإيقاف. لا يتم حفظ النصوص والصوت في السجل.",
+      "empty": "لا توجد أي نصوص مفرَّغة حتى الآن",
+      "dataRetentionDisabled": "الاحتفاظ بالبيانات قيد الإيقاف. لا يتم حفظ النصوص المفرَّغة والصوت في السجل.",
       "press": "اضغط",
       "toStart": "للبدء",
       "dateGroups": {
@@ -496,28 +496,28 @@
         "yesterday": "أمس"
       },
       "copyText": "نسخ النص",
-      "copyRawTranscript": "نسخ النص الخام",
+      "copyRawTranscript": "نسخ النص المفرَّغ الخام",
       "deleteItem": "حذف",
-      "viewRawTranscript": "عرض النص الخام",
-      "showInFolder": "إظهار في الباحث (Finder)",
-      "showInFolderWindows": "إظهار في المستكشف (Explorer)",
+      "viewRawTranscript": "عرض النص المفرَّغ الخام",
+      "showInFolder": "إظهار في Finder",
+      "showInFolderWindows": "إظهار في مستكشف الملفات",
       "showInFolderLinux": "إظهار في مدير الملفات",
-      "retryTranscription": "إعادة النسخ",
-      "retrying": "جاري إعادة النسخ...",
-      "retrySuccess": "تم تحديث النسخ",
-      "retryError": "فشلت إعادة النسخ",
+      "retryTranscription": "إعادة التفريغ",
+      "retrying": "جاري إعادة التفريغ...",
+      "retrySuccess": "تم تحديث التفريغ",
+      "retryError": "فشلت إعادة التفريغ",
       "audioNotFound": "الملف الصوتي غير موجود أو انتهت صلاحيته",
-      "noAiProcessing": "لم يتم تطبيق أي معالجة بالذكاء الاصطناعي على هذا النسخ",
-      "transcriptionFailed": "فشل النسخ",
-      "failedCtaSettings": "قم بإعداد مزود النسخ الخاص بك",
+      "noAiProcessing": "لم يتم تطبيق أي معالجة بالذكاء الاصطناعي على هذا النص المفرَّغ",
+      "transcriptionFailed": "فشل التفريغ",
+      "failedCtaSettings": "قم بإعداد مزود التفريغ الخاص بك",
       "failedCtaAndRetry": "ثم انقر فوق إعادة المحاولة",
-      "failedCtaSettingsOnly": "قم بإعداد مزود النسخ الخاص بك في الإعدادات",
+      "failedCtaSettingsOnly": "قم بإعداد مزود التفريغ الخاص بك في الإعدادات",
       "failedLimitReached": "تم الوصول إلى الحد اليومي",
       "failedOffline": "أنت غير متصل بالإنترنت",
-      "rawTranscript": "النص الخام",
+      "rawTranscript": "النص المفرَّغ الخام",
       "clearAll": "مسح الكل",
-      "clearAllTitle": "مسح جميع النصوص",
-      "clearAllDescription": "ستتم إزالة جميع النصوص والملفات الصوتية بشكل دائم.",
+      "clearAllTitle": "مسح جميع النصوص المفرَّغة",
+      "clearAllDescription": "ستتم إزالة جميع النصوص المفرَّغة والملفات الصوتية بشكل دائم.",
       "clearAllSuccess": "تم مسح السجل",
       "clearAllErrorTitle": "تعذر مسح السجل",
       "clearAllErrorDescription": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
@@ -533,14 +533,14 @@
       "retryTranslationMode": "وضع الترجمة"
     },
     "cloudMigration": {
-      "title": "مرحباً بك في OpenWhispr Cloud",
-      "description": "لقد قمنا بتبديل النسخ الخاص بك إلى OpenWhispr Cloud للحصول على نتائج أسرع وأكثر دقة. تم حفظ إعداداتك السابقة — يمكنك التبديل مرة أخرى في أي وقت من الإعدادات.",
+      "title": "مرحبًا بك في OpenWhispr Cloud",
+      "description": "لقد قمنا بتبديل التفريغ الخاص بك إلى OpenWhispr Cloud للحصول على نتائج أسرع وأكثر دقة. تم حفظ إعداداتك السابقة — يمكنك التبديل مرة أخرى في أي وقت من الإعدادات.",
       "viewSettings": "عرض الإعدادات"
     },
     "aiCta": {
-      "title": "قم بتحسين نصوصك باستخدام الذكاء الاصطناعي",
-      "description": "قم بإصلاح القواعد وعلامات الترقيم والتنسيق تلقائياً أثناء التحدث.",
-      "enable": "تمكين تحسين الذكاء الاصطناعي"
+      "title": "قم بتحسين نصوصك المفرَّغة باستخدام الذكاء الاصطناعي",
+      "description": "إصلاح القواعد وعلامات الترقيم والتنسيق تلقائيًا أثناء التحدث.",
+      "enable": "تمكين التحسين بالذكاء الاصطناعي"
     },
     "loading": "جاري التحميل...",
     "gpu": {
@@ -557,7 +557,7 @@
     }
   },
   "integrations": {
-    "title": "عمليات الدمج (Integrations)",
+    "title": "التكاملات (Integrations)",
     "description": "قم بتوصيل الخدمات لتعزيز سير عملك",
     "googleCalendar": {
       "title": "تقويم Google",
@@ -573,10 +573,10 @@
       "disconnectConfirm": "هل تريد قطع اتصال {{email}}؟",
       "disconnectDescription": "لن يتم تسجيل ملاحظات الاجتماع من هذا التقويم بعد الآن.",
       "systemAudioRequired": "إذن صوت النظام مطلوب",
-      "systemAudioDescription": "لنسخ الاجتماعات، يحتاج OpenWhispr إلى إذن صوت النظام لالتقاط صوت المشاركين الآخرين. نحن لا نسجل شاشتك أبداً. سيتم توجيهك إلى إعدادات النظام لتمكين ذلك.",
+      "systemAudioDescription": "لتفريغ الاجتماعات، يحتاج OpenWhispr إلى إذن صوت النظام لالتقاط صوت المشاركين الآخرين. نحن لا نسجل شاشتك أبدًا. سيتم توجيهك إلى إعدادات النظام لتمكين ذلك.",
       "openSettings": "فتح إعدادات النظام",
       "connectFailed": "فشل الاتصال",
-      "connectFailedDescription": "حدث خطأ ما أثناء الاتصال بـ تقويم Google. يرجى المحاولة مرة أخرى."
+      "connectFailedDescription": "حدث خطأ ما أثناء الاتصال بتقويم Google. يرجى المحاولة مرة أخرى."
     },
     "microsoftCalendar": {
       "title": "تقويم Microsoft",
@@ -591,12 +591,12 @@
       "disconnectConfirm": "هل تريد قطع اتصال {{email}}؟",
       "disconnectDescription": "لن يتم تسجيل ملاحظات الاجتماع من هذا التقويم بعد الآن.",
       "connectFailed": "فشل الاتصال",
-      "connectFailedDescription": "حدث خطأ ما أثناء الاتصال بـ تقويم Microsoft. يرجى المحاولة مرة أخرى."
+      "connectFailedDescription": "حدث خطأ ما أثناء الاتصال بتقويم Microsoft. يرجى المحاولة مرة أخرى."
     },
     "appleCalendar": {
       "title": "تقويم Apple",
       "optional": "اختياري",
-      "description": "قراءة الاجتماعات من تطبيق التقويم (Calendar.app) — iCloud و Google و Exchange و Outlook في مكان واحد.",
+      "description": "قراءة الاجتماعات من تطبيق التقويم (Calendar.app) — iCloud وGoogle وExchange وOutlook في مكان واحد.",
       "connect": "ربط تقويم Apple",
       "connected": "متصل",
       "disconnect": "قطع الاتصال",
@@ -624,14 +624,14 @@
     },
     "mcp": {
       "title": "اجلب ملاحظاتك إلى أدوات الذكاء الاصطناعي الخاصة بك",
-      "description": "الدردشة والبحث والعمل مع ملاحظاتك داخل Claude و ChatGPT و Cursor.",
+      "description": "الدردشة والبحث والعمل مع ملاحظاتك داخل Claude وChatGPT وCursor.",
       "step1": "في أداة الذكاء الاصطناعي الخاصة بك، أضف OpenWhispr MCP باستخدام عنوان URL العام",
       "step2": "قم بإنشاء مفتاح API أعلاه بالنطاقات (scopes) التي تحتاجها.",
-      "step3": "الصق المفتاح كعنوان Authorization للاتصال.",
+      "step3": "الصق المفتاح في ترويسة Authorization للاتصال.",
       "learnMore": "اعرف المزيد",
       "viewPlans": "عرض الخطط",
       "copyUrl": "نسخ عنوان URL لـ MCP",
-      "proRequired": "قم بالترقية إلى خطة مدفوعة لتوصيل OpenWhispr بـ Claude و ChatGPT و Cursor.",
+      "proRequired": "قم بالترقية إلى خطة مدفوعة لتوصيل OpenWhispr بـ Claude وChatGPT وCursor.",
       "copied": "تم النسخ"
     },
     "cli": {
@@ -659,14 +659,14 @@
       "free": "مجانية",
       "freeLimit": "5 اجتماعات / شهر",
       "essential": "أساسية (Essential)",
-      "essentialLimit": "20 اجتماع / شهر",
+      "essentialLimit": "20 اجتماعًا / شهر",
       "pro": "Pro",
       "proLimit": "غير محدود",
       "upgrade": "ترقية"
     },
     "notABot": {
-      "title": "OpenWhispr هو مسجل اجتماعات، وليس روبوتاً",
-      "description": "يلتقط OpenWhispr الصوت مباشرة من نظامك — فهو لا ينضم أبداً إلى اجتماعاتك كمشارك. ما عليك سوى ربط التقويم الخاص بك وتدوين الملاحظات كالمعتاد."
+      "title": "OpenWhispr هو مسجل اجتماعات، وليس روبوتًا",
+      "description": "يلتقط OpenWhispr الصوت مباشرة من نظامك — فهو لا ينضم أبدًا إلى اجتماعاتك كمشارك. ما عليك سوى ربط التقويم الخاص بك وتدوين الملاحظات كالمعتاد."
     }
   },
   "auth": {
@@ -734,7 +734,7 @@
       "companySignInTitle": "استخدم تسجيل الدخول الخاص بشركتك",
       "requiredDescription": "يتطلب {{domain}} استخدام SSO للوصول إلى OpenWhispr.",
       "availableDescription": "حساب {{domain}} الخاص بك جاهز لتسجيل الدخول الموحد للشركة.",
-      "useEmailInstead": "استخدم البريد الإلكتروني وكلمة المرور بدلاً من ذلك"
+      "useEmailInstead": "استخدم البريد الإلكتروني وكلمة المرور بدلًا من ذلك"
     },
     "social": {
       "completeInBrowser": "أكمل تسجيل الدخول في متصفحك",
@@ -842,7 +842,7 @@
     "wordsReady_one": "{{count}} كلمة جاهزة",
     "wordsReady_two": "{{count}} كلمتان جاهزتان",
     "wordsReady_few": "{{count}} كلمات جاهزة",
-    "wordsReady_many": "{{count}} كلمةً جاهزةً",
+    "wordsReady_many": "{{count}} كلمةً جاهزة",
     "wordsReady_other": "{{count}} كلمة جاهزة",
     "import": "استيراد",
     "yourDictionary": "قاموسك",
@@ -857,16 +857,16 @@
       "edit": "تعديل {{trigger}}",
       "remove": "إزالة {{trigger}}",
       "editTitle": "تعديل المقتطف",
-      "dialogDescription": "عندما تنطق الكلمة المفتاحية، يتم استبدالها بالنص المحفوظ الخاص بك.",
-      "triggerLabel": "الكلمة المفتاحية",
+      "dialogDescription": "عندما تنطق العبارة المفتاحية، يتم استبدالها بالنص المحفوظ الخاص بك.",
+      "triggerLabel": "العبارة المفتاحية",
       "triggerPlaceholder": "مثال: رابط التقويم",
       "replacementLabel": "الاستبدال",
-      "replacementPlaceholder": "النص المراد إدراجه عندما تنطق الكلمة المفتاحية…",
+      "replacementPlaceholder": "النص المراد إدراجه عندما تنطق العبارة المفتاحية…",
       "create": "إنشاء مقتطف",
-      "duplicate": "يوجد مقتطف بهذه الكلمة المفتاحية بالفعل",
-      "emptyTitle": "الأشياء التي لا ينبغي عليك قولها",
+      "duplicate": "يوجد مقتطف بهذه العبارة المفتاحية بالفعل",
+      "emptyTitle": "الأشياء التي لا ينبغي أن تضطر إلى قولها",
       "emptyTitleAccent": "مرتين",
-      "emptyDescription": "انطق كلمة مفتاحية وسيقوم OpenWhispr باستبدالها بأي شيء قمت بحفظه — روابط URL، مقدمات، توقيعات، مطالبات.",
+      "emptyDescription": "انطق عبارة مفتاحية وسيستبدلها OpenWhispr بما حفظته — روابط، مقدمات، عبارات ختامية، مطالبات.",
       "new": "مقتطف جديد",
       "examples": {
         "linkedinTrigger": "حسابي على LinkedIn",
@@ -919,15 +919,15 @@
     "test": {
       "addressHint": "حاول مخاطبة \"{{agentName}}\" لاختبار وضع التعليمات",
       "aiModels": "نماذج الذكاء الاصطناعي",
-      "baseUrlMissing": "عنوان URL الأساسي لـ {{provider}} مفقود. أضفه في إعدادات نماذج الذكاء الاصطناعي.",
-      "cleanup": "تنظيف",
+      "baseUrlMissing": "عنوان URL الأساسي لـ {{provider}} مفقود. أضفه في إعدادات «نماذج الذكاء الاصطناعي».",
+      "cleanup": "تنقيح",
       "disabledInSettingsPrefix": "تم تعطيل تحسين النص بالذكاء الاصطناعي.",
-      "disabledInSettingsSuffix": "قم بتمكينه في نماذج الذكاء الاصطناعي لاختبار المطالبات.",
-      "disabledReasoning": "تم تعطيل تحسين النص بالذكاء الاصطناعي. قم بتمكينه في نماذج الذكاء الاصطناعي لاختبار المطالبات.",
+      "disabledInSettingsSuffix": "قم بتمكينه من قسم «نماذج الذكاء الاصطناعي» لاختبار المطالبات.",
+      "disabledReasoning": "تم تعطيل تحسين النص بالذكاء الاصطناعي. قم بتمكينه من قسم «نماذج الذكاء الاصطناعي» لاختبار المطالبات.",
       "failed": "فشل الاختبار: {{error}}",
       "inputLabel": "المدخلات",
       "inputPlaceholder": "أدخل النص للاختبار...",
-      "instruction": "تعليمات",
+      "instruction": "التعليمات",
       "modelLabel": "النموذج",
       "noModelSelected": "لم يتم تحديد أي نموذج",
       "none": "لا شيء",
@@ -937,11 +937,11 @@
       "providerLabel": "المزود",
       "run": "تشغيل الاختبار",
       "customEndpoint": "نقطة نهاية مخصصة",
-      "apiKeyMissing": "مفتاح API الخاص بـ {{provider}} غير مهيأ. أضفه في إعدادات نماذج الذكاء الاصطناعي.",
+      "apiKeyMissing": "مفتاح API الخاص بـ {{provider}} غير مهيأ. أضفه في إعدادات «نماذج الذكاء الاصطناعي».",
       "translateHint": "سيتم ترجمة النص إلى {{language}}",
       "translation": "الترجمة",
       "translationDisabled": "قم بتمكين ترجمة الإملاء لاختبار هذه المطالبة",
-      "noTargetLanguage": "اختر اللغة المستهدفة أولاً",
+      "noTargetLanguage": "اختر اللغة المستهدفة أولًا",
       "agentDisabled": "قم بتمكين المساعد الصوتي لاختبار هذه المطالبة"
     },
     "view": {
@@ -954,20 +954,20 @@
   "developerSection": {
     "currentLogFile": "ملف السجل الحالي",
     "debugMode": {
-      "disabledDescription": "قم بالتمكين لالتقاط معلومات تشخيصية مفصلة",
+      "disabledDescription": "فعّل هذا الخيار لالتقاط معلومات تشخيصية مفصلة",
       "enabledDescription": "تسجيل معالجة الصوت، وطلبات API، وعمليات النظام",
       "label": "وضع تصحيح الأخطاء"
     },
     "description": "التقاط سجلات مفصلة للمساعدة في تشخيص المشكلات",
     "openLogsFolder": "فتح مجلد السجلات",
     "performanceNote": {
-      "description": "تكتب سجلات تصحيح الأخطاء على القرص باستمرار وقد تؤثر قليلاً على الأداء. قم بتعطيلها عند عدم استكشاف الأخطاء وإصلاحها.",
+      "description": "يكتب تسجيل تصحيح الأخطاء على القرص باستمرار وقد يؤثر قليلًا على الأداء. عطّله عندما لا تحتاج إليه.",
       "label": "ملاحظة"
     },
     "sharing": {
       "footer": "لا تحتوي السجلات على مفاتيح API أو بيانات حساسة",
       "steps": {
-        "0": "قم بإعادة إنتاج المشكلة أثناء تمكين وضع تصحيح الأخطاء",
+        "0": "كرّر حدوث المشكلة أثناء تفعيل وضع تصحيح الأخطاء",
         "1": "انقر على \"فتح مجلد السجلات\" أعلاه",
         "2": "أرفق أحدث ملف سجل بتقرير الأخطاء الخاص بك"
       },
@@ -1042,13 +1042,13 @@
       "title": "تم إنشاء مفتاح API",
       "warning": "انسخ هذا المفتاح الآن. لن يتم عرضه مرة أخرى.",
       "copied": "تم النسخ!",
-      "copyButton": "النسخ إلى الحافظة",
+      "copyButton": "نسخ إلى الحافظة",
       "done": "تم"
     },
     "scopes": {
       "notesRead": "قراءة الملاحظات",
       "notesWrite": "إنشاء وتعديل الملاحظات",
-      "transcriptionsRead": "قراءة التفريغات الصوتية"
+      "transcriptionsRead": "قراءة النصوص المفرَّغة"
     },
     "revoke": {
       "button": "إبطال",
@@ -1057,7 +1057,7 @@
     },
     "neverUsed": "لم يُستخدم أبدًا",
     "lastUsed": "آخر استخدام {{time}}",
-    "maxKeysReached": "يُسمح بحد أقصى {{max}} مفاتيح",
+    "maxKeysReached": "الحد الأقصى المسموح به هو {{max}} من المفاتيح",
     "errors": {
       "loadFailed": "فشل تحميل مفاتيح API",
       "createFailed": "فشل إنشاء مفتاح API",
@@ -1065,8 +1065,8 @@
     }
   },
   "referral": {
-    "title": "أحل الأصدقاء واكسب المكافآت",
-    "modalTitle": "أحل الأصدقاء واكسب المكافآت",
+    "title": "قم بإحالة أصدقائك واكسب المكافآت",
+    "modalTitle": "قم بإحالة أصدقائك واكسب المكافآت",
     "subtitle": "امنح شهرًا. احصل على شهر.",
     "tabs": {
       "refer": "إحالة",
@@ -1078,7 +1078,7 @@
       "freeMonthOfPro": "شهر مجاني من Pro",
       "youGet": "أنت تحصل على ",
       "freeMonth": "شهر مجاني",
-      "whenTheyDictate": " عندما يملون 2,000 كلمة"
+      "whenTheyDictate": "عندما يُملون 2,000 كلمة"
     },
     "inviteLink": {
       "title": "رابط الدعوة الخاص بك",
@@ -1092,13 +1092,13 @@
       "sending": "جاري الإرسال"
     },
     "stats": {
-      "referred": "تمت إحالتهم",
-      "converted": "تم التحويل",
+      "referred": "المُحالون",
+      "converted": "المتحولون إلى مدفوع",
       "monthsEarned": "الأشهر المكتسبة"
     },
     "status": {
-      "converted": "تم التحويل",
-      "opened": "تم الفتح",
+      "converted": "اشترك",
+      "opened": "تم فتح الدعوة",
       "failed": "فشل",
       "sent": "تم الإرسال"
     },
@@ -1138,7 +1138,7 @@
   },
   "dictationAgent": {
     "enabled": "تمكين المساعد الصوتي",
-    "enabledDescription": "أملِ التعليمات على وكيلك. يتم إرسال النص المميز إلى النموذج المهيأ وتحريره في مكانه. قم بتنشيطه بقول \"{{agentName}}\".",
+    "enabledDescription": "أملِ التعليمات على وكيلك. يُرسل النص المحدد إلى النموذج المهيأ ويُحرَّر في مكانه. فعّله بقول \"{{agentName}}\".",
     "screenContext": {
       "title": "سياق الشاشة",
       "description": "أرفق لقطة شاشة لشاشتك النشطة بأوامر المساعد الصوتي.",
@@ -1159,13 +1159,13 @@
       "local": "محلي",
       "localDesc": "قم بتشغيل LLM محلي على جهازك — خاص بالكامل.",
       "selfHosted": "مستضاف ذاتيًا",
-      "selfHostedDesc": "أشر إلى نقطة نهاية متوافقة مع OpenAI ومستضافة ذاتيًا.",
-      "enterprise": "المؤسسة",
+      "selfHostedDesc": "اتصل بنقطة نهاية مستضافة ذاتيًا ومتوافقة مع OpenAI.",
+      "enterprise": "للمؤسسات",
       "enterpriseDesc": "استخدم AWS Bedrock أو Azure OpenAI أو Google Vertex."
     },
     "prompt": {
       "title": "مطالبة الوكيل",
-      "description": "مطالبة النظام المستخدمة عند اكتشاف كلمة الاستيقاظ. يتم الرجوع إلى المطالبة الافتراضية المدمجة."
+      "description": "مطالبة النظام المستخدمة عند اكتشاف كلمة التفعيل. إذا تُركت فارغة، تُستخدم المطالبة الافتراضية المدمجة."
     }
   },
   "agentMode": {
@@ -1175,10 +1175,10 @@
       "systemPromptPlaceholder": "أدخل مطالبة النظام المخصصة...",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "مزودي الخدمات السحابية",
+        "providers": "مزودو الخدمات السحابية",
         "local": "محلي",
         "selfHosted": "مستضاف ذاتيًا",
-        "enterprise": "المؤسسة",
+        "enterprise": "للمؤسسات",
         "openwhisprDesc": "دقة موثوقة. لا يتطلب أي إعداد.",
         "providersDesc": "أحضر مفتاح API الخاص بك.",
         "localDesc": "نماذج على الجهاز. خاصة بالكامل.",
@@ -1188,7 +1188,7 @@
     },
     "chat": {
       "errorPrefix": "خطأ",
-      "emptyResponse": "لم يرجع النموذج أي استجابة."
+      "emptyResponse": "لم يُرجِع النموذج أي رد."
     },
     "input": {
       "listening": "جاري الاستماع...",
@@ -1206,19 +1206,19 @@
       "copy_to_clipboardName": "النسخ إلى الحافظة",
       "web_searchName": "البحث في الويب",
       "get_calendar_eventsName": "الحصول على أحداث التقويم",
-      "get_calendar_availabilityName": "التحقق من توفر التقويم",
+      "get_calendar_availabilityName": "التحقق من الأوقات المتاحة في التقويم",
       "search_notesStatus": "جاري البحث في الملاحظات...",
       "web_searchStatus": "جاري البحث في الويب...",
       "copy_to_clipboardStatus": "جاري النسخ إلى الحافظة...",
       "get_calendar_eventsStatus": "جاري التحقق من التقويم...",
-      "get_calendar_availabilityStatus": "جاري التحقق من التوفر...",
+      "get_calendar_availabilityStatus": "جاري التحقق من الأوقات المتاحة...",
       "get_noteStatus": "جاري قراءة الملاحظة...",
       "create_noteStatus": "جاري إنشاء الملاحظة...",
       "update_noteStatus": "جاري تحديث الملاحظة...",
       "copiedToClipboard": "تم النسخ إلى حافظتك",
       "openNote": "فتح الملاحظة",
       "unknownTool": "أداة غير معروفة: {{name}}",
-      "invalidArgs": "وسيطات الأداة غير صالحة لـ {{name}}"
+      "invalidArgs": "وسيطات غير صالحة للأداة {{name}}"
     }
   },
   "noteEditor": {
@@ -1242,7 +1242,7 @@
         "owner": "المالك",
         "editor": "يمكنه التعديل",
         "viewer": "يمكنه العرض",
-        "teamAudience": "الجميع في مساحة هذا الفريق",
+        "teamAudience": "الجميع في مساحة الفريق هذه",
         "pending": "قيد الانتظار",
         "accepted": "لديه صلاحية الوصول",
         "resend": "إعادة إرسال الدعوة",
@@ -1250,10 +1250,10 @@
         "invitationActions": "إجراءات الدعوة",
         "resendSent": "تم إرسال الدعوة",
         "resendThrottled": "تم إرسال الدعوة مؤخرًا. حاول مرة أخرى بعد دقيقة.",
-        "syncPrompt": "تحتفظ المشاركة بنسخة من هذه الملاحظة في OpenWhispr Cloud الخاص بك. لا أحد يستطيع رؤيتها سواك حتى تختار من تشاركها معه.",
+        "syncPrompt": "تحتفظ المشاركة بنسخة من هذه الملاحظة في سحابة OpenWhispr الخاصة بك. لا يراها أحد سواك حتى تختار من تشاركها معه.",
         "syncAndShare": "مزامنة الملاحظة",
         "visibility": {
-          "label": "الرؤية",
+          "label": "من يمكنه الاطلاع",
           "private": "خاص",
           "privateOption": "خاص — أنت فقط",
           "link": "أي شخص لديه الرابط",
@@ -1279,7 +1279,7 @@
     "toasts": {
       "hotkeyChanged": {
         "title": "تم تغيير مفتاح الاختصار",
-        "description": "\"{{original}}\" غير متوفر. يتم استخدام \"{{fallback}}\" بدلاً منه. يمكنك تغيير هذا في الإعدادات."
+        "description": "\"{{original}}\" غير متوفر. يتم استخدام \"{{fallback}}\" بدلًا منه. يمكنك تغيير هذا في الإعدادات."
       },
       "hotkeyUnavailable": {
         "title": "مفتاح الاختصار غير متوفر",
@@ -1288,20 +1288,20 @@
       "addedToDict": "تمت إضافة {{words}} إلى قاموسك",
       "undo": "تراجع",
       "accessibilityMissing": {
-        "title": "مطلوب أذونات إمكانية الوصول",
-        "description": "يحتاج OpenWhispr إلى أذونات إمكانية الوصول لاكتشاف مفتاح الاختصار الخاص بك ولصق النص. يرجى تمكينها في لوحة التحكم."
+        "title": "أذونات تسهيلات الاستخدام مطلوبة",
+        "description": "يحتاج OpenWhispr إلى أذونات تسهيلات الاستخدام لاكتشاف مفتاح الاختصار الخاص بك ولصق النص. يرجى تمكينها في لوحة التحكم."
       },
       "gpuFallback": {
         "title": "تسريع GPU غير متوفر",
         "description": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للتفريغ الصوتي.",
-        "retry": "إعادة محاولة تفعيل GPU"
+        "retry": "إعادة تجربة GPU"
       },
       "gpuPackMigration": {
         "title": "تحتاج حزمة GPU إلى إعادة التنزيل",
         "description": "أزال التحديث تثبيت حزمة GPU قديمة ({{packs}}). أعد تنزيلها في الإعدادات لاستعادة تسريع GPU."
       },
       "cleanupFailed": {
-        "title": "فشل التنظيف",
+        "title": "فشل التنقيح",
         "description": "تم لصق الإملاء الأصلي دون تنقيح بالذكاء الاصطناعي."
       }
     },
@@ -1333,7 +1333,7 @@
       "title": "تكامل التقويم",
       "description": "اكتشاف الاجتماعات تلقائيًا وتسجيل التفريغات الصوتية"
     },
-    "connect": "ربط Google Calendar",
+    "connect": "ربط تقويم Google",
     "connecting": "جاري الربط...",
     "disconnect": "قطع الاتصال",
     "disconnecting": "جاري قطع الاتصال...",
@@ -1347,7 +1347,7 @@
     "tomorrow": "غدًا"
   },
   "upcoming": {
-    "title": "قادم",
+    "title": "القادم",
     "transcriptions": "التفريغات الصوتية",
     "now": "الآن",
     "untitledEvent": "حدث بدون عنوان",
@@ -1358,7 +1358,7 @@
     "moreCalendarsHint": "هل تريد تقاويم إضافية؟",
     "connectHere": "قم بربطها هنا",
     "openMeetingLink": "فتح رابط الاجتماع",
-    "systemAudioRequired": "مطلوب إذن صوت النظام لالتقاط صوت المشاركين الآخرين.",
+    "systemAudioRequired": "يلزم إذن «صوت النظام» لالتقاط صوت المشاركين الآخرين.",
     "openSettings": "فتح إعدادات النظام",
     "connectCalendar": "اربط تقويمك",
     "connectCalendarDescription": "شاهد اجتماعاتك وانضم إليها دون مغادرة OpenWhispr.",
@@ -1392,7 +1392,7 @@
       "nameLabel": "الاسم",
       "emojiLabel": "رمز تعبيري (Emoji)",
       "create": "إنشاء",
-      "couldNotCreate": "تعذر إنشاء مساحة",
+      "couldNotCreate": "تعذر إنشاء المساحة",
       "created": "تم إنشاء {{space}}",
       "rename": "إعادة تسمية",
       "changeEmoji": "تغيير الرمز التعبيري",
@@ -1412,8 +1412,8 @@
       "spaceRoot": "جذر المساحة",
       "moveConfirm": "نقل",
       "confirmMoveInTitle": "نقل إلى {{space}}؟",
-      "confirmMoveIn": "سيتمكن كل شخص في {{space}} من عرض هذه الملاحظة وتعديلها. لا يمكن نقل الملاحظات خارج مساحة الفريق لاحقاً.",
-      "confirmMoveInFolder": "سيتمكن كل شخص في {{space}} من عرض هذا المجلد وملاحظاته وتعديلها. لا يمكن نقل المجلدات والملاحظات خارج مساحة الفريق لاحقاً.",
+      "confirmMoveIn": "سيتمكن كل شخص في {{space}} من عرض هذه الملاحظة وتعديلها. لا يمكن نقل الملاحظات خارج مساحة الفريق لاحقًا.",
+      "confirmMoveInFolder": "سيتمكن كل شخص في {{space}} من عرض هذا المجلد وملاحظاته وتعديلها. لا يمكن نقل المجلدات والملاحظات خارج مساحة الفريق لاحقًا.",
       "cantMoveOut": "لا يمكن نقل الملاحظات خارج مساحة الفريق.",
       "cantMoveTeammate": "يمكن فقط لمالك الملاحظة أو مسؤول مساحة العمل نقلها إلى مساحة أخرى.",
       "moved": "تم نقل “{{title}}” إلى {{target}}",
@@ -1435,7 +1435,7 @@
       "updateDeniedNote": "ليس لديك إذن لتغيير “{{title}}” — تم حفظ تعديلاتك غير المتزامنة كنسخة في مساحتك الشخصية",
       "deleteDeniedNote": "لم يتم حذف “{{title}}” — يمكن فقط لمالك الملاحظة أو المسؤول حذفها",
       "updateDeniedFolder": "ليس لديك إذن لتغيير “{{name}}” — تم حفظ عملك غير المتزامن في مساحتك الشخصية",
-      "deleteDeniedFolder": "لم يتم حذف “{{name}}” — يمكن فقط للمسؤول حذف مجلد مساحة",
+      "deleteDeniedFolder": "لم يتم حذف “{{name}}” — يمكن فقط للمسؤول حذف المجلدات داخل مساحة الفريق",
       "conflictBanner": "توجد نسخة أحدث من هذه الملاحظة.",
       "conflictRefresh": "تحديث",
       "conflictKeep": "متابعة التعديل",
@@ -1453,7 +1453,7 @@
         "roleMember": "عضو",
         "remove": "إزالة",
         "removeConfirm": "إزالة {{name}} من {{space}}؟",
-        "removeConfirmDescription": "سيفقدون إمكانية الوصول إلى جميع الملاحظات في هذه المساحة.",
+        "removeConfirmDescription": "سيفقد هذا الشخص إمكانية الوصول إلى جميع الملاحظات في هذه المساحة.",
         "inviteFooter": "دعوة {{email}} إلى مساحة العمل…",
         "empty": "لم تتم إضافة أحد بعد"
       },
@@ -1475,16 +1475,16 @@
         "removeTeamConfirm": "إزالة {{team}} من {{space}}؟",
         "removeTeamConfirmDescription": "سيفقد أعضاؤه إمكانية الوصول إلى هذه المساحة ما لم يشملهم فريق آخر معين.",
         "lastTeamWarning": "هذا هو الفريق الوحيد الذي لديه وصول إلى هذه المساحة. بعد إزالته، سيحتفظ مسؤولو مساحة العمل فقط بإمكانية الوصول.",
-        "affectsOtherSpaces_zero": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحات أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_one": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحة أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_two": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحتين أخريين يمكنه الوصول إليهما.",
-        "affectsOtherSpaces_few": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحات أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_many": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحةً أخرى يمكنه الوصول إليها.",
-        "affectsOtherSpaces_other": "تنطبق التغييرات على {{team}} أيضًا على {{count}} مساحة أخرى يمكنه الوصول إليها.",
-        "accessLabel": "وصول المساحة",
+        "affectsOtherSpaces_zero": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحات أخرى يمكنه الوصول إليها.",
+        "affectsOtherSpaces_one": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحة أخرى يمكنه الوصول إليها.",
+        "affectsOtherSpaces_two": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحتين أخريين يمكنه الوصول إليهما.",
+        "affectsOtherSpaces_few": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحات أخرى يمكنه الوصول إليها.",
+        "affectsOtherSpaces_many": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحةً أخرى يمكنه الوصول إليها.",
+        "affectsOtherSpaces_other": "تسري التغييرات التي تُجرى على {{team}} أيضًا على {{count}} مساحة أخرى يمكنه الوصول إليها.",
+        "accessLabel": "صلاحية الوصول إلى المساحة",
         "accessAdmin": "مسؤول",
         "accessMember": "عضو",
-        "accessChanged": "تم تحديث الوصول لـ {{team}}",
+        "accessChanged": "تم تحديث صلاحية وصول {{team}}",
         "accessHint": "يدير مسؤولو {{team}} هذه المساحة فقط عندما يتم تعيين وصولها إلى مسؤول (Admin)."
       },
       "teams": {
@@ -1495,7 +1495,7 @@
       }
     },
     "structureIntro": {
-      "title": "أين تعيش ملاحظاتك",
+      "title": "أين تُحفظ ملاحظاتك",
       "description": "يفصل OpenWhispr الأفكار الخاصة عن العمل المشترك حتى يرى الأشخاص المناسبون الملاحظات المناسبة.",
       "personal": {
         "title": "المساحة الشخصية",
@@ -1503,7 +1503,7 @@
       },
       "workspace": {
         "title": "مساحة العمل",
-        "description": "المقر الرئيسي لأعضاء مساحة عملك وأدوارهم ومساحات فريقهم."
+        "description": "هنا يُدار أعضاء مساحة عملك وأدوارهم ومساحات الفرق فيها."
       },
       "teamSpace": {
         "title": "مساحة الفريق",
@@ -1520,7 +1520,7 @@
         "videos": "الفيديوهات"
       },
       "title": "المجلدات",
-      "soon": "قريباً",
+      "soon": "قريبًا",
       "folderName": "اسم المجلد",
       "couldNotCreate": "تعذر إنشاء المجلد",
       "couldNotRename": "تعذر إعادة تسمية المجلد",
@@ -1545,7 +1545,7 @@
       "untitled": "بدون عنوان",
       "noteTitle": "عنوان الملاحظة",
       "stop": "إيقاف",
-      "transcribe": "نسخ",
+      "transcribe": "تفريغ",
       "processing": "جاري المعالجة...",
       "export": "تصدير",
       "asMarkdown": "بصيغة Markdown",
@@ -1560,7 +1560,7 @@
       "startWriting": "ابدأ الكتابة...",
       "staleIndicator": "تم تغيير المحتوى منذ التحسين",
       "live": "مباشر",
-      "transcript": "النص",
+      "transcript": "النص المفرَّغ",
       "notes": "الملاحظات",
       "conversationWillAppear": "ستظهر المحادثة هنا...",
       "linkedEvent": "الحدث المرتبط",
@@ -1572,24 +1572,24 @@
       "attendees": "حاضرون",
       "addAttendees": "إضافة حاضرين",
       "addPlaceholder": "إضافة حاضرين...",
-      "typeEmail": "اكتب بريداً إلكترونياً لإضافته...",
+      "typeEmail": "اكتب بريدًا إلكترونيًا لإضافته...",
       "me": "(أنا)"
     },
     "upload": {
-      "title": "رفع صوت",
+      "title": "رفع ملف صوتي",
       "using": "باستخدام {{model}}",
-      "dropOrBrowse": "أسقط ملفاً صوتياً أو انقر للتصفح",
+      "dropOrBrowse": "أسقط ملفًا صوتيًا أو انقر للتصفح",
       "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC, Opus",
       "dropToUpload": "أسقط للرفع",
-      "transcribe": "نسخ",
+      "transcribe": "تفريغ",
       "cancel": "إلغاء",
-      "transcribingCloud": "جاري النسخ عبر السحابة...",
-      "transcribingLocal": "جاري النسخ محلياً...",
-      "transcribingProvider": "جاري النسخ عبر {{provider}}...",
-      "cancelTranscription": "إلغاء النسخ",
-      "transcriptionComplete": "اكتمل النسخ",
-      "partialWarning": "تعذر نسخ جزء من الصوت.",
-      "partialWarningCount": "عدد الأجزاء الصوتية التي تعذر نسخها: {{failed}} من أصل {{total}}.",
+      "transcribingCloud": "جاري التفريغ عبر السحابة...",
+      "transcribingLocal": "جاري التفريغ محليًا...",
+      "transcribingProvider": "جاري التفريغ عبر {{provider}}...",
+      "cancelTranscription": "إلغاء التفريغ",
+      "transcriptionComplete": "اكتمل التفريغ",
+      "partialWarning": "تعذر تفريغ جزء من الصوت.",
+      "partialWarningCount": "عدد الأجزاء الصوتية التي تعذر تفريغها: {{failed}} من أصل {{total}}.",
       "chunkLossExceeded": "فُقد جزء كبير من الصوت بسبب مشكلة في الشبكة. تحقق من اتصالك وحاول مرة أخرى.",
       "openNote": "فتح الملاحظة",
       "uploadAnother": "رفع ملف آخر",
@@ -1601,21 +1601,21 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "مخصص",
       "selectFolder": "تحديد مجلد",
-      "transcriptionFailed": "فشل النسخ",
+      "transcriptionFailed": "فشل التفريغ",
       "errorOccurred": "حدث خطأ",
       "noSpeechDetected": "لم يتم اكتشاف أي كلام في هذا الصوت.",
-      "noProviderTitle": "لم يتم إعداد مزود نسخ",
-      "noProviderDescription": "أضف مفتاح API أو قم بتنزيل نموذج محلي لبدء النسخ.",
-      "noProviderAction": "فتح إعدادات النسخ",
+      "noProviderTitle": "لم يتم إعداد مزود تفريغ",
+      "noProviderDescription": "أضف مفتاح API أو قم بتنزيل نموذج محلي لبدء التفريغ.",
+      "noProviderAction": "فتح إعدادات التفريغ",
       "fileTooLarge": "يتجاوز هذا الملف حد الـ 500 ميغابايت.",
-      "paidPlanRequired": "النسخ السحابي للملفات التي يزيد حجمها عن 25 ميغابايت يتطلب خطة مدفوعة. تتم معالجة الملفات الكبيرة باستخدام OpenWhispr Cloud للحصول على نتائج موثوقة وعالية الجودة.",
-      "largeFileNote": "يتم تقسيم الملفات الكبيرة ونسخها بالتوازي.",
-      "chunkProgress": "جاري نسخ الجزء {{completed}} من {{total}}...",
+      "paidPlanRequired": "التفريغ السحابي للملفات التي يزيد حجمها عن 25 ميغابايت يتطلب خطة مدفوعة. تتم معالجة الملفات الكبيرة باستخدام OpenWhispr Cloud للحصول على نتائج موثوقة وعالية الجودة.",
+      "largeFileNote": "يتم تقسيم الملفات الكبيرة وتفريغها بالتوازي.",
+      "chunkProgress": "جاري تفريغ الجزء {{completed}} من {{total}}...",
       "byokTooLarge": "تدعم مفاتيح API التابعة لجهات خارجية ملفات يصل حجمها إلى {{size}} ميغابايت فقط.",
       "byokTooLargeDetail": "بالنسبة إلى الملفات التي يزيد حجمها على {{size}} ميغابايت، يتولى OpenWhispr Cloud تقسيمها ومعالجتها بالتوازي وإعادة تجميعها — لتحصل على نتائج موثوقة دون الاعتماد على حدود مزودي الجهات الخارجية.",
-      "byokTooLargeNeedsAccount": "أنشئ حساباً وقم بالترقية إلى خطة مدفوعة لنسخ الملفات الأكبر حجماً باستخدام OpenWhispr Cloud.",
-      "byokTooLargeNeedsUpgrade": "قم بالترقية إلى خطة مدفوعة لنسخ الملفات الأكبر حجماً باستخدام OpenWhispr Cloud.",
-      "switchToCloudForLargeFiles": "قم بالتبديل إلى OpenWhispr Cloud لنسخ هذا الملف.",
+      "byokTooLargeNeedsAccount": "أنشئ حسابًا وقم بالترقية إلى خطة مدفوعة لتفريغ الملفات الأكبر حجمًا باستخدام OpenWhispr Cloud.",
+      "byokTooLargeNeedsUpgrade": "قم بالترقية إلى خطة مدفوعة لتفريغ الملفات الأكبر حجمًا باستخدام OpenWhispr Cloud.",
+      "switchToCloudForLargeFiles": "قم بالتبديل إلى OpenWhispr Cloud لتفريغ هذا الملف.",
       "createAccount": "إنشاء حساب",
       "upgrade": "ترقية",
       "switchToCloud": "OpenWhispr Cloud",
@@ -1624,7 +1624,7 @@
       "urlDownloading": "جاري تنزيل الصوت...",
       "urlResolving": "جاري تحليل الرابط...",
       "urlInvalid": "رابط غير صالح. الصق رابط YouTube أو رابط ملف صوتي مباشر.",
-      "urlVideoUnavailable": "هذا الفيديو غير متاح. قد يكون خاصاً أو محذوفاً أو محظوراً جغرافياً.",
+      "urlVideoUnavailable": "هذا الفيديو غير متاح. قد يكون خاصًا أو محذوفًا أو محظورًا جغرافيًا.",
       "urlPlaylistNotSupported": "قوائم التشغيل غير مدعومة. الصق رابط فيديو واحد.",
       "urlContentTypeInvalid": "هذا الرابط لا يشير إلى ملف صوتي أو فيديو.",
       "urlDownloadFailed": "فشل التنزيل. تحقق من الرابط وحاول مرة أخرى.",
@@ -1640,28 +1640,28 @@
       "numSpeakersLabel": "عدد المتحدثين",
       "numSpeakersHint": "يؤدي تحديد العدد الدقيق إلى تحسين الدقة، خاصة في التسجيلات الطويلة.",
       "downloadingModels": "جاري تنزيل النماذج...",
-      "openaiDiarizeNote": "يتجاوز نموذج النسخ الخاص بك بـ gpt-4o-transcribe-diarize، وهو النموذج الوحيد من OpenAI الذي يحتوي على ميزة اكتشاف المتحدث. قد تختلف التكاليف عن النموذج المحدد.",
+      "openaiDiarizeNote": "يستبدل نموذج التفريغ الذي اخترته بالنموذج gpt-4o-transcribe-diarize، وهو نموذج OpenAI الوحيد الذي يدعم اكتشاف المتحدثين. قد تختلف التكاليف عن نموذجك المحدد.",
       "mistralDiarizeNote": "تم تضمين ميزة اكتشاف المتحدث بدون تكلفة إضافية مع Voxtral.",
-      "groqDiarizeNote": "ميزة اكتشاف المتحدث غير متوفرة مع Groq. سيتم استخدام الفصل المحلي (diarization) بدلاً من ذلك.",
+      "groqDiarizeNote": "ميزة اكتشاف المتحدثين غير متوفرة مع Groq. سيتم استخدام اكتشاف المتحدثين المحلي بدلًا من ذلك.",
       "batchCancelled": "تم الإلغاء",
-      "batchTranscriptionFailed": "فشل النسخ",
+      "batchTranscriptionFailed": "فشل التفريغ",
       "batchSaveFailed": "فشل حفظ الملاحظة",
       "batchUnknownError": "خطأ غير معروف",
       "removeFromQueue": "إزالة من قائمة الانتظار",
-      "diarizationRunsLocally": "يعمل اكتشاف المتحدث محلياً على جهازك.",
+      "diarizationRunsLocally": "يعمل اكتشاف المتحدث محليًا على جهازك.",
       "urlSubmit": "إضافة رابط",
       "urlsSkipped": "تعذر إضافة بعض الروابط ({{n}})",
       "queueFailed": "فشل {{n}}",
-      "urlFileTooLarge": "الملف كبير جداً بحيث لا يمكن تنزيله. الحد الأقصى للحجم هو 500 ميغابايت.",
-      "urlYoutubeBlocked": "يحظر YouTube التنزيلات من شبكتك مؤقتاً. حاول مرة أخرى بعد قليل.",
-      "customEndpointInvalid": "نقطة نهاية النسخ المخصصة غير مكونة أو غير صالحة. قم بتحديثها في الإعدادات."
+      "urlFileTooLarge": "الملف كبير جدًا بحيث لا يمكن تنزيله. الحد الأقصى للحجم هو 500 ميغابايت.",
+      "urlYoutubeBlocked": "يحظر YouTube التنزيلات من شبكتك مؤقتًا. حاول مرة أخرى بعد قليل.",
+      "customEndpointInvalid": "نقطة نهاية التفريغ المخصصة غير مهيأة أو غير صالحة. قم بتحديثها في الإعدادات."
     },
     "meeting": {
       "title": "ملاحظات الاجتماع",
-      "description": "نصوص مكتوبة وملخصات مهيكلة",
+      "description": "نصوص مفرَّغة وملخصات مهيكلة",
       "back": "رجوع",
-      "restrictedByOrg": "نسخ الاجتماعات مقيد بواسطة مؤسستك.",
-      "autoEnded": "توقف التسجيل تلقائياً بعد انتهاء اجتماعك.",
+      "restrictedByOrg": "تفريغ الاجتماعات مقيد بواسطة مؤسستك.",
+      "autoEnded": "توقف التسجيل تلقائيًا بعد انتهاء اجتماعك.",
       "restartFailed": "تعذرت إعادة تشغيل تسجيل الاجتماع.",
       "systemAudioSilent": {
         "title": "لم يتم اكتشاف صوت الاجتماع بعد",
@@ -1675,7 +1675,7 @@
     "empty": {
       "title": "لا توجد ملاحظات هنا بعد",
       "description": "أنشئ ملاحظتك الأولى لبدء الكتابة",
-      "selectTitle": "تحديد ملاحظة",
+      "selectTitle": "اختر ملاحظة",
       "selectDescription": "اختر ملاحظة من الشريط الجانبي",
       "createNote": "إنشاء ملاحظة",
       "emptyFolder": "لا توجد ملاحظات في هذا المجلد"
@@ -1683,7 +1683,7 @@
     "addToFolder": {
       "title": "إضافة ملاحظات",
       "searchPlaceholder": "البحث عن ملاحظات لإضافتها...",
-      "addExisting": "إضافة موجودة",
+      "addExisting": "إضافة ملاحظات موجودة",
       "addCount": "إضافة {{count}} ملاحظات",
       "addCount_zero": "إضافة {{count}} ملاحظات",
       "addCount_one": "إضافة {{count}} ملاحظة",
@@ -1712,14 +1712,14 @@
       "namePlaceholder": "اسم الإجراء",
       "descriptionPlaceholder": "وصف موجز (اختياري)",
       "promptPlaceholder": "ما الذي يجب أن يفعله الذكاء الاصطناعي بمحتوى الملاحظة؟",
-      "builtIn": "مُدمج",
+      "builtIn": "مضمّن",
       "save": "حفظ",
       "update": "تحديث",
       "cancel": "إلغاء",
       "noActions": "لا توجد إجراءات مخصصة بعد",
-      "promptLabel": "المطالبة (Prompt)",
-      "emptyEditorTitle": "تحديد إجراء",
-      "emptyEditorDescription": "اختر إجراءً من القائمة أو أنشئ إجراءً جديداً",
+      "promptLabel": "الموجه (Prompt)",
+      "emptyEditorTitle": "اختر إجراءً",
+      "emptyEditorDescription": "اختر إجراءً من القائمة أو أنشئ إجراءً جديدًا",
       "runAction": "تشغيل {{name}}",
       "selectAction": "تحديد إجراء",
       "builtin": {
@@ -1731,7 +1731,7 @@
       "errors": {
         "noModel": "لم يتم تحديد نموذج ذكاء اصطناعي. قم بتكوين واحد في الإعدادات.",
         "actionFailed": "فشل الإجراء",
-        "noEndpoint": "لم يتم تعيين عنوان URL لخادم مستضاف ذاتياً. قم بتكوين واحد في الإعدادات."
+        "noEndpoint": "لم يتم تعيين عنوان URL لخادم مستضاف ذاتيًا. قم بتكوين واحد في الإعدادات."
       }
     },
     "onboarding": {
@@ -1742,10 +1742,10 @@
       },
       "actions": {
         "title": "إجراءات مدعومة بالذكاء الاصطناعي",
-        "description": "تعمل الإجراءات على تحويل ملاحظاتك — تنظيف النصوص، وتلخيص الاجتماعات، والمزيد. استخدم الإجراءات المضمنة أو أنشئ إجراءاتك الخاصة.",
-        "builtInLabel": "مضمن",
+        "description": "تعمل الإجراءات على تحويل ملاحظاتك — تنظيف النصوص المفرَّغة، وتلخيص الاجتماعات، والمزيد. استخدم الإجراءات المضمّنة أو أنشئ إجراءاتك الخاصة.",
+        "builtInLabel": "مضمّن",
         "createTitle": "أنشئ إجراءك الخاص",
-        "createDescription": "حدد إجراءً مخصصاً باستخدام موجه الذكاء الاصطناعي الخاص بك. يمكنك دائماً تعديله أو إضافة المزيد لاحقاً في الإعدادات.",
+        "createDescription": "حدد إجراءً مخصصًا باستخدام موجه الذكاء الاصطناعي الخاص بك. يمكنك دائمًا تعديله أو إضافة المزيد لاحقًا في الإعدادات.",
         "created": "تم الإنشاء!"
       },
       "getStarted": "البدء",
@@ -1757,7 +1757,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "النسخ في الوقت الفعلي متاح في خطة Pro",
+      "message": "التفريغ في الوقت الفعلي متاح في خطة Pro",
       "upgrade": "ترقية"
     },
     "enhance": {
@@ -1765,14 +1765,14 @@
     },
     "speaker": {
       "you": "أنت",
-      "them": "هم",
+      "them": "الطرف الآخر",
       "unknown": "متحدث غير معروف",
       "label": "المتحدث {{n}}",
       "identifyingSpeakers": "جاري التعرف على المتحدثين...",
-      "liveAccuracyHint": "لا يزال جاري التعرف على المتحدثين. ستتحسن دقة التسمية بمجرد انتهاء المكالمة.",
+      "liveAccuracyHint": "لا يزال التعرف على المتحدثين جاريًا. ستتحسن دقة التسمية بمجرد انتهاء المكالمة.",
       "speakersIdentified": "تم التعرف على المتحدثين",
-      "typeNamePlaceholder": "اكتب اسماً",
-      "nameOrEmailPlaceholder": "اكتب اسماً أو بريداً إلكترونياً",
+      "typeNamePlaceholder": "اكتب اسمًا",
+      "nameOrEmailPlaceholder": "اكتب اسمًا أو بريدًا إلكترونيًا",
       "knownSpeakers": "متحدثون معروفون",
       "meetingAttendees": "حاضرو الاجتماع",
       "createNewPrefix": "إنشاء",
@@ -1805,7 +1805,7 @@
         "incAria": "زيادة عدد المتحدثين المتوقع",
         "decAria": "تقليل عدد المتحدثين المتوقع"
       },
-      "consentNotice": "احصل دائماً على الموافقة عند تسجيل الآخرين"
+      "consentNotice": "احصل دائمًا على الموافقة عند تسجيل الآخرين"
     },
     "overview": {
       "subtitle": {
@@ -1829,10 +1829,10 @@
       "banner": {
         "title": {
           "team": "مساحة فريقك",
-          "private": "مساحتك الخاصة"
+          "private": "مساحتك الشخصية"
         },
         "body": {
-          "team": "حوّل المحادثات إلى معرفة مشتركة. انشر المقابلات ومكالمات المبيعات ومزامنة الفريق حيث يمكن للجميع العثور عليها.",
+          "team": "حوّل المحادثات إلى معرفة مشتركة. انشر المقابلات ومكالمات المبيعات واجتماعات الفريق الدورية حيث يمكن للجميع العثور عليها.",
           "private": "احتفظ بملاحظات الاجتماع والأفكار والمسودات في مكان واحد — واسأل عن أي شيء في هذه المساحة."
         },
         "dismiss": "تجاهل"
@@ -1841,7 +1841,7 @@
         "placeholder": "اسأل عن أي شيء",
         "chips": {
           "catchUp": "أطلعني على المستجدات",
-          "keyDecisions": "قائمة القرارات الرئيسية",
+          "keyDecisions": "اذكر القرارات الرئيسية",
           "inFlight": "إظهار المشاريع قيد التنفيذ"
         }
       },
@@ -1882,7 +1882,7 @@
         "title": "قم بإعداد OpenWhispr Assistant",
         "titleLineOne": "قم بإعداد",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "انطق طلبًا، وسيقوم OpenWhispr Assistant بكتابة النتيجة لك."
+        "description": "قل ما تريده بصوتك، وسيكتب OpenWhispr Assistant النتيجة لك."
       },
       "hotkey": {
         "capture": "اضغط على المفاتيح التي تريد استخدامها",
@@ -1891,11 +1891,11 @@
         "holding": "استمر في الضغط، أو اضغط على مفتاح آخر"
       },
       "dictationDemo": {
-        "title": "جرب الإملاء الأول لك",
+        "title": "جرب إملاءك الأول",
         "titleLineOne": "جرب",
-        "titleLineTwo": "الإملاء الأول لك",
+        "titleLineTwo": "إملاءك الأول",
         "description": "اضغط على {{hotkey}} وابدأ في التحدث. سيقوم OpenWhispr بتحويل صوتك إلى نص.",
-        "founder": "مرحباً، أنا جيب (Gabe)، مؤسس OpenWhispr",
+        "founder": "مرحبًا، أنا غيب (Gabe)، مؤسس OpenWhispr",
         "prompt": "جرب قول: “أنا أختبر الإملاء لأول مرة.”",
         "placeholder": "سيظهر إملاؤك هنا..."
       },
@@ -1903,17 +1903,17 @@
         "title": "تعرف على OpenWhispr Assistant",
         "titleLineOne": "تعرف على",
         "titleLineTwo": "OpenWhispr Assistant",
-        "description": "انطق طلبًا، وسيقوم OpenWhispr Assistant بكتابة النتيجة لك.",
+        "description": "قل ما تريده بصوتك، وسيكتب OpenWhispr Assistant النتيجة لك.",
         "senderName": "إيرين لورين (Eren Lauren)",
         "senderEmail": "eren32@gmail.com",
         "recipientLabel": "إلى جون دو (John Doe)",
-        "email": "مرحباً! هل ترغب في تناول القهوة الأسبوع المقبل؟ أخبرني بالوقت الذي يناسبك.",
+        "email": "مرحبًا! هل ترغب في تناول القهوة الأسبوع المقبل؟ أخبرني بالوقت الذي يناسبك.",
         "prompt": "رد بأن يوم الثلاثاء الساعة 3 مناسب. أرسل دعوة.",
-        "response": "مرحباً إيرين،\n\nأود كثيراً اللقاء بك. يوم الثلاثاء الساعة 3 مساءً يناسبني جيداً. إذا كان ذلك مناسباً لك، سأرسل لك دعوة تقويم.\nأتطلع لذلك،\nجون"
+        "response": "مرحبًا إيرين،\n\nأود كثيرًا اللقاء بك. يوم الثلاثاء الساعة 3 مساءً يناسبني جيدًا. إذا كان ذلك مناسبًا لك، سأرسل لك دعوة تقويم.\nأتطلع لذلك،\nجون"
       },
       "demo": {
         "listening": "جاري الاستماع...",
-        "processing": "تحويل صوتك إلى نص...",
+        "processing": "جاري تحويل صوتك إلى نص...",
         "stop": "إيقاف",
         "typing": "جاري الكتابة..."
       },
@@ -1926,8 +1926,8 @@
         "hero": {
           "description": "سجل اجتماعك ودع OpenWhispr يحول المحادثة إلى ملاحظات واضحة ومنظمة.",
           "chat": "دردش مع ملاحظات اجتماعك",
-          "transcript": "راجع النص الكامل",
-          "speakers": "شاهد من قال ماذا"
+          "transcript": "راجع النص المفرَّغ الكامل",
+          "speakers": "اعرف من قال ماذا"
         },
         "connectors": {
           "connect": "ربط",
@@ -1936,7 +1936,7 @@
           "microsoftTitle": "Microsoft Outlook",
           "microsoftDescription": "استيراد اجتماعات العمل والدعوات.",
           "appleTitle": "Apple Calendar",
-          "appleDescription": "مزامنة الأحداث من جهاز Mac و iPhone الخاص بك."
+          "appleDescription": "مزامنة الأحداث من جهازي Mac وiPhone الخاصين بك."
         }
       },
       "setupChoice": {
@@ -1946,16 +1946,16 @@
         "description": "اختر الخيار الذي يناسب طريقة عملك.",
         "unavailable": {
           "title": "لا يتوفر أي خيار إعداد",
-          "description": "سياسة مساحة العمل الخاصة بك لا تسمح بإعداد كامل للنسخ والذكاء الاصطناعي. اتصل بالمسؤول."
+          "description": "سياسة مساحة العمل الخاصة بك لا تسمح بإعداد كامل للتفريغ والذكاء الاصطناعي. اتصل بالمسؤول."
         },
         "cloud": {
           "title": "OpenWhispr Cloud",
           "description": "احصل على 2,000 كلمة مجانية كل أسبوع. تظل إعداداتك متزامنة عبر الأجهزة.",
-          "continue": "المتابعة مجاناً",
+          "continue": "المتابعة مجانًا",
           "signIn": "تسجيل الدخول لاستخدام السحابة",
           "features": {
-            "fast": "الأسرع، لا يتطلب إعداداً",
-            "privacy": "خصوصية واضحة وبدون الاحتفاظ بالبيانات",
+            "fast": "الأسرع، لا يتطلب إعدادًا",
+            "privacy": "خصوصية واضحة وعدم الاحتفاظ بأي بيانات",
             "sync": "مزامنة الإعدادات عبر الأجهزة",
             "features": "ميزات الذكاء الاصطناعي للملاحظات والإجراءات"
           }
@@ -1966,7 +1966,7 @@
         },
         "local": {
           "title": "على جهازك",
-          "description": "نسخ محلي خاص بدون إنترنت. يتطلب مساحة خالية تبلغ {{minimumSpace}} جيجابايت على الأقل.",
+          "description": "تفريغ محلي خاص بدون إنترنت. يتطلب مساحة خالية تبلغ {{minimumSpace}} جيجابايت على الأقل.",
           "badge": "مجاني",
           "download": "تنزيل النماذج",
           "features": {
@@ -1988,25 +1988,25 @@
             }
           },
           "local": {
-            "title": "يستغرق الإعداد المحلي بضع خطوات إضافية",
-            "description": "تحتفظ المعالجة المحلية بكلامك على هذا الجهاز، ولكنها تتطلب إعداداً لمرة واحدة ومساحة خالية تبلغ {{minimumSpace}} جيجابايت على الأقل.",
-            "continue": "الإعداد محلياً",
+            "title": "يتطلب الإعداد المحلي بضع خطوات إضافية",
+            "description": "تحتفظ المعالجة المحلية بكلامك على هذا الجهاز، ولكنها تتطلب إعدادًا لمرة واحدة ومساحة خالية تبلغ {{minimumSpace}} جيجابايت على الأقل.",
+            "continue": "الإعداد محليًا",
             "steps": {
-              "1": "اختر محرك النسخ",
+              "1": "اختر محرك تفريغ",
               "2": "قم بتكوين أو تنزيل نموذج، حوالي {{modelSize}}",
               "3": "انتظر التثبيت والتفعيل"
             }
           }
         },
-        "useCloud": "استخدم السحابة بدلاً من ذلك",
+        "useCloud": "استخدم السحابة بدلًا من ذلك",
         "continueSetup": "متابعة الإعداد",
         "showMore": "إظهار المزيد من الخيارات",
         "moreOptions": {
           "title": "اختر إعداد API الخاص بك",
-          "description": "أضف مفتاح API أو اتصل بنموذج مستضاف ذاتياً.",
+          "description": "أضف مفتاح API أو اربط نموذجًا مستضافًا ذاتيًا.",
           "selfHosted": {
-            "title": "مستضاف ذاتياً",
-            "description": "اتصل بنموذجك المستضاف ذاتياً."
+            "title": "مستضاف ذاتيًا",
+            "description": "اربط نموذجك المستضاف ذاتيًا."
           }
         }
       },
@@ -2014,11 +2014,11 @@
         "progress": "تقدم إعداد المزود",
         "dictation": "الإملاء",
         "assistant": "المساعد",
-        "title": "قم بتوصيل مزود الذكاء الاصطناعي الخاص بك",
-        "description": "اختر مزوداً، وأضف بيانات الاعتماد الخاصة بك، واختبر الاتصال.",
-        "descriptionLineOne": "اختر مزوداً وأضف",
+        "title": "اربط مزود الذكاء الاصطناعي الخاص بك",
+        "description": "اختر مزودًا، وأضف بيانات الاعتماد الخاصة بك، واختبر الاتصال.",
+        "descriptionLineOne": "اختر مزودًا وأضف",
         "descriptionLineTwo": "مفتاح API الخاص بك.",
-        "selfHosted": "لدي مفتاح نموذج مستضاف ذاتياً",
+        "selfHosted": "لدي مفتاح نموذج مستضاف ذاتيًا",
         "providerLabel": "المزود",
         "providerPlaceholder": "اختر مزود النموذج",
         "modelLabel": "النموذج",
@@ -2032,7 +2032,7 @@
         "modelIdPlaceholder": "اكتب معرف النموذج الخاص بك",
         "testConnection": "اختبار الاتصال",
         "proceed": "متابعة",
-        "clinical": "للنسخ السريري",
+        "clinical": "للتفريغ السريري",
         "clientId": "معرف العميل (Client ID)",
         "clientSecret": "سر العميل (Client Secret)",
         "runTest": "إجراء الاختبار",
@@ -2041,14 +2041,14 @@
         "connectionFailed": "تعذر التحقق من الاتصال.",
         "errors": {
           "endpointRequired": "أدخل عنوان URL لنقطة النهاية قبل الاختبار.",
-          "invalidUrl": "يجب أن تكون نقطة النهاية عنوان URL صالحاً لـ HTTP أو HTTPS.",
+          "invalidUrl": "يجب أن تكون نقطة النهاية عنوان URL صالحًا لـ HTTP أو HTTPS.",
           "httpsRequired": "يجب أن تستخدم نقاط النهاية العامة HTTPS. يُسمح بـ HTTP فقط على العناوين الخاصة.",
           "unsupportedProvider": "اختبار الاتصال غير متوفر لهذا المزود.",
           "apiKeyRequired": "أضف مفتاح API قبل الاختبار.",
           "credentialsRejected": "رفض المزود بيانات الاعتماد هذه.",
-          "endpointNotFound": "لا تكشف نقطة النهاية عن قائمة نماذج متوافقة مع OpenAI.",
+          "endpointNotFound": "لا توفر نقطة النهاية قائمة نماذج متوافقة مع OpenAI.",
           "modelNotFound": "النموذج المحدد غير متوفر من هذا المزود.",
-          "providerStatus": "أرجع المزود الحالة {{status}}.",
+          "providerStatus": "أعاد المزود رمز الحالة {{status}}.",
           "timeout": "انتهت مهلة اختبار الاتصال.",
           "network": "تعذر الوصول إلى المزود."
         }
@@ -2059,7 +2059,7 @@
         "descriptionLineOne": "اختر النماذج التي تريد",
         "descriptionLineTwo": "تشغيلها على جهازك.",
         "providerLabel": "المزود",
-        "agent": "الوكيل",
+        "agent": "المساعد",
         "download": "تنزيل",
         "downloadingShort": "جاري التنزيل",
         "selected": "محدد",
@@ -2072,7 +2072,7 @@
       }
     },
     "steps": {
-      "welcome": "مرحباً",
+      "welcome": "مرحبًا",
       "setup": "الإعداد",
       "permissions": "الأذونات",
       "activation": "الإملاء",
@@ -2096,20 +2096,20 @@
       "microphoneDescription": "يحول كلامك إلى نص. لا يتم تسجيل أي شيء حتى تضغط على اختصار لوحة المفاتيح الخاص بك.",
       "grant": "منح",
       "grantAccess": "منح الوصول",
-      "accessibilityTitle": "إمكانية الوصول",
+      "accessibilityTitle": "تسهيلات الاستخدام",
       "accessibilityDescription": "يكتب النص النهائي مباشرة في أي تطبيق تستخدمه — المستندات، البريد الإلكتروني، الدردشة.",
       "testAndGrant": "اختبار ومنح",
       "requiredForApp": "مطلوب لعمل OpenWhispr",
       "microphoneRequired": "الوصول إلى الميكروفون مطلوب",
       "openSystemSettings": "فتح إعدادات النظام",
       "systemAudioTitle": "صوت النظام",
-      "systemAudioDescription": "يتيح لمسجل الاجتماع سماع الجانب الآخر من مكالماتك — الاجتماعات، المحاضرات، البودكاست. يمكنك تشغيل هذا لاحقاً في الإعدادات.",
+      "systemAudioDescription": "يتيح لمسجل الاجتماع سماع الجانب الآخر من مكالماتك — الاجتماعات، المحاضرات، البودكاست. يمكنك تشغيل هذا لاحقًا في الإعدادات.",
       "optional": "اختياري",
       "recommended": "موصى به",
-      "accessibilityTroubleshooting": "في إعدادات النظام ← إمكانية الوصول، قم بإيقاف تشغيل مفتاح OpenWhispr ثم أعد تشغيله. إذا لم يكن OpenWhispr موجوداً في القائمة على الإطلاق، انقر فوق + وأضفه من مجلد التطبيقات الخاص بك. هل ما زلت تواجه مشكلة؟ أرسل بريداً إلكترونياً إلى support@openwhispr.com."
+      "accessibilityTroubleshooting": "في إعدادات النظام ← تسهيلات الاستخدام، أوقف مفتاح تبديل OpenWhispr ثم أعد تشغيله. إذا لم يكن OpenWhispr موجودًا في القائمة أصلًا، فانقر على + وأضفه من مجلد التطبيقات. هل ما زلت تواجه مشكلة؟ راسلنا على support@openwhispr.com."
     },
     "transcription": {
-      "title": "إعداد النسخ",
+      "title": "إعداد التفريغ",
       "description": "اختر وضعك ومزودك",
       "preferredLanguage": "اللغة المفضلة"
     },
@@ -2119,7 +2119,7 @@
       "hotkey": "اختصار لوحة المفاتيح",
       "mode": "الوضع",
       "tapDescription": "اضغط للبدء/الإيقاف",
-      "holdDescription": "استمر بالضغط أثناء التحدث",
+      "holdDescription": "استمر في الضغط أثناء التحدث",
       "test": "اختبار",
       "hotkeyToStartStop": "{{hotkey}} للبدء/الإيقاف",
       "holdHotkey": "اضغط باستمرار على {{hotkey}}",
@@ -2129,7 +2129,7 @@
       "title": "إعداد المساعد الصوتي",
       "description": "تحدث إلى مساعد الذكاء الاصطناعي الخاص بك بضغطة مفتاح واحدة",
       "hotkey": "اختصار لوحة المفاتيح",
-      "howItWorks": "اضغط على المفتاح وقل ما تريد — مثلاً: «اكتب رسالة شكر قصيرة». إذا كان هناك نص محدد، فسيحرره {{agentName}} ويستبدله. وإذا كان التركيز على حقل نصي قابل للكتابة، فستُلصق الإجابة عند المؤشر؛ وإلا فستفتح في لوحة عائمة. لا حاجة لقول «مرحبًا {{agentName}}» أولاً.",
+      "howItWorks": "اضغط على المفتاح وقل ما تريد — مثلًا: “اكتب رسالة شكر قصيرة”. إذا كان هناك نص محدد، فسيحرره {{agentName}} ويستبدله. وإذا كان التركيز على حقل نصي قابل للكتابة، فستُلصق الإجابة عند المؤشر؛ وإلا فستفتح في لوحة عائمة. لا حاجة لقول “مرحبًا {{agentName}}” أولًا.",
       "test": "جربه",
       "testInstruction": "حدد نموذج النص أدناه، ثم اضغط على {{hotkey}} وقل “اجعل هذا أقصر” — سيظهر التعديل مباشرة في مربع النص",
       "testSetHotkey": "قم بتعيين اختصار أعلاه لتجربته",
@@ -2143,7 +2143,7 @@
     },
     "connectivity": {
       "title": "لا يمكننا الوصول إلى OpenWhispr Cloud من هذه الشبكة",
-      "body": "{{cause}} يمكنك التبديل إلى المحرك المحلي، أو المتابعة والمحاولة مرة أخرى لاحقاً.",
+      "body": "{{cause}} يمكنك التبديل إلى المحرك المحلي، أو المتابعة والمحاولة مرة أخرى لاحقًا.",
       "useLocal": "استخدام المحرك المحلي",
       "continue": "المتابعة على أي حال"
     },
@@ -2158,11 +2158,11 @@
       "options": {
         "dictation": {
           "title": "الكتابة بشكل أسرع",
-          "description": "تحدث بدلاً من الكتابة في أي تطبيق."
+          "description": "تحدث بدلًا من الكتابة في أي تطبيق."
         },
         "meetings": {
           "title": "ملاحظات الاجتماعات",
-          "description": "سجل واكتب ولخص الاجتماعات."
+          "description": "سجّل الاجتماعات وفرّغها ولخّصها."
         },
         "healthcare": {
           "title": "التوثيق السريري",
@@ -2174,19 +2174,19 @@
         },
         "ai": {
           "title": "تحدث إلى الذكاء الاصطناعي الخاص بك",
-          "description": "استخدم صوتك مع ChatGPT و Claude وأدوات الذكاء الاصطناعي الأخرى."
+          "description": "استخدم صوتك مع ChatGPT وClaude وأدوات الذكاء الاصطناعي الأخرى."
         },
         "upload": {
-          "title": "نسخ الملفات الصوتية",
-          "description": "قم بتحميل الملفات الصوتية لنسخها."
+          "title": "تفريغ الملفات الصوتية",
+          "description": "ارفع الملفات الصوتية لتفريغها."
         }
       },
-      "selectHint": "حدد جميع ما ينطبق"
+      "selectHint": "حدد كل ما ينطبق"
     },
     "meeting": {
       "title": "ملاحظات الاجتماعات",
-      "description": "التقط ولخص اجتماعاتك",
-      "autoDetect": "يكتشف OpenWhispr تلقائياً عندما تكون في اجتماع ويعرض بدء تدوين الملاحظات — لا يتم تسجيل أي شيء بدون إذنك.",
+      "description": "سجّل اجتماعاتك ولخّصها",
+      "autoDetect": "يكتشف OpenWhispr تلقائيًا عندما تكون في اجتماع ويعرض بدء تدوين الملاحظات — لا يتم تسجيل أي شيء بدون إذنك.",
       "hotkeyLabel": "اختصار الاجتماع",
       "hotkeyHint": "اختياري — اضغط عليه في أي اجتماع لبدء ملاحظة على الفور."
     },
@@ -2198,12 +2198,12 @@
       "openSettings": "فتح الإعدادات",
       "skipForNow": "تخطي في الوقت الحالي",
       "corti": {
-        "title": "أخبرتنا أنك هنا من أجل النسخ السريري",
+        "title": "أخبرتنا أنك هنا من أجل التفريغ السريري",
         "description": "لقد عقدنا شراكة مع Corti — تحويل الكلام إلى نص من الدرجة السريرية بأعلى دقة، وهو متوافق مع قانون HIPAA.",
         "createAccount": "أنشئ حساب Corti الخاص بك",
-        "creditBadge": "رصيد مجاني بقيمة 50 دولاراً",
+        "creditBadge": "رصيد مجاني بقيمة 50 دولارًا",
         "regionHint": "اختر مكان معالجة صوتك — الولايات المتحدة أو الاتحاد الأوروبي.",
-        "llmHint": "ستعمل ميزات نموذج اللغة أيضاً على نماذج Corti.",
+        "llmHint": "ستعمل ميزات نموذج اللغة أيضًا على نماذج Corti.",
         "useCorti": "استخدام Corti",
         "skip": "ليس الآن",
         "step1": "سجل في corti.ai",
@@ -2213,7 +2213,7 @@
     },
     "requiredModels": {
       "title": "تثبيت النماذج المطلوبة",
-      "description": "تتطلب مؤسستك {{organization}} هذه النماذج على هذا الجهاز قبل أن تتمكن من بدء الإملاء.",
+      "description": "تتطلب {{organization}} هذه النماذج على هذا الجهاز قبل أن تتمكن من بدء الإملاء.",
       "genericOrganization": "مؤسستك",
       "installed": "مُثبَّت",
       "queued": "في قائمة الانتظار",
@@ -2241,10 +2241,10 @@
         "general": "عام",
         "members": "الأعضاء",
         "teams": "الفرق",
-        "developer": "المطور"
+        "developer": "للمطورين"
       },
       "role": {
-        "owner": "المالك",
+        "owner": "مالك",
         "admin": "مسؤول",
         "member": "عضو"
       },
@@ -2252,7 +2252,7 @@
         "nameLabel": "اسم مساحة العمل",
         "saved": "تم تحديث مساحة العمل",
         "dangerTitle": "حذف مساحة العمل",
-        "dangerDescription": "سيتم حذف جميع الملاحظات المشتركة والمجلدات وعمليات الدمج. لا يمكن التراجع عن هذا الإجراء.",
+        "dangerDescription": "سيتم حذف جميع الملاحظات المشتركة والمجلدات وعمليات التكامل. لا يمكن التراجع عن هذا الإجراء.",
         "delete": "حذف مساحة العمل",
         "confirmTitle": "حذف {{name}}؟",
         "confirmDescription": "هذا يلغي الاشتراك ويزيل جميع بيانات مساحة العمل بشكل دائم.",
@@ -2270,7 +2270,7 @@
       },
       "members": {
         "title": "الأعضاء",
-        "description": "تم استخدام {{count}} من {{seats}} مقاعد.",
+        "description": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "description_zero": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "description_one": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "description_two": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
@@ -2347,23 +2347,23 @@
       },
       "invites": {
         "title": "الدعوات المعلقة",
-        "expiresIn_zero": "تنتهي صلاحيته خلال {{count}} أيام",
-        "expiresIn_one": "تنتهي صلاحيته خلال {{count}} يوم",
-        "expiresIn_two": "تنتهي صلاحيته خلال {{count}} يومين",
-        "expiresIn_few": "تنتهي صلاحيته خلال {{count}} أيام",
-        "expiresIn_many": "تنتهي صلاحيته خلال {{count}} يومًا",
-        "expiresIn_other": "تنتهي صلاحيته خلال {{count}} يوم",
+        "expiresIn_zero": "تنتهي صلاحيتها خلال {{count}} أيام",
+        "expiresIn_one": "تنتهي صلاحيتها خلال {{count}} يوم",
+        "expiresIn_two": "تنتهي صلاحيتها خلال {{count}} يومين",
+        "expiresIn_few": "تنتهي صلاحيتها خلال {{count}} أيام",
+        "expiresIn_many": "تنتهي صلاحيتها خلال {{count}} يومًا",
+        "expiresIn_other": "تنتهي صلاحيتها خلال {{count}} يوم",
         "expired": "منتهية الصلاحية",
         "loadError": "تعذر تحميل الدعوات.",
         "resend": "إعادة الإرسال",
         "resending": "جاري إعادة الإرسال…",
-        "revoke": "إلغاء",
+        "revoke": "إبطال الدعوة",
         "resent": "تمت إعادة إرسال الدعوة",
         "resentNoEmail": "تم تحديث الدعوة، لكن تعذر تسليم البريد الإلكتروني.",
-        "revoked": "تم إلغاء الدعوة",
-        "revokeFailed": "تعذر إلغاء الدعوة",
+        "revoked": "تم إبطال الدعوة",
+        "revokeFailed": "تعذر إبطال الدعوة",
         "revokeConfirm": {
-          "title": "إلغاء هذه الدعوة؟",
+          "title": "إبطال هذه الدعوة؟",
           "description": "سيتوقف رابط الدعوة لـ {{email}} عن العمل."
         }
       },
@@ -2375,10 +2375,10 @@
         "manageStripe": "إدارة في Stripe",
         "startSubscription": "بدء الاشتراك",
         "planLabel": {
-          "business": "أعمال",
+          "business": "Business",
           "pro": "Pro",
           "free": "مجاني",
-          "enterprise": "مؤسسات"
+          "enterprise": "Enterprise"
         },
         "status": {
           "active": "نشط",
@@ -2397,17 +2397,17 @@
         "new": "مفتاح جديد",
         "create": "إنشاء مفتاح",
         "createTitle": "إنشاء مفتاح API",
-        "createDescription": "اختر الأذونات التي يحتاجها هذا المفتاح. يمكنك إلغاؤه في أي وقت.",
+        "createDescription": "اختر الأذونات التي يحتاجها هذا المفتاح. يمكنك إبطاله في أي وقت.",
         "nameLabel": "اسم المفتاح",
         "namePlaceholder": "تكامل الإنتاج",
-        "revoke": "إلغاء المفتاح",
-        "revoked": "تم إلغاء {{name}}",
+        "revoke": "إبطال المفتاح",
+        "revoked": "تم إبطال {{name}}",
         "lastUsed": "آخر استخدام في {{date}}",
         "neverUsed": "لم يُستخدم أبدًا",
         "keyCreatedTitle": "تم إنشاء مفتاح API",
         "keyCreatedDescription": "انسخ هذا المفتاح الآن — لن تتمكن من رؤيته مرة أخرى.",
         "revokeConfirm": {
-          "title": "إلغاء هذا المفتاح؟",
+          "title": "إبطال هذا المفتاح؟",
           "description": "سيتوقف {{name}} عن العمل على الفور. سيفشل أي تكامل يستخدمه."
         },
         "scopes": {
@@ -2422,8 +2422,8 @@
             "write": "كتابة المجلدات"
           },
           "transcriptions": {
-            "title": "النسخ النصية",
-            "read": "قراءة النسخ النصية"
+            "title": "النصوص المفرَّغة",
+            "read": "قراءة النصوص المفرَّغة"
           },
           "members": {
             "title": "الأعضاء",
@@ -2462,15 +2462,15 @@
       "seatUpdateFailed": "تعذر تحديث مقاعد مساحة العمل",
       "businessWorkspaceOnly": "متاح لمساحات العمل",
       "personalPlanTitle": "الخطة الشخصية",
-      "providedBy": "الخطة الشخصية: Free · الوصول المدفوع مقدم من {{workspaces}}",
+      "providedBy": "الخطة الشخصية: مجاني · الوصول المدفوع مقدم من {{workspaces}}",
       "confirmSeats": {
         "title": "إضافة مقعد لمساحة العمل؟",
-        "description_zero": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيقوم Stripe بحساب التغيير نسبيًا.",
-        "description_one": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيقوم Stripe بحساب التغيير نسبيًا.",
-        "description_two": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدين. سيقوم Stripe بحساب التغيير نسبيًا.",
-        "description_few": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيقوم Stripe بحساب التغيير نسبيًا.",
-        "description_many": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدًا. سيقوم Stripe بحساب التغيير نسبيًا.",
-        "description_other": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيقوم Stripe بحساب التغيير نسبيًا.",
+        "description_zero": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيحتسب Stripe الفرق بشكل تناسبي.",
+        "description_one": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيحتسب Stripe الفرق بشكل تناسبي.",
+        "description_two": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدين. سيحتسب Stripe الفرق بشكل تناسبي.",
+        "description_few": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيحتسب Stripe الفرق بشكل تناسبي.",
+        "description_many": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدًا. سيحتسب Stripe الفرق بشكل تناسبي.",
+        "description_other": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيحتسب Stripe الفرق بشكل تناسبي.",
         "newCapacity": "السعة الجديدة",
         "chargeToday": "رسوم اليوم",
         "confirm": "إضافة مقعد"
@@ -2482,7 +2482,7 @@
         "limitReached": "تم بلوغ الحد الأقصى",
         "pastDue": "متأخر الدفع",
         "pro": "Pro",
-        "business": "أعمال",
+        "business": "Business",
         "trial": "تجريبي"
       },
       "billing": {
@@ -2505,7 +2505,7 @@
       "featuresDisabledDescription": "قم بتعيين VITE_AUTH_URL في ملف .env الخاص بك لتمكين ميزات الحساب.",
       "notConfigured": "لم يتم تكوين المصادقة",
       "notSignedIn": "لم يتم تسجيل الدخول",
-      "notSignedInDescription": "أنشئ حسابًا لإلغاء قفل الميزات المتميزة.",
+      "notSignedInDescription": "أنشئ حسابًا للوصول إلى الميزات المميزة.",
       "offline": "غير متصل بالإنترنت",
       "pastDue": {
         "description": "أنت على الخطة المجانية في الوقت الحالي. قم بتحديث طريقة الدفع الخاصة بك للعودة إلى Pro.",
@@ -2515,13 +2515,13 @@
         "freeUsage": "{{used}} / {{limit}} كلمة هذا الأسبوع",
         "nextBilling": "الفوترة القادمة: {{date}}",
         "pastDue": "{{used}} / {{limit}} كلمة مجانية هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
-        "trial": "عدد الأيام المتبقية: {{days}} - نسخ نصية غير محدودة",
+        "trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
         "unlimited": "غير محدود"
       },
       "planLabels": {
         "free": "مجاني",
         "pro": "Pro",
-        "business": "أعمال",
+        "business": "Business",
         "trial": "تجريبي"
       },
       "pricing": {
@@ -2533,15 +2533,15 @@
           "period": "إلى الأبد",
           "features": [
             "## OpenWhispr Cloud",
-            "2,000 كلمة/أسبوع للنسخ النصي",
+            "2,000 كلمة/أسبوع للتفريغ",
             "5 ساعات من تسجيلات الاجتماعات/شهر",
             "## مجانًا دائمًا",
             "نماذج ذكاء اصطناعي محلية غير محدودة",
-            "نسخ سحابي غير محدود باستخدام مفاتيح API الخاصة بك",
+            "تفريغ سحابي غير محدود باستخدام مفاتيح API الخاصة بك",
             "دعم أكثر من 100 لغة",
             "قاموس مخصص",
             "عدم الاحتفاظ بالبيانات",
-            "دعم المجتمع"
+            "دعم مجتمعي"
           ]
         },
         "pro": {
@@ -2551,9 +2551,9 @@
           "annualPrice": "$80",
           "annualPeriod": "/سنة",
           "annualEquivalent": "$6.67",
-          "includesPrefix": "جميع ميزات Free +",
+          "includesPrefix": "جميع ميزات الخطة المجانية +",
           "features": [
-            "نسخ سحابي غير محدود",
+            "تفريغ سحابي غير محدود",
             "20 ساعة من تسجيلات الاجتماعات/شهر",
             "مزامنة عبر الأجهزة",
             "مشاركة الملاحظات بروابط عامة",
@@ -2566,7 +2566,7 @@
           "switchToAnnual": "التبديل إلى السنوي"
         },
         "business": {
-          "name": "أعمال",
+          "name": "Business",
           "monthlyPrice": "$16",
           "monthlyPeriod": "/شهر",
           "annualPrice": "$160",
@@ -2585,10 +2585,10 @@
           "switchToAnnual": "التبديل إلى السنوي"
         },
         "enterprise": {
-          "name": "مؤسسات",
+          "name": "Enterprise",
           "price": "مخصص",
           "subtitle": "للأمان والدعم المتقدمين",
-          "includesPrefix": "جميع ميزات Business +",
+          "includesPrefix": "جميع ميزات خطة Business +",
           "features": [
             "أرصدة API مُدارة",
             "مزامنة سحابية عبر الأجهزة",
@@ -2603,7 +2603,7 @@
         "currentPlan": "الخطة الحالية",
         "coveredByWorkspace": "مضمنة في خطة مساحة العمل الخاصة بك",
         "upgrade": "ترقية",
-        "downgrade": "خفض الدرجة",
+        "downgrade": "تخفيض الخطة",
         "planSwitched": "تم تحديث الخطة بنجاح",
         "confirmSwitch": {
           "title": "تأكيد تغيير الخطة",
@@ -2636,7 +2636,7 @@
       },
       "trialCta": {
         "button": "إنشاء حساب مجاني",
-        "description": "نسخ نصية غير محدودة، ومعالجة ذات أولوية، والمزيد.",
+        "description": "تفريغ غير محدود، ومعالجة ذات أولوية، والمزيد.",
         "title": "جرب Pro مجانًا لمدة 7 أيام"
       },
       "signedOutPlans": {
@@ -2724,12 +2724,12 @@
     "aiModels": {
       "customSetup": "إعداد مخصص",
       "customSetupDescription": "استخدم المزود ومفتاح API الخاص بك.",
-      "description": "تنظيف النسخ النصية ومعالجة الأوامر وإصلاح الأخطاء مع الحفاظ على أسلوبك.",
+      "description": "تنظيف النصوص المفرَّغة ومعالجة الأوامر وإصلاح الأخطاء مع الحفاظ على أسلوبك.",
       "enableTextCleanup": "تمكين تنظيف النص",
       "enableTextCleanupDescription": "استخدم الذكاء الاصطناعي لإزالة كلمات الحشو، وإصلاح القواعد، وتنسيق علامات الترقيم",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "مزودي الخدمات السحابية",
+        "providers": "مزودو الخدمات السحابية",
         "local": "محلي",
         "selfHosted": "مستضاف ذاتيًا",
         "enterprise": "مؤسسي",
@@ -2752,7 +2752,7 @@
           "title": "تم التبديل إلى الإعداد المخصص"
         },
         "switchedProviders": {
-          "title": "مزودي الخدمات السحابية",
+          "title": "مزودو الخدمات السحابية",
           "description": "استخدام مفاتيح API الخاصة بك."
         },
         "switchedLocal": {
@@ -2769,20 +2769,20 @@
         }
       },
       "managedEnterprise": {
-        "errorTitle": "يحتاج الذكاء الاصطناعي المُدار للمؤسسة إلى الانتباه",
+        "errorTitle": "الذكاء الاصطناعي المُدار للمؤسسة يحتاج إلى مراجعة",
         "title": "مُدار بواسطة مؤسستك",
-        "description": "يوفر تسجيل الدخول وصولاً قصير الأجل تلقائيًا. لا يلزم وجود مفاتيح سحابية أو إعداد CLI.",
+        "description": "يوفر تسجيل الدخول وصولًا قصير الأجل تلقائيًا. لا يلزم وجود مفاتيح سحابية أو إعداد CLI.",
         "usePersonalSetup": "استخدام الإعداد الشخصي",
         "availableTitle": "إعداد المؤسسة متاح",
         "availableDescription": "استخدم {{provider}} دون إدارة بيانات الاعتماد.",
-        "useManaged": "استخدام المُدار"
+        "useManaged": "استخدام الإعداد المُدار"
       }
     },
     "developer": {
       "clearCache": "مسح ذاكرة التخزين المؤقت",
       "dataManagementDescription": "إدارة النماذج المخزنة مؤقتًا وبيانات التطبيق",
       "dataManagementTitle": "إدارة البيانات",
-      "modelCache": "ذاكرة التخزين المؤقت للنموذج",
+      "modelCache": "ذاكرة التخزين المؤقت للنماذج",
       "open": "فتح",
       "removeModels": {
         "confirmText": "حذف النماذج",
@@ -2797,7 +2797,7 @@
       "removing": "جاري الإزالة...",
       "resetAll": {
         "confirmText": "حذف كل شيء",
-        "description": "سيؤدي هذا إلى حذف جميع الإعدادات المحلية والنسخ النصية والتسجيلات الصوتية ونماذج الذكاء الاصطناعي التي تم تنزيلها واتصالات التقويم والبيانات المخزنة مؤقتًا بشكل دائم. لن تتأثر البيانات السحابية وحسابك. سيتم إعادة تحميل التطبيق بعد إعادة التعيين.",
+        "description": "سيؤدي هذا إلى حذف جميع الإعدادات المحلية والنصوص المفرَّغة والتسجيلات الصوتية ونماذج الذكاء الاصطناعي التي تم تنزيلها واتصالات التقويم والبيانات المخزنة مؤقتًا بشكل دائم. لن تتأثر البيانات السحابية وحسابك. سيتم إعادة تحميل التطبيق بعد إعادة التعيين.",
         "failedDescription": "حدث خطأ ما. يرجى المحاولة مرة أخرى أو إعادة تثبيت التطبيق.",
         "failedTitle": "تعذر إعادة التعيين",
         "successDescription": "تمت إعادة تعيين كل شيء. سيتم إعادة تحميل التطبيق الآن.",
@@ -2805,17 +2805,17 @@
         "title": "إعادة تعيين جميع بيانات التطبيق"
       },
       "resetAppData": "إعادة تعيين بيانات التطبيق",
-      "resetAppDataDescription": "حذف جميع الإعدادات المحلية والنسخ النصية والتسجيلات الصوتية والنماذج التي تم تنزيلها والبيانات المخزنة مؤقتًا بشكل دائم"
+      "resetAppDataDescription": "حذف جميع الإعدادات المحلية والنصوص المفرَّغة والتسجيلات الصوتية والنماذج التي تم تنزيلها والبيانات المخزنة مؤقتًا بشكل دائم"
     },
     "dictionary": {
       "title": "القاموس المخصص",
-      "description": "علّم الذكاء الاصطناعي مفرداتك — الأسماء والمصطلحات والكلمات المتخصصة التي قد تفوته بخلاف ذلك",
+      "description": "علّم الذكاء الاصطناعي مفرداتك — الأسماء والمصطلحات والكلمات المتخصصة التي قد تفوته لولا ذلك",
       "addWordOrPhrase": "إضافة كلمة أو عبارة",
       "placeholder": "إضافة كلمة أو عبارة...",
       "add": "إضافة",
       "pressEnterToAdd": "اضغط على Enter للإضافة",
       "autoLearnTitle": "التعلم التلقائي من التصحيحات",
-      "autoLearnDescription": "عند تصحيح نسخ نصي في التطبيق المستهدف، تتم إضافة الكلمة المصححة تلقائيًا إلى قاموسك المخصص.",
+      "autoLearnDescription": "عند تصحيح نص مفرَّغ في التطبيق المستهدف، تتم إضافة الكلمة المصححة تلقائيًا إلى قاموسك المخصص.",
       "yourWords": "كلماتك",
       "clearDictionaryTitle": "مسح القاموس؟",
       "clearDictionaryDescription": "سيؤدي هذا إلى إزالة جميع الكلمات من قاموسك المخصص. لا يمكن التراجع عن هذا الإجراء.",
@@ -2835,19 +2835,19 @@
         "dark": "داكن",
         "description": "تحكم في مظهر OpenWhispr",
         "light": "فاتح",
-        "theme": "المظهر",
-        "themeDescription": "اختر الفاتح، الداكن، أو طابق نظامك",
+        "theme": "السمة",
+        "themeDescription": "اختر المظهر الفاتح أو الداكن أو مطابقة إعدادات النظام",
         "title": "المظهر"
       },
       "floatingIcon": {
         "autoHide": "إخفاء تلقائي عند الخمول",
         "autoHideDescription": "إبقاء الرمز مخفيًا حتى تبدأ في الإملاء",
         "startPosition": "موضع البدء",
-        "startPositionDescription": "أين تظهر لوحة مسجل الصوت على الشاشة",
+        "startPositionDescription": "مكان ظهور لوحة مسجل الصوت على الشاشة",
         "bottomRight": "أسفل اليمين",
         "center": "أسفل الوسط",
         "bottomLeft": "أسفل اليسار",
-        "description": "التحكم في متى يكون رمز الإملاء مرئيًا على شاشتك",
+        "description": "التحكم في وقت ظهور رمز الإملاء على شاشتك",
         "title": "الرمز العائم"
       },
       "hotkey": {
@@ -2855,14 +2855,14 @@
         "description": "مجموعة المفاتيح التي تبدأ وتوقف الإملاء الصوتي",
         "resetToDefault": "إعادة التعيين إلى {{hotkey}}",
         "title": "مفتاح اختصار الإملاء",
-        "linuxPttPermissionTitle": "يتطلب اضغط للتحدث إعدادًا إضافيًا",
+        "linuxPttPermissionTitle": "يتطلب وضع «اضغط مع الاستمرار للتحدث» إعدادًا إضافيًا",
         "linuxPttPermissionDescription": "قم بتشغيل هذا الأمر وتسجيل الخروج/الدخول: sudo usermod -aG input $USER",
-        "linuxPttSetupTitle": "يتطلب اضغط للتحدث إعدادًا",
+        "linuxPttSetupTitle": "يتطلب وضع «اضغط مع الاستمرار للتحدث» إعدادًا",
         "linuxPttSetupDescription": "يحتاج المستخدم الخاص بك إلى الوصول إلى أجهزة إدخال لوحة المفاتيح.",
         "linuxPttSetupNote": "بعد تشغيل الأمر، قم بتسجيل الخروج وتسجيل الدخول مرة أخرى.",
-        "hyprlandConfigWriteWarningTitle": "لن تستمر اختصارات Hyprland",
-        "hyprlandConfigWriteWarningDescription": "لا يمكن لـ OpenWhispr الكتابة إلى {{path}}، لذلك لن تنجو الاختصارات من إعادة تحميل تكوين Hyprland. تأكد من وجود الملف وقابليته للكتابة.",
-        "hyprlandUnbindDescription": "في Hyprland، يطالب OpenWhispr بالاختصار المحدد. سيتم إلغاء ربط أي ربط Hyprland موجود يستخدم نفس مجموعة المفاتيح عندما يسجل OpenWhispr اختصاره."
+        "hyprlandConfigWriteWarningTitle": "لن يتم حفظ اختصارات Hyprland بشكل دائم",
+        "hyprlandConfigWriteWarningDescription": "لا يمكن لـ OpenWhispr الكتابة إلى {{path}}، لذلك لن تبقى الاختصارات بعد إعادة تحميل تكوين Hyprland. تأكد من وجود الملف وقابليته للكتابة.",
+        "hyprlandUnbindDescription": "في Hyprland، يستحوذ OpenWhispr على الاختصار المحدد. سيتم فك أي ارتباط Hyprland موجود يستخدم مجموعة المفاتيح نفسها عندما يسجل OpenWhispr اختصاره."
       },
       "meetingHotkey": {
         "title": "مفتاح اختصار وضع الاجتماع",
@@ -2881,7 +2881,7 @@
       },
       "soundEffects": {
         "dictationSounds": "أصوات الإملاء",
-        "dictationSoundsDescription": "تشغيل نغمة عند بدء وايقاف التسجيل",
+        "dictationSoundsDescription": "تشغيل نغمة عند بدء التسجيل وإيقافه",
         "pauseMedia": "إيقاف مؤقت للوسائط",
         "pauseMediaDescription": "إيقاف الموسيقى مؤقتًا تلقائيًا عند بدء الإملاء",
         "title": "المؤثرات الصوتية"
@@ -2901,8 +2901,8 @@
       "clipboard": {
         "title": "الحافظة",
         "autoPaste": "لصق تلقائي",
-        "autoPasteDescription": "لصق النص المكتوب تلقائيًا في التطبيق النشط عند انتهاء الإملاء",
-        "keepInClipboard": "احتفظ بالنسخ النصي في الحافظة",
+        "autoPasteDescription": "لصق النص المفرَّغ تلقائيًا في التطبيق النشط عند انتهاء الإملاء",
+        "keepInClipboard": "الاحتفاظ بالنص المفرَّغ في الحافظة",
         "keepInClipboardDescription": "احتفظ بالنص المُملى في الحافظة حتى تتمكن من لصقه يدويًا إذا لزم الأمر"
       },
       "startup": {
@@ -2920,21 +2920,21 @@
       },
       "waylandPaste": {
         "title": "إعداد لصق Wayland",
-        "description": "يستخدم اللصق التلقائي على Wayland ydotool أو wtype. يفضل wtype على مركبات wlroots.",
+        "description": "يستخدم اللصق التلقائي على Wayland ydotool أو wtype. يفضل wtype على مُركِّبات wlroots.",
         "allGoodDesc": "اللصق التلقائي جاهز للعمل.",
         "recheck": "إعادة الفحص",
         "copy": "نسخ",
         "ydotoolDesc": "أداة أتمتة الإدخال لـ Wayland",
-        "wtypeDesc": "أداة أتمتة الإدخال المفضلة على مركبات wlroots",
-        "ydotooldDesc": "خفي لـ ydotool (حزمة منفصلة على Ubuntu/Pop!_OS)",
+        "wtypeDesc": "أداة أتمتة الإدخال المفضلة على مُركِّبات wlroots",
+        "ydotooldDesc": "خدمة ydotool الخلفية (حزمة منفصلة على Ubuntu/Pop!_OS)",
         "uinputDesc": "الوصول إلى جهاز إدخال النواة",
-        "uinputRuleFound": "القاعدة موجودة ولكنها غير نشطة. إعادة التشغيل قد تصلحها.",
+        "uinputRuleFound": "القاعدة موجودة ولكنها غير نشطة. من المفترض أن تصلحها إعادة التشغيل.",
         "uinputRuleMissing": "لم يتم العثور على قاعدة udev",
-        "inputGroup": "مجموعة إدخال",
-        "inputGroupDesc": "يجب أن يكون المستخدم في مجموعة الإدخال (يتطلب إعادة تسجيل الدخول)",
+        "inputGroup": "مجموعة input",
+        "inputGroupDesc": "يجب أن يكون المستخدم في مجموعة input (يتطلب إعادة تسجيل الدخول)",
         "service": "خدمة systemd",
         "serviceDesc": "ملف خدمة المستخدم لبدء التشغيل التلقائي لـ ydotoold",
-        "daemon": "خفي ydotoold",
+        "daemon": "خدمة ydotoold الخلفية",
         "daemonDesc": "يجب تشغيل خدمة الخلفية",
         "guide": {
           "open": "الدليل",
@@ -2946,12 +2946,12 @@
           },
           "wtype": {
             "step1Title": "تثبيت wtype",
-            "step1Desc": "wtype هي طريقة اللصق التلقائي الأساسية على Hyprland و Sway ومركبات wlroots الأخرى.",
+            "step1Desc": "wtype هي طريقة اللصق التلقائي الأساسية على Hyprland وSway ومُركِّبات wlroots الأخرى.",
             "step2Title": "التحقق من التثبيت"
           },
           "ydotoold": {
             "step1Title": "تثبيت ydotoold",
-            "step1Desc": "على Ubuntu و Pop!_OS، ydotoold هو حزمة منفصلة. على Fedora، هو مضمن مع ydotool."
+            "step1Desc": "على Ubuntu وPop!_OS، يُعد ydotoold حزمة منفصلة. على Fedora، هو مضمن مع ydotool."
           },
           "uinput": {
             "ruleFoundTitle": "تم تكوين قاعدة udev بالفعل",
@@ -2959,12 +2959,12 @@
             "rebootTitle": "إذا لم تساعد إعادة التحميل، أعد التشغيل",
             "rebootDesc": "في بعض التوزيعات، لا يتم تطبيق تغييرات udev إلا بعد إعادة تشغيل كاملة. أعد تشغيل الكمبيوتر وعد لإعادة الفحص.",
             "step1Title": "إنشاء قاعدة udev",
-            "step1Desc": "تمنح هذه القاعدة الوصول إلى /dev/uinput للمستخدمين في مجموعة الإدخال.",
+            "step1Desc": "تمنح هذه القاعدة الوصول إلى /dev/uinput للمستخدمين في مجموعة input.",
             "step2Title": "إعادة تحميل قواعد udev",
             "step2Desc": "قم بتطبيق القاعدة الجديدة دون إعادة التشغيل."
           },
           "group": {
-            "step1Title": "أضف مستخدمك إلى مجموعة الإدخال",
+            "step1Title": "أضف مستخدمك إلى مجموعة input",
             "step2Title": "تسجيل الخروج وتسجيل الدخول مرة أخرى",
             "step2Desc": "تغييرات المجموعة لا تدخل حيز التنفيذ إلا بعد جلسة تسجيل دخول جديدة. سجّل الخروج من سطح المكتب وسجل الدخول مرة أخرى، ثم أعد فتح OpenWhispr."
           },
@@ -2975,7 +2975,7 @@
             "step3Title": "إعادة التحميل والتمكين"
           },
           "daemon": {
-            "step1Title": "بدء الخفي",
+            "step1Title": "بدء الخدمة الخلفية",
             "step1Desc": "ابدأ ydotoold وقم بتمكينه ليعمل في كل عملية تسجيل دخول.",
             "step2Title": "التحقق من أنه قيد التشغيل"
           },
@@ -2990,13 +2990,13 @@
           "manualTitle": "أضف هذا إلى التكوين الخاص بك",
           "manualDesc": "قم بتكوينه بنفسك، ثم أعد البناء.",
           "flakeTitle": "التثبيت عبر flake الخاص بنا؟",
-          "flakeDesc": "إذا قمت بتثبيت OpenWhispr من flake، فسيقوم programs.openwhispr.enable بتشغيل ydotool، وحدة uinput، وعضويات المجموعة نيابة عنك.",
+          "flakeDesc": "إذا قمت بتثبيت OpenWhispr من flake، فسيقوم programs.openwhispr.enable بتفعيل ydotool ووحدة uinput وعضويات المجموعة نيابة عنك.",
           "rebuildNote": "قم بتشغيل sudo nixos-rebuild switch، ثم قم بتسجيل الخروج وتسجيل الدخول مرة أخرى حتى يسري تغيير المجموعة وقاعدة /dev/uinput. استبدل <you> باسم المستخدم الخاص بك."
         }
       },
       "updates": {
         "badges": {
-          "dev": "مطور",
+          "dev": "تطوير",
           "latest": "الأحدث",
           "update": "تحديث"
         },
@@ -3056,20 +3056,20 @@
       }
     },
     "permissions": {
-      "accessibilityDescription": "مطلوب لعمل اللصق التلقائي بعد النسخ النصي",
-      "accessibilityTitle": "إمكانية الوصول",
+      "accessibilityDescription": "مطلوب لعمل اللصق التلقائي بعد التفريغ",
+      "accessibilityTitle": "تسهيلات الاستخدام",
       "description": "اختبار وإدارة أذونات النظام المطلوبة لعمل OpenWhispr بشكل صحيح",
-      "microphoneDescription": "يلتقط صوتك للإملاء والنسخ النصي",
+      "microphoneDescription": "يلتقط صوتك للإملاء والتفريغ",
       "microphoneTitle": "الميكروفون",
       "resetAccessibility": {
-        "description": "سيؤدي هذا إلى إزالة OpenWhispr من أذونات إمكانية الوصول. ستحتاج إلى إعادة منح الوصول من قسم إمكانية الوصول ضمن الخصوصية والأمان في إعدادات النظام.",
-        "label": "إعادة تعيين أذونات إمكانية الوصول",
+        "description": "سيؤدي هذا إلى إزالة OpenWhispr من أذونات تسهيلات الاستخدام. ستحتاج إلى إعادة منح الوصول من قسم تسهيلات الاستخدام ضمن الخصوصية والأمان في إعدادات النظام.",
+        "label": "إعادة تعيين أذونات تسهيلات الاستخدام",
         "rowDescription": "إصلاح المشكلات بعد إعادة تثبيت التطبيق أو إعادة بنائه عن طريق إزالة وإضافة OpenWhispr في إعدادات النظام",
-        "title": "إعادة تعيين أذونات إمكانية الوصول"
+        "title": "إعادة تعيين أذونات تسهيلات الاستخدام"
       },
       "optional": "اختياري",
       "systemAudioTitle": "صوت النظام",
-      "systemAudioDescription": "نسخ الاجتماعات والمكالمات والمحاضرات والبودكاست وصوت النظام الآخر نصيًا.",
+      "systemAudioDescription": "تفريغ الاجتماعات والمكالمات والمحاضرات والبودكاست وصوت النظام الآخر.",
       "grantAccess": "منح الوصول",
       "test": "اختبار",
       "testAndGrant": "اختبار ومنح",
@@ -3079,16 +3079,16 @@
     },
     "privacy": {
       "cloudBackup": "نسخ احتياطي سحابي",
-      "cloudBackupDescription": "احتفظ بنسخة احتياطية من نسخك النصية وملاحظاتك على السحابة للوصول السلس عبر الأجهزة.",
+      "cloudBackupDescription": "احتفظ بنسخة احتياطية من نصوصك المفرَّغة وملاحظاتك على السحابة للوصول السلس عبر الأجهزة.",
       "cloudBackupTeamCaveat": "تتم مزامنة الملاحظات في مساحات الفريق والملاحظات التي قمت بمشاركتها دائمًا، بغض النظر عن هذا الإعداد.",
       "cloudNotesMigration": "النسخ الاحتياطي للملاحظات… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "تم نسخ جميع الملاحظات احتياطيًا",
       "description": "تحكم في البيانات التي تغادر جهازك. كل شيء متوقف افتراضيًا.",
       "title": "الخصوصية",
       "usageAnalytics": "تحليلات الاستخدام",
-      "usageAnalyticsDescription": "ساعدنا في تحسين OpenWhispr من خلال مشاركة مقاييس الأداء المجهولة. لا نرسل أبدًا محتوى النسخ النصي — فقط بيانات التوقيت والأخطاء.",
+      "usageAnalyticsDescription": "ساعدنا في تحسين OpenWhispr من خلال مشاركة مقاييس الأداء المجهولة. لا نرسل أبدًا محتوى التفريغ — فقط بيانات التوقيت والأخطاء.",
       "audioRetention": "الاحتفاظ بالصوت",
-      "audioRetentionDescription": "تخزين صوت الإملاء محليًا لإعادة النسخ والتنزيل. يتم حذف الملفات تلقائيًا بعد فترة الاحتفاظ. لا يتم تخزين صوت الاجتماعات أبدًا.",
+      "audioRetentionDescription": "تخزين صوت الإملاء محليًا لإعادة التفريغ والتنزيل. يتم حذف الملفات تلقائيًا بعد فترة الاحتفاظ. لا يتم تخزين صوت الاجتماعات أبدًا.",
       "audioRetentionDisabled": "معطل",
       "retentionDays_zero": "{{count}} أيام",
       "retentionDays_one": "{{count}} يوم",
@@ -3109,9 +3109,9 @@
       "clearAllAudio": "مسح كل الصوت",
       "clearAllAudioConfirm": "هل تريد حذف جميع الملفات الصوتية المخزنة؟ لا يمكن التراجع عن هذا.",
       "dataRetention": "الاحتفاظ بالبيانات",
-      "dataRetentionDescription": "تخزين النسخ النصية والصوت محليًا في سجلك. عند التعطيل، يتم لصق النسخ النصية ولكن لا يتم حفظها.",
-      "transcriptRetention": "الاحتفاظ بالنسخ النصي",
-      "transcriptRetentionDescription": "حذف النسخ النصية المحفوظة وصوتها تلقائيًا بعد هذه الفترة.",
+      "dataRetentionDescription": "تخزين النصوص المفرَّغة والصوت محليًا في سجلك. عند التعطيل، يتم لصق النصوص المفرَّغة ولكن لا يتم حفظها.",
+      "transcriptRetention": "الاحتفاظ بالنصوص المفرَّغة",
+      "transcriptRetentionDescription": "حذف النصوص المفرَّغة المحفوظة وصوتها تلقائيًا بعد هذه الفترة.",
       "transcriptRetentionForever": "للأبد",
       "hoursAgo": "منذ {{count}} ساعة",
       "hoursAgo_zero": "منذ {{count}} ساعات",
@@ -3142,9 +3142,9 @@
       "tabs": {
         "dictation": "الإملاء",
         "noteRecording": "تسجيل الملاحظات",
-        "upload": "تحميل الصوت"
+        "upload": "رفع ملف صوتي"
       },
-      "selfHostedStreamingNote": "يتطلب خادمًا يدعم النسخ النصي المتدفق."
+      "selfHostedStreamingNote": "يتطلب خادمًا يدعم التفريغ المتدفق."
     },
     "llms": {
       "title": "نماذج اللغة",
@@ -3159,15 +3159,15 @@
     },
     "noteFormatting": {
       "autoGenerateTitle": "إنشاء عناوين الملاحظات تلقائيًا",
-      "autoGenerateTitleDescription": "استخدم الذكاء الاصطناعي لإنشاء عنوان قصير للملاحظات بعد النسخ النصي أو التحسين"
+      "autoGenerateTitleDescription": "استخدم الذكاء الاصطناعي لإنشاء عنوان قصير للملاحظات بعد التفريغ أو التحسين"
     },
     "transcription": {
       "customSetup": "إعداد مخصص",
       "customSetupDescription": "استخدم المزود ومفتاح API الخاص بك.",
-      "description": "اختر كيف يقوم OpenWhispr بنسخ صوتك نصيًا",
+      "description": "اختر كيف يفرّغ OpenWhispr صوتك",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
-        "providers": "مزودي الخدمات السحابية",
+        "providers": "مزودو الخدمات السحابية",
         "local": "محلي",
         "selfHosted": "مستضاف ذاتيًا",
         "openwhisprDesc": "دقة موثوقة. لا حاجة للإعداد.",
@@ -3180,7 +3180,7 @@
       "title": "تحويل الكلام إلى نص",
       "toasts": {
         "switchedCloud": {
-          "description": "سيستخدم النسخ النصي الخدمة السحابية لـ OpenWhispr.",
+          "description": "سيستخدم التفريغ الخدمة السحابية لـ OpenWhispr.",
           "title": "تم التبديل إلى OpenWhispr Cloud"
         },
         "switchedCustom": {
@@ -3188,12 +3188,12 @@
           "title": "تم التبديل إلى الإعداد المخصص"
         },
         "switchedProviders": {
-          "title": "مزودي الخدمات السحابية",
+          "title": "مزودو الخدمات السحابية",
           "description": "استخدام مفاتيح API الخاصة بك."
         },
         "switchedLocal": {
           "title": "على الجهاز",
-          "description": "يعمل النسخ النصي محليًا على جهازك."
+          "description": "يعمل التفريغ محليًا على جهازك."
         },
         "switchedSelfHosted": {
           "title": "مستضاف ذاتيًا",
@@ -3201,38 +3201,38 @@
         }
       },
       "gpuDevice": {
-        "title": "وحدة معالجة الرسومات للنسخ النصي",
+        "title": "وحدة معالجة الرسومات للتفريغ",
         "description": "وحدة معالجة الرسومات المستخدمة لتحويل الكلام إلى نص محليًا"
       },
       "diarization": {
         "title": "تحديد المتحدث",
-        "description": "تحديد المتحدثين الفرديين في تسجيلات الاجتماعات",
+        "description": "التعرف على كل متحدث على حدة في تسجيلات الاجتماعات",
         "modelsReady": "النماذج جاهزة",
         "deleteModels": "حذف النماذج"
       },
-      "transcriptionPreview": "معاينة النسخ النصي المباشر",
-      "transcriptionPreviewDescription": "إظهار النسخ النصي في نافذة عائمة قبل التنظيف",
+      "transcriptionPreview": "معاينة التفريغ المباشر",
+      "transcriptionPreviewDescription": "إظهار التفريغ في نافذة عائمة قبل التنقيح",
       "vad": {
         "title": "اكتشاف النشاط الصوتي",
-        "description": "تكوين كيفية اكتشاف وتقسيم Silero VAD للكلام للنسخ النصي لـ Whisper المحلي",
+        "description": "تكوين كيفية اكتشاف Silero VAD للكلام وتقسيمه عند التفريغ المحلي باستخدام Whisper",
         "toggles": {
           "dictation": {
             "title": "Silero VAD للإملاء",
-            "description": "تمكين اكتشاف النشاط الصوتي للنسخ النصي للإملاء المحلي"
+            "description": "تمكين اكتشاف النشاط الصوتي لتفريغ الإملاء المحلي"
           },
           "noteRecording": {
             "title": "Silero VAD لتسجيل الملاحظات",
-            "description": "تمكين اكتشاف النشاط الصوتي للنسخ النصي لتسجيل الملاحظات المحلي"
+            "description": "تمكين اكتشاف النشاط الصوتي لتفريغ تسجيل الملاحظات المحلي"
           },
           "meeting": {
             "title": "Silero VAD للاجتماعات",
-            "description": "تمكين اكتشاف النشاط الصوتي للنسخ النصي للاجتماعات المحلي"
+            "description": "تمكين اكتشاف النشاط الصوتي لتفريغ الاجتماعات المحلي"
           }
         },
         "fields": {
           "threshold": {
             "label": "حد VAD",
-            "info": "الاحتمالية التي يتم تصنيف الإطار ككلام فوقها."
+            "info": "الاحتمالية التي يُصنَّف الإطار فوقها على أنه كلام."
           },
           "minSpeechDurationMs": {
             "label": "الحد الأدنى لمدة الكلام (ملي ثانية)",
@@ -3240,7 +3240,7 @@
           },
           "minSilenceDurationMs": {
             "label": "الحد الأدنى لمدة الصمت (ملي ثانية)",
-            "info": "يجب أن يستمر الصمت على الأقل هذا الطول لإنهاء مقطع الكلام. يتم الاحتفاظ بالتوقفات الأقصر داخل المقطع."
+            "info": "يجب أن يستمر الصمت هذه المدة على الأقل لإنهاء مقطع الكلام. يتم الاحتفاظ بالتوقفات الأقصر داخل المقطع."
           },
           "maxSpeechDurationS": {
             "label": "الحد الأقصى لمدة الكلام (ثانية)",
@@ -3252,14 +3252,14 @@
           },
           "samplesOverlap": {
             "label": "تداخل العينات (ثانية)",
-            "info": "الصوت المنقول من كل مقطع إلى المقطع التالي لتجنب الانقطاعات المفاجئة عند التسلسل."
+            "info": "الصوت المنقول من كل مقطع إلى المقطع التالي لتجنب الانقطاعات المفاجئة عند الدمج."
           }
         }
       }
     },
     "intelligence": {
       "gpuDevice": {
-        "title": "وحدة معالجة الرسومات للذكاء",
+        "title": "وحدة معالجة الرسومات للذكاء الاصطناعي",
         "description": "وحدة معالجة الرسومات المستخدمة لمعالجة الذكاء الاصطناعي المحلي"
       }
     },
@@ -3271,7 +3271,7 @@
     "enterpriseCheckout": {
       "title": "الترقية إلى Enterprise",
       "description": "اختر مساحة عمل والمقاعد ودورة الفوترة. يتم الدفع في Stripe Checkout.",
-      "allSubscribed": "مساحات العمل التي تمتلكها موجودة بالفعل في Enterprise أو لا يمكن تغييرها هنا. لإجراء تغييرات على الخطة، اتصل بالمبيعات.",
+      "allSubscribed": "مساحات العمل التي تمتلكها على خطة Enterprise بالفعل أو لا يمكن تغييرها هنا. لإجراء تغييرات على الخطة، اتصل بالمبيعات.",
       "workspaceLabel": "مساحة العمل",
       "seatsLabel": "المقاعد",
       "seatsHint_zero": "{{count}} مقاعد قيد الاستخدام حاليًا",
@@ -3289,7 +3289,7 @@
       "prorationNote": "تتم إضافة الفرق التناسبي إلى فاتورتك القادمة.",
       "errors": {
         "previewFailed": "تعذر تحميل معاينة الترقية.",
-        "alreadyEnterprise": "مساحة العمل هذه موجودة بالفعل في Enterprise.",
+        "alreadyEnterprise": "مساحة العمل هذه على خطة Enterprise بالفعل.",
         "subscriptionInactive": "اشتراك مساحة العمل هذه غير نشط. قم بتحديث تفاصيل الفوترة وحاول مرة أخرى.",
         "priceNotConfigured": "أسعار Enterprise غير متوفرة الآن. يرجى الاتصال بالمبيعات."
       },
@@ -3335,18 +3335,18 @@
       "transcriptionLabel": "لغة التفريغ الصوتي",
       "transcriptionDescription": "اختر اللغة التي تتحدث بها للحصول على تفريغ صوتي أكثر دقة",
       "chineseScriptLabel": "الكتابة الصينية (الإملاء)",
-      "chineseScriptDescription": "عند اكتشاف اللغة الصينية، سيتم تحويل النص المُملى إلى أحرف مبسطة أو تقليدية. اللغة الصينية المنطوقة هي نفسها في كلتا الحالتين؛ Whisper يُرجع نصاً واحداً فقط.",
-      "chineseScriptAsTranscribed": "إبقاء كما تم تفريغه",
+      "chineseScriptDescription": "عند اكتشاف اللغة الصينية، سيتم تحويل النص المُملى إلى أحرف مبسطة أو تقليدية. اللغة الصينية المنطوقة هي نفسها في كلتا الحالتين؛ لا يُرجع Whisper سوى نظام كتابة واحد.",
+      "chineseScriptAsTranscribed": "الإبقاء على النص كما تم تفريغه",
       "chineseScriptSimplified": "مبسطة (简体)",
       "chineseScriptTraditional": "تقليدية (繁體)"
     },
     "noteFiles": {
       "title": "حفظ الملاحظات كملفات",
-      "description": "حفظ الملاحظات والنصوص تلقائيًا كملفات على القرص، منظمة في مجلدات",
+      "description": "حفظ الملاحظات والنصوص المفرَّغة تلقائيًا كملفات على القرص، منظمة في مجلدات",
       "path": "موقع الحفظ",
       "changePath": "تغيير الموقع",
       "rebuild": "إعادة بناء جميع الملفات",
-      "rebuildDescription": "إعادة مزامنة جميع الملاحظات والنصوص على القرص",
+      "rebuildDescription": "إعادة مزامنة جميع الملاحظات والنصوص المفرَّغة على القرص",
       "rebuildError": {
         "title": "فشل إعادة البناء",
         "description": "تعذر إعادة بناء ملفات الملاحظات. تأكد من تفعيل الميزة وأن المجلد قابل للكتابة."
@@ -3355,7 +3355,7 @@
     "meeting": {
       "speakerDetection": {
         "title": "تحديد وتسمية المتحدثين",
-        "description": "عند الإيقاف، تظهر النصوص كـ \"أنت\" و \"الآخرين\""
+        "description": "عند الإيقاف، تعرض النصوص المفرَّغة المتحدثين كـ \"أنت\" و\"آخرون\""
       }
     }
   },
@@ -3372,7 +3372,7 @@
   "menu": {
     "appLabel": "OpenWhispr",
     "quit": "إنهاء OpenWhispr",
-    "speech": "الكلام",
+    "speech": "النطق",
     "settings": "الإعدادات...",
     "help": "المساعدة",
     "learnMore": "معرفة المزيد",
@@ -3409,7 +3409,7 @@
       "message": "لم يتمكن OpenWhispr من تفعيل مفتاح اختصار Globe.",
       "details": {
         "unknown": "حدث خطأ غير معروف أثناء بدء مستمع Globe.",
-        "fallback": "سيظل اختصار مفتاح Globe معطلاً؛ ستستمر اختصارات لوحة المفاتيح الحالية في العمل.",
+        "fallback": "سيظل اختصار مفتاح Globe معطلًا؛ ستستمر اختصارات لوحة المفاتيح الحالية في العمل.",
         "devHint": "شغّل `npm run compile:globe` وأعد بناء التطبيق لإعادة إنشاء ملف المستمع الثنائي.",
         "reinstallHint": "حاول إعادة تثبيت OpenWhispr أو اتصل بالدعم إذا استمرت المشكلة."
       }
@@ -3420,9 +3420,9 @@
       "callbackRequired": "دالة الاستدعاء مطلوبة لإعداد اختصار لوحة المفاتيح",
       "globeOnlyMac": "مفتاح Globe متوفر فقط على نظام macOS.",
       "fnCombinationUnsupported": "يمكن استخدام مفتاح Globe/Fn بمفرده فقط.",
-      "mouseButtonOnlyMac": "اختصارات أزرار الماوس مدعومة حالياً على نظام macOS فقط.",
+      "mouseButtonOnlyMac": "اختصارات أزرار الماوس مدعومة حاليًا على نظام macOS فقط.",
       "alreadyRegistered": "\"{{hotkey}}\" مسجل بالفعل بواسطة تطبيق آخر.",
-      "osReserved": "قد يكون \"{{hotkey}}\" محجوزاً بواسطة بيئة سطح المكتب لديك.",
+      "osReserved": "قد يكون \"{{hotkey}}\" محجوزًا بواسطة بيئة سطح المكتب لديك.",
       "registrationFailed": "تعذر تسجيل \"{{hotkey}}\". قد يكون قيد الاستخدام بواسطة تطبيق آخر.",
       "updateFailedCheckFormat": "فشل تحديث الاختصار إلى \"{{hotkey}}\". تأكد من أن التنسيق صالح.",
       "trySuggestions": "جرّب: {{suggestions}}",
@@ -3441,7 +3441,7 @@
     "paymentFailed": "لم نتمكن من معالجة دفعتك",
     "weeklyLimit": "لقد وصلت إلى حدك الأسبوعي",
     "pastDueDescription": "أنت الآن على الخطة المجانية — لا تقلق، ما زلت تحصل على {{limit}} كلمة في الأسبوع.\nقم بتحديث طريقة الدفع للعودة إلى خطة Pro غير المحدودة.",
-    "limitDescription": "تم استخدام {{used}} من {{limit}} كلمة.\nتم حفظ النص الخاص بك ولصقه.",
+    "limitDescription": "تم استخدام {{used}} من {{limit}} كلمة.\nتم حفظ نصك المفرَّغ ولصقه.",
     "updatePayment": "تحديث طريقة الدفع",
     "updatePaymentDescription": "عد إلى تفريغ صوتي غير محدود مع Pro.",
     "upgradeToPro": "الترقية إلى Pro",
@@ -3459,7 +3459,7 @@
     "close": "إغلاق"
   },
   "windows": {
-    "pttUnavailable": "مستمع اضغط للتحدث الأصلي غير متوفر"
+    "pttUnavailable": "المستمع الأصلي لميزة «اضغط للتحدث» غير متوفر"
   },
   "common": {
     "continue": "متابعة",
@@ -3476,10 +3476,10 @@
     "active": "نشط",
     "managedByOrg": "مُدار بواسطة مؤسستك",
     "freeAccountRequired": "حساب مجاني مطلوب",
-    "comingSoon": "قريباً",
+    "comingSoon": "قريبًا",
     "cloud": "سحابي",
     "local": "محلي",
-    "apiKey": "API Key",
+    "apiKey": "مفتاح API",
     "model": "النموذج",
     "loading": "جاري التحميل...",
     "unknown": "غير معروف",
@@ -3512,7 +3512,7 @@
         "generic": "فشل طلب الشبكة. تحقق من اتصالك.",
         "dnsBlocked": "لا يستطيع DNS تحليل openwhispr.com — قد يقوم مانع الإعلانات أو مرشح بحظره.",
         "refused": "تم رفض الاتصال — على الأرجح بسبب جدار حماية أو VPN.",
-        "timeout": "انتهت مهلة الشبكة — بسبب VPN أو بوابة مقيدة أو اتصال غير مستقر.",
+        "timeout": "انتهت مهلة الشبكة — بسبب VPN أو صفحة تسجيل دخول للشبكة (captive portal) أو اتصال غير مستقر.",
         "tls": "فشلت مصافحة TLS — تحقق من ساعة نظامك أو وجود وكيل شبكة خاص بالشركة.",
         "fallback": "لا يمكن الوصول إلى السحابة — يتم استخدام المحرك المحلي لهذا التسجيل."
       }
@@ -3542,19 +3542,19 @@
     "corti": {
       "clientId": "معرف العميل (Client ID)",
       "clientSecret": "سر العميل (Client Secret)",
-      "apiKey": "API Key",
+      "apiKey": "مفتاح API",
       "environment": "منطقة البيانات",
       "tenant": "المستأجر"
     },
     "tinfoil": {
-      "transportNote": "يقوم Tinfoil بالبث باستخدام Voxtral Mini 4B، ويدمج الدفعات باستخدام Voxtral Small 24B.",
+      "transportNote": "يستخدم Tinfoil نموذج Voxtral Mini 4B للتفريغ المباشر (البث)، ونموذج Voxtral Small 24B للمعالجة الدفعية.",
       "docsLink": "قراءة الوثائق"
     }
   },
   "cleanupPrompt": "التنظيف",
   "dictionarySuffix": "لاحقة القاموس",
   "emailVerification": {
-    "checkEmailDescription": "لقد أرسلنا رابط تحقق إلى بريدك الإلكتروني على",
+    "checkEmailDescription": "لقد أرسلنا رابط تحقق إلى بريدك الإلكتروني:",
     "checkEmailTitle": "تم إرسال بريد التحقق",
     "errors": {
       "resendFailed": "لم نتمكن من إعادة إرسال البريد الإلكتروني. يرجى المحاولة مرة أخرى.",
@@ -3562,7 +3562,7 @@
     },
     "resendButton": "إعادة إرسال بريد التحقق",
     "resendIn": "إعادة الإرسال بعد {{seconds}} ث",
-    "verifiedDescription": "حسابك جاهز تماماً.",
+    "verifiedDescription": "حسابك جاهز تمامًا.",
     "verifiedTitle": "تم التحقق",
     "waiting": "في انتظار التحقق",
     "backToSignIn": "العودة إلى تسجيل الدخول"
@@ -3585,11 +3585,11 @@
       "description": "لقد أرسلنا رابط إعادة تعيين كلمة المرور إلى",
       "help": "لم تتلق البريد الإلكتروني؟ تحقق من مجلد البريد العشوائي أو حاول مرة أخرى.",
       "title": "تحقق من بريدك الإلكتروني",
-      "tryAnother": "جرب بريداً إلكترونياً آخر"
+      "tryAnother": "جرب بريدًا إلكترونيًا آخر"
     },
     "title": "إعادة تعيين كلمة المرور الخاصة بك"
   },
-  "actionPrompt": "موجه الإجراء (Action Prompt)",
+  "actionPrompt": "موجه الإجراء",
   "hotkeyGuidance": {
     "blockedDescription": "تم حظر هذه الاختصارات لأنها تُستخدم عادةً بواسطة النظام.",
     "blockedTitle": "الاختصارات المحظورة",
@@ -3628,7 +3628,7 @@
     "showFewer": "إظهار أقل",
     "title": "دليل الاختصارات",
     "validationRules": {
-      "0": "يجب استخدام معدّل واحد على الأقل (مثل Ctrl, Alt, Shift, وما إلى ذلك)",
+      "0": "يجب استخدام مفتاح معدّل واحد على الأقل (Ctrl أو Alt أو Shift، وما إلى ذلك)",
       "1": "لا يمكن استخدام اختصارات النظام المحجوزة",
       "2": "المفاتيح الفردية وحدها غير مسموح بها",
       "3": "قد تتعارض بعض التركيبات مع تطبيقات أخرى"
@@ -3653,7 +3653,7 @@
     "remove": "إزالة الاختصار",
     "addAnother": "إضافة اختصار آخر",
     "duplicate": "تمت إضافته بالفعل",
-    "singleModifierNeedsRightSide": "لا يمكن أن يكون {{key}} بمفرده اختصاراً. اضغط على {{alternative}} بدلاً من ذلك، أو أضف مفتاحاً ثانياً."
+    "singleModifierNeedsRightSide": "لا يمكن أن يكون {{key}} بمفرده اختصارًا. اضغط على {{alternative}} بدلًا من ذلك، أو أضف مفتاحًا ثانيًا."
   },
   "languageSelector": {
     "noLanguagesFound": "لم يتم العثور على لغات",
@@ -3664,20 +3664,20 @@
     "errors": {
       "unableToAccess": "تعذر الوصول إلى الميكروفون. يرجى التحقق من الأذونات."
     },
-    "helpText": "حدد ميكروفوناً معيناً أو استخدم الإعداد الافتراضي للنظام.",
+    "helpText": "حدد ميكروفونًا معينًا أو استخدم الإعداد الافتراضي للنظام.",
     "inputDevice": "جهاز الإدخال",
     "noBuiltInDetected": "لم يتم اكتشاف ميكروفون مدمج. سيتم استخدام الإعداد الافتراضي للنظام.",
     "preferBuiltIn": {
       "description": "قد تتسبب الميكروفونات الخارجية في حدوث تأخير أو تقليل جودة التفريغ الصوتي",
       "label": "تفضيل الميكروفون المدمج"
     },
-    "selectPlaceholder": "حدد ميكروفوناً",
+    "selectPlaceholder": "حدد ميكروفونًا",
     "systemDefault": "الافتراضي للنظام",
     "unknownDevice": "جهاز غير معروف",
-    "using": "مستخدم حالياً: {{device}}",
+    "using": "مستخدم حاليًا: {{device}}",
     "warmHold": {
-      "label": "إبقاء الميكروفون نشطاً",
-      "description": "بعد انتهاء الإملاء، أبقِ الميكروفون مفتوحاً لفترة وجيزة حتى يبدأ الإملاء التالي على الفور دون اقتطاع أي شيء",
+      "label": "إبقاء الميكروفون نشطًا",
+      "description": "بعد انتهاء الإملاء، أبقِ الميكروفون مفتوحًا لفترة وجيزة حتى يبدأ الإملاء التالي على الفور دون اقتطاع أي شيء",
       "privacyNote": "بينما يكون الميكروفون قيد التشغيل، يظل مؤشر استخدام الميكروفون في نظامك مضاءً. لا يتم تسجيل أي شيء بين الإملاءات.",
       "options": {
         "0": "إيقاف",
@@ -3697,20 +3697,20 @@
       "fedoraRhel": "# Fedora / RHEL",
       "openSuse": "# openSUSE Tumbleweed / Leap"
     },
-    "installPrefix": "للصق النص التلقائي، قم بتثبيت",
-    "methodReady": "للصق النص التلقائي",
-    "noteXwaylandAlso": "ملاحظة: بالنسبة لتطبيقات XWayland، تعمل xdotool أيضاً.",
+    "installPrefix": "لتفعيل اللصق التلقائي للنص، ثبّت",
+    "methodReady": "للصق التلقائي للنص",
+    "noteXwaylandAlso": "ملاحظة: بالنسبة لتطبيقات XWayland، تعمل xdotool أيضًا.",
     "noteXwaylandOnly": "ملاحظة: اللصق التلقائي يعمل مع تطبيقات XWayland فقط.",
     "optionalEnableTitle": "اختياري: تفعيل اللصق التلقائي",
     "readyTitle": "اللصق التلقائي جاهز",
     "recheck": "إعادة التحقق",
     "recheckChecking": "جاري التحقق...",
     "title": "اللصق التلقائي",
-    "usingMethodPrefix": "باستخدام",
-    "waylandClipboardDescription": "اللصق التلقائي غير متوفر في جلسة Wayland هذه. سيقوم OpenWhispr بنسخ النص إلى الحافظة الخاصة بك لتتمكن من لصقه يدوياً باستخدام Ctrl+V.",
+    "usingMethodPrefix": "يتم استخدام",
+    "waylandClipboardDescription": "اللصق التلقائي غير متوفر في جلسة Wayland هذه. سيقوم OpenWhispr بنسخ النص إلى الحافظة الخاصة بك لتتمكن من لصقه يدويًا باستخدام Ctrl+V.",
     "waylandClipboardTitle": "وضع الحافظة في Wayland",
     "windowsReady": "نظام Windows يدعم اللصق التلقائي بشكل افتراضي. لا يتطلب أي إعداد!",
-    "withoutToolPrefix": "بدون هذه الأداة، سيقوم OpenWhispr بنسخ النص إلى الحافظة الخاصة بك. يمكنك بعد ذلك اللصق يدوياً باستخدام Ctrl+V.",
+    "withoutToolPrefix": "بدون هذه الأداة، سيقوم OpenWhispr بنسخ النص إلى الحافظة الخاصة بك. يمكنك بعد ذلك اللصق يدويًا باستخدام Ctrl+V.",
     "wtypeFallbackDescription": "يُعد wtype الطريقة المفضلة للصق التلقائي في مركب wlroots هذا. يتوفر بديل آخر، ولكنه قد يكون أقل موثوقية.",
     "xwaylandAppsOnly": "اللصق التلقائي يعمل مع تطبيقات XWayland فقط"
   },
@@ -3779,7 +3779,7 @@
     "upgradeZeroRetention": "عدم الاحتفاظ بالبيانات",
     "upgradeEnterpriseSecurity": "أمان على مستوى المؤسسات SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "معرفة المزيد",
-    "integrations": "عمليات الدمج",
+    "integrations": "التكاملات",
     "defaultUser": "مستخدم",
     "notSignedIn": "لم يتم تسجيل الدخول",
     "chat": "الدردشة",
@@ -3800,13 +3800,13 @@
     "archive": "أرشفة",
     "unarchive": "إلغاء الأرشفة",
     "delete": "حذف",
-    "deleteConfirm": "سيتم حذف هذه المحادثة نهائياً. لا يمكن التراجع عن هذا الإجراء.",
-    "editTitle": "انقر نقراً مزدوجاً لتعديل العنوان",
+    "deleteConfirm": "سيتم حذف هذه المحادثة نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+    "editTitle": "انقر نقرًا مزدوجًا لتعديل العنوان",
     "untitled": "بدون عنوان",
     "searchChats": "البحث في المحادثات",
     "searchTitle": "البحث في المحادثات",
     "searchDescription": "البحث في جميع محادثاتك",
-    "newChatEmpty": "اسأل عن ملاحظاتك أو نصوصك أو أي شيء آخر"
+    "newChatEmpty": "اسأل عن ملاحظاتك أو نصوصك المفرَّغة أو أي شيء آخر"
   },
   "support": {
     "documentation": "الوثائق",
@@ -3815,14 +3815,14 @@
     "submitBug": "الإبلاغ عن خطأ"
   },
   "postMigration": {
-    "title": "مرحباً بعودتك إلى OpenWhispr",
+    "title": "مرحبًا بعودتك إلى OpenWhispr",
     "description": "تم نقل ملاحظاتك وإعداداتك من الإصدار السابق. ومع ذلك، يعامل macOS هذا كتطبيق جديد، لذا يجب منح بعض الأذونات مرة أخرى.",
     "done": "تم",
-    "remindLater": "ذكرني لاحقاً"
+    "remindLater": "ذكرني لاحقًا"
   },
   "apiKeyInput": {
     "placeholder": "الصق مفتاح API الخاص بك",
-    "label": "API Key",
+    "label": "مفتاح API",
     "save": "حفظ مفتاح API",
     "cancelEdit": "إلغاء التعديل",
     "edit": "تعديل مفتاح API",
@@ -3831,8 +3831,8 @@
     "addButton": "إضافة"
   },
   "gpu": {
-    "transcriptionBanner": "تسريع التفريغ الصوتي باستخدام تسريع GPU",
-    "reasoningBanner": "تسريع معالجة الذكاء الاصطناعي باستخدام تسريع GPU",
+    "transcriptionBanner": "اجعل التفريغ الصوتي أسرع باستخدام تسريع GPU",
+    "reasoningBanner": "اجعل معالجة الذكاء الاصطناعي أسرع باستخدام تسريع GPU",
     "enableButton": "تفعيل GPU",
     "active": "تسريع GPU نشط",
     "ready": "تسريع GPU جاهز",
@@ -3861,8 +3861,8 @@
     "toolActivity": {
       "verbs": {
         "invoking": "جاري استدعاء",
-        "calling": "جاري الاتصال",
-        "using": "استخدام"
+        "calling": "جاري تنفيذ",
+        "using": "جاري استخدام"
       },
       "toolFallback": "أداة"
     }
@@ -3887,12 +3887,12 @@
   "commandSearch": {
     "allSpaces": "جميع المساحات",
     "title": "البحث",
-    "description": "البحث في جميع الملاحظات والنصوص",
+    "description": "البحث في جميع الملاحظات والنصوص المفرَّغة",
     "shortPlaceholder": "بحث",
-    "placeholder": "البحث في الملاحظات والنصوص...",
+    "placeholder": "البحث في الملاحظات والنصوص المفرَّغة...",
     "sections": {
       "notes": "الملاحظات",
-      "transcripts": "النصوص",
+      "transcripts": "النصوص المفرَّغة",
       "jumpTo": "الانتقال إلى"
     },
     "noResults": "لا توجد نتائج",
@@ -3917,7 +3917,7 @@
     "askPlaceholder": "اسأل عن أي شيء...",
     "send": "إرسال",
     "title": "الدردشة",
-    "emptyState": "اسأل سؤالاً حول هذه الملاحظة",
+    "emptyState": "اسأل سؤالًا حول هذه الملاحظة",
     "dock": "إرساء في الشريط الجانبي",
     "undock": "إلغاء الإرساء من الشريط الجانبي",
     "close": "إغلاق الدردشة",
@@ -3931,8 +3931,8 @@
     "ready": "جاهز",
     "copy": "نسخ",
     "copied": "تم النسخ",
-    "collapse": "طي النص",
-    "waitingForInput": "قل شيئاً..."
+    "collapse": "طي النص المفرَّغ",
+    "waitingForInput": "قل شيئًا..."
   },
   "transcript": {
     "speaker": {
@@ -3943,17 +3943,17 @@
   },
   "dictationTranslation": {
     "title": "ترجمة الإملاء",
-    "description": "اختصار مخصص يقوم بلصق الإملاء الخاص بك مترجماً إلى لغة أخرى",
+    "description": "اختصار مخصص يقوم بلصق الإملاء الخاص بك مترجمًا إلى لغة أخرى",
     "enabled": "تفعيل ترجمة الإملاء",
-    "enabledDescription": "يتم تنظيف الإملاءات التي يتم بدءها باستخدام اختصار الترجمة ثم ترجمتها قبل لصقها",
+    "enabledDescription": "الإملاءات التي تبدأ باختصار الترجمة تُنظَّف ثم تُترجم قبل لصقها",
     "sourceLanguage": "اللغة المنطوقة",
-    "sourceLanguageDescription": "اللغة التي تملي بها — يتعامل الوضع التلقائي أيضاً مع الإملاء متعدد اللغات",
+    "sourceLanguageDescription": "اللغة التي تملي بها — يتعامل الوضع التلقائي أيضًا مع الإملاء متعدد اللغات",
     "targetLanguage": "ترجم إلى",
     "targetLanguageDescription": "لغة النص الملصق",
     "targetLanguageMissing": "اختر لغة مستهدفة لتفعيل اختصار الترجمة",
     "selectLanguage": "حدد اللغة...",
     "prompt": {
-      "title": "موجه الترجمة (Translation Prompt)",
+      "title": "موجه الترجمة",
       "description": "خصص كيف يترجم النموذج الإملاء الخاص بك"
     },
     "hotkeyHint": "قم بتعيين الاختصار من خلال الإعدادات ← اختصارات لوحة المفاتيح ← اختصار الترجمة",
