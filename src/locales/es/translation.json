@@ -211,8 +211,8 @@
         "microphoneDescription": "Convierte la voz en texto.",
         "accessibilityDescription": "Pega texto en tu aplicación activa.",
         "systemAudioTitle": "Audio del Sistema",
-        "systemAudioDescription": "Captura audio de otras aplicaciones.",
-        "screenContextDescription": "Contexto de pantalla, siempre privado.",
+        "systemAudioDescription": "Necesario para capturar audio en las notas de reuniones.",
+        "screenContextDescription": "Comparte el contexto de pantalla con el asistente de voz.",
         "enable": "Activar",
         "enabled": "Activado"
       },

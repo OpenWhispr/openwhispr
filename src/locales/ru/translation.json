@@ -211,8 +211,8 @@
         "microphoneDescription": "Преобразует речь в текст.",
         "accessibilityDescription": "Вставляет текст в активное приложение.",
         "systemAudioTitle": "Системное аудио",
-        "systemAudioDescription": "Записывает звук из других приложений.",
-        "screenContextDescription": "Контекст экрана, всегда приватно.",
+        "systemAudioDescription": "Необходимо для захвата звука в заметках о встречах.",
+        "screenContextDescription": "Делитесь контекстом экрана с голосовым помощником.",
         "enable": "Включить",
         "enabled": "Включено"
       },

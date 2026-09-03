@@ -211,8 +211,8 @@
         "microphoneDescription": "音声をテキストに変換します。",
         "accessibilityDescription": "アクティブなアプリにテキストを貼り付けます。",
         "systemAudioTitle": "システムオーディオ",
-        "systemAudioDescription": "ほかのアプリの音声を取り込みます。",
-        "screenContextDescription": "画面コンテキスト、常にプライベート。",
+        "systemAudioDescription": "会議メモで音声を取り込むために必要です。",
+        "screenContextDescription": "画面コンテキストを音声アシスタントと共有します。",
         "enable": "有効にする",
         "enabled": "有効"
       },

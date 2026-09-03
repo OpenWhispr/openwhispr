@@ -39,6 +39,7 @@ type PermissionRowId = "microphone" | "accessibility" | "system-audio" | "screen
 interface PermissionRowProps {
   title: string;
   description: string;
+  badge?: string;
   granted: boolean;
   busy: boolean;
   disabled?: boolean;
@@ -50,6 +51,7 @@ interface PermissionRowProps {
 function PermissionRow({
   title,
   description,
+  badge,
   granted,
   busy,
   disabled = false,
@@ -80,6 +82,11 @@ function PermissionRow({
       <div className="min-w-0 flex-1 text-left">
         <p className="text-sm font-medium leading-5 text-[var(--onboarding-text-primary)]">
           {title}
+          {badge && (
+            <span className="ml-1.5 inline-flex items-center rounded-full bg-[var(--onboarding-surface-tertiary)] px-2 py-0.5 align-middle text-[10px] font-normal leading-4 text-[var(--onboarding-text-secondary)]">
+              {badge}
+            </span>
+          )}
         </p>
         <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-[var(--onboarding-text-secondary)]">
           {description}
@@ -173,6 +180,7 @@ export default function CompactPermissionsStep({
               <PermissionRow
                 title={t("onboarding.permissions.accessibilityTitle")}
                 description={t("onboarding.rehaul.permissions.accessibilityDescription")}
+                badge={t("onboarding.permissions.recommended")}
                 granted={permissions.accessibilityPermissionGranted}
                 busy={busyPermission === "accessibility"}
                 iconSrc={accessibilityIcon}
@@ -188,6 +196,7 @@ export default function CompactPermissionsStep({
               <PermissionRow
                 title={t("onboarding.rehaul.permissions.systemAudioTitle")}
                 description={t("onboarding.rehaul.permissions.systemAudioDescription")}
+                badge={t("onboarding.permissions.optional")}
                 granted={systemAudio.granted}
                 busy={busyPermission === "system-audio"}
                 disabled={!canRequestSystemAudio}
@@ -202,6 +211,7 @@ export default function CompactPermissionsStep({
               <PermissionRow
                 title={t("dictationAgent.screenContext.title")}
                 description={t("onboarding.rehaul.permissions.screenContextDescription")}
+                badge={t("onboarding.permissions.optional")}
                 granted={screenContext.enabled && screenContext.granted}
                 busy={busyPermission === "screen-context"}
                 icon={

@@ -211,8 +211,8 @@
         "microphoneDescription": "将语音转换为文本。",
         "accessibilityDescription": "将文本粘贴到当前应用。",
         "systemAudioTitle": "系统音频",
-        "systemAudioDescription": "捕获其他应用的音频。",
-        "screenContextDescription": "屏幕上下文，始终私密。",
+        "systemAudioDescription": "在会议笔记中捕获音频时必需。",
+        "screenContextDescription": "与语音助手共享屏幕上下文。",
         "enable": "启用",
         "enabled": "已启用"
       },

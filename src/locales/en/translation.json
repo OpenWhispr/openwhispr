@@ -211,8 +211,8 @@
         "microphoneDescription": "Turns speech into text.",
         "accessibilityDescription": "Pastes text into your active app.",
         "systemAudioTitle": "System Audio",
-        "systemAudioDescription": "Captures audio from other apps.",
-        "screenContextDescription": "Screen context, always private.",
+        "systemAudioDescription": "Required for capturing audio in Meeting Notes.",
+        "screenContextDescription": "Share screen context with Voice Assistant.",
         "enable": "Enable",
         "enabled": "Enabled"
       },

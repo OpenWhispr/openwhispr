@@ -211,8 +211,8 @@
         "microphoneDescription": "Trasforma la voce in testo.",
         "accessibilityDescription": "Incolla il testo nell’app attiva.",
         "systemAudioTitle": "Audio di Sistema",
-        "systemAudioDescription": "Acquisisce l’audio da altre app.",
-        "screenContextDescription": "Contesto dello schermo, sempre privato.",
+        "systemAudioDescription": "Necessario per acquisire l’audio nelle note delle riunioni.",
+        "screenContextDescription": "Condividi il contesto dello schermo con l’assistente vocale.",
         "enable": "Attiva",
         "enabled": "Attivato"
       },

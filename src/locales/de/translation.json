@@ -211,8 +211,8 @@
         "microphoneDescription": "Verwandelt Sprache in Text.",
         "accessibilityDescription": "Fügt Text in deine aktive App ein.",
         "systemAudioTitle": "Systemaudio",
-        "systemAudioDescription": "Nimmt Audio aus anderen Apps auf.",
-        "screenContextDescription": "Bildschirmkontext, immer privat.",
+        "systemAudioDescription": "Erforderlich, um Audio für Besprechungsnotizen aufzunehmen.",
+        "screenContextDescription": "Bildschirmkontext mit dem Sprachassistenten teilen.",
         "enable": "Aktivieren",
         "enabled": "Aktiviert"
       },

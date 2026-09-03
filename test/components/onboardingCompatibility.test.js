@@ -216,6 +216,16 @@ test("macOS onboarding offers optional Screen Context setup", async (t) => {
 
   assert.match(markup, /dictationAgent\.screenContext\.title/);
   assert.match(markup, /lucide-laptop/);
+  assert.equal(
+    markup.match(/onboarding\.permissions\.recommended/g)?.length,
+    1,
+    "Accessibility should be labelled Recommended on macOS"
+  );
+  assert.equal(
+    markup.match(/onboarding\.permissions\.optional/g)?.length,
+    2,
+    "System Audio and Screen Context should be labelled Optional on macOS"
+  );
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
 });
 
@@ -282,6 +292,11 @@ test("Windows onboarding offers Screen Context as a permissionless opt-in", asyn
 
   assert.match(markup, /dictationAgent\.screenContext\.title/);
   assert.match(markup, /lucide-laptop/);
+  assert.equal(
+    markup.match(/onboarding\.permissions\.optional/g)?.length,
+    1,
+    "Screen Context should be labelled Optional on Windows"
+  );
   assert.match(markup, />onboarding\.rehaul\.permissions\.enabled<\/button>/);
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.relaunchHint/);
 });
