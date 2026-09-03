@@ -300,3 +300,32 @@ test("opting out while signed out stops at the device", () => {
     "a signed-out opt-out must not call the account endpoint"
   );
 });
+
+// The store is module-level, so an account leaving the app has to take its
+// answer with it. Clearing it only from the leaderboard's own read would leave
+// the previous account's answer standing whenever that view was never opened.
+test("an account scope purge drops the participation answer with the rest of the account", () => {
+  const auth = read("src/hooks/useAuth.ts");
+  const store = read("src/stores/leaderboardParticipationStore.ts");
+  const purge = auth.slice(
+    auth.indexOf("if (accountScopeRequiresPurge(resolvedUserId)) {"),
+    auth.indexOf("if (accountScopeRequiresReconciliation(resolvedUserId)) {")
+  );
+  assert.ok(
+    purge.includes("useLeaderboardParticipationStore.getState().reset()"),
+    "sign-out and account switch must drop the departing account's participation"
+  );
+  const reset = store.slice(
+    store.indexOf("reset: () => {"),
+    store.indexOf("publishAnswer: (enabled)")
+  );
+  assert.ok(
+    reset.includes("readId += 1"),
+    "a read still in flight for the previous account must not land on the next one"
+  );
+  assert.equal(
+    /PendingLeaderboardLeave/.test(reset),
+    false,
+    "the opt-out queued against that account survives the purge so it can still be delivered"
+  );
+});
