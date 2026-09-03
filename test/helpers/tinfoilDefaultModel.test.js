@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 const modelRegistryData = require("../../src/models/modelRegistryData.json");
+const english = require("../../src/locales/en/translation.json");
 
 // Tinfoil retires GLM-5.2 on 2026-09-10 (replaced by glm-5-3) and its live
 // /v1/models list already omits it. The default lookup must follow, otherwise
@@ -28,10 +29,89 @@ test("tinfoil default model follows the glm-5-3 replacement", async (t) => {
     assert.equal(pickDefaultTinfoilModel(LIVE_CATALOG.slice(0, 1))?.id, "deepseek-v4-flash");
   });
 
-  await t.test("seeded registry leads with the default and no longer ships glm-5-2", () => {
+  await t.test("registry names the default and no longer ships glm-5-2", () => {
     const tinfoil = modelRegistryData.cloudProviders.find((provider) => provider.id === "tinfoil");
-    const ids = tinfoil.models.map((model) => model.id);
-    assert.equal(ids[0], "glm-5-3");
-    assert.ok(!ids.includes("glm-5-2"), "retired id must be out of the seed");
+    assert.equal(tinfoil.defaultModel, "glm-5-3");
+    assert.ok(
+      !tinfoil.models.some((model) => model.id === "glm-5-2"),
+      "retired id must be out of the seed"
+    );
   });
+
+  await t.test("every curated description key resolves in English", async () => {
+    const { DESCRIPTION_KEYS } = await vite.ssrLoadModule("/models/tinfoilModels.ts");
+    for (const key of Object.values(DESCRIPTION_KEYS)) {
+      const path = key.split(".");
+      const value = path.reduce((node, segment) => node?.[segment], english);
+      assert.equal(typeof value, "string", `${key} is missing from en`);
+      assert.ok(value.length > 0, `${key} is empty in en`);
+    }
+  });
+});
+
+// Tinfoil's catalog is fetched live and cached, so its order is Tinfoil's, not
+// ours. Anything that resolves a default from list position lands on whatever
+// the enclave happens to serve first — deepseek-v4-flash today.
+test("a cached catalog does not displace the named Tinfoil default", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      tinfoilModels: JSON.stringify({ models: LIVE_CATALOG, fetchedAt: Date.now() }),
+      cleanupMode: "providers",
+      cleanupProvider: "openai",
+      cleanupModel: "gpt-5-mini",
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-tinfoil-cached-default-test-",
+  });
+  // Loading the registry applies the cached list, exactly as app startup does.
+  await vite.ssrLoadModule("/models/ModelRegistry.ts");
+  const { useSettingsStore, selectPolicyEffectiveSettings } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+
+  const effective = selectPolicyEffectiveSettings(useSettingsStore.getState(), {
+    status: "managed",
+    appVersion: "1.9.2",
+    policy: {
+      version: 1,
+      transcription: { allowedModes: ["local"], allowedByokProviders: [] },
+      llm: {
+        allowedModes: ["providers"],
+        allowedByokProviders: ["tinfoil"],
+        allowedEnterpriseProviders: [],
+      },
+      features: { agentEnabled: true, webSearchEnabled: true },
+      sharing: { externalLinkSharing: "allowed" },
+      dataRetention: {
+        audioRetentionMaxDays: null,
+        localHistoryMode: "user_choice",
+        cloudBackupAllowed: true,
+      },
+      minAppVersion: null,
+    },
+  });
+
+  assert.equal(effective.cleanupProvider, "tinfoil");
+  assert.equal(effective.cleanupModel, "glm-5-3");
+});
+
+test("a persisted glm-5-2 selection is repointed before any request", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      cleanupMode: "providers",
+      cleanupProvider: "tinfoil",
+      cleanupModel: "glm-5-2",
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-tinfoil-retired-selection-test-",
+  });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+
+  // No catalog fetch and no network: the store repairs the selection on load,
+  // so the first request of the session already carries a served model.
+  assert.equal(useSettingsStore.getState().cleanupModel, "glm-5-3");
 });

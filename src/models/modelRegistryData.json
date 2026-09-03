@@ -598,6 +598,7 @@
     {
       "id": "tinfoil",
       "name": "Tinfoil",
+      "defaultModel": "glm-5-3",
       "models": [
         {
           "id": "glm-5-3",

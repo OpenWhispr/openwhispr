@@ -14,6 +14,7 @@ import type {
 import type { CalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { sweepRetiredPromptOverrides } from "../config/retiredPrompts";
+import { sweepRetiredCloudModelSelections } from "../config/retiredCloudModels";
 import {
   deriveReasoningMode,
   buildReasoningScopePatches,
@@ -29,6 +30,7 @@ import {
 import { normalizeChineseScriptPreference } from "../utils/chineseScript";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import modelRegistryData from "../models/modelRegistryData.json";
+import { pickProviderDefaultModel } from "../models/providerDefaultModel";
 import {
   getTranscriptionSelection,
   isScreenContextAllowed,
@@ -148,8 +150,10 @@ function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion:
       : mode === "enterprise"
         ? modelRegistryData.enterpriseProviders
         : modelRegistryData.cloudProviders;
-  const defaultModel =
-    providers.find((provider) => provider.id === providerId)?.models[0]?.id ?? "";
+  const provider = providers.find((candidate) => candidate.id === providerId);
+  // Only providers with a live catalog name a default; the rest lead their list with it.
+  const namedDefault = provider && "defaultModel" in provider ? provider.defaultModel : undefined;
+  const defaultModel = pickProviderDefaultModel(provider?.models, namedDefault)?.id ?? "";
   return mode === "enterprise" && providerId === "bedrock"
     ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)
     : defaultModel;
@@ -591,29 +595,22 @@ function migrateLLMScopeKeys() {
 
 migrateLLMScopeKeys();
 
-// Groq retired these models on 2026-08-16, so a scope still pointing at one
-// 404s on every request. Remap to the closest replacement Groq still serves.
-// Runs after migrateLLMScopeKeys so scope values live under their final keys.
-const RETIRED_GROQ_MODELS: Record<string, string> = {
-  "qwen/qwen3-32b": "openai/gpt-oss-120b",
-  "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
-  "llama-3.1-8b-instant": "openai/gpt-oss-20b",
-};
-
-function migrateRetiredGroqModels() {
+// A scope still pointing at a model its provider has retired 404s on every
+// request. Runs after migrateLLMScopeKeys so scope values live under their
+// final keys, and before the store reads them, so the first request of the
+// session already carries a model the provider serves.
+function migrateRetiredCloudModels() {
   if (!isBrowser) return;
-  if (localStorage.getItem("_retiredGroqModelsMigrated") === "1") return;
-
-  for (const { storeKeys } of Object.values(INFERENCE_SCOPES)) {
-    if (localStorage.getItem(storeKeys.provider) !== "groq") continue;
-    const replacement = RETIRED_GROQ_MODELS[localStorage.getItem(storeKeys.model) ?? ""];
-    if (replacement) localStorage.setItem(storeKeys.model, replacement);
+  const swept = sweepRetiredCloudModelSelections(
+    localStorage,
+    Object.values(INFERENCE_SCOPES).map(({ storeKeys }) => storeKeys)
+  );
+  if (swept.length > 0) {
+    logger.info("Repointed retired cloud model selections", { scopes: swept }, "settings");
   }
-
-  localStorage.setItem("_retiredGroqModelsMigrated", "1");
 }
 
-migrateRetiredGroqModels();
+migrateRetiredCloudModels();
 
 export interface SettingsState
   extends

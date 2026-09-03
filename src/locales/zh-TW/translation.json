@@ -2552,7 +2552,6 @@
         "anthropic_claude_opus_4_7": "強大的 Opus 模型",
         "anthropic_claude_opus_4_6": "上一代 Opus 模型，1M 上下文",
         "anthropic_claude_opus_4_5": "較早的 Opus 模型",
-        "tinfoil_deepseek_v4_pro": "安全飛地中的私密長上下文推理，800K 上下文",
         "tinfoil_glm_5_3": "安全飛地中的私密智能體程式設計模型，1M 上下文",
         "tinfoil_gemma4_31b": "支援工具呼叫的私密多語言推理模型，256K 上下文",
         "tinfoil_gpt_oss_120b": "支援工具使用的私密開放權重推理模型，131K 上下文",
