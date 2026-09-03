@@ -208,10 +208,15 @@ export function useInsightsSyncOptIn() {
     if (!syncAllowedByPolicy) return;
     if (!insightsSyncEnabled && !(await enableInsightsSync())) return;
     setParticipationUpdating(true);
+    // The account says yes here, which retires any leave still queued for it —
+    // before the request goes out, not after it lands, because turning the sync
+    // toggle on re-reads participation and that read would flush the queued
+    // leave into a PATCH racing this join. A join that then fails leaves it
+    // retired too: re-arming would take the user off a board they just asked to
+    // join. A declined opt-in returns above, so its leave is never touched.
+    if (userId) clearPendingLeaderboardLeave(userId);
     try {
       const participation = await LeaderboardService.setParticipation(true);
-      // The account said yes here, which retires any leave still queued for it.
-      if (userId) clearPendingLeaderboardLeave(userId);
       publishParticipationAnswer(participation.enabled);
     } catch (error) {
       console.error("Joining the leaderboard failed:", error);

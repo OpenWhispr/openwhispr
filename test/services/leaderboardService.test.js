@@ -17,6 +17,9 @@ function captureRequests(t, responseData) {
   return requests;
 }
 
+const pendingUserIds = (storage) =>
+  JSON.parse(storage.getItem("leaderboardLeavePendingUserIds") ?? "[]");
+
 test("participation uses the account endpoint for both reads and sync-controlled updates", async (t) => {
   const participation = { configured: true, enabled: true, updatedAt: null };
   const requests = captureRequests(t, participation);
@@ -118,7 +121,7 @@ test("leaderboard requests carry scope, pagination, filters and no body data", a
 test("a pending leave is retried for the account that asked and cleared once it lands", async (t) => {
   const requests = [];
   const { storage } = installBrowserGlobals(t, {
-    initialStorage: { leaderboardLeavePendingUserId: "user_1" },
+    initialStorage: { leaderboardLeavePendingUserIds: '["user_1","user_2"]' },
     window: {
       electronAPI: {
         cloudApiRequest: async (request) => {
@@ -134,7 +137,7 @@ test("a pending leave is retried for the account that asked and cleared once it 
   const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
 
   assert.equal(await LeaderboardService.flushPendingLeave(null), false);
-  assert.equal(await LeaderboardService.flushPendingLeave("user_2"), false);
+  assert.equal(await LeaderboardService.flushPendingLeave("user_3"), false);
   assert.deepEqual(requests, [], "a leave another account recorded is never sent for this one");
 
   assert.equal(await LeaderboardService.flushPendingLeave("user_1"), false);
@@ -142,7 +145,11 @@ test("a pending leave is retried for the account that asked and cleared once it 
   assert.equal(requests[0].method, "PATCH");
   assert.equal(requests[0].path, "/api/analytics/participation");
   assert.deepEqual(requests[0].body, { enabled: false });
-  assert.equal(storage.getItem("leaderboardLeavePendingUserId"), null);
+  assert.deepEqual(
+    pendingUserIds(storage),
+    ["user_2"],
+    "one account taking its leave must not discard another account's"
+  );
 
   assert.equal(await LeaderboardService.flushPendingLeave("user_1"), false);
   assert.equal(requests.length, 1, "nothing is retried once the account has taken the leave");
@@ -150,7 +157,7 @@ test("a pending leave is retried for the account that asked and cleared once it 
 
 test("a retry that fails keeps the leave pending for the next trigger", async (t) => {
   const { storage } = installBrowserGlobals(t, {
-    initialStorage: { leaderboardLeavePendingUserId: "user_1" },
+    initialStorage: { leaderboardLeavePendingUserIds: '["user_1","user_2"]' },
     window: {
       electronAPI: {
         cloudApiRequest: async () => ({ success: false, status: 0, error: "offline" }),
@@ -164,5 +171,5 @@ test("a retry that fails keeps the leave pending for the next trigger", async (t
     true,
     "the caller has to know the account is still on the leaderboard the user left"
   );
-  assert.equal(storage.getItem("leaderboardLeavePendingUserId"), "user_1");
+  assert.deepEqual(pendingUserIds(storage), ["user_1", "user_2"]);
 });
