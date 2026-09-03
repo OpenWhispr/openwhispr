@@ -61,52 +61,43 @@ test("rejects a packaged ONNX Runtime library missing a universal architecture s
   );
 });
 
-// The bundle the sherpa binaries link is libonnxruntime.dylib, so a versioned file sitting
-// beside it (a leftover from an older sherpa-onnx release) must not be the one validated.
-test("prefers the unversioned ONNX Runtime library the sherpa binaries link", () => {
+// The sherpa binaries link @rpath/libonnxruntime.dylib, so a versioned file beside it is a
+// leftover from an older release: it is 60MB of dead weight in the signed bundle, and accepting
+// it would validate a library dyld never loads.
+test("rejects a packaged app still carrying an ONNX Runtime library from an older release", () => {
   const appPath = "/tmp/OpenWhispr.app";
-  const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
-  const libraryPath = path.join(binDirectory, "libonnxruntime.dylib");
-  const result = sherpaDownloader.verifyPackagedMacosParakeet?.(appPath, {
-    readDirectory(directory) {
-      assert.equal(directory, binDirectory);
-      return ["libonnxruntime.dylib", "libonnxruntime.1.27.0.dylib"];
-    },
-    runVtool(actualLibraryPath) {
-      assert.equal(actualLibraryPath, libraryPath);
-      return UNIVERSAL_VTOOL_OUTPUT;
-    },
-  });
-
-  assert.deepEqual(result, {
-    architectures: ["x86_64", "arm64"],
-    libraryPath,
-    minimumVersion: "15.5",
-  });
+  assert.throws(
+    () =>
+      sherpaDownloader.verifyPackagedMacosParakeet(appPath, {
+        readDirectory: () => ["libonnxruntime.dylib", "libonnxruntime.1.27.0.dylib"],
+        runVtool: () => UNIVERSAL_VTOOL_OUTPUT,
+      }),
+    /found libonnxruntime\.dylib, libonnxruntime\.1\.27\.0\.dylib/
+  );
 });
 
-// Layouts before 1.13.6 shipped only a versioned file under an unversioned symlink; a bundle
-// that lost the symlink still has exactly one library to validate.
-test("falls back to a versioned ONNX Runtime library when no unversioned one is present", () => {
+test("rejects a packaged app missing the ONNX Runtime library the sherpa binaries link", () => {
   const appPath = "/tmp/OpenWhispr.app";
-  const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
-  const libraryPath = path.join(binDirectory, "libonnxruntime.1.27.0.dylib");
-  const result = sherpaDownloader.verifyPackagedMacosParakeet?.(appPath, {
-    readDirectory(directory) {
-      assert.equal(directory, binDirectory);
-      return ["libonnxruntime.1.27.0.dylib", "libsherpa-onnx-c-api.dylib"];
-    },
-    runVtool(actualLibraryPath) {
-      assert.equal(actualLibraryPath, libraryPath);
-      return UNIVERSAL_VTOOL_OUTPUT;
-    },
-  });
+  assert.throws(
+    () =>
+      sherpaDownloader.verifyPackagedMacosParakeet(appPath, {
+        readDirectory: () => ["libonnxruntime.1.27.0.dylib", "libsherpa-onnx-c-api.dylib"],
+        runVtool: () => UNIVERSAL_VTOOL_OUTPUT,
+      }),
+    /found libonnxruntime\.1\.27\.0\.dylib/
+  );
+});
 
-  assert.deepEqual(result, {
-    architectures: ["x86_64", "arm64"],
-    libraryPath,
-    minimumVersion: "15.5",
-  });
+test("rejects a packaged app with no ONNX Runtime library at all", () => {
+  const appPath = "/tmp/OpenWhispr.app";
+  assert.throws(
+    () =>
+      sherpaDownloader.verifyPackagedMacosParakeet(appPath, {
+        readDirectory: () => ["libsherpa-onnx-c-api.dylib"],
+        runVtool: () => UNIVERSAL_VTOOL_OUTPUT,
+      }),
+    /found no ONNX Runtime library/
+  );
 });
 
 test("validates an unversioned ONNX Runtime library from a packaged app", () => {

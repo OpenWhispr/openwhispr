@@ -93,8 +93,8 @@ function findStaleVersionedLibraries(entries, copiedLibraries) {
   });
 }
 
-// Upstream ad-hoc signatures were invalid on arm64 through 1.13.4 and dyld SIGKILLs unsigned
-// loads; re-signing keeps that from returning in a future release.
+// Upstream ad-hoc signatures were invalid on both slices through 1.13.4 and dyld SIGKILLs
+// unsigned loads; re-signing keeps that from returning in a future release.
 function adhocSign(filePath, platformArch) {
   if (process.platform !== "darwin" || !platformArch.startsWith("darwin")) return;
   execFileSync("codesign", ["--force", "--sign", "-", filePath], { stdio: "ignore" });
@@ -163,22 +163,19 @@ function verifyPackagedMacosParakeet(
   } = {}
 ) {
   const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
-  const directoryEntries = readDirectory(binDirectory);
-  // Validate the library dyld resolves, which is libonnxruntime.dylib in both layouts: the
-  // sherpa binaries link @rpath/libonnxruntime.dylib since 1.13.6, and before that they linked
-  // the versioned file that this name symlinked to. Preferring the versioned entry would
-  // validate a leftover from an older release instead of the library the app loads.
-  const unversionedLibraries = directoryEntries.filter(
-    (fileName) => fileName === UNVERSIONED_ONNX_RUNTIME_DYLIB
+  const libraries = readDirectory(binDirectory).filter(
+    (fileName) =>
+      fileName === UNVERSIONED_ONNX_RUNTIME_DYLIB ||
+      VERSIONED_ONNX_RUNTIME_DYLIB_PATTERN.test(fileName)
   );
-  const libraries =
-    unversionedLibraries.length > 0
-      ? unversionedLibraries
-      : directoryEntries.filter((fileName) => VERSIONED_ONNX_RUNTIME_DYLIB_PATTERN.test(fileName));
 
-  if (libraries.length !== 1) {
+  // The sherpa binaries link @rpath/libonnxruntime.dylib, so the bundle must carry that file and
+  // nothing else: a versioned sibling is a leftover from an older sherpa-onnx release that dyld
+  // never loads, and validating it would pass a bundle whose real runtime was never checked.
+  if (libraries.length !== 1 || libraries[0] !== UNVERSIONED_ONNX_RUNTIME_DYLIB) {
+    const found = libraries.length ? libraries.join(", ") : "no ONNX Runtime library";
     throw new Error(
-      `Expected one ONNX Runtime library in ${binDirectory}, found ${libraries.length}`
+      `Expected ${UNVERSIONED_ONNX_RUNTIME_DYLIB} alone in ${binDirectory}, found ${found}`
     );
   }
 
