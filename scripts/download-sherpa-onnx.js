@@ -269,22 +269,27 @@ function readInstallMarker(markerPath) {
   }
 }
 
-function isCompleteInstall(marker, binaryPaths) {
+// A marker that parses but carries anything other than library names has to read as an
+// incomplete install and re-download, the way it did when one try/catch covered the whole check.
+function isCompleteInstall(marker, binaryPaths, binDirectory = BIN_DIR) {
   if (!marker || binaryPaths.some((binaryPath) => !fs.existsSync(binaryPath))) return false;
 
   return (
     marker.version === SHERPA_ONNX_VERSION &&
     Array.isArray(marker.libraries) &&
-    marker.libraries.every((lib) => fs.existsSync(path.join(BIN_DIR, lib)))
+    marker.libraries.every(
+      (lib) => typeof lib === "string" && fs.existsSync(path.join(binDirectory, lib))
+    )
   );
 }
 
 // Drop the versioned libraries an earlier sherpa-onnx release left behind. Scoped to the base
 // names of the libraries installed, so the whisper.cpp/llama.cpp/qdrant libraries sharing
 // resources/bin are never candidates.
-function pruneStaleLibraries(platformArch, installedLibraries) {
-  for (const file of findStaleVersionedLibraries(fs.readdirSync(BIN_DIR), installedLibraries)) {
-    fs.rmSync(path.join(BIN_DIR, file), { force: true });
+function pruneStaleLibraries(platformArch, installedLibraries, binDirectory = BIN_DIR) {
+  const entries = fs.readdirSync(binDirectory);
+  for (const file of findStaleVersionedLibraries(entries, installedLibraries)) {
+    fs.rmSync(path.join(binDirectory, file), { force: true });
     console.log(`  ${platformArch}: Removed stale ${file}`);
   }
 }
@@ -457,6 +462,8 @@ module.exports = {
   BIN_DIR,
   findStaleVersionedLibraries,
   getDownloadUrl,
+  isCompleteInstall,
+  pruneStaleLibraries,
   parseMacosDeploymentTargets,
   validateMacosDeploymentTargets,
   verifyPackagedMacosParakeet,

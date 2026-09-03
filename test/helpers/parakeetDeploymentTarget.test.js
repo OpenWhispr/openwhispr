@@ -99,6 +99,21 @@ test("accepts the pre-1.13.5 layout where the library is a symlink to a versione
   });
 });
 
+// The prune and this check have to recognize the same version shapes, or a leftover the check
+// spots is one the tooling cannot remove.
+test("rejects a leftover whose version has two components", () => {
+  const appPath = "/tmp/OpenWhispr.app";
+  assert.throws(
+    () =>
+      sherpaDownloader.verifyPackagedMacosParakeet(appPath, {
+        readDirectory: () => ["libonnxruntime.dylib", "libonnxruntime.1.27.dylib"],
+        resolveLibrary: (libraryPath) => libraryPath,
+        runVtool: () => UNIVERSAL_VTOOL_OUTPUT,
+      }),
+    /older release.*libonnxruntime\.1\.27\.dylib/
+  );
+});
+
 test("rejects a packaged app whose ONNX Runtime library does not resolve", () => {
   const appPath = "/tmp/OpenWhispr.app";
   assert.throws(
