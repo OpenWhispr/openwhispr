@@ -14,6 +14,7 @@ const {
 const ParakeetServerManager = require("./parakeetServer");
 const { getModelsDirForService } = require("./modelDirUtils");
 const { assertParakeetSupported, getParakeetCapability } = require("./parakeetCapability");
+const { IDLE_TIMEOUT_MS, shouldPauseServer, recordActivity } = require("./transcriptionIdlePolicy");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 const {
@@ -43,6 +44,10 @@ class ParakeetManager {
     this.currentDownloadProcess = null;
     this.isInitialized = false;
     this.serverManager = new ParakeetServerManager();
+    // Idle pause/resume state
+    this._idleTimer = null;
+    this._lastActivityMs = Date.now();
+    this._transcribing = false;
   }
 
   getModelsDir() {
@@ -197,11 +202,54 @@ class ParakeetManager {
     if (!capability.supported) {
       return { success: false, code: capability.code, reason: capability.message };
     }
-    return this.serverManager.startServer(modelName, language);
+    const result = await this.serverManager.startServer(modelName, language);
+    if (result.success) {
+      this._recordActivity();
+      this._resetIdleTimer();
+    }
+    return result;
   }
 
   async stopServer() {
+    this._clearIdleTimer();
     await this.serverManager.stopServer();
+  }
+
+  _resetIdleTimer() {
+    this._clearIdleTimer();
+    this._idleTimer = setTimeout(() => {
+      const state = {
+        serverRunning: this.serverManager.wsServer.ready,
+        transcribing: this._transcribing,
+        rewarmInFlight: false, // Parakeet doesn't have wake-from-sleep re-warm
+        lastActivityMs: this._lastActivityMs,
+        nowMs: Date.now(),
+      };
+
+      if (shouldPauseServer(state)) {
+        debugLogger.info("parakeet-server idle timeout reached, stopping to free memory", {
+          timeoutMs: IDLE_TIMEOUT_MS,
+          model: this.serverManager.wsServer.modelName,
+        });
+        this.stopServer().catch((err) => {
+          debugLogger.warn("Failed to stop parakeet-server after idle timeout", {
+            error: err.message,
+          });
+        });
+      }
+    }, IDLE_TIMEOUT_MS);
+    this._idleTimer.unref?.();
+  }
+
+  _clearIdleTimer() {
+    if (this._idleTimer) {
+      clearTimeout(this._idleTimer);
+      this._idleTimer = null;
+    }
+  }
+
+  _recordActivity() {
+    this._lastActivityMs = recordActivity(Date.now());
   }
 
   getServerStatus() {
@@ -223,67 +271,82 @@ class ParakeetManager {
   }
 
   async transcribeLocalParakeet(audioBlob, options = {}) {
-    const model = options.model || "parakeet-tdt-0.6b-v3";
-    assertParakeetSupported();
-    const serverAvailable = this.serverManager.isAvailable(getModelRuntime(model));
+    // Clear idle timer during active work
+    this._clearIdleTimer();
+    this._transcribing = true;
 
-    debugLogger.logSTTPipeline("transcribeLocalParakeet - start", {
-      options,
-      audioBlobType: audioBlob?.constructor?.name,
-      audioBlobSize: audioBlob?.byteLength || audioBlob?.size || 0,
-      serverAvailable,
-    });
+    try {
+      const model = options.model || "parakeet-tdt-0.6b-v3";
+      assertParakeetSupported();
+      const serverAvailable = this.serverManager.isAvailable(getModelRuntime(model));
 
-    if (!serverAvailable) {
-      throw new Error(
-        "sherpa-onnx binary not found. Please ensure the app is installed correctly."
-      );
+      debugLogger.logSTTPipeline("transcribeLocalParakeet - start", {
+        options,
+        audioBlobType: audioBlob?.constructor?.name,
+        audioBlobSize: audioBlob?.byteLength || audioBlob?.size || 0,
+        serverAvailable,
+      });
+
+      if (!serverAvailable) {
+        throw new Error(
+          "sherpa-onnx binary not found. Please ensure the app is installed correctly."
+        );
+      }
+
+      if (!this.serverManager.isModelDownloaded(model)) {
+        throw new Error(
+          `Parakeet model "${model}" not downloaded. Please download it from Settings.`
+        );
+      }
+
+      let audioBuffer;
+      if (Buffer.isBuffer(audioBlob)) {
+        audioBuffer = audioBlob;
+      } else if (ArrayBuffer.isView(audioBlob)) {
+        audioBuffer = Buffer.from(audioBlob.buffer, audioBlob.byteOffset, audioBlob.byteLength);
+      } else if (audioBlob instanceof ArrayBuffer) {
+        audioBuffer = Buffer.from(audioBlob);
+      } else if (typeof audioBlob === "string") {
+        audioBuffer = Buffer.from(audioBlob, "base64");
+      } else if (audioBlob && audioBlob.buffer && typeof audioBlob.byteLength === "number") {
+        audioBuffer = Buffer.from(
+          audioBlob.buffer,
+          audioBlob.byteOffset || 0,
+          audioBlob.byteLength
+        );
+      } else {
+        throw new Error(`Unsupported audio data type: ${typeof audioBlob}`);
+      }
+
+      if (!audioBuffer || audioBuffer.length === 0) {
+        throw new Error("Audio buffer is empty - no audio data received");
+      }
+
+      debugLogger.logSTTPipeline("transcribeLocalParakeet - processing", {
+        bufferSize: audioBuffer.length,
+        model,
+      });
+
+      const startTime = Date.now();
+      const result = await this.serverManager.transcribe(audioBuffer, {
+        modelName: model,
+        language: options.language,
+        signal: options.signal,
+      });
+      const elapsed = Date.now() - startTime;
+
+      debugLogger.logSTTPipeline("transcribeLocalParakeet - completed", {
+        elapsed,
+        textLength: result.text?.length || 0,
+      });
+
+      return this.parseParakeetResult(result);
+    } finally {
+      this._transcribing = false;
+      // Record activity and reset idle timer after transcription completes
+      this._recordActivity();
+      this._resetIdleTimer();
     }
-
-    if (!this.serverManager.isModelDownloaded(model)) {
-      throw new Error(
-        `Parakeet model "${model}" not downloaded. Please download it from Settings.`
-      );
-    }
-
-    let audioBuffer;
-    if (Buffer.isBuffer(audioBlob)) {
-      audioBuffer = audioBlob;
-    } else if (ArrayBuffer.isView(audioBlob)) {
-      audioBuffer = Buffer.from(audioBlob.buffer, audioBlob.byteOffset, audioBlob.byteLength);
-    } else if (audioBlob instanceof ArrayBuffer) {
-      audioBuffer = Buffer.from(audioBlob);
-    } else if (typeof audioBlob === "string") {
-      audioBuffer = Buffer.from(audioBlob, "base64");
-    } else if (audioBlob && audioBlob.buffer && typeof audioBlob.byteLength === "number") {
-      audioBuffer = Buffer.from(audioBlob.buffer, audioBlob.byteOffset || 0, audioBlob.byteLength);
-    } else {
-      throw new Error(`Unsupported audio data type: ${typeof audioBlob}`);
-    }
-
-    if (!audioBuffer || audioBuffer.length === 0) {
-      throw new Error("Audio buffer is empty - no audio data received");
-    }
-
-    debugLogger.logSTTPipeline("transcribeLocalParakeet - processing", {
-      bufferSize: audioBuffer.length,
-      model,
-    });
-
-    const startTime = Date.now();
-    const result = await this.serverManager.transcribe(audioBuffer, {
-      modelName: model,
-      language: options.language,
-      signal: options.signal,
-    });
-    const elapsed = Date.now() - startTime;
-
-    debugLogger.logSTTPipeline("transcribeLocalParakeet - completed", {
-      elapsed,
-      textLength: result.text?.length || 0,
-    });
-
-    return this.parseParakeetResult(result);
   }
 
   parseParakeetResult(output) {
