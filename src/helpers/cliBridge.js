@@ -84,6 +84,18 @@ function parseIdParam(value) {
   return id;
 }
 
+function parsePositiveIntQuery(query, key, fallback) {
+  const raw = query.get(key);
+  if (raw === null || raw === "") return fallback;
+  const num = Number(raw);
+  if (!Number.isInteger(num) || num <= 0) {
+    const err = new Error(`Query parameter '${key}' must be a positive integer`);
+    err.code = "VALIDATION";
+    throw err;
+  }
+  return num;
+}
+
 function unwrapMutationResult(result, label) {
   if (!result?.success || !result[label]) {
     throw new Error(result?.error || `Failed to write ${label}`);
@@ -300,8 +312,8 @@ class CliBridge {
       exact("GET", "/v1/health", () => ({ data: { ok: true, version: 1 } })),
       exact("GET", "/v1/notes/list", ({ query }) => {
         const noteType = query.get("note_type") || null;
-        const limit = query.get("limit") ? Number(query.get("limit")) : 100;
-        const folderId = query.get("folder_id") ? Number(query.get("folder_id")) : null;
+        const limit = parsePositiveIntQuery(query, "limit", 100);
+        const folderId = parsePositiveIntQuery(query, "folder_id", null);
         const notes = db.getNotes(noteType, limit, folderId);
         return { data: notes, has_more: false, next_cursor: null };
       }),
@@ -312,7 +324,7 @@ class CliBridge {
           err.code = "VALIDATION";
           throw err;
         }
-        const limit = query.get("limit") ? Number(query.get("limit")) : 20;
+        const limit = parsePositiveIntQuery(query, "limit", 20);
         const notes = db.searchNotes(q, limit);
         return { data: notes, has_more: false, next_cursor: null };
       }),
@@ -395,7 +407,7 @@ class CliBridge {
         return { data: { words, added: result.added, removed: result.removed } };
       }),
       exact("GET", "/v1/transcriptions/list", ({ query }) => {
-        const limit = query.get("limit") ? Number(query.get("limit")) : 50;
+        const limit = parsePositiveIntQuery(query, "limit", 50);
         return {
           data: db.getTranscriptions(limit),
           has_more: false,
