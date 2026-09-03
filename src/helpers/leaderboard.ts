@@ -5,11 +5,18 @@ import type { LeaderboardMember, LeaderboardMetric, LeaderboardRange } from "../
 export const LEADERBOARD_PAGE_SIZE = 20;
 export const LEADERBOARD_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
+// Which metrics a week can rank is one fact: the weekly ones are what the
+// picker offers under "This week", and the lifetime ones are what forces a
+// selection over to "All time".
+export const WEEKLY_METRICS: LeaderboardMetric[] = ["total_words", "desktop_words", "mobile_words"];
+const LIFETIME_METRICS: LeaderboardMetric[] = ["words_per_minute", "current_daily_streak"];
+export const ALL_TIME_METRICS: LeaderboardMetric[] = [...WEEKLY_METRICS, ...LIFETIME_METRICS];
+
 export function normalizeLeaderboardSelection(
   metric: LeaderboardMetric,
   range: LeaderboardRange
 ): { metric: LeaderboardMetric; range: LeaderboardRange } {
-  if (metric === "words_per_minute" || metric === "current_daily_streak") {
+  if (LIFETIME_METRICS.includes(metric)) {
     return { metric, range: "all" };
   }
   return { metric, range };
@@ -19,7 +26,7 @@ export function selectionForRange(
   metric: LeaderboardMetric,
   range: LeaderboardRange
 ): { metric: LeaderboardMetric; range: LeaderboardRange } {
-  if (range === "week" && (metric === "words_per_minute" || metric === "current_daily_streak")) {
+  if (range === "week" && LIFETIME_METRICS.includes(metric)) {
     return { metric: "total_words", range };
   }
   return { metric, range };

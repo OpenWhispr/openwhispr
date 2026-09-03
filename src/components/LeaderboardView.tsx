@@ -15,7 +15,7 @@ interface LeaderboardViewProps {
 export default function LeaderboardView({ onSignIn, onUpgrade }: LeaderboardViewProps) {
   const { t } = useTranslation();
   const { isSignedIn, user } = useAuth();
-  const { dataRetentionEnabled: personalDataRetentionEnabled } = useSettings();
+  const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
   const dataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );
@@ -32,10 +32,12 @@ export default function LeaderboardView({ onSignIn, onUpgrade }: LeaderboardView
   } = useInsightsSyncOptIn();
 
   // The leaderboard is the only surface that needs the account preference, so
-  // it is the only one that pays for reading it.
+  // it is the only one that pays for reading it. The device sync switch is not
+  // a gate here, but flipping it off elsewhere leaves the account too, so it is
+  // the signal to re-read rather than keep showing a roster nobody is in.
   useEffect(() => {
     void refreshParticipation();
-  }, [refreshParticipation]);
+  }, [insightsSyncEnabled, refreshParticipation]);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">

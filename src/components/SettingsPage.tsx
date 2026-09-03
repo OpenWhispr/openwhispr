@@ -1140,7 +1140,6 @@ export default function SettingsPage({
     cloudBackupEnabled,
     setCloudBackupEnabled,
     insightsSyncEnabled,
-    setInsightsSyncEnabled,
     telemetryEnabled,
     setTelemetryEnabled,
     audioRetentionDays,

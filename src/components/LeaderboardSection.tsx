@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
+  ALL_TIME_METRICS,
   LEADERBOARD_PAGE_SIZE,
   LEADERBOARD_REFRESH_INTERVAL_MS,
   memberValue,
@@ -19,6 +20,7 @@ import {
   pageCount,
   pageForRank,
   selectionForRange,
+  WEEKLY_METRICS,
 } from "../helpers/leaderboard";
 import { CloudApiError } from "../services/cloudApi";
 import { LeaderboardService } from "../services/LeaderboardService";
@@ -45,13 +47,6 @@ import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Tooltip } from "./ui/tooltip";
 import { useToast } from "./ui/useToast";
-
-const WEEKLY_METRICS: LeaderboardMetric[] = ["total_words", "desktop_words", "mobile_words"];
-const ALL_TIME_METRICS: LeaderboardMetric[] = [
-  ...WEEKLY_METRICS,
-  "words_per_minute",
-  "current_daily_streak",
-];
 
 interface LeaderboardSectionProps {
   accountId: string | null;
