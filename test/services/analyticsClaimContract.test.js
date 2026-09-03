@@ -159,3 +159,46 @@ test("a participation read that fails cannot leave the board looking joined", ()
     "reading participation must never write it back to the account"
   );
 });
+
+// The sync toggle re-reads participation, and joining flips that toggle — so a
+// join fires a read of its own right after the write goes out. The write is the
+// newer answer whatever order the two land in, so it has to retire that read.
+test("a completed participation write outranks every read still in flight", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const publish = hook.slice(
+    hook.indexOf("const publishParticipationAnswer"),
+    hook.indexOf("const activate")
+  );
+  assert.ok(
+    publish.indexOf("participationReadIdRef.current += 1") <
+      publish.indexOf("setParticipationEnabled("),
+    "a read started before the write must be retired before the answer is published"
+  );
+  assert.ok(
+    publish.includes("setParticipationReady(true)"),
+    "the retired read never reports itself finished, so the write has to"
+  );
+  for (const [name, end] of [
+    ["const joinLeaderboard", "const answerClaimPrompt"],
+    ["const leaveLeaderboard", "const disableInsightsSync"],
+  ]) {
+    assert.ok(
+      hook.slice(hook.indexOf(name), hook.indexOf(end)).includes("publishParticipationAnswer("),
+      `${name} must publish through the path that retires in-flight reads`
+    );
+  }
+});
+
+// Signed out there is no account row to clear, and the PATCH could only fail
+// for want of a credential.
+test("opting out while signed out stops at the device", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const disable = hook.slice(
+    hook.indexOf("const disableInsightsSync"),
+    hook.indexOf("const refreshUnclaimedCount")
+  );
+  assert.ok(
+    disable.indexOf("if (!isSignedIn) return true;") < disable.indexOf("leaveLeaderboard()"),
+    "a signed-out opt-out must not call the account endpoint"
+  );
+});
