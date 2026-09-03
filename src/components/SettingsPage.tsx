@@ -4107,21 +4107,10 @@ EOF`,
                         (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
                       }
                       onChange={(enabled) => {
-                        if (enabled) {
-                          void enableInsightsSync();
-                          return;
-                        }
-                        // The device is already off; only the account call can
-                        // still fail, and it is the one that keeps old totals
-                        // ranked until it lands.
-                        void disableInsightsSync().then((left) => {
-                          if (!left) {
-                            toast({
-                              title: t("insights.leaderboard.activationError"),
-                              variant: "destructive",
-                            });
-                          }
-                        });
+                        // A failed opt-out is reported on the leaderboard, the
+                        // only surface that knows whether the account was on one.
+                        if (enabled) void enableInsightsSync();
+                        else void disableInsightsSync();
                       }}
                     />
                   </SettingsRow>
