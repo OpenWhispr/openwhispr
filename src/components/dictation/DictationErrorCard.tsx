@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef } from "react";
-import { RotateCcw, ScrollText } from "lucide-react";
-import { ASSISTANT_PANEL_SIZE_LIMITS } from "../../helpers/voiceSurfaceGeometry.mjs";
+import { RotateCcw, ScrollText, X } from "lucide-react";
+import {
+  ASSISTANT_PANEL_SIZE_LIMITS,
+  DICTATION_ERROR_SURFACE_LIMITS,
+} from "../../helpers/voiceSurfaceGeometry.mjs";
 import { cn } from "../lib/utils";
 import type { ToastActionConfig } from "../ui/useToast";
 
@@ -9,6 +12,8 @@ interface DictationErrorCardProps {
   description?: string;
   actions: ToastActionConfig[];
   onAction: (action: ToastActionConfig) => void;
+  onDismiss: () => void;
+  dismissLabel: string;
   onPreferredHeightChange?: (height: number) => void;
   progressDuration?: number;
   progressPaused?: boolean;
@@ -26,6 +31,8 @@ export function DictationErrorCard({
   description,
   actions,
   onAction,
+  onDismiss,
+  dismissLabel,
   onPreferredHeightChange,
   progressDuration = 0,
   progressPaused = false,
@@ -62,7 +69,7 @@ export function DictationErrorCard({
         )
       );
       if (Math.abs(card.getBoundingClientRect().width - expectedWidth) > 1) return;
-      const preferredHeight = Math.ceil(Math.max(card.offsetHeight, card.scrollHeight));
+      const preferredHeight = Math.ceil(card.offsetHeight);
       if (Math.abs(preferredHeight - lastPreferredHeightRef.current) < 1) return;
       lastPreferredHeightRef.current = preferredHeight;
       onPreferredHeightChange(preferredHeight);
@@ -83,7 +90,7 @@ export function DictationErrorCard({
   }, [onPreferredHeightChange]);
 
   const text = (
-    <div className="min-w-0 flex-1 break-words px-2 py-1">
+    <div className="min-w-0 flex-1 break-words px-2 py-1 pr-9">
       {title && <p className="text-base font-normal leading-snug text-foreground">{title}</p>}
       {description && (
         <p className="mt-1 whitespace-pre-wrap text-sm leading-snug text-muted-foreground">
@@ -124,10 +131,11 @@ export function DictationErrorCard({
       aria-live="assertive"
       data-action-count={actions.length}
       className={cn(
-        "relative max-h-[calc(100vh-1.5rem)] w-full overflow-y-auto rounded-2xl border border-border/50 bg-surface-0",
+        "relative w-full overflow-hidden rounded-2xl border border-border/50 bg-surface-0",
         "shadow-[var(--shadow-modal)] transition-[opacity,transform] duration-200 ease-out",
         ready ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"
       )}
+      style={{ maxHeight: DICTATION_ERROR_SURFACE_LIMITS.maxHeight }}
     >
       {progressDuration > 0 && (
         <svg
@@ -152,17 +160,28 @@ export function DictationErrorCard({
           />
         </svg>
       )}
-      {hasSecondaryAction ? (
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label={dismissLabel}
+        title={dismissLabel}
+        className="absolute right-2 top-2 z-20 flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      >
+        <X className="size-3.5" aria-hidden="true" />
+      </button>
+      <div
+        className="overflow-y-auto"
+        style={{ maxHeight: DICTATION_ERROR_SURFACE_LIMITS.maxHeight }}
+      >
         <div className="px-2 py-3">
           {text}
-          <div className="mt-3 grid grid-cols-2 gap-2">{actions.map(renderAction)}</div>
+          {actions.length > 0 && (
+            <div className={cn("mt-3 grid gap-2", hasSecondaryAction && "grid-cols-2")}>
+              {actions.map(renderAction)}
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="flex items-center gap-2 px-2 py-3">
-          {text}
-          {actions.slice(0, 1).map(renderAction)}
-        </div>
-      )}
+      </div>
     </section>
   );
 }
