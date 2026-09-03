@@ -75,7 +75,6 @@ import {
   shouldRunTranslateStep,
 } from "../helpers/translationChain";
 import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
-import { LEADERBOARD_DEMO_ENABLED } from "../helpers/leaderboardDemo";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
@@ -103,6 +102,7 @@ const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
 const InsightsView = React.lazy(() => import("./InsightsView"));
+const LeaderboardView = React.lazy(() => import("./LeaderboardView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
 const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
@@ -138,9 +138,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
-  const [activeView, setActiveView] = useState<ControlPanelView>(
-    LEADERBOARD_DEMO_ENABLED ? "insights" : "home"
-  );
+  const [activeView, setActiveView] = useState<ControlPanelView>("home");
   const {
     collapsed: sidebarCollapsed,
     peek: sidebarPeek,
@@ -1183,7 +1181,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
             {activeView === "insights" && (
               <Suspense fallback={null}>
-                <InsightsView
+                <InsightsView />
+              </Suspense>
+            )}
+            {activeView === "leaderboard" && (
+              <Suspense fallback={null}>
+                <LeaderboardView
                   onUpgrade={() => {
                     setSettingsSection("plansBilling");
                     setShowSettings(true);
