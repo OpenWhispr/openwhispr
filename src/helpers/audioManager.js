@@ -418,6 +418,16 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       tenant: (apiSettings.cortiTenant || "").trim() || "base",
     }),
   },
+  custom: {
+    displayName: "Custom",
+    ipc: () => window.electronAPI?.proxyCustomTranscription,
+    buildPayload: ({ audioBuffer, model, language, apiSettings, dictionaryPrompt }) => ({
+      audioBuffer,
+      model,
+      language,
+      prompt: dictionaryPrompt || undefined,
+    }),
+  },
 };
 
 class AudioManager {
