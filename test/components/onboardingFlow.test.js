@@ -93,6 +93,23 @@ test("a confirmed enterprise workspace ends the account route at notes", async (
   assert.equal(route.includes("setup-choice"), false);
 });
 
+test("notes starts with Skip and switches to Continue after a calendar connects", async () => {
+  const { getNotesFooterAction } = await load();
+
+  assert.equal(
+    getNotesFooterAction({ workspaceResolutionPending: false, hasConnectedCalendar: false }),
+    "skip"
+  );
+  assert.equal(
+    getNotesFooterAction({ workspaceResolutionPending: false, hasConnectedCalendar: true }),
+    "continue"
+  );
+  assert.equal(
+    getNotesFooterAction({ workspaceResolutionPending: true, hasConnectedCalendar: true }),
+    null
+  );
+});
+
 test("enterprise workspace entitlement requires a current paid entitlement", async () => {
   const { isEnterpriseWorkspaceEntitled } = await load();
   assert.equal(isEnterpriseWorkspaceEntitled({ plan: "enterprise", status: "active" }), true);

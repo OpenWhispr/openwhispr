@@ -46,6 +46,7 @@ import logger from "../utils/logger";
 import {
   COMPACT_STEPS,
   getNextOnboardingStep,
+  getNotesFooterAction,
   getOnboardingProgress,
   getOnboardingRoute,
   reconcileStepWithRoute,
@@ -243,6 +244,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     session.authPath === "account" &&
     (!workspacesLoaded ||
       (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)));
+  const notesFooterAction = getNotesFooterAction({
+    workspaceResolutionPending,
+    hasConnectedCalendar:
+      settingsStore.gcalAccounts.length > 0 ||
+      settingsStore.mcalAccounts.length > 0 ||
+      (platform === "darwin" && settingsStore.appleCalendarConnected),
+  });
 
   // The setting turns on only once the permission is actually granted, so an
   // Enable click whose System Settings grant is abandoned can't leave screen
@@ -727,7 +735,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "assistant-demo":
         return assistantDemoSuccess;
       case "notes":
-        return !workspaceResolutionPending;
+        return notesFooterAction === "continue";
       case "byok-dictation":
       case "byok-assistant":
       case "local-dictation":
@@ -1134,14 +1142,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     currentStepId === "byok-assistant" ||
     currentStepId === "local-dictation" ||
     currentStepId === "local-assistant";
-  // Choice/provider pages own their forward action, while hotkey/demo pages
-  // withhold Continue until their task is complete.
+  // Choice/provider pages own their forward action. Hotkey/demo pages withhold
+  // Continue until complete; Notes does the same until a calendar is connected.
   const showsContinue =
-    hasShellNavigation && !choiceStep && !inlineProviderStep && (!inlineGatedStep || canContinue);
-  // Practice must remain skippable when a microphone or backend problem
-  // prevents completion. Calendar connections are optional, so Notes also
-  // offers Skip once workspace routing is ready.
-  const showsSkip = (demoStep && !canContinue) || (notesStep && canContinue);
+    hasShellNavigation &&
+    !choiceStep &&
+    !inlineProviderStep &&
+    (!inlineGatedStep || canContinue) &&
+    (!notesStep || notesFooterAction === "continue");
+  // Practice remains skippable if it cannot complete. Calendar connections are
+  // optional, so Notes starts with Skip and replaces it with Continue on connect.
+  const showsSkip = (demoStep && !canContinue) || (notesStep && notesFooterAction === "skip");
 
   return (
     <>

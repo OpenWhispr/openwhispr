@@ -240,6 +240,17 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
   return route;
 }
 
+export function getNotesFooterAction({
+  workspaceResolutionPending,
+  hasConnectedCalendar,
+}: {
+  workspaceResolutionPending: boolean;
+  hasConnectedCalendar: boolean;
+}): "skip" | "continue" | null {
+  if (workspaceResolutionPending) return null;
+  return hasConnectedCalendar ? "continue" : "skip";
+}
+
 export function isOnboardingStepId(value: unknown): value is OnboardingStepId {
   return typeof value === "string" && KNOWN_STEPS.has(value as OnboardingStepId);
 }
