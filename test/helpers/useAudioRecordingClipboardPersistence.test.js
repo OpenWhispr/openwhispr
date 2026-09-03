@@ -170,7 +170,7 @@ async function mountCompletionHarness(
     bridgeWrites,
     complete: async (result) => {
       await React.act(async () => {
-        await globalThis.__clipboardPersistenceAudioManager.complete(result).catch(NOOP);
+        await globalThis.__clipboardPersistenceAudioManager.complete(result);
       });
     },
     logs: globalThis.__clipboardPersistenceLogs,
