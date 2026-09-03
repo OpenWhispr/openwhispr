@@ -1187,6 +1187,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             {activeView === "leaderboard" && (
               <Suspense fallback={null}>
                 <LeaderboardView
+                  onSignIn={() => {
+                    setSettingsSection("account");
+                    setShowSettings(true);
+                  }}
                   onUpgrade={() => {
                     setSettingsSection("plansBilling");
                     setShowSettings(true);

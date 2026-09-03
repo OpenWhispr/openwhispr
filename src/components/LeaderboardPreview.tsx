@@ -6,8 +6,6 @@ import { Button } from "./ui/button";
 
 const PREVIEW_ROWS = [92, 84, 76, 68, 61] as const;
 
-type LeaderboardPreviewVariant = "locked" | "free" | "invite";
-
 interface LeaderboardPreviewProps {
   actionDisabled?: boolean;
   actionIcon?: LucideIcon;
@@ -18,7 +16,6 @@ interface LeaderboardPreviewProps {
   icon: LucideIcon;
   onAction: () => void;
   title: string;
-  variant: LeaderboardPreviewVariant;
 }
 
 export default function LeaderboardPreview({
@@ -31,7 +28,6 @@ export default function LeaderboardPreview({
   icon: Icon,
   onAction,
   title,
-  variant,
 }: LeaderboardPreviewProps) {
   const { t } = useTranslation();
 
@@ -41,9 +37,6 @@ export default function LeaderboardPreview({
         "relative min-h-96 overflow-hidden rounded-2xl border border-border/50 bg-card/70 dark:border-white/8",
         className
       )}
-      data-leaderboard-locked-preview={variant === "locked" ? "" : undefined}
-      data-leaderboard-free-preview={variant === "free" ? "" : undefined}
-      data-leaderboard-invite-preview={variant === "invite" ? "" : undefined}
     >
       <div className="pointer-events-none select-none opacity-35 blur-[1px]" aria-hidden="true">
         <div className="flex items-center gap-2 border-b border-border/40 px-5 py-4">

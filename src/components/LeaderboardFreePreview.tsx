@@ -20,7 +20,6 @@ export default function LeaderboardFreePreview({
       icon={LockKeyhole}
       onAction={onUpgrade}
       title={t("insights.leaderboard.lockedTitle")}
-      variant="free"
     />
   );
 }

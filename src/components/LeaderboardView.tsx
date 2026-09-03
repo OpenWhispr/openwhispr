@@ -7,10 +7,11 @@ import { usePolicyStore } from "../stores/policyStore";
 import LeaderboardSection from "./LeaderboardSection";
 
 interface LeaderboardViewProps {
+  onSignIn: () => void;
   onUpgrade: () => void;
 }
 
-export default function LeaderboardView({ onUpgrade }: LeaderboardViewProps) {
+export default function LeaderboardView({ onSignIn, onUpgrade }: LeaderboardViewProps) {
   const { t } = useTranslation();
   const { isSignedIn, user } = useAuth();
   const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
@@ -18,7 +19,7 @@ export default function LeaderboardView({ onUpgrade }: LeaderboardViewProps) {
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );
   const {
-    enableInsightsSync,
+    joinLeaderboard,
     optInDialog,
     participationEnabled,
     participationError,
@@ -45,12 +46,13 @@ export default function LeaderboardView({ onUpgrade }: LeaderboardViewProps) {
         syncActive={
           isSignedIn && insightsSyncEnabled && syncAllowedByPolicy && participationEnabled
         }
-        syncCanBeEnabled={
+        canJoin={
           isSignedIn && syncAllowedByPolicy && dataRetentionEnabled && !participationUpdating
         }
         participationReady={participationReady}
         participationError={participationError}
-        onEnableSync={enableInsightsSync}
+        onJoin={() => void joinLeaderboard()}
+        onSignIn={onSignIn}
         onUpgrade={onUpgrade}
       />
 
