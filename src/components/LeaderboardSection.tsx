@@ -18,7 +18,6 @@ import {
   pageForRank,
   selectionForRange,
 } from "../helpers/leaderboard";
-import { LEADERBOARD_DEMO_ENABLED } from "../helpers/leaderboardDemo";
 import { LeaderboardService } from "../services/LeaderboardService";
 import { WorkspacesService } from "../services/WorkspacesService";
 import { useWorkspaceStore } from "../stores/workspaceStore";
@@ -33,7 +32,6 @@ import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import InviteTeammateDialog from "./InviteTeammateDialog";
 import MemberAvatar from "./MemberAvatar";
 import LeaderboardCreateTeamPreview from "./LeaderboardCreateTeamPreview";
-import LeaderboardDemoPreview from "./LeaderboardDemoPreview";
 import LeaderboardFreePreview from "./LeaderboardFreePreview";
 import LeaderboardInvitePreview from "./LeaderboardInvitePreview";
 import LeaderboardRequestJoinPreview from "./LeaderboardRequestJoinPreview";
@@ -118,7 +116,7 @@ export default function LeaderboardSection({
 
   const loadAccess = useCallback(async () => {
     const requestId = ++accessRequestIdRef.current;
-    if (!accountId || LEADERBOARD_DEMO_ENABLED) {
+    if (!accountId) {
       setAccess(null);
       setAccessLoading(false);
       setAccessError(false);
@@ -145,7 +143,7 @@ export default function LeaderboardSection({
   }, [accountId]);
 
   useEffect(() => {
-    if (!LEADERBOARD_DEMO_ENABLED && isSignedIn && !loaded) void refresh();
+    if (isSignedIn && !loaded) void refresh();
   }, [isSignedIn, loaded, refresh]);
 
   useEffect(() => {
@@ -305,18 +303,7 @@ export default function LeaderboardSection({
       </Select>
     ) : null;
 
-  if (!isSignedIn && !LEADERBOARD_DEMO_ENABLED) return null;
-  if (LEADERBOARD_DEMO_ENABLED) {
-    return (
-      <>
-        <LeaderboardDemoPreview
-          onInvite={() => setCreateWorkspaceOpen(true)}
-          onUpgrade={onUpgrade}
-        />
-        {dialogs}
-      </>
-    );
-  }
+  if (!isSignedIn) return null;
   if (accessLoading && !access) {
     return (
       <section className="mt-8 flex min-h-48 items-center justify-center rounded-2xl border border-border/50 bg-card/70 text-muted-foreground dark:border-white/8">
@@ -437,16 +424,13 @@ export default function LeaderboardSection({
                 <Loader2 size={18} className="animate-spin" />
               )}
             </div>
-            <div>
-              <h2 className="text-base font-semibold">{t("insights.leaderboard.title")}</h2>
-              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-                {participationError
-                  ? t("insights.leaderboard.activationError")
-                  : participationReady
-                    ? t("insights.leaderboard.activationDescription")
-                    : t("insights.leaderboard.checkingParticipation")}
-              </p>
-            </div>
+            <p className="max-w-2xl pt-0.5 text-xs leading-relaxed text-muted-foreground">
+              {participationError
+                ? t("insights.leaderboard.activationError")
+                : participationReady
+                  ? t("insights.leaderboard.activationDescription")
+                  : t("insights.leaderboard.checkingParticipation")}
+            </p>
           </div>
           {participationReady && (
             <Button size="sm" onClick={onEnableSync} disabled={!syncCanBeEnabled}>
@@ -465,11 +449,8 @@ export default function LeaderboardSection({
         <div>
           <div className="flex items-center gap-2">
             <Trophy size={17} className="text-amber-500" />
-            <h2 className="text-base font-semibold">{t("insights.leaderboard.title")}</h2>
+            <h2 className="text-base font-semibold">{selectedScope.name}</h2>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {t("insights.leaderboard.description")}
-          </p>
         </div>
         <div className="flex items-center gap-2">
           {scopeSelect}
