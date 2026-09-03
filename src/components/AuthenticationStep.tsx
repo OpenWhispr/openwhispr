@@ -14,6 +14,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "lucide-react";
 import logger from "../utils/logger";
+import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
 import { getCachedPlatform } from "../utils/platform";
 import ForgotPasswordView from "./ForgotPasswordView";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
@@ -39,6 +40,9 @@ const EXISTING_ACCOUNT_ERROR_CODES = new Set([
   "USER_ALREADY_EXISTS",
   "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
 ]);
+
+/** The resume draft holds typed fields, so it is written per pause, not per keystroke. */
+const AUTH_DRAFT_PERSIST_DELAY_MS = 400;
 
 function ProviderTile({
   label,
@@ -139,14 +143,12 @@ export default function AuthenticationStep({
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [isSocialLoading, setIsSocialLoading] = useState<SocialProvider | null>(null);
   const [isSSOLoading, setIsSSOLoading] = useState(false);
-  const [showSSOEmailStep, setShowSSOEmailStep] = useState(resumeState?.showSSOEmailStep ?? false);
+  const [showSSOEmailStep, setShowSSOEmailStep] = useState(false);
   const [ssoDiscovery, setSsoDiscovery] = useState<SsoDiscovery | null>(
     resumeState?.ssoDiscovery ?? null
   );
   const [error, setError] = useState<string | null>(null);
-  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(
-    resumeState?.forgotPasswordOpen ?? false
-  );
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState(true);
   const isMacOS = getCachedPlatform() === "darwin";
 
@@ -159,26 +161,23 @@ export default function AuthenticationStep({
       .catch(() => {});
   }, []);
 
+  // Only the fields this step owns: pendingVerificationEmail belongs to
+  // CompactAuthenticationFlow, and the forgot-password / SSO-email sub-screens are
+  // transient — a returning user should land on sign-in, not on a reset form.
+  const latestAuthDraft = useRef<Partial<OnboardingAuthDraft>>({});
+  const persistAuthDraft = useDebouncedCallback(
+    () => onResumeStateChange?.(latestAuthDraft.current),
+    AUTH_DRAFT_PERSIST_DELAY_MS
+  );
+
   useEffect(() => {
-    onResumeStateChange?.({
-      authMode,
-      email,
-      fullName,
-      showSSOEmailStep,
-      forgotPasswordOpen,
-      ssoDiscovery,
-      pendingVerificationEmail: resumeState?.pendingVerificationEmail ?? null,
-    });
-  }, [
-    authMode,
-    email,
-    forgotPasswordOpen,
-    fullName,
-    onResumeStateChange,
-    resumeState?.pendingVerificationEmail,
-    showSSOEmailStep,
-    ssoDiscovery,
-  ]);
+    latestAuthDraft.current = { authMode, email, fullName, ssoDiscovery };
+    persistAuthDraft();
+  }, [authMode, email, fullName, persistAuthDraft, ssoDiscovery]);
+
+  // The debounce drops a pending write when this step unmounts, which is exactly
+  // what sign-up does on its way to verification, so flush the last draft.
+  useEffect(() => () => onResumeStateChange?.(latestAuthDraft.current), [onResumeStateChange]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || needsVerificationRef.current || !user?.id || !user?.email)

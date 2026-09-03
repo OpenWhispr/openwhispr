@@ -294,7 +294,8 @@ const LINUX_RESERVED_SHORTCUTS = [
 const MAC_RECOMMENDED = [
   "Fn",
   "Ctrl + Q",
-  "Option + Cmd",
+  // No bare two-modifier combos here: validateHotkey rejects them on macOS
+  // (MODIFIER_ONLY_UNSUPPORTED), so suggesting one sends the user into an error.
   "Right Cmd or Right Option",
   "Modifier + unused key (e.g., Ctrl + Page Up)",
 ] as const;

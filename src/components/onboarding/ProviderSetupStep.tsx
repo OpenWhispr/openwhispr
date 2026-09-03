@@ -205,6 +205,47 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
   }
 }
 
+/**
+ * The provider/model a local step opens on: the draft this step last wrote, then
+ * a selection whose download is still pending, then whatever the store already
+ * holds. Reads localStorage, so it belongs in a state initializer, not a render.
+ */
+function resolveInitialLocalSelection(
+  assistant: boolean,
+  resumeState: OnboardingLocalModelDraft | undefined,
+  store: ReturnType<typeof useSettingsStore.getState>
+): OnboardingLocalModelDraft {
+  const pending = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
+  const savedProvider = assistant
+    ? modelRegistry.getProvider(store.chatAgentProvider)
+      ? store.chatAgentProvider
+      : "qwen"
+    : store.localTranscriptionProvider === "nvidia"
+      ? "nvidia"
+      : "whisper";
+  const requestedProvider = resumeState?.provider || pending?.provider || savedProvider;
+  const provider = assistant
+    ? modelRegistry.getProvider(requestedProvider)
+      ? requestedProvider
+      : "qwen"
+    : requestedProvider === "nvidia"
+      ? "nvidia"
+      : "whisper";
+  const savedModel = assistant
+    ? store.chatAgentModel
+    : provider === "nvidia"
+      ? store.parakeetModel
+      : store.whisperModel;
+
+  return {
+    provider,
+    modelId:
+      (resumeState?.provider === provider ? resumeState.modelId : "") ||
+      (pending?.provider === provider ? pending.modelId : "") ||
+      savedModel,
+  };
+}
+
 type HostedProvider = CloudProviderData | TranscriptionProviderData;
 
 function FieldLabel({ children }: { children: ReactNode }) {
@@ -275,7 +316,9 @@ export function ByokProviderStep({
   const [draftCortiClientId, setDraftCortiClientId] = useState(
     initialProvider === "corti" ? store.cortiClientId : ""
   );
-  const [draftCortiClientSecret, setDraftCortiClientSecret] = useState(store.cortiClientSecret);
+  const [draftCortiClientSecret, setDraftCortiClientSecret] = useState(
+    initialProvider === "corti" ? store.cortiClientSecret : ""
+  );
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
@@ -620,33 +663,12 @@ export function LocalModelSetupStep({
   const { t } = useTranslation();
   const store = useSettingsStore();
   const assistant = stepId === "local-assistant";
-  const pendingSelection = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
-  const savedProvider = assistant
-    ? modelRegistry.getProvider(store.chatAgentProvider)
-      ? store.chatAgentProvider
-      : "qwen"
-    : store.localTranscriptionProvider === "nvidia"
-      ? "nvidia"
-      : "whisper";
-  const requestedProvider = resumeState?.provider || pendingSelection?.provider || savedProvider;
-  const initialProvider = assistant
-    ? modelRegistry.getProvider(requestedProvider)
-      ? requestedProvider
-      : "qwen"
-    : requestedProvider === "nvidia"
-      ? "nvidia"
-      : "whisper";
-  const savedModel = assistant
-    ? store.chatAgentModel
-    : initialProvider === "nvidia"
-      ? store.parakeetModel
-      : store.whisperModel;
-  const initialModel =
-    (resumeState?.provider === initialProvider ? resumeState.modelId : "") ||
-    (pendingSelection?.provider === initialProvider ? pendingSelection.modelId : "") ||
-    savedModel;
-  const [selectedProvider, setSelectedProvider] = useState(initialProvider);
-  const [selectedModel, setSelectedModel] = useState(initialModel);
+  const [selectedProvider, setSelectedProvider] = useState(
+    () => resolveInitialLocalSelection(assistant, resumeState, store).provider
+  );
+  const [selectedModel, setSelectedModel] = useState(
+    () => resolveInitialLocalSelection(assistant, resumeState, store).modelId
+  );
   const [downloadedWhisper, setDownloadedWhisper] = useState<Set<string>>(new Set());
   const [downloadedParakeet, setDownloadedParakeet] = useState<Set<string>>(new Set());
   const [downloadedLlm, setDownloadedLlm] = useState<Set<string>>(new Set());
@@ -891,11 +913,9 @@ export function LocalModelSetupStep({
                 // text-secondary. Progress is a light/surface-tertiary fill
                 // growing from the left behind them, not a fixed-width segment
                 // around the percentage.
-                <span
-                  aria-live="polite"
-                  aria-atomic="true"
-                  className="relative flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 text-sm font-medium leading-[1.4] tabular-nums text-[var(--onboarding-text-secondary)]"
-                >
+                // No aria-live: BackgroundModelDownloadTray is the one live region
+                // for download progress, so a second one here read every tick twice.
+                <span className="relative flex h-8 shrink-0 items-center gap-2 overflow-hidden rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-3 text-sm font-medium leading-[1.4] tabular-nums text-[var(--onboarding-text-secondary)]">
                   {/* Figma draws the rect taller than the pill so it bleeds top
                       and bottom; inset-y-0 does that without a magic height. */}
                   <span

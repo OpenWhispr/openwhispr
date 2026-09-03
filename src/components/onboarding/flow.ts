@@ -1,3 +1,5 @@
+import { PENDING_LOCAL_MODELS_KEY } from "./pendingLocalModels";
+
 export const ONBOARDING_SESSION_KEY = "onboardingSessionV2";
 export const LEGACY_ONBOARDING_STEP_KEY = "onboardingCurrentStep";
 export const ONBOARDING_FLOW_VERSION = 2;
@@ -38,8 +40,6 @@ export interface OnboardingAuthDraft {
   authMode: OnboardingAuthMode;
   email: string;
   fullName: string;
-  showSSOEmailStep: boolean;
-  forgotPasswordOpen: boolean;
   ssoDiscovery: OnboardingSsoDiscoveryDraft | null;
   pendingVerificationEmail: string | null;
 }
@@ -164,8 +164,6 @@ export function createOnboardingResumeState(): OnboardingResumeState {
       authMode: null,
       email: "",
       fullName: "",
-      showSSOEmailStep: false,
-      forgotPasswordOpen: false,
       ssoDiscovery: null,
       pendingVerificationEmail: null,
     },
@@ -192,7 +190,7 @@ export function resetOnboardingProgress(storage: OnboardingStorage): void {
   storage.removeItem("authenticationSkipped");
   storage.removeItem("skipAuth");
   storage.removeItem("localSetupPending");
-  storage.removeItem("pendingLocalModelSelectionsV1");
+  storage.removeItem(PENDING_LOCAL_MODELS_KEY);
   // AppRouter uses this marker to distinguish an explicit restart from a
   // returning signed-in user, while useOnboardingSession migrates it to auth.
   storage.setItem(LEGACY_ONBOARDING_STEP_KEY, "0");
@@ -315,8 +313,6 @@ function parseOnboardingResumeState(value: unknown): OnboardingResumeState {
       authMode: authMode === "sign-in" || authMode === "sign-up" ? authMode : null,
       email: readDraftString(authValue.email),
       fullName: readDraftString(authValue.fullName),
-      showSSOEmailStep: authValue.showSSOEmailStep === true,
-      forgotPasswordOpen: authValue.forgotPasswordOpen === true,
       ssoDiscovery: parseSsoDiscoveryDraft(authValue.ssoDiscovery),
       pendingVerificationEmail:
         typeof authValue.pendingVerificationEmail === "string"

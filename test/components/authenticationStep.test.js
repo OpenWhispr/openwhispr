@@ -202,21 +202,25 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
   await settleAsyncHandler();
   assert.deepEqual(directSso.ssoCalls, ["person@company.test"]);
 
-  const resumedSso = createHarness();
-  const resumedSsoTree = render(resumedSso, {
+  // A resumed draft restores the identity fields only. The SSO work-email screen
+  // is transient, so a returning user lands back on sign-in rather than inside it.
+  const resumed = createHarness();
+  const resumedTree = render(resumed, {
     resumeState: {
       authMode: null,
       email: "resume@company.test",
       fullName: "Resume User",
-      showSSOEmailStep: true,
-      forgotPasswordOpen: false,
       ssoDiscovery: null,
       pendingVerificationEmail: null,
     },
   });
-  assert.equal(resumedSso.values[EMAIL_INDEX], "resume@company.test");
-  assert.equal(resumedSso.values[FULL_NAME_INDEX], "Resume User");
-  assert.ok(findElement(resumedSsoTree, (node) => node.type === "form"));
+  assert.equal(resumed.values[EMAIL_INDEX], "resume@company.test");
+  assert.equal(resumed.values[FULL_NAME_INDEX], "Resume User");
+  assert.equal(resumed.values[SSO_EMAIL_STEP_INDEX], false);
+  assert.ok(
+    findElement(resumedTree, (node) => node.type?.name === "ProviderTile"),
+    "a resumed draft should reopen the provider choices, not the SSO email step"
+  );
 
   const duplicateRace = createHarness({
     [AUTH_MODE_INDEX]: "sign-up",

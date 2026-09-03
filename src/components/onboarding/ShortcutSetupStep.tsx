@@ -82,6 +82,9 @@ export default function ShortcutSetupStep({
   const recommendations = Array.isArray(recommended) ? recommended : [recommended];
   const [candidate, setCandidate] = useState(value);
   const [confirmed, setConfirmed] = useState(initiallyConfirmed ?? Boolean(value));
+  // The step opens with a recommended chord already in the box, so "press it
+  // again" only becomes true once the user has actually captured one.
+  const [hasCapturedChord, setHasCapturedChord] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [captureKey, setCaptureKey] = useState(0);
@@ -98,6 +101,7 @@ export default function ShortcutSetupStep({
       if (confirmationError) {
         setError(confirmationError);
         setCandidate("");
+        setHasCapturedChord(false);
         setCaptureKey((current) => current + 1);
         onClearSelection?.();
         return;
@@ -108,6 +112,7 @@ export default function ShortcutSetupStep({
     }
 
     setCandidate(next);
+    setHasCapturedChord(true);
     setConfirmed(false);
     onClearSelection?.();
     // HotkeyInput blurs after every completed capture. Remounting restores focus
@@ -117,6 +122,7 @@ export default function ShortcutSetupStep({
 
   const reset = () => {
     setCandidate("");
+    setHasCapturedChord(false);
     setConfirmed(false);
     setError(null);
     setCaptureKey((current) => current + 1);
@@ -172,9 +178,11 @@ export default function ShortcutSetupStep({
               <p
                 className={`rounded-full bg-[var(--onboarding-surface-tertiary)] px-5 py-2 text-sm text-[var(--onboarding-text-tertiary)] ${dense ? "" : "mt-6"}`}
               >
-                {t("onboarding.rehaul.hotkey.confirmAgain", {
-                  hotkey: formatHotkeyInstruction(candidate),
-                })}
+                {hasCapturedChord
+                  ? t("onboarding.rehaul.hotkey.confirmAgain", {
+                      hotkey: formatHotkeyInstruction(candidate),
+                    })
+                  : captureLabel}
               </p>
             )}
             <button

@@ -111,8 +111,11 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
   };
   const input = (tree) => findElement(tree, (node) => node.type?.name === "HotkeyInput");
 
+  // The step opens with the recommended chord already in the box, so it asks for a
+  // first press; "press it again" only applies once a chord has actually been captured.
   const initialTree = render();
-  assert.match(textContent(initialTree), /onboarding\.rehaul\.hotkey\.confirmAgain:RightOption/);
+  assert.match(textContent(initialTree), /Capture/);
+  assert.doesNotMatch(textContent(initialTree), /confirmAgain/);
   assert.ok(
     findElement(
       initialTree,
