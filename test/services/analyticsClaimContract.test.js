@@ -208,8 +208,13 @@ test("a leave the account never took is kept and retried until it does", () => {
     hook.indexOf("const answerClaimPrompt")
   );
   assert.ok(
-    join.includes("clearPendingLeaderboardLeave(userId)"),
-    "an explicit join is the account's newest answer, so it retires the leave"
+    join.indexOf("clearPendingLeaderboardLeave(userId)") >
+      join.indexOf("await enableInsightsSync()"),
+    "a declined opt-in never joins, so the leave it stopped short of must survive"
+  );
+  assert.ok(
+    join.indexOf("clearPendingLeaderboardLeave(userId)") < join.indexOf("setParticipation(true)"),
+    "an explicit join is the account's newest answer, and retiring the leave only after the join lands lets the read the sync toggle fires flush it into a PATCH racing that join"
   );
   const flush = service.slice(
     service.indexOf("async function flushPendingLeave"),

@@ -36,7 +36,7 @@ async function setParticipation(enabled: boolean): Promise<AnalyticsParticipatio
  * that keeps failing costs one call per trigger rather than a loop.
  */
 async function flushPendingLeave(userId: string | null): Promise<boolean> {
-  if (!userId || readPendingLeaderboardLeave() !== userId) return false;
+  if (!userId || !readPendingLeaderboardLeave(userId)) return false;
   try {
     await setParticipation(false);
     clearPendingLeaderboardLeave(userId);
