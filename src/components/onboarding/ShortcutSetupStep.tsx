@@ -63,7 +63,6 @@ interface ShortcutSetupStepProps {
       whatever it recorded from a previous `onChange`. */
   onClearSelection?: () => void;
   dense?: boolean;
-  showCandidateActions?: boolean;
 }
 
 export default function ShortcutSetupStep({
@@ -78,7 +77,6 @@ export default function ShortcutSetupStep({
   onConfirm,
   onClearSelection,
   dense = false,
-  showCandidateActions = true,
 }: ShortcutSetupStepProps) {
   const { t } = useTranslation();
   const recommendations = Array.isArray(recommended) ? recommended : [recommended];
@@ -164,7 +162,7 @@ export default function ShortcutSetupStep({
             )}
           </div>
 
-          <div className="mt-auto flex flex-col items-center gap-2.5 pb-1" aria-live="polite">
+          <div className="mt-auto flex flex-col items-center gap-2.5 pb-1 pt-8" aria-live="polite">
             {confirmed ? (
               <p className="sr-only">{formatHotkeyInstruction(candidate)}</p>
             ) : (
@@ -174,15 +172,13 @@ export default function ShortcutSetupStep({
                 })}
               </p>
             )}
-            {showCandidateActions && (
-              <button
-                type="button"
-                onClick={reset}
-                className="rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 py-2 text-sm text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
-              >
-                {chooseAnotherLabel}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 py-2 text-sm text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
+            >
+              {chooseAnotherLabel}
+            </button>
           </div>
         </>
       ) : (

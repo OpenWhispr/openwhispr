@@ -900,7 +900,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               validate={assistant ? validateAssistantHotkey : validateDictationHotkey}
               onConfirm={assistant ? confirmAssistantHotkey : confirmDictationHotkey}
               dense={assistant}
-              showCandidateActions={!assistant}
             />
           </div>
         );

@@ -180,7 +180,6 @@ export default function CompactPermissionsStep({
               <PermissionRow
                 title={t("onboarding.permissions.accessibilityTitle")}
                 description={t("onboarding.rehaul.permissions.accessibilityDescription")}
-                badge={t("onboarding.permissions.recommended")}
                 granted={permissions.accessibilityPermissionGranted}
                 busy={busyPermission === "accessibility"}
                 iconSrc={accessibilityIcon}

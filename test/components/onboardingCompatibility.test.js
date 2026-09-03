@@ -216,11 +216,7 @@ test("macOS onboarding offers optional Screen Context setup", async (t) => {
 
   assert.match(markup, /dictationAgent\.screenContext\.title/);
   assert.match(markup, /lucide-laptop/);
-  assert.equal(
-    markup.match(/onboarding\.permissions\.recommended/g)?.length,
-    1,
-    "Accessibility should be labelled Recommended on macOS"
-  );
+  assert.doesNotMatch(markup, /onboarding\.permissions\.recommended/);
   assert.equal(
     markup.match(/onboarding\.permissions\.optional/g)?.length,
     2,
