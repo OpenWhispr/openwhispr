@@ -108,10 +108,31 @@ export const formatRecommendedHotkey = (value: string) =>
 export const MACOS_DEFAULT_ONBOARDING_HOTKEY = "RightOption";
 export const DEFAULT_ASSISTANT_ONBOARDING_HOTKEY = "CommandOrControl+Shift+Space";
 
-export const getDefaultOnboardingDictationHotkey = (
-  platform: Platform,
-  effectiveDefault: string
-): string => (platform === "darwin" ? MACOS_DEFAULT_ONBOARDING_HOTKEY : effectiveDefault);
+/**
+ * The chord the dictation step opens on.
+ *
+ * macOS onboards on Right Option rather than the platform default, but only when
+ * there is nothing of the user's to lose: `confirmed` is false for a session the
+ * legacy numeric migration rebuilt (and for any session written before the resume
+ * flags existed), so a saved hotkey that isn't simply the platform default is
+ * treated as the user's own choice and kept. finalizeOnboarding re-registers
+ * whatever this returns, so overwriting it here overwrites their real hotkey.
+ */
+export const resolveOnboardingDictationHotkey = ({
+  platform,
+  savedHotkey,
+  platformDefault,
+  confirmed,
+}: {
+  platform: Platform;
+  savedHotkey: string;
+  platformDefault: string;
+  confirmed: boolean;
+}): string => {
+  if (platform !== "darwin") return savedHotkey || platformDefault;
+  if (savedHotkey && (confirmed || savedHotkey !== platformDefault)) return savedHotkey;
+  return MACOS_DEFAULT_ONBOARDING_HOTKEY;
+};
 
 export const getRecommendedDictationHotkeys = (
   platform: Platform,

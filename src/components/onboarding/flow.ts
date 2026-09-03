@@ -4,6 +4,12 @@ export const ONBOARDING_SESSION_KEY = "onboardingSessionV2";
 export const LEGACY_ONBOARDING_STEP_KEY = "onboardingCurrentStep";
 export const ONBOARDING_FLOW_VERSION = 2;
 
+/**
+ * Resume drafts hold typed fields, and every write persists the whole session, so
+ * the steps that own a text input write once per pause rather than per keystroke.
+ */
+export const RESUME_DRAFT_PERSIST_DELAY_MS = 400;
+
 type OnboardingStorage = Pick<Storage, "setItem" | "removeItem">;
 
 export type OnboardingStepId =

@@ -33,8 +33,8 @@ import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils
 import {
   DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
   formatHotkeyInstruction,
-  getDefaultOnboardingDictationHotkey,
   getRecommendedDictationHotkeys,
+  resolveOnboardingDictationHotkey,
 } from "./onboarding/hotkeyPresentation";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
@@ -112,11 +112,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   }, []);
 
   const { dictationHotkeyConfirmed, assistantHotkeyConfirmed } = session.resume;
-  const [dictationHotkey, setDictationHotkey] = useState(() => {
-    const savedHotkey = parseHotkeyList(settings.dictationKey)[0];
-    if (dictationHotkeyConfirmed && savedHotkey) return savedHotkey;
-    return getDefaultOnboardingDictationHotkey(platform, savedHotkey || getDefaultHotkey());
-  });
+  const [dictationHotkey, setDictationHotkey] = useState(() =>
+    resolveOnboardingDictationHotkey({
+      platform,
+      savedHotkey: parseHotkeyList(settings.dictationKey)[0] ?? "",
+      platformDefault: getDefaultHotkey(),
+      confirmed: dictationHotkeyConfirmed,
+    })
+  );
   const [assistantHotkey, setAssistantHotkey] = useState(() => {
     const savedHotkey = parseHotkeyList(settings.voiceAgentKey)[0];
     if (assistantHotkeyConfirmed && savedHotkey) return savedHotkey;

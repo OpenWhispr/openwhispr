@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AudioLines, Check, Circle, CircleCheck, Download, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ProviderConnectionTest from "./ProviderConnectionTest";
@@ -24,7 +24,13 @@ import {
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
 import { pickDefaultModelId } from "../../models/providerDefaultModel";
-import type { OnboardingByokDraft, OnboardingLocalModelDraft, OnboardingStepId } from "./flow";
+import {
+  RESUME_DRAFT_PERSIST_DELAY_MS,
+  type OnboardingByokDraft,
+  type OnboardingLocalModelDraft,
+  type OnboardingStepId,
+} from "./flow";
+import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import {
   forgetPendingLocalModel,
   readPendingLocalModels,
@@ -325,14 +331,26 @@ export function ByokProviderStep({
     onConnectionChange(false);
   }, [onConnectionChange]);
 
+  // Base URL and custom model are typed, so the write is debounced the way the
+  // auth draft is; the flush covers the pending write this card drops when the
+  // step advances and unmounts it.
+  const latestByokDraft = useRef<OnboardingByokDraft | null>(null);
+  const flushByokDraft = useCallback(() => {
+    if (latestByokDraft.current) onResumeStateChange?.(latestByokDraft.current);
+  }, [onResumeStateChange]);
+  const persistByokDraft = useDebouncedCallback(flushByokDraft, RESUME_DRAFT_PERSIST_DELAY_MS);
+
   useEffect(() => {
-    onResumeStateChange?.({
+    latestByokDraft.current = {
       selectedProvider,
       selectedModel,
       baseUrl: draftBaseUrl,
       customModel: draftCustomModel,
-    });
-  }, [draftBaseUrl, draftCustomModel, onResumeStateChange, selectedModel, selectedProvider]);
+    };
+    persistByokDraft();
+  }, [draftBaseUrl, draftCustomModel, persistByokDraft, selectedModel, selectedProvider]);
+
+  useEffect(() => flushByokDraft, [flushByokDraft]);
 
   // A live policy update can remove self-hosting while this card is open.
   useEffect(() => {
@@ -663,12 +681,11 @@ export function LocalModelSetupStep({
   const { t } = useTranslation();
   const store = useSettingsStore();
   const assistant = stepId === "local-assistant";
-  const [selectedProvider, setSelectedProvider] = useState(
-    () => resolveInitialLocalSelection(assistant, resumeState, store).provider
+  const [initialSelection] = useState(() =>
+    resolveInitialLocalSelection(assistant, resumeState, store)
   );
-  const [selectedModel, setSelectedModel] = useState(
-    () => resolveInitialLocalSelection(assistant, resumeState, store).modelId
-  );
+  const [selectedProvider, setSelectedProvider] = useState(initialSelection.provider);
+  const [selectedModel, setSelectedModel] = useState(initialSelection.modelId);
   const [downloadedWhisper, setDownloadedWhisper] = useState<Set<string>>(new Set());
   const [downloadedParakeet, setDownloadedParakeet] = useState<Set<string>>(new Set());
   const [downloadedLlm, setDownloadedLlm] = useState<Set<string>>(new Set());

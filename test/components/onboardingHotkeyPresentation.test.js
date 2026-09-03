@@ -25,11 +25,9 @@ test("macOS recommends Right Option first, followed by Globe/Fn and Ctrl + R", a
   const {
     DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
     formatRecommendedHotkey,
-    getDefaultOnboardingDictationHotkey,
     getRecommendedDictationHotkeys,
   } = await load();
 
-  assert.equal(getDefaultOnboardingDictationHotkey("darwin", "GLOBE"), "RightOption");
   assert.deepEqual(
     getRecommendedDictationHotkeys("darwin", "Command+K").map(formatRecommendedHotkey),
     ["Right Option", "Globe/Fn", "Ctrl + R"]
@@ -40,6 +38,50 @@ test("macOS recommends Right Option first, followed by Globe/Fn and Ctrl + R", a
   ]);
   assert.equal(DEFAULT_ASSISTANT_ONBOARDING_HOTKEY, "CommandOrControl+Shift+Space");
   assert.equal(formatRecommendedHotkey(DEFAULT_ASSISTANT_ONBOARDING_HOTKEY), "Cmd + Shift + Space");
+});
+
+test("the dictation step never opens on a chord that would overwrite the user's own", async () => {
+  const { resolveOnboardingDictationHotkey } = await load();
+  const onMac = (savedHotkey, confirmed) =>
+    resolveOnboardingDictationHotkey({
+      platform: "darwin",
+      savedHotkey,
+      platformDefault: "GLOBE",
+      confirmed,
+    });
+
+  // Nothing of the user's to lose: onboard on the macOS default.
+  assert.equal(onMac("", false), "RightOption");
+  assert.equal(onMac("", true), "RightOption");
+  assert.equal(onMac("GLOBE", false), "RightOption");
+
+  // A hotkey the user picked survives, confirmed or not. `confirmed` is false for
+  // a session rebuilt by the legacy numeric migration and for any session written
+  // before the resume flags existed, and finalizeOnboarding re-registers whatever
+  // this returns — so returning the macOS default here would erase their chord.
+  assert.equal(onMac("Control+Shift+D", false), "Control+Shift+D");
+  assert.equal(onMac("Control+Shift+D", true), "Control+Shift+D");
+  assert.equal(onMac("GLOBE", true), "GLOBE");
+});
+
+test("only macOS substitutes an onboarding default for the platform one", async () => {
+  const { resolveOnboardingDictationHotkey } = await load();
+
+  for (const platform of ["win32", "linux"]) {
+    for (const confirmed of [false, true]) {
+      const resolve = (savedHotkey) =>
+        resolveOnboardingDictationHotkey({
+          platform,
+          savedHotkey,
+          platformDefault: "Control+Super",
+          confirmed,
+        });
+      assert.equal(resolve(""), "Control+Super");
+      assert.equal(resolve("Control+Super"), "Control+Super");
+      assert.equal(resolve("F8"), "F8");
+      assert.equal(resolve("Control+Shift+D"), "Control+Shift+D");
+    }
+  }
 });
 
 test("a side-specific modifier keeps its glyph and says which side in the label", async () => {

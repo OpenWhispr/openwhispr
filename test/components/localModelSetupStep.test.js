@@ -13,6 +13,18 @@ function findElements(node, predicate, matches = []) {
   return matches;
 }
 
+function findByName(tree, name) {
+  return findElements(tree, (node) => node.type?.name === name);
+}
+
+// Rows are keyed by model id, so a per-model assertion can read just that row
+// rather than the whole card.
+function modelRow(tree, modelId) {
+  const [row] = findElements(tree, (node) => node.key === modelId);
+  assert.ok(row, `expected a row for ${modelId}`);
+  return row;
+}
+
 // The action row is the only grid in this step's tree; its column count has to
 // follow Skip, or Proceed sits half-width in the left column on its own.
 function actionRowColumns(tree) {
@@ -31,33 +43,62 @@ function textContent(node) {
   return textContent(node.props?.children);
 }
 
-test("local model rows distinguish downloading, selectable, and selected states", async (t) => {
-  installBrowserGlobals(t, { window: { electronAPI: {} } });
-  globalThis.__localModelSetupHarness = { cursor: 0, values: {}, downloadActive: false };
+test("local model setup reflects what is on disk, downloading, and resumed", async (t) => {
+  const harness = {
+    cursor: 0,
+    slots: {},
+    effects: [],
+    downloadedLlm: [],
+    downloadActive: false,
+    savedChatAgentModel: "",
+  };
+  globalThis.__localModelSetupHarness = harness;
   t.after(() => {
     delete globalThis.__localModelSetupHarness;
+  });
+
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        // Assistant models come from modelGetAll; the two transcription lists are
+        // queried on the same pass and stay empty for a local-assistant step.
+        modelGetAll: async () =>
+          globalThis.__localModelSetupHarness.downloadedLlm.map((id) => ({
+            id,
+            isDownloaded: true,
+          })),
+        listWhisperModels: async () => ({ models: [] }),
+        listParakeetModels: async () => ({ models: [] }),
+      },
+    },
   });
 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-local-model-setup-step-",
     noExternal: ["react", "react-i18next", "lucide-react"],
     mockModules: {
+      // A minimal renderer rather than react-dom: it returns the element tree so
+      // the assertions can read rendered output, and it runs effects so the
+      // downloaded-model state comes from window.electronAPI the way it does in
+      // the app. Nothing here is keyed on hook call order.
       react: `
         export function useState(initialValue) {
           const harness = globalThis.__localModelSetupHarness;
-          const index = harness.cursor++;
-          if (!(index in harness.values)) {
-            harness.values[index] = typeof initialValue === "function" ? initialValue() : initialValue;
+          const slot = harness.cursor++;
+          if (!(slot in harness.slots)) {
+            harness.slots[slot] = typeof initialValue === "function" ? initialValue() : initialValue;
           }
-          return [harness.values[index], (nextValue) => {
-            harness.values[index] = typeof nextValue === "function"
-              ? nextValue(harness.values[index])
+          return [harness.slots[slot], (nextValue) => {
+            harness.slots[slot] = typeof nextValue === "function"
+              ? nextValue(harness.slots[slot])
               : nextValue;
           }];
         }
         export function useCallback(callback) { return callback; }
-        export function useEffect() {}
         export function useMemo(factory) { return factory(); }
+        export function useEffect(effect) {
+          globalThis.__localModelSetupHarness.effects.push(effect);
+        }
       `,
       "/jsx-dev-runtime": `
         export const Fragment = Symbol.for("react.fragment");
@@ -82,6 +123,9 @@ test("local model rows distinguish downloading, selectable, and selected states"
         export function SelectTrigger() { return null; }
         export function SelectValue() { return null; }
       `,
+      "/hooks/useDebouncedCallback": `
+        export function useDebouncedCallback(callback) { return callback; }
+      `,
       "/hooks/useModelDownload": `
         export function useModelDownload({ modelType }) {
           const harness = globalThis.__localModelSetupHarness;
@@ -99,6 +143,9 @@ test("local model rows distinguish downloading, selectable, and selected states"
         const store = {
           chatAgentProvider: "qwen",
           localTranscriptionProvider: "whisper",
+          get chatAgentModel() {
+            return globalThis.__localModelSetupHarness.savedChatAgentModel;
+          },
           setChatAgentMode() {}, setChatAgentProvider() {}, setChatAgentModel() {},
           setLocalTranscriptionProvider() {}, setParakeetModel() {}, setWhisperModel() {},
         };
@@ -142,86 +189,81 @@ test("local model rows distinguish downloading, selectable, and selected states"
   const { LocalModelSetupStep } = await vite.ssrLoadModule(
     "/components/onboarding/ProviderSetupStep.tsx"
   );
-  const harness = globalThis.__localModelSetupHarness;
-  const props = {
+
+  const baseProps = {
     stepId: "local-assistant",
     onReadinessChange() {},
     onProceed() {},
     onSkip() {},
-  };
-  const render = () => {
-    harness.cursor = 0;
-    return LocalModelSetupStep(props);
+    onResumeStateChange() {},
   };
 
-  harness.values = {
-    0: "qwen",
-    1: "qwen-9b",
-    2: new Set(),
-    3: new Set(),
-    4: new Set(["qwen-9b", "qwen-4b"]),
+  // Renders, runs the queued effects, lets their promises settle, and renders
+  // again — so the tree under assertion is the one the user ends up looking at
+  // once the disk check has come back.
+  const renderSettled = async (props = {}) => {
+    harness.slots = {};
+    let tree = null;
+    for (let pass = 0; pass < 3; pass += 1) {
+      harness.cursor = 0;
+      harness.effects = [];
+      tree = LocalModelSetupStep({ ...baseProps, ...props });
+      for (const effect of harness.effects) effect();
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    return tree;
   };
-  const selected = render();
-  assert.match(textContent(selected), /onboarding\.rehaul\.local\.selected/);
-  assert.match(textContent(selected), /onboarding\.rehaul\.local\.selectModel/);
-  const selectedProceed = findElements(
-    selected,
-    (node) => node.type?.name === "StepPrimaryAction"
-  )[0];
-  assert.equal(selectedProceed.props.disabled, false);
+
+  // Both models on disk, the saved one active: it shows Selected, the other
+  // offers Select model, and Proceed is available.
+  harness.downloadedLlm = ["qwen-9b", "qwen-4b"];
+  harness.savedChatAgentModel = "qwen-9b";
+  harness.downloadActive = false;
+  const selected = await renderSettled();
+  assert.match(textContent(modelRow(selected, "qwen-9b")), /onboarding\.rehaul\.local\.selected/);
+  assert.match(
+    textContent(modelRow(selected, "qwen-4b")),
+    /onboarding\.rehaul\.local\.selectModel/
+  );
+  assert.equal(findByName(selected, "StepPrimaryAction")[0].props.disabled, false);
   // Skip is the "don't wait for this download" escape hatch, so it stays off the
   // card whenever nothing is downloading.
-  assert.equal(
-    findElements(selected, (node) => node.type?.name === "StepSecondaryAction").length,
-    0
-  );
+  assert.equal(findByName(selected, "StepSecondaryAction").length, 0);
   assert.equal(actionRowColumns(selected), "grid-cols-1");
 
-  harness.values = {
-    0: "qwen",
-    1: "",
-    2: new Set(),
-    3: new Set(),
-    4: new Set(),
-  };
-  const idle = render();
-  const idleProceed = findElements(idle, (node) => node.type?.name === "StepPrimaryAction")[0];
-  assert.equal(idleProceed.props.disabled, true);
+  // Nothing on disk: every row offers Download and Proceed is withheld.
+  harness.downloadedLlm = [];
+  harness.savedChatAgentModel = "";
+  const idle = await renderSettled();
+  assert.match(textContent(modelRow(idle, "qwen-9b")), /onboarding\.rehaul\.local\.download/);
+  assert.doesNotMatch(textContent(idle), /onboarding\.rehaul\.local\.selected/);
+  assert.equal(findByName(idle, "StepPrimaryAction")[0].props.disabled, true);
   // Neither action is available with no model on disk and no transfer running:
   // skipping here would finish onboarding on local transcription with nothing to
   // transcribe with. Back is the way out.
-  assert.equal(findElements(idle, (node) => node.type?.name === "StepSecondaryAction").length, 0);
+  assert.equal(findByName(idle, "StepSecondaryAction").length, 0);
   assert.equal(actionRowColumns(idle), "grid-cols-1");
 
-  harness.values = {
-    0: "qwen",
-    1: "",
-    2: new Set(),
-    3: new Set(),
-    4: new Set(),
-  };
+  // Mid-download: the row shows progress, Proceed stays withheld, and Skip
+  // appears as the way past a transfer the user should not have to wait for.
   harness.downloadActive = true;
-  const downloading = render();
-  assert.match(textContent(downloading), /onboarding\.rehaul\.local\.downloadingShort/);
-  assert.equal(findElements(downloading, (node) => node.props?.style?.width === "20%").length, 1);
-  const downloadingProceed = findElements(
-    downloading,
-    (node) => node.type?.name === "StepPrimaryAction"
-  )[0];
-  assert.equal(downloadingProceed.props.disabled, true);
+  const downloading = await renderSettled();
+  const downloadingRow = modelRow(downloading, "qwen-9b");
+  assert.match(textContent(downloadingRow), /onboarding\.rehaul\.local\.downloadingShort/);
   assert.equal(
-    findElements(downloading, (node) => node.type?.name === "StepSecondaryAction").length,
+    findElements(downloadingRow, (node) => node.props?.style?.width === "20%").length,
     1
   );
+  assert.equal(findByName(downloading, "StepPrimaryAction")[0].props.disabled, true);
+  assert.equal(findByName(downloading, "StepSecondaryAction").length, 1);
   assert.equal(actionRowColumns(downloading), "grid-cols-2");
 
-  harness.values = {};
+  // A resumed draft outranks the model the store has saved, so the step reopens
+  // on the row the user last picked.
+  harness.downloadedLlm = ["qwen-9b", "qwen-4b"];
+  harness.savedChatAgentModel = "qwen-9b";
   harness.downloadActive = false;
-  harness.cursor = 0;
-  LocalModelSetupStep({
-    ...props,
-    resumeState: { provider: "qwen", modelId: "qwen-4b" },
-  });
-  assert.equal(harness.values[0], "qwen");
-  assert.equal(harness.values[1], "qwen-4b");
+  const resumed = await renderSettled({ resumeState: { provider: "qwen", modelId: "qwen-4b" } });
+  assert.match(textContent(modelRow(resumed, "qwen-4b")), /onboarding\.rehaul\.local\.selected/);
+  assert.match(textContent(modelRow(resumed, "qwen-9b")), /onboarding\.rehaul\.local\.selectModel/);
 });

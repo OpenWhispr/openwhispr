@@ -18,10 +18,11 @@ import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
 import { getCachedPlatform } from "../utils/platform";
 import ForgotPasswordView from "./ForgotPasswordView";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
-import type {
-  OnboardingAuthDraft,
-  OnboardingAuthMode,
-  OnboardingSsoDiscoveryDraft,
+import {
+  RESUME_DRAFT_PERSIST_DELAY_MS,
+  type OnboardingAuthDraft,
+  type OnboardingAuthMode,
+  type OnboardingSsoDiscoveryDraft,
 } from "./onboarding/flow";
 
 interface AuthenticationStepProps {
@@ -40,9 +41,6 @@ const EXISTING_ACCOUNT_ERROR_CODES = new Set([
   "USER_ALREADY_EXISTS",
   "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
 ]);
-
-/** The resume draft holds typed fields, so it is written per pause, not per keystroke. */
-const AUTH_DRAFT_PERSIST_DELAY_MS = 400;
 
 function ProviderTile({
   label,
@@ -167,7 +165,7 @@ export default function AuthenticationStep({
   const latestAuthDraft = useRef<Partial<OnboardingAuthDraft>>({});
   const persistAuthDraft = useDebouncedCallback(
     () => onResumeStateChange?.(latestAuthDraft.current),
-    AUTH_DRAFT_PERSIST_DELAY_MS
+    RESUME_DRAFT_PERSIST_DELAY_MS
   );
 
   useEffect(() => {
