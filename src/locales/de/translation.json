@@ -2772,6 +2772,7 @@
       "activationDescription": "Beim Beitritt wird die Analytics-Synchronisierung aktiviert und Teammitglieder sehen in dieser Bestenliste deinen Namen, deine E-Mail-Adresse und deine Aktivitätszähler. Transkriptinhalte werden nie geteilt.",
       "checkingParticipation": "Teilnahme an der Bestenliste wird geprüft…",
       "join": "Bestenliste beitreten",
+      "leave": "Bestenliste verlassen",
       "allTime": "Gesamt",
       "thisWeek": "Diese Woche",
       "wpmValue": "{{count}} WPM",

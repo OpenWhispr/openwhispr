@@ -3270,6 +3270,7 @@
       "activationDescription": "Ao entrar, a sincronização de análises é ativada e seus colegas verão seu nome, seu e-mail e seus contadores de atividade nesta classificação. O conteúdo das transcrições nunca é compartilhado.",
       "checkingParticipation": "Verificando sua participação na classificação…",
       "join": "Entrar na classificação",
+      "leave": "Sair da classificação",
       "allTime": "Todo o período",
       "thisWeek": "Esta semana",
       "wpmValue": "{{count}} PPM",

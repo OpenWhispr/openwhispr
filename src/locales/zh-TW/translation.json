@@ -3270,6 +3270,7 @@
       "activationDescription": "加入會啟用分析同步，團隊成員會在此排行榜中看到你的姓名、電子郵件和活動計數。轉錄內容絕不會被分享。",
       "checkingParticipation": "正在檢查排行榜參與狀態…",
       "join": "加入排行榜",
+      "leave": "退出排行榜",
       "allTime": "全部時間",
       "thisWeek": "本週",
       "wpmValue": "{{count}} 字/分鐘",

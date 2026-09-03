@@ -2797,6 +2797,7 @@
       "activationDescription": "Joining turns on Analytics Sync and shows your name, email and activity counters to teammates on this leaderboard. Transcript content is never shared.",
       "checkingParticipation": "Checking your leaderboard participation…",
       "join": "Join leaderboard",
+      "leave": "Leave leaderboard",
       "allTime": "All time",
       "thisWeek": "This week",
       "wpmValue": "{{count}} WPM",

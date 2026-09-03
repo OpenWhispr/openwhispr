@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { Check, Download, Loader2, Share2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { memberValue } from "../helpers/leaderboard";
 import type { Leaderboard, LeaderboardMember, LeaderboardMetric } from "../types/electron";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -11,21 +12,6 @@ interface LeaderboardShareDialogProps {
   periodLabel: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
-
-function memberValue(member: LeaderboardMember, metric: LeaderboardMetric): number | null {
-  switch (metric) {
-    case "words_per_minute":
-      return member.averageWpm;
-    case "current_daily_streak":
-      return member.currentStreakDays;
-    case "desktop_words":
-      return member.desktopWords;
-    case "mobile_words":
-      return member.mobileWords;
-    case "total_words":
-      return member.totalWords;
-  }
 }
 
 // The card is built to leave the app, so it never carries a full address: an

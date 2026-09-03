@@ -3270,6 +3270,7 @@
       "activationDescription": "参加すると分析同期が有効になり、このリーダーボードでチームメンバーに名前、メールアドレス、アクティビティ集計が表示されます。文字起こしの内容は共有されません。",
       "checkingParticipation": "リーダーボードへの参加状況を確認中…",
       "join": "リーダーボードに参加",
+      "leave": "リーダーボードから退出",
       "allTime": "全期間",
       "thisWeek": "今週",
       "wpmValue": "{{count}} WPM",

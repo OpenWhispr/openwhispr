@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
@@ -20,13 +21,21 @@ export default function LeaderboardView({ onSignIn, onUpgrade }: LeaderboardView
   );
   const {
     joinLeaderboard,
+    leaveLeaderboard,
     optInDialog,
     participationEnabled,
     participationError,
     participationReady,
     participationUpdating,
+    refreshParticipation,
     syncAllowedByPolicy,
   } = useInsightsSyncOptIn();
+
+  // The leaderboard is the only surface that needs the account preference, so
+  // it is the only one that pays for reading it.
+  useEffect(() => {
+    void refreshParticipation();
+  }, [refreshParticipation]);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
@@ -51,7 +60,10 @@ export default function LeaderboardView({ onSignIn, onUpgrade }: LeaderboardView
         }
         participationReady={participationReady}
         participationError={participationError}
+        participationUpdating={participationUpdating}
         onJoin={() => void joinLeaderboard()}
+        onLeave={() => void leaveLeaderboard()}
+        onParticipationStale={refreshParticipation}
         onSignIn={onSignIn}
         onUpgrade={onUpgrade}
       />

@@ -2772,6 +2772,7 @@
       "activationDescription": "Rejoindre active la synchronisation des analyses et vos coéquipiers voient votre nom, votre e-mail et vos compteurs d’activité dans ce classement. Le contenu des transcriptions n’est jamais partagé.",
       "checkingParticipation": "Vérification de votre participation au classement…",
       "join": "Rejoindre le classement",
+      "leave": "Quitter le classement",
       "allTime": "Depuis toujours",
       "thisWeek": "Cette semaine",
       "wpmValue": "{{count}} MPM",

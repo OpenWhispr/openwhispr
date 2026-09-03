@@ -3270,6 +3270,7 @@
       "activationDescription": "Unendoti si attiva la sincronizzazione delle analisi e i tuoi colleghi vedranno nome, email e contatori di attività in questa classifica. Il contenuto delle trascrizioni non viene mai condiviso.",
       "checkingParticipation": "Verifica della partecipazione alla classifica…",
       "join": "Unisciti alla classifica",
+      "leave": "Esci dalla classifica",
       "allTime": "Da sempre",
       "thisWeek": "Questa settimana",
       "wpmValue": "{{count}} PPM",
