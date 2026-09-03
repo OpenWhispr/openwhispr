@@ -2798,6 +2798,7 @@
       "checkingParticipation": "Checking your leaderboard participation…",
       "join": "Join leaderboard",
       "leave": "Leave leaderboard",
+      "leavePending": "You've left this leaderboard. We'll finish taking you off the account as soon as you're online.",
       "allTime": "All time",
       "thisWeek": "This week",
       "wpmValue": "{{count}} WPM",

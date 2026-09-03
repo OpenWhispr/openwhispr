@@ -3271,6 +3271,7 @@
       "checkingParticipation": "リーダーボードへの参加状況を確認中…",
       "join": "リーダーボードに参加",
       "leave": "リーダーボードから退出",
+      "leavePending": "このリーダーボードから退出しました。オンラインに戻り次第、アカウントからの削除を完了します。",
       "allTime": "全期間",
       "thisWeek": "今週",
       "wpmValue": "{{count}} WPM",

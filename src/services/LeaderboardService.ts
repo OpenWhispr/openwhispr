@@ -6,6 +6,10 @@ import type {
   LeaderboardMetric,
   LeaderboardRange,
 } from "../types/electron";
+import {
+  clearPendingLeaderboardLeave,
+  readPendingLeaderboardLeave,
+} from "../lib/pendingLeaderboardLeave";
 import { cloudGet, cloudPatch, type DataWrap } from "./cloudApi";
 
 async function getParticipation(): Promise<AnalyticsParticipation> {
@@ -19,6 +23,28 @@ async function setParticipation(enabled: boolean): Promise<AnalyticsParticipatio
     { enabled }
   );
   return response.data;
+}
+
+/**
+ * Retries a leave the user already asked for and the network never delivered,
+ * for that account only: a device may take itself off a leaderboard, never put
+ * itself on one. Returns whether the account is still waiting for it.
+ *
+ * The record survives anything but a completed leave. Dropping it because a
+ * request failed would leave the account on a leaderboard the user left, and
+ * flushes are trigger-driven (a sync pass, a participation read), so a request
+ * that keeps failing costs one call per trigger rather than a loop.
+ */
+async function flushPendingLeave(userId: string | null): Promise<boolean> {
+  if (!userId || readPendingLeaderboardLeave() !== userId) return false;
+  try {
+    await setParticipation(false);
+    clearPendingLeaderboardLeave(userId);
+    return false;
+  } catch (error) {
+    console.error("Retrying the leaderboard leave failed:", error);
+    return true;
+  }
 }
 
 async function getAccess(): Promise<LeaderboardAccess> {
@@ -52,6 +78,7 @@ async function getLeaderboard(
 }
 
 export const LeaderboardService = {
+  flushPendingLeave,
   getAccess,
   getLeaderboard,
   getParticipation,
