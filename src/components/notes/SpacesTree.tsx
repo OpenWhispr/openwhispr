@@ -922,6 +922,7 @@ function NoteLeaf({
   );
 
   const title = note.title || t("notes.list.untitled");
+  const hasActions = noteFilesEnabled || canMove || canDelete;
 
   return (
     <div
@@ -935,6 +936,7 @@ function NoteLeaf({
       onClick={onOpen}
       title={title}
       {...(canMove ? dragHandlers : {})}
+      style={hasActions ? treeRowActionClearanceStyle(1) : undefined}
       className={cn(
         ROW_BASE_CLASS,
         "h-7 pe-2",
@@ -973,7 +975,7 @@ function NoteLeaf({
           className="text-foreground/40 shrink-0 transition-opacity group-hover:opacity-0"
         />
       )}
-      {(noteFilesEnabled || canMove || canDelete) && (
+      {hasActions && (
         <DropdownMenu
           onOpenChange={(open) => {
             if (!open) {
