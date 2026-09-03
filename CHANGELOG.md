@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Transcription
 
-- **Local transcription runs on sherpa-onnx 1.13.6.** The streaming Nemotron models pick up upstream's greedy-search fix for NVIDIA streaming transducers, which sharpens the word endings 1.13.4 garbled — a clip that came back as `spech ... parakeed model` now reads `speech ... parakeet model`. macOS builds carry a single ONNX Runtime library again, since the runtime dropped its duplicate versioned copy. (#1951, thanks @emanuelet)
+- **Local transcription runs on sherpa-onnx 1.13.6.** The streaming Nemotron models pick up upstream's greedy-search fix for NVIDIA streaming transducers, which sharpens the word endings 1.13.4 garbled — a clip that came back as `spech ... parakeed model` now reads `speech ... parakeet model`. (#1951, thanks @emanuelet)
 
 ## [1.9.2] - 2026-08-29
 

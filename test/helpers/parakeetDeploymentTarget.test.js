@@ -61,14 +61,40 @@ test("rejects a packaged ONNX Runtime library missing a universal architecture s
   );
 });
 
-test("prefers the versioned ONNX Runtime library from a packaged app", () => {
+// The bundle the sherpa binaries link is libonnxruntime.dylib, so a versioned file sitting
+// beside it (a leftover from an older sherpa-onnx release) must not be the one validated.
+test("prefers the unversioned ONNX Runtime library the sherpa binaries link", () => {
+  const appPath = "/tmp/OpenWhispr.app";
+  const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
+  const libraryPath = path.join(binDirectory, "libonnxruntime.dylib");
+  const result = sherpaDownloader.verifyPackagedMacosParakeet?.(appPath, {
+    readDirectory(directory) {
+      assert.equal(directory, binDirectory);
+      return ["libonnxruntime.dylib", "libonnxruntime.1.27.0.dylib"];
+    },
+    runVtool(actualLibraryPath) {
+      assert.equal(actualLibraryPath, libraryPath);
+      return UNIVERSAL_VTOOL_OUTPUT;
+    },
+  });
+
+  assert.deepEqual(result, {
+    architectures: ["x86_64", "arm64"],
+    libraryPath,
+    minimumVersion: "15.5",
+  });
+});
+
+// Layouts before 1.13.6 shipped only a versioned file under an unversioned symlink; a bundle
+// that lost the symlink still has exactly one library to validate.
+test("falls back to a versioned ONNX Runtime library when no unversioned one is present", () => {
   const appPath = "/tmp/OpenWhispr.app";
   const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
   const libraryPath = path.join(binDirectory, "libonnxruntime.1.27.0.dylib");
   const result = sherpaDownloader.verifyPackagedMacosParakeet?.(appPath, {
     readDirectory(directory) {
       assert.equal(directory, binDirectory);
-      return ["libonnxruntime.dylib", "libonnxruntime.1.27.0.dylib"];
+      return ["libonnxruntime.1.27.0.dylib", "libsherpa-onnx-c-api.dylib"];
     },
     runVtool(actualLibraryPath) {
       assert.equal(actualLibraryPath, libraryPath);
