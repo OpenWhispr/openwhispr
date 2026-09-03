@@ -24,7 +24,7 @@ export default class FakeAudioManager {
     this.pasteCalls += 1;
     return globalThis.__cleanupFallbackPasteOutcome?.pasted === true;
   }
-  saveTranscription() {}
+  async saveTranscription() { return true; }
   cleanup() {}
 }
 `;
