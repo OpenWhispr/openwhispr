@@ -40,11 +40,7 @@ test("analytics stays content-free and idempotent, and only syncs the signed-in 
   const pending = db.getPendingAnalyticsEvents();
   assert.equal(pending.length, 1);
   assert.equal(pending[0].event_id, "event-2");
-  assert.equal(
-    pending[0].counter_version,
-    2,
-    "new rows identify the Unicode-aware counting rule"
-  );
+  assert.equal(pending[0].counter_version, 2, "new rows identify the Unicode-aware counting rule");
   assert.equal(db.markAnalyticsEventsSynced(["event-2"]).updated, 1);
   assert.deepEqual(db.getPendingAnalyticsEvents(), []);
 });
@@ -75,7 +71,7 @@ test("clearing history and deleting account data both erase analytics rows", (t)
   );
 });
 
-test("clearing history erases anonymous analytics and tombstones attributed analytics", (t) => {
+test("clearing history tombstones only the counters the cloud actually holds", (t) => {
   const db = createDb(t);
   if (!db) return;
 
@@ -107,7 +103,8 @@ test("clearing history erases anonymous analytics and tombstones attributed anal
       .all()
       .map((row) => row.event_id)
       .sort(),
-    ["pending-1", "synced-1"]
+    ["synced-1"],
+    "only an uploaded counter leaves a tombstone; pending-1 never reached the cloud"
   );
   assert.deepEqual(
     db.db
@@ -126,7 +123,8 @@ test("clearing history erases anonymous analytics and tombstones attributed anal
       .getPendingAnalyticsDeletes()
       .map((row) => row.event_id)
       .sort(),
-    ["pending-1", "synced-1"]
+    ["synced-1"],
+    "the erase queued for the cloud covers exactly what the cloud was given"
   );
 
   // A delayed producer for the same dictation must not revive a tombstone.
@@ -137,7 +135,7 @@ test("clearing history erases anonymous analytics and tombstones attributed anal
       .getPendingAnalyticsDeletes()
       .map((row) => row.event_id)
       .sort(),
-    ["pending-1", "synced-1"]
+    ["synced-1"]
   );
 
   const pendingClear = db.getPendingAnalyticsClear();
@@ -165,7 +163,9 @@ test("clearing history erases anonymous analytics and tombstones attributed anal
 
   assert.equal(db.completeAnalyticsClear("2000-01-01T00:00:00.000Z").deleted, 0);
   assert.deepEqual(db.getPendingAnalyticsClear(), pendingClear);
-  assert.equal(db.completeAnalyticsClear(pendingClear.cleared_through).deleted, 2);
+  // One, not two: pending-1 was erased outright at clear time rather than
+  // tombstoned, because the cloud never received it.
+  assert.equal(db.completeAnalyticsClear(pendingClear.cleared_through).deleted, 1);
   assert.equal(db.getPendingAnalyticsClear(), null);
   recordEvent(db, "later-pre-clear", {
     occurredAt: new Date(Date.parse(pendingClear.cleared_through) - 1).toISOString(),
@@ -256,4 +256,35 @@ test("the pending batch carries both the precise timestamp and the local date", 
   for (const row of pending) {
     assert.equal(row.local_date, "2026-08-30");
   }
+});
+
+test("the opt-in count covers everything turning sync on would upload", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  // The prompt used to be driven by the pre-sign-in count alone. Every
+  // dictation made while signed in is already attributed, so a long-signed-in
+  // user had nothing "unclaimed", saw no prompt, and uploaded their whole
+  // history on the next pass.
+  recordEvent(db, "before-sign-in");
+  db.setActiveAccountId("account-a");
+  recordEvent(db, "while-signed-in-1");
+  recordEvent(db, "while-signed-in-2");
+
+  assert.equal(db.countUnclaimedAnalyticsEvents(), 1, "only the pre-sign-in row is unclaimed");
+  assert.equal(
+    db.countAnalyticsEventsAwaitingUpload(),
+    3,
+    "but three rows would actually leave the device"
+  );
+
+  db.markAnalyticsEventsSynced(["while-signed-in-1"]);
+  assert.equal(db.countAnalyticsEventsAwaitingUpload(), 2, "an uploaded row is no longer pending");
+
+  db.setActiveAccountId("account-b");
+  assert.equal(
+    db.countAnalyticsEventsAwaitingUpload(),
+    1,
+    "another account sees only the unattributed row, never account-a's"
+  );
 });

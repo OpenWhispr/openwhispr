@@ -131,10 +131,11 @@ test("retention purges analytics counters on the same schedule as transcripts", 
   const { analyticsPurged } = db.deleteTranscriptionsExpiredBefore(7);
 
   assert.equal(analyticsPurged, 2);
-  assert.deepEqual((db.getPendingAnalyticsDeletes?.() ?? []).map((row) => row.event_id).sort(), [
-    "stale-pending",
-    "stale-synced",
-  ]);
+  assert.deepEqual(
+    (db.getPendingAnalyticsDeletes?.() ?? []).map((row) => row.event_id).sort(),
+    ["stale-synced"],
+    "only the counter the cloud received needs erasing there; stale-pending never left"
+  );
   assert.deepEqual(
     db.db
       .prepare("SELECT event_id FROM analytics_events WHERE deleted_at IS NULL")

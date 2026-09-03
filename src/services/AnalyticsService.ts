@@ -1,4 +1,4 @@
-import { cloudDelete, cloudGet, cloudPost } from "./cloudApi";
+import { cloudDelete, cloudGet, cloudPost, isAuthContextError } from "./cloudApi";
 import type { AnalyticsSummary, PendingAnalyticsEvent } from "../types/electron";
 
 const BATCH_SIZE = 200;
@@ -114,21 +114,58 @@ async function pushAnalyticsClear(): Promise<void> {
   await window.electronAPI.completeAnalyticsClear(pending.cleared_through);
 }
 
-export async function syncPendingAnalytics({
+// Erasures and uploads are independent work that happens to share a pass. A
+// clear the server keeps refusing must not stop queued deletes from draining,
+// and neither may block an upload — running them in one try block meant a
+// single stuck request wedged the whole feature until it cleared. Auth-context
+// errors still escape, because SyncService uses them to abandon the pass.
+async function runStage(name: string, stage: () => Promise<void>): Promise<void> {
+  try {
+    await stage();
+  } catch (error) {
+    if (isAuthContextError(error)) throw error;
+    console.error(`Analytics ${name} failed:`, error);
+  }
+}
+
+// One pass at a time. InsightsView flushes on its own schedule — focus, the
+// analytics-changed broadcast, a five-minute timer — while SyncService runs
+// passes inside SYNC_ALL_LOCK, and the two share no lock. Overlapping passes
+// read the same pending rows and post them twice. Queueing rather than
+// coalescing keeps a caller that may upload from joining one that may not.
+let passQueue: Promise<unknown> = Promise.resolve();
+
+export function syncPendingAnalytics(options: { uploadAllowed?: boolean } = {}): Promise<number> {
+  const pass = passQueue.then(
+    () => runAnalyticsPass(options),
+    () => runAnalyticsPass(options)
+  );
+  passQueue = pass.catch(() => {});
+  return pass;
+}
+
+async function runAnalyticsPass({
   uploadAllowed = true,
 }: { uploadAllowed?: boolean } = {}): Promise<number> {
-  // Deletes take precedence over uploads so a clear/retention action cannot
-  // race with an older batch and recreate data the user asked us to erase.
-  await pushAnalyticsClear();
-  await pushAnalyticsDeletes();
+  // Erasures still go first, so a clear cannot race an older batch and
+  // recreate data the user asked us to erase.
+  await runStage("clear", pushAnalyticsClear);
+  await runStage("deletes", pushAnalyticsDeletes);
   if (!uploadAllowed) return 0;
 
   let synced = 0;
+  // Ids this pass has already offered. The server deliberately withholds rows
+  // it could not store, which keeps them pending — but they stay at the head
+  // of an oldest-first queue, so without this they ride along in every later
+  // batch and one stuck row costs an extra POST per batch behind it.
+  const offered = new Set<string>();
 
   while (true) {
     const events: PendingAnalyticsEvent[] =
       await window.electronAPI.getPendingAnalyticsEvents(BATCH_SIZE);
-    if (events.length === 0) return synced;
+    const fresh = events.filter((event) => !offered.has(event.event_id));
+    if (fresh.length === 0) return synced;
+    for (const event of fresh) offered.add(event.event_id);
 
     // `accepted` is an ack list, not a list of stored rows. The endpoint
     // validates per event and deliberately echoes back the ids it refused as
@@ -138,15 +175,13 @@ export async function syncPendingAnalytics({
     // can never validate at the head of the queue forever. A batch the server
     // refuses outright throws and stays pending for the next pass.
     const result = await cloudPost<{ accepted: string[] }>("/api/analytics/events/batch", {
-      events,
+      events: fresh,
     });
     const accepted = Array.isArray(result?.accepted) ? result.accepted : [];
 
-    // Every pass must retire rows locally, or the next read returns the same
-    // batch and this loop re-posts it forever.
     const { updated } = await window.electronAPI.markAnalyticsEventsSynced(accepted);
-    if (updated === 0) return synced;
     synced += updated;
+    // The whole queue fit in one read, so there is nothing behind this batch.
     if (events.length < BATCH_SIZE) return synced;
   }
 }

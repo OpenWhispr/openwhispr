@@ -78,7 +78,9 @@ test("analytics deletion tombstones reach the cloud before pending uploads", asy
   ]);
 });
 
-test("a failed cloud deletion preserves its tombstone and blocks later uploads", async (t) => {
+test("a failed cloud deletion preserves its tombstone without blocking uploads", async (t) => {
+  // A tombstone the server refuses must survive locally, but it must not hold
+  // the user's consented uploads hostage while it keeps failing.
   const requests = [];
   let hardDeletes = 0;
   installBrowserGlobals(t, {
@@ -94,7 +96,10 @@ test("a failed cloud deletion preserves its tombstone and blocks later uploads",
         markAnalyticsEventsSynced: async () => ({ success: true, updated: 1 }),
         cloudApiRequest: async (request) => {
           requests.push(request);
-          return { success: false, status: 500, error: "delete failed" };
+          if (request.method === "DELETE") {
+            return { success: false, status: 500, error: "delete failed" };
+          }
+          return { success: true, data: { accepted: [EVENT.event_id] } };
         },
       },
     },
@@ -102,12 +107,12 @@ test("a failed cloud deletion preserves its tombstone and blocks later uploads",
   const vite = await createRendererServer(t);
   const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
 
-  await assert.rejects(syncPendingAnalytics(), /delete failed/);
+  assert.equal(await syncPendingAnalytics(), 1);
   assert.deepEqual(
     requests.map(({ method }) => method),
-    ["DELETE"]
+    ["DELETE", "POST"]
   );
-  assert.equal(hardDeletes, 0);
+  assert.equal(hardDeletes, 0, "the tombstone survives a failed cloud delete");
 });
 
 test("a delete-only pass clears cloud tombstones without enabling uploads", async (t) => {
@@ -189,9 +194,13 @@ test("an account clear reaches the cloud before newer analytics upload", async (
   ]);
 });
 
-test("a failed account clear remains pending and blocks every later analytics request", async (t) => {
+test("a failed account clear stays pending without stalling the rest of the pass", async (t) => {
+  // The clear used to be the first and only thing that had to succeed: one
+  // server error and neither the queued deletes nor the uploads ran, on this
+  // pass or any later one, until it cleared. Each stage stands alone now.
+  const requests = [];
   let completed = 0;
-  let requestCount = 0;
+  let hardDeletes = 0;
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -202,15 +211,20 @@ test("a failed account clear remains pending and blocks every later analytics re
           completed += 1;
           return { success: true, deleted: 0 };
         },
-        getPendingAnalyticsDeletes: async () => {
-          throw new Error("per-event deletes must wait");
+        getPendingAnalyticsDeletes: async () =>
+          requests.length === 0 ? [] : [{ event_id: "deleted-event" }],
+        hardDeleteAnalyticsEvents: async () => {
+          hardDeletes += 1;
+          return { success: true, deleted: 1 };
         },
-        getPendingAnalyticsEvents: async () => {
-          throw new Error("analytics uploads must wait");
-        },
-        cloudApiRequest: async () => {
-          requestCount += 1;
-          return { success: false, status: 500, error: "clear failed" };
+        getPendingAnalyticsEvents: async () => (hardDeletes === 0 ? [] : [EVENT]),
+        markAnalyticsEventsSynced: async () => ({ success: true, updated: 1 }),
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          if (request.body?.deleteAll) {
+            return { success: false, status: 500, error: "clear failed" };
+          }
+          return { success: true, data: { accepted: [EVENT.event_id] } };
         },
       },
     },
@@ -218,9 +232,14 @@ test("a failed account clear remains pending and blocks every later analytics re
   const vite = await createRendererServer(t);
   const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
 
-  await assert.rejects(syncPendingAnalytics(), /clear failed/);
-  assert.equal(requestCount, 1);
-  assert.equal(completed, 0);
+  assert.equal(await syncPendingAnalytics(), 1, "the upload still happens");
+  assert.deepEqual(
+    requests.map(({ method }) => method),
+    ["DELETE", "DELETE", "POST"],
+    "the failed clear is attempted, then deletes drain, then uploads go"
+  );
+  assert.equal(completed, 0, "an unacknowledged clear stays queued for the next pass");
+  assert.equal(hardDeletes, 1);
 });
 
 test("account analytics accepts a complete cloud summary", async (t) => {
@@ -235,9 +254,7 @@ test("account analytics accepts a complete cloud summary", async (t) => {
     },
   });
   const vite = await createRendererServer(t);
-  const { getAccountAnalyticsSummary } = await vite.ssrLoadModule(
-    "/services/AnalyticsService.ts"
-  );
+  const { getAccountAnalyticsSummary } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
 
   assert.deepEqual(await getAccountAnalyticsSummary("UTC"), {
     ...VALID_SUMMARY,
@@ -410,9 +427,7 @@ test("analytics refresh does not install cloud triggers while account sync is in
     },
   });
   const vite = await createRendererServer(t);
-  const { subscribeToAnalyticsRefresh } = await vite.ssrLoadModule(
-    "/services/AnalyticsService.ts"
-  );
+  const { subscribeToAnalyticsRefresh } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
   let refreshes = 0;
   const dispose = subscribeToAnalyticsRefresh(() => {
     refreshes += 1;
@@ -442,9 +457,7 @@ test("analytics refresh serializes triggers and runs one trailing refresh", asyn
     },
   });
   const vite = await createRendererServer(t);
-  const { subscribeToAnalyticsRefresh } = await vite.ssrLoadModule(
-    "/services/AnalyticsService.ts"
-  );
+  const { subscribeToAnalyticsRefresh } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
   let activeRefreshes = 0;
   let refreshes = 0;
   let maximumConcurrentRefreshes = 0;
@@ -508,9 +521,7 @@ test("analytics drops remote-only trailing work when the view becomes hidden", a
     },
   });
   const vite = await createRendererServer(t);
-  const { subscribeToAnalyticsRefresh } = await vite.ssrLoadModule(
-    "/services/AnalyticsService.ts"
-  );
+  const { subscribeToAnalyticsRefresh } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
   let refreshes = 0;
   const dispose = subscribeToAnalyticsRefresh(async () => {
     refreshes += 1;
@@ -535,4 +546,81 @@ test("analytics drops remote-only trailing work when the view becomes hidden", a
   await Promise.resolve();
   assert.equal(refreshes, 1, "hidden views discard queued remote-only refreshes");
   dispose();
+});
+
+test("overlapping passes are serialized rather than posting the same batch twice", async (t) => {
+  // InsightsView flushes on focus, on every analytics-changed broadcast and on
+  // a timer, while SyncService runs passes under its own lock. The two share
+  // no lock, so without serializing here both read the same pending rows.
+  const requests = [];
+  let synced = false;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => null,
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async () => (synced ? [] : [EVENT]),
+        markAnalyticsEventsSynced: async () => {
+          synced = true;
+          return { success: true, updated: 1 };
+        },
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return { success: true, data: { accepted: [EVENT.event_id] } };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  const [first, second] = await Promise.all([syncPendingAnalytics(), syncPendingAnalytics()]);
+
+  assert.equal(requests.length, 1, "the second pass waits and then finds nothing left to send");
+  assert.equal(first, 1);
+  assert.equal(second, 0);
+});
+
+test("a withheld row is offered once per pass, not once per batch behind it", async (t) => {
+  // The server withholds rows it could not store, which correctly keeps them
+  // pending. They sit at the head of an oldest-first queue, so re-reading from
+  // the head each iteration made every later batch carry them again.
+  const posted = [];
+  const pending = Array.from({ length: 3 }, (_, index) => ({
+    ...EVENT,
+    event_id: `event-${index}`,
+  }));
+  const retired = new Set();
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => null,
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async () =>
+          pending.filter((event) => !retired.has(event.event_id)),
+        markAnalyticsEventsSynced: async (ids) => {
+          ids.forEach((id) => retired.add(id));
+          return { success: true, updated: ids.length };
+        },
+        cloudApiRequest: async (request) => {
+          posted.push(request.body.events.map((event) => event.event_id));
+          // event-0 is withheld: in neither accepted nor rejected.
+          return {
+            success: true,
+            data: {
+              accepted: request.body.events.map((e) => e.event_id).filter((id) => id !== "event-0"),
+            },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  await syncPendingAnalytics();
+
+  assert.deepEqual(posted, [["event-0", "event-1", "event-2"]]);
+  assert.equal(retired.has("event-0"), false, "the withheld row stays pending for a later pass");
 });

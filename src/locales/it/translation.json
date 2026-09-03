@@ -3237,7 +3237,14 @@
     "claimDescription_one": "{{count}} dettatura è stata registrata su questo dispositivo prima dell'accesso. Includendola vengono inviati solo il conteggio delle parole, la data e l'ora esatta in cui è avvenuta, la sua durata e il tipo di modello, mai il contenuto delle trascrizioni.",
     "claimDescription_other": "{{count}} dettature sono state registrate su questo dispositivo prima dell'accesso. Includendole vengono inviati solo i conteggi delle parole, la data e l'ora esatta di ciascuna, le durate e i tipi di modello, mai il contenuto delle trascrizioni.",
     "claimInclude": "Includi",
-    "claimSkip": "Non ora"
+    "claimSkip": "Non ora",
+    "enableTitle": "Attivare la sincronizzazione di Insights?",
+    "enableConfirm": "Attiva sincronizzazione",
+    "enableDescription_one": "{{count}} dettatura già registrata su questo dispositivo verrà caricata sul tuo account. La sincronizzazione di Insights invia solo i conteggi delle parole, la data e l'ora esatta di ciascuna, le durate e i tipi di modello, mai il contenuto delle trascrizioni.",
+    "enableDescription_other": "{{count}} dettature già registrate su questo dispositivo verranno caricate sul tuo account. La sincronizzazione di Insights invia solo i conteggi delle parole, la data e l'ora esatta di ciascuna, le durate e i tipi di modello, mai il contenuto delle trascrizioni.",
+    "emptyTitle": "Ancora nessuna dettatura",
+    "emptyBody": "Inizia a dettare: qui compariranno le tue parole, le serie e l'attività quotidiana.",
+    "loadError": "Non è stato possibile leggere gli Insights da questo dispositivo."
   },
   "sidebar": {
     "insights": "Statistiche",

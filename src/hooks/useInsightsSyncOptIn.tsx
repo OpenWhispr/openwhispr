@@ -32,9 +32,12 @@ export function useInsightsSyncOptIn() {
   const { t } = useTranslation();
   const { insightsSyncEnabled, setInsightsSyncEnabled } = useSettings();
   const [unclaimedCount, setUnclaimedCount] = useState(0);
-  // Separate from the count: a live count must never be what holds the dialog
+  const [awaitingUploadCount, setAwaitingUploadCount] = useState(0);
+  // Separate from the counts: a live count must never be what holds the dialog
   // open, or it reopens itself on mount for anyone with rows left behind.
-  const [claimPromptOpen, setClaimPromptOpen] = useState(false);
+  // "enable" asks about everything the first pass would upload; "claim" is the
+  // narrower question that is left once sync is already on.
+  const [promptKind, setPromptKind] = useState<"enable" | "claim" | null>(null);
   const syncAllowedByPolicy = usePolicyStore(isCloudBackupAllowed);
   const canToggleSync = canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled);
 
@@ -53,36 +56,52 @@ export function useInsightsSyncOptIn() {
     [setInsightsSyncEnabled]
   );
 
-  const refreshUnclaimedCount = useCallback(async () => {
-    const unclaimed = await window.electronAPI.countUnclaimedAnalyticsEvents().catch(() => 0);
+  const refreshCounts = useCallback(async () => {
+    const [unclaimed, awaitingUpload] = await Promise.all([
+      window.electronAPI.countUnclaimedAnalyticsEvents().catch(() => 0),
+      window.electronAPI.countAnalyticsEventsAwaitingUpload().catch(() => 0),
+    ]);
     setUnclaimedCount(unclaimed);
-    return unclaimed;
+    setAwaitingUploadCount(awaitingUpload);
+    return { unclaimed, awaitingUpload };
   }, []);
 
   // Every claim, purge and new dictation broadcasts analytics-changed, so the
-  // count follows the rows without polling.
+  // counts follow the rows without polling.
   useEffect(() => {
-    void refreshUnclaimedCount();
-    return window.electronAPI.onAnalyticsChanged?.(() => void refreshUnclaimedCount());
-  }, [refreshUnclaimedCount]);
+    void refreshCounts();
+    return window.electronAPI.onAnalyticsChanged?.(() => void refreshCounts());
+  }, [refreshCounts]);
 
   const enableInsightsSync = useCallback(() => {
     if (!syncAllowedByPolicy) return;
     void (async () => {
-      if ((await refreshUnclaimedCount()) > 0) setClaimPromptOpen(true);
+      const { unclaimed, awaitingUpload } = await refreshCounts();
+      // Already on: the pre-sign-in rows are the only thing still unanswered.
+      if (insightsSyncEnabled) {
+        if (unclaimed > 0) setPromptKind("claim");
+        else await activate(false);
+        return;
+      }
+      // Turning it on: ask about everything the first pass would send, not
+      // just the pre-sign-in slice. Nothing queued means nothing to disclose.
+      if (awaitingUpload > 0) setPromptKind("enable");
       else await activate(false);
     })();
-  }, [activate, refreshUnclaimedCount, syncAllowedByPolicy]);
+  }, [activate, insightsSyncEnabled, refreshCounts, syncAllowedByPolicy]);
 
+  const claiming = promptKind === "claim";
   const optInDialog = (
     <ConfirmDialog
-      open={claimPromptOpen}
+      open={promptKind !== null}
       onOpenChange={(open) => {
-        if (!open) setClaimPromptOpen(false);
+        if (!open) setPromptKind(null);
       }}
-      title={t("insights.claimTitle")}
-      description={t("insights.claimDescription", { count: unclaimedCount })}
-      confirmText={t("insights.claimInclude")}
+      title={t(claiming ? "insights.claimTitle" : "insights.enableTitle")}
+      description={t(claiming ? "insights.claimDescription" : "insights.enableDescription", {
+        count: claiming ? unclaimedCount : awaitingUploadCount,
+      })}
+      confirmText={t(claiming ? "insights.claimInclude" : "insights.enableConfirm")}
       cancelText={t("insights.claimSkip")}
       onConfirm={() => void activate(true)}
     />

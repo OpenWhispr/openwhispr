@@ -3237,7 +3237,14 @@
     "claimDescription_one": "本设备上有 {{count}} 次听写是在你登录前记录的。将其纳入只会发送字数、记录的日期和精确时间、时长和模型类型，不会发送转录内容。",
     "claimDescription_other": "本设备上有 {{count}} 次听写是在你登录前记录的。将它们纳入只会发送字数、记录的日期和精确时间、时长和模型类型，不会发送转录内容。",
     "claimInclude": "包含",
-    "claimSkip": "暂不开启"
+    "claimSkip": "暂不开启",
+    "enableTitle": "要开启 Insights 同步吗？",
+    "enableConfirm": "开启同步",
+    "enableDescription_one": "本设备上已记录的 {{count}} 次听写将上传到你的账户。Insights 同步只会发送字数、记录的日期和精确时间、时长和模型类型，不会发送转录内容。",
+    "enableDescription_other": "本设备上已记录的 {{count}} 次听写将上传到你的账户。Insights 同步只会发送字数、记录的日期和精确时间、时长和模型类型，不会发送转录内容。",
+    "emptyTitle": "还没有听写记录",
+    "emptyBody": "开始听写后，你的字数、连续记录和每日活动会显示在这里。",
+    "loadError": "无法从本设备读取 Insights。"
   },
   "sidebar": {
     "insights": "统计",

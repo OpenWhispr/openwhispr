@@ -1443,6 +1443,10 @@ class IPCHandlers {
       return this.databaseManager.countUnclaimedAnalyticsEvents();
     });
 
+    ipcMain.handle("analytics-count-awaiting-upload", async () => {
+      return this.databaseManager.countAnalyticsEventsAwaitingUpload();
+    });
+
     ipcMain.handle("analytics-claim-anonymous", async () => {
       const result = this.databaseManager.claimAnonymousAnalyticsEvents();
       // Claimed rows are only pushed by the Insights view's reload, and the

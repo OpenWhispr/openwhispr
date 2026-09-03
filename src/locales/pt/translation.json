@@ -3237,7 +3237,14 @@
     "claimDescription_one": "{{count}} ditado foi gravado neste dispositivo antes de você entrar na conta. Ao incluí-lo, só são enviadas a contagem de palavras, a data e a hora exata em que ocorreu, sua duração e o tipo de modelo, nunca o conteúdo das transcrições.",
     "claimDescription_other": "{{count}} ditados foram gravados neste dispositivo antes de você entrar na conta. Ao incluí-los, só são enviadas as contagens de palavras, a data e a hora exata de cada um, as durações e os tipos de modelo, nunca o conteúdo das transcrições.",
     "claimInclude": "Incluir",
-    "claimSkip": "Agora não"
+    "claimSkip": "Agora não",
+    "enableTitle": "Ativar a sincronização do Insights?",
+    "enableConfirm": "Ativar sincronização",
+    "enableDescription_one": "{{count}} ditado já gravado neste dispositivo será enviado para a sua conta. A sincronização do Insights só envia as contagens de palavras, a data e a hora exata de cada um, as durações e os tipos de modelo, nunca o conteúdo das transcrições.",
+    "enableDescription_other": "{{count}} ditados já gravados neste dispositivo serão enviados para a sua conta. A sincronização do Insights só envia as contagens de palavras, a data e a hora exata de cada um, as durações e os tipos de modelo, nunca o conteúdo das transcrições.",
+    "emptyTitle": "Ainda sem ditados",
+    "emptyBody": "Comece a ditar e as suas palavras, sequências e atividade diária aparecerão aqui.",
+    "loadError": "Não foi possível ler os Insights deste dispositivo."
   },
   "sidebar": {
     "insights": "Estatísticas",

@@ -2740,7 +2740,14 @@
     "claimDescription_one": "{{count}} dictée a été enregistrée sur cet appareil avant votre connexion. L'inclure n'envoie que le nombre de mots, la date et l'heure exacte à laquelle elle a eu lieu, sa durée et le type de modèle : jamais le contenu des transcriptions.",
     "claimDescription_other": "{{count}} dictées ont été enregistrées sur cet appareil avant votre connexion. Les inclure n'envoie que le nombre de mots, la date et l'heure exacte de chacune, les durées et les types de modèle : jamais le contenu des transcriptions.",
     "claimInclude": "Inclure",
-    "claimSkip": "Pas maintenant"
+    "claimSkip": "Pas maintenant",
+    "enableTitle": "Activer la synchronisation d'Insights ?",
+    "enableConfirm": "Activer la synchronisation",
+    "enableDescription_one": "{{count}} dictée déjà enregistrée sur cet appareil sera envoyée vers votre compte. La synchronisation d'Insights n'envoie que le nombre de mots, la date et l'heure exacte de chacune, les durées et les types de modèle : jamais le contenu des transcriptions.",
+    "enableDescription_other": "{{count}} dictées déjà enregistrées sur cet appareil seront envoyées vers votre compte. La synchronisation d'Insights n'envoie que le nombre de mots, la date et l'heure exacte de chacune, les durées et les types de modèle : jamais le contenu des transcriptions.",
+    "emptyTitle": "Aucune dictée pour l'instant",
+    "emptyBody": "Commencez à dicter : vos mots, vos séries et votre activité quotidienne apparaîtront ici.",
+    "loadError": "Impossible de lire les Insights depuis cet appareil."
   },
   "sidebar": {
     "insights": "Statistiques",

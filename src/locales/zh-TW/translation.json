@@ -3237,7 +3237,14 @@
     "claimDescription_one": "本裝置上有 {{count}} 次聽寫是在你登入前記錄的。納入後只會傳送字數、記錄的日期與精確時間、時長與模型類型，不會傳送轉錄內容。",
     "claimDescription_other": "本裝置上有 {{count}} 次聽寫是在你登入前記錄的。納入後只會傳送字數、記錄的日期與精確時間、時長與模型類型，不會傳送轉錄內容。",
     "claimInclude": "包含",
-    "claimSkip": "暫不開啟"
+    "claimSkip": "暫不開啟",
+    "enableTitle": "要開啟 Insights 同步嗎？",
+    "enableConfirm": "開啟同步",
+    "enableDescription_one": "本裝置上已記錄的 {{count}} 次聽寫將上傳到你的帳戶。Insights 同步只會傳送字數、記錄的日期與精確時間、時長與模型類型，不會傳送轉錄內容。",
+    "enableDescription_other": "本裝置上已記錄的 {{count}} 次聽寫將上傳到你的帳戶。Insights 同步只會傳送字數、記錄的日期與精確時間、時長與模型類型，不會傳送轉錄內容。",
+    "emptyTitle": "尚無聽寫記錄",
+    "emptyBody": "開始聽寫後，你的字數、連續記錄與每日活動會顯示在這裡。",
+    "loadError": "無法從本裝置讀取 Insights。"
   },
   "sidebar": {
     "insights": "統計",

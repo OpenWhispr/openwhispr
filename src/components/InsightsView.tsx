@@ -17,17 +17,6 @@ import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
 import { Tooltip } from "./ui/tooltip";
 
-const EMPTY_SUMMARY: AnalyticsSummary = {
-  totalWords: 0,
-  totalDictations: 0,
-  totalSpokenDurationMs: 0,
-  averageWpm: null,
-  currentStreakDays: 0,
-  longestStreakDays: 0,
-  wpmCoveragePercent: 0,
-  daily: [],
-};
-
 type ActivityDay = { date: string; words: number };
 
 const ACTIVITY_INTENSITY_CLASSES = [
@@ -86,12 +75,27 @@ function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] }) {
       ),
     [i18n.language]
   );
-  const columnStyle = { gridTemplateColumns: `repeat(${calendar.weeks.length}, minmax(0, 1fr))` };
+  // Fixed tracks, sized to the 1.5rem cells they hold. minmax(0, 1fr) let every
+  // week column collapse toward zero while the cells stayed 24px wide, so the
+  // squares overflowed their tracks and overlapped each other; the grid also
+  // contributed no intrinsic width, leaving overflow-x nothing to scroll, so
+  // the newest weeks — today's cell among them — were painted outside the
+  // scrollable area on any window narrower than about 1050px.
+  const columnStyle = { gridTemplateColumns: `repeat(${calendar.weeks.length}, 1.5rem)` };
 
   return (
-    <div className="overflow-x-auto pb-1">
-      <div className="min-w-xl" role="img" aria-label={t("insights.activityLabel")}>
-        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
+    // Focusable, so the chart can be scrolled without a mouse. role="img" used
+    // to sit on the container, which made every descendant presentational and
+    // silently discarded the per-day labels below it; the cells carry it now
+    // and the group only names the chart.
+    <div
+      className="overflow-x-auto rounded-sm pb-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
+      tabIndex={0}
+      role="group"
+      aria-label={t("insights.activityLabel")}
+    >
+      <div className="w-max">
+        <div className="grid grid-cols-[auto_max-content] gap-x-3">
           <div aria-hidden="true" />
           <div className="grid h-4 gap-2" style={columnStyle} aria-hidden="true">
             {calendar.monthLabels.map((label, index) => (
@@ -137,6 +141,7 @@ function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] }) {
                     <div key={day.date} className="justify-self-center">
                       <Tooltip content={tooltip}>
                         <div
+                          role="img"
                           aria-label={tooltip}
                           className={cn(
                             "size-6 rounded-sm",
@@ -203,7 +208,7 @@ function MetricCard({
 }
 
 export default function InsightsView() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { isSignedIn, isLoaded } = useAuth();
   const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
   const dataRetentionEnabled = usePolicyStore((policyState) =>
@@ -218,6 +223,7 @@ export default function InsightsView() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   // Every dictation broadcasts analytics-changed, so loads overlap; only the
   // newest one may write state, or a slow reply overwrites a fresher summary.
   // A superseded load also bails before syncing, so two passes cannot share a
@@ -228,10 +234,25 @@ export default function InsightsView() {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setSyncError(false);
-    let local: AnalyticsSummary | null = null;
+
+    // The device read stands on its own. Folding it into the same catch as the
+    // cloud fetch meant a failed local read fell through to a summary of
+    // zeros — under a confident "On this device", with no error anywhere — and
+    // told the user their history was empty.
+    let local: AnalyticsSummary;
     try {
       local = await window.electronAPI.getAnalyticsSummary();
+    } catch (error) {
       if (requestId !== requestIdRef.current) return;
+      console.error("Reading local Insights failed:", error);
+      setLoadFailed(true);
+      setLoading(false);
+      return;
+    }
+    if (requestId !== requestIdRef.current) return;
+    setLoadFailed(false);
+
+    try {
       if (isLoaded && syncActive) {
         await syncPendingAnalytics();
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -243,7 +264,8 @@ export default function InsightsView() {
       }
     } catch {
       if (requestId !== requestIdRef.current) return;
-      setSummary((current) => local || current || EMPTY_SUMMARY);
+      // Real device data, and the pill says the cloud is the part that failed.
+      setSummary(local);
       setSyncError(true);
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
@@ -252,16 +274,42 @@ export default function InsightsView() {
 
   useEffect(() => subscribeToAnalyticsRefresh(load, syncActive), [load, syncActive]);
 
+  // i18n.language, not the runtime default: the OS locale is not the language
+  // the app is being read in, so a Japanese UI rendered 12.3K where 1.2万
+  // belongs, next to correctly localized month labels in the same card.
   const number = useMemo(
-    () => new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }),
-    []
+    () => new Intl.NumberFormat(i18n.language, { notation: "compact", maximumFractionDigits: 1 }),
+    [i18n.language]
   );
 
-  if (!summary) {
-    if (!loading) return null;
+  if (loadFailed) {
     return (
-      <div className="flex min-h-64 items-center justify-center text-muted-foreground">
-        <Loader2 size={18} className="animate-spin" />
+      <div className="mx-auto w-full max-w-5xl px-6 py-8">
+        <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
+          <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
+            <p className="max-w-sm text-sm text-muted-foreground">{t("insights.loadError")}</p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
+            >
+              {t("common.retry")}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-6 py-8">
+        <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
+          <div className="flex items-center justify-center gap-2 py-8">
+            <Loader2 size={14} className="animate-spin text-primary" />
+            <span className="text-sm text-muted-foreground">{t("controlPanel.loading")}</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -314,42 +362,56 @@ export default function InsightsView() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard
-          icon={Mic2}
-          label={t("insights.wordsSpoken")}
-          value={number.format(summary.totalWords)}
-          detail={t("insights.allTime")}
-          largeValue
-        />
-        <MetricCard
-          icon={Gauge}
-          label={t("insights.wordsPerMinute")}
-          value={summary.averageWpm == null ? "—" : number.format(summary.averageWpm)}
-          detail={t("insights.wpmCoverage", { count: summary.wpmCoveragePercent })}
-          largeValue
-        />
-        <MetricCard
-          icon={BarChart3}
-          label={t("insights.dictations")}
-          value={number.format(summary.totalDictations)}
-          detail={t("insights.allTime")}
-          largeValue
-        />
-        <MetricCard
-          icon={Flame}
-          label={t("insights.currentStreak")}
-          value={t("insights.days", { count: summary.currentStreakDays })}
-          detail={t("insights.longestStreak", { count: summary.longestStreakDays })}
-        />
-      </div>
-
-      <div className="mt-5 rounded-2xl border border-border/50 bg-card/70 px-5 py-2.5 dark:border-white/8">
-        <h2 className="text-base font-medium text-foreground">{t("insights.activity")}</h2>
-        <div className="mt-2">
-          <Heatmap daily={summary.daily} />
+      {summary.totalDictations === 0 ? (
+        <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
+          <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+            <BarChart3 size={40} className="mb-4 text-foreground/15" aria-hidden="true" />
+            <h2 className="text-sm font-medium text-foreground">{t("insights.emptyTitle")}</h2>
+            <p className="mt-1.5 max-w-sm text-xs text-muted-foreground">
+              {t("insights.emptyBody")}
+            </p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <MetricCard
+              icon={Mic2}
+              label={t("insights.wordsSpoken")}
+              value={number.format(summary.totalWords)}
+              detail={t("insights.allTime")}
+              largeValue
+            />
+            <MetricCard
+              icon={Gauge}
+              label={t("insights.wordsPerMinute")}
+              value={summary.averageWpm == null ? "—" : number.format(summary.averageWpm)}
+              detail={t("insights.wpmCoverage", { count: summary.wpmCoveragePercent })}
+              largeValue
+            />
+            <MetricCard
+              icon={BarChart3}
+              label={t("insights.dictations")}
+              value={number.format(summary.totalDictations)}
+              detail={t("insights.allTime")}
+              largeValue
+            />
+            <MetricCard
+              icon={Flame}
+              label={t("insights.currentStreak")}
+              value={t("insights.days", { count: summary.currentStreakDays })}
+              detail={t("insights.longestStreak", { count: summary.longestStreakDays })}
+            />
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-border/50 bg-card/70 px-5 py-2.5 dark:border-white/8">
+            <h2 className="text-base font-medium text-foreground">{t("insights.activity")}</h2>
+            <div className="mt-2">
+              <Heatmap daily={summary.daily} />
+            </div>
+          </div>
+        </>
+      )}
 
       {optInDialog}
     </div>

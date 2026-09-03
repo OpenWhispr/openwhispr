@@ -1521,6 +1521,25 @@ class DatabaseManager {
       .get().count;
   }
 
+  // Everything turning Insights sync on would upload: this account's queued
+  // rows plus the pre-sign-in ones the prompt offers to claim.
+  //
+  // The claim count alone is not that number and badly understates it. Every
+  // dictation made while signed in is already attributed to the account, so a
+  // user who had been signed in for months had nothing "unclaimed" — the
+  // consent prompt never opened, and flipping the toggle uploaded their entire
+  // history in one pass.
+  countAnalyticsEventsAwaitingUpload() {
+    if (!this.db) throw new Error("Database not initialized");
+    return this.db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM analytics_events
+         WHERE deleted_at IS NULL AND sync_status <> 'synced'
+           AND (account_id IS NULL OR account_id = ?)`
+      )
+      .get(this.activeAccountId).count;
+  }
+
   // Device-local rows stay unattributed until the signed-in user explicitly
   // asks for them, so signing in never silently adopts someone else's history.
   claimAnonymousAnalyticsEvents() {
@@ -1565,22 +1584,32 @@ class DatabaseManager {
         "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL"
       );
       const hardDelete = this.db.prepare("DELETE FROM transcriptions WHERE cloud_id IS NULL");
-      // Only the active account can be deleted with the current credentials.
-      // Keep other accounts' existing delete tombstones for their next login,
-      // but remove their live counters from this device without misattributing
-      // a cloud delete.
-      const hardDeleteLocalAnalytics = this.activeAccountId
-        ? this.db.prepare(
-            `DELETE FROM analytics_events
-             WHERE account_id IS NULL OR (account_id <> ? AND deleted_at IS NULL)`
-          )
-        : this.db.prepare(
-            "DELETE FROM analytics_events WHERE account_id IS NULL OR deleted_at IS NULL"
-          );
-      const tombstoneAttributedAnalytics = this.db.prepare(
+      // One rule decides every row: a counter the cloud never received is
+      // erased outright, and only a counter it did receive leaves a tombstone
+      // behind for the delete pusher.
+      //
+      // It matters in both directions. Tombstoning a row that was never
+      // uploaded sent its event id to the server on the next pass — for an
+      // account that never turned Insights sync on, that was the only
+      // analytics traffic it ever produced, and the server stores a row per id
+      // it is asked to delete. Hard-deleting a row that *was* uploaded stranded
+      // it in the cloud with nothing left on the device to erase it, which is
+      // what signing out before clearing used to do.
+      //
+      // Scope follows the credentials: only the active account can be erased
+      // remotely, so another account's synced rows keep their tombstones until
+      // that account signs in here again.
+      const hardDeleteLocalAnalytics = this.db.prepare(
+        `DELETE FROM analytics_events
+         WHERE account_id IS NULL OR (sync_status <> 'synced' AND deleted_at IS NULL)`
+      );
+      const tombstoneSyncedAnalytics = this.db.prepare(
         `UPDATE analytics_events
          SET deleted_at = ?, sync_status = 'pending'
-         WHERE account_id = ? AND deleted_at IS NULL`
+         WHERE sync_status = 'synced' AND deleted_at IS NULL`
+      );
+      const countSyncedAnalytics = this.db.prepare(
+        "SELECT COUNT(*) AS count FROM analytics_events WHERE account_id = ? AND sync_status = 'synced'"
       );
       const queueAnalyticsClear = this.db.prepare(
         `INSERT INTO analytics_clear_requests (account_id, cleared_through, synced)
@@ -1599,12 +1628,17 @@ class DatabaseManager {
       const clearAll = this.db.transaction(() => {
         const cleared = tombstone.run().changes + hardDelete.run().changes;
         updateDeviceClearState.run(clearedThrough);
-        if (this.activeAccountId) {
-          hardDeleteLocalAnalytics.run(this.activeAccountId);
-          tombstoneAttributedAnalytics.run(clearedThrough, this.activeAccountId);
+        // The account-wide cutoff is what erases rows this device no longer
+        // has — another device's uploads. It is only meaningful once this
+        // account has actually put something in the cloud; queueing it for an
+        // account that never synced would be a bare request to the analytics
+        // API from a user who never opted in.
+        const hasSyncedRows =
+          this.activeAccountId && countSyncedAnalytics.get(this.activeAccountId).count > 0;
+        tombstoneSyncedAnalytics.run(clearedThrough);
+        hardDeleteLocalAnalytics.run();
+        if (hasSyncedRows) {
           queueAnalyticsClear.run(this.activeAccountId, clearedThrough);
-        } else {
-          hardDeleteLocalAnalytics.run();
         }
         return cleared;
       });
@@ -1640,25 +1674,29 @@ class DatabaseManager {
       );
       // Counters follow the transcripts they describe, on the same cutoff and
       // in the same transaction. Matched on created_at, never occurred_at:
-      // created_at uses the same SQLite timestamp format as the cutoff. Rows
-      // attributed to an account may already be uploaded or in flight, so
-      // retain them as pending cloud-delete tombstones; anonymous rows can be
-      // removed immediately because they never left the device.
-      const purgeAnonymousAnalytics = this.db.prepare(
-        "DELETE FROM analytics_events WHERE account_id IS NULL AND created_at < ?"
-      );
-      const tombstoneAttributedAnalytics = this.db.prepare(
+      // created_at uses the same SQLite timestamp format as the cutoff.
+      //
+      // Same rule as clearTranscriptions: only a row the cloud actually holds
+      // leaves a tombstone. Attribution alone is not enough — every dictation
+      // made while signed in carries an account_id whether or not Insights
+      // sync was ever turned on, so tombstoning on that basis shipped the event
+      // ids of a user who never opted in.
+      const tombstoneSyncedAnalytics = this.db.prepare(
         `UPDATE analytics_events
          SET deleted_at = datetime('now'), sync_status = 'pending'
-         WHERE account_id IS NOT NULL AND deleted_at IS NULL AND created_at < ?`
+         WHERE sync_status = 'synced' AND deleted_at IS NULL AND created_at < ?`
+      );
+      const purgeUnsyncedAnalytics = this.db.prepare(
+        `DELETE FROM analytics_events
+         WHERE (account_id IS NULL OR sync_status <> 'synced')
+           AND deleted_at IS NULL AND created_at < ?`
       );
       let analyticsPurged = 0;
       this.db.transaction(() => {
         tombstone.run(cutoff);
         hardDelete.run(cutoff);
         analyticsPurged =
-          purgeAnonymousAnalytics.run(cutoff).changes +
-          tombstoneAttributedAnalytics.run(cutoff).changes;
+          tombstoneSyncedAnalytics.run(cutoff).changes + purgeUnsyncedAnalytics.run(cutoff).changes;
       })();
       return { ids: expired, analyticsPurged };
     } catch (error) {

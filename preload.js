@@ -136,6 +136,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   completeAnalyticsClear: (clearedThrough) =>
     ipcRenderer.invoke("analytics-complete-clear", clearedThrough),
   countUnclaimedAnalyticsEvents: () => ipcRenderer.invoke("analytics-count-unclaimed"),
+  countAnalyticsEventsAwaitingUpload: () =>
+    ipcRenderer.invoke("analytics-count-awaiting-upload"),
   claimAnonymousAnalyticsEvents: () => ipcRenderer.invoke("analytics-claim-anonymous"),
   clearTranscriptions: () => ipcRenderer.invoke("db-clear-transcriptions"),
   deleteTranscription: (id) => ipcRenderer.invoke("db-delete-transcription", id),
