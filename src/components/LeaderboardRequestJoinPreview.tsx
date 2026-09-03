@@ -35,7 +35,6 @@ export default function LeaderboardRequestJoinPreview({
       icon={Send}
       onAction={onRequest}
       title={t("insights.leaderboard.requestJoinTitle")}
-      variant="locked"
     />
   );
 }

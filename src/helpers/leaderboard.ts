@@ -1,8 +1,4 @@
-import type {
-  AnalyticsParticipation,
-  LeaderboardMetric,
-  LeaderboardRange,
-} from "../types/electron";
+import type { LeaderboardMetric, LeaderboardRange } from "../types/electron";
 
 export const LEADERBOARD_PAGE_SIZE = 20;
 export const LEADERBOARD_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
@@ -35,17 +31,4 @@ export function pageForRank(rank: number, memberCount: number): number {
 
 export function pageCount(memberCount: number): number {
   return Math.max(1, Math.ceil(memberCount / LEADERBOARD_PAGE_SIZE));
-}
-
-export function reconcileLeaderboardParticipation(
-  participation: AnalyticsParticipation,
-  localSyncEnabled: boolean
-): { enabled: boolean; publish: boolean | null } {
-  if (participation.configured) {
-    return { enabled: participation.enabled, publish: null };
-  }
-  return {
-    enabled: localSyncEnabled,
-    publish: localSyncEnabled ? true : null,
-  };
 }

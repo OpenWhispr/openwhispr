@@ -5,7 +5,6 @@ import { canChangeCloudBackupPreference, isCloudBackupAllowed } from "../stores/
 import { usePolicyStore } from "../stores/policyStore";
 import { syncService } from "../services/SyncService.js";
 import { LeaderboardService } from "../services/LeaderboardService";
-import { reconcileLeaderboardParticipation } from "../helpers/leaderboard";
 import { useAuth } from "./useAuth";
 import { useSettings } from "./useSettings";
 
@@ -30,6 +29,10 @@ import { useSettings } from "./useSettings";
  * more rows appear after it: the toggle survives sign-out, so anything spoken
  * before the next sign-in is unattributed with sync already on. It is what
  * canOfferAnalyticsClaim uses to keep offering this prompt.
+ *
+ * Leaderboard participation is a second, narrower consent — it publishes a name
+ * and email to teammates — so syncing never implies it. Only joinLeaderboard
+ * turns it on, and turning sync off takes it back down with it.
  */
 export function useInsightsSyncOptIn() {
   const { t } = useTranslation();
@@ -41,7 +44,7 @@ export function useInsightsSyncOptIn() {
   const [participationEnabled, setParticipationEnabled] = useState(false);
   const [participationError, setParticipationError] = useState(false);
   const [participationUpdating, setParticipationUpdating] = useState(false);
-  const reconciliationIdRef = useRef(0);
+  const participationReadIdRef = useRef(0);
   // Separate from the counts: a live count must never be what holds the dialog
   // open, or it reopens itself on mount for anyone with rows left behind.
   // "enable" asks about everything the first pass would upload; "claim" is the
@@ -50,14 +53,12 @@ export function useInsightsSyncOptIn() {
   const syncAllowedByPolicy = usePolicyStore(isCloudBackupAllowed);
   const canToggleSync =
     canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled) &&
-    participationReady &&
     !participationUpdating;
 
-  // The account preference is authoritative once it exists. This lets the
-  // existing device-local Sync switch roam safely without a newly signed-in
-  // device silently opting the account out with its default `false` value.
+  // Read-only: the account preference is the one source of truth for who is on
+  // a leaderboard, and nothing here may join or leave one on the user's behalf.
   useEffect(() => {
-    const reconciliationId = ++reconciliationIdRef.current;
+    const readId = ++participationReadIdRef.current;
     if (!isLoaded || !isSignedIn) {
       setParticipationReady(false);
       setParticipationEnabled(false);
@@ -69,67 +70,45 @@ export function useInsightsSyncOptIn() {
     setParticipationError(false);
     void (async () => {
       try {
-        let participation = await LeaderboardService.getParticipation();
-        const reconciliation = reconcileLeaderboardParticipation(
-          participation,
-          insightsSyncEnabled
-        );
-        if (reconciliation.publish !== null) {
-          participation = await LeaderboardService.setParticipation(reconciliation.publish);
-        }
-        if (reconciliationId !== reconciliationIdRef.current) return;
+        const participation = await LeaderboardService.getParticipation();
+        if (readId !== participationReadIdRef.current) return;
         setParticipationEnabled(participation.enabled);
-        if (reconciliation.enabled !== insightsSyncEnabled) {
-          setInsightsSyncEnabled(reconciliation.enabled);
-        }
-        setParticipationReady(true);
       } catch (error) {
-        if (reconciliationId !== reconciliationIdRef.current) return;
-        console.error("Reconciling leaderboard participation failed:", error);
+        if (readId !== participationReadIdRef.current) return;
+        console.error("Reading leaderboard participation failed:", error);
         setParticipationError(true);
-        setParticipationReady(true);
+      } finally {
+        if (readId === participationReadIdRef.current) setParticipationReady(true);
       }
     })();
-  }, [insightsSyncEnabled, isLoaded, isSignedIn, setInsightsSyncEnabled]);
+  }, [isLoaded, isSignedIn]);
 
   // The claim lands before the pass is requested so the rows it adopts go up
   // with it, rather than waiting for the next ambient one.
   const activate = useCallback(
     async (claimAnonymous: boolean) => {
-      setParticipationUpdating(true);
       if (claimAnonymous) {
         await window.electronAPI.claimAnonymousAnalyticsEvents().catch((error) => {
           console.error("Claiming earlier Insights events failed:", error);
         });
       }
-      try {
-        const participation = await LeaderboardService.setParticipation(true);
-        setParticipationEnabled(participation.enabled);
-        setParticipationError(false);
-        setInsightsSyncEnabled(true);
-        syncService.requestSyncAll("manual");
-      } catch (error) {
-        console.error("Enabling Insights sync failed:", error);
-        setParticipationError(true);
-      } finally {
-        setParticipationUpdating(false);
-      }
+      setInsightsSyncEnabled(true);
+      syncService.requestSyncAll("manual");
     },
     [setInsightsSyncEnabled]
   );
 
   const disableInsightsSync = useCallback(async () => {
+    // The device stops uploading straight away: an opt-out that waits on the
+    // network is an opt-out the user loses whenever the network is down.
+    setInsightsSyncEnabled(false);
     setParticipationUpdating(true);
     try {
       const participation = await LeaderboardService.setParticipation(false);
       setParticipationEnabled(participation.enabled);
       setParticipationError(false);
-      setInsightsSyncEnabled(false);
     } catch (error) {
-      // Keep the toggle on when the account-level opt-out did not reach the
-      // server; showing it as off while old totals remain ranked would be a
-      // privacy-breaking lie.
-      console.error("Disabling Insights sync failed:", error);
+      console.error("Leaving the leaderboard failed:", error);
       setParticipationError(true);
     } finally {
       setParticipationUpdating(false);
@@ -170,6 +149,24 @@ export function useInsightsSyncOptIn() {
     })();
   }, [activate, insightsSyncEnabled, refreshCounts, syncAllowedByPolicy]);
 
+  // Joining publishes the account; the counters it ranks still have to reach
+  // the server, so a leaderboard opt-in turns the sync on when it is off.
+  const joinLeaderboard = useCallback(async () => {
+    if (!syncAllowedByPolicy) return;
+    setParticipationUpdating(true);
+    try {
+      const participation = await LeaderboardService.setParticipation(true);
+      setParticipationEnabled(participation.enabled);
+      setParticipationError(false);
+      if (!insightsSyncEnabled) enableInsightsSync();
+    } catch (error) {
+      console.error("Joining the leaderboard failed:", error);
+      setParticipationError(true);
+    } finally {
+      setParticipationUpdating(false);
+    }
+  }, [enableInsightsSync, insightsSyncEnabled, syncAllowedByPolicy]);
+
   const claiming = promptKind === "claim";
   const optInDialog = (
     <ConfirmDialog
@@ -191,6 +188,7 @@ export function useInsightsSyncOptIn() {
     canToggleSync,
     disableInsightsSync,
     enableInsightsSync,
+    joinLeaderboard,
     optInDialog,
     participationEnabled,
     participationError,

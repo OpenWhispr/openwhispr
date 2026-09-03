@@ -30,18 +30,3 @@ test("rank jumps and pagination clamp safely at 20 rows per page", async () => {
   assert.equal(pageForRank(21, 55), 1);
   assert.equal(pageForRank(10_000, 55), 2);
 });
-
-test("configured account participation wins over a new device default", async () => {
-  const { reconcileLeaderboardParticipation } = await load();
-  assert.deepEqual(
-    reconcileLeaderboardParticipation(
-      { configured: true, enabled: true, updatedAt: "2026-09-03T00:00:00.000Z" },
-      false
-    ),
-    { enabled: true, publish: null }
-  );
-  assert.deepEqual(
-    reconcileLeaderboardParticipation({ configured: false, enabled: false, updatedAt: null }, true),
-    { enabled: true, publish: true }
-  );
-});

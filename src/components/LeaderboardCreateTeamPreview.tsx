@@ -22,7 +22,6 @@ export default function LeaderboardCreateTeamPreview({
       icon={Users}
       onAction={onCreate}
       title={t("insights.leaderboard.createTeamTitle")}
-      variant="locked"
     />
   );
 }

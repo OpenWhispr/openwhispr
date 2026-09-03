@@ -28,6 +28,12 @@ function memberValue(member: LeaderboardMember, metric: LeaderboardMetric): numb
   }
 }
 
+// The card is built to leave the app, so it never carries a full address: an
+// unnamed member is shown by the local part alone, as elsewhere in the UI.
+function shareName(member: LeaderboardMember): string {
+  return member.name || member.email.split("@")[0];
+}
+
 function drawRoundedRect(
   context: CanvasRenderingContext2D,
   x: number,
@@ -88,7 +94,7 @@ function createLeaderboardCard(
     context.fillText(`#${member.rank}`, 94, y + 36);
     context.fillStyle = "#ffffff";
     context.font = "600 22px Inter, system-ui, sans-serif";
-    context.fillText((member.name || member.email).slice(0, 38), 180, y + 36);
+    context.fillText(shareName(member).slice(0, 38), 180, y + 36);
     context.textAlign = "right";
     context.font = "700 24px Inter, system-ui, sans-serif";
     const value = memberValue(member, metric);
@@ -175,7 +181,7 @@ export default function LeaderboardShareDialog({
               >
                 <span className="truncate">
                   <strong className="mr-3 text-indigo-200">#{member.rank}</strong>
-                  {member.name || member.email}
+                  {shareName(member)}
                 </span>
                 <strong className="ml-3">
                   {memberValue(member, metric) == null

@@ -45,9 +45,22 @@ test("the Insights view asks the predicate whether to offer the claim", () => {
   );
 });
 
-test("the same Analytics Sync control owns leaderboard participation", () => {
+// Joining a leaderboard publishes a name and an email to teammates, so it is a
+// consent of its own: syncing counters must never imply it, and the sync switch
+// must take it back down when it goes off.
+test("only an explicit join opts the account into a leaderboard", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
   const settings = read("src/components/SettingsPage.tsx");
+  const activate = hook.slice(
+    hook.indexOf("const activate"),
+    hook.indexOf("const disableInsightsSync")
+  );
+  assert.equal(
+    activate.includes("setParticipation"),
+    false,
+    "turning Insights sync on must not join a leaderboard"
+  );
+  assert.ok(hook.includes("const joinLeaderboard"));
   assert.ok(hook.includes("LeaderboardService.setParticipation(true)"));
   assert.ok(hook.includes("LeaderboardService.setParticipation(false)"));
   assert.ok(settings.includes("void disableInsightsSync()"));
@@ -55,5 +68,18 @@ test("the same Analytics Sync control owns leaderboard participation", () => {
     settings.includes("enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)"),
     false,
     "Settings must not bypass the account-level opt-out"
+  );
+});
+
+// An opt-out that waits on the network is one the user loses when it is down.
+test("turning Insights sync off stops the device before it calls the account", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const disable = hook.slice(
+    hook.indexOf("const disableInsightsSync"),
+    hook.indexOf("const refreshUnclaimedCount")
+  );
+  assert.ok(
+    disable.indexOf("setInsightsSyncEnabled(false)") < disable.indexOf("setParticipation(false)"),
+    "the local switch must go off before the account call, not after it succeeds"
   );
 });

@@ -21,7 +21,6 @@ export default function LeaderboardInvitePreview({
       icon={UserPlus}
       onAction={onInvite}
       title={t("insights.leaderboard.inviteTitle")}
-      variant="invite"
     />
   );
 }

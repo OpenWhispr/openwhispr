@@ -36,6 +36,7 @@ import LeaderboardFreePreview from "./LeaderboardFreePreview";
 import LeaderboardInvitePreview from "./LeaderboardInvitePreview";
 import LeaderboardRequestJoinPreview from "./LeaderboardRequestJoinPreview";
 import LeaderboardShareDialog from "./LeaderboardShareDialog";
+import LeaderboardSignInPreview from "./LeaderboardSignInPreview";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -53,10 +54,11 @@ interface LeaderboardSectionProps {
   accountId: string | null;
   isSignedIn: boolean;
   syncActive: boolean;
-  syncCanBeEnabled: boolean;
+  canJoin: boolean;
   participationReady: boolean;
   participationError: boolean;
-  onEnableSync: () => void;
+  onJoin: () => void;
+  onSignIn: () => void;
   onUpgrade: () => void;
 }
 
@@ -75,14 +77,24 @@ function memberValue(member: LeaderboardMember, metric: LeaderboardMetric): numb
   }
 }
 
+function scrollToRank(rank: number) {
+  requestAnimationFrame(() =>
+    document.getElementById(`leaderboard-rank-${rank}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    })
+  );
+}
+
 export default function LeaderboardSection({
   accountId,
   isSignedIn,
   syncActive,
-  syncCanBeEnabled,
+  canJoin,
   participationReady,
   participationError,
-  onEnableSync,
+  onJoin,
+  onSignIn,
   onUpgrade,
 }: LeaderboardSectionProps) {
   const { t, i18n } = useTranslation();
@@ -222,12 +234,7 @@ export default function LeaderboardSection({
     const rank = pendingScrollRankRef.current;
     if (rank == null || !visibleMembers.some((member) => member.rank === rank)) return;
     pendingScrollRankRef.current = null;
-    requestAnimationFrame(() =>
-      document.getElementById(`leaderboard-rank-${rank}`)?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      })
-    );
+    scrollToRank(rank);
   }, [visibleMembers]);
 
   const requestJoin = async () => {
@@ -303,7 +310,7 @@ export default function LeaderboardSection({
       </Select>
     ) : null;
 
-  if (!isSignedIn) return null;
+  if (!isSignedIn) return <LeaderboardSignInPreview className="mt-8" onSignIn={onSignIn} />;
   if (accessLoading && !access) {
     return (
       <section className="mt-8 flex min-h-48 items-center justify-center rounded-2xl border border-border/50 bg-card/70 text-muted-foreground dark:border-white/8">
@@ -397,18 +404,25 @@ export default function LeaderboardSection({
     const value = memberValue(member, metric);
     if (value == null) return "—";
     if (metric === "words_per_minute") {
-      return t("insights.leaderboard.wpmValue", { count: number.format(value) });
+      return t("insights.leaderboard.wpmValue", { count: value });
     }
     if (metric === "current_daily_streak") {
-      return t("insights.leaderboard.dayValue", { count: number.format(value) });
+      return t("insights.leaderboard.dayValue", { count: value });
     }
     return number.format(value);
   };
   const jumpToRank = (rank: number) => {
     if (!leaderboard?.totalMembers) return;
     const resolvedRank = Math.max(1, Math.min(leaderboard.totalMembers, Math.trunc(rank) || 1));
+    const targetPage = pageForRank(resolvedRank, leaderboard.totalMembers);
+    // Staying on the page renders nothing new, so the row is already there and
+    // the effect that scrolls after a page load never runs.
+    if (targetPage === page) {
+      scrollToRank(resolvedRank);
+      return;
+    }
     pendingScrollRankRef.current = resolvedRank;
-    setPage(pageForRank(resolvedRank, leaderboard.totalMembers));
+    setPage(targetPage);
   };
   const podiumOrder = leaderboard?.leaders.length === 1 ? [0] : [1, 0, 2];
 
@@ -433,7 +447,7 @@ export default function LeaderboardSection({
             </p>
           </div>
           {participationReady && (
-            <Button size="sm" onClick={onEnableSync} disabled={!syncCanBeEnabled}>
+            <Button size="sm" onClick={onJoin} disabled={!canJoin}>
               <Cloud size={14} />
               {t("insights.leaderboard.join")}
             </Button>
