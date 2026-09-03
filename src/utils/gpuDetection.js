@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const debugLogger = require("../helpers/debugLogger");
 
-// The shipped CUDA whisper build (release 0.0.9) carries kernels for Pascal
+// The shipped CUDA whisper build (release 0.0.10) carries kernels for Pascal
 // (compute capability 6.1) and newer; 6.1's embedded PTX also covers Volta via
 // driver JIT. On cards below the floor the server starts, loads the model into
 // VRAM, then aborts on the first kernel launch with "no kernel image is

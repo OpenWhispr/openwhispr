@@ -1,10 +1,16 @@
 const GpuBinaryManager = require("./gpuBinaryManager");
+const { WHISPER_CPP_TAG, WINDOWS_MSVC_RUNTIME_LIBRARIES } = require("./whisperCppRelease");
 
 // Pinned so untested future binaries never auto-ship; bump together with the digests below
-const WHISPER_CPP_TAG = process.env.WHISPER_CPP_VERSION || "0.0.9";
-
 // sha256 per release tag; tags without an entry fall back to the API-reported digest
 const EXPECTED_DIGESTS = {
+  // Adds app-local MSVC runtime DLLs to the Windows archive
+  "0.0.10": {
+    "whisper-server-win32-x64-cuda.zip":
+      "4bcf9f28bb1f725163442789015a600cdbccc4c40063de97d29f40b5855bb041",
+    "whisper-server-linux-x64-cuda.zip":
+      "9282d706a3c1853e10f563be5fab3d7e9e544142cc73fe9e6470aaeeaf0a5454",
+  },
   // Same source as 0.0.8; adds Pascal (sm_61) CUDA kernels
   "0.0.9": {
     "whisper-server-win32-x64-cuda.zip":
@@ -35,6 +41,7 @@ class WhisperCudaManager extends GpuBinaryManager {
           binaryName: "whisper-server-win32-x64-cuda.exe",
           outputName: "whisper-server-win32-x64-cuda.exe",
           libPattern: /\.dll$/i,
+          requiredLibraries: WINDOWS_MSVC_RUNTIME_LIBRARIES,
         },
         "linux-x64": {
           assetName: "whisper-server-linux-x64-cuda.zip",

@@ -780,6 +780,35 @@
         "ssoHelp": "Uses your AWS CLI SSO configuration. Ensure you have run 'aws sso login'.",
         "keysHelp": "Enter your AWS IAM access keys."
       },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "Temporary AWS access expired.",
+          "ssoExpired": "AWS SSO session expired.",
+          "credentialsRejected": "AWS credentials were rejected. Check the access key ID, secret, and session token.",
+          "accessDenied": "AWS Bedrock denied this request. Ask your AWS administrator to grant permission to invoke the selected model in region {{region}}.",
+          "modelNotFound": "AWS Bedrock could not find the selected model in region {{region}}. Check the model ID and whether it is available in that region.",
+          "configurationRejected": "AWS Bedrock rejected the model configuration for region {{region}}. Check the model ID, inference profile, and region.",
+          "notConfigured": "AWS Bedrock is not configured correctly. Check the region and AWS credentials.",
+          "serviceUnavailable": "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an OpenWhispr outage. Please try again in a few minutes.",
+          "throttled": "AWS Bedrock is temporarily limiting requests because it is receiving too many. Please wait a moment and try again. If this continues, ask your AWS administrator to check your Bedrock usage and quotas.",
+          "timeout": "AWS Bedrock did not respond in time. Please try again. If this continues, check your internet connection and AWS Bedrock service status.",
+          "network": "AWS Bedrock could not be reached. Check your internet connection and try again.",
+          "unknown": "AWS Bedrock error: {{error}}",
+          "actions": {
+            "refreshManagedAccess": "Sign out and sign back in to refresh company access, then retry.",
+            "reauthenticate": "Run the command below in your terminal to re-authenticate:"
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "Technical details",
+        "httpStatus": "HTTP status",
+        "awsException": "AWS exception",
+        "awsRequestId": "AWS request ID",
+        "underlyingError": "Underlying error",
+        "copy": "Copy technical details",
+        "copyCommand": "Copy recovery command"
+      },
       "azure": {
         "endpointHelp": "Your Azure OpenAI resource endpoint (e.g., https://myresource.openai.azure.com).",
         "deploymentHelp": "The name of your model deployment in Azure OpenAI."
@@ -3448,7 +3477,7 @@
       },
       "cleanupFailed": {
         "title": "Cleanup failed",
-        "description": "Your dictation was pasted without AI cleanup."
+        "description": "Original dictation pasted without AI cleanup."
       }
     },
     "mic": {
