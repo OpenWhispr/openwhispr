@@ -194,7 +194,7 @@ test("a leave the account never took is kept and retried until it does", () => {
   const leave = store.slice(store.indexOf("leave: async"));
   assert.ok(leave.includes("writePendingLeaderboardLeave(userId)"));
   assert.ok(
-    leave.includes("publishAnswer(false)"),
+    leave.includes("publishAnswer(false, generation)"),
     "a pending leave must stop showing the user as participating"
   );
   const hookJoin = hook.slice(
@@ -228,7 +228,7 @@ test("a leave the account never took is kept and retried until it does", () => {
 test("a completed participation write outranks every read still in flight", () => {
   const store = read("src/stores/leaderboardParticipationStore.ts");
   const publish = store.slice(
-    store.indexOf("publishAnswer: (enabled)"),
+    store.indexOf("publishAnswer: (enabled, generation)"),
     store.indexOf("refresh: async")
   );
   assert.ok(
@@ -317,7 +317,7 @@ test("an account scope purge drops the participation answer with the rest of the
   );
   const reset = store.slice(
     store.indexOf("reset: () => {"),
-    store.indexOf("publishAnswer: (enabled)")
+    store.indexOf("publishAnswer: (enabled, generation)")
   );
   assert.ok(
     reset.includes("readId += 1"),
