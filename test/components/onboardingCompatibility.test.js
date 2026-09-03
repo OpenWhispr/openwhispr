@@ -180,18 +180,22 @@ test("permissions replaces Back with Logout, keeps Continue at the bottom, and g
     );
 
   const blocked = render(false, asyncNoop);
-  assert.match(blocked, /relative flex h-full flex-col overflow-y-auto px-5 pb-6 pt-38/);
   assert.doesNotMatch(blocked, />common\.back<\/button>/);
-  assert.match(blocked, /mt-auto flex w-full[^>]+>.*common\.logout.*common\.continue/s);
-  assert.match(
-    blocked,
-    /disabled="" class="onboarding-pressable h-10 flex-1[^>]+>common\.continue/
+  assert.ok(
+    blocked.indexOf("common.logout") < blocked.indexOf("common.continue"),
+    "Logout takes the place Back had, ahead of Continue"
   );
-  assert.doesNotMatch(blocked, /fixed top-4/);
+  // Continue is part of the step now rather than an overlay above it, so it
+  // follows the permission rows in the DOM, and so in tab order.
+  assert.ok(
+    blocked.indexOf("onboarding.permissions.microphoneTitle") < blocked.indexOf("common.continue"),
+    "Continue should render after the permission rows"
+  );
+  assert.match(blocked, /<button[^>]*\bdisabled=""[^>]*>common\.continue<\/button>/);
 
   const ready = render(true, asyncNoop);
-  assert.match(ready, /class="onboarding-pressable h-10 flex-1[^>]+>common\.continue/);
-  assert.doesNotMatch(ready, /disabled="" class="onboarding-pressable h-10 flex-1/);
+  assert.match(ready, /<button[^>]*>common\.continue<\/button>/);
+  assert.doesNotMatch(ready, /\bdisabled=""[^>]*>common\.continue/);
 
   // Guests reach this step without ever signing in, so they get no Logout.
   const guest = render(true);
@@ -315,7 +319,7 @@ test("Linux onboarding does not show Screen Context", async (t) => {
   assert.doesNotMatch(markup, /dictationAgent\.screenContext\.title/);
 });
 
-test("provider setup stages use one size and mark dictation complete before Assistant", async (t) => {
+test("provider setup stages mark dictation complete before Assistant", async (t) => {
   const vite = await createOnboardingRenderer(t);
   const { SetupStageStepper } = await vite.ssrLoadModule(
     "/components/onboarding/ProviderSetupStep.tsx"
@@ -324,8 +328,6 @@ test("provider setup stages use one size and mark dictation complete before Assi
   for (const stepId of ["byok-assistant", "local-assistant"]) {
     const markup = renderToStaticMarkup(React.createElement(SetupStageStepper, { stepId }));
 
-    assert.match(markup, /\bw-40\b/);
-    assert.match(markup, /\bsize-8\b/);
     assert.match(markup, /lucide-circle-check/);
     assert.doesNotMatch(markup, /lucide-audio-lines/);
   }

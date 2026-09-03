@@ -134,6 +134,16 @@ export const resolveOnboardingDictationHotkey = ({
   return MACOS_DEFAULT_ONBOARDING_HOTKEY;
 };
 
+/**
+ * The chord the assistant step opens on.
+ *
+ * Unlike dictation, `voiceAgentKey` has no platform default and no substitution,
+ * so a saved chord is always the user's own pick and is kept — there is nothing
+ * here for a `confirmed` flag to tell apart.
+ */
+export const resolveOnboardingAssistantHotkey = (savedHotkey: string): string =>
+  savedHotkey || DEFAULT_ASSISTANT_ONBOARDING_HOTKEY;
+
 export const getRecommendedDictationHotkeys = (
   platform: Platform,
   effectiveDefault: string

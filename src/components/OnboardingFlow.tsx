@@ -34,6 +34,7 @@ import {
   DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
   formatHotkeyInstruction,
   getRecommendedDictationHotkeys,
+  resolveOnboardingAssistantHotkey,
   resolveOnboardingDictationHotkey,
 } from "./onboarding/hotkeyPresentation";
 import { getValidationMessage } from "../utils/hotkeyValidator";
@@ -120,11 +121,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       confirmed: dictationHotkeyConfirmed,
     })
   );
-  const [assistantHotkey, setAssistantHotkey] = useState(() => {
-    const savedHotkey = parseHotkeyList(settings.voiceAgentKey)[0];
-    if (assistantHotkeyConfirmed && savedHotkey) return savedHotkey;
-    return DEFAULT_ASSISTANT_ONBOARDING_HOTKEY;
-  });
+  const [assistantHotkey, setAssistantHotkey] = useState(() =>
+    resolveOnboardingAssistantHotkey(parseHotkeyList(settings.voiceAgentKey)[0] ?? "")
+  );
   // Seeded from main rather than getDefaultHotkey(): main already knows when the
   // platform default can't bind (GNOME/X11 reject modifier-only combos) and
   // registered a fallback instead — recommending the unregistrable default would
@@ -1182,9 +1181,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }
         skipLabel={t("common.skip")}
         continueDisabled={!canContinue}
-        continueLoading={
-          isFinishing || isRegistering || (currentStepId === "notes" && workspaceResolutionPending)
-        }
+        continueLoading={isFinishing || isRegistering}
         progress={getOnboardingProgress(currentStepId, route)}
         // Label Back only when it is the sole footer action. Unlike the source
         // commit, this branch also has demo Skip, so Back stays icon-only there.

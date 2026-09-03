@@ -105,11 +105,26 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
       harness.cleared += 1;
     },
   };
-  const render = () => {
+  const render = (overrides = {}) => {
     harness.cursor = 0;
-    return ShortcutSetupStep(props);
+    return ShortcutSetupStep({ ...props, ...overrides });
+  };
+  // The step adjusts its seeded chord during render, which makes React re-render
+  // synchronously before it paints; this harness has to run the component again to
+  // observe that. The third pass pins that the adjustment settles instead of
+  // re-triggering itself.
+  const renderSettled = (overrides = {}) => {
+    render(overrides);
+    const settled = render(overrides);
+    assert.equal(
+      textContent(render(overrides)),
+      textContent(settled),
+      "the seeded chord should settle after one adjustment"
+    );
+    return settled;
   };
   const input = (tree) => findElement(tree, (node) => node.type?.name === "HotkeyInput");
+  const chord = (tree) => findElement(tree, (node) => node.type?.name === "HotkeyChord");
 
   // The step opens with the recommended chord already in the box, so it asks for a
   // first press; "press it again" only applies once a chord has actually been captured.
@@ -123,7 +138,20 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
     ),
     "an unconfirmed shortcut should still expose the reset action"
   );
-  input(initialTree).props.onChange("RightOption");
+  // Main resolves the shortcut it can actually register after this step is already
+  // open, so a late correction has to reach the box — without reading as a capture.
+  const correctedTree = renderSettled({ value: "F8" });
+  assert.equal(chord(correctedTree).props.value, "F8");
+  assert.equal(input(correctedTree).props.value, "F8");
+  assert.match(textContent(correctedTree), /Capture/);
+  assert.doesNotMatch(textContent(correctedTree), /confirmAgain/);
+
+  // It keeps following, so the box can never lag behind main.
+  const restoredTree = renderSettled();
+  assert.equal(chord(restoredTree).props.value, "RightOption");
+  assert.doesNotMatch(textContent(restoredTree), /confirmAgain/);
+
+  input(restoredTree).props.onChange("RightOption");
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(harness.confirmed, ["RightOption"]);
   assert.deepEqual(harness.changed, ["RightOption"]);
@@ -157,6 +185,15 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
     ),
     null
   );
+
+  // A captured chord is the user's own, so nothing the caller reports afterwards
+  // may replace it — including the empty value onClearSelection drives it to.
+  for (const value of ["", "Meta+J"]) {
+    const heldTree = renderSettled({ value });
+    assert.equal(chord(heldTree).props.value, "Control+Alt");
+    assert.match(textContent(heldTree), /onboarding\.rehaul\.hotkey\.confirmAgain:Control \+ Alt/);
+    assert.doesNotMatch(textContent(heldTree), /Recommended/);
+  }
 
   input(candidateTree).props.onChange("Control+Alt");
   await new Promise((resolve) => setImmediate(resolve));

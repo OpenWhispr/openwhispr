@@ -85,12 +85,25 @@ export default function ShortcutSetupStep({
   // The step opens with a recommended chord already in the box, so "press it
   // again" only becomes true once the user has actually captured one.
   const [hasCapturedChord, setHasCapturedChord] = useState(false);
+  const [seededValue, setSeededValue] = useState(value);
   const [error, setError] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [captureKey, setCaptureKey] = useState(0);
   // The capture box hides the input behind its own surface, so the keys being
   // held have to be echoed here or pressing a bare modifier looks like nothing.
   const [heldModifiers, setHeldModifiers] = useState("");
+
+  // The opening chord is resolved asynchronously — main reports the shortcut it
+  // could actually register, and may replace it later — so the seed has to follow
+  // `value` until the user captures something of their own, or the box keeps
+  // offering a chord that is already known to fail. Adjusted during render rather
+  // than in an effect so the superseded chord is never painted, and it is not a
+  // capture: `hasCapturedChord` stays false, so the copy still asks for a first
+  // press instead of asking to confirm.
+  if (value !== seededValue) {
+    setSeededValue(value);
+    if (!hasCapturedChord) setCandidate(value);
+  }
 
   const handleCapture = async (next: string) => {
     setError(null);

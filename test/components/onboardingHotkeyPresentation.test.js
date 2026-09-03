@@ -64,6 +64,19 @@ test("the dictation step never opens on a chord that would overwrite the user's 
   assert.equal(onMac("GLOBE", true), "GLOBE");
 });
 
+test("the assistant step keeps a saved chord whether or not onboarding confirmed it", async () => {
+  const { DEFAULT_ASSISTANT_ONBOARDING_HOTKEY, resolveOnboardingAssistantHotkey } = await load();
+
+  // voiceAgentKey is opt-in with no platform default, so anything saved is the
+  // user's own pick and there is no default for a confirmed flag to tell it from.
+  assert.equal(resolveOnboardingAssistantHotkey("Alt+Space"), "Alt+Space");
+  assert.equal(
+    resolveOnboardingAssistantHotkey(DEFAULT_ASSISTANT_ONBOARDING_HOTKEY),
+    DEFAULT_ASSISTANT_ONBOARDING_HOTKEY
+  );
+  assert.equal(resolveOnboardingAssistantHotkey(""), DEFAULT_ASSISTANT_ONBOARDING_HOTKEY);
+});
+
 test("only macOS substitutes an onboarding default for the platform one", async () => {
   const { resolveOnboardingDictationHotkey } = await load();
 

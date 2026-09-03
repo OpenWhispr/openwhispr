@@ -2,20 +2,24 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-const AUTH_MODE_INDEX = 0;
-const EMAIL_INDEX = 1;
-const PASSWORD_INDEX = 2;
-const FULL_NAME_INDEX = 3;
-const SSO_EMAIL_STEP_INDEX = 8;
-const SSO_DISCOVERY_INDEX = 9;
-const ERROR_INDEX = 10;
+const EMPTY_AUTH_DRAFT = {
+  authMode: null,
+  email: "",
+  fullName: "",
+  ssoDiscovery: null,
+  pendingVerificationEmail: null,
+};
 
-function createHarness(values = {}) {
+function createHarness() {
   return {
     cursor: 0,
     refCursor: 0,
-    values,
+    values: {},
     refs: {},
+    effects: [],
+    cleanups: [],
+    debouncedCalls: 0,
+    pendingDebounced: null,
     discoveryCalls: [],
     ssoCalls: [],
     discoveryResult: { exists: false },
@@ -38,11 +42,36 @@ function findElement(node, predicate) {
   return findElement(node.props?.children, predicate);
 }
 
+function textContent(node) {
+  if (Array.isArray(node)) return node.map(textContent).join("");
+  if (typeof node === "string") return node;
+  if (!node || typeof node !== "object") return "";
+  return textContent(node.props?.children);
+}
+
+const isInput = (node) => node.type?.name === "Input";
+const inputByPlaceholder = (tree, placeholder) =>
+  findElement(tree, (node) => isInput(node) && node.props?.placeholder === placeholder);
+// Sign-in shows the address back instead of asking for a name, so a read-only
+// field is how "this is the password step for a known account" reads.
+const readOnlyEmailField = (tree) =>
+  findElement(tree, (node) => isInput(node) && node.props?.readOnly === true);
+const passwordField = (tree) =>
+  findElement(tree, (node) => isInput(node) && node.props?.type === "password");
+const providerTile = (tree, label) =>
+  findElement(
+    tree,
+    (node) =>
+      node.type?.name === "ProviderTile" && (label === undefined || node.props?.label === label)
+  );
+const buttonLabelled = (tree, label) =>
+  findElement(tree, (node) => node.type?.name === "Button" && textContent(node) === label);
+
 async function settleAsyncHandler() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test("email authentication discovers accounts before choosing sign-in or sign-up", async (t) => {
+test("email authentication discovers accounts, restores drafts, and persists them once per pause", async (t) => {
   installBrowserGlobals(t, { window: { electronAPI: {} } });
   t.after(() => {
     delete globalThis.__authenticationStepHarness;
@@ -52,27 +81,32 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
     cachePrefix: "openwhispr-authentication-step-",
     noExternal: ["react", "react-i18next", "lucide-react"],
     mockModules: {
+      // A minimal renderer rather than react-dom: it returns the element tree so
+      // the assertions can read rendered output, and it collects effects so the
+      // render helper can run them. Nothing here is keyed on hook call order.
       react: `
         export default {};
         export function useState(initialValue) {
           const harness = globalThis.__authenticationStepHarness;
-          const index = harness.cursor++;
-          if (!(index in harness.values)) {
-            harness.values[index] = typeof initialValue === "function" ? initialValue() : initialValue;
+          const slot = harness.cursor++;
+          if (!(slot in harness.values)) {
+            harness.values[slot] = typeof initialValue === "function" ? initialValue() : initialValue;
           }
-          return [harness.values[index], (nextValue) => {
-            harness.values[index] = typeof nextValue === "function"
-              ? nextValue(harness.values[index])
+          return [harness.values[slot], (nextValue) => {
+            harness.values[slot] = typeof nextValue === "function"
+              ? nextValue(harness.values[slot])
               : nextValue;
           }];
         }
         export function useCallback(callback) { return callback; }
-        export function useEffect() {}
+        export function useEffect(effect) {
+          globalThis.__authenticationStepHarness.effects.push(effect);
+        }
         export function useRef(initialValue) {
           const harness = globalThis.__authenticationStepHarness;
-          const index = harness.refCursor++;
-          if (!(index in harness.refs)) harness.refs[index] = { current: initialValue };
-          return harness.refs[index];
+          const slot = harness.refCursor++;
+          if (!(slot in harness.refs)) harness.refs[slot] = { current: initialValue };
+          return harness.refs[slot];
         }
       `,
       "/jsx-dev-runtime": `
@@ -81,7 +115,16 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
       `,
       "react-i18next": `
         export function useTranslation() {
-          return { t(key) { return key; } };
+          return { t(key, options) { return options ? key + ":" + JSON.stringify(options) : key; } };
+        }
+      `,
+      // Records the pending write instead of firing it, so the test can tell a
+      // scheduled draft apart from a persisted one.
+      "/hooks/useDebouncedCallback": `
+        export function useDebouncedCallback(callback) {
+          const harness = globalThis.__authenticationStepHarness;
+          harness.pendingDebounced = callback;
+          return () => { harness.debouncedCalls += 1; };
         }
       `,
       "/hooks/useAuth": `
@@ -141,93 +184,127 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
     globalThis.__authenticationStepHarness = harness;
     harness.cursor = 0;
     harness.refCursor = 0;
-    return AuthenticationStep({ ...props, ...overrides });
+    harness.effects = [];
+    const tree = AuthenticationStep({ ...props, ...overrides });
+    // Running the collected effects is what makes the draft ref, the scheduled
+    // write and the unmount flush observable.
+    harness.cleanups = harness.effects
+      .map((effect) => effect())
+      .filter((cleanup) => typeof cleanup === "function");
+    return tree;
   };
-  const submitEmail = async (harness) => {
-    const form = findElement(render(harness), (node) => node.type === "form");
+  const typeEmail = (harness, address, overrides) => {
+    const tree = render(harness, overrides);
+    const field = inputByPlaceholder(tree, "auth.emailStep.emailPlaceholder");
+    assert.ok(field, "the welcome view should offer an email field");
+    field.props.onChange({ target: { value: address } });
+    return tree;
+  };
+  const submitEmail = async (harness, address, overrides) => {
+    typeEmail(harness, address, overrides);
+    const form = findElement(render(harness, overrides), (node) => node.type === "form");
     assert.ok(form, "email form should render");
     form.props.onSubmit({ preventDefault() {} });
     await settleAsyncHandler();
+    return render(harness, overrides);
   };
 
-  const existingAccount = createHarness({ [EMAIL_INDEX]: "returning@example.com" });
+  const existingAccount = createHarness();
   existingAccount.discoveryResult = { exists: true };
-  await submitEmail(existingAccount);
-  assert.equal(existingAccount.values[AUTH_MODE_INDEX], "sign-in");
+  const signIn = await submitEmail(existingAccount, "returning@example.com");
+  assert.equal(readOnlyEmailField(signIn)?.props.value, "returning@example.com");
+  assert.ok(passwordField(signIn), "a known account goes straight to the password step");
+  assert.match(textContent(signIn), /auth\.passwordForm\.signIn/);
+  assert.match(textContent(signIn), /auth\.passwordForm\.forgotPassword/);
   assert.deepEqual(existingAccount.discoveryCalls, [
     { email: "returning@example.com", authUrl: "https://auth.example.test" },
   ]);
 
-  const newAccount = createHarness({ [EMAIL_INDEX]: "new@example.com" });
-  await submitEmail(newAccount);
-  assert.equal(newAccount.values[AUTH_MODE_INDEX], "sign-up");
+  const newAccount = createHarness();
+  const signUp = await submitEmail(newAccount, "new@example.com");
+  assert.ok(
+    inputByPlaceholder(signUp, "auth.passwordForm.fullNamePlaceholder"),
+    "an unknown address asks for a name"
+  );
+  assert.match(textContent(signUp), /auth\.passwordForm\.createAccountButton/);
 
-  const missingEndpoint = createHarness({ [EMAIL_INDEX]: "user@selfhosted.example" });
+  // A self-hosted deployment without the discovery endpoint still gets sign-up,
+  // and no error for the missing endpoint.
+  const missingEndpoint = createHarness();
   missingEndpoint.discoveryResult = null;
-  await submitEmail(missingEndpoint);
-  assert.equal(missingEndpoint.values[AUTH_MODE_INDEX], "sign-up");
-  assert.equal(missingEndpoint.values[ERROR_INDEX], null);
+  const selfHosted = await submitEmail(missingEndpoint, "user@selfhosted.example");
+  assert.ok(inputByPlaceholder(selfHosted, "auth.passwordForm.fullNamePlaceholder"));
+  assert.doesNotMatch(textContent(selfHosted), /auth\.errors\./);
 
-  const unavailableDiscovery = createHarness({ [EMAIL_INDEX]: "user@example.com" });
+  const unavailableDiscovery = createHarness();
   unavailableDiscovery.discoveryError = new Error("offline");
-  await submitEmail(unavailableDiscovery);
-  assert.equal(unavailableDiscovery.values[AUTH_MODE_INDEX], null);
-  assert.equal(unavailableDiscovery.values[ERROR_INDEX], "auth.errors.failedUserCheck");
+  const offline = await submitEmail(unavailableDiscovery, "user@example.com");
+  assert.ok(providerTile(offline), "an unreachable check must not advance the flow");
+  assert.match(textContent(offline), /auth\.errors\.failedUserCheck/);
 
-  const ssoAccount = createHarness({ [EMAIL_INDEX]: "user@example.com" });
+  const ssoAccount = createHarness();
   ssoAccount.discoveryResult = {
     exists: true,
     sso: { available: true, required: false, domain: "example.com" },
   };
-  await submitEmail(ssoAccount);
-  assert.equal(ssoAccount.values[AUTH_MODE_INDEX], null);
-  assert.deepEqual(ssoAccount.values[SSO_DISCOVERY_INDEX], {
-    exists: true,
-    required: false,
-    domain: "example.com",
-  });
-
-  const directSso = createHarness({ [EMAIL_INDEX]: "person@company.test" });
-  const ssoTile = findElement(
-    render(directSso),
-    (node) => node.type?.name === "ProviderTile" && node.props?.label === "SSO"
+  const company = await submitEmail(ssoAccount, "user@example.com");
+  assert.match(textContent(company), /auth\.sso\.companySignInTitle/);
+  assert.match(textContent(company), /auth\.sso\.availableDescription:\{"domain":"example\.com"\}/);
+  const useEmailInstead = buttonLabelled(company, "auth.sso.useEmailInstead");
+  assert.ok(useEmailInstead, "an optional SSO domain keeps the password route open");
+  useEmailInstead.props.onClick();
+  assert.ok(
+    readOnlyEmailField(render(ssoAccount)),
+    "leaving SSO for an existing account lands on sign-in"
   );
+
+  const directSso = createHarness();
+  const ssoTile = providerTile(typeEmail(directSso, "person@company.test"), "SSO");
   assert.ok(ssoTile, "SSO provider tile should render");
   ssoTile.props.onClick();
-  assert.equal(directSso.values[SSO_EMAIL_STEP_INDEX], true);
-
-  const ssoForm = findElement(render(directSso), (node) => node.type === "form");
+  const ssoScreen = render(directSso);
+  assert.match(textContent(ssoScreen), /auth\.sso\.workEmailLabel/);
+  const ssoForm = findElement(ssoScreen, (node) => node.type === "form");
   assert.ok(ssoForm, "SSO work-email form should render after choosing SSO");
   ssoForm.props.onSubmit({ preventDefault() {} });
   await settleAsyncHandler();
   assert.deepEqual(directSso.ssoCalls, ["person@company.test"]);
 
   // A resumed draft restores the identity fields only. The SSO work-email screen
-  // is transient, so a returning user lands back on sign-in rather than inside it.
-  const resumed = createHarness();
-  const resumedTree = render(resumed, {
-    resumeState: {
-      authMode: null,
-      email: "resume@company.test",
-      fullName: "Resume User",
-      ssoDiscovery: null,
-      pendingVerificationEmail: null,
-    },
+  // is transient, so a returning user lands back on the provider choices.
+  const resumedWelcome = createHarness();
+  const resumedTree = render(resumedWelcome, {
+    resumeState: { ...EMPTY_AUTH_DRAFT, email: "resume@company.test", fullName: "Resume User" },
   });
-  assert.equal(resumed.values[EMAIL_INDEX], "resume@company.test");
-  assert.equal(resumed.values[FULL_NAME_INDEX], "Resume User");
-  assert.equal(resumed.values[SSO_EMAIL_STEP_INDEX], false);
+  assert.equal(
+    inputByPlaceholder(resumedTree, "auth.emailStep.emailPlaceholder").props.value,
+    "resume@company.test"
+  );
   assert.ok(
-    findElement(resumedTree, (node) => node.type?.name === "ProviderTile"),
+    providerTile(resumedTree),
     "a resumed draft should reopen the provider choices, not the SSO email step"
   );
 
-  const duplicateRace = createHarness({
-    [AUTH_MODE_INDEX]: "sign-up",
-    [EMAIL_INDEX]: "returning@example.com",
-    [PASSWORD_INDEX]: "password123",
-    [FULL_NAME_INDEX]: "Returning User",
+  const resumedSignUp = createHarness();
+  const resumedSignUpTree = render(resumedSignUp, {
+    resumeState: {
+      ...EMPTY_AUTH_DRAFT,
+      authMode: "sign-up",
+      email: "resume@company.test",
+      fullName: "Resume User",
+    },
   });
+  assert.equal(
+    inputByPlaceholder(resumedSignUpTree, "auth.passwordForm.fullNamePlaceholder").props.value,
+    "Resume User"
+  );
+
+  const duplicateRace = createHarness();
+  const raceSignUp = await submitEmail(duplicateRace, "returning@example.com");
+  inputByPlaceholder(raceSignUp, "auth.passwordForm.fullNamePlaceholder").props.onChange({
+    target: { value: "Returning User" },
+  });
+  passwordField(render(duplicateRace)).props.onChange({ target: { value: "password123" } });
   duplicateRace.signupResult = {
     error: {
       code: "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
@@ -237,7 +314,42 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
   const signupForm = findElement(render(duplicateRace), (node) => node.type === "form");
   assert.ok(signupForm, "sign-up form should render");
   await signupForm.props.onSubmit({ preventDefault() {} });
-  assert.equal(duplicateRace.values[AUTH_MODE_INDEX], "sign-in");
-  assert.equal(duplicateRace.values[PASSWORD_INDEX], "");
-  assert.equal(duplicateRace.values[ERROR_INDEX], "auth.errors.accountExistsSignIn");
+  const afterRace = render(duplicateRace);
+  assert.ok(readOnlyEmailField(afterRace), "a duplicate account switches to sign-in");
+  assert.equal(passwordField(afterRace).props.value, "", "the password is cleared for the retry");
+  assert.match(textContent(afterRace), /auth\.errors\.accountExistsSignIn/);
+
+  // The resume draft is written once per typing pause, never per keystroke, and
+  // carries only the fields this step owns.
+  const drafting = createHarness();
+  const draftWrites = [];
+  const draftProps = {
+    resumeState: EMPTY_AUTH_DRAFT,
+    onResumeStateChange: (patch) => draftWrites.push(patch),
+  };
+  typeEmail(drafting, "typed@example.com", draftProps);
+  render(drafting, draftProps);
+  assert.deepEqual(draftWrites, [], "typing must not persist per keystroke");
+  assert.ok(drafting.debouncedCalls >= 2, "every change schedules the debounced write");
+  drafting.pendingDebounced();
+  assert.deepEqual(draftWrites, [
+    { authMode: null, email: "typed@example.com", fullName: "", ssoDiscovery: null },
+  ]);
+
+  // Sign-up unmounts this step on its way to verification, so the flush has to
+  // cover the write the debounce still had pending.
+  const abandoned = createHarness();
+  const flushedWrites = [];
+  const flushProps = {
+    resumeState: EMPTY_AUTH_DRAFT,
+    onResumeStateChange: (patch) => flushedWrites.push(patch),
+  };
+  typeEmail(abandoned, "gone@example.com", flushProps);
+  render(abandoned, flushProps);
+  assert.deepEqual(flushedWrites, []);
+  assert.ok(abandoned.cleanups.length > 0, "the flush effect should register a cleanup");
+  abandoned.cleanups.forEach((cleanup) => cleanup());
+  assert.deepEqual(flushedWrites, [
+    { authMode: null, email: "gone@example.com", fullName: "", ssoDiscovery: null },
+  ]);
 });
