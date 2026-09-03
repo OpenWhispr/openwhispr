@@ -340,6 +340,8 @@ const Toast: React.FC<
           description={description}
           actions={actions ?? []}
           onAction={handleStructuredAction}
+          onDismiss={() => onClose?.()}
+          dismissLabel={t("common.dismiss")}
           onPreferredHeightChange={handleErrorHeightChange}
           progressDuration={!isExiting ? duration : 0}
           progressPaused={timerPaused}

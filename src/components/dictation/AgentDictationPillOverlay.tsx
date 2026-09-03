@@ -218,7 +218,7 @@ export default function AgentDictationPillOverlay() {
         }}
         onMouseLeave={() => setHovered(false)}
       >
-        <div className="relative flex items-center gap-2">
+        <div className="relative flex items-center" data-horizontal-direction={horizontalDirection}>
           <VoicePill
             variant={liveTranscript.open ? "panel" : "floating"}
             state={state}
@@ -236,20 +236,22 @@ export default function AgentDictationPillOverlay() {
             onClick={activatePill}
           />
           {cancelVisible && (
-            <button
-              type="button"
-              aria-label={
-                isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
-              }
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                void window.electronAPI.cancelAgentPanelDictation?.();
-              }}
-              className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/55 bg-surface-2 text-muted-foreground shadow-sm transition-colors hover:bg-surface-3 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              <X size={13} strokeWidth={2.5} aria-hidden="true" />
-            </button>
+            <div className="voice-pill-cancel-slot">
+              <button
+                type="button"
+                aria-label={
+                  isRecording ? t("app.buttons.cancelRecording") : t("app.buttons.cancelProcessing")
+                }
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void window.electronAPI.cancelAgentPanelDictation?.();
+                }}
+                className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/55 bg-surface-2 text-muted-foreground shadow-sm transition-colors hover:bg-surface-3 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <X size={13} strokeWidth={2.5} aria-hidden="true" />
+              </button>
+            </div>
           )}
         </div>
       </div>
