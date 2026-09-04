@@ -29,7 +29,10 @@ export function getEnterpriseCallSettings(
   const managedState = useEnterpriseIdentityStore.getState();
   const resolution = getManagedScopeResolution(inferenceScope, s.enterpriseSetupMode);
   if (resolution.kind === "error") {
-    throw Object.assign(new Error(resolution.message), { code: resolution.code });
+    throw Object.assign(new Error(resolution.message), {
+      code: resolution.code,
+      messageKey: resolution.messageKey,
+    });
   }
   const managedContext =
     resolution.kind === "managed" &&

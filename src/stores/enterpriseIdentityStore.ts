@@ -6,12 +6,15 @@ import {
 import type {
   EnterpriseSetupMode,
   ManagedEnterpriseConfig,
+  ManagedEnterpriseScope,
   ManagedEnterpriseScopeResolution,
 } from "../types/enterpriseIdentity";
-import type { InferenceScope } from "../config/inferenceScopes";
 import logger from "../utils/logger";
-import { resolveManagedEnterpriseScope } from "../helpers/enterpriseManagedConfig.mjs";
-import { isLlmSelectionAllowed } from "./policyRules";
+import {
+  resolveManagedEnterpriseScope,
+  managedScopesForConfig,
+} from "../helpers/enterpriseManagedConfig.mjs";
+import { isLlmSelectionAllowed, isTranscriptionSelectionAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
 
 interface EnterpriseIdentityState {
@@ -21,7 +24,8 @@ interface EnterpriseIdentityState {
   status: "idle" | "loading" | "ready" | "error";
   config: ManagedEnterpriseConfig | null;
   error: string | null;
-  failClosed: boolean;
+  managedScopes: ManagedEnterpriseScope[];
+  enforcedScopes: ManagedEnterpriseScope[];
   refresh: (
     accountId: string,
     workspaceId: string,
@@ -29,6 +33,51 @@ interface EnterpriseIdentityState {
     forceRefresh?: boolean
   ) => Promise<void>;
   clear: () => void;
+}
+
+type ScopeSummary = { managed: ManagedEnterpriseScope[]; enforced: ManagedEnterpriseScope[] };
+const EMPTY_SCOPES: ScopeSummary = { managed: [], enforced: [] };
+
+function scopeStorageKey(accountId: string | null, workspaceId: string | null): string | null {
+  return accountId && workspaceId ? `managedEnterpriseScopes:${accountId}:${workspaceId}` : null;
+}
+
+function readPersistedScopes(accountId: string | null, workspaceId: string | null): ScopeSummary {
+  const key = scopeStorageKey(accountId, workspaceId);
+  if (!key || typeof localStorage === "undefined") return EMPTY_SCOPES;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? "null");
+    return Array.isArray(parsed?.managed) && Array.isArray(parsed?.enforced)
+      ? parsed
+      : EMPTY_SCOPES;
+  } catch {
+    return EMPTY_SCOPES;
+  }
+}
+
+function persistScopes(accountId: string, workspaceId: string, summary: ScopeSummary): void {
+  const key = scopeStorageKey(accountId, workspaceId);
+  if (!key || typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(key, JSON.stringify(summary));
+  } catch {
+    // Storage is a cold-start hint only.
+  }
+}
+
+function summarize(config: ManagedEnterpriseConfig | null): ScopeSummary {
+  return managedScopesForConfig(config) as ScopeSummary;
+}
+
+/** Scopes that must fail closed when the config is gone: the main process's list, else the last known one. */
+function enforcedScopesOnError(
+  reported: unknown,
+  enforcementRequired: boolean | undefined,
+  lastKnown: ScopeSummary
+): ManagedEnterpriseScope[] {
+  if (Array.isArray(reported)) return reported as ManagedEnterpriseScope[];
+  if (enforcementRequired === false) return [];
+  return lastKnown.enforced;
 }
 
 let requestSequence = 0;
@@ -43,7 +92,8 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
   status: "idle",
   config: null,
   error: null,
-  failClosed: false,
+  managedScopes: [],
+  enforcedScopes: [],
 
   refresh: (accountId, workspaceId, authGeneration, forceRefresh = false) => {
     ensureLifecycleListeners();
@@ -62,7 +112,8 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
       status: sameIdentity && current.config ? "ready" : "loading",
       config: sameIdentity ? current.config : null,
       error: null,
-      failClosed: sameIdentity ? current.failClosed : false,
+      managedScopes: sameIdentity ? current.managedScopes : [],
+      enforcedScopes: sameIdentity ? current.enforcedScopes : [],
     });
 
     const promise = (async () => {
@@ -82,14 +133,20 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
         ) {
           throw Object.assign(
             new Error(result.error || "Managed enterprise AI configuration is unavailable."),
-            { enforcementRequired: result.enforcementRequired }
+            {
+              enforcementRequired: result.enforcementRequired,
+              enforcedScopes: result.enforcedScopes,
+            }
           );
         }
+        const summary = summarize(result.config ?? null);
+        persistScopes(accountId, workspaceId, summary);
         set({
           status: "ready",
           config: result.config ?? null,
           error: null,
-          failClosed: false,
+          managedScopes: summary.managed,
+          enforcedScopes: [],
         });
       } catch (error) {
         if (sequence !== requestSequence) return;
@@ -97,21 +154,19 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
         const enforcementRequired = (error as { enforcementRequired?: boolean })
           .enforcementRequired;
         logger.warn("Managed enterprise AI configuration unavailable", { error: message }, "auth");
+        const lastKnown = current.config
+          ? summarize(current.config)
+          : readPersistedScopes(accountId, workspaceId);
         set({
           status: "error",
           config: null,
           error: message,
-          failClosed:
-            typeof enforcementRequired === "boolean"
-              ? enforcementRequired
-              : current.failClosed ||
-                Boolean(
-                  current.config?.providers.some(
-                    (record) =>
-                      record.mode !== "disabled" &&
-                      (record.mode === "managed_required" || !record.allowManualSetup)
-                  )
-                ),
+          managedScopes: lastKnown.managed,
+          enforcedScopes: enforcedScopesOnError(
+            (error as { enforcedScopes?: unknown }).enforcedScopes,
+            enforcementRequired,
+            lastKnown
+          ),
         });
       } finally {
         if (inFlightKey === key) {
@@ -137,7 +192,8 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
       status: "idle",
       config: null,
       error: null,
-      failClosed: false,
+      managedScopes: [],
+      enforcedScopes: [],
     });
   },
 }));
@@ -168,22 +224,33 @@ function ensureLifecycleListeners(): void {
     }
     const currentGeneration = state.config?.generation ?? -1;
     if (snapshot.config && snapshot.config.generation < currentGeneration) return;
+    if (snapshot.config) {
+      const summary = summarize(snapshot.config);
+      if (state.accountId && state.workspaceId) {
+        persistScopes(state.accountId, state.workspaceId, summary);
+      }
+      useEnterpriseIdentityStore.setState({
+        status: "ready",
+        config: snapshot.config,
+        error: null,
+        managedScopes: summary.managed,
+        enforcedScopes: [],
+      });
+      return;
+    }
+    const lastKnown = state.config
+      ? summarize(state.config)
+      : readPersistedScopes(state.accountId, state.workspaceId);
     useEnterpriseIdentityStore.setState({
-      status: snapshot.config ? "ready" : "error",
-      config: snapshot.config,
-      error: snapshot.config ? null : snapshot.code,
-      failClosed: snapshot.config
-        ? false
-        : typeof snapshot.enforcementRequired === "boolean"
-          ? snapshot.enforcementRequired
-          : state.failClosed ||
-            Boolean(
-              state.config?.providers.some(
-                (record) =>
-                  record.mode !== "disabled" &&
-                  (record.mode === "managed_required" || !record.allowManualSetup)
-              )
-            ),
+      status: "error",
+      config: null,
+      error: snapshot.code,
+      managedScopes: lastKnown.managed,
+      enforcedScopes: enforcedScopesOnError(
+        snapshot.enforcedScopes,
+        snapshot.enforcementRequired,
+        lastKnown
+      ),
     });
   });
 }
@@ -191,23 +258,43 @@ function ensureLifecycleListeners(): void {
 // The vision override is the dictation agent's image lane; it has no managed
 // scope of its own (enterprise envelopes predate it), so managed resolution
 // follows the agent scope instead of failing as an unknown scope.
-const MANAGED_SCOPE_ALIASES: Partial<Record<InferenceScope, InferenceScope>> = {
+const MANAGED_SCOPE_ALIASES: Partial<Record<ManagedEnterpriseScope, ManagedEnterpriseScope>> = {
   dictationAgentVision: "dictationAgent",
 };
 
+function isManagedSelectionAllowedByPolicy(
+  scope: ManagedEnterpriseScope,
+  provider: string
+): boolean {
+  const policy = usePolicyStore.getState();
+  const selection = { mode: "enterprise" as const, provider };
+  return scope === "transcription"
+    ? isTranscriptionSelectionAllowed(policy, selection)
+    : isLlmSelectionAllowed(policy, selection);
+}
+
 function resolveScope(
   config: ManagedEnterpriseConfig | null,
-  requestedScope: InferenceScope,
+  requestedScope: ManagedEnterpriseScope,
   setupMode: EnterpriseSetupMode,
-  failClosed: boolean
+  scopeHold: false | "unavailable" | "loading"
 ): ManagedEnterpriseScopeResolution {
   const scope = MANAGED_SCOPE_ALIASES[requestedScope] ?? requestedScope;
-  if (!config && failClosed) {
-    return {
-      kind: "error",
-      code: "MANAGED_CONFIG_UNAVAILABLE",
-      message: "Managed enterprise access is unavailable. Sign in with company SSO or contact IT.",
-    };
+  if (!config && scopeHold) {
+    return scopeHold === "loading"
+      ? {
+          kind: "error",
+          code: "MANAGED_CONFIG_LOADING",
+          message: "Checking your organization's managed setup. Try again in a moment.",
+          messageKey: "common.managedConfigLoading",
+        }
+      : {
+          kind: "error",
+          code: "MANAGED_CONFIG_UNAVAILABLE",
+          message:
+            "Managed enterprise access is unavailable. Sign in again or contact your IT administrator.",
+          messageKey: "common.managedConfigUnavailable",
+        };
   }
   const resolution = resolveManagedEnterpriseScope(
     config,
@@ -216,10 +303,7 @@ function resolveScope(
   ) as ManagedEnterpriseScopeResolution;
   if (
     resolution.kind === "managed" &&
-    !isLlmSelectionAllowed(usePolicyStore.getState(), {
-      mode: "enterprise",
-      provider: resolution.provider,
-    })
+    !isManagedSelectionAllowedByPolicy(scope, resolution.provider)
   ) {
     const required = resolution.mode === "managed_required" || !resolution.allowManualSetup;
     logger.warn("Managed enterprise provider is blocked by workspace policy", {
@@ -233,34 +317,68 @@ function resolveScope(
           code: "PROVIDER_POLICY_CONFLICT",
           message:
             "Managed access is blocked by your workspace policy. Contact your IT administrator.",
+          messageKey: "common.managedPolicyConflict",
         }
       : { kind: "manual" };
   }
   return resolution;
 }
 
+/**
+ * Per-scope fail-closed decision. `"loading"` only while the first fetch for
+ * this identity is still pending and the last-known config enforced the
+ * scope; `"unavailable"` once the config is confirmed gone (error) and either
+ * the main process reported this scope enforced or, in managed setup mode,
+ * the scope was ever managed for this workspace. Otherwise `false`, so an
+ * unrelated scope (e.g. transcription on an LLM-only workspace) never fails
+ * closed just because another scope's config outage occurred.
+ */
+function scopeFailsClosed(
+  state: Pick<
+    EnterpriseIdentityState,
+    "status" | "config" | "accountId" | "workspaceId" | "managedScopes" | "enforcedScopes"
+  >,
+  requestedScope: ManagedEnterpriseScope,
+  setupMode: EnterpriseSetupMode
+): false | "unavailable" | "loading" {
+  const scope = MANAGED_SCOPE_ALIASES[requestedScope] ?? requestedScope;
+  if ((state.status === "idle" || state.status === "loading") && !state.config) {
+    // Covers both the very first fetch for an identity ("idle", right after
+    // app start or a workspace switch, before refresh() has even been
+    // called) and a retry after an error ("loading" with in-memory
+    // enforcement carried forward). Prefer that in-memory enforcement; fall
+    // back to the persisted cold-start hint only when nothing was carried
+    // forward yet. After clear() there is no accountId/workspaceId, so the
+    // hint lookup finds nothing and a signed-out user is never held.
+    const enforced = state.enforcedScopes.length
+      ? state.enforcedScopes
+      : readPersistedScopes(state.accountId, state.workspaceId).enforced;
+    return enforced.includes(scope) ? "loading" : false;
+  }
+  if (state.enforcedScopes.includes(scope)) return "unavailable";
+  if (setupMode === "managed" && state.status === "error" && state.managedScopes.includes(scope)) {
+    return "unavailable";
+  }
+  return false;
+}
+
 /** Imperative reads (services, stores). Components should use useManagedScopeResolution. */
 export function getManagedScopeResolution(
-  scope: InferenceScope,
+  scope: ManagedEnterpriseScope,
   setupMode: EnterpriseSetupMode
 ): ManagedEnterpriseScopeResolution {
   const state = useEnterpriseIdentityStore.getState();
-  return resolveScope(
-    state.config,
-    scope,
-    setupMode,
-    state.failClosed || (setupMode === "managed" && state.status === "error")
-  );
+  return resolveScope(state.config, scope, setupMode, scopeFailsClosed(state, scope, setupMode));
 }
 
 /** Subscribes to the managed config so the UI re-renders when an administrator changes it. */
 export function useManagedScopeResolution(
-  scope: InferenceScope,
+  scope: ManagedEnterpriseScope,
   setupMode: EnterpriseSetupMode
 ): ManagedEnterpriseScopeResolution {
   const config = useEnterpriseIdentityStore((state) => state.config);
-  const failClosed = useEnterpriseIdentityStore(
-    (state) => state.failClosed || (setupMode === "managed" && state.status === "error")
+  const scopeHold = useEnterpriseIdentityStore((state) =>
+    scopeFailsClosed(state, scope, setupMode)
   );
-  return resolveScope(config, scope, setupMode, failClosed);
+  return resolveScope(config, scope, setupMode, scopeHold);
 }

@@ -180,7 +180,10 @@
     "skip": "Pular",
     "policyAiProcessingRestricted": "O processamento de IA está restrito pela sua organização.",
     "policyAgentRestricted": "O uso do agente de IA está restrito pela sua organização.",
-    "policyTranscriptionRestricted": "A transcrição está restrita pela sua organização."
+    "policyTranscriptionRestricted": "A transcrição está restrita pela sua organização.",
+    "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
+    "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
+    "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador."
   },
   "onboarding": {
     "rehaul": {
@@ -881,7 +884,10 @@
         "chunkLoss": "Um problema de rede fez perder grande parte da gravação. Retranscreva-a a partir do histórico.",
         "agentReasoningFailed": "Seu assistente de voz não conseguiu processar o comando; a transcrição bruta foi inserida no lugar.",
         "screenContextSkipped": "Não foi possível enviar a captura, então seu comando foi executado sem contexto de tela.",
-        "customEndpointInvalid": "Seu endpoint de transcrição personalizado não está configurado ou a URL é inválida. Atualize-o em Configurações → Fala para texto."
+        "customEndpointInvalid": "Seu endpoint de transcrição personalizado não está configurado ou a URL é inválida. Atualize-o em Configurações → Fala para texto.",
+        "managedTranscriptionUnavailable": "A transcrição gerenciada não está disponível no momento. Tente novamente em instantes.",
+        "managedRouteInvalid": "A transcrição gerenciada não pôde ser iniciada devido a uma incompatibilidade de configuração. Tente novamente ou entre em contato com o administrador.",
+        "managedAuthRejected": "As credenciais de transcrição gerenciada da sua organização foram rejeitadas. Entre em contato com o administrador."
       },
       "translationFallback": {
         "unreachableTitle": "Tradução indisponível",
@@ -2141,7 +2147,9 @@
         "openwhisprDesc": "Resultados confiáveis. Sem configuração.",
         "providersDesc": "Use sua própria chave API.",
         "localDesc": "Modelos no dispositivo. Privado.",
-        "selfHostedDesc": "Seu servidor na sua rede."
+        "selfHostedDesc": "Seu servidor na sua rede.",
+        "enterprise": "Nuvem corporativa",
+        "enterpriseDesc": "O áudio vai para a nuvem da sua organização."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Resultados confiáveis. Sem configuração.",
@@ -2166,6 +2174,10 @@
         "switchedSelfHosted": {
           "title": "Auto-hospedado",
           "description": "Usando seu próprio servidor."
+        },
+        "switchedEnterprise": {
+          "title": "Nuvem corporativa selecionada",
+          "description": "A ditado agora usa a transcrição gerida pela sua organização."
         }
       },
       "gpuDevice": {
@@ -2223,7 +2235,8 @@
             "info": "Áudio estendido de um segmento para o próximo, evitando cortes bruscos na concatenação."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "A sua organização só permite transcrição em nuvem corporativa, que ainda não abrange a gravação de reuniões."
     },
     "intelligence": {
       "gpuDevice": {

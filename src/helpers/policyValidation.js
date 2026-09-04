@@ -7,8 +7,16 @@ const { isCanonicalAppVersion } = require("./appVersion");
 const modelRegistryData = require("../models/modelRegistryData.json");
 
 const POLICY_SCOPES = ["transcription", "llm"];
-const TRANSCRIPTION_MODES = new Set(["openwhispr", "providers", "local", "self-hosted"]);
-const LLM_MODES = new Set([...TRANSCRIPTION_MODES, "enterprise"]);
+const TRANSCRIPTION_MODES = new Set([
+  "openwhispr",
+  "providers",
+  "local",
+  "self-hosted",
+  "enterprise",
+]);
+const LLM_MODES = TRANSCRIPTION_MODES;
+// Enterprise clouds with a managed transcription implementation (Azure only for now).
+const TRANSCRIPTION_ENTERPRISE_PROVIDERS = new Set(["azure"]);
 const TRANSCRIPTION_PROVIDERS = new Set(
   modelRegistryData.transcriptionProviders.map((provider) => provider.id).concat("custom")
 );
@@ -33,6 +41,12 @@ function isValidPolicyShape(policy) {
     POLICY_SCOPES.every((scope) => Boolean(policy[scope])) &&
     isKnownList(policy.transcription.allowedModes, TRANSCRIPTION_MODES) &&
     isKnownList(policy.transcription.allowedByokProviders, TRANSCRIPTION_PROVIDERS) &&
+    // Additive within policy version 1: absent (older server) means none.
+    (policy.transcription.allowedEnterpriseProviders === undefined ||
+      isKnownList(
+        policy.transcription.allowedEnterpriseProviders,
+        TRANSCRIPTION_ENTERPRISE_PROVIDERS
+      )) &&
     isKnownList(policy.llm.allowedModes, LLM_MODES) &&
     isKnownList(policy.llm.allowedByokProviders, LLM_PROVIDERS) &&
     isKnownList(policy.llm.allowedEnterpriseProviders, ENTERPRISE_PROVIDERS) &&

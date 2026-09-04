@@ -201,7 +201,10 @@
     "skip": "略過",
     "policyAiProcessingRestricted": "AI 處理已被您的組織限制。",
     "policyAgentRestricted": "AI 代理的使用已被您的組織限制。",
-    "policyTranscriptionRestricted": "轉錄已被您的組織限制。"
+    "policyTranscriptionRestricted": "轉錄已被您的組織限制。",
+    "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
+    "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
+    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。"
   },
   "onboarding": {
     "rehaul": {
@@ -902,7 +905,10 @@
         "chunkLoss": "網路問題導致錄音大部分遺失。請從歷史記錄中重新轉錄。",
         "agentReasoningFailed": "語音助理無法處理該指令，已改為插入原始逐字稿。",
         "screenContextSkipped": "截圖無法傳送，因此已在沒有螢幕內容的情況下執行你的指令。",
-        "customEndpointInvalid": "自訂轉錄端點未設定或其 URL 無效。請在「設定 → 語音轉文字」中更新。"
+        "customEndpointInvalid": "自訂轉錄端點未設定或其 URL 無效。請在「設定 → 語音轉文字」中更新。",
+        "managedTranscriptionUnavailable": "託管轉錄目前無法使用。請稍候再試。",
+        "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
+        "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。"
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
@@ -2162,7 +2168,9 @@
         "openwhisprDesc": "準確可靠，無需設定。",
         "providersDesc": "使用你自己的 API Key。",
         "localDesc": "裝置端模型，完全私密。",
-        "selfHostedDesc": "你的伺服器，在你的網路上。"
+        "selfHostedDesc": "你的伺服器，在你的網路上。",
+        "enterprise": "企業雲端",
+        "enterpriseDesc": "音訊會傳送到貴組織自己的雲端。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "準確可靠，無需設定。",
@@ -2187,6 +2195,10 @@
         "switchedSelfHosted": {
           "title": "自架主機",
           "description": "使用你自己的伺服器。"
+        },
+        "switchedEnterprise": {
+          "title": "已選擇企業雲端",
+          "description": "聽寫現在使用貴組織管理的轉錄部署。"
         }
       },
       "gpuDevice": {
@@ -2244,7 +2256,8 @@
             "info": "將每個片段延伸到下一個片段的音訊量，避免拼接時出現突兀截斷。"
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "貴組織僅允許企業雲端轉錄，尚不支援會議錄音。"
     },
     "intelligence": {
       "gpuDevice": {

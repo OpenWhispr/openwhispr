@@ -48,6 +48,7 @@ import {
   isTranscriptionContextAllowed,
   isUpdateRequiredByOrg,
 } from "../stores/policyRules";
+import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import {
   useIsMeetingMode,
   useIsNarrowWindow,
@@ -595,11 +596,20 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     async (id: number, options?: { isRecover?: boolean }) => {
       try {
         const s = getSettings();
-        if (!isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
+        const managed = getManagedTranscriptionResolution();
+        if (managed?.kind === "error") {
+          toast({
+            title: managed.messageKey ? t(managed.messageKey) : managed.message,
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!managed && !isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
           toast({ title: t("common.managedByOrg"), variant: "default" });
           return;
         }
         const result = await window.electronAPI.retryTranscription(id, {
+          managed,
           useLocalWhisper: s.useLocalWhisper,
           localTranscriptionProvider: s.localTranscriptionProvider,
           cloudTranscriptionMode: s.cloudTranscriptionMode,
@@ -773,7 +783,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         } else {
           toast({
             title: t("controlPanel.history.retryError"),
-            description: result.error,
+            description: result.messageKey ? t(result.messageKey) : result.error,
             variant: "destructive",
           });
         }

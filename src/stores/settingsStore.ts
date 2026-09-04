@@ -79,9 +79,13 @@ export const LLM_POLICY_PROVIDER_IDS = [
 // Azure and Vertex remain intentionally unavailable in the desktop picker.
 export const LLM_ENTERPRISE_POLICY_PROVIDER_IDS = ["bedrock"] as const;
 
+// Managed transcription is Azure-only in this phase.
+export const TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS = ["azure"] as const;
+
 const TRANSCRIPTION_POLICY_CATALOG = {
-  modes: ["openwhispr", "providers", "local", "self-hosted"] as const,
+  modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"] as const,
   byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS,
+  enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
 };
 
 const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
@@ -905,6 +909,7 @@ export interface SettingsState
 
   // Enterprise providers
   enterpriseSetupMode: EnterpriseSetupMode;
+  enterpriseTranscriptionSetupMode: EnterpriseSetupMode;
   bedrockAuthMode: string;
   bedrockRegion: string;
   bedrockProfile: string;
@@ -921,6 +926,7 @@ export interface SettingsState
   vertexApiKey: string;
   setBedrockAuthMode: (value: string) => void;
   setEnterpriseSetupMode: (value: EnterpriseSetupMode) => void;
+  setEnterpriseTranscriptionSetupMode: (value: EnterpriseSetupMode) => void;
   setBedrockRegion: (value: string) => void;
   setBedrockProfile: (value: string) => void;
   setBedrockAccessKeyId: (key: string) => void;
@@ -1309,6 +1315,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   // Enterprise providers
   enterpriseSetupMode: (() => {
     const v = readString("enterpriseSetupMode", "auto");
+    if (v === "auto" || v === "managed" || v === "manual") return v;
+    return "auto" as EnterpriseSetupMode;
+  })(),
+  enterpriseTranscriptionSetupMode: (() => {
+    const v = readString("enterpriseTranscriptionSetupMode", "auto");
     if (v === "auto" || v === "managed" || v === "manual") return v;
     return "auto" as EnterpriseSetupMode;
   })(),
@@ -1950,6 +1961,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   // Enterprise provider setters
   setEnterpriseSetupMode: createStringSetter("enterpriseSetupMode") as (
+    value: EnterpriseSetupMode
+  ) => void,
+  setEnterpriseTranscriptionSetupMode: createStringSetter("enterpriseTranscriptionSetupMode") as (
     value: EnterpriseSetupMode
   ) => void,
   setBedrockAuthMode: (value: string) => {
@@ -2785,6 +2799,11 @@ export function selectPolicyEffectiveSettings(
         // as user authorization to send content there.
         writable[keys.baseUrl] = "";
       }
+    } else if (selection.mode === "enterprise") {
+      // The managed deployment/endpoint is resolved separately by
+      // enterpriseIdentityStore; the provider id here only needs to satisfy
+      // the policy gate (isTranscriptionContextAllowed).
+      writable[keys.provider] = selection.provider;
     }
   }
 

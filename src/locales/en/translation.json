@@ -201,7 +201,10 @@
     "skip": "Skip",
     "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
     "policyAgentRestricted": "AI agent use is restricted by your organization.",
-    "policyTranscriptionRestricted": "Transcription is restricted by your organization."
+    "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
+    "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
+    "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
+    "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator."
   },
   "onboarding": {
     "rehaul": {
@@ -902,7 +905,10 @@
         "chunkLoss": "A network problem lost too much of the recording. Re-transcribe it from History.",
         "agentReasoningFailed": "Your voice assistant couldn't process the command — the raw transcript was inserted instead.",
         "screenContextSkipped": "The screenshot couldn't be sent, so your command ran without screen context.",
-        "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text."
+        "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text.",
+        "managedTranscriptionUnavailable": "Managed transcription is not available right now. Try again in a moment.",
+        "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
+        "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator."
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",
@@ -2451,7 +2457,9 @@
         "openwhisprDesc": "Reliable accuracy. No setup needed.",
         "providersDesc": "Bring your own API key.",
         "localDesc": "On-device models. Fully private.",
-        "selfHostedDesc": "Your own server on your network."
+        "selfHostedDesc": "Your own server on your network.",
+        "enterprise": "Enterprise cloud",
+        "enterpriseDesc": "Audio goes to your organization's own cloud."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
@@ -2476,6 +2484,10 @@
         "switchedSelfHosted": {
           "title": "Self-Hosted",
           "description": "Using your own server."
+        },
+        "switchedEnterprise": {
+          "title": "Enterprise cloud selected",
+          "description": "Dictation now uses the transcription deployment your organization manages."
         }
       },
       "gpuDevice": {
@@ -2533,7 +2545,8 @@
             "info": "Audio carried from each segment into the next to avoid abrupt cuts when concatenating."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet."
     },
     "intelligence": {
       "gpuDevice": {

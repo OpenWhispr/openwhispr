@@ -334,3 +334,35 @@ test("Bedrock exchanges the workspace assertion for short-lived web identity cre
     clientConfig: { region: "us-west-2" },
   });
 });
+
+test("assertion requests carry the inference scope being exercised", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-scope-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const bodies = [];
+  const config = managedConfig();
+  config.providers[0].config.transcription = {
+    allowedDeployments: ["gpt-4o-transcribe"],
+    defaultDeployment: "gpt-4o-transcribe",
+  };
+  const proxyFetch = async (url, init) => {
+    if (url.includes("/enterprise-providers/azure/assertion")) {
+      bodies.push(JSON.parse(init.body));
+      return jsonResponse({ data: { assertion: "signed" } });
+    }
+    if (url.startsWith("https://login.microsoftonline.com/")) {
+      return jsonResponse({ access_token: "entra", expires_in: 3600 });
+    }
+    return jsonResponse({ data: config });
+  };
+  const manager = createEnterpriseIdentityManager({
+    cachePath: path.join(tempDir, "cache.json"),
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.10.0",
+    proxyFetch,
+    tokenStore: { getState: () => ({ generation: 4, token: "openwhispr-session" }) },
+  });
+  const resolved = await manager.resolveProvider(request({ inferenceScope: "transcription" }));
+  assert.equal(resolved.managed, true);
+  await resolved.tokenProvider();
+  assert.deepEqual(bodies, [{ inferenceScope: "transcription" }]);
+});

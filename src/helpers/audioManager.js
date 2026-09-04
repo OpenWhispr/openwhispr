@@ -56,6 +56,10 @@ import {
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import { resolveByokModel, resolveTranscriptionRoute } from "./transcriptionRoute.ts";
+import {
+  getManagedTranscriptionResolution,
+  isManagedTranscriptionActive,
+} from "../services/managedTranscription.ts";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isSelfHostedTranscription,
@@ -364,6 +368,29 @@ const STREAMING_PROVIDERS = {
 
 // Batch providers that must transcribe via a main-process proxy (CORS,
 // non-Bearer auth, OAuth, or attested transport) instead of a renderer fetch.
+function audioExtensionForMime(mimeType) {
+  if (mimeType.includes("ogg")) return "ogg";
+  if (mimeType.includes("mp4")) return "mp4";
+  if (mimeType.includes("mpeg")) return "mp3";
+  if (mimeType.includes("wav")) return "wav";
+  return "webm";
+}
+
+// Workspace-managed Azure STT: the Entra token lives in the main process, so
+// dictation dispatches over IPC exactly like the proxied providers below.
+const MANAGED_TRANSCRIPTION_SPEC = {
+  displayName: "Managed Azure",
+  ipc: () => window.electronAPI?.managedTranscribe,
+  buildPayload: ({ audioBuffer, language, dictionaryPrompt, managedResolution, mimeType }) => ({
+    audioBuffer,
+    fileName: `audio.${audioExtensionForMime(mimeType)}`,
+    mimeType,
+    language,
+    prompt: dictionaryPrompt || undefined,
+    managed: { provider: managedResolution.provider, context: managedResolution.context },
+  }),
+};
+
 const PROXY_TRANSCRIPTION_PROVIDERS = {
   tinfoil: {
     displayName: "Tinfoil",
@@ -862,7 +889,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   isRecordingAllowedByPolicy() {
     const policyState = usePolicyStore.getState();
     return (
-      isTranscriptionContextAllowed(policyState, getSettings(), "dictation") &&
+      (isManagedTranscriptionActive() ||
+        isTranscriptionContextAllowed(policyState, getSettings(), "dictation")) &&
       (!this.voiceAgentRequested || isAgentAllowed(policyState))
     );
   }
@@ -1833,7 +1861,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       let result;
       let activeModel;
-      if (useLocalWhisper) {
+      // Managed enterprise STT outranks the local and OpenWhispr Cloud lanes,
+      // matching the LLM scopes; users opt out via "Use personal setup" when
+      // the administrator allows it. Error resolutions fail closed inside
+      // processWithOpenAIAPI with their own code.
+      const managedTranscription = getManagedTranscriptionResolution();
+      if (managedTranscription) {
+        activeModel =
+          managedTranscription.kind === "managed" ? managedTranscription.deployment : null;
+        result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
+      } else if (useLocalWhisper) {
         if (isSherpaLocalProvider(localProvider)) {
           activeModel = localProvider === "cohere" ? settings.cohereModel : parakeetModel;
           result = await this.processWithLocalParakeet(
@@ -3335,13 +3372,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "transcription"
       );
 
-      const apiKey = await this.getAPIKey();
+      // Managed enterprise STT outranks every personal setting.
+      const managedResolution = getManagedTranscriptionResolution();
+      if (managedResolution?.kind === "error") {
+        throw Object.assign(new Error(managedResolution.message), {
+          code: managedResolution.code,
+          messageKey: managedResolution.messageKey,
+        });
+      }
+
+      const apiKey = managedResolution ? null : await this.getAPIKey();
       const optimizedAudio = audioBlob;
 
       // Dispatch before endpoint resolution (which defaults to OpenAI and would leak
       // the key). Self-hosted wins, so a leftover proxied provider isn't diverted here.
-      const proxySpec = PROXY_TRANSCRIPTION_PROVIDERS[provider];
-      if (proxySpec && !isSelfHostedTranscription(apiSettings)) {
+      const proxySpec = managedResolution
+        ? MANAGED_TRANSCRIPTION_SPEC
+        : PROXY_TRANSCRIPTION_PROVIDERS[provider];
+      if (proxySpec && (managedResolution || !isSelfHostedTranscription(apiSettings))) {
+        const providerName = managedResolution ? "azure-managed" : provider;
         const call = proxySpec.ipc();
         if (!call) {
           throw new Error(`${proxySpec.displayName} transcription is unavailable in this window`);
@@ -3352,6 +3401,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           model,
           language,
           apiSettings,
+          managedResolution,
+          mimeType: optimizedAudio.type || "audio/webm",
           dictionaryPrompt: this.getWhisperPrompt(apiSettings),
           keyterms: this.getKeyterms()
             .map((t) => t.trim().slice(0, 50))
@@ -3374,27 +3425,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(proxyText, provider, wasCancelled);
+        const text = await this.processTranscription(proxyText, providerName, wasCancelled);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
-        const source = (await this.isReasoningAvailable()) ? `${provider}-reasoned` : provider;
+        const source = (await this.isReasoningAvailable())
+          ? `${providerName}-reasoned`
+          : providerName;
         return { success: true, text, rawText: proxyText, source, timings };
       }
 
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
       const mimeType = optimizedAudio.type || "audio/webm";
-      const extension = mimeType.includes("webm")
-        ? "webm"
-        : mimeType.includes("ogg")
-          ? "ogg"
-          : mimeType.includes("mp4")
-            ? "mp4"
-            : mimeType.includes("mpeg")
-              ? "mp3"
-              : mimeType.includes("wav")
-                ? "wav"
-                : "webm";
+      const extension = audioExtensionForMime(mimeType);
 
       logger.debug(
         "FormData preparation",
@@ -3902,6 +3945,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   shouldUseStreaming(isSignedInOverride) {
     const s = getSettings();
     if (s.useLocalWhisper) return false;
+
+    // Managed enterprise STT is batch-only and outranks personal streaming
+    // setups; an error resolution must fail closed on the batch path too.
+    if (getManagedTranscriptionResolution()) return false;
 
     // Self-hosted transcription is batch HTTP to the user's server, never cloud realtime WS.
     if (isSelfHostedTranscription(s)) return false;

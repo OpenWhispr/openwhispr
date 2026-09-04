@@ -201,7 +201,10 @@
     "skip": "跳过",
     "policyAiProcessingRestricted": "AI 处理已被您的组织限制。",
     "policyAgentRestricted": "AI 智能体的使用已被您的组织限制。",
-    "policyTranscriptionRestricted": "转录已被您的组织限制。"
+    "policyTranscriptionRestricted": "转录已被您的组织限制。",
+    "managedConfigLoading": "正在检查您组织的托管设置。请稍候再试。",
+    "managedConfigUnavailable": "托管企业访问不可用。请重新登录或联系管理员。",
+    "managedPolicyConflict": "托管访问已被您工作区的策略阻止。请联系管理员。"
   },
   "onboarding": {
     "rehaul": {
@@ -902,7 +905,10 @@
         "chunkLoss": "网络问题导致录音大部分丢失。请从历史记录中重新转录。",
         "agentReasoningFailed": "语音助手无法处理该命令，已改为插入原始转录文本。",
         "screenContextSkipped": "截图无法发送，因此已在没有屏幕上下文的情况下执行你的命令。",
-        "customEndpointInvalid": "自定义转写端点未配置或其 URL 无效。请在“设置 → 语音转文字”中更新。"
+        "customEndpointInvalid": "自定义转写端点未配置或其 URL 无效。请在“设置 → 语音转文字”中更新。",
+        "managedTranscriptionUnavailable": "托管转录目前不可用。请稍候再试。",
+        "managedRouteInvalid": "由于配置不匹配，托管转录无法启动。请重试或联系管理员。",
+        "managedAuthRejected": "您组织的托管转录凭证被拒绝。请联系管理员。"
       },
       "translationFallback": {
         "unreachableTitle": "翻译不可用",
@@ -2162,7 +2168,9 @@
         "openwhisprDesc": "准确可靠，无需设置。",
         "providersDesc": "使用你自己的 API Key。",
         "localDesc": "设备端模型，完全私密。",
-        "selfHostedDesc": "你的服务器，在你的网络上。"
+        "selfHostedDesc": "你的服务器，在你的网络上。",
+        "enterprise": "企业云",
+        "enterpriseDesc": "音频将发送到贵组织自己的云。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "准确可靠，无需设置。",
@@ -2187,6 +2195,10 @@
         "switchedSelfHosted": {
           "title": "自托管",
           "description": "使用你自己的服务器。"
+        },
+        "switchedEnterprise": {
+          "title": "已选择企业云",
+          "description": "听写现在使用贵组织管理的转录部署。"
         }
       },
       "gpuDevice": {
@@ -2244,7 +2256,8 @@
             "info": "将每个片段延伸到下一个片段的音频量，避免拼接时出现突兀的截断。"
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "贵组织仅允许企业云转录，暂不支持会议录音。"
     },
     "intelligence": {
       "gpuDevice": {

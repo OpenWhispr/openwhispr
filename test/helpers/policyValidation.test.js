@@ -122,12 +122,16 @@ test("rejects unknown modes and providers", () => {
   const cases = [
     [
       "transcription.allowedModes",
-      (policy) => policy.transcription.allowedModes.push("enterprise"),
+      (policy) => policy.transcription.allowedModes.push("future-mode"),
     ],
     ["llm.allowedModes", (policy) => policy.llm.allowedModes.push("future-mode")],
     [
       "transcription.allowedByokProviders",
       (policy) => policy.transcription.allowedByokProviders.push("future-stt"),
+    ],
+    [
+      "transcription.allowedEnterpriseProviders",
+      (policy) => (policy.transcription.allowedEnterpriseProviders = ["bedrock"]),
     ],
     ["llm.allowedByokProviders", (policy) => policy.llm.allowedByokProviders.push("future-llm")],
     [
@@ -141,6 +145,18 @@ test("rejects unknown modes and providers", () => {
     mutate(policy);
     assert.equal(isValidPolicyShape(policy), false, label);
   }
+});
+
+test("enterprise transcription is additive within policy v1", () => {
+  const withEnterprise = validPolicy();
+  withEnterprise.transcription.allowedModes.push("enterprise");
+  withEnterprise.transcription.allowedEnterpriseProviders = ["azure"];
+  assert.equal(isValidPolicyShape(withEnterprise), true);
+
+  // Absent on older servers; absent means none.
+  const withoutField = validPolicy();
+  delete withoutField.transcription.allowedEnterpriseProviders;
+  assert.equal(isValidPolicyShape(withoutField), true);
 });
 
 test("rejects a missing or non-object policy", () => {

@@ -201,7 +201,10 @@
     "skip": "Passer",
     "policyAiProcessingRestricted": "Le traitement par IA est restreint par votre organisation.",
     "policyAgentRestricted": "L’utilisation de l’agent IA est restreinte par votre organisation.",
-    "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation."
+    "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation.",
+    "managedConfigLoading": "Vérification de la configuration gérée de votre organisation en cours. Réessayez dans un instant.",
+    "managedConfigUnavailable": "L'accès d'entreprise géré est indisponible. Reconnectez-vous ou contactez votre administrateur.",
+    "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur."
   },
   "onboarding": {
     "rehaul": {
@@ -902,7 +905,10 @@
         "chunkLoss": "Un problème réseau a fait perdre une trop grande partie de l'enregistrement. Retranscrivez-le depuis l'historique.",
         "agentReasoningFailed": "Votre assistant vocal n'a pas pu traiter la commande ; la transcription brute a été insérée à la place.",
         "screenContextSkipped": "La capture n'a pas pu être envoyée ; votre commande a été exécutée sans contexte d'écran.",
-        "customEndpointInvalid": "Votre point de terminaison de transcription personnalisé n'est pas configuré ou son URL est invalide. Mettez-le à jour dans Réglages → Parole en texte."
+        "customEndpointInvalid": "Votre point de terminaison de transcription personnalisé n'est pas configuré ou son URL est invalide. Mettez-le à jour dans Réglages → Parole en texte.",
+        "managedTranscriptionUnavailable": "La transcription gérée n'est pas disponible pour le moment. Réessayez dans un instant.",
+        "managedRouteInvalid": "La transcription gérée n'a pas pu démarrer en raison d'une incohérence de configuration. Réessayez ou contactez votre administrateur.",
+        "managedAuthRejected": "Les identifiants de transcription gérée de votre organisation ont été refusés. Contactez votre administrateur."
       },
       "translationFallback": {
         "unreachableTitle": "Traduction indisponible",
@@ -2451,7 +2457,9 @@
         "openwhisprDesc": "Résultats fiables. Aucune configuration requise.",
         "providersDesc": "Utilisez votre propre clé API.",
         "localDesc": "Modèles sur l'appareil. 100 % privé.",
-        "selfHostedDesc": "Votre serveur sur votre réseau."
+        "selfHostedDesc": "Votre serveur sur votre réseau.",
+        "enterprise": "Cloud d'entreprise",
+        "enterpriseDesc": "L'audio est envoyé vers le cloud de votre organisation."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Résultats fiables. Aucune configuration requise.",
@@ -2476,6 +2484,10 @@
         "switchedSelfHosted": {
           "title": "Auto-hébergé",
           "description": "Utilisation de votre propre serveur."
+        },
+        "switchedEnterprise": {
+          "title": "Cloud d'entreprise sélectionné",
+          "description": "La dictée utilise désormais la transcription gérée par votre organisation."
         }
       },
       "gpuDevice": {
@@ -2533,7 +2545,8 @@
             "info": "Audio prolongé d'un segment au suivant pour éviter les coupures brusques lors de la concaténation."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "Votre organisation n'autorise que la transcription cloud d'entreprise, qui ne couvre pas encore l'enregistrement des réunions."
     },
     "intelligence": {
       "gpuDevice": {

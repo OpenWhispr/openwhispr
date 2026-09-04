@@ -201,7 +201,10 @@
     "skip": "Salta",
     "policyAiProcessingRestricted": "L’elaborazione con IA è limitata dalla tua organizzazione.",
     "policyAgentRestricted": "L’uso dell’agente IA è limitato dalla tua organizzazione.",
-    "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione."
+    "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione.",
+    "managedConfigLoading": "Verifica della configurazione gestita della tua organizzazione in corso. Riprova tra un momento.",
+    "managedConfigUnavailable": "L'accesso aziendale gestito non è disponibile. Accedi di nuovo o contatta l'amministratore.",
+    "managedPolicyConflict": "L'accesso gestito è bloccato dai criteri del tuo spazio di lavoro. Contatta l'amministratore."
   },
   "onboarding": {
     "rehaul": {
@@ -902,7 +905,10 @@
         "chunkLoss": "Un problema di rete ha fatto perdere troppa parte della registrazione. Ritrascrivila dalla cronologia.",
         "agentReasoningFailed": "L'assistente vocale non è riuscito a elaborare il comando; è stata inserita la trascrizione grezza.",
         "screenContextSkipped": "Non è stato possibile inviare lo screenshot, quindi il comando è stato eseguito senza contesto dello schermo.",
-        "customEndpointInvalid": "L'endpoint di trascrizione personalizzato non è configurato o il suo URL non è valido. Aggiornalo in Impostazioni → Da voce a testo."
+        "customEndpointInvalid": "L'endpoint di trascrizione personalizzato non è configurato o il suo URL non è valido. Aggiornalo in Impostazioni → Da voce a testo.",
+        "managedTranscriptionUnavailable": "La trascrizione gestita non è disponibile al momento. Riprova tra un momento.",
+        "managedRouteInvalid": "La trascrizione gestita non è potuta partire per un'incoerenza di configurazione. Riprova o contatta l'amministratore.",
+        "managedAuthRejected": "Le credenziali di trascrizione gestita della tua organizzazione sono state rifiutate. Contatta l'amministratore."
       },
       "translationFallback": {
         "unreachableTitle": "Traduzione non disponibile",
@@ -2162,7 +2168,9 @@
         "openwhisprDesc": "Risultati affidabili. Nessuna configurazione necessaria.",
         "providersDesc": "Usa la tua chiave API.",
         "localDesc": "Modelli sul dispositivo. Totalmente privato.",
-        "selfHostedDesc": "Il tuo server nella tua rete."
+        "selfHostedDesc": "Il tuo server nella tua rete.",
+        "enterprise": "Cloud aziendale",
+        "enterpriseDesc": "L'audio viene inviato al cloud della tua organizzazione."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Risultati affidabili. Nessuna configurazione necessaria.",
@@ -2187,6 +2195,10 @@
         "switchedSelfHosted": {
           "title": "Self-hosted",
           "description": "Utilizzo del tuo server."
+        },
+        "switchedEnterprise": {
+          "title": "Cloud aziendale selezionato",
+          "description": "La dettatura ora usa la trascrizione gestita dalla tua organizzazione."
         }
       },
       "gpuDevice": {
@@ -2244,7 +2256,8 @@
             "info": "Audio esteso da un segmento al successivo per evitare tagli netti nella concatenazione."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "La tua organizzazione consente solo la trascrizione su cloud aziendale, che non copre ancora la registrazione delle riunioni."
     },
     "intelligence": {
       "gpuDevice": {

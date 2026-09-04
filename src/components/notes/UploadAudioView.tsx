@@ -70,6 +70,8 @@ import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
 import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
+import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
+import { isManagedTranscriptionActive } from "../../services/managedTranscription";
 
 type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
@@ -299,6 +301,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     return selectIsCloudCleanupMode(effectiveSettings) ? "" : effectiveSettings.cleanupModel;
   });
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
+  const enterpriseTranscriptionSetupMode = useSettingsStore(
+    (s) => s.enterpriseTranscriptionSetupMode
+  );
+  const managedActive =
+    useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode).kind === "managed";
 
   const isOpenWhisprCloud =
     isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
@@ -387,6 +394,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   useEffect(() => {
     let cancelled = false;
     const checkProviderReady = async () => {
+      if (managedActive) {
+        setProviderReady(true);
+        return;
+      }
       if (isOpenWhisprCloud) {
         setProviderReady(true);
         return;
@@ -437,6 +448,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       cancelled = true;
     };
   }, [
+    managedActive,
     isOpenWhisprCloud,
     isSelfHosted,
     remoteTranscriptionUrl,
@@ -609,7 +621,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
   const handleTranscribe = async () => {
     if (!file || batch.isProcessing) return;
-    if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) {
+    if (
+      !isManagedTranscriptionActive() &&
+      !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
+    ) {
       setError(t("common.managedByOrg"));
       return;
     }
@@ -710,7 +725,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setError(
           errorKey
             ? t(`notes.upload.${errorKey}`)
-            : res.error || t("notes.upload.transcriptionFailed")
+            : res.messageKey
+              ? t(res.messageKey)
+              : res.error || t("notes.upload.transcriptionFailed")
         );
         setState("error");
       }
@@ -847,7 +864,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const startBatchProcessing = () => {
     if (state === "downloading" || state === "transcribing") return;
-    if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")) {
+    if (
+      !isManagedTranscriptionActive() &&
+      !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
+    ) {
       setBatchUrlNotice(t("common.managedByOrg"));
       return;
     }

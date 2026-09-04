@@ -5707,6 +5707,35 @@ class IPCHandlers {
         },
       };
     };
+    const { createManagedTranscriptionExecutor } = require("./managedTranscriptionExecutor");
+    const executeManagedTranscription = createManagedTranscriptionExecutor({
+      resolveEnterpriseRuntime,
+      proxyFetch,
+      buildUrl: async (endpoint, deployment, apiVersion) => {
+        const { buildManagedAzureTranscriptionUrl } = await import("../utils/urlUtils.ts");
+        return buildManagedAzureTranscriptionUrl(endpoint, deployment, apiVersion);
+      },
+    });
+    this.executeManagedTranscription = executeManagedTranscription;
+
+    ipcMain.handle(
+      "managed-transcribe",
+      serializeIpcError(
+        async (event, { audioBuffer, fileName, mimeType, language, prompt, managed }) => {
+          const text = await executeManagedTranscription(
+            event,
+            { provider: managed.provider, context: managed.context, language },
+            {
+              audioBuffer: Buffer.from(audioBuffer),
+              fileName: fileName || "audio.webm",
+              contentType: mimeType || "audio/webm",
+              prompt,
+            }
+          );
+          return { text };
+        }
+      )
+    );
     const handleSttConfigRequest = createCloudConfigRequestHandler({
       getApiUrl,
       getAuthHeader,
@@ -5880,6 +5909,7 @@ class IPCHandlers {
         const route = resolveTranscriptionRoute({
           settings: settings || {},
           providers: transcriptionProviderBaseUrls(),
+          managed: settings?.managed,
           request: { effectiveLanguage: language },
         });
 
@@ -5896,7 +5926,14 @@ class IPCHandlers {
           throw err;
         }
 
-        if (route.transport === "http-batch" && route.provider === "self-hosted") {
+        if (route.transport === "managed") {
+          const text = await this.executeManagedTranscription(event, route, {
+            audioBuffer: buffer,
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+          });
+          result = { text, source: "azure-managed", model: route.deployment };
+        } else if (route.transport === "http-batch" && route.provider === "self-hosted") {
           const formData = new FormData();
           formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
           if (route.model) {
@@ -9246,6 +9283,7 @@ class IPCHandlers {
           transcriptionMode,
           remoteTranscriptionUrl,
           remoteTranscriptionModel,
+          managed,
         }
       ) => {
         const fs = require("fs");
@@ -9269,12 +9307,31 @@ class IPCHandlers {
               cortiTenant: tenant,
             },
             providers: transcriptionProviderBaseUrls(),
+            managed,
             request: { effectiveLanguage: language || undefined },
           });
 
           // Fail closed: a misconfigured route must never fall through to a default.
           if (route.transport === "error") {
-            return { success: false, error: route.message, code: route.code };
+            return {
+              success: false,
+              error: route.message,
+              code: route.code,
+              messageKey: route.messageKey,
+            };
+          }
+
+          if (route.transport === "managed") {
+            if (fs.statSync(realByok).size > route.sizeCapBytes) {
+              return { success: false, error: byokSizeCapError(route.sizeCapBytes) };
+            }
+            const ext = path.extname(realByok).toLowerCase().replace(".", "");
+            const text = await this.executeManagedTranscription(event, route, {
+              audioBuffer: fs.readFileSync(realByok),
+              fileName: path.basename(realByok),
+              contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+            });
+            return { success: true, text };
           }
 
           if (route.transport === "http-batch" && route.provider === "self-hosted") {
@@ -9470,7 +9527,12 @@ class IPCHandlers {
           return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
         } catch (error) {
           debugLogger.error("BYOK audio file transcription error", { error: error.message });
-          return { success: false, error: error.message };
+          return {
+            success: false,
+            error: error.message,
+            code: error.code,
+            messageKey: error.messageKey,
+          };
         }
       }
     );
