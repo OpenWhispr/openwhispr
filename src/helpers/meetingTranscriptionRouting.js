@@ -14,6 +14,7 @@ export function resolveMeetingTranscriptionOptions({
   localProvider,
   whisperModel,
   parakeetModel,
+  cohereModel,
   selectedProvider,
   selectedModel,
   byokProviders,
@@ -29,7 +30,9 @@ export function resolveMeetingTranscriptionOptions({
       localModel:
         localProvider === "nvidia"
           ? parakeetModel || "parakeet-tdt-0.6b-v3"
-          : whisperModel || "base",
+          : localProvider === "cohere"
+            ? cohereModel || "cohere-transcribe-03-2026"
+            : whisperModel || "base",
       language,
     };
   }

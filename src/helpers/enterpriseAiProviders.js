@@ -8,7 +8,7 @@
 // app startup doesn't eager-load ~100 MB of AWS/Azure/Google SDKs for users
 // who never select an enterprise provider.
 
-function getEnterpriseAIModel(provider, model, apiKey, enterprise) {
+async function getEnterpriseAIModel(provider, model, apiKey, enterprise) {
   switch (provider) {
     case "bedrock":
       return createBedrockModel(model, enterprise);
@@ -21,35 +21,55 @@ function getEnterpriseAIModel(provider, model, apiKey, enterprise) {
   }
 }
 
-function createBedrockModel(model, enterprise) {
+async function createBedrockModel(model, enterprise) {
   const { createAmazonBedrock } = require("@ai-sdk/amazon-bedrock");
   const region = enterprise?.bedrockRegion || "us-east-1";
+  const explicitCredentialSource = enterprise?.managedCredentialProvider
+    ? "managed credential provider"
+    : enterprise?.bedrockProfile
+      ? "profile credential provider"
+      : enterprise?.bedrockAccessKeyId || enterprise?.bedrockSecretAccessKey
+        ? "static credentials"
+        : null;
+  const credentials = enterprise?.managedCredentialProvider
+    ? await enterprise.managedCredentialProvider()
+    : enterprise?.bedrockProfile
+      ? await require("@aws-sdk/credential-providers").fromNodeProviderChain({
+          profile: enterprise.bedrockProfile,
+        })()
+      : explicitCredentialSource
+        ? {
+            accessKeyId: enterprise.bedrockAccessKeyId,
+            secretAccessKey: enterprise.bedrockSecretAccessKey,
+            sessionToken: enterprise.bedrockSessionToken,
+          }
+        : null;
 
-  if (enterprise?.managedCredentialProvider) {
-    return createAmazonBedrock({
-      region,
-      credentialProvider: enterprise.managedCredentialProvider,
-    })(model);
+  if (
+    explicitCredentialSource &&
+    (!credentials ||
+      typeof credentials.accessKeyId !== "string" ||
+      credentials.accessKeyId.length === 0 ||
+      typeof credentials.secretAccessKey !== "string" ||
+      credentials.secretAccessKey.length === 0)
+  ) {
+    const error = new Error(
+      `AWS ${explicitCredentialSource} returned invalid credentials. Expected accessKeyId and secretAccessKey.`
+    );
+    error.name = "CredentialsProviderError";
+    throw error;
   }
 
-  if (enterprise?.bedrockProfile) {
-    const { fromNodeProviderChain } = require("@aws-sdk/credential-providers");
-    return createAmazonBedrock({
-      region,
-      credentialProvider: fromNodeProviderChain({ profile: enterprise.bedrockProfile }),
-    })(model);
-  }
-
-  if (enterprise?.bedrockAccessKeyId && enterprise?.bedrockSecretAccessKey) {
-    return createAmazonBedrock({
-      region,
-      accessKeyId: enterprise.bedrockAccessKeyId,
-      secretAccessKey: enterprise.bedrockSecretAccessKey,
-      sessionToken: enterprise.bedrockSessionToken,
-    })(model);
-  }
-
-  return createAmazonBedrock({ region })(model);
+  return createAmazonBedrock({
+    region,
+    ...(credentials
+      ? {
+          accessKeyId: credentials.accessKeyId,
+          secretAccessKey: credentials.secretAccessKey,
+          sessionToken: credentials.sessionToken,
+        }
+      : {}),
+  })(model);
 }
 
 function createAzureModel(model, apiKey, enterprise) {

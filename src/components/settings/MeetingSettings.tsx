@@ -47,6 +47,8 @@ export function MeetingTranscriptionPanel() {
     setMeetingLocalTranscriptionProvider,
     meetingParakeetModel,
     setMeetingParakeetModel,
+    meetingCohereModel,
+    setMeetingCohereModel,
     meetingCloudTranscriptionProvider,
     setMeetingCloudTranscriptionProvider,
     meetingCloudTranscriptionModel,
@@ -109,16 +111,21 @@ export function MeetingTranscriptionPanel() {
 
   const handleLocalTranscriptionModelSelect = useCallback(
     (modelId: string, providerId?: string) => {
-      if (
-        providerId === "nvidia" ||
-        (!providerId && meetingLocalTranscriptionProvider === "nvidia")
-      ) {
+      const provider = providerId ?? meetingLocalTranscriptionProvider;
+      if (provider === "nvidia") {
         setMeetingParakeetModel(modelId);
+      } else if (provider === "cohere") {
+        setMeetingCohereModel(modelId);
       } else {
         setMeetingWhisperModel(modelId);
       }
     },
-    [meetingLocalTranscriptionProvider, setMeetingParakeetModel, setMeetingWhisperModel]
+    [
+      meetingLocalTranscriptionProvider,
+      setMeetingParakeetModel,
+      setMeetingCohereModel,
+      setMeetingWhisperModel,
+    ]
   );
 
   const renderTranscriptionPicker = (mode: "cloud" | "local") => (
@@ -130,7 +137,11 @@ export function MeetingTranscriptionPanel() {
       selectedCloudModel={meetingCloudTranscriptionModel}
       onCloudModelSelect={setMeetingCloudTranscriptionModel}
       selectedLocalModel={
-        meetingLocalTranscriptionProvider === "nvidia" ? meetingParakeetModel : meetingWhisperModel
+        meetingLocalTranscriptionProvider === "nvidia"
+          ? meetingParakeetModel
+          : meetingLocalTranscriptionProvider === "cohere"
+            ? meetingCohereModel
+            : meetingWhisperModel
       }
       onLocalModelSelect={handleLocalTranscriptionModelSelect}
       selectedLocalProvider={meetingLocalTranscriptionProvider}

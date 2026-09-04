@@ -623,6 +623,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Node-only SDKs (AWS/Azure/Google credential providers) can resolve.
   processEnterpriseReasoning: (text, modelId, agentName, config) =>
     ipcRenderer.invoke("process-enterprise-reasoning", text, modelId, agentName, config),
+  cancelEnterpriseReasoning: () => ipcRenderer.send("enterprise-reasoning-cancel"),
   enterpriseStreamStart: (payload) => ipcRenderer.invoke("enterprise-stream-start", payload),
   enterpriseStreamCancel: (streamId) => ipcRenderer.invoke("enterprise-stream-cancel", streamId),
   onEnterpriseStreamPart: registerListener(
@@ -860,6 +861,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onMeetingSystemAudioSilent: registerListener(
     "meeting-system-audio-silent",
     (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingSystemAudioDegraded: registerListener(
+    "meeting-system-audio-degraded",
+    (callback) => () => callback()
   ),
 
   // Dictation realtime streaming
