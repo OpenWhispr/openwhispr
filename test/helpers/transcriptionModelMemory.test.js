@@ -113,6 +113,46 @@ test("per-provider transcription model memory", async (t) => {
   });
 });
 
+test("unset upload/meeting local providers inherit dictation, and onboarding mirrors them", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _providerSettingsMigrated: "1",
+      uploadTranscriptionMigrated: "true",
+      localTranscriptionProvider: "nvidia",
+      parakeetModel: "parakeet-tdt-0.6b-v3",
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-upload-provider-inherit-test-",
+  });
+  const {
+    useSettingsStore,
+    selectResolvedUploadTranscription,
+    selectResolvedMeetingTranscription,
+  } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const state = () => useSettingsStore.getState();
+
+  await t.test("a missing scoped key inherits the dictation local provider", () => {
+    assert.equal(state().localTranscriptionProvider, "nvidia");
+    assert.equal(state().uploadLocalTranscriptionProvider, "nvidia");
+    assert.equal(state().meetingLocalTranscriptionProvider, "nvidia");
+    assert.equal(selectResolvedUploadTranscription(state()).localTranscriptionProvider, "nvidia");
+    assert.equal(selectResolvedMeetingTranscription(state()).localTranscriptionProvider, "nvidia");
+  });
+
+  await t.test(
+    "setCloudTranscriptionForAllScopes writes the dictation local provider into upload and meeting",
+    () => {
+      state().setLocalTranscriptionProvider("cohere");
+      state().setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
+      assert.equal(state().uploadLocalTranscriptionProvider, "cohere");
+      assert.equal(state().meetingLocalTranscriptionProvider, "cohere");
+      assert.equal(localStorage.getItem("uploadLocalTranscriptionProvider"), "cohere");
+      assert.equal(localStorage.getItem("meetingLocalTranscriptionProvider"), "cohere");
+    }
+  );
+});
+
 // The picker commits a cloud selection only on an explicit model click:
 // switchCloudTranscriptionProvider(ctx, browsedProvider) followed by
 // setCloudTranscriptionModel(clickedId). Pin that sequence at store level.
