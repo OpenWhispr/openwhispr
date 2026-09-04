@@ -1984,7 +1984,10 @@
         "noEndpoint": "Aucune URL de serveur auto-hébergé définie. Configurez-en une dans les Paramètres.",
         "actionFailed": "L'action a échoué",
         "promptTooLong": "Cet appel est trop long pour le modèle local. Utilisez un modèle cloud ou raccourcissez la note.",
-        "partialResult": "Certaines parties de cet appel n'ont pas pu être traitées et sont signalées dans les notes."
+        "partialResult": "Certaines parties de cet appel n'ont pas pu être traitées et sont signalées dans les notes.",
+        "runTimedOut": "La génération des notes a pris trop de temps et a été interrompue. Essayez une sélection plus courte ou un modèle cloud.",
+        "runDegraded": "La génération des notes ralentissait fortement ; elle a été interrompue pour garder votre machine réactive. Fermez des applications ou utilisez un modèle cloud.",
+        "notEnoughMemory": "Mémoire libre insuffisante pour le modèle local pour l'instant. Fermez des applications, ou utilisez un modèle cloud pour cette note."
       },
       "passProgress": "passe {{current}} sur {{total}}"
     },

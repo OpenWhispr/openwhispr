@@ -737,3 +737,172 @@ test("no title or notes are written when noteFormatting is unconfigured", async 
     "an unconfigured pipeline must not invent a title"
   );
 });
+
+// ── Long transcripts (1.17.0) ──────────────────────────────────────────────
+//
+// The notes step used to send `text.slice(0, 8000)` in a single call. On a local
+// model that is a hard failure ("Prompt is too long ... budget of 1228"); on a
+// cloud model it silently discarded everything past about 25 minutes of meeting.
+
+const LONG_SEGMENTS = Array.from({ length: 400 }, (_, i) => ({
+  text: `Segment ${i}: we discussed the quarterly rollout and agreed on the staffing plan.`,
+  speaker: `speaker_${i % 3}`,
+  source: "system",
+  timestamp: i,
+}));
+
+function longTranscriptMocks(createMocks) {
+  const mocks = createMocks();
+  const transcript = JSON.stringify(LONG_SEGMENTS);
+  mocks.databaseManager.getNote = (id) => ({
+    id,
+    transcript,
+    system_audio_path: "/tmp/test.opus",
+    mic_audio_path: null,
+    meeting_type_id: null,
+    audio_duration_seconds: 3600,
+  });
+  return mocks;
+}
+
+function recordingInference(mocks) {
+  const calls = [];
+  mocks.inference.processText = async (text, opts) => {
+    calls.push({ text, opts });
+    if (opts.systemPrompt?.includes("extracting source material")) return "DECISIONS: rollout agreed.";
+    return "## Summary\nTest notes";
+  };
+  return calls;
+}
+
+test("a local model chunks a long transcript instead of failing on it", async () => {
+  const { PostCallPipelineManager } = await import("../../src/helpers/postCallPipelineManager.js");
+  const mocks = longTranscriptMocks(createMocks);
+  const calls = recordingInference(mocks);
+
+  process.env.NOTE_FORMATTING_PROVIDER = "local";
+  process.env.NOTE_FORMATTING_MODEL = "gemma-4-e4b";
+
+  try {
+    const manager = new PostCallPipelineManager({
+      broadcast: mocks.broadcast,
+      databaseManager: mocks.databaseManager,
+      whisperManager: mocks.whisperManager,
+      diarizationManager: mocks.diarizationManager,
+      inference: mocks.inference,
+      convertToWav: mocks.convertToWav,
+      resolveModelContext: async () => ({ contextSize: 8192, isGpuBackend: true }),
+    });
+
+    await manager.runSingleStep(1, "notes");
+
+    const statuses = mocks.events
+      .filter((e) => e.channel === "post-call-pipeline-status" && e.step === "notes")
+      .map((e) => e.status);
+    assert.ok(statuses.includes("complete"), `notes did not complete: ${statuses.join(",")}`);
+    assert.ok(calls.length > 1, `expected several passes, got ${calls.length}`);
+
+    // Nothing may be dropped: the last segment has to reach an extraction.
+    const seen = calls.map((c) => c.text).join("\n");
+    assert.ok(seen.includes("Segment 399"), "the tail of the transcript never reached the model");
+  } finally {
+    delete process.env.NOTE_FORMATTING_PROVIDER;
+    delete process.env.NOTE_FORMATTING_MODEL;
+  }
+});
+
+test("a model family in the provider field still takes the local path", async () => {
+  // Settings has been seen persisting "gemma" into the provider field. Sending
+  // that down the cloud branch would put the whole transcript in one local call.
+  const { PostCallPipelineManager } = await import("../../src/helpers/postCallPipelineManager.js");
+  const mocks = longTranscriptMocks(createMocks);
+  const calls = recordingInference(mocks);
+  let resolvedContext = false;
+
+  process.env.NOTE_FORMATTING_PROVIDER = "gemma";
+  process.env.NOTE_FORMATTING_MODEL = "google_gemma-4-E4B-it-Q4_K_M.gguf";
+
+  try {
+    const manager = new PostCallPipelineManager({
+      broadcast: mocks.broadcast,
+      databaseManager: mocks.databaseManager,
+      whisperManager: mocks.whisperManager,
+      diarizationManager: mocks.diarizationManager,
+      inference: mocks.inference,
+      convertToWav: mocks.convertToWav,
+      resolveModelContext: async () => {
+        resolvedContext = true;
+        return { contextSize: 8192, isGpuBackend: true };
+      },
+    });
+
+    await manager.runSingleStep(1, "notes");
+
+    assert.ok(resolvedContext, "a family-labelled local model must resolve a context");
+    assert.ok(calls.length > 1, `expected several passes, got ${calls.length}`);
+  } finally {
+    delete process.env.NOTE_FORMATTING_PROVIDER;
+    delete process.env.NOTE_FORMATTING_MODEL;
+  }
+});
+
+test("a cloud model gets the whole transcript, not the first 8000 characters", async () => {
+  const { PostCallPipelineManager } = await import("../../src/helpers/postCallPipelineManager.js");
+  const mocks = longTranscriptMocks(createMocks);
+  const calls = recordingInference(mocks);
+  let resolvedContext = false;
+
+  process.env.NOTE_FORMATTING_PROVIDER = "openai";
+  process.env.NOTE_FORMATTING_MODEL = "gpt-5.5";
+
+  try {
+    const manager = new PostCallPipelineManager({
+      broadcast: mocks.broadcast,
+      databaseManager: mocks.databaseManager,
+      whisperManager: mocks.whisperManager,
+      diarizationManager: mocks.diarizationManager,
+      inference: mocks.inference,
+      convertToWav: mocks.convertToWav,
+      resolveModelContext: async () => {
+        resolvedContext = true;
+        return { contextSize: 8192, isGpuBackend: true };
+      },
+    });
+
+    await manager.runSingleStep(1, "notes");
+
+    assert.equal(calls.length, 1, "a cloud model needs exactly one call");
+    assert.ok(calls[0].text.includes("Segment 399"), "the transcript was truncated");
+    assert.equal(resolvedContext, false, "resolveModelContext throws for cloud model ids");
+  } finally {
+    delete process.env.NOTE_FORMATTING_PROVIDER;
+    delete process.env.NOTE_FORMATTING_MODEL;
+  }
+});
+
+test("without a context resolver a local model falls back to a single call", async () => {
+  const { PostCallPipelineManager } = await import("../../src/helpers/postCallPipelineManager.js");
+  const mocks = longTranscriptMocks(createMocks);
+  const calls = recordingInference(mocks);
+
+  process.env.NOTE_FORMATTING_PROVIDER = "local";
+  process.env.NOTE_FORMATTING_MODEL = "gemma-4-e4b";
+
+  try {
+    const manager = new PostCallPipelineManager({
+      broadcast: mocks.broadcast,
+      databaseManager: mocks.databaseManager,
+      whisperManager: mocks.whisperManager,
+      diarizationManager: mocks.diarizationManager,
+      inference: mocks.inference,
+      convertToWav: mocks.convertToWav,
+    });
+
+    await manager.runSingleStep(1, "notes");
+
+    assert.equal(calls.length, 1);
+  } finally {
+    delete process.env.NOTE_FORMATTING_PROVIDER;
+    delete process.env.NOTE_FORMATTING_MODEL;
+  }
+});

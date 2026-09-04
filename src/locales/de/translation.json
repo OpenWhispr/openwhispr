@@ -1928,7 +1928,10 @@
         "noEndpoint": "Keine URL für den selbst gehosteten Server festgelegt. Konfigurieren Sie eine in den Einstellungen.",
         "actionFailed": "Aktion fehlgeschlagen",
         "promptTooLong": "Dieses Gespräch ist zu lang für das lokale Modell. Verwenden Sie ein Cloud-Modell oder kürzen Sie die Notiz.",
-        "partialResult": "Einige Abschnitte dieses Gesprächs konnten nicht verarbeitet werden und sind in den Notizen markiert."
+        "partialResult": "Einige Abschnitte dieses Gesprächs konnten nicht verarbeitet werden und sind in den Notizen markiert.",
+        "runTimedOut": "Die Notizerstellung hat zu lange gedauert und wurde gestoppt. Versuchen Sie eine kürzere Auswahl oder ein Cloud-Modell.",
+        "runDegraded": "Die Notizerstellung wurde deutlich langsamer und wurde gestoppt, damit Ihr Rechner reaktionsfähig bleibt. Schließen Sie Apps oder nutzen Sie ein Cloud-Modell.",
+        "notEnoughMemory": "Derzeit ist zu wenig freier Speicher für das lokale Modell. Schließen Sie Apps oder nutzen Sie für diese Notiz ein Cloud-Modell."
       },
       "passProgress": "Durchlauf {{current}} von {{total}}"
     },

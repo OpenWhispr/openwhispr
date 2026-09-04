@@ -1928,7 +1928,10 @@
         "noEndpoint": "Nenhum URL de servidor auto-hospedado definido. Configure um nas Configurações.",
         "actionFailed": "A ação falhou",
         "promptTooLong": "Esta chamada é longa demais para o modelo local. Use um modelo na nuvem ou encurte a nota.",
-        "partialResult": "Algumas partes desta chamada não puderam ser processadas e estão marcadas nas notas."
+        "partialResult": "Algumas partes desta chamada não puderam ser processadas e estão marcadas nas notas.",
+        "runTimedOut": "A geração de notas demorou demais e foi interrompida. Tente uma seleção menor ou um modelo na nuvem.",
+        "runDegraded": "A geração de notas estava ficando muito lenta e foi interrompida para manter seu computador responsivo. Feche alguns apps ou use um modelo na nuvem.",
+        "notEnoughMemory": "Não há memória livre suficiente para o modelo local agora. Feche alguns apps ou use um modelo na nuvem para esta nota."
       },
       "passProgress": "passagem {{current}} de {{total}}"
     },

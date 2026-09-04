@@ -160,7 +160,18 @@ export interface RunActionLabels {
   actionFailed: string;
   promptTooLong: string;
   partialResult: string;
+  runTimedOut: string;
+  runDegraded: string;
+  notEnoughMemory: string;
 }
+
+/** Known failure codes get a translated message rather than a raw English one. */
+const CODE_LABELS: Record<string, keyof RunActionLabels> = {
+  LOCAL_CONTEXT_EXCEEDED: "promptTooLong",
+  LOCAL_MULTIPASS_TIMEOUT: "runTimedOut",
+  LOCAL_MULTIPASS_DEGRADED: "runDegraded",
+  LOCAL_INSUFFICIENT_MEMORY: "notEnoughMemory",
+};
 
 /**
  * Start processing an action on a note. Runs in the background — survives
@@ -286,12 +297,12 @@ export function runBackgroundAction(
       processingFlags.set(noteId, false);
       clearNoteState(noteId);
       const code = (err as { code?: string })?.code;
-      const message =
-        code === "LOCAL_CONTEXT_EXCEEDED"
-          ? labels.promptTooLong
-          : err instanceof Error
-            ? err.message
-            : labels.actionFailed;
+      const labelKey = code ? CODE_LABELS[code] : undefined;
+      const message = labelKey
+        ? labels[labelKey]
+        : err instanceof Error
+          ? err.message
+          : labels.actionFailed;
       pushErrorEvent({ noteId, message });
     } finally {
       cancelledFlags.delete(noteId);

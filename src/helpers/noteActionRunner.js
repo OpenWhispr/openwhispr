@@ -41,7 +41,17 @@ const COMPOSE_MAX_TOKENS = 2048;
 const EXTRACTION_TEMPERATURE = 0.1;
 
 const TRANSIENT_ATTEMPTS = 4;
+// A pass that already burned the full request timeout, or a server killed while
+// loading a multi-GB model, gets one more go and no more. Four attempts is tens
+// of minutes of the same thrash on a machine that is already struggling.
+const SLOW_ATTEMPTS = 2;
 const GENUINE_ATTEMPTS = 2;
+const DEFAULT_DEADLINE_MS = 30 * 60 * 1000;
+// A pass this much slower than the established median means the machine is
+// struggling, not that this chunk is harder. Needs two completed passes first,
+// so a single cold-start outlier cannot trip it.
+const DEGRADATION_FACTOR = 4;
+const DEGRADATION_MIN_SAMPLES = 2;
 const MAX_CONSECUTIVE_GAPS = 3;
 const MAX_FOLD_LEVELS = 2;
 const BACKOFF_MS = [2000, 4000, 8000];
@@ -63,6 +73,48 @@ const renderSegments = (segments) =>
     })
     .filter(Boolean)
     .join("\n");
+
+const hasTranscriptText = (transcript) => Boolean(transcript);
+
+const median = (values) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+/**
+ * Catches a run whose passes are stretching out — the signature of a machine
+ * that has started swapping. It cannot catch a pass that hangs outright: the
+ * runner is awaiting `infer`, so control only returns once the pass settles,
+ * which for a wedged request means the llama-server request timeout. Bounding
+ * that is the timeout's job, not this one.
+ */
+function throwIfDegrading({ durations, elapsed, currentPass, totalPasses }) {
+  if (durations.length < DEGRADATION_MIN_SAMPLES) return;
+  const baseline = median(durations);
+  if (baseline <= 0 || elapsed <= baseline * DEGRADATION_FACTOR) return;
+  throw runnerError(
+    `Note generation is slowing down sharply (pass ${currentPass} took ${Math.round(elapsed / 1000)}s ` +
+      `against a typical ${Math.round(baseline / 1000)}s) — stopping rather than grinding`,
+    "LOCAL_MULTIPASS_DEGRADED",
+    { elapsedMs: elapsed, baselineMs: baseline, currentPass, totalPasses }
+  );
+}
+
+/**
+ * Bounds the whole run regardless of how the individual passes fail. Without
+ * it, a machine slow enough to make every pass crawl still runs every pass.
+ */
+function throwIfPastDeadline({ now, startedAt, deadlineMs, currentPass, totalPasses }) {
+  if (deadlineMs == null) return;
+  const elapsed = now() - startedAt;
+  if (elapsed < deadlineMs) return;
+  throw runnerError(
+    `Note generation exceeded its time limit after ${currentPass} of ${totalPasses} passes`,
+    "LOCAL_MULTIPASS_TIMEOUT",
+    { elapsedMs: elapsed, currentPass, totalPasses }
+  );
+}
 
 function throwIfAborted(signal) {
   if (signal?.aborted) throw runnerError("Cancelled", "LOCAL_INFERENCE_ABORTED");
@@ -89,9 +141,14 @@ async function runPass({ infer, prompt, options, sleep, signal }) {
       if (kind === "fatal") throw error;
 
       lastError = error;
-      const limit = kind === "transient" ? TRANSIENT_ATTEMPTS : GENUINE_ATTEMPTS;
+      const limit =
+        kind === "transient"
+          ? TRANSIENT_ATTEMPTS
+          : kind === "slow"
+            ? SLOW_ATTEMPTS
+            : GENUINE_ATTEMPTS;
       if (attempt >= limit) {
-        if (kind === "transient") {
+        if (kind === "transient" || kind === "slow") {
           // Three failed retries mean the server or the machine is broken, not
           // that this section of the call was unreadable. Saying so beats
           // writing a gap marker that lies about which it was.
@@ -104,7 +161,11 @@ async function runPass({ infer, prompt, options, sleep, signal }) {
         return { text: null, error };
       }
 
-      if (kind === "transient") await sleep(BACKOFF_MS[attempt - 1] ?? 8000);
+      // Backoff applies to slow too: retrying instantly at a server that may
+      // still be grinding the request we just destroyed helps nobody.
+      if (kind === "transient" || kind === "slow") {
+        await sleep(BACKOFF_MS[attempt - 1] ?? 8000);
+      }
     }
   }
 }
@@ -156,8 +217,13 @@ async function runNoteAction({
   onExtract = null,
   signal = null,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  deadlineMs = DEFAULT_DEADLINE_MS,
+  now = () => Date.now(),
 }) {
+  const startedAt = now();
   const { inputBudget, chunkBudget } = resolveChunkBudget({ contextSize, isGpuBackend });
+  // 2048 output tokens against a 2048 context leaves nothing for the prompt.
+  const composeMaxTokens = Math.max(256, Math.min(COMPOSE_MAX_TOKENS, Math.floor(contextSize * 0.3)));
 
   const note = String(noteContent || "").trim();
   const transcript = renderSegments(segments);
@@ -171,7 +237,7 @@ async function runNoteAction({
     const { text, error } = await runPass({
       infer,
       prompt: assembled,
-      options: { systemPrompt, maxTokens: COMPOSE_MAX_TOKENS },
+      options: { systemPrompt, maxTokens: composeMaxTokens },
       sleep,
       signal,
     });
@@ -188,11 +254,29 @@ async function runNoteAction({
     throw runnerError("Nothing to process", "LOCAL_CONTEXT_EXCEEDED");
   }
 
+  // Can this run possibly finish? Folding halves the extract count at most
+  // MAX_FOLD_LEVELS times, so the smallest compose input this run could ever
+  // produce is known before a single pass runs. If even that cannot fit, the
+  // run is arithmetically doomed — and proving it over 150 passes and three
+  // hours of thrash is strictly worse than saying so now.
+  const noteTokensEstimate = estimateTokens(hasTranscriptText(transcript) ? note : "");
+  const bestCaseExtracts = Math.ceil(chunks.length / 2 ** MAX_FOLD_LEVELS);
+  const bestCaseComposeTokens =
+    bestCaseExtracts * EXTRACTION_MAX_TOKENS + noteTokensEstimate + estimateTokens(systemPrompt);
+  if (bestCaseComposeTokens > inputBudget) {
+    throw runnerError(
+      "This note is too long for the local model's available context",
+      "LOCAL_CONTEXT_EXCEEDED",
+      { chunks: chunks.length, bestCaseComposeTokens, inputBudget, contextSize }
+    );
+  }
+
   const totalPasses = chunks.length + 1;
   let currentPass = 0;
   const passState = () => ({ currentPass, totalPasses });
 
   const extracts = [];
+  const passDurations = [];
   let gapCount = 0;
   let consecutiveGaps = 0;
 
@@ -204,9 +288,11 @@ async function runNoteAction({
     }
 
     throwIfAborted(signal);
+    throwIfPastDeadline({ now, startedAt, deadlineMs, currentPass, totalPasses });
     currentPass++;
     onProgress?.({ phase: "extracting", ...passState() });
 
+    const passStartedAt = now();
     const { text } = await runPass({
       infer,
       prompt: chunks[i],
@@ -218,6 +304,14 @@ async function runNoteAction({
       sleep,
       signal,
     });
+    const passElapsed = now() - passStartedAt;
+    throwIfDegrading({
+      durations: passDurations,
+      elapsed: passElapsed,
+      currentPass,
+      totalPasses,
+    });
+    passDurations.push(passElapsed);
 
     if (text == null) {
       gapCount++;
@@ -273,13 +367,14 @@ async function runNoteAction({
   }
 
   throwIfAborted(signal);
+  throwIfPastDeadline({ now, startedAt, deadlineMs, currentPass, totalPasses });
   currentPass++;
   onProgress?.({ phase: "composing", ...passState() });
 
   const { text, error } = await runPass({
     infer,
     prompt: composePrompt,
-    options: { systemPrompt, maxTokens: COMPOSE_MAX_TOKENS },
+    options: { systemPrompt, maxTokens: composeMaxTokens },
     sleep,
     signal,
   });

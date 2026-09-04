@@ -1928,7 +1928,10 @@
         "noEndpoint": "Nessun URL del server self-hosted impostato. Configurane uno nelle Impostazioni.",
         "actionFailed": "Azione non riuscita",
         "promptTooLong": "Questa chiamata è troppo lunga per il modello locale. Usa un modello cloud o accorcia la nota.",
-        "partialResult": "Alcune parti di questa chiamata non sono state elaborate e sono segnalate nelle note."
+        "partialResult": "Alcune parti di questa chiamata non sono state elaborate e sono segnalate nelle note.",
+        "runTimedOut": "La generazione delle note ha richiesto troppo tempo ed è stata interrotta. Prova una selezione più breve o un modello cloud.",
+        "runDegraded": "La generazione delle note stava rallentando molto ed è stata interrotta per mantenere reattivo il computer. Chiudi qualche app o usa un modello cloud.",
+        "notEnoughMemory": "Memoria libera insufficiente per il modello locale in questo momento. Chiudi qualche app o usa un modello cloud per questa nota."
       },
       "passProgress": "passaggio {{current}} di {{total}}"
     },

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-09-03
+
+### Fixed
+- **Generating notes with a local model failed every time on some machines.** Every meeting stopped with "Prompt is too long for this model", and the queue behind it failed the same way. The app was working out how much memory a model's context needs by assuming every layer of the model grows with the length of the conversation. Newer models — Gemma among them — keep most of their layers at a fixed size no matter how long the conversation gets, so the app was overstating the cost by more than six times and then giving the model a context far too small to hold a single meeting. It now reads the model's own description of how it works. On the machine this was reported from, the model went from a 2,048-token context to 16,384 — from refusing a two-minute meeting to comfortably handling an hour.
+- **The app no longer refuses a model the little memory it needs while handing it gigabytes.** When a model was larger than the memory reported free, the amount set aside for the conversation collapsed to a fixed minimum too small to be useful — while the app went ahead and loaded the multi-gigabyte model anyway. What it sets aside now scales with the model it has already committed to loading, and is still capped so a large model on a small machine cannot take more than its share.
+- **The app now asks the model server how much context it actually got** rather than trusting its own estimate. Notes were being refused against a guess, so an estimate that read high rejected meetings the model would have handled.
+- **Long meetings no longer lose their ending.** The notes step only ever looked at the first 8,000 characters of a transcript — roughly the first 25 minutes — and silently discarded the rest. Local models now work through the whole transcript in passes, as the manual "regenerate notes" action already did, and cloud models get the complete transcript instead of the first quarter of it.
+- **A damaged or hand-edited model file can no longer talk the app into over-allocating memory.** Model files are downloaded, and several kinds of corruption inside one made its memory cost look far smaller than it is — in the worst case free — which would have had the app reserve far more than the machine could give and hang it, the same way a bad estimate did in August. A model whose description of itself does not add up is now treated as unreadable rather than trusted.
+- **"Prompt is too long" now says what to do about it** — which model, how much context it was given, and that freeing memory or choosing a smaller model is the fix — instead of two bare numbers.
+
+## [1.16.1] - 2026-08-12
+
+### Fixed
+- **Generating notes with a local model could still make the machine unresponsive.** 1.15.0 stopped the model reserving more memory than the machine *has*, but it worked that out from the machine's total memory — not from what was actually free. On a 24 GB machine with 17 GB already in use by other apps, it still set aside 3.5 GB for the model on top of the 5.4 GB the model itself needs, which is more than was left. The app now measures memory that is genuinely available and sizes the model to fit it.
+- **A long note that cannot be processed now says so immediately** instead of working through it for hours and failing at the end. When the available memory is too small for a transcript of that length, the app can tell in a moment, and it now says which of the two problems it is — not enough memory, or a note that is too long — rather than a generic message.
+- **Note generation stops itself if it starts dragging.** If passes begin taking far longer than the ones before them — the sign that the machine is struggling — the run stops rather than continuing and making things worse. There is also an overall time limit.
+- **A stuck pass is no longer retried three times.** A request that has already run out of time, or a model that was killed while loading, is retried once rather than three more times, which previously meant tens of minutes of the same problem. The window before a stuck pass gives up is back to 5 minutes, from the 15 introduced in 1.16.0.
+- **Saved meeting audio is no longer deleted while the meeting is still unprocessed.** Recordings were cleared after 30 days regardless of whether notes had ever been generated from them — so a meeting you put off would quietly become unprocessable. A meeting with no notes yet now keeps its audio until it has been processed. Recording itself was never affected; the audio was always saved.
+- Every one of these now shows a message in your language rather than raw English.
+
 ## [1.16.0] - 2026-08-12
 
 ### Added

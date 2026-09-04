@@ -1928,7 +1928,10 @@
         "noEndpoint": "No hay URL del servidor autoalojado configurada. Configura una en Ajustes.",
         "actionFailed": "La acción falló",
         "promptTooLong": "Esta llamada es demasiado larga para el modelo local. Usa un modelo en la nube o acorta la nota.",
-        "partialResult": "Algunas secciones de esta llamada no se pudieron procesar y están marcadas en las notas."
+        "partialResult": "Algunas secciones de esta llamada no se pudieron procesar y están marcadas en las notas.",
+        "runTimedOut": "La generación de notas tardó demasiado y se detuvo. Prueba con una selección más corta o un modelo en la nube.",
+        "runDegraded": "La generación de notas se estaba ralentizando mucho y se detuvo para mantener tu equipo receptivo. Cierra algunas apps o usa un modelo en la nube.",
+        "notEnoughMemory": "No hay suficiente memoria libre para el modelo local ahora mismo. Cierra algunas apps o usa un modelo en la nube para esta nota."
       },
       "passProgress": "paso {{current}} de {{total}}"
     },

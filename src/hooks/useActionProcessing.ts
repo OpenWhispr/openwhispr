@@ -34,6 +34,9 @@ export function useActionProcessing(noteId: number | null) {
         actionFailed: t("notes.actions.errors.actionFailed"),
         promptTooLong: t("notes.actions.errors.promptTooLong"),
         partialResult: t("notes.actions.errors.partialResult"),
+        runTimedOut: t("notes.actions.errors.runTimedOut"),
+        runDegraded: t("notes.actions.errors.runDegraded"),
+        notEnoughMemory: t("notes.actions.errors.notEnoughMemory"),
       });
     },
     [noteId, t]

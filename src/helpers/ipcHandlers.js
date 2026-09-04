@@ -3389,7 +3389,7 @@ class IPCHandlers {
         const { runNoteAction } = require("./noteActionRunner");
         const { BATCH_REQUEST_TIMEOUT_MS } = require("./llamaServer");
 
-        const { contextSize, isGpuBackend } = modelManager.resolveModelContext(modelId);
+        const { contextSize, isGpuBackend } = await modelManager.resolveModelContext(modelId);
 
         const result = await runNoteAction({
           noteContent,
@@ -3841,6 +3841,10 @@ class IPCHandlers {
       diarizationManager: this.diarizationManager,
       inference,
       convertToWav,
+      // Lets the notes step size its chunks against the context the local server
+      // actually has, instead of truncating the transcript to fit a guess.
+      resolveModelContext: (modelId) =>
+        require("./modelManagerBridge").default.resolveModelContext(modelId),
     });
 
     // Observe pipeline status events for pending retranscription tracking

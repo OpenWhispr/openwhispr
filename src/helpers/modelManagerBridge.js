@@ -13,6 +13,7 @@ const modelRegistryData = require("../models/modelRegistryData.json");
 const LlamaServerManager = require("./llamaServer");
 const { checkPromptFitsContext, resolveContextSize } = require("./llamaContext");
 const { readGgufMetadata } = require("./ggufMetadata");
+const { availableMemBytes } = require("./systemMemory");
 const os = require("os");
 const debugLogger = require("./debugLogger");
 
@@ -393,9 +394,10 @@ class ModelManager {
 
     // Refuse a prompt the server cannot hold rather than letting it grind. An
     // over-context prompt used to be accepted and processed for minutes on end.
+    const contextSize = this.serverManager.contextSize || 4096;
     const fit = checkPromptFitsContext({
       text: `${options.systemPrompt || ""}${prompt}`,
-      contextSize: this.serverManager.contextSize || 4096,
+      contextSize,
     });
     if (!fit.fits) {
       debugLogger.warn(
@@ -404,14 +406,25 @@ class ModelManager {
           modelId,
           estimatedTokens: fit.estimatedTokens,
           budgetTokens: fit.budgetTokens,
-          contextSize: this.serverManager.contextSize,
+          contextSize,
+          serverContextSize: this.serverManager.contextSize,
         },
         "llama"
       );
+      // Says only what it knows. The context can be small because memory was
+      // tight or because the model was trained that way, and this call site
+      // cannot tell which — so it names the limit rather than guessing a cause.
       throw new ModelError(
-        `Prompt is too long for this model: about ${fit.estimatedTokens} tokens against a budget of ${fit.budgetTokens}`,
+        `Prompt is too long for this model: about ${fit.estimatedTokens} tokens against a budget of ` +
+          `${fit.budgetTokens}. ${modelId} is running with a ${contextSize}-token context. ` +
+          `Shorten the note, or choose a model that fits more context on this machine.`,
         fit.code,
-        { estimatedTokens: fit.estimatedTokens, budgetTokens: fit.budgetTokens }
+        {
+          estimatedTokens: fit.estimatedTokens,
+          budgetTokens: fit.budgetTokens,
+          contextSize,
+          modelId,
+        }
       );
     }
 
@@ -456,18 +469,38 @@ class ModelManager {
   }
 
   /**
-   * The context a model will get, computed without starting the server.
+   * The context the model will actually run with, for sizing chunks against.
    *
-   * `serverManager.contextSize` is only set inside `_doStart`, so at planning
-   * time it is null on a cold server and stale after a model switch — and the
-   * pre-flight guard's fallback of 4096 would split a two-hour call into
-   * seventy-odd chunks. Reading the GGUF header costs microseconds and agrees
-   * with what `_doStart` will resolve, by construction.
+   * If the server is already up with this model, its context is a fact — read
+   * it rather than re-deriving it. Re-deriving from available memory would give
+   * a different answer every time (memory moves, and a resident model's weights
+   * are already excluded from the available figure), and planning against a
+   * number the server does not have means either far too many chunks or chunks
+   * that every one of them fails the pre-flight guard.
+   *
+   * Only when the server is cold, or running a different model, is an estimate
+   * needed — and then it is the same computation `_doStart` will perform.
    */
-  resolveModelContext(modelId) {
+  async resolveModelContext(modelId) {
     this.ensureInitialized();
     const modelInfo = this.findModelById(modelId);
     if (!modelInfo) throw new ModelNotFoundError(modelId);
+
+    const isGpuBackend = this.serverManager.activeBackend
+      ? this.serverManager.activeBackend !== "cpu"
+      : process.platform === "darwin";
+
+    if (
+      this.serverManager.ready &&
+      this.currentServerModelId === modelId &&
+      this.serverManager.contextSize
+    ) {
+      return {
+        contextSize: this.serverManager.contextSize,
+        isGpuBackend,
+        source: "live-server",
+      };
+    }
 
     const modelPath = path.join(this.modelsDir, modelInfo.model.fileName);
     let modelFileBytes = 0;
@@ -477,19 +510,15 @@ class ModelManager {
       modelFileBytes = 0;
     }
 
+    const available = await availableMemBytes();
     const resolved = resolveContextSize({
       gguf: readGgufMetadata(modelPath),
       totalMemBytes: os.totalmem(),
+      availableMemBytes: available.bytes,
       modelFileBytes,
     });
 
-    return {
-      contextSize: resolved.contextSize,
-      isGpuBackend: this.serverManager.activeBackend
-        ? this.serverManager.activeBackend !== "cpu"
-        : process.platform === "darwin",
-      source: resolved.source,
-    };
+    return { contextSize: resolved.contextSize, isGpuBackend, source: resolved.source };
   }
 
   async stopServer() {
