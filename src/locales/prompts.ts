@@ -1,13 +1,13 @@
-import dePrompts from "./de/prompts.json";
-import enPrompts from "./en/prompts.json";
-import esPrompts from "./es/prompts.json";
-import frPrompts from "./fr/prompts.json";
-import itPrompts from "./it/prompts.json";
-import jaPrompts from "./ja/prompts.json";
-import ptPrompts from "./pt/prompts.json";
-import ruPrompts from "./ru/prompts.json";
-import zhCNPrompts from "./zh-CN/prompts.json";
-import zhTWPrompts from "./zh-TW/prompts.json";
+import dePrompts from "./de/prompts.json" with { type: "json" };
+import enPrompts from "./en/prompts.json" with { type: "json" };
+import esPrompts from "./es/prompts.json" with { type: "json" };
+import frPrompts from "./fr/prompts.json" with { type: "json" };
+import itPrompts from "./it/prompts.json" with { type: "json" };
+import jaPrompts from "./ja/prompts.json" with { type: "json" };
+import ptPrompts from "./pt/prompts.json" with { type: "json" };
+import ruPrompts from "./ru/prompts.json" with { type: "json" };
+import zhCNPrompts from "./zh-CN/prompts.json" with { type: "json" };
+import zhTWPrompts from "./zh-TW/prompts.json" with { type: "json" };
 
 export interface PromptBundle {
   cleanupPrompt: string;

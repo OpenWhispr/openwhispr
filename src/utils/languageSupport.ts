@@ -1,4 +1,4 @@
-import registry from "../config/languageRegistry.json";
+import registry from "../config/languageRegistry.json" with { type: "json" };
 
 function buildLanguageSet(key: "whisper" | "assemblyai"): Set<string> {
   const set = new Set<string>();
