@@ -4571,14 +4571,15 @@ class IPCHandlers {
             }
             const { text: generated, finishReason } = result;
 
-            if (
-              config?.requireCompleteOutput &&
-              ["length", "max-tokens", "max_tokens"].includes(finishReason)
-            ) {
+            // Normalize once so the selection-edit guard and the renderer's
+            // success log cannot disagree about what counts as truncated.
+            const truncated = ["length", "max-tokens", "max_tokens"].includes(finishReason);
+
+            if (config?.requireCompleteOutput && truncated) {
               throw new Error("Model output was truncated before the selection edit completed");
             }
 
-            return { success: true, text: (generated || "").trim() };
+            return { success: true, text: (generated || "").trim(), finishReason, truncated };
           } finally {
             if (controller) {
               sender.removeListener("destroyed", cancelSenderRequests);
@@ -4968,7 +4969,7 @@ class IPCHandlers {
           if (outputText === null) {
             throw new Error(describeMissingAnthropicText(data));
           }
-          return { success: true, text: outputText };
+          return { success: true, text: outputText, stopReason: data.stop_reason };
         } catch (error) {
           debugLogger.error("Anthropic reasoning error:", error);
           return { success: false, error: error.message };
