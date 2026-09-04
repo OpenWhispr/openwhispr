@@ -11,7 +11,8 @@ import { DownloadProgressBar } from "./ui/DownloadProgressBar";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import { ConfirmDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
-import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
+import { useModelDownload } from "../hooks/useModelDownload";
+import { useWhisperGpuDownload } from "../hooks/useWhisperGpuDownload";
 import {
   getTranscriptionProviders,
   getStreamingTranscriptionProviders,
@@ -397,17 +398,20 @@ export default function TranscriptionModelPicker({
   const [internalLocalProvider, setInternalLocalProvider] = useState(selectedLocalProvider);
   const hasLoadedRef = useRef(false);
   const hasLoadedParakeetRef = useRef(false);
-  const [gpuBackend, setGpuBackend] = useState<"cuda" | "vulkan" | null>(null);
-  const [gpuDownloaded, setGpuDownloaded] = useState(false);
-  const [gpuDownloading, setGpuDownloading] = useState(false);
-  const [gpuProgress, setGpuProgress] = useState<DownloadProgress>({
-    downloadedBytes: 0,
-    totalBytes: 0,
-    percentage: 0,
-  });
+  const {
+    gpuBackend,
+    gpuDownloaded,
+    gpuDownloading,
+    gpuProgress,
+    gpuFailed,
+    setGpuDownloaded,
+    setGpuFailed,
+    startGpuDownload,
+    finishGpuDownload,
+  } = useWhisperGpuDownload(
+    effectiveLocal && internalLocalProvider === "whisper" && getCachedPlatform() !== "darwin"
+  );
   const [gpuDismissed, setGpuDismissed] = useState(false);
-  // The pack fell back to CPU on this machine (persisted by main until retried)
-  const [gpuFailed, setGpuFailed] = useState(false);
   // A server reload with the new backend is in flight (Vulkan cold starts are slow)
   const [gpuActivating, setGpuActivating] = useState(false);
   // Live truth from the running server; "active" is never inferred from a download
@@ -661,44 +665,6 @@ export default function TranscriptionModelPicker({
     return () => window.removeEventListener("openwhispr-models-cleared", handleModelsCleared);
   }, [loadLocalModels, loadParakeetModels]);
 
-  useEffect(() => {
-    if (!effectiveLocal || internalLocalProvider !== "whisper") return;
-    if (getCachedPlatform() === "darwin") return;
-    const detect = async () => {
-      try {
-        const [cuda, vulkan] = await Promise.all([
-          window.electronAPI?.getCudaWhisperStatus?.(),
-          window.electronAPI?.getVulkanWhisperStatus?.(),
-        ]);
-        // Cards below the CUDA build's kernel floor (e.g. Maxwell) crash at the
-        // first kernel launch, so they get the Vulkan pack like AMD/Intel GPUs.
-        const cudaEligible = !!cuda?.gpuInfo.hasNvidiaGpu && !!cuda.gpuInfo.cudaSupported;
-        // Prefer the pack that's already installed: a working Vulkan setup must
-        // not be re-prompted to download the CUDA pack (matches the resolver,
-        // which only prefers CUDA when it is actually downloaded).
-        if (cudaEligible && (cuda.downloaded || !vulkan?.downloaded)) {
-          setGpuBackend("cuda");
-          setGpuDownloaded(cuda.downloaded);
-          setGpuFailed(!!cuda.gpuFailed);
-        } else if (vulkan?.vulkan.available) {
-          setGpuBackend("vulkan");
-          setGpuDownloaded(vulkan.downloaded);
-          setGpuFailed(!!vulkan.gpuFailed);
-        }
-      } catch {}
-    };
-    detect();
-  }, [effectiveLocal, internalLocalProvider]);
-
-  useEffect(() => {
-    if (!gpuDownloading || !gpuBackend) return;
-    const subscribe =
-      gpuBackend === "cuda"
-        ? window.electronAPI?.onCudaDownloadProgress
-        : window.electronAPI?.onVulkanWhisperDownloadProgress;
-    return subscribe?.((data) => setGpuProgress(data));
-  }, [gpuDownloading, gpuBackend]);
-
   // Live server state: "GPU acceleration active" reflects what the server is
   // actually running on, not just that a pack is on disk (a crashed GPU server
   // silently falls back to CPU). Faster poll while an activation is in flight.
@@ -739,10 +705,10 @@ export default function TranscriptionModelPicker({
       disposeCuda?.();
       disposeVulkan?.();
     };
-  }, []);
+  }, [setGpuFailed]);
 
   const handleGpuDownload = async () => {
-    setGpuDownloading(true);
+    startGpuDownload();
     try {
       const result =
         gpuBackend === "cuda"
@@ -756,7 +722,7 @@ export default function TranscriptionModelPicker({
         setGpuActivating(!!result.willRestart);
       }
     } finally {
-      setGpuDownloading(false);
+      finishGpuDownload();
     }
   };
 
@@ -782,7 +748,7 @@ export default function TranscriptionModelPicker({
   const handleGpuCancel = async () => {
     if (gpuBackend === "cuda") await window.electronAPI?.cancelCudaWhisperDownload?.();
     else await window.electronAPI?.cancelVulkanWhisperDownload?.();
-    setGpuDownloading(false);
+    finishGpuDownload();
   };
 
   const {
