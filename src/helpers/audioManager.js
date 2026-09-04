@@ -4,6 +4,7 @@ import logger from "../utils/logger";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
+import { convertToWav, needsWavConversion } from "../utils/audioContainer";
 import {
   applyChineseScript,
   mergeWhisperPrompt,
@@ -3381,9 +3382,36 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return { success: true, text, rawText: proxyText, source, timings };
       }
 
+      // Some Custom endpoints decode the upload and reject anything that isn't
+      // WAV/MP3/FLAC (Azure MAI-Transcribe via OpenRouter, for one), which
+      // Chromium's WebM/Opus recordings always are. Re-encode for those rather
+      // than failing the dictation; a conversion failure falls through to the
+      // original bytes so this can only widen what works.
+      let uploadAudio = optimizedAudio;
+      if (needsWavConversion(provider, optimizedAudio.type)) {
+        try {
+          uploadAudio = await convertToWav(optimizedAudio);
+          logger.debug(
+            "Re-encoded recording to WAV for custom endpoint",
+            {
+              fromType: optimizedAudio.type,
+              fromSize: optimizedAudio.size,
+              toSize: uploadAudio.size,
+            },
+            "transcription"
+          );
+        } catch (conversionError) {
+          logger.warn(
+            "WAV re-encode failed; uploading original container",
+            { error: conversionError?.message, type: optimizedAudio.type },
+            "transcription"
+          );
+        }
+      }
+
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
-      const mimeType = optimizedAudio.type || "audio/webm";
+      const mimeType = uploadAudio.type || "audio/webm";
       const extension = mimeType.includes("webm")
         ? "webm"
         : mimeType.includes("ogg")
@@ -3401,13 +3429,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         {
           mimeType,
           extension,
-          optimizedSize: optimizedAudio.size,
+          optimizedSize: uploadAudio.size,
           hasApiKey: !!apiKey,
         },
         "transcription"
       );
 
-      formData.append("file", optimizedAudio, `audio.${extension}`);
+      formData.append("file", uploadAudio, `audio.${extension}`);
       formData.append("model", model);
 
       if (language) {
