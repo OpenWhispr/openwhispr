@@ -1214,6 +1214,7 @@ async function startApp() {
   const parakeetSettings = {
     localTranscriptionProvider: process.env.LOCAL_TRANSCRIPTION_PROVIDER || "",
     parakeetModel: process.env.PARAKEET_MODEL,
+    language: process.env.DICTATION_LANGUAGE,
   };
   parakeetManager.initializeAtStartup(parakeetSettings).catch((err) => {
     debugLogger.debug("Parakeet startup init error (non-fatal)", { error: err.message });

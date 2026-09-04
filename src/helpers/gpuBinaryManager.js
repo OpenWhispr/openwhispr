@@ -36,10 +36,17 @@ function sha256File(filePath) {
   });
 }
 
+function getMissingRequiredLibraries(directory, assetConfig) {
+  return (assetConfig.requiredLibraries || []).filter(
+    (library) => !fs.existsSync(path.join(directory, library))
+  );
+}
+
 // Shared download/install pipeline for GPU server binaries fetched from GitHub
 // releases (whisper CUDA, whisper Vulkan, llama Vulkan). Subclasses configure
 // the release URL, a dirName, and per-`${platform}-${arch}` assets (exact
-// assetName or assetPattern regex; optional libPattern for companion libs).
+// assetName or assetPattern regex; optional libPattern for companion libs and
+// requiredLibraries for companions that must be present in a complete pack).
 // Archives are sha256-verified against expectedDigests, falling back to the
 // digest the GitHub API reports.
 //
@@ -77,7 +84,8 @@ class GpuBinaryManager {
     if (!assetConfig) return null;
     const binaryPath = path.join(this.binDir, assetConfig.outputName);
     try {
-      if (fs.existsSync(binaryPath)) return binaryPath;
+      if (!fs.existsSync(binaryPath)) return null;
+      if (getMissingRequiredLibraries(this.binDir, assetConfig).length === 0) return binaryPath;
     } catch {}
     return null;
   }
@@ -205,6 +213,13 @@ class GpuBinaryManager {
           await fsPromises.copyFile(lib, dest);
           if (process.platform !== "win32") await fsPromises.chmod(dest, 0o755);
         }
+      }
+
+      const missingLibraries = getMissingRequiredLibraries(stagingDir, assetConfig);
+      if (missingLibraries.length > 0) {
+        throw new Error(
+          `${this.config.name} archive is missing required libraries: ${missingLibraries.join(", ")}`
+        );
       }
 
       await fsPromises.rm(this.binDir, { recursive: true, force: true });

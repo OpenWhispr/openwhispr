@@ -609,6 +609,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           cortiEnvironment: s.cortiEnvironment,
           cortiTenant: s.cortiTenant,
           parakeetModel: s.parakeetModel,
+          cohereModel: s.cohereModel,
           whisperModel: s.whisperModel,
           preferredLanguage: s.preferredLanguage,
           transcriptionMode: s.transcriptionMode,

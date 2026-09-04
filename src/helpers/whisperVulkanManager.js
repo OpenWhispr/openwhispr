@@ -1,10 +1,16 @@
 const GpuBinaryManager = require("./gpuBinaryManager");
+const { WHISPER_CPP_TAG, WINDOWS_MSVC_RUNTIME_LIBRARIES } = require("./whisperCppRelease");
 
 // Pinned so untested future binaries never auto-ship; bump together with the digests below
-const WHISPER_CPP_TAG = process.env.WHISPER_CPP_VERSION || "0.0.9";
-
 // sha256 per release tag; tags without an entry fall back to the API-reported digest
 const EXPECTED_DIGESTS = {
+  // Adds app-local MSVC runtime DLLs to the Windows archive
+  "0.0.10": {
+    "whisper-server-win32-x64-vulkan.zip":
+      "327b76fb88dd6a71fe981a68d8fcf52c61b37577b5e2b71ac1849e653a4a7766",
+    "whisper-server-linux-x64-vulkan.zip":
+      "7bcd8b226cae9b0384613ce315fd8afab533fbdc5c3731343a09de8693eca203",
+  },
   // Same source as 0.0.8, rebuilt alongside the Pascal CUDA kernels
   "0.0.9": {
     "whisper-server-win32-x64-vulkan.zip":
@@ -22,7 +28,7 @@ const EXPECTED_DIGESTS = {
 
 const BIN_SUBDIR = "whisper-vulkan";
 
-// Statically linked — no companion libs to copy
+// Linux is statically linked; Windows still needs the app-local MSVC runtime
 class WhisperVulkanManager extends GpuBinaryManager {
   constructor() {
     super({
@@ -35,6 +41,8 @@ class WhisperVulkanManager extends GpuBinaryManager {
           assetName: "whisper-server-win32-x64-vulkan.zip",
           binaryName: "whisper-server-win32-x64-vulkan.exe",
           outputName: "whisper-server-win32-x64-vulkan.exe",
+          libPattern: /\.dll$/i,
+          requiredLibraries: WINDOWS_MSVC_RUNTIME_LIBRARIES,
         },
         "linux-x64": {
           assetName: "whisper-server-linux-x64-vulkan.zip",

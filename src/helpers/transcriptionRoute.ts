@@ -29,6 +29,14 @@ import {
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
+// Gemini's Interactions API takes inline base64 audio inside a 20 MB total
+// request cap; base64 inflates 4/3, so cap the raw audio lower.
+const GEMINI_FILE_SIZE_LIMIT = 14 * 1024 * 1024;
+
+export function byokFileSizeLimit(provider: string): number {
+  return provider === "gemini" ? GEMINI_FILE_SIZE_LIMIT : BYOK_FILE_SIZE_LIMIT;
+}
+
 const CUSTOM_ENDPOINT_INVALID_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.customEndpointInvalid";
 
@@ -65,7 +73,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti";
+      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -124,13 +132,15 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
       (provider === "openai" && (trimmed.startsWith("gpt-4o") || trimmed === "whisper-1")) ||
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
-      (provider === "corti" && trimmed.startsWith("corti-"));
+      (provider === "corti" && trimmed.startsWith("corti-")) ||
+      (provider === "gemini" && trimmed.startsWith("gemini-"));
     if (matchesProvider) return trimmed;
   }
   if (provider === "groq") return "whisper-large-v3-turbo";
   if (provider === "xai") return "grok-stt";
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
+  if (provider === "gemini") return "gemini-3.5-transcribe";
   return "gpt-4o-mini-transcribe";
 }
 
@@ -240,6 +250,15 @@ export function resolveTranscriptionRoute({
       language:
         provider === "xai" && language && !XAI_STT_LANGUAGES.has(language) ? undefined : language,
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+    };
+  }
+  if (provider === "gemini") {
+    return {
+      transport: "proxied",
+      provider,
+      model,
+      language,
+      sizeCapBytes: GEMINI_FILE_SIZE_LIMIT,
     };
   }
   if (provider === "corti") {

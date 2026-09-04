@@ -780,6 +780,35 @@
         "ssoHelp": "使用你的 AWS CLI SSO 配置。请确保已运行 'aws sso login'。",
         "keysHelp": "输入你的 AWS IAM 访问密钥。"
       },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "AWS 临时访问权限已过期。",
+          "ssoExpired": "AWS SSO 会话已过期。",
+          "credentialsRejected": "AWS 拒绝了这些凭证。请检查访问密钥 ID、密钥和会话令牌。",
+          "accessDenied": "AWS Bedrock 拒绝了此请求。请让 AWS 管理员授予在区域 {{region}} 中调用所选模型的权限。",
+          "modelNotFound": "AWS Bedrock 在区域 {{region}} 中找不到所选模型。请检查模型 ID 以及该模型是否在此区域可用。",
+          "configurationRejected": "AWS Bedrock 拒绝了区域 {{region}} 的模型配置。请检查模型 ID、推理配置文件和区域。",
+          "notConfigured": "AWS Bedrock 配置不正确。请检查区域和 AWS 凭证。",
+          "serviceUnavailable": "由于需求过高，AWS Bedrock 暂时不可用。这是 AWS 服务问题，并非 OpenWhispr 中断。请几分钟后重试。",
+          "throttled": "由于收到的请求过多，AWS Bedrock 正在暂时限制请求。请稍候再试。如果问题持续，请让 AWS 管理员检查 Bedrock 使用量和配额。",
+          "timeout": "AWS Bedrock 未及时响应。请重试。如果问题持续，请检查互联网连接和 AWS Bedrock 服务状态。",
+          "network": "无法连接到 AWS Bedrock。请检查互联网连接并重试。",
+          "unknown": "AWS Bedrock 错误：{{error}}",
+          "actions": {
+            "refreshManagedAccess": "请退出并重新登录以刷新公司访问权限，然后重试。",
+            "reauthenticate": "请在终端中运行以下命令以重新进行身份验证："
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "技术详情",
+        "httpStatus": "HTTP 状态",
+        "awsException": "AWS 异常",
+        "awsRequestId": "AWS 请求 ID",
+        "underlyingError": "底层错误",
+        "copy": "复制技术详情",
+        "copyCommand": "复制恢复命令"
+      },
       "azure": {
         "endpointHelp": "你的 Azure OpenAI 资源端点（例如 https://myresource.openai.azure.com）。",
         "deploymentHelp": "Azure OpenAI 中的模型部署名称。"
@@ -2461,6 +2490,9 @@
     "learnMore": "了解更多",
     "noneAvailable": "没有可用的模型",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "最准确的本地语音识别(平均 WER 5.42%,支持 14 种语言)。不支持自动语言检测"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）",
         "parakeet_unified_en_0_6b": "仅英语 ASR，最先进的准确度（平均 WER 5.91%）",
@@ -2482,6 +2514,7 @@
         "groq_whisper_large_v3_turbo": "216 倍实时速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
         "mistral_voxtral_mini_latest": "快速多语言转录",
+        "gemini_3_5_transcribe": "Google Gemini 语音转文字",
         "corti_transcribe": "临床级医疗转录",
         "xai_grok_stt": "xAI 高精度语音识别",
         "tinfoil_voxtral": "可验证的私密转录"
@@ -2885,8 +2918,8 @@
       "largeFileNote": "大文件将被分割并平行转录。",
       "chunkProgress": "正在转录第 {{completed}} 部分，共 {{total}} 部分...",
       "paidPlanRequired": "超过 25 MB 的文件需要付费计划才能使用云端转录。大文件通过 OpenWhispr Cloud 处理，确保可靠、高质量的结果。",
-      "byokTooLarge": "第三方 API 密钥仅支持 25 MB 以内的文件。",
-      "byokTooLargeDetail": "超过 25 MB 的文件由 OpenWhispr Cloud 负责分割、并行处理和重组——无需依赖第三方服务限制，即可获得可靠的结果。",
+      "byokTooLarge": "第三方 API 密钥仅支持 {{size}} MB 以内的文件。",
+      "byokTooLargeDetail": "超过 {{size}} MB 的文件由 OpenWhispr Cloud 负责分割、并行处理和重组——无需依赖第三方服务限制，即可获得可靠的结果。",
       "byokTooLargeNeedsAccount": "创建账户并升级到付费计划，即可使用 OpenWhispr Cloud 转录更大的文件。",
       "byokTooLargeNeedsUpgrade": "升级到付费计划，即可使用 OpenWhispr Cloud 转录更大的文件。",
       "switchToCloudForLargeFiles": "切换到 OpenWhispr Cloud 来转录此文件。",
@@ -2936,6 +2969,7 @@
       "back": "返回",
       "restrictedByOrg": "会议转录已被您的组织限制。",
       "autoEnded": "会议结束后，录音已自动停止。",
+      "restartFailed": "无法重新开始会议录音。",
       "systemAudioSilent": {
         "title": "尚未检测到会议音频",
         "description": "到目前为止，只有您的麦克风采集到声音。正在进行视频通话？请检查会议音频是否正在此电脑上播放且未被静音。正在进行现场录音？您可以忽略此提示——您的麦克风会采集房间内的声音。"
@@ -3243,8 +3277,10 @@
     "active": "GPU 加速已启用",
     "ready": "GPU 加速已就绪",
     "activating": "正在激活 GPU...",
-    "activationFailed": "无法激活 GPU",
-    "retry": "重试",
+    "activationFailed": "GPU 加速不可用",
+    "activationFailedDescription": "OpenWhispr 已切换为 CPU 转录。",
+    "reasoningActivationFailedDescription": "OpenWhispr 已切换为 CPU 处理。",
+    "retryActivation": "重试 GPU 加速",
     "remove": "移除",
     "dismiss": "暂不启用",
     "cancel": "取消"
@@ -3267,7 +3303,8 @@
       },
       "gpuFallback": {
         "title": "GPU 加速不可用",
-        "description": "转录正在使用 CPU。你可以在设置中关闭 GPU 加速。"
+        "description": "OpenWhispr 已切换为 CPU 转录。",
+        "retry": "重试 GPU"
       },
       "gpuPackMigration": {
         "title": "需要重新下载 GPU 加速包",
@@ -3841,13 +3878,13 @@
     "start": "开始记录",
     "join": "加入并转录",
     "autoEnd": {
-      "title": "会议可能已结束",
+      "title": "会议录音已结束",
       "body": {
-        "micReleased": "没有其他应用在使用麦克风。录音将在 {{seconds}} 秒后停止。",
-        "silence": "未检测到音频。录音将在 {{seconds}} 秒后停止。",
-        "processExit": "会议应用已关闭。录音将在 {{seconds}} 秒后停止。"
+        "micReleased": "没有其他应用在使用麦克风，因此录音已自动停止。请在 {{seconds}} 秒内重新开始录音。",
+        "silence": "未检测到音频，因此录音已自动停止。请在 {{seconds}} 秒内重新开始录音。",
+        "processExit": "会议应用已关闭，因此录音已自动停止。请在 {{seconds}} 秒内重新开始录音。"
       },
-      "keep": "继续录音"
+      "restart": "重新开始录音"
     }
   }
 }

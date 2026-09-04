@@ -5,7 +5,7 @@ import type { OrgPolicy } from "./policy";
 import type { ManagedEnterpriseConfig } from "./enterpriseIdentity";
 import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./calendar";
 
-export type LocalTranscriptionProvider = "whisper" | "nvidia";
+export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 
 export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcribed";
 
@@ -100,6 +100,18 @@ export type MeetingNotificationData =
 export interface MeetingAutoEndRequest {
   sessionId: string;
   reason?: MeetingAutoEndReason;
+}
+
+export type MeetingAutoEndAction = "restart" | "dismiss";
+
+export interface MeetingAutoEndRestartRequest {
+  sessionId: string;
+}
+
+export interface MeetingAutoEndLifecycleResult {
+  success: boolean;
+  reason?: "invalid-session" | "invalid-action" | "stale-session";
+  error?: string;
 }
 
 /**
@@ -924,7 +936,7 @@ declare global {
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
         }
-      ) => Promise<void>;
+      ) => Promise<{ success: true; pasted: boolean }>;
       captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
@@ -981,10 +993,41 @@ declare global {
       onToggleTranslation?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
-      onPrepareDictation?: (callback: () => void) => () => void;
+      onPrepareDictation?: (
+        callback: (options?: { inputKind?: "dictation" | "assistant" | "translation" }) => void
+      ) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
+      onCancelDictation?: (callback: () => void) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
-      dictationLifecycleStateChanged: (state: "idle" | "recording" | "processing") => void;
+      dictationLifecycleStateChanged: (
+        state: "idle" | "preparing" | "recording" | "processing",
+        inputKind?: "dictation" | "assistant" | "translation"
+      ) => void;
+      dictationAudioLevelChanged?: (level: number) => void;
+      toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
+      cancelAgentPanelDictation?: () => Promise<{ success: boolean }>;
+      getAgentDictationPillState?: () => Promise<{
+        lifecycle: "idle" | "preparing" | "recording" | "processing";
+        interactive: boolean;
+        horizontalDirection: "left" | "right";
+      }>;
+      resizeAgentDictationPillToContent?: (surfaceHeight: number | null) => Promise<{
+        success: boolean;
+        changed?: boolean;
+        bounds?: { x: number; y: number; width: number; height: number };
+        message?: string;
+      }>;
+      setAgentDictationPillInteractivity?: (interactive: boolean) => Promise<{ success: boolean }>;
+      onAgentDictationPillStateChanged?: (
+        callback: (state: {
+          lifecycle: "idle" | "preparing" | "recording" | "processing";
+          interactive: boolean;
+          horizontalDirection: "left" | "right";
+        }) => void
+      ) => () => void;
+      onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
+      showAgentDictationFinalTranscript?: (text: string) => void;
+      onAgentDictationPillFinalTranscript?: (callback: (text: string) => void) => () => void;
 
       // STT config
       getSttConfig?: () => Promise<
@@ -1096,6 +1139,7 @@ declare global {
           cortiEnvironment?: string;
           cortiTenant?: string;
           parakeetModel: string;
+          cohereModel: string;
           whisperModel: string;
           preferredLanguage?: string;
           transcriptionMode?: InferenceMode;
@@ -1340,7 +1384,7 @@ declare global {
       transcribeAudioFile: (
         filePath: string,
         options?: {
-          provider?: "whisper" | "nvidia";
+          provider?: LocalTranscriptionProvider;
           model?: string;
           language?: string;
           requestId?: string;
@@ -1405,6 +1449,7 @@ declare global {
         useLocalWhisper: boolean;
         localTranscriptionProvider: LocalTranscriptionProvider;
         model?: string;
+        language?: string;
         useCleanupModel: boolean;
         cleanupMode: InferenceMode;
         cleanupModel?: string;
@@ -1499,7 +1544,7 @@ declare global {
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
         audioBlob: ArrayBuffer,
-        options?: { model?: string }
+        options?: { model?: string; language?: string }
       ) => Promise<ParakeetTranscriptionResult>;
       checkParakeetInstallation: () => Promise<ParakeetCheckResult>;
       downloadParakeetModel: (modelName: string) => Promise<ParakeetModelResult>;
@@ -1580,7 +1625,24 @@ declare global {
         modelId: string,
         agentName: string | null,
         config: any
-      ) => Promise<{ success: boolean; text?: string; error?: string; retryable?: boolean }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
+        action?: string;
+        actionKey?: string;
+        copyCommand?: string;
+        retryable?: boolean;
+        technicalDetails?: {
+          status?: number;
+          exceptionType?: string;
+          requestId?: string;
+          underlyingError?: string;
+        };
+      }>;
+      cancelEnterpriseReasoning?: () => void;
       enterpriseStreamStart?: (payload: {
         streamId: string;
         provider: string;
@@ -1754,6 +1816,12 @@ declare global {
       // Gemini API key management
       getGeminiKey: () => Promise<string | null>;
       saveGeminiKey: (key: string) => Promise<void>;
+      proxyGeminiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<ProxyTranscriptionResult>;
 
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
@@ -1846,7 +1914,21 @@ declare global {
       testEnterpriseConnection?: (
         provider: string,
         config: Record<string, unknown>
-      ) => Promise<{ success: boolean; error?: string; action?: string; copyCommand?: string }>;
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        messageKey?: string;
+        messageParams?: Record<string, string | number>;
+        action?: string;
+        actionKey?: string;
+        copyCommand?: string;
+        technicalDetails?: {
+          status?: number;
+          exceptionType?: string;
+          requestId?: string;
+          underlyingError?: string;
+        };
+      }>;
       getManagedEnterpriseConfig?: (
         accountId: string,
         workspaceId: string,
@@ -2576,6 +2658,7 @@ declare global {
       onMeetingSystemAudioSilent?: (
         callback: (data: { systemAudioStrategy: SystemAudioStrategy }) => void
       ) => () => void;
+      onMeetingSystemAudioDegraded?: (callback: () => void) => () => void;
 
       // Speaker diarization
       downloadDiarizationModels?: () => Promise<{ success: boolean; error?: string }>;
@@ -2756,11 +2839,14 @@ declare global {
       onMeetingAutoEndRequested?: (
         callback: (request: MeetingAutoEndRequest) => void
       ) => () => void;
-      meetingAutoEndKeep?: (sessionId: string) => Promise<{
-        success: boolean;
-        reason?: "invalid-session" | "stale-session";
-        error?: string;
-      }>;
+      meetingAutoEndCompleted?: (sessionId: string) => Promise<MeetingAutoEndLifecycleResult>;
+      meetingAutoEndRespond?: (
+        sessionId: string,
+        action: MeetingAutoEndAction
+      ) => Promise<MeetingAutoEndLifecycleResult>;
+      onMeetingAutoEndRestartRequested?: (
+        callback: (request: MeetingAutoEndRestartRequest) => void
+      ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (

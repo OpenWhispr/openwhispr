@@ -11,6 +11,7 @@ import { useAssistantPanel } from "./hooks/useAssistantPanel";
 import { useLiveTranscriptPanel } from "./hooks/useLiveTranscriptPanel";
 import { useMainWindowSizeOwner } from "./hooks/useMainWindowSizeOwner";
 import { useMainProcessNotifications } from "./hooks/useMainProcessNotifications";
+import { useListeningEntrancePhase } from "./hooks/useListeningEntrancePhase";
 import { useWindowResizeCompensation } from "./hooks/useWindowResizeCompensation";
 import { useSettingsStore } from "./stores/settingsStore";
 import { isAgentAllowed } from "./stores/policyRules";
@@ -24,7 +25,6 @@ import { PillCommandMenu } from "./components/dictation/PillCommandMenu";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
-  getListeningEntranceTimeline,
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   resolveLiveTranscriptEntrancePresentation,
   resolveAssistantFooterPresentation,
@@ -38,6 +38,7 @@ import {
   isVoicePillActivationKey,
   shouldActivateVoicePill,
   shouldOfferLiveTranscriptReopen,
+  shouldSuppressPillForAssistantActions,
 } from "./helpers/voicePillPresentation";
 
 const formatPillHotkeyLabel = (value) =>
@@ -195,7 +196,16 @@ export default function App() {
     dismissDictationError,
     onDictationError: handleDictationError,
     getAssistantSelectionContext: assistant.getSelectionContext,
-    onShowTranscript: (text) => liveTranscriptApiRef.current?.showFinalText(text),
+    onShowTranscript: (text) => {
+      // While the Agent panel is open the main window's transcript is suppressed
+      // (openPanel refuses under assistantOpenRef); the companion hosts it instead.
+      if (assistantOpenRef.current) {
+        window.electronAPI?.showAgentDictationFinalTranscript?.(text);
+        return;
+      }
+      liveTranscriptApiRef.current?.showFinalText(text);
+    },
+    assistantOpenRef,
   });
   const isVisuallyProcessing = isProcessing || isPreparing || isStopping;
 
@@ -248,53 +258,37 @@ export default function App() {
     }
   }, [isAssistantVoice, isProcessing, assistantOpenRef, beginAssistantThinking]);
 
+  // While the Agent panel is open, plain dictation renders on the
+  // opposite-edge companion pill — neither its recording nor its processing
+  // may animate the footer pill here. Ownership returns at close INTENT
+  // (assistant.closing), not at fade completion: beginClose hides the
+  // companion immediately, so waiting for the fade would leave a running
+  // recording with no visual owner for the fade duration.
+  const voicePillOwnsActivity = !assistant.open || assistant.closing || isAssistantVoice;
+  const voicePillIsRecording = isRecording && voicePillOwnsActivity;
+  const voicePillIsProcessing = (isProcessing || isStopping) && voicePillOwnsActivity;
   const voiceActivity = resolveVoiceActivityPresentation({
-    isRecording,
+    isRecording: voicePillIsRecording,
     // Mic warm-up is an acknowledged press, not work on a transcript. Keeping
     // isPreparing out of the thinking state leaves the press on the pulsing
     // "processing" mic-state pill instead of lighting the glow at hotkey time.
-    isProcessing: isProcessing || isStopping,
+    isProcessing: voicePillIsProcessing,
     isAssistantVoice,
     assistantThinking: assistant.thinking || assistant.busy,
   });
-  const [listeningEntrancePhase, setListeningEntrancePhase] = useState("idle");
-  useLayoutEffect(() => {
-    if (!isRecording) {
-      setListeningEntrancePhase("idle");
-      return;
-    }
-
-    setListeningEntrancePhase("thinking");
-    const timeline = getListeningEntranceTimeline();
-    const expansionTimer = setTimeout(
-      () => setListeningEntrancePhase("expanding"),
-      timeline.expandAtMs
-    );
-    const settledTimer = setTimeout(
-      () => setListeningEntrancePhase("settled"),
-      timeline.settleAtMs
-    );
-    const waveformTimer = setTimeout(
-      () => setListeningEntrancePhase("waveform"),
-      timeline.waveformAtMs
-    );
-
-    return () => {
-      clearTimeout(expansionTimer);
-      clearTimeout(settledTimer);
-      clearTimeout(waveformTimer);
-    };
-  }, [isRecording]);
+  const listeningEntrancePhase = useListeningEntrancePhase(voicePillIsRecording);
   const listeningEntrance = resolveListeningEntrancePresentation({
-    isRecording,
+    isRecording: voicePillIsRecording,
     phase: listeningEntrancePhase,
   });
-  const isCompactPill = isRecording ? listeningEntrance.compactPill : voiceActivity.compactPill;
+  const isCompactPill = voicePillIsRecording
+    ? listeningEntrance.compactPill
+    : voiceActivity.compactPill;
   // The native window grows during the entrance's static thinking hold, not
   // when the pill starts its width transition: a setBounds landing mid
   // animation forces compositor work that visibly stutters the expansion, and
   // the growing pill can clip against the old bounds if the resize IPC lags.
-  const windowFitsCompactPill = isRecording || voiceActivity.compactPill;
+  const windowFitsCompactPill = voicePillIsRecording || voiceActivity.compactPill;
 
   const { dictationErrorPillHandoffActive } = useMainWindowSizeOwner({
     requestMainWindowSize,
@@ -352,6 +346,16 @@ export default function App() {
     });
     return () => unsubscribe?.();
   }, [cancelRecording]);
+
+  // The Agent companion pill's cancel button routes here: only this renderer
+  // owns the recording, so it decides what "cancel" means at arrival time.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onCancelDictation?.(() => {
+      if (isRecording || isPreparing) cancelRecording();
+      else if (isProcessing) cancelProcessing();
+    });
+    return () => unsubscribe?.();
+  }, [isRecording, isPreparing, isProcessing, cancelRecording, cancelProcessing]);
 
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {
@@ -535,7 +539,12 @@ export default function App() {
   // Keep one pill DOM node alive while final Agent actions own the footer. On
   // close it can fade and travel from the panel dock instead of mounting at
   // the resting dock halfway through the surface contraction.
-  const assistantActionsSuppressPill = assistant.open && !assistantFooter.pillVisible;
+  const assistantActionsSuppressPill = shouldSuppressPillForAssistantActions({
+    assistantOpen: assistant.open,
+    footerPillVisible: assistantFooter.pillVisible,
+    assistantClosing: assistant.closing,
+    hasLiveActivity: voicePillIsRecording || voicePillIsProcessing,
+  });
   const pillVisuallySuppressed = dictationErrorSuppressesPill || assistantActionsSuppressPill;
   const pillInteractionSuppressed = pillVisuallySuppressed || assistant.closing;
 
