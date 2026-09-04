@@ -23,6 +23,7 @@ import {
   type CloudProviderData,
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
+import { pickDefaultModelId } from "../../models/providerDefaultModel";
 import type { OnboardingStepId } from "./flow";
 import { forgetPendingLocalModel, rememberPendingLocalModel } from "./pendingLocalModels";
 import { isLocalStageDownloadActive } from "./localDownloadState";
@@ -286,8 +287,7 @@ export function ByokProviderStep({
   };
 
   const chooseProvider = (providerId: string) => {
-    const provider = providers.find((item) => item.id === providerId);
-    const fallbackModel = provider?.models[0]?.id ?? "";
+    const fallbackModel = pickDefaultModelId(providers.find((item) => item.id === providerId));
     setSelectedProvider(providerId);
     setSelectedModel(fallbackModel);
     setDraftApiKey(providerCredential(providerId, store).value);

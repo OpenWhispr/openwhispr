@@ -52,6 +52,8 @@ export interface CloudModelDefinition {
 export interface CloudProviderData {
   id: string;
   name: string;
+  /** Named default for providers whose list order isn't ours — see pickProviderDefaultModel. */
+  defaultModel?: string;
   models: CloudModelDefinition[];
 }
 
@@ -303,6 +305,10 @@ export const REASONING_PROVIDERS = buildReasoningProviders();
 
 export function getTinfoilModels(): CloudModelDefinition[] {
   return getTinfoilCloudProvider()?.models ?? [];
+}
+
+export function getCloudProviderDefaultModelId(providerId: string): string | undefined {
+  return modelData.cloudProviders.find((provider) => provider.id === providerId)?.defaultModel;
 }
 
 export function applyTinfoilModels(models: CloudModelDefinition[]): void {
