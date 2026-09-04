@@ -186,13 +186,19 @@ function convertToWav(inputPath, outputPath, options = {}) {
   });
 }
 
+let reencodeSequence = 0;
+
 // Buffer in, buffer out. convertToWav works on paths, but the retry and upload
 // paths hold recordings in memory, and every caller that bridged that gap was
 // writing the same temp-file dance by hand.
 async function convertBufferToWav(audioBuffer, options = {}) {
   const { getSafeTempDir } = require("./safeTempDir");
   const tempDir = getSafeTempDir();
-  const stamp = `${Date.now()}-${process.pid}`;
+  // process.pid is constant within a process and Date.now() only has
+  // millisecond resolution, so two concurrent conversions -- a user retrying
+  // several history entries at once -- would otherwise share both temp paths
+  // and race each other's output.
+  const stamp = `${Date.now()}-${process.pid}-${++reencodeSequence}`;
   const inputPath = path.join(tempDir, `ow-reencode-${stamp}.input`);
   const outputPath = path.join(tempDir, `ow-reencode-${stamp}.wav`);
 
