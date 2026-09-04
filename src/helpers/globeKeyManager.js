@@ -27,16 +27,20 @@ class GlobeKeyManager extends EventEmitter {
     this._restartCount = 0;
     this._restartResetTimer = null;
     this.preferenceStatePath = preferenceStatePath;
-    this.config = { mouseButtons: [], suppressGlobeAction: false };
+    this.config = { mouseButtons: [], suppressGlobeAction: false, watchKeys: [] };
   }
 
   // Replaces the listener's whole state, so every call has to pass all of it.
-  setConfiguration({ mouseButtons = [], suppressGlobeAction = false } = {}) {
+  // `watchKeys` are plain keys the listener's event tap owns for Hold slots
+  // (a Carbon hot key would hide their release); it reports KEY_DOWN/KEY_UP
+  // for them and swallows them.
+  setConfiguration({ mouseButtons = [], suppressGlobeAction = false, watchKeys = [] } = {}) {
     const next = {
       mouseButtons: [
         ...new Set(mouseButtons.filter((button) => /^MouseButton[45]$/i.test(button))),
       ].sort(),
       suppressGlobeAction: Boolean(suppressGlobeAction),
+      watchKeys: [...new Set(watchKeys.filter((key) => typeof key === "string" && key))].sort(),
     };
 
     if (JSON.stringify(next) === JSON.stringify(this.config)) {
@@ -82,6 +86,9 @@ class GlobeKeyManager extends EventEmitter {
     }
     if (this.config.suppressGlobeAction) {
       args.push("--suppress-system-globe-action");
+    }
+    if (this.config.watchKeys.length > 0) {
+      args.push("--watch-keys", this.config.watchKeys.join(","));
     }
     return args;
   }
@@ -194,6 +201,16 @@ class GlobeKeyManager extends EventEmitter {
             const button = line.replace("MOUSE_BUTTON_UP:", "").trim();
             if (button) {
               this.emit("mouse-button-up", button);
+            }
+          } else if (line.startsWith("KEY_DOWN:")) {
+            const key = line.replace("KEY_DOWN:", "").trim();
+            if (key) {
+              this.emit("key-down", key);
+            }
+          } else if (line.startsWith("KEY_UP:")) {
+            const key = line.replace("KEY_UP:", "").trim();
+            if (key) {
+              this.emit("key-up", key);
             }
           }
         });

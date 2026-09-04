@@ -60,6 +60,8 @@ export interface HotkeySettings {
   voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
   activationMode: "tap" | "push";
+  voiceAgentActivationMode: "tap" | "push";
+  translationActivationMode: "tap" | "push";
 }
 
 export interface OnboardingSettings {
@@ -353,6 +355,10 @@ function useSettingsInternal() {
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
+    voiceAgentActivationMode: store.voiceAgentActivationMode,
+    setVoiceAgentActivationMode: store.setVoiceAgentActivationMode,
+    translationActivationMode: store.translationActivationMode,
+    setTranslationActivationMode: store.setTranslationActivationMode,
     notificationsEnabled: store.notificationsEnabled,
     setNotificationsEnabled: store.setNotificationsEnabled,
     notifyMeetingDetection: store.notifyMeetingDetection,

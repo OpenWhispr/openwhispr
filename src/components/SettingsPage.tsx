@@ -239,6 +239,51 @@ function SectionHeader({
   );
 }
 
+// One "Activation Mode" Tap/Hold row, shared by the dictation, voice agent and
+// translation hotkey sections. Each slot resolves its own Hold capability (a
+// DE-native backend only implements Hold for dictation).
+function ActivationModeRow({
+  slot,
+  hotkey,
+  value,
+  onChange,
+}: {
+  slot: "dictation" | "voiceAgent" | "translation";
+  hotkey: string;
+  value: "tap" | "push";
+  onChange: (mode: "tap" | "push") => void;
+}) {
+  const { t } = useTranslation();
+  const { supportsPushToTalk, pushToTalkUnavailableReason } = useHotkeyModeInfo(
+    "settings",
+    hotkey,
+    slot
+  );
+
+  const pushDisabledReason = !supportsPushToTalk
+    ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
+    : undefined;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground/80">
+          {t("settingsPage.general.hotkey.activationMode")}
+        </span>
+        <ActivationModeSelector
+          value={value}
+          onChange={onChange}
+          pushDisabledReason={pushDisabledReason}
+        />
+      </div>
+      {/* A greyed-out Hold with only a hover tooltip reads as broken; say why in place. */}
+      {pushDisabledReason && (
+        <p className="text-[11px] leading-snug text-muted-foreground/70">{pushDisabledReason}</p>
+      )}
+    </div>
+  );
+}
+
 interface GranolaImportPreview {
   total: number;
   newCount: number;
@@ -1079,6 +1124,10 @@ export default function SettingsPage({
     dictationKey,
     activationMode,
     setActivationMode,
+    voiceAgentActivationMode,
+    setVoiceAgentActivationMode,
+    translationActivationMode,
+    setTranslationActivationMode,
     microphoneSelectionMode,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
@@ -1463,13 +1512,10 @@ export default function SettingsPage({
     [dictationKey, meetingKey, voiceAgentKey, t]
   );
 
-  const {
-    isUsingNativeShortcut,
-    isUsingHyprland,
-    hyprlandConfigStatus,
-    supportsPushToTalk,
-    pushToTalkUnavailableReason,
-  } = useHotkeyModeInfo("settings", dictationKey);
+  const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus } = useHotkeyModeInfo(
+    "settings",
+    dictationKey
+  );
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -1601,9 +1647,11 @@ export default function SettingsPage({
         duration: 15000,
       });
       setActivationMode("tap");
+      setVoiceAgentActivationMode("tap");
+      setTranslationActivationMode("tap");
     });
     return () => cleanup?.();
-  }, [toast, t, setActivationMode]);
+  }, [toast, t, setActivationMode, setVoiceAgentActivationMode, setTranslationActivationMode]);
 
   useEffect(() => {
     if (updateError) {
@@ -3855,20 +3903,12 @@ EOF`,
 
                 {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
                   <SettingsPanelRow>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-muted-foreground/80">
-                        {t("settingsPage.general.hotkey.activationMode")}
-                      </span>
-                      <ActivationModeSelector
-                        value={activationMode}
-                        onChange={setActivationMode}
-                        pushDisabledReason={
-                          !supportsPushToTalk
-                            ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                            : undefined
-                        }
-                      />
-                    </div>
+                    <ActivationModeRow
+                      slot="dictation"
+                      hotkey={dictationKey}
+                      value={activationMode}
+                      onChange={setActivationMode}
+                    />
                     {getCachedPlatform() === "linux" && activationMode === "push" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
                     )}
@@ -3895,6 +3935,16 @@ EOF`,
                       maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                     />
                   </SettingsPanelRow>
+                  {voiceAgentKey && (!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
+                    <SettingsPanelRow>
+                      <ActivationModeRow
+                        slot="voiceAgent"
+                        hotkey={voiceAgentKey}
+                        value={voiceAgentActivationMode}
+                        onChange={setVoiceAgentActivationMode}
+                      />
+                    </SettingsPanelRow>
+                  )}
                 </SettingsPanel>
               </div>
             )}
@@ -3916,6 +3966,16 @@ EOF`,
                     maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
                 </SettingsPanelRow>
+                {translationKey && (!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
+                  <SettingsPanelRow>
+                    <ActivationModeRow
+                      slot="translation"
+                      hotkey={translationKey}
+                      value={translationActivationMode}
+                      onChange={setTranslationActivationMode}
+                    />
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 

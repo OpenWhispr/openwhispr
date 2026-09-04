@@ -124,7 +124,12 @@
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
       "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
       "trySuggestions": "Prova: {{suggestions}}",
-      "slotConflict": "Questa scorciatoia è già utilizzata per {{slot}}."
+      "slotConflict": "Questa scorciatoia è già utilizzata per {{slot}}.",
+      "holdUnsupportedOnHyprland": "Su Hyprland, Tieni premuto è disponibile solo per la scorciatoia di dettatura."
+    },
+    "portal": {
+      "voiceAgentHold": "Tieni premuto per parlare con l'assistente",
+      "translationHold": "Tieni premuto per dettare un testo da tradurre"
     }
   },
   "systemSettings": {
@@ -941,7 +946,8 @@
         "failedToRegister": "Registrazione scorciatoia non riuscita. Riprova."
       },
       "messages": {
-        "nowUsing": "{{hotkey}} impostata per la dettatura"
+        "nowUsing": "{{hotkey}} impostata per la dettatura",
+        "holdSwitchedToTap": "Tieni premuto non è disponibile per {{hotkey}} su questo dispositivo, quindi l'attivazione è passata a Tocca."
       }
     },
     "modelDownload": {

@@ -20,6 +20,10 @@ const DEFAULT_HOTKEY = "Control+Super";
 // Temporary slots like "cancel" stay on globalShortcut.
 const GNOME_NATIVE_SLOTS = new Set(["meeting", "voiceAgent", "translation"]);
 
+// Slots whose activation mode is configurable per slot. Dictation keeps the
+// legacy activationMode value; meeting and cancel are always tap-to-toggle.
+const SLOT_MODE_PUSH_SLOTS = new Set(["voiceAgent", "translation"]);
+
 // KDE registration failure reasons — reuse existing i18n keys
 const KDE_FAILURE_REASONS = {
   conflict: (hotkey) => i18nMain.t("hotkey.errors.alreadyRegistered", { hotkey }),
@@ -98,6 +102,93 @@ class HotkeyManager extends EventEmitter {
     this.useHyprland = false;
     this.kdeManager = null;
     this.useKDE = false;
+    // Per-slot activation modes for the slots that can Hold besides
+    // dictation (which keeps the legacy activationMode).
+    this.slotActivationModes = { voiceAgent: "tap", translation: "tap" };
+  }
+
+  getSlotActivationMode(slotName) {
+    if (slotName === "dictation") return this.activationMode === "push" ? "push" : "tap";
+    return this.slotActivationModes[slotName] === "push" ? "push" : "tap";
+  }
+
+  _slotWantsPushToTalk(slotName) {
+    return this.getSlotActivationMode(slotName) === "push";
+  }
+
+  // Switch a voiceAgent/translation slot between Tap and Hold. Verifies the
+  // slot's hotkey can Hold on this backend (fail closed with no hotkey), and
+  // on GNOME rebinds the slot through the matching mechanism — the portal for
+  // Hold, gsettings for Tap — rolling back to the previous binding if the
+  // portal refuses. Mirrors setActivationMode for dictation.
+  async setSlotActivationMode(slotName, mode, { notifyFailure = true } = {}) {
+    if (!SLOT_MODE_PUSH_SLOTS.has(slotName)) return false;
+    const nextMode = mode === "push" ? "push" : "tap";
+    const previousMode = this.getSlotActivationMode(slotName);
+    if (previousMode === nextMode) return true;
+
+    const hotkey = this.getSlotHotkey(slotName);
+    const callback = this.slots.get(slotName)?.callback;
+    if (nextMode === "push" && (!hotkey || !this.supportsPushToTalk(hotkey, slotName))) {
+      if (notifyFailure && hotkey) {
+        this.notifyHotkeyFailure(hotkey, {
+          error: this.getPushToTalkUnavailableReason(hotkey, slotName),
+        });
+      }
+      return false;
+    }
+
+    this.slotActivationModes[slotName] = nextMode;
+    // KGlobalAccel reports press and release for every action regardless of
+    // mode, so only GNOME binds a slot differently per mode — and macOS, where
+    // a plain key changes owner with the mode (Carbon hot key on Tap, the
+    // listener's event tap on Hold).
+    if (hotkey && callback && this.useGnome && this.gnomeManager) {
+      const result = await this.registerSlot(slotName, hotkey, callback);
+      if (!result.success) {
+        this.slotActivationModes[slotName] = previousMode;
+        await this.registerSlot(slotName, hotkey, callback);
+        if (notifyFailure) {
+          this.notifyHotkeyFailure(hotkey, { error: result.error });
+        }
+        return false;
+      }
+    } else if (this._macSlotNeedsReregister(slotName)) {
+      if (!this._reregisterSlotShortcuts(slotName)) {
+        this.slotActivationModes[slotName] = previousMode;
+        this._reregisterSlotShortcuts(slotName);
+        if (notifyFailure) {
+          this.notifyHotkeyFailure(hotkey, {
+            error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+          });
+        }
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // macOS only: a plain key on a Hold slot has no release source through
+  // globalShortcut (a Carbon hot key hides both edges from every monitor), so
+  // the listener's event tap owns it — as the low-level hooks do on Windows
+  // and Linux. Combos keep the hot key: modifier-up is their release source.
+  isMacListenerOwnedKey(hotkey, slotName = "dictation") {
+    return this._isMacPlainKey(hotkey) && this._slotWantsPushToTalk(slotName);
+  }
+
+  _macSlotNeedsReregister(slotName) {
+    return (
+      process.platform === "darwin" &&
+      this.getSlotHotkeys(slotName).some((hotkey) => this._isMacPlainKey(hotkey))
+    );
+  }
+
+  // Re-run a slot's registration under its current mode (the owner of each
+  // plain key follows the mode). True when the slot is empty or re-registered.
+  _reregisterSlotShortcuts(slotName) {
+    const slot = this.slots.get(slotName);
+    if (!slot?.hotkeys?.length || !slot.callback) return true;
+    return this.setupShortcuts(slot.hotkeys, slot.callback, slotName, { atomic: true }).success;
   }
 
   // Ensure a slot exists and return it (slots always use the list shape).
@@ -207,10 +298,13 @@ class HotkeyManager extends EventEmitter {
       );
     }
 
-    // On GNOME (X11 or Wayland), route named slots through native gsettings
+    // On GNOME (X11 or Wayland), route named slots through native gsettings —
+    // or, for a slot on Hold, through the GlobalShortcuts portal, the only
+    // GNOME source of press/release phases.
     if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
+      const pushToTalk = this._slotWantsPushToTalk(slotName);
       const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
-      if (!gnomeHotkey) {
+      if (!pushToTalk && !gnomeHotkey) {
         debugLogger.log(
           `[HotkeyManager] Could not convert hotkey "${hotkey}" to GNOME format for slot "${slotName}"`
         );
@@ -230,7 +324,15 @@ class HotkeyManager extends EventEmitter {
         this.gnomeManager.setTranslationCallback(callback);
       }
 
-      const success = await this.gnomeManager.registerKeybinding(gnomeHotkey, slotName);
+      let success;
+      if (pushToTalk) {
+        success = await this.gnomeManager.registerPushToTalk(hotkey, callback, slotName);
+      } else {
+        // A slot leaving Hold must release its portal binding, or the portal
+        // would keep delivering phases beside the gsettings toggle.
+        await this.gnomeManager.unregisterPushToTalk?.(slotName);
+        success = await this.gnomeManager.registerKeybinding(gnomeHotkey, slotName);
+      }
       if (!success) {
         debugLogger.log(
           `[HotkeyManager] GNOME keybinding registration failed for slot "${slotName}" ("${hotkey}")`
@@ -263,7 +365,7 @@ class HotkeyManager extends EventEmitter {
         hotkey,
         slotName,
         callback,
-        slotName === "dictation" && this.activationMode === "push"
+        this._slotWantsPushToTalk(slotName)
       );
       if (result !== true) {
         const reason =
@@ -312,11 +414,19 @@ class HotkeyManager extends EventEmitter {
       return;
     }
 
-    // On GNOME, native slots are managed via gsettings, not globalShortcut
+    // On GNOME, native slots are managed via gsettings (Tap) or the portal
+    // (Hold), not globalShortcut. The portal serialises its own calls, so a
+    // registration queued right after this lands in order.
     if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
       this.gnomeManager.unregisterKeybinding(slotName).catch((err) => {
         debugLogger.warn(
           `[HotkeyManager] Error unregistering GNOME keybinding for slot "${slotName}":`,
+          err.message
+        );
+      });
+      Promise.resolve(this.gnomeManager.unregisterPushToTalk?.(slotName)).catch((err) => {
+        debugLogger.warn(
+          `[HotkeyManager] Error unregistering GNOME portal shortcut for slot "${slotName}":`,
           err.message
         );
       });
@@ -367,17 +477,21 @@ class HotkeyManager extends EventEmitter {
   /**
    * Hotkeys that must be watched by a native low-level listener (Windows/Linux)
    * instead of globalShortcut. Modifier-only and right-side-modifier combos never
-   * register through globalShortcut, and in push-to-talk mode dictation also needs
-   * raw key-down/key-up events. Only the dictation slot supports push-to-talk;
-   * every other slot is tap-to-toggle. Globe/mouse hotkeys are macOS-only.
+   * register through globalShortcut, and in push-to-talk mode a slot also needs
+   * raw key-down/key-up events. Dictation follows the legacy activationMode;
+   * voiceAgent/translation follow their own per-slot mode in slotModes; meeting
+   * and cancel are always tap-to-toggle. Globe/mouse hotkeys are macOS-only.
    * Each slot may bind several hotkeys, so we evaluate every one.
    */
-  getNativeListenerKeys(activationMode) {
+  getNativeListenerKeys(activationMode, slotModes = {}) {
     const keys = [];
     for (const [slotName, slot] of this.slots) {
       for (const hotkey of slot.hotkeys ?? []) {
         if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
-        const pushToTalk = slotName === "dictation" && activationMode === "push";
+        const pushToTalk =
+          slotName === "dictation"
+            ? activationMode === "push"
+            : SLOT_MODE_PUSH_SLOTS.has(slotName) && slotModes[slotName] === "push";
         if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
           keys.push(hotkey);
         }
@@ -386,8 +500,30 @@ class HotkeyManager extends EventEmitter {
     return keys;
   }
 
-  supportsPushToTalk(hotkey = this.currentHotkey) {
+  // A plain single key on macOS: not Globe/Fn, a mouse button, a right-side
+  // modifier or a combo. globalShortcut can only report its press, so on Hold
+  // the native listener's event tap owns it (isMacListenerOwnedKey).
+  _isMacPlainKey(hotkey) {
+    return (
+      process.platform === "darwin" &&
+      Boolean(hotkey) &&
+      !isGlobeLikeHotkey(hotkey) &&
+      !isMouseButtonHotkey(hotkey) &&
+      !isRightSideModifier(hotkey) &&
+      !hotkey.includes("+")
+    );
+  }
+
+  // Hold needs a press/release source for the slot's hotkey: the low-level
+  // listener on Windows/Linux, the GlobalShortcuts portal on GNOME,
+  // KGlobalAccel on KDE, and on macOS the native listener (Globe, right
+  // modifiers, mouse buttons, plain keys) or modifier-up for combos.
+  // Hyprland binds only the dictation slot, so the others have no source there.
+  supportsPushToTalk(hotkey = this.currentHotkey, slotName = "dictation") {
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
+      return false;
+    }
+    if (slotName !== "dictation" && this.useHyprland) {
       return false;
     }
     if (this.useGnome && this.gnomeManager?.supportsPushToTalk) {
@@ -396,9 +532,12 @@ class HotkeyManager extends EventEmitter {
     return true;
   }
 
-  getPushToTalkUnavailableReason(hotkey = this.currentHotkey) {
+  getPushToTalkUnavailableReason(hotkey = this.currentHotkey, slotName = "dictation") {
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
       return i18nMain.t("hotkey.errors.osReserved", { hotkey });
+    }
+    if (slotName !== "dictation" && this.useHyprland) {
+      return i18nMain.t("hotkey.errors.holdUnsupportedOnHyprland");
     }
     return i18nMain.t("windows.pttUnavailable");
   }
@@ -427,6 +566,15 @@ class HotkeyManager extends EventEmitter {
         success = await this.hyprlandManager.updateKeybinding(hotkey, nextMode === "push");
         if (!success) {
           await this.hyprlandManager.updateKeybinding(hotkey, previousMode === "push");
+        }
+      } else if (this._macSlotNeedsReregister("dictation")) {
+        // The registration reads the mode, so it flips first and rolls back
+        // with its bindings if the re-registration fails.
+        this.activationMode = nextMode;
+        success = this._reregisterSlotShortcuts("dictation");
+        if (!success) {
+          this.activationMode = previousMode;
+          this._reregisterSlotShortcuts("dictation");
         }
       }
     } catch (err) {
@@ -474,6 +622,7 @@ class HotkeyManager extends EventEmitter {
   // action has to stand down.
   getMacNativeListenerConfig(slotNames) {
     const mouseButtons = new Set();
+    const watchKeys = new Set();
     let suppressGlobeAction = false;
 
     for (const slotName of slotNames) {
@@ -482,16 +631,23 @@ class HotkeyManager extends EventEmitter {
           mouseButtons.add(hotkey);
         } else if (isGlobeLikeHotkey(hotkey)) {
           suppressGlobeAction = true;
+        } else if (!this.isListeningMode && this.isMacListenerOwnedKey(hotkey, slotName)) {
+          // Hotkey capture must see every key, so nothing is watched then.
+          watchKeys.add(hotkey);
         }
       }
     }
 
-    return { mouseButtons: [...mouseButtons], suppressGlobeAction };
+    return {
+      mouseButtons: [...mouseButtons],
+      suppressGlobeAction,
+      watchKeys: [...watchKeys].sort(),
+    };
   }
 
   // Register one hotkey without mutating any slot. `accelerator` is null for
   // hotkeys handled by native listeners.
-  _registerSingleHotkey(hotkey, callback) {
+  _registerSingleHotkey(hotkey, callback, slotName = "dictation") {
     try {
       if (isMouseButtonHotkey(hotkey)) {
         if (process.platform !== "darwin") {
@@ -536,6 +692,13 @@ class HotkeyManager extends EventEmitter {
       if (isModifierOnlyHotkey(hotkey) && process.platform === "win32") {
         debugLogger.log(
           `[HotkeyManager] Modifier-only "${hotkey}" set - using Windows native listener`
+        );
+        return { success: true, hotkey, accelerator: null };
+      }
+
+      if (this.isMacListenerOwnedKey(hotkey, slotName)) {
+        debugLogger.log(
+          `[HotkeyManager] Plain key "${hotkey}" on Hold - using the macOS native listener`
         );
         return { success: true, hotkey, accelerator: null };
       }
@@ -628,7 +791,7 @@ class HotkeyManager extends EventEmitter {
     const registeredAccelerators = [];
     const failures = [];
     for (const hotkey of desired) {
-      const res = this._registerSingleHotkey(hotkey, callback);
+      const res = this._registerSingleHotkey(hotkey, callback, slotName);
       if (res.success) {
         registeredHotkeys.push(res.hotkey);
         registeredAccelerators.push(res.accelerator ?? null);
@@ -1261,24 +1424,34 @@ class HotkeyManager extends EventEmitter {
       throw new Error("Callback function is required for hotkey update");
     }
 
-    try {
-      const hotkeys = parseHotkeyList(hotkeyInput);
-      if (hotkeys.length === 0) {
-        return {
-          success: false,
-          message: i18nMain.t("hotkey.errors.registrationFailed", { hotkey: "" }),
-        };
-      }
-      const hotkeyStr = hotkeys.join(",");
-      // DE backends bind one accelerator per slot; extras stay in storage.
-      const primary = hotkeys[0];
+    const hotkeys = parseHotkeyList(hotkeyInput);
+    if (hotkeys.length === 0) {
+      return {
+        success: false,
+        message: i18nMain.t("hotkey.errors.registrationFailed", { hotkey: "" }),
+      };
+    }
+    // DE backends bind one accelerator per slot; extras stay in storage.
+    const primary = hotkeys[0];
 
-      if (this.activationMode === "push" && !this.supportsPushToTalk(primary)) {
-        return {
-          success: false,
-          message: this.getPushToTalkUnavailableReason(primary),
-        };
-      }
+    // The hotkey the user just chose wins over the stored mode: a Hold this
+    // hotkey cannot deliver (a macOS plain key with no release source, a
+    // modifier-only combo on a DE-native backend) converges to Tap and the
+    // caller is told, instead of the change being refused with a message
+    // about a missing native listener.
+    const demoteHold = this.activationMode === "push" && !this.supportsPushToTalk(primary);
+    if (demoteHold) this.activationMode = "tap";
+    const result = await this._applyHotkeyUpdate(hotkeys, primary, callback);
+    if (demoteHold) {
+      if (result.success) result.activationMode = "tap";
+      else this.activationMode = "push";
+    }
+    return result;
+  }
+
+  async _applyHotkeyUpdate(hotkeys, primary, callback) {
+    try {
+      const hotkeyStr = hotkeys.join(",");
 
       for (const hotkey of hotkeys) {
         const conflict = this._findSlotConflict("dictation", hotkey);

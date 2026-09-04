@@ -124,7 +124,12 @@
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
       "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
       "trySuggestions": "試試看：{{suggestions}}",
-      "slotConflict": "此快捷鍵已用於{{slot}}。"
+      "slotConflict": "此快捷鍵已用於{{slot}}。",
+      "holdUnsupportedOnHyprland": "在 Hyprland 上，按住模式僅適用於聽寫快捷鍵。"
+    },
+    "portal": {
+      "voiceAgentHold": "按住以與助理對話",
+      "translationHold": "按住以聽寫並翻譯"
     }
   },
   "systemSettings": {
@@ -941,7 +946,8 @@
         "failedToRegister": "快捷鍵註冊失敗。請再試一次。"
       },
       "messages": {
-        "nowUsing": "現在使用 {{hotkey}} 進行語音輸入"
+        "nowUsing": "現在使用 {{hotkey}} 進行語音輸入",
+        "holdSwitchedToTap": "此裝置上 {{hotkey}} 不支援按住模式，已切換為點按。"
       }
     },
     "modelDownload": {

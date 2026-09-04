@@ -111,6 +111,46 @@ test("adopts a legacy chat-agent hotkey as the voice-agent hotkey", async (t) =>
   assert.doesNotMatch(persistedEnv, /^CHAT_AGENT_KEY=/m);
 });
 
+test("per-slot activation modes persist, normalize, and reject unknown slots", async (t) => {
+  const userDataDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "openwhispr-slot-activation-mode-")
+  );
+  const environmentSnapshot = new Map(
+    ["VOICE_AGENT_ACTIVATION_MODE", "TRANSLATION_ACTIVATION_MODE"].map((name) => [
+      name,
+      { present: Object.hasOwn(process.env, name), value: process.env[name] },
+    ])
+  );
+  const originalResourcesPath = process.resourcesPath;
+  process.resourcesPath = userDataDirectory;
+  delete process.env.VOICE_AGENT_ACTIVATION_MODE;
+  delete process.env.TRANSLATION_ACTIVATION_MODE;
+  t.after(() => {
+    restoreEnvironment(environmentSnapshot);
+    process.resourcesPath = originalResourcesPath;
+    fs.rmSync(userDataDirectory, { recursive: true, force: true });
+  });
+
+  installDotenvStub(t);
+  const EnvironmentManager = loadEnvironmentManager(t, userDataDirectory);
+  const environmentManager = new EnvironmentManager();
+  environmentManager.saveAllKeysToEnvFile = async () => ({});
+
+  assert.deepEqual(environmentManager.getSlotActivationModes(), {
+    voiceAgent: "tap",
+    translation: "tap",
+  });
+
+  environmentManager.saveSlotActivationMode("voiceAgent", "push");
+  environmentManager.saveSlotActivationMode("translation", "bogus");
+  assert.equal(environmentManager.saveSlotActivationMode("meeting", "push"), false);
+
+  assert.deepEqual(environmentManager.getSlotActivationModes(), {
+    voiceAgent: "push",
+    translation: "tap",
+  });
+});
+
 test("device cleanup clears persisted settings and encrypted secret files", async (t) => {
   const userDataDirectory = fs.mkdtempSync(
     path.join(os.tmpdir(), "openwhispr-device-settings-cleanup-")

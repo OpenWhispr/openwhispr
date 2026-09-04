@@ -35,33 +35,78 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
           };
           createdBrowserWindows.push(this);
         }
-        on(event, listener) { this.windowListeners.set(event, listener); }
-        setContentProtection(value) { this.protectionCalls.push(value); }
+        on(event, listener) {
+          this.windowListeners.set(event, listener);
+        }
+        setContentProtection(value) {
+          this.protectionCalls.push(value);
+        }
         setIgnoreMouseEvents() {}
-        loadFile() { return Promise.resolve(); }
-        loadURL() { return Promise.resolve(); }
-        isDestroyed() { return false; }
-        close() { this.closeCalls += 1; this.windowListeners.get("closed")?.(); }
-        getBounds() { return this.bounds; }
-        setBounds(nextBounds) { this.bounds = nextBounds; this.setBoundsCalls += 1; }
-        isVisible() { return this.visible; }
-        showInactive() { this.visible = true; }
-        hide() { this.visible = false; }
+        loadFile() {
+          return Promise.resolve();
+        }
+        loadURL() {
+          return Promise.resolve();
+        }
+        isDestroyed() {
+          return false;
+        }
+        close() {
+          this.closeCalls += 1;
+          this.windowListeners.get("closed")?.();
+        }
+        getBounds() {
+          return this.bounds;
+        }
+        setBounds(nextBounds) {
+          this.bounds = nextBounds;
+          this.setBoundsCalls += 1;
+        }
+        isVisible() {
+          return this.visible;
+        }
+        showInactive() {
+          this.visible = true;
+        }
+        hide() {
+          this.visible = false;
+        }
         moveTop() {}
       },
       shell: {},
       dialog: {},
     };
   }
-  if (request === "./debugLogger") return { warn: () => undefined, debug: () => undefined, log: () => undefined };
+  if (request === "./debugLogger")
+    return { warn: () => undefined, debug: () => undefined, log: () => undefined };
   if (request === "./hotkeyManager") {
-    const FakeHotkeyManager = class { unregisterAll() {} isInListeningMode() { return false; } };
+    const FakeHotkeyManager = class {
+      unregisterAll() {}
+      isInListeningMode() {
+        return false;
+      }
+    };
     FakeHotkeyManager.isGlobeLikeHotkey = () => false;
     return FakeHotkeyManager;
   }
-  if (request === "./dragManager") return class { cleanup() {} async startWindowDrag() { return { success: true }; } async stopWindowDrag() { return { success: true }; } };
+  if (request === "./dragManager")
+    return class {
+      cleanup() {}
+      async startWindowDrag() {
+        return { success: true };
+      }
+      async stopWindowDrag() {
+        return { success: true };
+      }
+    };
   if (request === "./menuManager") return {};
-  if (request === "./devServerManager") return { DEV_SERVER_PORT: 5173, DEV_SERVER_URL: "http://localhost:5173", getAppFilePath: () => ({ path: "/app/index.html", query: {} }), waitForDevServer: async () => undefined };
+  if (request === "./devServerManager")
+    return {
+      DEV_SERVER_PORT: 5173,
+      DEV_SERVER_URL: "http://localhost:5173",
+      getAppFilePath: () => ({ path: "/app/index.html", query: {} }),
+      waitForDevServer: async () => undefined,
+    };
   if (request === "./dockManager") return {};
   if (request === "./i18nMain") return { i18nMain: { t: (key) => key } };
   if (request === "./windowConfig") {
@@ -106,9 +151,18 @@ function fakeWindow({ visible }) {
       isDestroyed: () => false,
       isVisible: () => isVisible,
       isMinimized: () => false,
-      showInactive: () => { isVisible = true; calls.push("showInactive"); },
-      show: () => { isVisible = true; calls.push("show"); },
-      hide: () => { isVisible = false; calls.push("hide"); },
+      showInactive: () => {
+        isVisible = true;
+        calls.push("showInactive");
+      },
+      show: () => {
+        isVisible = true;
+        calls.push("show");
+      },
+      hide: () => {
+        isVisible = false;
+        calls.push("hide");
+      },
       focus: () => calls.push("focus"),
       blur: () => calls.push("blur"),
       setFocusable: (value) => calls.push(`focusable:${value}`),
@@ -418,7 +472,7 @@ test("native Linux push-to-talk keeps only the dictation low-level listener", as
       isInListeningMode: () => false,
       isUsingNativeShortcut: () => true,
       getNativeListenerKeys: () => ["Control+Space", "Control+Shift+Space"],
-      slotHasHotkey: (slot, key) => slot === "dictation" && key === "Control+Space",
+      findSlotByHotkey: (key) => (key === "Control+Space" ? "dictation" : "voiceAgent"),
     };
     await manager.setActivationModeCache("push");
     manager.linuxKeyManager = {
@@ -597,15 +651,18 @@ test("display changes reposition the companion pill", () => {
   pill.webContentsListeners.get("did-finish-load")();
   const boundsCallsBefore = pill.setBoundsCalls;
 
-  const metricsListener = screenListeners.find((entry) => entry.event === "display-metrics-changed");
+  const metricsListener = screenListeners.find(
+    (entry) => entry.event === "display-metrics-changed"
+  );
   assert.ok(metricsListener, "display-metrics-changed listener registered");
   metricsListener.listener();
 
   assert.equal(pill.setBoundsCalls, boundsCallsBefore + 1);
-  assert.deepEqual(
-    screenListeners.map((entry) => entry.event).sort(),
-    ["display-added", "display-metrics-changed", "display-removed"]
-  );
+  assert.deepEqual(screenListeners.map((entry) => entry.event).sort(), [
+    "display-added",
+    "display-metrics-changed",
+    "display-removed",
+  ]);
 });
 
 test("onboarding suppresses the companion pill like every popup surface", () => {

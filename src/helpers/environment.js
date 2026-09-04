@@ -24,6 +24,12 @@ const SECRET_KEYS = [
 
 const SECRET_KEY_SET = new Set(SECRET_KEYS);
 
+// Slots with a configurable activation mode; dictation stays on ACTIVATION_MODE.
+const SLOT_ACTIVATION_MODE_ENV_KEYS = Object.freeze({
+  voiceAgent: "VOICE_AGENT_ACTIVATION_MODE",
+  translation: "TRANSLATION_ACTIVATION_MODE",
+});
+
 const PERSISTED_KEYS = [
   ...SECRET_KEYS,
   "LOCAL_TRANSCRIPTION_PROVIDER",
@@ -41,6 +47,7 @@ const PERSISTED_KEYS = [
   "TRANSLATION_KEY",
   "MEETING_KEY",
   "ACTIVATION_MODE",
+  ...Object.values(SLOT_ACTIVATION_MODE_ENV_KEYS),
   "FLOATING_ICON_AUTO_HIDE",
   "PANEL_START_POSITION",
   "START_MINIMIZED",
@@ -444,6 +451,23 @@ class EnvironmentManager {
   getActivationMode() {
     const mode = this._getKey("ACTIVATION_MODE");
     return mode === "push" ? "push" : "tap";
+  }
+
+  getSlotActivationModes() {
+    const modes = {};
+    for (const [slotName, envKey] of Object.entries(SLOT_ACTIVATION_MODE_ENV_KEYS)) {
+      modes[slotName] = this._getKey(envKey) === "push" ? "push" : "tap";
+    }
+    return modes;
+  }
+
+  saveSlotActivationMode(slotName, mode) {
+    const envKey = SLOT_ACTIVATION_MODE_ENV_KEYS[slotName];
+    if (!envKey) return false;
+    const validMode = mode === "push" ? "push" : "tap";
+    const result = this._saveKey(envKey, validMode);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
   }
 
   saveActivationMode(mode) {
