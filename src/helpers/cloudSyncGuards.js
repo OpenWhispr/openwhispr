@@ -18,13 +18,14 @@ export function isCloudEntryNewer(cloudUpdatedAt, localUpdatedAt) {
   return normalizeTimestamp(cloudUpdatedAt) > normalizeTimestamp(localUpdatedAt);
 }
 
-// Full-content PATCH payload for an existing cloud note — a content-less
-// PATCH still bumps the cloud row's updated_at, so the next pull elects a
-// copy that never received the local edit (#1290). No client_note_id here:
-// legacy cloud notes carry a different backfilled UUID per device, so
-// PATCHing it on every push would fork duplicate notes; only the one-shot
-// migration branch sends it.
-export function buildNoteUpdatePayload(note, folderMap) {
+// Full-content payload for note pushes — a content-less PATCH still bumps
+// the cloud row's updated_at, so the next pull elects a copy that never
+// received the local edit (#1290). No client_note_id here: legacy cloud
+// notes carry a different backfilled UUID per device, so PATCHing it on
+// every push would fork duplicate notes; only the one-shot migration branch
+// sends it. `cloudFolderId` is the note's folder already mapped to its cloud
+// id (null when folderless or unmapped).
+export function buildNoteUpdatePayload(note, cloudFolderId) {
   return {
     title: note.title,
     content: note.content,
@@ -39,7 +40,20 @@ export function buildNoteUpdatePayload(note, folderMap) {
     calendar_event_id: note.calendar_event_id,
     diarization_enabled: note.diarization_enabled,
     expected_speaker_count: note.expected_speaker_count,
-    folder_id: note.folder_id ? (folderMap.get(note.folder_id) ?? null) : null,
+    folder_id: cloudFolderId ?? null,
     updated_at: note.updated_at,
+    // The server revision this device last acked; the server 409s when a newer
+    // write landed since. Omitted for pre-guard rows (null base), which keeps
+    // the legacy last-write-wins contract for them.
+    ...(note.cloud_updated_at ? { base_updated_at: note.cloud_updated_at } : {}),
   };
+}
+
+// POST creates a new cloud identity and therefore has no prior server
+// revision to compare. Forks from older databases can retain a stale base, so
+// derive create payloads explicitly rather than forwarding base_updated_at.
+export function buildNoteCreatePayload(note, cloudFolderId) {
+  const payload = buildNoteUpdatePayload(note, cloudFolderId);
+  delete payload.base_updated_at;
+  return payload;
 }

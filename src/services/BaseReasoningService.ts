@@ -1,6 +1,9 @@
 import { getCleanupSystemPrompt } from "../config/prompts";
 import { getSettings } from "../stores/settingsStore";
+import { resolveCleanupLanguage } from "../utils/chineseScript";
 import { getDictionaryHintWords } from "../utils/snippets";
+import type { InferenceScope } from "../config/inferenceScopes";
+import type { ScreenContextImage } from "../types/electron";
 
 export interface ReasoningConfig {
   maxTokens?: number;
@@ -12,7 +15,14 @@ export interface ReasoningConfig {
   customApiKey?: string;
   provider?: string;
   disableThinking?: boolean;
+  /** Screenshot attached to voice-agent requests when screen context is on. */
+  screenContext?: ScreenContextImage;
+  /** Suffix-free prompt used when a screenshot-carrying request is retried text-only. */
+  textOnlySystemPrompt?: string;
   language?: string;
+  requireCompleteOutput?: boolean;
+  requiresAgent?: boolean;
+  inferenceScope?: InferenceScope;
 }
 
 export abstract class BaseReasoningService {
@@ -22,8 +32,11 @@ export abstract class BaseReasoningService {
     return getDictionaryHintWords(getSettings());
   }
 
+  // Auto must remain auto here: zh-CN/zh-TW instructions make cleanup write its
+  // entire response in Chinese before the transcription language is known. The
+  // final deterministic script pass handles likely-Chinese output instead. See #975.
   protected getPreferredLanguage(): string {
-    return getSettings().preferredLanguage || "auto";
+    return resolveCleanupLanguage(getSettings().preferredLanguage);
   }
 
   protected getUiLanguage(): string {

@@ -49,16 +49,6 @@ export default function UpdateNotificationOverlay() {
     [data]
   );
 
-  const handleMouseEnter = useCallback(() => {
-    setIsHovered(true);
-    window.electronAPI?.setNotificationInteractivity?.(true);
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    setIsHovered(false);
-    window.electronAPI?.setNotificationInteractivity?.(false);
-  }, []);
-
   return (
     <div className="meeting-notification-window w-full h-full bg-transparent p-3">
       <div
@@ -72,8 +62,8 @@ export default function UpdateNotificationOverlay() {
             ? "translate-x-0 opacity-100 scale-100"
             : "translate-x-[120%] opacity-0 scale-95",
         ].join(" ")}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
         <button
           onClick={() => respond("dismiss")}

@@ -1,9 +1,8 @@
-// The control panel loads with "control" in the path (packaged) or ?panel=true
-// (dev server); the dictation panel is the plain URL.
+// Window creation tags the control panel with ?panel=true in both development
+// and packaged builds; the dictation panel is the plain URL.
 export const isControlPanelWindow = (): boolean => {
   if (typeof window === "undefined") return false;
-  const { search, pathname } = window.location;
-  return pathname.includes("control") || search.includes("panel=true");
+  return new URLSearchParams(window.location.search).get("panel") === "true";
 };
 
 export const isDictationPanelWindow = (): boolean =>

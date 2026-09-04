@@ -87,6 +87,26 @@ test("two-modifier combos without a base key are valid", async () => {
   assert.equal(validateHotkey("Control+Super", "linux").valid, true);
 });
 
+test("modifier-only chords are Windows/Linux only — macOS cannot register them", async () => {
+  const { validateHotkey } = await load();
+
+  const mac = validateHotkey("Control+Alt", "darwin");
+  assert.equal(mac.valid, false);
+  assert.equal(mac.errorCode, "MODIFIER_ONLY_UNSUPPORTED");
+  // Adding a real key is what makes it registrable on macOS.
+  assert.equal(validateHotkey("Control+Alt+Space", "darwin").valid, true);
+});
+
+test("Fn combinations are rejected because only standalone Globe has a native path", async () => {
+  const { validateHotkey } = await load();
+
+  for (const platform of ["darwin", "win32", "linux"]) {
+    const result = validateHotkey("Fn+A", platform);
+    assert.equal(result.valid, false, platform);
+    assert.equal(result.errorCode, "FN_COMBINATION_UNSUPPORTED", platform);
+  }
+});
+
 test("duplicates are detected after normalization, so Ctrl+K collides with a stored Control+K", async () => {
   const { validateHotkey } = await load();
 
@@ -172,4 +192,34 @@ test("normalizeHotkey canonicalizes key token spellings", async () => {
   assert.equal(normalizeHotkey("Ctrl+k", "win32"), "Control+K");
   assert.equal(normalizeHotkey("Ctrl+f9", "win32"), "Control+F9");
   assert.equal(normalizeHotkey("", "darwin"), "");
+});
+
+test("left-side modifier tokens normalize to canonical Left modifier forms and pass compound validation", async () => {
+  const { normalizeHotkey, validateHotkey } = await load();
+
+  assert.equal(normalizeHotkey("ControlLeft+K", "darwin"), "LeftControl+K");
+  assert.equal(normalizeHotkey("ShiftLeft+Space", "win32"), "LeftShift+Space");
+
+  assert.equal(validateHotkey("ControlLeft+K", "darwin").valid, true);
+  assert.equal(validateHotkey("ShiftLeft+Space", "win32").valid, true);
+
+  const singleLeft = validateHotkey("ControlLeft", "darwin");
+  assert.equal(singleLeft.valid, false);
+  assert.equal(singleLeft.errorCode, "LEFT_MODIFIER_ONLY");
+});
+
+test("mixing left and right versions of the same modifier is rejected across prefix and suffix formats", async () => {
+  const { validateHotkey } = await load();
+
+  const prefixMix = validateHotkey("LeftControl+RightControl", "darwin");
+  assert.equal(prefixMix.valid, false);
+  assert.equal(prefixMix.errorCode, "LEFT_RIGHT_MIX");
+
+  const suffixMix = validateHotkey("ControlLeft+ControlRight", "darwin");
+  assert.equal(suffixMix.valid, false);
+  assert.equal(suffixMix.errorCode, "LEFT_RIGHT_MIX");
+
+  const crossMix = validateHotkey("LeftControl+ControlRight", "win32");
+  assert.equal(crossMix.valid, false);
+  assert.equal(crossMix.errorCode, "LEFT_RIGHT_MIX");
 });

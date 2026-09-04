@@ -5,45 +5,13 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const debugLogger = require("./debugLogger");
+const { getLinuxSessionInfo } = require("./linuxSession");
 
 const CACHE_TTL_MS = 30000;
 
 // isTrustedAccessibilityClient() is a cheap synchronous syscall, so the cache
 // only exists to debounce the dialog shown on denial.
 const ACCESSIBILITY_CHECK_TTL_MS = 5000;
-
-const getLinuxDesktopEnv = () =>
-  [process.env.XDG_CURRENT_DESKTOP, process.env.XDG_SESSION_DESKTOP, process.env.DESKTOP_SESSION]
-    .filter(Boolean)
-    .join(":")
-    .toLowerCase();
-
-const isGnomeDesktop = (desktopEnv) => desktopEnv.includes("gnome");
-
-const isKdeDesktop = (desktopEnv) => desktopEnv.includes("kde");
-
-const isWlrootsCompositor = (desktopEnv) => {
-  const wlrootsDesktops = ["sway", "hyprland", "wayfire", "river", "dwl", "labwc", "cage"];
-  return (
-    wlrootsDesktops.some((wm) => desktopEnv.includes(wm)) ||
-    !!process.env.SWAYSOCK ||
-    !!process.env.HYPRLAND_INSTANCE_SIGNATURE
-  );
-};
-
-const getLinuxSessionInfo = () => {
-  const isWayland =
-    (process.env.XDG_SESSION_TYPE || "").toLowerCase() === "wayland" ||
-    !!process.env.WAYLAND_DISPLAY;
-  const xwaylandAvailable = isWayland && !!process.env.DISPLAY;
-  const desktopEnv = getLinuxDesktopEnv();
-  const isGnome = isWayland && isGnomeDesktop(desktopEnv);
-  const isKde = isWayland && isKdeDesktop(desktopEnv);
-  const isWlroots = isWayland && isWlrootsCompositor(desktopEnv);
-  const isHyprland = isWayland && !!process.env.HYPRLAND_INSTANCE_SIGNATURE;
-
-  return { isWayland, xwaylandAvailable, desktopEnv, isGnome, isKde, isWlroots, isHyprland };
-};
 
 const PASTE_DELAYS = {
   darwin: 120,
@@ -60,6 +28,44 @@ const RESTORE_DELAYS = {
   linux: 800,
   linux_kde_wayland: 1200,
 };
+
+// Window classes that identify terminal emulators, which expect
+// Ctrl+Shift+V/C instead of Ctrl+V/C. Mirrors terminal_classes in
+// resources/linux-fast-paste.c — keep the two lists in sync.
+const LINUX_TERMINAL_CLASSES = [
+  "konsole",
+  "gnome-terminal",
+  "terminal",
+  "kitty",
+  "alacritty",
+  "terminator",
+  "xterm",
+  "urxvt",
+  "rxvt",
+  "tilix",
+  "terminology",
+  "wezterm",
+  "foot",
+  "st",
+  "yakuake",
+  "ghostty",
+  "guake",
+  "tilda",
+  "hyper",
+  "tabby",
+  "sakura",
+  "warp",
+  "termius",
+  "waveterm",
+  "ptyxis",
+  "kgx",
+  "org.gnome.console",
+];
+
+// macOS reports localized app names rather than window classes, and iTerm2 has
+// no entry above because it has no Linux window class. Matching it on Linux too
+// is harmless — no such window class exists there.
+const TERMINAL_SIGNATURES = [...LINUX_TERMINAL_CLASSES, "iterm"];
 
 function writeClipboardInRenderer(webContents, text) {
   if (!webContents || !webContents.executeJavaScript) {
@@ -82,6 +88,13 @@ class ClipboardManager {
     this.linuxFastPastePath = null;
     this.linuxFastPasteChecked = false;
     this.portalDenied = false;
+    this.portalUnavailable = false;
+    this.portalTokenPasteFailed = false;
+    this.portalKeysymChecked = false;
+    this.portalKeysymAvailable = false;
+    this.portalFailed = false;
+    this.uinputTimedOut = false;
+    this.xtestTimedOut = false;
     this._kwinScriptPath = null;
     this.pasteQueue = Promise.resolve();
 
@@ -224,6 +237,66 @@ class ClipboardManager {
       return clipboard.readText("selection") || "";
     } catch {}
     return null;
+  }
+
+  // Accepts a Linux window class or a macOS app name.
+  isTerminalSignature(signature) {
+    if (!signature) return false;
+    const normalized = String(signature).toLowerCase();
+    return TERMINAL_SIGNATURES.some((term) => normalized.includes(term));
+  }
+
+  isLinuxTerminalWindowClass(windowClass) {
+    return this.isTerminalSignature(windowClass);
+  }
+
+  // Selection capture (SelectionManager) seeds a sentinel and polls until a
+  // synthetic copy replaces it. On Wayland — KDE especially — the X11 and
+  // Wayland clipboards can be desynced, so write and read BOTH sides; a value
+  // appearing on either side counts.
+  _writeClipboardTextAll(text) {
+    if (this._isWayland() && this.commandExists("wl-copy")) {
+      try {
+        spawnSync("wl-copy", ["--", text], { timeout: 200 });
+      } catch {}
+    }
+    if (process.platform === "linux" && this.commandExists("xclip")) {
+      try {
+        spawnSync("xclip", ["-selection", "clipboard"], { input: text, timeout: 200 });
+      } catch {}
+    }
+    if (process.platform === "linux" && this.commandExists("xsel")) {
+      try {
+        spawnSync("xsel", ["--clipboard", "--input"], { input: text, timeout: 200 });
+      } catch {}
+    }
+    clipboard.writeText(text);
+  }
+
+  _readClipboardTextAll() {
+    const texts = [];
+    if (this._isWayland() && this.commandExists("wl-paste")) {
+      try {
+        const result = spawnSync("wl-paste", ["--no-newline"], { timeout: 200 });
+        if (result.status === 0) texts.push(result.stdout.toString());
+      } catch {}
+    }
+    if (process.platform === "linux" && this.commandExists("xclip")) {
+      try {
+        const result = spawnSync("xclip", ["-selection", "clipboard", "-o"], { timeout: 200 });
+        if (result.status === 0) texts.push(result.stdout.toString());
+      } catch {}
+    }
+    if (process.platform === "linux" && this.commandExists("xsel")) {
+      try {
+        const result = spawnSync("xsel", ["--clipboard", "--output"], { timeout: 200 });
+        if (result.status === 0) texts.push(result.stdout.toString());
+      } catch {}
+    }
+    try {
+      texts.push(clipboard.readText());
+    } catch {}
+    return [...new Set(texts.filter((text) => typeof text === "string"))];
   }
 
   getNircmdPath() {
@@ -427,9 +500,10 @@ class ClipboardManager {
     }
   }
 
-  _runPortalPaste(fastPasteBinary, { shiftInsert = false, terminal = false } = {}) {
+  _runPortalPaste(fastPasteBinary, { shiftInsert = false, terminal = false, copy = false } = {}) {
     return new Promise((resolve, reject) => {
       const args = ["--portal"];
+      if (copy) args.push("--copy");
       if (shiftInsert) args.push("--shift-insert");
       else if (terminal) args.push("--terminal");
 
@@ -457,31 +531,31 @@ class ClipboardManager {
       });
 
       let timedOut = false;
+      // 15s only for the first grant (no token yet) so the permission dialog has
+      // time. With a saved token the session is pre-approved, so fail fast instead
+      // of hanging on a stale RemoteDesktop session that no longer responds (#1614).
+      const timeoutMs = restoreToken ? 2500 : 15000;
       const timeoutId = setTimeout(() => {
         timedOut = true;
         killProcess(proc, "SIGKILL");
-      }, 15000); // Portal may show a user dialog, allow more time
+      }, timeoutMs);
 
       proc.on("close", (code) => {
         if (timedOut) return reject(new Error("linux-fast-paste --portal timed out"));
         clearTimeout(timeoutId);
+        const newToken = stdout.trim();
+        if (newToken) {
+          this._savePortalToken(newToken);
+        }
         if (code === 0) {
-          const newToken = stdout.trim();
-          if (newToken) {
-            this._savePortalToken(newToken);
-          }
-          // Exit 0 without token: dialog was dismissed without approving (e.g. clicked outside).
-          // Reject with a recognizable message so the caller can retry.
-          if (!restoreToken && !newToken) {
-            reject(new Error("portal-dismissed"));
-            return;
-          }
           resolve(newToken || null);
         } else if (code === 3) {
           // User explicitly clicked "Deny" in the portal dialog.
           reject(new Error("portal-denied"));
         } else if (code === 5) {
           reject(new Error("portal support not compiled in"));
+        } else if (code === 6) {
+          reject(new Error("portal symbolic keyboard input unavailable"));
         } else {
           reject(
             new Error(
@@ -609,6 +683,50 @@ class ClipboardManager {
     }
   }
 
+  _runLinuxPasteCommand(command, args, label, { expectedOutput } = {}) {
+    return new Promise((resolve, reject) => {
+      debugLogger.debug("Attempting Linux paste command", { command, args, label }, "clipboard");
+      const proc = spawn(command, args);
+      let stdout = "";
+      let stderr = "";
+      let timedOut = false;
+
+      proc.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      proc.stderr?.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        killProcess(proc, "SIGKILL");
+        reject(new Error(`${label} timed out`));
+      }, 2000);
+
+      proc.on("close", (code) => {
+        if (timedOut) return;
+        clearTimeout(timeoutId);
+        const output = stdout.trim();
+        if (code === 0 && (expectedOutput === undefined || output === expectedOutput)) {
+          resolve();
+        } else {
+          const errorOutput = stderr.trim() || output;
+          reject(
+            new Error(`${label} exited with code ${code}${errorOutput ? `: ${errorOutput}` : ""}`)
+          );
+        }
+      });
+
+      proc.on("error", (error) => {
+        if (timedOut) return;
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+    });
+  }
+
   _saveClipboard() {
     const formats = clipboard.availableFormats();
     const data = {};
@@ -725,6 +843,17 @@ class ClipboardManager {
   }
 
   async pasteText(text, options = {}) {
+    return this._runClipboardOperation(
+      () => this._pasteText(text, options),
+      (result) => result?.restoreComplete
+    );
+  }
+
+  async runClipboardOperation(operation) {
+    return this._runClipboardOperation(operation);
+  }
+
+  async _runClipboardOperation(operation, completionForResult = null) {
     const previousPaste = this.pasteQueue.catch(() => {});
     let markRestoreComplete;
     const restoreGate = new Promise((resolve) => {
@@ -735,8 +864,10 @@ class ClipboardManager {
     await previousPaste;
 
     try {
-      const result = await this._pasteText(text, options);
-      Promise.resolve(result?.restoreComplete).then(markRestoreComplete, markRestoreComplete);
+      const result = await operation();
+      const completion = completionForResult ? completionForResult(result) : null;
+      Promise.resolve(completion).then(markRestoreComplete, markRestoreComplete);
+      return result;
     } catch (error) {
       markRestoreComplete();
       throw error;
@@ -782,7 +913,7 @@ class ClipboardManager {
           this.safeLog("⚠️ No accessibility permissions - text copied to clipboard only");
           if (allowClipboardFallback) {
             this.safeLog("✅ Clipboard fallback used (manual paste required)");
-            return { restoreComplete: Promise.resolve() };
+            return { restoreComplete: Promise.resolve(), pasted: false };
           }
           const errorMsg =
             "Accessibility permissions required for automatic pasting. Text has been copied to clipboard - please paste manually with Cmd+V.";
@@ -812,7 +943,10 @@ class ClipboardManager {
           const nircmdPath = this.getNircmdPath();
           method = nircmdPath ? "nircmd" : "powershell";
         }
-        pasteResult = await this.pasteWindows(originalClipboard, { expectedClipboardText: text });
+        pasteResult = await this.pasteWindows(originalClipboard, {
+          expectedClipboardText: text,
+          targetWindow: options.targetWindow,
+        });
       } else {
         pasteResult = await this.pasteLinux(originalClipboard, {
           ...options,
@@ -994,9 +1128,17 @@ class ClipboardManager {
         let hasTimedOut = false;
         const startTime = Date.now();
 
-        this.safeLog("⚡ Windows fast-paste starting");
+        // Restore the window captured at record start (#859) so the paste lands
+        // where the user was dictating even if focus drifted during
+        // transcription. The hex handle comes from --detect-only's TARGET line
+        // via selectionManager. An older cached binary ignores the unknown flag
+        // and pastes into the current foreground — the pre-fix behavior.
+        const args =
+          options.targetWindow != null ? ["--restore-window", String(options.targetWindow)] : [];
 
-        const pasteProcess = spawn(fastPastePath, [], {
+        this.safeLog("⚡ Windows fast-paste starting", { targetWindow: options.targetWindow });
+
+        const pasteProcess = spawn(fastPastePath, args, {
           stdio: ["ignore", "pipe", "pipe"],
           windowsHide: true,
         });
@@ -1311,33 +1453,6 @@ class ClipboardManager {
       return Promise.resolve();
     };
 
-    const terminalClasses = [
-      "konsole",
-      "gnome-terminal",
-      "terminal",
-      "kitty",
-      "alacritty",
-      "terminator",
-      "xterm",
-      "urxvt",
-      "rxvt",
-      "tilix",
-      "terminology",
-      "wezterm",
-      "foot",
-      "st",
-      "yakuake",
-      "ghostty",
-      "guake",
-      "tilda",
-      "hyper",
-      "tabby",
-      "sakura",
-      "warp",
-      "termius",
-      "waveterm",
-    ];
-
     // Pre-detect the target window BEFORE our window takes focus or blurs,
     // so the fast-paste binary and fallback tools know where to send keystrokes.
     const preDetectTargetWindow = () => {
@@ -1443,6 +1558,18 @@ class ClipboardManager {
     // Shift+Insert on any desktop environment, even when their class is detected.
     const useShiftInsert =
       detectedIsKonsole || detectedIsElectron || (isWayland && windowSignals.length === 0);
+    const isTerminalTarget =
+      windowSignals.length > 0 && LINUX_TERMINAL_CLASSES.some((term) => signalsMatch(term));
+    const hyprlandShortcut = useShiftInsert
+      ? { modifiers: "SHIFT", key: "Insert" }
+      : isTerminalTarget
+        ? { modifiers: "CTRL SHIFT", key: "V" }
+        : { modifiers: "CTRL", key: "V" };
+    const wtypeArgs = useShiftInsert
+      ? ["-M", "shift", "-k", "Insert", "-m", "shift"]
+      : isTerminalTarget
+        ? ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"]
+        : ["-M", "ctrl", "-k", "v", "-m", "ctrl"];
 
     // Konsole on X11 silently drops simulated Ctrl+Shift+V via XTest (a long-standing
     // focus/grab quirk), and the native fast-paste binary uses XTest. Route Konsole+X11
@@ -1450,67 +1577,90 @@ class ClipboardManager {
     // windowactivate --sync and reliably reaches the target window.
     const skipFastPasteForKonsole = detectedIsKonsole && !isWayland;
 
-    if (linuxFastPaste && !skipFastPasteForKonsole) {
-      const earlyIsTerminal =
-        windowSignals.length > 0 ? terminalClasses.some((term) => signalsMatch(term)) : false;
-      const appendModeFlag = (args) => {
-        if (useShiftInsert) args.push("--shift-insert");
-        else if (earlyIsTerminal) args.push("--terminal");
-      };
+    const appendModeFlag = (args) => {
+      if (useShiftInsert) args.push("--shift-insert");
+      else if (isTerminalTarget) args.push("--terminal");
+    };
 
-      const spawnFastPaste = (args, label) =>
-        new Promise((resolve, reject) => {
+    if (isWayland && isWlroots && wtypeExists) {
+      try {
+        await this._runLinuxPasteCommand("wtype", wtypeArgs, "wtype");
+        this.safeLog("✅ Paste successful using wtype");
+        return { method: "wtype", restoreComplete: restoreClipboard() };
+      } catch (error) {
+        debugLogger.warn(
+          "wtype paste failed, falling back",
+          { error: error?.message },
+          "clipboard"
+        );
+      }
+    }
+
+    // sendshortcut resolves keys through the compositor's keymap, so it is
+    // layout-independent — but it has a known stuck-modifier bug (synthetic
+    // modifiers stay latched in XKB: hyprwm/Hyprland#14099, unresolved as of
+    // 0.56). wtype above is equally layout-independent and unaffected, so
+    // sendshortcut is only the zero-dependency fallback. The explicit
+    // "activewindow" target is the community-reported mitigation for #14099.
+    if (isWayland && isHyprland && this.commandExists("hyprctl")) {
+      const currentDispatcher = `hl.dsp.send_shortcut({ mods = "${hyprlandShortcut.modifiers}", key = "${hyprlandShortcut.key}", window = "activewindow" })`;
+      const legacyDispatcher = `${hyprlandShortcut.modifiers}, ${hyprlandShortcut.key}, activewindow`;
+      const dispatchers = [
+        { args: ["dispatch", currentDispatcher], label: "hyprctl send_shortcut" },
+        {
+          args: ["dispatch", "sendshortcut", legacyDispatcher],
+          label: "hyprctl legacy sendshortcut",
+        },
+      ];
+      let lastDispatcherError;
+
+      for (const dispatcher of dispatchers) {
+        try {
+          await this._runLinuxPasteCommand("hyprctl", dispatcher.args, dispatcher.label, {
+            expectedOutput: "ok",
+          });
+          this.safeLog("✅ Paste shortcut dispatched by Hyprland", {
+            dispatcher: dispatcher.label,
+            shortcut: dispatcher.args.at(-1),
+          });
+          return { method: "hyprland-sendshortcut", restoreComplete: restoreClipboard() };
+        } catch (error) {
+          lastDispatcherError = error;
           debugLogger.debug(
-            `Attempting native linux-fast-paste (${label})`,
-            {
-              linuxFastPaste,
-              args,
-              targetWindowId,
-              detectedWindowClass,
-              detectedWindowComm,
-              earlyIsTerminal,
-            },
+            "Hyprland dispatcher failed",
+            { dispatcher: dispatcher.label, error: error?.message },
             "clipboard"
           );
-          const proc = spawn(linuxFastPaste, args);
-          let stderr = "";
+        }
+      }
 
-          proc.stderr?.on("data", (data) => {
-            stderr += data.toString();
-          });
+      debugLogger.warn(
+        "Hyprland symbolic paste failed, falling back",
+        { error: lastDispatcherError?.message },
+        "clipboard"
+      );
+    }
 
-          let timedOut = false;
-          const timeoutId = setTimeout(() => {
-            timedOut = true;
-            killProcess(proc, "SIGKILL");
-          }, 2000);
-
-          proc.on("close", (code) => {
-            if (timedOut) return reject(new Error("linux-fast-paste timed out"));
-            clearTimeout(timeoutId);
-            if (code === 0) {
-              resolve();
-            } else {
-              reject(
-                new Error(
-                  `linux-fast-paste exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`
-                )
-              );
-            }
-          });
-
-          proc.on("error", (error) => {
-            if (timedOut) return;
-            clearTimeout(timeoutId);
-            reject(error);
-          });
-        });
+    if (linuxFastPaste && !skipFastPasteForKonsole) {
+      const spawnFastPaste = (args, label) =>
+        this._runLinuxPasteCommand(linuxFastPaste, args, `linux-fast-paste ${label}`);
 
       if (isWayland) {
         const tryUinputPaste = async () => {
-          const args = ["--uinput"];
-          appendModeFlag(args);
-          await spawnFastPaste(args, "uinput");
+          if (this.uinputTimedOut) {
+            throw new Error("uinput timed out earlier this session, skipping");
+          }
+          const args = ["--uinput", "--shift-insert"];
+          try {
+            await spawnFastPaste(args, "uinput");
+          } catch (error) {
+            // A timeout means uinput hangs in this environment (unlike a fast
+            // error, which can be transient) — don't re-pay 2s on every paste.
+            if (error?.message?.endsWith(" timed out")) {
+              this.uinputTimedOut = true;
+            }
+            throw error;
+          }
           this.safeLog("✅ Paste successful using native linux-fast-paste (uinput)");
           debugLogger.info(
             "Paste successful",
@@ -1521,89 +1671,79 @@ class ClipboardManager {
         };
 
         const tryPortalPaste = async () => {
-          const MAX_PORTAL_RETRIES = 3;
-          for (let attempt = 0; attempt < MAX_PORTAL_RETRIES; attempt++) {
-            try {
-              const portalResult = await this._runPortalPaste(linuxFastPaste, {
-                shiftInsert: useShiftInsert,
-                terminal: earlyIsTerminal,
-              });
-              this.safeLog("✅ Paste successful using linux-fast-paste --portal (RemoteDesktop)");
-              debugLogger.info(
-                "Paste successful",
-                { tool: "linux-fast-paste", method: "portal", token: !!portalResult },
-                "clipboard"
-              );
-              return { restoreComplete: restoreClipboard() };
-            } catch (portalError) {
-              if (portalError?.message === "portal-dismissed") {
-                debugLogger.warn(
-                  "Portal dialog dismissed without response, retrying",
-                  { attempt: attempt + 1, maxRetries: MAX_PORTAL_RETRIES },
-                  "clipboard"
-                );
-                continue;
-              }
-              if (portalError?.message === "portal-denied") {
-                this.portalDenied = true;
-                debugLogger.warn(
-                  "User denied portal access, skipping portal for this session",
-                  {},
-                  "clipboard"
-                );
-              } else {
-                debugLogger.warn(
-                  "linux-fast-paste --portal failed, falling back",
-                  { error: portalError?.message },
-                  "clipboard"
-                );
-              }
-              return false;
+          try {
+            await this._runPortalPaste(linuxFastPaste, {
+              shiftInsert: useShiftInsert,
+              terminal: isTerminalTarget,
+            });
+            this.safeLog("✅ Paste successful using linux-fast-paste --portal (RemoteDesktop)");
+            return { restoreComplete: restoreClipboard() };
+          } catch (portalError) {
+            if (portalError?.message === "portal-denied") {
+              this.portalDenied = true;
+            } else if (
+              portalError?.message === "portal support not compiled in" ||
+              portalError?.message === "portal symbolic keyboard input unavailable"
+            ) {
+              this.portalUnavailable = true;
+            } else {
+              // Timeout or service error: the session stays broken until app
+              // restart, so skip the portal from now on (#1614).
+              this.portalFailed = true;
             }
+            debugLogger.warn(
+              "linux-fast-paste --portal failed, falling back",
+              { error: portalError?.message },
+              "clipboard"
+            );
+            return false;
           }
-          return false;
         };
 
         // KDE with XWayland: portal first because clipboard and input are both
-        // on X11. uinput causes clipboard desync (X11 clipboard vs Wayland input).
-        // GNOME: uinput first because the portal often times out or shows a
-        // confusing permission dialog, causing a 10s+ delay (issue #494).
-        if (isKde && linuxFastPaste && !this.portalDenied) {
+        // on X11; uinput causes clipboard desync (X11 clipboard vs Wayland input).
+        if (isKde && !this.portalDenied && !this.portalUnavailable && !this.portalFailed) {
           const portalPaste = await tryPortalPaste();
           if (portalPaste) return { method: "portal", ...portalPaste };
-          try {
-            const uinputPaste = await tryUinputPaste();
-            return { method: "uinput", ...uinputPaste };
-          } catch (uinputError) {
-            debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
-          }
-        } else if (isGnome && linuxFastPaste) {
-          try {
-            const uinputPaste = await tryUinputPaste();
-            return { method: "uinput", ...uinputPaste };
-          } catch (uinputError) {
-            debugLogger.warn(
-              "uinput paste failed on GNOME, trying portal",
-              { error: uinputError?.message },
-              "clipboard"
-            );
-          }
-          if (!this.portalDenied) {
-            const portalPaste = await tryPortalPaste();
-            if (portalPaste) return { method: "portal", ...portalPaste };
-          }
-        } else {
-          // Other compositors (wlroots, etc.): try uinput only
-          try {
-            const uinputPaste = await tryUinputPaste();
-            return { method: "uinput", ...uinputPaste };
-          } catch (uinputError) {
-            debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
-          }
+        }
+
+        // GNOME: only lead with the portal when a saved token lets it run
+        // silently — a tokenless portal can stall 10s+ on a permission dialog
+        // (issue #494), so first-time pastes try uinput and only fall back to
+        // the portal (and its dialog) when uinput is unavailable.
+        const shouldPreferGnomePortal =
+          isGnome &&
+          !this.portalDenied &&
+          !this.portalUnavailable &&
+          !this.portalFailed &&
+          !this.portalTokenPasteFailed &&
+          !!this._readPortalToken();
+        if (shouldPreferGnomePortal) {
+          const portalPaste = await tryPortalPaste();
+          if (portalPaste) return { method: "portal", ...portalPaste };
+          this.portalTokenPasteFailed = true;
+        }
+
+        try {
+          const uinputPaste = await tryUinputPaste();
+          return { method: "uinput", ...uinputPaste };
+        } catch (uinputError) {
+          debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
+        }
+
+        if (
+          isGnome &&
+          !shouldPreferGnomePortal &&
+          !this.portalDenied &&
+          !this.portalUnavailable &&
+          !this.portalFailed
+        ) {
+          const portalPaste = await tryPortalPaste();
+          if (portalPaste) return { method: "portal", ...portalPaste };
         }
 
         // XTest/XWayland fallback: works for XWayland apps on any Wayland compositor
-        if (xwaylandAvailable) {
+        if (xwaylandAvailable && !this.xtestTimedOut) {
           const xtestArgs = [];
           if (targetWindowId) xtestArgs.push("--window", targetWindowId);
           appendModeFlag(xtestArgs);
@@ -1621,6 +1761,9 @@ class ClipboardManager {
               restoreComplete: restoreClipboard(),
             };
           } catch (xtestError) {
+            if (xtestError?.message?.endsWith(" timed out")) {
+              this.xtestTimedOut = true;
+            }
             debugLogger.warn(
               "XTest/XWayland fallback also failed",
               { error: xtestError?.message },
@@ -1660,20 +1803,15 @@ class ClipboardManager {
       }
     }
 
-    // Terminals use Ctrl+Shift+V instead of Ctrl+V
-    const isTerminal = () => {
-      if (windowSignals.length === 0) return false;
-      const isTerminalWindow = terminalClasses.some((term) => signalsMatch(term));
-      if (isTerminalWindow) {
-        this.safeLog(`🖥️ Terminal detected: ${windowSignals.join(" | ")}`);
-      }
-      return isTerminalWindow;
-    };
+    if (isTerminalTarget) {
+      this.safeLog(`🖥️ Terminal detected: ${windowSignals.join(" | ")}`);
+    }
+    const pasteKeys = useShiftInsert
+      ? "shift+Insert"
+      : isTerminalTarget
+        ? "ctrl+shift+v"
+        : "ctrl+v";
 
-    const inTerminal = isTerminal();
-    const pasteKeys = useShiftInsert ? "shift+Insert" : inTerminal ? "ctrl+shift+v" : "ctrl+v";
-
-    const canUseWtype = isWayland && isWlroots;
     const canUseYdotool = ydotoolDaemonRunning;
     const canUseXdotool = isWayland ? xwaylandAvailable && xdotoolExists : xdotoolExists;
 
@@ -1688,15 +1826,15 @@ class ClipboardManager {
       );
     }
 
-    // ydotool 0.1.x (Ubuntu 24.04) uses key names; 1.0.x uses raw keycodes
-    // 29 = KEY_LEFTCTRL, 42 = KEY_LEFTSHIFT, 47 = KEY_V, 110 = KEY_INSERT
+    // ydotool 0.1.x (Ubuntu 24.04) uses key names; 1.0.x uses raw keycodes.
+    // Wayland's physical fallback is always Shift+Insert to avoid KEY_V's layout-sensitive position.
     const legacyYdotool = this._isYdotoolLegacy();
     let ydotoolArgs;
-    if (useShiftInsert) {
+    if (isWayland || useShiftInsert) {
       ydotoolArgs = legacyYdotool
         ? ["key", "shift+Insert"]
         : ["key", "42:1", "110:1", "110:0", "42:0"];
-    } else if (inTerminal) {
+    } else if (isTerminalTarget) {
       ydotoolArgs = legacyYdotool
         ? ["key", "ctrl+shift+v"]
         : ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"];
@@ -1704,30 +1842,18 @@ class ClipboardManager {
       ydotoolArgs = legacyYdotool ? ["key", "ctrl+v"] : ["key", "29:1", "47:1", "47:0", "29:0"];
     }
 
-    let wtypeArgs;
-    if (useShiftInsert) {
-      wtypeArgs = ["-M", "shift", "-k", "Insert", "-m", "shift"];
-    } else if (inTerminal) {
-      wtypeArgs = ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"];
-    } else {
-      wtypeArgs = ["-M", "ctrl", "-k", "v", "-m", "ctrl"];
-    }
-    const wtypeEntry = canUseWtype ? [{ cmd: "wtype", args: wtypeArgs }] : [];
     const xdotoolEntry = canUseXdotool ? [{ cmd: "xdotool", args: xdotoolArgs }] : [];
     const ydotoolEntry = canUseYdotool ? [{ cmd: "ydotool", args: ydotoolArgs }] : [];
 
-    // Compositor-aware priority ordering
-    let candidates;
-    if (!isWayland) {
-      // X11: xdotool is native and needs no daemon; ydotool as fallback
-      candidates = [...xdotoolEntry, ...ydotoolEntry];
-    } else if (isWlroots) {
-      // wlroots (Sway, Hyprland, etc.): wtype is native; then xdotool for XWayland; ydotool last
-      candidates = [...wtypeEntry, ...xdotoolEntry, ...ydotoolEntry];
-    } else {
-      // GNOME, KDE, or unknown Wayland: ydotool (uinput) works for all windows; xdotool for XWayland only
-      candidates = [...ydotoolEntry, ...xdotoolEntry, ...wtypeEntry];
-    }
+    // Compositor-aware priority ordering. X11 and wlroots (where wtype already
+    // ran): xdotool first — native on X11, no daemon needed. GNOME, KDE, or
+    // unknown Wayland: ydotool (uinput) first because it reaches every window,
+    // while xdotool exits 0 even when the focused window is native Wayland and
+    // never receives the keystroke; its Wayland args are layout-safe Shift+Insert.
+    const candidates =
+      !isWayland || isWlroots
+        ? [...xdotoolEntry, ...ydotoolEntry]
+        : [...ydotoolEntry, ...xdotoolEntry];
 
     const available = candidates.filter((c) => this.commandExists(c.cmd));
 
@@ -1739,7 +1865,7 @@ class ClipboardManager {
         targetWindowId,
         detectedWindowClass,
         detectedWindowComm,
-        inTerminal,
+        inTerminal: isTerminalTarget,
         useShiftInsert,
         pasteKeys,
       },
@@ -1854,7 +1980,7 @@ class ClipboardManager {
     debugLogger.error("All paste tools failed", { failedAttempts }, "clipboard");
 
     // xdotool type fallback for terminals where Ctrl+Shift+V simulation fails
-    if (inTerminal && xdotoolExists && !isWayland) {
+    if (isTerminalTarget && xdotoolExists && !isWayland) {
       debugLogger.debug(
         "Trying xdotool type fallback for terminal",
         {
@@ -2111,12 +2237,28 @@ Would you like to open System Settings now?`;
       };
     }
 
-    const { isWayland, xwaylandAvailable, isWlroots } = getLinuxSessionInfo();
+    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland } =
+      getLinuxSessionInfo();
     const linuxFastPaste = this.resolveLinuxFastPasteBinary();
     const hasNativeBinary = !!linuxFastPaste;
+    let portalKeysymAvailable = false;
+    if (linuxFastPaste && isWayland && (isGnome || isKde)) {
+      // spawnSync blocks the main process, so probe the binary only once.
+      if (!this.portalKeysymChecked) {
+        this.portalKeysymChecked = true;
+        try {
+          const result = spawnSync(linuxFastPaste, ["--capabilities"], { timeout: 1000 });
+          this.portalKeysymAvailable =
+            result.status === 0 &&
+            result.stdout.toString().split(/\s+/).includes("portal-keysym-v1");
+        } catch {}
+      }
+      portalKeysymAvailable = this.portalKeysymAvailable;
+    }
 
     const tools = [];
-    const canUseWtype = isWayland && isWlroots;
+    const hasHyprlandShortcut = isWayland && isHyprland && this.commandExists("hyprctl");
+    const hasWtype = isWayland && isWlroots && this.commandExists("wtype");
     const canUseYdotool = this.commandExists("ydotool") && this._isYdotoolDaemonRunning();
     const canUseXdotool = !isWayland || xwaylandAvailable;
 
@@ -2124,13 +2266,14 @@ Would you like to open System Settings now?`;
       if (canUseXdotool && this.commandExists("xdotool")) tools.push("xdotool");
       if (canUseYdotool) tools.push("ydotool");
     } else if (isWlroots) {
-      if (canUseWtype && this.commandExists("wtype")) tools.push("wtype");
+      if (hasWtype) tools.push("wtype");
+      if (hasHyprlandShortcut) tools.push("hyprland-sendshortcut");
       if (canUseXdotool && this.commandExists("xdotool")) tools.push("xdotool");
       if (canUseYdotool) tools.push("ydotool");
     } else {
+      if (portalKeysymAvailable) tools.push("portal");
       if (canUseXdotool && this.commandExists("xdotool")) tools.push("xdotool");
       if (canUseYdotool) tools.push("ydotool");
-      if (canUseWtype && this.commandExists("wtype")) tools.push("wtype");
     }
 
     const hasUinput = this._canAccessUinput();
@@ -2145,25 +2288,34 @@ Would you like to open System Settings now?`;
       } else {
         recommendedInstall = "xdotool";
       }
-    } else if (isWayland && hasNativeBinary && !hasUinput && tools.length === 0) {
-      recommendedInstall = "usermod -aG input $USER";
+    }
+
+    let method = null;
+    if (!isWayland) {
+      method = nativeBinaryUsable ? "xtest" : tools[0] || null;
+    } else if (hasWtype) {
+      method = "wtype";
+    } else if (hasHyprlandShortcut) {
+      method = "hyprland-sendshortcut";
+    } else if ((isGnome || isKde) && portalKeysymAvailable) {
+      method = "portal";
+    } else if (nativeBinaryUsable) {
+      method = "uinput";
+    } else {
+      method = tools[0] || null;
     }
 
     return {
       platform: "linux",
       available,
-      method: nativeBinaryUsable
-        ? isWayland && hasUinput
-          ? "uinput"
-          : "xtest"
-        : available
-          ? tools[0]
-          : null,
-      requiresPermission: false,
+      method,
+      requiresPermission: method === "portal",
       isWayland,
       xwaylandAvailable,
       hasNativeBinary,
       hasUinput,
+      hasWtype,
+      isWlroots,
       tools,
       recommendedInstall,
     };

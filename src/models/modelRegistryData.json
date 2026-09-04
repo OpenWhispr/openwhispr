@@ -87,6 +87,34 @@
       "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11.tar.bz2",
       "extractDir": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
       "descriptionKey": "models.descriptions.parakeet.nemotron_3_5_asr_streaming_0_6b"
+    },
+    "cohere-transcribe-03-2026": {
+      "name": "Cohere Transcribe 2B",
+      "description": "Most accurate local ASR (5.42% avg WER, 14 languages). No auto language detection",
+      "size": "2.7GB",
+      "sizeMb": 2700,
+      "expectedSizeBytes": 1699791751,
+      "language": "multilingual",
+      "supportedLanguages": [
+        "ar",
+        "de",
+        "el",
+        "en",
+        "es",
+        "fr",
+        "it",
+        "ja",
+        "ko",
+        "nl",
+        "pl",
+        "pt",
+        "vi",
+        "zh"
+      ],
+      "modelType": "cohere-transcribe",
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01.tar.bz2",
+      "extractDir": "sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01",
+      "descriptionKey": "models.descriptions.cohere.cohere_transcribe_03_2026"
     }
   },
   "diarizationModels": {
@@ -246,6 +274,19 @@
       ]
     },
     {
+      "id": "gemini",
+      "name": "Gemini",
+      "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+      "models": [
+        {
+          "id": "gemini-3.5-transcribe",
+          "name": "Gemini 3.5 Transcribe",
+          "description": "Google's Gemini speech-to-text",
+          "descriptionKey": "models.descriptions.transcription.gemini_3_5_transcribe"
+        }
+      ]
+    },
+    {
       "id": "corti",
       "name": "Corti",
       "baseUrl": "https://api.us.corti.app/v2",
@@ -286,7 +327,8 @@
           "description": "Flagship GPT-5.6 for complex coding, research, and agentic work, 1M context",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_sol",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5.6-terra",
@@ -294,7 +336,8 @@
           "description": "Balanced capability, speed, and cost for everyday work",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_terra",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5.6-luna",
@@ -302,7 +345,8 @@
           "description": "Fastest and lowest-cost model in the GPT-5.6 family",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_luna",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5.5",
@@ -310,7 +354,8 @@
           "description": "Frontier model for complex reasoning, 1M context",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_5",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5.2",
@@ -318,7 +363,8 @@
           "description": "Strong reasoning model",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_2",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5-mini",
@@ -326,7 +372,8 @@
           "description": "Fast and cost-efficient",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_mini",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-5-nano",
@@ -334,7 +381,8 @@
           "description": "Ultra-fast, low latency",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_nano",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "gpt-4.1",
@@ -342,7 +390,8 @@
           "description": "Strong baseline, 1M context",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": true
+          "supportsTemperature": true,
+          "supportsVision": true
         },
         {
           "id": "gpt-4.1-mini",
@@ -350,7 +399,8 @@
           "description": "Smaller GPT-4.1 model",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_mini",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": true
+          "supportsTemperature": true,
+          "supportsVision": true
         },
         {
           "id": "gpt-4.1-nano",
@@ -358,7 +408,8 @@
           "description": "Lowest latency GPT-4.1",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_nano",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": true
+          "supportsTemperature": true,
+          "supportsVision": true
         }
       ]
     },
@@ -397,55 +448,81 @@
           "id": "claude-fable-5",
           "name": "Claude Fable 5",
           "description": "Anthropic's most capable model, Mythos-class, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5",
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "claude-sonnet-5",
           "name": "Claude Sonnet 5",
           "description": "Fast, capable agentic model at lower cost",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5",
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "claude-sonnet-4-6",
           "name": "Claude Sonnet 4.6",
           "description": "Balanced performance",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_6"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_6",
+          "supportsTemperature": true,
+          "supportsVision": true
         },
         {
           "id": "claude-haiku-4-5",
           "name": "Claude Haiku 4.5",
           "description": "Fast with near-frontier intelligence",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5",
+          "supportsTemperature": true,
+          "supportsVision": true
+        },
+        {
+          "id": "claude-opus-5",
+          "name": "Claude Opus 5",
+          "description": "Most capable Opus model, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_5",
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "claude-opus-4-8",
           "name": "Claude Opus 4.8",
           "description": "Powerful Opus model tuned for honesty and reliability, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8",
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "claude-opus-4-7",
           "name": "Claude Opus 4.7",
           "description": "Powerful Opus model, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7",
+          "supportsTemperature": false,
+          "supportsVision": true
         },
         {
           "id": "claude-opus-4-6",
           "name": "Claude Opus 4.6",
           "description": "Previous Opus generation, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6",
+          "supportsTemperature": true,
+          "supportsVision": true
         },
         {
           "id": "claude-sonnet-4-5",
           "name": "Claude Sonnet 4.5",
           "description": "Previous Sonnet generation",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5",
+          "supportsTemperature": true,
+          "supportsVision": true
         },
         {
           "id": "claude-opus-4-5",
           "name": "Claude Opus 4.5",
           "description": "Earlier Opus model",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5",
+          "supportsTemperature": true,
+          "supportsVision": true
         }
       ]
     },
@@ -458,25 +535,46 @@
           "name": "Gemini 3.5 Flash",
           "description": "Latest fast, high-capability Gemini model",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash",
-          "supportsThinking": true
+          "supportsThinking": true,
+          "supportsVision": true
+        },
+        {
+          "id": "gemini-3.5-flash-lite",
+          "name": "Gemini 3.5 Flash Lite",
+          "description": "Fastest, most cost-effective 3.5 model",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash_lite",
+          "supportsThinking": true,
+          "supportsVision": true
         },
         {
           "id": "gemini-3.1-pro-preview",
           "name": "Gemini 3.1 Pro",
           "description": "Next-gen flagship model for complex reasoning",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview",
+          "supportsThinking": true,
+          "supportsVision": true
+        },
+        {
+          "id": "gemini-3.1-flash-lite",
+          "name": "Gemini 3.1 Flash Lite",
+          "description": "Frontier-class performance at low cost",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_flash_lite",
+          "supportsVision": true
         },
         {
           "id": "gemini-3-flash-preview",
           "name": "Gemini 3 Flash",
           "description": "Ultra-fast, high-capability next-gen model",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview",
+          "supportsThinking": true,
+          "supportsVision": true
         },
         {
           "id": "gemini-2.5-flash-lite",
           "name": "Gemini 2.5 Flash Lite",
           "description": "Lowest latency and cost",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_2_5_flash_lite"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_2_5_flash_lite",
+          "supportsVision": true
         },
         {
           "id": "gemma-4-31b-it",
@@ -497,14 +595,6 @@
       "name": "Groq",
       "models": [
         {
-          "id": "qwen/qwen3-32b",
-          "name": "Qwen3 32B",
-          "description": "Powerful reasoning model, 131K context",
-          "disableThinking": true,
-          "supportsThinking": true,
-          "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_32b"
-        },
-        {
           "id": "openai/gpt-oss-120b",
           "name": "GPT-OSS 120B",
           "description": "OpenAI's open-source flagship, 500 T/sec",
@@ -519,24 +609,6 @@
           "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b"
         },
         {
-          "id": "llama-3.3-70b-versatile",
-          "name": "LLaMA 3.3 70B",
-          "description": "Meta's versatile model, 280 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_llama_3_3_70b_versatile"
-        },
-        {
-          "id": "llama-3.1-8b-instant",
-          "name": "LLaMA 3.1 8B",
-          "description": "Ultra-fast 560 T/sec, 131K context",
-          "descriptionKey": "models.descriptions.cloud.groq_llama_3_1_8b_instant"
-        },
-        {
-          "id": "meta-llama/llama-4-scout-17b-16e-instruct",
-          "name": "Llama 4 Scout",
-          "description": "Meta's efficient multimodal, 750 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_llama_4_scout"
-        },
-        {
           "id": "groq/compound",
           "name": "Compound",
           "description": "Groq's compound system, 450 T/sec",
@@ -547,12 +619,6 @@
           "name": "Compound Mini",
           "description": "Fast compound system, 3x lower latency",
           "descriptionKey": "models.descriptions.cloud.groq_compound_mini"
-        },
-        {
-          "id": "moonshotai/kimi-k2-instruct-0905",
-          "name": "Kimi K2 0905",
-          "description": "Moonshot AI's 1T MoE, 256K context",
-          "descriptionKey": "models.descriptions.cloud.groq_kimi_k2_0905"
         }
       ]
     },
@@ -560,15 +626,6 @@
       "id": "tinfoil",
       "name": "Tinfoil",
       "models": [
-        {
-          "id": "kimi-k2-6",
-          "name": "Kimi K2.6",
-          "description": "Private long-horizon coding and multimodal model, 256K context",
-          "tokenParam": "max_tokens",
-          "supportsTemperature": true,
-          "descriptionKey": "models.descriptions.cloud.tinfoil_kimi_k2_6",
-          "supportsThinking": true
-        },
         {
           "id": "glm-5-2",
           "name": "GLM-5.2",
@@ -718,7 +775,6 @@
       "id": "qwen",
       "name": "Qwen",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
       "models": [
         {
           "id": "qwen3.5-9b-q4_k_m",
@@ -879,7 +935,6 @@
       "id": "mistral",
       "name": "Mistral",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "[INST] {system}\n\n{user} [/INST]",
       "models": [
         {
           "id": "mistral-nemo-12b-instruct-q4_k_m",
@@ -924,7 +979,6 @@
       "id": "llama",
       "name": "Meta Llama",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{system}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{user}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
       "models": [
         {
           "id": "llama-3.2-1b-instruct-q4_k_m",
@@ -969,7 +1023,6 @@
       "id": "openai-oss",
       "name": "OpenAI",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
       "models": [
         {
           "id": "gpt-oss-20b-mxfp4",
@@ -977,7 +1030,7 @@
           "size": "12.1GB",
           "sizeBytes": 12999763968,
           "description": "OpenAI's open-weight model for consumer hardware",
-          "fileName": "gpt-oss-20b-mxfp4.gguf",
+          "fileName": "gpt-oss-20b-MXFP4.gguf",
           "quantization": "mxfp4",
           "contextLength": 128000,
           "hfRepo": "ggml-org/gpt-oss-20b-GGUF",
@@ -991,7 +1044,6 @@
       "id": "gemma",
       "name": "Gemma (Google)",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<bos><start_of_turn>user\n{system}\n\n{user}<end_of_turn>\n<start_of_turn>model\n",
       "models": [
         {
           "id": "gemma-4-31b-it-q4_k_m",
@@ -1145,7 +1197,6 @@
       "id": "liquidai",
       "name": "Liquid AI",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
       "models": [
         {
           "id": "lfm2.5-1.2b-instruct-q4_k_m",
@@ -1237,8 +1288,8 @@
         "provider": "openrouter",
         "models": [
           {
-            "id": "anthropic/claude-sonnet-4",
-            "name": "Claude Sonnet 4",
+            "id": "anthropic/claude-sonnet-4.6",
+            "name": "Claude Sonnet 4.6",
             "description": "Balanced performance and quality",
             "recommended": true
           },
@@ -1255,8 +1306,8 @@
         "provider": "openrouter",
         "models": [
           {
-            "id": "anthropic/claude-opus-4",
-            "name": "Claude Opus 4",
+            "id": "anthropic/claude-opus-4.8",
+            "name": "Claude Opus 4.8",
             "description": "Most capable, highest quality",
             "recommended": true
           },

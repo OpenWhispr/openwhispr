@@ -8,9 +8,12 @@ export interface GoogleCalendar {
   sync_token: string | null;
 }
 
+export type CalendarResponseStatus = "needsAction" | "declined" | "tentative" | "accepted";
+
 export interface CalendarEvent {
   id: string;
   calendar_id: string;
+  provider: string;
   summary: string | null;
   start_time: string;
   end_time: string;
@@ -21,9 +24,42 @@ export interface CalendarEvent {
   organizer_email: string | null;
   attendees_count: number;
   attendees: string | null;
+  availability_status: CalendarAvailabilityStatus;
+  self_response_status: CalendarResponseStatus | "unknown";
 }
 
-export interface GoogleCalendarAccount {
+export type CalendarAvailabilityStatus = "free" | "tentative" | "busy" | "unavailable" | "unknown";
+
+export interface CalendarAvailabilityRequest {
+  start: string;
+  end: string;
+  minimumSlotMinutes?: number;
+  bufferMinutes?: number;
+  maxResults?: number;
+}
+
+export interface CalendarAvailabilityInterval {
+  start: string;
+  end: string;
+}
+
+export interface CalendarAvailabilitySlot extends CalendarAvailabilityInterval {
+  durationMinutes: number;
+}
+
+export interface CalendarAvailabilityResult {
+  range: CalendarAvailabilityInterval;
+  timezone: string;
+  isEntireRangeFree: boolean;
+  availableSlots: CalendarAvailabilitySlot[];
+  hasMore: boolean;
+  coverage: {
+    source: "local-calendar-cache";
+    lookaheadDays: number;
+  };
+}
+
+export interface CalendarAccount {
   email: string;
 }
 
@@ -40,7 +76,7 @@ export interface MeetingDetectionPreferences {
 export interface CalendarAttendee {
   email: string;
   displayName: string | null;
-  responseStatus: "needsAction" | "declined" | "tentative" | "accepted" | null;
+  responseStatus: CalendarResponseStatus | null;
   self: boolean;
 }
 
