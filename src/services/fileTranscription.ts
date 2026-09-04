@@ -9,6 +9,8 @@ export interface FileTranscriptionResult {
   error?: string;
   code?: string;
   diarized?: boolean;
+  // The transcript succeeded, but requested speaker labels could not be applied.
+  diarizationWarning?: boolean;
   warning?: string;
   // Set alongside `warning` by the chunked cloud path: how much audio was lost.
   failedChunks?: number;
@@ -172,6 +174,33 @@ export function shouldUseByokDiarize(
   );
 }
 
+interface DiarizationSettingsRequest {
+  enabled: boolean;
+  modelsReady: boolean;
+  numSpeakers: number | null;
+  config: FileTranscriptionConfig;
+  ensureModels: () => Promise<boolean>;
+}
+
+// Speaker detection is opt-in but its local models download lazily, so a run
+// started before they land would report "couldn't be applied" without the
+// diarizer ever being invoked. Fetch them first; only the routes that diarize
+// server-side can skip the download.
+export async function resolveDiarizationSettings({
+  enabled,
+  modelsReady,
+  numSpeakers,
+  config,
+  ensureModels,
+}: DiarizationSettingsRequest): Promise<DiarizationSettings> {
+  const needsLocalModels = enabled && !modelsReady && !shouldUseByokDiarize(config, enabled);
+  return {
+    enabled,
+    localModelsReady: needsLocalModels ? await ensureModels() : modelsReady,
+    numSpeakers,
+  };
+}
+
 // Transcribe and diarize in parallel, then merge speaker labels into the text.
 // Shared by the single-file flow and the batch queue. `durationSeconds` (when the
 // source knows it, e.g. URL downloads) beats inferring duration from segments.
@@ -203,8 +232,10 @@ export async function transcribeFileWithSpeakers(
   const measuredDuration = durationSeconds || (diar?.success && diar.durationSeconds) || null;
   const result = { ...transcribed, durationSeconds: measuredDuration };
 
-  if (!result.success || !result.text || result.diarized) return result;
-  if (!diar?.success || !diar.segments?.length) return result;
+  if (!result.success || !result.text || !diarization.enabled || result.diarized) return result;
+  if (!diar?.success || !diar.segments?.length) {
+    return { ...result, diarizationWarning: true };
+  }
 
   try {
     const merged = await window.electronAPI.mergeSpeakerText?.(
@@ -216,5 +247,5 @@ export async function transcribeFileWithSpeakers(
   } catch {
     // Merge failure falls back to the plain transcript.
   }
-  return result;
+  return { ...result, diarizationWarning: true };
 }

@@ -2896,6 +2896,7 @@
       "transcriptionComplete": "Transcrição concluída",
       "partialWarning": "Não foi possível transcrever parte do áudio.",
       "partialWarningCount": "Não foi possível transcrever {{failed}} de {{total}} seções do áudio.",
+      "diarizationWarning": "Não foi possível aplicar a identificação de falantes. A transcrição foi salva sem rótulos de falante.",
       "chunkLossExceeded": "Muito áudio foi perdido devido a um problema de rede. Verifique sua conexão e tente novamente.",
       "openNote": "Abrir nota",
       "uploadAnother": "Enviar outro",

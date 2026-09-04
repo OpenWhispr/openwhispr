@@ -2880,6 +2880,7 @@
       "transcriptionComplete": "文字起こし完了",
       "partialWarning": "音声の一部を文字起こしできませんでした。",
       "partialWarningCount": "{{total}}個の音声セクションのうち{{failed}}個を文字起こしできませんでした。",
+      "diarizationWarning": "話者識別を適用できませんでした。文字起こしは話者ラベルなしで保存されました。",
       "chunkLossExceeded": "ネットワークの問題で音声の大部分が失われました。接続を確認してもう一度お試しください。",
       "openNote": "ノートを開く",
       "uploadAnother": "別のファイルをアップロード",
