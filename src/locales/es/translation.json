@@ -164,6 +164,7 @@
     "add": "Añadir",
     "retry": "Reintentar",
     "back": "Atrás",
+    "logout": "Cerrar sesión",
     "next": "Siguiente",
     "complete": "Completar",
     "reset": "Restablecer",
@@ -200,7 +201,7 @@
     "done": "Listo",
     "skip": "Omitir",
     "policyAiProcessingRestricted": "El procesamiento con IA está restringido por tu organización.",
-    "policyAgentRestricted": "El uso del agente de IA está restringido por tu organización.",
+    "policyAgentRestricted": "El uso del asistente de IA está restringido por tu organización.",
     "policyTranscriptionRestricted": "La transcripción está restringida por tu organización."
   },
   "onboarding": {
@@ -210,8 +211,8 @@
         "microphoneDescription": "Convierte la voz en texto.",
         "accessibilityDescription": "Pega texto en tu aplicación activa.",
         "systemAudioTitle": "Audio del Sistema",
-        "systemAudioDescription": "Captura audio de otras aplicaciones.",
-        "screenContextDescription": "Permite que tu asistente de voz vea tu pantalla. Nunca se guarda.",
+        "systemAudioDescription": "Necesario para capturar audio en las notas de reuniones.",
+        "screenContextDescription": "Comparte el contexto de pantalla con el asistente de voz.",
         "enable": "Activar",
         "enabled": "Activado"
       },
@@ -236,6 +237,7 @@
       "hotkey": {
         "capture": "Pulsa las teclas que quieras usar",
         "chooseAnother": "Elegir otro atajo",
+        "confirmAgain": "Pulsa {{hotkey}} otra vez para confirmar",
         "inUse": "Ese atajo ya está en uso. Elige otro.",
         "holding": "Mantén pulsado o pulsa otra tecla"
       },
@@ -408,16 +410,15 @@
         "descriptionLineOne": "Elige los modelos que quieres",
         "descriptionLineTwo": "ejecutar en tu dispositivo.",
         "providerLabel": "Proveedor",
-        "agent": "Agente",
         "download": "Descargar",
         "downloadingShort": "Descargando",
         "selected": "Seleccionado",
-        "use": "Usar",
+        "selectModel": "Seleccionar modelo",
         "downloadInProgress": "Descarga en curso",
         "cancelDownload": "Cancelar la descarga de {{model}}",
         "downloads": "Descargas de modelos",
         "downloading": "Descargando… {{progress}}%",
-        "installing": "Instalando el modelo…"
+        "installing": "Instalando"
       }
     },
     "steps": {
@@ -865,7 +866,7 @@
       "errorTitles": {
         "sessionExpired": "Sesión expirada",
         "offline": "Sin conexión",
-        "agentUnavailable": "Agente no disponible",
+        "agentUnavailable": "Asistente no disponible",
         "screenContextSkipped": "Contexto de pantalla omitido",
         "dailyLimitReached": "Límite diario alcanzado",
         "providerRateLimited": "Límite de tasa del proveedor"
@@ -1099,12 +1100,12 @@
       "welcomeBack": "Bienvenido de nuevo"
     },
     "signedIn": {
-      "ready": "Listo",
-      "welcomeBack": "Bienvenido de nuevo",
-      "welcomeBackName": "Bienvenido de nuevo, {{name}}"
+      "welcomeBack": "Bienvenido de nuevo"
     },
     "sso": {
       "continueWithSSO": "Iniciar sesión con SSO",
+      "workEmailLabel": "Correo del trabajo",
+      "emailPlaceholder": "Añade tu correo",
       "emailRequired": "Introduce tu correo del trabajo para usar SSO.",
       "failed": "Error al iniciar sesión con SSO. Inténtalo de nuevo.",
       "companySignInTitle": "Usa el inicio de sesión de tu empresa",
@@ -1418,10 +1419,10 @@
       }
     },
     "edit": {
-      "agentNameLabel": "Nombre del agente:",
+      "agentNameLabel": "Nombre del asistente:",
       "cautionLabel": "Precaución",
       "cautionTextPrefix": "Modificar este prompt puede afectar la calidad de transcripción.",
-      "cautionTextSuffix": "Mantén el marcador {{agentName}} para preservar la detección del agente.",
+      "cautionTextSuffix": "Mantén el marcador {{agentName}} para preservar la detección del asistente.",
       "placeholder": "Introduce tu prompt de sistema personalizado..."
     },
     "tabs": {
@@ -1636,7 +1637,7 @@
           "features": [
             "Grabaciones de reuniones ilimitadas",
             "Roles y gestión de miembros del espacio de trabajo",
-            "Modo agente",
+            "Modo asistente",
             "Chatea sobre tus datos",
             "Soporte prioritario"
           ],
@@ -1760,11 +1761,11 @@
       }
     },
     "agentConfig": {
-      "agentName": "Nombre del agente",
+      "agentName": "Nombre del asistente",
       "description": "Nombra a tu asistente de IA para que puedas dirigirte a él directamente durante el dictado",
       "dialogs": {
-        "updatedDescription": "Tu agente ahora se llama \"{{name}}\". Dirígete a él diciendo \"Hey {{name}}\" seguido de tus instrucciones.",
-        "updatedTitle": "Nombre del agente actualizado"
+        "updatedDescription": "Tu asistente ahora se llama \"{{name}}\". Dirígete a él diciendo \"Hey {{name}}\" seguido de tus instrucciones.",
+        "updatedTitle": "Nombre del asistente actualizado"
       },
       "examplesTitle": "Ejemplos",
       "helper": "Elige algo corto y natural para decir en voz alta",
@@ -1879,7 +1880,7 @@
       "clearDictionaryTitle": "¿Borrar diccionario?",
       "clearDictionaryDescription": "Esto eliminará todas las palabras de tu diccionario personalizado. Esta acción no se puede deshacer.",
       "clearAll": "Borrar todo",
-      "agentNameAutoManaged": "Gestionado automáticamente — sincronizado con el nombre del agente",
+      "agentNameAutoManaged": "Gestionado automáticamente — sincronizado con el nombre del asistente",
       "removeWord": "Eliminar palabra",
       "noWords": "Aún no hay palabras",
       "wordsAppearHere": "Las palabras que añadas aparecerán aquí",
@@ -2575,7 +2576,7 @@
         "openai_gpt_4_1_mini": "Modelo GPT-4.1 más pequeño",
         "openai_gpt_4_1_nano": "GPT-4.1 de menor latencia",
         "anthropic_claude_fable_5": "El modelo más capaz de Anthropic, clase Mythos",
-        "anthropic_claude_sonnet_5": "Modelo agéntico rápido y capaz a menor costo",
+        "anthropic_claude_sonnet_5": "Modelo asistente rápido y capaz a menor costo",
         "anthropic_claude_sonnet_4_6": "Rendimiento equilibrado",
         "anthropic_claude_sonnet_4_5": "Generación anterior de Sonnet",
         "anthropic_claude_haiku_4_5": "Rápido con inteligencia cercana a la frontera",
@@ -2610,12 +2611,12 @@
         "corti_corti_s1_mini": "Modelo clínico compacto con razonamiento a mitad de precio"
       },
       "enterprise": {
-        "bedrock_claude_fable_5": "El modelo Claude más capaz. Ideal para las tareas más difíciles del Modo Agente.",
+        "bedrock_claude_fable_5": "El modelo Claude más capaz. Ideal para las tareas de asistente más difíciles.",
         "bedrock_claude_haiku_4_5": "Rápido y económico. Ideal para limpiar texto.",
-        "bedrock_claude_sonnet_5": "Equilibrado. Opción por defecto para el Modo Agente.",
-        "bedrock_claude_opus_4_8": "Máxima inteligencia. Para tareas complejas del Modo Agente.",
+        "bedrock_claude_sonnet_5": "Equilibrado. Opción por defecto para las tareas de asistente.",
+        "bedrock_claude_opus_4_8": "Máxima inteligencia. Para tareas complejas de asistente.",
         "bedrock_gpt_oss_120b": "Modelo abierto de OpenAI. Gran razonamiento a bajo costo.",
-        "bedrock_deepseek_v3_2": "Modelo frontera de pesos abiertos. Gran valor para el Modo Agente.",
+        "bedrock_deepseek_v3_2": "Modelo frontera de pesos abiertos. Gran valor para las tareas de asistente.",
         "bedrock_qwen3_next_80b": "Modelo abierto disperso. Rápido y multilingüe.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
@@ -3383,7 +3384,7 @@
   },
   "dictationAgent": {
     "enabled": "Activar asistente de voz",
-    "enabledDescription": "Dicta instrucciones a tu agente. El texto resaltado se envía al modelo configurado y se edita en su lugar. Actívalo diciendo \"{{agentName}}\".",
+    "enabledDescription": "Dicta instrucciones a tu asistente. El texto resaltado se envía al modelo configurado y se edita en su lugar. Actívalo diciendo \"{{agentName}}\".",
     "screenContext": {
       "title": "Contexto de pantalla",
       "description": "Adjunta una captura de tu pantalla activa a los comandos del asistente de voz.",
@@ -3398,7 +3399,7 @@
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Usa el agente gestionado por OpenWhispr, sin necesidad de clave API.",
+      "openwhisprDesc": "Usa el asistente gestionado por OpenWhispr, sin necesidad de clave API.",
       "providers": "Usa tu propia clave API",
       "providersDesc": "Conéctate a OpenAI, Anthropic, Gemini o Groq con tu propia clave API.",
       "local": "Local",
@@ -3409,14 +3410,14 @@
       "enterpriseDesc": "Usa AWS Bedrock, Azure OpenAI o Google Vertex."
     },
     "prompt": {
-      "title": "Prompt del agente",
+      "title": "Prompt del asistente",
       "description": "El prompt de sistema usado cuando se detecta la palabra de activación. Recurre al valor predeterminado integrado."
     }
   },
   "agentMode": {
     "settings": {
       "systemPrompt": "Prompt del Sistema",
-      "systemPromptDescription": "Instrucciones personalizadas para el agente",
+      "systemPromptDescription": "Instrucciones personalizadas para el asistente",
       "systemPromptPlaceholder": "Introduce un prompt de sistema personalizado...",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
@@ -3568,7 +3569,7 @@
     },
     "cli": {
       "title": "Acceso por línea de comandos",
-      "description": "Dale a tu agente acceso a tus notas desde la terminal.",
+      "description": "Dale a tu asistente acceso a tus notas desde la terminal.",
       "installLabel": "Instalar",
       "learnMore": "Leer la documentación",
       "copyDocsLink": "Copiar enlace de la documentación",

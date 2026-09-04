@@ -30,21 +30,34 @@ import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
-import { formatHotkeyInstruction } from "./onboarding/hotkeyPresentation";
+import {
+  DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
+  formatHotkeyInstruction,
+  getRecommendedDictationHotkeys,
+  resolveOnboardingAssistantHotkey,
+  resolveOnboardingDictationHotkey,
+} from "./onboarding/hotkeyPresentation";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform } from "../utils/platform";
 import { ACCESSIBILITY_SKIPPED_KEY, areRequiredPermissionsMet } from "../utils/permissions";
 import { cloudPost } from "../services/cloudApi";
+import { signOut } from "../lib/auth";
 import logger from "../utils/logger";
 import {
   COMPACT_STEPS,
   getNextOnboardingStep,
+  getNotesFooterAction,
   getOnboardingProgress,
   getOnboardingRoute,
   reconcileStepWithRoute,
+  resetOnboardingProgress,
   resolveEnterpriseWorkspaceForOnboarding,
   shouldSkipOnboardingSetupChoice,
+  type OnboardingAuthDraft,
+  type OnboardingByokDraft,
+  type OnboardingLocalModelDraft,
+  type OnboardingResumeState,
   type OnboardingSetupMode,
   type OnboardingStepId,
 } from "./onboarding/flow";
@@ -76,6 +89,7 @@ function DemoHotkeyDescription({ text, hotkey }: { text: string; hotkey: string 
 
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
+  const platform = getPlatform();
   const { isSignedIn } = useAuth();
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
@@ -92,21 +106,31 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     clearSession,
   } = useOnboardingSession();
 
-  const [dictationHotkey, setDictationHotkey] = useState(
-    () => parseHotkeyList(settings.dictationKey)[0] || getDefaultHotkey()
+  const handleLogout = useCallback(async () => {
+    await signOut();
+    resetOnboardingProgress(localStorage);
+    window.location.reload();
+  }, []);
+
+  const { dictationHotkeyConfirmed, assistantHotkeyConfirmed } = session.resume;
+  const [dictationHotkey, setDictationHotkey] = useState(() =>
+    resolveOnboardingDictationHotkey({
+      platform,
+      savedHotkey: parseHotkeyList(settings.dictationKey)[0] ?? "",
+      platformDefault: getDefaultHotkey(),
+      confirmed: dictationHotkeyConfirmed,
+    })
   );
-  const [assistantHotkey, setAssistantHotkey] = useState(
-    () => parseHotkeyList(settings.voiceAgentKey)[0] || "CommandOrControl+Shift+Space"
+  const [assistantHotkey, setAssistantHotkey] = useState(() =>
+    resolveOnboardingAssistantHotkey(parseHotkeyList(settings.voiceAgentKey)[0] ?? "")
   );
-  const [dictationHotkeyConfirmed, setDictationHotkeyConfirmed] = useState(false);
-  const [assistantHotkeyConfirmed, setAssistantHotkeyConfirmed] = useState(false);
   // Seeded from main rather than getDefaultHotkey(): main already knows when the
   // platform default can't bind (GNOME/X11 reject modifier-only combos) and
   // registered a fallback instead — recommending the unregistrable default would
   // make every confirm of it fail.
   const [recommendedDictationHotkey, setRecommendedDictationHotkey] = useState(getDefaultHotkey);
-  const [dictationDemoSuccess, setDictationDemoSuccess] = useState(false);
-  const [assistantDemoSuccess, setAssistantDemoSuccess] = useState(false);
+  const dictationDemoSuccess = session.resume.dictationDemoCompleted;
+  const assistantDemoSuccess = session.resume.assistantDemoCompleted;
   const [stageReady, setStageReady] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   const [fatalError, setFatalError] = useState<string | null>(null);
@@ -115,6 +139,53 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     description: string;
   } | null>(null);
   const [, setAccessibilitySkipped] = useLocalStorage(ACCESSIBILITY_SKIPPED_KEY, false);
+
+  const updateResumeFlag = useCallback(
+    (
+      key: Extract<
+        keyof OnboardingResumeState,
+        | "dictationHotkeyConfirmed"
+        | "assistantHotkeyConfirmed"
+        | "dictationDemoCompleted"
+        | "assistantDemoCompleted"
+      >,
+      value: boolean
+    ) => {
+      setSession((current) => ({
+        ...current,
+        resume: { ...current.resume, [key]: value },
+      }));
+    },
+    [setSession]
+  );
+  const setDictationHotkeyConfirmed = useCallback(
+    (confirmed: boolean) => updateResumeFlag("dictationHotkeyConfirmed", confirmed),
+    [updateResumeFlag]
+  );
+  const setAssistantHotkeyConfirmed = useCallback(
+    (confirmed: boolean) => updateResumeFlag("assistantHotkeyConfirmed", confirmed),
+    [updateResumeFlag]
+  );
+  const setDictationDemoSuccess = useCallback(
+    (successful: boolean) => updateResumeFlag("dictationDemoCompleted", successful),
+    [updateResumeFlag]
+  );
+  const setAssistantDemoSuccess = useCallback(
+    (successful: boolean) => updateResumeFlag("assistantDemoCompleted", successful),
+    [updateResumeFlag]
+  );
+  const updateAuthResumeState = useCallback(
+    (patch: Partial<OnboardingAuthDraft>) => {
+      setSession((current) => ({
+        ...current,
+        resume: {
+          ...current.resume,
+          auth: { ...current.resume.auth, ...patch },
+        },
+      }));
+    },
+    [setSession]
+  );
 
   const permissions = usePermissions((dialog) =>
     setPermissionAlert({ title: dialog.title, description: dialog.description })
@@ -175,6 +246,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     session.authPath === "account" &&
     (!workspacesLoaded ||
       (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)));
+  const notesFooterAction = getNotesFooterAction({
+    workspaceResolutionPending,
+    hasConnectedCalendar:
+      settingsStore.gcalAccounts.length > 0 ||
+      settingsStore.mcalAccounts.length > 0 ||
+      (platform === "darwin" && settingsStore.appleCalendarConnected),
+  });
 
   // The setting turns on only once the permission is actually granted, so an
   // Enable click whose System Settings grant is abandoned can't leave screen
@@ -236,6 +314,32 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
   const compact = COMPACT_STEPS.has(currentStepId);
+  const updateCurrentByokDraft = useCallback(
+    (state: OnboardingByokDraft) => {
+      if (currentStepId !== "byok-dictation" && currentStepId !== "byok-assistant") return;
+      setSession((current) => ({
+        ...current,
+        resume: {
+          ...current.resume,
+          byok: { ...current.resume.byok, [currentStepId]: state },
+        },
+      }));
+    },
+    [currentStepId, setSession]
+  );
+  const updateCurrentLocalModelDraft = useCallback(
+    (state: OnboardingLocalModelDraft) => {
+      if (currentStepId !== "local-dictation" && currentStepId !== "local-assistant") return;
+      setSession((current) => ({
+        ...current,
+        resume: {
+          ...current.resume,
+          localModels: { ...current.resume.localModels, [currentStepId]: state },
+        },
+      }));
+    },
+    [currentStepId, setSession]
+  );
 
   useEffect(() => {
     if (currentStepId === "required-models") requiredModelsLatchRef.current = true;
@@ -327,8 +431,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   });
 
   const validateDictationHotkey = useCallback(
-    (value: string) => getValidationMessage(value, getPlatform()),
-    []
+    (value: string) => getValidationMessage(value, platform),
+    [platform]
   );
   const validateAssistantHotkey = useCallback(
     (value: string) =>
@@ -517,7 +621,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setFatalError(null);
     if (currentStepId === "notes" && workspaceResolutionPending) return;
     if (currentStepId === "permissions") {
-      if (getPlatform() === "darwin" && !permissions.accessibilityPermissionGranted) {
+      if (platform === "darwin" && !permissions.accessibilityPermissionGranted) {
         setAccessibilitySkipped(true);
       }
     } else if (currentStepId === "languages") {
@@ -532,6 +636,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         setFatalError(t("onboarding.hotkey.couldNotRegisterDescription"));
         return;
       }
+      setDictationHotkeyConfirmed(true);
     } else if (currentStepId === "assistant-hotkey") {
       if (parseHotkeyList(settings.voiceAgentKey)[0] !== assistantHotkey) {
         const registered = await settings.setVoiceAgentKey(
@@ -588,10 +693,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     finalizeOnboarding,
     goTo,
     permissions.accessibilityPermissionGranted,
+    platform,
     registerHotkey,
     route,
     session.setupMode,
     setAccessibilitySkipped,
+    setDictationHotkeyConfirmed,
     settings,
     settingsStore,
     syncUseCases,
@@ -630,7 +737,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "assistant-demo":
         return assistantDemoSuccess;
       case "notes":
-        return !workspaceResolutionPending;
+        return notesFooterAction === "continue";
       case "byok-dictation":
       case "byok-assistant":
       case "local-dictation":
@@ -647,6 +754,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return (
           <div className="min-h-full w-full">
             <CompactAuthenticationFlow
+              resumeState={session.resume.auth}
+              onResumeStateChange={updateAuthResumeState}
               onContinueWithoutAccount={() => {
                 // Guests continue onto their route's permissions step — jumping
                 // straight to setup-choice would skip the permission grants and
@@ -698,6 +807,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 : undefined
             }
+            // Guests never signed in, so there is nothing for them to log out of.
+            onLogout={session.authPath === "account" ? handleLogout : undefined}
             onContinue={() => void continueFromCurrentStep()}
           />
         );
@@ -739,9 +850,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "assistant-hotkey": {
         const assistant = currentStepId === "assistant-hotkey";
         return (
-          // Flex column: the preview illustration is allowed to shrink so the
-          // capture box below it always stays inside the shell, which is
-          // overflow-hidden.
           <div className="flex h-full min-h-0 w-full flex-col pt-2">
             <OnboardingStepHeader
               title={t(
@@ -768,13 +876,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             {assistant && <AssistantHotkeyPreview />}
             <ShortcutSetupStep
-              value={
-                (assistant ? assistantHotkeyConfirmed : dictationHotkeyConfirmed)
-                  ? assistant
-                    ? assistantHotkey
-                    : dictationHotkey
-                  : ""
-              }
+              value={assistant ? assistantHotkey : dictationHotkey}
+              initiallyConfirmed={assistant ? assistantHotkeyConfirmed : dictationHotkeyConfirmed}
               onChange={(value) => {
                 if (assistant) {
                   setAssistantHotkey(value);
@@ -786,19 +889,24 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               }}
               onClearSelection={() => {
                 if (assistant) {
+                  setAssistantHotkey("");
                   setAssistantHotkeyConfirmed(false);
                 } else {
+                  setDictationHotkey("");
                   setDictationHotkeyConfirmed(false);
                 }
               }}
-              recommended={assistant ? "CommandOrControl+Shift+Space" : recommendedDictationHotkey}
+              recommended={
+                assistant
+                  ? DEFAULT_ASSISTANT_ONBOARDING_HOTKEY
+                  : getRecommendedDictationHotkeys(platform, recommendedDictationHotkey)
+              }
               captureLabel={t("onboarding.rehaul.hotkey.capture")}
               recommendedLabel={t("common.recommended")}
               chooseAnotherLabel={t("onboarding.rehaul.hotkey.chooseAnother")}
               validate={assistant ? validateAssistantHotkey : validateDictationHotkey}
               onConfirm={assistant ? confirmAssistantHotkey : confirmDictationHotkey}
               dense={assistant}
-              showCandidateActions={!assistant}
             />
           </div>
         );
@@ -835,7 +943,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 />
               </div>
-              {getPlatform() === "linux" && activationMode === "push" && (
+              {platform === "linux" && activationMode === "push" && (
                 <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
               )}
             </div>
@@ -887,6 +995,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             />
             <DemoStep
               kind={assistant ? "assistant" : "dictation"}
+              initialSuccessful={assistant ? assistantDemoSuccess : dictationDemoSuccess}
               firstMessage={t(
                 assistant
                   ? "onboarding.rehaul.assistantDemo.email"
@@ -983,11 +1092,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               />
             </div>
             <ByokProviderStep
+              key={currentStepId}
               stepId={currentStepId}
               selfHostedRequested={session.selfHostedRequested}
               onSelfHostedChange={setSelfHostedRequested}
               onConnectionChange={setStageReady}
               onProceed={() => void continueFromCurrentStep()}
+              resumeState={session.resume.byok[currentStepId]}
+              onResumeStateChange={updateCurrentByokDraft}
             />
           </div>
         );
@@ -1008,10 +1120,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               ]}
             />
             <LocalModelSetupStep
+              key={currentStepId}
               stepId={currentStepId}
               onReadinessChange={setStageReady}
               onProceed={() => void continueFromCurrentStep()}
               onSkip={() => void skipLocalSetup()}
+              resumeState={session.resume.localModels[currentStepId]}
+              onResumeStateChange={updateCurrentLocalModelDraft}
             />
           </div>
         );
@@ -1021,6 +1136,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const hasShellNavigation = !compact;
   const hotkeyStep = currentStepId === "dictation-hotkey" || currentStepId === "assistant-hotkey";
   const demoStep = currentStepId === "dictation-demo" || currentStepId === "assistant-demo";
+  const notesStep = currentStepId === "notes";
   const inlineGatedStep = hotkeyStep || demoStep;
   const choiceStep = currentStepId === "setup-choice";
   const inlineProviderStep =
@@ -1028,13 +1144,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     currentStepId === "byok-assistant" ||
     currentStepId === "local-dictation" ||
     currentStepId === "local-assistant";
-  // Choice/provider pages own their forward action, while hotkey/demo pages
-  // withhold Continue until their task is complete.
+  // Choice/provider pages own their forward action. Hotkey/demo pages withhold
+  // Continue until complete; Notes does the same until a calendar is connected.
   const showsContinue =
-    hasShellNavigation && !choiceStep && !inlineProviderStep && (!inlineGatedStep || canContinue);
-  // Keep this branch's demo escape hatch: practice must remain skippable when a
-  // microphone or backend problem prevents completion.
-  const showsSkip = demoStep && !canContinue;
+    hasShellNavigation &&
+    !choiceStep &&
+    !inlineProviderStep &&
+    (!inlineGatedStep || canContinue) &&
+    (!notesStep || notesFooterAction === "continue");
+  // Practice remains skippable if it cannot complete. Calendar connections are
+  // optional, so Notes starts with Skip and replaces it with Continue on connect.
+  const showsSkip = (demoStep && !canContinue) || (notesStep && notesFooterAction === "skip");
 
   return (
     <>
@@ -1051,9 +1171,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             : undefined
         }
         onContinue={showsContinue ? () => void continueFromCurrentStep() : undefined}
-        // The demos are practice, not configuration — a mic problem or an
-        // unreachable transcription backend must never dead-end setup, so they
-        // stay skippable until they succeed.
+        // Demos are optional practice, and calendar connections on Notes are
+        // optional setup. Both advance through the same persisted route.
         onSkip={showsSkip ? () => void continueFromCurrentStep() : undefined}
         continueLabel={
           currentStepId === "use-cases"
@@ -1062,9 +1181,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }
         skipLabel={t("common.skip")}
         continueDisabled={!canContinue}
-        continueLoading={
-          isFinishing || isRegistering || (currentStepId === "notes" && workspaceResolutionPending)
-        }
+        continueLoading={isFinishing || isRegistering}
         progress={getOnboardingProgress(currentStepId, route)}
         // Label Back only when it is the sole footer action. Unlike the source
         // commit, this branch also has demo Skip, so Back stays icon-only there.

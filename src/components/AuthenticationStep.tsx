@@ -14,9 +14,16 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "lucide-react";
 import logger from "../utils/logger";
+import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
 import { getCachedPlatform } from "../utils/platform";
 import ForgotPasswordView from "./ForgotPasswordView";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
+import {
+  RESUME_DRAFT_PERSIST_DELAY_MS,
+  type OnboardingAuthDraft,
+  type OnboardingAuthMode,
+  type OnboardingSsoDiscoveryDraft,
+} from "./onboarding/flow";
 
 interface AuthenticationStepProps {
   onContinueWithoutAccount?: () => void;
@@ -24,14 +31,11 @@ interface AuthenticationStepProps {
   onNeedsVerification: (email: string) => void;
   /** Rendering inside SignInDialog rather than the onboarding window. */
   embedded?: boolean;
+  resumeState?: OnboardingAuthDraft;
+  onResumeStateChange?: (state: Partial<OnboardingAuthDraft>) => void;
 }
 
-type AuthMode = "sign-in" | "sign-up" | null;
-type SsoDiscovery = {
-  required: boolean;
-  domain: string;
-  exists: boolean;
-};
+type SsoDiscovery = OnboardingSsoDiscoveryDraft;
 
 const EXISTING_ACCOUNT_ERROR_CODES = new Set([
   "USER_ALREADY_EXISTS",
@@ -118,6 +122,8 @@ export default function AuthenticationStep({
   onAuthComplete,
   onNeedsVerification,
   embedded = false,
+  resumeState,
+  onResumeStateChange,
 }: AuthenticationStepProps) {
   const { t } = useTranslation();
   // The fixed top offsets centre content in the compact setup window;
@@ -127,15 +133,18 @@ export default function AuthenticationStep({
     ? "text-2xl font-semibold tracking-tight"
     : "onboarding-display-title";
   const { isSignedIn, isLoaded, user } = useAuth();
-  const [authMode, setAuthMode] = useState<AuthMode>(null);
-  const [email, setEmail] = useState("");
+  const [authMode, setAuthMode] = useState<OnboardingAuthMode>(resumeState?.authMode ?? null);
+  const [email, setEmail] = useState(resumeState?.email ?? "");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [fullName, setFullName] = useState(resumeState?.fullName ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [isSocialLoading, setIsSocialLoading] = useState<SocialProvider | null>(null);
   const [isSSOLoading, setIsSSOLoading] = useState(false);
-  const [ssoDiscovery, setSsoDiscovery] = useState<SsoDiscovery | null>(null);
+  const [showSSOEmailStep, setShowSSOEmailStep] = useState(false);
+  const [ssoDiscovery, setSsoDiscovery] = useState<SsoDiscovery | null>(
+    resumeState?.ssoDiscovery ?? null
+  );
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState(true);
@@ -149,6 +158,24 @@ export default function AuthenticationStep({
       .then(setOauthProtocolRegistered)
       .catch(() => {});
   }, []);
+
+  // Only the fields this step owns: pendingVerificationEmail belongs to
+  // CompactAuthenticationFlow, and the forgot-password / SSO-email sub-screens are
+  // transient — a returning user should land on sign-in, not on a reset form.
+  const latestAuthDraft = useRef<Partial<OnboardingAuthDraft>>({});
+  const persistAuthDraft = useDebouncedCallback(
+    () => onResumeStateChange?.(latestAuthDraft.current),
+    RESUME_DRAFT_PERSIST_DELAY_MS
+  );
+
+  useEffect(() => {
+    latestAuthDraft.current = { authMode, email, fullName, ssoDiscovery };
+    persistAuthDraft();
+  }, [authMode, email, fullName, persistAuthDraft, ssoDiscovery]);
+
+  // The debounce drops a pending write when this step unmounts, which is exactly
+  // what sign-up does on its way to verification, so flush the last draft.
+  useEffect(() => () => onResumeStateChange?.(latestAuthDraft.current), [onResumeStateChange]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || needsVerificationRef.current || !user?.id || !user?.email)
@@ -219,6 +246,16 @@ export default function AuthenticationStep({
   );
 
   const handleSSOSignIn = useCallback(() => startSSOSignIn(email), [email, startSSOSignIn]);
+
+  const handleOpenSSOEmailStep = useCallback(() => {
+    setError(null);
+    setShowSSOEmailStep(true);
+  }, []);
+
+  const handleBackFromSSOEmailStep = useCallback(() => {
+    setError(null);
+    setShowSSOEmailStep(false);
+  }, []);
 
   const handleEmailContinue = useCallback(async () => {
     if (!email.trim() || !authClient) return;
@@ -388,12 +425,10 @@ export default function AuthenticationStep({
             <Check className="size-5 text-success" />
           </div>
           <p className="mt-6 text-2xl font-medium leading-tight tracking-tight">
-            {user?.name
-              ? t("auth.signedIn.welcomeBackName", { name: user.name })
-              : t("auth.signedIn.welcomeBack")}
+            <span className="block">{t("auth.signedIn.welcomeBack")}</span>
+            {user?.name && <span className="mt-1 block">{user.name}</span>}
           </p>
-          <p className="mt-2 text-sm text-muted-foreground">{t("auth.signedIn.ready")}</p>
-          <Button onClick={onAuthComplete} className="mt-7 h-12 w-full rounded-full">
+          <Button onClick={onAuthComplete} className="mt-7 h-12 w-fit min-w-32 rounded-full px-6">
             {t("auth.common.continue")}
             <ArrowRight className="size-4" />
           </Button>
@@ -407,6 +442,76 @@ export default function AuthenticationStep({
       <CompactOnboardingFrame embedded={embedded}>
         <div className={frameInset("pt-42")}>
           <ForgotPasswordView email={email} onBack={handleBackFromForgotPassword} />
+        </div>
+      </CompactOnboardingFrame>
+    );
+  }
+
+  if (showSSOEmailStep) {
+    return (
+      <CompactOnboardingFrame embedded={embedded}>
+        <div className={`${frameInset("pt-38")} text-center`}>
+          <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
+          <p className="mt-2 text-base text-[var(--onboarding-text-secondary)]">
+            {t("auth.welcomeSubtitle")}
+          </p>
+
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSSOSignIn();
+            }}
+            className="mt-6 space-y-4 text-left"
+          >
+            <label className="block space-y-2">
+              <span className="text-xs text-[var(--onboarding-text-secondary)]">
+                {t("auth.sso.workEmailLabel")}
+              </span>
+              <Input
+                type="email"
+                placeholder={t("auth.sso.emailPlaceholder")}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="onboarding-light-input onboarding-auth-input h-10 rounded-xl px-3 text-sm disabled:opacity-100"
+                required
+                autoFocus
+                disabled={isSSOLoading}
+              />
+            </label>
+
+            <Button
+              type="submit"
+              disabled={!email.trim() || isSSOLoading || !oauthProtocolRegistered}
+              className="h-10 w-full rounded-full border-transparent bg-[var(--onboarding-inverse-surface)] text-base font-normal text-[var(--onboarding-inverse-text)] shadow-none hover:opacity-90 disabled:border-transparent disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)] disabled:opacity-100"
+            >
+              {isSSOLoading ? <Loader2 className="size-4 animate-spin" /> : null}
+              {isSSOLoading
+                ? t("auth.social.completeInBrowser")
+                : t("auth.emailStep.continueWithEmail")}
+            </Button>
+          </form>
+
+          <button
+            type="button"
+            onClick={handleBackFromSSOEmailStep}
+            disabled={isSSOLoading}
+            className="mt-4 text-sm font-medium text-[var(--onboarding-text-primary)] transition-colors hover:text-[var(--onboarding-text-secondary)] disabled:opacity-50"
+          >
+            {t("auth.common.back")}
+          </button>
+
+          {!oauthProtocolRegistered && (
+            <p className="mt-3 text-center text-xs leading-tight text-muted-foreground/80">
+              {t("auth.social.protocolUnavailable")}
+            </p>
+          )}
+
+          {error && (
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-left">
+              <AlertCircle className="size-3.5 shrink-0 text-destructive" />
+              <p className="text-xs text-destructive">{error}</p>
+            </div>
+          )}
         </div>
       </CompactOnboardingFrame>
     );
@@ -630,7 +735,13 @@ export default function AuthenticationStep({
       onClick: () => handleSocialSignIn("microsoft"),
       loading: isSocialLoading === "microsoft",
     },
-    { id: "sso", label: "SSO", icon: Building2, onClick: handleSSOSignIn, loading: isSSOLoading },
+    {
+      id: "sso",
+      label: "SSO",
+      icon: Building2,
+      onClick: handleOpenSSOEmailStep,
+      loading: isSSOLoading,
+    },
   ];
 
   return (

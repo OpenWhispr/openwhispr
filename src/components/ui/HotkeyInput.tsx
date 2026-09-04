@@ -8,6 +8,11 @@ import {
   sidedModifierToken,
 } from "../../utils/hotkeys";
 import { getPlatform, type Platform } from "../../utils/platform";
+import {
+  hasMetModifierOnlyHoldThreshold,
+  shouldAcceptModifierOnlyCapture,
+  shouldRestoreCaptureFocus,
+} from "./hotkeyCapturePolicy";
 
 const CODE_TO_KEY: Record<string, string> = {
   Backquote: "`",
@@ -276,8 +281,6 @@ export function HotkeyInput({
   const platform = getPlatform();
   const isMac = platform === "darwin";
 
-  const MODIFIER_HOLD_THRESHOLD_MS = 200;
-
   const resolveModifierOnlyCapture = useCallback(
     (
       modifiers: Record<ModifierKind, boolean>,
@@ -446,31 +449,36 @@ export function HotkeyInput({
 
       if (wasHoldingModifiers && MODIFIER_CODES.has(e.nativeEvent.code)) {
         const holdDuration = Date.now() - keyDownTimeRef.current;
+        const capture = resolveModifierOnlyCapture(
+          heldModifiersRef.current,
+          modifierCodesRef.current
+        );
 
-        if (holdDuration >= MODIFIER_HOLD_THRESHOLD_MS) {
-          const capture = resolveModifierOnlyCapture(
-            heldModifiersRef.current,
-            modifierCodesRef.current
-          );
-          if (capture?.kind === "hotkey") {
-            attempted = true;
-            if (fnHeldRef.current) {
-              fnCapturedKeyRef.current = true;
-              finalizeCapture(`Fn+${capture.hotkey}`);
-            } else {
-              finalizeCapture(capture.hotkey);
-            }
-          } else if (capture?.kind === "needsRightSide" && !fnHeldRef.current) {
-            // Silently dropping this release is what made a left-side Option or
-            // Control look like the field was ignoring the key entirely.
-            attempted = true;
-            rejectCapture(
-              t("hotkeyInput.singleModifierNeedsRightSide", {
-                key: capture.held,
-                alternative: capture.rightSide,
-              })
-            );
+        if (
+          capture?.kind === "hotkey" &&
+          shouldAcceptModifierOnlyCapture(capture.hotkey, holdDuration)
+        ) {
+          attempted = true;
+          if (fnHeldRef.current) {
+            fnCapturedKeyRef.current = true;
+            finalizeCapture(`Fn+${capture.hotkey}`);
+          } else {
+            finalizeCapture(capture.hotkey);
           }
+        } else if (
+          capture?.kind === "needsRightSide" &&
+          hasMetModifierOnlyHoldThreshold(holdDuration) &&
+          !fnHeldRef.current
+        ) {
+          // Silently dropping this release is what made a left-side Option or
+          // Control look like the field was ignoring the key entirely.
+          attempted = true;
+          rejectCapture(
+            t("hotkeyInput.singleModifierNeedsRightSide", {
+              key: capture.held,
+              alternative: capture.rightSide,
+            })
+          );
         }
       }
 
@@ -486,7 +494,11 @@ export function HotkeyInput({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (disabled || !isCapturing) return;
+      if (disabled) return;
+      if (!isCapturing) {
+        containerRef.current?.focus({ preventScroll: true });
+        return;
+      }
 
       const mouseHotkey = e.button === 3 ? "MouseButton4" : e.button === 4 ? "MouseButton5" : null;
       if (!mouseHotkey) return;
@@ -525,7 +537,7 @@ export function HotkeyInput({
     let cancelled = false;
     let frame: number | null = null;
 
-    const focusCaptureSurface = async () => {
+    const focusCaptureSurface = async (onlyIfPageFocusIsUnclaimed = false) => {
       if (platform === "win32") {
         // On Windows, focusing a DOM node does not bring an inactive native
         // window to the foreground. Main restores/focuses the BrowserWindow as
@@ -535,12 +547,30 @@ export function HotkeyInput({
       }
       if (cancelled) return;
 
-      frame = requestAnimationFrame(() => containerRef.current?.focus({ preventScroll: true }));
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        if (
+          onlyIfPageFocusIsUnclaimed &&
+          !shouldRestoreCaptureFocus(document.activeElement, document.body)
+        ) {
+          return;
+        }
+        containerRef.current?.focus({ preventScroll: true });
+      });
     };
 
     void focusCaptureSurface();
+    const handleWindowFocus = () => void focusCaptureSurface(true);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void focusCaptureSurface(true);
+    };
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (frame !== null) cancelAnimationFrame(frame);
     };
   }, [autoFocus, platform]);

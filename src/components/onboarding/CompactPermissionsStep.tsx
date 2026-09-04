@@ -1,6 +1,5 @@
-import { useState, type CSSProperties } from "react";
-import { createPortal } from "react-dom";
-import { CircleCheck } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { CircleCheck, Laptop, LogOut } from "lucide-react";
 import { useTranslation } from "react-i18next";
 // Imported (not referenced by path) so Vite fingerprints them and they resolve
 // under the packaged app's file:// origin. Authored at 88px (2x the original
@@ -9,7 +8,6 @@ import { useTranslation } from "react-i18next";
 import microphoneIcon from "@/assets/onboarding-permission-microphone.webp";
 import accessibilityIcon from "@/assets/onboarding-permission-accessibility.webp";
 import systemAudioIcon from "@/assets/onboarding-permission-system-audio.webp";
-import screenContextIcon from "@/assets/onboarding-permission-screen-context.webp";
 import type { UsePermissionsReturn } from "../../hooks/usePermissions";
 import type { SystemAudioAccessResult } from "../../types/electron";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
@@ -31,6 +29,8 @@ interface CompactPermissionsStepProps {
     needsRelaunch: boolean;
     request: () => Promise<boolean>;
   };
+  /** Omitted on the guest route, which never signed in. */
+  onLogout?: () => Promise<void>;
   onContinue: () => void;
 }
 
@@ -39,20 +39,24 @@ type PermissionRowId = "microphone" | "accessibility" | "system-audio" | "screen
 interface PermissionRowProps {
   title: string;
   description: string;
+  badge?: string;
   granted: boolean;
   busy: boolean;
   disabled?: boolean;
-  iconSrc: string;
+  iconSrc?: string;
+  icon?: ReactNode;
   onRequest: () => Promise<void>;
 }
 
 function PermissionRow({
   title,
   description,
+  badge,
   granted,
   busy,
   disabled = false,
   iconSrc,
+  icon,
   onRequest,
 }: PermissionRowProps) {
   const { t } = useTranslation();
@@ -62,20 +66,27 @@ function PermissionRow({
       {/* Decorative: the adjacent title and description already name the
           permission, so announcing the icon too would just duplicate it. The
           icon stays put once granted — the button carries the state. */}
-      <img
-        src={iconSrc}
-        alt=""
-        aria-hidden="true"
-        width={40}
-        height={40}
-        decoding="async"
-        draggable={false}
-        className="size-10 shrink-0 select-none"
-      />
+      {icon ?? (
+        <img
+          src={iconSrc}
+          alt=""
+          aria-hidden="true"
+          width={40}
+          height={40}
+          decoding="async"
+          draggable={false}
+          className="size-10 shrink-0 select-none"
+        />
+      )}
 
       <div className="min-w-0 flex-1 text-left">
         <p className="text-sm font-medium leading-5 text-[var(--onboarding-text-primary)]">
           {title}
+          {badge && (
+            <span className="ml-1.5 inline-flex items-center rounded-full bg-[var(--onboarding-surface-tertiary)] px-2 py-0.5 align-middle text-[10px] font-normal leading-4 text-[var(--onboarding-text-secondary)]">
+              {badge}
+            </span>
+          )}
         </p>
         <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-[var(--onboarding-text-secondary)]">
           {description}
@@ -109,6 +120,7 @@ export default function CompactPermissionsStep({
   permissions,
   systemAudio,
   screenContext,
+  onLogout,
   onContinue,
 }: CompactPermissionsStepProps) {
   const { t } = useTranslation();
@@ -141,26 +153,7 @@ export default function CompactPermissionsStep({
 
   return (
     <CompactOnboardingFrame showLegalNotice={false}>
-      {/* Continue appears once the required permission (microphone) is granted.
-          Portalled to body: inside the step wrapper it can never out-stack the
-          shell's z-50 drag band (see OnboardingShell), so clicks would be
-          swallowed as window drags. */}
-      {requiredGranted &&
-        createPortal(
-          <button
-            type="button"
-            onClick={onContinue}
-            // Literal white, not tokens: this sits on the indigo hero, which
-            // stays indigo in both themes.
-            style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
-            className={`onboarding-pressable fixed top-4 z-[60] h-7 rounded-full bg-white px-3 text-xs font-medium text-neutral-950 transition-colors hover:bg-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${platform === "darwin" ? "right-4" : "right-24"}`}
-          >
-            {t("common.continue")}
-          </button>,
-          document.body
-        )}
-
-      <div className="onboarding-shell-scroll h-full overflow-y-auto px-5 pb-4 pt-44 text-center">
+      <div className="onboarding-shell-scroll relative flex h-full flex-col overflow-y-auto px-5 pb-6 pt-38 text-center">
         {/* text-balance evens the two lines out ("Set up OpenWhispr" / "in 3
             minutes") instead of leaving one word stranded. Preferred over a
             hardcoded <br> because the break point stays correct in all 9
@@ -172,7 +165,7 @@ export default function CompactPermissionsStep({
           {t("auth.welcomeSubtitle")}
         </p>
 
-        <div className="mt-8 rounded-[1.35rem] bg-[var(--onboarding-surface-secondary)] px-3 py-1">
+        <div className="mt-6 rounded-[1.35rem] bg-[var(--onboarding-surface-secondary)] px-3 py-1">
           <PermissionRow
             title={t("onboarding.permissions.microphoneTitle")}
             description={t("onboarding.rehaul.permissions.microphoneDescription")}
@@ -202,6 +195,7 @@ export default function CompactPermissionsStep({
               <PermissionRow
                 title={t("onboarding.rehaul.permissions.systemAudioTitle")}
                 description={t("onboarding.rehaul.permissions.systemAudioDescription")}
+                badge={t("onboarding.permissions.optional")}
                 granted={systemAudio.granted}
                 busy={busyPermission === "system-audio"}
                 disabled={!canRequestSystemAudio}
@@ -216,9 +210,17 @@ export default function CompactPermissionsStep({
               <PermissionRow
                 title={t("dictationAgent.screenContext.title")}
                 description={t("onboarding.rehaul.permissions.screenContextDescription")}
+                badge={t("onboarding.permissions.optional")}
                 granted={screenContext.enabled && screenContext.granted}
                 busy={busyPermission === "screen-context"}
-                iconSrc={screenContextIcon}
+                icon={
+                  <span
+                    aria-hidden="true"
+                    className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)]"
+                  >
+                    <Laptop className="size-5" strokeWidth={2.2} />
+                  </span>
+                }
                 onRequest={() => request("screen-context", screenContext.request)}
               />
             </>
@@ -250,6 +252,32 @@ export default function CompactPermissionsStep({
             />
           </div>
         )}
+
+        {/* Last child so mt-auto actually pins the actions to the bottom: any
+            element after them rides along on that auto margin, which put the
+            relaunch hint and the two warnings below the buttons — and, on Linux
+            where the paste guidance is the point of the screen, out of view. */}
+        <div className="mt-auto flex w-full shrink-0 items-center justify-between gap-3 pt-5">
+          {onLogout && (
+            <button
+              type="button"
+              onClick={() => void onLogout()}
+              className="onboarding-pressable inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 text-sm font-medium text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
+            >
+              <LogOut className="size-3.5" aria-hidden="true" />
+              {t("common.logout")}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onContinue}
+            disabled={!requiredGranted}
+            className="onboarding-pressable h-10 flex-1 rounded-full bg-[var(--onboarding-accent)] px-5 text-sm font-medium text-[var(--onboarding-accent-foreground)] transition-colors hover:bg-[var(--onboarding-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default disabled:bg-[var(--onboarding-surface-tertiary)] disabled:text-[var(--onboarding-text-tertiary)]"
+          >
+            {t("common.continue")}
+          </button>
+        </div>
       </div>
     </CompactOnboardingFrame>
   );

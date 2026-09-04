@@ -182,6 +182,7 @@ interface DemoStepProps {
   assistantSenderEmail?: string;
   assistantRecipientLabel?: string;
   onSuccessChange: (successful: boolean) => void;
+  initialSuccessful?: boolean;
 }
 
 export default function DemoStep({
@@ -198,11 +199,13 @@ export default function DemoStep({
   assistantSenderEmail,
   assistantRecipientLabel,
   onSuccessChange,
+  initialSuccessful = false,
 }: DemoStepProps) {
   const [messageCount, setMessageCount] = useState(0);
   const [event, setEvent] = useState<OnboardingDemoEvent | null>(null);
   const [draft, setDraft] = useState("");
   const [demoId, setDemoId] = useState(() => crypto.randomUUID());
+  const [restoredSuccessful, setRestoredSuccessful] = useState(initialSuccessful);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -220,6 +223,7 @@ export default function DemoStep({
     void window.electronAPI?.beginOnboardingDemo?.({ id: demoId, kind });
     const unsubscribe = window.electronAPI?.onOnboardingDemoEvent?.((payload) => {
       if (payload.demoId !== demoId || payload.kind !== kind) return;
+      setRestoredSuccessful(false);
       setEvent(payload);
       if (payload.text) setDraft(payload.text);
       if (payload.status === "success") onSuccessChange(true);
@@ -231,6 +235,7 @@ export default function DemoStep({
   }, [demoId, kind, onSuccessChange]);
 
   const retry = () => {
+    setRestoredSuccessful(false);
     onSuccessChange(false);
     setEvent(null);
     setDraft("");
@@ -238,7 +243,10 @@ export default function DemoStep({
     setDemoId(crypto.randomUUID());
   };
 
-  const status = event?.status;
+  const effectiveEvent: OnboardingDemoEvent | null = restoredSuccessful
+    ? { demoId, kind, status: "success" }
+    : event;
+  const status = effectiveEvent?.status;
   const successful = status === "success";
 
   return (
@@ -287,7 +295,7 @@ export default function DemoStep({
               value={draft}
               onChange={setDraft}
               placeholder={placeholder}
-              event={event}
+              event={effectiveEvent}
               listeningLabel={listeningLabel}
               processingLabel={processingLabel}
               stopLabel={stopLabel}
@@ -355,7 +363,7 @@ export default function DemoStep({
               value={draft || (successful ? (assistantResponse ?? "") : "")}
               onChange={setDraft}
               placeholder={secondMessage}
-              event={event}
+              event={effectiveEvent}
               listeningLabel={listeningLabel}
               processingLabel={processingLabel}
               stopLabel={stopLabel}

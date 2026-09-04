@@ -164,6 +164,7 @@
     "add": "新增",
     "retry": "重試",
     "back": "返回",
+    "logout": "登出",
     "next": "下一步",
     "complete": "完成",
     "reset": "重設",
@@ -200,7 +201,7 @@
     "done": "完成",
     "skip": "略過",
     "policyAiProcessingRestricted": "AI 處理已被您的組織限制。",
-    "policyAgentRestricted": "AI 代理的使用已被您的組織限制。",
+    "policyAgentRestricted": "AI 助理的使用已被您的組織限制。",
     "policyTranscriptionRestricted": "轉錄已被您的組織限制。"
   },
   "onboarding": {
@@ -210,8 +211,8 @@
         "microphoneDescription": "將語音轉換為文字。",
         "accessibilityDescription": "將文字貼到目前的 App。",
         "systemAudioTitle": "系統音訊",
-        "systemAudioDescription": "擷取其他 App 的音訊。",
-        "screenContextDescription": "讓語音助理查看目前螢幕，絕不儲存。",
+        "systemAudioDescription": "在會議筆記中擷取音訊時必需。",
+        "screenContextDescription": "與語音助理分享螢幕內容。",
         "enable": "啟用",
         "enabled": "已啟用"
       },
@@ -236,6 +237,7 @@
       "hotkey": {
         "capture": "請按下你想使用的按鍵",
         "chooseAnother": "選擇其他快速鍵",
+        "confirmAgain": "再次按下 {{hotkey}} 以確認",
         "inUse": "此快速鍵已被使用。請選擇其他快速鍵。",
         "holding": "繼續按住，或按下另一個鍵"
       },
@@ -408,16 +410,15 @@
         "descriptionLineOne": "選擇你想在裝置上",
         "descriptionLineTwo": "執行的模型。",
         "providerLabel": "服務商",
-        "agent": "代理程式",
         "download": "下載",
         "downloadingShort": "下載中",
         "selected": "已選擇",
-        "use": "使用",
+        "selectModel": "選擇模型",
         "downloadInProgress": "下載進行中",
         "cancelDownload": "取消下載 {{model}}",
         "downloads": "模型下載",
         "downloading": "正在下載… {{progress}}%",
-        "installing": "正在安裝模型…"
+        "installing": "安裝中"
       }
     },
     "steps": {
@@ -1099,12 +1100,12 @@
       "welcomeBack": "歡迎回來"
     },
     "signedIn": {
-      "ready": "準備就緒",
-      "welcomeBack": "歡迎回來",
-      "welcomeBackName": "歡迎回來，{{name}}"
+      "welcomeBack": "歡迎回來"
     },
     "sso": {
       "continueWithSSO": "使用 SSO 登入",
+      "workEmailLabel": "工作電子郵件",
+      "emailPlaceholder": "新增您的電子郵件",
       "emailRequired": "輸入您的工作電子郵件以使用 SSO。",
       "failed": "單一登入失敗，請再試一次。",
       "companySignInTitle": "使用公司登入",
@@ -1607,7 +1608,7 @@
           "features": [
             "無限會議錄製",
             "工作區角色與成員管理",
-            "代理模式",
+            "助理模式",
             "與您的資料對話",
             "優先支援"
           ],
@@ -2527,7 +2528,7 @@
         "openai_gpt_4_1_mini": "較小的 GPT-4.1 模型",
         "openai_gpt_4_1_nano": "最低延遲的 GPT-4.1",
         "anthropic_claude_fable_5": "Anthropic 最強大的模型，Mythos 級",
-        "anthropic_claude_sonnet_5": "快速且強大的智慧代理模型，成本更低",
+        "anthropic_claude_sonnet_5": "快速且強大的助理模型，成本更低",
         "anthropic_claude_sonnet_4_6": "均衡表現",
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet 模型",
         "anthropic_claude_haiku_4_5": "快速且接近頂尖智慧",
@@ -2562,12 +2563,12 @@
         "corti_corti_s1_mini": "精簡型臨床模型，半價提供推理"
       },
       "enterprise": {
-        "bedrock_claude_fable_5": "最強大的 Claude 模型。最適合最具挑戰性的智慧助手模式任務。",
+        "bedrock_claude_fable_5": "最強大的 Claude 模型。最適合最具挑戰性的助理任務。",
         "bedrock_claude_haiku_4_5": "快速且低成本。適合文字清理。",
-        "bedrock_claude_sonnet_5": "均衡效能。建議作為智慧助手模式的預設模型。",
-        "bedrock_claude_opus_4_8": "最高智能。適用於複雜的智慧助手模式任務。",
+        "bedrock_claude_sonnet_5": "均衡效能。建議作為助理任務的預設模型。",
+        "bedrock_claude_opus_4_8": "最高智能。適用於複雜的助理任務。",
         "bedrock_gpt_oss_120b": "OpenAI 開放權重模型。低成本下的強大推理能力。",
-        "bedrock_deepseek_v3_2": "開放權重前沿模型。智慧助手模式的高性價比之選。",
+        "bedrock_deepseek_v3_2": "開放權重前沿模型。助理任務的高性價比之選。",
         "bedrock_qwen3_next_80b": "稀疏開放權重模型。快速且多語言。",
         "vertex_gemini_2_5_flash": "透過 Vertex 提供的快速多模態模型",
         "vertex_gemini_2_5_pro": "透過 Vertex 提供的進階推理模型"
@@ -3335,7 +3336,7 @@
   },
   "dictationAgent": {
     "enabled": "啟用語音助理",
-    "enabledDescription": "向你的代理口述指令。選取的文字會傳送到所設定的模型並就地編輯。說出 \"{{agentName}}\" 即可啟用。",
+    "enabledDescription": "向你的助理口述指令。選取的文字會傳送到所設定的模型並就地編輯。說出 \"{{agentName}}\" 即可啟用。",
     "screenContext": {
       "title": "螢幕內容",
       "description": "在語音助理指令中附上目前螢幕的截圖。",
@@ -3350,7 +3351,7 @@
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "使用 OpenWhispr 託管的代理，無需 API Key。",
+      "openwhisprDesc": "使用 OpenWhispr 託管的助理，無需 API Key。",
       "providers": "使用你自己的 API Key",
       "providersDesc": "用你自己的 API Key 連接 OpenAI、Anthropic、Gemini 或 Groq。",
       "local": "本機",
@@ -3361,14 +3362,14 @@
       "enterpriseDesc": "使用 AWS Bedrock、Azure OpenAI 或 Google Vertex。"
     },
     "prompt": {
-      "title": "代理提示詞",
+      "title": "助理提示詞",
       "description": "偵測到喚醒詞時使用的系統提示詞。若未設定則使用內建預設值。"
     }
   },
   "agentMode": {
     "settings": {
       "systemPrompt": "系統提示詞",
-      "systemPromptDescription": "助手的自訂指令",
+      "systemPromptDescription": "助理的自訂指令",
       "systemPromptPlaceholder": "輸入自訂系統提示詞...",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
@@ -3520,7 +3521,7 @@
     },
     "cli": {
       "title": "命令列存取",
-      "description": "讓你的智慧助手透過終端機存取你的筆記。",
+      "description": "讓你的助理透過終端機存取你的筆記。",
       "installLabel": "安裝",
       "learnMore": "查看文件",
       "copyDocsLink": "複製文件連結",
