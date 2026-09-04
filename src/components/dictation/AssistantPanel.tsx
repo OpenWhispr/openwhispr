@@ -27,6 +27,7 @@ import {
   normalizeAgentSelectionContext,
   type AgentSelectionContext,
 } from "../../utils/agentSelectionContext";
+import { getSelectionForCopyShortcut, getSelectionInside } from "../../utils/assistantSelection";
 import { AssistantEmptyState } from "./AssistantEmptyState";
 import { useToast } from "../ui/useToast";
 import {
@@ -341,15 +342,11 @@ export function AssistantPanel({
     if (!open || !isResponseReady || !latestAssistantMessage) return undefined;
 
     const captureSelection = () => {
-      const selection = window.getSelection();
-      const root = responseSelectionRootRef.current;
-      if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !root) return;
-
-      const range = selection.getRangeAt(0);
-      if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return;
+      const selectedText = getSelectionInside(responseSelectionRootRef.current);
+      if (!selectedText) return;
 
       const context = normalizeAgentSelectionContext({
-        text: selection.toString(),
+        text: selectedText,
         sourceMessageId: latestAssistantMessage.id,
       });
       if (!context) return;
@@ -391,6 +388,18 @@ export function AssistantPanel({
       const target = e.target as HTMLElement | null;
       const isEditable =
         target?.isContentEditable || target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+      if (isResponseReady) {
+        const selectedText = getSelectionForCopyShortcut(
+          e,
+          responseSelectionRootRef.current,
+          Boolean(isEditable)
+        );
+        if (selectedText) {
+          e.preventDefault();
+          void handleCopy(selectedText);
+          return;
+        }
+      }
       if (
         isResponseReady &&
         footerPhase === "actions" &&

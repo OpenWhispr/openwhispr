@@ -5,7 +5,7 @@ export function useCopyFeedback(
   { resetMs = 1800 }: { resetMs?: number } = {}
 ): {
   copied: boolean;
-  copy: () => Promise<void>;
+  copy: (textOverride?: string) => Promise<void>;
   confirmCopied: (copiedText: string, durationMs?: number) => void;
 } {
   const [copied, setCopied] = useState(false);
@@ -36,9 +36,9 @@ export function useCopyFeedback(
     [resetMs]
   );
 
-  const copy = useCallback(async () => {
-    const textToCopy = text.trim();
-    if (!textToCopy) return;
+  const copy = useCallback(async (textOverride?: string) => {
+    const textToCopy = textOverride ?? text.trim();
+    if (!textToCopy.trim()) return;
 
     try {
       const result = await window.electronAPI?.writeClipboard?.(textToCopy);
@@ -52,7 +52,7 @@ export function useCopyFeedback(
       }
     }
 
-    confirmCopied(text, resetMs);
+    confirmCopied(textOverride === undefined ? text : textToCopy, resetMs);
   }, [confirmCopied, text, resetMs]);
 
   return { copied, copy, confirmCopied };

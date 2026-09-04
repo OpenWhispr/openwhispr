@@ -1,4 +1,4 @@
-const { app, screen, BrowserWindow, dialog, ipcMain } = require("electron");
+const { app, screen, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
 const debugLogger = require("./debugLogger");
 // Aliased: this class has an openExternalUrl method wrapping the helper.
 const { openExternalUrl: openUrlInExternalBrowser } = require("./externalUrlOpener");
@@ -132,6 +132,7 @@ class WindowManager {
 
     this.setMainWindowInteractivity(false);
     this.registerMainWindowEvents();
+    this.registerAssistantSelectionContextMenu();
 
     // Register load event handlers BEFORE loading to catch all events
     this.mainWindow.webContents.on(
@@ -171,6 +172,14 @@ class WindowManager {
     await this.initializeHotkey();
     this.dragManager.setTargetWindow(this.mainWindow);
     MenuManager.setupMainMenu(() => this.openSettings());
+  }
+
+  registerAssistantSelectionContextMenu() {
+    this.mainWindow?.webContents.on("context-menu", (_event, params) => {
+      if (!this._assistantPanelOpen || !params?.selectionText?.trim()) return;
+
+      Menu.buildFromTemplate([{ role: "copy" }]).popup({ window: this.mainWindow });
+    });
   }
 
   _updateMainContentProtection() {
