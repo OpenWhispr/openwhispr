@@ -4,6 +4,7 @@ const Module = require("node:module");
 const requestedMainWindowPositions = [];
 const createdBrowserWindows = [];
 const screenListeners = [];
+const builtMenus = [];
 
 // Same stub set as windowManagerMeetingNotification.test.js: WindowManager
 // pulls in electron + sibling managers at require time.
@@ -48,6 +49,16 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
         showInactive() { this.visible = true; }
         hide() { this.visible = false; }
         moveTop() {}
+      },
+      Menu: {
+        buildFromTemplate: (template) => {
+          const menu = {
+            popupCalls: [],
+            popup(options) { this.popupCalls.push(options); },
+          };
+          builtMenus.push({ template, menu });
+          return menu;
+        },
       },
       shell: {},
       dialog: {},
@@ -129,6 +140,30 @@ function makeManager(windowState) {
   manager.hideAgentDictationPill = () => undefined;
   return { manager, calls: fake.calls };
 }
+
+test("the Assistant response context menu exposes native Copy only for selected text", () => {
+  builtMenus.length = 0;
+  const manager = new WindowManager();
+  const listeners = new Map();
+  manager.mainWindow = {
+    webContents: { on: (event, listener) => listeners.set(event, listener) },
+  };
+  manager._assistantPanelOpen = true;
+  manager.registerAssistantSelectionContextMenu();
+
+  const onContextMenu = listeners.get("context-menu");
+  assert.ok(onContextMenu);
+  onContextMenu(null, { selectionText: "selected answer" });
+  onContextMenu(null, { selectionText: "   " });
+
+  assert.equal(builtMenus.length, 1);
+  assert.deepEqual(builtMenus[0].template, [{ role: "copy" }]);
+  assert.deepEqual(builtMenus[0].menu.popupCalls, [{ window: manager.mainWindow }]);
+
+  manager._assistantPanelOpen = false;
+  onContextMenu(null, { selectionText: "outside Assistant" });
+  assert.equal(builtMenus.length, 1);
+});
 
 test("the Agent companion follows the edge opposite the panel", () => {
   requestedMainWindowPositions.length = 0;

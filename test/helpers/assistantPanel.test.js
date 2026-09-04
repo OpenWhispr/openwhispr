@@ -641,6 +641,110 @@ test("an automatic clipboard delivery keeps the shared Copy button confirmed for
   assert.ok(scheduledDelays.includes(6000));
 });
 
+test("Assistant selection copy preserves the selected text", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const writes = [];
+  const originalElectronAPI = globalThis.window.electronAPI;
+  t.after(() => {
+    globalThis.window.electronAPI = originalElectronAPI;
+  });
+  globalThis.window.electronAPI = {
+    writeClipboard: async (text) => {
+      writes.push(text);
+      return { success: true };
+    },
+  };
+
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-selection-copy-feedback-test-",
+  });
+  const { useCopyFeedback } = await vite.ssrLoadModule("/hooks/useCopyFeedback.ts");
+  const { createRoot } = require("react-dom/client");
+  let copyFeedback;
+
+  function Harness() {
+    copyFeedback = useCopyFeedback("Full Agent answer");
+    return React.createElement("button");
+  }
+
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => copyFeedback.copy(" selected answer "));
+  await React.act(async () => copyFeedback.copy());
+
+  assert.deepEqual(writes, [" selected answer ", "Full Agent answer"]);
+});
+
+test("Assistant selection must stay entirely inside the response root", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-selection-test-",
+  });
+  const { getSelectionForCopyShortcut, getSelectionInside } = await vite.ssrLoadModule(
+    "/utils/assistantSelection.ts"
+  );
+  const insideStart = {};
+  const insideEnd = {};
+  const outside = {};
+  const responseRoot = {
+    contains: (node) => node === insideStart || node === insideEnd,
+  };
+  const originalGetSelection = globalThis.window.getSelection;
+  t.after(() => {
+    globalThis.window.getSelection = originalGetSelection;
+  });
+
+  globalThis.window.getSelection = () => ({
+    isCollapsed: false,
+    rangeCount: 1,
+    getRangeAt: () => ({ startContainer: insideStart, endContainer: insideEnd }),
+    toString: () => "selected answer",
+  });
+  assert.equal(getSelectionInside(responseRoot), "selected answer");
+  assert.equal(
+    getSelectionForCopyShortcut(
+      { key: "c", ctrlKey: true, metaKey: false, altKey: false },
+      responseRoot
+    ),
+    "selected answer"
+  );
+  assert.equal(
+    getSelectionForCopyShortcut(
+      { key: "c", ctrlKey: false, metaKey: true, altKey: false },
+      responseRoot
+    ),
+    "selected answer"
+  );
+  assert.equal(
+    getSelectionForCopyShortcut(
+      { key: "c", ctrlKey: true, metaKey: false, altKey: true },
+      responseRoot
+    ),
+    null
+  );
+  assert.equal(
+    getSelectionForCopyShortcut(
+      { key: "c", ctrlKey: true, metaKey: false, altKey: false },
+      responseRoot,
+      true
+    ),
+    null
+  );
+
+  globalThis.window.getSelection = () => ({
+    isCollapsed: false,
+    rangeCount: 1,
+    getRangeAt: () => ({ startContainer: insideStart, endContainer: outside }),
+    toString: () => "mixed selection",
+  });
+  assert.equal(getSelectionInside(responseRoot), null);
+});
+
 test("a failed Assistant resize releases its open claim so opening can retry", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
