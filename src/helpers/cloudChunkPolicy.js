@@ -52,6 +52,11 @@ const FATAL_CHUNK_CODES = new Set(["AUTH_EXPIRED", "LIMIT_REACHED"]);
 
 const NON_RETRYABLE_CHUNK_CODES = new Set([...FATAL_CHUNK_CODES, "NO_SPEECH_DETECTED"]);
 
+function withoutChunkAnalytics(fields) {
+  const { localDate, analyticsOccurredAt, ...transcriptionFields } = fields;
+  return transcriptionFields;
+}
+
 function isTransientChunkError(err) {
   if (NON_RETRYABLE_CHUNK_CODES.has(err.code)) return false;
   return !err.statusCode || err.statusCode >= 500;
@@ -245,4 +250,5 @@ module.exports = {
   abortableSleep,
   createTeardownGate,
   createUploadSlots,
+  withoutChunkAnalytics,
 };

@@ -20,6 +20,7 @@ const {
   abortableSleep,
   createTeardownGate,
   createUploadSlots,
+  withoutChunkAnalytics,
 } = require("../../src/helpers/cloudChunkPolicy");
 const { changeLanguage } = require("../../src/helpers/i18nMain");
 const { createAbortError } = require("../../src/helpers/abortError");
@@ -32,6 +33,22 @@ test("policy constants match the issue-1326 contract", () => {
   assert.equal(CLOUD_UPLOAD_TIMEOUT_MS, 120_000);
   assert.equal(CLOUD_CHUNK_MAX_ATTEMPTS, 3);
   assert.equal(CLOUD_CHUNK_GLOBAL_CONCURRENCY, 5);
+});
+
+test("chunk requests keep transcription identity without writing partial analytics", () => {
+  const fields = {
+    clientTranscriptionId: "dictation-1",
+    language: "en",
+    localDate: "2026-09-02",
+    analyticsOccurredAt: "2026-09-02T14:00:00.000Z",
+  };
+
+  assert.deepEqual(withoutChunkAnalytics(fields), {
+    clientTranscriptionId: "dictation-1",
+    language: "en",
+  });
+  assert.equal(fields.localDate, "2026-09-02", "the shared inline fields stay unchanged");
+  assert.equal(fields.analyticsOccurredAt, "2026-09-02T14:00:00.000Z");
 });
 
 // A wedge fails every in-flight chunk at once, and closeAllConnections is

@@ -123,3 +123,63 @@ test("cloud auto-language routing uses detected speech before the UI language", 
   const italianResult = await createManager().processWithOpenWhisprCloud(audioBlob);
   assert.equal(italianResult.text, "agent output");
 });
+
+test("cloud transcription returns the occurrence time sent with analytics", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t);
+  const analyticsOccurredAt = "2026-09-02T14:00:00.000Z";
+  const audioBlob = {
+    type: "audio/webm",
+    size: 1024,
+    arrayBuffer: async () => new ArrayBuffer(8),
+  };
+  let requestOptions;
+
+  setSettings({
+    preferredLanguage: "auto",
+    useCleanupModel: false,
+    customDictionary: [],
+    snippets: [],
+    isSignedIn: true,
+    insightsSyncEnabled: true,
+    dataRetentionEnabled: true,
+  });
+  window.electronAPI.cloudTranscribe = async (_audio, options) => {
+    requestOptions = options;
+    return {
+      success: true,
+      text: "same event",
+      clientTranscriptionId: "event-1",
+    };
+  };
+
+  const result = await createManager().processWithOpenWhisprCloud(audioBlob, {
+    analyticsOccurredAt,
+  });
+
+  assert.equal(requestOptions.analyticsOccurredAt, analyticsOccurredAt);
+  assert.equal(result.analyticsOccurredAt, analyticsOccurredAt);
+});
+
+test("local analytics save uses the propagated occurrence time", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t);
+  const analyticsOccurredAt = "2026-09-02T14:00:00.000Z";
+  let recordedEvent;
+
+  setSettings({
+    dataRetentionEnabled: true,
+    audioRetentionDays: 0,
+    customDictionary: [],
+    snippets: [],
+  });
+  window.electronAPI.recordAnalyticsEvent = async (event) => {
+    recordedEvent = event;
+  };
+  window.electronAPI.saveTranscription = async () => ({});
+
+  await createManager().saveTranscription("same event", "same event", {
+    clientTranscriptionId: "event-1",
+    analyticsOccurredAt,
+  });
+
+  assert.equal(recordedEvent.occurredAt, analyticsOccurredAt);
+});

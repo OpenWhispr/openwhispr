@@ -117,6 +117,24 @@ test("streaming silence publishes its empty outcome only after processing settle
   assert.deepEqual(order, ["processing", "idle", "empty"]);
 });
 
+test("streaming completion keeps the recording occurrence time", async (t) => {
+  const AudioManager = await loadManagerClass(t);
+  const { manager } = createFinalizingManager(AudioManager);
+  globalThis.window.dispatchEvent = () => true;
+  const recordingStartedAt = Date.parse("2026-09-02T14:00:00.000Z");
+  let completion;
+  manager.recordingStartTime = recordingStartedAt;
+  manager.streamingFinalText = "same event";
+  manager.finalizeChineseScript = async (text) => text;
+  manager.onTranscriptionComplete = (result) => {
+    completion = result;
+  };
+
+  await manager.stopStreamingRecording();
+
+  assert.equal(completion.analyticsOccurredAt, new Date(recordingStartedAt).toISOString());
+});
+
 test("cancelling an active streaming recording discards it without publishing text", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager, states, getProviderStopCalls } = createFinalizingManager(AudioManager);

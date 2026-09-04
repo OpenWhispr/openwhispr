@@ -190,6 +190,7 @@ const {
   abortableSleep,
   createTeardownGate,
   createUploadSlots,
+  withoutChunkAnalytics,
 } = require("./cloudChunkPolicy");
 
 // Chunk retries need their own connection pool: recovering a wedged chunk pool
@@ -430,7 +431,7 @@ async function chunkedCloudTranscribe({
               fs.readFileSync(chunkPaths[index]),
               path.basename(chunkPaths[index]),
               "audio/mpeg",
-              multipartFields
+              withoutChunkAnalytics(multipartFields)
             );
             const data = await postMultipart(url, body, boundary, policyHeaders, {
               signal: AbortSignal.any([jobSignal, timeoutSignal]),
@@ -997,12 +998,13 @@ class IPCHandlers {
     const { audioRetentionDays, transcriptRetentionDays } = this._retentionSettings;
     try {
       if (transcriptRetentionDays > 0) {
-        const { ids } =
+        const { ids, analyticsPurged } =
           this.databaseManager.deleteTranscriptionsExpiredBefore(transcriptRetentionDays);
         for (const id of ids) {
           this.audioStorageManager.deleteAudio(id);
           broadcastToWindows("transcription-deleted", { id });
         }
+        if (analyticsPurged > 0) broadcastToWindows("analytics-changed");
       }
       if (audioRetentionDays > 0) {
         this.audioStorageManager.cleanupExpiredAudio(audioRetentionDays, this.databaseManager);
@@ -1397,6 +1399,66 @@ class IPCHandlers {
       return this.databaseManager.getTranscriptions(limit, options);
     });
 
+    ipcMain.handle("analytics-record-event", async (_event, input) => {
+      const result = this.databaseManager.recordAnalyticsEvent(input);
+      // Dictation and the control panel are separate renderers, so the
+      // Insights view can only learn about a new event through the main process.
+      if (result?.success && !result.ignored) {
+        setImmediate(() => {
+          broadcastToWindows("analytics-changed");
+        });
+      }
+      return result;
+    });
+
+    ipcMain.handle("analytics-get-summary", async () => {
+      return this.databaseManager.getAnalyticsSummary();
+    });
+
+    ipcMain.handle("analytics-get-pending", async (_event, limit) => {
+      return this.databaseManager.getPendingAnalyticsEvents(limit);
+    });
+
+    ipcMain.handle("analytics-mark-synced", async (_event, eventIds) => {
+      return this.databaseManager.markAnalyticsEventsSynced(eventIds);
+    });
+
+    ipcMain.handle("analytics-get-pending-deletes", async (_event, limit) => {
+      return this.databaseManager.getPendingAnalyticsDeletes(limit);
+    });
+
+    ipcMain.handle("analytics-hard-delete", async (_event, eventIds) => {
+      return this.databaseManager.hardDeleteAnalyticsEvents(eventIds);
+    });
+
+    ipcMain.handle("analytics-get-pending-clear", async () => {
+      return this.databaseManager.getPendingAnalyticsClear();
+    });
+
+    ipcMain.handle("analytics-complete-clear", async (_event, clearedThrough) => {
+      return this.databaseManager.completeAnalyticsClear(clearedThrough);
+    });
+
+    ipcMain.handle("analytics-count-unclaimed", async () => {
+      return this.databaseManager.countUnclaimedAnalyticsEvents();
+    });
+
+    ipcMain.handle("analytics-count-awaiting-upload", async () => {
+      return this.databaseManager.countAnalyticsEventsAwaitingUpload();
+    });
+
+    ipcMain.handle("analytics-claim-anonymous", async () => {
+      const result = this.databaseManager.claimAnonymousAnalyticsEvents();
+      // Claimed rows are only pushed by the Insights view's reload, and the
+      // claim itself changes nothing it renders, so tell it to reload.
+      if (result?.claimed > 0) {
+        setImmediate(() => {
+          broadcastToWindows("analytics-changed");
+        });
+      }
+      return result;
+    });
+
     ipcMain.handle("db-clear-transcriptions", async (event) => {
       this.audioStorageManager.deleteAllAudio();
       const result = this.databaseManager.clearTranscriptions();
@@ -1405,6 +1467,7 @@ class IPCHandlers {
           broadcastToWindows("transcriptions-cleared", {
             cleared: result.cleared,
           });
+          broadcastToWindows("analytics-changed");
         });
       }
       return result;
@@ -5751,6 +5814,8 @@ class IPCHandlers {
           clientVersion: app.getVersion(),
           sessionId: this.sessionId,
           clientTranscriptionId,
+          localDate: opts.localDate,
+          analyticsOccurredAt: opts.analyticsOccurredAt,
         };
 
         debugLogger.debug("Cloud transcribe request", { audioSize: audioData.length }, "cloud-api");
@@ -8927,10 +8992,10 @@ class IPCHandlers {
 
           const response = await proxyFetch(`${apiUrl}/api/streaming-usage`, {
             method: "POST",
-            headers: {
+            headers: withPolicyHeaders({
               "Content-Type": "application/json",
               ...authHeader,
-            },
+            }),
             body: JSON.stringify({
               text,
               audioDurationSeconds,
@@ -8946,6 +9011,11 @@ class IPCHandlers {
               audioFormat: opts.audioFormat,
               clientTotalMs: opts.clientTotalMs,
               sendLogs: opts.sendLogs,
+              clientTranscriptionId: opts.clientTranscriptionId,
+              localDate: opts.localDate,
+              analyticsOccurredAt: opts.analyticsOccurredAt,
+              analyticsWordCount: opts.analyticsWordCount,
+              analyticsCounterVersion: opts.analyticsCounterVersion,
             }),
           });
 

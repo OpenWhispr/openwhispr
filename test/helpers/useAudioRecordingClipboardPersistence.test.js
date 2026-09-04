@@ -325,3 +325,32 @@ test("a false persistence result is logged instead of silently ignored", async (
   );
   assert.deepEqual(harness.navigatorWrites, []);
 });
+
+test("the Insights timestamp rides along on the persistence call", async (t) => {
+  // Persistence moved ahead of the paste so history survives a failed
+  // clipboard delivery (#1979). The analytics timestamp has to travel with it:
+  // recordAnalyticsEvent reads it from these options, and losing it here would
+  // silently backdate every counter to the write time instead of the moment
+  // the recording started.
+  const harness = await mountCompletionHarness(t, {});
+
+  await harness.complete({
+    success: true,
+    text: "Final text",
+    rawText: "Raw text",
+    clientTranscriptionId: "client-analytics",
+    analyticsOccurredAt: "2026-09-04T09:00:00.000Z",
+    source: "openai",
+  });
+
+  assert.deepEqual(harness.saves, [
+    [
+      "Final text",
+      "Raw text",
+      {
+        clientTranscriptionId: "client-analytics",
+        analyticsOccurredAt: "2026-09-04T09:00:00.000Z",
+      },
+    ],
+  ]);
+});
