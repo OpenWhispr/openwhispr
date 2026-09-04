@@ -309,10 +309,54 @@ test("live transcript events are mirrored to the companion only for plain dictat
   assert.deepEqual(companionMessages, [{ channel: "preview-text", payload: "plain" }]);
 });
 
-test("opening the assistant panel surfaces a hidden pill window before focusing it", () => {
-  const { manager, calls } = makeManager({ visible: false });
-  manager.setAssistantPanelOpen(true);
-  assert.deepEqual(calls, ["showInactive", "focusable:true", "focus"]);
+// Both platform paths run on every runner: branching the expectation on the
+// host's own process.platform would leave whichever path CI is not running
+// unverified — and darwin is the one that carries the contract.
+function withPlatform(platform, run) {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+  try {
+    run();
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+}
+
+test("opening the assistant panel surfaces a hidden pill window without activating on macOS", () => {
+  withPlatform("darwin", () => {
+    const { manager, calls } = makeManager({ visible: false });
+    manager.setAssistantPanelOpen(true);
+    // focus() answers a user-granted activation with a whole-desktop Space
+    // slide when another OpenWhispr window lives on a different Space. The
+    // non-activating panel becomes key on click instead.
+    assert.deepEqual(calls, ["showInactive", "focusable:true"]);
+  });
+});
+
+test("opening the assistant panel focuses the pill window on Windows/Linux", () => {
+  for (const platform of ["win32", "linux"]) {
+    withPlatform(platform, () => {
+      const { manager, calls } = makeManager({ visible: false });
+      manager.setAssistantPanelOpen(true);
+      assert.deepEqual(calls, ["showInactive", "focusable:true", "focus"], platform);
+    });
+  }
+});
+
+test("closing the assistant panel blurs only where opening focused", () => {
+  withPlatform("darwin", () => {
+    const { manager, calls } = makeManager({ visible: true });
+    manager.setAssistantPanelOpen(false);
+    // Nothing was activated, so blur() would only churn key-window state.
+    assert.ok(!calls.includes("blur"), "macOS must not blur the overlay");
+  });
+  for (const platform of ["win32", "linux"]) {
+    withPlatform(platform, () => {
+      const { manager, calls } = makeManager({ visible: true });
+      manager.setAssistantPanelOpen(false);
+      assert.ok(calls.includes("blur"), `${platform} hands the foreground back`);
+    });
+  }
 });
 
 test("showDictationPanel still surfaces a hidden window while the panel is open", () => {

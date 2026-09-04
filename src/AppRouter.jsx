@@ -8,6 +8,7 @@ import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.ts
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
 import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
+import { useControlPanelWindowDrag } from "./hooks/useControlPanelWindowDrag";
 import { useTheme } from "./hooks/useTheme";
 import { usePolicyStore } from "./stores/policyStore";
 import { resolveSettledControlPanelWindowMode } from "./utils/controlPanelWindowMode.ts";
@@ -59,6 +60,8 @@ function MainApp() {
 
   const isControlPanel = isControlPanelWindow();
   const isDictationPanel = !isControlPanel;
+  // Covers every surface this window hosts: onboarding, reauth, the panel.
+  useControlPanelWindowDrag(isControlPanel);
 
   useEffect(() => {
     if (isControlPanel) {

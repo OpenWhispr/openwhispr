@@ -186,7 +186,8 @@ class WindowManager {
   }
 
   // The pill window is created focusable:false so it never steals focus; the
-  // assistant panel needs keyboard focus so Escape can dismiss it reliably.
+  // assistant panel makes it focusable so it can take keyboard input at all.
+  // How it then becomes key is platform-split — see the branches below.
   setAssistantPanelOpen(open) {
     this._assistantPanelOpen = Boolean(open);
     if (!this._assistantPanelOpen) {
@@ -198,12 +199,24 @@ class WindowManager {
         // (PTT tap, auto-hide, tray); focus() is a no-op on a hidden window.
         if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
         this.mainWindow.setFocusable(true);
-        this.mainWindow.focus();
+        // macOS: never request app activation for the overlay. focus() calls
+        // NSApp activate, and when another OpenWhispr window (control panel)
+        // lives on a different Space, macOS answers a granted activation by
+        // sliding the whole desktop to it — the "massive flash" on panel
+        // open/close. The window is a non-activating panel, so clicking its
+        // input still makes it key (typing and Escape work from then on)
+        // without activating the app or stealing the user's keyboard.
+        if (process.platform !== "darwin") {
+          this.mainWindow.focus();
+        }
       } else {
         // On Windows/Linux the pill is a normal/toolbar window, so focus()
         // activated OpenWhispr — blur before dropping focusability to hand
-        // the foreground back to the app the user was in.
-        this.mainWindow.blur();
+        // the foreground back to the app the user was in. On macOS nothing
+        // was activated, and blur() would only churn key-window state.
+        if (process.platform !== "darwin") {
+          this.mainWindow.blur();
+        }
         this.mainWindow.setFocusable(false);
       }
       this.enforceMainWindowOnTop();
@@ -419,6 +432,19 @@ class WindowManager {
           ? "center"
           : `bottom-${this._activeHorizontalDirection || this.getMainWindowHorizontalDirection()}`;
       this._baseBoundsBeforeResize = null;
+      if (
+        restored.x === currentBounds.x &&
+        restored.y === currentBounds.y &&
+        restored.width === currentBounds.width &&
+        restored.height === currentBounds.height
+      ) {
+        // Nothing moved (BASE and the grown size share bounds) — skip the mask
+        // handshake and setBounds so the restore cannot perturb the renderer.
+        this._lastResizeBounds = restored;
+        this._activeHorizontalDirection = null;
+        this._notifyMainWindowHorizontalDirection();
+        return { success: true, bounds: restored, changed: false };
+      }
       await this._prepareRendererForMainWindowResize(restored, restoreAnchor);
       if (!this.mainWindow || this.mainWindow.isDestroyed()) {
         return { success: false, message: "Window not available" };
@@ -1129,6 +1155,21 @@ class WindowManager {
 
   isUsingNativeShortcutHotkeys() {
     return this.hotkeyManager.isUsingNativeShortcut();
+  }
+
+  // The control panel is transparent on macOS, where Electron ignores
+  // `-webkit-app-region: drag` entirely — the renderer recreates its titlebar
+  // drag through the shared DragManager instead (useControlPanelWindowDrag).
+  // No pill bookkeeping: position ownership below is main-window-only.
+  async startControlPanelDrag() {
+    if (!this.controlPanelWindow || this.controlPanelWindow.isDestroyed()) {
+      return { success: false, message: "Window not available" };
+    }
+    return await this.dragManager.startWindowDrag(this.controlPanelWindow);
+  }
+
+  async stopControlPanelDrag() {
+    return await this.dragManager.stopWindowDrag();
   }
 
   async startWindowDrag() {
