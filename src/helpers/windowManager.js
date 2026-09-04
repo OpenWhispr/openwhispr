@@ -1319,8 +1319,13 @@ class WindowManager {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("preview-text", text);
     this._sendAgentDictationPreview("preview-text", text);
-    this.mainWindow.showInactive();
-    this.enforceMainWindowOnTop();
+    // Partial results arrive many times per second. Re-showing the already
+    // visible pill and re-applying always-on-top makes Windows restack and
+    // reposition the overlay on every chunk (#1262). Surface it only once.
+    if (!this.mainWindow.isVisible()) {
+      this.mainWindow.showInactive();
+      this.enforceMainWindowOnTop();
+    }
   }
 
   appendTranscriptionPreview(text) {
