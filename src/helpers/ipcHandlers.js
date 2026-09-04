@@ -10954,16 +10954,21 @@ class IPCHandlers {
         if (result.canceled || !result.filePaths.length) {
           return { canceled: true };
         }
+        const filePaths = [...result.filePaths].sort();
         const MAX_IMPORT_BYTES = 200 * 1024 * 1024;
-        const { parseGranolaCsv } = await import("./granolaImport.js");
+        const { createGranolaNoteKeyAllocator, parseGranolaCsv } =
+          await import("./granolaImport.js");
+        const allocateNoteKey = createGranolaNoteKeyAllocator();
         const notes = [];
         const seenIds = new Set();
         let rowIssueCount = 0;
-        for (const filePath of result.filePaths) {
+        for (const filePath of filePaths) {
           if (fs.statSync(filePath).size > MAX_IMPORT_BYTES) {
             return { canceled: false, success: false, error: "FILE_TOO_LARGE" };
           }
-          const parsed = parseGranolaCsv(fs.readFileSync(filePath, "utf8"));
+          const parsed = parseGranolaCsv(fs.readFileSync(filePath, "utf8"), {
+            allocateNoteKey,
+          });
           if (!parsed.ok) {
             return { canceled: false, success: false, error: parsed.error.code };
           }
@@ -10987,7 +10992,7 @@ class IPCHandlers {
         return {
           canceled: false,
           success: true,
-          fileName: result.filePaths.map((p) => path.basename(p)).join(", "),
+          fileName: filePaths.map((p) => path.basename(p)).join(", "),
           total: notes.length,
           newCount: freshNotes.length,
           duplicateCount: notes.length - freshNotes.length,
