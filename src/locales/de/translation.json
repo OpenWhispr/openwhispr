@@ -2296,6 +2296,8 @@
         }
       },
       "updates": {
+        "autoInstall": "Updates automatisch installieren",
+        "autoInstallDescription": "Heruntergeladene Updates werden beim Beenden der App installiert. Deaktivieren Sie dies, um Updates nur auf Wunsch zu installieren.",
         "badges": {
           "dev": "Dev",
           "latest": "Aktuell",

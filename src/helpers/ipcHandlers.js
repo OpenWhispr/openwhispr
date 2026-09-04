@@ -9788,6 +9788,23 @@ class IPCHandlers {
       return this.updateManager.installUpdate();
     });
 
+    ipcMain.handle("get-update-auto-install", async () => {
+      return { enabled: this.environmentManager.getUpdateAutoInstall() };
+    });
+
+    ipcMain.handle("set-update-auto-install", async (_event, enabled) => {
+      try {
+        if (typeof enabled !== "boolean") {
+          return { success: false, error: "Invalid value" };
+        }
+        this.environmentManager.saveUpdateAutoInstall(enabled);
+        this.updateManager.setAutoInstallOnAppQuit(enabled);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("get-app-version", async () => {
       return this.updateManager.getAppVersion();
     });

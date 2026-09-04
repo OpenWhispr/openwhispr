@@ -2055,6 +2055,8 @@
         }
       },
       "updates": {
+        "autoInstall": "Instalar actualizaciones automáticamente",
+        "autoInstallDescription": "Las actualizaciones descargadas se instalan al cerrar la aplicación. Desactívalo para instalarlas solo cuando tú decidas.",
         "badges": {
           "dev": "Dev",
           "latest": "Última",

@@ -1478,6 +1478,8 @@ export default function SettingsPage({
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   const [autoStartNeedsApproval, setAutoStartNeedsApproval] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
+  const [autoInstallUpdates, setAutoInstallUpdates] = useState(true);
+  const [autoInstallLoading, setAutoInstallLoading] = useState(true);
 
   const readAutoStartState = useCallback(async () => {
     if (!window.electronAPI?.getAutoStartEnabled) return;
@@ -1493,6 +1495,36 @@ export default function SettingsPage({
   useEffect(() => {
     readAutoStartState().finally(() => setAutoStartLoading(false));
   }, [readAutoStartState]);
+
+  useEffect(() => {
+    const loadAutoInstall = async () => {
+      if (window.electronAPI?.getUpdateAutoInstall) {
+        try {
+          const result = await window.electronAPI.getUpdateAutoInstall();
+          setAutoInstallUpdates(result.enabled !== false);
+        } catch (error) {
+          logger.error("Failed to get auto-install setting", error, "settings");
+        }
+      }
+      setAutoInstallLoading(false);
+    };
+    loadAutoInstall();
+  }, []);
+
+  const handleAutoInstallChange = async (enabled: boolean) => {
+    if (!window.electronAPI?.setUpdateAutoInstall) return;
+    try {
+      setAutoInstallLoading(true);
+      const result = await window.electronAPI.setUpdateAutoInstall(enabled);
+      if (result.success) {
+        setAutoInstallUpdates(enabled);
+      }
+    } catch (error) {
+      logger.error("Failed to set auto-install", error, "settings");
+    } finally {
+      setAutoInstallLoading(false);
+    }
+  };
 
   useEffect(() => {
     window.electronAPI?.syncNotificationPreferences?.({
@@ -4512,6 +4544,19 @@ EOF`,
                       />
                     </div>
                   )}
+                </SettingsPanelRow>
+
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.updates.autoInstall")}
+                    description={t("settingsPage.general.updates.autoInstallDescription")}
+                  >
+                    <Toggle
+                      checked={autoInstallUpdates}
+                      onChange={(checked: boolean) => handleAutoInstallChange(checked)}
+                      disabled={autoInstallLoading}
+                    />
+                  </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
