@@ -40,6 +40,7 @@ const {
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
+const { getAssistantPanelChrome } = require("./assistantPanelChrome");
 const AGENT_DICTATION_PILL_SIZE = Object.freeze({ ...WINDOW_SIZES.BASE });
 const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
 const { ONBOARDING_DEMO_KINDS, isOnboardingInputAllowed } = require("./onboardingInputPolicy");
@@ -193,10 +194,16 @@ class WindowManager {
       this._assistantPanelBusy = false;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      const chrome = getAssistantPanelChrome({
+        platform: process.platform,
+        open: this._assistantPanelOpen,
+      });
       if (this._assistantPanelOpen) {
         // The window may have been hidden while the command was in flight
         // (PTT tap, auto-hide, tray); focus() is a no-op on a hidden window.
         if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
+        if (!chrome.alwaysOnTop) this.mainWindow.setAlwaysOnTop(false);
+        if (!chrome.skipTaskbar) this.mainWindow.setSkipTaskbar(false);
         this.mainWindow.setFocusable(true);
         this.mainWindow.focus();
       } else {
@@ -205,8 +212,9 @@ class WindowManager {
         // the foreground back to the app the user was in.
         this.mainWindow.blur();
         this.mainWindow.setFocusable(false);
+        if (process.platform === "linux") this.mainWindow.setSkipTaskbar(true);
       }
-      this.enforceMainWindowOnTop();
+      if (chrome.alwaysOnTop) this.enforceMainWindowOnTop();
     }
     if (this._assistantPanelOpen) this.showAgentDictationPill();
     else this.hideAgentDictationPill();
