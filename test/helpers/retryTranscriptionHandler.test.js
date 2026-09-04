@@ -56,6 +56,20 @@ const electronStub = {
   MessageChannelMain: class {},
 };
 
+// A 44-byte RIFF header is enough for isWavFormat, which only sniffs the magic.
+const WAV_BUFFER = Buffer.concat([
+  Buffer.from("RIFF"),
+  Buffer.alloc(4),
+  Buffer.from("WAVE"),
+  Buffer.alloc(32),
+]);
+const CONVERTED_WAV = Buffer.concat([WAV_BUFFER, Buffer.from("converted")]);
+
+// Conversion is mocked rather than run: spawning ffmpeg from a unit test would
+// make it slow and dependent on the runner having a usable binary.
+const wavConversions = [];
+let convertBehavior = async () => CONVERTED_WAV;
+
 const cortiCalls = [];
 const tinfoilCalls = [];
 let cortiBehavior = async () => ({ text: "corti text" });
@@ -85,6 +99,16 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "./windowBroadcast") {
       return { broadcastToWindows: () => {} };
     }
+    if (request === "./ffmpegUtils") {
+      const real = originalLoad.call(this, request, parent, isMain);
+      return {
+        ...real,
+        convertBufferToWav: async (buffer, options) => {
+          wavConversions.push(buffer);
+          return convertBehavior(buffer, options);
+        },
+      };
+    }
   }
   return originalLoad.call(this, request, parent, isMain);
 };
@@ -103,10 +127,16 @@ function anything() {
 }
 
 function buildFakeThis() {
-  const dbRows = new Map([[7, { id: 7, audio_duration_ms: 1200 }]]);
+  const dbRows = new Map([
+    [7, { id: 7, audio_duration_ms: 1200 }],
+    [8, { id: 8, audio_duration_ms: 1200 }],
+  ]);
   const target = {
     sessionId: "test-session",
-    audioStorageManager: { getAudioBuffer: (id) => (id === 7 ? Buffer.from([1, 2, 3]) : null) },
+    audioStorageManager: {
+      // 7 is a stored WebM recording, 8 one already in WAV.
+      getAudioBuffer: (id) => (id === 7 ? Buffer.from([1, 2, 3]) : id === 8 ? WAV_BUFFER : null),
+    },
     databaseManager: {
       updateTranscriptionText: () => {},
       updateTranscriptionStatus: () => {},
@@ -222,6 +252,76 @@ test("retry: plain custom endpoints use Bearer auth at the configured URL", asyn
   assert.equal(result.success, true);
   assert.equal(fetches[0].url, "https://stt.parasail.example.com/v1/audio/transcriptions");
   assert.equal(fetches[0].init.headers.Authorization, "Bearer ck-custom");
+});
+
+const CUSTOM_SETTINGS = {
+  cloudTranscriptionProvider: "custom",
+  cloudTranscriptionMode: "byok",
+  transcriptionMode: "providers",
+  cloudTranscriptionBaseUrl: "https://stt.parasail.example.com/v1",
+  cloudTranscriptionModel: "parasail-model",
+};
+
+const uploadedPart = () => fetches[0].init.body.get("file");
+
+test("retry: a stored WebM is re-encoded before reaching a custom endpoint", async () => {
+  // Without this the renderer-side fix covers fresh dictations only, and every
+  // retry of a recording that failed for the container reason fails again.
+  fetches.length = 0;
+  wavConversions.length = 0;
+
+  const result = await invoke(CUSTOM_SETTINGS);
+
+  assert.equal(result.success, true);
+  assert.equal(wavConversions.length, 1, "the stored container must be converted");
+  const part = uploadedPart();
+  assert.equal(part.name, "audio.wav");
+  assert.equal(part.type, "audio/wav");
+  assert.equal(part.size, CONVERTED_WAV.length, "the converted bytes are what gets uploaded");
+});
+
+test("retry: audio already in WAV is uploaded untouched", async () => {
+  fetches.length = 0;
+  wavConversions.length = 0;
+
+  const result = await invoke(CUSTOM_SETTINGS, 8);
+
+  assert.equal(result.success, true);
+  assert.equal(wavConversions.length, 0, "re-encoding WAV would only cost time");
+  assert.equal(uploadedPart().size, WAV_BUFFER.length);
+});
+
+test("retry: built-in providers keep sending the stored container", async () => {
+  fetches.length = 0;
+  wavConversions.length = 0;
+
+  await invoke({
+    cloudTranscriptionProvider: "openai",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+    cloudTranscriptionModel: "whisper-1",
+  });
+
+  assert.equal(wavConversions.length, 0, "only custom endpoints need the re-encode");
+  assert.equal(uploadedPart().name, "audio.webm");
+});
+
+test("retry: a conversion failure falls open to the stored container", async () => {
+  fetches.length = 0;
+  wavConversions.length = 0;
+  convertBehavior = async () => {
+    throw new Error("ffmpeg missing");
+  };
+
+  try {
+    const result = await invoke(CUSTOM_SETTINGS);
+    assert.equal(result.success, true, "a failed re-encode must not fail the retry");
+    const part = uploadedPart();
+    assert.equal(part.name, "audio.webm");
+    assert.equal(part.type, "audio/webm");
+  } finally {
+    convertBehavior = async () => CONVERTED_WAV;
+  }
 });
 
 test("retry: a custom URL on Tinfoil's host is refused in the main process", async () => {
