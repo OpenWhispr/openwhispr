@@ -1,8 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-// Requires Node's native TypeScript type-stripping (Node >= 22.6 with
-// --experimental-strip-types, on by default in Node 23.6+/24). CI runs Node 24.
+// The .ts import is stripped by tsx, which `npm test` loads via --import.
 
 const load = () => import("../../src/utils/audioContainer.ts");
 
@@ -15,18 +14,42 @@ test("only the custom provider re-encodes, and only for containers a WAV/MP3/FLA
   assert.equal(needsWavConversion("custom", "audio/webm;codecs=opus"), true);
   assert.equal(needsWavConversion("custom", "audio/ogg"), true);
 
+  // Allowlisted rather than blocklisted: MediaRecorder emits MP4/AAC on some
+  // platforms, and AAC is no more acceptable to these backends than Opus.
+  assert.equal(needsWavConversion("custom", "audio/mp4"), true);
+  assert.equal(needsWavConversion("custom", "video/webm"), true);
+
   // Already acceptable — re-encoding would only cost bytes.
   assert.equal(needsWavConversion("custom", "audio/wav"), false);
+  assert.equal(needsWavConversion("custom", "audio/x-wav"), false);
   assert.equal(needsWavConversion("custom", "audio/mpeg"), false);
+  assert.equal(needsWavConversion("custom", "audio/flac"), false);
 
   // Built-in providers accept Opus today; leaving them alone keeps uploads small.
   for (const provider of ["openai", "groq", "mistral", "xai", "gemini", "corti", "tinfoil"]) {
     assert.equal(needsWavConversion(provider, "audio/webm"), false);
   }
 
-  // Missing/unknown type must not trigger a pointless decode.
+  // Missing type must not trigger a pointless decode.
   assert.equal(needsWavConversion("custom", undefined), false);
   assert.equal(needsWavConversion("custom", ""), false);
+
+  // An empty recording has nothing to decode; attempting it would only log a
+  // misleading "re-encode failed" warning.
+  assert.equal(needsWavConversion("custom", "audio/webm", 0), false);
+  assert.equal(needsWavConversion("custom", "audio/webm", 1024), true);
+});
+
+test("downmixToMono averages channels and passes mono through untouched", async () => {
+  const { downmixToMono } = await load();
+
+  const mono = new Float32Array([0.25, -0.5]);
+  assert.equal(downmixToMono([mono]), mono, "mono input is returned as-is, not copied");
+
+  const mixed = downmixToMono([new Float32Array([1, -1]), new Float32Array([0, 1])]);
+  assert.deepEqual(Array.from(mixed), [0.5, 0]);
+
+  assert.throws(() => downmixToMono([]), /at least one channel/);
 });
 
 test("encodeWav writes a RIFF header the upstream decoder can read", async () => {

@@ -12,16 +12,30 @@
 const WAV_HEADER_BYTES = 44;
 const BYTES_PER_SAMPLE = 2;
 
-// Containers Chromium can produce that a WAV/MP3/FLAC-only backend will refuse.
-const REENCODE_CONTAINERS = ["webm", "ogg", "matroska"];
+// Speech models resample to 16 kHz mono internally, and the main process
+// already standardises on it (ffmpegUtils.convertToWav defaults to exactly
+// this), so matching it here keeps the two conversion paths consistent and
+// keeps the upload ~6x smaller than the decoded 48 kHz stream.
+const TARGET_SAMPLE_RATE = 16000;
+
+// Containers these backends already accept. Anything else is re-encoded --
+// an allowlist rather than a list of known-bad containers, so a format we
+// have not seen yet (MP4/AAC on some platforms) converts instead of being
+// uploaded and rejected.
+const ACCEPTED_CONTAINERS = ["wav", "x-wav", "wave", "mpeg", "mp3", "flac"];
 
 export function needsWavConversion(
   provider: string | undefined,
-  mimeType: string | undefined
+  mimeType: string | undefined,
+  size?: number
 ): boolean {
   if (provider !== "custom") return false;
+  // An empty recording has nothing to decode; converting it would only turn a
+  // silent no-op into a spurious "re-encode failed" warning.
+  if (size === 0) return false;
   const type = (mimeType || "").toLowerCase();
-  return REENCODE_CONTAINERS.some((container) => type.includes(container));
+  if (!type) return false;
+  return !ACCEPTED_CONTAINERS.some((container) => type.includes(container));
 }
 
 // Interleaved 16-bit PCM in a RIFF container. Kept pure and free of Web Audio
@@ -67,27 +81,45 @@ export function encodeWav(channels: Float32Array[], sampleRate: number): ArrayBu
   return buffer;
 }
 
-// Renderer-only: decodes through Web Audio rather than ffmpeg, which lives in
-// the main process and would need IPC plumbing for what is otherwise a
-// self-contained step on the upload path.
-export async function convertToWav(blob: Blob): Promise<Blob> {
-  const AudioContextCtor =
-    (globalThis as any).AudioContext || (globalThis as any).webkitAudioContext;
-  if (!AudioContextCtor) throw new Error("Web Audio is unavailable in this context");
+// Averages channels into one. Speech backends gain nothing from stereo and it
+// doubles the upload, so the mono mixdown happens before encoding.
+export function downmixToMono(channels: Float32Array[]): Float32Array {
+  if (!channels.length) throw new Error("downmixToMono requires at least one channel");
+  if (channels.length === 1) return channels[0];
 
-  const context = new AudioContextCtor();
-  try {
-    const decoded = await context.decodeAudioData(await blob.arrayBuffer());
-    const channels: Float32Array[] = [];
-    for (let i = 0; i < decoded.numberOfChannels; i++) channels.push(decoded.getChannelData(i));
-    return new Blob([encodeWav(channels, decoded.sampleRate)], { type: "audio/wav" });
-  } finally {
-    // Best-effort: an already-closed or non-closable context must not mask a
-    // decode error on the way out.
-    try {
-      await context.close?.();
-    } catch {
-      /* ignore */
-    }
+  const frameCount = channels[0].length;
+  const mono = new Float32Array(frameCount);
+  for (let frame = 0; frame < frameCount; frame++) {
+    let sum = 0;
+    for (let channel = 0; channel < channels.length; channel++) sum += channels[channel][frame];
+    mono[frame] = sum / channels.length;
   }
+  return mono;
+}
+
+// Renderer-side conversion, using Web Audio because ffmpeg is only reachable
+// from the main process. Retries re-upload stored audio from there and cannot
+// use this, so they go through ffmpegUtils.convertBufferToWav instead -- both
+// paths target 16 kHz mono so the upload is identical either way.
+export async function convertToWav(blob: Blob): Promise<Blob> {
+  const OfflineCtor =
+    (globalThis as any).OfflineAudioContext || (globalThis as any).webkitOfflineAudioContext;
+  if (!OfflineCtor) throw new Error("Web Audio is unavailable in this context");
+
+  // Decoding through an OfflineAudioContext resamples to the context rate, so
+  // the 48 kHz recording arrives already downsampled -- and unlike a live
+  // AudioContext it neither opens an output device nor inherits whatever rate
+  // the hardware happens to run at.
+  const context = new OfflineCtor(1, 1, TARGET_SAMPLE_RATE);
+  const decoded = await context.decodeAudioData(await blob.arrayBuffer());
+
+  // decodeAudioData honours the context's sample rate but not its channel
+  // count, so a stereo input still decodes to two channels and has to be
+  // downmixed explicitly.
+  const channels: Float32Array[] = [];
+  for (let i = 0; i < decoded.numberOfChannels; i++) channels.push(decoded.getChannelData(i));
+
+  return new Blob([encodeWav([downmixToMono(channels)], decoded.sampleRate)], {
+    type: "audio/wav",
+  });
 }

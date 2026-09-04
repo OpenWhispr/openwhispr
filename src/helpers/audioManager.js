@@ -3388,7 +3388,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // than failing the dictation; a conversion failure falls through to the
       // original bytes so this can only widen what works.
       let uploadAudio = optimizedAudio;
-      if (needsWavConversion(provider, optimizedAudio.type)) {
+      if (needsWavConversion(provider, optimizedAudio.type, optimizedAudio.size)) {
         try {
           uploadAudio = await convertToWav(optimizedAudio);
           logger.debug(
