@@ -1835,6 +1835,10 @@
         "availableTitle": "Configuración de la organización disponible",
         "availableDescription": "Usa {{provider}} sin gestionar credenciales.",
         "useManaged": "Usar gestionado"
+      },
+      "localModelIdleTimeout": {
+        "label": "Local LLM VRAM TTL (Minutes)",
+        "help": "0 means always keep in memory."
       }
     },
     "developer": {

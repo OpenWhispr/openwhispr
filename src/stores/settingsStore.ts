@@ -668,6 +668,9 @@ export interface SettingsState
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
 
+  localModelIdleTimeout: number;
+  setLocalModelIdleTimeout: (value: number) => void;
+
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
   meetingWhisperModel: string;
@@ -1250,6 +1253,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   cortiEnvironment: readString("cortiEnvironment", "us"),
+  localModelIdleTimeout: readNumber("localModelIdleTimeout", 5),
   cortiTenant: readString("cortiTenant", "base"),
   customDictionary: readStringArray("customDictionary", []),
   snippets: (() => {
@@ -1532,6 +1536,20 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
+
+  setLocalModelIdleTimeout: (value: number) => {
+    if (isBrowser) localStorage.setItem("localModelIdleTimeout", String(value));
+    set({ localModelIdleTimeout: value });
+    if (window.electronAPI?.llamaServerUpdateIdleTimeout) {
+      window.electronAPI.llamaServerUpdateIdleTimeout(value).catch((err) => {
+        logger.warn(
+          "Failed to sync VRAM TTL to main process",
+          { error: (err as Error).message },
+          "settings"
+        );
+      });
+    }
+  },
 
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
     mode: InferenceMode
@@ -3058,6 +3076,19 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to hydrate secrets from main process",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+    
+    // Push the initial local model idle timeout to the main process
+    try {
+      if (window.electronAPI?.llamaServerUpdateIdleTimeout) {
+        await window.electronAPI.llamaServerUpdateIdleTimeout(useSettingsStore.getState().localModelIdleTimeout);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to push localModelIdleTimeout to main process on startup",
         { error: (err as Error).message },
         "settings"
       );

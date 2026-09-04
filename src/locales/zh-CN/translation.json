@@ -1787,6 +1787,10 @@
         "availableTitle": "可使用组织配置",
         "availableDescription": "使用 {{provider}}，无需管理凭据。",
         "useManaged": "使用托管配置"
+      },
+      "localModelIdleTimeout": {
+        "label": "Local LLM VRAM TTL (Minutes)",
+        "help": "0 means always keep in memory."
       }
     },
     "developer": {

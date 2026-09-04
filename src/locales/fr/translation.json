@@ -2076,6 +2076,10 @@
         "availableTitle": "Configuration de l'organisation disponible",
         "availableDescription": "Utilisez {{provider}} sans gérer d'identifiants.",
         "useManaged": "Utiliser la version gérée"
+      },
+      "localModelIdleTimeout": {
+        "label": "Local LLM VRAM TTL (Minutes)",
+        "help": "0 means always keep in memory."
       }
     },
     "developer": {

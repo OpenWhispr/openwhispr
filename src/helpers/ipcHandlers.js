@@ -4987,6 +4987,16 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("llama-server-update-idle-timeout", async (event, ttlMinutes) => {
+      try {
+        const modelManager = require("./modelManagerBridge").default;
+        modelManager.updateServerIdleTimeout(ttlMinutes);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("llama-server-status", async () => {
       try {
         const modelManager = require("./modelManagerBridge").default;

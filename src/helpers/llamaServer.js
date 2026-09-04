@@ -19,7 +19,6 @@ const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_CONTEXT_SIZE = 4096;
 
 class LlamaServerManager {
@@ -35,9 +34,29 @@ class LlamaServerManager {
     this.startupPromise = null;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
+    this.shuttingDown = false;
+    this.idleTimeoutMs = 5 * 60 * 1000;
     this.cachedServerBinaryPaths = null;
     this.activeBackend = null;
     this.idleTimer = null;
+  }
+
+  setIdleTimeout(minutes) {
+    let safeMinutes = Number(minutes);
+    if (!Number.isFinite(safeMinutes) || safeMinutes < 0) {
+      safeMinutes = 5; // fallback
+    } else if (safeMinutes > 35000) {
+      safeMinutes = 35000; // clamp to prevent setTimeout overflow (max 2,147,483,647 ms)
+    }
+
+    this.idleTimeoutMs = safeMinutes * 60 * 1000;
+    if (this.process) {
+      if (this.idleTimeoutMs === 0) {
+        this.clearIdleTimer();
+      } else {
+        this.resetIdleTimer();
+      }
+    }
   }
 
   getServerBinaryPaths() {
@@ -507,13 +526,14 @@ class LlamaServerManager {
 
   resetIdleTimer() {
     this.clearIdleTimer();
+    if (this.idleTimeoutMs === 0) return;
     this.idleTimer = setTimeout(() => {
       debugLogger.info("llama-server idle timeout reached, stopping to free VRAM", {
-        timeoutMs: IDLE_TIMEOUT_MS,
+        timeoutMs: this.idleTimeoutMs,
         model: this.modelPath ? path.basename(this.modelPath) : null,
       });
       this.stop();
-    }, IDLE_TIMEOUT_MS);
+    }, this.idleTimeoutMs);
   }
 
   clearIdleTimer() {
@@ -651,6 +671,7 @@ class LlamaServerManager {
     this.draftModelPath = null;
     this.activeDraftModelPath = null;
     this.activeBackend = null;
+    this.shuttingDown = false;
   }
 
   getStatus() {

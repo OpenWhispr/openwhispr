@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "lucide-react";
@@ -29,6 +29,7 @@ import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore"
 import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { resetOnboardingProgress } from "../onboarding/flow";
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
@@ -66,6 +67,10 @@ export default function InferenceConfigEditor({
     )
   );
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const localModelIdleTimeout = useSettingsStore((s) => s.localModelIdleTimeout);
+  const setLocalModelIdleTimeout = useSettingsStore((s) => s.setLocalModelIdleTimeout);
+  const [ttlInput, setTtlInput] = useState(String(localModelIdleTimeout));
+  useEffect(() => setTtlInput(String(localModelIdleTimeout)), [localModelIdleTimeout]);
   const enterpriseSetupMode = useSettingsStore((s) => s.enterpriseSetupMode);
   const setEnterpriseSetupMode = useSettingsStore((s) => s.setEnterpriseSetupMode);
   const managed = useManagedScopeResolution(scope, enterpriseSetupMode);
@@ -267,7 +272,36 @@ export default function InferenceConfigEditor({
       <InferenceModeSelector modes={modes} activeMode={effectiveMode} onSelect={handleModeSelect} />
 
       {effectiveMode === "providers" && renderModelSelector("cloud")}
-      {effectiveMode === "local" && renderModelSelector("local")}
+      {effectiveMode === "local" && (
+        <>
+          {renderModelSelector("local")}
+          <div className="flex items-start justify-between gap-3 pt-1">
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-medium text-foreground">
+                {t("settingsPage.aiModels.localModelIdleTimeout.label", "Unload Local Model After (Minutes)")}
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                {t("settingsPage.aiModels.localModelIdleTimeout.help", "0 means always keep in memory.")}
+              </p>
+            </div>
+            <Input
+              type="number"
+              min="0"
+              value={ttlInput}
+              onChange={(e) => setTtlInput(e.target.value)}
+              onBlur={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val) && val >= 0) {
+                  setLocalModelIdleTimeout(val);
+                } else {
+                  setTtlInput(String(localModelIdleTimeout));
+                }
+              }}
+              className="w-24"
+            />
+          </div>
+        </>
+      )}
 
       {effectiveMode === "self-hosted" && (
         <OpenAICompatiblePanel

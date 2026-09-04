@@ -2076,6 +2076,10 @@
         "availableTitle": "Organization setup available",
         "availableDescription": "Use {{provider}} without managing credentials.",
         "useManaged": "Use managed"
+      },
+      "localModelIdleTimeout": {
+        "label": "Unload Local Model After (Minutes)",
+        "help": "0 means always keep in memory."
       }
     },
     "developer": {

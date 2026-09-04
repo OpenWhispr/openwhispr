@@ -541,6 +541,12 @@ class ModelManager {
     this.currentServerModelId = null;
   }
 
+  updateServerIdleTimeout(ttlMinutes) {
+    if (this.serverManager.setIdleTimeout) {
+      this.serverManager.setIdleTimeout(ttlMinutes);
+    }
+  }
+
   getServerStatus() {
     return this.serverManager.getStatus();
   }
