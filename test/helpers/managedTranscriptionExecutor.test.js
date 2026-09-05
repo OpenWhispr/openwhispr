@@ -68,7 +68,7 @@ test("posts multipart audio to the workspace deployment with an Entra bearer", a
   assert.equal(calls.length, 1);
   assert.equal(
     calls[0].url,
-    "https://acme.services.ai.azure.com/openai/v1/audio/transcriptions?api-version=preview"
+    "https://acme.services.ai.azure.com/openai/deployments/gpt-4o-transcribe/audio/transcriptions?api-version=2025-03-01-preview"
   );
   assert.equal(calls[0].init.headers.Authorization, "Bearer entra-token");
   const body = calls[0].init.body;
