@@ -86,11 +86,20 @@ function createAzureModel(model, apiKey, enterprise) {
 
 // One allowlist for managed Azure hosts (resource, AI Services, and Foundry),
 // shared with the envelope validator so the two can never disagree.
+//
+// @ai-sdk/azure appends `/v1` and `?api-version=` itself ONLY when the base
+// URL's hostname ends in `.openai.azure.com`; for every other host it uses the
+// base URL verbatim and sends no api-version, so the version segment has to be
+// part of it here or AI Services / Foundry requests land on `/openai/<path>`
+// and 404.
 function toAzureOpenAIBaseUrl(endpoint) {
   if (!isAllowedAzureEndpoint(endpoint)) {
     throw new Error("Managed Azure OpenAI requires a public Azure resource origin");
   }
-  return `${new URL(endpoint).origin}/openai`;
+  const url = new URL(endpoint);
+  return url.hostname.endsWith(".openai.azure.com")
+    ? `${url.origin}/openai`
+    : `${url.origin}/openai/v1`;
 }
 
 function createVertexModel(model, apiKey, enterprise) {
