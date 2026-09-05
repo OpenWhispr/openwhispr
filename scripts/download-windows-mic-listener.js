@@ -81,7 +81,7 @@ async function main() {
 
   const tagToFind = VERSION_OVERRIDE || readPinnedTag();
   console.log(`\n[windows-mic-listener] Using pinned version: ${tagToFind}`);
-  const release = await fetchLatestRelease(REPO, { tagPrefix: tagToFind });
+  const release = await fetchLatestRelease(REPO, { tag: tagToFind });
 
   if (!release) {
     failDownload(`Could not find a release matching: ${tagToFind}`);

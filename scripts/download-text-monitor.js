@@ -22,7 +22,7 @@ const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 const PLATFORM_CONFIG = {
   linux: {
     label: "linux-text-monitor",
-    tagPrefix: "linux-text-monitor-v",
+    pinnedTag: "linux-text-monitor-v1.0.0",
     archiveName: "linux-text-monitor-linux-x64.tar.gz",
     binaryName: "linux-text-monitor",
     versionEnv: "LINUX_TEXT_MONITOR_VERSION",
@@ -30,7 +30,7 @@ const PLATFORM_CONFIG = {
   },
   win32: {
     label: "windows-text-monitor",
-    tagPrefix: "windows-text-monitor-v",
+    pinnedTag: "windows-text-monitor-v1.0.0",
     archiveName: "windows-text-monitor-win32-x64.zip",
     binaryName: "windows-text-monitor.exe",
     versionEnv: "WINDOWS_TEXT_MONITOR_VERSION",
@@ -45,7 +45,7 @@ async function main() {
     return;
   }
 
-  const { label, tagPrefix, archiveName, binaryName, versionEnv, compileHint } = config;
+  const { label, pinnedTag, archiveName, binaryName, versionEnv, compileHint } = config;
   const versionOverride = process.env[versionEnv] || null;
   const forceDownload = process.argv.includes("--force");
   const outputPath = path.join(BIN_DIR, binaryName);
@@ -61,11 +61,11 @@ async function main() {
   } else {
     console.log(`\n[${label}] Fetching latest release...`);
   }
-  const tagToFind = versionOverride || tagPrefix;
-  const release = await fetchLatestRelease(REPO, { tagPrefix: tagToFind });
+  const tagToFind = versionOverride || pinnedTag;
+  const release = await fetchLatestRelease(REPO, { tag: tagToFind });
 
   if (!release) {
-    console.error(`[${label}] Could not find a release matching prefix:`, tagPrefix);
+    console.error(`[${label}] Could not find release:`, tagToFind);
     console.log(`[${label}] Auto-learn correction monitoring will be disabled`);
     return;
   }

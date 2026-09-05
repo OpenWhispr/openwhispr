@@ -21,7 +21,7 @@ const {
 } = require("./lib/download-utils");
 
 const REPO = "OpenWhispr/openwhispr";
-const TAG_PREFIX = "windows-fast-paste-v";
+const PINNED_TAG = "windows-fast-paste-v2.0.0";
 const ZIP_NAME = "windows-fast-paste-win32-x64.zip";
 const BINARY_NAME = "windows-fast-paste.exe";
 
@@ -74,11 +74,11 @@ async function main() {
   } else {
     console.log("\n[windows-fast-paste] Fetching latest release...");
   }
-  const tagToFind = VERSION_OVERRIDE || TAG_PREFIX;
-  const release = await fetchLatestRelease(REPO, { tagPrefix: tagToFind });
+  const tagToFind = VERSION_OVERRIDE || PINNED_TAG;
+  const release = await fetchLatestRelease(REPO, { tag: tagToFind });
 
   if (!release) {
-    console.error("[windows-fast-paste] Could not find a release matching prefix:", TAG_PREFIX);
+    console.error("[windows-fast-paste] Could not find release:", tagToFind);
     console.log("[windows-fast-paste] Paste will use nircmd/PowerShell fallback");
     return;
   }
