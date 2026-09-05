@@ -35,9 +35,19 @@ export default function MeetingRecordingMount(): null {
   const error = useMeetingRecordingStore((s) => s.error);
   const errorNonce = useMeetingRecordingStore((s) => s.errorNonce);
   const systemAudioSilentWarning = useMeetingRecordingStore((s) => s.systemAudioSilentWarning);
+  const systemAudioInterrupted = useMeetingRecordingStore((s) => s.systemAudioInterrupted);
+  const systemAudioInterruptedNonce = useMeetingRecordingStore(
+    (s) => s.systemAudioInterruptedNonce
+  );
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
   const wasMicUnavailable = useRef(false);
   const wasSystemAudioSilent = useRef(false);
+  // Seeded from the live nonce rather than 0: the nonce is monotonic across
+  // sessions, so a remount mid-recording would otherwise replay the last
+  // interruption's toast as if it had just happened.
+  const lastSystemAudioInterruption = useRef(
+    useMeetingRecordingStore.getState().systemAudioInterruptedNonce
+  );
   const pendingAutoEndRestart = useRef<MeetingAutoEndRestartContext | null>(null);
   // The auto-end listeners are registered once, so they cannot close over `t`
   // or `toast` directly without pinning the language they mounted with.
@@ -196,6 +206,28 @@ export default function MeetingRecordingMount(): null {
       duration: 8000,
     });
   }, [systemAudioSilentWarning, toast, t]);
+
+  // Unlike the warning above this repeats: capture can stop more than once in a
+  // call. The nonce is monotonic, so the ref alone keeps `t` from re-firing it.
+  useEffect(() => {
+    if (!systemAudioInterrupted) return;
+    if (lastSystemAudioInterruption.current === systemAudioInterruptedNonce) return;
+    lastSystemAudioInterruption.current = systemAudioInterruptedNonce;
+    // Going quiet is not a diagnosis: a call where nobody is speaking looks
+    // identical to a dead tap, so it gets its own copy rather than the
+    // "capture has stopped" one, which asserts more than main can know.
+    let key = "notes.meeting.systemAudioStopped";
+    if (systemAudioInterrupted.recovering) {
+      key = "notes.meeting.systemAudioInterrupted";
+    } else if (systemAudioInterrupted.reason === "gone_quiet") {
+      key = "notes.meeting.systemAudioQuiet";
+    }
+    toast({
+      title: t(`${key}.title`),
+      description: t(`${key}.description`),
+      duration: 8000,
+    });
+  }, [systemAudioInterrupted, systemAudioInterruptedNonce, toast, t]);
 
   useEffect(() => {
     if (micCaptureStatus === "unavailable" && !wasMicUnavailable.current) {

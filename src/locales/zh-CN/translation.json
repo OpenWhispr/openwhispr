@@ -2978,6 +2978,18 @@
       "systemAudioSilent": {
         "title": "尚未检测到会议音频",
         "description": "到目前为止，只有您的麦克风采集到声音。正在进行视频通话？请检查会议音频是否正在此电脑上播放且未被静音。正在进行现场录音？您可以忽略此提示——您的麦克风会采集房间内的声音。"
+      },
+      "systemAudioInterrupted": {
+        "title": "会议音频已中断",
+        "description": "系统音频采集已停止，正在重新启动。转录中可能会缺少几秒钟的通话内容。"
+      },
+      "systemAudioStopped": {
+        "title": "会议音频已停止",
+        "description": "OpenWhispr 已无法采集其他参会者的声音。请停止录制后重新开始，或检查您的音频输出设备。"
+      },
+      "systemAudioQuiet": {
+        "title": "会议音频已静默",
+        "description": "已有几分钟未检测到任何人声。如果通话仍在进行，请检查您的声音输出设备。"
       }
     },
     "meetingPill": {

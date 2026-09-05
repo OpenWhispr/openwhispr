@@ -3229,6 +3229,18 @@
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
+      },
+      "systemAudioInterrupted": {
+        "title": "Meeting-Ton unterbrochen",
+        "description": "Die Aufnahme des Systemtons wurde unterbrochen und startet neu. Einige Sekunden des Gesprächs können im Transkript fehlen."
+      },
+      "systemAudioStopped": {
+        "title": "Meeting-Ton gestoppt",
+        "description": "OpenWhispr nimmt die anderen Teilnehmer nicht mehr auf. Beenden Sie die Aufnahme und starten Sie sie erneut, oder prüfen Sie Ihr Audioausgabegerät."
+      },
+      "systemAudioQuiet": {
+        "title": "Meeting-Audio ist verstummt",
+        "description": "Seit einigen Minuten war niemand zu hören. Falls das Gespräch noch läuft, prüfen Sie Ihr Audioausgabegerät."
       }
     },
     "meetingPill": {

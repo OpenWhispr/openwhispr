@@ -3229,6 +3229,18 @@
       "systemAudioSilent": {
         "title": "Aucun son de réunion détecté pour le moment",
         "description": "Seul votre microphone a capté du son jusqu'à présent. Vous êtes en visioconférence ? Vérifiez que le son de la réunion est diffusé sur cet ordinateur et qu'il n'est pas coupé. Vous enregistrez en présentiel ? Vous pouvez ignorer ce message : votre microphone capte la salle."
+      },
+      "systemAudioInterrupted": {
+        "title": "Son de la réunion interrompu",
+        "description": "La capture du son système s'est arrêtée et redémarre. Quelques secondes de l'appel peuvent manquer dans la transcription."
+      },
+      "systemAudioStopped": {
+        "title": "Son de la réunion arrêté",
+        "description": "OpenWhispr ne capte plus les autres participants. Arrêtez l'enregistrement puis relancez-le, ou vérifiez votre périphérique de sortie audio."
+      },
+      "systemAudioQuiet": {
+        "title": "L'audio de la réunion est devenu silencieux",
+        "description": "Personne n'a été entendu depuis quelques minutes. Si l'appel est toujours en cours, vérifiez votre périphérique de sortie audio."
       }
     },
     "meetingPill": {
