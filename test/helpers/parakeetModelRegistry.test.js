@@ -85,6 +85,9 @@ test("model info helpers distinguish cohere-transcribe from transducer models", 
 test("cohere language resolution maps app languages to supported codes", () => {
   assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "pl"), "pl");
   assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "zh-CN"), "zh");
+  assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "zh_CN"), "zh");
+  assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "pt_BR"), "pt");
+  assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "  es_ES  "), "es");
   assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "auto"), "en");
   assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", undefined), "en");
   assert.equal(resolveModelLanguage("parakeet-tdt-0.6b-v3", "pl"), null);
