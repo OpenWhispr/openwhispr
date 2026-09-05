@@ -77,7 +77,7 @@ import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
-import { formatHotkeyLabel } from "../utils/hotkeys";
+import { formatHotkeyLabel, parseHotkeyList } from "../utils/hotkeys";
 import {
   getLinuxPasteInstallCommands,
   needsLinuxPasteToolGuidance,
@@ -235,6 +235,36 @@ function SectionHeader({
         <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
       )}
       {note && <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{note}</p>}
+    </div>
+  );
+}
+
+function DictationHotkeyActivationMode({
+  hotkey,
+  value,
+  onChange,
+  disabled,
+}: {
+  hotkey: string;
+  value: "tap" | "push";
+  onChange: (mode: "tap" | "push") => void;
+  disabled: boolean;
+}) {
+  const { t } = useTranslation();
+  const { supportsPushToTalk, pushToTalkUnavailableReason } = useHotkeyModeInfo("settings", hotkey);
+
+  return (
+    <div className="w-[132px] shrink-0">
+      <ActivationModeSelector
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        pushDisabledReason={
+          !supportsPushToTalk
+            ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
+            : undefined
+        }
+      />
     </div>
   );
 }
@@ -1078,7 +1108,9 @@ export default function SettingsPage({
     useCleanupModel,
     dictationKey,
     activationMode,
+    activationModeByHotkey,
     setActivationMode,
+    setActivationModeForHotkey,
     microphoneSelectionMode,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
@@ -1463,17 +1495,17 @@ export default function SettingsPage({
     [dictationKey, meetingKey, voiceAgentKey, t]
   );
 
-  const {
-    isUsingNativeShortcut,
-    isUsingHyprland,
-    hyprlandConfigStatus,
-    supportsPushToTalk,
-    pushToTalkUnavailableReason,
-  } = useHotkeyModeInfo("settings", dictationKey);
+  const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus } = useHotkeyModeInfo(
+    "settings",
+    dictationKey
+  );
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
   const platform = getCachedPlatform();
+  const hasPushDictationHotkey = parseHotkeyList(dictationKey).some(
+    (hotkey) => (activationModeByHotkey[hotkey] ?? activationMode) === "push"
+  );
 
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   const [autoStartNeedsApproval, setAutoStartNeedsApproval] = useState(false);
@@ -3835,6 +3867,18 @@ EOF`,
                     disabled={isHotkeyRegistering}
                     maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                     required
+                    renderHotkeyEnd={
+                      !isUsingNativeShortcut || getCachedPlatform() === "linux"
+                        ? (hotkey) => (
+                            <DictationHotkeyActivationMode
+                              hotkey={hotkey}
+                              value={activationModeByHotkey[hotkey] ?? activationMode}
+                              onChange={(mode) => setActivationModeForHotkey(hotkey, mode)}
+                              disabled={isHotkeyRegistering}
+                            />
+                          )
+                        : undefined
+                    }
                     footerEnd={
                       effectiveDefaultHotkey &&
                       dictationKey &&
@@ -3853,25 +3897,9 @@ EOF`,
                   />
                 </SettingsPanelRow>
 
-                {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
+                {getCachedPlatform() === "linux" && hasPushDictationHotkey && (
                   <SettingsPanelRow>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-muted-foreground/80">
-                        {t("settingsPage.general.hotkey.activationMode")}
-                      </span>
-                      <ActivationModeSelector
-                        value={activationMode}
-                        onChange={setActivationMode}
-                        pushDisabledReason={
-                          !supportsPushToTalk
-                            ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                            : undefined
-                        }
-                      />
-                    </div>
-                    {getCachedPlatform() === "linux" && activationMode === "push" && (
-                      <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
-                    )}
+                    <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
                   </SettingsPanelRow>
                 )}
               </SettingsPanel>

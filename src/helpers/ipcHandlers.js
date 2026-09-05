@@ -3921,7 +3921,7 @@ class IPCHandlers {
           );
           await hotkeyManager.hyprlandManager.registerKeybinding(
             effectiveHotkey,
-            this.windowManager.getActivationMode() === "push"
+            this.windowManager.getActivationMode(effectiveHotkey) === "push"
           );
         }
 
@@ -3935,7 +3935,7 @@ class IPCHandlers {
             effectiveHotkey,
             "dictation",
             callback,
-            this.windowManager.getActivationMode() === "push"
+            this.windowManager.getActivationMode(effectiveHotkey) === "push"
           );
           if (result !== true) {
             debugLogger.warn(
@@ -4779,6 +4779,10 @@ class IPCHandlers {
 
     ipcMain.handle("get-activation-mode", async () => {
       return this.environmentManager.getActivationMode();
+    });
+
+    ipcMain.handle("get-activation-modes", async () => {
+      return this.environmentManager.getActivationModes();
     });
 
     ipcMain.handle("save-activation-mode", async (event, mode) => {

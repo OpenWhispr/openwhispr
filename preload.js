@@ -624,6 +624,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Activation mode persistence (file-based for reliable startup)
   getActivationMode: () => ipcRenderer.invoke("get-activation-mode"),
   saveActivationMode: (mode) => ipcRenderer.invoke("save-activation-mode", mode),
+  getActivationModes: () => ipcRenderer.invoke("get-activation-modes"),
 
   saveAllKeysToEnv: () => ipcRenderer.invoke("save-all-keys-to-env"),
   syncStartupPreferences: (prefs) => ipcRenderer.invoke("sync-startup-preferences", prefs),
@@ -968,8 +969,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   checkAccessibilityTrusted: () => ipcRenderer.invoke("check-accessibility-trusted"),
 
-  // Notify main process of activation mode changes (for Windows Push-to-Talk)
+  // Notify main process of activation mode changes (for Push-to-Talk)
   notifyActivationModeChanged: (mode) => ipcRenderer.send("activation-mode-changed", mode),
+  notifyActivationModesChanged: (modes) => ipcRenderer.send("activation-modes-changed", modes),
   notifyHotkeyChanged: (hotkey) => ipcRenderer.send("hotkey-changed", hotkey),
   registerMeetingHotkey: (hotkey) => ipcRenderer.invoke("register-meeting-hotkey", hotkey),
 

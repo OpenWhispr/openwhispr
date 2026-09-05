@@ -98,6 +98,8 @@ class HotkeyManager extends EventEmitter {
     this.useHyprland = false;
     this.kdeManager = null;
     this.useKDE = false;
+    this.activationMode = "tap";
+    this.activationModes = {};
   }
 
   // Ensure a slot exists and return it (slots always use the list shape).
@@ -131,6 +133,57 @@ class HotkeyManager extends EventEmitter {
     const slot = this._ensureSlot("dictation");
     slot.callback = value;
     this.slots.set("dictation", slot);
+  }
+
+  getActivationMode(hotkey, fallback = this.activationMode) {
+    const configured =
+      this.activationModes[hotkey] ??
+      (hotkey === "GLOBE"
+        ? this.activationModes.Fn
+        : hotkey === "Fn"
+          ? this.activationModes.GLOBE
+          : undefined);
+    if (configured === "tap" || configured === "push") return configured;
+    return fallback === "push" ? "push" : "tap";
+  }
+
+  getActivationModes() {
+    return { ...this.activationModes };
+  }
+
+  async setActivationModes(modes) {
+    const nextModes = Object.fromEntries(
+      Object.entries(modes || {}).filter(
+        ([hotkey, mode]) => typeof hotkey === "string" && (mode === "tap" || mode === "push")
+      )
+    );
+    const hotkey = this.currentHotkey;
+    const previousMode = this.getActivationMode(hotkey);
+    const nextMode =
+      nextModes[hotkey] === "push"
+        ? "push"
+        : nextModes[hotkey] === "tap"
+          ? "tap"
+          : this.activationMode === "push"
+            ? "push"
+            : "tap";
+
+    if (hotkey && previousMode !== nextMode) {
+      // Reuse the native-backend transition logic without changing the
+      // legacy fallback that unconfigured hotkeys inherit.
+      const legacyMode = this.activationMode;
+      this.activationMode = previousMode;
+      let success;
+      try {
+        success = await this.setActivationMode(nextMode);
+      } finally {
+        this.activationMode = legacyMode;
+      }
+      if (!success) return false;
+    }
+
+    this.activationModes = nextModes;
+    return true;
   }
 
   setListeningMode(enabled) {
@@ -263,7 +316,7 @@ class HotkeyManager extends EventEmitter {
         hotkey,
         slotName,
         callback,
-        slotName === "dictation" && this.activationMode === "push"
+        slotName === "dictation" && this.getActivationMode(hotkey) === "push"
       );
       if (result !== true) {
         const reason =
@@ -372,12 +425,13 @@ class HotkeyManager extends EventEmitter {
    * every other slot is tap-to-toggle. Globe/mouse hotkeys are macOS-only.
    * Each slot may bind several hotkeys, so we evaluate every one.
    */
-  getNativeListenerKeys(activationMode) {
+  getNativeListenerKeys(activationMode = this.activationMode) {
     const keys = [];
     for (const [slotName, slot] of this.slots) {
       for (const hotkey of slot.hotkeys ?? []) {
         if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
-        const pushToTalk = slotName === "dictation" && activationMode === "push";
+        const pushToTalk =
+          slotName === "dictation" && this.getActivationMode(hotkey, activationMode) === "push";
         if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
           keys.push(hotkey);
         }
@@ -759,7 +813,7 @@ class HotkeyManager extends EventEmitter {
     return false;
   }
 
-  async registerGnomeDictationHotkey(hotkey, callback, mode = this.activationMode) {
+  async registerGnomeDictationHotkey(hotkey, callback, mode = this.getActivationMode(hotkey)) {
     if (mode === "push") {
       if (isModifierOnlyHotkey(hotkey)) return false;
       return this.gnomeManager.registerPushToTalk(hotkey, callback);
@@ -903,7 +957,7 @@ class HotkeyManager extends EventEmitter {
 
             const success = await this.hyprlandManager.registerKeybinding(
               hotkey,
-              this.activationMode === "push"
+              this.getActivationMode(hotkey) === "push"
             );
             if (success) {
               this.currentHotkey = hotkey;
@@ -913,7 +967,7 @@ class HotkeyManager extends EventEmitter {
               );
             } else {
               const ok = await this.tryNativeFallbacks(hotkey, "Hyprland", (fb) =>
-                this.hyprlandManager.registerKeybinding(fb, this.activationMode === "push")
+                this.hyprlandManager.registerKeybinding(fb, this.getActivationMode(fb) === "push")
               );
               if (!ok) {
                 this.useHyprland = false;
@@ -950,7 +1004,7 @@ class HotkeyManager extends EventEmitter {
               hotkey,
               "dictation",
               callback,
-              this.activationMode === "push"
+              this.getActivationMode(hotkey) === "push"
             );
             if (result === true) {
               this.currentHotkey = hotkey;
@@ -959,7 +1013,12 @@ class HotkeyManager extends EventEmitter {
             } else if (result === "conflict" || result === "modifier-only") {
               const ok = await this.tryNativeFallbacks(hotkey, "KDE", (fb) =>
                 this.kdeManager
-                  .registerKeybinding(fb, "dictation", callback, this.activationMode === "push")
+                  .registerKeybinding(
+                    fb,
+                    "dictation",
+                    callback,
+                    this.getActivationMode(fb) === "push"
+                  )
                   .then((r) => r === true)
               );
               if (!ok) {
@@ -1273,7 +1332,7 @@ class HotkeyManager extends EventEmitter {
       // DE backends bind one accelerator per slot; extras stay in storage.
       const primary = hotkeys[0];
 
-      if (this.activationMode === "push" && !this.supportsPushToTalk(primary)) {
+      if (this.getActivationMode(primary) === "push" && !this.supportsPushToTalk(primary)) {
         return {
           success: false,
           message: this.getPushToTalkUnavailableReason(primary),
@@ -1314,7 +1373,7 @@ class HotkeyManager extends EventEmitter {
         debugLogger.log(`[HotkeyManager] Updating Hyprland hotkey to "${primary}"`);
         const success = await this.hyprlandManager.updateKeybinding(
           primary,
-          this.activationMode === "push"
+          this.getActivationMode(primary) === "push"
         );
         if (!success) {
           return {
@@ -1344,7 +1403,7 @@ class HotkeyManager extends EventEmitter {
           primary,
           "dictation",
           callback,
-          this.activationMode === "push"
+          this.getActivationMode(primary) === "push"
         );
         if (result !== true) {
           if (previousHotkey) {
@@ -1352,7 +1411,7 @@ class HotkeyManager extends EventEmitter {
               previousHotkey,
               "dictation",
               callback,
-              this.activationMode === "push"
+              this.getActivationMode(previousHotkey) === "push"
             );
             if (restored === true) {
               debugLogger.log(`[HotkeyManager] Restored previous KDE hotkey "${previousHotkey}"`);

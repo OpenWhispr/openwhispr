@@ -64,6 +64,13 @@ test("push mode watches every dictation hotkey, including regular keys", () => {
   assert.deepEqual(mgr.getNativeListenerKeys("push").sort(), ["Control+Shift+R", "F8"]);
 });
 
+test("per-hotkey modes only watch dictation hotkeys configured for Hold", () => {
+  const mgr = makeManager({ dictation: ["F8", "Control+Shift+R"] });
+  mgr.activationModes = { F8: "push", "Control+Shift+R": "tap" };
+
+  assert.deepEqual(mgr.getNativeListenerKeys("tap"), ["F8"]);
+});
+
 test("membership and lookup helpers work across multi-hotkey slots", () => {
   const mgr = makeManager({
     dictation: ["GLOBE", "Control+Shift+R"],

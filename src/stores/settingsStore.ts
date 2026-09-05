@@ -28,6 +28,7 @@ import {
   type InferenceScopeStoreKeys,
 } from "../config/inferenceScopes";
 import { normalizeChineseScriptPreference } from "../utils/chineseScript";
+import { parseHotkeyList } from "../utils/hotkeys";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import modelRegistryData from "../models/modelRegistryData.json";
 import { pickDefaultModelId } from "../models/providerDefaultModel";
@@ -186,6 +187,31 @@ function readNumber(key: string, fallback: number): number {
   if (!isBrowser) return fallback;
   const parsed = parseInt(localStorage.getItem(key) ?? "", 10);
   return isNaN(parsed) ? fallback : parsed;
+}
+
+type ActivationMode = "tap" | "push";
+
+function readActivationModes(): Record<string, ActivationMode> {
+  if (!isBrowser) return {};
+  try {
+    const parsed = JSON.parse(localStorage.getItem("activationModeByHotkey") || "{}");
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        ([hotkey, mode]) => typeof hotkey === "string" && (mode === "tap" || mode === "push")
+      )
+    ) as Record<string, ActivationMode>;
+  } catch {
+    return {};
+  }
+}
+
+function retainActivationModes(
+  modes: Record<string, ActivationMode>,
+  dictationKey: string
+): Record<string, ActivationMode> {
+  const hotkeys = new Set(parseHotkeyList(dictationKey));
+  return Object.fromEntries(Object.entries(modes).filter(([hotkey]) => hotkeys.has(hotkey)));
 }
 
 // Durations offered by the mic warm-hold select; unknown values snap to 0 (off)
@@ -467,6 +493,19 @@ function migrateUploadTranscription() {
 }
 
 migrateUploadTranscription();
+
+function migrateActivationModesByHotkey() {
+  if (!isBrowser || localStorage.getItem("_activationModesByHotkeyMigrated") === "1") return;
+  const mode: ActivationMode = readString("activationMode", "tap") === "push" ? "push" : "tap";
+  const hotkeys = parseHotkeyList(readString("dictationKey", ""));
+  localStorage.setItem(
+    "activationModeByHotkey",
+    JSON.stringify(Object.fromEntries(hotkeys.map((hotkey) => [hotkey, mode])))
+  );
+  localStorage.setItem("_activationModesByHotkeyMigrated", "1");
+}
+
+migrateActivationModesByHotkey();
 
 function migrateAgentMode() {
   if (!isBrowser) return;
@@ -946,6 +985,7 @@ export interface SettingsState
   setOnboardingUseCaseNote: (note: string) => void;
   setSpokenLanguages: (languages: string[]) => void;
   setActivationMode: (mode: "tap" | "push") => void;
+  setActivationModeForHotkey: (hotkey: string, mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
   setMicrophoneSelectionMode: (mode: MicrophoneSelectionMode) => void;
@@ -1342,6 +1382,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     : "full-width") as "side-panel" | "full-width",
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     "tap" | "push",
+  activationModeByHotkey: readActivationModes(),
 
   microphoneSelectionMode: (() => {
     const mode = readString("microphoneSelectionMode", "system");
@@ -2033,10 +2074,16 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setDictationKey: (key: string) => {
     if (isBrowser) localStorage.setItem("dictationKey", key);
-    set({ dictationKey: key });
+    const nextModes = retainActivationModes(
+      useSettingsStore.getState().activationModeByHotkey,
+      key
+    );
+    if (isBrowser) localStorage.setItem("activationModeByHotkey", JSON.stringify(nextModes));
+    set({ dictationKey: key, activationModeByHotkey: nextModes });
     if (isBrowser) {
       window.electronAPI?.notifyHotkeyChanged?.(key);
       window.electronAPI?.saveDictationKey?.(key);
+      window.electronAPI?.notifyActivationModesChanged?.(nextModes);
     }
   },
   setMeetingKey: (key: string) => {
@@ -2072,10 +2119,26 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   setActivationMode: (mode: "tap" | "push") => {
+    const validMode: ActivationMode = mode === "push" ? "push" : "tap";
+    const hotkeys = parseHotkeyList(useSettingsStore.getState().dictationKey);
+    const nextModes = Object.fromEntries(hotkeys.map((hotkey) => [hotkey, validMode]));
     if (isBrowser) localStorage.setItem("activationMode", mode);
-    set({ activationMode: mode });
+    if (isBrowser) localStorage.setItem("activationModeByHotkey", JSON.stringify(nextModes));
+    set({ activationMode: validMode, activationModeByHotkey: nextModes });
     if (isBrowser) {
-      window.electronAPI?.notifyActivationModeChanged?.(mode);
+      window.electronAPI?.notifyActivationModeChanged?.(validMode);
+      window.electronAPI?.notifyActivationModesChanged?.(nextModes);
+    }
+  },
+  setActivationModeForHotkey: (hotkey: string, mode: "tap" | "push") => {
+    if (!hotkey) return;
+    const validMode: ActivationMode = mode === "push" ? "push" : "tap";
+    const current = useSettingsStore.getState();
+    const nextModes = { ...current.activationModeByHotkey, [hotkey]: validMode };
+    if (isBrowser) localStorage.setItem("activationModeByHotkey", JSON.stringify(nextModes));
+    set({ activationModeByHotkey: nextModes });
+    if (isBrowser) {
+      window.electronAPI?.notifyActivationModesChanged?.(nextModes);
     }
   },
 
@@ -3161,6 +3224,21 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync activation mode on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    try {
+      const envModes = await window.electronAPI.getActivationModes?.();
+      if (envModes) {
+        const nextModes = retainActivationModes(envModes, useSettingsStore.getState().dictationKey);
+        if (isBrowser) localStorage.setItem("activationModeByHotkey", JSON.stringify(nextModes));
+        useSettingsStore.setState({ activationModeByHotkey: nextModes });
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync per-hotkey activation modes on startup",
         { error: (err as Error).message },
         "settings"
       );
