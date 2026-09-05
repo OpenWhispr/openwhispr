@@ -839,6 +839,11 @@
       "requiresMacOS": "macOS {{version}}+",
       "unavailable": "Недоступно"
     },
+    "modelCompatibility": {
+      "englishOnly": "Только английский",
+      "unsupported": "Не поддерживает {{language}}",
+      "chooseLanguage": "Выберите поддерживаемый язык"
+    },
     "apiKeyOptional": "API-ключ (необязательно)",
     "getKey": "Получить ключ ->",
     "endpointUrl": "URL конечной точки",

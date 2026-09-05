@@ -839,6 +839,11 @@
       "requiresMacOS": "macOS {{version}}+",
       "unavailable": "Unavailable"
     },
+    "modelCompatibility": {
+      "englishOnly": "English only",
+      "unsupported": "Doesn't support {{language}}",
+      "chooseLanguage": "Choose a supported language"
+    },
     "apiKeyOptional": "API Key (Optional)",
     "getKey": "Get key ->",
     "endpointUrl": "Endpoint URL",

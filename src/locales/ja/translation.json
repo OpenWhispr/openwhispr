@@ -839,6 +839,11 @@
       "requiresMacOS": "macOS {{version}}+",
       "unavailable": "利用不可"
     },
+    "modelCompatibility": {
+      "englishOnly": "英語のみ",
+      "unsupported": "{{language}}には対応していません",
+      "chooseLanguage": "対応言語を選択してください"
+    },
     "apiKeyOptional": "API キー（任意）",
     "getKey": "キーを取得 ->",
     "endpointUrl": "エンドポイント URL",

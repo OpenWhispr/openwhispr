@@ -30,6 +30,31 @@ test("non-registry ids of every local family fall back to the local provider", a
   }
 });
 
+test("Parakeet compatibility distinguishes auto and unsupported languages", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: { _providerSettingsMigrated: "1", cleanupMode: "local" },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-model-language-compatibility-test-",
+  });
+  const { getParakeetLanguageCompatibility } = await vite.ssrLoadModule("/models/ModelRegistry.ts");
+
+  assert.equal(
+    getParakeetLanguageCompatibility("parakeet-unified-en-0.6b", "auto"),
+    "english-only"
+  );
+  assert.equal(getParakeetLanguageCompatibility("parakeet-unified-en-0.6b", "ar"), "unsupported");
+  assert.equal(getParakeetLanguageCompatibility("parakeet-tdt-0.6b-v3", "fr"), "compatible");
+  assert.equal(
+    getParakeetLanguageCompatibility("cohere-transcribe-03-2026", "auto"),
+    "language-required"
+  );
+  assert.equal(
+    getParakeetLanguageCompatibility("cohere-transcribe-03-2026", "zh-TW"),
+    "compatible"
+  );
+});
+
 test("gemma fallback does not capture gemini ids or registry cloud gemma models", async (t) => {
   installBrowserGlobals(t, {
     initialStorage: { _providerSettingsMigrated: "1", cleanupMode: "local" },
