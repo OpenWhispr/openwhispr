@@ -3229,6 +3229,18 @@
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",
         "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
+      },
+      "systemAudioInterrupted": {
+        "title": "Meeting audio interrupted",
+        "description": "System audio capture stopped and is restarting. A few seconds of the call may be missing from the transcript."
+      },
+      "systemAudioStopped": {
+        "title": "Meeting audio stopped",
+        "description": "OpenWhispr is no longer capturing the other participants. Stop and start the recording again, or check your sound output device."
+      },
+      "systemAudioQuiet": {
+        "title": "Meeting audio has gone quiet",
+        "description": "No one has been heard for a few minutes. If the call is still going, check your sound output device."
       }
     },
     "meetingPill": {

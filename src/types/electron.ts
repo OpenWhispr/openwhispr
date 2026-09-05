@@ -2738,6 +2738,13 @@ declare global {
         callback: (data: { systemAudioStrategy: SystemAudioStrategy }) => void
       ) => () => void;
       onMeetingSystemAudioDegraded?: (callback: () => void) => () => void;
+      onMeetingSystemAudioInterrupted?: (
+        callback: (data: {
+          systemAudioStrategy: SystemAudioStrategy;
+          reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet";
+          recovering: boolean;
+        }) => void
+      ) => () => void;
 
       // Speaker diarization
       downloadDiarizationModels?: () => Promise<{ success: boolean; error?: string }>;

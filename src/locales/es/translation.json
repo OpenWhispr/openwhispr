@@ -3026,6 +3026,18 @@
       "systemAudioSilent": {
         "title": "Aún no se detecta el audio de la reunión",
         "description": "Hasta ahora solo tu micrófono ha captado sonido. ¿Estás en una videollamada? Comprueba que el audio de la reunión se reproduce en este equipo y no está silenciado. ¿Estás grabando en persona? Puedes ignorar este aviso: tu micrófono capta la sala."
+      },
+      "systemAudioInterrupted": {
+        "title": "Audio de la reunión interrumpido",
+        "description": "La captura del audio del sistema se detuvo y se está reiniciando. Puede que falten unos segundos de la llamada en la transcripción."
+      },
+      "systemAudioStopped": {
+        "title": "El audio de la reunión se detuvo",
+        "description": "OpenWhispr ya no está captando a los demás participantes. Detén la grabación y vuelve a iniciarla, o revisa tu dispositivo de salida de sonido."
+      },
+      "systemAudioQuiet": {
+        "title": "El audio de la reunión se ha quedado en silencio",
+        "description": "No se ha oído a nadie desde hace unos minutos. Si la llamada sigue en curso, revisa tu dispositivo de salida de sonido."
       }
     },
     "meetingPill": {

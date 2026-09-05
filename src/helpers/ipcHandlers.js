@@ -77,6 +77,7 @@ const { registerMeetingAutoEndLifecycleHandlers } = require("./meetingAutoEndLif
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
+const createMeetingSystemAudioWatchdog = require("./meetingSystemAudioWatchdog");
 const {
   partitionPendingMicFinals,
   isRiskyMicDuplicateProfile,
@@ -6955,8 +6956,28 @@ class IPCHandlers {
     const MEETING_MIC_BLEED_LOOKBACK_MS = 500;
     const MEETING_MIC_STATS_LOG_LIMIT = 200;
     const MEETING_SYSTEM_AUDIO_SILENCE_WARNING_MS = 45000;
+    const MEETING_SYSTEM_AUDIO_TICK_MS = 2000;
     let meetingMicStatsLogCount = 0;
     let meetingSystemAudioSilenceTimer = null;
+    let meetingSystemAudioTicker = null;
+    let meetingSystemAudioWatchdogWin = null;
+
+    const meetingSystemAudioWatchdog = createMeetingSystemAudioWatchdog({
+      onInterrupted: (payload) => {
+        // debugLogger.error flattens its arguments into one string, dropping
+        // both the meta and the scope, so the give-up event would vanish from a
+        // log filtered on "meeting", the one filter used to triage this bug.
+        if (payload.recovering) {
+          debugLogger.warn("Meeting system audio interrupted, restarting", payload, "meeting");
+        } else {
+          debugLogger.warn("Meeting system audio capture gave up", payload, "meeting");
+        }
+        const win = meetingSystemAudioWatchdogWin;
+        if (win && !win.isDestroyed()) {
+          win.webContents.send("meeting-system-audio-interrupted", payload);
+        }
+      },
+    });
     let meetingStartedAt = null;
     let meetingSendCounts = { mic: 0, system: 0 };
     const meetingEchoLeakDetector = new MeetingEchoLeakDetector();
@@ -7778,8 +7799,43 @@ class IPCHandlers {
       }, MEETING_SYSTEM_AUDIO_SILENCE_WARNING_MS);
     };
 
+    const clearMeetingSystemAudioTicker = () => {
+      if (meetingSystemAudioTicker) {
+        clearInterval(meetingSystemAudioTicker);
+        meetingSystemAudioTicker = null;
+      }
+    };
+
+    const stopMeetingSystemAudioWatchdog = () => {
+      clearMeetingSystemAudioTicker();
+      // Detaches the capture too, which strands any restart still in flight.
+      meetingSystemAudioWatchdog.stop();
+      meetingSystemAudioWatchdogWin = null;
+    };
+
+    // Rolling counterpart to the one-shot warning above, which only covers a
+    // session that never produced audio and stops watching once any arrives.
+    const startMeetingSystemAudioWatchdog = (win, systemAudioStrategy) => {
+      // Deliberately not stopMeetingSystemAudioWatchdog(): capture is already
+      // running and attached by this point, and detaching it here would leave a
+      // watchdog that reports stalls it cannot recover from.
+      clearMeetingSystemAudioTicker();
+      meetingSystemAudioWatchdogWin = win;
+      meetingSystemAudioWatchdog.start({
+        systemAudioStrategy,
+        // Only the macOS tap delivers a chunk every period regardless of what
+        // is playing; a gap from the loopback helpers proves nothing.
+        watchesDelivery: systemAudioStrategy === "native",
+      });
+      meetingSystemAudioTicker = setInterval(
+        () => meetingSystemAudioWatchdog.tick(),
+        MEETING_SYSTEM_AUDIO_TICK_MS
+      );
+    };
+
     const rollbackMeetingTranscriptionStart = async () => {
       clearMeetingSystemAudioSilenceTimer();
+      stopMeetingSystemAudioWatchdog();
       if (this.audioTapManager) {
         await this.audioTapManager.stop().catch(() => {});
       }
@@ -8009,6 +8065,7 @@ class IPCHandlers {
         // in-person recordings where a silent system tap is expected.
         if (result.systemAudioStrategy && result.systemAudioStrategy !== "unsupported") {
           armMeetingSystemAudioSilenceTimer(meetingConnectionWin, result.systemAudioStrategy);
+          startMeetingSystemAudioWatchdog(meetingConnectionWin, result.systemAudioStrategy);
         }
         return { ...result, sessionId: recordingSessionId };
       };
@@ -8159,14 +8216,17 @@ class IPCHandlers {
         }
         meetingDiarizationStream.write(outboundBuffer);
 
-        if (!meetingSystemAudioHeard) {
-          const { rms, peak } = computeChunkStats(outboundBuffer);
-          if (rms >= MEETING_MIC_SILENCE_RMS || peak >= MEETING_MIC_SILENCE_PEAK) {
-            // A call is audibly underway: diarization stays on the system
-            // channel, so stop paying the mic capture's disk cost.
-            meetingSystemAudioHeard = true;
-            dropMeetingMicDiarizationCapture();
-          }
+        // Every chunk feeds the watchdog, not just the first audible one: it
+        // needs the gaps after the call has been heard, which is where the
+        // capture dies silently.
+        const { rms, peak } = computeChunkStats(outboundBuffer);
+        const audible = rms >= MEETING_MIC_SILENCE_RMS || peak >= MEETING_MIC_SILENCE_PEAK;
+        meetingSystemAudioWatchdog.recordChunk(audible);
+        if (audible && !meetingSystemAudioHeard) {
+          // A call is audibly underway: diarization stays on the system
+          // channel, so stop paying the mic capture's disk cost.
+          meetingSystemAudioHeard = true;
+          dropMeetingMicDiarizationCapture();
         }
 
         dispatchMeetingAudioBuffer(outboundBuffer, "system");
@@ -8238,24 +8298,36 @@ class IPCHandlers {
 
     const startManagedMeetingSystemAudio = (event, manager, warningLabel, onWarningCode) => {
       const win = BrowserWindow.fromWebContents(event.sender);
-      return manager.start({
-        onChunk: (chunk) => {
-          sendMeetingAudio(chunk, "system");
-        },
-        onError: (error) => {
-          if (win && !win.isDestroyed()) {
-            win.webContents.send("meeting-transcription-error", error.message);
-          }
-        },
-        onWarning: (warning) => {
-          debugLogger.warn(
-            warningLabel,
-            { code: warning.code, message: warning.message },
-            "meeting"
-          );
-          onWarningCode?.(warning.code);
-        },
+      const startCapture = () =>
+        manager.start({
+          onChunk: (chunk) => {
+            sendMeetingAudio(chunk, "system");
+          },
+          onError: (error) => {
+            if (win && !win.isDestroyed()) {
+              win.webContents.send("meeting-transcription-error", error.message);
+            }
+          },
+          onWarning: (warning) => {
+            debugLogger.warn(
+              warningLabel,
+              { code: warning.code, message: warning.message },
+              "meeting"
+            );
+            onWarningCode?.(warning.code);
+          },
+        });
+
+      // Recovery restarts the helper process rather than rebuilding capture in
+      // place, so the stop half is a process exit and stays idempotent. The
+      // gap costs ~250ms of audio, which shifts later diarization timestamps
+      // earlier by that much; under the restart cap it stays below a second.
+      meetingSystemAudioWatchdog.attachCapture({
+        stop: () => manager.stop(),
+        start: startCapture,
       });
+
+      return startCapture();
     };
 
     const fallBackToMicOnly = async (context) => {
@@ -8269,6 +8341,8 @@ class IPCHandlers {
         });
       }
       this._meetingSystemStreaming = null;
+      // No system capture left to recover, so drop the restart hook with it.
+      stopMeetingSystemAudioWatchdog();
       await stopLiveSpeakerIdentification().catch(() => {});
     };
 
@@ -8283,7 +8357,14 @@ class IPCHandlers {
           await startManagedMeetingSystemAudio(
             event,
             this.audioTapManager,
-            "macOS system audio tap warning"
+            "macOS system audio tap warning",
+            (code) => {
+              // The tap is pinned to the devices it saw at creation, so a route
+              // change can strand it. Restart before the stall window elapses.
+              if (code === "device_invalidated") {
+                meetingSystemAudioWatchdog.reportDeviceInvalidated();
+              }
+            }
           );
           return { systemAudioMode, systemAudioStrategy };
         } catch (error) {
@@ -8357,6 +8438,7 @@ class IPCHandlers {
       }
       this.meetingDetectionEngine?.setUserRecording(false);
       clearMeetingSystemAudioSilenceTimer();
+      stopMeetingSystemAudioWatchdog();
       try {
         if (this.audioTapManager) {
           await this.audioTapManager.stop();

@@ -101,6 +101,10 @@ interface MeetingRecordingState {
   errorNonce: number;
   /** Latched once per recording when main reports the system-audio tap has produced only silence. */
   systemAudioSilentWarning: boolean;
+  /** Most recent system-audio interruption main reported this recording; null before the first. */
+  systemAudioInterrupted: { recovering: boolean; reason: string } | null;
+  /** Bumped on every interruption report so a repeated one still re-notifies. */
+  systemAudioInterruptedNonce: number;
   currentMicLevel: number;
   micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
   windowWidth: number;
@@ -438,6 +442,8 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   error: null,
   errorNonce: 0,
   systemAudioSilentWarning: false,
+  systemAudioInterrupted: null,
+  systemAudioInterruptedNonce: 0,
   currentMicLevel: 0,
   micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
@@ -818,6 +824,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       completedDiarization: null,
       error: null,
       systemAudioSilentWarning: false,
+      systemAudioInterrupted: null,
       micCaptureStatus: "inactive",
     });
 
@@ -1182,6 +1189,32 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       });
       if (systemAudioSilentCleanup) ipcCleanups.push(systemAudioSilentCleanup);
 
+      // Repeatable, unlike the one-shot above: capture can stop and be restarted
+      // more than once in a call, and each time is worth surfacing.
+      const systemAudioInterruptedCleanup = window.electronAPI?.onMeetingSystemAudioInterrupted?.(
+        (data) => {
+          if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+          if (!sessionSystemAudioActive) return;
+          logger.warn(
+            "Meeting system audio was interrupted",
+            {
+              systemAudioStrategy: data?.systemAudioStrategy,
+              reason: data?.reason,
+              recovering: data?.recovering,
+            },
+            "meeting"
+          );
+          useMeetingRecordingStore.setState((state) => ({
+            systemAudioInterrupted: {
+              recovering: data?.recovering === true,
+              reason: data?.reason ?? "unknown",
+            },
+            systemAudioInterruptedNonce: state.systemAudioInterruptedNonce + 1,
+          }));
+        }
+      );
+      if (systemAudioInterruptedCleanup) ipcCleanups.push(systemAudioInterruptedCleanup);
+
       // Main re-derives the expected count when participants are added mid-meeting
       // (never for a count set explicitly via the stepper — main skips those).
       const speakerConfigCleanup = window.electronAPI?.onMeetingSessionSpeakerConfigUpdated?.(
@@ -1494,6 +1527,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemPartialSpeakerId: null,
       systemPartialSpeakerName: null,
       systemAudioSilentWarning: false,
+      systemAudioInterrupted: null,
       currentMicLevel: 0,
     });
     return { diarizationSessionId: null, stopped: false };
@@ -1580,6 +1614,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemPartialSpeakerId: null,
       systemPartialSpeakerName: null,
       systemAudioSilentWarning: false,
+      systemAudioInterrupted: null,
       currentMicLevel: 0,
     });
 

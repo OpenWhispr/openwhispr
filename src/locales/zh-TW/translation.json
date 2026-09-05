@@ -2978,6 +2978,18 @@
       "systemAudioSilent": {
         "title": "尚未偵測到會議音訊",
         "description": "到目前為止，只有您的麥克風收到聲音。正在進行視訊通話？請檢查會議音訊是否正在此電腦上播放且未被靜音。正在進行現場錄音？您可以忽略此提示——您的麥克風會收錄房間內的聲音。"
+      },
+      "systemAudioInterrupted": {
+        "title": "會議音訊已中斷",
+        "description": "系統音訊擷取已停止，正在重新啟動。逐字稿中可能會缺少幾秒鐘的通話內容。"
+      },
+      "systemAudioStopped": {
+        "title": "會議音訊已停止",
+        "description": "OpenWhispr 已無法擷取其他與會者的聲音。請停止錄製後重新開始，或檢查您的音訊輸出裝置。"
+      },
+      "systemAudioQuiet": {
+        "title": "會議音訊已靜默",
+        "description": "已有幾分鐘未偵測到任何人聲。如果通話仍在進行，請檢查您的聲音輸出裝置。"
       }
     },
     "meetingPill": {

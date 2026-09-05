@@ -2978,6 +2978,18 @@
       "systemAudioSilent": {
         "title": "Nenhum áudio da reunião detectado até agora",
         "description": "Até agora, apenas o seu microfone captou som. Está em uma videochamada? Verifique se o áudio da reunião está sendo reproduzido neste computador e não está silenciado. Está gravando presencialmente? Você pode ignorar este aviso: seu microfone capta o ambiente."
+      },
+      "systemAudioInterrupted": {
+        "title": "Áudio da reunião interrompido",
+        "description": "A captura do áudio do sistema parou e está reiniciando. Alguns segundos da chamada podem faltar na transcrição."
+      },
+      "systemAudioStopped": {
+        "title": "O áudio da reunião parou",
+        "description": "O OpenWhispr não está mais captando os outros participantes. Pare a gravação e inicie novamente, ou verifique seu dispositivo de saída de som."
+      },
+      "systemAudioQuiet": {
+        "title": "O áudio da reunião ficou silencioso",
+        "description": "Ninguém foi ouvido nos últimos minutos. Se a chamada ainda estiver acontecendo, verifique seu dispositivo de saída de som."
       }
     },
     "meetingPill": {
