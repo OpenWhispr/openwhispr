@@ -12,6 +12,7 @@ const BYOK_KEY_BRIDGES = [
   { base: "xai", get: "getXaiKey", save: "saveXaiKey" },
   { base: "mistral", get: "getMistralKey", save: "saveMistralKey" },
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
+  { base: "atlascloud", get: "getAtlascloudKey", save: "saveAtlascloudKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
   {

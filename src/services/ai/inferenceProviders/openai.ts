@@ -132,6 +132,7 @@ export const openaiProvider: InferenceProvider = {
     const resolvedProvider = config.provider || getSettings().cleanupProvider || "";
     const isCustomProvider = resolvedProvider === "custom";
     const isOpenRouter = resolvedProvider === "openrouter";
+    const isAtlasCloud = resolvedProvider === "atlascloud";
 
     logger.logReasoning("OPENAI_START", {
       model,
@@ -144,7 +145,15 @@ export const openaiProvider: InferenceProvider = {
     const apiKey =
       overrideKey ||
       (canFallBackToSharedKey
-        ? await ctx.getApiKey(isCustomProvider ? "custom" : isOpenRouter ? "openrouter" : "openai")
+        ? await ctx.getApiKey(
+            isCustomProvider
+              ? "custom"
+              : isOpenRouter
+                ? "openrouter"
+                : isAtlasCloud
+                  ? "atlascloud"
+                  : "openai"
+          )
         : "");
 
     logger.logReasoning("OPENAI_API_KEY", {
@@ -181,11 +190,13 @@ export const openaiProvider: InferenceProvider = {
 
     const openAiBase = isOpenRouter
       ? API_ENDPOINTS.OPENROUTER_BASE
-      : resolveConfiguredOpenAIBase(resolvedProvider, config.baseUrl);
+      : isAtlasCloud
+        ? API_ENDPOINTS.ATLASCLOUD_BASE
+        : resolveConfiguredOpenAIBase(resolvedProvider, config.baseUrl);
     const dialect = detectEndpointDialect(openAiBase);
     // OpenRouter and known dialect hosts speak Chat Completions only — no /responses probe needed.
     let endpointCandidates: Array<{ url: string; type: "responses" | "chat" }>;
-    if (isOpenRouter || dialect) {
+    if (isOpenRouter || isAtlasCloud || dialect) {
       endpointCandidates = [{ url: buildApiUrl(openAiBase, "/chat/completions"), type: "chat" }];
     } else {
       await detectServerType(openAiBase);

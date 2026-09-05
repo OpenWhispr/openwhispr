@@ -63,6 +63,35 @@ test("openrouter is a first-class secret", () => {
   assert.equal(env.getOpenrouterKey(), "sk-or-abc");
 });
 
+test("atlascloud is a first-class secret", () => {
+  const atlas = BYOK_API_KEYS.find((k) => k.base === "atlascloud");
+  assert.ok(atlas, "atlascloud present in manifest");
+  assert.equal(atlas.env, "ATLASCLOUD_API_KEY");
+  const env = new EnvironmentManager();
+  env.saveAtlascloudKey("sk-atlas-abc");
+  assert.equal(env.getAtlascloudKey(), "sk-atlas-abc");
+});
+
+test("atlascloud registry exposes the supported OpenAI-compatible models", () => {
+  const registry = require("../../src/models/modelRegistryData.json");
+  const atlas = registry.cloudProviders.find((provider) => provider.id === "atlascloud");
+  const constantsSrc = fs.readFileSync(
+    path.join(__dirname, "../../src/config/constants.ts"),
+    "utf8"
+  );
+
+  assert.ok(atlas, "atlascloud present in cloud model registry");
+  assert.match(
+    constantsSrc,
+    /ATLASCLOUD_BASE:\s*"https:\/\/api\.atlascloud\.ai\/v1"/,
+    "atlascloud uses the official OpenAI-compatible base URL"
+  );
+  assert.deepEqual(
+    atlas.models.map((model) => model.id),
+    ["deepseek-ai/deepseek-v4-pro", "deepseek-ai/deepseek-v4-flash", "qwen/qwen3.5-flash"]
+  );
+});
+
 test("preload BYOK_KEY_BRIDGES mirror the manifest exactly", () => {
   // preload.js can't require the manifest under sandbox, so it inlines the
   // {base, get, save} tuples. Assert they stay in lockstep with the manifest.
