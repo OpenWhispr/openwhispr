@@ -374,6 +374,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   promptAccessibilityPermission: () => ipcRenderer.invoke("prompt-accessibility-permission"),
   readClipboard: () => ipcRenderer.invoke("read-clipboard"),
   writeClipboard: (text) => ipcRenderer.invoke("write-clipboard", text),
+  copyLeaderboardImage: (dataUrl) => ipcRenderer.invoke("leaderboard-copy-image", dataUrl),
+  saveLeaderboardImage: (dataUrl, suggestedName) =>
+    ipcRenderer.invoke("leaderboard-save-image", dataUrl, suggestedName),
   checkPasteTools: () => ipcRenderer.invoke("check-paste-tools"),
 
   // Voice drafts (chat input recordings)

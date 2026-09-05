@@ -29,6 +29,7 @@ import logger from "../utils/logger";
 import { useSettingsStore } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
 import { useEnterpriseIdentityStore } from "../stores/enterpriseIdentityStore";
+import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipationStore";
 
 const useStaticSession = () => ({
   data: null,
@@ -181,6 +182,11 @@ export function useAuth() {
       if (accountScopeRequiresPurge(resolvedUserId)) {
         markAccountScopePurgeRequired();
         useSettingsStore.getState().setInsightsSyncEnabled(false);
+        // The departing account's leaderboard answer must not outlive it, and a
+        // read still in flight for it must not land on the next one. The opt-out
+        // this device is still holding for that account is kept: it is queued in
+        // storage against that user id and is delivered whenever it signs back in.
+        useLeaderboardParticipationStore.getState().reset();
       }
       if (accountScopeRequiresReconciliation(resolvedUserId)) {
         // This legacy marker drives every already-running SyncService window;

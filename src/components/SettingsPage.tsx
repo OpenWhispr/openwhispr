@@ -1140,7 +1140,6 @@ export default function SettingsPage({
     cloudBackupEnabled,
     setCloudBackupEnabled,
     insightsSyncEnabled,
-    setInsightsSyncEnabled,
     telemetryEnabled,
     setTelemetryEnabled,
     audioRetentionDays,
@@ -1702,6 +1701,7 @@ export default function SettingsPage({
   const { isSignedIn, isLoaded, user, refetch } = useAuth();
   const {
     canToggleSync: canToggleInsightsSync,
+    disableInsightsSync,
     enableInsightsSync,
     optInDialog: insightsOptInDialog,
     syncAllowedByPolicy: insightsSyncAllowedByPolicy,
@@ -4105,9 +4105,12 @@ EOF`,
                         !canToggleInsightsSync ||
                         (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
                       }
-                      onChange={(enabled) =>
-                        enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)
-                      }
+                      onChange={(enabled) => {
+                        // A failed opt-out is reported on the leaderboard, the
+                        // only surface that knows whether the account was on one.
+                        if (enabled) void enableInsightsSync();
+                        else void disableInsightsSync();
+                      }}
                     />
                   </SettingsRow>
                 </SettingsPanelRow>

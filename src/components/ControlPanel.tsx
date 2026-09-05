@@ -102,6 +102,7 @@ const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
 const InsightsView = React.lazy(() => import("./InsightsView"));
+const LeaderboardView = React.lazy(() => import("./LeaderboardView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
 const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
@@ -1181,6 +1182,20 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             {activeView === "insights" && (
               <Suspense fallback={null}>
                 <InsightsView />
+              </Suspense>
+            )}
+            {activeView === "leaderboard" && (
+              <Suspense fallback={null}>
+                <LeaderboardView
+                  onSignIn={() => {
+                    setSettingsSection("account");
+                    setShowSettings(true);
+                  }}
+                  onUpgrade={() => {
+                    setSettingsSection("plansBilling");
+                    setShowSettings(true);
+                  }}
+                />
               </Suspense>
             )}
             {activeView === "chat" && agentAllowedByPolicy && (

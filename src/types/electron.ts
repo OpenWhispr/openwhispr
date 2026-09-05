@@ -199,6 +199,82 @@ export interface AnalyticsSummary {
   daily: AnalyticsDailyBucket[];
 }
 
+export type LeaderboardMetric =
+  "total_words" | "words_per_minute" | "current_daily_streak" | "desktop_words" | "mobile_words";
+
+export type LeaderboardRange = "week" | "all";
+
+export interface AnalyticsParticipation {
+  configured: boolean;
+  enabled: boolean;
+  updatedAt: string | null;
+}
+
+export interface LeaderboardMember {
+  userId: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+  totalWords: number;
+  desktopWords: number;
+  mobileWords: number;
+  averageWpm: number | null;
+  currentStreakDays: number;
+  rank: number;
+}
+
+export type LeaderboardAccessState =
+  "ready" | "invite" | "request_join" | "create_team" | "upgrade";
+
+export interface LeaderboardAccessScope {
+  key: string;
+  kind: "workspace" | "domain";
+  id: string;
+  name: string;
+  plan: string;
+  memberCount: number;
+  canShare: boolean;
+  state: "ready" | "invite";
+  role: WorkspaceRole | null;
+}
+
+export interface LeaderboardAccess {
+  state: LeaderboardAccessState;
+  scopes: LeaderboardAccessScope[];
+  domain: string | null;
+  colleagueCount: number;
+  personalPlan: string;
+  joinableWorkspace: {
+    id: string;
+    name: string;
+    requestState: "none" | "pending";
+  } | null;
+}
+
+export interface Leaderboard {
+  scope: {
+    key: string;
+    kind: "workspace" | "domain";
+    id: string;
+    name: string;
+    plan: string;
+  };
+  viewerUserId: string | null;
+  metric: LeaderboardMetric;
+  range: LeaderboardRange;
+  weekStart: string | null;
+  availableWeekStarts: string[];
+  leaders: LeaderboardMember[];
+  members: LeaderboardMember[];
+  totalMembers: number;
+  viewerRank: number | null;
+  page: number;
+  pageSize: number;
+  canShare: boolean;
+  generatedAt: string;
+  refreshAfterSeconds: number;
+}
+
 export interface NoteItem {
   id: number;
   title: string;
@@ -1530,6 +1606,11 @@ declare global {
       promptAccessibilityPermission: () => Promise<boolean>;
       readClipboard: () => Promise<string>;
       writeClipboard: (text: string) => Promise<{ success: boolean }>;
+      copyLeaderboardImage: (dataUrl: string) => Promise<{ success: boolean; error?: string }>;
+      saveLeaderboardImage: (
+        dataUrl: string,
+        suggestedName: string
+      ) => Promise<{ success: boolean; canceled?: boolean; error?: string }>;
       checkPasteTools: () => Promise<PasteToolsResult>;
 
       // Audio
