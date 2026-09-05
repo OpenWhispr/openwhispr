@@ -2290,6 +2290,38 @@ declare global {
         callback: (data: { stage: string; chunksTotal: number; chunksCompleted: number }) => void
       ) => () => void;
 
+      // POC: CLI-import bridge handshake (see cliAudioImportBridge.js).
+      cliAudioImportHostReady?: () => void;
+      cliAudioImportHostUnready?: () => void;
+      onCliAudioImportJob?: (
+        callback: (job: { jobId: string; path: string; requestId: string }) => void
+      ) => () => void;
+      onCliAudioImportCancel?: (
+        callback: (payload: { jobId: string; requestId: string }) => void
+      ) => () => void;
+      reportCliAudioImportResult?: (
+        jobId: string,
+        report: {
+          status: "completed" | "failed" | "cancelled";
+          noteId?: number;
+          title?: string;
+          text?: string;
+          durationSeconds?: number | null;
+          error?: string;
+        }
+      ) => Promise<void>;
+      // Atomic commit gate (see cliAudioImportBridge.js#beginPersist): must
+      // resolve ok:true before the renderer may call saveUploadNote.
+      beginCliAudioImportPersist?: (jobId: string) => Promise<{ ok: boolean; reason?: string }>;
+      // Authoritative fallback terminalization for when
+      // reportCliAudioImportResult itself is unreachable (see
+      // cliAudioImportBridge.js#failJob).
+      failCliAudioImportJob?: (
+        jobId: string,
+        requestId: string,
+        reason?: string
+      ) => Promise<{ ok: boolean; reason?: string }>;
+
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;

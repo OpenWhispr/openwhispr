@@ -259,12 +259,34 @@ function getCanonicalAllowedAudioDirs() {
 // static dirs (external volumes, /mnt, D:\) and are approved individually.
 const approvedAudioPaths = new Set();
 
+// Mirrors the "Audio Files" dialog filter below; extracted so other callers
+// (e.g. the CLI-import bridge) that need to validate a path outside the file
+// dialog reuse the exact same supported-extension list instead of a second,
+// driftable copy.
+const SUPPORTED_AUDIO_EXTENSIONS = [
+  "mp3",
+  "wav",
+  "m4a",
+  "webm",
+  "ogg",
+  "oga",
+  "flac",
+  "aac",
+  "opus",
+];
+
 function approveAudioPath(filePath) {
   if (typeof filePath !== "string" || !filePath) return;
   try {
     approvedAudioPaths.add(fs.realpathSync(path.resolve(filePath)));
   } catch {
     // File vanished or unreadable; nothing to approve.
+  }
+}
+
+function revokeAudioPath(filePath) {
+  if (typeof filePath === "string" && filePath) {
+    approvedAudioPaths.delete(filePath);
   }
 }
 
@@ -588,6 +610,10 @@ class IPCHandlers {
     this.windowsLoopbackAudioManager = managers.windowsLoopbackAudioManager;
     this.meetingAecManager = managers.meetingAecManager;
     this.getQdrantManager = managers.getQdrantManager;
+    // POC: renderer-hosted CLI-import bridge (see cliAudioImportBridge.js).
+    // Optional so any other IPCHandlers construction site (tests, future
+    // callers) that omits it simply leaves the related handlers as no-ops.
+    this.cliAudioImportBridge = managers.cliAudioImportBridge || null;
     this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
@@ -669,6 +695,10 @@ class IPCHandlers {
         this._syncStartupEnv({}, ["WHISPER_VULKAN_DEVICE"]);
       });
     }
+  }
+
+  cancelUploadTranscription(requestId) {
+    return this._uploadCancelRegistry.cancel(requestId);
   }
 
   // The dictation slot reports its own changes from the renderer. Slots
@@ -2622,7 +2652,7 @@ class IPCHandlers {
         filters: [
           {
             name: "Audio Files",
-            extensions: ["mp3", "wav", "m4a", "webm", "ogg", "oga", "flac", "aac", "opus"],
+            extensions: SUPPORTED_AUDIO_EXTENSIONS,
           },
         ],
       });
@@ -2640,6 +2670,43 @@ class IPCHandlers {
     // renderer-constructed File yields "" there, so this can't be forged.
     ipcMain.on("approve-audio-path", (_event, filePath) => {
       approveAudioPath(filePath);
+    });
+
+    // POC CLI-import bridge (see cliAudioImportBridge.js): the renderer's
+    // always-mounted host component registers here so the loopback bridge
+    // knows a live renderer is available to run a job through the app's own
+    // upload-note pipeline, and reports each job's outcome back once its
+    // transcribeFileWithSpeakers -> saveUploadNote run settles.
+    ipcMain.on("cli-audio-import:host-ready", (event) => {
+      this.cliAudioImportBridge?.registerRenderer(event.sender);
+    });
+    ipcMain.on("cli-audio-import:host-unready", (event) => {
+      this.cliAudioImportBridge?.unregisterRenderer(event.sender);
+    });
+    ipcMain.handle("cli-audio-import:report-result", (_event, jobId, report) => {
+      this.cliAudioImportBridge?.reportResult(jobId, report);
+    });
+    // Atomic commit gate: the renderer must call this and get ok:true
+    // immediately before invoking saveUploadNote (see cliAudioImport.ts /
+    // cliAudioImportBridge.js#beginPersist) so a concurrent CLI cancel and
+    // the decision to persist a note are serialized through one place
+    // instead of racing across two processes.
+    ipcMain.handle("cli-audio-import:begin-persist", (_event, jobId) => {
+      return (
+        this.cliAudioImportBridge?.beginPersist(jobId) ?? { ok: false, reason: "not_available" }
+      );
+    });
+    // Authoritative fallback for a renderer that computed a real outcome
+    // but couldn't deliver it via report-result (e.g. that IPC call itself
+    // threw/rejected) — see cliAudioImportBridge.js#failJob for why this
+    // requires the matching requestId rather than trusting jobId alone.
+    ipcMain.handle("cli-audio-import:fail-job", (_event, jobId, requestId, reason) => {
+      return (
+        this.cliAudioImportBridge?.failJob(jobId, requestId, reason) ?? {
+          ok: false,
+          reason: "not_available",
+        }
+      );
     });
 
     ipcMain.handle("get-file-size", async (_event, filePath) => {
@@ -11651,3 +11718,11 @@ class IPCHandlers {
 }
 
 module.exports = IPCHandlers;
+// Path-guard helpers reused by the CLI-import bridge (see
+// cliAudioImportBridge.js) so a main-process-originated import job is
+// pre-approved through the exact same allowlist the file-dialog/drag-drop
+// flow populates, rather than a second, driftable implementation.
+module.exports.approveAudioPath = approveAudioPath;
+module.exports.revokeAudioPath = revokeAudioPath;
+module.exports.resolveAllowedAudioPath = resolveAllowedAudioPath;
+module.exports.SUPPORTED_AUDIO_EXTENSIONS = SUPPORTED_AUDIO_EXTENSIONS;

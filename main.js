@@ -275,6 +275,7 @@ const dockManager = require("./src/helpers/dockManager");
 const autoStart = require("./src/helpers/autoStart");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
 const CliBridge = require("./src/helpers/cliBridge");
+const { CliAudioImportBridge } = require("./src/helpers/cliAudioImportBridge");
 const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
@@ -338,6 +339,7 @@ let meetingAecManager = null;
 let qdrantManager = null;
 let ipcHandlers = null;
 let cliBridge = null;
+let cliAudioImportBridge = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
 let pendingNoteCloudId = null;
@@ -528,6 +530,18 @@ function initializeCoreManagers() {
   windowManager.linuxKeyManager = linuxKeyManager;
 
   // IPC handlers must be registered before window content loads
+  // POC: job tracking for the CLI-import bridge (see
+  // cliAudioImportBridge.js). Built ahead of IPCHandlers so both it and the
+  // CLI bridge's HTTP routes (via ipcHandlers.cliAudioImportBridge) share
+  // the same instance.
+  cliAudioImportBridge = new CliAudioImportBridge({
+    approveAudioPath: IPCHandlers.approveAudioPath,
+    revokeApprovedAudioPath: IPCHandlers.revokeAudioPath,
+    resolveAllowedAudioPath: IPCHandlers.resolveAllowedAudioPath,
+    cancelActiveTranscription: (requestId) =>
+      ipcHandlers?.cancelUploadTranscription(requestId) ?? 0,
+    supportedAudioExtensions: IPCHandlers.SUPPORTED_AUDIO_EXTENSIONS,
+  });
   ipcHandlers = new IPCHandlers({
     environmentManager,
     databaseManager,
@@ -555,6 +569,7 @@ function initializeCoreManagers() {
     getTrayManager: () => trayManager,
     oauthProtocolRegistered: protocolRegistered,
     oauthProtocol: OAUTH_PROTOCOL,
+    cliAudioImportBridge,
   });
 }
 

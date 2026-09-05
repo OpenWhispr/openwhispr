@@ -227,6 +227,14 @@ class CliBridge {
       sendV1Error(res, 400, "validation_error", err.message);
       return;
     }
+    if (err.code === "RENDERER_UNAVAILABLE") {
+      sendV1Error(res, 503, "renderer_unavailable", err.message);
+      return;
+    }
+    if (err.code === "QUEUE_FULL") {
+      sendV1Error(res, 429, "queue_full", err.message);
+      return;
+    }
     debugLogger.error("CLI bridge route error", { error: err.message }, "cli-bridge");
     sendV1Error(res, 500, "internal_error", err.message || "Internal server error");
   }
@@ -294,6 +302,15 @@ class CliBridge {
         err.code = "NOT_FOUND";
         throw err;
       }
+    };
+
+    const requireAudioImportBridge = () => {
+      if (!ipc.cliAudioImportBridge) {
+        const err = new Error("Audio import bridge is not initialized");
+        err.code = "RENDERER_UNAVAILABLE";
+        throw err;
+      }
+      return ipc.cliAudioImportBridge;
     };
 
     return [
@@ -431,6 +448,40 @@ class CliBridge {
           model: null,
         });
         return NO_CONTENT;
+      }),
+      // POC: drives the desktop app's own visible upload-note flow
+      // (UploadAudioView's transcribeFileWithSpeakers -> saveUploadNote) via
+      // the always-mounted CLI-import renderer host, rather than a separate
+      // headless pipeline. See cliAudioImportBridge.js for job semantics.
+      exact(
+        "POST",
+        "/v1/audio-import-jobs",
+        ({ body }) => {
+          const bridge = requireAudioImportBridge();
+          const job = bridge.submit(body?.path);
+          return { data: job };
+        },
+        202
+      ),
+      param("GET", "/v1/audio-import-jobs/", "", "id", ({ params }) => {
+        const bridge = requireAudioImportBridge();
+        const job = bridge.get(params.id);
+        if (!job) {
+          const err = new Error(`Job ${params.id} not found`);
+          err.code = "NOT_FOUND";
+          throw err;
+        }
+        return { data: job };
+      }),
+      param("DELETE", "/v1/audio-import-jobs/", "", "id", ({ params }) => {
+        const bridge = requireAudioImportBridge();
+        const outcome = bridge.cancel(params.id);
+        if (!outcome) {
+          const err = new Error(`Job ${params.id} not found`);
+          err.code = "NOT_FOUND";
+          throw err;
+        }
+        return { data: outcome };
       }),
     ];
   }

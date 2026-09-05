@@ -26,6 +26,7 @@ import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
 import { useUsage } from "../hooks/useUsage";
 import { decideUpsell } from "../lib/upsell";
 import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
+import { useCliAudioImportHost } from "../hooks/useCliAudioImportHost";
 import {
   useTranscriptions,
   useShowDiscarded,
@@ -115,6 +116,8 @@ interface ControlPanelProps {
 
 export default function ControlPanel({ initialSettingsSection }: ControlPanelProps = {}) {
   const { t } = useTranslation();
+  // POC: always-on CLI-import bridge host (see cliAudioImportBridge.js).
+  useCliAudioImportHost();
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(!!initialSettingsSection);

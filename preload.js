@@ -764,6 +764,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, data) => callback(data)
   ),
 
+  // POC: CLI-import bridge handshake. The always-mounted renderer host
+  // registers/unregisters itself so the loopback bridge (see
+  // cliAudioImportBridge.js) knows whether a live renderer can run a job
+  // through the app's own upload-note flow.
+  cliAudioImportHostReady: () => ipcRenderer.send("cli-audio-import:host-ready"),
+  cliAudioImportHostUnready: () => ipcRenderer.send("cli-audio-import:host-unready"),
+  onCliAudioImportJob: registerListener(
+    "cli-audio-import:job",
+    (callback) => (_event, job) => callback(job)
+  ),
+  onCliAudioImportCancel: registerListener(
+    "cli-audio-import:cancel",
+    (callback) => (_event, payload) => callback(payload)
+  ),
+  reportCliAudioImportResult: (jobId, report) =>
+    ipcRenderer.invoke("cli-audio-import:report-result", jobId, report),
+  beginCliAudioImportPersist: (jobId) =>
+    ipcRenderer.invoke("cli-audio-import:begin-persist", jobId),
+  // Authoritative fallback used only when reportCliAudioImportResult itself
+  // could not be delivered (see cliAudioImportBridge.js#failJob); scoped to
+  // the exact job+requestId the renderer was actually running.
+  failCliAudioImportJob: (jobId, requestId, reason) =>
+    ipcRenderer.invoke("cli-audio-import:fail-job", jobId, requestId, reason),
+
   // Referral stats
   getReferralStats: () => ipcRenderer.invoke("get-referral-stats"),
   sendReferralInvite: (email) => ipcRenderer.invoke("send-referral-invite", email),
