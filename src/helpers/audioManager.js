@@ -1341,9 +1341,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           this._previewSource.connect(this._previewProcessor);
 
           const model = isNvidia
-            ? parakeetModel
+            ? parakeetModel || "parakeet-tdt-0.6b-v3"
             : localTranscriptionProvider === "cohere"
-              ? cohereModel
+              ? cohereModel || "cohere-transcribe-03-2026"
               : whisperModel;
           const language = getBaseLanguageCode(getSettings().preferredLanguage);
           window.electronAPI?.startDictationPreview?.({
@@ -1849,6 +1849,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const localProvider = settings.localTranscriptionProvider;
       const whisperModel = settings.whisperModel;
       const parakeetModel = settings.parakeetModel || "parakeet-tdt-0.6b-v3";
+      const cohereModel = settings.cohereModel || "cohere-transcribe-03-2026";
 
       const cloudTranscriptionMode = settings.cloudTranscriptionMode;
       const isSignedIn = settings.isSignedIn;
@@ -1865,7 +1866,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       let activeModel;
       if (useLocalWhisper) {
         if (isSherpaLocalProvider(localProvider)) {
-          activeModel = localProvider === "cohere" ? settings.cohereModel : parakeetModel;
+          activeModel = localProvider === "cohere" ? cohereModel : parakeetModel;
           result = await this.processWithLocalParakeet(
             audioBlob,
             activeModel,

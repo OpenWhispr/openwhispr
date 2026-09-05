@@ -5990,11 +5990,11 @@ class IPCHandlers {
         } else if (route.transport === "local") {
           if (isSherpaLocalProvider(settings.localTranscriptionProvider)) {
             const model =
-              (settings.localTranscriptionProvider === "cohere"
-                ? settings.cohereModel
-                : settings.parakeetModel) ||
-              process.env.PARAKEET_MODEL ||
-              "parakeet-tdt-0.6b-v3";
+              settings.localTranscriptionProvider === "cohere"
+                ? settings.cohereModel || "cohere-transcribe-03-2026"
+                : settings.parakeetModel ||
+                  process.env.PARAKEET_MODEL ||
+                  "parakeet-tdt-0.6b-v3";
             result = await this.parakeetManager.transcribeLocalParakeet(buffer, {
               model,
               language,
