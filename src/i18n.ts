@@ -1,21 +1,11 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
+import { SUPPORTED_UI_LANGUAGES, type UiLanguage } from "./config/uiLanguages";
 import { PROMPTS_BY_LOCALE } from "./locales/prompts";
 import { TRANSLATIONS_BY_LOCALE } from "./locales/translations";
 
-export const SUPPORTED_UI_LANGUAGES = [
-  "en",
-  "es",
-  "fr",
-  "de",
-  "pt",
-  "it",
-  "ru",
-  "ja",
-  "zh-CN",
-  "zh-TW",
-] as const;
-export type UiLanguage = (typeof SUPPORTED_UI_LANGUAGES)[number];
+export { SUPPORTED_UI_LANGUAGES };
+export type { UiLanguage };
 
 export function normalizeUiLanguage(language: string | null | undefined): UiLanguage {
   const candidate = (language || "").trim();

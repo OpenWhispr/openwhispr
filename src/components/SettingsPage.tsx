@@ -150,6 +150,7 @@ import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
 import { getTranscriptionProvider } from "../models/ModelRegistry";
 import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
+import { UI_LANGUAGE_OPTIONS } from "../config/uiLanguages";
 
 export type SettingsSectionType =
   | "account"
@@ -168,19 +169,6 @@ interface SettingsPageProps {
   /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
   initialSubTab?: string;
 }
-
-const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
-  { value: "en", label: "English", flag: "🇺🇸" },
-  { value: "es", label: "Español", flag: "🇪🇸" },
-  { value: "fr", label: "Français", flag: "🇫🇷" },
-  { value: "de", label: "Deutsch", flag: "🇩🇪" },
-  { value: "pt", label: "Português", flag: "🇵🇹" },
-  { value: "it", label: "Italiano", flag: "🇮🇹" },
-  { value: "ru", label: "Русский", flag: "🇷🇺" },
-  { value: "ja", label: "日本語", flag: "🇯🇵" },
-  { value: "zh-CN", label: "简体中文", flag: "🇨🇳" },
-  { value: "zh-TW", label: "繁體中文", flag: "🇹🇼" },
-];
 
 const RETENTION_DAY_OPTIONS = [1, 7, 14, 30, 60, 90];
 

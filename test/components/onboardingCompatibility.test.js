@@ -96,6 +96,30 @@ test("Linux onboarding exposes labelled minimize, maximize, and close controls i
   }
 });
 
+test("interface language step exposes one selected locale without transcription options", async (t) => {
+  const vite = await createOnboardingRenderer(t);
+  const { default: InterfaceLanguageStep } = await vite.ssrLoadModule(
+    "/components/onboarding/InterfaceLanguageStep.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(InterfaceLanguageStep, {
+      value: "zh-CN",
+      onChange: noop,
+      label: "Interface language",
+    })
+  );
+
+  assert.match(markup, /role="radiogroup" aria-label="Interface language"/);
+  const radioInputs = markup.match(/<input[^>]*type="radio"[^>]*>/g) ?? [];
+  const names = radioInputs.map((input) => input.match(/name="([^"]+)"/)?.[1]);
+  assert.equal(radioInputs.length, 10);
+  assert.equal(new Set(names).size, 1);
+  assert.equal(radioInputs.filter((input) => input.includes('checked=""')).length, 1);
+  assert.match(markup, /简体中文/);
+  assert.doesNotMatch(markup, />Auto</);
+});
+
 test("a denied microphone exposes the existing Linux settings recovery", async (t) => {
   const vite = await createOnboardingRenderer(t);
   const { default: CompactPermissionsStep } = await vite.ssrLoadModule(

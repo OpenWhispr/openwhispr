@@ -215,6 +215,12 @@
         "enable": "Activer",
         "enabled": "Activé"
       },
+      "interfaceLanguage": {
+        "title": "Choisissez la langue de l'interface",
+        "titleLineOne": "Choisissez la langue",
+        "titleLineTwo": "de l'interface",
+        "description": "Cela change la langue des menus et de la configuration initiale d'OpenWhispr, pas celle de la transcription. Vous pourrez la modifier plus tard dans les paramètres."
+      },
       "languages": {
         "title": "Quelles langues parlez-vous ?",
         "titleLineOne": "Quelles langues",

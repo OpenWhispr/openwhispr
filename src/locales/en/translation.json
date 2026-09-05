@@ -215,6 +215,12 @@
         "enable": "Enable",
         "enabled": "Enabled"
       },
+      "interfaceLanguage": {
+        "title": "Choose your interface language",
+        "titleLineOne": "Choose your",
+        "titleLineTwo": "interface language",
+        "description": "This controls OpenWhispr's menus and onboarding, not transcription. You can change it later in Settings."
+      },
       "languages": {
         "title": "Which languages do you speak?",
         "titleLineOne": "Which languages",

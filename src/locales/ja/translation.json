@@ -215,6 +215,12 @@
         "enable": "有効にする",
         "enabled": "有効"
       },
+      "interfaceLanguage": {
+        "title": "インターフェースの言語を選択",
+        "titleLineOne": "インターフェースの",
+        "titleLineTwo": "言語を選択",
+        "description": "OpenWhisprのメニューと初期設定に使用する言語です。文字起こし言語には影響しません。後から設定で変更できます。"
+      },
       "languages": {
         "title": "どの言語を話しますか？",
         "titleLineOne": "どの言語を",

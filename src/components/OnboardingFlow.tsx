@@ -6,6 +6,7 @@ import UseCaseStep from "./onboarding/UseCaseStep";
 import { hasUseCaseIntent } from "./onboarding/useCases";
 import OnboardingShell, { OnboardingStepHeader } from "./onboarding/OnboardingShell";
 import CompactPermissionsStep from "./onboarding/CompactPermissionsStep";
+import InterfaceLanguageStep from "./onboarding/InterfaceLanguageStep";
 import LanguageSelectionStep from "./onboarding/LanguageSelectionStep";
 import ShortcutSetupStep from "./onboarding/ShortcutSetupStep";
 import AssistantHotkeyPreview from "./onboarding/AssistantHotkeyPreview";
@@ -700,6 +701,25 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             }
             onContinue={() => void continueFromCurrentStep()}
           />
+        );
+
+      case "interface-language":
+        return (
+          <div className="flex h-full min-h-0 w-full flex-col pt-1">
+            <OnboardingStepHeader
+              title={t("onboarding.rehaul.interfaceLanguage.title")}
+              titleLines={[
+                t("onboarding.rehaul.interfaceLanguage.titleLineOne"),
+                t("onboarding.rehaul.interfaceLanguage.titleLineTwo"),
+              ]}
+              description={t("onboarding.rehaul.interfaceLanguage.description")}
+            />
+            <InterfaceLanguageStep
+              value={settings.uiLanguage}
+              onChange={settings.setUiLanguage}
+              label={t("onboarding.rehaul.interfaceLanguage.title")}
+            />
+          </div>
         );
 
       case "languages":
