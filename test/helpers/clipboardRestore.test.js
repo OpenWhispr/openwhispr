@@ -671,6 +671,24 @@ test("pasteMacOS restores clipboard after the short macOS delay on successful fa
   });
 });
 
+test("pasteMacOS leaves text on the clipboard when the keyboard layout cannot be resolved", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [3]),
+  });
+  const manager = new TestClipboardManager();
+  manager.resolveFastPasteBinary = () => "/tmp/openwhispr-fast-paste";
+
+  await assert.rejects(
+    manager.pasteMacOS({ type: "text", data: "previous clipboard" }),
+    /could not resolve the active keyboard layout/
+  );
+
+  assert.deepEqual(spawnCalls, [{ command: "/tmp/openwhispr-fast-paste", args: [] }]);
+  assert.equal(manager.fastPastePath, null);
+  assert.equal(manager.fastPasteChecked, false);
+});
+
 test("pasteMacOSWithOsascript fallback uses the short macOS restore delay", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({
