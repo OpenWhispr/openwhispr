@@ -45,6 +45,15 @@ function resolveBootAccountScope({ token, binding }) {
   return binding.accountId;
 }
 
+// The scope a window without a resolvable session hydrates from (the dictation
+// window has no cross-origin fetch, so its session never resolves): the same
+// validated binding boot restores, paired with the credential generation the
+// policy and managed-config handlers gate on.
+function resolveActiveAccountScope({ token, generation, binding }) {
+  const accountId = resolveBootAccountScope({ token, binding });
+  return accountId ? { accountId, authGeneration: generation } : null;
+}
+
 function read() {
   try {
     const parsed = JSON.parse(fs.readFileSync(bindingFile(), "utf8"));
@@ -77,4 +86,12 @@ function clear() {
   }
 }
 
-module.exports = { clear, evaluateScopeRequest, hashToken, persist, read, resolveBootAccountScope };
+module.exports = {
+  clear,
+  evaluateScopeRequest,
+  hashToken,
+  persist,
+  read,
+  resolveActiveAccountScope,
+  resolveBootAccountScope,
+};
