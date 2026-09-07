@@ -15,7 +15,8 @@ export const LISTENING_ENTRANCE_TIMING = Object.freeze({
   // Give the Beam enough time to read as an intentional thinking state before
   // the persistent control begins changing shape.
   thinkingMs: 420,
-  expansionMs: 300,
+  // The morph spring, played over 360 ms.
+  expansionMs: 360,
   // Hold the finished footprint briefly so the waveform reveal cannot be
   // perceived as part of the width animation.
   waveformDelayMs: 100,

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, type CSSProperties } from "react";
 import { cn } from "../lib/utils";
 import { resolveWaveformBarHeight, WAVEFORM_BAR_COUNT, WAVEFORM_BAR_MIN_PX } from "./waveformMath";
 
@@ -8,6 +8,7 @@ interface PillWaveformProps {
   /** While true the bars scroll with live levels; false freezes the captured wave. */
   active: boolean;
   className?: string;
+  style?: CSSProperties;
 }
 
 // Syllables run ~140-250ms; sampling much faster than that lands neighboring
@@ -22,7 +23,7 @@ const SAMPLE_INTERVAL_MS = 80;
  * pays React re-render cost. With no signal (getLevel → null) the bars rest at
  * minimum height; when `active` goes false the last captured wave stays frozen.
  */
-export function PillWaveform({ getLevel, active, className }: PillWaveformProps) {
+export function PillWaveform({ getLevel, active, className, style }: PillWaveformProps) {
   const barRefs = useRef<(HTMLDivElement | null)[]>([]);
   const levelsRef = useRef<number[]>([]);
 
@@ -60,6 +61,7 @@ export function PillWaveform({ getLevel, active, className }: PillWaveformProps)
   return (
     <div
       className={cn("flex h-full items-center justify-center gap-0.75", className)}
+      style={style}
       aria-hidden="true"
     >
       {Array.from({ length: WAVEFORM_BAR_COUNT }, (_, i) => (

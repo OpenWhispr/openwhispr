@@ -27,7 +27,7 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   horizontalDirection?: "left" | "right";
 }
 
-const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms cubic-bezier(0.2, 0, 0, 1)`;
+const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms var(--motion-morph-ease, cubic-bezier(0.2, 0, 0, 1))`;
 // Sized from WAVEFORM_BAR_COUNT so a bar-count change can never silently
 // desync the resting silhouette from the live waveform's footprint.
 const RESTING_WAVE_HEIGHTS = Array.from(
@@ -183,10 +183,16 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         <PillWaveform
           getLevel={getAudioLevel}
           active={isRecording}
-          className={cn(
-            "absolute inset-0 transition-opacity duration-200 ease-out",
-            showCompactPill && waveformVisible && isRecording ? "opacity-100" : "opacity-0"
-          )}
+          className="absolute inset-0"
+          style={{
+            opacity: showCompactPill && waveformVisible && isRecording ? 1 : 0,
+            transform:
+              showCompactPill && waveformVisible && isRecording
+                ? "translateX(0)"
+                : `translateX(${horizontalDirection === "left" ? "-6px" : "6px"})`,
+            transition:
+              "opacity 200ms ease-out, transform 200ms var(--motion-show-ease, cubic-bezier(0.2, 0, 0, 1))",
+          }}
         />
       </div>
 

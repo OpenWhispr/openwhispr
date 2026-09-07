@@ -177,7 +177,10 @@ test("the floating hover pill changes surface treatment without zooming", async 
 
   assert.match(hovered, /border-border-hover bg-surface-3 text-foreground/);
   assert.match(hovered, /box-shadow:var\(--shadow-card-hover-subtle\)/);
-  assert.doesNotMatch(hovered, /style="[^"]*transform:/);
+  // Scoped to the control's own surface style. The waveform reveal carries an
+  // always-present inline transform (its armed pre-slide offset, invisible
+  // via opacity while idle) — that is a different element, not a hover zoom.
+  assert.doesNotMatch(hovered, /class="voice-pill-control[^"]*"\s+style="[^"]*transform:/);
   assert.match(hovered, footprint.idle);
   assert.match(hovered, /<svg width="22" height="22"/);
 });

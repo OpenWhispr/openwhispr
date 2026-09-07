@@ -324,6 +324,13 @@ test("listening entrance timers preserve the visual order", async () => {
   assert.ok(timeline.expandAtMs > 0);
   assert.ok(timeline.settleAtMs > timeline.expandAtMs);
   assert.ok(timeline.waveformAtMs > timeline.settleAtMs);
+
+  const { LISTENING_ENTRANCE_TIMING } = await load();
+  assert.equal(LISTENING_ENTRANCE_TIMING.thinkingMs, 420);
+  assert.equal(LISTENING_ENTRANCE_TIMING.expansionMs, 360);
+  assert.equal(timeline.expandAtMs, 420);
+  assert.equal(timeline.settleAtMs, 780);
+  assert.equal(timeline.waveformAtMs, 880);
 });
 
 test("Agent footer retreats actions before the compact pill enters", async () => {
