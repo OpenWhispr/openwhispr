@@ -3,7 +3,9 @@ const debugLogger = require("./debugLogger");
 
 const SAMPLE_RATE = 16000;
 const WEBSOCKET_TIMEOUT_MS = 15000;
-// The final transcript lands ~500ms after audioStreamEnd, ~2s at the tail.
+// Budget for the final transcript, measured from audioStreamEnd (it lands
+// ~500ms after, ~2s at the p95 tail). The renderer's gemini settle ceiling in
+// audioManager.js is the same 3s; disconnect only spends what is left of it.
 const DISCONNECT_TIMEOUT_MS = 3000;
 const KEEPALIVE_INTERVAL_MS = 15000;
 const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
@@ -32,23 +34,25 @@ function buildGeminiLiveUrl({ mode, token }) {
 
 // Every Live failure arrives as a close frame after the upgrade succeeded (the
 // socket's `error` event never carries them), and the server truncates close
-// reasons to the 123-byte WebSocket limit — decide on the code, never on the
-// tail of the reason.
-function closeFrameError(code, reason) {
+// reasons to the 123-byte WebSocket limit — classify on the code alone; the
+// reason is only logged by the close handler.
+function closeFrameError(code) {
   if (code === 1011) {
     // "Token has been used too many times" / "Token has expired". The managed
     // tokens are single-use, so this is the one retryable auth failure; byok
     // re-handshakes with the same raw key and never sees it.
-    return Object.assign(new Error(reason || "Gemini Live session token expired"), {
+    return Object.assign(new Error("Gemini Live session token expired"), {
       code: "AUTH_EXPIRED",
     });
   }
-  if (code === 1007 && reason.startsWith("API key not valid")) {
+  if (code === 1007 || code === 1008) {
+    // 1007 is a malformed credential, 1008 one Google no longer knows (revoked
+    // or deleted); neither is retryable, both are fixed in Settings.
     return Object.assign(new Error("Invalid Gemini API key. Check your key in Settings."), {
       code: "INVALID_KEY",
     });
   }
-  return new Error(`Gemini Live closed before ready (code: ${code}${reason ? `, ${reason}` : ""})`);
+  return new Error(`Gemini Live closed before ready (code: ${code})`);
 }
 
 class GeminiLiveStreaming {
@@ -73,7 +77,8 @@ class GeminiLiveStreaming {
     this.audioBytesSent = 0;
     this.currentModel = GEMINI_LIVE_MODEL;
     this._connectionLossNotified = false;
-    this._audioStreamEndSent = false;
+    this._audioStreamEndSentAt = null;
+    this._turnEnded = false;
     this._turnEndResolve = null;
   }
 
@@ -133,7 +138,8 @@ class GeminiLiveStreaming {
     this.audioBytesSent = 0;
     this.currentModel = resolveLiveModel(options.model);
     this._connectionLossNotified = false;
-    this._audioStreamEndSent = false;
+    this._audioStreamEndSentAt = null;
+    this._turnEnded = false;
 
     try {
       await this._openSocket(options);
@@ -188,18 +194,21 @@ class GeminiLiveStreaming {
 
       this.ws.on("close", (code, reason) => {
         const wasActive = this.isConnected;
-        const reasonText = reason?.toString() || "";
-        debugLogger.debug("Gemini Live WebSocket closed", { code, reason: reasonText, wasActive });
+        debugLogger.debug("Gemini Live WebSocket closed", {
+          code,
+          reason: reason?.toString() || "",
+          wasActive,
+        });
         this._resolveTurnEnd();
         this.cleanup();
-        const error = closeFrameError(code, reasonText);
-        this._rejectPending(error);
-        if (wasActive && !this.isDisconnecting) {
+        if (!wasActive) {
+          this._rejectPending(closeFrameError(code));
+        } else if (!this.isDisconnecting) {
           // A session killed mid-dictation (the ~10 minute cap, a dead network)
           // still hands over what it transcribed; there is no resumption handle
           // to reconnect with, so the caller finalizes with this text.
           this.onSessionEnd?.({ text: this.getFullTranscript() });
-          this._notifyConnectionLost(error);
+          this._notifyConnectionLost(new Error(`Connection lost (code: ${code})`));
         }
       });
     });
@@ -236,7 +245,9 @@ class GeminiLiveStreaming {
         });
       }
 
-      if (serverContent.generationComplete) this._resolveTurnEnd();
+      // Only a generationComplete after audioStreamEnd answers our turn;
+      // anything earlier cannot be the reply to it.
+      if (serverContent.generationComplete && this._audioStreamEndSentAt) this._resolveTurnEnd();
     } catch (err) {
       debugLogger.error("Gemini Live message parse error", { error: err.message });
     }
@@ -278,8 +289,8 @@ class GeminiLiveStreaming {
   }
 
   _resolveTurnEnd() {
-    if (!this._turnEndResolve) return;
-    this._turnEndResolve();
+    this._turnEnded = true;
+    this._turnEndResolve?.();
     this._turnEndResolve = null;
   }
 
@@ -350,7 +361,7 @@ class GeminiLiveStreaming {
     }
 
     this._flushColdStartBuffer();
-    this._sendAudioFrame(Buffer.from(pcmBuffer));
+    this._sendAudioFrame(pcmBuffer);
     return true;
   }
 
@@ -371,8 +382,8 @@ class GeminiLiveStreaming {
   // server answers with the final transcript. Sending it from here (the stop
   // sequence calls finalize() before it waits for text) buys back the wait.
   finalize() {
-    if (this.ws?.readyState !== WebSocket.OPEN || this._audioStreamEndSent) return false;
-    this._audioStreamEndSent = true;
+    if (this.ws?.readyState !== WebSocket.OPEN || this._audioStreamEndSentAt) return false;
+    this._audioStreamEndSentAt = Date.now();
     this.ws.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
     debugLogger.debug("Gemini Live audioStreamEnd sent", { audioBytesSent: this.audioBytesSent });
     return true;
@@ -395,30 +406,35 @@ class GeminiLiveStreaming {
     }
 
     if (closeStream && this.ws.readyState === WebSocket.OPEN && this.audioBytesSent > 0) {
-      const awaitingTurnEnd = !this._audioStreamEndSent;
       this.finalize();
-      if (awaitingTurnEnd) {
-        let timeoutId;
-        await Promise.race([
-          new Promise((resolve) => {
-            this._turnEndResolve = resolve;
-          }),
-          new Promise((resolve) => {
-            timeoutId = setTimeout(() => {
-              debugLogger.debug("Gemini Live final transcript timeout, using accumulated text");
-              resolve();
-            }, DISCONNECT_TIMEOUT_MS);
-          }),
-        ]);
-        clearTimeout(timeoutId);
-        this._turnEndResolve = null;
-      }
+      if (!this._turnEnded) await this._awaitTurnEnd();
     }
 
     const result = this._takeTranscript();
     this.cleanup();
     this.isDisconnecting = false;
     return result;
+  }
+
+  // The stop sequence finalizes first and waits on the renderer side before it
+  // gets here, so the budget runs from audioStreamEnd, not from this call.
+  async _awaitTurnEnd() {
+    const remaining = DISCONNECT_TIMEOUT_MS - (Date.now() - this._audioStreamEndSentAt);
+    if (remaining <= 0) return;
+    let timeoutId;
+    await Promise.race([
+      new Promise((resolve) => {
+        this._turnEndResolve = resolve;
+      }),
+      new Promise((resolve) => {
+        timeoutId = setTimeout(() => {
+          debugLogger.debug("Gemini Live final transcript timeout, using accumulated text");
+          resolve();
+        }, remaining);
+      }),
+    ]);
+    clearTimeout(timeoutId);
+    this._turnEndResolve = null;
   }
 
   _takeTranscript() {

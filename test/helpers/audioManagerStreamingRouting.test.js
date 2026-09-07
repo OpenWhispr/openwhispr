@@ -79,6 +79,9 @@ test("Gemini's live model routes onto the gemini-streaming-* channels", async (t
   assert.equal(manager.getStreamingProviderName(), "gemini");
   const provider = manager.getStreamingProvider();
   assert.equal(provider.awaitsFinalTranscript, true);
+  // Pinned to geminiLiveStreaming.js's DISCONNECT_TIMEOUT_MS: both sides
+  // measure the same 3s from audioStreamEnd.
+  assert.equal(provider.finalCeilingMs, 3000);
 
   const options = { provider: "gemini", model: "gemini-3.5-transcribe-live", mode: "byok" };
   await provider.warmup(options);

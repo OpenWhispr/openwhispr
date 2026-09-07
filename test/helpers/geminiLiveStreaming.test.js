@@ -105,13 +105,16 @@ test("connect resolves on setupComplete, not on socket open", async () => {
   );
 });
 
-test("connect rejects when the socket closes before setupComplete", async () => {
+test("connect rejects when the socket drops before setupComplete", async () => {
   await withServer(
     async ({ streaming }) => {
-      await assert.rejects(streaming.connect({ token: "t", mode: "byok" }), /closed.*1008/i);
+      await assert.rejects(
+        streaming.connect({ token: "t", mode: "byok" }),
+        /closed before ready \(code: 1006\)/
+      );
       assert.equal(streaming.isConnected, false);
     },
-    (socket) => socket.close(1008, "Requested entity was not found.")
+    (socket) => socket.terminate()
   );
 });
 
@@ -275,6 +278,97 @@ test("disconnect sends audioStreamEnd once and waits for the end of the turn", a
   );
 });
 
+test("disconnect still waits for the final when finalize() already closed the turn", async () => {
+  await withServer(
+    async ({ streaming, received }) => {
+      await streaming.connect({ token: "t", mode: "byok" });
+      streaming.sendAudio(FRAME);
+
+      // The stop sequence finalizes, then stops as soon as its own wait gives
+      // up — disconnect must not treat the sent audioStreamEnd as "answered".
+      assert.equal(streaming.finalize(), true);
+      const result = await streaming.disconnect(true);
+
+      assert.equal(result.text, "the slow final");
+      assert.equal(received.filter((m) => m.realtimeInput?.audioStreamEnd).length, 1);
+    },
+    (socket, message) => {
+      if (message.setup) {
+        socket.send(JSON.stringify({ setupComplete: {} }));
+        return;
+      }
+      if (!message.realtimeInput?.audioStreamEnd) return;
+      setTimeout(() => {
+        socket.send(
+          JSON.stringify({ serverContent: { inputTranscription: { text: "the slow final" } } })
+        );
+        socket.send(JSON.stringify({ serverContent: { generationComplete: true } }));
+      }, 120);
+    }
+  );
+});
+
+test("disconnect spends only what is left of the budget since audioStreamEnd", async () => {
+  await withServer(
+    async ({ streaming }) => {
+      await streaming.connect({ token: "t", mode: "byok" });
+      streaming.sendAudio(FRAME);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      assert.equal(streaming.finalize(), true);
+      // The renderer already waited out the whole budget on its side.
+      streaming._audioStreamEndSentAt -= 10000;
+      const start = Date.now();
+      const result = await streaming.disconnect(true);
+
+      assert.equal(result.text, "already here");
+      assert.ok(Date.now() - start < 500, "must not re-spend the budget");
+    },
+    (socket, message) => {
+      if (message.setup) {
+        socket.send(JSON.stringify({ setupComplete: {} }));
+        return;
+      }
+      if (message.realtimeInput?.audio) {
+        socket.send(
+          JSON.stringify({ serverContent: { inputTranscription: { text: "already here" } } })
+        );
+      }
+    }
+  );
+});
+
+test("a mid-dictation generationComplete does not end the turn early", async () => {
+  await withServer(
+    async ({ streaming }) => {
+      await streaming.connect({ token: "t", mode: "byok" });
+      streaming.sendAudio(FRAME);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      assert.equal(streaming._turnEnded, false);
+
+      assert.deepEqual(await streaming.disconnect(true), { text: "first segment last words" });
+    },
+    (socket, message) => {
+      if (message.setup) {
+        socket.send(JSON.stringify({ setupComplete: {} }));
+        return;
+      }
+      if (message.realtimeInput?.audio) {
+        socket.send(
+          JSON.stringify({ serverContent: { inputTranscription: { text: "first segment" } } })
+        );
+        socket.send(JSON.stringify({ serverContent: { generationComplete: true } }));
+      }
+      if (message.realtimeInput?.audioStreamEnd) {
+        socket.send(
+          JSON.stringify({ serverContent: { inputTranscription: { text: "last words" } } })
+        );
+        socket.send(JSON.stringify({ serverContent: { generationComplete: true } }));
+      }
+    }
+  );
+});
+
 test("disconnect returns the accumulated text when the turn never ends cleanly", async () => {
   await withServer(
     async ({ streaming }) => {
@@ -301,17 +395,27 @@ test("disconnect returns the accumulated text when the turn never ends cleanly",
   );
 });
 
-test("errors: a bad key close frame becomes the coded, fixable error", async () => {
-  await withServer(
-    async ({ streaming }) => {
-      await assert.rejects(
-        streaming.connect({ token: "nope", mode: "byok" }),
-        (err) => err.code === "INVALID_KEY" && /Check your key in Settings/.test(err.message)
-      );
-    },
-    (socket) => socket.close(1007, "API key not valid. Please pass a valid API key.")
-  );
-});
+// 1007 is a malformed credential, 1008 a revoked or deleted one. The reason is
+// truncated by the server and is never part of the user-facing message.
+for (const [code, reason] of [
+  [1007, "API key not valid. Please pass a valid API key."],
+  [1008, "Requested entity was not found."],
+]) {
+  test(`errors: a ${code} close frame becomes the coded, fixable key error`, async () => {
+    await withServer(
+      async ({ streaming }) => {
+        await assert.rejects(
+          streaming.connect({ token: "nope", mode: "byok" }),
+          (err) =>
+            err.code === "INVALID_KEY" &&
+            /Check your key in Settings/.test(err.message) &&
+            !err.message.includes(reason)
+        );
+      },
+      (socket) => socket.close(code, reason)
+    );
+  });
+}
 
 test("errors: a spent managed token is re-minted once and the session survives", async () => {
   await withServer(
@@ -364,7 +468,8 @@ test("an unexpected close hands the transcript over and reports the loss once", 
       await new Promise((resolve) => setTimeout(resolve, 60));
 
       assert.deepEqual(sessionEnds, [{ text: "half a sentence" }]);
-      assert.equal(errors.length, 1);
+      // Distinct from the pre-ready failure, and without the raw server reason.
+      assert.deepEqual(errors, ["Connection lost (code: 1011)"]);
       assert.equal(streaming.isConnected, false);
     },
     (socket, message) => {

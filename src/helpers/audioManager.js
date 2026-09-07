@@ -381,9 +381,12 @@ const STREAMING_PROVIDERS = {
   },
   "openai-realtime": makeDictationRealtimeProvider("openai-realtime"),
   gemini: {
-    // The final transcript only lands ~500ms after audioStreamEnd (which
-    // finalize sends), so the stop sequence must wait for it, not sleep.
+    // The final transcript lands ~500ms after audioStreamEnd (which finalize
+    // sends), ~2s at the p95 tail, so the stop sequence waits for it under a
+    // wider ceiling. geminiLiveStreaming.js measures the same 3s budget from
+    // audioStreamEnd before its own disconnect gives up.
     awaitsFinalTranscript: true,
+    finalCeilingMs: 3000,
     warmup: (opts) => window.electronAPI.geminiStreamingWarmup(opts),
     start: (opts) => window.electronAPI.geminiStreamingStart(opts),
     send: (buf) => window.electronAPI.geminiStreamingSend(buf),
@@ -4597,7 +4600,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Resolves once the transcript stops moving. An outstanding partial proves its
   // final is still in flight, so only the ceiling ends the wait until it lands —
   // a plain debounce would expire on the very tail this exists to catch.
-  awaitStreamingTextSettled() {
+  awaitStreamingTextSettled(ceilingMs = STREAMING_FINAL_CEILING_MS) {
     return new Promise((resolve) => {
       const settle = () => {
         clearTimeout(this.streamingTextDebounce);
@@ -4606,7 +4609,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.streamingTextDebounce = null;
         resolve();
       };
-      const ceiling = setTimeout(settle, STREAMING_FINAL_CEILING_MS);
+      const ceiling = setTimeout(settle, ceilingMs);
       const arm = () => {
         clearTimeout(this.streamingTextDebounce);
         if (this.streamingPartialText) return;
@@ -4849,7 +4852,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const provider = this.getStreamingProvider();
     provider.finalize?.();
     if (provider.awaitsFinalTranscript) {
-      await this.awaitStreamingTextSettled();
+      await this.awaitStreamingTextSettled(provider.finalCeilingMs);
     } else {
       await new Promise((resolve) => setTimeout(resolve, 300));
     }

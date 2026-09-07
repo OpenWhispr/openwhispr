@@ -10652,6 +10652,11 @@ class IPCHandlers {
 
     let geminiStreamingStartInProgress = false;
     let geminiSendDropCount = 0;
+    // One handshake at a time. A start that raced an in-flight warmup used to
+    // clear the cold-start buffer, spend a second single-use managed token and
+    // report success while the warmup's handshake (and its failure) were still
+    // pending on a promise nobody read.
+    let geminiConnectInFlight = null;
 
     // Re-bound on every warmup/start so a warm socket promoted by a different
     // window can never emit into the window that opened it.
@@ -10671,20 +10676,26 @@ class IPCHandlers {
       return streaming;
     };
 
-    const connectGeminiStreaming = async (event, options) => {
-      const streaming = ensureGeminiStreaming(event);
-      // byok resolves to the raw API key, managed to a single-use ephemeral
-      // token; the client picks its Live method from `mode` accordingly.
-      const tokenOptions = { mode: options.mode, provider: "gemini-realtime" };
-      // Buffer before the token fetch (a real network round trip) so
-      // gemini-streaming-send has somewhere to put the first frames.
-      streaming.beginConnecting();
-      const token = await fetchRealtimeToken(event, tokenOptions);
-      await streaming.connect({
-        ...options,
-        token,
-        refreshToken: () => fetchRealtimeToken(event, tokenOptions),
+    const connectGeminiStreaming = (event, options) => {
+      if (geminiConnectInFlight) return geminiConnectInFlight;
+      geminiConnectInFlight = (async () => {
+        const streaming = ensureGeminiStreaming(event);
+        // byok resolves to the raw API key, managed to a single-use ephemeral
+        // token; the client picks its Live method from `mode` accordingly.
+        const tokenOptions = { mode: options.mode, provider: "gemini-realtime" };
+        // Buffer before the token fetch (a real network round trip) so
+        // gemini-streaming-send has somewhere to put the first frames.
+        streaming.beginConnecting();
+        const token = await fetchRealtimeToken(event, tokenOptions);
+        await streaming.connect({
+          ...options,
+          token,
+          refreshToken: () => fetchRealtimeToken(event, tokenOptions),
+        });
+      })().finally(() => {
+        geminiConnectInFlight = null;
       });
+      return geminiConnectInFlight;
     };
 
     ipcMain.handle("gemini-streaming-warmup", async (event, options = {}) => {
@@ -10711,6 +10722,7 @@ class IPCHandlers {
       geminiStreamingStartInProgress = true;
       try {
         const streaming = ensureGeminiStreaming(event);
+        if (geminiConnectInFlight) await geminiConnectInFlight;
         const usedWarmConnection = streaming.isConnected && !options.forceNew;
         if (!usedWarmConnection) {
           if (streaming.isConnected) await streaming.disconnect(false);
