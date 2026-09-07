@@ -21,6 +21,7 @@ import {
   ALL_TIME_METRICS,
   LEADERBOARD_PAGE_SIZE,
   LEADERBOARD_REFRESH_INTERVAL_MS,
+  domainToWorkspaceName,
   memberValue,
   normalizeLeaderboardSelection,
   pageCount,
@@ -31,7 +32,9 @@ import {
 } from "../helpers/leaderboard";
 import { CloudApiError } from "../services/cloudApi";
 import { LeaderboardService } from "../services/LeaderboardService";
+import { InvitationsService } from "../services/InvitationsService";
 import { WorkspacesService } from "../services/WorkspacesService";
+import { afterWorkspaceJoined } from "../services/membershipActions";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import type {
   Leaderboard,
@@ -45,6 +48,7 @@ import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import InviteTeammateDialog from "./InviteTeammateDialog";
 import MemberAvatar from "./MemberAvatar";
 import LeaderboardRequestJoinPreview from "./LeaderboardRequestJoinPreview";
+import LeaderboardAcceptInvitePreview from "./LeaderboardAcceptInvitePreview";
 import LeaderboardPodium from "./LeaderboardPodium";
 import LeaderboardSetupCard from "./LeaderboardSetupCard";
 import LeaderboardShareDialog from "./LeaderboardShareDialog";
@@ -144,6 +148,9 @@ export default function LeaderboardSection({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [requestingJoin, setRequestingJoin] = useState(false);
+  const [joiningInvitation, setJoiningInvitation] = useState(false);
+  const [pendingInvites, setPendingInvites] = useState<string[]>([]);
+  const [pendingInviteRevision, setPendingInviteRevision] = useState(0);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [inviteWorkspace, setInviteWorkspace] = useState<{ id: string; name: string } | null>(null);
   const [page, setPage] = useState(0);
@@ -157,33 +164,76 @@ export default function LeaderboardSection({
   const scopes = useMemo(() => access?.scopes ?? [], [access]);
   const selectedScope = scopes.find((scope) => scope.key === scopeKey);
 
-  const loadAccess = useCallback(async () => {
-    const requestId = ++accessRequestIdRef.current;
-    if (!accountId) {
-      setAccess(null);
-      setAccessLoading(false);
+  const loadAccess = useCallback(
+    async (preferredScopeKey?: string) => {
+      const requestId = ++accessRequestIdRef.current;
+      if (!accountId) {
+        setAccess(null);
+        setAccessLoading(false);
+        setAccessError(false);
+        return;
+      }
+      setAccessLoading(true);
       setAccessError(false);
+      try {
+        const response = await LeaderboardService.getAccess();
+        if (requestId !== accessRequestIdRef.current) return;
+        setAccess(response);
+        setScopeKey((current) => {
+          if (
+            preferredScopeKey &&
+            response.scopes.some((scope) => scope.key === preferredScopeKey)
+          ) {
+            return preferredScopeKey;
+          }
+          return current && response.scopes.some((scope) => scope.key === current)
+            ? current
+            : (response.scopes[0]?.key ?? null);
+        });
+      } catch (loadError) {
+        if (requestId !== accessRequestIdRef.current) return;
+        console.error("Loading leaderboard access failed:", loadError);
+        setAccessError(true);
+      } finally {
+        if (requestId === accessRequestIdRef.current) setAccessLoading(false);
+      }
+    },
+    [accountId]
+  );
+
+  useEffect(() => {
+    const canListInvites =
+      selectedScope?.kind === "workspace" &&
+      selectedScope.state === "invite" &&
+      (selectedScope.role === "owner" || selectedScope.role === "admin");
+    if (!canListInvites) {
+      setPendingInvites([]);
       return;
     }
-    setAccessLoading(true);
-    setAccessError(false);
-    try {
-      const response = await LeaderboardService.getAccess();
-      if (requestId !== accessRequestIdRef.current) return;
-      setAccess(response);
-      setScopeKey((current) =>
-        current && response.scopes.some((scope) => scope.key === current)
-          ? current
-          : (response.scopes[0]?.key ?? null)
-      );
-    } catch (loadError) {
-      if (requestId !== accessRequestIdRef.current) return;
-      console.error("Loading leaderboard access failed:", loadError);
-      setAccessError(true);
-    } finally {
-      if (requestId === accessRequestIdRef.current) setAccessLoading(false);
-    }
-  }, [accountId]);
+
+    let cancelled = false;
+    InvitationsService.list(selectedScope.id)
+      .then((invitations) => {
+        if (cancelled) return;
+        const now = Date.now();
+        setPendingInvites(
+          invitations
+            .filter(
+              (invitation) =>
+                !invitation.accepted_at &&
+                !invitation.revoked_at &&
+                new Date(invitation.expires_at).getTime() > now
+            )
+            .map((invitation) => invitation.email)
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setPendingInvites([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingInviteRevision, selectedScope]);
 
   useEffect(() => {
     if (isSignedIn && !loaded) void refresh();
@@ -330,9 +380,36 @@ export default function LeaderboardSection({
     }
   };
 
+  const acceptInvitation = async () => {
+    const invitation = access?.invitation;
+    if (!invitation || joiningInvitation) return;
+    setJoiningInvitation(true);
+    try {
+      await WorkspacesService.join(invitation.workspaceId);
+      await afterWorkspaceJoined();
+      await loadAccess(`workspace:${invitation.workspaceId}`);
+      toast({
+        title: t("insights.leaderboard.inviteAcceptedTitle"),
+        description: t("insights.leaderboard.inviteAcceptedDescription", {
+          workspace: invitation.workspaceName,
+        }),
+      });
+    } catch (joinError) {
+      toast({
+        title: t("insights.leaderboard.inviteAcceptError"),
+        description: joinError instanceof Error ? joinError.message : t("common.unknownError"),
+        variant: "destructive",
+      });
+      void loadAccess();
+    } finally {
+      setJoiningInvitation(false);
+    }
+  };
+
   const dialogs = (
     <>
       <CreateWorkspaceDialog
+        defaultName={domainToWorkspaceName(access?.domain ?? null)}
         open={createWorkspaceOpen}
         onOpenChange={setCreateWorkspaceOpen}
         onCreated={(workspaceId) => {
@@ -351,7 +428,10 @@ export default function LeaderboardSection({
           }}
           workspaceId={inviteWorkspace.id}
           workspaceName={inviteWorkspace.name}
-          onInvited={() => void loadAccess()}
+          onInvited={() => {
+            setPendingInviteRevision((current) => current + 1);
+            void loadAccess();
+          }}
         />
       )}
     </>
@@ -404,10 +484,22 @@ export default function LeaderboardSection({
     return (
       <LeaderboardRequestJoinPreview
         className="mt-8"
+        colleagueCount={access.colleagueCount}
+        domain={access.domain}
         workspaceName={access.joinableWorkspace.name}
         pending={access.joinableWorkspace.requestState === "pending"}
         requesting={requestingJoin}
         onRequest={() => void requestJoin()}
+      />
+    );
+  }
+  if (surface === "accept_invite" && access.invitation) {
+    return (
+      <LeaderboardAcceptInvitePreview
+        inviterName={access.invitation.inviterName}
+        joining={joiningInvitation}
+        onAccept={() => void acceptInvitation()}
+        workspaceName={access.invitation.workspaceName}
       />
     );
   }
@@ -416,6 +508,7 @@ export default function LeaderboardSection({
       <>
         <LeaderboardSetupCard
           className="mt-8"
+          colleagueCount={access.colleagueCount}
           domain={access.domain}
           onCreate={() => setCreateWorkspaceOpen(true)}
         />
@@ -584,6 +677,7 @@ export default function LeaderboardSection({
           scopeKind={selectedScope.kind}
           scopeName={selectedScope.name}
           onInvite={inviteToLeaderboard}
+          pendingInvites={pendingInvites}
           sync={{
             canEnable: canJoin,
             enabled: participating,

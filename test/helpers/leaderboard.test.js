@@ -113,3 +113,11 @@ test("leaderboard surfaces follow scope state before participation state", async
     "board"
   );
 });
+
+test("workspace defaults are readable and derived only from the company domain", async () => {
+  const { domainToWorkspaceName } = await load();
+  assert.equal(domainToWorkspaceName("acme.com"), "Acme");
+  assert.equal(domainToWorkspaceName("north-star.example.co.uk"), "North Star");
+  assert.equal(domainToWorkspaceName("WWW.EXAMPLE.COM"), "Example");
+  assert.equal(domainToWorkspaceName(null), "");
+});

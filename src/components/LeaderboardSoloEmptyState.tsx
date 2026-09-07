@@ -1,4 +1,4 @@
-import { Building2, Globe2, UserPlus, UserRound } from "lucide-react";
+import { Building2, Clock3, Globe2, UserPlus, UserRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import LeaderboardSyncRow from "./LeaderboardSyncRow";
@@ -7,11 +7,13 @@ export default function LeaderboardSoloEmptyState({
   scopeKind,
   scopeName,
   onInvite,
+  pendingInvites,
   sync,
 }: {
   scopeKind: "workspace" | "domain";
   scopeName: string;
   onInvite: () => void;
+  pendingInvites: string[];
   sync: {
     canEnable: boolean;
     enabled: boolean;
@@ -68,6 +70,14 @@ export default function LeaderboardSoloEmptyState({
         <p className="mt-3 text-[11px] text-muted-foreground/75">
           {t("insights.leaderboard.soloHint")}
         </p>
+        {pendingInvites.length > 0 && (
+          <div className="mt-4 flex max-w-full items-start gap-2 rounded-lg border border-border/50 bg-muted/25 px-3 py-2 text-left text-[11px] text-muted-foreground">
+            <Clock3 size={13} className="mt-0.5 shrink-0" />
+            <p className="min-w-0 break-words">
+              {t("insights.leaderboard.invitedList", { emails: pendingInvites.join(", ") })}
+            </p>
+          </div>
+        )}
         <LeaderboardSyncRow {...sync} />
       </div>
     </div>

@@ -41,6 +41,9 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   assert.ok(section.includes('t("insights.leaderboard.inviteCta")'));
   assert.ok(section.includes("<LeaderboardSetupCard"));
   assert.ok(section.includes("<LeaderboardSoloEmptyState"));
+  assert.ok(section.includes("<LeaderboardAcceptInvitePreview"));
+  assert.ok(section.includes("afterWorkspaceJoined"));
+  assert.ok(section.includes("InvitationsService.list"));
   assert.ok(section.includes('selectedScope?.state === "invite"'));
   assert.ok(section.includes("<LeaderboardSyncPreview"));
   assert.equal(section.includes("activationDescription"), false);

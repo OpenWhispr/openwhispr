@@ -5,10 +5,12 @@ import { Button } from "./ui/button";
 
 export default function LeaderboardSetupCard({
   className,
+  colleagueCount,
   domain,
   onCreate,
 }: {
   className?: string;
+  colleagueCount: number;
   domain: string | null;
   onCreate: () => void;
 }) {
@@ -28,7 +30,7 @@ export default function LeaderboardSetupCard({
       <h2 className="mt-4 text-base font-semibold">{t("insights.leaderboard.setupTitle")}</h2>
       <p className="mt-2 max-w-md text-xs leading-relaxed text-muted-foreground">
         {domain
-          ? t("insights.leaderboard.setupDomainDescription", { domain })
+          ? t("insights.leaderboard.setupDomainDescription", { count: colleagueCount, domain })
           : t("insights.leaderboard.setupDescription")}
       </p>
       <Button className="mt-5" onClick={onCreate}>

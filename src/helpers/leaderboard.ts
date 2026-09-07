@@ -52,6 +52,21 @@ export function resolveLeaderboardSurface({
   return participating ? "board" : "sync";
 }
 
+export function domainToWorkspaceName(domain: string | null): string {
+  if (!domain) return "";
+  const label =
+    domain
+      .trim()
+      .toLowerCase()
+      .replace(/^www\./, "")
+      .split(".")[0] ?? "";
+  return label
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
 export function normalizeLeaderboardSelection(
   metric: LeaderboardMetric,
   range: LeaderboardRange
