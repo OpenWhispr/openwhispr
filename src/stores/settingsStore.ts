@@ -454,6 +454,7 @@ const UPLOAD_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
   ["cloudTranscriptionBaseUrl", "uploadCloudTranscriptionBaseUrl"],
   ["cloudTranscriptionMode", "uploadCloudTranscriptionMode"],
   ["transcriptionMode", "uploadTranscriptionMode"],
+  ["remoteTranscriptionUrl", "uploadRemoteTranscriptionUrl"],
 ];
 
 function migrateUploadTranscription() {
@@ -715,6 +716,7 @@ export interface SettingsState
   uploadCloudTranscriptionModel: string;
   uploadCloudTranscriptionBaseUrl: string;
   uploadCloudTranscriptionMode: string;
+  uploadRemoteTranscriptionUrl: string;
 
   /** Last model used per scope+provider (`"<context>:<providerId>"`), so switching providers restores it. */
   transcriptionModelByProvider: Record<string, string>;
@@ -819,6 +821,7 @@ export interface SettingsState
   setUploadCloudTranscriptionModel: (value: string) => void;
   setUploadCloudTranscriptionBaseUrl: (value: string) => void;
   setUploadCloudTranscriptionMode: (value: string) => void;
+  setUploadRemoteTranscriptionUrl: (value: string) => void;
 
   setNoteFormattingMode: (mode: InferenceMode) => void;
   setNoteFormattingProvider: (value: string) => void;
@@ -1500,6 +1503,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uploadCloudTranscriptionModel: readString("uploadCloudTranscriptionModel", ""),
   uploadCloudTranscriptionBaseUrl: readString("uploadCloudTranscriptionBaseUrl", ""),
   uploadCloudTranscriptionMode: readString("uploadCloudTranscriptionMode", ""),
+  uploadRemoteTranscriptionUrl: readString("uploadRemoteTranscriptionUrl", ""),
 
   noteFormattingMode: (() => {
     const v = readString("noteFormattingMode", "openwhispr");
@@ -1594,6 +1598,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setUploadCloudTranscriptionModel: createStringSetter("uploadCloudTranscriptionModel"),
   setUploadCloudTranscriptionBaseUrl: createStringSetter("uploadCloudTranscriptionBaseUrl"),
   setUploadCloudTranscriptionMode: createStringSetter("uploadCloudTranscriptionMode"),
+  setUploadRemoteTranscriptionUrl: createStringSetter("uploadRemoteTranscriptionUrl"),
 
   setNoteFormattingMode: createStringSetter("noteFormattingMode") as (mode: InferenceMode) => void,
   setNoteFormattingProvider: createStringSetter("noteFormattingProvider"),
@@ -2539,6 +2544,7 @@ export interface ResolvedUploadTranscription {
   cloudTranscriptionBaseUrl: string;
   cloudTranscriptionMode: string;
   transcriptionMode: InferenceMode;
+  remoteTranscriptionUrl: string;
 }
 
 // Audio upload is batch (not streaming), so unset values fall back to the base
@@ -2558,6 +2564,7 @@ export const selectResolvedUploadTranscription = (
     state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
   cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
   transcriptionMode: state.uploadTranscriptionMode,
+  remoteTranscriptionUrl: state.uploadRemoteTranscriptionUrl || state.remoteTranscriptionUrl,
 });
 
 export interface ResolvedNoteFormatting {
