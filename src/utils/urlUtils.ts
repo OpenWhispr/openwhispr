@@ -115,10 +115,12 @@ export function buildAzureTranscriptionUrl(
   }
 }
 
-// Workload-identity (managed) Azure STT. On the `/openai/v1` route Azure only
-// serves audio on the preview surface — GA v1 has no audio operations — so
-// both "v1" and "preview" send `api-version=preview`. Dated versions use the
-// legacy deployments route above.
+// Workload-identity (managed) Azure STT. Only the deployments route serves a
+// transcription deployment: `/openai/v1/audio/transcriptions?api-version=preview`
+// answers 404 DeploymentNotFound, and the deployments route rejects the
+// v1-surface aliases ("v1", "preview") outright — so those aliases are
+// translated to the dated version that is known to serve audio. Dated versions
+// pass through unchanged.
 export function buildManagedAzureTranscriptionUrl(
   endpoint: string,
   deployment: string,
@@ -130,8 +132,9 @@ export function buildManagedAzureTranscriptionUrl(
   } catch {
     return null;
   }
-  if (apiVersion === "v1" || apiVersion === "preview") {
-    return `${origin}/openai/v1/audio/transcriptions?api-version=preview`;
-  }
-  return buildAzureTranscriptionUrl(origin, deployment, apiVersion);
+  const version =
+    apiVersion === "v1" || apiVersion === "preview"
+      ? DEFAULT_AZURE_TRANSCRIPTION_API_VERSION
+      : apiVersion;
+  return buildAzureTranscriptionUrl(origin, deployment, version);
 }
