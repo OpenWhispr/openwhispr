@@ -5,7 +5,8 @@ export function useCopyFeedback(
   { resetMs = 1800 }: { resetMs?: number } = {}
 ): {
   copied: boolean;
-  copy: (textOverride?: string) => Promise<void>;
+  copy: () => Promise<void>;
+  copyText: (textToCopy: string) => Promise<boolean>;
   confirmCopied: (copiedText: string, durationMs?: number) => void;
 } {
   const [copied, setCopied] = useState(false);
@@ -36,24 +37,36 @@ export function useCopyFeedback(
     [resetMs]
   );
 
-  const copy = useCallback(async (textOverride?: string) => {
-    const textToCopy = textOverride ?? text.trim();
-    if (!textToCopy.trim()) return;
+  // Writes without touching the copied state: the shared feedback belongs to
+  // the full-text copy, not to a partial selection.
+  const copyText = useCallback(async (textToCopy: string) => {
+    if (!textToCopy.trim()) return false;
 
     try {
       const result = await window.electronAPI?.writeClipboard?.(textToCopy);
       if (result?.success === false) throw new Error("clipboard-write-failed");
+      return true;
     } catch {
       try {
         await navigator.clipboard.writeText(textToCopy);
+        return true;
       } catch {
-        setCopied(false);
-        return;
+        return false;
       }
     }
+  }, []);
 
-    confirmCopied(textOverride === undefined ? text : textToCopy, resetMs);
-  }, [confirmCopied, text, resetMs]);
+  const copy = useCallback(async () => {
+    const textToCopy = text.trim();
+    if (!textToCopy) return;
 
-  return { copied, copy, confirmCopied };
+    if (!(await copyText(textToCopy))) {
+      setCopied(false);
+      return;
+    }
+
+    confirmCopied(text, resetMs);
+  }, [confirmCopied, copyText, text, resetMs]);
+
+  return { copied, copy, copyText, confirmCopied };
 }

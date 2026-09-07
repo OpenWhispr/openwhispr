@@ -1,3 +1,10 @@
+export function isEditableTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  return Boolean(
+    element?.isContentEditable || element?.tagName === "INPUT" || element?.tagName === "TEXTAREA"
+  );
+}
+
 export function getSelectionInside(root: HTMLElement | null): string | null {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !root) return null;
@@ -10,12 +17,11 @@ export function getSelectionInside(root: HTMLElement | null): string | null {
 }
 
 export function getSelectionForCopyShortcut(
-  event: Pick<KeyboardEvent, "altKey" | "ctrlKey" | "key" | "metaKey">,
-  root: HTMLElement | null,
-  isEditableTarget = false
+  event: Pick<KeyboardEvent, "altKey" | "ctrlKey" | "key" | "metaKey" | "target">,
+  root: HTMLElement | null
 ): string | null {
   if (
-    isEditableTarget ||
+    isEditableTarget(event.target) ||
     event.key.toLowerCase() !== "c" ||
     event.altKey ||
     (!event.ctrlKey && !event.metaKey)

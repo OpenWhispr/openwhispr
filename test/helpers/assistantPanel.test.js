@@ -641,7 +641,7 @@ test("an automatic clipboard delivery keeps the shared Copy button confirmed for
   assert.ok(scheduledDelays.includes(6000));
 });
 
-test("Assistant selection copy preserves the selected text", async (t) => {
+test("Assistant selection copy preserves the selected text without claiming Copied", async (t) => {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -674,8 +674,10 @@ test("Assistant selection copy preserves the selected text", async (t) => {
 
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Harness)));
-  await React.act(async () => copyFeedback.copy(" selected answer "));
+  await React.act(async () => copyFeedback.copyText(" selected answer "));
+  assert.equal(copyFeedback.copied, false, "a partial copy never shows the Copied state");
   await React.act(async () => copyFeedback.copy());
+  assert.equal(copyFeedback.copied, true);
 
   assert.deepEqual(writes, [" selected answer ", "Full Agent answer"]);
 });
@@ -729,9 +731,8 @@ test("Assistant selection must stay entirely inside the response root", async (t
   );
   assert.equal(
     getSelectionForCopyShortcut(
-      { key: "c", ctrlKey: true, metaKey: false, altKey: false },
-      responseRoot,
-      true
+      { key: "c", ctrlKey: true, metaKey: false, altKey: false, target: { tagName: "TEXTAREA" } },
+      responseRoot
     ),
     null
   );

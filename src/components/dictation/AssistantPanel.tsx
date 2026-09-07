@@ -27,7 +27,11 @@ import {
   normalizeAgentSelectionContext,
   type AgentSelectionContext,
 } from "../../utils/agentSelectionContext";
-import { getSelectionForCopyShortcut, getSelectionInside } from "../../utils/assistantSelection";
+import {
+  getSelectionForCopyShortcut,
+  getSelectionInside,
+  isEditableTarget,
+} from "../../utils/assistantSelection";
 import { AssistantEmptyState } from "./AssistantEmptyState";
 import { useToast } from "../ui/useToast";
 import {
@@ -143,6 +147,7 @@ export function AssistantPanel({
   const {
     copied,
     copy: handleCopy,
+    copyText,
     confirmCopied,
   } = useCopyFeedback(responseContent, {
     resetMs: MANUAL_COPY_FEEDBACK_MS,
@@ -385,21 +390,15 @@ export function AssistantPanel({
         return;
       }
 
-      const target = e.target as HTMLElement | null;
-      const isEditable =
-        target?.isContentEditable || target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
       if (isResponseReady) {
-        const selectedText = getSelectionForCopyShortcut(
-          e,
-          responseSelectionRootRef.current,
-          Boolean(isEditable)
-        );
+        const selectedText = getSelectionForCopyShortcut(e, responseSelectionRootRef.current);
         if (selectedText) {
           e.preventDefault();
-          void handleCopy(selectedText);
+          void copyText(selectedText);
           return;
         }
       }
+      const isEditable = isEditableTarget(e.target);
       if (
         isResponseReady &&
         footerPhase === "actions" &&
@@ -415,7 +414,17 @@ export function AssistantPanel({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [voiceState, isBusy, streaming, open, onClose, isResponseReady, footerPhase, handleCopy]);
+  }, [
+    voiceState,
+    isBusy,
+    streaming,
+    open,
+    onClose,
+    isResponseReady,
+    footerPhase,
+    handleCopy,
+    copyText,
+  ]);
 
   return (
     <>
