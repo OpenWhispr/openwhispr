@@ -4,6 +4,13 @@
 // workspace's Azure resource. No user-owned API key is involved.
 const DEFAULT_TIMEOUT_MS = 120_000;
 
+// Azure keys the accepted-format check off the multipart filename's extension
+// and does not list "opus". Every .opus file is Opus in an Ogg container, so
+// the .ogg name it does accept describes the same bytes.
+function azureFileName(fileName) {
+  return fileName.replace(/\.opus$/i, ".ogg");
+}
+
 function createManagedTranscriptionExecutor({
   resolveEnterpriseRuntime,
   proxyFetch,
@@ -33,7 +40,11 @@ function createManagedTranscriptionExecutor({
     }
     const token = await managedTokenProvider();
     const formData = new FormData();
-    formData.append("file", new Blob([audioBuffer], { type: contentType }), fileName);
+    formData.append(
+      "file",
+      new Blob([audioBuffer], { type: contentType }),
+      azureFileName(fileName)
+    );
     formData.append("model", deployment);
     formData.append("response_format", "json");
     if (route.language && route.language !== "auto") {

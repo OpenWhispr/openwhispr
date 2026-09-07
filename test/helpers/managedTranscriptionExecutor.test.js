@@ -80,6 +80,22 @@ test("posts multipart audio to the workspace deployment with an Entra bearer", a
   assert.ok(calls[0].init.signal instanceof AbortSignal);
 });
 
+test("sends .opus uploads under an .ogg filename, the container Azure recognises", async () => {
+  // Proven live 2026-09-07: identical Ogg-Opus bytes are rejected as "Unsupported
+  // file format opus" under a .opus name and transcribed under a .ogg name.
+  const calls = [];
+  const run = executor({
+    fetch: async (_url, init) => {
+      calls.push(init);
+      return new Response(JSON.stringify({ text: "ok" }), { status: 200 });
+    },
+  });
+  await run({}, route, { ...input, fileName: "ow-url-123.opus", contentType: "audio/ogg" });
+  const file = calls[0].body.get("file");
+  assert.equal(file.name, "ow-url-123.ogg");
+  assert.equal(file.type, "audio/ogg");
+});
+
 test("maps Azure failures to coded errors", async () => {
   for (const [status, code] of [
     [429, "PROVIDER_RATE_LIMITED"],
