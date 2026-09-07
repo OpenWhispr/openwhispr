@@ -36,6 +36,8 @@ interface LeaderboardParticipationState {
 // Writes read the same counter: one taken out for the departing account has no
 // answer to give about the account that replaced it.
 let readId = 0;
+// Keep write invalidation separate so an older account cannot clear a newer account's pending state.
+let writeId = 0;
 
 export const useLeaderboardParticipationStore = create<LeaderboardParticipationState>(
   (set, get) => ({
@@ -46,6 +48,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
 
     reset: () => {
       readId += 1;
+      writeId += 1;
       // updating with it: a write left running for the departing account would
       // otherwise keep refresh() deferring the new account's read for as long
       // as its request takes to settle.
@@ -91,6 +94,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
 
     join: async (userId) => {
       const generation = readId;
+      const currentWriteId = ++writeId;
       set({ updating: true });
       // The account says yes here, which retires any leave still queued for it —
       // before the request goes out, not after it lands, because turning the sync
@@ -106,12 +110,13 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
         console.error("Joining the leaderboard failed:", error);
         if (generation === readId) set({ error: "write" });
       } finally {
-        set({ updating: false });
+        if (currentWriteId === writeId) set({ updating: false });
       }
     },
 
     leave: async (userId) => {
       const generation = readId;
+      const currentWriteId = ++writeId;
       set({ updating: true });
       try {
         const participation = await LeaderboardService.setParticipation(false);
@@ -129,7 +134,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
         get().publishAnswer(false, generation);
         return false;
       } finally {
-        set({ updating: false });
+        if (currentWriteId === writeId) set({ updating: false });
       }
     },
   })

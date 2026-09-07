@@ -1,4 +1,4 @@
-import { Check, Send } from "lucide-react";
+import { Check, Loader2, Send } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import LeaderboardPreview from "./LeaderboardPreview";
 
@@ -23,7 +23,8 @@ export default function LeaderboardRequestJoinPreview({
   return (
     <LeaderboardPreview
       actionDisabled={pending || requesting}
-      actionIcon={pending ? Check : Send}
+      actionIcon={pending ? Check : requesting ? Loader2 : Send}
+      actionIconClassName={requesting ? "animate-spin" : undefined}
       actionLabel={
         pending
           ? t("insights.leaderboard.requestSent")

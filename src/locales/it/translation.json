@@ -3293,7 +3293,6 @@
       "syncRowLabel": "Sincronizzazione analisi",
       "syncRowHint": "Attivala ora per comparire in classifica quando si uniranno i colleghi.",
       "activationError": "Non è stato possibile verificare la tua partecipazione alla classifica. Controlla la connessione e riprova.",
-      "join": "Unisciti alla classifica",
       "leave": "Esci dalla classifica",
       "leavePending": "Hai lasciato questa classifica. Completeremo la rimozione dall'account non appena tornerai online.",
       "allTime": "Da sempre",

@@ -83,6 +83,42 @@ async function waitForPort(port, attempts = 60) {
   throw new Error(`Timed out waiting for profile auth bridge on port ${port}`);
 }
 
+function validProcessRecords(value) {
+  return Array.isArray(value)
+    ? value.filter((record) => Number.isInteger(record?.pid) && record.pid > 0)
+    : [];
+}
+
+async function writeProcessRecords(records) {
+  await writeFile(PROCESS_PATH, `${JSON.stringify(records, null, 2)}\n`, { mode: 0o600 });
+}
+
+function stopProfiles(records) {
+  for (const record of validProcessRecords(records)) {
+    try {
+      process.kill(record.pid, "SIGTERM");
+    } catch {}
+  }
+}
+
+async function waitForProfilesToStop(records, attempts = 50) {
+  let remaining = validProcessRecords(records);
+  for (let attempt = 0; attempt < attempts && remaining.length > 0; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    remaining = remaining.filter((record) => {
+      try {
+        process.kill(record.pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  }
+  if (remaining.length > 0) {
+    throw new Error(`Timed out stopping leaderboard profiles: ${remaining.map(({ pid }) => pid)}`);
+  }
+}
+
 async function ensureSharedServices() {
   const [api, renderer] = await Promise.all([
     request({ hostname: "127.0.0.1", port: 3000, path: "/api/leaderboard/access" }).catch(() => 0),
@@ -96,14 +132,13 @@ async function ensureSharedServices() {
 async function stopExistingProfiles() {
   let records = [];
   try {
-    records = JSON.parse(await readFile(PROCESS_PATH, "utf8"));
+    records = validProcessRecords(JSON.parse(await readFile(PROCESS_PATH, "utf8")));
   } catch {}
-
-  for (const record of records) {
-    try {
-      process.kill(record.pid, "SIGTERM");
-    } catch {}
-  }
+  // Retire the records before signalling them. Re-running stop later must not
+  // terminate an unrelated process that inherited a stale, recycled PID.
+  await writeProcessRecords([]);
+  stopProfiles(records);
+  await waitForProfilesToStop(records);
 }
 
 async function openProfiles() {
@@ -113,59 +148,66 @@ async function openProfiles() {
 
   const electronPath = require("electron");
   const records = [];
-  for (const profile of manifest.profiles) {
-    // Every seed generation gets fresh local storage without deleting a prior
-    // QA profile. Cloud rows are reset transactionally by the seed script.
-    const qaProfile = `${profile.key}-${manifest.generation}`;
-    const logPath = path.join(os.tmpdir(), `openwhispr-${profile.key}.log`);
-    const logFd = openSync(logPath, "a", 0o600);
-    const env = {
-      ...process.env,
-      AUTH_URL: "http://localhost:3000",
-      NODE_ENV: "development",
-      OPENWHISPR_AUTH_BRIDGE_PORT: String(profile.bridgePort),
-      OPENWHISPR_QA_ONBOARDING_COMPLETE: "1",
-      OPENWHISPR_QA_PROFILE: qaProfile,
-      OPENWHISPR_START_VIEW: "leaderboard",
-      OPENWHISPR_UI_ONLY: "1",
-      VITE_AUTH_URL: "http://localhost:3000",
-      VITE_OPENWHISPR_API_URL: "http://localhost:3000",
-    };
-    delete env.ELECTRON_RUN_AS_NODE;
+  try {
+    for (const profile of manifest.profiles) {
+      // Every seed generation gets fresh local storage without deleting a prior
+      // QA profile. Cloud rows are reset transactionally by the seed script.
+      const qaProfile = `${profile.key}-${manifest.generation}`;
+      const logPath = path.join(os.tmpdir(), `openwhispr-${profile.key}.log`);
+      const logFd = openSync(logPath, "w", 0o600);
+      const env = {
+        ...process.env,
+        AUTH_URL: "http://localhost:3000",
+        NODE_ENV: "development",
+        OPENWHISPR_AUTH_BRIDGE_PORT: String(profile.bridgePort),
+        OPENWHISPR_QA_ONBOARDING_COMPLETE: "1",
+        OPENWHISPR_QA_PROFILE: qaProfile,
+        OPENWHISPR_START_VIEW: "leaderboard",
+        OPENWHISPR_UI_ONLY: "1",
+        VITE_AUTH_URL: "http://localhost:3000",
+        VITE_OPENWHISPR_API_URL: "http://localhost:3000",
+      };
+      delete env.ELECTRON_RUN_AS_NODE;
 
-    let child;
-    try {
-      child = spawn(electronPath, [ROOT, "--dev"], {
-        cwd: ROOT,
-        detached: true,
-        env,
-        stdio: ["ignore", logFd, logFd],
+      let child;
+      try {
+        child = spawn(electronPath, [ROOT, "--dev"], {
+          cwd: ROOT,
+          detached: true,
+          env,
+          stdio: ["ignore", logFd, logFd],
+        });
+      } finally {
+        closeSync(logFd);
+      }
+      child.unref();
+      records.push({
+        key: profile.key,
+        label: profile.label,
+        expected: profile.expected,
+        qaProfile,
+        bridgePort: profile.bridgePort,
+        pid: child.pid,
+        logPath,
       });
-    } finally {
-      closeSync(logFd);
-    }
-    child.unref();
-    records.push({
-      key: profile.key,
-      label: profile.label,
-      expected: profile.expected,
-      qaProfile,
-      pid: child.pid,
-      logPath,
-    });
+      await writeProcessRecords(records);
 
-    await waitForPort(profile.bridgePort);
-    const status = await request({
-      hostname: "127.0.0.1",
-      port: profile.bridgePort,
-      path: "/oauth/callback",
-      method: "POST",
-      body: { bearer_token: profile.token },
-    });
-    if (status !== 200) throw new Error(`Could not authenticate ${profile.key}: HTTP ${status}`);
+      await waitForPort(profile.bridgePort);
+      const status = await request({
+        hostname: "127.0.0.1",
+        port: profile.bridgePort,
+        path: "/oauth/callback",
+        method: "POST",
+        body: { bearer_token: profile.token },
+      });
+      if (status !== 200) throw new Error(`Could not authenticate ${profile.key}: HTTP ${status}`);
+    }
+  } catch (error) {
+    await writeProcessRecords([]);
+    stopProfiles(records);
+    throw error;
   }
 
-  await writeFile(PROCESS_PATH, `${JSON.stringify(records, null, 2)}\n`, { mode: 0o600 });
   console.log(`Opened ${records.length} isolated Leaderboard v1 profiles:`);
   for (const record of records) {
     console.log(`- ${record.label} (PID ${record.pid}): ${record.expected}`);

@@ -3341,7 +3341,6 @@
       "syncRowLabel": "Sincronización de analíticas",
       "syncRowHint": "Actívala ahora para aparecer en la clasificación cuando se unan tus compañeros.",
       "activationError": "No pudimos verificar tu participación en la clasificación. Comprueba tu conexión e inténtalo de nuevo.",
-      "join": "Unirse a la clasificación",
       "leave": "Salir de la clasificación",
       "leavePending": "Has salido de esta clasificación. Terminaremos de quitarte de la cuenta en cuanto vuelvas a estar en línea.",
       "allTime": "Todo el tiempo",

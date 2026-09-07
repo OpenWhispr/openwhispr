@@ -214,3 +214,41 @@ test("a write left over from the departing account cannot settle the next one", 
     "the opt-out is tagged with the account that asked, so the reset cannot drop it"
   );
 });
+
+test("a departing account's write cannot clear a newer account's write state", async (t) => {
+  let releaseFirstWrite;
+  let releaseSecondWrite;
+  let requestCount = 0;
+  const { store } = loadStore(t, {
+    cloudApiRequest: async () => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        await new Promise((resolve) => {
+          releaseFirstWrite = resolve;
+        });
+        return { success: false, status: 0, error: "offline" };
+      }
+      await new Promise((resolve) => {
+        releaseSecondWrite = resolve;
+      });
+      return participation(true);
+    },
+  });
+
+  const firstWrite = store.getState().leave("user_1");
+  store.getState().reset();
+  const secondWrite = store.getState().join("user_2");
+
+  releaseFirstWrite();
+  await firstWrite;
+  assert.equal(
+    store.getState().updating,
+    true,
+    "the first account must not make the second account's pending write look complete"
+  );
+
+  releaseSecondWrite();
+  await secondWrite;
+  assert.equal(store.getState().updating, false);
+  assert.equal(store.getState().enabled, true);
+});
