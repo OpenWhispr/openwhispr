@@ -1,9 +1,8 @@
 import { Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { HotkeyKeycaps } from "../ui/HotkeyKeycaps";
-import { TipCardShell, TIP_CARD_WIDTH } from "./TipCardShell";
+import { TipCardShell } from "./TipCardShell";
 
-export const HANDS_FREE_TIP_CARD_WIDTH = TIP_CARD_WIDTH;
 // The translated sentence carries the hotkey as `{{hotkey}}`; rendering it as
 // keycaps means splitting the resolved copy around that slot.
 const HOTKEY_SLOT = "\u0000";
