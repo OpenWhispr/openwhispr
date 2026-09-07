@@ -35,6 +35,7 @@ import {
   resolveLiveTranscriptEntrancePresentation,
   resolveAssistantFooterPresentation,
   resolveAgentModeActive,
+  resolveHandsFreeTipLadderVisible,
   resolveListeningEntrancePresentation,
   resolvePillShrinkWait,
   resolveVoiceActivityPresentation,
@@ -321,12 +322,21 @@ export default function App() {
       !holdMigrationCard.visible,
   });
   // Feeds only the window-size ladder below (the auto-hide effect further
-  // down reads handsFreeTip.tip and holdMigrationCard.visible directly, the
-  // same underlying signal). Both already outlast the migration card's
-  // 200ms exit — a 340ms deferred shrink, a 500ms auto-hide delay — so
-  // widening either to also track `exiting` would just hold the window
-  // large through the fade for nothing.
-  const tipCardVisible = handsFreeTip.tip !== null || holdMigrationCard.visible;
+  // down reads handsFreeTip.tip and holdMigrationCard.visible directly — a
+  // separate consumer, unaffected by this: its own 500ms delay comfortably
+  // outlasts the migration card's 200ms exit on its own, so it stays on
+  // `.visible`). This one tracks the card through its whole MOUNTED
+  // lifetime (visible OR exiting) via resolveHandsFreeTipLadderVisible, NOT
+  // `.visible` alone: resolvePillShrinkWait correctly resolves a
+  // HANDS_FREE_TIP -> BASE shrink at once now (the pill's own width is not
+  // part of it), so there is no longer a deferred-shrink guess long enough
+  // to outlast the card's exit fade by accident — this flag has to stop
+  // lying about when the card is actually gone instead.
+  const tipCardVisible = resolveHandsFreeTipLadderVisible({
+    tip: handsFreeTip.tip,
+    holdMigrationCardVisible: holdMigrationCard.visible,
+    holdMigrationCardExiting: holdMigrationCard.exiting,
+  });
   // Which card, if any, currently owns the pill's spot. Deliberately NOT
   // tipCardVisible: placement has to track the migration card through its
   // own exit fade (visible drops the instant dismissal starts, but the card

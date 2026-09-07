@@ -285,3 +285,64 @@ test("waitForShrink is required — a shrink with none supplied fails fast inste
     /waitForShrink is not a function/
   );
 });
+
+// Fix round 2 (review of task-3-report.md's fix round 1, 2026-09-07): round
+// 1's resolvePillShrinkWait correctly resolves a HANDS_FREE_TIP -> BASE
+// shrink at once — the pill's own width is not part of it — but that shrink
+// is only ever safe if handsFreeTipVisible itself has already stopped lying
+// about whether the Hold migration card is still on screen. App.jsx now
+// computes it via resolveHandsFreeTipLadderVisible, which stays true through
+// the card's whole mounted lifetime (visible OR exiting), not just its
+// `visible` sub-state. This drives handsFreeTipVisible with the REAL helper
+// so the mutation below (in the source file, not a copy in this test) is
+// what the bite-check reverts — see the report for what App.jsx's own call
+// site is and is not covered by this.
+test("a hands-free-tip shrink triggered by the migration card's dismissal does not land before its exit fade finishes", async (t) => {
+  const { resolveHandsFreeTipLadderVisible } = await loadVoicePillPresentation();
+  const { render, requests } = await mountOwner(t, {
+    // resolvePillShrinkWait's real answer for HANDS_FREE_TIP -> BASE: nothing
+    // to wait on at the pill level. This shrink's only protection is
+    // handsFreeTipVisible staying true long enough — exactly what this test
+    // pins, so the fallback duration is irrelevant here and left at 0.
+    waitForShrink: () => Promise.resolve(),
+  });
+
+  // The migration card is up: mounted and visible.
+  await render({
+    handsFreeTipVisible: resolveHandsFreeTipLadderVisible({
+      tip: null,
+      holdMigrationCardVisible: true,
+      holdMigrationCardExiting: false,
+    }),
+  });
+  assert.deepEqual(requests, ["BASE", "HANDS_FREE_TIP"]);
+
+  // The user clicks X: holdMigrationCard.visible (visible && !exiting) drops
+  // immediately, but the card stays MOUNTED for its 200ms fade.
+  await render({
+    handsFreeTipVisible: resolveHandsFreeTipLadderVisible({
+      tip: null,
+      holdMigrationCardVisible: false,
+      holdMigrationCardExiting: true,
+    }),
+  });
+  assert.deepEqual(
+    requests,
+    ["BASE", "HANDS_FREE_TIP"],
+    "must not shrink while the card is still mounted and fading"
+  );
+
+  // The card's EXIT_MS timer fires and it actually unmounts.
+  await render({
+    handsFreeTipVisible: resolveHandsFreeTipLadderVisible({
+      tip: null,
+      holdMigrationCardVisible: false,
+      holdMigrationCardExiting: false,
+    }),
+  });
+  assert.deepEqual(
+    requests,
+    ["BASE", "HANDS_FREE_TIP", "BASE"],
+    "shrinks only once the card has actually unmounted"
+  );
+});

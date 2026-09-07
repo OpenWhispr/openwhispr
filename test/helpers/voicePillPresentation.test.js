@@ -847,3 +847,73 @@ test("resolvePillShrinkWait's own narrow resolves early when the real transition
   el.fire(el, "width");
   assert.equal(await settled, "transitionend");
 });
+
+// resolveHandsFreeTipLadderVisible: does the window-size ladder still need
+// to reserve HANDS_FREE_TIP room?
+//
+// Fix round 2 (review of task-3-report.md's fix round 1, 2026-09-07): round
+// 1 made resolvePillShrinkWait resolve a HANDS_FREE_TIP -> BASE shrink at
+// once, correctly, since the pill's own width is not part of that
+// transition — but that only stays safe if the LADDER INPUT
+// (App.jsx's tipCardVisible) itself is not lying about whether something is
+// still on screen. Before this fix it read holdMigrationCard.visible alone,
+// which the hook returns as `visible && !exiting` — so it drops to false the
+// INSTANT dismissal starts, while the card stays mounted for its own 200ms
+// exit fade (`.hands-free-tip-card[data-exiting="true"]`,
+// dictation-panel.css). The old 340ms/480ms guesses happened to outlast that
+// fade by accident; round 1 removed that accident. This widens the decision
+// to the card's whole MOUNTED lifetime (visible OR exiting), so the ladder
+// only lets go once the card has actually unmounted and there is nothing
+// left to clip.
+
+test("resolveHandsFreeTipLadderVisible stays true for the migration card's whole mounted lifetime, including its exit fade", async () => {
+  const { resolveHandsFreeTipLadderVisible } = await load();
+  assert.equal(
+    resolveHandsFreeTipLadderVisible({
+      tip: null,
+      holdMigrationCardVisible: true,
+      holdMigrationCardExiting: false,
+    }),
+    true,
+    "the card is fully shown"
+  );
+  assert.equal(
+    resolveHandsFreeTipLadderVisible({
+      tip: null,
+      holdMigrationCardVisible: false,
+      holdMigrationCardExiting: true,
+    }),
+    true,
+    "the card is exiting — still mounted and fading, must still reserve room"
+  );
+  assert.equal(
+    resolveHandsFreeTipLadderVisible({
+      tip: null,
+      holdMigrationCardVisible: false,
+      holdMigrationCardExiting: false,
+    }),
+    false,
+    "the card has actually unmounted — nothing left to reserve room for"
+  );
+});
+
+test("resolveHandsFreeTipLadderVisible leaves the hands-free tip card's own visibility untouched by the widening", async () => {
+  const { resolveHandsFreeTipLadderVisible } = await load();
+  assert.equal(
+    resolveHandsFreeTipLadderVisible({
+      tip: { inputKind: "dictation" },
+      holdMigrationCardVisible: false,
+      holdMigrationCardExiting: false,
+    }),
+    true,
+    "the hands-free tip card has no exiting sub-state of its own; its own tip !== null is untouched"
+  );
+  assert.equal(
+    resolveHandsFreeTipLadderVisible({
+      tip: null,
+      holdMigrationCardVisible: false,
+      holdMigrationCardExiting: false,
+    }),
+    false
+  );
+});

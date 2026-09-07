@@ -44,6 +44,28 @@ export function resolvePillShrinkWait({ target, prev, prefersReducedMotion, el }
   return waitForTransitionEnd(el, "width", settleFallbackMs(LISTENING_ENTRANCE_TIMING.expansionMs));
 }
 
+/**
+ * Whether the window-size ladder still needs to reserve HANDS_FREE_TIP room.
+ * Tracks the Hold migration card through its whole MOUNTED lifetime (visible
+ * OR exiting), not its `visible` sub-state alone: resolvePillShrinkWait
+ * above correctly resolves a HANDS_FREE_TIP -> BASE shrink at once (the
+ * pill's own width is not part of that transition), so this flag going
+ * false the instant the card starts exiting — instead of when it actually
+ * unmounts, 200ms later — would let the window shrink out from under the
+ * still-fading card (`.hands-free-tip-card[data-exiting="true"]`,
+ * dictation-panel.css) instead of waiting for it to finish. The hands-free
+ * tip card itself has no such `exiting` sub-state (its own `tip` stays
+ * non-null through its own fade), so widening only ever changes the
+ * migration card's half of this decision.
+ */
+export function resolveHandsFreeTipLadderVisible({
+  tip,
+  holdMigrationCardVisible,
+  holdMigrationCardExiting,
+}) {
+  return tip !== null || holdMigrationCardVisible || holdMigrationCardExiting;
+}
+
 export const ASSISTANT_FOOTER_TRANSITION_TIMING = Object.freeze({
   pillRetreatMs: 180,
   actionsRetreatMs: 220,
