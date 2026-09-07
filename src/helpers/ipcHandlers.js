@@ -10231,6 +10231,7 @@ class IPCHandlers {
         if (!this.assemblyAiStreaming) {
           this.assemblyAiStreaming = new AssemblyAiStreaming();
         }
+        this.assemblyAiStreaming.adoptMode(options);
 
         if (this.assemblyAiStreaming.hasWarmConnection()) {
           debugLogger.debug("AssemblyAI connection already warm", {}, "streaming");
@@ -10273,6 +10274,7 @@ class IPCHandlers {
         if (!this.assemblyAiStreaming) {
           this.assemblyAiStreaming = new AssemblyAiStreaming();
         }
+        this.assemblyAiStreaming.adoptMode(options);
 
         // Clean up any stale active connection (shouldn't happen normally)
         if (this.assemblyAiStreaming.isConnected) {
@@ -10483,6 +10485,7 @@ class IPCHandlers {
         if (!this.deepgramStreaming) {
           this.deepgramStreaming = new DeepgramStreaming();
         }
+        this.deepgramStreaming.adoptMode(options);
 
         setDeepgramTokenRefreshFn(event, byok);
 
@@ -10539,6 +10542,7 @@ class IPCHandlers {
         if (!this.deepgramStreaming) {
           this.deepgramStreaming = new DeepgramStreaming();
         }
+        this.deepgramStreaming.adoptMode(options);
 
         setDeepgramTokenRefreshFn(event, byok);
 

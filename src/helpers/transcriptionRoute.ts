@@ -46,10 +46,17 @@ const MANAGED_TRANSCRIPTION_UNAVAILABLE_MESSAGE_KEY =
 const STREAMING_ONLY_PROVIDER_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.streamingOnlyProvider";
 
+const PROVIDER_KEY_MISSING_MESSAGE_KEY =
+  "hooks.audioRecording.errorDescriptions.providerKeyMissing";
+
 // Deepgram and AssemblyAI have no OpenAI-compatible /audio/transcriptions, so
 // they exist only as realtime providers. A batch/upload/retry request for them
 // has to fail closed: the fall-through at the end of resolveTranscriptionRoute
 // would otherwise POST the user's audio to api.openai.com with their OpenAI key.
+// Hand-maintained rather than derived from the registry: Corti's only model is
+// realtime too, yet it batches through the proxy. Every other "realtime-only"
+// decision (dictationStreamingRouting, audioManager.shouldUseStreaming, the
+// upload picker and selector) derives from this set.
 export const STREAMING_ONLY_PROVIDERS = new Set(["deepgram", "assemblyai"]);
 
 export interface TranscriptionRouteSettings {
@@ -88,6 +95,13 @@ export interface TranscriptionRouteInput {
   providers?: readonly TranscriptionProviderBaseUrl[];
   /** Managed enterprise STT outcome; when present it outranks every personal setting. */
   managed?: ManagedTranscriptionResolution | null;
+  /**
+   * Whether the selected provider's BYOK key is present — a presence flag, never
+   * the key. Consulted only for realtime-only providers: the recorder skips
+   * streaming when their key is missing, and the batch guard below would then
+   * blame the transport instead of the key. Omit when unknown (retry, upload).
+   */
+  hasProviderKey?: boolean;
   request?: {
     /** Explicit model override; doubles as the Azure deployment name. */
     model?: string;
@@ -222,6 +236,7 @@ export function resolveTranscriptionRoute({
   policy,
   providers = [],
   managed: managedResolution,
+  hasProviderKey,
   request,
 }: TranscriptionRouteInput): TranscriptionRoute {
   const s = settings || {};
@@ -377,6 +392,13 @@ export function resolveTranscriptionRoute({
   }
 
   if (STREAMING_ONLY_PROVIDERS.has(provider)) {
+    if (hasProviderKey === false) {
+      return error(
+        `No ${provider} API key configured. Add your key in Settings.`,
+        "API_KEY_MISSING",
+        PROVIDER_KEY_MISSING_MESSAGE_KEY
+      );
+    }
     return error(
       "This provider only supports live transcription. Choose another provider for file uploads and retries.",
       "STREAMING_ONLY_PROVIDER",

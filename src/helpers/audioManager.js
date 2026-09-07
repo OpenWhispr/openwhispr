@@ -63,11 +63,16 @@ import {
   isSherpaLocalProvider,
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
-import { resolveByokModel, resolveTranscriptionRoute } from "./transcriptionRoute.ts";
+import {
+  resolveByokModel,
+  resolveTranscriptionRoute,
+  STREAMING_ONLY_PROVIDERS,
+} from "./transcriptionRoute.ts";
 import {
   getManagedTranscriptionResolution,
   isManagedTranscriptionActive,
 } from "../services/managedTranscription.ts";
+import { getTranscriptionApiKey } from "../services/fileTranscription";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isSelfHostedTranscription,
@@ -3442,6 +3447,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         });
       }
 
+      // Route before reading a key: the resolver's fail-closed guards name the
+      // real problem (a realtime-only provider, or its missing key), whereas the
+      // key read blames the OpenAI key for a provider that never uses it.
+      const route = managedResolution ? null : this.resolveBatchRoute(apiSettings, model);
       const apiKey = managedResolution ? null : await this.getAPIKey();
       const optimizedAudio = audioBlob;
 
@@ -3518,7 +3527,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("language", language);
       }
 
-      const endpoint = this.getTranscriptionEndpoint(model);
+      const endpoint = this.getTranscriptionEndpoint(route);
 
       // Prompt budgets follow each provider's real limit (see dictionaryPromptCap):
       // Groq's 896-char request cap, the Whisper decoders' window, and a far
@@ -3811,11 +3820,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   // Local-vs-cloud is decided upstream, so useLocalWhisper is forced off here:
   // the local→cloud fallback resolves its cloud endpoint through this too.
-  getTranscriptionEndpoint(deploymentName = "") {
+  resolveBatchRoute(settings, deploymentName = "") {
     const route = resolveTranscriptionRoute({
-      settings: { ...getSettings(), useLocalWhisper: false },
+      settings: { ...settings, useLocalWhisper: false },
       policy: usePolicyStore.getState(),
       providers: getTranscriptionProviders(),
+      hasProviderKey: Boolean(
+        getTranscriptionApiKey(settings.cloudTranscriptionProvider || "openai", settings)
+      ),
       request: { model: deploymentName },
     });
     if (route.transport === "error") {
@@ -3824,6 +3836,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (route.messageKey) error.messageKey = route.messageKey;
       throw error;
     }
+    return route;
+  }
+
+  getTranscriptionEndpoint(route) {
     if (route.transport !== "http-batch") {
       // Proxied providers are dispatched before endpoint resolution; reaching
       // here means that guard was bypassed — never fall open to a default.
@@ -4065,12 +4081,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return !!(isSignedInOverride ?? s.isSignedIn);
     }
 
-    // Deepgram and AssemblyAI (BYOK) stream over their own WSS and have no batch
+    // Realtime-only providers (BYOK) stream over their own WSS and have no batch
     // endpoint at all — transcriptionRoute fails those closed — so gate on the
     // key instead of letting them fall through to the HTTP path.
-    if (s.cloudTranscriptionMode === "byok") {
-      if (s.cloudTranscriptionProvider === "deepgram") return !!s.deepgramApiKey;
-      if (s.cloudTranscriptionProvider === "assemblyai") return !!s.assemblyaiApiKey;
+    if (
+      s.cloudTranscriptionMode === "byok" &&
+      STREAMING_ONLY_PROVIDERS.has(s.cloudTranscriptionProvider)
+    ) {
+      return Boolean(getTranscriptionApiKey(s.cloudTranscriptionProvider, s));
     }
 
     // The managed-cloud bootstrap only controls OpenWhispr Cloud. A user's

@@ -88,6 +88,7 @@ class DeepgramStreaming {
     this.closeResolve = null;
     this.cachedToken = null;
     this.tokenFetchedAt = null;
+    this.mode = null;
     this.warmConnection = null;
     this.warmConnectionReady = false;
     this.warmConnectionOptions = null;
@@ -160,6 +161,23 @@ class DeepgramStreaming {
     debugLogger.debug("Deepgram token cached", { expiresIn: TOKEN_EXPIRY_MS });
   }
 
+  // BYOK and managed dictation share one client instance, so a token or warm
+  // socket minted under one credential kind must never serve the other. Callers
+  // that read the cache before connecting must adopt the mode first.
+  adoptMode(options) {
+    const mode = options.mode === "byok" ? "byok" : "openwhispr";
+    if (this.mode !== null && this.mode !== mode) {
+      debugLogger.debug("Deepgram credential mode changed, dropping cached session state", {
+        from: this.mode,
+        to: mode,
+      });
+      this.cachedToken = null;
+      this.tokenFetchedAt = null;
+      this.cleanupWarmConnection();
+    }
+    this.mode = mode;
+  }
+
   isTokenValid() {
     if (!this.cachedToken || !this.tokenFetchedAt) return false;
     const age = Date.now() - this.tokenFetchedAt;
@@ -212,6 +230,7 @@ class DeepgramStreaming {
       throw new Error("Streaming token is required for warmup");
     }
 
+    this.adoptMode(options);
     if (this.warmConnection) {
       debugLogger.debug(
         this.warmConnectionReady
@@ -560,10 +579,12 @@ class DeepgramStreaming {
       return;
     }
 
+    this.adoptMode(options);
     this.connectionOptions = {
       sampleRate: options.sampleRate,
       language: options.language,
       keyterms: options.keyterms,
+      mode: options.mode,
     };
     this.accumulatedText = "";
     this.finalSegments = [];

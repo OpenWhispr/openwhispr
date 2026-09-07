@@ -906,7 +906,9 @@
         "managedTranscriptionUnavailable": "托管转录目前不可用。请稍候再试。",
         "managedRouteInvalid": "由于配置不匹配，托管转录无法启动。请重试或联系管理员。",
         "managedAuthRejected": "您组织的托管转录凭证被拒绝。请联系管理员。",
-        "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。"
+        "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
+        "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
+        "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。"
       },
       "translationFallback": {
         "unreachableTitle": "翻译不可用",
@@ -2984,7 +2986,8 @@
       "queueFailed": "{{n}} 个失败",
       "urlFileTooLarge": "文件过大，无法下载。最大大小为 500 MB。",
       "urlYoutubeBlocked": "YouTube 暂时阻止了来自您网络的下载。请稍后重试。",
-      "customEndpointInvalid": "自定义转写端点未配置或无效。请在设置中更新。"
+      "customEndpointInvalid": "自定义转写端点未配置或无效。请在设置中更新。",
+      "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。"
     },
     "meeting": {
       "title": "会议笔记",
@@ -3558,7 +3561,8 @@
       "transcribing": "正在转录...",
       "thinking": "正在思考...",
       "typeMessage": "输入消息...",
-      "send": "发送"
+      "send": "发送",
+      "voiceDraftStreamingOnly": "当前转录服务商仅支持实时听写，因此无法使用语音输入。请在“设置 → 语音转文字”中选择其他服务商。"
     },
     "tools": {
       "search_notesName": "搜索笔记",

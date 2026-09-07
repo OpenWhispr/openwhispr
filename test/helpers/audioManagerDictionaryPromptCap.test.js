@@ -139,6 +139,7 @@ test("custom dictionary prompt caps follow the provider's real limit", async (t)
         useLocalWhisper: false,
         allowLocalFallback: false,
         cloudTranscriptionProvider: "custom",
+        cloudTranscriptionBaseUrl: "https://stt.internal.example/v1",
       });
       const prompts = capturePrompts(t);
       // Self-hosted and custom endpoints take whatever model name the user typed;

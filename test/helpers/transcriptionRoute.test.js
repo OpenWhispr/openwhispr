@@ -191,6 +191,38 @@ test("realtime-only providers fail closed instead of falling through to OpenAI",
   }
 });
 
+// Dictation only reaches the batch path for these providers when streaming was
+// skipped for want of a key, so the key — not the transport — is the diagnosis
+// there. Retry and upload cannot know about keys and keep the transport error.
+test("realtime-only providers report a missing key ahead of the transport limitation", async () => {
+  const { STREAMING_ONLY_PROVIDERS } = await load();
+
+  for (const provider of STREAMING_ONLY_PROVIDERS) {
+    const missingKey = await resolve(
+      { cloudTranscriptionProvider: provider },
+      { hasProviderKey: false }
+    );
+    assert.equal(missingKey.transport, "error", provider);
+    assert.equal(missingKey.code, "API_KEY_MISSING", provider);
+    assert.equal(
+      missingKey.messageKey,
+      "hooks.audioRecording.errorDescriptions.providerKeyMissing",
+      provider
+    );
+    assert.equal(JSON.stringify(missingKey).includes("openai.com"), false, provider);
+
+    for (const hasProviderKey of [true, undefined]) {
+      const route = await resolve({ cloudTranscriptionProvider: provider }, { hasProviderKey });
+      assert.equal(route.code, "STREAMING_ONLY_PROVIDER", `${provider} key=${hasProviderKey}`);
+    }
+  }
+
+  // The hint is only about realtime-only providers: batch providers diagnose
+  // their own missing key at the key read, with the store+env fallback.
+  const groq = await resolve({ cloudTranscriptionProvider: "groq" }, { hasProviderKey: false });
+  assert.equal(groq.transport, "http-batch");
+});
+
 test("a custom URL pointing at Tinfoil's host must use the attested proxy", async () => {
   const route = await resolve(
     {

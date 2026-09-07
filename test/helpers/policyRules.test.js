@@ -249,6 +249,80 @@ test("managed provider lists hide denied BYOK and enterprise providers", async (
   assert.deepEqual(filterEnterpriseProviderOptionsByPolicy(enterpriseOptions, managed), []);
 });
 
+test("unknown BYOK provider ids validate through but grant nothing", async () => {
+  const {
+    isProviderAllowedByPolicy,
+    filterByokProviderOptionsByPolicy,
+    filterModeOptionsByPolicy,
+    resolveEffectivePolicySelection,
+  } = await load();
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try {
+    const managed = {
+      status: "managed",
+      appVersion: "1.8.1",
+      policy: {
+        ...policy,
+        transcription: {
+          allowedModes: ["providers", "local"],
+          allowedByokProviders: ["future-stt", "openai"],
+        },
+      },
+    };
+
+    // Even asked about the unknown id directly — a stale synced selection — the
+    // answer is no, so the route resolver's fail-closed floor holds.
+    assert.equal(isProviderAllowedByPolicy(managed, "transcription", "future-stt"), false);
+    assert.equal(isProviderAllowedByPolicy(managed, "transcription", "openai"), true);
+    assert.deepEqual(
+      filterByokProviderOptionsByPolicy(
+        [{ id: "openai" }, { id: "future-stt" }, { id: "groq" }],
+        "transcription",
+        managed
+      ).map((option) => option.id),
+      ["openai"]
+    );
+    assert.deepEqual(
+      resolveEffectivePolicySelection(
+        managed,
+        "transcription",
+        { mode: "providers", provider: "future-stt" },
+        { modes: ["providers", "local"], byokProviders: ["openai", "groq"] }
+      ),
+      { mode: "providers", provider: "openai" }
+    );
+    assert.ok(
+      warnings.some((line) => line.includes("future-stt")),
+      "unknown ids are logged once so a newer server is diagnosable"
+    );
+
+    // A list made only of unknown ids leaves the BYOK mode with nothing to
+    // offer, catalog or not.
+    const unknownOnly = {
+      ...managed,
+      policy: {
+        ...managed.policy,
+        transcription: {
+          allowedModes: ["providers", "local"],
+          allowedByokProviders: ["future-stt"],
+        },
+      },
+    };
+    assert.deepEqual(
+      filterModeOptionsByPolicy(
+        [{ id: "providers" }, { id: "local" }],
+        "transcription",
+        unknownOnly
+      ).map((option) => option.id),
+      ["local"]
+    );
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
 test("provider fallback preserves an allowed selection and chooses the first visible alternative", async () => {
   const { reconcileProviderSelection } = await load();
   const allowedProviders = [{ id: "bedrock" }, { id: "azure", disabled: true }];
@@ -825,10 +899,7 @@ test("missing required models is a pure set difference over disk truth", async (
 
   assert.deepEqual(missingRequiredLocalModels([], []), []);
   assert.deepEqual(missingRequiredLocalModels(["base"], []), ["base"]);
-  assert.deepEqual(
-    missingRequiredLocalModels(["base", "turbo"], ["turbo", "small"]),
-    ["base"]
-  );
+  assert.deepEqual(missingRequiredLocalModels(["base", "turbo"], ["turbo", "small"]), ["base"]);
   assert.deepEqual(missingRequiredLocalModels(["base"], ["base"]), []);
 });
 
@@ -839,19 +910,48 @@ test("enterprise transcription resolves through the transcription policy section
     appVersion: "1.10.0",
     policy: {
       ...policy,
-      transcription: { allowedModes: ["enterprise"], allowedByokProviders: [], allowedEnterpriseProviders: ["azure"] },
+      transcription: {
+        allowedModes: ["enterprise"],
+        allowedByokProviders: [],
+        allowedEnterpriseProviders: ["azure"],
+      },
     },
   };
-  const catalog = { modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"], byokProviders: ["openai"], enterpriseProviders: ["azure"] };
+  const catalog = {
+    modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"],
+    byokProviders: ["openai"],
+    enterpriseProviders: ["azure"],
+  };
   assert.deepEqual(
-    resolveEffectivePolicySelection(enterpriseOnly, "transcription", { mode: "openwhispr", provider: "" }, catalog),
+    resolveEffectivePolicySelection(
+      enterpriseOnly,
+      "transcription",
+      { mode: "openwhispr", provider: "" },
+      catalog
+    ),
     { mode: "enterprise", provider: "azure" }
   );
-  const options = filterModeOptionsByPolicy(catalog.modes.map((id) => ({ id })), "transcription", enterpriseOnly, catalog);
-  assert.deepEqual(options.map((o) => o.id), ["enterprise"]);
+  const options = filterModeOptionsByPolicy(
+    catalog.modes.map((id) => ({ id })),
+    "transcription",
+    enterpriseOnly,
+    catalog
+  );
+  assert.deepEqual(
+    options.map((o) => o.id),
+    ["enterprise"]
+  );
   // The meeting catalog has no enterprise lane, so meetings stay unresolvable (documented).
   const meetingCatalog = { modes: ["openwhispr", "providers", "local"], byokProviders: ["openai"] };
-  assert.equal(resolveEffectivePolicySelection(enterpriseOnly, "transcription", { mode: "local", provider: "" }, meetingCatalog), null);
+  assert.equal(
+    resolveEffectivePolicySelection(
+      enterpriseOnly,
+      "transcription",
+      { mode: "local", provider: "" },
+      meetingCatalog
+    ),
+    null
+  );
 });
 
 // Mirrors what TranscriptionSection/UploadTranscriptionPanel do: the
@@ -862,7 +962,12 @@ test("enterprise transcription resolves through the transcription policy section
 // resolution, which then fails every dictation/upload closed.
 test("the enterprise transcription tile is offered only to a managed policy snapshot", async () => {
   const { isEnterpriseTranscriptionOfferable, filterModeOptionsByPolicy } = await load();
-  const baseOptions = [{ id: "openwhispr" }, { id: "providers" }, { id: "local" }, { id: "self-hosted" }];
+  const baseOptions = [
+    { id: "openwhispr" },
+    { id: "providers" },
+    { id: "local" },
+    { id: "self-hosted" },
+  ];
   const enterpriseOption = { id: "enterprise" };
   const catalog = { byokProviders: ["openai"], enterpriseProviders: ["azure"] };
   const buildOptions = (state) => [
@@ -904,11 +1009,8 @@ test("the enterprise transcription tile is offered only to a managed policy snap
     managedEnterpriseAzure,
     catalog
   );
-  assert.deepEqual(managedOptions.map((o) => o.id), [
-    "openwhispr",
-    "providers",
-    "local",
-    "self-hosted",
-    "enterprise",
-  ]);
+  assert.deepEqual(
+    managedOptions.map((o) => o.id),
+    ["openwhispr", "providers", "local", "self-hosted", "enterprise"]
+  );
 });

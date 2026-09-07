@@ -32,6 +32,7 @@ class AssemblyAiStreaming {
     this.terminationResolve = null;
     this.cachedToken = null;
     this.tokenFetchedAt = null;
+    this.mode = null;
     this.warmConnection = null;
     this.warmConnectionReady = false;
     this.warmConnectionOptions = null;
@@ -77,6 +78,23 @@ class AssemblyAiStreaming {
     debugLogger.debug("AssemblyAI token cached", { expiresIn: TOKEN_EXPIRY_MS });
   }
 
+  // BYOK and managed dictation share one client instance, so a token or warm
+  // socket minted under one credential kind must never serve the other. Callers
+  // that read the cache before connecting must adopt the mode first.
+  adoptMode(options) {
+    const mode = options.mode === "byok" ? "byok" : "openwhispr";
+    if (this.mode !== null && this.mode !== mode) {
+      debugLogger.debug("AssemblyAI credential mode changed, dropping cached session state", {
+        from: this.mode,
+        to: mode,
+      });
+      this.cachedToken = null;
+      this.tokenFetchedAt = null;
+      this.cleanupWarmConnection();
+    }
+    this.mode = mode;
+  }
+
   isTokenValid() {
     if (!this.cachedToken || !this.tokenFetchedAt) return false;
     const age = Date.now() - this.tokenFetchedAt;
@@ -116,6 +134,7 @@ class AssemblyAiStreaming {
       throw new Error("Streaming token is required for warmup");
     }
 
+    this.adoptMode(options);
     if (this.warmConnection) {
       debugLogger.debug(
         this.warmConnectionReady
@@ -325,6 +344,21 @@ class AssemblyAiStreaming {
     this.lastTurnText = "";
     this.turns = [];
     this.connectionLossNotified = false;
+
+    this.adoptMode(options);
+    // The server pins speech_model at Begin, so a warm socket opened for another
+    // model would keep that model for the whole session — and the Begin mismatch
+    // warning could never fire for the model actually requested.
+    if (
+      this.hasWarmConnection() &&
+      (this.warmConnectionOptions.model || null) !== (options.model || null)
+    ) {
+      debugLogger.debug("AssemblyAI warm connection model differs, cold-starting", {
+        warm: this.warmConnectionOptions.model || null,
+        requested: options.model || null,
+      });
+      this.cleanupWarmConnection();
+    }
 
     // Try to use pre-warmed connection for instant start
     if (this.hasWarmConnection()) {

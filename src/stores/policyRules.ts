@@ -19,6 +19,39 @@ function managedPolicy(state: PolicyDecisionSnapshot): OrgPolicy | null {
   return state.status === "managed" && state.policy ? state.policy : null;
 }
 
+const KNOWN_BYOK_PROVIDER_IDS: Record<PolicyScope, ReadonlySet<string>> = {
+  transcription: new Set([
+    ...modelRegistryData.transcriptionProviders.map((provider) => provider.id),
+    "custom",
+  ]),
+  llm: new Set([
+    ...modelRegistryData.cloudProviders.map((provider) => provider.id),
+    "custom",
+    "openrouter",
+  ]),
+};
+
+const warnedUnknownByokProviderIds = new Set<string>();
+
+/**
+ * The scope's BYOK allowlist, filtered to provider ids this build knows. The
+ * field is validated shape-only, so an id from a newer server reaches here and
+ * is dropped with a warning instead of invalidating the whole policy — it can
+ * grant nothing an older app could act on. Mirrors requiredLocalModelIds.
+ */
+function allowedByokProviderIds(policy: OrgPolicy, scope: PolicyScope): string[] {
+  const known = KNOWN_BYOK_PROVIDER_IDS[scope];
+  return policy[scope].allowedByokProviders.filter((id) => {
+    if (known.has(id)) return true;
+    const key = `${scope}:${id}`;
+    if (!warnedUnknownByokProviderIds.has(key)) {
+      warnedUnknownByokProviderIds.add(key);
+      console.warn(`[policy] Ignoring unknown ${scope} BYOK provider id: ${id}`);
+    }
+    return false;
+  });
+}
+
 export function isPolicyActionAllowed(state: PolicyDecisionSnapshot): boolean {
   if (state.status === "idle" || state.status === "unmanaged") return true;
   if (state.status !== "managed" || !state.policy) return false;
@@ -89,7 +122,7 @@ export function isProviderAllowedByPolicy(
   providerId: string
 ): boolean {
   return managedPolicyDecision(state, (policy) =>
-    policy[scope].allowedByokProviders.includes(providerId)
+    allowedByokProviderIds(policy, scope).includes(providerId)
   );
 }
 
@@ -228,8 +261,9 @@ export function resolveEffectivePolicySelection(
   const policy = managedPolicy(state);
   if (!policy) return null;
 
+  const policyByokProviders = allowedByokProviderIds(policy, scope);
   const allowedByokProviders = catalog.byokProviders.filter((provider) =>
-    policy[scope].allowedByokProviders.includes(provider)
+    policyByokProviders.includes(provider)
   );
   const allowedEnterpriseProviders = (catalog.enterpriseProviders ?? []).filter((provider) =>
     (policy[scope].allowedEnterpriseProviders ?? []).includes(provider)
@@ -419,11 +453,10 @@ function policyModeHasAvailableProvider(
   providerCatalog?: Pick<PolicySelectionCatalog, "byokProviders" | "enterpriseProviders">
 ): boolean {
   if (mode === "providers") {
+    const allowed = allowedByokProviderIds(policy, scope);
     return providerCatalog
-      ? providerCatalog.byokProviders.some((provider) =>
-          policy[scope].allowedByokProviders.includes(provider)
-        )
-      : policy[scope].allowedByokProviders.length > 0;
+      ? providerCatalog.byokProviders.some((provider) => allowed.includes(provider))
+      : allowed.length > 0;
   }
   if (mode === "enterprise") {
     const allowed = policy[scope].allowedEnterpriseProviders ?? [];

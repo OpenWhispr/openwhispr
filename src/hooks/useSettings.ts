@@ -299,6 +299,8 @@ function useSettingsInternal() {
     mistralApiKey: store.mistralApiKey,
     openrouterApiKey: store.openrouterApiKey,
     tinfoilApiKey: store.tinfoilApiKey,
+    deepgramApiKey: store.deepgramApiKey,
+    assemblyaiApiKey: store.assemblyaiApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
     voiceAgentKey: store.voiceAgentKey,
