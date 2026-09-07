@@ -138,7 +138,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
-  const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  const [activeView, setActiveView] = useState<ControlPanelView>(() => {
+    if (!import.meta.env.DEV) return "home";
+    return new URLSearchParams(window.location.search).get("view") === "leaderboard"
+      ? "leaderboard"
+      : "home";
+  });
   const {
     collapsed: sidebarCollapsed,
     peek: sidebarPeek,

@@ -1,6 +1,7 @@
 // Chromium picks the display backend before JS runs, so appendSwitch is too
 // late — the flag has to come from a relaunch.
 const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
+const { qaUserDataDirectoryName, resolveQaProfile } = require("./src/helpers/qaProfile");
 
 if (shouldForceXWayland(process.argv)) {
   const { spawn } = require("child_process");
@@ -80,13 +81,23 @@ function resolveAppChannel() {
 
 const APP_CHANNEL = resolveAppChannel();
 process.env.OPENWHISPR_CHANNEL = APP_CHANNEL;
+const RAW_QA_PROFILE = process.env.OPENWHISPR_QA_PROFILE || "";
+const QA_PROFILE = resolveQaProfile(RAW_QA_PROFILE);
+if (process.env.NODE_ENV === "development" && RAW_QA_PROFILE.trim() && !QA_PROFILE) {
+  throw new Error("OPENWHISPR_QA_PROFILE must use lowercase letters, numbers, and hyphens");
+}
+if (QA_PROFILE) process.env.OPENWHISPR_QA_PROFILE = QA_PROFILE;
+const IS_UI_ONLY_QA = Boolean(QA_PROFILE) && process.env.OPENWHISPR_UI_ONLY === "1";
 
 function configureChannelUserDataPath() {
   if (APP_CHANNEL === "production") {
     return;
   }
 
-  const isolatedPath = path.join(app.getPath("appData"), `OpenWhispr-${APP_CHANNEL}`);
+  const isolatedPath = path.join(
+    app.getPath("appData"),
+    qaUserDataDirectoryName(APP_CHANNEL, QA_PROFILE)
+  );
   app.setPath("userData", isolatedPath);
 }
 
@@ -505,6 +516,9 @@ function initializeCoreManagers() {
     windowManager,
     databaseManager
   );
+  if (IS_UI_ONLY_QA) {
+    meetingDetectionEngine.setPreferences({ processDetection: false, audioDetection: false });
+  }
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   calendarReminderScheduler.meetingDetectionEngine = meetingDetectionEngine;
   updateManager = new UpdateManager();
@@ -547,6 +561,7 @@ function initializeCoreManagers() {
     microsoftCalendarManager,
     appleCalendarManager,
     meetingDetectionEngine,
+    meetingDetectionEnabled: !IS_UI_ONLY_QA,
     audioTapManager,
     linuxPortalAudioManager,
     windowsLoopbackAudioManager,
@@ -1064,7 +1079,9 @@ async function startApp() {
   const launchedHidden = wasLaunchedAtLoginHidden();
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
-  await windowManager.createMainWindow();
+  if (!IS_UI_ONLY_QA) {
+    await windowManager.createMainWindow();
+  }
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
@@ -1085,6 +1102,11 @@ async function startApp() {
       }
     }
     await flushPendingNoteDeepLink();
+  }
+
+  if (IS_UI_ONLY_QA) {
+    debugLogger.info("UI-only QA profile ready", { profile: QA_PROFILE }, "startup");
+    return;
   }
 
   // Set up voice agent hotkey (dictation routed straight to the dictation
@@ -1782,10 +1804,12 @@ if (gotSingleInstanceLock) {
       windowManager.createControlPanelWindow();
     }
 
-    if (isLiveWindow(windowManager.mainWindow)) {
-      windowManager.enforceMainWindowOnTop();
-    } else {
-      windowManager.createMainWindow();
+    if (!IS_UI_ONLY_QA) {
+      if (isLiveWindow(windowManager.mainWindow)) {
+        windowManager.enforceMainWindowOnTop();
+      } else {
+        windowManager.createMainWindow();
+      }
     }
 
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
@@ -1869,7 +1893,7 @@ if (gotSingleInstanceLock) {
     // On macOS, re-create windows when dock icon is clicked
     if (BrowserWindow.getAllWindows().length === 0) {
       if (windowManager) {
-        windowManager.createMainWindow();
+        if (!IS_UI_ONLY_QA) windowManager.createMainWindow();
         windowManager.createControlPanelWindow();
       }
     } else {

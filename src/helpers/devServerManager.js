@@ -56,7 +56,18 @@ class DevServerManager {
 
   static getAppUrl(isControlPanel = false) {
     if (process.env.NODE_ENV === "development") {
-      return isControlPanel ? `${DEV_SERVER_URL}?panel=true` : DEV_SERVER_URL;
+      if (!isControlPanel) return DEV_SERVER_URL;
+      const params = new URLSearchParams({ panel: "true" });
+      if (process.env.OPENWHISPR_START_VIEW === "leaderboard") {
+        params.set("view", "leaderboard");
+      }
+      if (
+        process.env.OPENWHISPR_QA_PROFILE &&
+        process.env.OPENWHISPR_QA_ONBOARDING_COMPLETE === "1"
+      ) {
+        params.set("qaOnboarding", "complete");
+      }
+      return `${DEV_SERVER_URL}?${params.toString()}`;
     } else {
       // For production, return null - caller should use loadFile() instead
       return null;

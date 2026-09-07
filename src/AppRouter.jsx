@@ -22,6 +22,15 @@ const isOnboardingInProgress = () =>
 const ControlPanel = React.lazy(() => import("./components/ControlPanel.tsx"));
 const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow.tsx"));
 
+if (
+  import.meta.env.DEV &&
+  new URLSearchParams(window.location.search).get("qaOnboarding") === "complete"
+) {
+  localStorage.removeItem(LEGACY_ONBOARDING_STEP_KEY);
+  localStorage.removeItem(ONBOARDING_SESSION_KEY);
+  localStorage.setItem("onboardingCompleted", "true");
+}
+
 export default function AppRouter() {
   useTheme();
   const params = window.location.search;

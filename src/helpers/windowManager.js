@@ -24,6 +24,7 @@ const {
   shouldBlockDictationWhilePanelOpen,
 } = require("./dictationLifecycle");
 const { DEV_SERVER_PORT } = DevServerManager;
+const { qaWindowTitle } = require("./qaProfile");
 const AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS = 10_000;
 const DRAG_MOVE_TOLERANCE_PX = 2;
 const {
@@ -1259,7 +1260,7 @@ class WindowManager {
       // expose the dictation pill, hotkeys, or popup surfaces in between.
       this.setOnboardingActive(true);
       this.endOnboardingDemo();
-      this.controlPanelWindow.setTitle(i18nMain.t("window.controlPanelTitle"));
+      this.controlPanelWindow.setTitle(qaWindowTitle(i18nMain.t("window.controlPanelTitle")));
     });
 
     this.controlPanelWindow.webContents.on(
@@ -2306,7 +2307,7 @@ class WindowManager {
 
     if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
       MenuManager.setupControlPanelMenu(this.controlPanelWindow, () => this.openSettings());
-      this.controlPanelWindow.setTitle(i18nMain.t("window.controlPanelTitle"));
+      this.controlPanelWindow.setTitle(qaWindowTitle(i18nMain.t("window.controlPanelTitle")));
     }
 
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
