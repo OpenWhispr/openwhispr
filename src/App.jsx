@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import "./index.css";
@@ -28,6 +28,7 @@ import { HANDS_FREE_TIP_DURATION_MS, resolveHandsFreeTipHotkey } from "./helpers
 import { HoldMigrationCard } from "./components/dictation/HoldMigrationCard";
 import { useHoldMigrationCard } from "./hooks/useHoldMigrationCard";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
+import { motionCssVariables } from "./utils/springEasing";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
@@ -59,6 +60,7 @@ const UNMOUNTED_RESIZE = {
 };
 
 export default function App() {
+  const motionVars = useMemo(() => motionCssVariables(), []);
   const [isHovered, setIsHovered] = useState(false);
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
   const buttonRef = useRef(null);
@@ -600,7 +602,7 @@ export default function App() {
   const pillInteractionSuppressed = pillVisuallySuppressed || assistant.closing;
 
   return (
-    <div className="dictation-window">
+    <div className="dictation-window" style={motionVars}>
       {/* The panel footer can hide this pill, but never unmounts it. */}
       <div
         className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50 transition-opacity duration-150 ease-out ${

@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -10,6 +11,7 @@ import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useListeningEntrancePhase } from "../../hooks/useListeningEntrancePhase";
 import { useLiveTranscriptPanel } from "../../hooks/useLiveTranscriptPanel";
+import { motionCssVariables } from "../../utils/springEasing";
 import {
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   resolveCompanionPillInteractive,
@@ -41,6 +43,7 @@ const DEFAULT_STATE: CompanionState = {
 const UNAVAILABLE_RESIZE = { success: false, message: "Window not available" };
 
 export default function AgentDictationPillOverlay() {
+  const motionVars = useMemo(() => motionCssVariables() as CSSProperties, []);
   const { t } = useTranslation();
   const [companionState, setCompanionState] = useState(DEFAULT_STATE);
   const [hovered, setHovered] = useState(false);
@@ -205,7 +208,7 @@ export default function AgentDictationPillOverlay() {
   };
 
   return (
-    <main className="agent-dictation-pill-window dictation-window">
+    <main className="agent-dictation-pill-window dictation-window" style={motionVars}>
       <div
         className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50`}
         style={
