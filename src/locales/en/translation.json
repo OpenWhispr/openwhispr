@@ -2169,7 +2169,15 @@
         "linuxPttSetupNote": "After running the command, log out and log back in.",
         "hyprlandConfigWriteWarningTitle": "Hyprland keybinds will not persist",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr cannot write to {{path}}, so keybinds will not survive a Hyprland config reload. Make sure the file exists and is writable.",
-        "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut."
+        "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut.",
+        "gestures": {
+          "holdTitle": "Hold to speak",
+          "holdDetail": "Release to finish",
+          "handsFreeTitle": "Hands-free",
+          "handsFreeDetail": "Press again to stop",
+          "doublePress": "Double press",
+          "tapOnlyTitle": "Press to start, press again to stop"
+        }
       },
       "meetingHotkey": {
         "title": "Meeting Mode Hotkey",
@@ -3552,6 +3560,12 @@
       "badge": "Tip",
       "title": "Switch to hands-free mode",
       "description": "Double tap {{hotkey}} to start hands-free mode."
+    },
+    "holdMigrationCard": {
+      "badge": "New in this update",
+      "title": "Hold to speak, release to finish",
+      "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
+      "gesture": "Double press it for hands‑free, press again to stop."
     }
   },
   "dictationAgent": {

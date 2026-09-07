@@ -1880,7 +1880,15 @@
         "linuxPttSetupNote": "运行命令后，请注销并重新登录。",
         "hyprlandConfigWriteWarningTitle": "Hyprland 键绑定不会持久保存",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr 无法写入 {{path}}，因此键绑定不会在 Hyprland 配置重新加载后保留。请确保该文件存在且可写。",
-        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 会占用所选快捷键。OpenWhispr 注册快捷键时，任何使用相同组合键的现有 Hyprland 绑定都会被解除。"
+        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 会占用所选快捷键。OpenWhispr 注册快捷键时，任何使用相同组合键的现有 Hyprland 绑定都会被解除。",
+        "gestures": {
+          "holdTitle": "Hold to speak",
+          "holdDetail": "Release to finish",
+          "handsFreeTitle": "Hands-free",
+          "handsFreeDetail": "Press again to stop",
+          "doublePress": "Double press",
+          "tapOnlyTitle": "Press to start, press again to stop"
+        }
       },
       "meetingHotkey": {
         "title": "会议模式快捷键",
@@ -3387,6 +3395,12 @@
       "badge": "提示",
       "title": "切换到免提模式",
       "description": "连按两次 {{hotkey}} 即可开始免提模式。"
+    },
+    "holdMigrationCard": {
+      "badge": "New in this update",
+      "title": "Hold to speak, release to finish",
+      "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
+      "gesture": "Double press it for hands‑free, press again to stop."
     }
   },
   "dictationAgent": {

@@ -1880,7 +1880,15 @@
         "linuxPttSetupNote": "コマンド実行後、ログアウトして再度ログインしてください。",
         "hyprlandConfigWriteWarningTitle": "Hyprland のキーバインドは永続化されません",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr は {{path}} に書き込めないため、Hyprland の設定を再読み込みするとキーバインドは維持されません。ファイルが存在し、書き込み可能であることを確認してください。",
-        "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。"
+        "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。",
+        "gestures": {
+          "holdTitle": "Hold to speak",
+          "holdDetail": "Release to finish",
+          "handsFreeTitle": "Hands-free",
+          "handsFreeDetail": "Press again to stop",
+          "doublePress": "Double press",
+          "tapOnlyTitle": "Press to start, press again to stop"
+        }
       },
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",
@@ -3387,6 +3395,12 @@
       "badge": "ヒント",
       "title": "ハンズフリーモードに切り替え",
       "description": "{{hotkey}} を2回押すとハンズフリーモードが始まります。"
+    },
+    "holdMigrationCard": {
+      "badge": "New in this update",
+      "title": "Hold to speak, release to finish",
+      "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
+      "gesture": "Double press it for hands‑free, press again to stop."
     }
   },
   "dictationAgent": {
