@@ -29,3 +29,17 @@ test("the production control panel has no leaderboard demo path", () => {
   assert.equal(leaderboard.includes("LEADERBOARD_DEMO_ENABLED"), false);
   assert.ok(controlPanel.includes('useState<ControlPanelView>("home")'));
 });
+
+test("leaderboard access is plan agnostic and invitation led", () => {
+  const controlPanel = read("src/components/ControlPanel.tsx");
+  const section = read("src/components/LeaderboardSection.tsx");
+  const view = read("src/components/LeaderboardView.tsx");
+
+  assert.equal(section.includes("LeaderboardFreePreview"), false);
+  assert.equal(section.includes('selectedScope.state !== "ready"'), false);
+  assert.equal(view.includes("onUpgrade"), false);
+  assert.ok(section.includes("inviteToLeaderboard"));
+  assert.ok(section.includes('t("insights.leaderboard.inviteCta")'));
+  assert.ok(section.includes("<LeaderboardSetupCard"));
+  assert.ok(controlPanel.includes("onInvite={() => setShowReferrals(true)}"));
+});

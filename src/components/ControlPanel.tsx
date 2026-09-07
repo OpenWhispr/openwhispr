@@ -1191,10 +1191,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     setSettingsSection("account");
                     setShowSettings(true);
                   }}
-                  onUpgrade={() => {
-                    setSettingsSection("plansBilling");
-                    setShowSettings(true);
-                  }}
+                  onInvite={() => setShowReferrals(true)}
                 />
               </Suspense>
             )}

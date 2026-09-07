@@ -9,10 +9,10 @@ import LeaderboardSection from "./LeaderboardSection";
 
 interface LeaderboardViewProps {
   onSignIn: () => void;
-  onUpgrade: () => void;
+  onInvite: () => void;
 }
 
-export default function LeaderboardView({ onSignIn, onUpgrade }: LeaderboardViewProps) {
+export default function LeaderboardView({ onSignIn, onInvite }: LeaderboardViewProps) {
   const { t } = useTranslation();
   const { isSignedIn, user } = useAuth();
   const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
@@ -65,7 +65,7 @@ export default function LeaderboardView({ onSignIn, onUpgrade }: LeaderboardView
         onLeave={leaveLeaderboard}
         onRefreshParticipation={refreshParticipation}
         onSignIn={onSignIn}
-        onUpgrade={onUpgrade}
+        onInvite={onInvite}
       />
 
       {optInDialog}

@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Share2,
   Trophy,
+  UserPlus,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -37,10 +38,8 @@ import { cn } from "./lib/utils";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import InviteTeammateDialog from "./InviteTeammateDialog";
 import MemberAvatar from "./MemberAvatar";
-import LeaderboardCreateTeamPreview from "./LeaderboardCreateTeamPreview";
-import LeaderboardFreePreview from "./LeaderboardFreePreview";
-import LeaderboardInvitePreview from "./LeaderboardInvitePreview";
 import LeaderboardRequestJoinPreview from "./LeaderboardRequestJoinPreview";
+import LeaderboardSetupCard from "./LeaderboardSetupCard";
 import LeaderboardShareDialog from "./LeaderboardShareDialog";
 import LeaderboardSignInPreview from "./LeaderboardSignInPreview";
 import { Button } from "./ui/button";
@@ -62,7 +61,7 @@ interface LeaderboardSectionProps {
   onLeave: () => Promise<boolean>;
   onRefreshParticipation: () => void;
   onSignIn: () => void;
-  onUpgrade: () => void;
+  onInvite: () => void;
 }
 
 const ERROR_CARD_CHROME = "mt-8 rounded-2xl border border-border/50 bg-card/70 dark:border-white/8";
@@ -113,7 +112,7 @@ export default function LeaderboardSection({
   onLeave,
   onRefreshParticipation,
   onSignIn,
-  onUpgrade,
+  onInvite,
 }: LeaderboardSectionProps) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -191,8 +190,7 @@ export default function LeaderboardSection({
   }, [participating]);
 
   const load = useCallback(async () => {
-    if (!selectedScope || selectedScope.state !== "ready" || !participating || !participationReady)
-      return;
+    if (!selectedScope || !participating || !participationReady) return;
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(false);
@@ -253,8 +251,7 @@ export default function LeaderboardSection({
     : LEADERBOARD_REFRESH_INTERVAL_MS;
 
   useEffect(() => {
-    if (!selectedScope || selectedScope.state !== "ready" || !participating || !participationReady)
-      return;
+    if (!selectedScope || !participating || !participationReady) return;
     const refreshIfStale = () => {
       if (
         document.visibilityState === "visible" &&
@@ -377,25 +374,6 @@ export default function LeaderboardSection({
   }
   if (!access) return null;
 
-  if (selectedScope?.state === "invite") {
-    return (
-      <>
-        <div className="mt-8 space-y-3">
-          {scopeSelect && <div className="flex justify-end">{scopeSelect}</div>}
-          <LeaderboardInvitePreview
-            onInvite={() => {
-              if (selectedScope.kind === "workspace") {
-                setInviteWorkspace({ id: selectedScope.id, name: selectedScope.name });
-              } else {
-                setCreateWorkspaceOpen(true);
-              }
-            }}
-          />
-        </div>
-        {dialogs}
-      </>
-    );
-  }
   if (access.state === "request_join" && access.joinableWorkspace) {
     return (
       <LeaderboardRequestJoinPreview
@@ -407,10 +385,10 @@ export default function LeaderboardSection({
       />
     );
   }
-  if (access.state === "create_team" && access.domain) {
+  if (!selectedScope) {
     return (
       <>
-        <LeaderboardCreateTeamPreview
+        <LeaderboardSetupCard
           className="mt-8"
           domain={access.domain}
           onCreate={() => setCreateWorkspaceOpen(true)}
@@ -418,17 +396,6 @@ export default function LeaderboardSection({
         {dialogs}
       </>
     );
-  }
-  if (access.state === "invite" && !selectedScope) {
-    return (
-      <>
-        <LeaderboardInvitePreview className="mt-8" onInvite={() => setCreateWorkspaceOpen(true)} />
-        {dialogs}
-      </>
-    );
-  }
-  if (access.state === "upgrade" || !selectedScope) {
-    return <LeaderboardFreePreview className="mt-8" onUpgrade={onUpgrade} />;
   }
 
   const number = new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 0 });
@@ -471,6 +438,16 @@ export default function LeaderboardSection({
     setPage(targetPage);
   };
   const podiumOrder = leaderboard?.leaders.length === 1 ? [0] : [1, 0, 2];
+  const inviteToLeaderboard = () => {
+    if (
+      selectedScope.kind === "workspace" &&
+      (selectedScope.role === "owner" || selectedScope.role === "admin")
+    ) {
+      setInviteWorkspace({ id: selectedScope.id, name: selectedScope.name });
+      return;
+    }
+    onInvite();
+  };
 
   if (!participating || !participationReady) {
     // An unknown answer must not offer Join: the account it would publish may
@@ -525,6 +502,10 @@ export default function LeaderboardSection({
         </div>
         <div className="flex items-center gap-2">
           {scopeSelect}
+          <Button variant="outline" size="sm" onClick={inviteToLeaderboard}>
+            <UserPlus size={14} />
+            {t("insights.leaderboard.inviteCta")}
+          </Button>
           {leaderboard?.canShare && (
             <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
               <Share2 size={14} />
@@ -816,6 +797,7 @@ export default function LeaderboardSection({
           onOpenChange={setShareOpen}
         />
       )}
+      {dialogs}
     </section>
   );
 }
