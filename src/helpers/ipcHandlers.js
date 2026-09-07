@@ -3783,9 +3783,10 @@ class IPCHandlers {
 
     ipcMain.handle("update-hotkey", async (event, hotkey) => {
       const result = await this.windowManager.updateHotkey(hotkey);
-      // A Hold the new hotkey cannot deliver converged to Tap in the manager:
-      // persist it and tell every renderer, the same way a rejected
-      // activation-mode change is echoed back.
+      // The manager converged the mode for this hotkey in either direction
+      // (Hold it cannot deliver → Tap, or a demoted Tap → Hold): persist it
+      // and tell every renderer, the same way a rejected activation-mode
+      // change is echoed back.
       if (result?.success && result.activationMode) {
         this.environmentManager.saveActivationMode(result.activationMode);
         for (const browserWindow of BrowserWindow.getAllWindows()) {
@@ -10407,18 +10408,26 @@ class IPCHandlers {
     });
 
     // Agent mode handlers
-    // A slot left on Hold whose new (or cleared) hotkey cannot Hold on this
-    // backend silently reverts to Tap everywhere: cache, env and renderer.
-    const revalidateSlotActivationMode = async (slotName, settingKey) => {
+    // Hold is the only model, so a voiceAgent/translation slot's mode is a
+    // verdict about its hotkey, re-judged after every hotkey change: Hold
+    // when the (new) hotkey can deliver a release, Tap when it cannot or the
+    // slot is unbound. Cache, env and every renderer follow, silently.
+    const reconcileSlotActivationMode = async (slotName, settingKey) => {
       const windowManager = this.windowManager;
-      if (windowManager.getSlotActivationMode(slotName) !== "push") return;
       const hotkey = windowManager.hotkeyManager.getSlotHotkey?.(slotName);
-      if (hotkey && windowManager.hotkeyManager.supportsPushToTalk(hotkey, slotName)) return;
-      await windowManager.setSlotActivationModeCache(slotName, "tap");
-      this.environmentManager.saveSlotActivationMode?.(slotName, "tap");
+      const preferred =
+        hotkey && windowManager.hotkeyManager.supportsPushToTalk(hotkey, slotName)
+          ? "push"
+          : "tap";
+      if (windowManager.getSlotActivationMode(slotName) === preferred) return;
+      await windowManager.setSlotActivationModeCache(slotName, preferred, {
+        notifyFailure: false,
+      });
+      const effective = windowManager.getSlotActivationMode(slotName);
+      this.environmentManager.saveSlotActivationMode?.(slotName, effective);
       for (const browserWindow of BrowserWindow.getAllWindows()) {
         if (!browserWindow.isDestroyed()) {
-          browserWindow.webContents.send("setting-updated", { key: settingKey, value: "tap" });
+          browserWindow.webContents.send("setting-updated", { key: settingKey, value: effective });
         }
       }
       windowManager.reconcileNativeKeyListeners();
@@ -10435,7 +10444,7 @@ class IPCHandlers {
         hotkeyManager.unregisterSlot("voiceAgent");
         this.environmentManager.saveVoiceAgentKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
-        await revalidateSlotActivationMode("voiceAgent", "voiceAgentActivationMode");
+        await reconcileSlotActivationMode("voiceAgent", "voiceAgentActivationMode");
         this._notifyHotkeyChanged("");
         return { success: true, message: "Voice agent hotkey cleared" };
       }
@@ -10446,7 +10455,7 @@ class IPCHandlers {
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveVoiceAgentKey?.(hotkey);
-        await revalidateSlotActivationMode("voiceAgent", "voiceAgentActivationMode");
+        await reconcileSlotActivationMode("voiceAgent", "voiceAgentActivationMode");
         this._notifyHotkeyChanged(hotkey);
         return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
       }
@@ -10472,7 +10481,7 @@ class IPCHandlers {
         hotkeyManager.unregisterSlot("translation");
         this.environmentManager.saveTranslationKey?.("");
         this.windowManager.reconcileNativeKeyListeners();
-        await revalidateSlotActivationMode("translation", "translationActivationMode");
+        await reconcileSlotActivationMode("translation", "translationActivationMode");
         this._notifyHotkeyChanged("");
         return { success: true, message: "Translation hotkey cleared" };
       }
@@ -10483,7 +10492,7 @@ class IPCHandlers {
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveTranslationKey?.(hotkey);
-        await revalidateSlotActivationMode("translation", "translationActivationMode");
+        await reconcileSlotActivationMode("translation", "translationActivationMode");
         this._notifyHotkeyChanged(hotkey);
         return { success: true, message: `Translation hotkey updated to: ${hotkey}` };
       }
