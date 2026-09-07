@@ -604,7 +604,10 @@ export default function LeaderboardSection({
   };
 
   return (
-    <section className="mt-8 overflow-hidden rounded-2xl border border-border/50 bg-card/70 dark:border-white/8">
+    <section
+      data-leaderboard-state="board"
+      className="mt-8 overflow-hidden rounded-2xl border border-border/50 bg-card/70 dark:border-white/8"
+    >
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/40 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/8 text-primary">

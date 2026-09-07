@@ -46,7 +46,14 @@ test("participation uses the account endpoint for both reads and sync-controlled
 });
 
 test("leaderboard access uses the authoritative production endpoint", async (t) => {
-  const response = { state: "upgrade", scopes: [] };
+  const response = {
+    state: "create",
+    scopes: [],
+    domain: null,
+    colleagueCount: 0,
+    invitation: null,
+    joinableWorkspace: null,
+  };
   const requests = captureRequests(t, response);
   const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
 

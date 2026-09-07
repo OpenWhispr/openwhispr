@@ -3293,8 +3293,6 @@
       "syncRowLabel": "分析同步",
       "syncRowHint": "立即開啟，讓團隊成員加入後你能出現在排行榜上。",
       "activationError": "無法驗證你的排行榜參與狀態。請檢查網路連線後再試一次。",
-      "activationDescription": "加入會啟用分析同步，團隊成員會在此排行榜中看到你的姓名、電子郵件和活動計數。轉錄內容絕不會被分享。",
-      "checkingParticipation": "正在檢查排行榜參與狀態…",
       "join": "加入排行榜",
       "leave": "退出排行榜",
       "leavePending": "你已退出此排行榜。等你重新連線後，我們會完成從帳戶中移除的操作。",

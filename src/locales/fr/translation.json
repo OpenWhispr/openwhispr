@@ -2795,8 +2795,6 @@
       "syncRowLabel": "Synchronisation des analyses",
       "syncRowHint": "Activez-la maintenant pour apparaître dans le classement lorsque vos coéquipiers vous rejoindront.",
       "activationError": "Nous n’avons pas pu vérifier votre participation au classement. Vérifiez votre connexion et réessayez.",
-      "activationDescription": "Rejoindre active la synchronisation des analyses et vos coéquipiers voient votre nom, votre e-mail et vos compteurs d’activité dans ce classement. Le contenu des transcriptions n’est jamais partagé.",
-      "checkingParticipation": "Vérification de votre participation au classement…",
       "join": "Rejoindre le classement",
       "leave": "Quitter le classement",
       "leavePending": "Vous avez quitté ce classement. Nous finirons de vous retirer du compte dès que vous serez de nouveau en ligne.",

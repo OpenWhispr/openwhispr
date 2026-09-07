@@ -3293,8 +3293,6 @@
       "syncRowLabel": "Sincronizzazione analisi",
       "syncRowHint": "Attivala ora per comparire in classifica quando si uniranno i colleghi.",
       "activationError": "Non è stato possibile verificare la tua partecipazione alla classifica. Controlla la connessione e riprova.",
-      "activationDescription": "Unendoti si attiva la sincronizzazione delle analisi e i tuoi colleghi vedranno nome, email e contatori di attività in questa classifica. Il contenuto delle trascrizioni non viene mai condiviso.",
-      "checkingParticipation": "Verifica della partecipazione alla classifica…",
       "join": "Unisciti alla classifica",
       "leave": "Esci dalla classifica",
       "leavePending": "Hai lasciato questa classifica. Completeremo la rimozione dall'account non appena tornerai online.",

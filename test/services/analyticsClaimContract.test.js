@@ -172,16 +172,23 @@ test("an unknown participation answer offers a retry instead of a join", () => {
   const section = read("src/components/LeaderboardSection.tsx");
   const refresh = store.slice(store.indexOf("refresh: async"), store.indexOf("join: async"));
   assert.ok(refresh.includes('error: "read"'));
-  const card = section.slice(
-    section.indexOf("if (!participating || !participationReady)"),
-    section.indexOf('t("insights.leaderboard.join")')
+  const retrySurface = section.slice(
+    section.indexOf('if (surface === "participation_error")'),
+    section.indexOf('if (surface === "participation_loading")')
   );
-  assert.ok(card.includes('participationError === "read"'));
-  assert.ok(card.includes("onRetry={onRefreshParticipation}"));
+  const syncSurface = section.slice(
+    section.indexOf('if (surface === "sync")'),
+    section.indexOf("const number =")
+  );
+  assert.ok(section.includes("resolveLeaderboardSurface"));
+  assert.ok(retrySurface.includes("onRetry={onRefreshParticipation}"));
   assert.ok(
-    card.indexOf("LeaderboardRetryCard") < card.indexOf("onJoin"),
-    "the retry has to return before the Join button is ever reached"
+    section.indexOf('if (surface === "participation_error")') <
+      section.indexOf('if (surface === "sync")'),
+    "the retry surface has to return before the sync action is reached"
   );
+  assert.equal(retrySurface.includes("onJoin"), false);
+  assert.ok(syncSurface.includes("onEnable={onJoin}"));
 });
 
 // An opt-out the network refused is still an opt-out. It holds on the device
