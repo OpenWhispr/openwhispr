@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-test("per-slot activation modes default to tap and persist through their setters", async (t) => {
+test("per-slot activation modes default to Hold and persist through their setters", async (t) => {
   const notified = [];
   const { storage } = installBrowserGlobals(t, {
     window: {
@@ -17,8 +17,8 @@ test("per-slot activation modes default to tap and persist through their setters
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
 
   const state = useSettingsStore.getState();
-  assert.equal(state.voiceAgentActivationMode, "tap");
-  assert.equal(state.translationActivationMode, "tap");
+  assert.equal(state.voiceAgentActivationMode, "push");
+  assert.equal(state.translationActivationMode, "push");
 
   state.setVoiceAgentActivationMode("push");
   state.setTranslationActivationMode("bogus");
