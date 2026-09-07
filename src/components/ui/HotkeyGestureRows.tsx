@@ -67,10 +67,17 @@ export function HotkeyGestureRows({ slot, hotkey, mode }: HotkeyGestureRowsProps
     return (
       <div className="flex flex-col">
         <GestureRow title={t("settingsPage.general.hotkey.gestures.tapOnlyTitle")} tokens={keycaps} />
-        {/* A Hold that is missing with no explanation reads as broken; say why in place. */}
-        <p className="text-[11px] leading-snug text-muted-foreground/70">
-          {pushToTalkUnavailableReason || t("windows.pttUnavailable")}
-        </p>
+        {/* A Hold that is missing with no explanation reads as broken, so say
+            why — but only when main actually gave a reason. A null reason
+            means main believes Hold IS supported (an onboarding Tap choice, a
+            Linux evdev slot that lost its input permission), and the generic
+            "no native listener" line would then be a specific, false cause.
+            No explanation beats a wrong one. */}
+        {pushToTalkUnavailableReason && (
+          <p className="text-[11px] leading-snug text-muted-foreground/70">
+            {pushToTalkUnavailableReason}
+          </p>
+        )}
       </div>
     );
   }
