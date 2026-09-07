@@ -166,6 +166,9 @@ const AUDIO_MIME_TYPES = {
 };
 
 const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
+// The enterprise "Test Connection" probe only needs one word back, but the
+// Azure Responses API rejects max_output_tokens below 16.
+const CONNECTION_TEST_MAX_OUTPUT_TOKENS = 16;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 const { createAbortError } = require("./abortError");
@@ -4403,7 +4406,7 @@ class IPCHandlers {
             return generateText({
               model,
               prompt: "Say hello in one word.",
-              maxOutputTokens: 10,
+              maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
               abortSignal,
               maxRetries: 0,
             });
@@ -4413,7 +4416,7 @@ class IPCHandlers {
           await generateText({
             model,
             prompt: "Say hello in one word.",
-            maxOutputTokens: 10,
+            maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
           });
         }
 
