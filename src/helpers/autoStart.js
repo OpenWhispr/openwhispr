@@ -6,6 +6,7 @@ const { app } = require("electron");
 const linuxAutostart = require("./linuxAutostart");
 const {
   getLoginItemArgs,
+  getLoginItemLookupPath,
   resolveAutoStartState,
   needsHiddenFlagMigration,
   wasLaunchedHidden,
@@ -14,7 +15,12 @@ const {
 const isLinux = () => process.platform === "linux";
 
 function readLoginItemSettings() {
-  return app.getLoginItemSettings({ args: getLoginItemArgs(process.platform) });
+  const options = { args: getLoginItemArgs(process.platform) };
+  // Windows needs the path passed quoted, or executableWillLaunchAtLogin reports
+  // another app's Run entry as ours. See getLoginItemLookupPath.
+  const lookupPath = getLoginItemLookupPath(process.platform, process.execPath);
+  if (lookupPath) options.path = lookupPath;
+  return app.getLoginItemSettings(options);
 }
 
 function writeLoginItem(enabled) {
