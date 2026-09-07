@@ -1,5 +1,6 @@
 import { LIVE_TRANSCRIPT_SURFACE_LIMITS } from "./voiceSurfaceGeometry.mjs";
 import { MOTION_TIMING } from "../utils/springEasing";
+import { waitForTransitionEnd, settleFallbackMs } from "../utils/transitionSettled";
 
 export { LIVE_TRANSCRIPT_SURFACE_LIMITS };
 
@@ -24,6 +25,24 @@ export const LISTENING_ENTRANCE_TIMING = Object.freeze({
   // perceived as part of the width animation.
   waveformDelayMs: 100,
 });
+
+/**
+ * What a shrinking pill window should wait for before the native window
+ * snaps down. Only the pill's own compact-to-idle narrow (RECORDING ->
+ * BASE) has a width transition worth observing — every other shrink (a
+ * menu or toast closing, the hands-free tip retiring) leaves the pill's own
+ * footprint untouched, so there is nothing here to wait for and it resolves
+ * at once. Reduced motion strips `width` from the pill's transition-property
+ * outright (src/index.css's blanket rule), so even the pill's own narrow has
+ * no real transitionend to wait for there either — waiting anyway would just
+ * park the window at the old size for the whole fallback window, for
+ * nothing.
+ */
+export function resolvePillShrinkWait({ target, prev, prefersReducedMotion, el }) {
+  if (prev !== "RECORDING" || target !== "BASE") return Promise.resolve();
+  if (prefersReducedMotion) return Promise.resolve("reduced-motion");
+  return waitForTransitionEnd(el, "width", settleFallbackMs(LISTENING_ENTRANCE_TIMING.expansionMs));
+}
 
 export const ASSISTANT_FOOTER_TRANSITION_TIMING = Object.freeze({
   pillRetreatMs: 180,

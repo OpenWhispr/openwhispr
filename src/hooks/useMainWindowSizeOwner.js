@@ -9,6 +9,11 @@ import { SIZE_RANK, resolveMainWindowSizeKey } from "../utils/windowSizeLadder";
  * content collapse animation to finish before the window snaps down. Also owns
  * the dictation-error pill handoff, which hides the pill until the native
  * window has left the error footprint.
+ *
+ * `waitForShrink(target, prev)` is required: it decides, per shrink, what (if
+ * anything) is worth waiting for — the caller knows which of its own elements
+ * actually animate for a given target/prev pair, this hook does not. Return
+ * an already-resolved promise for a shrink with nothing to wait on.
  */
 export function useMainWindowSizeOwner({
   requestMainWindowSize,
@@ -102,15 +107,18 @@ export function useMainWindowSizeOwner({
       return undefined;
     }
     // A lower-ranked target means content is collapsing: let the collapse
-    // finish (the caller reports its transitionend) before the native window
-    // snaps down, so the two never animate the same edge at once.
+    // finish (the caller reports its transitionend, or resolves at once when
+    // there is nothing to wait for — e.g. reduced motion, or a shrink the
+    // caller's own element isn't part of) before the native window snaps
+    // down, so the two never animate the same edge at once. `target`/`prev`
+    // let the caller tell those cases apart. A wait that rejects must still
+    // let the window catch up rather than sticking at the wrong size.
     let cancelled = false;
-    const settled = waitForShrink
-      ? waitForShrink()
-      : new Promise((resolve) => setTimeout(resolve, 340));
-    void settled.then(() => {
-      if (!cancelled) void requestMainWindowSize(target);
-    });
+    void waitForShrink(target, prev)
+      .catch(() => undefined)
+      .then(() => {
+        if (!cancelled) void requestMainWindowSize(target);
+      });
     return () => {
       cancelled = true;
     };

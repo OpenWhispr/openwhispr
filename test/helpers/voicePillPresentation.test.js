@@ -736,3 +736,114 @@ test("activity handed back at close intent stays visible through the content fad
     true
   );
 });
+
+// resolvePillShrinkWait: what a shrinking pill window should wait for.
+//
+// Fix round 1 (review of task-3-report.md, 2026-09-07), findings 1+2: Task 3
+// wired App.jsx to wait on the pill's own width transitionend for EVERY
+// shrink unconditionally. Two cases have no such event to wait for and used
+// to burn the full settleFallbackMs fallback (480ms) doing nothing: (a) a
+// shrink the pill's width is not part of at all — closing a menu or toast,
+// retiring the hands-free tip — and (b) reduced motion, which strips `width`
+// from the pill's transition-property outright (src/index.css's blanket
+// rule), so even the pill's own RECORDING -> BASE narrow has nothing to fire
+// there. Both are handled here so App.jsx's callback stays a thin wrapper.
+
+function fakeElement() {
+  const listenersByType = new Map();
+  const setFor = (type) => {
+    let set = listenersByType.get(type);
+    if (!set) {
+      set = new Set();
+      listenersByType.set(type, set);
+    }
+    return set;
+  };
+  return {
+    addEventListener: (type, fn) => setFor(type).add(fn),
+    removeEventListener: (type, fn) => setFor(type).delete(fn),
+    fire(target, propertyName, type = "transitionend") {
+      for (const fn of [...setFor(type)]) fn({ target, propertyName, type });
+    },
+    get listenerCount() {
+      let total = 0;
+      for (const set of listenersByType.values()) total += set.size;
+      return total;
+    },
+  };
+}
+
+test("resolvePillShrinkWait resolves at once for any shrink that is not the pill's own narrow", async () => {
+  const { resolvePillShrinkWait } = await load();
+  const el = fakeElement();
+
+  for (const [prev, target] of [
+    ["BASE", "WITH_MENU"], // a grow: this helper is only ever called on a shrink, but must still no-op
+    ["WITH_MENU", "BASE"],
+    ["WITH_MENU", "RECORDING"],
+    ["HANDS_FREE_TIP", "BASE"],
+    ["WITH_TOAST", "WITH_MENU"],
+    ["EXPANDED", "WITH_MENU"],
+  ]) {
+    const result = await resolvePillShrinkWait({ target, prev, prefersReducedMotion: false, el });
+    assert.equal(result, undefined, `"${prev}" -> "${target}" must resolve at once`);
+    assert.equal(el.listenerCount, 0, `must never listen for a "${prev}" -> "${target}" shrink`);
+  }
+});
+
+test("resolvePillShrinkWait resolves at once under reduced motion, even for the pill's own narrow", async () => {
+  const { resolvePillShrinkWait } = await load();
+  const el = fakeElement();
+  const result = await resolvePillShrinkWait({
+    target: "BASE",
+    prev: "RECORDING",
+    prefersReducedMotion: true,
+    el,
+  });
+  assert.equal(result, "reduced-motion");
+  assert.equal(
+    el.listenerCount,
+    0,
+    "must never listen for a width transitionend that reduced motion cannot fire"
+  );
+});
+
+test("resolvePillShrinkWait waits for the real width transition on the pill's own narrow, falling back at exactly settleFallbackMs's boundary", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { resolvePillShrinkWait } = await load();
+  const { settleFallbackMs } = await import("../../src/utils/transitionSettled.ts");
+  const { LISTENING_ENTRANCE_TIMING } = await load();
+  const expectedFallbackMs = settleFallbackMs(LISTENING_ENTRANCE_TIMING.expansionMs);
+  assert.equal(expectedFallbackMs, 480, "sanity pin: 360ms pinned duration + 120ms grace");
+
+  const el = fakeElement(); // deliberately never fired
+  const settled = resolvePillShrinkWait({
+    target: "BASE",
+    prev: "RECORDING",
+    prefersReducedMotion: false,
+    el,
+  });
+  assert.equal(el.listenerCount, 2, "must register for both transitionend and transitioncancel");
+
+  let settledYet = false;
+  settled.then(() => (settledYet = true));
+  t.mock.timers.tick(expectedFallbackMs - 1);
+  await Promise.resolve();
+  assert.equal(settledYet, false, "must not resolve before settleFallbackMs's boundary");
+
+  t.mock.timers.tick(1);
+  assert.equal(await settled, "timeout");
+});
+
+test("resolvePillShrinkWait's own narrow resolves early when the real transitionend fires, not at the fallback", async () => {
+  const { resolvePillShrinkWait } = await load();
+  const el = fakeElement();
+  const settled = resolvePillShrinkWait({
+    target: "BASE",
+    prev: "RECORDING",
+    prefersReducedMotion: false,
+    el,
+  });
+  el.fire(el, "width");
+  assert.equal(await settled, "transitionend");
+});

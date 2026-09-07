@@ -13,12 +13,12 @@ const {
 const loadTransitionUtils = () => import("../../src/utils/transitionSettled.ts");
 const loadVoicePillPresentation = () => import("../../src/helpers/voicePillPresentation.js");
 
-async function mountOwner(t, { waitForShrink }) {
+async function mountOwner(t, { waitForShrink, windowProps = {} }) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  installBrowserGlobals(t, { window: { electronAPI: {} } });
+  installBrowserGlobals(t, { window: { electronAPI: {}, ...windowProps } });
   const container = installHookDom(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-main-window-size-owner-test-",
@@ -187,5 +187,101 @@ test("a shrink whose transition fires EARLY lands right away, not after the fall
     requests,
     ["BASE", "RECORDING", "BASE"],
     "the transitionend itself must drive the shrink immediately, not the fallback timer"
+  );
+});
+
+// Fix round 1 (review of task-3-report.md, 2026-09-07), findings 1, 2 and 4.
+// Finding 1: reduced motion strips `width` from the pill's transition-property
+// (index.css), so waitForTransitionEnd could only ever settle via its 480ms
+// fallback there — the window sat at the old size doing nothing for the
+// whole wait. Finding 2: the hook called `waitForShrink()` with no
+// arguments, so App.jsx's callback had no way to tell "the pill's own
+// narrow" apart from "a menu/toast/hands-free-tip shrink the pill's width
+// isn't part of" — every shrink paid the full wait. Finding 4: `.then()` had
+// no `.catch`, so a rejecting `waitForShrink` would strand the window at the
+// wrong size (and, today, throw an unhandled rejection) instead of still
+// catching up.
+
+test("reduced motion resolves the pill's own narrow at once, instead of waiting out the fallback", async (t) => {
+  const { resolvePillShrinkWait } = await loadVoicePillPresentation();
+  const fakeEl = fakeElement(); // deliberately never fired
+  const { render, requests } = await mountOwner(t, {
+    windowProps: { matchMedia: () => ({ matches: true }) },
+    waitForShrink: (target, prev) =>
+      resolvePillShrinkWait({
+        target,
+        prev,
+        prefersReducedMotion: Boolean(
+          globalThis.window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        ),
+        el: fakeEl,
+      }),
+  });
+  await render({ isCompactPill: true });
+  assert.deepEqual(requests, ["BASE", "RECORDING"]);
+
+  // Reduced motion resolves with an already-settled promise, so the shrink
+  // must have landed by the time this same render's effects have flushed —
+  // there is no "still pending" moment to check first. The old bug could
+  // only ever resolve via the 480ms fallback, since reduced motion means no
+  // width transitionend can fire for the real waitForTransitionEnd to catch;
+  // this assertion, checked with no wait at all, fails against that bug.
+  await render({ isCompactPill: false });
+  assert.deepEqual(
+    requests,
+    ["BASE", "RECORDING", "BASE"],
+    "reduced motion must resolve at once, not wait out the 480ms fallback"
+  );
+});
+
+test("waitForShrink receives the resolved target and the size key it is replacing; an immediately-resolving wait is not held back", async (t) => {
+  const calls = [];
+  const { render, requests } = await mountOwner(t, {
+    waitForShrink: (target, prev) => {
+      calls.push([target, prev]);
+      return Promise.resolve();
+    },
+  });
+  await render({ isCommandMenuOpen: true });
+  assert.deepEqual(requests, ["BASE", "WITH_MENU"]);
+
+  await render({ isCommandMenuOpen: false });
+  assert.deepEqual(
+    calls,
+    [["BASE", "WITH_MENU"]],
+    "the hook must pass the resolved target and the size key it is replacing"
+  );
+  assert.deepEqual(
+    requests,
+    ["BASE", "WITH_MENU", "BASE"],
+    "an immediately-resolving wait must not be held back"
+  );
+});
+
+test("a rejected wait still lets the window catch up instead of sticking at the old size", async (t) => {
+  const { render, requests } = await mountOwner(t, {
+    waitForShrink: () => Promise.reject(new Error("simulated failure")),
+  });
+  await render({ isCompactPill: true });
+  await render({ isCompactPill: false });
+  assert.deepEqual(
+    requests,
+    ["BASE", "RECORDING", "BASE"],
+    "a rejected wait must not strand the window at the recording size"
+  );
+});
+
+// Finding 3: the old ternary's "no waitForShrink supplied" branch silently
+// guessed 340ms — untested (the hook's only real caller always supplies it)
+// and, per this same review round, wrong for the pill's own narrow (480ms is
+// the correct wait there). An unverifiable fallback is worse than none, so
+// waitForShrink is now required: omitting it must fail fast and loudly on a
+// shrink, not silently reintroduce a guess.
+test("waitForShrink is required — a shrink with none supplied fails fast instead of silently guessing a duration", async (t) => {
+  const { render } = await mountOwner(t, { waitForShrink: undefined });
+  await render({ isCompactPill: true }); // a grow needs no wait; must still succeed
+  await assert.rejects(
+    () => render({ isCompactPill: false }), // a shrink does need one
+    /waitForShrink is not a function/
   );
 });

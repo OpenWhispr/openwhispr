@@ -29,15 +29,14 @@ import { HoldMigrationCard } from "./components/dictation/HoldMigrationCard";
 import { useHoldMigrationCard } from "./hooks/useHoldMigrationCard";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
 import { motionCssVariables } from "./utils/springEasing";
-import { waitForTransitionEnd, settleFallbackMs } from "./utils/transitionSettled";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
-  LISTENING_ENTRANCE_TIMING,
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   resolveLiveTranscriptEntrancePresentation,
   resolveAssistantFooterPresentation,
   resolveAgentModeActive,
   resolveListeningEntrancePresentation,
+  resolvePillShrinkWait,
   resolveVoiceActivityPresentation,
   resolveVoiceHorizontalDirection,
   resolveVoicePanelCorePresentation,
@@ -345,15 +344,20 @@ export default function App() {
   // The pill's own width transition ends when the capsule has finished
   // narrowing back down — that is the real signal a shrinking window should
   // wait on, instead of a fixed guess at how long the animation takes.
-  // Anything else that shrinks (a menu, a toast closing) has no pill width
-  // transition running and falls back to the hook's own 340ms timer.
+  // Every other shrink (a menu, a toast, the hands-free tip closing) and
+  // reduced motion both resolve at once instead of waiting on a width
+  // transitionend that cannot fire for them — see resolvePillShrinkWait's
+  // own docblock for why.
   const waitForPillShrink = React.useCallback(
-    () =>
-      waitForTransitionEnd(
-        buttonRef.current,
-        "width",
-        settleFallbackMs(LISTENING_ENTRANCE_TIMING.expansionMs)
-      ),
+    (target, prev) =>
+      resolvePillShrinkWait({
+        target,
+        prev,
+        prefersReducedMotion: Boolean(
+          window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        ),
+        el: buttonRef.current,
+      }),
     []
   );
 
