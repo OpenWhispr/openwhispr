@@ -2780,6 +2780,7 @@
       "inviteAcceptedDescription": "Du kannst jetzt die Bestenliste von {{workspace}} sehen.",
       "inviteAcceptError": "Beitritt zum Workspace fehlgeschlagen",
       "invitedList": "Eingeladen: {{emails}}",
+      "chooseBoard": "Bestenliste auswählen",
       "syncTitle": "Sieh, wo du bei {{scope}} stehst",
       "syncDescription": "Nur Aktivitätszähler werden mit Teammitgliedern geteilt. Transkriptinhalte sind nie enthalten, und du kannst die Bestenliste jederzeit verlassen.",
       "enableSyncCta": "Analytics-Synchronisierung aktivieren",

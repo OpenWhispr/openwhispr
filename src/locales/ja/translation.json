@@ -3278,6 +3278,7 @@
       "inviteAcceptedDescription": "{{workspace}} のリーダーボードを表示できます。",
       "inviteAcceptError": "ワークスペースに参加できませんでした",
       "invitedList": "招待済み: {{emails}}",
+      "chooseBoard": "リーダーボードを選択",
       "syncTitle": "{{scope}} での順位を確認しましょう",
       "syncDescription": "チームメンバーと共有されるのはアクティビティ集計のみです。文字起こしの内容は含まれず、いつでもリーダーボードから退出できます。",
       "enableSyncCta": "分析同期をオンにする",

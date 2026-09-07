@@ -2780,6 +2780,7 @@
       "inviteAcceptedDescription": "Vous pouvez maintenant voir le classement de {{workspace}}.",
       "inviteAcceptError": "Impossible de rejoindre cet espace de travail",
       "invitedList": "Invités : {{emails}}",
+      "chooseBoard": "Choisir un classement",
       "syncTitle": "Découvrez votre classement dans {{scope}}",
       "syncDescription": "Seuls les compteurs d’activité sont partagés avec vos coéquipiers. Les transcriptions ne sont jamais incluses et vous pouvez quitter le classement à tout moment.",
       "enableSyncCta": "Activer la synchronisation des analyses",

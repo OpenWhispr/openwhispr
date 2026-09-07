@@ -26,6 +26,7 @@ import {
   normalizeLeaderboardSelection,
   pageCount,
   pageForRank,
+  resolveLeaderboardScopeKey,
   resolveLeaderboardSurface,
   selectionForRange,
   WEEKLY_METRICS,
@@ -179,17 +180,9 @@ export default function LeaderboardSection({
         const response = await LeaderboardService.getAccess();
         if (requestId !== accessRequestIdRef.current) return;
         setAccess(response);
-        setScopeKey((current) => {
-          if (
-            preferredScopeKey &&
-            response.scopes.some((scope) => scope.key === preferredScopeKey)
-          ) {
-            return preferredScopeKey;
-          }
-          return current && response.scopes.some((scope) => scope.key === current)
-            ? current
-            : (response.scopes[0]?.key ?? null);
-        });
+        setScopeKey((current) =>
+          resolveLeaderboardScopeKey(response.scopes, current, preferredScopeKey)
+        );
       } catch (loadError) {
         if (requestId !== accessRequestIdRef.current) return;
         console.error("Loading leaderboard access failed:", loadError);
@@ -437,21 +430,25 @@ export default function LeaderboardSection({
     </>
   );
 
-  const scopeSelect =
-    scopes.length > 1 ? (
-      <Select value={selectedScope?.key} onValueChange={setScopeKey}>
-        <SelectTrigger className="h-8 w-44 rounded-lg text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {scopes.map((scope) => (
-            <SelectItem key={scope.key} value={scope.key}>
-              {scope.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    ) : null;
+  const showScopeSelect = scopes.length > 1 || (scopes.length === 1 && !selectedScope);
+  const scopeSelect = showScopeSelect ? (
+    <Select value={selectedScope?.key} onValueChange={setScopeKey}>
+      <SelectTrigger className="h-8 w-44 rounded-lg text-xs">
+        <SelectValue placeholder={t("insights.leaderboard.chooseBoard")} />
+      </SelectTrigger>
+      <SelectContent>
+        {scopes.map((scope) => (
+          <SelectItem key={scope.key} value={scope.key}>
+            {scope.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  ) : null;
+  const funnelScopeSelect = scopeSelect ? (
+    <div className="mt-8 flex justify-end">{scopeSelect}</div>
+  ) : null;
+  const funnelCardClassName = funnelScopeSelect ? "mt-4" : "mt-8";
 
   if (!isSignedIn) return <LeaderboardSignInPreview className="mt-8" onSignIn={onSignIn} />;
   if (accessLoading && !access) {
@@ -482,32 +479,40 @@ export default function LeaderboardSection({
 
   if (surface === "request_join" && access.joinableWorkspace) {
     return (
-      <LeaderboardRequestJoinPreview
-        className="mt-8"
-        colleagueCount={access.colleagueCount}
-        domain={access.domain}
-        workspaceName={access.joinableWorkspace.name}
-        pending={access.joinableWorkspace.requestState === "pending"}
-        requesting={requestingJoin}
-        onRequest={() => void requestJoin()}
-      />
+      <>
+        {funnelScopeSelect}
+        <LeaderboardRequestJoinPreview
+          className={funnelCardClassName}
+          colleagueCount={access.colleagueCount}
+          domain={access.domain}
+          workspaceName={access.joinableWorkspace.name}
+          pending={access.joinableWorkspace.requestState === "pending"}
+          requesting={requestingJoin}
+          onRequest={() => void requestJoin()}
+        />
+      </>
     );
   }
   if (surface === "accept_invite" && access.invitation) {
     return (
-      <LeaderboardAcceptInvitePreview
-        inviterName={access.invitation.inviterName}
-        joining={joiningInvitation}
-        onAccept={() => void acceptInvitation()}
-        workspaceName={access.invitation.workspaceName}
-      />
+      <>
+        {funnelScopeSelect}
+        <LeaderboardAcceptInvitePreview
+          className={funnelCardClassName}
+          inviterName={access.invitation.inviterName}
+          joining={joiningInvitation}
+          onAccept={() => void acceptInvitation()}
+          workspaceName={access.invitation.workspaceName}
+        />
+      </>
     );
   }
   if (!selectedScope) {
     return (
       <>
+        {funnelScopeSelect}
         <LeaderboardSetupCard
-          className="mt-8"
+          className={funnelCardClassName}
           colleagueCount={access.colleagueCount}
           domain={access.domain}
           onCreate={() => setCreateWorkspaceOpen(true)}

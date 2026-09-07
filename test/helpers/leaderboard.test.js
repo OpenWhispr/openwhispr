@@ -121,3 +121,25 @@ test("workspace defaults are readable and derived only from the company domain",
   assert.equal(domainToWorkspaceName("WWW.EXAMPLE.COM"), "Example");
   assert.equal(domainToWorkspaceName(null), "");
 });
+
+test("scope selection defaults to a membership and leaves domain-only users in the funnel", async () => {
+  const { resolveLeaderboardScopeKey } = await load();
+  const domain = {
+    key: "domain:acme.com",
+    kind: "domain",
+    id: "acme.com",
+    name: "acme.com",
+  };
+  const workspace = {
+    key: "workspace:one",
+    kind: "workspace",
+    id: "one",
+    name: "One",
+  };
+
+  assert.equal(resolveLeaderboardScopeKey([domain], null), null);
+  assert.equal(resolveLeaderboardScopeKey([domain, workspace], null), workspace.key);
+  assert.equal(resolveLeaderboardScopeKey([workspace, domain], domain.key), domain.key);
+  assert.equal(resolveLeaderboardScopeKey([domain, workspace], null, workspace.key), workspace.key);
+  assert.equal(resolveLeaderboardScopeKey([workspace], "workspace:gone"), workspace.key);
+});

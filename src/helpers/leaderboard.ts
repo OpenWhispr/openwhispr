@@ -67,6 +67,20 @@ export function domainToWorkspaceName(domain: string | null): string {
     .join(" ");
 }
 
+export function resolveLeaderboardScopeKey(
+  scopes: LeaderboardAccessScope[],
+  currentScopeKey: string | null,
+  preferredScopeKey?: string
+): string | null {
+  if (preferredScopeKey && scopes.some((scope) => scope.key === preferredScopeKey)) {
+    return preferredScopeKey;
+  }
+  if (currentScopeKey && scopes.some((scope) => scope.key === currentScopeKey)) {
+    return currentScopeKey;
+  }
+  return scopes.find((scope) => scope.kind === "workspace")?.key ?? null;
+}
+
 export function normalizeLeaderboardSelection(
   metric: LeaderboardMetric,
   range: LeaderboardRange

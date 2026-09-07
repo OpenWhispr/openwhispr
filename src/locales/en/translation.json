@@ -2805,6 +2805,7 @@
       "inviteAcceptedDescription": "You can now see the {{workspace}} leaderboard.",
       "inviteAcceptError": "Couldn't join this workspace",
       "invitedList": "Invited: {{emails}}",
+      "chooseBoard": "Choose a board",
       "syncTitle": "See where you rank in {{scope}}",
       "syncDescription": "Only activity counters are shared with teammates. Transcript content is never included, and you can leave the leaderboard at any time.",
       "enableSyncCta": "Turn on Analytics Sync",

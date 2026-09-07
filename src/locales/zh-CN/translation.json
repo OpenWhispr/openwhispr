@@ -3278,6 +3278,7 @@
       "inviteAcceptedDescription": "你现在可以查看 {{workspace}} 的排行榜。",
       "inviteAcceptError": "无法加入此工作区",
       "invitedList": "已邀请：{{emails}}",
+      "chooseBoard": "选择排行榜",
       "syncTitle": "查看你在 {{scope}} 中的排名",
       "syncDescription": "只会与团队成员共享活动计数，不会包含转录内容，并且你可以随时退出排行榜。",
       "enableSyncCta": "开启分析同步",

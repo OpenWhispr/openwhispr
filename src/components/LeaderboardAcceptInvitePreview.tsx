@@ -3,11 +3,13 @@ import { useTranslation } from "react-i18next";
 import LeaderboardPreview from "./LeaderboardPreview";
 
 export default function LeaderboardAcceptInvitePreview({
+  className,
   inviterName,
   joining,
   onAccept,
   workspaceName,
 }: {
+  className?: string;
   inviterName: string | null;
   joining: boolean;
   onAccept: () => void;
@@ -26,7 +28,7 @@ export default function LeaderboardAcceptInvitePreview({
           : t("insights.leaderboard.acceptInviteCta", { workspace: workspaceName })
       }
       badge={workspaceName}
-      className="mt-8"
+      className={className}
       dataState="accept_invite"
       description={
         inviterName

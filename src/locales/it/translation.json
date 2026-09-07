@@ -3278,6 +3278,7 @@
       "inviteAcceptedDescription": "Ora puoi vedere la classifica di {{workspace}}.",
       "inviteAcceptError": "Impossibile entrare nello spazio di lavoro",
       "invitedList": "Invitati: {{emails}}",
+      "chooseBoard": "Scegli una classifica",
       "syncTitle": "Scopri la tua posizione in {{scope}}",
       "syncDescription": "Con i colleghi vengono condivisi solo i contatori di attività. Le trascrizioni non sono mai incluse e puoi lasciare la classifica in qualsiasi momento.",
       "enableSyncCta": "Attiva sincronizzazione analisi",
