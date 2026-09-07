@@ -82,7 +82,7 @@ import {
   getLinuxPasteInstallCommands,
   needsLinuxPasteToolGuidance,
 } from "../utils/linuxPasteTools";
-import { ActivationModeSelector } from "./ui/ActivationModeSelector";
+import { HotkeyGestureRows } from "./ui/HotkeyGestureRows";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import { Toggle } from "./ui/toggle";
@@ -235,51 +235,6 @@ function SectionHeader({
         <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
       )}
       {note && <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{note}</p>}
-    </div>
-  );
-}
-
-// One "Activation Mode" Tap/Hold row, shared by the dictation, voice agent and
-// translation hotkey sections. Each slot resolves its own Hold capability (a
-// DE-native backend only implements Hold for dictation).
-function ActivationModeRow({
-  slot,
-  hotkey,
-  value,
-  onChange,
-}: {
-  slot: "dictation" | "voiceAgent" | "translation";
-  hotkey: string;
-  value: "tap" | "push";
-  onChange: (mode: "tap" | "push") => void;
-}) {
-  const { t } = useTranslation();
-  const { supportsPushToTalk, pushToTalkUnavailableReason } = useHotkeyModeInfo(
-    "settings",
-    hotkey,
-    slot
-  );
-
-  const pushDisabledReason = !supportsPushToTalk
-    ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-    : undefined;
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-muted-foreground/80">
-          {t("settingsPage.general.hotkey.activationMode")}
-        </span>
-        <ActivationModeSelector
-          value={value}
-          onChange={onChange}
-          pushDisabledReason={pushDisabledReason}
-        />
-      </div>
-      {/* A greyed-out Hold with only a hover tooltip reads as broken; say why in place. */}
-      {pushDisabledReason && (
-        <p className="text-[11px] leading-snug text-muted-foreground/70">{pushDisabledReason}</p>
-      )}
     </div>
   );
 }
@@ -3903,12 +3858,7 @@ EOF`,
 
                 {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
                   <SettingsPanelRow>
-                    <ActivationModeRow
-                      slot="dictation"
-                      hotkey={dictationKey}
-                      value={activationMode}
-                      onChange={setActivationMode}
-                    />
+                    <HotkeyGestureRows slot="dictation" hotkey={dictationKey} mode={activationMode} />
                     {getCachedPlatform() === "linux" && activationMode === "push" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
                     )}
@@ -3937,11 +3887,10 @@ EOF`,
                   </SettingsPanelRow>
                   {voiceAgentKey && (!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
                     <SettingsPanelRow>
-                      <ActivationModeRow
+                      <HotkeyGestureRows
                         slot="voiceAgent"
                         hotkey={voiceAgentKey}
-                        value={voiceAgentActivationMode}
-                        onChange={setVoiceAgentActivationMode}
+                        mode={voiceAgentActivationMode}
                       />
                     </SettingsPanelRow>
                   )}
@@ -3968,11 +3917,10 @@ EOF`,
                 </SettingsPanelRow>
                 {translationKey && (!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
                   <SettingsPanelRow>
-                    <ActivationModeRow
+                    <HotkeyGestureRows
                       slot="translation"
                       hotkey={translationKey}
-                      value={translationActivationMode}
-                      onChange={setTranslationActivationMode}
+                      mode={translationActivationMode}
                     />
                   </SettingsPanelRow>
                 )}
