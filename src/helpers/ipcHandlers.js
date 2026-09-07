@@ -641,6 +641,7 @@ class IPCHandlers {
       if (!token) {
         this.databaseManager.setActiveAccountId(null);
         accountScopeBinding.clear();
+        broadcastToWindows("active-account-scope-changed", null);
       }
       broadcastToWindows("auth-token-state-changed", {
         generation,
@@ -1983,8 +1984,19 @@ class IPCHandlers {
       this.databaseManager.setActiveAccountId(accountId);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
+      broadcastToWindows(
+        "active-account-scope-changed",
+        accountId !== null ? { accountId, authGeneration: state.generation } : null
+      );
       return { success: true };
     });
+
+    ipcMain.handle("get-active-account-scope", () =>
+      accountScopeBinding.resolveActiveAccountScope({
+        ...tokenStore.getState(),
+        binding: accountScopeBinding.read(),
+      })
+    );
 
     ipcMain.handle("delete-account-data", async (_event, accountId, expectedGeneration) => {
       const state = tokenStore.getState();

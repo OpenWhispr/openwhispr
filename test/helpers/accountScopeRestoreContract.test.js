@@ -46,3 +46,17 @@ test("boot restores the validated scope before any main-process consumer constru
   assert.ok(bootWindow[1].includes("resolveBootAccountScope"));
   assert.ok(bootWindow[1].includes("databaseManager.setActiveAccountId(bootAccountId)"));
 });
+
+test("clearing the bearer token broadcasts the cleared account scope to every window", () => {
+  const source = read("src/helpers/ipcHandlers.js");
+  const subscription = source.match(
+    /tokenStore\.subscribe\(\(\{ generation, token \}\) => \{([\s\S]*?)\n {4}\}\);/
+  );
+  assert.ok(subscription, "token subscription is present");
+  const cleared = subscription[1].match(/if \(!token\) \{([\s\S]*?)\n {6}\}/);
+  assert.ok(cleared, "the no-token branch is present");
+  assert.ok(
+    cleared[1].includes('broadcastToWindows("active-account-scope-changed", null)'),
+    "the no-token branch broadcasts the cleared scope"
+  );
+});

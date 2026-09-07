@@ -135,6 +135,12 @@ export interface AuthTokenMutationResult extends AuthTokenState {
   code?: string;
 }
 
+/** The validated account scope the main process holds, as seen by any window. */
+export interface ActiveAccountScope {
+  accountId: string;
+  authGeneration: number;
+}
+
 export interface TranscriptionItem {
   id: number;
   text: string;
@@ -1287,6 +1293,10 @@ declare global {
         accountId: string | null,
         expectedAuthGeneration?: number
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      getActiveAccountScope?: () => Promise<ActiveAccountScope | null>;
+      onActiveAccountScopeChanged?: (
+        callback: (scope: ActiveAccountScope | null) => void
+      ) => () => void;
       deleteAccountData?: (
         accountId: string,
         expectedAuthGeneration: number
