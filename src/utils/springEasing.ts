@@ -4,23 +4,35 @@
 // by zeta — sampled over its natural settle time and played over the
 // pinned duration below — the same trick the prototype uses for "show".
 
+function isPositiveFinite(value: number): boolean {
+  return Number.isFinite(value) && value > 0;
+}
+
 export function springLinearEasing(
   stiffness: number,
   damping: number,
   mass = 1,
   segments = 48
 ): string {
-  if (!(stiffness > 0)) {
-    throw new RangeError(`springLinearEasing: stiffness must be > 0, got ${stiffness}`);
+  if (!isPositiveFinite(stiffness)) {
+    throw new RangeError(
+      `springLinearEasing: stiffness must be a positive finite number, got ${stiffness}`
+    );
   }
-  if (!(damping > 0)) {
-    throw new RangeError(`springLinearEasing: damping must be > 0, got ${damping}`);
+  if (!isPositiveFinite(damping)) {
+    throw new RangeError(
+      `springLinearEasing: damping must be a positive finite number, got ${damping}`
+    );
   }
-  if (!(mass > 0)) {
-    throw new RangeError(`springLinearEasing: mass must be > 0, got ${mass}`);
+  if (!isPositiveFinite(mass)) {
+    throw new RangeError(
+      `springLinearEasing: mass must be a positive finite number, got ${mass}`
+    );
   }
   if (!(Number.isInteger(segments) && segments > 0)) {
-    throw new RangeError(`springLinearEasing: segments must be a positive integer, got ${segments}`);
+    throw new RangeError(
+      `springLinearEasing: segments must be a positive integer, got ${segments}`
+    );
   }
   const w0 = Math.sqrt(stiffness / mass);
   const zeta = damping / (2 * Math.sqrt(stiffness * mass));

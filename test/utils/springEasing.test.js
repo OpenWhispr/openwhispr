@@ -126,6 +126,20 @@ test("rejects non-physical inputs instead of silently emitting NaN", async () =>
   assert.throws(() => springLinearEasing(300, 26, 1, 4.5), /segments/i);
 });
 
+// Fix round 2, finding 2: `!(x > 0)` is false for `Infinity` (Infinity > 0
+// is true), so it slipped past the guard above entirely — each call below
+// used to return `linear(NaN 0.0%, …)`, the exact silent failure finding 5
+// was raised to stop. `-Infinity` was already caught by `> 0` alone; this
+// pins the positive-Infinity gap specifically, so the guard means "finite",
+// not just "not obviously non-positive".
+test("rejects Infinity too, not just non-positive and NaN", async () => {
+  const { springLinearEasing } = await load();
+  assert.throws(() => springLinearEasing(300, Infinity), /damping/i);
+  assert.throws(() => springLinearEasing(Infinity, 26), /stiffness/i);
+  assert.throws(() => springLinearEasing(300, 26, Infinity), /mass/i);
+  assert.throws(() => springLinearEasing(300, 26, -Infinity), /mass/i);
+});
+
 // Fix round 1, finding 2: the plan requires sampling over the spring's
 // NATURAL SETTLE TIME and playing the result over the PINNED DURATION —
 // never collapsing the two. Nothing above actually proves that: the
