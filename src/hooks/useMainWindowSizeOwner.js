@@ -23,6 +23,7 @@ export function useMainWindowSizeOwner({
   liveTranscriptOpen,
   liveTranscriptMounted,
   liveTranscriptOpenRef,
+  waitForShrink,
 }) {
   const [handoffActive, setHandoffActive] = useState(false);
   const actionCountRef = useRef(dictationErrorActionCount);
@@ -100,8 +101,19 @@ export function useMainWindowSizeOwner({
       void requestMainWindowSize(target);
       return undefined;
     }
-    const timeout = setTimeout(() => void requestMainWindowSize(target), 340);
-    return () => clearTimeout(timeout);
+    // A lower-ranked target means content is collapsing: let the collapse
+    // finish (the caller reports its transitionend) before the native window
+    // snaps down, so the two never animate the same edge at once.
+    let cancelled = false;
+    const settled = waitForShrink
+      ? waitForShrink()
+      : new Promise((resolve) => setTimeout(resolve, 340));
+    void settled.then(() => {
+      if (!cancelled) void requestMainWindowSize(target);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [
     assistantOpen,
     assistantMounted,
@@ -115,6 +127,7 @@ export function useMainWindowSizeOwner({
     handsFreeTipVisible,
     dictationErrorActionCount,
     requestMainWindowSize,
+    waitForShrink,
   ]);
 
   useEffect(() => {

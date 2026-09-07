@@ -29,8 +29,10 @@ import { HoldMigrationCard } from "./components/dictation/HoldMigrationCard";
 import { useHoldMigrationCard } from "./hooks/useHoldMigrationCard";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
 import { motionCssVariables } from "./utils/springEasing";
+import { waitForTransitionEnd, settleFallbackMs } from "./utils/transitionSettled";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
+  LISTENING_ENTRANCE_TIMING,
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   resolveLiveTranscriptEntrancePresentation,
   resolveAssistantFooterPresentation,
@@ -340,6 +342,21 @@ export default function App() {
     handsFreeTip.tip !== null || (holdMigrationCardMounted && !anyPanelMounted);
   const tipCardInPlaceOfPill = tipCardPlacementActive && floatingIconAutoHide;
 
+  // The pill's own width transition ends when the capsule has finished
+  // narrowing back down — that is the real signal a shrinking window should
+  // wait on, instead of a fixed guess at how long the animation takes.
+  // Anything else that shrinks (a menu, a toast closing) has no pill width
+  // transition running and falls back to the hook's own 340ms timer.
+  const waitForPillShrink = React.useCallback(
+    () =>
+      waitForTransitionEnd(
+        buttonRef.current,
+        "width",
+        settleFallbackMs(LISTENING_ENTRANCE_TIMING.expansionMs)
+      ),
+    []
+  );
+
   const { dictationErrorPillHandoffActive } = useMainWindowSizeOwner({
     requestMainWindowSize,
     dictationErrorActionCount,
@@ -353,6 +370,7 @@ export default function App() {
     liveTranscriptOpen: liveTranscript.open,
     liveTranscriptMounted: liveTranscript.mounted,
     liveTranscriptOpenRef: liveTranscript.openRef,
+    waitForShrink: waitForPillShrink,
   });
 
   useEffect(() => {
