@@ -22,12 +22,14 @@ import {
   LEADERBOARD_PAGE_SIZE,
   LEADERBOARD_REFRESH_INTERVAL_MS,
   domainToWorkspaceName,
+  missingLeaderboardMembers,
   memberValue,
   normalizeLeaderboardSelection,
   pageCount,
   pageForRank,
   resolveLeaderboardScopeKey,
   resolveLeaderboardSurface,
+  shouldShowLeaderboardEmptyStrip,
   selectionForRange,
   WEEKLY_METRICS,
 } from "../helpers/leaderboard";
@@ -50,6 +52,7 @@ import InviteTeammateDialog from "./InviteTeammateDialog";
 import MemberAvatar from "./MemberAvatar";
 import LeaderboardRequestJoinPreview from "./LeaderboardRequestJoinPreview";
 import LeaderboardAcceptInvitePreview from "./LeaderboardAcceptInvitePreview";
+import LeaderboardEmptyStrip from "./LeaderboardEmptyStrip";
 import LeaderboardPodium from "./LeaderboardPodium";
 import LeaderboardSetupCard from "./LeaderboardSetupCard";
 import LeaderboardShareDialog from "./LeaderboardShareDialog";
@@ -630,7 +633,7 @@ export default function LeaderboardSection({
               {t("insights.leaderboard.inviteCta")}
             </Button>
           )}
-          {!isSoloScope && leaderboard?.canShare && (
+          {leaderboard?.canShare && (
             <Button variant="outline-flat" size="sm" onClick={() => setShareOpen(true)}>
               <Share2 size={14} />
               {t("insights.leaderboard.share")}
@@ -703,6 +706,14 @@ export default function LeaderboardSection({
         </div>
       ) : (
         <>
+          {shouldShowLeaderboardEmptyStrip(selectedScope.memberCount, leaderboard.totalMembers) && (
+            <LeaderboardEmptyStrip
+              missingCount={missingLeaderboardMembers(
+                selectedScope.memberCount,
+                leaderboard.totalMembers
+              )}
+            />
+          )}
           <LeaderboardPodium
             members={leaderboard.leaders}
             formatValue={formatValue}

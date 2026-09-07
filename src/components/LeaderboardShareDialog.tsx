@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { Check, Download, Loader2, Share2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { memberValue } from "../helpers/leaderboard";
-import type { Leaderboard, LeaderboardMember, LeaderboardMetric } from "../types/electron";
+import { leaderboardDisplayName, memberValue } from "../helpers/leaderboard";
+import type { Leaderboard, LeaderboardMetric } from "../types/electron";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 
@@ -12,12 +12,6 @@ interface LeaderboardShareDialogProps {
   periodLabel: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
-
-// The card is built to leave the app, so it never carries a full address: an
-// unnamed member is shown by the local part alone, as elsewhere in the UI.
-function shareName(member: LeaderboardMember): string {
-  return member.name || member.email.split("@")[0];
 }
 
 function drawRoundedRect(
@@ -80,7 +74,7 @@ function createLeaderboardCard(
     context.fillText(`#${member.rank}`, 94, y + 36);
     context.fillStyle = "#ffffff";
     context.font = "600 22px Inter, system-ui, sans-serif";
-    context.fillText(shareName(member).slice(0, 38), 180, y + 36);
+    context.fillText(leaderboardDisplayName(member).slice(0, 38), 180, y + 36);
     context.textAlign = "right";
     context.font = "700 24px Inter, system-ui, sans-serif";
     const value = memberValue(member, metric);
@@ -167,7 +161,7 @@ export default function LeaderboardShareDialog({
               >
                 <span className="truncate">
                   <strong className="mr-3 text-indigo-200">#{member.rank}</strong>
-                  {shareName(member)}
+                  {leaderboardDisplayName(member)}
                 </span>
                 <strong className="ml-3">
                   {memberValue(member, metric) == null

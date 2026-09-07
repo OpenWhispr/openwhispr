@@ -143,3 +143,24 @@ test("scope selection defaults to a membership and leaves domain-only users in t
   assert.equal(resolveLeaderboardScopeKey([domain, workspace], null, workspace.key), workspace.key);
   assert.equal(resolveLeaderboardScopeKey([workspace], "workspace:gone"), workspace.key);
 });
+
+test("the partial-participation strip appears only while a board has at most one participant", async () => {
+  const { missingLeaderboardMembers, shouldShowLeaderboardEmptyStrip } = await load();
+  assert.equal(missingLeaderboardMembers(5, 1), 4);
+  assert.equal(missingLeaderboardMembers(2, 5), 0);
+  assert.equal(shouldShowLeaderboardEmptyStrip(5, 1), true);
+  assert.equal(shouldShowLeaderboardEmptyStrip(5, 0), true);
+  assert.equal(shouldShowLeaderboardEmptyStrip(5, 2), false);
+  assert.equal(shouldShowLeaderboardEmptyStrip(1, 1), false);
+});
+
+test("share-card names never expose an email address", async () => {
+  const { leaderboardDisplayName } = await load();
+  assert.equal(
+    leaderboardDisplayName({ name: "  Sam Lee  ", email: "private@acme.com" }),
+    "Sam Lee"
+  );
+  assert.equal(leaderboardDisplayName({ name: null, email: "jane.doe+work@acme.com" }), "Jane");
+  assert.equal(leaderboardDisplayName({ name: "", email: "alex-smith@acme.com" }), "Alex");
+  assert.equal(leaderboardDisplayName({ name: null, email: "@acme.com" }), "Member");
+});

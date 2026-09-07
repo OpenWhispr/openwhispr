@@ -81,6 +81,25 @@ export function resolveLeaderboardScopeKey(
   return scopes.find((scope) => scope.kind === "workspace")?.key ?? null;
 }
 
+export function missingLeaderboardMembers(memberCount: number, participantCount: number): number {
+  return Math.max(0, memberCount - participantCount);
+}
+
+export function shouldShowLeaderboardEmptyStrip(
+  memberCount: number,
+  participantCount: number
+): boolean {
+  return participantCount <= 1 && missingLeaderboardMembers(memberCount, participantCount) > 0;
+}
+
+export function leaderboardDisplayName(member: Pick<LeaderboardMember, "name" | "email">): string {
+  const name = member.name?.trim();
+  if (name) return name;
+  const localPart = member.email.split("@")[0] ?? "";
+  const firstToken = localPart.split(/[._+-]+/).find(Boolean) ?? "";
+  return firstToken ? `${firstToken.charAt(0).toUpperCase()}${firstToken.slice(1)}` : "Member";
+}
+
 export function normalizeLeaderboardSelection(
   metric: LeaderboardMetric,
   range: LeaderboardRange
