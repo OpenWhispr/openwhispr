@@ -48,6 +48,7 @@ const PERSISTED_KEYS = [
   "MEETING_KEY",
   "ACTIVATION_MODE",
   ...Object.values(SLOT_ACTIVATION_MODE_ENV_KEYS),
+  "ACTIVATION_MODE_HOLD_MIGRATED",
   "FLOATING_ICON_AUTO_HIDE",
   "PANEL_START_POSITION",
   "START_MINIMIZED",
@@ -448,15 +449,17 @@ class EnvironmentManager {
     return result;
   }
 
+  // Hold is the only activation model. An unset mode is Hold; a stored
+  // "tap" is a capability verdict (this hotkey/backend cannot deliver a
+  // release), written by the convergence paths, never by the user.
   getActivationMode() {
-    const mode = this._getKey("ACTIVATION_MODE");
-    return mode === "push" ? "push" : "tap";
+    return this._getKey("ACTIVATION_MODE") === "tap" ? "tap" : "push";
   }
 
   getSlotActivationModes() {
     const modes = {};
     for (const [slotName, envKey] of Object.entries(SLOT_ACTIVATION_MODE_ENV_KEYS)) {
-      modes[slotName] = this._getKey(envKey) === "push" ? "push" : "tap";
+      modes[slotName] = this._getKey(envKey) === "tap" ? "tap" : "push";
     }
     return modes;
   }
@@ -464,17 +467,34 @@ class EnvironmentManager {
   saveSlotActivationMode(slotName, mode) {
     const envKey = SLOT_ACTIVATION_MODE_ENV_KEYS[slotName];
     if (!envKey) return false;
-    const validMode = mode === "push" ? "push" : "tap";
+    const validMode = mode === "tap" ? "tap" : "push";
     const result = this._saveKey(envKey, validMode);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }
 
   saveActivationMode(mode) {
-    const validMode = mode === "push" ? "push" : "tap";
+    const validMode = mode === "tap" ? "tap" : "push";
     const result = this._saveKey("ACTIVATION_MODE", validMode);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
+  }
+
+  // One-time (marker-guarded) move of every stored Tap to Hold. Runs before
+  // the hotkey manager seeds its cache, so the existing convergence — a
+  // silent demotion of any Hold the registered hotkey cannot deliver — then
+  // decides the final verdict per slot. Returns true when a value changed.
+  migrateActivationModesToHold() {
+    if (this._getKey("ACTIVATION_MODE_HOLD_MIGRATED") === "true") return false;
+    process.env.ACTIVATION_MODE_HOLD_MIGRATED = "true";
+    let changed = false;
+    for (const envKey of ["ACTIVATION_MODE", ...Object.values(SLOT_ACTIVATION_MODE_ENV_KEYS)]) {
+      if (this._getKey(envKey) !== "tap") continue;
+      process.env[envKey] = "push";
+      changed = true;
+    }
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return changed;
   }
 
   getFloatingIconAutoHide() {
