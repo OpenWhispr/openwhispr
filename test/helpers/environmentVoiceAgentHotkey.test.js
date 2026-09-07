@@ -263,3 +263,89 @@ test("an unset activation mode reads as Hold", async (t) => {
   environmentManager.saveActivationMode("nonsense");
   assert.equal(environmentManager.getActivationMode(), "push");
 });
+
+test("migrateActivationModesToHold's marker and verdict survive a real second launch", async (t) => {
+  const userDataDirectory = fs.mkdtempSync(
+    path.join(os.tmpdir(), "openwhispr-hold-migration-restart-")
+  );
+  // Kept separate from `keys` below: that array is also used later to clear
+  // leftover in-process state before the second launch, and this one must
+  // survive that clear (or the second launch's real dotenv.config() calls
+  // print their promotional "tip" lines to stdout).
+  const quietSnapshot = {
+    present: Object.hasOwn(process.env, "DOTENV_CONFIG_QUIET"),
+    value: process.env.DOTENV_CONFIG_QUIET,
+  };
+  process.env.DOTENV_CONFIG_QUIET = "true";
+
+  const keys = [
+    "ACTIVATION_MODE",
+    "VOICE_AGENT_ACTIVATION_MODE",
+    "TRANSLATION_ACTIVATION_MODE",
+    "ACTIVATION_MODE_HOLD_MIGRATED",
+  ];
+  const environmentSnapshot = new Map(
+    keys.map((name) => [
+      name,
+      { present: Object.hasOwn(process.env, name), value: process.env[name] },
+    ])
+  );
+  const originalResourcesPath = process.resourcesPath;
+  process.resourcesPath = userDataDirectory;
+  for (const name of keys) delete process.env[name];
+  process.env.ACTIVATION_MODE = "tap";
+  process.env.VOICE_AGENT_ACTIVATION_MODE = "tap";
+  t.after(() => {
+    if (quietSnapshot.present) process.env.DOTENV_CONFIG_QUIET = quietSnapshot.value;
+    else delete process.env.DOTENV_CONFIG_QUIET;
+    restoreEnvironment(environmentSnapshot);
+    process.resourcesPath = originalResourcesPath;
+    fs.rmSync(userDataDirectory, { recursive: true, force: true });
+  });
+
+  // Deliberately real dotenv here — no installDotenvStub. Every other test in
+  // this file stubs config() to a no-op, which is exactly why none of them
+  // can tell a broken PERSISTED_KEYS entry from a working one: a stub never
+  // reads the file back. This test's whole point is a genuine second read of
+  // the persisted .env, so it needs the real parser. Safe to do unstubbed:
+  // .env is gitignored and this worktree has none at its root, so the other
+  // fallback paths loadEnvironmentVariables() probes stay no-ops, and
+  // process.resourcesPath / app.getPath("userData") both point at the
+  // isolated tmp directory above.
+  const EnvironmentManager = loadEnvironmentManager(t, userDataDirectory);
+  const persistedEnvPath = path.join(userDataDirectory, ".env");
+
+  const firstLaunch = new EnvironmentManager();
+  const realSaveAllKeysToEnvFile = firstLaunch.saveAllKeysToEnvFile.bind(firstLaunch);
+  let persistence;
+  firstLaunch.saveAllKeysToEnvFile = () => {
+    persistence = realSaveAllKeysToEnvFile();
+    return persistence;
+  };
+
+  assert.equal(firstLaunch.migrateActivationModesToHold(), true);
+  assert.ok(persistence);
+  await persistence;
+
+  const afterMigration = fs.readFileSync(persistedEnvPath, "utf8");
+  assert.match(afterMigration, /^ACTIVATION_MODE_HOLD_MIGRATED=true$/m);
+  assert.match(afterMigration, /^ACTIVATION_MODE=push$/m);
+
+  // A later convergence verdict on the same launch (the slot-restore loop or
+  // the darwin dictation demotion writing "tap" back) must also reach disk
+  // before the next launch can honor it.
+  firstLaunch.saveActivationMode("tap");
+  await persistence;
+
+  const afterDemotion = fs.readFileSync(persistedEnvPath, "utf8");
+  assert.match(afterDemotion, /^ACTIVATION_MODE=tap$/m);
+
+  // Clear in-process state so the second instance can only see what actually
+  // reached disk — leftover process.env would let this test pass even if the
+  // marker write itself were silently broken.
+  for (const name of keys) delete process.env[name];
+
+  const secondLaunch = new EnvironmentManager();
+  assert.equal(secondLaunch.migrateActivationModesToHold(), false);
+  assert.equal(secondLaunch.getActivationMode(), "tap");
+});
