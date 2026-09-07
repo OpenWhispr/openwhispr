@@ -94,8 +94,13 @@ function managerWithHotkeyResult(result) {
     isUsingNativeShortcut: () => false,
   };
   manager.createHotkeyCallback = () => () => undefined;
-  manager.resetNativePushState = () => undefined;
-  manager.reconcileNativeKeyListeners = () => undefined;
+  // A converging case must re-arm the native listeners, not just move the
+  // cache: on macOS that re-arm is what makes a plain-key promotion actually
+  // functional. Record the calls instead of no-opping them so a case that
+  // moves _cachedActivationMode without re-arming still fails.
+  manager.nativeCalls = [];
+  manager.resetNativePushState = () => manager.nativeCalls.push("reset");
+  manager.reconcileNativeKeyListeners = () => manager.nativeCalls.push("reconcile");
   return manager;
 }
 
@@ -104,14 +109,18 @@ test("updateHotkey follows a converged mode in both directions", async () => {
   demoted._cachedActivationMode = "push";
   await demoted.updateHotkey("F13");
   assert.equal(demoted.getActivationMode(), "tap");
+  assert.deepEqual(demoted.nativeCalls, ["reset", "reconcile"]);
 
   const promoted = managerWithHotkeyResult({ success: true, activationMode: "push" });
   promoted._cachedActivationMode = "tap";
   await promoted.updateHotkey("Command+Period");
   assert.equal(promoted.getActivationMode(), "push");
+  assert.deepEqual(promoted.nativeCalls, ["reset", "reconcile"]);
 
   const untouched = managerWithHotkeyResult({ success: true });
   untouched._cachedActivationMode = "tap";
   await untouched.updateHotkey("Command+Period");
   assert.equal(untouched.getActivationMode(), "tap");
+  // Nothing converged, so the native listeners must not be touched.
+  assert.deepEqual(untouched.nativeCalls, []);
 });

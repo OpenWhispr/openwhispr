@@ -161,8 +161,10 @@ test("updateHotkey converges a Hold dictation mode to Tap when the new hotkey ca
     assert.equal(manager.activationMode, "push");
 
     // A registration that fails keeps the stored Hold: nothing changed hands.
+    // F13 cannot Hold, so this actually attempts the push→tap demotion and
+    // must roll it back on failure, not merely leave an untouched mode alone.
     manager.setupShortcuts = () => ({ success: false, error: "nope" });
-    const failed = await manager.updateHotkey("F14", () => undefined);
+    const failed = await manager.updateHotkey("F13", () => undefined);
     assert.equal(failed.success, false);
     assert.equal(manager.activationMode, "push");
   } finally {
