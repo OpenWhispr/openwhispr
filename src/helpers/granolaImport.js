@@ -269,6 +269,40 @@ export function deterministicUuid(key) {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${withVersion}-${withVariant}-${hex.slice(20, 32)}`;
 }
 
+const shortHash = (value) => createHash("sha256").update(value).digest("hex").slice(0, 16);
+
+/**
+ * Allocate stable note keys across every CSV file in one Granola import.
+ * The first missing-id row retains the released fallback identity; only later
+ * collisions receive a versioned key.
+ *
+ * @returns {(fields: {
+ *   id: string,
+ *   title: string,
+ *   rawDate: string,
+ * }) => string}
+ */
+export function createGranolaNoteKeyAllocator() {
+  const claimedLegacyFallbackKeys = new Set();
+  const fallbackOccurrences = new Map();
+
+  return ({ id, title, rawDate }) => {
+    if (id) return id;
+
+    const legacyFallbackKey = shortHash(`${title}|${rawDate}`);
+    const fallbackTuple = JSON.stringify([title, rawDate]);
+    const occurrence = fallbackOccurrences.get(fallbackTuple) ?? 0;
+    fallbackOccurrences.set(fallbackTuple, occurrence + 1);
+
+    if (!claimedLegacyFallbackKeys.has(legacyFallbackKey)) {
+      claimedLegacyFallbackKeys.add(legacyFallbackKey);
+      return legacyFallbackKey;
+    }
+
+    return shortHash(JSON.stringify(["v2", title, rawDate, occurrence]));
+  };
+}
+
 const NAME_EMAIL_RE = /^(.*?)\s*<([^<>\s]+@[^<>\s]+)>$/;
 const BARE_EMAIL_RE = /^\S+@\S+\.\S+$/;
 
@@ -290,6 +324,7 @@ const parseAttendees = (cell) =>
  * Parse a Granola CSV export into insert-ready note rows.
  *
  * @param {string} text
+ * @param {{ allocateNoteKey?: ReturnType<typeof createGranolaNoteKeyAllocator> }} [options]
  * @returns {{
  *   ok: boolean,
  *   error?: { code: "EMPTY_FILE"|"HEADERS_UNRECOGNIZED"|"NO_DATA_ROWS" },
@@ -301,7 +336,7 @@ const parseAttendees = (cell) =>
  *   warnings: Array<{ code: string, row?: number, detail?: string }>,
  * }}
  */
-export function parseGranolaCsv(text) {
+export function parseGranolaCsv(text, { allocateNoteKey = createGranolaNoteKeyAllocator() } = {}) {
   const src = String(text ?? "");
   const emptyHeaderInfo = { mapped: {}, unknown: [] };
   if (!src.trim()) {
@@ -375,14 +410,18 @@ export function parseGranolaCsv(text) {
       warnings.push({ code: "DATE_UNPARSEABLE", row: rowNumber, detail: rawDate });
     }
 
-    // Stable per-note key: Granola's own id when the export carries one,
-    // otherwise a hash of title + raw date (re-import stays idempotent either way).
     const id = cell("id");
-    const key = id || createHash("sha256").update(`${title}|${rawDate}`).digest("hex").slice(0, 16);
+    const rawTranscript = cell("transcript");
+    const rawAttendees = cell("attendees");
+    const key = allocateNoteKey({
+      id,
+      title,
+      rawDate,
+    });
 
     const anchorMs = createdAt ? Date.parse(`${createdAt.replace(" ", "T")}Z`) : 0;
-    const segments = parseTranscriptToSegments(cell("transcript"), anchorMs);
-    const attendees = parseAttendees(cell("attendees"));
+    const segments = parseTranscriptToSegments(rawTranscript, anchorMs);
+    const attendees = parseAttendees(rawAttendees);
 
     notes.push({
       clientNoteId: deterministicUuid(key),

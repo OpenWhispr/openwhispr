@@ -185,6 +185,14 @@ test("cloud reasoning cancellation is forwarded to the main process", () => {
   assert.deepEqual(sends, [["cloud-reason-cancel"]]);
 });
 
+test("enterprise reasoning cancellation is forwarded to the main process", () => {
+  const { api, sends } = loadPreloadApi();
+
+  api.cancelEnterpriseReasoning();
+
+  assert.deepEqual(sends, [["enterprise-reasoning-cancel"]]);
+});
+
 test("cloud transcription cancellation is forwarded to the main process", () => {
   const { api, sends } = loadPreloadApi();
 

@@ -101,6 +101,7 @@ const toggleIconClass =
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
+const InsightsView = React.lazy(() => import("./InsightsView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
 const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
@@ -542,7 +543,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const clearAllTranscriptions = useCallback(() => {
     showConfirmDialog({
       title: t("controlPanel.history.clearAllTitle"),
-      description: t("controlPanel.history.clearAllDescription"),
+      description: t(
+        isSignedIn
+          ? "controlPanel.history.clearAllDescription"
+          : "controlPanel.history.clearAllDescriptionDevice"
+      ),
       onConfirm: async () => {
         try {
           const result = await window.electronAPI.clearTranscriptions();
@@ -569,7 +574,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       },
       variant: "destructive",
     });
-  }, [showConfirmDialog, showAlertDialog, toast, t]);
+  }, [isSignedIn, showConfirmDialog, showAlertDialog, toast, t]);
 
   const showAudioInFolder = useCallback(
     async (id: number) => {
@@ -1172,6 +1177,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 }}
                 onOpenIntegrations={() => setActiveView("integrations")}
               />
+            )}
+            {activeView === "insights" && (
+              <Suspense fallback={null}>
+                <InsightsView />
+              </Suspense>
             )}
             {activeView === "chat" && agentAllowedByPolicy && (
               <Suspense fallback={null}>
