@@ -1002,7 +1002,16 @@ async function startApp() {
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 
-  await windowManager.setActivationModeCache(environmentManager.getActivationMode());
+  // Hold-only model: rewrite a stored Tap once, then seed the cache. A Hold
+  // the current hotkey cannot deliver is demoted below (slots) and after the
+  // macOS hotkey restore (dictation), exactly as before.
+  environmentManager.migrateActivationModesToHold();
+  const dictationHoldApplied = await windowManager.setActivationModeCache(
+    environmentManager.getActivationMode()
+  );
+  if (!dictationHoldApplied && environmentManager.getActivationMode() === "push") {
+    environmentManager.saveActivationMode("tap");
+  }
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 

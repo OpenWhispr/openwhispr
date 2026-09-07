@@ -137,17 +137,17 @@ test("per-slot activation modes persist, normalize, and reject unknown slots", a
   environmentManager.saveAllKeysToEnvFile = async () => ({});
 
   assert.deepEqual(environmentManager.getSlotActivationModes(), {
-    voiceAgent: "tap",
-    translation: "tap",
+    voiceAgent: "push",
+    translation: "push",
   });
 
-  environmentManager.saveSlotActivationMode("voiceAgent", "push");
+  environmentManager.saveSlotActivationMode("voiceAgent", "tap");
   environmentManager.saveSlotActivationMode("translation", "bogus");
   assert.equal(environmentManager.saveSlotActivationMode("meeting", "push"), false);
 
   assert.deepEqual(environmentManager.getSlotActivationModes(), {
-    voiceAgent: "push",
-    translation: "tap",
+    voiceAgent: "tap",
+    translation: "push",
   });
 });
 
@@ -185,4 +185,81 @@ test("device cleanup clears persisted settings and encrypted secret files", asyn
   assert.equal(process.env.START_MINIMIZED, undefined);
   assert.equal(fs.existsSync(path.join(userDataDirectory, ".env")), false);
   assert.equal(fs.existsSync(secureKeysDirectory), false);
+});
+
+test("migrateActivationModesToHold flips every stored Tap to Hold exactly once", async (t) => {
+  const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-hold-migration-"));
+  const keys = [
+    "ACTIVATION_MODE",
+    "VOICE_AGENT_ACTIVATION_MODE",
+    "TRANSLATION_ACTIVATION_MODE",
+    "ACTIVATION_MODE_HOLD_MIGRATED",
+  ];
+  const environmentSnapshot = new Map(
+    keys.map((name) => [
+      name,
+      { present: Object.hasOwn(process.env, name), value: process.env[name] },
+    ])
+  );
+  const originalResourcesPath = process.resourcesPath;
+  process.resourcesPath = userDataDirectory;
+  for (const name of keys) delete process.env[name];
+  process.env.ACTIVATION_MODE = "tap";
+  process.env.VOICE_AGENT_ACTIVATION_MODE = "push";
+  t.after(() => {
+    restoreEnvironment(environmentSnapshot);
+    process.resourcesPath = originalResourcesPath;
+    fs.rmSync(userDataDirectory, { recursive: true, force: true });
+  });
+
+  installDotenvStub(t);
+  const EnvironmentManager = loadEnvironmentManager(t, userDataDirectory);
+  const environmentManager = new EnvironmentManager();
+  let persisted = 0;
+  environmentManager.saveAllKeysToEnvFile = async () => {
+    persisted += 1;
+    return {};
+  };
+
+  assert.equal(environmentManager.getActivationMode(), "tap");
+  assert.equal(environmentManager.migrateActivationModesToHold(), true);
+  assert.equal(environmentManager.getActivationMode(), "push");
+  assert.deepEqual(environmentManager.getSlotActivationModes(), {
+    voiceAgent: "push",
+    translation: "push",
+  });
+  assert.equal(process.env.ACTIVATION_MODE_HOLD_MIGRATED, "true");
+  assert.equal(persisted, 1);
+
+  // A later demotion verdict survives the next launch: the marker holds.
+  environmentManager.saveActivationMode("tap");
+  assert.equal(environmentManager.migrateActivationModesToHold(), false);
+  assert.equal(environmentManager.getActivationMode(), "tap");
+});
+
+test("an unset activation mode reads as Hold", async (t) => {
+  const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-hold-default-"));
+  const environmentSnapshot = new Map(
+    ["ACTIVATION_MODE"].map((name) => [
+      name,
+      { present: Object.hasOwn(process.env, name), value: process.env[name] },
+    ])
+  );
+  const originalResourcesPath = process.resourcesPath;
+  process.resourcesPath = userDataDirectory;
+  delete process.env.ACTIVATION_MODE;
+  t.after(() => {
+    restoreEnvironment(environmentSnapshot);
+    process.resourcesPath = originalResourcesPath;
+    fs.rmSync(userDataDirectory, { recursive: true, force: true });
+  });
+
+  installDotenvStub(t);
+  const EnvironmentManager = loadEnvironmentManager(t, userDataDirectory);
+  const environmentManager = new EnvironmentManager();
+  environmentManager.saveAllKeysToEnvFile = async () => ({});
+
+  assert.equal(environmentManager.getActivationMode(), "push");
+  environmentManager.saveActivationMode("nonsense");
+  assert.equal(environmentManager.getActivationMode(), "push");
 });
