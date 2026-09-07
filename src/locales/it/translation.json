@@ -1882,7 +1882,15 @@
         "linuxPttSetupNote": "Dopo aver eseguito il comando, esci e riaccedi.",
         "hyprlandConfigWriteWarningTitle": "Le scorciatoie di Hyprland non verranno mantenute",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr non può scrivere in {{path}}, quindi le scorciatoie non sopravvivranno a un ricaricamento della configurazione di Hyprland. Assicurati che il file esista e sia scrivibile.",
-        "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr riserva la scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usa la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia."
+        "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr riserva la scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usa la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia.",
+        "gestures": {
+          "holdTitle": "Hold to speak",
+          "holdDetail": "Release to finish",
+          "handsFreeTitle": "Hands-free",
+          "handsFreeDetail": "Press again to stop",
+          "doublePress": "Double press",
+          "tapOnlyTitle": "Press to start, press again to stop"
+        }
       },
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",
@@ -3412,6 +3420,12 @@
       "badge": "Suggerimento",
       "title": "Passa alla modalità a mani libere",
       "description": "Premi due volte {{hotkey}} per avviare la modalità a mani libere."
+    },
+    "holdMigrationCard": {
+      "badge": "New in this update",
+      "title": "Hold to speak, release to finish",
+      "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
+      "gesture": "Double press it for hands‑free, press again to stop."
     }
   },
   "dictationAgent": {

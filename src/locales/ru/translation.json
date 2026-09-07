@@ -1886,7 +1886,15 @@
         "linuxPttSetupNote": "После выполнения команды выйдите из системы и войдите снова.",
         "hyprlandConfigWriteWarningTitle": "Привязки клавиш Hyprland не будут сохраняться",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr не может записывать в {{path}}, поэтому привязки клавиш не сохранятся после перезагрузки конфигурации Hyprland. Убедитесь, что файл существует и доступен для записи.",
-        "hyprlandUnbindDescription": "В Hyprland OpenWhispr резервирует выбранное сочетание клавиш. Любая существующая привязка Hyprland, использующая ту же комбинацию, будет удалена, когда OpenWhispr зарегистрирует своё сочетание."
+        "hyprlandUnbindDescription": "В Hyprland OpenWhispr резервирует выбранное сочетание клавиш. Любая существующая привязка Hyprland, использующая ту же комбинацию, будет удалена, когда OpenWhispr зарегистрирует своё сочетание.",
+        "gestures": {
+          "holdTitle": "Hold to speak",
+          "holdDetail": "Release to finish",
+          "handsFreeTitle": "Hands-free",
+          "handsFreeDetail": "Press again to stop",
+          "doublePress": "Double press",
+          "tapOnlyTitle": "Press to start, press again to stop"
+        }
       },
       "meetingHotkey": {
         "title": "Горячая клавиша режима встречи",
@@ -3450,6 +3458,12 @@
       "badge": "Совет",
       "title": "Перейдите в режим без рук",
       "description": "Дважды нажмите {{hotkey}}, чтобы запустить режим без рук."
+    },
+    "holdMigrationCard": {
+      "badge": "New in this update",
+      "title": "Hold to speak, release to finish",
+      "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
+      "gesture": "Double press it for hands‑free, press again to stop."
     }
   },
   "dictationAgent": {
