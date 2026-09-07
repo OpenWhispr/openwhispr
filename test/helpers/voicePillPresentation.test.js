@@ -151,6 +151,75 @@ test("the idle pill keeps its configured resting dock", async () => {
   );
 });
 
+// resolveVoicePillTravelPresentation: how long the persistent pill takes to
+// glide to its next dock, and on what easing. The Assistant panel's shell
+// springs open on the pinned morph spring (Task 4); the pill's travel plays
+// the SAME spring so it arrives at the footer as the shell finishes. Live
+// Transcript's entrance is out of scope here and must keep its own
+// established timings and the transition's default CSS easing (no override).
+test("the pill travels on the morph spring, at the morph duration, while the Assistant panel is mounted", async () => {
+  const { resolveVoicePillTravelPresentation } = await load();
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
+
+  assert.deepEqual(
+    resolveVoicePillTravelPresentation({
+      assistantMounted: true,
+      liveTranscriptOpen: false,
+      liveTranscriptEntrancePhase: "idle",
+    }),
+    { durationMs: MOTION_TIMING.morphMs, ease: "var(--motion-morph-ease)" }
+  );
+});
+
+test("the Assistant panel's travel outranks a simultaneously-open Live Transcript phase", async () => {
+  const { resolveVoicePillTravelPresentation } = await load();
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
+
+  // Both flags are only ever true together mid-handoff, but the precedence
+  // still must pick the morph spring first, not fall through to Live
+  // Transcript's encapsulate timing.
+  assert.deepEqual(
+    resolveVoicePillTravelPresentation({
+      assistantMounted: true,
+      liveTranscriptOpen: true,
+      liveTranscriptEntrancePhase: "encapsulate",
+    }),
+    { durationMs: MOTION_TIMING.morphMs, ease: "var(--motion-morph-ease)" }
+  );
+});
+
+test("Live Transcript's own pill travel keeps its established timings and the default CSS easing", async () => {
+  const { resolveVoicePillTravelPresentation, LIVE_TRANSCRIPT_ENTRANCE_TIMING } = await load();
+
+  assert.deepEqual(
+    resolveVoicePillTravelPresentation({
+      assistantMounted: false,
+      liveTranscriptOpen: true,
+      liveTranscriptEntrancePhase: "encapsulate",
+    }),
+    { durationMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs, ease: undefined },
+    "the encapsulate phase keeps its own shorter duration"
+  );
+  assert.deepEqual(
+    resolveVoicePillTravelPresentation({
+      assistantMounted: false,
+      liveTranscriptOpen: true,
+      liveTranscriptEntrancePhase: "controls",
+    }),
+    { durationMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs, ease: undefined },
+    "any other open phase falls back to the horizontal-travel duration"
+  );
+  assert.deepEqual(
+    resolveVoicePillTravelPresentation({
+      assistantMounted: false,
+      liveTranscriptOpen: false,
+      liveTranscriptEntrancePhase: "idle",
+    }),
+    { durationMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs, ease: undefined },
+    "the resting pill (neither panel mounted) also uses the horizontal-travel duration, unmodified"
+  );
+});
+
 test("Live Transcript restores stop and cancel interactions without unlocking Assistant", async () => {
   const { resolveVoicePillInteraction } = await load();
 

@@ -223,6 +223,148 @@ test("the listening entrance widening and the waveform reveal reference the pinn
   );
 });
 
+// Task 4: the shared expanding-panel-surface's closed state IS the pill's own
+// 40px circle at the resting dock (not the old invisible corner-box), and
+// opening springs it open on the pinned morph spring. Exact multi-line
+// substring matches (not a loose regex) so a revert to a hardcoded
+// cubic-bezier literal, a duration drift, or a dropped var name all fail this
+// the same way the Task 2 review's near-miss should have been caught.
+test("the pill-to-panel surface closes to the pill's own circle and springs open on the morph spring", async () => {
+  const styles = readDictationStyles();
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
+
+  const closedSurfaceRule = [
+    ".expanding-panel-surface {",
+    "  clip-path: inset(calc(100% - 40px) 0 0 calc(100% - 40px) round 20px);",
+    "  opacity: 1;",
+    "  pointer-events: none;",
+    "  transform: none;",
+    "  transition:",
+    `    clip-path var(--motion-morph-ms, ${MOTION_TIMING.morphMs}ms) var(--motion-morph-ease, cubic-bezier(0.2, 0, 0, 1)),`,
+    "    opacity 180ms linear,",
+    `    transform var(--motion-morph-ms, ${MOTION_TIMING.morphMs}ms) var(--motion-morph-ease, cubic-bezier(0.2, 0, 0, 1));`,
+    "  will-change: clip-path, opacity, transform;",
+    "}",
+  ].join("\n");
+  assert.ok(
+    closedSurfaceRule.includes("var(--motion-morph-ease,"),
+    "sanity: the expected snippet itself must reference the pinned morph ease variable"
+  );
+  assert.ok(
+    styles.includes(closedSurfaceRule),
+    "expected the shared closed state to be exactly the pill's circle, springing open on the pinned morph spring"
+  );
+
+  // Nothing is mounted at rest (no data-panel-mode attribute at all): the
+  // shell hides instead of showing an empty circle under the pill.
+  assert.ok(
+    styles.includes(
+      [".expanding-panel-surface:not([data-panel-mode]) {", "  visibility: hidden;", "}"].join("\n")
+    ),
+    "expected the surface to stay hidden while nothing is mounted"
+  );
+
+  // Each dock's anchor only needs to flip the clip-path's kept corner now —
+  // the transform nudge moved to Live Transcript's own scoped closed state
+  // below, since the shared circle never needs one.
+  assert.ok(
+    styles.includes(
+      [".expanding-panel-anchor-bottom-right {", "  transform-origin: bottom right;", "}"].join(
+        "\n"
+      )
+    ),
+    "expected the right anchor to carry only a transform-origin now"
+  );
+  assert.ok(
+    styles.includes(
+      [
+        ".expanding-panel-anchor-bottom-left {",
+        "  clip-path: inset(calc(100% - 40px) calc(100% - 40px) 0 0 round 20px);",
+        "  transform-origin: bottom left;",
+        "}",
+      ].join("\n")
+    ),
+    "expected the left anchor's closed clip-path to keep the pill's bottom-left corner instead"
+  );
+});
+
+// The old corner-box closed state (52px/108px inset, 4px translate nudge) is
+// not deleted — Live Transcript's entrance is out of scope for this task and
+// must render identically, so that geometry survives, just rescoped to
+// data-panel-mode="live-transcript" and gated to the closed (:not(...-open))
+// state instead of living in the mode-agnostic base rule.
+test("Live Transcript's own closed corner-box geometry survives Task 4, rescoped to its own mode", async () => {
+  const styles = readDictationStyles();
+
+  assert.ok(
+    styles.includes(
+      [
+        '.expanding-panel-surface[data-panel-mode="live-transcript"]:not(.expanding-panel-surface-open) {',
+        "  clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 108px) round 24px);",
+        "  opacity: 0;",
+        "  transform: translate(4px, 4px);",
+        "}",
+      ].join("\n")
+    ),
+    "expected Live Transcript's right-origin closed geometry to be preserved verbatim, scoped to its own mode"
+  );
+  assert.ok(
+    styles.includes(
+      [
+        '.expanding-panel-surface[data-panel-mode="live-transcript"].expanding-panel-anchor-bottom-left:not(.expanding-panel-surface-open) {',
+        "  clip-path: inset(calc(100% - 52px) calc(100% - 108px) 0 0 round 24px);",
+        "  transform: translate(-4px, 4px);",
+        "}",
+      ].join("\n")
+    ),
+    "expected Live Transcript's left-origin closed geometry to be preserved verbatim, scoped to its own mode"
+  );
+});
+
+test("the pill's travel between docks can be driven onto the morph spring by an ease variable", async () => {
+  const styles = readDictationStyles();
+
+  const pillPositionRule = [
+    ".voice-pill-position {",
+    "  transition:",
+    "    left var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1)),",
+    "    bottom var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1)),",
+    "    transform var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1));",
+    "  will-change: left, bottom, transform;",
+    "}",
+  ].join("\n");
+
+  assert.ok(
+    styles.includes(pillPositionRule),
+    "expected .voice-pill-position's transition to accept a --voice-pill-travel-ease override, defaulting to the prior cubic-bezier when unset"
+  );
+});
+
+test("the surface springing open and the pill's travel both collapse to near-instant under reduced motion", async () => {
+  const styles = readDictationStyles();
+
+  const reducedMotionOverride = [
+    "  .expanding-panel-surface,",
+    "  .voice-pill-position {",
+    "    transition-duration: 1ms !important;",
+    "  }",
+  ].join("\n");
+
+  assert.ok(
+    styles.includes(reducedMotionOverride),
+    "expected both the closed-circle surface and the pill's travel to override to 1ms under reduced motion"
+  );
+
+  // Confirm it actually lives inside the reduced-motion media query, not just
+  // anywhere else in the file.
+  const reducedMotionBlockStart = styles.indexOf("@media (prefers-reduced-motion: reduce)");
+  assert.ok(reducedMotionBlockStart >= 0, "expected a reduced-motion media block to exist");
+  assert.ok(
+    styles.indexOf(reducedMotionOverride) > reducedMotionBlockStart,
+    "expected the new override to live inside the reduced-motion media query, not outside it"
+  );
+});
+
 test("the waveform pill keeps the normal compact logo footprint", async () => {
   const idle = await renderPill("idle", false);
   const recording = await renderPill("recording", true);

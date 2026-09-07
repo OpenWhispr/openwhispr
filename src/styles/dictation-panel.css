@@ -3,26 +3,33 @@
    index.css ahead of its own rules; nothing here shares selectors with the
    app-wide styles that remain there. */
 
-/* Shared pill-to-panel surface. Each mode chooses the pill corner it grows from. */
+/* Shared pill-to-panel surface. Closed, the surface IS the pill's circle at
+   the resting dock (the shell is inset 12px like the pill, so the circle is
+   its bottom corner). Opening springs the circle open on the morph spring;
+   closing springs it shut. clip-path clips the shadow as well, so the closed
+   circle carries no halo. Nothing is mounted at rest, so it is hidden then. */
 .expanding-panel-surface {
-  clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 108px) round 24px);
-  opacity: 0;
+  clip-path: inset(calc(100% - 40px) 0 0 calc(100% - 40px) round 20px);
+  opacity: 1;
   pointer-events: none;
+  transform: none;
   transition:
-    clip-path 280ms cubic-bezier(0.2, 0, 0, 1),
-    opacity 140ms ease-out,
-    transform 280ms cubic-bezier(0.2, 0, 0, 1);
+    clip-path var(--motion-morph-ms, 440ms) var(--motion-morph-ease, cubic-bezier(0.2, 0, 0, 1)),
+    opacity 180ms linear,
+    transform var(--motion-morph-ms, 440ms) var(--motion-morph-ease, cubic-bezier(0.2, 0, 0, 1));
   will-change: clip-path, opacity, transform;
 }
 
+.expanding-panel-surface:not([data-panel-mode]) {
+  visibility: hidden;
+}
+
 .expanding-panel-anchor-bottom-right {
-  transform: translate(4px, 4px);
   transform-origin: bottom right;
 }
 
 .expanding-panel-anchor-bottom-left {
-  clip-path: inset(calc(100% - 52px) calc(100% - 108px) 0 0 round 24px);
-  transform: translate(-4px, 4px);
+  clip-path: inset(calc(100% - 40px) calc(100% - 40px) 0 0 round 20px);
   transform-origin: bottom left;
 }
 
@@ -31,6 +38,19 @@
   opacity: 1;
   pointer-events: auto;
   transform: none;
+}
+
+/* Live Transcript keeps its established corner-box origin and fade: its
+   entrance is staged from the encapsulated footer and is out of scope here. */
+.expanding-panel-surface[data-panel-mode="live-transcript"]:not(.expanding-panel-surface-open) {
+  clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 108px) round 24px);
+  opacity: 0;
+  transform: translate(4px, 4px);
+}
+
+.expanding-panel-surface[data-panel-mode="live-transcript"].expanding-panel-anchor-bottom-left:not(.expanding-panel-surface-open) {
+  clip-path: inset(calc(100% - 52px) calc(100% - 108px) 0 0 round 24px);
+  transform: translate(-4px, 4px);
 }
 
 /* Agent close first fades its complex inner tree while the surface is still
@@ -399,9 +419,9 @@
    from any resting dock into either panel footer; no left/right auto jump. */
 .voice-pill-position {
   transition:
-    left var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
-    bottom var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
-    transform var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1);
+    left var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1)),
+    bottom var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1)),
+    transform var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1));
   will-change: left, bottom, transform;
 }
 
@@ -620,6 +640,11 @@
 @media (prefers-reduced-motion: reduce) {
   .expanding-panel-surface {
     transition-duration: 1ms;
+  }
+
+  .expanding-panel-surface,
+  .voice-pill-position {
+    transition-duration: 1ms !important;
   }
 
   .hands-free-tip-card {

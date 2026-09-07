@@ -31,7 +31,6 @@ import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoord
 import { motionCssVariables } from "./utils/springEasing";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
-  LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   resolveLiveTranscriptEntrancePresentation,
   resolveAssistantFooterPresentation,
   resolveAgentModeActive,
@@ -43,6 +42,7 @@ import {
   resolveVoicePanelCorePresentation,
   resolveVoicePillDock,
   resolveVoicePillInteraction,
+  resolveVoicePillTravelPresentation,
   isVoicePillActivationKey,
   shouldActivateVoicePill,
   shouldOfferLiveTranscriptReopen,
@@ -615,10 +615,12 @@ export default function App() {
     panelStartPosition,
     horizontalDirection: voiceHorizontalDirection,
   });
-  const voicePillTravelDuration =
-    liveTranscript.open && liveTranscript.entrancePhase === "encapsulate"
-      ? LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs
-      : LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs;
+  const { durationMs: voicePillTravelDuration, ease: voicePillTravelEase } =
+    resolveVoicePillTravelPresentation({
+      assistantMounted: assistant.mounted,
+      liveTranscriptOpen: liveTranscript.open,
+      liveTranscriptEntrancePhase: liveTranscript.entrancePhase,
+    });
   const dictationErrorSuppressesPill =
     dictationErrorActionCount > 0 || dictationErrorPillHandoffActive;
   // Keep one pill DOM node alive while final Agent actions own the footer. On
@@ -642,6 +644,7 @@ export default function App() {
         } ${pillVisuallySuppressed ? "opacity-0" : "opacity-100"}`}
         style={{
           "--voice-pill-travel-duration": `${voicePillTravelDuration}ms`,
+          "--voice-pill-travel-ease": voicePillTravelEase,
         }}
         data-dictation-error-suppressed={dictationErrorSuppressesPill || undefined}
         data-assistant-actions-suppressed={assistantActionsSuppressPill || undefined}

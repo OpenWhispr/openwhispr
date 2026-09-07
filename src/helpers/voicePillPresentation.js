@@ -195,6 +195,32 @@ export function resolveVoicePillDock({
   return `bottom-${horizontalDirection}`;
 }
 
+/**
+ * How long the persistent pill takes to glide to its next dock, and on what
+ * easing. The Assistant panel's shell springs open on the pinned morph spring
+ * (see .expanding-panel-surface in dictation-panel.css); the pill's travel
+ * plays the SAME spring so it arrives at the footer dock as the shell
+ * finishes opening, instead of the two motions disagreeing. Live Transcript's
+ * entrance is out of scope here and keeps its own established timings and the
+ * transition's default CSS easing (no override).
+ */
+export function resolveVoicePillTravelPresentation({
+  assistantMounted,
+  liveTranscriptOpen,
+  liveTranscriptEntrancePhase,
+}) {
+  if (assistantMounted) {
+    return { durationMs: MOTION_TIMING.morphMs, ease: "var(--motion-morph-ease)" };
+  }
+  return {
+    durationMs:
+      liveTranscriptOpen && liveTranscriptEntrancePhase === "encapsulate"
+        ? LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs
+        : LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs,
+    ease: undefined,
+  };
+}
+
 export function getListeningEntranceTimeline(timing = LISTENING_ENTRANCE_TIMING) {
   const settleAtMs = timing.thinkingMs + timing.expansionMs;
   return {
