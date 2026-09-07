@@ -200,6 +200,46 @@ test("updateHotkey promotes a demoted dictation slot back to Hold when the new h
   }
 });
 
+test("a failed KDE hotkey change restores the old hotkey under the mode it was registered with", async () => {
+  const manager = new HotkeyManager();
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  const calls = [];
+  manager.useKDE = true;
+  manager.kdeManager = {
+    unregisterKeybinding: async () => true,
+    registerKeybinding: async (hotkey, _slotName, _callback, isPushToTalk) => {
+      calls.push([hotkey, isPushToTalk]);
+      // Another app already owns the new hotkey.
+      return hotkey === "Control+Shift+Space" ? "conflict" : true;
+    },
+  };
+  manager.notifyActiveHotkey = () => undefined;
+  manager.saveHotkeyToRenderer = async () => true;
+  // Tap is the correct verdict for a modifier-only hotkey on a DE backend,
+  // and it is the mode Control+Super is currently registered under.
+  manager.activationMode = "tap";
+  manager.currentHotkey = "Control+Super";
+
+  try {
+    const result = await manager.updateHotkey("Control+Shift+Space", () => undefined);
+
+    assert.equal(result.success, false);
+    // The new hotkey is attempted under its own verdict, Hold ...
+    assert.deepEqual(calls[0], ["Control+Shift+Space", true]);
+    // ... and the old one goes back under the mode it actually had, Tap.
+    // KGlobalAccel refuses a modifier-only shortcut on Hold, so restoring it
+    // under the new Hold would leave dictation with no binding at all.
+    assert.deepEqual(calls[1], ["Control+Super", false]);
+    assert.equal(calls.length, 2);
+    // Nothing changed hands, so the mode rolls back too.
+    assert.equal(manager.activationMode, "tap");
+    assert.equal(manager.getCurrentHotkey(), "Control+Super");
+  } finally {
+    Object.defineProperty(process, "platform", originalPlatform);
+  }
+});
+
 test("macOS supports Hold for every hotkey kind, plain keys through the listener's key watch", () => {
   const manager = new HotkeyManager();
   const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");

@@ -1472,7 +1472,10 @@ class HotkeyManager extends EventEmitter {
     const preferredMode = this.supportsPushToTalk(primary) ? "push" : "tap";
     const converged = preferredMode !== previousMode;
     if (converged) this.activationMode = preferredMode;
-    const result = await this._applyHotkeyUpdate(hotkeys, primary, callback);
+    // previousMode goes with it: the backend that has to put the OLD hotkey
+    // back on failure must put it back under the mode it was registered
+    // with, not the one we were converging to.
+    const result = await this._applyHotkeyUpdate(hotkeys, primary, callback, previousMode);
     if (converged) {
       if (result.success) result.activationMode = preferredMode;
       else this.activationMode = previousMode;
@@ -1480,7 +1483,15 @@ class HotkeyManager extends EventEmitter {
     return result;
   }
 
-  async _applyHotkeyUpdate(hotkeys, primary, callback) {
+  // `previousMode` is the mode the CURRENT hotkey is registered under, which
+  // is not this.activationMode any more: updateHotkey converges that to the
+  // new hotkey's verdict before calling in. Only the rollback path needs it.
+  async _applyHotkeyUpdate(
+    hotkeys,
+    primary,
+    callback,
+    previousMode = this.activationMode === "push" ? "push" : "tap"
+  ) {
     try {
       const hotkeyStr = hotkeys.join(",");
 
@@ -1552,14 +1563,22 @@ class HotkeyManager extends EventEmitter {
         );
         if (result !== true) {
           if (previousHotkey) {
+            // Under previousMode, not the mode we were converging to:
+            // KGlobalAccel refuses a modifier-only shortcut on Hold, so
+            // restoring one under the NEW Hold would silently leave dictation
+            // with no binding at all until the next restart.
             const restored = await this.kdeManager.registerKeybinding(
               previousHotkey,
               "dictation",
               callback,
-              this.activationMode === "push"
+              previousMode === "push"
             );
             if (restored === true) {
               debugLogger.log(`[HotkeyManager] Restored previous KDE hotkey "${previousHotkey}"`);
+            } else {
+              debugLogger.warn(
+                `[HotkeyManager] Could not restore previous KDE hotkey "${previousHotkey}": ${restored}`
+              );
             }
           }
           const reason =
