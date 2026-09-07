@@ -228,6 +228,39 @@ function migrateMicrophoneSelectionMode() {
 
 migrateMicrophoneSelectionMode();
 
+// Hold is the only activation model now (2026-09-07 design). One-time: a
+// stored Tap becomes Hold, and so does an *absent* mode on an install that
+// already finished onboarding — those users were on the old Tap default and
+// their hotkey behaviour is about to change, which is what the migration
+// card explains. A fresh install (onboarding not completed) simply gets the
+// new default and never sees the card. After the marker, a stored Tap is a
+// capability verdict written by the main process (the hotkey or backend
+// cannot Hold) and must be left alone.
+const ACTIVATION_MODE_STORAGE_KEYS = [
+  "activationMode",
+  "voiceAgentActivationMode",
+  "translationActivationMode",
+] as const;
+
+function migrateActivationModesToHold() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("activationModeHoldMigration") === "done") return;
+  const existingInstall = localStorage.getItem("onboardingCompleted") === "true";
+  let changed = false;
+  for (const key of ACTIVATION_MODE_STORAGE_KEYS) {
+    const stored = localStorage.getItem(key);
+    if (stored === "push") continue;
+    if (stored === "tap" || existingInstall) {
+      localStorage.setItem(key, "push");
+      changed = true;
+    }
+  }
+  localStorage.setItem("activationModeHoldMigration", "done");
+  localStorage.setItem("holdMigrationCardPending", String(changed));
+}
+
+migrateActivationModesToHold();
+
 // One-time migration for legacy `meetingFollows{Transcription,Reasoning}` flags.
 // When the flag was true (the default), meeting/note recordings inherited the
 // main dictation/intelligence settings. We've removed the toggle; copy the
@@ -297,6 +330,8 @@ const BOOLEAN_SETTINGS = new Set([
   "audioCuesEnabled",
   "pauseMediaOnDictation",
   "floatingIconAutoHide",
+  "holdMigrationCardShown",
+  "holdMigrationCardPending",
   "startMinimized",
   "meetingProcessDetection",
   "speakerDiarizationEnabled",
@@ -950,6 +985,9 @@ export interface SettingsState
   setVoiceAgentActivationMode: (mode: "tap" | "push") => void;
   translationActivationMode: "tap" | "push";
   setTranslationActivationMode: (mode: "tap" | "push") => void;
+  holdMigrationCardPending: boolean;
+  holdMigrationCardShown: boolean;
+  setHoldMigrationCardShown: (shown: boolean) => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
   setMicrophoneSelectionMode: (mode: MicrophoneSelectionMode) => void;
@@ -1344,14 +1382,17 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
-  activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
+  activationMode: (readString("activationMode", "push") === "tap" ? "tap" : "push") as
     "tap" | "push",
-  voiceAgentActivationMode: (readString("voiceAgentActivationMode", "tap") === "push"
-    ? "push"
-    : "tap") as "tap" | "push",
-  translationActivationMode: (readString("translationActivationMode", "tap") === "push"
-    ? "push"
-    : "tap") as "tap" | "push",
+  voiceAgentActivationMode: (readString("voiceAgentActivationMode", "push") === "tap"
+    ? "tap"
+    : "push") as "tap" | "push",
+  translationActivationMode: (readString("translationActivationMode", "push") === "tap"
+    ? "tap"
+    : "push") as "tap" | "push",
+  // Set by migrateActivationModesToHold() above; read-only from here on.
+  holdMigrationCardPending: readBoolean("holdMigrationCardPending", false),
+  holdMigrationCardShown: readBoolean("holdMigrationCardShown", false),
 
   microphoneSelectionMode: (() => {
     const mode = readString("microphoneSelectionMode", "system");
@@ -2105,6 +2146,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) {
       window.electronAPI?.notifySlotActivationModeChanged?.("translation", validMode);
     }
+  },
+
+  setHoldMigrationCardShown: (shown: boolean) => {
+    if (isBrowser) localStorage.setItem("holdMigrationCardShown", String(shown));
+    set({ holdMigrationCardShown: shown });
   },
 
   setPreferBuiltInMic: (value: boolean) => {
