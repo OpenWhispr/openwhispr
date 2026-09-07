@@ -27,7 +27,7 @@ test("the production control panel has no leaderboard demo path", () => {
 
   assert.equal(controlPanel.includes("LEADERBOARD_DEMO_ENABLED"), false);
   assert.equal(leaderboard.includes("LEADERBOARD_DEMO_ENABLED"), false);
-  assert.ok(controlPanel.includes('useState<ControlPanelView>("home")'));
+  assert.ok(controlPanel.includes('if (!import.meta.env.DEV) return "home"'));
 });
 
 test("leaderboard access is plan agnostic and invitation led", () => {
@@ -41,5 +41,7 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   assert.ok(section.includes("inviteToLeaderboard"));
   assert.ok(section.includes('t("insights.leaderboard.inviteCta")'));
   assert.ok(section.includes("<LeaderboardSetupCard"));
+  assert.ok(section.includes("<LeaderboardSoloEmptyState"));
+  assert.ok(section.includes("selectedScope?.memberCount === 1"));
   assert.ok(controlPanel.includes("onInvite={() => setShowReferrals(true)}"));
 });

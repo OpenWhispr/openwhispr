@@ -50,6 +50,7 @@ import LeaderboardPodium from "./LeaderboardPodium";
 import LeaderboardSetupCard from "./LeaderboardSetupCard";
 import LeaderboardShareDialog from "./LeaderboardShareDialog";
 import LeaderboardSignInPreview from "./LeaderboardSignInPreview";
+import LeaderboardSoloEmptyState from "./LeaderboardSoloEmptyState";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -288,6 +289,7 @@ export default function LeaderboardSection({
   useEffect(() => setPage((current) => Math.min(current, pages - 1)), [pages]);
 
   const visibleMembers = useMemo(() => leaderboard?.members ?? [], [leaderboard]);
+  const isSoloScope = selectedScope?.memberCount === 1 && leaderboard?.totalMembers === 1;
 
   useEffect(() => {
     const rank = pendingScrollRankRef.current;
@@ -528,11 +530,13 @@ export default function LeaderboardSection({
         </div>
         <div className="flex items-center gap-2">
           {scopeSelect}
-          <Button size="sm" onClick={inviteToLeaderboard}>
-            <UserPlus size={14} />
-            {t("insights.leaderboard.inviteCta")}
-          </Button>
-          {leaderboard?.canShare && (
+          {!isSoloScope && (
+            <Button size="sm" onClick={inviteToLeaderboard}>
+              <UserPlus size={14} />
+              {t("insights.leaderboard.inviteCta")}
+            </Button>
+          )}
+          {!isSoloScope && leaderboard?.canShare && (
             <Button variant="outline-flat" size="sm" onClick={() => setShareOpen(true)}>
               <Share2 size={14} />
               {t("insights.leaderboard.share")}
@@ -579,7 +583,13 @@ export default function LeaderboardSection({
         </div>
       </div>
 
-      {error && !leaderboard ? (
+      {isSoloScope ? (
+        <LeaderboardSoloEmptyState
+          scopeKind={selectedScope.kind}
+          scopeName={selectedScope.name}
+          onInvite={inviteToLeaderboard}
+        />
+      ) : error && !leaderboard ? (
         <LeaderboardRetryCard
           message={t("insights.leaderboard.error")}
           onRetry={() => void load()}
