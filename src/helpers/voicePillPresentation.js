@@ -1,4 +1,5 @@
 import { LIVE_TRANSCRIPT_SURFACE_LIMITS } from "./voiceSurfaceGeometry.mjs";
+import { MOTION_TIMING } from "../utils/springEasing";
 
 export { LIVE_TRANSCRIPT_SURFACE_LIMITS };
 
@@ -15,8 +16,10 @@ export const LISTENING_ENTRANCE_TIMING = Object.freeze({
   // Give the Beam enough time to read as an intentional thinking state before
   // the persistent control begins changing shape.
   thinkingMs: 420,
-  // The morph spring, played over 360 ms.
-  expansionMs: 360,
+  // The morph spring, played over its pinned duration (Task 1's MOTION_TIMING) —
+  // imported, not re-hardcoded, so a change there can't silently stop reaching
+  // the pill.
+  expansionMs: MOTION_TIMING.listeningExpansionMs,
   // Hold the finished footprint briefly so the waveform reveal cannot be
   // perceived as part of the width animation.
   waveformDelayMs: 100,

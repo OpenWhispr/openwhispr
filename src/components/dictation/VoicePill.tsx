@@ -4,6 +4,7 @@ import { cn } from "../lib/utils";
 import { PillWaveform } from "./PillWaveform";
 import { VoiceIdentityIcon } from "./VoiceIdentityIcon";
 import { RESTING_WAVE_SILHOUETTE, WAVEFORM_BAR_COUNT } from "./waveformMath";
+import { MOTION_TIMING } from "../../utils/springEasing";
 import {
   LISTENING_ENTRANCE_TIMING,
   VOICE_PILL_FOOTPRINT,
@@ -190,8 +191,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
               showCompactPill && waveformVisible && isRecording
                 ? "translateX(0)"
                 : `translateX(${horizontalDirection === "left" ? "-6px" : "6px"})`,
-            transition:
-              "opacity 200ms ease-out, transform 200ms var(--motion-show-ease, cubic-bezier(0.2, 0, 0, 1))",
+            transition: `opacity 200ms ease-out, transform ${MOTION_TIMING.showMs}ms var(--motion-show-ease, cubic-bezier(0.2, 0, 0, 1))`,
           }}
         />
       </div>
