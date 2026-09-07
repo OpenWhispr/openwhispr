@@ -24,6 +24,7 @@ import { waitForVisualFrames } from "../utils/visualFrame";
 import { resolveLifecycleInputKind } from "../helpers/dictationRouting";
 import { createAssistantResponseDelivery } from "../helpers/assistantResponseDelivery";
 import { recordCleanupFailure } from "../stores/cleanupFailureStore";
+import { shouldPrewarmLocalWhisper } from "../helpers/whisperPrewarmPolicy";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -144,6 +145,20 @@ export const useAudioRecording = (toast, options = {}) => {
         // the compositor. startRecording() joins this prepared capture, so the
         // device still opens exactly once.
         void audioManagerRef.current.prepareMicCapture?.();
+
+        // Hide most of local Whisper's cold-start cost: kick off the model load
+        // in parallel with opening the microphone rather than after the user
+        // stops speaking. No-ops almost instantly if the right server is already
+        // running (see start()'s signature guard in whisperServer.js); a failure
+        // is logged and left for the normal transcribe-local-whisper path to
+        // retry, so it never blocks or delays the recording itself.
+        if (shouldPrewarmLocalWhisper(getSettings())) {
+          window.electronAPI?.whisperServerPrewarm?.(getSettings().whisperModel)?.catch((error) => {
+            logger.warn("Whisper prewarm failed; will retry on transcription", {
+              error: error?.message,
+            });
+          });
+        }
 
         // The floating dictation panel is non-focusable, so the foreground app is
         // still the user's actual editing target here. Refresh it for recordings

@@ -1559,6 +1559,11 @@ declare global {
 
       // Whisper server lifecycle
       whisperServerStatus: () => Promise<WhisperServerStatus>;
+      // Fire-and-forget cold-start hider called when dictation recording begins;
+      // never awaited on the recording-start path (see useAudioRecording.js).
+      whisperServerPrewarm?: (
+        modelName: string
+      ) => Promise<{ success: boolean; port?: number; reason?: string }>;
       whisperGpuRetry: () => Promise<{ success: boolean; willRestart: boolean }>;
 
       // CUDA GPU acceleration
