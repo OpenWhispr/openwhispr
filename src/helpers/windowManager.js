@@ -1424,11 +1424,11 @@ class WindowManager {
 
   async updateHotkey(hotkey) {
     const result = await this.hotkeyManager.updateHotkey(hotkey, this.createHotkeyCallback());
-    // The manager converged a Hold this hotkey cannot deliver to Tap: the
-    // cache and the native listeners follow; the IPC layer persists it and
-    // tells the renderer.
-    if (result?.activationMode === "tap" && this._cachedActivationMode !== "tap") {
-      this._cachedActivationMode = "tap";
+    // The manager converged the mode for this hotkey (Hold it cannot
+    // deliver → Tap, or a demoted Tap → Hold): the cache and the native
+    // listeners follow; the IPC layer persists it and tells the renderer.
+    if (result?.activationMode && result.activationMode !== this._cachedActivationMode) {
+      this._cachedActivationMode = result.activationMode;
       this.resetNativePushState();
       this.reconcileNativeKeyListeners();
     }

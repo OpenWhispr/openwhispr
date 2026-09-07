@@ -170,6 +170,33 @@ test("updateHotkey converges a Hold dictation mode to Tap when the new hotkey ca
   }
 });
 
+test("updateHotkey promotes a demoted dictation slot back to Hold when the new hotkey can Hold", async () => {
+  const manager = new HotkeyManager();
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+  manager.saveHotkeyToRenderer = async () => true;
+  manager.notifyActiveHotkey = () => undefined;
+  manager.supportsPushToTalk = (hotkey) => hotkey !== "F13";
+  try {
+    // A slot demoted to Tap for F13 (cannot Hold) comes back to Hold on a
+    // hotkey that can — Tap is a verdict about the hotkey, not a choice.
+    manager.activationMode = "tap";
+    const promoted = await manager.updateHotkey("Command+Period", () => undefined);
+    assert.equal(promoted.success, true);
+    assert.equal(promoted.activationMode, "push");
+    assert.equal(manager.activationMode, "push");
+
+    // A registration that fails keeps Tap: nothing changed hands.
+    manager.activationMode = "tap";
+    manager.setupShortcuts = () => ({ success: false, error: "nope" });
+    const failed = await manager.updateHotkey("Command+Comma", () => undefined);
+    assert.equal(failed.success, false);
+    assert.equal(manager.activationMode, "tap");
+  } finally {
+    Object.defineProperty(process, "platform", originalPlatform);
+  }
+});
+
 test("macOS supports Hold for every hotkey kind, plain keys through the listener's key watch", () => {
   const manager = new HotkeyManager();
   const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");

@@ -1434,17 +1434,21 @@ class HotkeyManager extends EventEmitter {
     // DE backends bind one accelerator per slot; extras stay in storage.
     const primary = hotkeys[0];
 
-    // The hotkey the user just chose wins over the stored mode: a Hold this
-    // hotkey cannot deliver (a macOS plain key with no release source, a
-    // modifier-only combo on a DE-native backend) converges to Tap and the
-    // caller is told, instead of the change being refused with a message
-    // about a missing native listener.
-    const demoteHold = this.activationMode === "push" && !this.supportsPushToTalk(primary);
-    if (demoteHold) this.activationMode = "tap";
+    // Hold is the only model, so the stored mode is a verdict about the
+    // hotkey, re-judged at every registration: a Hold this hotkey cannot
+    // deliver (a macOS plain key with no release source, a modifier-only
+    // combo on a DE-native backend) converges to Tap, and a Tap left behind
+    // by an earlier demotion comes back to Hold once the hotkey can deliver
+    // a release. The caller is told either way; a failed registration
+    // restores the previous mode because nothing changed hands.
+    const previousMode = this.activationMode === "push" ? "push" : "tap";
+    const preferredMode = this.supportsPushToTalk(primary) ? "push" : "tap";
+    const converged = preferredMode !== previousMode;
+    if (converged) this.activationMode = preferredMode;
     const result = await this._applyHotkeyUpdate(hotkeys, primary, callback);
-    if (demoteHold) {
-      if (result.success) result.activationMode = "tap";
-      else this.activationMode = "push";
+    if (converged) {
+      if (result.success) result.activationMode = preferredMode;
+      else this.activationMode = previousMode;
     }
     return result;
   }
