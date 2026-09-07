@@ -846,6 +846,9 @@ export default function App() {
         stage={
           activeVoicePanelMode === "live-transcript" ? liveTranscriptEntrance.coreStage : "content"
         }
+        entrancePhase={
+          activeVoicePanelMode === "live-transcript" ? liveTranscript.entrancePhase : undefined
+        }
         horizontalDirection={voiceHorizontalDirection}
         label={activeVoicePanelLabel}
         measurementRevision={

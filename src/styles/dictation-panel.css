@@ -53,6 +53,24 @@
   transform: translate(-4px, 4px);
 }
 
+/* Mounting Live Transcript no longer starts from an identical rest state
+   (the shared circle above is now visible, opacity 1 — not the invisible
+   default this corner-box used to share), so its first frame must SNAP
+   straight to the corner-box instead of animating into it: mounting and
+   opening are one requestAnimationFrame apart
+   (useLiveTranscriptPanel.js), so an animated mount-transition would still
+   be mid-flight — and get RETARGETED, not restarted — the instant -open
+   lands, making the real entrance begin wherever that retarget caught it
+   instead of a clean 52/108/opacity-0. entrancePhase="encapsulate" is set
+   in the same commit as mounted=true, so it uniquely tags this one
+   pre-open frame — CLOSING reaches the identical mode=live-transcript,
+   not-open combination but with entrancePhase="idle", and must keep
+   playing its own already-correct animated collapse. Finding 1, review
+   2026-09-08. */
+.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-entrance-phase="encapsulate"]:not(.expanding-panel-surface-open) {
+  transition: none;
+}
+
 /* Agent close first fades its complex inner tree while the surface is still
    geometrically stable. The following pill-to-surface contraction can then be
    composited as a simple layer instead of repainting markdown, controls, and
@@ -642,9 +660,23 @@
     transition-duration: 1ms;
   }
 
-  .expanding-panel-surface,
+  /* Only left/bottom/transform collapse here — the pill's own opacity fade
+     (Tailwind's `transition-opacity duration-150` in its className) keeps
+     its normal speed, matching index.css's policy just above that opacity
+     carries meaning and stays at normal speed. Naming these three properties
+     explicitly, instead of a bare un-named `transition-duration`, is what
+     keeps this rule from also reaching opacity: a blanket
+     `transition-duration: 1ms !important` reaches EVERY property in
+     transition-property — opacity included — because `!important` beats a
+     non-important declaration regardless of which rule or cascade layer
+     contributed it (Tailwind's utilities live in `@layer utilities`; this
+     file is unlayered, so it already wins left/bottom/transform without
+     needing `!important` at all). Finding 4, review 2026-09-08. */
   .voice-pill-position {
-    transition-duration: 1ms !important;
+    transition:
+      left 1ms,
+      bottom 1ms,
+      transform 1ms;
   }
 
   .hands-free-tip-card {

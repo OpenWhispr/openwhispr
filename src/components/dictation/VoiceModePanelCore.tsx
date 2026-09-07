@@ -13,6 +13,14 @@ interface VoiceModePanelCoreProps {
   open: boolean;
   closing?: boolean;
   stage?: VoiceModePanelStage;
+  // Live Transcript's raw entrance phase (useLiveTranscriptPanel's
+  // entrancePhase, e.g. "encapsulate" | "idle" | ...), passed through
+  // untouched — NOT the derived coreStage `stage` above, which normalises
+  // "idle" (closing) and "encapsulate" (freshly mounted, not yet open) to
+  // the SAME "encapsulated" value. Only the raw phase can tell those two
+  // apart, which is what gates the fresh-mount snap in dictation-panel.css
+  // without also silencing the closing animation.
+  entrancePhase?: string | null;
   horizontalDirection?: "left" | "right";
   label?: string;
   measurementRevision?: string | number | null;
@@ -34,6 +42,7 @@ export function VoiceModePanelCore({
   open,
   closing = false,
   stage = "content",
+  entrancePhase = null,
   horizontalDirection = "right",
   label,
   measurementRevision = null,
@@ -93,6 +102,7 @@ export function VoiceModePanelCore({
       data-panel-mode={mode ?? undefined}
       data-panel-closing={closing ? "true" : undefined}
       data-panel-stage={isLiveTranscript ? stage : "content"}
+      data-panel-entrance-phase={isLiveTranscript ? (entrancePhase ?? undefined) : undefined}
       data-panel-direction={horizontalDirection}
       style={
         {
