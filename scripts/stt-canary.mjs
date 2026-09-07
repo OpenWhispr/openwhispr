@@ -116,6 +116,7 @@ async function probeGeminiBatch(key, audio, contentType) {
 // audio frame shape and the transcript events — the socket opening proves none
 // of it, and server-side VAD suppresses silence, so the probe has to speak.
 const CANARY_PHRASE = "The quick brown fox. OpenWhispr transcription test.";
+const LIVE_FRAME_MS = 50;
 const LIVE_FRAME_BYTES = 1600; // one 50ms dictation worklet frame at 16kHz s16le
 
 // Gemini's own TTS keeps the fixture out of the repo and needs no second key.
@@ -171,8 +172,11 @@ async function probeGeminiLive(key) {
   };
   try {
     await streaming.connect({ token, mode: "byok", keyterms: ["OpenWhispr"] });
+    // Paced like the mic worklet: the server finalizes relative to real-time
+    // ingest, so a burst followed by audioStreamEnd starves the final.
     for (let offset = 0; offset < pcm.length; offset += LIVE_FRAME_BYTES) {
       streaming.sendAudio(pcm.subarray(offset, offset + LIVE_FRAME_BYTES));
+      await new Promise((resolve) => setTimeout(resolve, LIVE_FRAME_MS));
     }
     const { text } = await streaming.disconnect(true);
     if (!/quick brown fox/i.test(text)) {
