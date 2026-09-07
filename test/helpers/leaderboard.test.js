@@ -60,3 +60,56 @@ test("pagination follows the page size the response reports", async () => {
   assert.equal(pageForRank(21, 55, 10), 2);
   assert.equal(pageForRank(55, 55, 50), 1);
 });
+
+test("leaderboard surfaces follow scope state before participation state", async () => {
+  const { resolveLeaderboardSurface } = await load();
+  const access = {
+    state: "create",
+    scopes: [],
+    domain: null,
+    colleagueCount: 0,
+    invitation: null,
+    joinableWorkspace: null,
+  };
+  const scope = {
+    key: "workspace:one",
+    kind: "workspace",
+    id: "one",
+    name: "One",
+    memberCount: 1,
+    canShare: true,
+    state: "invite",
+    role: "owner",
+  };
+  const surface = (overrides = {}) =>
+    resolveLeaderboardSurface({
+      access,
+      selectedScope: null,
+      participating: false,
+      participationReady: true,
+      participationError: null,
+      ...overrides,
+    });
+
+  assert.equal(surface(), "create");
+  assert.equal(surface({ access: { ...access, state: "accept_invite" } }), "accept_invite");
+  assert.equal(surface({ access: { ...access, state: "request_join" } }), "request_join");
+  assert.equal(surface({ selectedScope: scope, participationReady: false }), "invite");
+  assert.equal(
+    surface({ selectedScope: { ...scope, state: "ready" }, participationReady: false }),
+    "participation_loading"
+  );
+  assert.equal(
+    surface({
+      selectedScope: { ...scope, state: "ready" },
+      participationReady: false,
+      participationError: "read",
+    }),
+    "participation_error"
+  );
+  assert.equal(surface({ selectedScope: { ...scope, state: "ready" } }), "sync");
+  assert.equal(
+    surface({ selectedScope: { ...scope, state: "ready" }, participating: true }),
+    "board"
+  );
+});

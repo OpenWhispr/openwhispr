@@ -224,14 +224,13 @@ export interface LeaderboardMember {
 }
 
 export type LeaderboardAccessState =
-  "ready" | "invite" | "request_join" | "create_team" | "upgrade";
+  "ready" | "invite" | "accept_invite" | "request_join" | "create";
 
 export interface LeaderboardAccessScope {
   key: string;
   kind: "workspace" | "domain";
   id: string;
   name: string;
-  plan: string;
   memberCount: number;
   canShare: boolean;
   state: "ready" | "invite";
@@ -243,7 +242,11 @@ export interface LeaderboardAccess {
   scopes: LeaderboardAccessScope[];
   domain: string | null;
   colleagueCount: number;
-  personalPlan: string;
+  invitation: {
+    workspaceId: string;
+    workspaceName: string;
+    inviterName: string | null;
+  } | null;
   joinableWorkspace: {
     id: string;
     name: string;
@@ -257,7 +260,6 @@ export interface Leaderboard {
     kind: "workspace" | "domain";
     id: string;
     name: string;
-    plan: string;
   };
   viewerUserId: string | null;
   metric: LeaderboardMetric;

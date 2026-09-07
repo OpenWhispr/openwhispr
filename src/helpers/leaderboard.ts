@@ -1,4 +1,10 @@
-import type { LeaderboardMember, LeaderboardMetric, LeaderboardRange } from "../types/electron";
+import type {
+  LeaderboardAccess,
+  LeaderboardAccessScope,
+  LeaderboardMember,
+  LeaderboardMetric,
+  LeaderboardRange,
+} from "../types/electron";
 
 // Fallbacks only: a loaded leaderboard carries the page size and refresh window
 // the server actually used, and those win over these.
@@ -11,6 +17,40 @@ export const LEADERBOARD_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 export const WEEKLY_METRICS: LeaderboardMetric[] = ["total_words", "desktop_words", "mobile_words"];
 const LIFETIME_METRICS: LeaderboardMetric[] = ["words_per_minute", "current_daily_streak"];
 export const ALL_TIME_METRICS: LeaderboardMetric[] = [...WEEKLY_METRICS, ...LIFETIME_METRICS];
+
+export type LeaderboardSurface =
+  | "accept_invite"
+  | "request_join"
+  | "create"
+  | "invite"
+  | "participation_loading"
+  | "participation_error"
+  | "sync"
+  | "board";
+
+export function resolveLeaderboardSurface({
+  access,
+  selectedScope,
+  participating,
+  participationReady,
+  participationError,
+}: {
+  access: LeaderboardAccess;
+  selectedScope: LeaderboardAccessScope | null;
+  participating: boolean;
+  participationReady: boolean;
+  participationError: "read" | "write" | null;
+}): LeaderboardSurface {
+  if (!selectedScope) {
+    if (access.state === "accept_invite" || access.state === "request_join") return access.state;
+    return "create";
+  }
+  if (selectedScope.state === "invite") return "invite";
+  if (!participationReady) {
+    return participationError === "read" ? "participation_error" : "participation_loading";
+  }
+  return participating ? "board" : "sync";
+}
 
 export function normalizeLeaderboardSelection(
   metric: LeaderboardMetric,
