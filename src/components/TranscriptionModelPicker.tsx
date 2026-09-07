@@ -110,7 +110,7 @@ function LocalModelCard({
             <div
               className={`w-1.5 h-1.5 rounded-full ${
                 isSelected
-                  ? "bg-primary shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)] animate-[pulse-glow_2s_ease-in-out_infinite]"
+                  ? "bg-primary shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)]"
                   : "bg-success shadow-[0_0_4px_rgba(34,197,94,0.5)]"
               }`}
             />
@@ -315,7 +315,7 @@ interface ModeToggleProps {
 function ModeToggle({ useLocalWhisper, onModeChange }: ModeToggleProps) {
   const { t } = useTranslation();
   return (
-    <div className="relative flex p-0.5 rounded-lg bg-surface-1/80 backdrop-blur-xl dark:bg-surface-1 border border-border/60 dark:border-white/8 shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark)">
+    <div className="relative flex p-0.5 rounded-lg bg-surface-1/80 dark:bg-surface-1 border border-border/60 dark:border-white/8 shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark)">
       <div
         className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md bg-card border border-border/60 dark:border-border-subtle shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark) transition-transform duration-200 ease-out ${
           useLocalWhisper ? "translate-x-[calc(100%)]" : "translate-x-0"

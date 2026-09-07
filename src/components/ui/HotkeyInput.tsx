@@ -664,7 +664,7 @@ export function HotkeyInput({
         {isCapturing ? (
           <div className="flex flex-col items-center gap-3">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+              <div className="w-2 h-2 bg-primary rounded-full" />
               <span className="text-xs font-medium text-primary">{t("hotkeyInput.listening")}</span>
             </div>
             {activeModifiers.length > 0 ? (
@@ -765,16 +765,14 @@ export function HotkeyInput({
         }
       `}
     >
-      {isCapturing && (
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary animate-pulse" />
-      )}
+      {isCapturing && <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary" />}
 
       <div className="px-4 py-3">
         {isCapturing ? (
           <>
             <div className="flex items-center justify-center gap-3">
               <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+                <div className="w-1.5 h-1.5 bg-primary rounded-full" />
                 <span className="text-xs font-medium text-muted-foreground">
                   {t("hotkeyInput.recording")}
                 </span>

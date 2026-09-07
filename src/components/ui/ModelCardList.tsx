@@ -115,7 +115,7 @@ export function ModelCard({
         <div
           className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusDotClass()} ${
             isSelected && isDownloaded
-              ? "animate-[pulse-glow_2s_ease-in-out_infinite]"
+              ? ""
               : isDownloading
                 ? "animate-[spinner-rotate_1s_linear_infinite]"
                 : ""

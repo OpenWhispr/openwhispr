@@ -47,10 +47,10 @@ const buttonVariants = cva(
           "active:bg-destructive/80 active:scale-[0.98]",
         ].join(" "),
 
-        // Outline — refined with subtle glassmorphism
+        // Outline
         outline: [
           "relative font-medium",
-          "text-foreground bg-muted/70 backdrop-blur-sm",
+          "text-foreground bg-muted/70",
           "border border-border/70",
           "shadow-sm",
           "hover:bg-muted hover:border-border-hover",
@@ -96,10 +96,10 @@ const buttonVariants = cva(
           "underline-offset-4",
         ].join(" "),
 
-        // Social button for auth flows - ultra-premium glassmorphism
+        // Social button for auth flows
         social: [
           "relative font-medium",
-          "text-foreground bg-surface-1/80 backdrop-blur-xl",
+          "text-foreground bg-surface-1/80",
           "border border-border/60",
           "shadow-sm gap-2",
           "hover:bg-surface-2/90 hover:border-border-hover hover:shadow",

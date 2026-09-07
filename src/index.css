@@ -1097,19 +1097,6 @@ a:hover {
   }
 }
 
-/* Model picker LED pulse animation */
-@keyframes pulse-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 6px oklch(0.65 0.2 260 / 0.4);
-    opacity: 0.8;
-  }
-  50% {
-    box-shadow: 0 0 8px oklch(0.65 0.2 260 / 0.6);
-    opacity: 1;
-  }
-}
-
 /* Spinner rotation for downloading state */
 @keyframes spinner-rotate {
   from {
