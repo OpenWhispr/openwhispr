@@ -1,6 +1,7 @@
 // Springs as CSS linear() easings, generated once (no animation library).
 // The curve is the closed-form damped spring from the design page's
-// prototype, sampled over its natural settle time and played over the
+// prototype — underdamped, critically damped, or truly over-damped, chosen
+// by zeta — sampled over its natural settle time and played over the
 // pinned duration below — the same trick the prototype uses for "show".
 
 export function springLinearEasing(
@@ -9,6 +10,18 @@ export function springLinearEasing(
   mass = 1,
   segments = 48
 ): string {
+  if (!(stiffness > 0)) {
+    throw new RangeError(`springLinearEasing: stiffness must be > 0, got ${stiffness}`);
+  }
+  if (!(damping > 0)) {
+    throw new RangeError(`springLinearEasing: damping must be > 0, got ${damping}`);
+  }
+  if (!(mass > 0)) {
+    throw new RangeError(`springLinearEasing: mass must be > 0, got ${mass}`);
+  }
+  if (!(Number.isInteger(segments) && segments > 0)) {
+    throw new RangeError(`springLinearEasing: segments must be a positive integer, got ${segments}`);
+  }
   const w0 = Math.sqrt(stiffness / mass);
   const zeta = damping / (2 * Math.sqrt(stiffness * mass));
   let settleSeconds: number;
@@ -19,8 +32,22 @@ export function springLinearEasing(
     position = (t) =>
       1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd * t) + ((zeta * w0) / wd) * Math.sin(wd * t));
   } else {
-    settleSeconds = (-Math.log(0.001) / w0) * 1.6;
-    position = (t) => 1 - (1 + w0 * t) * Math.exp(-w0 * t);
+    const discriminant = Math.sqrt(zeta * zeta - 1);
+    if (discriminant === 0) {
+      // Exactly critical damping: the two-root solution below has a
+      // removable 0/0 singularity here (r1 === r2), so use its closed-form
+      // limit directly instead of dividing by zero.
+      settleSeconds = (-Math.log(0.001) / w0) * 1.6;
+      position = (t) => 1 - (1 + w0 * t) * Math.exp(-w0 * t);
+    } else {
+      // True over-damped case: two distinct real roots. The slow root (the
+      // one closer to zero) dominates the tail and is what "settle time"
+      // means here — the fast root decays away almost immediately.
+      const r1 = w0 * (-zeta + discriminant); // slow root
+      const r2 = w0 * (-zeta - discriminant); // fast root
+      settleSeconds = -Math.log(0.001) / Math.abs(r1);
+      position = (t) => 1 - (r2 * Math.exp(r1 * t) - r1 * Math.exp(r2 * t)) / (r2 - r1);
+    }
   }
   const points: string[] = [];
   for (let i = 0; i <= segments; i++) {

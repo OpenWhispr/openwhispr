@@ -88,3 +88,68 @@ test("more damping means less overshoot for the same stiffness (k and c are both
     "heavier damping at the same stiffness must overshoot less"
   );
 });
+
+// Fix round 1, finding 1: the zeta >= 1 (critically/over-damped) branch used
+// to be a pure function of stiffness and mass — damping only decided WHICH
+// branch ran, never shaped the curve once inside it. zoop (k 520, c 46) sits
+// just past critical (zeta ~= 1.0086), so a retune of its damping alone used
+// to emit a byte-identical easing string. This must no longer be true.
+test("damping shapes the over-damped branch too — zoop's own c is not a dead knob", async () => {
+  const { springLinearEasing } = await load();
+  const zoop = springLinearEasing(520, 46);
+  assert.notEqual(springLinearEasing(520, 80), zoop, "retuning c=46 to c=80 must move the curve");
+  assert.notEqual(
+    springLinearEasing(520, 300),
+    zoop,
+    "retuning c=46 to c=300 must move the curve further still"
+  );
+  // And the two heavier-damped retunes must differ from each other too —
+  // otherwise the branch could still be secretly collapsing distinct c
+  // values onto one curve rather than truly tracking damping continuously.
+  assert.notEqual(springLinearEasing(520, 80), springLinearEasing(520, 300));
+});
+
+// Fix round 1, finding 5: invalid physical inputs must fail loudly, not
+// emit `linear(NaN 0.0%, …)` — an invalid custom-property value is invalid
+// AT COMPUTED-VALUE TIME, so CSS silently drops transition-timing-function
+// to `ease` with no console error. Silent-wrong-animation is worse than a
+// thrown error at the call site (which, for MOTION_EASING, is module load).
+test("rejects non-physical inputs instead of silently emitting NaN", async () => {
+  const { springLinearEasing } = await load();
+  assert.throws(() => springLinearEasing(300, 0), /damping/i);
+  assert.throws(() => springLinearEasing(0, 26), /stiffness/i);
+  assert.throws(() => springLinearEasing(-10, 26), /stiffness/i);
+  assert.throws(() => springLinearEasing(300, -5), /damping/i);
+  assert.throws(() => springLinearEasing(300, 26, 0), /mass/i);
+  assert.throws(() => springLinearEasing(300, 26, -1), /mass/i);
+  assert.throws(() => springLinearEasing(300, 26, 1, 0), /segments/i);
+  assert.throws(() => springLinearEasing(300, 26, 1, 4.5), /segments/i);
+});
+
+// Fix round 1, finding 2: the plan requires sampling over the spring's
+// NATURAL SETTLE TIME and playing the result over the PINNED DURATION —
+// never collapsing the two. Nothing above actually proves that: the
+// endpoint checks pass no matter what happens in between, and the overshoot
+// band (1.0-1.08) is wide enough to swallow a badly wrong middle. This pins
+// the curve's actual SHAPE as a regression tripwire. Values computed by
+// running this module's own springLinearEasing(300, 26) (morph) — not
+// assumed — see the bite-check in the fix-round-1 report for the two
+// mutations this specifically catches.
+test("morph's curve shape is pinned, not just its endpoints", async () => {
+  const { springLinearEasing } = await load();
+  const points = springLinearEasing(300, 26)
+    .slice("linear(".length, -1)
+    .split(", ");
+  assert.deepEqual(points.slice(0, 3), ["0.0000 0.0%", "0.0167 2.1%", "0.0605 4.2%"]);
+  let peakIndex = 0;
+  let peakValue = -Infinity;
+  points.forEach((p, i) => {
+    const value = Number(p.split(" ")[0]);
+    if (value > peakValue) {
+      peakValue = value;
+      peakIndex = i;
+    }
+  });
+  assert.equal(points[peakIndex], "1.0282 52.1%");
+  assert.equal(peakIndex, 25, "the peak must land at stop 25 of 48 (52.1% of the timeline)");
+});
