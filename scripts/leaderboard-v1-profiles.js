@@ -13,6 +13,39 @@ const MANIFEST_PATH =
   path.join(os.tmpdir(), "openwhispr-leaderboard-v1.seed");
 const PROCESS_PATH = path.join(os.tmpdir(), "openwhispr-leaderboard-v1-processes.json");
 
+function validateManifest(manifest) {
+  if (
+    manifest?.version !== 2 ||
+    !/^[a-f0-9]{6}$/.test(manifest.generation || "") ||
+    !Array.isArray(manifest.profiles) ||
+    manifest.profiles.length === 0
+  ) {
+    throw new Error(`Unsupported leaderboard profile manifest: ${MANIFEST_PATH}`);
+  }
+
+  const keys = new Set();
+  const ports = new Set();
+  for (const profile of manifest.profiles) {
+    if (
+      !/^[a-z0-9][a-z0-9-]{0,31}$/.test(profile.key || "") ||
+      typeof profile.label !== "string" ||
+      typeof profile.expected !== "string" ||
+      typeof profile.token !== "string" ||
+      profile.token.length < 16 ||
+      !Number.isInteger(profile.bridgePort) ||
+      profile.bridgePort < 1024 ||
+      profile.bridgePort > 65535 ||
+      keys.has(profile.key) ||
+      ports.has(profile.bridgePort)
+    ) {
+      throw new Error(`Invalid leaderboard profile in ${MANIFEST_PATH}`);
+    }
+    keys.add(profile.key);
+    ports.add(profile.bridgePort);
+  }
+  return manifest;
+}
+
 function request({ hostname, port, path: requestPath, method = "GET", body }) {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : null;
@@ -76,14 +109,14 @@ async function stopExistingProfiles() {
 async function openProfiles() {
   await ensureSharedServices();
   await stopExistingProfiles();
-  const manifest = JSON.parse(await readFile(MANIFEST_PATH, "utf8"));
-  if (manifest.version !== 1 || !Array.isArray(manifest.profiles)) {
-    throw new Error(`Unsupported leaderboard profile manifest: ${MANIFEST_PATH}`);
-  }
+  const manifest = validateManifest(JSON.parse(await readFile(MANIFEST_PATH, "utf8")));
 
   const electronPath = require("electron");
   const records = [];
   for (const profile of manifest.profiles) {
+    // Every seed generation gets fresh local storage without deleting a prior
+    // QA profile. Cloud rows are reset transactionally by the seed script.
+    const qaProfile = `${profile.key}-${manifest.generation}`;
     const logPath = path.join(os.tmpdir(), `openwhispr-${profile.key}.log`);
     const logFd = openSync(logPath, "a", 0o600);
     const env = {
@@ -92,7 +125,7 @@ async function openProfiles() {
       NODE_ENV: "development",
       OPENWHISPR_AUTH_BRIDGE_PORT: String(profile.bridgePort),
       OPENWHISPR_QA_ONBOARDING_COMPLETE: "1",
-      OPENWHISPR_QA_PROFILE: profile.key,
+      OPENWHISPR_QA_PROFILE: qaProfile,
       OPENWHISPR_START_VIEW: "leaderboard",
       OPENWHISPR_UI_ONLY: "1",
       VITE_AUTH_URL: "http://localhost:3000",
@@ -112,7 +145,14 @@ async function openProfiles() {
       closeSync(logFd);
     }
     child.unref();
-    records.push({ key: profile.key, label: profile.label, pid: child.pid, logPath });
+    records.push({
+      key: profile.key,
+      label: profile.label,
+      expected: profile.expected,
+      qaProfile,
+      pid: child.pid,
+      logPath,
+    });
 
     await waitForPort(profile.bridgePort);
     const status = await request({
@@ -127,7 +167,9 @@ async function openProfiles() {
 
   await writeFile(PROCESS_PATH, `${JSON.stringify(records, null, 2)}\n`, { mode: 0o600 });
   console.log(`Opened ${records.length} isolated Leaderboard v1 profiles:`);
-  for (const record of records) console.log(`- ${record.label} (PID ${record.pid})`);
+  for (const record of records) {
+    console.log(`- ${record.label} (PID ${record.pid}): ${record.expected}`);
+  }
 }
 
 async function main() {
@@ -142,7 +184,11 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { validateManifest };
