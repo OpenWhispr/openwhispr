@@ -1079,6 +1079,27 @@ async function startApp() {
       });
   });
 
+  // Dictation's Hold verdict cannot be reached here on Linux: a DE-native
+  // backend only binds the saved hotkey a second later, so the hotkey manager
+  // judges it there and announces the result. Listen before the first window
+  // exists, because that deferred registration starts inside
+  // createMainWindow() below.
+  hotkeyManager.on("dictation-activation-mode-settled", (mode) => {
+    activationModeChangeQueue = activationModeChangeQueue
+      .then(async () => {
+        environmentManager.saveActivationMode(
+          await windowManager.applyDictationActivationMode(mode)
+        );
+      })
+      .catch((err) => {
+        debugLogger.error(
+          "Failed to apply the settled dictation activation mode",
+          { mode, error: err.message },
+          "hotkey"
+        );
+      });
+  });
+
   ipcMain.on("floating-icon-auto-hide-changed", (_event, enabled) => {
     windowManager.setFloatingIconAutoHide(enabled);
     environmentManager.saveFloatingIconAutoHide(enabled);
@@ -1195,9 +1216,10 @@ async function startApp() {
   // the capability gate existed) behaves as Tap anyway and would wedge every
   // later hotkey update. Darwin-only on purpose — its hotkey restore is
   // synchronous by this point, while DE-native Linux registration is still
-  // pending and the current hotkey would be judged before it loads.
+  // pending and the current hotkey would be judged before it loads; Linux
+  // arrives through the dictation-activation-mode-settled listener above.
   if (process.platform === "darwin" && (await windowManager.demoteUnsupportedDictationHold())) {
-    environmentManager.saveActivationMode("tap");
+    environmentManager.saveActivationMode(await windowManager.applyDictationActivationMode("tap"));
   }
 
   // Set up meeting mode hotkey

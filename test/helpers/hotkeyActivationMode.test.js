@@ -18,6 +18,7 @@ require.cache[require.resolve("electron")] = {
 };
 
 const HotkeyManager = require("../../src/helpers/hotkeyManager");
+const GnomeShortcutManager = require("../../src/helpers/gnomeShortcut");
 
 test("native push-to-talk support is hotkey-aware", () => {
   const manager = new HotkeyManager();
@@ -289,4 +290,143 @@ test("a failed activation-mode registration preserves Tap and notifies the user"
   assert.equal(manager.activationMode, "tap");
   assert.equal(failures.length, 1);
   assert.equal(failures[0].hotkey, "Alt+R");
+});
+
+// --- the settled dictation verdict on a DE-native Linux backend ---------
+//
+// A DE backend is only known after initializeHotkey has detected it, and the
+// saved hotkey is only read a second later inside the deferred registration.
+// The seam is that setTimeout: capture the callback it schedules, put the
+// real timer back, then run the callback — the same order the app runs it in.
+
+function fakeMainWindow() {
+  return {
+    isDestroyed: () => false,
+    webContents: {
+      isLoading: () => false,
+      once: () => undefined,
+      send: () => undefined,
+      executeJavaScript: async () => "",
+    },
+  };
+}
+
+// Records which mechanism each hotkey was bound through: "tap" is gsettings,
+// "push" is the GlobalShortcuts portal.
+function fakeGnomeManager({ portalAvailable = true } = {}) {
+  const calls = [];
+  return {
+    calls,
+    api: {
+      supportsPushToTalk: () => portalAvailable,
+      registerPushToTalk: async (hotkey) => {
+        calls.push(["push", hotkey]);
+        return true;
+      },
+      registerKeybinding: async (shortcut) => {
+        calls.push(["tap", shortcut]);
+        return true;
+      },
+      unregisterPushToTalk: async () => undefined,
+    },
+  };
+}
+
+async function runDeferredGnomeRegistration(manager) {
+  const scheduled = [];
+  const realSetTimeout = global.setTimeout;
+  global.setTimeout = (fn) => {
+    scheduled.push(fn);
+    return 0;
+  };
+  try {
+    await manager.initializeHotkey(fakeMainWindow(), () => undefined);
+  } finally {
+    global.setTimeout = realSetTimeout;
+  }
+  assert.equal(scheduled.length, 1, "the GNOME backend defers exactly one registration");
+  await scheduled[0]();
+}
+
+async function withGnomeSession(fn, { savedHotkey, activationMode, portalAvailable = true }) {
+  const manager = new HotkeyManager();
+  const gnome = fakeGnomeManager({ portalAvailable });
+  const announced = [];
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  const originalIsGnome = GnomeShortcutManager.isGnome;
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  GnomeShortcutManager.isGnome = () => true;
+  manager.activationMode = activationMode;
+  manager.getSavedHotkey = async () => savedHotkey;
+  // Never touch a real .env: only the fallback path writes one, and a
+  // regression here is exactly what sends us down it.
+  manager._persistHotkeyToEnvFile = async () => undefined;
+  manager.initializeGnomeShortcuts = async () => {
+    manager.useGnome = true;
+    manager.gnomeManager = gnome.api;
+    return true;
+  };
+  manager.on("dictation-activation-mode-settled", (mode) => announced.push(mode));
+  try {
+    await runDeferredGnomeRegistration(manager);
+    await fn({ manager, announced, bindings: gnome.calls });
+  } finally {
+    GnomeShortcutManager.isGnome = originalIsGnome;
+    Object.defineProperty(process, "platform", originalPlatform);
+  }
+}
+
+test("GNOME judges the saved hotkey before binding it, so the shipped Linux default survives", async () => {
+  await withGnomeSession(
+    ({ manager, announced, bindings }) => {
+      // Control+Super is modifier-only: a DE backend has no key-up for it,
+      // so the Hold seeded before any backend was known must converge to Tap.
+      assert.equal(manager.activationMode, "tap");
+      assert.deepEqual(announced, ["tap"]);
+      // Bound through gsettings as Tap — never offered to the portal (which
+      // refuses it outright) and so never dropped into the F8/F9 fallbacks.
+      assert.deepEqual(
+        bindings.map(([mode]) => mode),
+        ["tap"]
+      );
+      assert.equal(manager.getCurrentHotkey(), "Control+Super");
+    },
+    { savedHotkey: "Control+Super", activationMode: "push" }
+  );
+});
+
+test("GNOME leaves a Hold-capable hotkey on Hold and announces nothing", async () => {
+  await withGnomeSession(
+    ({ manager, announced, bindings }) => {
+      assert.equal(manager.activationMode, "push");
+      assert.deepEqual(announced, []);
+      assert.deepEqual(bindings, [["push", "F8"]]);
+    },
+    { savedHotkey: "F8", activationMode: "push" }
+  );
+});
+
+test("GNOME promotes a stored Tap back to Hold once the hotkey can deliver a release", async () => {
+  await withGnomeSession(
+    ({ manager, announced, bindings }) => {
+      assert.equal(manager.activationMode, "push");
+      assert.deepEqual(announced, ["push"]);
+      assert.deepEqual(bindings, [["push", "F8"]]);
+    },
+    { savedHotkey: "F8", activationMode: "tap" }
+  );
+});
+
+test("GNOME without the portal converges even a plain key to Tap", async () => {
+  await withGnomeSession(
+    ({ manager, announced, bindings }) => {
+      assert.equal(manager.activationMode, "tap");
+      assert.deepEqual(announced, ["tap"]);
+      assert.deepEqual(
+        bindings.map(([mode]) => mode),
+        ["tap"]
+      );
+    },
+    { savedHotkey: "F8", activationMode: "push", portalAvailable: false }
+  );
 });

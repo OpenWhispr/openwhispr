@@ -532,6 +532,23 @@ class HotkeyManager extends EventEmitter {
     return true;
   }
 
+  // Hold is a verdict about the hotkey, not a choice — and on a DE-native
+  // Linux backend that verdict cannot be reached at startup: the backend and
+  // the saved hotkey are both known for the first time inside the deferred
+  // registrations in initializeHotkey. Take it there, and take it BEFORE the
+  // binding is attempted, because a Hold the backend cannot deliver is
+  // refused outright rather than downgraded (GNOME, Hyprland and KDE all
+  // refuse a modifier-only hotkey on Hold, and Control+Super is the shipped
+  // Linux default) — which would drop a perfectly good hotkey into the
+  // fallback list. Announced so the window manager's cache, the stored
+  // setting and every renderer follow the same verdict.
+  _settleDictationActivationMode(hotkey) {
+    const preferredMode = this.supportsPushToTalk(hotkey) ? "push" : "tap";
+    if (this.getSlotActivationMode("dictation") === preferredMode) return;
+    this.activationMode = preferredMode;
+    this.emit("dictation-activation-mode-settled", preferredMode);
+  }
+
   getPushToTalkUnavailableReason(hotkey = this.currentHotkey, slotName = "dictation") {
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
       return i18nMain.t("hotkey.errors.osReserved", { hotkey });
@@ -1020,6 +1037,10 @@ class HotkeyManager extends EventEmitter {
           try {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            // The GNOME backend is settled now, so the hotkey can finally be
+            // judged for Hold. Any fallback below then binds under the mode
+            // this settles on.
+            this._settleDictationActivationMode(hotkey);
             const success = await this.registerGnomeDictationHotkey(hotkey, callback);
             if (success) {
               this.currentHotkey = hotkey;
@@ -1063,6 +1084,9 @@ class HotkeyManager extends EventEmitter {
           try {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            // The Hyprland backend is settled now, so the hotkey can finally
+            // be judged for Hold.
+            this._settleDictationActivationMode(hotkey);
 
             const success = await this.hyprlandManager.registerKeybinding(
               hotkey,
@@ -1109,6 +1133,9 @@ class HotkeyManager extends EventEmitter {
           try {
             // DE backends bind one accelerator per slot — use the primary hotkey.
             const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
+            // The KDE backend is settled now, so the hotkey can finally be
+            // judged for Hold.
+            this._settleDictationActivationMode(hotkey);
             const result = await this.kdeManager.registerKeybinding(
               hotkey,
               "dictation",
