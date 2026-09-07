@@ -9,20 +9,40 @@ const load = () => import("../../src/utils/transitionSettled.ts");
 // a normal (detaching) fake, removeEventListener already makes a second
 // dispatch impossible, so nothing can tell whether `done` does any work.
 // Only the leaky variant can force a genuine second call into `finish()`.
+//
+// Fix round 2, finding 1: listeners are keyed BY EVENT TYPE (a real
+// EventTarget never delivers a "transitioncancel" to a handler registered
+// only for "transitionend"). A round-1 version pooled every handler into one
+// shared Set regardless of type, which made the source's
+// `addEventListener("transitioncancel", onSettle)` registration line
+// unprotected — deleting it from the source still passed 10/10, because the
+// fake would happily hand a fired "transitioncancel" to the handler that was
+// only ever registered for "transitionend". Same shape of gap as finding 6:
+// the double was more permissive than the real thing it stands in for.
 function fakeElement({ detachOnRemove = true } = {}) {
-  const listeners = new Set();
+  const listenersByType = new Map(); // type -> Set<fn>
   let removeEventListenerCalls = 0;
+  const setFor = (type) => {
+    let set = listenersByType.get(type);
+    if (!set) {
+      set = new Set();
+      listenersByType.set(type, set);
+    }
+    return set;
+  };
   return {
-    addEventListener: (_type, fn) => listeners.add(fn),
-    removeEventListener: (_type, fn) => {
+    addEventListener: (type, fn) => setFor(type).add(fn),
+    removeEventListener: (type, fn) => {
       removeEventListenerCalls++;
-      if (detachOnRemove) listeners.delete(fn);
+      if (detachOnRemove) setFor(type).delete(fn);
     },
     fire(target, propertyName, type = "transitionend") {
-      for (const fn of [...listeners]) fn({ target, propertyName, type });
+      for (const fn of [...setFor(type)]) fn({ target, propertyName, type });
     },
     get listenerCount() {
-      return listeners.size;
+      let total = 0;
+      for (const set of listenersByType.values()) total += set.size;
+      return total;
     },
     get removeEventListenerCalls() {
       return removeEventListenerCalls;
@@ -113,6 +133,12 @@ test("resolves 'transitioncancel' when the transition is interrupted instead of 
   const el = fakeElement();
   const settled = waitForTransitionEnd(el, "clip-path", 500);
   el.fire(el, "clip-path", "transitioncancel");
+  // A no-op once genuinely settled (the timer was already cleared) — but if
+  // the transitioncancel registration were ever missing, the fake (now
+  // correctly type-scoped) wouldn't deliver the event at all, and this tick
+  // turns what would otherwise be a hung promise into a fast, clean
+  // "timeout" mismatch instead.
+  t.mock.timers.tick(500);
   assert.equal(await settled, "transitioncancel");
   assert.equal(el.listenerCount, 0);
 });
