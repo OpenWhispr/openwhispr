@@ -584,7 +584,6 @@ class IPCHandlers {
     this.microsoftCalendarManager = managers.microsoftCalendarManager;
     this.appleCalendarManager = managers.appleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
-    this.meetingDetectionEnabled = managers.meetingDetectionEnabled !== false;
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
     this.windowsLoopbackAudioManager = managers.windowsLoopbackAudioManager;
@@ -10738,9 +10737,7 @@ class IPCHandlers {
 
     ipcMain.handle("meeting-detection-set-preferences", async (_event, prefs) => {
       try {
-        if (this.meetingDetectionEnabled) {
-          this.meetingDetectionEngine.setPreferences(prefs);
-        }
+        this.meetingDetectionEngine.setPreferences(prefs);
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -10767,11 +10764,9 @@ class IPCHandlers {
         // Detection only serves the notification, so the toggle also gates the detector.
         const { notificationsEnabled, notifyMeetingDetection } =
           this.windowManager.notificationPrefs;
-        if (this.meetingDetectionEnabled) {
-          this.meetingDetectionEngine?.setPreferences({
-            audioDetection: notificationsEnabled && notifyMeetingDetection,
-          });
-        }
+        this.meetingDetectionEngine?.setPreferences({
+          audioDetection: notificationsEnabled && notifyMeetingDetection,
+        });
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
