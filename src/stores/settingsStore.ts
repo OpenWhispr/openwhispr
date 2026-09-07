@@ -235,11 +235,12 @@ migrateMicrophoneSelectionMode();
 // Hold is the only activation model now (2026-09-07 design). One-time: a
 // stored Tap becomes Hold, and so does an *absent* mode on an install that
 // already finished onboarding — those users were on the old Tap default and
-// their hotkey behaviour is about to change, which is what the migration
-// card explains. A fresh install (onboarding not completed) simply gets the
-// new default and never sees the card. After the marker, a stored Tap is a
-// capability verdict written by the main process (the hotkey or backend
-// cannot Hold) and must be left alone.
+// their hotkey behaviour is about to change. All three slots migrate the
+// same way; only the dictation slot arms the migration card (see below). A
+// fresh install (onboarding not completed) simply gets the new default and
+// never sees the card. After the marker, a stored Tap is a capability
+// verdict written by the main process (the hotkey or backend cannot Hold)
+// and must be left alone.
 const ACTIVATION_MODE_STORAGE_KEYS = [
   "activationMode",
   "voiceAgentActivationMode",
@@ -250,17 +251,21 @@ function migrateActivationModesToHold() {
   if (!isBrowser) return;
   if (localStorage.getItem("activationModeHoldMigration") === "done") return;
   const existingInstall = localStorage.getItem("onboardingCompleted") === "true";
-  let changed = false;
+  let dictationChanged = false;
   for (const key of ACTIVATION_MODE_STORAGE_KEYS) {
     const stored = localStorage.getItem(key);
     if (stored === "push") continue;
     if (stored === "tap" || existingInstall) {
       localStorage.setItem(key, "push");
-      changed = true;
+      if (key === "activationMode") dictationChanged = true;
     }
   }
   localStorage.setItem("activationModeHoldMigration", "done");
-  localStorage.setItem("holdMigrationCardPending", String(changed));
+  // The card's copy is specifically about the dictation hotkey ("hold ⌃ `
+  // while you talk"), so only the dictation slot moving can honestly arm
+  // it — a voice-agent or translation slot migrating alone is not a change
+  // this card can announce.
+  localStorage.setItem("holdMigrationCardPending", String(dictationChanged));
 }
 
 migrateActivationModesToHold();
