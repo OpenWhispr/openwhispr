@@ -238,6 +238,10 @@ export default function App() {
     isProcessing,
     isAssistantVoice,
   });
+  // Hoisted above the tip/migration-card wiring below: their placement must
+  // read whether a panel is mounted, so these need to exist before that.
+  const anyPanelOpen = assistant.open || liveTranscript.open;
+  const anyPanelMounted = assistant.mounted || liveTranscript.mounted;
 
   useLayoutEffect(() => {
     liveTranscriptApiRef.current = liveTranscript;
@@ -317,8 +321,26 @@ export default function App() {
       !liveTranscript.mounted &&
       !holdMigrationCard.visible,
   });
+  // Feeds only the window-size ladder below (the auto-hide effect further
+  // down reads handsFreeTip.tip and holdMigrationCard.visible directly, the
+  // same underlying signal). Both already outlast the migration card's
+  // 200ms exit — a 340ms deferred shrink, a 500ms auto-hide delay — so
+  // widening either to also track `exiting` would just hold the window
+  // large through the fade for nothing.
   const tipCardVisible = handsFreeTip.tip !== null || holdMigrationCard.visible;
-  const tipCardInPlaceOfPill = tipCardVisible && floatingIconAutoHide;
+  // Which card, if any, currently owns the pill's spot. Deliberately NOT
+  // tipCardVisible: placement has to track the migration card through its
+  // own exit fade (visible drops the instant dismissal starts, but the card
+  // stays mounted for its 200ms fade — inPlaceOfPill flipping mid-fade would
+  // change its `bottom` value, which isn't in the card's transition list, so
+  // it would jump instead of fading in place), and it must never claim the
+  // pill's spot while a panel is mounted (the card stays pending-dismissal
+  // behind the panel, but is not rendered there, so nothing is "in place" —
+  // leaving this on would otherwise leave the panel's own footer pill
+  // invisible and dead until the next hotkey press dismisses the card).
+  const tipCardPlacementActive =
+    handsFreeTip.tip !== null || (holdMigrationCardMounted && !anyPanelMounted);
+  const tipCardInPlaceOfPill = tipCardPlacementActive && floatingIconAutoHide;
 
   const { dictationErrorPillHandoffActive, panelReturnResizeActive } = useMainWindowSizeOwner({
     requestMainWindowSize,
@@ -492,8 +514,6 @@ export default function App() {
       : isProcessing && isAssistantVoice
         ? "transcribing"
         : "idle";
-  const anyPanelOpen = assistant.open || liveTranscript.open;
-  const anyPanelMounted = assistant.mounted || liveTranscript.mounted;
   const canReopenLiveTranscript =
     shouldOfferLiveTranscriptReopen({
       manuallyCollapsed: liveTranscript.manuallyCollapsed,
