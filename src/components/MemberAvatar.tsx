@@ -4,6 +4,7 @@ import { cn } from "./lib/utils";
 const SIZES = {
   sm: { box: "w-5 h-5", text: "text-[9px]" },
   md: { box: "w-7 h-7", text: "text-[10px]" },
+  lg: { box: "w-11 h-11", text: "text-xs" },
 } as const;
 
 interface MemberAvatarProps {

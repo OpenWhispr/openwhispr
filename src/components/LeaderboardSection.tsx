@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowUpDown,
+  Building2,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Cloud,
+  Clock3,
+  Globe2,
   Loader2,
   LocateFixed,
   LogOut,
+  MoreHorizontal,
   RefreshCw,
   Share2,
   Trophy,
+  Users,
   UserPlus,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -39,10 +46,17 @@ import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import InviteTeammateDialog from "./InviteTeammateDialog";
 import MemberAvatar from "./MemberAvatar";
 import LeaderboardRequestJoinPreview from "./LeaderboardRequestJoinPreview";
+import LeaderboardPodium from "./LeaderboardPodium";
 import LeaderboardSetupCard from "./LeaderboardSetupCard";
 import LeaderboardShareDialog from "./LeaderboardShareDialog";
 import LeaderboardSignInPreview from "./LeaderboardSignInPreview";
 import { Button } from "./ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Tooltip } from "./ui/tooltip";
@@ -437,7 +451,6 @@ export default function LeaderboardSection({
     pendingScrollRankRef.current = resolvedRank;
     setPage(targetPage);
   };
-  const podiumOrder = leaderboard?.leaders.length === 1 ? [0] : [1, 0, 2];
   const inviteToLeaderboard = () => {
     if (
       selectedScope.kind === "workspace" &&
@@ -493,49 +506,76 @@ export default function LeaderboardSection({
 
   return (
     <section className="mt-8 overflow-hidden rounded-2xl border border-border/50 bg-card/70 dark:border-white/8">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/40 px-5 py-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Trophy size={17} className="text-amber-500" />
-            <h2 className="text-base font-semibold">{selectedScope.name}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/40 px-5 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/8 text-primary">
+            {selectedScope.kind === "workspace" ? <Building2 size={16} /> : <Globe2 size={16} />}
+          </div>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold">{selectedScope.name}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Users size={11} />
+                {t("workspaces.join.memberCount", { count: selectedScope.memberCount })}
+              </span>
+              <span aria-hidden="true" className="size-0.5 rounded-full bg-muted-foreground/50" />
+              <span className="flex items-center gap-1">
+                <Clock3 size={11} />
+                {t("insights.leaderboard.refreshCadence")}
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {scopeSelect}
-          <Button variant="outline" size="sm" onClick={inviteToLeaderboard}>
+          <Button size="sm" onClick={inviteToLeaderboard}>
             <UserPlus size={14} />
             {t("insights.leaderboard.inviteCta")}
           </Button>
           {leaderboard?.canShare && (
-            <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
+            <Button variant="outline-flat" size="sm" onClick={() => setShareOpen(true)}>
               <Share2 size={14} />
               {t("insights.leaderboard.share")}
             </Button>
           )}
-          {/* The mirror of Join: publishing a name and an email to colleagues
-              has to be undoable from the surface that publishes it. */}
           <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              void onLeave().then((left) => {
-                if (!left) toast({ title: t("insights.leaderboard.leavePending") });
-              })
-            }
-            disabled={participationUpdating}
-          >
-            <LogOut size={14} />
-            {t("insights.leaderboard.leave")}
-          </Button>
-          <Button
-            variant="ghost"
+            variant="outline-flat"
             size="icon"
+            className="size-8"
             onClick={() => void load()}
             disabled={loading}
             aria-label={t("insights.leaderboard.refresh")}
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : undefined} />
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground"
+                aria-label={t("insights.leaderboard.moreActions")}
+              >
+                <MoreHorizontal size={15} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-40">
+              {/* The mirror of Join: publishing a name and an email must stay
+                  undoable from the surface that publishes it. */}
+              <DropdownMenuItem
+                disabled={participationUpdating}
+                className="gap-2 text-xs text-destructive focus:bg-destructive/10 focus:text-destructive"
+                onSelect={() =>
+                  void onLeave().then((left) => {
+                    if (!left) toast({ title: t("insights.leaderboard.leavePending") });
+                  })
+                }
+              >
+                <LogOut size={13} />
+                {t("insights.leaderboard.leave")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -550,44 +590,22 @@ export default function LeaderboardSection({
         </div>
       ) : (
         <>
-          {leaderboard.leaders.length > 0 && (
-            <div className="grid grid-cols-1 items-end gap-3 px-5 pb-5 pt-6 sm:grid-cols-3">
-              {podiumOrder.map((memberIndex) => {
-                const member = leaderboard.leaders[memberIndex];
-                if (!member) return <div key={memberIndex} />;
-                const winner = member.rank === 1;
-                return (
-                  <div
-                    key={member.userId}
-                    className={`flex flex-col items-center rounded-xl border px-3 py-4 text-center ${
-                      winner
-                        ? "order-first border-amber-400/30 bg-amber-400/8 sm:order-none sm:py-6"
-                        : "border-border/40 bg-background/35"
-                    }`}
-                  >
-                    <div className="relative">
-                      <MemberAvatar name={member.name} email={member.email} image={member.image} />
-                      <span className="absolute -bottom-2 left-1/2 flex size-5 -translate-x-1/2 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
-                        {member.rank}
-                      </span>
-                    </div>
-                    <p className="mt-4 max-w-full truncate text-sm font-medium">
-                      {member.name || member.email}
-                    </p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums">{formatValue(member)}</p>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <LeaderboardPodium
+            members={leaderboard.leaders}
+            formatValue={formatValue}
+            metricLabel={t(`insights.leaderboard.metrics.${metric}`)}
+            periodLabel={periodLabel}
+            title={t("insights.leaderboard.topPerformers")}
+          />
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 px-5 py-3">
-            <div className="flex rounded-lg bg-muted/60 p-0.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-muted/10 px-5 py-3">
+            <div className="flex rounded-lg border border-border/40 bg-muted/40 p-0.5">
               {(["week", "all"] as const).map((value) => (
                 <button
                   key={value}
                   type="button"
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  aria-pressed={range === value}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30 ${
                     range === value
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
@@ -613,6 +631,7 @@ export default function LeaderboardSection({
                 }}
               >
                 <SelectTrigger className="h-8 w-44 rounded-lg text-xs">
+                  <CalendarDays size={13} className="text-muted-foreground" />
                   <SelectValue placeholder={t("insights.leaderboard.history")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -630,7 +649,7 @@ export default function LeaderboardSection({
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
-              <thead>
+              <thead className="bg-muted/10">
                 <tr className="border-y border-border/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                   <th className="w-16 px-5 py-2.5 font-medium">{t("insights.leaderboard.rank")}</th>
                   <th className="px-3 py-2.5 font-medium">{t("insights.leaderboard.member")}</th>
@@ -645,7 +664,8 @@ export default function LeaderboardSection({
                         setPage(0);
                       }}
                     >
-                      <SelectTrigger className="ml-auto h-7 w-48 rounded-md border-0 bg-transparent px-2 text-[11px] uppercase tracking-wide shadow-none">
+                      <SelectTrigger className="ml-auto h-8 w-48 rounded-lg border border-border/40 bg-background/30 px-2.5 text-xs font-medium normal-case tracking-normal shadow-none hover:bg-muted/40">
+                        <ArrowUpDown size={12} className="text-muted-foreground" />
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -666,10 +686,24 @@ export default function LeaderboardSection({
                     <tr
                       id={`leaderboard-rank-${member.rank}`}
                       key={member.userId}
-                      className={`border-b border-border/30 last:border-0 ${isViewer ? "bg-primary/5" : ""}`}
+                      className={cn(
+                        "border-b border-border/30 transition-colors last:border-0 hover:bg-muted/20",
+                        isViewer && "bg-primary/5 hover:bg-primary/7"
+                      )}
                     >
-                      <td className="px-5 py-3 font-medium tabular-nums text-muted-foreground">
-                        {member.rank}
+                      <td className="px-5 py-3 tabular-nums">
+                        <span
+                          className={cn(
+                            "inline-flex size-6 items-center justify-center rounded-md text-xs font-medium text-muted-foreground",
+                            member.rank === 1 &&
+                              "bg-amber-400/12 font-semibold text-amber-600 dark:text-amber-400",
+                            member.rank === 2 && "bg-foreground/6 text-foreground/70",
+                            member.rank === 3 &&
+                              "bg-orange-400/10 text-orange-600 dark:text-orange-400"
+                          )}
+                        >
+                          {member.rank}
+                        </span>
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex min-w-0 items-center gap-2.5">
@@ -706,7 +740,7 @@ export default function LeaderboardSection({
             </table>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 px-5 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-muted/10 px-5 py-3">
             <Tooltip
               content={
                 leaderboard.viewerRank !== null
@@ -732,6 +766,7 @@ export default function LeaderboardSection({
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="size-8"
                   disabled={page === 0}
                   onClick={() => setPage((current) => Math.max(0, current - 1))}
                   aria-label={t("insights.leaderboard.previous")}
@@ -776,6 +811,7 @@ export default function LeaderboardSection({
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="size-8"
                   disabled={page >= pages - 1}
                   onClick={() => setPage((current) => Math.min(pages - 1, current + 1))}
                   aria-label={t("insights.leaderboard.next")}
