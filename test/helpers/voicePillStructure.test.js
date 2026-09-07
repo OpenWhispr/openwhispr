@@ -42,6 +42,19 @@ const renderPill = async (state, expanded, horizontalDirection = "right", overri
   });
 };
 
+// The listening entrance's widening and the waveform's reveal are pinned to
+// Task 1's spring easings (springEasing.ts). Both snippets derive from the
+// same exported constants the implementation consumes, so a drift in either
+// constant — not a copy-pasted literal — is what would break this test.
+const motionTransitionSnippets = async () => {
+  const { LISTENING_ENTRANCE_TIMING } = await import("../../src/helpers/voicePillPresentation.js");
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
+  return {
+    widen: `transition:width ${LISTENING_ENTRANCE_TIMING.expansionMs}ms var(--motion-morph-ease`,
+    waveformSlide: `transform ${MOTION_TIMING.showMs}ms var(--motion-show-ease`,
+  };
+};
+
 test("thinking and recording keep the same persistent glow and pill roots", async () => {
   const thinking = await renderPill("thinking", false);
   const recording = await renderPill("recording", true);
@@ -177,12 +190,37 @@ test("the floating hover pill changes surface treatment without zooming", async 
 
   assert.match(hovered, /border-border-hover bg-surface-3 text-foreground/);
   assert.match(hovered, /box-shadow:var\(--shadow-card-hover-subtle\)/);
-  // Scoped to the control's own surface style. The waveform reveal carries an
-  // always-present inline transform (its armed pre-slide offset, invisible
-  // via opacity while idle) — that is a different element, not a hover zoom.
-  assert.doesNotMatch(hovered, /class="voice-pill-control[^"]*"\s+style="[^"]*transform:/);
+  // Structural, not positional: compare the full set of transform-bearing
+  // style attributes against the idle render, anywhere in the subtree — not
+  // just a regex scoped to one element or anchored to one attribute order.
+  // The waveform reveal's inline transform (its armed pre-slide offset,
+  // invisible via opacity until the reveal) is identical in both states, so
+  // it cancels out of the comparison; any transform hover actually adds —
+  // on the control, on some other element, at any attribute position — does
+  // not.
+  const transformStyles = (markup) => (markup.match(/style="[^"]*transform:[^"]*"/g) || []).sort();
+  assert.deepEqual(transformStyles(hovered), transformStyles(await renderPill("idle", false)));
   assert.match(hovered, footprint.idle);
   assert.match(hovered, /<svg width="22" height="22"/);
+});
+
+test("the listening entrance widening and the waveform reveal reference the pinned spring easings", async () => {
+  const snippets = await motionTransitionSnippets();
+  const pill = await renderPill("recording", true);
+
+  // The control's width transition (also height/padding, driven by the same
+  // GROW_TRANSITION constant) actually plays the morph spring — not just a
+  // duration that happens to match it.
+  assert.ok(
+    pill.includes(snippets.widen),
+    `expected the control's transition to include "${snippets.widen}"`
+  );
+  // The waveform's slide-in actually plays the show spring, over its own
+  // pinned duration — not the morph spring's, and not a hardcoded literal.
+  assert.ok(
+    pill.includes(snippets.waveformSlide),
+    `expected the waveform's transition to include "${snippets.waveformSlide}"`
+  );
 });
 
 test("the waveform pill keeps the normal compact logo footprint", async () => {
