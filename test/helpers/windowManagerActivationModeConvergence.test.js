@@ -2,6 +2,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 
+// The windows BrowserWindow.getAllWindows() reports; a case fills this before
+// asserting who a broadcast reached.
+const openWindows = [];
+
 // Same stub set as windowManagerHandsFree.test.js: WindowManager pulls in
 // electron + sibling managers at require time.
 const originalLoad = Module._load;
@@ -18,6 +22,9 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
       BrowserWindow: class FakeBrowserWindow {
         constructor() {
           this.webContents = { on: () => undefined, send: () => undefined };
+        }
+        static getAllWindows() {
+          return openWindows;
         }
         on() {}
         isDestroyed() {
@@ -123,4 +130,73 @@ test("updateHotkey follows a converged mode in both directions", async () => {
   assert.equal(untouched.getActivationMode(), "tap");
   // Nothing converged, so the native listeners must not be touched.
   assert.deepEqual(untouched.nativeCalls, []);
+});
+
+// A verdict settled after startup — the DE-native backend judging the hotkey
+// it is about to bind, or the macOS demotion — has to reach the renderers
+// too. Each one copies the stored mode into its store once, early, so the
+// broadcast is the only thing that moves the pill window off "push"; without
+// it the Hold migration card teaches a gesture the backend cannot deliver.
+
+function makeOpenWindow({ destroyed = false } = {}) {
+  const sent = [];
+  return {
+    sent,
+    isDestroyed: () => destroyed,
+    webContents: { send: (channel, payload) => sent.push([channel, payload]) },
+  };
+}
+
+function managerWithActivationMode(initialMode, { accept = true } = {}) {
+  const manager = new WindowManager();
+  manager.mainWindow = null;
+  manager._cachedActivationMode = initialMode;
+  manager.setCalls = [];
+  manager.hotkeyManager = {
+    setActivationMode: async (mode) => {
+      manager.setCalls.push(mode);
+      return accept;
+    },
+    isInListeningMode: () => false,
+    getNativeListenerKeys: () => [],
+    isUsingNativeShortcut: () => false,
+  };
+  manager.nativeCalls = [];
+  manager.resetNativePushState = () => manager.nativeCalls.push("reset");
+  manager.reconcileNativeKeyListeners = () => manager.nativeCalls.push("reconcile");
+  return manager;
+}
+
+test("a settled dictation verdict reaches the cache, every live window, and the caller", async () => {
+  const alive = makeOpenWindow();
+  const closing = makeOpenWindow({ destroyed: true });
+  openWindows.length = 0;
+  openWindows.push(alive, closing);
+
+  const manager = managerWithActivationMode("push");
+  const effective = await manager.applyDictationActivationMode("tap");
+
+  assert.equal(effective, "tap");
+  assert.equal(manager.getActivationMode(), "tap");
+  assert.deepEqual(manager.setCalls, ["tap"]);
+  assert.deepEqual(alive.sent, [["setting-updated", { key: "activationMode", value: "tap" }]]);
+  assert.deepEqual(closing.sent, []);
+  assert.deepEqual(manager.nativeCalls, ["reset", "reconcile"]);
+});
+
+test("a refused cache write publishes the read-back, never the attempted mode", async () => {
+  const alive = makeOpenWindow();
+  openWindows.length = 0;
+  openWindows.push(alive);
+
+  const manager = managerWithActivationMode("push", { accept: false });
+  const effective = await manager.applyDictationActivationMode("tap");
+
+  // The attempt was for "tap" ...
+  assert.deepEqual(manager.setCalls, ["tap"]);
+  // ... the manager refused it, so "push" is what is still in force — and
+  // "push" is what the caller persists and every window is told.
+  assert.equal(effective, "push");
+  assert.equal(manager.getActivationMode(), "push");
+  assert.deepEqual(alive.sent, [["setting-updated", { key: "activationMode", value: "push" }]]);
 });

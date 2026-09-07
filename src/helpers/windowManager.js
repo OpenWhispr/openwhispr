@@ -1317,6 +1317,32 @@ class WindowManager {
     return await this.setActivationModeCache("tap");
   }
 
+  // Publish a settled dictation Hold verdict — the hotkey manager judging the
+  // hotkey it is about to bind on a DE-native Linux backend, or the macOS
+  // demotion above. The cache alone is not enough: each renderer copies the
+  // stored mode into its own store once, early in initializeSettings, so a
+  // verdict reached after that only lands through this broadcast — and the
+  // pill window is what decides whether to show the Hold migration card, so
+  // without it the card teaches a gesture the backend cannot deliver. Returns
+  // the mode that actually took, which is what the caller persists; a refused
+  // write leaves the previous mode in place and publishes that instead.
+  // Mirrors reconcileSlotActivationMode (ipcHandlers) for the slot modes.
+  async applyDictationActivationMode(mode) {
+    await this.setActivationModeCache(mode);
+    const effectiveMode = this.getActivationMode();
+    for (const browserWindow of BrowserWindow.getAllWindows()) {
+      if (!browserWindow.isDestroyed()) {
+        browserWindow.webContents.send("setting-updated", {
+          key: "activationMode",
+          value: effectiveMode,
+        });
+      }
+    }
+    this.resetNativePushState();
+    this.reconcileNativeKeyListeners();
+    return effectiveMode;
+  }
+
   // Dictation keeps the legacy activationMode; voiceAgent/translation carry
   // their own mode; meeting (and anything else) is always tap-to-toggle.
   getSlotActivationMode(slotName) {
