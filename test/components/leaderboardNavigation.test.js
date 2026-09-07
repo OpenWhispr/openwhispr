@@ -36,12 +36,13 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   const view = read("src/components/LeaderboardView.tsx");
 
   assert.equal(section.includes("LeaderboardFreePreview"), false);
-  assert.equal(section.includes('selectedScope.state !== "ready"'), false);
   assert.equal(view.includes("onUpgrade"), false);
   assert.ok(section.includes("inviteToLeaderboard"));
   assert.ok(section.includes('t("insights.leaderboard.inviteCta")'));
   assert.ok(section.includes("<LeaderboardSetupCard"));
   assert.ok(section.includes("<LeaderboardSoloEmptyState"));
-  assert.ok(section.includes("selectedScope?.memberCount === 1"));
+  assert.ok(section.includes('selectedScope?.state === "invite"'));
+  assert.ok(section.includes("<LeaderboardSyncPreview"));
+  assert.equal(section.includes("activationDescription"), false);
   assert.ok(controlPanel.includes("onInvite={() => setShowReferrals(true)}"));
 });

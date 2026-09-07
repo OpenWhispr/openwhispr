@@ -29,6 +29,7 @@ export default function LeaderboardRequestJoinPreview({
       }
       badge={workspaceName}
       className={className}
+      dataState="request_join"
       description={t("insights.leaderboard.requestJoinDescription", {
         workspace: workspaceName,
       })}

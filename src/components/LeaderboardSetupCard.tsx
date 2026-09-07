@@ -16,6 +16,7 @@ export default function LeaderboardSetupCard({
 
   return (
     <section
+      data-leaderboard-state="create"
       className={cn(
         "flex min-h-64 flex-col items-center justify-center rounded-2xl border border-border/50 bg-card/70 px-6 py-10 text-center dark:border-white/8",
         className

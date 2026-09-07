@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Trophy, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
@@ -9,10 +10,14 @@ const PREVIEW_ROWS = [92, 84, 76, 68, 61] as const;
 interface LeaderboardPreviewProps {
   actionDisabled?: boolean;
   actionIcon?: LucideIcon;
+  actionIconClassName?: string;
   actionLabel: string;
   badge?: string;
   className?: string;
+  children?: ReactNode;
+  dataState?: string;
   description: string;
+  helperText?: string;
   icon: LucideIcon;
   onAction: () => void;
   title: string;
@@ -20,11 +25,15 @@ interface LeaderboardPreviewProps {
 
 export default function LeaderboardPreview({
   actionIcon: ActionIcon,
+  actionIconClassName,
   actionDisabled = false,
   actionLabel,
   badge,
   className,
+  children,
+  dataState,
   description,
+  helperText,
   icon: Icon,
   onAction,
   title,
@@ -33,6 +42,7 @@ export default function LeaderboardPreview({
 
   return (
     <section
+      data-leaderboard-state={dataState}
       className={cn(
         "relative min-h-96 overflow-hidden rounded-2xl border border-border/50 bg-card/70 dark:border-white/8",
         className
@@ -97,9 +107,11 @@ export default function LeaderboardPreview({
           <h2 className={cn("text-base font-semibold", badge ? "mt-3" : "mt-4")}>{title}</h2>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{description}</p>
           <Button className="mt-5 w-full" onClick={onAction} disabled={actionDisabled}>
-            {ActionIcon && <ActionIcon size={14} />}
+            {ActionIcon && <ActionIcon size={14} className={actionIconClassName} />}
             {actionLabel}
           </Button>
+          {helperText && <p className="mt-3 text-[11px] text-muted-foreground">{helperText}</p>}
+          {children}
         </div>
       </div>
     </section>

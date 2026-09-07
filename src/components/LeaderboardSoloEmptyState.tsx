@@ -1,21 +1,34 @@
 import { Building2, Globe2, UserPlus, UserRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
+import LeaderboardSyncRow from "./LeaderboardSyncRow";
 
 export default function LeaderboardSoloEmptyState({
   scopeKind,
   scopeName,
   onInvite,
+  sync,
 }: {
   scopeKind: "workspace" | "domain";
   scopeName: string;
   onInvite: () => void;
+  sync: {
+    canEnable: boolean;
+    enabled: boolean;
+    error: boolean;
+    onEnable: () => void;
+    ready: boolean;
+    updating: boolean;
+  };
 }) {
   const { t } = useTranslation();
   const ScopeIcon = scopeKind === "workspace" ? Building2 : Globe2;
 
   return (
-    <div className="relative isolate flex min-h-96 items-center justify-center overflow-hidden px-6 py-12 text-center">
+    <div
+      data-leaderboard-state="invite"
+      className="relative isolate flex min-h-96 items-center justify-center overflow-hidden px-6 py-12 text-center"
+    >
       <div
         aria-hidden="true"
         className="pointer-events-none absolute left-1/2 top-1/2 size-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-3xl"
@@ -55,6 +68,7 @@ export default function LeaderboardSoloEmptyState({
         <p className="mt-3 text-[11px] text-muted-foreground/75">
           {t("insights.leaderboard.soloHint")}
         </p>
+        <LeaderboardSyncRow {...sync} />
       </div>
     </div>
   );

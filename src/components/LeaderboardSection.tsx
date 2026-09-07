@@ -5,7 +5,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Cloud,
   Clock3,
   Globe2,
   Loader2,
@@ -14,7 +13,6 @@ import {
   MoreHorizontal,
   RefreshCw,
   Share2,
-  Trophy,
   Users,
   UserPlus,
 } from "lucide-react";
@@ -27,6 +25,7 @@ import {
   normalizeLeaderboardSelection,
   pageCount,
   pageForRank,
+  resolveLeaderboardSurface,
   selectionForRange,
   WEEKLY_METRICS,
 } from "../helpers/leaderboard";
@@ -51,6 +50,7 @@ import LeaderboardSetupCard from "./LeaderboardSetupCard";
 import LeaderboardShareDialog from "./LeaderboardShareDialog";
 import LeaderboardSignInPreview from "./LeaderboardSignInPreview";
 import LeaderboardSoloEmptyState from "./LeaderboardSoloEmptyState";
+import LeaderboardSyncPreview from "./LeaderboardSyncPreview";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -205,7 +205,8 @@ export default function LeaderboardSection({
   }, [participating]);
 
   const load = useCallback(async () => {
-    if (!selectedScope || !participating || !participationReady) return;
+    if (!selectedScope || selectedScope.state !== "ready" || !participating || !participationReady)
+      return;
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(false);
@@ -233,7 +234,7 @@ export default function LeaderboardSection({
         onRefreshParticipation();
         return;
       }
-      if (code === "LEADERBOARD_PLAN_REQUIRED" || code === "LEADERBOARD_DOMAIN_REQUIRED") {
+      if (code === "LEADERBOARD_DOMAIN_REQUIRED") {
         setLeaderboard(null);
         void loadAccess();
         return;
@@ -266,7 +267,8 @@ export default function LeaderboardSection({
     : LEADERBOARD_REFRESH_INTERVAL_MS;
 
   useEffect(() => {
-    if (!selectedScope || !participating || !participationReady) return;
+    if (!selectedScope || selectedScope.state !== "ready" || !participating || !participationReady)
+      return;
     const refreshIfStale = () => {
       if (
         document.visibilityState === "visible" &&
@@ -289,7 +291,7 @@ export default function LeaderboardSection({
   useEffect(() => setPage((current) => Math.min(current, pages - 1)), [pages]);
 
   const visibleMembers = useMemo(() => leaderboard?.members ?? [], [leaderboard]);
-  const isSoloScope = selectedScope?.memberCount === 1 && leaderboard?.totalMembers === 1;
+  const isSoloScope = selectedScope?.state === "invite";
 
   useEffect(() => {
     const rank = pendingScrollRankRef.current;
@@ -390,7 +392,15 @@ export default function LeaderboardSection({
   }
   if (!access) return null;
 
-  if (access.state === "request_join" && access.joinableWorkspace) {
+  const surface = resolveLeaderboardSurface({
+    access,
+    selectedScope: selectedScope ?? null,
+    participating,
+    participationReady,
+    participationError,
+  });
+
+  if (surface === "request_join" && access.joinableWorkspace) {
     return (
       <LeaderboardRequestJoinPreview
         className="mt-8"
@@ -411,6 +421,34 @@ export default function LeaderboardSection({
         />
         {dialogs}
       </>
+    );
+  }
+
+  if (surface === "participation_error") {
+    return (
+      <LeaderboardRetryCard
+        className={ERROR_CARD_CHROME}
+        message={t("insights.leaderboard.activationError")}
+        onRetry={onRefreshParticipation}
+      />
+    );
+  }
+  if (surface === "participation_loading") {
+    return (
+      <section className="mt-8 flex min-h-48 items-center justify-center rounded-2xl border border-border/50 bg-card/70 text-muted-foreground dark:border-white/8">
+        <Loader2 size={18} className="animate-spin" />
+      </section>
+    );
+  }
+  if (surface === "sync") {
+    return (
+      <LeaderboardSyncPreview
+        canEnable={canJoin}
+        error={participationError === "write"}
+        onEnable={onJoin}
+        scopeName={selectedScope.name}
+        updating={participationUpdating}
+      />
     );
   }
 
@@ -463,48 +501,6 @@ export default function LeaderboardSection({
     }
     onInvite();
   };
-
-  if (!participating || !participationReady) {
-    // An unknown answer must not offer Join: the account it would publish may
-    // already be on this leaderboard. Re-reading it is the only way forward.
-    if (participationError === "read") {
-      return (
-        <LeaderboardRetryCard
-          className={ERROR_CARD_CHROME}
-          message={t("insights.leaderboard.activationError")}
-          onRetry={onRefreshParticipation}
-        />
-      );
-    }
-    return (
-      <section className="mt-8 rounded-2xl border border-primary/20 bg-primary/5 p-6">
-        <div className="flex items-start justify-between gap-5">
-          <div className="flex gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              {participationReady ? (
-                <Trophy size={18} />
-              ) : (
-                <Loader2 size={18} className="animate-spin" />
-              )}
-            </div>
-            <p className="max-w-2xl pt-0.5 text-xs leading-relaxed text-muted-foreground">
-              {participationError
-                ? t("insights.leaderboard.activationError")
-                : participationReady
-                  ? t("insights.leaderboard.activationDescription")
-                  : t("insights.leaderboard.checkingParticipation")}
-            </p>
-          </div>
-          {participationReady && (
-            <Button size="sm" onClick={onJoin} disabled={!canJoin}>
-              <Cloud size={14} />
-              {t("insights.leaderboard.join")}
-            </Button>
-          )}
-        </div>
-      </section>
-    );
-  }
 
   return (
     <section className="mt-8 overflow-hidden rounded-2xl border border-border/50 bg-card/70 dark:border-white/8">
@@ -588,6 +584,14 @@ export default function LeaderboardSection({
           scopeKind={selectedScope.kind}
           scopeName={selectedScope.name}
           onInvite={inviteToLeaderboard}
+          sync={{
+            canEnable: canJoin,
+            enabled: participating,
+            error: participationError === "read" || participationError === "write",
+            onEnable: onJoin,
+            ready: participationReady,
+            updating: participationUpdating,
+          }}
         />
       ) : error && !leaderboard ? (
         <LeaderboardRetryCard
