@@ -87,3 +87,16 @@ test("personal API keys fail closed for workspace spaces", async () => {
   assert.equal(response.status, 403);
   assert.equal((await response.json()).error.code, "workspace_key_required");
 });
+
+test("the CLI bridge builds the Oppulence API lazily, so it works outside Electron", async () => {
+  // The public API caches verifier state under app.getPath("userData"). When
+  // the bridge built it in its constructor, merely constructing a CliBridge
+  // under the Oppulence distribution threw outside a running Electron
+  // process — which broke the release build's own test run.
+  process.env.DISTRIBUTION_MANIFEST = "distributions/oppulence-voice.json";
+  const CliBridge = require("../../src/helpers/cliBridge.js");
+
+  const bridge = new CliBridge({ saveNote: () => ({ success: true }) });
+
+  assert.equal(bridge.oppulencePublicAPI, null, "no Electron app means no public API");
+});
