@@ -103,17 +103,32 @@ class CliBridge {
     this.port = null;
     this.token = null;
     this.bridgeFilePath = getBridgeFilePath();
-    this.oppulencePublicAPI =
-      DISTRIBUTION.id === "oppulence-voice"
-        ? new OppulencePublicAPI({
-            app: require("electron").app,
-            apiURL: DISTRIBUTION.services.apiUrl,
-            ipcHandlers,
-            logger: debugLogger,
-            tokenStore,
-          })
-        : null;
+    // Built on first request rather than here: the constructor reads
+    // app.getPath("userData"), which only exists inside Electron. Building it
+    // eagerly made every test that constructs a CliBridge fail under this
+    // distribution, including the suite the release build runs.
+    this._oppulencePublicAPI = undefined;
     this.routes = this._buildRouteTable();
+  }
+
+  get oppulencePublicAPI() {
+    if (this._oppulencePublicAPI === undefined) {
+      const { app } = require("electron");
+      // `app` is undefined outside a running Electron process. The public API
+      // caches verifier state under app.getPath("userData"), so there is
+      // nowhere to put it and nothing meaningful to serve.
+      this._oppulencePublicAPI =
+        DISTRIBUTION.id === "oppulence-voice" && app
+          ? new OppulencePublicAPI({
+              app,
+              apiURL: DISTRIBUTION.services.apiUrl,
+              ipcHandlers: this.ipcHandlers,
+              logger: debugLogger,
+              tokenStore,
+            })
+          : null;
+    }
+    return this._oppulencePublicAPI;
   }
 
   async start() {
