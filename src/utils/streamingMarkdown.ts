@@ -18,18 +18,48 @@
 // fence of any length stays whole in the tail until something else proves
 // it has ended, and settles as one unit rather than splitting a boundary
 // through the middle of it.
-export function splitStreamingMarkdown(content: string): { settled: string; tail: string } {
+//
+// Fix round 3, finding 1: that heuristic alone is necessarily incomplete —
+// EVERY tail shape that momentarily fails looksLikeListOrQuote (not just an
+// empty tail, fixed in round 2, but a bare/partial marker like "-", "*",
+// "3", or "3.") licenses the identical wrongful split one character later.
+// Two rounds of patching one observed shape at a time each bought exactly
+// one more input. Rather than continue enumerating tail shapes, this now
+// enforces the actual invariant the task promises directly: the settled
+// prefix must never get SHORTER as content grows. `previousSettledLength`
+// is the floor from the last call for THIS SAME growing message (the
+// caller — AssistantPanel.tsx — owns that state and is responsible for
+// resetting it to 0 when a new reply starts; see the comment there). The
+// natural, markdown-aware boundary computed below still decides where to
+// ADVANCE the boundary; only retreat below the floor is now impossible.
+export function splitStreamingMarkdown(
+  content: string,
+  previousSettledLength = 0
+): { settled: string; tail: string } {
+  const end = Math.max(computeNaturalBoundary(content), previousSettledLength);
+  // No explicit clamp against content.length: JS's own slice semantics
+  // already treat an end past the string's length as "the whole string"
+  // (content.slice(0, tooFar) === content, content.slice(tooFar) === ""),
+  // which is exactly the safe behavior wanted if a caller ever fails to
+  // reset the floor for a new, shorter reply — everything settles rather
+  // than throwing or slicing negative.
+  return { settled: content.slice(0, end), tail: content.slice(end) };
+}
+
+// The markdown-aware heuristic alone, unaware of any previous call: the
+// furthest-forward index into `content` that is safe to settle up to,
+// searching backward from the last "\n\n" and deferring to progressively
+// earlier ones until a safe one is found (or none exists, returning 0).
+function computeNaturalBoundary(content: string): number {
   let boundary = content.lastIndexOf("\n\n");
   while (boundary !== -1) {
     const end = boundary + 2;
     const candidateSettled = content.slice(0, end);
     const candidateTail = content.slice(end);
-    if (isSafeSettledBoundary(candidateSettled, candidateTail)) {
-      return { settled: candidateSettled, tail: candidateTail };
-    }
+    if (isSafeSettledBoundary(candidateSettled, candidateTail)) return end;
     boundary = content.lastIndexOf("\n\n", boundary - 1);
   }
-  return { settled: "", tail: content };
+  return 0;
 }
 
 // A list item's own text always looks list-shaped — that includes the

@@ -303,13 +303,36 @@ export function AssistantPanel({
   // current paragraph) re-renders per token. Once streaming ends the whole
   // reply is one settled block with no live tail.
   const isStreamingNow = Boolean(latestAssistantMessage?.isStreaming);
+  // The settled boundary must never retreat once advanced (fix round 3,
+  // finding 1): splitStreamingMarkdown is a pure function, so it cannot
+  // enforce that cross-call invariant by itself — the caller owns the
+  // previous boundary and passes it back in as a floor on every call.
+  // settledLengthRef IS that floor. It resets to 0 whenever the message
+  // being displayed changes identity (a brand new reply started, or there
+  // is none) — the floor is a promise about ONE growing message's own
+  // content, and message ids are stable across a single message's
+  // streaming updates (useChatStreaming keeps re-using the same id — see
+  // useChatStreaming.ts) but change for a genuinely new one. Resetting on
+  // anything looser (e.g. comparing content, or comparing settledMarkdown
+  // itself) would be circular: settledMarkdown is what this floor feeds
+  // INTO computing. Without the reset, a new reply's own early content
+  // would inherit the previous reply's (larger) floor and — since
+  // content.slice clamps past the string's end — instantly show as fully
+  // settled, skipping its own tail/rise treatment entirely.
+  const settledLengthRef = useRef(0);
+  const latestAssistantMessageIdRef = useRef<string | undefined>(undefined);
+  if (latestAssistantMessageIdRef.current !== latestAssistantMessage?.id) {
+    latestAssistantMessageIdRef.current = latestAssistantMessage?.id;
+    settledLengthRef.current = 0;
+  }
   const { settled: settledMarkdown, tail: tailMarkdown } = useMemo(
     () =>
       isStreamingNow
-        ? splitStreamingMarkdown(displayedResponse)
+        ? splitStreamingMarkdown(displayedResponse, settledLengthRef.current)
         : { settled: displayedResponse, tail: "" },
     [displayedResponse, isStreamingNow]
   );
+  if (isStreamingNow) settledLengthRef.current = settledMarkdown.length;
   // Sticky per-word rise state for the tail's current settled-prefix cycle:
   // real (HAST-order) word index -> its assigned delay, mutated in place by
   // rehypeWordRise. Reset only when settledMarkdown itself changes — a

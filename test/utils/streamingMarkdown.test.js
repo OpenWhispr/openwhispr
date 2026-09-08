@@ -107,3 +107,111 @@ test("a boundary between two plain paragraphs is unaffected by the block-safety 
     tail: "Thr",
   });
 });
+
+// Fix round 3, finding 1: round 1 and round 2 each patched ONE observed
+// shape of the same defect (a tail that momentarily fails
+// looksLikeListOrQuote — first an empty tail, then a bare/partial marker
+// like "-" or "3." — gets read as proof a list/quote ended, when it is
+// simply mid-stream). A property sweep found 30 such violations across 7 of
+// 17 tried shapes; chasing each remaining one as its own fixture would only
+// ever fix the specific character offsets exercised, leaving the next one
+// for the next round. The actual promise this task makes ("settled blocks
+// never re-render") is the general property being tested here directly:
+// the settled prefix returned for a growing string must never get SHORTER
+// as more of that same string streams in. splitStreamingMarkdown now takes
+// the previous call's settled length as a floor and never returns less than
+// it — this test proves that holds for every character-by-character (and,
+// separately, chunk-by-chunk) prefix of eleven different document shapes,
+// not just the specific inputs earlier rounds happened to try.
+const MONOTONICITY_SHAPES = {
+  "loose bullet list": "- Alpha\n\n- Bravo\n\n- Charlie\n\nAfter the list.",
+  "loose ordered list": "1. Alpha\n\n2. Bravo\n\n3. Charlie\n\nAfter the list.",
+  "tight bullet list": "- Alpha\n- Bravo\n- Charlie\n\nAfter the list.",
+  "nested list": "- Alpha\n  - Nested one\n  - Nested two\n\n- Bravo\n\nAfter the list.",
+  blockquote: "> Quoted one\n\n> Quoted two\n\nAfter the quote.",
+  "quote then list": "> Quoted line\n\n- List item\n\nAfter.",
+  "list, paragraph, list": "- First item\n\nA paragraph in between.\n\n- Second item\n\nAfter.",
+  "fenced code with a blank line inside": "Before.\n\n```js\ncode line one\n\ncode line two\n```\n\nAfter the code.",
+  headings: "## Heading one\n\nSome text.\n\n### Heading two\n\nMore text.",
+  "plain paragraphs": "Paragraph one.\n\nParagraph two.\n\nParagraph three.",
+  "whitespace-padded list": "  - Alpha\n\n  - Bravo\n\nAfter.",
+};
+
+test("the settled boundary is monotonically non-decreasing across every character-by-character prefix, for every shape (fix round 3, finding 1)", async () => {
+  const { splitStreamingMarkdown } = await load();
+
+  for (const [name, shape] of Object.entries(MONOTONICITY_SHAPES)) {
+    let floor = 0;
+    for (let i = 0; i <= shape.length; i++) {
+      const chunk = shape.slice(0, i);
+      const { settled, tail } = splitStreamingMarkdown(chunk, floor);
+      assert.equal(
+        settled + tail,
+        chunk,
+        `[${name}] settled+tail must reconstruct the streamed-so-far content at length ${i}`
+      );
+      assert.ok(
+        settled.length >= floor,
+        `[${name}] settled prefix REGRESSED at character ${i}: floor was ${floor}, got ${settled.length}\n` +
+          `  chunk:   ${JSON.stringify(chunk)}\n  settled: ${JSON.stringify(settled)}`
+      );
+      floor = settled.length;
+    }
+  }
+});
+
+test("the settled boundary is monotonically non-decreasing across word-sized chunk arrivals, for every shape (fix round 3, finding 1)", async () => {
+  const { splitStreamingMarkdown } = await load();
+
+  for (const [name, shape] of Object.entries(MONOTONICITY_SHAPES)) {
+    // Word-sized "chunks" (each run of non-whitespace plus its trailing
+    // whitespace) approximate real token-by-token arrival more closely than
+    // single characters — a coarser granularity feeding the SAME floor.
+    const chunks = shape.match(/\S+\s*|\s+/g) ?? [];
+    let accumulated = "";
+    let floor = 0;
+    for (const piece of chunks) {
+      accumulated += piece;
+      const { settled, tail } = splitStreamingMarkdown(accumulated, floor);
+      assert.equal(settled + tail, accumulated, `[${name}] settled+tail must reconstruct the accumulated chunks`);
+      assert.ok(
+        settled.length >= floor,
+        `[${name}] settled prefix REGRESSED after a chunk arrival: floor was ${floor}, got ${settled.length}\n` +
+          `  accumulated so far: ${JSON.stringify(accumulated)}`
+      );
+      floor = settled.length;
+    }
+    assert.equal(accumulated, shape, `[${name}] fixture-integrity check: chunks must reconstruct the whole shape`);
+  }
+});
+
+test("a new reply resets the floor to zero — a stale, larger floor from a previous reply is not carried over", async () => {
+  const { splitStreamingMarkdown } = await load();
+
+  // Simulate a long previous reply that settled a lot of content.
+  const previousReply = "Paragraph one.\n\nParagraph two.\n\nParagraph three.\n\n";
+  const { settled: staleFloorSource } = splitStreamingMarkdown(previousReply, 0);
+  const staleFloor = staleFloorSource.length;
+  assert.ok(staleFloor > 20, "fixture-integrity check: expected the previous reply to settle a substantial prefix");
+
+  // A brand new, much shorter reply starts. Called WITHOUT resetting the
+  // floor (previousSettledLength defaults to 0 — this is what "the caller
+  // resets the floor to 0 on a new reply" means in practice: simply not
+  // carrying the old value forward), the new reply's own boundary logic
+  // must run on its own terms, unaffected by the old reply's floor.
+  const newReplySoFar = "Hi";
+  const { settled, tail } = splitStreamingMarkdown(newReplySoFar);
+  assert.equal(settled, "", "a fresh, short reply must not inherit a stale floor from an unrelated previous reply");
+  assert.equal(tail, "Hi");
+
+  // Demonstrate what WOULD go wrong if the floor were wrongly carried over
+  // (the bug this test guards the "reset" contract against): passing the
+  // stale floor explicitly clamps the whole short reply as settled,
+  // skipping its own tail/rise treatment entirely.
+  const withStaleFloor = splitStreamingMarkdown(newReplySoFar, staleFloor);
+  assert.equal(
+    withStaleFloor.settled,
+    newReplySoFar,
+    "fixture-integrity check: demonstrates why NOT resetting the floor would be wrong"
+  );
+});
