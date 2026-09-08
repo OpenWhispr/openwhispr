@@ -490,6 +490,96 @@ test("GNOME stops preferring a saved portal token after it fails", async () => {
   );
 });
 
+test("GNOME pastes through a running ydotoold before the ephemeral uinput device", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "ydotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._isYdotoolDaemonRunning = () => true;
+  manager._isYdotoolLegacy = () => false;
+
+  const result = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+
+  assert.equal(result.method, "ydotool");
+  assert.deepEqual(spawnCalls, [
+    { command: "ydotool", args: ["key", "42:1", "110:1", "110:0", "42:0"] },
+  ]);
+});
+
+test("GNOME keeps a saved portal token ahead of ydotoold", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "ydotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => "restore-token";
+  manager._isYdotoolDaemonRunning = () => true;
+  manager._isYdotoolLegacy = () => false;
+
+  await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+
+  assert.deepEqual(spawnCalls, [
+    {
+      command: "/tmp/linux-fast-paste",
+      args: ["--portal", "--shift-insert", "--restore-token", "restore-token"],
+    },
+  ]);
+});
+
+test("GNOME falls back to the ephemeral uinput device when ydotool fails", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [1, 0]),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "ydotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._isYdotoolDaemonRunning = () => true;
+  manager._isYdotoolLegacy = () => false;
+
+  const result = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+
+  assert.equal(result.method, "uinput");
+  assert.deepEqual(spawnCalls, [
+    { command: "ydotool", args: ["key", "42:1", "110:1", "110:0", "42:0"] },
+    { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+  ]);
+});
+
+test("GNOME does not retry a failed ydotool after the native paths also fail", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [1, 1, 1]),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "ydotool";
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._isYdotoolDaemonRunning = () => true;
+  manager._isYdotoolLegacy = () => false;
+
+  await assert.rejects(
+    withWaylandEnvironment("GNOME", () => manager.pasteLinux(null)),
+    { code: "PASTE_SIMULATION_FAILED" }
+  );
+
+  assert.deepEqual(
+    spawnCalls.map((call) => call.args),
+    [
+      ["key", "42:1", "110:1", "110:0", "42:0"],
+      ["--uinput", "--shift-insert"],
+      ["--portal", "--shift-insert"],
+    ]
+  );
+});
+
 test("KDE tries portal before uinput", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({
