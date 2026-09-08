@@ -288,6 +288,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionBaseUrl,
     cloudTranscriptionMode,
     transcriptionMode,
+    remoteTranscriptionUrl,
   } = useSettingsStore(
     useShallow((settings) =>
       selectResolvedUploadTranscription(selectPolicyEffectiveSettings(settings, policyState))
@@ -295,7 +296,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   );
   const uploadAllowedByPolicy = useTranscriptionContextAllowed("upload");
 
-  const remoteTranscriptionUrl = useSettingsStore((s) => s.remoteTranscriptionUrl);
   const remoteTranscriptionModel = useSettingsStore((s) => s.remoteTranscriptionModel);
 
   const setUploadTranscriptionMode = useSettingsStore((s) => s.setUploadTranscriptionMode);
