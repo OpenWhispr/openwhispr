@@ -286,6 +286,7 @@ test("live transcript events are mirrored to the companion only for plain dictat
   manager._agentDictationPillReady = true;
   manager.mainWindow = {
     isDestroyed: () => false,
+    isVisible: () => true,
     showInactive: () => undefined,
     webContents: { send: (channel, payload) => mainMessages.push({ channel, payload }) },
   };
@@ -307,6 +308,41 @@ test("live transcript events are mirrored to the companion only for plain dictat
     { channel: "preview-text", payload: "plain" },
   ]);
   assert.deepEqual(companionMessages, [{ channel: "preview-text", payload: "plain" }]);
+});
+
+test("live transcript updates do not restack an already visible dictation window", async () => {
+  const manager = new WindowManager();
+  const calls = [];
+  manager.setOnboardingActive(false);
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    showInactive: () => calls.push("showInactive"),
+    webContents: { send: () => undefined },
+  };
+  manager.enforceMainWindowOnTop = () => calls.push("onTop");
+
+  await manager.showTranscriptionPreview("one");
+  await manager.showTranscriptionPreview("two");
+
+  assert.deepEqual(calls, []);
+});
+
+test("the first live transcript update still surfaces a hidden dictation window", async () => {
+  const manager = new WindowManager();
+  const calls = [];
+  manager.setOnboardingActive(false);
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    isVisible: () => false,
+    showInactive: () => calls.push("showInactive"),
+    webContents: { send: () => undefined },
+  };
+  manager.enforceMainWindowOnTop = () => calls.push("onTop");
+
+  await manager.showTranscriptionPreview("hello");
+
+  assert.deepEqual(calls, ["showInactive", "onTop"]);
 });
 
 test("opening the assistant panel surfaces a hidden pill window before focusing it", () => {
