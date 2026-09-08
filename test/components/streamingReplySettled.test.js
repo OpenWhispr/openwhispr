@@ -171,9 +171,12 @@ async function mountStreamingAssistantPanel(t) {
     )
   );
 
-  const setAssistantMessage = async (content, isStreaming) => {
+  // id defaults to a fixed value (the existing behavior every prior test
+  // relies on: one continuous message growing across calls) — pass a
+  // DIFFERENT id to simulate a genuinely new reply starting.
+  const setAssistantMessage = async (content, isStreaming, id = "assistant-1") => {
     await React.act(async () => {
-      globalThis.__setStreamMessages([{ id: "assistant-1", role: "assistant", content, isStreaming }]);
+      globalThis.__setStreamMessages([{ id, role: "assistant", content, isStreaming }]);
     });
   };
 
@@ -237,14 +240,27 @@ test("a settled paragraph keeps its DOM identity across tail-only growth, but ge
   );
 
   // Stage 4: a new paragraph boundary passes — settled content itself
-  // genuinely changes. This must NOT be a no-op: proves the test can tell
-  // the difference between "didn't re-render" and "nothing ever changes".
+  // genuinely changes (a new paragraph joins it). Since fix round 3,
+  // finding 2 (MarkdownRenderer's components map is now a stable, hoisted
+  // reference — see MarkdownRenderer.tsx), "Alpha bravo." itself no longer
+  // loses its DOM identity here either: react-markdown re-parses the whole
+  // settled string, but because the <p> type reference is now stable,
+  // React's reconciliation can patch the EXISTING, unchanged first
+  // paragraph in place and only mount a DOM node for the genuinely new
+  // second one — an improvement over the original design (which tore down
+  // and rebuilt the whole settled subtree on every genuine boundary
+  // advance, not just spuriously). This must still NOT be a no-op, though
+  // — proven differently now: "Echo", which WAS a risen tail span one
+  // stage ago, must no longer be found as a span AT ALL once its sentence
+  // settles (rendered from here on as plain text via the memoized,
+  // rehypeWordRise-free settled path) — a real, detectable representation
+  // change, not just "nothing ever happens".
   await setAssistantMessage("Alpha bravo.\n\nCharlie delta.\n\nEcho foxtrot golf hotel.\n\nIndia", true);
   const settledNodeAfterBoundary = findSettledParagraph(container, "Alpha bravo.");
-  assert.notEqual(
+  assert.equal(
     settledNodeAfterBoundary,
     settledNode,
-    "once new text actually joins the settled portion, it legitimately re-renders once (this is not the case the guarantee protects)"
+    "the first settled paragraph's DOM identity now survives a genuine settled-boundary advance too, thanks to fix round 3's stable components map"
   );
   assert.ok(
     findSettledParagraph(container, "Echo foxtrot golf hotel."),
@@ -253,6 +269,10 @@ test("a settled paragraph keeps its DOM identity across tail-only growth, but ge
   assert.equal(
     findSettledParagraph(container, "Echo foxtrot golf hotel.").getAttribute("data-rise"),
     null
+  );
+  assert.ok(
+    !riseSpans(container).some((span) => span.textContent === "Echo"),
+    "'Echo' must no longer be found as a risen span once its sentence settles — the non-vacuous proof this test relies on now that settled paragraph identity itself is stable"
   );
   // The new (shorter) tail's own word must still actually rise — this is
   // the settled-boundary reset path (risenWordsRef's Map is replaced with a
@@ -642,4 +662,155 @@ test("an empty tail right after a blockquote line is not proof the blockquote en
     alphaAtEmptyTail.style.animationDelay,
     "Alpha's delay value must be unchanged"
   );
+});
+
+// Fix round 3, finding 1: round 2's fix covered the EMPTY-tail moment; the
+// same defect reappears one character later for a BARE/PARTIAL marker
+// ("-", "*", "3", "3.") — looksLikeListOrQuote requires trailing
+// whitespace after the marker, so "-" alone also fails "looks like it
+// continues" and licenses the identical wrongful ADVANCE (settling "a"
+// alone, before its sibling item's marker has even fully arrived).
+//
+// What this does NOT assert: that the settled prefix's OWN identity stays
+// unchanged the instant the bare marker appears. It does not, and per the
+// "never shrink" invariant it is not required to — settling "a" alone
+// there is a genuine, one-time, FORWARD move (verified separately: once
+// "b" and then non-list content prove the list complete, "a" and "b"
+// correctly rejoin into one settled block — see the trace in the report).
+// The actual defect the coordinator measured is the step AFTER that: the
+// bare marker's own trailing space arriving used to prove nothing and
+// caused the settle to REVERSE — detaching the just-created settled node
+// and moving "a" back into the tail, where it regains data-rise and
+// replays its rise animation. That reversal is what must never happen: a
+// word, once found settled, must never again be found risen.
+function findWordStatus(container, word) {
+  if (riseSpans(container).some((span) => span.textContent === word)) return "risen";
+  if (findElement(container, (el) => el.tagName === "P" && el.textContent.includes(word))) return "settled";
+  return "absent";
+}
+
+test("a bare list marker with no content yet does not cause a settled word to regress back to risen (fix round 3, finding 1)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+  const introNode = () => findSettledParagraph(container, "Intro para.");
+
+  const steps = [
+    "Intro para.\n\n- a\n\n",
+    "Intro para.\n\n- a\n\n-", // bare marker — this is where round 2 alone would wrongly advance
+    "Intro para.\n\n- a\n\n- ", // marker's trailing space — this is where the OLD bug reversed it
+    "Intro para.\n\n- a\n\n- b",
+    "Intro para.\n\n- a\n\n- b\n\nAfter.", // proves the list complete: "a" and "b" settle together
+  ];
+  let previousStatus = null;
+  for (const content of steps) {
+    await setAssistantMessage(content, true);
+    assert.ok(introNode(), "the intro paragraph must remain settled throughout");
+    const status = findWordStatus(container, "a");
+    assert.notEqual(status, "absent", `'a' must always be findable somewhere; step: ${JSON.stringify(content)}`);
+    if (previousStatus === "settled") {
+      assert.equal(
+        status,
+        "settled",
+        `'a' regressed from settled back to ${status} at step: ${JSON.stringify(content)} — a settled word must never become risen again`
+      );
+    }
+    previousStatus = status;
+  }
+  // By the time the list is proven complete, "a" must have actually
+  // reached "settled" at some point during the sweep above (not stayed
+  // "risen" forever, which would mean it never actually settled at all).
+  assert.equal(previousStatus, "settled");
+});
+
+// Round 1's ordered-list numbering symptom, reappearing through the same
+// bare-marker window: verified that a bare "3." does not itself get
+// captured into a competing, separately-numbered list — and, decisively,
+// that once the list is fully proven complete, it is ONE <ol> with three
+// items, not two <ol> elements that never got reconciled.
+test("ordered-list numbering stays correct through the bare-marker window, and settles as one <ol> once complete (fix round 3, finding 1)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+  const orderedLists = () => findAllElements(container, (el) => el.tagName === "OL");
+  const listItemCount = () => findAllElements(container, (el) => el.tagName === "LI").length;
+
+  await setAssistantMessage("1. one\n\n2. two", true);
+  await setAssistantMessage("1. one\n\n2. two\n\n3.", true);
+  await setAssistantMessage("1. one\n\n2. two\n\n3. three", true);
+  await setAssistantMessage("1. one\n\n2. two\n\n3. three\n\nAfter.", true);
+
+  assert.equal(orderedLists().length, 1, "the fully-streamed list must be exactly one <ol>, never two left unreconciled");
+  assert.equal(listItemCount(), 3);
+  assert.match(container.textContent, /After\./);
+});
+
+// The floor's reset contract, exercised through the real component: a
+// brand new reply (a different message id — see useChatStreaming.ts, which
+// mints one crypto.randomUUID() per assistant turn and keeps reusing it for
+// that turn's own updates) must not inherit a stale, larger floor left
+// over from whatever a PREVIOUS reply settled to.
+test("a new reply's own early words still rise — a previous reply's settled floor is not inherited (fix round 3, finding 1)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+
+  // First reply: settle a substantial prefix.
+  await setAssistantMessage(
+    "Paragraph one.\n\nParagraph two.\n\nParagraph three.\n\nStill going",
+    true,
+    "assistant-1"
+  );
+  const firstReplySettledLength = findSettledParagraph(container, "Paragraph one.") ? 1 : 0;
+  assert.ok(firstReplySettledLength, "fixture-integrity check: expected the first reply to have settled content");
+
+  // Second reply: a genuinely new message id, short content. If the floor
+  // from the first reply (a much larger number) were wrongly inherited,
+  // this short content would instantly render as fully "settled" (no live
+  // tail at all — JS's slice semantics clamp an over-long end to the whole
+  // string), so its own word would never get a chance to rise.
+  await setAssistantMessage("Hi", true, "assistant-2");
+  const hiSpan = riseSpans(container).find((span) => span.textContent === "Hi");
+  assert.ok(
+    hiSpan,
+    "the new reply's own first word must be found risen — inheriting the old floor would settle it instantly instead"
+  );
+  assert.equal(
+    findSettledParagraph(container, "Paragraph one."),
+    null,
+    "the previous reply's settled content must not still be present once a new reply has replaced it"
+  );
+});
+
+// Fix round 3, finding 2: MarkdownRenderer.tsx built its react-markdown
+// `components` map inline (a fresh object, with fresh arrow functions for
+// every custom-mapped tag: p, li, h1-h3, ul, ol, code, pre, strong, em,
+// blockquote) on every call. The tail is deliberately NOT wrapped in memo
+// (only settled is — that's the actual mechanism behind this whole task's
+// core guarantee), so every tail re-render handed react-markdown a
+// brand-new `components` object. Since react-markdown uses each entry as
+// the React element TYPE for its tag, a fresh object meant every
+// custom-mapped ancestor got a NEW type reference on every render,
+// forcing React to unmount and remount its entire subtree — including any
+// already-risen word span inside it — regardless of round 1's sticky,
+// byte-identical `risenWords` delay VALUE. A freshly (re)inserted DOM node
+// with an `animation` declaration paints its "from" keyframe on/near its
+// first paint (verified reasoning, not measured in a browser — none
+// available here), so a word that had already finished rising would
+// restart from opacity 0 every time a LATER word arrived in the SAME
+// paragraph — not list-specific, not blockquote-specific: this is the
+// common case, every multi-word paragraph, for the paragraph's whole
+// streaming duration.
+test("a tail word's DOM node survives a growth within the same paragraph (fix round 3, finding 2)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+
+  await setAssistantMessage("Echo foxtrot", true);
+  const echoBefore = riseSpans(container).find((span) => span.textContent === "Echo");
+  assert.ok(echoBefore, "expected Echo to have risen on its first appearance");
+
+  await setAssistantMessage("Echo foxtrot golf", true);
+  const echoAfterOneGrowth = riseSpans(container).find((span) => span.textContent === "Echo");
+  assert.equal(
+    echoAfterOneGrowth,
+    echoBefore,
+    "Echo's own DOM node must survive a tail growth in the same paragraph — a fresh node restarts its CSS animation from the 'from' keyframe regardless of the sticky delay value staying byte-identical"
+  );
+
+  await setAssistantMessage("Echo foxtrot golf hotel", true);
+  const echoAfterTwoGrowths = riseSpans(container).find((span) => span.textContent === "Echo");
+  assert.equal(echoAfterTwoGrowths, echoBefore, "still the same node after a second growth");
 });
