@@ -6,3 +6,25 @@ body:has(.agent-dictation-pill-window) #root {
   overflow: hidden;
   background: transparent;
 }
+
+/* Fades the whole companion window out on the same clock as the assistant
+   panel's own close instead of the native window being cut dead the instant
+   hideAgentDictationPill fires. */
+.agent-dictation-pill-window {
+  transition: opacity var(--motion-companion-fade-ms, 160ms) ease-out;
+}
+
+.agent-dictation-pill-window[data-exiting="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* A single value broadcasts to every property index.css's blanket
+     reduced-motion rule forces into transition-property here (only opacity
+     survives) instead of being matched positionally against the wrong one —
+     same convention as dictation-panel.css's own close-fade override. */
+  .agent-dictation-pill-window {
+    transition-duration: 1ms !important;
+  }
+}

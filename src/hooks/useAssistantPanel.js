@@ -8,8 +8,14 @@ import {
   discardPendingAssistantCommand,
 } from "../helpers/assistantSessionState";
 
-const ASSISTANT_TRANSITION_MS = 320;
-const ASSISTANT_CONTENT_FADE_FALLBACK_MS = 260;
+// The shell's own clip-path transitionend (VoiceModePanelCore's onCollapsed)
+// is the real signal; this is only the safety net (a torn-down node, a
+// missed event, or reduced motion — see completeContentFade's own comment on
+// why that last case can never reach the real event at all). Exported so
+// tests can derive their expectations from the real constant instead of a
+// retyped literal.
+export const ASSISTANT_COLLAPSE_FALLBACK_MS = 560;
+export const ASSISTANT_CONTENT_FADE_FALLBACK_MS = 160;
 
 /**
  * Owns the assistant panel lifecycle: open/close choreography, the thinking
@@ -210,6 +216,16 @@ export function useAssistantPanel({
     window.electronAPI?.setAssistantPanelBusy?.(assistantPanelBusy);
   }, [assistantPanelBusy]);
 
+  // The shell reports its own clip-path transitionend (VoiceModePanelCore
+  // onCollapsed); the timer set by completeContentFade is only the fallback.
+  const completeCollapse = useCallback(() => {
+    if (!closingRef.current || !contentFadeCompletedRef.current) return;
+    clearTimeout(closeTimerRef.current);
+    closingRef.current = false;
+    setClosing(false);
+    setMounted(false);
+  }, []);
+
   const completeContentFade = useCallback(() => {
     if (!closingRef.current || contentFadeCompletedRef.current) return;
     const closeState = closeAssistantSessionState({
@@ -226,12 +242,24 @@ export function useAssistantPanel({
     selectionContextRef.current = null;
     hasContentRef.current = false;
     clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = setTimeout(() => {
-      closingRef.current = false;
-      setClosing(false);
-      setMounted(false);
-    }, ASSISTANT_TRANSITION_MS);
-  }, []);
+    // The shell's own clip-path never transitions under reduced motion
+    // (src/index.css's blanket reduced-motion rule strips clip-path from
+    // every element's transition-property, the same trap that cost Task 3 a
+    // review round on a stripped `width`) — so onCollapsed can structurally
+    // never fire there, and this fallback is the ONLY path to
+    // completeCollapse. Falling through to the full fallback anyway would
+    // leave a shell already snapped to its closed circle sitting inside a
+    // still-expanded native window for most of ASSISTANT_COLLAPSE_FALLBACK_MS,
+    // since nothing else shrinks the window. Resolve at once instead,
+    // mirroring resolvePillShrinkWait's own reduced-motion short-circuit.
+    const prefersReducedMotion = Boolean(
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    );
+    closeTimerRef.current = setTimeout(
+      completeCollapse,
+      prefersReducedMotion ? 0 : ASSISTANT_COLLAPSE_FALLBACK_MS
+    );
+  }, [completeCollapse]);
 
   const beginClose = useCallback(
     (preserveNativeOwnership = false) => {
@@ -249,6 +277,12 @@ export function useAssistantPanel({
       contentFadeCompletedRef.current = false;
       setErrorDownplayActive(preserveNativeOwnership);
       setClosing(true);
+      // A ready response's actions own the footer; retreat them on close
+      // intent instead of riding out their slower normal handoff duration.
+      // The footer effect's own `!open` branch resets the phase to "pill"
+      // once completeContentFade flips `open` false, so this only needs to
+      // cover the visible retreat itself.
+      if (previousResponseReadyRef.current) setFooterPhase("actions-exiting");
 
       // Native interaction ownership must be released at close intent, not after
       // the renderer's opacity transition. If the transition event is delayed or
@@ -333,6 +367,7 @@ export function useAssistantPanel({
     getSelectionContext,
     handleClose,
     completeContentFade,
+    completeCollapse,
     noteDictationError,
   };
 }

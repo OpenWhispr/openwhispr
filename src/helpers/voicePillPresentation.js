@@ -304,16 +304,25 @@ export function resolveVoiceActivityPresentation({
 }
 
 /**
- * Keep Agent identity for the complete request/panel lifecycle, but do not let
- * the audio manager's last routing flag brand a later idle dictation pill.
+ * Keep Agent identity for the complete request lifecycle and the open panel,
+ * end it at close intent so the colour fades inside the close spring, and
+ * hold it through an auto-hide exit when asked (the mark leaves with the
+ * pill; the leaf→ring morph runs while the window is hidden). Never let the
+ * audio manager's last routing flag brand a later idle dictation pill.
  */
 export function resolveAgentModeActive({
   isAssistantVoice,
   isRecording,
   isProcessing,
   assistantPanelMounted,
+  assistantPanelClosing = false,
+  heldThroughHide = false,
 }) {
-  return Boolean((isAssistantVoice && (isRecording || isProcessing)) || assistantPanelMounted);
+  return Boolean(
+    (isAssistantVoice && (isRecording || isProcessing)) ||
+    (assistantPanelMounted && !assistantPanelClosing) ||
+    heldThroughHide
+  );
 }
 
 /**

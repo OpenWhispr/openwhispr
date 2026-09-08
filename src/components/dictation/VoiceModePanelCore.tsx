@@ -33,6 +33,12 @@ interface VoiceModePanelCoreProps {
   label?: string;
   measurementRevision?: string | number | null;
   onClosingFadeComplete?: () => void;
+  // Fired once when the shell's own clip-path transition ends while
+  // closing && !open && mode === "assistant" — the morph that carries the
+  // shell down to the pill's circle has genuinely finished, distinct from
+  // onClosingFadeComplete above (the CHILDREN's opacity fade, which reports
+  // much earlier in the same close sequence).
+  onCollapsed?: () => void;
   onPreferredHeightChange: (
     height: number,
     measurementRevision?: string | number | null
@@ -56,6 +62,7 @@ export function VoiceModePanelCore({
   label,
   measurementRevision = null,
   onClosingFadeComplete,
+  onCollapsed,
   onPreferredHeightChange,
   children,
 }: VoiceModePanelCoreProps) {
@@ -81,6 +88,17 @@ export function VoiceModePanelCore({
   }, [closing, mode, onClosingFadeComplete]);
 
   const handleTransitionEndCapture = (event: TransitionEvent<HTMLElement>) => {
+    if (
+      closing &&
+      !open &&
+      mode === "assistant" &&
+      event.propertyName === "clip-path" &&
+      event.target === event.currentTarget
+    ) {
+      onCollapsed?.();
+      return;
+    }
+
     if (
       !closing ||
       mode !== "assistant" ||

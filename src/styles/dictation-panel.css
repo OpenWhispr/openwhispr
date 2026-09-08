@@ -87,12 +87,15 @@
    composited as a simple layer instead of repainting markdown, controls, and
    shimmer descendants inside a changing clip on every frame. */
 .expanding-panel-surface[data-panel-mode="assistant"] > * {
-  transition: opacity 100ms ease-out;
+  transition:
+    opacity var(--motion-close-fade-ms, 120ms) ease-out,
+    transform 160ms ease-out;
 }
 
 .expanding-panel-surface[data-panel-mode="assistant"][data-panel-closing="true"] > * {
   pointer-events: none;
   opacity: 0;
+  transform: translateY(4px);
 }
 
 /* Live Transcript stages its empty surface before buffered text becomes visible. */
@@ -720,6 +723,17 @@
   .voice-pill-control[data-integrated-with-panel="true"] {
     transition-duration: 1ms !important;
     transition-delay: 0ms !important;
+  }
+
+  /* This rule's own transition is a two-value list (opacity, transform);
+     index.css's blanket reduced-motion rule forces transition-property to
+     its own fixed list (opacity survives, transform does not) without
+     touching transition-duration, so a value here is matched by POSITION
+     against the new property list, not by name — the same trap
+     .voice-pill-position hit. A single value broadcasts to every property in
+     that forced list instead of cycling onto the wrong one. */
+  .expanding-panel-surface[data-panel-mode="assistant"] > * {
+    transition-duration: 1ms !important;
   }
 
   .assistant-response-actions,

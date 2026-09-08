@@ -680,7 +680,7 @@ test("onboarding suppresses the companion pill like every popup surface", () => 
   assert.equal(createdBrowserWindows.length, 0);
 });
 
-test("a ready but hidden companion never counts as an available surface", () => {
+test("a ready but hidden companion never counts as an available surface", (t) => {
   createdBrowserWindows.length = 0;
   const manager = new WindowManager();
   manager.setOnboardingActive(false);
@@ -698,15 +698,20 @@ test("a ready but hidden companion never counts as an available surface", () => 
 
   // Onboarding hides the pill without dropping readiness; a hidden surface
   // cannot show a recording, so dictation must fail closed rather than start
-  // invisibly.
+  // invisibly. The hide now fades on the renderer's clock (Task 7) before
+  // the native window actually hides, so this advances past that fade
+  // window instead of asserting synchronously.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   manager.hideAgentDictationPill();
+  t.mock.timers.tick(200);
   assert.equal(pill.isVisible(), false);
   assert.equal(manager._shouldBlockDictationInput("dictation"), true);
-  // The blocked press re-kicks the show, so the next press can land.
+  // The blocked press re-kicks the show, so the next press can land. The
+  // re-show itself is still synchronous — only the hide fades.
   assert.equal(pill.isVisible(), true);
 });
 
-test("entering onboarding hides an already-visible companion pill", () => {
+test("entering onboarding hides an already-visible companion pill", (t) => {
   createdBrowserWindows.length = 0;
   const manager = new WindowManager();
   manager.setOnboardingActive(false);
@@ -724,7 +729,11 @@ test("entering onboarding hides an already-visible companion pill", () => {
   pill.webContentsListeners.get("did-finish-load")();
   assert.equal(pill.isVisible(), true);
 
+  // The hide now fades on the renderer's clock (Task 7) before the native
+  // window actually hides — advance past that fade window.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   manager.setOnboardingActive(true);
+  t.mock.timers.tick(200);
 
   assert.equal(pill.isVisible(), false);
 });

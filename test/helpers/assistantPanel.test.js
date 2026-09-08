@@ -7,6 +7,7 @@ const { renderToStaticMarkup } = require("react-dom/server");
 const {
   createRendererServer,
   installBrowserGlobals,
+  installHookDom,
   installInteractiveDom,
   findElement,
 } = require("../lib/rendererTestHarness");
@@ -31,6 +32,45 @@ test("a populated Assistant keeps typed input without empty-state suggestions", 
   assert.match(markup, /Existing answer/);
   assert.match(markup, /<input/);
   assert.doesNotMatch(markup, /Summarize my recent notes/);
+});
+
+test("closing retreats the footer actions on the close-fade duration, not the slower footer-handoff duration", async (t) => {
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
+  const { ASSISTANT_FOOTER_TRANSITION_TIMING } =
+    await import("../../src/helpers/voicePillPresentation.js");
+
+  const closingMarkup = await renderAssistantPanel(
+    t,
+    [{ id: "assistant-1", role: "assistant", content: "Existing answer", isStreaming: false }],
+    { footerPhase: "actions", closing: true }
+  );
+  // Assert the actual DURATION VALUE landed in the style attribute, not just
+  // that the actions container rendered — and derive the expectation from
+  // MOTION_TIMING.closeFadeMs rather than retyping 120.
+  assert.match(
+    closingMarkup,
+    new RegExp(`--assistant-actions-retreat-duration:\\s*${MOTION_TIMING.closeFadeMs}ms`)
+  );
+  assert.doesNotMatch(
+    closingMarkup,
+    new RegExp(
+      `--assistant-actions-retreat-duration:\\s*${ASSISTANT_FOOTER_TRANSITION_TIMING.actionsRetreatMs}ms`
+    )
+  );
+
+  const openMarkup = await renderAssistantPanel(
+    t,
+    [{ id: "assistant-1", role: "assistant", content: "Existing answer", isStreaming: false }],
+    { footerPhase: "actions", closing: false }
+  );
+  // Unchanged when the panel itself is not closing (e.g. the footer's own
+  // ready->stale handoff): still the pre-existing footer-transition timing.
+  assert.match(
+    openMarkup,
+    new RegExp(
+      `--assistant-actions-retreat-duration:\\s*${ASSISTANT_FOOTER_TRANSITION_TIMING.actionsRetreatMs}ms`
+    )
+  );
 });
 
 test("starting a new conversation clears the displayed response and parent content ownership", async (t) => {
@@ -631,4 +671,204 @@ test("a follow-up into an open panel strips caret delivery and stays panel-first
     assistant.handleCommand({ text: "draft a reply", attachment: null, selectedContext: null, delivery });
   });
   assert.deepEqual(assistant.pendingCommand.delivery, delivery);
+});
+
+test("completeCollapse waits for both close intent and the content fade to finish before unmounting", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-collapse-guard-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { createRoot } = require("react-dom/client");
+
+  let assistant;
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => assistant.openPanel());
+  assert.equal(assistant.mounted, true);
+
+  // Before any close intent: a pure no-op.
+  await React.act(async () => assistant.completeCollapse());
+  assert.equal(assistant.mounted, true, "completeCollapse before any close intent must be a no-op");
+
+  // Close intent alone, before the content fade reports completion: still a
+  // no-op — the shell hasn't even begun its own close spring yet.
+  await React.act(async () => assistant.handleClose());
+  assert.equal(assistant.closing, true);
+  await React.act(async () => assistant.completeCollapse());
+  assert.equal(
+    assistant.mounted,
+    true,
+    "completeCollapse must wait for the content fade, not just close intent"
+  );
+
+  // Once the content fade has completed, completeCollapse actually unmounts.
+  await React.act(async () => assistant.completeContentFade());
+  assert.equal(assistant.open, false);
+  await React.act(async () => assistant.completeCollapse());
+  assert.equal(assistant.mounted, false);
+  assert.equal(assistant.closing, false);
+});
+
+test("the fallback timer collapses the panel on its own, timed to ASSISTANT_COLLAPSE_FALLBACK_MS, if nothing reports the shell's own transitionend", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-collapse-fallback-test-",
+  });
+  const { useAssistantPanel, ASSISTANT_COLLAPSE_FALLBACK_MS } = await vite.ssrLoadModule(
+    "/hooks/useAssistantPanel.js"
+  );
+  const { createRoot } = require("react-dom/client");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  let assistant;
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => assistant.openPanel());
+  await React.act(async () => assistant.handleClose());
+  await React.act(async () => assistant.completeContentFade());
+  assert.equal(
+    assistant.mounted,
+    true,
+    "fixture: still mounted right after the content fade completes"
+  );
+
+  // Derived from the real exported constant, never a retyped 560.
+  await React.act(async () => {
+    t.mock.timers.tick(ASSISTANT_COLLAPSE_FALLBACK_MS - 1);
+  });
+  assert.equal(assistant.mounted, true, "must not collapse before the pinned fallback elapses");
+
+  await React.act(async () => {
+    t.mock.timers.tick(1);
+  });
+  assert.equal(assistant.mounted, false);
+  assert.equal(assistant.closing, false);
+});
+
+// Deviation from the brief's literal fallback line, flagged in the task
+// report: src/index.css strips clip-path from transition-property under
+// reduced motion (the task's own documented trap, "Task 3 lost a round to
+// exactly this"), so the shell's own onCollapsed can never fire there and
+// this fallback becomes the ONLY path to completeCollapse. Falling all the
+// way through to the full 560ms fallback would leave a visibly collapsed
+// shell sitting inside a still-expanded native window for over half a
+// second — the window shrink is gated on `mounted`, and nothing else moves
+// it. Mirrors the established resolvePillShrinkWait convention (resolve at
+// once under reduced motion) instead of leaning on a generic timeout.
+test("reduced motion collapses the panel at once instead of waiting the full fallback", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t, { window: { matchMedia: () => ({ matches: true }) } });
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-collapse-reduced-motion-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { createRoot } = require("react-dom/client");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  let assistant;
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => assistant.openPanel());
+  await React.act(async () => assistant.handleClose());
+  await React.act(async () => assistant.completeContentFade());
+  assert.equal(
+    assistant.mounted,
+    true,
+    "fixture: still mounted immediately after the content fade"
+  );
+
+  await React.act(async () => {
+    t.mock.timers.tick(1);
+  });
+  assert.equal(
+    assistant.mounted,
+    false,
+    "reduced motion must not wait for a clip-path transitionend that can never fire, nor the full fallback"
+  );
+});
+
+test("closing with a ready response retreats the footer actions immediately instead of waiting for the normal handoff", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-close-footer-retreat-test-",
+  });
+  const { useAssistantPanel } = await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { createRoot } = require("react-dom/client");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  let assistant;
+  function Harness() {
+    assistant = useAssistantPanel({
+      requestMainWindowSize: async () => ({ success: true }),
+      dictationErrorActionCount: 0,
+      recordingControlsRef: { current: null },
+    });
+    return null;
+  }
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => assistant.openPanel());
+  assert.equal(
+    assistant.open,
+    true,
+    "fixture: the panel must be genuinely open for the footer effect to run"
+  );
+
+  await React.act(async () => assistant.setResponseReady(true));
+  assert.equal(
+    assistant.footerPhase,
+    "pill-exiting",
+    "fixture: the normal ready handoff begins by retreating the pill"
+  );
+
+  await React.act(async () => assistant.handleClose());
+  assert.equal(
+    assistant.footerPhase,
+    "actions-exiting",
+    "a close intent while a response was ready must retreat the ACTIONS, not continue the pill/actions handoff"
+  );
 });

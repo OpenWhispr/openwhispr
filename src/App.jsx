@@ -556,6 +556,7 @@ export default function App() {
     isRecording,
     isProcessing: isVisuallyProcessing,
     assistantPanelMounted: assistant.mounted,
+    assistantPanelClosing: assistant.closing,
   });
   const assistantFooter = resolveAssistantFooterPresentation(assistant.footerPhase);
   const voicePillInteraction = resolveVoicePillInteraction({
@@ -859,6 +860,7 @@ export default function App() {
         }
         onPreferredHeightChange={liveTranscript.requestHeight}
         onClosingFadeComplete={assistant.completeContentFade}
+        onCollapsed={assistant.completeCollapse}
       >
         {activeVoicePanelMode === "assistant" && assistant.mounted && (
           <AssistantPanel
@@ -872,6 +874,7 @@ export default function App() {
             thinking={assistant.thinking && assistant.open}
             open={assistant.open}
             footerPhase={assistant.footerPhase}
+            closing={assistant.closing}
             horizontalDirection={voiceHorizontalDirection}
             onClose={assistant.handleClose}
             onBusyChange={assistant.setBusy}

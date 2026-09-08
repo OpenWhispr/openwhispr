@@ -546,6 +546,27 @@ test("Agent identity follows active requests and the complete panel lifecycle", 
   );
 });
 
+test("Agent identity ends at close intent so the colour fades inside the close spring", async () => {
+  const { resolveAgentModeActive } = await load();
+  const base = { isAssistantVoice: false, isRecording: false, isProcessing: false };
+  assert.equal(resolveAgentModeActive({ ...base, assistantPanelMounted: true }), true);
+  assert.equal(
+    resolveAgentModeActive({ ...base, assistantPanelMounted: true, assistantPanelClosing: true }),
+    false
+  );
+  // A live agent request keeps its identity even while a stale panel closes.
+  assert.equal(
+    resolveAgentModeActive({
+      isAssistantVoice: true,
+      isRecording: true,
+      isProcessing: false,
+      assistantPanelMounted: true,
+      assistantPanelClosing: true,
+    }),
+    true
+  );
+});
+
 test("Agent transcription contracts to the rotating thinking circle", async () => {
   const { resolveVoiceActivityPresentation } = await load();
   assert.deepEqual(

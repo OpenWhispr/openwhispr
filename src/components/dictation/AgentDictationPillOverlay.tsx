@@ -47,6 +47,10 @@ export default function AgentDictationPillOverlay() {
   const { t } = useTranslation();
   const [companionState, setCompanionState] = useState(DEFAULT_STATE);
   const [hovered, setHovered] = useState(false);
+  // Fades the whole companion window out on the panel's own close clock
+  // instead of the native window being cut dead — see
+  // agent-dictation-pill.css's [data-exiting="true"] rule.
+  const [exiting, setExiting] = useState(false);
   const audioLevelRef = useRef<number | null>(null);
   const assistantOpenRef = useRef(false);
 
@@ -59,6 +63,12 @@ export default function AgentDictationPillOverlay() {
     const disposeAudio = window.electronAPI.onAgentDictationPillAudioLevelChanged?.((level) => {
       audioLevelRef.current = level;
     });
+    const disposeWillHide = window.electronAPI.onAgentDictationPillWillHide?.(() => {
+      if (!disposed) setExiting(true);
+    });
+    const disposeWillShow = window.electronAPI.onAgentDictationPillWillShow?.(() => {
+      if (!disposed) setExiting(false);
+    });
     window.electronAPI
       .getAgentDictationPillState?.()
       .then(applyState)
@@ -67,16 +77,23 @@ export default function AgentDictationPillOverlay() {
       disposed = true;
       disposeState?.();
       disposeAudio?.();
+      disposeWillHide?.();
+      disposeWillShow?.();
     };
   }, []);
 
   // hideAgentDictationPill force-resets native click-through, but a hidden
   // window never fires mouseleave, so React's hovered flag would survive the
   // hide and desync the interactivity effect on the next show (first click
-  // falls through). Electron marks hidden windows document.hidden.
+  // falls through). Electron marks hidden windows document.hidden. The same
+  // hide also ends any in-flight fade, so a later show must not find the
+  // window still marked exiting.
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") setHovered(false);
+      if (document.visibilityState === "hidden") {
+        setHovered(false);
+        setExiting(false);
+      }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -208,7 +225,11 @@ export default function AgentDictationPillOverlay() {
   };
 
   return (
-    <main className="agent-dictation-pill-window dictation-window" style={motionVars}>
+    <main
+      className="agent-dictation-pill-window dictation-window"
+      data-exiting={exiting || undefined}
+      style={motionVars}
+    >
       <div
         className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50`}
         style={

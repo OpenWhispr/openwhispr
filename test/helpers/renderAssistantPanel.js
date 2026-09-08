@@ -26,6 +26,11 @@ async function renderAssistantPanel(
     // gates actionsMounted on the phase) — the Copy button lives there, so
     // reaching it requires "actions".
     footerPhase = "pill",
+    // Task 7: whether the WHOLE panel is closing, not just the footer's own
+    // phase — feeds --assistant-actions-retreat-duration so a close intent
+    // retreats the actions on the close-fade's own duration instead of the
+    // footer's normal (slower) internal handoff duration.
+    closing = false,
     // copied drives the mocked useCopyFeedback return value; copiedLabel,
     // when set, replaces useCrossfadedLabel entirely with a fixed
     // { showActive, fading } pair — the only way to reach the mid-fade
@@ -142,6 +147,7 @@ async function renderAssistantPanel(
       thinking: false,
       open: true,
       footerPhase,
+      closing,
       horizontalDirection: "right",
       onClose: noop,
       onBusyChange: noop,

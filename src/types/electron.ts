@@ -1084,6 +1084,8 @@ declare global {
         }) => void
       ) => () => void;
       onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
+      onAgentDictationPillWillHide?: (callback: () => void) => () => void;
+      onAgentDictationPillWillShow?: (callback: () => void) => () => void;
       showAgentDictationFinalTranscript?: (text: string) => void;
       onAgentDictationPillFinalTranscript?: (callback: (text: string) => void) => () => void;
 

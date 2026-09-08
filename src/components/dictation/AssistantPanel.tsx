@@ -87,6 +87,10 @@ interface AssistantPanelProps {
   thinking: boolean;
   open: boolean;
   footerPhase: AssistantFooterPhase;
+  /** Whether the WHOLE panel is closing (not just the footer's own internal
+   * phase handoff) — retreats the footer actions on the close-fade's own
+   * duration instead of their slower normal entrance/handoff duration. */
+  closing: boolean;
   horizontalDirection: "left" | "right";
   onClose: () => void;
   onBusyChange: (busy: boolean) => void;
@@ -113,6 +117,7 @@ export function AssistantPanel({
   thinking,
   open,
   footerPhase,
+  closing,
   horizontalDirection,
   onClose,
   onBusyChange,
@@ -721,7 +726,15 @@ export function AssistantPanel({
             aria-hidden={footerPhase !== "actions"}
             style={
               {
-                "--assistant-actions-retreat-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.actionsRetreatMs}ms`,
+                // A close intent retreats the actions on the close-fade's own
+                // duration instead of the slower normal footer-handoff
+                // duration, so they finish retreating alongside the rest of
+                // the closing content instead of trailing behind it.
+                "--assistant-actions-retreat-duration": `${
+                  closing
+                    ? MOTION_TIMING.closeFadeMs
+                    : ASSISTANT_FOOTER_TRANSITION_TIMING.actionsRetreatMs
+                }ms`,
                 "--assistant-actions-entrance-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.actionsEntranceMs}ms`,
               } as CSSProperties
             }

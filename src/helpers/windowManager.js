@@ -49,6 +49,11 @@ const {
   WindowPositionUtil,
 } = require("./windowConfig");
 const AGENT_DICTATION_PILL_SIZE = Object.freeze({ ...WINDOW_SIZES.BASE });
+// Matches MOTION_TIMING.companionFadeMs (src/utils/springEasing.ts) — the
+// renderer's own opacity fade. The main process has no import path into that
+// renderer-only module, so this is a deliberate, named duplicate of the same
+// value rather than a derived one; the +20ms grace below is this file's own.
+const AGENT_DICTATION_PILL_FADE_MS = 160;
 const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
 const { ONBOARDING_DEMO_KINDS, isOnboardingInputAllowed } = require("./onboardingInputPolicy");
 
@@ -71,6 +76,7 @@ class WindowManager {
     this.notificationWindow = null;
     this.agentDictationPillWindow = null;
     this._agentDictationPillReady = false;
+    this._agentDictationPillHideTimer = null;
     this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
     this._agentDictationPillHorizontalDirection = "left";
     this._agentDictationPillScreenListener = null;
@@ -2063,10 +2069,27 @@ class WindowManager {
   }
 
   showAgentDictationPill() {
+    let pillWindow = this.agentDictationPillWindow;
+    if (pillWindow && !pillWindow.isDestroyed() && this._agentDictationPillHideTimer) {
+      // A show cancels a pending fade-then-hide — the window must stay put,
+      // not disappear out from under a request that arrived mid-fade. Only
+      // meaningful when a hide was actually in flight: an ordinary show (no
+      // pending hide, e.g. the very first show once did-finish-load marks
+      // the companion ready) must not tell the renderer to reverse a fade it
+      // never started. Runs ahead of the guards below: a show can be
+      // requested (and must still cancel a pending hide) even while
+      // onboarding or a closed panel stops the rest of this method from
+      // doing anything else.
+      clearTimeout(this._agentDictationPillHideTimer);
+      this._agentDictationPillHideTimer = null;
+      if (this._agentDictationPillReady) {
+        pillWindow.webContents.send("agent-dictation-pill-will-show");
+      }
+    }
+
     if (this._onboardingActive) return;
     if (!this._assistantPanelOpen || !this.mainWindow || this.mainWindow.isDestroyed()) return;
 
-    let pillWindow = this.agentDictationPillWindow;
     if (!pillWindow || pillWindow.isDestroyed()) {
       pillWindow = new BrowserWindow({
         ...NOTIFICATION_WINDOW_CONFIG,
@@ -2147,6 +2170,23 @@ class WindowManager {
   }
 
   hideAgentDictationPill() {
+    const pillWindow = this.agentDictationPillWindow;
+    if (!pillWindow || pillWindow.isDestroyed()) return;
+    if (this._agentDictationPillHideTimer) return;
+    if (pillWindow.isVisible() && this._agentDictationPillReady) {
+      // Fade on the renderer's clock with the panel close instead of a hard
+      // cut; the native hide follows once the fade has had time to land.
+      pillWindow.webContents.send("agent-dictation-pill-will-hide");
+      this._agentDictationPillHideTimer = setTimeout(() => {
+        this._agentDictationPillHideTimer = null;
+        this._hideAgentDictationPillNow();
+      }, AGENT_DICTATION_PILL_FADE_MS + 20);
+      return;
+    }
+    this._hideAgentDictationPillNow();
+  }
+
+  _hideAgentDictationPillNow() {
     const pillWindow = this.agentDictationPillWindow;
     if (!pillWindow || pillWindow.isDestroyed()) return;
     if (pillWindow.isVisible()) pillWindow.hide();
