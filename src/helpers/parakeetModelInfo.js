@@ -46,11 +46,7 @@ function resolveModelLanguage(modelName, language) {
   if (getModelType(modelName) !== "cohere-transcribe") return null;
   const base =
     typeof language === "string"
-      ? language
-          .trim()
-          .replace(/_/g, "-")
-          .split("-")[0]
-          .toLowerCase()
+      ? language.trim().replace(/_/g, "-").split("-")[0].toLowerCase()
       : "";
   const supported = getModelInfo(modelName)?.supportedLanguages || [];
   return supported.includes(base) ? base : "en";
