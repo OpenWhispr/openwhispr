@@ -6,7 +6,7 @@ import {
   ApiKeyVerifierSnapshotSchema,
   type ApiKeyScope,
   type ApiKeyVerifierSnapshot,
-} from "../../src/config/openwhisprApi";
+} from "../../src/config/openwhisprApi.ts";
 
 const { net, safeStorage } = electron;
 const REFRESH_INTERVAL_MS = 5 * 60 * 1_000;

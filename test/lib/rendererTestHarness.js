@@ -119,9 +119,15 @@ async function createRendererServer(
         resolveId(source) {
           const suffix = suffixes.find((candidate) => source.endsWith(candidate));
           if (suffix) return `\0mock:${suffix}`;
+          // Distribution aliases are supplied by vite.config.mjs, which these
+          // servers deliberately skip (configFile: false). Resolve them to an
+          // empty asset so every component importing one does not have to be
+          // stubbed in each test.
+          if (source.startsWith("@distribution/")) return `\0distribution-asset`;
           return null;
         },
         load(id) {
+          if (id === "\0distribution-asset") return `export default "";`;
           if (!id.startsWith("\0mock:")) return null;
           return mockModules[id.slice("\0mock:".length)];
         },

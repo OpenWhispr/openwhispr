@@ -14,9 +14,9 @@ import {
   TranscriptionSchema,
   UpdateNoteRequestSchema,
   type ApiKeyScope,
-} from "../../src/config/openwhisprApi";
+} from "../../src/config/openwhisprApi.ts";
 import { broadcastToWindows } from "../../src/helpers/windowBroadcast.js";
-import { OppulenceAPIKeyVerifier } from "./apiKeyVerifier";
+import { OppulenceAPIKeyVerifier } from "./apiKeyVerifier.ts";
 
 const MAX_REQUEST_BODY_BYTES = 1024 * 1024;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
@@ -100,12 +100,16 @@ interface TextResult {
 }
 
 class PublicAPIError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string
-  ) {
+  // Written out longhand rather than as constructor parameter properties:
+  // Electron's main process loads this file through Node's strip-only
+  // TypeScript support, which rejects that syntax outright.
+  readonly status: number;
+  readonly code: string;
+
+  constructor(status: number, code: string, message: string) {
     super(message);
+    this.status = status;
+    this.code = code;
   }
 }
 

@@ -8,6 +8,7 @@ import { useWindowControls } from "../../hooks/useWindowControls";
 // Imported (not referenced by path) so Vite fingerprints it and it resolves
 // under the packaged app's file:// origin. See .onboarding-compact-hero.
 import heroDither from "@/assets/onboarding-hero-dither.webp";
+import distributionMarkSrc from "@distribution/mark";
 import heroDitherDark from "@/assets/onboarding-hero-dither-dark.webp";
 import onboardingBackgroundLight from "@/assets/onboarding-bg-light.svg";
 import onboardingBackgroundDark from "@/assets/onboarding-bg-dark.svg";
@@ -404,6 +405,13 @@ export function CompactOnboardingFrame({
 }
 
 export function BrandMark({ className = "" }: { className?: string }) {
+  // A distribution that ships its own mark renders that instead of the
+  // built-in glyph. The generic branch keeps this file free of any
+  // per-distribution branching, so upstream can still edit the fallback.
+  if (distributionMarkSrc) {
+    return <img src={distributionMarkSrc} alt="" aria-hidden="true" className={className} />;
+  }
+
   return (
     <svg
       className={className}
