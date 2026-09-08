@@ -2703,7 +2703,7 @@
         "gemma_gemma_3_1b_it_q4_k_m": "Modèle Google ultra-rapide, idéal pour le nettoyage de courtes dictées",
         "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Modèle efficace de Liquid AI, excellent suivi des instructions",
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE de Liquid AI, haute qualité avec seulement 1,5B de paramètres actifs",
-        "liquidai_lfm2_5_2_6b_q4_k_m": "Dernière génération LFM2.5, nettoyage et réécriture de meilleure qualité",
+        "liquidai_lfm2_5_2_6b_q4_k_m": "2.6B agentique de Liquid AI, raisonne toujours avant de répondre",
         "liquidai_lfm2_2_6b_q4_k_m": "LFM2 équilibré pour un nettoyage de meilleure qualité",
         "liquidai_lfm2_5_350m_q8_0": "Modèle ultraléger pour un nettoyage rapide de la dictée",
         "liquidai_lfm2_5_230m_q8_0": "Modèle minuscule, nettoyage instantané sur du matériel modeste"
