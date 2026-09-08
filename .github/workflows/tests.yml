@@ -24,9 +24,6 @@ jobs:
       - name: Check translations
         run: npm run i18n:check
       - name: Audit dependencies
-        # High and above only. onnxruntime-node depends on adm-zip, whose
-        # symlink advisory (GHSA-vwc7-r8mq-g2x9, moderate) has no patched
-        # release; failing on it would keep every PR red with nothing to fix.
         run: npm audit --audit-level=high
       - name: Run tests
         # The gates above fail on drift that has nothing to do with the suite —
