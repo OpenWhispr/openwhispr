@@ -1112,3 +1112,42 @@ test("ending a stream holds the tail's word spans until their rises finish, then
     "the released hold must collapse to plain markdown, never a permanently word-wrapped reply"
   );
 });
+
+// Josh, on the rig 2026-09-08: "A cursor hangs below the end of every
+// sentence, almost like a line break." The unit tests in
+// test/components/rehypeStreamCaret.test.js pin where the plugin PUTS the
+// caret; this one proves the panel actually renders it there, and — the half
+// a plugin test cannot reach — that the old block-level caret is no longer
+// also on screen. Two carets would look like one badly placed caret.
+test("the streaming caret renders inside the last block, with no block-level twin (Josh 2026-09-08)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+  await setAssistantMessage("Hello world, still writing", true);
+
+  const carets = findAllElements(container, (el) => el.getAttribute("data-stream-caret") === "true");
+  assert.equal(carets.length, 1, "exactly one caret while streaming");
+  const host = carets[0].parentNode;
+  assert.equal(host.nodeName, "P", "the caret must live inside the paragraph, not beside it");
+  assert.equal(
+    host.childNodes[host.childNodes.length - 1],
+    carets[0],
+    "and at the very end of it, after the last word"
+  );
+
+  // The pre-2026-09-08 caret, identified by the utility classes it renders
+  // with. While a tail exists it must not appear at all — it is the fallback
+  // for a tail with no block to host the caret.
+  const legacyCarets = findAllElements(
+    container,
+    (el) => el.tagName === "SPAN" && (el.getAttribute("class") || "").includes("bg-foreground/70")
+  );
+  assert.equal(legacyCarets.length, 0, "the block-level caret must not render alongside the inline one");
+
+  // A finished reply has no caret of either kind.
+  await setAssistantMessage("Hello world, still writing", false);
+  await waitForRiseCollapse(container);
+  assert.equal(
+    findAllElements(container, (el) => el.getAttribute("data-stream-caret") === "true").length,
+    0,
+    "a completed reply must carry no caret"
+  );
+});

@@ -694,6 +694,25 @@
   color: oklch(0.27 0.09 285);
 }
 
+/* The streaming caret, injected into the END OF THE LAST BLOCK of the tail by
+   rehypeStreamCaret rather than rendered after the markdown container. As a
+   sibling of a block-level element it started its own line every time, which
+   is what Josh saw on the rig 2026-09-08: "a cursor hangs below the end of
+   every sentence, almost like a line break." Same size, colour and blink as
+   the block-level caret it replaces (AssistantPanel keeps that one as the
+   fallback for a tail with no block to host the caret, and for code blocks).
+   Written as a real class, not Tailwind utilities: the class name is produced
+   inside a rehype plugin, where the utility scanner cannot see it. */
+.assistant-stream-caret {
+  display: inline-block;
+  width: 0.125rem;
+  height: 1rem;
+  margin-left: 0.125rem;
+  vertical-align: middle;
+  background: color-mix(in oklab, var(--color-foreground) 70%, transparent);
+  animation: agent-cursor-blink 1s ease-in-out infinite;
+}
+
 /* Streaming reply: each newly arrived word rises in once on the word spring.
    Settled words carry no animation; their spans stay in place as the tail grows. */
 .assistant-word[data-rise="true"] {

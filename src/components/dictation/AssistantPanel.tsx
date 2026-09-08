@@ -16,6 +16,7 @@ import {
   type RehypeWordRiseOptions,
   type RiseClock,
 } from "./rehypeWordRise";
+import { rehypeStreamCaret } from "./rehypeStreamCaret";
 import { Button } from "../ui/button";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
@@ -454,7 +455,13 @@ export function AssistantPanel({
   // memoizing it would only add a dependency-array correctness question
   // (what actually invalidates it — settledMarkdown changing, which the
   // factory function doesn't itself reference) for no real benefit.
-  const tailPlugins: Array<[typeof rehypeWordRise, RehypeWordRiseOptions]> = [
+  // Ordered, not a set: rehypeStreamCaret must run AFTER rehypeWordRise, so
+  // the caret it appends is never itself word-wrapped and never shifts a word
+  // index. Added only while the reply is actually streaming — the caret is the
+  // signal that more text is coming.
+  const tailPlugins: Array<
+    [typeof rehypeWordRise, RehypeWordRiseOptions] | [typeof rehypeStreamCaret, { className: string }]
+  > = [
     [
       rehypeWordRise,
       {
@@ -470,6 +477,9 @@ export function AssistantPanel({
       },
     ],
   ];
+  if (latestAssistantMessage?.isStreaming) {
+    tailPlugins.push([rehypeStreamCaret, { className: "assistant-stream-caret" }]);
+  }
 
   // Records when every rise assigned so far will be done, for the hold above
   // to read on the render that ends the stream. Deliberately no dependency
@@ -717,7 +727,17 @@ export function AssistantPanel({
                     />
                   )}
                 </div>
-                {latestAssistantMessage?.isStreaming && (
+                {/* The FALLBACK caret only. While there is a tail,
+                    rehypeStreamCaret puts the caret inside the last block,
+                    at the end of the text — as a sibling of a block-level
+                    element an inline span starts its own line, which is the
+                    "cursor hangs below the end of every sentence, almost like
+                    a line break" Josh reported from the rig on 2026-09-08.
+                    An empty tail has no block to host it (the boundary just
+                    moved and the next token has not landed), so the caret
+                    falls back to here, where it behaves exactly as it always
+                    did. */}
+                {latestAssistantMessage?.isStreaming && !tailMarkdown && (
                   <span
                     className="ml-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
                     style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
