@@ -26,9 +26,7 @@ const SyncSchema = z.object({
   }),
 });
 const SyncListSchema = z.object({
-  data: z.array(
-    z.object({ item_id: z.string(), ciphertext: z.string(), revision: z.number() })
-  ),
+  data: z.array(z.object({ item_id: z.string(), ciphertext: z.string(), revision: z.number() })),
 });
 const CaptureSchema = z.object({
   data: z.object({
@@ -211,4 +209,9 @@ async function main(): Promise<void> {
   console.log(`Oppulence Voice backend smoke passed against ${API_URL}`);
 }
 
-await main();
+// Not top-level await: tsx transforms this file as CJS, where that is a
+// syntax error, so the smoke test could never actually run.
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exitCode = 1;
+});
