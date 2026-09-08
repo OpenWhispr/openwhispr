@@ -69,6 +69,51 @@ test("per-provider reasoning model memory", async (t) => {
   });
 });
 
+// The reasoning picker commits only on an explicit model click via the plain
+// scope setters (provider, then model). Pin that the pair lands atomically
+// and that per-provider memory never overrides an explicit click.
+test("explicit model click commits the (provider, model) pair atomically", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      cleanupMode: "providers",
+      cleanupProvider: "openai",
+      cleanupModel: "gpt-5-mini",
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-reasoning-click-commit-test-",
+  });
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const state = () => useSettingsStore.getState();
+
+  // Seed per-provider memory: anthropic remembers claude-opus-4-6.
+  state().switchReasoningProvider("dictationCleanup", "anthropic", "claude-sonnet-4-6");
+  state().setCleanupModel("claude-opus-4-6");
+  state().switchReasoningProvider("dictationCleanup", "openai", "gpt-5.2");
+  assert.equal(state().cleanupModel, "gpt-5-mini", "switch-and-return restores openai's model");
+
+  // Explicit click on claude-haiku-4-5 under the browsed anthropic tab:
+  // the clicked pair commits, not the remembered claude-opus-4-6.
+  state().setCleanupProvider("anthropic");
+  state().setCleanupModel("claude-haiku-4-5");
+  assert.equal(state().cleanupProvider, "anthropic");
+  assert.equal(
+    state().cleanupModel,
+    "claude-haiku-4-5",
+    "per-provider memory must not resurrect over an explicit click"
+  );
+
+  // A later provider-only write must not drag the model along.
+  state().setCleanupProvider("openai");
+  assert.equal(state().cleanupProvider, "openai");
+  assert.equal(
+    state().cleanupModel,
+    "claude-haiku-4-5",
+    "the plain provider setter writes the provider alone"
+  );
+});
+
 test("corrupt persisted reasoning model memory hydrates as empty, not a crash", async (t) => {
   installBrowserGlobals(t, {
     initialStorage: {

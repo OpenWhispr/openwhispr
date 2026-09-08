@@ -170,6 +170,7 @@ export default function ChatView() {
                 onTextSubmit={handleTextSubmit}
                 onCancel={streaming.cancelStream}
                 autoFocus={isNewChat}
+                voiceDraft
               />
             </>
           ) : (

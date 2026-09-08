@@ -35,7 +35,7 @@ function wavFromSeconds(spans) {
   return buf;
 }
 
-function fakeWsServer(responses) {
+function fakeWsServer(responses, { onCall } = {}) {
   const calls = [];
   return {
     calls,
@@ -44,9 +44,15 @@ function fakeWsServer(responses) {
       calls.push(samplesBuffer.length);
       const next = responses.shift();
       assert.ok(next, "unexpected extra transcribe call");
+      onCall?.(calls.length);
       return { elapsed: 1, ...next };
     },
   };
+}
+
+function isAbortError(err) {
+  assert.equal(err.name, "AbortError");
+  return true;
 }
 
 function managerWith(fake) {
@@ -123,4 +129,105 @@ test("a silent segment decoding to empty is not retried or flagged", async () =>
   assert.equal(result.text, "alpha omega");
   assert.ok(!result.truncated, "silence is not data loss");
   assert.equal(fake.calls.length, 3);
+});
+
+test("a pre-aborted signal rejects before any decode is issued", async () => {
+  const fake = fakeWsServer([]);
+  const manager = managerWith(fake);
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(
+    () => manager.transcribe(wavFromSeconds([{ seconds: 10 }]), { signal: controller.signal }),
+    isAbortError
+  );
+  assert.equal(fake.calls.length, 0);
+});
+
+test("an abort during the first segment stops the segment loop", async () => {
+  const controller = new AbortController();
+  const fake = fakeWsServer([{ text: "one" }, { text: "two" }, { text: "three" }], {
+    onCall: () => controller.abort(),
+  });
+  const manager = managerWith(fake);
+
+  await assert.rejects(
+    () => manager.transcribe(wavFromSeconds([{ seconds: 31 }]), { signal: controller.signal }),
+    isAbortError
+  );
+  assert.equal(fake.calls.length, 1, "no further segments may be scheduled after the abort");
+});
+
+test("an abort between an empty decode and its retry suppresses the retry", async () => {
+  const controller = new AbortController();
+  const fake = fakeWsServer([{ text: "" }, { text: "recovered" }], {
+    onCall: () => controller.abort(),
+  });
+  const manager = managerWith(fake);
+
+  await assert.rejects(
+    () => manager.transcribe(wavFromSeconds([{ seconds: 10 }]), { signal: controller.signal }),
+    isAbortError
+  );
+  assert.equal(fake.calls.length, 1, "the empty-decode retry must not run after a cancel");
+});
+
+test("transcribe without a signal is unchanged", async () => {
+  const fake = fakeWsServer([{ text: "one" }, { text: "two" }, { text: "three" }]);
+  const manager = managerWith(fake);
+
+  const result = await manager.transcribe(wavFromSeconds([{ seconds: 31 }]));
+
+  assert.equal(result.text, "one two three");
+  assert.equal(fake.calls.length, 3);
+});
+
+test("cohere models segment at 30s and start the server with the resolved language", async () => {
+  const fake = fakeWsServer([{ text: "one" }, { text: "two" }]);
+  const startArgs = [];
+  fake.start = async (...args) => {
+    startArgs.push(args);
+  };
+  const manager = managerWith(fake);
+
+  const result = await manager.transcribe(wavFromSeconds([{ seconds: 31 }]), {
+    modelName: "cohere-transcribe-03-2026",
+    language: "pl",
+  });
+
+  assert.equal(result.text, "one two");
+  assert.deepEqual(fake.calls, [30 * SAMPLE_RATE * 4, 1 * SAMPLE_RATE * 4]);
+  assert.equal(startArgs.length, 1);
+  assert.equal(startArgs[0][0], "cohere-transcribe-03-2026");
+  assert.equal(startArgs[0][2], "offline");
+  assert.equal(startArgs[0][3], "pl");
+});
+
+test("cohere models fall back to English when the app language has no match", async () => {
+  const fake = fakeWsServer([{ text: "hello" }]);
+  const startArgs = [];
+  fake.start = async (...args) => {
+    startArgs.push(args);
+  };
+  const manager = managerWith(fake);
+
+  await manager.transcribe(wavFromSeconds([{ seconds: 5 }]), {
+    modelName: "cohere-transcribe-03-2026",
+    language: "auto",
+  });
+
+  assert.equal(startArgs[0][3], "en");
+});
+
+test("transducer models start the server without a language", async () => {
+  const fake = fakeWsServer([{ text: "hello" }]);
+  const startArgs = [];
+  fake.start = async (...args) => {
+    startArgs.push(args);
+  };
+  const manager = managerWith(fake);
+
+  await manager.transcribe(wavFromSeconds([{ seconds: 5 }]), { language: "pl" });
+
+  assert.equal(startArgs[0][3], null);
 });

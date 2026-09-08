@@ -3,6 +3,7 @@ import { Mic, Shield, Monitor } from "lucide-react";
 import PermissionCard from "./PermissionCard";
 import MicPermissionWarning from "./MicPermissionWarning";
 import PasteToolsInfo from "./PasteToolsInfo";
+import { needsLinuxPasteToolGuidance } from "../../utils/linuxPasteTools";
 import type { UsePermissionsReturn } from "../../hooks/usePermissions";
 import type { SystemAudioAccessResult } from "../../types/electron";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
@@ -82,7 +83,7 @@ export default function PermissionsSection({
 
       {platform === "linux" &&
         permissions.pasteToolsInfo &&
-        !permissions.pasteToolsInfo.available && (
+        needsLinuxPasteToolGuidance(permissions.pasteToolsInfo) && (
           <PasteToolsInfo
             pasteToolsInfo={permissions.pasteToolsInfo}
             isChecking={permissions.isCheckingPasteTools}

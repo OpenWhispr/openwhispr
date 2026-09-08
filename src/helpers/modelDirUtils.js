@@ -14,30 +14,42 @@ function ensureDir(dir) {
   return dir;
 }
 
-function getAsciiSafeCacheRoot() {
-  const envOverride =
-    process.env.OPENWHISPR_CACHE_ROOT ||
-    (process.env.XDG_CACHE_HOME ? path.join(process.env.XDG_CACHE_HOME, "openwhispr") : null);
-  if (envOverride && !pathHasProblematicChars(envOverride)) {
+function getAsciiSafeFallbackRoot() {
+  const candidates = [
+    path.join(process.env.ProgramData || "C:\\ProgramData", "OpenWhispr", "cache"),
+    path.join(process.env.SystemDrive || "C:", "OpenWhispr", "cache"),
+  ];
+
+  for (const candidate of candidates) {
+    if (pathHasProblematicChars(candidate)) continue;
     try {
-      return ensureDir(envOverride);
-    } catch {
-      // fall through
+      return ensureDir(candidate);
+    } catch {}
+  }
+
+  return null;
+}
+
+function getPreferredCacheRoot(homeCache) {
+  if (process.env.OPENWHISPR_CACHE_ROOT) {
+    return process.env.OPENWHISPR_CACHE_ROOT;
+  }
+
+  if (process.platform === "win32") {
+    const redirectedProfile = process.env.USERPROFILE;
+    if (redirectedProfile && path.isAbsolute(redirectedProfile)) {
+      return path.join(redirectedProfile, ".cache", "openwhispr");
     }
   }
 
-  const fallbackBase = process.env.ProgramData || "C:\\ProgramData";
-  const fallback = path.join(fallbackBase, "OpenWhispr", "cache");
-  try {
-    return ensureDir(fallback);
-  } catch {
-    const rootFallback = path.join(process.env.SystemDrive || "C:", "OpenWhispr", "cache");
-    try {
-      return ensureDir(rootFallback);
-    } catch {
-      return null;
+  if (process.platform === "linux") {
+    const xdgCacheHome = process.env.XDG_CACHE_HOME;
+    if (xdgCacheHome && path.isAbsolute(xdgCacheHome)) {
+      return path.join(xdgCacheHome, "openwhispr");
     }
   }
+
+  return homeCache;
 }
 
 // Only these subdirs resolve through getCacheRoot(). qdrant-data,
@@ -45,45 +57,80 @@ function getAsciiSafeCacheRoot() {
 // managers (and tolerate non-ASCII paths), so they must stay put.
 const RELOCATED_SUBDIRS = ["whisper-models", "parakeet-models", "diarization-models", "models"];
 
-let migratedLegacyRoot = null;
+let migratedRootPair = null;
 
-function migrateLegacyModelDirs(legacyRoot, safeRoot) {
-  if (migratedLegacyRoot === legacyRoot) return;
-  migratedLegacyRoot = legacyRoot;
-  for (const subdir of RELOCATED_SUBDIRS) {
-    const from = path.join(legacyRoot, subdir);
-    const to = path.join(safeRoot, subdir);
+function rollbackMigration(completedMoves) {
+  for (const move of completedMoves.reverse()) {
     try {
+      if (!fs.existsSync(move.to)) continue;
+
+      if (move.copied) {
+        fs.cpSync(move.to, move.from, { recursive: true });
+        fs.rmSync(move.to, { recursive: true, force: true });
+      } else if (!fs.existsSync(move.from)) {
+        fs.renameSync(move.to, move.from);
+      }
+    } catch {}
+  }
+}
+
+function migrateLegacyModelDirs(legacyRoot, targetRoot) {
+  const rootPair = `${legacyRoot}\0${targetRoot}`;
+  if (migratedRootPair === rootPair) return true;
+
+  const completedMoves = [];
+  let staging = null;
+  try {
+    ensureDir(targetRoot);
+
+    for (const subdir of RELOCATED_SUBDIRS) {
+      const from = path.join(legacyRoot, subdir);
+      const to = path.join(targetRoot, subdir);
       if (!fs.existsSync(from) || fs.existsSync(to)) continue;
+
       try {
         fs.renameSync(from, to);
+        completedMoves.push({ from, to, copied: false });
       } catch {
         // Cross-volume move: copy to a staging dir first so an interrupted
         // copy can never be mistaken for a complete model dir.
-        const staging = `${to}.migrating`;
+        staging = `${to}.migrating`;
         fs.rmSync(staging, { recursive: true, force: true });
         fs.cpSync(from, staging, { recursive: true });
         fs.renameSync(staging, to);
-        fs.rmSync(from, { recursive: true, force: true });
+        staging = null;
+        completedMoves.push({ from, to, copied: true });
       }
-    } catch {
-      // Leave the legacy copy in place; the model re-downloads if needed.
     }
+
+    for (const move of completedMoves) {
+      if (move.copied) fs.rmSync(move.from, { recursive: true, force: true });
+    }
+
+    migratedRootPair = rootPair;
+    return true;
+  } catch {
+    if (staging) {
+      try {
+        fs.rmSync(staging, { recursive: true, force: true });
+      } catch {}
+    }
+    rollbackMigration(completedMoves);
+    return false;
   }
 }
 
 function getCacheRoot() {
   const homeDir = app?.getPath?.("home") || os.homedir();
   const homeCache = path.join(homeDir, ".cache", "openwhispr");
+  let targetRoot = getPreferredCacheRoot(homeCache);
 
-  if (process.platform !== "win32" || !pathHasProblematicChars(homeCache)) {
-    return homeCache;
+  if (process.platform === "win32" && pathHasProblematicChars(targetRoot)) {
+    targetRoot = getAsciiSafeFallbackRoot() || homeCache;
   }
 
-  const safeRoot = getAsciiSafeCacheRoot();
-  if (!safeRoot) return homeCache;
-  migrateLegacyModelDirs(homeCache, safeRoot);
-  return safeRoot;
+  if (targetRoot === homeCache) return homeCache;
+  return migrateLegacyModelDirs(homeCache, targetRoot) ? targetRoot : homeCache;
 }
 
 function getModelsDirForService(service) {

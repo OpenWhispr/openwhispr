@@ -1,0 +1,14 @@
+{
+  "ASSISTANT_PANEL_SIZE_LIMITS": {
+    "ratioWidth": 442,
+    "ratioHeight": 538,
+    "gutter": 24,
+    "minSurfaceWidth": 360,
+    "minSurfaceHeight": 152,
+    "maxSurfaceWidth": 600
+  },
+  "LIVE_TRANSCRIPT_SURFACE_LIMITS": {
+    "minHeight": 152,
+    "maxHeight": 538
+  }
+}

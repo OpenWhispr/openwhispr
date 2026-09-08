@@ -16,6 +16,8 @@ export interface OrgPolicy {
   transcription: {
     allowedModes: InferenceMode[];
     allowedByokProviders: string[];
+    /** Absent on servers that predate the field; absent means none. */
+    allowedEnterpriseProviders?: string[];
   };
   llm: {
     allowedModes: InferenceMode[];
@@ -27,6 +29,11 @@ export interface OrgPolicy {
     webSearchEnabled: boolean;
     /** Absent on servers that predate the field; absent means allowed. */
     screenContextEnabled?: boolean;
+    /**
+     * Server-only Mem0 agent-memory gate, enforced by the API on
+     * `/api/agent/stream`; the app never reads it. Absent on older servers.
+     */
+    memoryEnabled?: boolean;
   };
   sharing: {
     externalLinkSharing: ExternalSharingMode;
@@ -36,6 +43,13 @@ export interface OrgPolicy {
     localHistoryMode: LocalHistoryMode;
     cloudBackupAllowed: boolean;
   };
+  /**
+   * Model ids (whisper/parakeet registry keys) members must download.
+   * Absent on servers that predate the field; absent/empty means none.
+   * Validated shape-only so future server-side ids can't invalidate the
+   * policy — unknown ids are filtered at enforcement time.
+   */
+  requiredLocalModels?: string[];
   minAppVersion: string | null;
 }
 

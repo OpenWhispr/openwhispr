@@ -72,6 +72,40 @@ test("right-side single modifiers get spelled-out platform-aware labels", async 
   assert.equal(formatHotkeyLabelForPlatform("RightCommand", "darwin"), "Right Cmd");
 });
 
+test("left-side modifiers are labelled by side too, so a rejection can name the key pressed", async () => {
+  const { formatHotkeyLabelForPlatform } = await load();
+
+  assert.equal(formatHotkeyLabelForPlatform("LeftOption", "darwin"), "Left Option");
+  assert.equal(formatHotkeyLabelForPlatform("LeftOption", "win32"), "Left Alt");
+  assert.equal(formatHotkeyLabelForPlatform("LeftControl", "darwin"), "Left Ctrl");
+  assert.equal(formatHotkeyLabelForPlatform("LeftCommand", "darwin"), "Left Cmd");
+  assert.equal(formatHotkeyLabelForPlatform("LeftShift", "linux"), "Left Shift");
+});
+
+test("bare modifier tokens format like they do inside a chord", async () => {
+  const { formatHotkeyLabelForPlatform } = await load();
+
+  assert.equal(formatHotkeyLabelForPlatform("Alt", "darwin"), "Option");
+  assert.equal(formatHotkeyLabelForPlatform("Alt", "win32"), "Alt");
+  assert.equal(formatHotkeyLabelForPlatform("Command", "darwin"), "Cmd");
+  assert.equal(formatHotkeyLabelForPlatform("Super", "linux"), "Super");
+});
+
+test("sidedModifierToken names the physical key behind a modifier code", async () => {
+  const { sidedModifierToken } = await load();
+
+  assert.equal(sidedModifierToken("AltRight", "darwin"), "RightOption");
+  assert.equal(sidedModifierToken("AltLeft", "darwin"), "LeftOption");
+  assert.equal(sidedModifierToken("AltRight", "win32"), "RightAlt");
+  assert.equal(sidedModifierToken("MetaLeft", "darwin"), "LeftCommand");
+  assert.equal(sidedModifierToken("MetaRight", "linux"), "RightSuper");
+  assert.equal(sidedModifierToken("ControlLeft", "win32"), "LeftControl");
+  assert.equal(sidedModifierToken("ShiftRight", "darwin"), "RightShift");
+  // Sideless codes have no side to report.
+  assert.equal(sidedModifierToken("CapsLock", "darwin"), null);
+  assert.equal(sidedModifierToken("KeyK", "darwin"), null);
+});
+
 test("single keys pass through unchanged", async () => {
   const { formatHotkeyLabelForPlatform } = await load();
 

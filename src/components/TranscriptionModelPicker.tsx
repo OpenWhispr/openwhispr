@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Download, Trash2, Cloud, Lock, X, Zap, Check } from "lucide-react";
+import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "lucide-react";
 import { ProviderIcon } from "./ui/ProviderIcon";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
@@ -18,6 +18,8 @@ import {
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
   PARAKEET_MODEL_INFO,
+  isCohereTranscribeModel,
+  isSherpaLocalProvider,
 } from "../models/ModelRegistry";
 import {
   MODEL_PICKER_COLORS,
@@ -39,6 +41,7 @@ import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
 import logger from "../utils/logger";
+import type { ParakeetCheckResult } from "../types/electron";
 
 interface LocalModel {
   model: string;
@@ -202,7 +205,7 @@ interface TranscriptionModelPickerProps {
   selectedCloudModel: string;
   onCloudModelSelect: (modelId: string) => void;
   selectedLocalModel: string;
-  onLocalModelSelect: (modelId: string) => void;
+  onLocalModelSelect: (modelId: string, providerId?: string) => void;
   selectedLocalProvider?: string;
   onLocalProviderSelect?: (providerId: string) => void;
   useLocalWhisper: boolean;
@@ -220,6 +223,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "groq", name: "Groq" },
   { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
+  { id: "gemini", name: "Gemini" },
   { id: "corti", name: "Corti" },
   { id: "tinfoil", name: "Tinfoil" },
   { id: "custom", name: "Custom" },
@@ -231,6 +235,7 @@ interface ProviderCredentialField {
     | "groqApiKey"
     | "xaiApiKey"
     | "mistralApiKey"
+    | "geminiApiKey"
     | "cortiClientId"
     | "cortiClientSecret"
     | "cortiEnvironment"
@@ -261,6 +266,10 @@ const PROVIDER_CREDENTIALS: Record<
   mistral: {
     consoleUrl: "https://console.mistral.ai/api-keys",
     fields: [{ key: "mistralApiKey", input: "secret" }],
+  },
+  gemini: {
+    consoleUrl: "https://aistudio.google.com/apikey",
+    fields: [{ key: "geminiApiKey", input: "secret" }],
   },
   corti: {
     consoleUrl: "https://www.corti.ai/?utm_source=referral&utm_content=&utm_campaign=openwhispr",
@@ -295,6 +304,7 @@ const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
 const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> = [
   { id: "whisper", name: "OpenAI" },
   { id: "nvidia", name: "NVIDIA" },
+  { id: "cohere", name: "Cohere" },
 ];
 
 interface ModeToggleProps {
@@ -364,6 +374,8 @@ export default function TranscriptionModelPicker({
   const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
+  const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
@@ -380,6 +392,8 @@ export default function TranscriptionModelPicker({
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
   const [localModels, setLocalModels] = useState<LocalModel[]>([]);
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
+  const [parakeetCapability, setParakeetCapability] = useState<ParakeetCheckResult | null>(null);
+  const [browsedCloudProvider, setBrowsedCloudProvider] = useState<string | null>(null);
   const [internalLocalProvider, setInternalLocalProvider] = useState(selectedLocalProvider);
   const hasLoadedRef = useRef(false);
   const hasLoadedParakeetRef = useRef(false);
@@ -405,6 +419,35 @@ export default function TranscriptionModelPicker({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync prop→state: only re-run when the prop changes
   }, [selectedLocalProvider]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    window.electronAPI
+      ?.checkParakeetInstallation?.()
+      .then((capability) => {
+        if (!cancelled) setParakeetCapability(capability);
+      })
+      .catch((error) => {
+        logger.error("Failed to check Parakeet compatibility", { error }, "models");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (parakeetCapability?.supported !== false) return;
+
+    // Tabs are pure browse state, so the browsed tab and the committed
+    // provider must each leave the sherpa tabs on their own: moving the tab off
+    // the disabled entry keeps the UI usable, while committing "whisper"
+    // is what actually reroutes transcription on unsupported Macs.
+    if (isSherpaLocalProvider(internalLocalProvider)) setInternalLocalProvider("whisper");
+    if (isSherpaLocalProvider(selectedLocalProvider)) onLocalProviderSelect?.("whisper");
+  }, [internalLocalProvider, onLocalProviderSelect, parakeetCapability, selectedLocalProvider]);
+
   const localModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const parakeetModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const loadLocalModelsRef = useRef<(() => Promise<void>) | null>(null);
@@ -439,6 +482,23 @@ export default function TranscriptionModelPicker({
     );
     return filterByokProviderOptionsByPolicy(tabs, "transcription", policyState);
   }, [availableCloudProviders, policyState, streamingOnly, t]);
+  const localProviderTabs = useMemo(
+    () =>
+      LOCAL_PROVIDER_TABS.map((provider) =>
+        isSherpaLocalProvider(provider.id) && parakeetCapability?.supported === false
+          ? {
+              ...provider,
+              disabled: true,
+              disabledLabel: parakeetCapability.minimumMacOSVersion
+                ? t("transcription.parakeet.requiresMacOS", {
+                    version: parakeetCapability.minimumMacOSVersion,
+                  })
+                : t("transcription.parakeet.unavailable"),
+            }
+          : provider
+      ),
+    [parakeetCapability, t]
+  );
 
   useEffect(() => {
     selectedLocalModelRef.current = selectedLocalModel;
@@ -451,14 +511,14 @@ export default function TranscriptionModelPicker({
     const current = selectedLocalModelRef.current;
     if (!current) return;
 
-    const downloaded = loadedModels.filter((m) => m.downloaded);
-    const isCurrentDownloaded = loadedModels.find((m) => m.model === current)?.downloaded;
+    // The whisper list loads on a mere browse of the Whisper tab, so the
+    // committed selection can be a foreign id (a Parakeet model while nvidia
+    // is committed) — only replace ids this list owns.
+    const currentEntry = loadedModels.find((m) => m.model === current);
+    if (!currentEntry || currentEntry.downloaded) return;
 
-    if (!isCurrentDownloaded && downloaded.length > 0) {
-      onLocalModelSelectRef.current(downloaded[0].model);
-    } else if (!isCurrentDownloaded && downloaded.length === 0) {
-      onLocalModelSelectRef.current("");
-    }
+    const downloaded = loadedModels.filter((m) => m.downloaded);
+    onLocalModelSelectRef.current(downloaded[0]?.model ?? "", "whisper");
   }, []);
 
   const loadLocalModels = useCallback(() => {
@@ -511,19 +571,26 @@ export default function TranscriptionModelPicker({
       normalizedBaseUrl !== normalizeBaseUrl(API_ENDPOINTS.TRANSCRIPTION_BASE) &&
       !knownProviderUrls.has(normalizedBaseUrl)
     );
+    // Reconcile null means the input needs no correction — echo the browsed
+    // input, not the committed pair, or browsing to the Custom tab (always
+    // reconciled as valid) would never display it.
     return (
       reconcileCloudProviderSelection({
-        selectedProvider: selectedCloudProvider,
+        selectedProvider: browsedCloudProvider ?? selectedCloudProvider,
         selectedModel: selectedCloudModel,
         allowedProviders: cloudProviders,
         customAllowed: !streamingOnly && providerAllowed("custom"),
         hasCustomUrl,
-      }) ?? { provider: selectedCloudProvider, model: selectedCloudModel }
+      }) ?? {
+        provider: browsedCloudProvider ?? selectedCloudProvider,
+        model: selectedCloudModel,
+      }
     );
   }, [
     availableCloudProviders,
     cloudProviders,
     cloudTranscriptionBaseUrl,
+    browsedCloudProvider,
     selectedCloudProvider,
     selectedCloudModel,
     providerAllowed,
@@ -535,6 +602,7 @@ export default function TranscriptionModelPicker({
   useEffect(() => {
     if (
       effectiveLocal ||
+      browsedCloudProvider ||
       !shouldPersistProviderFallback(policyState, isSignedIn) ||
       (effectiveCloudSelection.provider === selectedCloudProvider &&
         effectiveCloudSelection.model === selectedCloudModel)
@@ -550,6 +618,7 @@ export default function TranscriptionModelPicker({
   }, [
     effectiveCloudSelection,
     effectiveLocal,
+    browsedCloudProvider,
     isSignedIn,
     onCloudModelSelect,
     onCloudProviderSelect,
@@ -570,7 +639,7 @@ export default function TranscriptionModelPicker({
     if (internalLocalProvider === "whisper" && !hasLoadedRef.current) {
       hasLoadedRef.current = true;
       loadLocalModelsRef.current?.();
-    } else if (internalLocalProvider === "nvidia" && !hasLoadedParakeetRef.current) {
+    } else if (isSherpaLocalProvider(internalLocalProvider) && !hasLoadedParakeetRef.current) {
       hasLoadedParakeetRef.current = true;
       loadParakeetModelsRef.current?.();
     }
@@ -751,42 +820,55 @@ export default function TranscriptionModelPicker({
     [onModeChange]
   );
 
-  // switchCloudTranscriptionProvider writes both the provider and the model for
-  // this scope: it remembers the outgoing provider's model and restores the
-  // incoming one. It never touches cloudTranscriptionBaseUrl — that key is the
-  // Custom tab's only storage, and writing it here destroyed the URL (#1459).
   const handleCloudProviderChange = useCallback(
     (providerId: string) => {
       if (!providerAllowed(providerId)) return;
-      switchCloudTranscriptionProvider(transcriptionContext, providerId);
+      setBrowsedCloudProvider(providerId);
     },
-    [providerAllowed, switchCloudTranscriptionProvider, transcriptionContext]
+    [providerAllowed]
   );
 
   const handleLocalProviderChange = useCallback(
     (providerId: string) => {
-      const tab = LOCAL_PROVIDER_TABS.find((t) => t.id === providerId);
+      const tab = localProviderTabs.find((candidate) => candidate.id === providerId);
       if (tab?.disabled) return;
       setInternalLocalProvider(providerId);
-      onLocalProviderSelect?.(providerId);
     },
-    [onLocalProviderSelect]
+    [localProviderTabs]
+  );
+
+  const handleCloudModelSelect = useCallback(
+    (modelId: string) => {
+      if (displayedCloudProvider !== selectedCloudProvider) {
+        switchCloudTranscriptionProvider(transcriptionContext, displayedCloudProvider);
+      }
+      onCloudModelSelect(modelId);
+      setBrowsedCloudProvider(null);
+    },
+    [
+      displayedCloudProvider,
+      onCloudModelSelect,
+      selectedCloudProvider,
+      switchCloudTranscriptionProvider,
+      transcriptionContext,
+    ]
   );
 
   const handleWhisperModelSelect = useCallback(
     (modelId: string) => {
-      onLocalProviderSelect?.("whisper");
       setInternalLocalProvider("whisper");
-      onLocalModelSelect(modelId);
+      onLocalProviderSelect?.("whisper");
+      onLocalModelSelect(modelId, "whisper");
     },
     [onLocalModelSelect, onLocalProviderSelect]
   );
 
   const handleParakeetModelSelect = useCallback(
     (modelId: string) => {
-      onLocalProviderSelect?.("nvidia");
-      setInternalLocalProvider("nvidia");
-      onLocalModelSelect(modelId);
+      const provider = isCohereTranscribeModel(modelId) ? "cohere" : "nvidia";
+      setInternalLocalProvider(provider);
+      onLocalProviderSelect?.(provider);
+      onLocalModelSelect(modelId, provider);
     },
     [onLocalModelSelect, onLocalProviderSelect]
   );
@@ -852,6 +934,7 @@ export default function TranscriptionModelPicker({
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    geminiApiKey,
     cortiClientId,
     cortiClientSecret,
     cortiEnvironment,
@@ -863,6 +946,7 @@ export default function TranscriptionModelPicker({
     groqApiKey: setGroqApiKey,
     xaiApiKey: setXaiApiKey,
     mistralApiKey: setMistralApiKey,
+    geminiApiKey: setGeminiApiKey,
     cortiClientId: setCortiClientId,
     cortiClientSecret: setCortiClientSecret,
     cortiEnvironment: setCortiEnvironment,
@@ -898,7 +982,7 @@ export default function TranscriptionModelPicker({
       );
     }
 
-    if (downloadingParakeetModel && internalLocalProvider === "nvidia") {
+    if (downloadingParakeetModel && isSherpaLocalProvider(internalLocalProvider)) {
       const modelInfo = PARAKEET_MODEL_INFO[downloadingParakeetModel];
       return (
         <DownloadProgressBar
@@ -995,15 +1079,18 @@ export default function TranscriptionModelPicker({
     [showConfirmDialog, deleteParakeetModel, t]
   );
 
-  const renderParakeetModels = () => {
-    const modelsToRender =
+  // Both sherpa-onnx tabs share one downloaded-models list; each renders only
+  // its own vendor's registry entries.
+  const renderParakeetModels = (provider: "nvidia" | "cohere") => {
+    const modelsToRender = (
       parakeetModels.length === 0
         ? Object.entries(PARAKEET_MODEL_INFO).map(([modelId, info]) => ({
             model: modelId,
             downloaded: false,
             size_mb: info.sizeMb,
           }))
-        : parakeetModels;
+        : parakeetModels
+    ).filter((model) => isCohereTranscribeModel(model.model) === (provider === "cohere"));
 
     return (
       <div className="space-y-0.5">
@@ -1031,7 +1118,7 @@ export default function TranscriptionModelPicker({
               isCancelling={isCancellingParakeet}
               isInstalling={isInstallingParakeet}
               recommended={info.recommended}
-              provider="nvidia"
+              provider={provider}
               onSelect={() => handleParakeetModelSelect(modelId)}
               onDelete={() => handleParakeetDelete(modelId)}
               onDownload={() =>
@@ -1096,8 +1183,10 @@ export default function TranscriptionModelPicker({
                       {t("common.model")}
                     </label>
                     <Input
-                      value={displayedCloudModel}
-                      onChange={(e) => onCloudModelSelect(e.target.value)}
+                      value={
+                        selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : ""
+                      }
+                      onChange={(e) => handleCloudModelSelect(e.target.value)}
                       placeholder="whisper-1"
                       className="h-8 text-sm"
                     />
@@ -1163,8 +1252,10 @@ export default function TranscriptionModelPicker({
                     </label>
                     <ModelCardList
                       models={cloudModelOptions}
-                      selectedModel={displayedCloudModel}
-                      onModelSelect={onCloudModelSelect}
+                      selectedModel={
+                        selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : ""
+                      }
+                      onModelSelect={handleCloudModelSelect}
                       colorScheme="purple"
                     />
                     {displayedCloudProvider === "tinfoil" && (
@@ -1188,7 +1279,7 @@ export default function TranscriptionModelPicker({
       ) : (
         <>
           <ProviderTabs
-            providers={LOCAL_PROVIDER_TABS}
+            providers={localProviderTabs}
             selectedId={internalLocalProvider}
             onSelect={handleLocalProviderChange}
             colorScheme="purple"
@@ -1214,55 +1305,79 @@ export default function TranscriptionModelPicker({
             !gpuDismissed &&
             !gpuDownloading &&
             gpuBackend && (
-              <div className="rounded-md border border-border bg-surface-1 p-2.5">
+              <div
+                className={`rounded-md border p-2.5 ${
+                  gpuDownloaded && gpuFailed
+                    ? "border-warning/40 bg-warning/5"
+                    : "border-border bg-surface-1"
+                }`}
+              >
                 {gpuDownloaded ? (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      {gpuFailed ? (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-warning" />
-                          <span className="text-xs font-medium text-foreground">
+                  gpuFailed ? (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-2">
+                        <CircleAlert size={15} className="mt-0.5 shrink-0 text-warning" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-foreground">
                             {t("gpu.activationFailed")}
-                          </span>
-                          <button
+                          </p>
+                          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                            {t("gpu.activationFailedDescription")}
+                          </p>
+                          <Button
                             onClick={handleGpuRetry}
-                            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+                            size="sm"
+                            className="mt-2 h-7 px-3 text-xs"
                           >
-                            {t("gpu.retry")}
-                          </button>
-                        </>
-                      ) : gpuActivating ? (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.activating")}
-                          </span>
-                        </>
-                      ) : gpuActive ? (
-                        <>
-                          <Check size={13} className="text-success" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.active")}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.ready")}
-                          </span>
-                        </>
-                      )}
+                            {t("gpu.retryActivation")}
+                          </Button>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={handleGpuDelete}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 shrink-0 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        {t("gpu.remove")}
+                      </Button>
                     </div>
-                    <Button
-                      onClick={handleGpuDelete}
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
-                    >
-                      {t("gpu.remove")}
-                    </Button>
-                  </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        {gpuActivating ? (
+                          <>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.activating")}
+                            </span>
+                          </>
+                        ) : gpuActive ? (
+                          <>
+                            <Check size={13} className="text-success" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.active")}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.ready")}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <Button
+                        onClick={handleGpuDelete}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        {t("gpu.remove")}
+                      </Button>
+                    </div>
+                  )
                 ) : (
                   <div className="flex items-start gap-2.5">
                     <Zap size={13} className="text-primary shrink-0 mt-0.5" />
@@ -1294,7 +1409,8 @@ export default function TranscriptionModelPicker({
 
           <div>
             {internalLocalProvider === "whisper" && renderLocalModels()}
-            {internalLocalProvider === "nvidia" && renderParakeetModels()}
+            {(internalLocalProvider === "nvidia" || internalLocalProvider === "cohere") &&
+              renderParakeetModels(internalLocalProvider)}
           </div>
         </>
       )}

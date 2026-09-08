@@ -80,6 +80,41 @@ test("clearing the failure re-enables the backend (Retry)", () => {
   assert.equal(manager.resolveGpuStartOptions().useCuda, true);
 });
 
+test("a downloaded pack with a lost env flag still engages (#1340)", () => {
+  const vulkanOnly = managerWith({ vulkanDownloaded: true });
+  assert.deepEqual(vulkanOnly.resolveGpuStartOptions(), { useCuda: false, useVulkan: true });
+
+  const cudaOnly = managerWith({ cudaDownloaded: true });
+  assert.deepEqual(cudaOnly.resolveGpuStartOptions(), { useCuda: true, useVulkan: false });
+});
+
+test("explicit 'false' opts a downloaded pack out", () => {
+  process.env.WHISPER_VULKAN_ENABLED = "false";
+  const vulkanOnly = managerWith({ vulkanDownloaded: true });
+  assert.deepEqual(vulkanOnly.resolveGpuStartOptions(), { useCuda: false, useVulkan: false });
+
+  process.env.WHISPER_CUDA_ENABLED = "false";
+  const cudaOnly = managerWith({ cudaDownloaded: true });
+  assert.deepEqual(cudaOnly.resolveGpuStartOptions(), { useCuda: false, useVulkan: false });
+});
+
+test("the 'false' opt-out is case-insensitive (hand-edited .env)", () => {
+  // The flag is a hand-edit surface now, so FALSE/False must opt out too.
+  process.env.WHISPER_VULKAN_ENABLED = "FALSE";
+  const vulkanOnly = managerWith({ vulkanDownloaded: true });
+  assert.deepEqual(vulkanOnly.resolveGpuStartOptions(), { useCuda: false, useVulkan: false });
+
+  process.env.WHISPER_CUDA_ENABLED = "False";
+  const cudaOnly = managerWith({ cudaDownloaded: true });
+  assert.deepEqual(cudaOnly.resolveGpuStartOptions(), { useCuda: false, useVulkan: false });
+});
+
+test("a remembered failure still gates a flag-less downloaded pack", () => {
+  process.env.WHISPER_GPU_FAILED = "vulkan";
+  const manager = managerWith({ vulkanDownloaded: true });
+  assert.deepEqual(manager.resolveGpuStartOptions(), { useCuda: false, useVulkan: false });
+});
+
 test("without injected binary managers (macOS) everything resolves to CPU", () => {
   process.env.WHISPER_CUDA_ENABLED = "true";
   process.env.WHISPER_VULKAN_ENABLED = "true";

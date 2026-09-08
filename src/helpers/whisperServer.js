@@ -10,6 +10,7 @@ const { killProcess } = require("../utils/process");
 const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
+const { createAbortError } = require("./abortError");
 const sidecarPidFile = require("./sidecarPidFile");
 const { BIN_SUBDIR: CUDA_BIN_SUBDIR } = require("./whisperCudaManager");
 const { BIN_SUBDIR: VULKAN_BIN_SUBDIR } = require("./whisperVulkanManager");
@@ -32,6 +33,19 @@ const DEFAULT_WHISPER_THREADS = 4;
 const MAX_AUTO_WHISPER_THREADS = 12;
 const MAX_MANUAL_WHISPER_THREADS = 64;
 const AUTO_THREAD_RATIO = 0.75;
+// Decoder anti-hallucination thresholds sent with /inference requests. whisper.cpp's
+// defaults (entropy 2.4, logprob -1.0) let a mostly-silent 30s decode window pass the
+// repetition check and emit training-data outro boilerplate ("Thank you for watching",
+// "Продолжение следует..."). These values cut the hallucinated-tail rate from 2.25% to
+// 0.06% over 4,814 real dictations. See #1458. The raised entropy also sends more
+// windows into whisper.cpp's temperature-fallback loop (re-decoding a window up to
+// ~6x), which a continuous load cannot afford: meeting chunks pass
+// skipDecoderThresholds to keep the server defaults — they already have RMS-gate,
+// VAD, and holdback/dedup hallucination protection.
+const INFERENCE_DECODER_FIELDS = Object.freeze({
+  entropy_thold: "2.8",
+  logprob_thold: "-1.25",
+});
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -126,6 +140,24 @@ function getVadSignature(options = {}) {
   if (!isVadActive(options)) return "vad:off";
   const vadConfig = sanitizeWhisperVadConfig(options.vadConfig || DEFAULT_WHISPER_VAD_CONFIG);
   return `vad:on:${options.vadModelPath}:${JSON.stringify(vadConfig)}`;
+}
+
+// An explicit option wins (set by the one-shot pin restart; -1 means
+// "explicitly unpinned", so a stale env value must not resurface), else the
+// persisted choice from a prior run.
+function resolveVulkanDeviceIndex(options = {}) {
+  if (Number.isInteger(options.vulkanDeviceIndex)) return options.vulkanDeviceIndex;
+  const persisted = parseInt(process.env.WHISPER_VULKAN_DEVICE, 10);
+  return Number.isInteger(persisted) && persisted >= 0 ? persisted : null;
+}
+
+function getGpuSignature(options = {}) {
+  const useCuda = options.useCuda === true;
+  const useVulkan = !useCuda && options.useVulkan === true;
+  if (useCuda) return "gpu:cuda";
+  if (!useVulkan) return "gpu:cpu";
+  const deviceIndex = resolveVulkanDeviceIndex(options);
+  return `gpu:vulkan:${Number.isInteger(deviceIndex) && deviceIndex >= 0 ? deviceIndex : "default"}`;
 }
 
 function buildWhisperServerArgs({
@@ -276,6 +308,8 @@ class WhisperServerManager extends EventEmitter {
     this._stopRequested = false;
     this.vadSignature = "vad:off";
     this.threadSignature = "threads:default";
+    this.gpuSignature = "gpu:cpu";
+    this.gpuFallbackActive = false;
     this.lastStartOptions = {};
   }
 
@@ -482,12 +516,20 @@ class WhisperServerManager extends EventEmitter {
     const threadResolution = resolveWhisperThreads(options);
     const nextThreadSignature = getThreadSignature(threadResolution);
     const nextVadSignature = getVadSignature(options);
+    const nextGpuSignature = getGpuSignature(options);
+    // gpuFallbackActive pins a fallback session to its working CPU server:
+    // after a CUDA crash the next request can resolve to a different backend
+    // (an installed Vulkan pack, since only the crashed backend is recorded in
+    // WHISPER_GPU_FAILED) and must not tear the session down for a GPU cold
+    // start mid-dictation. stop() clears the pin, so pack downloads, explicit
+    // retries, and app restarts get a fresh GPU attempt.
     if (
       this.ready &&
       this.modelPath === modelPath &&
       !this.isRemote &&
       this.vadSignature === nextVadSignature &&
-      this.threadSignature === nextThreadSignature
+      this.threadSignature === nextThreadSignature &&
+      (this.gpuSignature === nextGpuSignature || this.gpuFallbackActive)
     ) {
       return;
     }
@@ -525,18 +567,19 @@ class WhisperServerManager extends EventEmitter {
     this.useCuda = usingCuda;
     this.useVulkan = usingVulkan;
 
-    // Pin Vulkan to a specific device: an explicit option wins (set by the
-    // one-shot restart below; -1 means "explicitly unpinned", so the stale env
-    // value must not resurface), else the persisted choice from a prior run.
-    let vulkanDeviceIndex = null;
-    if (usingVulkan) {
-      if (Number.isInteger(options.vulkanDeviceIndex)) {
-        vulkanDeviceIndex = options.vulkanDeviceIndex;
-      } else {
-        const persisted = parseInt(process.env.WHISPER_VULKAN_DEVICE, 10);
-        if (Number.isInteger(persisted) && persisted >= 0) vulkanDeviceIndex = persisted;
-      }
-    }
+    // Pin Vulkan to a specific device (see resolveVulkanDeviceIndex; the
+    // one-shot restart below passes the explicit index).
+    const vulkanDeviceIndex = usingVulkan ? resolveVulkanDeviceIndex(options) : null;
+
+    // Track what this server actually runs, not what start() was asked for:
+    // the GPU-failure fallback and the one-shot Vulkan pin restart re-enter
+    // _doStart with corrected flags, and the guard in start() must no-op on
+    // the next request with the same resolved flags instead of restart-looping.
+    this.gpuSignature = getGpuSignature({
+      useCuda: usingCuda,
+      useVulkan: usingVulkan,
+      vulkanDeviceIndex: vulkanDeviceIndex ?? -1,
+    });
 
     // Check for FFmpeg first - only use --convert flag if FFmpeg is available
     const ffmpegPath = this.getFFmpegPath();
@@ -652,6 +695,7 @@ class WhisperServerManager extends EventEmitter {
         );
         this.emit(usingCuda ? "cuda-fallback" : "gpu-fallback");
         await this.stop();
+        this.gpuFallbackActive = true;
         return this._doStart(modelPath, { ...options, useCuda: false, useVulkan: false });
       }
       if (shouldFallbackToDefaultThreads(threadResolution)) {
@@ -826,7 +870,9 @@ class WhisperServerManager extends EventEmitter {
           : "too short",
     });
 
-    const { language, initialPrompt } = options;
+    // signal is optional; only cancellable uploads pass one.
+    const { language, initialPrompt, signal, skipDecoderThresholds } = options;
+    if (signal?.aborted) throw createAbortError("whisper-server transcription cancelled");
 
     // Always convert to 16kHz mono WAV - whisper.cpp requires this exact format
     let finalBuffer = audioBuffer;
@@ -854,6 +900,16 @@ class WhisperServerManager extends EventEmitter {
         `${language || "auto"}\r\n`
     );
 
+    if (!skipDecoderThresholds) {
+      for (const [name, value] of Object.entries(INFERENCE_DECODER_FIELDS)) {
+        parts.push(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="${name}"\r\n\r\n` +
+            `${value}\r\n`
+        );
+      }
+    }
+
     // Add initial prompt for custom dictionary words
     if (initialPrompt) {
       parts.push(
@@ -878,17 +934,25 @@ class WhisperServerManager extends EventEmitter {
     const modelPath = this.modelPath;
 
     try {
-      return await this._postInference(body, boundary);
+      return await this._postInference(body, boundary, signal);
     } catch (err) {
+      // A cancel is not a server failure: rethrow before the retry/CPU-fallback
+      // logic so it never triggers a server restart.
+      if (err?.name === "AbortError") throw err;
       return await this._retryAfterRequestFailure(err, body, boundary, generation, modelPath);
     }
   }
 
-  _postInference(body, boundary) {
+  _postInference(body, boundary, signal) {
     // Multipart boilerplate adds under a kilobyte, so body length tracks audio length.
     const timeoutMs = computeTranscriptionTimeoutMs(body.length / PCM16_MONO_16K_BYTES_PER_SECOND);
 
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(createAbortError("whisper-server request cancelled"));
+        return;
+      }
+
       const startTime = Date.now();
 
       const req = http.request(
@@ -909,6 +973,7 @@ class WhisperServerManager extends EventEmitter {
             data += chunk;
           });
           res.on("end", () => {
+            removeAbortListener();
             debugLogger.debug("whisper-server transcription completed", {
               statusCode: res.statusCode,
               elapsed: Date.now() - startTime,
@@ -930,13 +995,25 @@ class WhisperServerManager extends EventEmitter {
         }
       );
 
+      // whisper-server has no mid-inference cancellation: destroying the
+      // request frees this pipeline immediately, but the server finishes its
+      // in-flight decode on its own.
+      const onAbort = () => {
+        req.destroy();
+        reject(createAbortError("whisper-server request cancelled"));
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      const removeAbortListener = () => signal?.removeEventListener("abort", onAbort);
+
       req.on("error", (error) => {
+        removeAbortListener();
         const err = new Error(`whisper-server request failed: ${error.message}`);
         err.isConnectionError = true;
         err.code = error.code;
         reject(err);
       });
       req.on("timeout", () => {
+        removeAbortListener();
         req.destroy();
         reject(new Error("whisper-server request timed out"));
       });
@@ -1011,6 +1088,7 @@ class WhisperServerManager extends EventEmitter {
       model: modelPath ? path.basename(modelPath) : null,
     });
     await this.start(modelPath, { ...this.lastStartOptions, useCuda: false, useVulkan: false });
+    this.gpuFallbackActive = true;
     // Emit only once the CPU server is up — the notification tells the user CPU is in use
     this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback");
     return await this._postInference(body, boundary);
@@ -1048,6 +1126,7 @@ class WhisperServerManager extends EventEmitter {
 
   async stop() {
     this._stopRequested = true;
+    this.gpuFallbackActive = false;
     this.stopHealthCheck();
 
     if (this.isRemote) {
@@ -1118,9 +1197,11 @@ class WhisperServerManager extends EventEmitter {
 
 module.exports = WhisperServerManager;
 module.exports.buildWhisperServerArgs = buildWhisperServerArgs;
+module.exports.INFERENCE_DECODER_FIELDS = INFERENCE_DECODER_FIELDS;
 module.exports.parseVulkanDevices = parseVulkanDevices;
 module.exports.resolveVulkanPinAction = resolveVulkanPinAction;
 module.exports.getVadSignature = getVadSignature;
+module.exports.getGpuSignature = getGpuSignature;
 module.exports.resolveWhisperThreads = resolveWhisperThreads;
 module.exports.shouldFallbackToCpuAfterRequestError = shouldFallbackToCpuAfterRequestError;
 module.exports.shouldRetryAfterServerReplaced = shouldRetryAfterServerReplaced;

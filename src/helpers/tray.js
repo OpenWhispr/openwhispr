@@ -264,7 +264,7 @@ class TrayManager {
           if (this.windowManager.isDictationPanelVisible()) {
             this.windowManager.hideDictationPanel();
           } else {
-            this.windowManager.showDictationPanel({ focus: true });
+            this.windowManager.showDictationPanel({ focus: true, reposition: true });
           }
           this.updateTrayMenu();
         },

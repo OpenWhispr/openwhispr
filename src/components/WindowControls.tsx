@@ -1,58 +1,24 @@
-import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Minus, Square, X, Copy } from "lucide-react";
+import { useWindowControls } from "../hooks/useWindowControls";
 
 export default function WindowControls() {
   const { t } = useTranslation();
-  const [isMaximized, setIsMaximized] = useState(false);
+  const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
-  useEffect(() => {
-    let mounted = true;
-
-    const syncIsMaximized = async () => {
-      try {
-        const maximized = await window.electronAPI?.windowIsMaximized?.();
-        if (mounted) setIsMaximized(!!maximized);
-      } catch {}
-    };
-
-    syncIsMaximized();
-    const intervalId = setInterval(syncIsMaximized, 1000);
-
-    return () => {
-      mounted = false;
-      clearInterval(intervalId);
-    };
-  }, []);
-
-  const handleMinimize = async () => {
-    try {
-      await window.electronAPI?.windowMinimize?.();
-    } catch {}
-  };
-
-  const handleMaximize = async () => {
-    try {
-      await window.electronAPI?.windowMaximize?.();
-      const maximized = await window.electronAPI?.windowIsMaximized?.();
-      setIsMaximized(!!maximized);
-    } catch {}
-  };
-
-  const handleClose = async () => {
-    try {
-      await window.electronAPI?.windowClose?.();
-    } catch {}
-  };
+  const minimizeLabel = t("windowControls.minimize");
+  const maximizeLabel = t(isMaximized ? "windowControls.restore" : "windowControls.maximize");
+  const closeLabel = t("windowControls.close");
 
   return (
     <div className="flex items-center gap-1 pointer-events-auto">
       <Button
         variant="ghost"
         size="icon"
-        onClick={handleMinimize}
-        title={t("windowControls.minimize")}
+        onClick={minimize}
+        title={minimizeLabel}
+        aria-label={minimizeLabel}
         className="h-8 w-8"
       >
         <Minus size={14} />
@@ -60,8 +26,9 @@ export default function WindowControls() {
       <Button
         variant="ghost"
         size="icon"
-        onClick={handleMaximize}
-        title={isMaximized ? t("windowControls.restore") : t("windowControls.maximize")}
+        onClick={toggleMaximize}
+        title={maximizeLabel}
+        aria-label={maximizeLabel}
         className="h-8 w-8"
       >
         {isMaximized ? <Copy size={14} /> : <Square size={12} />}
@@ -69,9 +36,10 @@ export default function WindowControls() {
       <Button
         variant="ghost"
         size="icon"
-        onClick={handleClose}
+        onClick={close}
         className="h-8 w-8 hover:text-destructive hover:bg-destructive/10"
-        title={t("windowControls.close")}
+        title={closeLabel}
+        aria-label={closeLabel}
       >
         <X size={14} />
       </Button>

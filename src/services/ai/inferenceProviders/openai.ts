@@ -11,11 +11,11 @@ import {
   isTruncatedFinishReason,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
+import { getLlmRequestTimeoutSeconds } from "../../../helpers/llmRequestTimeout.js";
 import { extractApiErrorMessage } from "../apiErrorMessage";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
-const REQUEST_TIMEOUT_MS = 30_000;
 const PROBE_TIMEOUT_MS = 2_000;
 
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
@@ -210,12 +210,15 @@ export const openaiProvider: InferenceProvider = {
       });
     }
 
+    const retryStrategy = createApiRetryStrategy();
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
+      let lastRetryableError: Error | null = null;
 
       for (const { url: endpoint, type } of endpointCandidates) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const timeoutSeconds = getLlmRequestTimeoutSeconds();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
         try {
           const maxTokens =
             config.maxTokens ||
@@ -293,9 +296,12 @@ export const openaiProvider: InferenceProvider = {
           return res.json();
         } catch (error) {
           if ((error as Error).name === "AbortError") {
-            throw new Error("Request timed out after 30s");
+            throw new Error(`Request timed out after ${timeoutSeconds}s`);
           }
           lastError = error as Error;
+          if (retryStrategy.shouldRetry(lastError)) {
+            lastRetryableError = lastError;
+          }
           if (type === "responses") {
             logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
               attemptedEndpoint: endpoint,
@@ -303,14 +309,14 @@ export const openaiProvider: InferenceProvider = {
             });
             continue;
           }
-          throw error;
+          throw lastRetryableError || error;
         } finally {
           clearTimeout(timeoutId);
         }
       }
 
-      throw lastError || new Error("No OpenAI endpoint responded");
-    }, createApiRetryStrategy());
+      throw lastRetryableError || lastError || new Error("No OpenAI endpoint responded");
+    }, retryStrategy);
 
     const isResponsesApi = Array.isArray(response?.output);
     const isChatCompletions = Array.isArray(response?.choices);

@@ -6,6 +6,13 @@ function normalizeComparableText(value) {
   return value.trim().replace(/\s+/g, " ");
 }
 
+// Shared guard for reasoning/cleanup output (#1616): a whitespace-only reply counts
+// as empty and must never replace existing text. Also used by the agent/cleanup
+// call sites in audioManager and the history-retry path in ControlPanel.
+export function hasTextContent(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 // Whether the translate step should run: skip only when an explicit source language
 // equals the target. "auto" (or empty, treated as auto) always translates.
 export function shouldRunTranslateStep(sourceLanguage, targetLanguage) {
@@ -34,7 +41,7 @@ export async function executeTranslationChain({
   if (cleanupReachable) {
     try {
       const cleaned = await runCleanup(out);
-      if (cleaned) out = cleaned;
+      if (hasTextContent(cleaned)) out = cleaned;
       // Cloud cleanup counts as cloud reasoning once its call succeeds, even if it
       // returned empty text.
       if (cleanupIsCloud) usedCloudReasoning = true;
@@ -64,5 +71,5 @@ export async function executeTranslationChain({
 // Keep the chain result only when it produced text; an empty/missing result
 // preserves the input so a dictation is never overwritten with nothing.
 export function resolveTranslatedText(previousText, chainResult) {
-  return chainResult?.text ? chainResult.text : previousText;
+  return hasTextContent(chainResult?.text) ? chainResult.text : previousText;
 }

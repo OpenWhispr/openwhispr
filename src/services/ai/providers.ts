@@ -38,7 +38,14 @@ export async function getAIModel(
     case "groq":
       return createGroq({ apiKey })(model);
     case "anthropic":
-      return createAnthropic({ apiKey })(model);
+      // The assistant panel runs in the pill window, which keeps Chromium's
+      // default webSecurity (the deleted agent overlay disabled it). Anthropic
+      // only answers browser-origin requests that opt in with this header;
+      // the dictation path avoids the issue by going through IPC.
+      return createAnthropic({
+        apiKey,
+        headers: { "anthropic-dangerous-direct-browser-access": "true" },
+      })(model);
     case "gemini":
       return createGoogleGenerativeAI({ apiKey })(model);
     case "tinfoil":

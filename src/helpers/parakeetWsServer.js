@@ -10,8 +10,10 @@ const {
   gracefulStopProcess,
 } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
+const { createAbortError } = require("./abortError");
 const sidecarPidFile = require("./sidecarPidFile");
 const { parseOfflineMessage, createOnlineAccumulator } = require("./parakeetWsResult");
+const { getModelType } = require("./parakeetModelInfo");
 const { pcm16ToFloat32 } = require("../utils/audioUtils");
 const {
   computeTranscriptionTimeoutMs,
@@ -40,8 +42,12 @@ class ParakeetWsServer {
     this.modelName = null;
     this.modelDir = null;
     this.modelRuntime = "offline";
+    // Only set for models started for a single language (Cohere Transcribe);
+    // part of the server identity, so a language change restarts the server.
+    this.language = null;
     this.startupPromise = null;
     this.startingModelName = null;
+    this.startingLanguage = null;
     this.healthCheckInterval = null;
     this.cachedBinaryPaths = {};
   }
@@ -67,29 +73,33 @@ class ParakeetWsServer {
     return this.isAvailable("offline") || this.isAvailable("online");
   }
 
-  async start(modelName, modelDir, runtime = "offline") {
+  async start(modelName, modelDir, runtime = "offline", language = null) {
     // Serialize with any in-flight startup; join it only when it's for the same model.
     while (this.startupPromise) {
-      if (this.startingModelName === modelName) return this.startupPromise;
+      if (this.startingModelName === modelName && this.startingLanguage === language) {
+        return this.startupPromise;
+      }
       await this.startupPromise.catch(() => {});
     }
-    if (this.ready && this.modelName === modelName) return;
+    if (this.ready && this.modelName === modelName && this.language === language) return;
 
     this.startingModelName = modelName;
+    this.startingLanguage = language;
     // Assigned before any await so concurrent callers can never double-spawn.
     this.startupPromise = (async () => {
       try {
         if (this.process) await this.stop();
-        await this._doStart(modelName, modelDir, runtime);
+        await this._doStart(modelName, modelDir, runtime, language);
       } finally {
         this.startupPromise = null;
         this.startingModelName = null;
+        this.startingLanguage = null;
       }
     })();
     return this.startupPromise;
   }
 
-  async _doStart(modelName, modelDir, runtime) {
+  async _doStart(modelName, modelDir, runtime, language) {
     const wsBinary = this.getWsBinaryPath(runtime);
     if (!wsBinary) throw new Error(`sherpa-onnx ${runtime} WS server binary not found`);
     if (!fs.existsSync(modelDir)) throw new Error(`Model directory not found: ${modelDir}`);
@@ -98,13 +108,24 @@ class ParakeetWsServer {
     this.modelName = modelName;
     this.modelDir = modelDir;
     this.modelRuntime = runtime;
+    this.language = language;
 
     const threads = Math.max(1, Math.min(4, Math.floor(os.cpus().length * 0.75)));
+    const modelArgs =
+      getModelType(modelName) === "cohere-transcribe"
+        ? [
+            `--cohere-transcribe-encoder=${path.join(modelDir, "encoder.int8.onnx")}`,
+            `--cohere-transcribe-decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
+            `--cohere-transcribe-language=${language}`,
+          ]
+        : [
+            `--encoder=${path.join(modelDir, "encoder.int8.onnx")}`,
+            `--decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
+            `--joiner=${path.join(modelDir, "joiner.int8.onnx")}`,
+          ];
     const args = [
       `--tokens=${path.join(modelDir, "tokens.txt")}`,
-      `--encoder=${path.join(modelDir, "encoder.int8.onnx")}`,
-      `--decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
-      `--joiner=${path.join(modelDir, "joiner.int8.onnx")}`,
+      ...modelArgs,
       `--port=${this.port}`,
       ...(runtime === "online"
         ? [
@@ -253,24 +274,30 @@ class ParakeetWsServer {
     }
   }
 
-  transcribe(samplesBuffer, sampleRate) {
+  // signal is optional; dictation and warm-up flows never pass one.
+  transcribe(samplesBuffer, sampleRate, { signal } = {}) {
     if (!this.ready || !this.process) {
       throw new Error("parakeet-ws server is not running");
     }
 
     if (this.modelRuntime === "online") {
-      return this._transcribeOnline(samplesBuffer);
+      return this._transcribeOnline(samplesBuffer, signal);
     }
 
-    return this._transcribeOffline(samplesBuffer, sampleRate);
+    return this._transcribeOffline(samplesBuffer, sampleRate, signal);
   }
 
-  _transcribeOffline(samplesBuffer, sampleRate) {
+  _transcribeOffline(samplesBuffer, sampleRate, signal) {
     const timeoutMs = computeTranscriptionTimeoutMs(
       samplesBuffer.length / FLOAT32_BYTES_PER_SAMPLE / sampleRate
     );
 
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(createAbortError("parakeet-ws transcription cancelled"));
+        return;
+      }
+
       const startTime = Date.now();
       let result = "";
 
@@ -282,6 +309,17 @@ class ParakeetWsServer {
       }, timeoutMs);
 
       const ws = new WebSocket(`ws://127.0.0.1:${this.port}`);
+
+      // Closing the socket drops this request; the server finishes its
+      // in-flight decode of the segment on its own (bounded by the 15s cap).
+      const onAbort = () => {
+        clearTimeout(timeout);
+        try {
+          ws.close();
+        } catch {}
+        reject(createAbortError("parakeet-ws transcription cancelled"));
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
 
       ws.on("open", () => {
         // sherpa-onnx offline WS binary protocol:
@@ -310,6 +348,7 @@ class ParakeetWsServer {
 
       ws.on("close", (code) => {
         clearTimeout(timeout);
+        signal?.removeEventListener("abort", onAbort);
         const elapsed = Date.now() - startTime;
 
         // The offline server always sends one result message (even for silence),
@@ -331,13 +370,16 @@ class ParakeetWsServer {
 
       ws.on("error", (error) => {
         clearTimeout(timeout);
+        signal?.removeEventListener("abort", onAbort);
         reject(new Error(`parakeet-ws transcription failed: ${error.message}`));
       });
     });
   }
 
   // samplesBuffer must already be 16kHz float32.
-  async _transcribeOnline(samplesBuffer) {
+  async _transcribeOnline(samplesBuffer, signal) {
+    if (signal?.aborted) throw createAbortError("parakeet-ws transcription cancelled");
+
     const startTime = Date.now();
     let streamError = null;
     let timedOut = false;
@@ -365,9 +407,12 @@ class ParakeetWsServer {
       },
       Math.max(TRANSCRIPTION_TIMEOUT_FLOOR_MS, audioSeconds * ONLINE_TIMEOUT_PER_AUDIO_SECOND_MS)
     );
+    const onAbort = () => stream.abort();
+    signal?.addEventListener("abort", onAbort, { once: true });
     try {
       const idleTimeoutMs = Math.max(ONLINE_FINISH_IDLE_TIMEOUT_MS, audioSeconds * 500);
       const { text, truncated } = await stream.finish({ idleTimeoutMs });
+      if (signal?.aborted) throw createAbortError("parakeet-ws transcription cancelled");
       if (timedOut) throw new Error("parakeet-ws transcription timed out");
       if (streamError) {
         throw new Error(`parakeet-ws transcription failed: ${streamError.message}`);
@@ -383,6 +428,7 @@ class ParakeetWsServer {
       return truncated ? { text, elapsed, truncated } : { text, elapsed };
     } finally {
       clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
     }
   }
 
@@ -550,6 +596,7 @@ class ParakeetWsServer {
     this.modelName = null;
     this.modelDir = null;
     this.modelRuntime = "offline";
+    this.language = null;
   }
 
   getStatus() {

@@ -26,11 +26,22 @@ import {
   TINFOIL_PROXY_REQUIRED_ERROR,
   type TranscriptionProviderBaseUrl,
 } from "../services/transcriptionBaseUrl.ts";
+import type { ManagedEnterpriseRequestContext } from "../types/enterpriseIdentity.ts";
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
+// Gemini's Interactions API takes inline base64 audio inside a 20 MB total
+// request cap; base64 inflates 4/3, so cap the raw audio lower.
+const GEMINI_FILE_SIZE_LIMIT = 14 * 1024 * 1024;
+
+export function byokFileSizeLimit(provider: string): number {
+  return provider === "gemini" ? GEMINI_FILE_SIZE_LIMIT : BYOK_FILE_SIZE_LIMIT;
+}
+
 const CUSTOM_ENDPOINT_INVALID_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.customEndpointInvalid";
+const MANAGED_TRANSCRIPTION_UNAVAILABLE_MESSAGE_KEY =
+  "hooks.audioRecording.errorDescriptions.managedTranscriptionUnavailable";
 
 export interface TranscriptionRouteSettings {
   transcriptionMode?: string;
@@ -45,6 +56,20 @@ export interface TranscriptionRouteSettings {
   preferredLanguage?: string;
 }
 
+/**
+ * Outcome of managed enterprise STT resolution, computed by the caller
+ * (renderer: enterpriseIdentityStore; main: enterpriseIdentityManager). The
+ * context is identity metadata for main-process re-validation, never a secret.
+ */
+export type ManagedTranscriptionResolution =
+  | {
+      kind: "managed";
+      provider: "azure";
+      deployment: string;
+      context: ManagedEnterpriseRequestContext;
+    }
+  | { kind: "error"; message: string; code: string; messageKey?: string };
+
 export interface TranscriptionRouteInput {
   /** Policy-EFFECTIVE, scope-resolved snapshot — the resolver never re-maps selections. */
   settings: TranscriptionRouteSettings;
@@ -52,6 +77,8 @@ export interface TranscriptionRouteInput {
   policy?: PolicyDecisionSnapshot | null;
   /** Provider registry, for the Tinfoil-host guard. Renderer passes ModelRegistry, main the raw JSON. */
   providers?: readonly TranscriptionProviderBaseUrl[];
+  /** Managed enterprise STT outcome; when present it outranks every personal setting. */
+  managed?: ManagedTranscriptionResolution | null;
   request?: {
     /** Explicit model override; doubles as the Azure deployment name. */
     model?: string;
@@ -65,7 +92,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti";
+      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -79,6 +106,16 @@ export type TranscriptionRoute =
       model: string | null;
       auth: { scheme: "bearer" | "azure-api-key" | "none"; keyRef: string | null };
       sizeCapBytes: number | null;
+      language?: string;
+    }
+  | {
+      // Workspace-managed Azure STT. Executed only in the main process, which
+      // re-validates the context and holds the Entra token.
+      transport: "managed";
+      provider: "azure";
+      deployment: string;
+      context: ManagedEnterpriseRequestContext;
+      sizeCapBytes: number;
       language?: string;
     };
 
@@ -124,13 +161,15 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
       (provider === "openai" && (trimmed.startsWith("gpt-4o") || trimmed === "whisper-1")) ||
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
-      (provider === "corti" && trimmed.startsWith("corti-"));
+      (provider === "corti" && trimmed.startsWith("corti-")) ||
+      (provider === "gemini" && trimmed.startsWith("gemini-"));
     if (matchesProvider) return trimmed;
   }
   if (provider === "groq") return "whisper-large-v3-turbo";
   if (provider === "xai") return "grok-stt";
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
+  if (provider === "gemini") return "gemini-3.5-transcribe";
   return "gpt-4o-mini-transcribe";
 }
 
@@ -168,10 +207,44 @@ export function resolveTranscriptionRoute({
   settings,
   policy,
   providers = [],
+  managed: managedResolution,
   request,
 }: TranscriptionRouteInput): TranscriptionRoute {
   const s = settings || {};
   const managed = policy?.status === "managed";
+  const language =
+    request?.effectiveLanguage ??
+    (!s.preferredLanguage || s.preferredLanguage === "auto"
+      ? undefined
+      : s.preferredLanguage.split("-")[0]);
+
+  // Managed enterprise STT outranks every personal setting; the resolution is
+  // already policy-checked where it was computed (enterpriseIdentityStore /
+  // enterpriseIdentityManager), so the selection floor below does not apply.
+  if (managedResolution) {
+    if (managedResolution.kind === "error") {
+      return error(managedResolution.message, managedResolution.code, managedResolution.messageKey);
+    }
+    return {
+      transport: "managed",
+      provider: managedResolution.provider,
+      deployment: managedResolution.deployment,
+      context: managedResolution.context,
+      sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+      language,
+    };
+  }
+
+  // A policy-effective "enterprise" selection with no managed resolution means
+  // the managed config has not resolved (loading, evicted, or absent). Never
+  // fall through to a personal lane in that state.
+  if (s.transcriptionMode === "enterprise") {
+    return error(
+      "Managed transcription is not available right now. Try again in a moment.",
+      "MANAGED_CONFIG_UNAVAILABLE",
+      MANAGED_TRANSCRIPTION_UNAVAILABLE_MESSAGE_KEY
+    );
+  }
 
   // Fail-closed floor only: callers pass policy-effective settings, so a
   // disallowed selection here means the policy layer was bypassed upstream.
@@ -188,12 +261,6 @@ export function resolveTranscriptionRoute({
       "common.policyTranscriptionRestricted"
     );
   }
-
-  const language =
-    request?.effectiveLanguage ??
-    (!s.preferredLanguage || s.preferredLanguage === "auto"
-      ? undefined
-      : s.preferredLanguage.split("-")[0]);
 
   // Self-hosted wins over everything, including stale useLocalWhisper flags.
   // The route needs a configured URL: `byok + custom` also persists
@@ -240,6 +307,15 @@ export function resolveTranscriptionRoute({
       language:
         provider === "xai" && language && !XAI_STT_LANGUAGES.has(language) ? undefined : language,
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+    };
+  }
+  if (provider === "gemini") {
+    return {
+      transport: "proxied",
+      provider,
+      model,
+      language,
+      sizeCapBytes: GEMINI_FILE_SIZE_LIMIT,
     };
   }
   if (provider === "corti") {

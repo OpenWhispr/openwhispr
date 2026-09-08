@@ -79,9 +79,6 @@ export default function CreateWorkspaceDialog({ open, onOpenChange, onCreated }:
               placeholder={t("workspaces.create.namePlaceholder")}
               maxLength={80}
             />
-            <p className="text-[11px] text-muted-foreground">
-              {t("workspaces.create.freePlanNote")}
-            </p>
           </div>
           <DialogFooter className="pt-2">
             <Button

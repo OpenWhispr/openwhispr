@@ -87,6 +87,34 @@
       "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11.tar.bz2",
       "extractDir": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
       "descriptionKey": "models.descriptions.parakeet.nemotron_3_5_asr_streaming_0_6b"
+    },
+    "cohere-transcribe-03-2026": {
+      "name": "Cohere Transcribe 2B",
+      "description": "Most accurate local ASR (5.42% avg WER, 14 languages). No auto language detection",
+      "size": "2.7GB",
+      "sizeMb": 2700,
+      "expectedSizeBytes": 1699791751,
+      "language": "multilingual",
+      "supportedLanguages": [
+        "ar",
+        "de",
+        "el",
+        "en",
+        "es",
+        "fr",
+        "it",
+        "ja",
+        "ko",
+        "nl",
+        "pl",
+        "pt",
+        "vi",
+        "zh"
+      ],
+      "modelType": "cohere-transcribe",
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01.tar.bz2",
+      "extractDir": "sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01",
+      "descriptionKey": "models.descriptions.cohere.cohere_transcribe_03_2026"
     }
   },
   "diarizationModels": {
@@ -242,6 +270,19 @@
           "name": "Voxtral Mini",
           "description": "Fast multilingual transcription",
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
+        }
+      ]
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini",
+      "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+      "models": [
+        {
+          "id": "gemini-3.5-transcribe",
+          "name": "Gemini 3.5 Transcribe",
+          "description": "Google's Gemini speech-to-text",
+          "descriptionKey": "models.descriptions.transcription.gemini_3_5_transcribe"
         }
       ]
     },
@@ -471,11 +512,26 @@
           "supportsVision": true
         },
         {
+          "id": "gemini-3.5-flash-lite",
+          "name": "Gemini 3.5 Flash Lite",
+          "description": "Fastest, most cost-effective 3.5 model",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash_lite",
+          "supportsThinking": true,
+          "supportsVision": true
+        },
+        {
           "id": "gemini-3.1-pro-preview",
           "name": "Gemini 3.1 Pro",
           "description": "Next-gen flagship model for complex reasoning",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview",
           "supportsThinking": true,
+          "supportsVision": true
+        },
+        {
+          "id": "gemini-3.1-flash-lite",
+          "name": "Gemini 3.1 Flash Lite",
+          "description": "Frontier-class performance at low cost",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_flash_lite",
           "supportsVision": true
         },
         {
@@ -512,14 +568,6 @@
       "name": "Groq",
       "models": [
         {
-          "id": "qwen/qwen3-32b",
-          "name": "Qwen3 32B",
-          "description": "Powerful reasoning model, 131K context",
-          "disableThinking": true,
-          "supportsThinking": true,
-          "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_32b"
-        },
-        {
           "id": "openai/gpt-oss-120b",
           "name": "GPT-OSS 120B",
           "description": "OpenAI's open-source flagship, 500 T/sec",
@@ -532,18 +580,6 @@
           "description": "Fast open-source model, 1000 T/sec",
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b"
-        },
-        {
-          "id": "llama-3.3-70b-versatile",
-          "name": "LLaMA 3.3 70B",
-          "description": "Meta's versatile model, 280 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_llama_3_3_70b_versatile"
-        },
-        {
-          "id": "llama-3.1-8b-instant",
-          "name": "LLaMA 3.1 8B",
-          "description": "Ultra-fast 560 T/sec, 131K context",
-          "descriptionKey": "models.descriptions.cloud.groq_llama_3_1_8b_instant"
         },
         {
           "id": "groq/compound",
@@ -562,23 +598,15 @@
     {
       "id": "tinfoil",
       "name": "Tinfoil",
+      "defaultModel": "glm-5-3",
       "models": [
         {
-          "id": "kimi-k2-6",
-          "name": "Kimi K2.6",
-          "description": "Private long-horizon coding and multimodal model, 256K context",
+          "id": "glm-5-3",
+          "name": "GLM-5.3",
+          "description": "Private agentic coding model in secure enclaves, 1M context",
           "tokenParam": "max_tokens",
           "supportsTemperature": true,
-          "descriptionKey": "models.descriptions.cloud.tinfoil_kimi_k2_6",
-          "supportsThinking": true
-        },
-        {
-          "id": "glm-5-2",
-          "name": "GLM-5.2",
-          "description": "Private agentic engineering model in secure enclaves, 384K context",
-          "tokenParam": "max_tokens",
-          "supportsTemperature": true,
-          "descriptionKey": "models.descriptions.cloud.tinfoil_glm_5_2",
+          "descriptionKey": "models.descriptions.cloud.tinfoil_glm_5_3",
           "supportsThinking": true
         },
         {
@@ -721,7 +749,6 @@
       "id": "qwen",
       "name": "Qwen",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
       "models": [
         {
           "id": "qwen3.5-9b-q4_k_m",
@@ -882,7 +909,6 @@
       "id": "mistral",
       "name": "Mistral",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "[INST] {system}\n\n{user} [/INST]",
       "models": [
         {
           "id": "mistral-nemo-12b-instruct-q4_k_m",
@@ -927,7 +953,6 @@
       "id": "llama",
       "name": "Meta Llama",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{system}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{user}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
       "models": [
         {
           "id": "llama-3.2-1b-instruct-q4_k_m",
@@ -972,7 +997,6 @@
       "id": "openai-oss",
       "name": "OpenAI",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
       "models": [
         {
           "id": "gpt-oss-20b-mxfp4",
@@ -994,7 +1018,6 @@
       "id": "gemma",
       "name": "Gemma (Google)",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<bos><start_of_turn>user\n{system}\n\n{user}<end_of_turn>\n<start_of_turn>model\n",
       "models": [
         {
           "id": "gemma-4-31b-it-q4_k_m",
@@ -1148,7 +1171,6 @@
       "id": "liquidai",
       "name": "Liquid AI",
       "baseUrl": "https://huggingface.co",
-      "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
       "models": [
         {
           "id": "lfm2.5-1.2b-instruct-q4_k_m",

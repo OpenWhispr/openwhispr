@@ -1,5 +1,40 @@
-const MEETING_URL_PATTERN =
-  /https?:\/\/[^\s<>"']*(?:zoom\.us\/j\/|meet\.google\.com\/|teams\.microsoft\.com\/l\/meetup-join|teams\.live\.com\/meet\/|\.webex\.com\/|chime\.aws\/)[^\s<>"']*/i;
+const URL_PATTERN = /https?:\/\/[^\s<>"']+/gi;
+const TRAILING_PUNCTUATION_PATTERN = /[),.;:!?]+$/;
+const MEETING_URL_RULES = [
+  {
+    hostname: "zoom.us",
+    allowSubdomains: true,
+    pathnamePattern: /^\/(?:j|w|my)\/[^/]+/i,
+  },
+  { hostname: "meet.google.com", pathnamePattern: /^\/[^/]+/ },
+  {
+    hostname: "teams.microsoft.com",
+    pathnamePattern: /^\/(?:l\/meetup-join|meet)\/[^/]+/i,
+  },
+  { hostname: "teams.live.com", pathnamePattern: /^\/meet\/[^/]+/i },
+  { hostname: "webex.com", allowSubdomains: true, pathnamePattern: /^\/[^/]+/ },
+  { hostname: "chime.aws", pathnamePattern: /^\/[^/]+/ },
+];
+
+function isAllowedHostname(candidateHostname, allowedHostname, allowSubdomains) {
+  return (
+    candidateHostname === allowedHostname ||
+    (allowSubdomains && candidateHostname.endsWith(`.${allowedHostname}`))
+  );
+}
+
+function isMeetingUrl(value) {
+  try {
+    const url = new URL(value);
+    return MEETING_URL_RULES.some(
+      ({ hostname, allowSubdomains, pathnamePattern }) =>
+        isAllowedHostname(url.hostname, hostname, allowSubdomains) &&
+        pathnamePattern.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
 
 export function getMeetingJoinUrl(event) {
   if (!event) return null;
@@ -22,8 +57,11 @@ export function getMeetingJoinUrl(event) {
 export function extractMeetingUrl(candidates) {
   if (!Array.isArray(candidates)) return null;
   for (const candidate of candidates) {
-    const match = candidate?.match?.(MEETING_URL_PATTERN);
-    if (match) return match[0].replace(/[),.;:!?]+$/, "");
+    if (typeof candidate !== "string") continue;
+    for (const match of candidate.matchAll(URL_PATTERN)) {
+      const value = match[0].replace(TRAILING_PUNCTUATION_PATTERN, "");
+      if (isMeetingUrl(value)) return value;
+    }
   }
   return null;
 }

@@ -1,43 +1,20 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { loadAudioManager: loadAudioManagerHarness } = require("./harness/audioManager");
 
-// audioManager pulls in the whole renderer graph, so every test here needs the
-// same store/service stubs. `settingsKey` names the globalThis slot each test
-// swaps its settings through, keeping the module cache per-test isolated.
+// The shared harness supplies the renderer-graph stubs; this wrapper adds the
+// no-op instance surface every manager in this suite needs.
 async function loadAudioManager(t, { cachePrefix, settingsKey }) {
-  const { window } = installBrowserGlobals(t);
-  const vite = await createRendererServer(t, {
+  const { window, vite, setSettings, createManager } = await loadAudioManagerHarness(t, {
     cachePrefix,
-    mockModules: {
-      "/utils/logger": "export default { debug() {}, info() {}, warn() {}, error() {} };",
-      "/stores/settingsStore": `
-        export const getSettings = () => globalThis.${settingsKey};
-        export const getEffectiveCleanupModel = () => null;
-        export const isCloudCleanupMode = () => false;
-        export const isCloudDictationAgentMode = () => false;
-        export const isCloudTranslationMode = () => false;
-      `,
-      "/services/ReasoningService": "export default class ReasoningService {};",
-      "/services/SyncService.js": "export const syncService = {};",
-      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
-      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
-    },
+    settingsKey,
   });
-  t.after(() => {
-    delete globalThis[settingsKey];
-  });
-
-  const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
   return {
     window,
     vite,
-    setSettings: (settings) => {
-      globalThis[settingsKey] = settings;
-    },
-    // Prototype-only instance: the constructor wires up media devices we don't need.
+    setSettings,
     createManager: (overrides = {}) =>
-      Object.assign(Object.create(AudioManager.prototype), {
+      createManager({
         getEffectiveSttLanguage: () => "auto",
         getTranscriptionModel: () => "whisper-1",
         getAPIKey: async () => "test-key",
@@ -520,6 +497,71 @@ test("proxied providers dispatch through the registry", async (t) => {
       );
     }
     assert.equal(fetched.length, 0);
+  });
+});
+
+test("proxied providers only run the dictionary-echo check when they sent bias", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-proxy-echo-gate-test-",
+    settingsKey: "__proxyEchoGateSettings",
+  });
+  captureFetch(t, rejectFetch("proxied providers must not fetch from the renderer"));
+
+  // [provider, preload channel, whether buildPayload carries dictionary bias]
+  const proxied = [
+    ["tinfoil", "proxyTinfoilTranscription", true],
+    ["mistral", "proxyMistralTranscription", true],
+    ["gemini", "proxyGeminiTranscription", true],
+    ["xai", "proxyXaiTranscription", true],
+    ["corti", "proxyCortiTranscription", false],
+  ];
+  for (const [, channel] of proxied) {
+    window.electronAPI[channel] = async () => ({ text: "Ozempic" });
+  }
+
+  const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+  const settingsFor = (provider) => ({
+    allowLocalFallback: false,
+    cloudTranscriptionProvider: provider,
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+  });
+  // The matcher's verdict is not under test; forcing it leaves only the gate
+  // (#1759) to decide whether the transcript is discarded.
+  const managerWith = (dictionary) =>
+    createManager({
+      getTranscriptionModel: () => "voxtral-mini-latest",
+      getWhisperPrompt: () => dictionary.join(", ") || null,
+      getKeyterms: () => dictionary,
+      isDictionaryEcho: () => true,
+    });
+
+  await t.test("providers that received the dictionary still discard an echo", async () => {
+    const manager = managerWith(["Ozempic"]);
+    for (const [provider, , sendsBias] of proxied) {
+      if (!sendsBias) continue;
+      setSettings(settingsFor(provider));
+      await assert.rejects(
+        manager.processWithOpenAIAPI(audioBlob),
+        (error) => error.code === "DICTIONARY_ECHO",
+        provider
+      );
+    }
+  });
+
+  await t.test("a provider that never received the dictionary keeps the transcript", async () => {
+    setSettings(settingsFor("corti"));
+    const result = await managerWith(["Ozempic"]).processWithOpenAIAPI(audioBlob);
+    assert.equal(result.rawText, "Ozempic");
+  });
+
+  await t.test("an empty dictionary sends no bias, so no provider can discard", async () => {
+    const manager = managerWith([]);
+    for (const [provider] of proxied) {
+      setSettings(settingsFor(provider));
+      const result = await manager.processWithOpenAIAPI(audioBlob);
+      assert.equal(result.rawText, "Ozempic", provider);
+    }
   });
 });
 

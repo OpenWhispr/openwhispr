@@ -140,13 +140,19 @@ function formatTxt(note, segments, speakerMappings) {
 
 function formatSrt(segments, speakerMappings, note = {}) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
+  // Upload transcripts carry no speaker identity at all; prefixing every cue
+  // with "Unknown Speaker:" would defeat the subtitle use case. Meeting
+  // segments always serialize a source, so they keep their labels.
+  const hasSpeakerIdentity = merged.some((seg) => seg.speaker || seg.speakerName || seg.source);
   const entries = [];
   for (let i = 0; i < merged.length; i++) {
     const seg = merged[i];
     const nextTs = i + 1 < merged.length ? merged[i + 1].timestamp : seg.endTimestamp + 3;
     entries.push(`${i + 1}`);
     entries.push(`${formatSrtTimestamp(seg.timestamp)} --> ${formatSrtTimestamp(nextTs)}`);
-    entries.push(`${resolveSpeaker(seg, speakerMappings)}: ${seg.text}`);
+    entries.push(
+      hasSpeakerIdentity ? `${resolveSpeaker(seg, speakerMappings)}: ${seg.text}` : seg.text
+    );
     entries.push("");
   }
   return entries.join("\n");

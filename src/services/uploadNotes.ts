@@ -11,6 +11,39 @@ function normalizeSpeakerCount(value: number | null | undefined): number | null 
   return Math.min(count, MAX_SPEAKER_COUNT);
 }
 
+export interface UploadSegment {
+  text: string;
+  start: number;
+  end?: number;
+  speaker?: string;
+}
+
+// Serializes provider timing segments into the note.transcript JSON the
+// meeting path already stores, unlocking the Transcript tab and the
+// SRT/TXT/JSON/MD export for upload notes. Timestamps are stored on the same
+// epoch-ms base the meeting path writes (anchorMs + offset), NOT in relative
+// seconds: the record button on any note seeds a meeting recording from
+// note.transcript and appends Date.now()-stamped live segments, and a
+// mixed-base transcript defeats the export rebase (normalizeSegmentTimestamps
+// keys off min timestamp > 1e9), rendering garbage cue times. The rebase
+// subtracts the minimum on export, so pure-upload output is unchanged.
+// Undefined when there is nothing usable, so plain-text uploads stay exactly
+// as they were.
+export function buildUploadTranscript(
+  segments?: UploadSegment[] | null,
+  anchorMs: number = Date.now()
+): string | undefined {
+  if (!segments?.length) return undefined;
+  const stored = segments
+    .filter((seg) => seg.text?.trim() && Number.isFinite(seg.start))
+    .map((seg) => ({
+      text: seg.text.trim(),
+      timestamp: anchorMs + seg.start * 1000,
+      ...(seg.speaker ? { speakerName: seg.speaker } : {}),
+    }));
+  return stored.length ? JSON.stringify(stored) : undefined;
+}
+
 // What an upload persists onto the note row about the diarizer invocation,
 // matching the meeting path's write semantics: the columns are written only
 // when diarization ran. A null diarization_enabled means "user never chose" and
@@ -22,19 +55,29 @@ function normalizeSpeakerCount(value: number | null | undefined): number | null 
 // explicit choice.
 export function buildUploadNoteMetadata(
   diarization: DiarizationSettings,
-  durationSeconds?: number | null
+  durationSeconds?: number | null,
+  segments?: UploadSegment[] | null,
+  anchorMs?: number
 ) {
+  const transcript = buildUploadTranscript(segments, anchorMs);
+  const noteUpdates: Record<string, unknown> | null =
+    diarization.enabled || transcript
+      ? {
+          ...(diarization.enabled
+            ? {
+                diarization_enabled: 1,
+                expected_speaker_count: normalizeSpeakerCount(diarization.numSpeakers),
+              }
+            : {}),
+          ...(transcript ? { transcript } : {}),
+        }
+      : null;
   return {
     audioDurationSeconds:
       typeof durationSeconds === "number" && Number.isFinite(durationSeconds) && durationSeconds > 0
         ? durationSeconds
         : null,
-    noteUpdates: diarization.enabled
-      ? {
-          diarization_enabled: 1,
-          expected_speaker_count: normalizeSpeakerCount(diarization.numSpeakers),
-        }
-      : null,
+    noteUpdates,
   };
 }
 
@@ -45,12 +88,14 @@ interface SaveUploadNoteParams {
   folderId: number | null;
   diarization: DiarizationSettings;
   durationSeconds?: number | null;
+  segments?: UploadSegment[] | null;
 }
 
 // The one save path for upload and URL-ingest notes, shared by the single-file
 // flow and the batch queue: the duration goes in the insert (updateNote does
-// not whitelist audio_duration_seconds), and the diarization columns follow
-// through updateNote — the same route the meeting path writes them through.
+// not whitelist audio_duration_seconds), and the diarization columns and the
+// timestamped transcript follow through updateNote — the same route the
+// meeting path writes them through.
 export async function saveUploadNote({
   title,
   text,
@@ -58,10 +103,12 @@ export async function saveUploadNote({
   folderId,
   diarization,
   durationSeconds,
+  segments,
 }: SaveUploadNoteParams) {
   const { audioDurationSeconds, noteUpdates } = buildUploadNoteMetadata(
     diarization,
-    durationSeconds
+    durationSeconds,
+    segments
   );
   const res = await window.electronAPI.saveNote(
     title,

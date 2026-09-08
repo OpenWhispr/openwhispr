@@ -136,12 +136,18 @@ export function useEmbeddedChat({
     },
     [fetchNoteConversations, noteId, noteTitle, persistence]
   );
-  const sendMessage = useChatMessageSender({
+  const sendMessageWithResult = useChatMessageSender({
     conversationId,
     persistence,
     streaming,
     createConversation,
   });
+  const sendMessage = useCallback(
+    async (text: string): Promise<void> => {
+      await sendMessageWithResult(text);
+    },
+    [sendMessageWithResult]
+  );
 
   return {
     messages: persistence.messages,

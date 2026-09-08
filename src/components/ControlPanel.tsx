@@ -1,5 +1,6 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "./ui/button";
 import {
   Download,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
+import { RequiredModelsBanner } from "./RequiredModelsBanner";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useHotkey } from "../hooks/useHotkey";
@@ -32,8 +34,13 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
-import { getSettings, useSettingsStore } from "../stores/settingsStore";
+import {
+  getSettings,
+  selectPolicyEffectiveSettings,
+  useSettingsStore,
+} from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
+import { usePolicySnapshot } from "../hooks/usePolicy";
 import {
   isAgentAllowed,
   isControlPanelViewAllowed,
@@ -41,6 +48,7 @@ import {
   isTranscriptionContextAllowed,
   isUpdateRequiredByOrg,
 } from "../stores/policyRules";
+import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import {
   useIsMeetingMode,
   useIsNarrowWindow,
@@ -53,6 +61,7 @@ import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
+import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
 import {
   setActiveNoteId,
   setActiveFolderId,
@@ -61,7 +70,11 @@ import {
   initializeNotes,
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
-import { executeTranslationChain, shouldRunTranslateStep } from "../helpers/translationChain";
+import {
+  executeTranslationChain,
+  hasTextContent,
+  shouldRunTranslateStep,
+} from "../helpers/translationChain";
 import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chineseScript";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
@@ -89,6 +102,7 @@ const toggleIconClass =
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
+const InsightsView = React.lazy(() => import("./InsightsView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
 const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
@@ -145,13 +159,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     folderId: number;
     event: any;
   } | null>(null);
-  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{
-    transcription: boolean;
-    intelligence: boolean;
-  }>({
-    transcription: false,
-    intelligence: false,
-  });
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
   );
@@ -160,13 +167,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const updateErrorToastShown = useRef<Error | null>(null);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
-  const {
-    useLocalWhisper,
-    localTranscriptionProvider,
-    useCleanupModel,
-    setUseLocalWhisper,
-    setCloudTranscriptionMode,
-  } = useSettings();
+  const { useCleanupModel, setUseLocalWhisper, setCloudTranscriptionMode } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
   // Suppressed while a deep-linked invitation is open so the two never stack.
   const {
@@ -201,6 +202,30 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [activeView, agentAllowedByPolicy, policyActionsAllowed]);
   const updateRequiredByOrg = usePolicyStore(isUpdateRequiredByOrg);
   const policyMinAppVersion = usePolicyStore((s) => s.policy?.minAppVersion ?? null);
+
+  // Policy-effective, because the settings pane the GPU banner links to renders
+  // the clamped mode — see eligibleGpuOffers.
+  const policySnapshot = usePolicySnapshot();
+  const gpuBannerSettings = useSettingsStore(
+    useShallow((settings) => {
+      const effective = selectPolicyEffectiveSettings(settings, policySnapshot);
+      return {
+        useLocalWhisper: effective.useLocalWhisper,
+        localTranscriptionProvider: effective.localTranscriptionProvider,
+        useCleanupModel: effective.useCleanupModel,
+        cleanupMode: effective.cleanupMode,
+        useDictationAgent: effective.useDictationAgent,
+        dictationAgentMode: effective.dictationAgentMode,
+      };
+    })
+  );
+  const gpuAccelAvailable = useGpuBannerAvailability({
+    settings: gpuBannerSettings,
+    agentAllowedByPolicy,
+    dismissed: gpuBannerDismissed,
+    settingsOpen: showSettings,
+    platform,
+  });
 
   const {
     confirmDialog,
@@ -388,35 +413,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [authLoaded, isSignedIn, setUseLocalWhisper, setCloudTranscriptionMode]);
 
   useEffect(() => {
-    if (platform === "darwin" || gpuBannerDismissed) return;
-    const detect = async () => {
-      const results = { transcription: false, intelligence: false };
-      if (useLocalWhisper && localTranscriptionProvider === "whisper") {
-        try {
-          const status = await window.electronAPI?.getCudaWhisperStatus?.();
-          if (status?.gpuInfo.hasNvidiaGpu && status.gpuInfo.cudaSupported) {
-            if (!status.downloaded) results.transcription = true;
-          } else {
-            const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
-            if (vulkan?.vulkan.available && !vulkan.downloaded) results.transcription = true;
-          }
-        } catch {}
-      }
-      if (useCleanupModel) {
-        try {
-          const [gpu, vulkan] = await Promise.all([
-            window.electronAPI?.detectVulkanGpu?.(),
-            window.electronAPI?.getLlamaVulkanStatus?.(),
-          ]);
-          if (gpu?.available && !vulkan?.downloaded) results.intelligence = true;
-        } catch {}
-      }
-      setGpuAccelAvailable(results);
-    };
-    detect();
-  }, [useLocalWhisper, localTranscriptionProvider, useCleanupModel, gpuBannerDismissed]);
-
-  useEffect(() => {
     const drain = async () => {
       const data = await window.electronAPI?.getPendingMeetingNoteNavigation?.();
       if (!data) return;
@@ -548,7 +544,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const clearAllTranscriptions = useCallback(() => {
     showConfirmDialog({
       title: t("controlPanel.history.clearAllTitle"),
-      description: t("controlPanel.history.clearAllDescription"),
+      description: t(
+        isSignedIn
+          ? "controlPanel.history.clearAllDescription"
+          : "controlPanel.history.clearAllDescriptionDevice"
+      ),
       onConfirm: async () => {
         try {
           const result = await window.electronAPI.clearTranscriptions();
@@ -575,7 +575,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       },
       variant: "destructive",
     });
-  }, [showConfirmDialog, showAlertDialog, toast, t]);
+  }, [isSignedIn, showConfirmDialog, showAlertDialog, toast, t]);
 
   const showAudioInFolder = useCallback(
     async (id: number) => {
@@ -601,11 +601,20 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     async (id: number, options?: { isRecover?: boolean }) => {
       try {
         const s = getSettings();
-        if (!isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
+        const managed = getManagedTranscriptionResolution();
+        if (managed?.kind === "error") {
+          toast({
+            title: managed.messageKey ? t(managed.messageKey) : managed.message,
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!managed && !isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
           toast({ title: t("common.managedByOrg"), variant: "default" });
           return;
         }
         const result = await window.electronAPI.retryTranscription(id, {
+          managed,
           useLocalWhisper: s.useLocalWhisper,
           localTranscriptionProvider: s.localTranscriptionProvider,
           cloudTranscriptionMode: s.cloudTranscriptionMode,
@@ -615,6 +624,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           cortiEnvironment: s.cortiEnvironment,
           cortiTenant: s.cortiTenant,
           parakeetModel: s.parakeetModel,
+          cohereModel: s.cohereModel,
           whisperModel: s.whisperModel,
           preferredLanguage: s.preferredLanguage,
           transcriptionMode: s.transcriptionMode,
@@ -717,7 +727,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
                   disableThinking: getSettings().cleanupDisableThinking,
                 });
-                if (reasonedText && reasonedText !== rawText) {
+                if (hasTextContent(reasonedText) && reasonedText !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
                     reasonedText,
@@ -778,7 +788,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         } else {
           toast({
             title: t("controlPanel.history.retryError"),
-            description: result.error,
+            description: result.messageKey ? t(result.messageKey) : result.error,
             variant: "destructive",
           });
         }
@@ -1030,6 +1040,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             {isSidePanelLayout && (
               <div
                 className={platform === "darwin" ? "ml-[84px] mt-[16px]" : "ml-2"}
+                data-no-window-drag=""
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
                 <Button
@@ -1045,7 +1056,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
             <div className="flex-1" />
             {platform !== "darwin" && (
-              <div className="pr-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+              <div
+                className="pr-1"
+                data-no-window-drag=""
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+              >
                 <WindowControls />
               </div>
             )}
@@ -1072,6 +1087,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 </div>
               </div>
             )}
+            <RequiredModelsBanner />
             {usage?.isPastDue && activeView === "home" && (
               <div className="max-w-3xl mx-auto w-full mb-3">
                 <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
@@ -1127,7 +1143,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                             className="h-7 text-xs"
                             onClick={() => {
                               setSettingsSection(
-                                gpuAccelAvailable.transcription ? "transcription" : "intelligence"
+                                gpuAccelAvailable.transcription
+                                  ? "transcription"
+                                  : gpuAccelAvailable.intelligence === "dictationAgent"
+                                    ? "dictationAgent"
+                                    : "intelligence"
                               );
                               setShowSettings(true);
                             }}
@@ -1170,7 +1190,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   setSettingsSection(section);
                   setShowSettings(true);
                 }}
+                onOpenIntegrations={() => setActiveView("integrations")}
               />
+            )}
+            {activeView === "insights" && (
+              <Suspense fallback={null}>
+                <InsightsView />
+              </Suspense>
             )}
             {activeView === "chat" && agentAllowedByPolicy && (
               <Suspense fallback={null}>
@@ -1184,7 +1210,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     setSettingsSection(section);
                     setShowSettings(true);
                   }}
-                  onOpenSearch={() => setShowSearch(true)}
                   meetingRecordingRequest={meetingRecordingRequest}
                   onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                   invitationEntry={invitationNotesEntry}
@@ -1230,6 +1255,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             className={`absolute z-40 flex h-10 items-center ${
               platform === "darwin" ? "left-21 top-2" : "left-2 top-0"
             }`}
+            data-no-window-drag=""
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
             onMouseLeave={sidebarCollapsed ? leaveSidebarToggle : undefined}

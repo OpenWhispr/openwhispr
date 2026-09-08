@@ -49,7 +49,9 @@ function createDb(t) {
   }
 
   try {
-    return new DatabaseManager();
+    const database = new DatabaseManager();
+    database.setActiveAccountId("test-account");
+    return database;
   } catch (error) {
     if (isNativeBindingUnavailable(error)) {
       t.skip("better-sqlite3 native binding is not available for this Node runtime");
@@ -68,6 +70,9 @@ function createTestTeamSpace(db, name) {
       "INSERT INTO spaces (client_space_id, kind, name, sort_order) VALUES (?, 'team', ?, ?)"
     )
     .run(`test-owner-space-${++nextSpaceId}`, name, (maxOrder?.max_order ?? 0) + 1);
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(result.lastInsertRowid, "test-account");
   return db.getSpace(result.lastInsertRowid);
 }
 
@@ -89,11 +94,13 @@ test("owner_user_id migration is idempotent across launches", (t) => {
 
   const columns = db.db.pragma("table_info('notes')").map((col) => col.name);
   assert.ok(columns.includes("owner_user_id"));
+  assert.ok(columns.includes("created_by_user_id"));
   db.db.close();
 
   const db2 = new DatabaseManager();
   const columns2 = db2.db.pragma("table_info('notes')").map((col) => col.name);
   assert.ok(columns2.includes("owner_user_id"));
+  assert.ok(columns2.includes("created_by_user_id"));
   db2.db.close();
 });
 
@@ -110,6 +117,37 @@ test("upsertNoteFromCloud stores the cloud owner and never erases a known one", 
     null
   );
   assert.equal(updated.owner_user_id, "owner-1");
+
+  db.db.close();
+});
+
+test("cloud creator attribution clears without changing the operational owner", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  let note = db.upsertNoteFromCloud(
+    cloudNote({
+      user_id: "workspace-owner",
+      created_by_user_id: "departing-user",
+      updated_by_user_id: "departing-user",
+    }),
+    null
+  );
+  assert.equal(note.owner_user_id, "workspace-owner");
+  assert.equal(note.created_by_user_id, "departing-user");
+
+  note = db.upsertNoteFromCloud(
+    cloudNote({
+      user_id: "workspace-owner",
+      created_by_user_id: null,
+      updated_by_user_id: null,
+      updated_at: "2026-07-03T10:00:00.000Z",
+    }),
+    null
+  );
+  assert.equal(note.owner_user_id, "workspace-owner");
+  assert.equal(note.created_by_user_id, null);
+  assert.equal(note.updated_by_user_id, null);
 
   db.db.close();
 });

@@ -226,3 +226,238 @@ test("segments without a commit time fall back to the capture window only", () =
     true
   );
 });
+
+const {
+  isRiskyMicDuplicateProfile,
+  isDuplicateMicSegment,
+  selectRacingMicEntryIndices,
+  partitionOverlappingPendingMicFinals,
+} = require("../../src/helpers/meetingMicHoldback");
+
+const DUPLICATE_WINDOW = 6000;
+const RETRACT_WINDOW = 4000;
+
+test("isRiskyMicDuplicateProfile: warmup alone is risky, even with no suppression", () => {
+  assert.equal(isRiskyMicDuplicateProfile({ suppression: null, inStartupWarmup: true }), true);
+});
+
+test("characterization: isRiskyMicDuplicateProfile treats systemSpeaking alone as risky (D4b changes this)", () => {
+  assert.equal(
+    isRiskyMicDuplicateProfile({ suppression: { systemSpeaking: true, reason: "clean" } }),
+    true
+  );
+});
+
+test("isRiskyMicDuplicateProfile: bleed evidence, render bleed, or double_talk are risky; clean is not", () => {
+  assert.equal(isRiskyMicDuplicateProfile({ suppression: { reason: "double_talk" } }), true);
+  assert.equal(isRiskyMicDuplicateProfile({ suppression: { hasBleedEvidence: true } }), true);
+  assert.equal(isRiskyMicDuplicateProfile({ suppression: { likelyRenderBleed: true } }), true);
+  // Today's closure yields `undefined` here (last operand of the `||` chain), not `false`;
+  // callers only test truthiness. Phase 1 may normalize the return to a strict boolean.
+  assert.equal(!!isRiskyMicDuplicateProfile({ suppression: { reason: "clean_local" } }), false);
+  assert.equal(isRiskyMicDuplicateProfile({ suppression: null }), false);
+  assert.equal(isRiskyMicDuplicateProfile({}), false);
+});
+
+test("isDuplicateMicSegment: bleed evidence uses the strict matcher; double_talk uses the relaxed matcher", () => {
+  const calls = [];
+  const matcher = (source, text, timestamp, options) => {
+    calls.push({ source, text, timestamp, options });
+    return true;
+  };
+  assert.equal(
+    isDuplicateMicSegment({
+      text: "hi",
+      timestamp: 10,
+      suppression: { hasBleedEvidence: true },
+      hasNearbyTranscriptMatch: matcher,
+    }),
+    true
+  );
+  assert.deepEqual(calls[0], { source: "system", text: "hi", timestamp: 10, options: undefined });
+
+  assert.equal(
+    isDuplicateMicSegment({
+      text: "hi",
+      timestamp: 10,
+      suppression: { reason: "double_talk" },
+      hasNearbyTranscriptMatch: matcher,
+    }),
+    true
+  );
+  assert.deepEqual(calls[1].options, { relaxed: true });
+});
+
+test("isDuplicateMicSegment: bleed evidence without a strict match falls through to double_talk only if flagged", () => {
+  const strictFalseRelaxedTrue = (source, text, timestamp, options) => !!options?.relaxed;
+  assert.equal(
+    isDuplicateMicSegment({
+      text: "hi",
+      timestamp: 10,
+      suppression: { hasBleedEvidence: true, reason: "render_bleed" },
+      hasNearbyTranscriptMatch: strictFalseRelaxedTrue,
+    }),
+    false
+  );
+  assert.equal(
+    isDuplicateMicSegment({
+      text: "hi",
+      timestamp: 10,
+      suppression: { hasBleedEvidence: true, reason: "double_talk" },
+      hasNearbyTranscriptMatch: strictFalseRelaxedTrue,
+    }),
+    true
+  );
+});
+
+test("isDuplicateMicSegment: systemSpeaking-only or no suppression never calls the matcher", () => {
+  let calls = 0;
+  const matcher = () => ((calls += 1), true);
+  assert.equal(
+    isDuplicateMicSegment({
+      text: "hi",
+      timestamp: 10,
+      suppression: { systemSpeaking: true },
+      hasNearbyTranscriptMatch: matcher,
+    }),
+    false
+  );
+  assert.equal(
+    isDuplicateMicSegment({
+      text: "hi",
+      timestamp: 10,
+      suppression: null,
+      hasNearbyTranscriptMatch: matcher,
+    }),
+    false
+  );
+  assert.equal(calls, 0);
+});
+
+const micSeg = (overrides) => ({
+  source: "mic",
+  text: "we should ship on friday",
+  timestamp: NOW - 1000,
+  committedAt: NOW - 900,
+  suppressionReason: null,
+  hasBleedEvidence: false,
+  likelyRenderBleed: false,
+  ...overrides,
+});
+
+test("selectRacingMicEntryIndices removes bleed-flagged mic entries that overlap the arriving system final, newest first", () => {
+  const segments = [
+    { source: "system", text: "unrelated", timestamp: NOW - 5000 },
+    micSeg({ hasBleedEvidence: true, timestamp: NOW - 3000, committedAt: NOW - 2900 }),
+    micSeg({
+      text: "clean speech",
+      suppressionReason: null,
+      timestamp: NOW - 2000,
+      committedAt: NOW - 1900,
+    }),
+    micSeg({ suppressionReason: "double_talk", timestamp: NOW - 1000, committedAt: NOW - 900 }),
+  ];
+  const seen = [];
+  const matcher = (source, text, timestamp, options) => {
+    seen.push({ text, relaxed: !!options?.relaxed, extra: options?.extraSegment });
+    return true;
+  };
+  const indices = selectRacingMicEntryIndices({
+    segments,
+    systemText: "we should ship on friday",
+    systemTimestamp: NOW,
+    hasNearbyTranscriptMatch: matcher,
+    duplicateWindowMs: DUPLICATE_WINDOW,
+    retractWindowMs: RETRACT_WINDOW,
+  });
+  assert.deepEqual(
+    indices,
+    [3, 1],
+    "descending; the non-risky clean entry (index 2) is never removed"
+  );
+  assert.deepEqual(
+    seen.map((s) => s.relaxed),
+    [true, false, false],
+    "double_talk candidates use the relaxed matcher"
+  );
+  assert.deepEqual(seen[0].extra, { text: "we should ship on friday", timestamp: NOW });
+});
+
+test("selectRacingMicEntryIndices skips candidates outside their per-candidate window (6 s bleed / 4 s otherwise)", () => {
+  const segments = [
+    micSeg({ hasBleedEvidence: true, timestamp: NOW - 5500, committedAt: NOW - 5400 }), // within 6 s
+    micSeg({ suppressionReason: "double_talk", timestamp: NOW - 4500, committedAt: NOW - 4400 }), // outside 4 s
+  ];
+  const indices = selectRacingMicEntryIndices({
+    segments,
+    systemText: "x",
+    systemTimestamp: NOW,
+    hasNearbyTranscriptMatch: () => true,
+    duplicateWindowMs: DUPLICATE_WINDOW,
+    retractWindowMs: RETRACT_WINDOW,
+  });
+  assert.deepEqual(indices, [0]);
+});
+
+test("selectRacingMicEntryIndices without a system timestamp evaluates every risky candidate", () => {
+  const segments = [
+    micSeg({ hasBleedEvidence: true, timestamp: NOW - 50_000, committedAt: NOW - 49_000 }),
+    micSeg({ timestamp: NOW - 100 }),
+  ];
+  const indices = selectRacingMicEntryIndices({
+    segments,
+    systemText: "x",
+    systemTimestamp: null,
+    hasNearbyTranscriptMatch: () => true,
+    duplicateWindowMs: DUPLICATE_WINDOW,
+    retractWindowMs: RETRACT_WINDOW,
+  });
+  assert.deepEqual(indices, [0]);
+});
+
+test("characterization: the backward-scan break stops before an older bleed-flagged entry whose commit time still races (Phase 1 flips break→continue)", () => {
+  // From the 2026-08-17 verification: array is committedAt-ordered, windows are per-candidate.
+  const E = micSeg({ hasBleedEvidence: true, timestamp: NOW - 8300, committedAt: NOW - 5300 }); // commit race passes the 6 s window
+  const C = micSeg({ timestamp: NOW - 7500, committedAt: NOW - 4500 }); // non-bleed: fails 4 s on both races, ts < NOW-6000 → break
+  const indices = selectRacingMicEntryIndices({
+    segments: [E, C],
+    systemText: "x",
+    systemTimestamp: NOW,
+    hasNearbyTranscriptMatch: () => true,
+    duplicateWindowMs: DUPLICATE_WINDOW,
+    retractWindowMs: RETRACT_WINDOW,
+  });
+  assert.deepEqual(indices, [], "TODAY: E is never scanned. Phase 1 expects [0].");
+});
+
+test("partitionOverlappingPendingMicFinals splits pending finals by system overlap, preserving order and using relaxed matching for double_talk", () => {
+  const pending = [
+    entry({ text: "a", micSuppression: { reason: "double_talk" } }),
+    entry({ text: "b", micSuppression: null }),
+    entry({ text: "c", micSuppression: { hasBleedEvidence: true } }),
+  ];
+  const seen = [];
+  const matcher = (source, text, timestamp, options) => {
+    seen.push({ text, relaxed: !!options?.relaxed });
+    return text !== "b";
+  };
+  const { kept, removed } = partitionOverlappingPendingMicFinals({
+    pending,
+    systemText: "sys",
+    systemTimestamp: NOW,
+    hasNearbyTranscriptMatch: matcher,
+  });
+  assert.deepEqual(
+    kept.map((p) => p.text),
+    ["b"]
+  );
+  assert.deepEqual(
+    removed.map((p) => p.text),
+    ["a", "c"]
+  );
+  assert.deepEqual(seen, [
+    { text: "a", relaxed: true },
+    { text: "b", relaxed: false },
+    { text: "c", relaxed: false },
+  ]);
+});

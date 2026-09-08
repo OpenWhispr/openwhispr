@@ -29,6 +29,7 @@ import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore"
 import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
+import { resetOnboardingProgress } from "../onboarding/flow";
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",
@@ -41,8 +42,7 @@ const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
 
 function startCloudOnboarding() {
   localStorage.setItem("pendingCloudMigration", "true");
-  localStorage.setItem("onboardingCurrentStep", "0");
-  localStorage.removeItem("onboardingCompleted");
+  resetOnboardingProgress(localStorage);
   window.location.reload();
 }
 
@@ -157,19 +157,12 @@ export default function InferenceConfigEditor({
   const setProvider = setField("provider");
   const setModel = setField("model");
 
-  const switchCloudProvider = useCallback(
-    (provider: string, fallbackModel: string) =>
-      useSettingsStore.getState().switchReasoningProvider(scope, provider, fallbackModel),
-    [scope]
-  );
-
   const renderModelSelector = (mode?: "cloud" | "local") => (
     <ReasoningModelSelector
       reasoningModel={config.model}
       setReasoningModel={setModel}
       localReasoningProvider={config.provider}
       setLocalReasoningProvider={setProvider}
-      onCloudProviderSelect={switchCloudProvider}
       cloudReasoningBaseUrl={config.cloudBaseUrl ?? ""}
       setCloudReasoningBaseUrl={setField("cloudBaseUrl")}
       customReasoningApiKey={config.customApiKey ?? ""}
@@ -196,7 +189,9 @@ export default function InferenceConfigEditor({
             <p className="text-sm font-medium">
               {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{managed.message}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {managed.messageKey ? t(managed.messageKey) : managed.message}
+            </p>
           </div>
         </div>
       </div>

@@ -187,12 +187,9 @@ test("a shrinking roster leaves the speaker cap untouched", () => {
   assert.deepEqual(emptied.broadcasts, []);
 });
 
-// Only system audio reaches the diarizer, so every branch must report `cap` as a
-// count of other speakers (total - 1). The no-signal fallback used to return the
-// total itself, which let one remote voice split across two labels.
-test("speaker expectation reports cap as other-speaker count in every branch", () => {
+function makeExpectationResolver() {
   const { IPCHandlers } = loadHandlers();
-  const resolve = (args) =>
+  return (args) =>
     IPCHandlers.prototype._resolveSpeakerExpectation.call(
       Object.assign(Object.create(IPCHandlers.prototype), {
         databaseManager: { getNote: () => args.note ?? null },
@@ -201,8 +198,17 @@ test("speaker expectation reports cap as other-speaker count in every branch", (
         sessionConfig: args.sessionConfig ?? null,
         noteId: args.noteId ?? null,
         observedSpeakerIds: args.observedSpeakerIds ?? new Set(),
+        diarizedSource: args.diarizedSource,
       }
     );
+}
+
+// System mode: only system audio reaches the diarizer (the mic track is "you"),
+// so every branch must report `cap` as a count of other speakers (total - 1).
+// The no-signal fallback used to return the total itself, which let one remote
+// voice split across two labels.
+test("speaker expectation reports cap as other-speaker count in every system-mode branch", () => {
+  const resolve = makeExpectationResolver();
 
   assert.deepEqual(
     resolve({ sessionConfig: { expectedCount: 3, explicit: true } }),
@@ -223,5 +229,22 @@ test("speaker expectation reports cap as other-speaker count in every branch", (
     resolve({}),
     { numSpeakers: -1, cap: 1 },
     "the default total of 2 means a single other speaker, not 2"
+  );
+});
+
+// Mic mode (in-person session): the user is one of the diarized voices, so the
+// expected total applies without the -1 the system-mode branches use.
+test("mic mode counts the user among the expected speakers", () => {
+  const resolve = makeExpectationResolver();
+
+  assert.deepEqual(
+    resolve({ sessionConfig: { expectedCount: 3, explicit: true }, diarizedSource: "mic" }),
+    { numSpeakers: 3, cap: 3 },
+    "an explicit total of 3 stays 3, not total - 1"
+  );
+  assert.deepEqual(
+    resolve({ diarizedSource: "mic" }),
+    { numSpeakers: -1, cap: 2 },
+    "the no-signal fallback caps at the default expected total, user included"
   );
 });

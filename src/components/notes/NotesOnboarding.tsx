@@ -51,13 +51,6 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   );
   const setCleanupModel = useSettingsStore((s) => s.setCleanupModel);
   const setCleanupProvider = useSettingsStore((s) => s.setCleanupProvider);
-  const switchCleanupProvider = useCallback(
-    (provider: string, fallbackModel: string) =>
-      useSettingsStore
-        .getState()
-        .switchReasoningProvider("dictationCleanup", provider, fallbackModel),
-    []
-  );
   const setCleanupMode = useSettingsStore((s) => s.setCleanupMode);
   const setCleanupCloudBaseUrl = useSettingsStore((s) => s.setCleanupCloudBaseUrl);
   const setCleanupCustomApiKey = useSettingsStore((s) => s.setCleanupCustomApiKey);
@@ -181,7 +174,6 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                   setReasoningModel={setCleanupModel}
                   localReasoningProvider={cleanupConfig.provider}
                   setLocalReasoningProvider={setCleanupProvider}
-                  onCloudProviderSelect={switchCleanupProvider}
                   cloudReasoningBaseUrl={cleanupConfig.cloudBaseUrl ?? ""}
                   setCloudReasoningBaseUrl={setCleanupCloudBaseUrl}
                   customReasoningApiKey={cleanupConfig.customApiKey ?? ""}

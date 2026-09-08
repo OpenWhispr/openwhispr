@@ -133,12 +133,13 @@ test("consecutive speaker-less segments within 2s merge across SRT, TXT and Mark
     { timestamp: 5, text: "Later sentence." },
   ];
 
+  // SRT cues from a fully speaker-less transcript (a timestamped upload)
+  // carry bare text — an "Unknown Speaker:" prefix on every subtitle would
+  // defeat the format's purpose.
   const srtOutput = formatSrt(segments, {});
-  assert.match(
-    srtOutput,
-    /^1\n00:00:00,000 --> 00:00:05,000\nUnknown Speaker: Hello world, this is a test\./
-  );
-  assert.match(srtOutput, /\n2\n00:00:05,000 --> 00:00:08,000\nUnknown Speaker: Later sentence\./);
+  assert.match(srtOutput, /^1\n00:00:00,000 --> 00:00:05,000\nHello world, this is a test\./);
+  assert.match(srtOutput, /\n2\n00:00:05,000 --> 00:00:08,000\nLater sentence\./);
+  assert.doesNotMatch(srtOutput, /Unknown Speaker/);
 
   const txtOutput = formatTxt(
     { title: "Test Note", created_at: "2026-01-01T00:00:00Z" },
@@ -155,6 +156,32 @@ test("consecutive speaker-less segments within 2s merge across SRT, TXT and Mark
   );
   assert.ok(mdOutput.includes("**Unknown Speaker** `00:00:00`\nHello world, this is a test."));
   assert.ok(mdOutput.includes("**Unknown Speaker** `00:00:05`\nLater sentence."));
+});
+
+test("a single segment with speaker identity keeps the prefix on every SRT cue", () => {
+  const output = formatSrt(
+    [
+      { timestamp: 0, text: "No identity here." },
+      { speakerName: "Ada", timestamp: 5, text: "Named reply." },
+    ],
+    {}
+  );
+
+  assert.match(output, /^1\n00:00:00,000 --> 00:00:05,000\nUnknown Speaker: No identity here\./);
+  assert.match(output, /\n2\n00:00:05,000 --> 00:00:08,000\nAda: Named reply\./);
+});
+
+test("meeting segments identified only by source keep their SRT speaker labels", () => {
+  const output = formatSrt(
+    [
+      { source: "mic", timestamp: 0, text: "Me talking." },
+      { source: "system", timestamp: 5, text: "Them talking." },
+    ],
+    {}
+  );
+
+  assert.match(output, /^1\n00:00:00,000 --> 00:00:05,000\nYou: Me talking\./);
+  assert.match(output, /\n2\n00:00:05,000 --> 00:00:08,000\nOthers: Them talking\./);
 });
 
 test("a manually named segment does not absorb the adjacent un-named one", () => {

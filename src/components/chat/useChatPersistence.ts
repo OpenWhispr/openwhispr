@@ -55,7 +55,14 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
 
   const loadConversation = useCallback(async (id: number) => {
     const conv = await window.electronAPI?.getAgentConversation?.(id);
-    if (!conv) return;
+    if (!conv) {
+      // The conversation was deleted elsewhere (e.g. ControlPanel history).
+      // Clear the id, or every subsequent save silently no-ops against the
+      // tombstoned row and the session is never persisted.
+      conversationIdRef.current = null;
+      setConversationId(null);
+      return;
+    }
     conversationIdRef.current = id;
     setConversationId(id);
     const loaded: Message[] = conv.messages.map((m) => {

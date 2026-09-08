@@ -54,6 +54,30 @@ test("unknown ACLs keep the owner fallback for personal notes", () => {
   assert.equal(canOrganizeNote(fallback, sharedPersonal), true);
 });
 
+test("loading ACLs fail closed unless the local row proves ownership", () => {
+  // A personal cloud note mid-ACL-fetch stays read-only by default…
+  assert.equal(
+    resolveNotePermission({
+      cachedPermission: undefined,
+      aclState: "loading",
+      isTeamNote: false,
+    }),
+    null
+  );
+  // …but when owner_user_id already matches the signed-in user, the editor
+  // (mic, generate notes, content editing) unlocks without waiting on the
+  // network round trip.
+  assert.equal(
+    resolveNotePermission({
+      cachedPermission: undefined,
+      aclState: "loading",
+      isTeamNote: false,
+      locallyOwned: true,
+    }),
+    "owner"
+  );
+});
+
 test("loaded ACLs drive the veto end to end", () => {
   const editor = resolveNotePermission({
     cachedPermission: "editor",

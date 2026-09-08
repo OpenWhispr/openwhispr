@@ -50,20 +50,26 @@ export default function ActionPicker({
   if (!activeAction) return null;
 
   return (
-    <div className="flex items-center shrink-0">
+    <div
+      className={cn(
+        "flex items-center shrink-0 rounded-full overflow-hidden",
+        "bg-white/60 dark:bg-white/8",
+        "backdrop-blur-lg transform-gpu",
+        "border border-black/10 dark:border-white/14",
+        "shadow-(--shadow-glass)",
+        disabled && "opacity-40 pointer-events-none"
+      )}
+    >
       <button
         onClick={() => handleRun(activeAction)}
         disabled={disabled}
         aria-label={t("notes.actions.runAction", { name: getActionName(activeAction, t) })}
         className={cn(
-          "flex items-center gap-1.5 h-7 pl-2.5 pr-1.5 rounded-l-lg",
-          "bg-accent/6 dark:bg-accent/10",
-          "text-accent/60 dark:text-accent/50",
+          "flex items-center gap-1.5 h-7 pl-3 pr-1.5",
+          "text-accent/70 dark:text-accent/60",
           "transition-colors duration-150",
-          "hover:bg-accent/10 dark:hover:bg-accent/15",
-          "hover:text-accent/80 dark:hover:text-accent/70",
-          "active:scale-[0.98]",
-          "disabled:opacity-30 disabled:pointer-events-none"
+          "hover:bg-accent/8 dark:hover:bg-accent/12",
+          "hover:text-accent/90 dark:hover:text-accent/80"
         )}
       >
         <Sparkles size={11} />
@@ -78,13 +84,12 @@ export default function ActionPicker({
             disabled={disabled}
             aria-label={t("notes.actions.selectAction")}
             className={cn(
-              "flex items-center justify-center h-7 w-5 rounded-r-lg",
-              "bg-accent/6 dark:bg-accent/10",
-              "text-accent/35 dark:text-accent/25",
+              "flex items-center justify-center h-7 w-6 pr-0.5",
+              "border-l border-black/6 dark:border-white/8",
+              "text-accent/40 dark:text-accent/30",
               "transition-colors duration-150",
-              "hover:bg-accent/10 dark:hover:bg-accent/15",
-              "hover:text-accent/60",
-              "disabled:opacity-30 disabled:pointer-events-none"
+              "hover:bg-accent/8 dark:hover:bg-accent/12",
+              "hover:text-accent/70"
             )}
           >
             <ChevronDown size={10} />

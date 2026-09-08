@@ -43,6 +43,42 @@ export function isMouseButtonHotkey(hotkey: string): boolean {
   return /^MouseButton[45]$/i.test(hotkey || "");
 }
 
+/**
+ * Display label for a side-qualified modifier token ("RightOption" →
+ * "Right Option", "LeftControl" → "Left Ctrl"), or null when the token carries
+ * no side.
+ */
+function formatSideModifierPart(part: string, platform: Platform): string | null {
+  const match = /^(Right|Left)(Option|Alt|Command|Cmd|Control|Ctrl|Shift|Super|Meta|Win)$/.exec(
+    part
+  );
+  if (!match) return null;
+  const [, side, key] = match;
+  return `${side} ${formatModifierPart(key === "Option" ? "Alt" : key, platform)}`;
+}
+
+/**
+ * Side-qualified token for a modifier `KeyboardEvent.code`, matching the tokens
+ * {@link formatSideModifierPart} and the hotkey validator understand
+ * ("AltRight" → "RightOption" on macOS, "RightAlt" elsewhere). Null for codes
+ * that carry no side, such as "CapsLock".
+ */
+export function sidedModifierToken(code: string, platform: Platform): string | null {
+  const match = /^(Control|Alt|Shift|Meta)(Left|Right)$/.exec(code);
+  if (!match) return null;
+  const [, key, side] = match;
+  switch (key) {
+    case "Control":
+      return `${side}Control`;
+    case "Shift":
+      return `${side}Shift`;
+    case "Alt":
+      return platform === "darwin" ? `${side}Option` : `${side}Alt`;
+    default:
+      return platform === "darwin" ? `${side}Command` : `${side}Super`;
+  }
+}
+
 function formatModifierPart(part: string, platform: Platform): string {
   switch (part) {
     case "CommandOrControl":
@@ -112,31 +148,15 @@ export function formatHotkeyLabelForPlatform(hotkey: string, platform: Platform)
     return hotkey === "MouseButton4" ? "Mouse Button 4" : "Mouse Button 5";
   }
 
-  // Right-side single modifiers
-  const rightSideMap: Record<string, string> = {
-    RightOption: platform === "darwin" ? "Right Option" : "Right Alt",
-    RightAlt: "Right Alt",
-    RightCommand: "Right Cmd",
-    RightCmd: "Right Cmd",
-    RightControl: "Right Ctrl",
-    RightCtrl: "Right Ctrl",
-    RightShift: "Right Shift",
-    RightSuper: platform === "win32" ? "Right Win" : "Right Super",
-    RightMeta:
-      platform === "darwin" ? "Right Cmd" : platform === "win32" ? "Right Win" : "Right Super",
-    RightWin: "Right Win",
-  };
-  if (rightSideMap[hotkey]) {
-    return rightSideMap[hotkey];
-  }
-
   if (hotkey.includes("+")) {
     const parts = hotkey.split("+");
-    const formattedParts = parts.map((part) => formatModifierPart(part, platform));
+    const formattedParts = parts.map(
+      (part) => formatSideModifierPart(part, platform) ?? formatModifierPart(part, platform)
+    );
     return formattedParts.join("+");
   }
 
-  return hotkey;
+  return formatSideModifierPart(hotkey, platform) ?? formatModifierPart(hotkey, platform);
 }
 
 /**

@@ -8,6 +8,7 @@ import type { Message, AgentState } from "../chat/types";
 import { setActiveNoteId, setActiveFolderId } from "../../stores/noteStore";
 import type { ContainerConversationItem } from "../../hooks/useContainerChat";
 import { ConversationPicker } from "./ConversationPicker";
+import { FLOATING_CHAT_MAX_HEIGHT_CSS } from "./floatingChatLayout";
 
 export type EmbeddedChatMode = "hidden" | "floating" | "sidebar";
 
@@ -22,6 +23,8 @@ interface EmbeddedChatProps {
   activeConversationId?: number | null;
   onSwitchConversation?: (id: number) => void;
   onNewChat?: () => void;
+  /** Floating panel ref; NoteEditor reserves scroll space with it. */
+  floatingPanelRef?: React.Ref<HTMLDivElement>;
 }
 
 function EmptyState() {
@@ -46,6 +49,7 @@ export default function EmbeddedChat({
   activeConversationId,
   onSwitchConversation,
   onNewChat,
+  floatingPanelRef,
 }: EmbeddedChatProps) {
   const { t } = useTranslation();
 
@@ -135,6 +139,7 @@ export default function EmbeddedChat({
         partialTranscript=""
         onTextSubmit={onTextSubmit}
         onCancel={onCancel}
+        voiceDraft
       />
     </>
   );
@@ -142,12 +147,15 @@ export default function EmbeddedChat({
   if (mode === "floating") {
     return (
       <div
+        ref={floatingPanelRef}
+        style={{ maxHeight: FLOATING_CHAT_MAX_HEIGHT_CSS }}
         className={cn(
-          "absolute bottom-4 left-5 right-5 z-20",
-          "max-h-[calc(100%-2rem)] min-h-50",
+          "absolute bottom-4 left-5 right-5 z-20 mx-auto max-w-[600px]",
+          "min-h-50",
           "flex flex-col",
           "bg-background/95 dark:bg-surface-2/95",
-          "border border-border/20 dark:border-white/8",
+          "border border-black/15 dark:border-white/18",
+          "ring-1 ring-inset ring-white/60 dark:ring-white/8",
           "rounded-xl",
           "shadow-elevated",
           "backdrop-blur-2xl",
@@ -163,7 +171,7 @@ export default function EmbeddedChat({
     <div
       className={cn(
         "w-85 shrink-0",
-        "border-l border-border/25 dark:border-white/10",
+        "border-l border-black/12 dark:border-white/14",
         "bg-surface-1 dark:bg-surface-2",
         "flex flex-col",
         "min-h-0"
