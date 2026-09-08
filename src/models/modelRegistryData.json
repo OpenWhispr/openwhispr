@@ -598,14 +598,15 @@
     {
       "id": "tinfoil",
       "name": "Tinfoil",
+      "defaultModel": "glm-5-3",
       "models": [
         {
-          "id": "glm-5-2",
-          "name": "GLM-5.2",
-          "description": "Private agentic engineering model in secure enclaves, 384K context",
+          "id": "glm-5-3",
+          "name": "GLM-5.3",
+          "description": "Private agentic coding model in secure enclaves, 1M context",
           "tokenParam": "max_tokens",
           "supportsTemperature": true,
-          "descriptionKey": "models.descriptions.cloud.tinfoil_glm_5_2",
+          "descriptionKey": "models.descriptions.cloud.tinfoil_glm_5_3",
           "supportsThinking": true
         },
         {

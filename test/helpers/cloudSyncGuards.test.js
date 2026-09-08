@@ -138,3 +138,13 @@ test("note create payloads never send a stale optimistic-concurrency base", asyn
   assert.equal(payload.content, localNote.content);
   assert.equal(payload.folder_id, "cloud-folder-3");
 });
+
+// A create carrying the local last-edit time lands behind mobile's delta
+// cursor when it uploads late (see buildNoteCreatePayload), so it must not.
+
+test("note create payloads let the server stamp updated_at", async () => {
+  const { buildNoteCreatePayload } = await load();
+  const payload = buildNoteCreatePayload(localNote, "cloud-folder-3");
+  assert.equal("updated_at" in payload, false);
+  assert.equal(payload.content, localNote.content);
+});

@@ -23,6 +23,8 @@ export interface QueueItem {
   error?: string;
   // Transcription completed but parts of the audio failed (e.g. failed chunks).
   warning?: boolean;
+  // Transcription completed, but requested speaker labels could not be applied.
+  diarizationWarning?: boolean;
   noteId?: number;
   tempPath?: string;
 }
@@ -251,6 +253,7 @@ export function processBatchQueue(
           status: "done",
           progress: 100,
           warning: !!transcriptionResult.warning,
+          diarizationWarning: !!transcriptionResult.diarizationWarning,
           noteId: noteRes.note.id,
         });
       } else {

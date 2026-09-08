@@ -1,4 +1,10 @@
-import { applyTinfoilModels, getTinfoilModels, type CloudModelDefinition } from "./ModelRegistry";
+import {
+  applyTinfoilModels,
+  getCloudProviderDefaultModelId,
+  getTinfoilModels,
+  type CloudModelDefinition,
+} from "./ModelRegistry";
+import { pickProviderDefaultModel } from "./providerDefaultModel";
 import {
   isCachedListFresh,
   readCachedTinfoilModels,
@@ -20,9 +26,8 @@ export interface TinfoilCatalogModel {
  * Curated, translated descriptions keyed by model id. The endpoint only returns
  * English copy.
  */
-const DESCRIPTION_KEYS: Record<string, string> = {
-  "deepseek-v4-pro": "models.descriptions.cloud.tinfoil_deepseek_v4_pro",
-  "glm-5-2": "models.descriptions.cloud.tinfoil_glm_5_2",
+export const DESCRIPTION_KEYS: Record<string, string> = {
+  "glm-5-3": "models.descriptions.cloud.tinfoil_glm_5_3",
   "gemma4-31b": "models.descriptions.cloud.tinfoil_gemma4_31b",
   "gpt-oss-120b": "models.descriptions.cloud.tinfoil_gpt_oss_120b",
   "llama3-3-70b": "models.descriptions.cloud.tinfoil_llama3_3_70b",
@@ -40,12 +45,10 @@ function toCloudModels(catalog: TinfoilCatalogModel[]): CloudModelDefinition[] {
   }));
 }
 
-const DEFAULT_MODEL_ID = "glm-5-2";
-
 export function pickDefaultTinfoilModel(
   models: CloudModelDefinition[]
 ): CloudModelDefinition | undefined {
-  return models.find((model) => model.id === DEFAULT_MODEL_ID) ?? models[0];
+  return pickProviderDefaultModel(models, getCloudProviderDefaultModelId("tinfoil"));
 }
 
 /**
