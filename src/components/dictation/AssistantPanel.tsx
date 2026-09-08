@@ -332,7 +332,27 @@ export function AssistantPanel({
         : { settled: displayedResponse, tail: "" },
     [displayedResponse, isStreamingNow]
   );
-  if (isStreamingNow) settledLengthRef.current = settledMarkdown.length;
+  // The write-back must be skipped on the guaranteed empty-content render at
+  // the start of every new reply: useChatStreaming.ts appends
+  // {content: "", isStreaming: true} for the new id BEFORE awaiting the
+  // first chunk, which is a render on its own. On exactly that render,
+  // responseContent (this message's own content) is "", so displayedResponse
+  // falls back to displayedResponseRef.current — the PREVIOUS reply's latched
+  // text (see above; that fallback is deliberate, so the UI doesn't flash
+  // empty). isStreamingNow is already true, so without this guard,
+  // settledMarkdown here reflects the PREVIOUS reply's boundary, and writing
+  // it back would immediately re-poison the floor the id check above just
+  // reset to 0 on this SAME render. Gating on responseContent (not
+  // isStreamingNow alone) is exact, not just defensive: useChatStreaming
+  // never resets fullContent back to "" for an id once it has grown — a
+  // completed stream ends with isStreaming: false, an aborted/errored one
+  // ends with a non-empty error string, and a think-only empty completion is
+  // substituted with a non-empty placeholder (see useChatStreaming.ts) — so
+  // "" only ever means "this id's own content genuinely has nothing yet."
+  // Skipping the write leaves settledLengthRef.current at whatever the id
+  // check above just left it (0 for a brand new id), which is what the very
+  // next render — the first real chunk — must see.
+  if (isStreamingNow && responseContent) settledLengthRef.current = settledMarkdown.length;
   // Sticky per-word rise state for the tail's current settled-prefix cycle:
   // real (HAST-order) word index -> its assigned delay, mutated in place by
   // rehypeWordRise. Reset only when settledMarkdown itself changes — a

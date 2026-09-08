@@ -814,3 +814,142 @@ test("a tail word's DOM node survives a growth within the same paragraph (fix ro
   const echoAfterTwoGrowths = riseSpans(container).find((span) => span.textContent === "Echo");
   assert.equal(echoAfterTwoGrowths, echoBefore, "still the same node after a second growth");
 });
+
+// Fix round 4 (Critical): useChatStreaming.ts always appends the next
+// assistant message as {content: "", isStreaming: true} for its brand new id
+// BEFORE the first chunk arrives (useChatStreaming.ts:369-372) — a guaranteed
+// render on its own. The round-3 test above never drives that render (it
+// jumps straight from reply 1 to setAssistantMessage("Hi", true,
+// "assistant-2")), so it could not catch that on exactly that render,
+// responseContent is "" (this message's own content) but displayedResponse
+// still shows reply 1 through the deliberate empty-content fallback — and
+// isStreamingNow is already true, so the old code wrote reply 1's settled
+// boundary back as reply 2's floor, undoing the id-keyed reset on the very
+// same render. Every render after that inherited the poisoned floor, since
+// nothing ever un-poisons it once written.
+const paragraphTexts = (container) =>
+  findAllElements(container, (el) => el.tagName === "P").map((p) => p.textContent);
+
+test("a new reply's first chunk still rises and the reply stays one paragraph, even through the guaranteed empty-content render that starts every follow-up turn (fix round 4)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+
+  // Reply 1: streams, then completes with a paragraph break — this is what
+  // leaves a non-zero floor sitting in settledLengthRef when reply 2 starts.
+  await setAssistantMessage(
+    "Paragraph one.\n\nParagraph two.\n\nParagraph three.",
+    true,
+    "assistant-1"
+  );
+  await setAssistantMessage(
+    "Paragraph one.\n\nParagraph two.\n\nParagraph three.",
+    false,
+    "assistant-1"
+  );
+  assert.ok(
+    findSettledParagraph(container, "Paragraph three."),
+    "fixture-integrity check: reply 1 must actually be showing before reply 2 starts"
+  );
+
+  // THE EMPTY-CONTENT RENDER: a brand new id, but useChatStreaming has not
+  // delivered a single chunk yet. Driving this explicitly is the entire
+  // point of this test.
+  await setAssistantMessage("", true, "assistant-2");
+
+  // First chunk of reply 2.
+  await setAssistantMessage("Hello there", true, "assistant-2");
+  const helloSpan = riseSpans(container).find((span) => span.textContent === "Hello");
+  assert.ok(
+    helloSpan,
+    "the new reply's first word must rise — a floor poisoned by reply 1's boundary would settle 'Hello there' instantly instead (content.slice clamps past the string's end), skipping the tail/rise path entirely"
+  );
+
+  // Chunk 2 — this is exactly where the reviewer's measured trace showed the
+  // reply splitting into two independently-parsed markdown documents: the
+  // poisoned settled prefix ("Hello there") as one <p>, and the growing tail
+  // as a second, separate <p>.
+  await setAssistantMessage("Hello there friend, how are you today", true, "assistant-2");
+  assert.deepEqual(
+    paragraphTexts(container),
+    ["Hello there friend, how are you today"],
+    "the reply must still be ONE paragraph while streaming — a poisoned floor splits it into two independently-parsed markdown documents at the first chunk's character length"
+  );
+
+  // Chunk 3, then completion — the split (if present) never heals on its own.
+  await setAssistantMessage(
+    "Hello there friend, how are you today? I can help.",
+    true,
+    "assistant-2"
+  );
+  await setAssistantMessage(
+    "Hello there friend, how are you today? I can help.",
+    false,
+    "assistant-2"
+  );
+  assert.deepEqual(paragraphTexts(container), ["Hello there friend, how are you today? I can help."]);
+  assert.equal(
+    findSettledParagraph(container, "Paragraph one."),
+    null,
+    "reply 1's content must not still be present once reply 2 has replaced it"
+  );
+});
+
+// Neighbouring path (fix round 4): an aborted/errored stream's catch block
+// finalizes the message's content as a (possibly multi-paragraph) error
+// string with isStreaming: false (see useChatStreaming.ts's catch block) —
+// structurally identical to a normal completed reply from AssistantPanel's
+// point of view: non-empty content, isStreaming flips to false, same id
+// throughout. The next user turn still mints a brand new id and still goes
+// through the exact same guaranteed empty-content render, so this path is
+// vulnerable to the identical staleness shape unless covered by the same
+// fix — it is not a special case, just another "previous reply" shape.
+test("a reply following an aborted/errored stream still rises its own first word (fix round 4, neighbouring path)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+
+  await setAssistantMessage(
+    "Something went wrong.\n\nPlease try again in a moment.",
+    true,
+    "assistant-1"
+  );
+  await setAssistantMessage(
+    "Something went wrong.\n\nPlease try again in a moment.",
+    false, // the catch block always finalizes with isStreaming: false
+    "assistant-1"
+  );
+
+  await setAssistantMessage("", true, "assistant-2"); // the empty-content render
+  await setAssistantMessage("Sure, let me help", true, "assistant-2"); // first real chunk
+
+  const sureSpan = riseSpans(container).find((span) => span.textContent === "Sure,");
+  assert.ok(
+    sureSpan,
+    "a reply following an error must still rise its own first word — the error text is just another 'previous reply' shape the same floor-poisoning bug could latch onto"
+  );
+});
+
+// Neighbouring path (fix round 4): AssistantPanel's own "New conversation"
+// reset (handleNewConversation) is guarded by isBusy (it bails out while
+// streaming.agentState/activeToolName/submissionInFlight say busy — see
+// resolveAssistantPanelBusy), so it cannot fire mid-stream in the first
+// place, and it synchronously empties `messages`, so latestAssistantMessage
+// becomes undefined and isStreamingNow is false at the moment of reset —
+// there is no in-flight streamed content for a floor to be poisoned FROM.
+// This suite has no direct way to invoke handleNewConversation (it lives
+// entirely inside the component and is wired to a footer button this
+// harness's mocks do not render), so it is exercised here through the same
+// observable state transition it performs: latestAssistantMessage flips
+// from a settled reply straight to none while nothing is streaming.
+test("clearing all messages outside of a stream (the shape of a new-conversation reset) leaves no floor to poison the next reply (fix round 4, neighbouring path)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+
+  await setAssistantMessage("Paragraph one.\n\nParagraph two.", true, "assistant-1");
+  await setAssistantMessage("Paragraph one.\n\nParagraph two.", false, "assistant-1");
+
+  // handleNewConversation's own reset shape: messages -> [], not streaming.
+  await React.act(async () => {
+    globalThis.__setStreamMessages([]);
+  });
+
+  await setAssistantMessage("Hi", true, "assistant-2");
+  const hiSpan = riseSpans(container).find((span) => span.textContent === "Hi");
+  assert.ok(hiSpan, "the new reply's own first word must still rise after a between-streams reset");
+});
