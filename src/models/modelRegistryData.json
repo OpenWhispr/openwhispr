@@ -1198,6 +1198,18 @@
           "descriptionKey": "models.descriptions.local.liquidai_lfm2_5_8b_a1b_q4_k_m"
         },
         {
+          "id": "lfm2.5-2.6b-q4_k_m",
+          "name": "LFM2.5 2.6B",
+          "size": "1.6GB",
+          "sizeBytes": 1674455040,
+          "description": "Latest LFM2.5 generation, stronger cleanup and rewrite quality",
+          "fileName": "LFM2.5-2.6B-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 131072,
+          "hfRepo": "LiquidAI/LFM2.5-2.6B-GGUF",
+          "descriptionKey": "models.descriptions.local.liquidai_lfm2_5_2_6b_q4_k_m"
+        },
+        {
           "id": "lfm2-2.6b-q4_k_m",
           "name": "LFM2 2.6B",
           "size": "1.5GB",
