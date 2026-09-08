@@ -22,19 +22,29 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   assert.ok(insights.includes('value="usage"'));
   assert.ok(insights.includes('t("insights.yourUsage")'));
   assert.ok(insights.includes('value="leaderboard"'));
-  for (const className of [
-    'className="h-7 p-0.5 rounded-[7px]"',
-    'className="h-6 px-2.5 text-xs rounded-[5px]"',
-  ]) {
-    assert.ok(dictionary.includes(className));
-    assert.ok(insights.includes(className));
-  }
+  assert.ok(dictionary.includes('className="h-7 p-0.5 rounded-[7px]"'));
+  assert.ok(insights.includes('className="h-7 self-start p-0.5 rounded-[7px]"'));
+  assert.ok(dictionary.includes('className="h-6 px-2.5 text-xs rounded-[5px]"'));
+  assert.ok(insights.includes('className="h-6 px-2.5 text-xs rounded-[5px]"'));
   assert.ok(insights.includes("<LeaderboardView"));
   assert.ok(insights.includes("syncService.syncAnalyticsNow()"));
   assert.equal(insights.includes("syncPendingAnalytics"), false);
   assert.ok(insights.includes("onClick={() => void joinLeaderboard()}"));
-  assert.ok(insights.includes('"insights.syncAndJoinConfirm"'));
+  assert.ok(insights.includes('"insights.enableSync"'));
   assert.ok(insights.includes("onSyncErrorChange={setSyncError}"));
+  const usageContent = insights.slice(
+    insights.indexOf('<TabsContent value="usage"'),
+    insights.indexOf('<TabsContent value="leaderboard"')
+  );
+  assert.ok(usageContent.includes("isLoaded && !syncActive"));
+  assert.ok(usageContent.includes('t("insights.onDevicePrivacy")'));
+  assert.ok(usageContent.includes("mt-auto pt-8"));
+  assert.equal(
+    insights
+      .slice(insights.indexOf('<TabsContent value="leaderboard"'))
+      .includes("onDevicePrivacy"),
+    false
+  );
   assert.ok(leaderboard.includes("<LeaderboardSection"));
   assert.equal(
     leaderboard.includes("useInsightsSyncOptIn"),

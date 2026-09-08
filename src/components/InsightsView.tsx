@@ -435,7 +435,7 @@ export default function InsightsView({ onSignIn, onInvite }: InsightsViewProps) 
     : t("insights.onDevice");
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-8">
+    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-6 py-8">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-base! font-semibold! leading-none! tracking-normal! text-foreground">
           {t("insights.title")}
@@ -458,17 +458,15 @@ export default function InsightsView({ onSignIn, onInvite }: InsightsViewProps) 
                 <CloudUpload size={13} />
               )}
               {t(
-                participationUpdating
-                  ? "insights.leaderboard.enablingSync"
-                  : "insights.syncAndJoinConfirm"
+                participationUpdating ? "insights.leaderboard.enablingSync" : "insights.enableSync"
               )}
             </Button>
           )}
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-        <TabsList className="h-7 p-0.5 rounded-[7px]">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6 flex flex-1 flex-col">
+        <TabsList className="h-7 self-start p-0.5 rounded-[7px]">
           <TabsTrigger value="usage" className="h-6 px-2.5 text-xs rounded-[5px]">
             {t("insights.yourUsage")}
           </TabsTrigger>
@@ -477,13 +475,18 @@ export default function InsightsView({ onSignIn, onInvite }: InsightsViewProps) 
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="usage" className="mt-6">
+        <TabsContent value="usage" className="mt-6 flex flex-1 flex-col">
           <YourUsage
             dataRetentionEnabled={dataRetentionEnabled}
             isLoaded={isLoaded}
             onSyncErrorChange={setSyncError}
             syncActive={syncActive}
           />
+          {isLoaded && !syncActive && (
+            <p className="mt-auto pt-8 text-center text-[11px] text-muted-foreground/70">
+              {t("insights.onDevicePrivacy")}
+            </p>
+          )}
         </TabsContent>
         <TabsContent value="leaderboard" className="mt-0">
           <Suspense fallback={null}>

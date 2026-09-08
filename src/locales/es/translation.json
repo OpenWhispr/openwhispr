@@ -3278,6 +3278,7 @@
     "dayTooltip_other": "{{date}}: {{count}} palabras",
     "dataRetentionDisabled": "La retención de datos está desactivada, así que los nuevos dictados no se cuentan en las Estadísticas: ni en este dispositivo ni en tu cuenta. Los contadores ya sincronizados permanecen en tu cuenta.",
     "onDevice": "En este dispositivo",
+    "onDevicePrivacy": "Estas estadísticas se calculan en este dispositivo para proteger tu privacidad.",
     "synced": "Sincronizado entre dispositivos",
     "syncFallback": "Mostrando datos del dispositivo: sincronización no disponible",
     "syncPrompt": "Sincroniza contadores sin contenido para combinar la actividad local y la de la nube entre dispositivos.",

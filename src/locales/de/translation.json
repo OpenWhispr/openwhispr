@@ -2732,6 +2732,7 @@
     "dayTooltip_other": "{{date}}: {{count}} Wörter",
     "dataRetentionDisabled": "Die Datenaufbewahrung ist deaktiviert, daher werden neue Diktate in den Statistiken nicht gezählt – weder auf diesem Gerät noch in Ihrem Konto. Bereits synchronisierte Zähler bleiben in Ihrem Konto.",
     "onDevice": "Auf diesem Gerät",
+    "onDevicePrivacy": "Diese Insights werden auf diesem Gerät berechnet, um deine Privatsphäre zu schützen.",
     "synced": "Geräteübergreifend synchronisiert",
     "syncFallback": "Gerätedaten werden angezeigt – Synchronisierung nicht verfügbar",
     "syncPrompt": "Synchronisieren Sie inhaltsfreie Zähler, um lokale und Cloud-Aktivität geräteübergreifend zusammenzuführen.",

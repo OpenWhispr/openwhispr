@@ -3230,6 +3230,7 @@
     "dayTooltip_other": "{{date}}：{{count}} 字",
     "dataRetentionDisabled": "数据保留已关闭，因此新的听写不会计入统计——本设备和你的账户都不会计数。已同步的计数会保留在你的账户中。",
     "onDevice": "仅在本设备",
+    "onDevicePrivacy": "这些分析数据会在此设备上计算，以保护你的隐私。",
     "synced": "已跨设备同步",
     "syncFallback": "正在显示本设备数据 — 同步不可用",
     "syncPrompt": "同步不含内容的计数，将本地与云端的活动跨设备合并。",

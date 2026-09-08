@@ -3230,6 +3230,7 @@
     "dayTooltip_other": "{{date}}: {{count}} parole",
     "dataRetentionDisabled": "La conservazione dei dati è disattivata, quindi le nuove dettature non vengono conteggiate nelle Statistiche: né su questo dispositivo né nel tuo account. I conteggi già sincronizzati restano nel tuo account.",
     "onDevice": "Su questo dispositivo",
+    "onDevicePrivacy": "Queste statistiche vengono calcolate su questo dispositivo per proteggere la tua privacy.",
     "synced": "Sincronizzato tra i dispositivi",
     "syncFallback": "Dati del dispositivo — sincronizzazione non disponibile",
     "syncPrompt": "Sincronizza contatori senza contenuti per combinare l'attività locale e quella cloud su tutti i dispositivi.",

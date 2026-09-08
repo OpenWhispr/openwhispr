@@ -3230,6 +3230,7 @@
     "dayTooltip_other": "{{date}}: {{count}} palavras",
     "dataRetentionDisabled": "A retenção de dados está desativada, então novos ditados não são contados nas Estatísticas: nem neste dispositivo nem na sua conta. As contagens já sincronizadas permanecem na sua conta.",
     "onDevice": "Neste dispositivo",
+    "onDevicePrivacy": "Estas informações são calculadas neste dispositivo para proteger sua privacidade.",
     "synced": "Sincronizado entre dispositivos",
     "syncFallback": "Mostrando dados do dispositivo — sincronização indisponível",
     "syncPrompt": "Sincronize contadores sem conteúdo para combinar a atividade local e a da nuvem entre dispositivos.",
