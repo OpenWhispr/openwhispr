@@ -4,6 +4,13 @@ export interface ShimmerTranscriptParts {
 }
 
 /**
+ * RETAINED BUT UNUSED (Finding 6, final review 2026-09-08). Superseded by
+ * splitTranscriptForTail below, which Task 10 put in LiveTranscriptPanel's
+ * hands: the stepped background-clip shimmer this fed became per-word opacity
+ * spans. Its `.inline-response-shimmer` CSS is deliberately kept in
+ * dictation-panel.css and this plan does not delete superseded code, so the
+ * helper stays with it. Only its own test calls it.
+ *
  * Keep the newest phrase visually active without making the completed body
  * flicker. A short trailing phrase closely tracks the final wrapped line at
  * the panel's responsive width while remaining deterministic for testing.

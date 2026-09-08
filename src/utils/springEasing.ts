@@ -99,6 +99,12 @@ export function motionCssVariables(): Record<string, string> {
     "--motion-zoop-ms": `${MOTION_TIMING.zoopMs}ms`,
     "--motion-word-ease": MOTION_EASING.word,
     "--motion-word-ms": `${MOTION_TIMING.wordMs}ms`,
+    // RETAINED BUT UNUSED (Finding 6, final review 2026-09-08). Emitted onto
+    // both window roots and read by no CSS rule: the per-word stagger ships as
+    // an inline animation-delay written from JS instead (AssistantPanel passes
+    // MOTION_TIMING.wordStaggerMs straight to rehypeWordRise), which is what
+    // superseded this variable. The constant itself is very much in use — only
+    // this CSS mirror of it is not.
     "--motion-word-stagger-ms": `${MOTION_TIMING.wordStaggerMs}ms`,
     "--motion-companion-fade-ms": `${MOTION_TIMING.companionFadeMs}ms`,
     "--motion-close-fade-ms": `${MOTION_TIMING.closeFadeMs}ms`,

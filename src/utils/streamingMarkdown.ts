@@ -112,6 +112,15 @@ function lastParagraphBlock(candidateSettled: string): string {
   return idx === -1 ? withoutTrailingBoundary : withoutTrailingBoundary.slice(idx + 2);
 }
 
+/**
+ * RETAINED BUT UNUSED (Finding 6, final review 2026-09-08). Superseded by
+ * rehypeWordRise's own HAST-order word indexing: AssistantPanel deliberately
+ * stopped counting words to detect a settled-prefix change, because this
+ * counts raw-markdown tokens ("-", "##", "1.", ">") while rehypeWordRise
+ * indexes parsed words, so the two can permanently disagree (fix round 1,
+ * finding 1 — AssistantPanel.tsx keeps the full reasoning next to
+ * risenWordsRef). Nothing in src/ calls it; only its own test does.
+ */
 export function countWords(text: string): number {
   const trimmed = text.trim();
   return trimmed ? trimmed.split(/\s+/).length : 0;
