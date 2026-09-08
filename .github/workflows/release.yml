@@ -539,8 +539,13 @@ jobs:
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          APP_PATH=$(find dist -type d -name "$RELEASE_PRODUCT_NAME.app" -print -quit)
-          test -n "$APP_PATH" || { echo "Missing packaged app: $RELEASE_PRODUCT_NAME.app"; exit 1; }
+          # electron-builder names the bundle after the manifest's
+          # executableName, not the product name, so those differ whenever a
+          # distribution sets both (oppulence-voice.app vs "Oppulence Voice").
+          # Take whichever single .app landed in dist/.
+          APP_PATH=$(find dist -maxdepth 2 -type d -name "*.app" -print -quit)
+          test -n "$APP_PATH" || { echo "Missing packaged .app under dist/"; find dist -maxdepth 2 -name "*.app" -o -maxdepth 1 -type d | head -20; exit 1; }
+          echo "Verifying $APP_PATH"
           for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-text-monitor macos-media-remote; do
             test -x "$APP_PATH/Contents/Resources/bin/$bin" || { echo "Missing in bundle: $bin"; exit 1; }
           done
