@@ -86,6 +86,24 @@ async function renderPanel(t, props) {
 }
 
 const words = (count) => Array.from({ length: count }, (_, index) => `w${index}`).join(" ");
+
+// The two paragraphs that must agree: the visible transcript and the hidden
+// node the shell measures its preferred height against. Tags are stripped
+// rather than parsed — the only elements inside either are the tail's own
+// <span>s, and what is under test is the TEXT they add up to.
+const stripTags = (html) => html.replace(/<[^>]*>/g, "");
+
+const visibleTranscript = (markup) => {
+  const match = markup.match(/<p class="select-text[^"]*">([\s\S]*?)<\/p>/);
+  assert.ok(match, "expected the visible transcript paragraph");
+  return stripTags(match[1]);
+};
+
+const measuredTranscript = (markup) => {
+  const match = markup.match(/data-panel-size-source[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/);
+  assert.ok(match, "expected the hidden measurement paragraph");
+  return stripTags(match[1]);
+};
 const activeWords = (markup) => [
   ...markup.matchAll(/<span class="live-transcript-word" data-active="true">([^<]*)<\/span>/g),
 ].map((match) => match[1].trim());
@@ -192,3 +210,63 @@ test("the superseded background-clip shimmer rule and keyframes remain in the st
   assert.match(base, /animation: inline-response-shimmer 2\.2s steps\(24, end\) infinite;/);
   assert.match(css, /@keyframes inline-response-shimmer \{/);
 });
+
+// Fix round 1, finding 1. The transcript paragraph is `whitespace-pre-wrap`
+// precisely because the cleanup prompt (src/locales/en/prompts.json) asks the
+// model to turn spoken "new line" into a real break and to emit bullet lists,
+// numbered steps, paragraph breaks between topics, and email layout. The tail
+// therefore has to carry the ACTUAL whitespace between words, not a single
+// space per gap — otherwise a cleaned-up dictation renders as one run-on line
+// and stays that way for the whole 4s final hold.
+//
+// Asserting equality with the source (rather than "contains a newline") also
+// covers the second-order defect: the hidden measurement node at
+// data-panel-size-source renders `measurementText` RAW, and both it and `text`
+// are the same trimmed source string, so any whitespace the visible node drops
+// makes the shell size itself against a taller box than the text occupies.
+const BREAK_SHAPES = {
+  "a spoken new line": "alpha bravo charlie\nsecond line here delta echo foxtrot golf",
+  "a paragraph break":
+    "first paragraph opening line here\n\nsecond paragraph continues with more words and then some more to push past the window",
+  "a bullet list":
+    "- buy milk\n- call the dentist\n- send the invoice today\n- book the flight home tomorrow",
+};
+
+for (const [shape, transcript] of Object.entries(BREAK_SHAPES)) {
+  for (const phase of ["live", "final"]) {
+    test(`${shape} keeps its breaks in the rendered tail at phase "${phase}"`, async (t) => {
+      const markup = await renderPanel(t, { text: transcript, measurementText: transcript, phase });
+
+      assert.equal(
+        visibleTranscript(markup),
+        transcript,
+        "the rendered transcript must be the source, character for character — breaks included"
+      );
+      assert.ok(
+        visibleTranscript(markup).includes("\n"),
+        "fixture sanity: this shape is only interesting because it contains a break"
+      );
+    });
+  }
+
+  test(`${shape} leaves the measurement node and the visible node in agreement`, async (t) => {
+    const streaming = await renderPanel(t, {
+      text: transcript,
+      measurementText: transcript,
+      phase: "live",
+    });
+    const committed = await renderPanel(t, {
+      text: transcript,
+      measurementText: transcript,
+      phase: "final",
+    });
+
+    for (const markup of [streaming, committed]) {
+      assert.equal(
+        visibleTranscript(markup),
+        measuredTranscript(markup),
+        "the shell sizes itself against the hidden node; a visible node that differs opens the panel taller than its text"
+      );
+    }
+  });
+}

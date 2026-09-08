@@ -305,7 +305,13 @@ export function useLiveTranscriptPanel({
             prefersReducedMotion,
           });
           return new Promise((resolve) => {
-            const timer = setTimeout(resolve, waitMs);
+            const timer = setTimeout(() => {
+              // The fallback won. Drop this beat's gate with it so the map
+              // keeps meaning "gates currently waiting" instead of holding a
+              // resolver that can only ever be a no-op until the next clear.
+              delete stageGatesRef.current[stage];
+              resolve();
+            }, waitMs);
             entranceTimersRef.current.push(timer);
             if (!awaitEvent) return;
             stageGatesRef.current[stage] = () => {

@@ -157,3 +157,62 @@ test("the tail collapses runs of whitespace and never emits an empty word", asyn
     ["one", "two", "three"]
   );
 });
+
+// Fix round 1, finding 1. The tail must carry the ACTUAL whitespace that
+// separated each pair of words, not one space per gap: the transcript
+// paragraph is `whitespace-pre-wrap` because the cleanup prompt asks the model
+// for real line breaks, bullet lists and paragraph breaks, and the hidden node
+// the panel measures its height against renders the same string RAW. The
+// round-trip below is the whole contract — reassembling the parts must give
+// back the source exactly.
+const BREAK_SHAPES = {
+  "a spoken new line": "alpha bravo charlie\nsecond line here delta echo foxtrot golf",
+  "a paragraph break":
+    "first paragraph opening line here\n\nsecond paragraph continues with more words and then some more to push past the window",
+  "a bullet list":
+    "- buy milk\n- call the dentist\n- send the invoice today\n- book the flight home tomorrow",
+};
+
+const reassemble = (result) =>
+  result.settled + result.tail.map((word) => `${word.text}${word.separator}`).join("");
+
+for (const [shape, transcript] of Object.entries(BREAK_SHAPES)) {
+  test(`the tail reassembles ${shape} character for character, streaming and committed`, async () => {
+    const { splitTranscriptForTail } = await load();
+
+    assert.equal(reassemble(splitTranscriptForTail(transcript)), transcript);
+    assert.equal(
+      reassemble(splitTranscriptForTail(transcript, { activeWordCount: 0 })),
+      transcript,
+      "the commit renders the same characters as the stream — only `active` changes"
+    );
+  });
+}
+
+test("each tail word carries the exact whitespace that followed it, and the last carries none", async () => {
+  const { splitTranscriptForTail } = await load();
+  const result = splitTranscriptForTail("alpha\n\nbravo charlie\ndelta");
+
+  assert.deepEqual(
+    result.tail.map((word) => [word.text, word.separator]),
+    [
+      ["alpha", "\n\n"],
+      ["bravo", " "],
+      ["charlie", "\n"],
+      ["delta", ""],
+    ]
+  );
+});
+
+test("the settled prefix is an exact slice of the source, breaks and all", async () => {
+  const { splitTranscriptForTail } = await load();
+  const transcript = BREAK_SHAPES["a paragraph break"];
+  const result = splitTranscriptForTail(transcript);
+
+  assert.ok(result.settled.length > 0, "fixture sanity: this shape is long enough to settle words");
+  assert.ok(
+    transcript.startsWith(result.settled),
+    "the settled string must be a literal prefix of the source, not a re-joined one"
+  );
+  assert.match(result.settled, /\n\n/, "and it must still carry the paragraph break inside it");
+});

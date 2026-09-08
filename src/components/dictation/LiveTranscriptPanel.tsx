@@ -83,7 +83,7 @@ export function LiveTranscriptPanel({
                   className="live-transcript-word"
                   data-active={word.active || undefined}
                 >
-                  {word.text}{" "}
+                  {`${word.text}${word.separator}`}
                 </span>
               ))}
             </p>
