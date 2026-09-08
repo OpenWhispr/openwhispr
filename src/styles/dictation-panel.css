@@ -785,17 +785,23 @@
     animation-duration: 1ms !important;
   }
 
-  /* The pill's exit/return transition. index.css's blanket rule already
-     strips transform from transition-property here (so the collapse pose
-     applies instantly and no transform transitionend can ever fire — which
-     is why usePillExitChoreography stops waiting for one under reduced
-     motion), but it leaves opacity IN and never touches duration or delay.
-     Left alone the 80ms-after-120ms fade would still run, holding the window
-     up behind it. ONE value each, never a list: duration and delay are
-     matched by POSITION against index.css's forced property list, so a
-     comma-separated list would cycle onto the wrong property — the same trap
-     the pill's travel rule hit. A single value broadcasts to all of them. */
-  .assistant-pill-presence,
+  /* The pill's EXIT transition only. index.css's blanket rule already strips
+     transform from transition-property here (so the collapse pose applies
+     instantly and no transform transitionend can ever fire — which is why
+     usePillExitChoreography stops waiting for one under reduced motion), but
+     it leaves opacity IN and never touches duration or delay. Left alone the
+     80ms-after-120ms fade would still run against a window that is already
+     going. ONE value each, never a list: duration and delay are matched by
+     POSITION against index.css's forced property list, so a comma-separated
+     list would cycle onto the wrong property — the same trap the pill's
+     travel rule hit. A single value broadcasts to all of them.
+
+     Deliberately NOT on the bare .assistant-pill-presence (fix round 1,
+     finding 4 — review measured 0.001s reaching the tip card in a real
+     browser): that rule also owns the tip card's in-place-of-pill opacity
+     swap, and collapsing it to 1ms works against index.css's own stated
+     policy that opacity keeps its normal speed. Scoping to the exit leaves
+     that swap at its 120ms, and leaves the unzoop's fade-back there too. */
   .assistant-pill-presence[data-pill-exit="zoop"] {
     transition-duration: 1ms !important;
     transition-delay: 0ms !important;

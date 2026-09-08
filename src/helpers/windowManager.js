@@ -227,6 +227,11 @@ class WindowManager {
         // The window may have been hidden while the command was in flight
         // (PTT tap, auto-hide, tray); focus() is a no-op on a hidden window.
         if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
+        // An accepted show like any other, so it owes the renderer the same
+        // unzoop cue — including when the window was never hidden and the
+        // pill is simply mid-zoop. Any pending fallback is left alone: the
+        // fire-time re-check above now refuses it while the panel is open.
+        this._notifyPillWillShow();
         this.mainWindow.setFocusable(true);
         this.mainWindow.focus();
       } else {
@@ -2043,9 +2048,18 @@ class WindowManager {
     dockManager.setControlPanelVisible(false);
   }
 
+  // An open panel, or a command still thinking toward one, must not lose its
+  // window (a PTT tap during thinking used to hide it — the panel then opened
+  // invisibly and nothing could show it again). Factored out so the arm-time
+  // check in hideDictationPanel and its deferred fire-time re-check are
+  // literally the same expression and can never disagree.
+  _assistantPanelOwnsWindow() {
+    return Boolean(this._assistantPanelOpen || this._assistantPanelBusy);
+  }
+
   // The pill zoops out on the renderer's clock and then asks for the hide
   // (hide-window IPC -> animate:false). The timer only covers a renderer that
-  // never answers — a route with no pill mounted (onboarding), or a dead one.
+  // never answers — a route with no pill mounted, or a dead one.
   // An open (or busy) assistant panel keeps its window.
   //
   // Returns false ONLY for that refusal, and true whenever the window is
@@ -2055,10 +2069,7 @@ class WindowManager {
   // the leaf->ring morph in full view — the exact bug Task 8 exists to
   // prevent. Nothing may resolve that IPC without a hide behind it.
   hideDictationPanel({ animate = true } = {}) {
-    // An open panel, or a command still thinking toward one, must not lose
-    // its window (a PTT tap during thinking used to hide it — the panel then
-    // opened invisibly and nothing could show it again).
-    if (this._assistantPanelOpen || this._assistantPanelBusy) return false;
+    if (this._assistantPanelOwnsWindow()) return false;
     this._mainWindowPlacementCoordinator.cancelPending();
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return true;
     // Nothing on screen to zoop: an already-hidden window would otherwise sit
@@ -2069,7 +2080,15 @@ class WindowManager {
     }
     if (this._pillHideTimer) return true;
     this.mainWindow.webContents.send("pill-will-hide");
-    this._pillHideTimer = setTimeout(() => this._hideMainWindowNow(), PILL_HIDE_FALLBACK_MS);
+    this._pillHideTimer = setTimeout(() => {
+      this._pillHideTimer = null;
+      // Re-read at FIRE time, not only at arm time. The guard above used to be
+      // atomic with hide(); the deferral splits them, so the panel can claim
+      // this window during the wait — and hiding it then is precisely the
+      // invisible, unrecoverable panel the guard exists to prevent.
+      if (this._assistantPanelOwnsWindow()) return;
+      this._hideMainWindowNow();
+    }, PILL_HIDE_FALLBACK_MS);
     return true;
   }
 

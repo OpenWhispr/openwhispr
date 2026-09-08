@@ -273,6 +273,38 @@ test("the mainWindow's closed handler clears a pending hide so it cannot outlive
   assert.equal(first.isVisible(), true);
 });
 
+// Fix round 1, finding 1: the panel guard used to be atomic with hide(); the
+// 320ms deferral split them, so it has to be re-read when the timer fires and
+// not only when it is armed. Hiding here is the exact failure the guard's own
+// comment names — the panel then opens invisibly and nothing can show it again.
+test("a panel that claims the window mid-zoop is not hidden when the fallback fires", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const m = manager();
+  m.hideDictationPanel();
+  m.setAssistantPanelBusy(true);
+  assert.equal(m.hideDictationPanel(), false, "sanity: a fresh hide is refused in this state");
+  t.mock.timers.tick(WindowManager.PILL_HIDE_FALLBACK_MS);
+  assert.equal(m.mainWindow.isVisible(), true, "a thinking command must not lose its window");
+
+  // The refusal must also retire the timer, not leave it to fire later.
+  m.setAssistantPanelBusy(false);
+  t.mock.timers.tick(10000);
+  assert.equal(m.mainWindow.isVisible(), true, "a refused fallback must not fire again");
+  // …and a fresh hide must still work afterwards.
+  assert.equal(m.hideDictationPanel(), true);
+  t.mock.timers.tick(WindowManager.PILL_HIDE_FALLBACK_MS);
+  assert.equal(m.mainWindow.isVisible(), false);
+});
+
+test("an open panel claiming the window mid-zoop is protected by the same re-check", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const m = manager();
+  m.hideDictationPanel();
+  m._assistantPanelOpen = true;
+  t.mock.timers.tick(WindowManager.PILL_HIDE_FALLBACK_MS);
+  assert.equal(m.mainWindow.isVisible(), true);
+});
+
 // The renderer's zoop duration lives in springEasing.ts, which main-process
 // code has no import path into. Bind the two together so a retune of one
 // without the other fails a test instead of silently desyncing the native

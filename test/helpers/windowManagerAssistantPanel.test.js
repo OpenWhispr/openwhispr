@@ -370,9 +370,29 @@ test("live transcript events are mirrored to the companion only for plain dictat
 });
 
 test("opening the assistant panel surfaces a hidden pill window before focusing it", () => {
-  const { manager, calls } = makeManager({ visible: false });
+  const { manager, calls, messages } = makeManager({ visible: false });
   manager.setAssistantPanelOpen(true);
   assert.deepEqual(calls, ["showInactive", "focusable:true", "focus"]);
+  // Fix round 1, finding 3: this is an accepted show like any other, so it
+  // owes the renderer the same unzoop cue. Without it the pill's return here
+  // depends entirely on the visibilitychange fallback — the one route whose
+  // behaviour would differ, for no stated reason.
+  assert.deepEqual(
+    messages.map((message) => message.channel),
+    ["pill-will-show"]
+  );
+});
+
+test("a panel opening while the pill is mid-zoop still tells it to come back", () => {
+  const { manager, calls, messages } = makeManager({ visible: true });
+  // The window is still on screen (the zoop has not finished), so nothing is
+  // surfaced — but the pill is collapsed and must be told to unzoop anyway.
+  manager.setAssistantPanelOpen(true);
+  assert.deepEqual(calls, ["focusable:true", "focus"]);
+  assert.deepEqual(
+    messages.map((message) => message.channel),
+    ["pill-will-show"]
+  );
 });
 
 test("showDictationPanel still surfaces a hidden window while the panel is open", () => {

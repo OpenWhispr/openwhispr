@@ -108,7 +108,11 @@ function MainApp() {
     if (isDictationPanel && !resolved) {
       // Keep the dictation overlay hidden during onboarding — OnboardingFlow
       // shows it explicitly when the user reaches the activation step.
-      window.electronAPI?.hideWindow?.();
+      // hide-window rejects when the main process refuses the hide (an open or
+      // busy Assistant panel owns the window). Unreachable before onboarding
+      // completes, but nothing awaits this call and the renderer installs no
+      // unhandledrejection handler, so it swallows its own rejection.
+      window.electronAPI?.hideWindow?.()?.catch(() => {});
     }
 
     setIsLoading(false);

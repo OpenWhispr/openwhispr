@@ -74,6 +74,23 @@ function animatedProperties(ruleBody) {
   return segments.map((segment) => segment.trim().split(/\s+/)[0]);
 }
 
+// Every flat `selector { body }` rule inside one already-extracted block.
+// Selectors are normalised to one line so a multi-line selector list reads the
+// same as a single-line one.
+function flatRules(block) {
+  const rules = [];
+  const inner = block.slice(block.indexOf("{") + 1, block.lastIndexOf("}"));
+  const pattern = /([^{}]+)\{([^{}]*)\}/g;
+  let match;
+  while ((match = pattern.exec(inner)) !== null) {
+    rules.push({
+      selector: match[1].trim().replace(/\s*\n\s*/g, " "),
+      body: match[2],
+    });
+  }
+  return rules;
+}
+
 test("the exit collapses to the brief's pinned pose on Task 1's zoop spring and duration variables", async () => {
   const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
   const css = stripCssComments(readCss("src/styles/dictation-panel.css"));
@@ -173,10 +190,7 @@ test("reduced motion shortens the exit with a single broadcast value, and never 
   );
   assert.ok(block, "expected dictation-panel.css to have its own reduced-motion media block");
 
-  const rule = extractRule(
-    block,
-    '.assistant-pill-presence,\n  .assistant-pill-presence[data-pill-exit="zoop"] {'
-  );
+  const rule = extractRule(block, '.assistant-pill-presence[data-pill-exit="zoop"] {');
   assert.ok(rule, "expected a reduced-motion override for the pill's exit transition");
   // ONE duration and ONE delay: index.css forces transition-property to its
   // own fixed list without touching duration, so a multi-value list here
@@ -189,5 +203,20 @@ test("reduced motion shortens the exit with a single broadcast value, and never 
     rule,
     /transition-duration:[^;]*,/,
     "a comma-separated duration list would cycle onto index.css's forced property list"
+  );
+
+  // Fix round 1, finding 4: the override must reach the ZOOP only. The bare
+  // .assistant-pill-presence also owns the tip-card in-place-of-pill opacity
+  // swap, and index.css's reduced-motion policy is explicit that opacity
+  // keeps its normal speed — collapsing that swap to 1ms works against it.
+  const overrides = flatRules(block).filter(
+    (candidate) =>
+      candidate.selector.includes(".assistant-pill-presence") &&
+      /transition-(duration|delay)/.test(candidate.body)
+  );
+  assert.deepEqual(
+    overrides.map((candidate) => candidate.selector),
+    ['.assistant-pill-presence[data-pill-exit="zoop"]'],
+    "no reduced-motion transition override may target the bare .assistant-pill-presence"
   );
 });
