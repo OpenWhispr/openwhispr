@@ -107,3 +107,20 @@ test("the signed builder only reuses a matching semantic draft and tag", () => {
   assert.match(releaseWorkflow, /TAG_SHA.*GITHUB_SHA/s);
   assert.match(releaseWorkflow, /requires both an existing draft release and its matching tag/);
 });
+
+test("the release gate waits on a status check the Tests workflow actually reports", () => {
+  // The gate looks up a check by job name. Upstream renamed that job once
+  // already, which silently wedged every release: semantic-release waited
+  // forever for a check that no longer existed, and no version shipped for
+  // over a month. Tie the two together so a rename fails here instead.
+  const gatedCheck = semanticWorkflow.match(
+    /select\(\.name == "([^"]+)" and \.workflowName == "Tests"\)/
+  );
+  assert.ok(gatedCheck, "semantic-release must gate on a named Tests check");
+
+  const jobNames = [...testsWorkflow.matchAll(/^ {2}([a-z][\w-]*):$/gm)].map((match) => match[1]);
+  assert.ok(
+    jobNames.includes(gatedCheck[1]),
+    `semantic-release waits for "${gatedCheck[1]}", but tests.yml only defines: ${jobNames.join(", ")}`
+  );
+});
