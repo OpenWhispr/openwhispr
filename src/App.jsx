@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import "./index.css";
@@ -14,6 +14,7 @@ import { useHandsFreeTip } from "./hooks/useHandsFreeTip";
 import { useMainProcessNotifications } from "./hooks/useMainProcessNotifications";
 import { useListeningEntrancePhase } from "./hooks/useListeningEntrancePhase";
 import { useWindowResizeCompensation } from "./hooks/useWindowResizeCompensation";
+import { usePillExitChoreography } from "./hooks/usePillExitChoreography";
 import { useSettingsStore } from "./stores/settingsStore";
 import { isAgentAllowed } from "./stores/policyRules";
 import { usePolicyStore } from "./stores/policyStore";
@@ -28,21 +29,27 @@ import { HANDS_FREE_TIP_DURATION_MS, resolveHandsFreeTipHotkey } from "./helpers
 import { HoldMigrationCard } from "./components/dictation/HoldMigrationCard";
 import { useHoldMigrationCard } from "./hooks/useHoldMigrationCard";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
+import { motionCssVariables } from "./utils/springEasing";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
-  LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   resolveLiveTranscriptEntrancePresentation,
   resolveAssistantFooterPresentation,
   resolveAgentModeActive,
+  resolveHandsFreeTipLadderVisible,
   resolveListeningEntrancePresentation,
+  resolvePillShrinkWait,
   resolveVoiceActivityPresentation,
   resolveVoiceHorizontalDirection,
   resolveVoicePanelCorePresentation,
   resolveVoicePillDock,
   resolveVoicePillInteraction,
+  resolveVoicePillTravelPresentation,
+  isPillClaimedApartFromAssistant,
   isVoicePillActivationKey,
   shouldActivateVoicePill,
+  shouldHoldAgentMarkThroughHide,
   shouldOfferLiveTranscriptReopen,
+  shouldReleaseAgentMarkHold,
   shouldSuppressPillForAssistantActions,
 } from "./helpers/voicePillPresentation";
 
@@ -59,9 +66,13 @@ const UNMOUNTED_RESIZE = {
 };
 
 export default function App() {
+  const motionVars = useMemo(() => motionCssVariables(), []);
   const [isHovered, setIsHovered] = useState(false);
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
   const buttonRef = useRef(null);
+  // The element the exit zoop actually plays on — usePillExitChoreography
+  // waits for ITS transform transition before the native window hides.
+  const pillPresenceRef = useRef(null);
   const { toast, dismiss, toastCount, dictationErrorActionCount, dismissByPresentation } =
     useToast();
   const { t } = useTranslation();
@@ -318,12 +329,21 @@ export default function App() {
       !holdMigrationCard.visible,
   });
   // Feeds only the window-size ladder below (the auto-hide effect further
-  // down reads handsFreeTip.tip and holdMigrationCard.visible directly, the
-  // same underlying signal). Both already outlast the migration card's
-  // 200ms exit — a 340ms deferred shrink, a 500ms auto-hide delay — so
-  // widening either to also track `exiting` would just hold the window
-  // large through the fade for nothing.
-  const tipCardVisible = handsFreeTip.tip !== null || holdMigrationCard.visible;
+  // down reads handsFreeTip.tip and holdMigrationCard.visible directly — a
+  // separate consumer, unaffected by this: its own 500ms delay comfortably
+  // outlasts the migration card's 200ms exit on its own, so it stays on
+  // `.visible`). This one tracks the card through its whole MOUNTED
+  // lifetime (visible OR exiting) via resolveHandsFreeTipLadderVisible, NOT
+  // `.visible` alone: resolvePillShrinkWait correctly resolves a
+  // HANDS_FREE_TIP -> BASE shrink at once now (the pill's own width is not
+  // part of it), so there is no longer a deferred-shrink guess long enough
+  // to outlast the card's exit fade by accident — this flag has to stop
+  // lying about when the card is actually gone instead.
+  const tipCardVisible = resolveHandsFreeTipLadderVisible({
+    tip: handsFreeTip.tip,
+    holdMigrationCardVisible: holdMigrationCard.visible,
+    holdMigrationCardExiting: holdMigrationCard.exiting,
+  });
   // Which card, if any, currently owns the pill's spot. Deliberately NOT
   // tipCardVisible: placement has to track the migration card through its
   // own exit fade (visible drops the instant dismissal starts, but the card
@@ -338,6 +358,26 @@ export default function App() {
     handsFreeTip.tip !== null || (holdMigrationCardMounted && !anyPanelMounted);
   const tipCardInPlaceOfPill = tipCardPlacementActive && floatingIconAutoHide;
 
+  // The pill's own width transition ends when the capsule has finished
+  // narrowing back down — that is the real signal a shrinking window should
+  // wait on, instead of a fixed guess at how long the animation takes.
+  // Every other shrink (a menu, a toast, the hands-free tip closing) and
+  // reduced motion both resolve at once instead of waiting on a width
+  // transitionend that cannot fire for them — see resolvePillShrinkWait's
+  // own docblock for why.
+  const waitForPillShrink = React.useCallback(
+    (target, prev) =>
+      resolvePillShrinkWait({
+        target,
+        prev,
+        prefersReducedMotion: Boolean(
+          window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        ),
+        el: buttonRef.current,
+      }),
+    []
+  );
+
   const { dictationErrorPillHandoffActive } = useMainWindowSizeOwner({
     requestMainWindowSize,
     dictationErrorActionCount,
@@ -351,6 +391,7 @@ export default function App() {
     liveTranscriptOpen: liveTranscript.open,
     liveTranscriptMounted: liveTranscript.mounted,
     liveTranscriptOpenRef: liveTranscript.openRef,
+    waitForShrink: waitForPillShrink,
   });
 
   useEffect(() => {
@@ -406,24 +447,110 @@ export default function App() {
     return () => unsubscribe?.();
   }, [isRecording, isPreparing, isProcessing, cancelRecording, cancelProcessing]);
 
+  // Decision 8: with auto-hide on, an Agent panel close is the last thing the
+  // user sees before the pill leaves. Hold the leaf through the close spring
+  // and the exit so the leaf→ring morph runs while the window is already
+  // hidden — and the next show is correctly the dictation pill — instead of
+  // completing just before the window goes.
+  const [agentMarkHeldThroughHide, setAgentMarkHeldThroughHide] = useState(false);
+  // The pill leaves with a zoop before the native window hides, and springs
+  // back on the next show. This is the funnel for every hide that could be
+  // SEEN — i.e. every hide taken while the pill is on screen and visible.
+  //
+  // It is NOT every renderer-initiated hide, which is what this comment used
+  // to claim (Finding 4, final review 2026-09-08). Two sit outside it on
+  // purpose, and neither can produce a visible hard cut:
+  //   - AppRouter.jsx hides the dictation overlay during onboarding, before
+  //     this component has mounted at all. There is no pill to zoop.
+  //   - useMainWindowSizeOwner hands the dictation-error pill handoff a raw
+  //     hideWindow thunk. That hide runs only while the handoff still holds
+  //     the pill suppressed at opacity 0 — a proven ordering, not an
+  //     assumption: dictationErrorPillHandoff.test.js's "auto-hide closes the
+  //     native window before releasing DOM suppression" pins the hide BEFORE
+  //     the reveal. Routing it through the zoop would animate an already
+  //     invisible pill and delay the hide for nothing.
+  const { exiting: pillExiting, hideWithZoop } = usePillExitChoreography({
+    pillPresenceRef,
+    recording: isRecording || isPreparing,
+  });
+
+  // Lifted out of the callback so this stays as stable as assistant.handleClose
+  // already is: AssistantPanel keys its Escape listener on the onClose prop, so
+  // a wrapper that changed identity every render would rebind it every render.
+  const { handleClose: closeAssistantPanel } = assistant;
+  const handleAssistantClose = React.useCallback(() => {
+    if (
+      shouldHoldAgentMarkThroughHide({
+        floatingIconAutoHide,
+        assistantPanelMounted: assistant.mounted,
+      })
+    ) {
+      setAgentMarkHeldThroughHide(true);
+    }
+    closeAssistantPanel();
+  }, [floatingIconAutoHide, assistant.mounted, closeAssistantPanel]);
+
+  // Everything OTHER than the Agent panel's own close that keeps the pill on
+  // screen. Read once, from the tested helper, so the mark-hold release below
+  // and the auto-hide effect after it can never drift apart — the release has
+  // to know exactly which preconditions the exit is waiting on (Finding 3,
+  // final review 2026-09-08).
+  const pillClaimedApartFromAssistant = isPillClaimedApartFromAssistant({
+    isRecording,
+    isVisuallyProcessing,
+    toastCount,
+    dictationErrorPillHandoffActive,
+    handsFreeTipVisible: handsFreeTip.tip !== null,
+    holdMigrationCardVisible: holdMigrationCard.visible,
+    liveTranscriptMounted: liveTranscript.mounted,
+  });
+
+  // The three releases that are derived state. The fourth — the hide itself
+  // landing — is in the auto-hide effect below.
+  useEffect(() => {
+    if (
+      shouldReleaseAgentMarkHold({
+        isRecording,
+        isPreparing,
+        floatingIconAutoHide,
+        // The Agent panel still being mounted is the close this hold was
+        // staged for, so it is never a cancellation. Anything else claiming
+        // the pill once that close has finished IS one: the auto-hide branch
+        // below then never schedules the hide, so no IPC can ever settle and
+        // release the mark.
+        autoHideExitCancelled: !assistant.mounted && pillClaimedApartFromAssistant,
+      })
+    ) {
+      setAgentMarkHeldThroughHide(false);
+    }
+  }, [
+    isRecording,
+    isPreparing,
+    floatingIconAutoHide,
+    assistant.mounted,
+    pillClaimedApartFromAssistant,
+  ]);
+
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {
     let hideTimeout;
 
-    if (
-      floatingIconAutoHide &&
-      !isRecording &&
-      !isVisuallyProcessing &&
-      toastCount === 0 &&
-      !dictationErrorPillHandoffActive &&
-      handsFreeTip.tip === null &&
-      !holdMigrationCard.visible &&
-      !assistant.mounted &&
-      !liveTranscript.mounted
-    ) {
+    if (floatingIconAutoHide && !pillClaimedApartFromAssistant && !assistant.mounted) {
       // Delay briefly so processing can start after recording stops without a flash
       hideTimeout = setTimeout(() => {
-        window.electronAPI?.hideWindow?.();
+        // Release a held Agent mark only once the window is actually gone, so
+        // the leaf→ring morph plays out of sight. Releasing on any settle (the
+        // rule until Task 9) would play it in full view on the one path where
+        // the hide does NOT happen: hideDictationPanel refuses while the
+        // Assistant panel owns the window, and hide-window now rejects rather
+        // than resolving on that. A hide that never lands keeps the pill on
+        // screen, where a stale-but-static leaf is the smaller wrong than a
+        // visible identity morph — and shouldReleaseAgentMarkHold above still
+        // clears it on the next recording, when auto-hide goes off, or when
+        // something else claims the pill before this exit can run.
+        void hideWithZoop().then((result) => {
+          if (result.hidden) setAgentMarkHeldThroughHide(false);
+        });
       }, 500);
     } else if (!floatingIconAutoHide && prevAutoHideRef.current) {
       window.electronAPI?.showDictationPanel?.();
@@ -431,21 +558,17 @@ export default function App() {
 
     prevAutoHideRef.current = floatingIconAutoHide;
     return () => clearTimeout(hideTimeout);
-  }, [
-    isRecording,
-    isVisuallyProcessing,
-    floatingIconAutoHide,
-    toastCount,
-    dictationErrorPillHandoffActive,
-    handsFreeTip.tip,
-    holdMigrationCard.visible,
-    assistant.mounted,
-    liveTranscript.mounted,
-  ]);
+    // pillClaimedApartFromAssistant stands in for the seven inputs it is
+    // derived from. While the 500ms timer is armed every one of them is
+    // pinned at its quiet value, so none can change without flipping this
+    // boolean — the effect re-runs on exactly the same commits as before.
+  }, [floatingIconAutoHide, pillClaimedApartFromAssistant, assistant.mounted, hideWithZoop]);
 
-  const handleClose = () => {
-    window.electronAPI.hideWindow();
-  };
+  // Memoized so the Escape listener below keeps binding once: hideWithZoop is
+  // itself stable, and this closure now reads it rather than only globals.
+  const handleClose = React.useCallback(() => {
+    void hideWithZoop();
+  }, [hideWithZoop]);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -476,6 +599,7 @@ export default function App() {
     isProcessing,
     cancelRecording,
     cancelProcessing,
+    handleClose,
   ]);
 
   // Determine current mic state
@@ -522,6 +646,8 @@ export default function App() {
     isRecording,
     isProcessing: isVisuallyProcessing,
     assistantPanelMounted: assistant.mounted,
+    assistantPanelClosing: assistant.closing,
+    heldThroughHide: agentMarkHeldThroughHide,
   });
   const assistantFooter = resolveAssistantFooterPresentation(assistant.footerPhase);
   const voicePillInteraction = resolveVoicePillInteraction({
@@ -581,10 +707,12 @@ export default function App() {
     panelStartPosition,
     horizontalDirection: voiceHorizontalDirection,
   });
-  const voicePillTravelDuration =
-    liveTranscript.open && liveTranscript.entrancePhase === "encapsulate"
-      ? LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs
-      : LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs;
+  const { durationMs: voicePillTravelDuration, ease: voicePillTravelEase } =
+    resolveVoicePillTravelPresentation({
+      assistantMounted: assistant.mounted,
+      liveTranscriptOpen: liveTranscript.open,
+      liveTranscriptEntrancePhase: liveTranscript.entrancePhase,
+    });
   const dictationErrorSuppressesPill =
     dictationErrorActionCount > 0 || dictationErrorPillHandoffActive;
   // Keep one pill DOM node alive while final Agent actions own the footer. On
@@ -600,7 +728,7 @@ export default function App() {
   const pillInteractionSuppressed = pillVisuallySuppressed || assistant.closing;
 
   return (
-    <div className="dictation-window">
+    <div className="dictation-window" style={motionVars}>
       {/* The panel footer can hide this pill, but never unmounts it. */}
       <div
         className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50 transition-opacity duration-150 ease-out ${
@@ -608,15 +736,22 @@ export default function App() {
         } ${pillVisuallySuppressed ? "opacity-0" : "opacity-100"}`}
         style={{
           "--voice-pill-travel-duration": `${voicePillTravelDuration}ms`,
+          "--voice-pill-travel-ease": voicePillTravelEase,
         }}
         data-dictation-error-suppressed={dictationErrorSuppressesPill || undefined}
         data-assistant-actions-suppressed={assistantActionsSuppressPill || undefined}
         aria-hidden={pillVisuallySuppressed || undefined}
       >
+        {/* No Tailwind transition utilities on the wrapper below:
+            .assistant-pill-presence in dictation-panel.css owns its transition
+            now (transform for the zoop/unzoop, opacity for the
+            in-place-of-pill swap). */}
         <div
-          className={`assistant-pill-presence relative flex items-center gap-2 transition-opacity duration-150 ease-out ${
+          ref={pillPresenceRef}
+          className={`assistant-pill-presence relative flex items-center gap-2 ${
             tipCardInPlaceOfPill ? "pointer-events-none opacity-0" : ""
           }`}
+          data-pill-exit={pillExiting ? "zoop" : undefined}
           data-assistant-footer-phase={assistant.open ? assistant.footerPhase : undefined}
           data-horizontal-direction={voiceHorizontalDirection}
           style={{
@@ -809,6 +944,12 @@ export default function App() {
         stage={
           activeVoicePanelMode === "live-transcript" ? liveTranscriptEntrance.coreStage : "content"
         }
+        entrancePhase={
+          activeVoicePanelMode === "live-transcript" ? liveTranscript.entrancePhase : undefined
+        }
+        freshMount={
+          activeVoicePanelMode === "live-transcript" ? liveTranscript.freshMount : undefined
+        }
         horizontalDirection={voiceHorizontalDirection}
         label={activeVoicePanelLabel}
         measurementRevision={
@@ -816,6 +957,8 @@ export default function App() {
         }
         onPreferredHeightChange={liveTranscript.requestHeight}
         onClosingFadeComplete={assistant.completeContentFade}
+        onCollapsed={assistant.completeCollapse}
+        onStageSettled={liveTranscript.notifyStageSettled}
       >
         {activeVoicePanelMode === "assistant" && assistant.mounted && (
           <AssistantPanel
@@ -829,8 +972,9 @@ export default function App() {
             thinking={assistant.thinking && assistant.open}
             open={assistant.open}
             footerPhase={assistant.footerPhase}
+            closing={assistant.closing}
             horizontalDirection={voiceHorizontalDirection}
-            onClose={assistant.handleClose}
+            onClose={handleAssistantClose}
             onBusyChange={assistant.setBusy}
             onResponseReadyChange={assistant.setResponseReady}
             onResponseContent={assistant.handleResponseContent}

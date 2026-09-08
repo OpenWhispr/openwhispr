@@ -9,6 +9,11 @@ import { SIZE_RANK, resolveMainWindowSizeKey } from "../utils/windowSizeLadder";
  * content collapse animation to finish before the window snaps down. Also owns
  * the dictation-error pill handoff, which hides the pill until the native
  * window has left the error footprint.
+ *
+ * `waitForShrink(target, prev)` is required: it decides, per shrink, what (if
+ * anything) is worth waiting for — the caller knows which of its own elements
+ * actually animate for a given target/prev pair, this hook does not. Return
+ * an already-resolved promise for a shrink with nothing to wait on.
  */
 export function useMainWindowSizeOwner({
   requestMainWindowSize,
@@ -23,6 +28,7 @@ export function useMainWindowSizeOwner({
   liveTranscriptOpen,
   liveTranscriptMounted,
   liveTranscriptOpenRef,
+  waitForShrink,
 }) {
   const [handoffActive, setHandoffActive] = useState(false);
   const actionCountRef = useRef(dictationErrorActionCount);
@@ -31,6 +37,14 @@ export function useMainWindowSizeOwner({
     const handoff = createDictationErrorPillHandoff({
       onSuppressedChange: setHandoffActive,
       shouldAutoHide: () => useSettingsStore.getState().floatingIconAutoHide,
+      // A RAW hide, deliberately not routed through usePillExitChoreography's
+      // zoop funnel (Finding 4, final review 2026-09-08 — App.jsx's comment on
+      // that funnel names this exception and why it is safe). The handoff only
+      // reaches this while it still has the pill suppressed at opacity 0, so
+      // there is no visible pill for a zoop to play on and no hard cut to
+      // avoid. hide-window REJECTS when the main process refuses; releaseAfter
+      // awaits this inside its own try/catch, so the rejection is contained —
+      // see that catch's own comment for what it does and does not promise.
       hideWindow: () => window.electronAPI?.hideWindow?.(),
     });
     handoffRef.current = handoff;
@@ -100,8 +114,22 @@ export function useMainWindowSizeOwner({
       void requestMainWindowSize(target);
       return undefined;
     }
-    const timeout = setTimeout(() => void requestMainWindowSize(target), 340);
-    return () => clearTimeout(timeout);
+    // A lower-ranked target means content is collapsing: let the collapse
+    // finish (the caller reports its transitionend, or resolves at once when
+    // there is nothing to wait for — e.g. reduced motion, or a shrink the
+    // caller's own element isn't part of) before the native window snaps
+    // down, so the two never animate the same edge at once. `target`/`prev`
+    // let the caller tell those cases apart. A wait that rejects must still
+    // let the window catch up rather than sticking at the wrong size.
+    let cancelled = false;
+    void waitForShrink(target, prev)
+      .catch(() => undefined)
+      .then(() => {
+        if (!cancelled) void requestMainWindowSize(target);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [
     assistantOpen,
     assistantMounted,
@@ -115,6 +143,7 @@ export function useMainWindowSizeOwner({
     handsFreeTipVisible,
     dictationErrorActionCount,
     requestMainWindowSize,
+    waitForShrink,
   ]);
 
   useEffect(() => {

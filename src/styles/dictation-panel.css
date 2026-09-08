@@ -3,26 +3,33 @@
    index.css ahead of its own rules; nothing here shares selectors with the
    app-wide styles that remain there. */
 
-/* Shared pill-to-panel surface. Each mode chooses the pill corner it grows from. */
+/* Shared pill-to-panel surface. Closed, the surface IS the pill's circle at
+   the resting dock (the shell is inset 12px like the pill, so the circle is
+   its bottom corner). Opening springs the circle open on the morph spring;
+   closing springs it shut. clip-path clips the shadow as well, so the closed
+   circle carries no halo. Nothing is mounted at rest, so it is hidden then. */
 .expanding-panel-surface {
-  clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 108px) round 24px);
-  opacity: 0;
+  clip-path: inset(calc(100% - 40px) 0 0 calc(100% - 40px) round 20px);
+  opacity: 1;
   pointer-events: none;
+  transform: none;
   transition:
-    clip-path 280ms cubic-bezier(0.2, 0, 0, 1),
-    opacity 140ms ease-out,
-    transform 280ms cubic-bezier(0.2, 0, 0, 1);
+    clip-path var(--motion-morph-ms, 440ms) var(--motion-morph-ease, cubic-bezier(0.2, 0, 0, 1)),
+    opacity 180ms linear,
+    transform var(--motion-morph-ms, 440ms) var(--motion-morph-ease, cubic-bezier(0.2, 0, 0, 1));
   will-change: clip-path, opacity, transform;
 }
 
+.expanding-panel-surface:not([data-panel-mode]) {
+  visibility: hidden;
+}
+
 .expanding-panel-anchor-bottom-right {
-  transform: translate(4px, 4px);
   transform-origin: bottom right;
 }
 
 .expanding-panel-anchor-bottom-left {
-  clip-path: inset(calc(100% - 52px) calc(100% - 108px) 0 0 round 24px);
-  transform: translate(-4px, 4px);
+  clip-path: inset(calc(100% - 40px) calc(100% - 40px) 0 0 round 20px);
   transform-origin: bottom left;
 }
 
@@ -33,17 +40,62 @@
   transform: none;
 }
 
+/* Live Transcript keeps its established corner-box origin and fade: its
+   entrance is staged from the encapsulated footer and is out of scope here. */
+.expanding-panel-surface[data-panel-mode="live-transcript"]:not(.expanding-panel-surface-open) {
+  clip-path: inset(calc(100% - 52px) 0 0 calc(100% - 108px) round 24px);
+  opacity: 0;
+  transform: translate(4px, 4px);
+}
+
+.expanding-panel-surface[data-panel-mode="live-transcript"].expanding-panel-anchor-bottom-left:not(.expanding-panel-surface-open) {
+  clip-path: inset(calc(100% - 52px) calc(100% - 108px) 0 0 round 24px);
+  transform: translate(-4px, 4px);
+}
+
+/* Mounting Live Transcript no longer starts from an identical rest state
+   (the shared circle above is now visible, opacity 1 — not the invisible
+   default this corner-box used to share), so its first frame must SNAP
+   straight to the corner-box instead of animating into it: mounting and
+   opening are one requestAnimationFrame apart
+   (useLiveTranscriptPanel.js), so an animated mount-transition would still
+   be mid-flight — and get RETARGETED, not restarted — the instant -open
+   lands, making the real entrance begin wherever that retarget caught it
+   instead of a clean 52/108/opacity-0. entrancePhase="encapsulate" is set
+   in the same commit as mounted=true, so it uniquely tags this one
+   pre-open frame — CLOSING reaches the identical mode=live-transcript,
+   not-open combination but with entrancePhase="idle", and must keep
+   playing its own already-correct animated collapse. Finding 1, review
+   2026-09-08.
+
+   entrancePhase alone is not enough, though: close() leaves `mounted` true
+   for LIVE_TRANSCRIPT_CLOSE_UNMOUNT_MS (320ms) so the collapse can finish
+   visually, and a reopen INSIDE that window re-enters entrancePhase=
+   "encapsulate" too — which would snap a still-mid-collapse frame straight
+   to the closed corner-box (a pop) instead of letting its already-in-flight
+   transition reverse smoothly. data-panel-fresh-mount="true" is the second,
+   required condition: it is true only when `mounted` was actually false
+   immediately before this open (a real rest -> mounted transition), so a
+   reopen while already mounted does not match this rule at all. Finding B,
+   review 2026-09-08 (fix round 2). */
+.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-entrance-phase="encapsulate"][data-panel-fresh-mount="true"]:not(.expanding-panel-surface-open) {
+  transition: none;
+}
+
 /* Agent close first fades its complex inner tree while the surface is still
    geometrically stable. The following pill-to-surface contraction can then be
    composited as a simple layer instead of repainting markdown, controls, and
    shimmer descendants inside a changing clip on every frame. */
 .expanding-panel-surface[data-panel-mode="assistant"] > * {
-  transition: opacity 100ms ease-out;
+  transition:
+    opacity var(--motion-close-fade-ms, 120ms) ease-out,
+    transform 160ms ease-out;
 }
 
 .expanding-panel-surface[data-panel-mode="assistant"][data-panel-closing="true"] > * {
   pointer-events: none;
   opacity: 0;
+  transform: translateY(4px);
 }
 
 /* Live Transcript stages its empty surface before buffered text becomes visible. */
@@ -399,9 +451,9 @@
    from any resting dock into either panel footer; no left/right auto jump. */
 .voice-pill-position {
   transition:
-    left var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
-    bottom var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1),
-    transform var(--voice-pill-travel-duration, 320ms) cubic-bezier(0.2, 0, 0, 1);
+    left var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1)),
+    bottom var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1)),
+    transform var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1));
   will-change: left, bottom, transform;
 }
 
@@ -480,6 +532,31 @@
   to {
     background-position: -120% 0;
   }
+}
+
+/* Live transcript tail: the newest words sit at 62% and settle to full
+   opacity when they leave the active window — an opacity change only, so
+   nothing repaints text every frame. This supersedes the stepped
+   background-clip sweep above for the transcript; that rule stays in the
+   stylesheet (nothing is removed in this change) and is simply no longer
+   referenced by it.
+
+   ONE property, ONE duration, deliberately: index.css's blanket
+   reduced-motion rule forces transition-property to its own fixed list
+   without touching transition-duration, and a comma-separated duration would
+   then be matched by POSITION against that list and cycle onto the wrong
+   property (the trap .voice-pill-position hit, and the base
+   .assistant-pill-presence rule after it). A single value broadcasts to all
+   of them, so this rule needs no reduced-motion override at all: opacity is
+   in that forced list and keeps its normal speed there, which is exactly what
+   index.css's own policy asks for. */
+.live-transcript-word {
+  opacity: 1;
+  transition: opacity 240ms ease-out;
+}
+
+.live-transcript-word[data-active="true"] {
+  opacity: 0.62;
 }
 
 /* Let the retained answer recede before the surface sweep begins. The filter
@@ -617,10 +694,113 @@
   color: oklch(0.27 0.09 285);
 }
 
+/* The streaming caret, injected into the END OF THE LAST BLOCK of the tail by
+   rehypeStreamCaret rather than rendered after the markdown container. As a
+   sibling of a block-level element it started its own line every time, which
+   is what Josh saw on the rig 2026-09-08: "a cursor hangs below the end of
+   every sentence, almost like a line break." Same size, colour and blink as
+   the block-level caret it replaces (AssistantPanel keeps that one as the
+   fallback for a tail with no block to host the caret, and for code blocks).
+   Written as a real class, not Tailwind utilities: the class name is produced
+   inside a rehype plugin, where the utility scanner cannot see it. */
+.assistant-stream-caret {
+  display: inline-block;
+  width: 0.125rem;
+  height: 1rem;
+  margin-left: 0.125rem;
+  vertical-align: middle;
+  background: color-mix(in oklab, var(--color-foreground) 70%, transparent);
+  animation: agent-cursor-blink 1s ease-in-out infinite;
+}
+
+/* Streaming reply: each newly arrived word rises in once on the word spring.
+   Settled words carry no animation; their spans stay in place as the tail grows. */
+.assistant-word[data-rise="true"] {
+  display: inline-block;
+  animation: assistant-word-rise var(--motion-word-ms, 320ms)
+    var(--motion-word-ease, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+@keyframes assistant-word-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Exit "zoop": the pill collapses into its own centre with a 2px squash, the
+   opacity leaving over the last 40%; the native window hides after (main's
+   PILL_HIDE_FALLBACK_MS only covers a renderer that never answers). Show is
+   the mirror on the show spring, whose ~4% overshoot is the spring's own —
+   springLinearEasing(380, 28) in springEasing.ts, not a separate keyframe.
+   This rule also replaces the wrapper's former Tailwind `transition-opacity
+   duration-150`: an unlayered shorthand here beats that layered utility for
+   transition-property, so leaving both would have been a silent conflict. */
+.assistant-pill-presence {
+  --pill-exit-origin: calc(100% - 20px) 50%;
+  transition:
+    transform var(--motion-show-ms, 260ms) var(--motion-show-ease, cubic-bezier(0.2, 0, 0, 1)),
+    opacity var(--motion-close-fade-ms, 120ms) linear;
+}
+
+.assistant-pill-presence[data-horizontal-direction="left"] {
+  --pill-exit-origin: 20px 50%;
+}
+
+.voice-pill-position-center .assistant-pill-presence {
+  --pill-exit-origin: 50% 50%;
+}
+
+/* Scoped away from the Assistant footer's own phases on purpose. The rule at
+   the top of this file gives this SAME element
+   `transform-origin: var(--assistant-footer-origin)` (right/left center),
+   which the footer's enter/retreat keyframes pivot their scale(0.68) on; an
+   unscoped override here would silently retune that shipped choreography.
+   A hide never happens while a footer phase is set (the panel must be
+   unmounted first), so the exit and its return both read the pill's own
+   centre and the origin never snaps mid-transition. */
+.assistant-pill-presence:not([data-assistant-footer-phase]) {
+  transform-origin: var(--pill-exit-origin);
+}
+
+.assistant-pill-presence[data-pill-exit="zoop"] {
+  transform: scale(0.04, 0.03);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--motion-zoop-ms, 200ms) var(--motion-zoop-ease, cubic-bezier(0.4, 0, 1, 1)),
+    opacity 80ms linear 120ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .expanding-panel-surface {
     transition-duration: 1ms;
   }
+
+  /* .voice-pill-position needs no override here (fix round 1's Finding-4 fix
+     is deleted, not repaired — fix round 2, Finding A, review 2026-09-08,
+     measured in a real browser): its left/bottom/transform are ALREADY
+     excluded from transition-property by index.css's `*, *::before,
+     *::after` reduced-motion rule (stronger than any duration this file
+     could set — a true no-transition, not just a fast one). Opacity is not
+     the same story in both modes, though (correction, fix round 3, review
+     2026-09-08, measured in a real browser — this comment previously and
+     wrongly claimed opacity never transitions here "in EITHER motion
+     mode"): this element never transitions opacity in NORMAL motion (its
+     own unlayered shorthand already beats Tailwind's layered
+     `transition-opacity duration-150` for transition-property there), but
+     under REDUCED motion that SAME index.css rule forces opacity INTO
+     transition-property for every element, so here it inherits this
+     element's own --voice-pill-travel-duration — 180/320/440ms depending on
+     panel state (resolveVoicePillTravelPresentation sets it) — instead of
+     snapping. That is a real, deliberate behaviour change from the 1ms this
+     deleted rule used to force, left as the browser's own outcome: it reads
+     closer to index.css's own "opacity keeps its meaning" policy than 1ms
+     did. See the covering test in voicePillStructure.test.js for the full
+     reasoning and its own explicit limits (source-text checks only — this
+     needs a real browser to verify computed duration, which is exactly how
+     both this rule's original ineffectiveness and this comment's later
+     wrong claim were caught). */
 
   .hands-free-tip-card {
     animation: none;
@@ -633,9 +813,74 @@
     transition-delay: 0ms !important;
   }
 
+  /* This rule's own transition is a two-value list (opacity, transform);
+     index.css's blanket reduced-motion rule forces transition-property to
+     its own fixed list (opacity survives, transform does not) without
+     touching transition-duration, so a value here is matched by POSITION
+     against the new property list, not by name — the same trap
+     .voice-pill-position hit. A single value broadcasts to every property in
+     that forced list instead of cycling onto the wrong one. Measured with the
+     override removed: 0.12s, 0.16s against an eight-property list, so opacity
+     lands on 0.12s by luck and every property after it cycles.
+
+     The value is the fade, NOT 1ms (corrected, Finding 5, final review
+     2026-09-08). Transform is already gone from the property list, so opacity
+     is the only thing left here — and index.css's own stated policy is that
+     opacity keeps its normal speed because it carries meaning. 1ms deleted
+     the fade rather than de-animating movement, which is the same call that
+     was ruled against on Task 4 and again on Task 9, and is why the pill's own
+     rule below carries var(--motion-close-fade-ms) instead. */
+  .expanding-panel-surface[data-panel-mode="assistant"] > * {
+    transition-duration: var(--motion-close-fade-ms, 120ms) !important;
+  }
+
   .assistant-response-actions,
   .assistant-pill-presence {
     animation-duration: 1ms !important;
+  }
+
+  /* The pill's EXIT transition only. index.css's blanket rule already strips
+     transform from transition-property here (so the collapse pose applies
+     instantly and no transform transitionend can ever fire — which is why
+     usePillExitChoreography stops waiting for one under reduced motion), but
+     it leaves opacity IN and never touches duration or delay. Left alone the
+     80ms-after-120ms fade would still run against a window that is already
+     going. ONE value each, never a list: duration and delay are matched by
+     POSITION against index.css's forced property list, so a comma-separated
+     list would cycle onto the wrong property — the same trap the pill's
+     travel rule hit. A single value broadcasts to all of them.
+
+     Deliberately NOT on the bare .assistant-pill-presence (fix round 1,
+     finding 4 — review measured 0.001s reaching the tip card in a real
+     browser): that rule also owns the tip card's in-place-of-pill opacity
+     swap, and collapsing it to 1ms works against index.css's own stated
+     policy that opacity keeps its normal speed. Scoping to the exit keeps
+     that swap — and the unzoop's fade-back — off this 1ms; the rule below is
+     what actually holds them at the fade duration. */
+  .assistant-pill-presence[data-pill-exit="zoop"] {
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  /* The tip card's in-place-of-pill opacity swap (App.jsx toggles `opacity-0`
+     on this element) and the unzoop's fade-back. Measured in a real browser
+     BEFORE this rule existed: that swap landed at 260ms, not the 120ms the
+     base rule names — scoping the 1ms above to the exit was necessary but not
+     sufficient, because the base rule's own shorthand still reaches here.
+
+     Its `transition` contributes a TWO-value transition-duration (0.26s for
+     transform, 0.12s for opacity, in that order). index.css's blanket rule
+     forces transition-property to its own list — opacity FIRST — and leaves
+     transition-duration alone, so the durations are matched by POSITION and
+     opacity picked up the TRANSFORM's 0.26s. Splitting that shorthand into
+     named longhands cannot fix it: once transition-property is a fixed,
+     unrelated list there is no syntax for "this duration applies to THESE
+     properties". ONE value, never a list, is the remedy this file already
+     uses twice — it broadcasts to every property in the forced list instead
+     of cycling onto the wrong one. Not 1ms, for the reason stated just
+     above: this restores the intended fade, it does not delete it. */
+  .assistant-pill-presence {
+    transition-duration: var(--motion-close-fade-ms, 120ms) !important;
   }
 
   .processing-signal-glow[data-active="true"],
@@ -670,5 +915,43 @@
 
   .assistant-response-content-updating {
     filter: none;
+  }
+
+  .assistant-word[data-rise="true"] {
+    animation: none;
+  }
+
+  /* The copy tick's pop-in needs no rule here: it's an inline CSS
+     *animation* (Check's `animation: tool-check-pop 300ms ...`), and the
+     universal `*, *::before, *::after` rule above already forces every
+     element's animation-duration to 0.01ms !important, regardless of an
+     inline style's own (non-important) duration — so the pop is already
+     reduced to imperceptible without a rule targeting it here.
+     The label crossfade needs one: it's an inline *transition*, and that
+     same universal rule only forces transition-property (already
+     includes opacity), never transition-duration — left alone, its 320ms
+     would run unshortened under reduced motion. A single value here
+     broadcasts to every property in the universal rule's forced list
+     (unlike a multi-value list, which can cycle onto the wrong property —
+     the trap .voice-pill-position hit, above); that follows from the CSS
+     Transitions spec's cycling rule, not from a real-browser measurement,
+     which this rule has not had.
+     Fix round 1: targets .assistant-copy-label-layer, not
+     .assistant-copy-label — the crossfade moved from one swapped span to
+     two always-mounted, stacked layers (fix round 1, finding 1: the
+     one-span version was a fade-to-blank then a SECOND fade-in, not a
+     crossfade), and both layers carry this class, so one rule shortens
+     both the outgoing and the incoming fade together. That is also what
+     closes finding 2 (a ~319ms blank hold under reduced motion): the old
+     design still needed the JS revert timer's full 320ms to swap the DOM
+     content before anything could reappear, no matter how short the CSS
+     transition was; the two-layer design has no DOM-content-swap step for
+     reduced motion to wait behind — both opacities move (and, here,
+     finish moving in 1ms) independently of when the JS timer eventually
+     unmounts the now-invisible outgoing layer. Not independently
+     re-measured in a real browser under reduced motion — see the covering
+     test's own comment for exactly what is and is not proven here. */
+  .assistant-copy-label-layer {
+    transition-duration: 1ms !important;
   }
 }

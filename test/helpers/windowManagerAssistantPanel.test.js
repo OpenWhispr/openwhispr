@@ -144,10 +144,16 @@ Module._load = originalLoad;
 
 function fakeWindow({ visible }) {
   const calls = [];
+  // IPC messages are recorded apart from `calls` on purpose: the assertions
+  // below are about window verbs, and Task 9's pill-will-show/pill-will-hide
+  // would otherwise change every one of them.
+  const messages = [];
   let isVisible = visible;
   return {
     calls,
+    messages,
     window: {
+      webContents: { send: (channel, payload) => messages.push({ channel, payload }) },
       isDestroyed: () => false,
       isVisible: () => isVisible,
       isMinimized: () => false,
@@ -181,7 +187,7 @@ function makeManager(windowState) {
   manager._notifyMainWindowHorizontalDirection = () => undefined;
   manager.showAgentDictationPill = () => undefined;
   manager.hideAgentDictationPill = () => undefined;
-  return { manager, calls: fake.calls };
+  return { manager, calls: fake.calls, messages: fake.messages };
 }
 
 test("the Agent companion follows the edge opposite the panel", () => {
@@ -364,32 +370,71 @@ test("live transcript events are mirrored to the companion only for plain dictat
 });
 
 test("opening the assistant panel surfaces a hidden pill window before focusing it", () => {
-  const { manager, calls } = makeManager({ visible: false });
+  const { manager, calls, messages } = makeManager({ visible: false });
   manager.setAssistantPanelOpen(true);
   assert.deepEqual(calls, ["showInactive", "focusable:true", "focus"]);
+  // Fix round 1, finding 3: this is an accepted show like any other, so it
+  // owes the renderer the same unzoop cue. Without it the pill's return here
+  // depends entirely on the visibilitychange fallback — the one route whose
+  // behaviour would differ, for no stated reason.
+  assert.deepEqual(
+    messages.map((message) => message.channel),
+    ["pill-will-show"]
+  );
+});
+
+test("a panel opening while the pill is mid-zoop still tells it to come back", () => {
+  const { manager, calls, messages } = makeManager({ visible: true });
+  // The window is still on screen (the zoop has not finished), so nothing is
+  // surfaced — but the pill is collapsed and must be told to unzoop anyway.
+  manager.setAssistantPanelOpen(true);
+  assert.deepEqual(calls, ["focusable:true", "focus"]);
+  assert.deepEqual(
+    messages.map((message) => message.channel),
+    ["pill-will-show"]
+  );
 });
 
 test("showDictationPanel still surfaces a hidden window while the panel is open", () => {
-  const { manager, calls } = makeManager({ visible: false });
+  const { manager, calls, messages } = makeManager({ visible: false });
   // Panel open but the window got hidden afterwards (tray Hide raced the open).
   manager._assistantPanelOpen = true;
   manager.showDictationPanel({ focus: true });
   assert.deepEqual(calls, ["showInactive", "focus"]);
+  // Task 9: an accepted show always tells the renderer to unzoop, including
+  // on this early-return path — a renderer-initiated hide leaves the pill in
+  // its exited pose with no main-side timer to cancel, so without this the
+  // window would come back with an invisible pill.
+  assert.deepEqual(
+    messages.map((message) => message.channel),
+    ["pill-will-show"]
+  );
 });
 
 test("hideDictationPanel refuses while an assistant command is busy or the panel is open", () => {
-  const { manager, calls } = makeManager({ visible: true });
+  const { manager, calls, messages } = makeManager({ visible: true });
   manager.setAssistantPanelBusy(true);
-  manager.hideDictationPanel();
+  assert.equal(manager.hideDictationPanel(), false);
   assert.deepEqual(calls, [], "a thinking command must not lose its window");
+  assert.deepEqual(messages, [], "and it is never even asked to zoop");
   manager.setAssistantPanelBusy(false);
   manager.setAssistantPanelOpen(true);
   calls.length = 0;
-  manager.hideDictationPanel();
+  assert.equal(manager.hideDictationPanel(), false);
   assert.deepEqual(calls, []);
   manager.setAssistantPanelOpen(false);
   calls.length = 0;
-  manager.hideDictationPanel();
+  messages.length = 0;
+  // Task 9: an accepted hide asks the renderer to zoop first and hides only
+  // once its hide-window IPC lands (or the fallback expires — see
+  // windowManagerPillHide.test.js). The renderer's own request skips that.
+  assert.equal(manager.hideDictationPanel(), true);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(
+    messages.map((message) => message.channel),
+    ["pill-will-hide"]
+  );
+  assert.equal(manager.hideDictationPanel({ animate: false }), true);
   assert.deepEqual(calls, ["hide"]);
 });
 
@@ -680,7 +725,7 @@ test("onboarding suppresses the companion pill like every popup surface", () => 
   assert.equal(createdBrowserWindows.length, 0);
 });
 
-test("a ready but hidden companion never counts as an available surface", () => {
+test("a ready but hidden companion never counts as an available surface", (t) => {
   createdBrowserWindows.length = 0;
   const manager = new WindowManager();
   manager.setOnboardingActive(false);
@@ -698,15 +743,20 @@ test("a ready but hidden companion never counts as an available surface", () => 
 
   // Onboarding hides the pill without dropping readiness; a hidden surface
   // cannot show a recording, so dictation must fail closed rather than start
-  // invisibly.
+  // invisibly. The hide now fades on the renderer's clock (Task 7) before
+  // the native window actually hides, so this advances past that fade
+  // window instead of asserting synchronously.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   manager.hideAgentDictationPill();
+  t.mock.timers.tick(200);
   assert.equal(pill.isVisible(), false);
   assert.equal(manager._shouldBlockDictationInput("dictation"), true);
-  // The blocked press re-kicks the show, so the next press can land.
+  // The blocked press re-kicks the show, so the next press can land. The
+  // re-show itself is still synchronous — only the hide fades.
   assert.equal(pill.isVisible(), true);
 });
 
-test("entering onboarding hides an already-visible companion pill", () => {
+test("entering onboarding hides an already-visible companion pill", (t) => {
   createdBrowserWindows.length = 0;
   const manager = new WindowManager();
   manager.setOnboardingActive(false);
@@ -724,7 +774,11 @@ test("entering onboarding hides an already-visible companion pill", () => {
   pill.webContentsListeners.get("did-finish-load")();
   assert.equal(pill.isVisible(), true);
 
+  // The hide now fades on the renderer's clock (Task 7) before the native
+  // window actually hides — advance past that fade window.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   manager.setOnboardingActive(true);
+  t.mock.timers.tick(200);
 
   assert.equal(pill.isVisible(), false);
 });

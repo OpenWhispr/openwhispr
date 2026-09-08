@@ -1,4 +1,6 @@
 import { LIVE_TRANSCRIPT_SURFACE_LIMITS } from "./voiceSurfaceGeometry.mjs";
+import { MOTION_TIMING } from "../utils/springEasing";
+import { waitForTransitionEnd, settleFallbackMs } from "../utils/transitionSettled";
 
 export { LIVE_TRANSCRIPT_SURFACE_LIMITS };
 
@@ -15,10 +17,98 @@ export const LISTENING_ENTRANCE_TIMING = Object.freeze({
   // Give the Beam enough time to read as an intentional thinking state before
   // the persistent control begins changing shape.
   thinkingMs: 420,
-  expansionMs: 300,
+  // The morph spring, played over its pinned duration (Task 1's MOTION_TIMING) —
+  // imported, not re-hardcoded, so a change there can't silently stop reaching
+  // the pill.
+  expansionMs: MOTION_TIMING.listeningExpansionMs,
   // Hold the finished footprint briefly so the waveform reveal cannot be
   // perceived as part of the width animation.
   waveformDelayMs: 100,
+});
+
+/**
+ * What a shrinking pill window should wait for before the native window
+ * snaps down. Only the pill's own compact-to-idle narrow (RECORDING ->
+ * BASE) has a width transition worth observing — every other shrink (a
+ * menu or toast closing, the hands-free tip retiring) leaves the pill's own
+ * footprint untouched, so there is nothing here to wait for and it resolves
+ * at once. Reduced motion strips `width` from the pill's transition-property
+ * outright (src/index.css's blanket rule), so even the pill's own narrow has
+ * no real transitionend to wait for there either — waiting anyway would just
+ * park the window at the old size for the whole fallback window, for
+ * nothing.
+ */
+export function resolvePillShrinkWait({ target, prev, prefersReducedMotion, el }) {
+  if (prev !== "RECORDING" || target !== "BASE") return Promise.resolve();
+  if (prefersReducedMotion) return Promise.resolve("reduced-motion");
+  return waitForTransitionEnd(el, "width", settleFallbackMs(LISTENING_ENTRANCE_TIMING.expansionMs));
+}
+
+/**
+ * Whether the pill's exit must wait for its "zoop" (the transform collapse in
+ * `.assistant-pill-presence[data-pill-exit="zoop"]`) before the native window
+ * hides. Two states have no transform transition to wait for at all, and
+ * waiting anyway would park the window on screen for the whole fallback
+ * window instead of choreographing anything:
+ *
+ * - Reduced motion. src/index.css's blanket `*, *::before, *::after` rule
+ *   sets `transition-property` with `!important` to a list that EXCLUDES
+ *   transform, so the transform transitionend this waits on can structurally
+ *   never fire — the same shape resolvePillShrinkWait above short-circuits
+ *   for `width`. The pose still applies (instantly), so the window hides on
+ *   exactly the hard cut reduced motion asks for.
+ * - The pill is already collapsed (a repeat hide against a window that is
+ *   already gone): re-applying a pose the element already holds starts no
+ *   transition, so nothing would ever settle.
+ */
+export function shouldAwaitPillZoop({ prefersReducedMotion, alreadyExited }) {
+  return !prefersReducedMotion && !alreadyExited;
+}
+
+/**
+ * Whether the window-size ladder still needs to reserve HANDS_FREE_TIP room.
+ * Tracks the Hold migration card through its whole MOUNTED lifetime (visible
+ * OR exiting), not its `visible` sub-state alone: resolvePillShrinkWait
+ * above correctly resolves a HANDS_FREE_TIP -> BASE shrink at once (the
+ * pill's own width is not part of that transition), so this flag going
+ * false the instant the card starts exiting — instead of when it actually
+ * unmounts, 200ms later — would let the window shrink out from under the
+ * still-fading card (`.hands-free-tip-card[data-exiting="true"]`,
+ * dictation-panel.css) instead of waiting for it to finish. The hands-free
+ * tip card itself has no such `exiting` sub-state (its own `tip` stays
+ * non-null through its own fade), so widening only ever changes the
+ * migration card's half of this decision.
+ */
+export function resolveHandsFreeTipLadderVisible({
+  tip,
+  holdMigrationCardVisible,
+  holdMigrationCardExiting,
+}) {
+  return tip !== null || holdMigrationCardVisible || holdMigrationCardExiting;
+}
+
+// The two safety nets on the Agent panel's content fade. The fade itself is
+// ONE duration — MOTION_TIMING.closeFadeMs, emitted to CSS as
+// --motion-close-fade-ms — and both nets derive from it here so a retune moves
+// all three together instead of leaving three unrelated numbers describing the
+// same 120ms (Finding 2, final review 2026-09-08).
+//
+// `reportMs` is VoiceModePanelCore's. It reports the children's real opacity
+// transitionend when one arrives, and falls back to this when none can (a
+// torn-down node, or a child with no computed opacity delta). Reduced motion
+// is NOT such a case: src/index.css's blanket rule forces `opacity` INTO
+// transition-property, so the event still fires there.
+//
+// `guaranteeMs` is useAssistantPanel's, and is deliberately one further grace
+// window out. The core REPORTS and the hook GUARANTEES, so the hook's net must
+// never fire first — before this, the hook's 160ms undercut the core's 220ms
+// and inverted exactly the relationship both call sites' comments claim. Both
+// land on the same idempotent completeContentFade, so the ordering buys
+// truthful comments rather than a different outcome.
+const ASSISTANT_CONTENT_FADE_REPORT_MS = settleFallbackMs(MOTION_TIMING.closeFadeMs);
+export const ASSISTANT_CLOSE_TIMING = Object.freeze({
+  reportMs: ASSISTANT_CONTENT_FADE_REPORT_MS,
+  guaranteeMs: settleFallbackMs(ASSISTANT_CONTENT_FADE_REPORT_MS),
 });
 
 export const ASSISTANT_FOOTER_TRANSITION_TIMING = Object.freeze({
@@ -101,6 +191,42 @@ export function getLiveTranscriptEntranceTimeline(timing = LIVE_TRANSCRIPT_ENTRA
   };
 }
 
+// How far BEHIND its own stage transition each entrance gate's fallback timer
+// sits. The gate is a race — the shell's clip-path transitionend against this
+// timer — so the timer must never win a healthy frame, only rescue a shell
+// that never reports (a torn-down node, a stage whose clip-path happened not
+// to change). Deliberately smaller than transitionSettled's own
+// SETTLE_FALLBACK_GRACE_MS: this gate's beat is followed by more entrance, so
+// a late fallback is felt as a stall rather than absorbed.
+export const LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS = 80;
+
+/**
+ * How the Live Transcript entrance waits for one of its two gated stages.
+ *
+ * Normally it races the shell's own `clip-path` transitionend against the
+ * stage's published duration plus a grace window, so the next beat starts
+ * when the surface has genuinely finished moving rather than when a timer
+ * guesses it has.
+ *
+ * Under reduced motion there is no event to race. src/index.css's blanket
+ * `*, *::before, *::after` rule sets `transition-property` with `!important`
+ * to a list that EXCLUDES clip-path, so the stage clip simply applies and no
+ * transitionend can ever fire — the same shape resolvePillShrinkWait handles
+ * for `width` and shouldAwaitPillZoop for `transform`. Arming the gate anyway
+ * would hold every beat for its whole fallback window and make the entrance
+ * SLOWER with reduced motion on than off, so the gate is skipped and the beat
+ * keeps its original published instant instead.
+ */
+export function resolveLiveTranscriptStageGate({
+  stage,
+  prefersReducedMotion,
+  timing = LIVE_TRANSCRIPT_ENTRANCE_TIMING,
+}) {
+  const stageDurationMs = stage === "encapsulated" ? timing.encapsulateMs : timing.horizontalMs;
+  if (prefersReducedMotion) return { awaitEvent: false, waitMs: stageDurationMs };
+  return { awaitEvent: true, waitMs: stageDurationMs + LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS };
+}
+
 export function resolveLiveTranscriptEntrancePresentation(phase) {
   const effectivePhase = phase === "idle" ? "encapsulate" : phase;
   const encapsulating = effectivePhase === "encapsulate";
@@ -148,6 +274,32 @@ export function resolveVoicePillDock({
   if (assistantOpen) return `assistant-bottom-${horizontalDirection}`;
   if (panelStartPosition === "center") return "center";
   return `bottom-${horizontalDirection}`;
+}
+
+/**
+ * How long the persistent pill takes to glide to its next dock, and on what
+ * easing. The Assistant panel's shell springs open on the pinned morph spring
+ * (see .expanding-panel-surface in dictation-panel.css); the pill's travel
+ * plays the SAME spring so it arrives at the footer dock as the shell
+ * finishes opening, instead of the two motions disagreeing. Live Transcript's
+ * entrance is out of scope here and keeps its own established timings and the
+ * transition's default CSS easing (no override).
+ */
+export function resolveVoicePillTravelPresentation({
+  assistantMounted,
+  liveTranscriptOpen,
+  liveTranscriptEntrancePhase,
+}) {
+  if (assistantMounted) {
+    return { durationMs: MOTION_TIMING.morphMs, ease: "var(--motion-morph-ease)" };
+  }
+  return {
+    durationMs:
+      liveTranscriptOpen && liveTranscriptEntrancePhase === "encapsulate"
+        ? LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs
+        : LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs,
+    ease: undefined,
+  };
 }
 
 export function getListeningEntranceTimeline(timing = LISTENING_ENTRANCE_TIMING) {
@@ -233,16 +385,99 @@ export function resolveVoiceActivityPresentation({
 }
 
 /**
- * Keep Agent identity for the complete request/panel lifecycle, but do not let
- * the audio manager's last routing flag brand a later idle dictation pill.
+ * Keep Agent identity for the complete request lifecycle and the open panel,
+ * end it at close intent so the colour fades inside the close spring, and
+ * hold it through an auto-hide exit when asked (the mark leaves with the
+ * pill; the leaf→ring morph runs while the window is hidden). Never let the
+ * audio manager's last routing flag brand a later idle dictation pill.
  */
 export function resolveAgentModeActive({
   isAssistantVoice,
   isRecording,
   isProcessing,
   assistantPanelMounted,
+  assistantPanelClosing = false,
+  heldThroughHide = false,
 }) {
-  return Boolean((isAssistantVoice && (isRecording || isProcessing)) || assistantPanelMounted);
+  return Boolean(
+    (isAssistantVoice && (isRecording || isProcessing)) ||
+    (assistantPanelMounted && !assistantPanelClosing) ||
+    heldThroughHide
+  );
+}
+
+/**
+ * Whether closing the Agent panel should hold its mark through the pill's
+ * exit (the `heldThroughHide` input above). Only an auto-hide exit needs it:
+ * the window is on its way out, and the leaf→ring morph would otherwise
+ * finish just before the pill vanishes, so the last thing a user who had
+ * just talked to the Agent sees is the pill turning into the dictation logo.
+ * With auto-hide off the pill stays on screen and that morph is a wanted,
+ * visible return to the dictation identity.
+ */
+export function shouldHoldAgentMarkThroughHide({ floatingIconAutoHide, assistantPanelMounted }) {
+  return Boolean(floatingIconAutoHide && assistantPanelMounted);
+}
+
+/**
+ * Everything OTHER than the Agent panel's own close that keeps the floating
+ * pill on screen: the auto-hide preconditions minus the panel itself. ONE
+ * list, read both by the auto-hide gate and by the mark-hold release below,
+ * because a release that guessed at a different set would either fire during
+ * the very close it is waiting for or miss the case that stranded it
+ * (Finding 3, final review 2026-09-08).
+ *
+ * `isPreparing` is deliberately absent: App.jsx's isVisuallyProcessing is
+ * already isProcessing || isPreparing || isStopping.
+ */
+export function isPillClaimedApartFromAssistant({
+  isRecording,
+  isVisuallyProcessing,
+  toastCount,
+  dictationErrorPillHandoffActive,
+  handsFreeTipVisible,
+  holdMigrationCardVisible,
+  liveTranscriptMounted,
+}) {
+  return Boolean(
+    isRecording ||
+    isVisuallyProcessing ||
+    toastCount !== 0 ||
+    dictationErrorPillHandoffActive ||
+    handsFreeTipVisible ||
+    holdMigrationCardVisible ||
+    liveTranscriptMounted
+  );
+}
+
+/**
+ * Whether a held Agent mark must be released while the pill is still on
+ * screen. The hold only exists to carry the leaf out of view, so anything
+ * that keeps the pill there has to drop it: a new recording, which owns the
+ * identity itself (a dictation wears the ring; an Agent command re-earns the
+ * leaf through isAssistantVoice), auto-hide being switched off, which cancels
+ * the exit the hold was staged for, and — `autoHideExitCancelled` — some
+ * OTHER surface claiming the pill before the staged exit could run.
+ *
+ * That last one closes Finding 3 (final review 2026-09-08). Decision 8 listed
+ * only three releases, the third being the hideWindow IPC settling (not
+ * derived state, so it lives at that call site). The gap: with auto-hide on,
+ * a toast appearing inside the 500ms auto-hide delay makes the auto-hide
+ * branch's condition false, so the hide is never even SCHEDULED — no IPC ever
+ * settles, and the idle, fully visible pill wore the Agent leaf for the whole
+ * life of the toast. Same for a hands-free tip, a mounted live transcript, a
+ * dictation-error handoff, or processing starting. The caller passes
+ * "the auto-hide preconditions stopped holding, and it is not the Agent
+ * panel's own close still finishing" — the panel unmounting is what the hold
+ * is waiting for, never a reason to drop it.
+ */
+export function shouldReleaseAgentMarkHold({
+  isRecording,
+  isPreparing,
+  floatingIconAutoHide,
+  autoHideExitCancelled = false,
+}) {
+  return Boolean(isRecording || isPreparing || !floatingIconAutoHide || autoHideExitCancelled);
 }
 
 /**

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  ASSISTANT_CLOSE_TIMING,
   getAssistantFooterTransitionTimeline,
   resolveAssistantThinkingTransition,
 } from "../helpers/voicePillPresentation";
@@ -7,9 +8,28 @@ import {
   closeAssistantSessionState,
   discardPendingAssistantCommand,
 } from "../helpers/assistantSessionState";
+import { MOTION_TIMING } from "../utils/springEasing";
+import { settleFallbackMs } from "../utils/transitionSettled";
 
-const ASSISTANT_TRANSITION_MS = 320;
-const ASSISTANT_CONTENT_FADE_FALLBACK_MS = 260;
+// The shell's own clip-path transitionend (VoiceModePanelCore's onCollapsed)
+// is the real signal; this is only the safety net (a torn-down node, a
+// missed event, or reduced motion — see completeContentFade's own comment on
+// why that last case can never reach the real event at all). Exported so
+// tests can derive their expectations from the real constant instead of a
+// retyped literal.
+//
+// DERIVED, never hand-written (Finding 2, final review 2026-09-08). This must
+// stay >= the morph it is a net for: the shell's clip-path runs for
+// MOTION_TIMING.morphMs, and a fallback that fired first would unmount the
+// panel mid-transition — which hands useMainWindowSizeOwner's
+// returning-from-panel branch a native resize DURING a visible transition,
+// the one thing spec section 3 forbids. Written by hand it happened to equal
+// settleFallbackMs(morphMs); retuning morphMs 440 -> 600 would have broken it
+// silently, because the only test on it imported the constant itself.
+export const ASSISTANT_COLLAPSE_FALLBACK_MS = settleFallbackMs(MOTION_TIMING.morphMs);
+// The hook's guarantee on the CONTENT fade, one grace window past the core's
+// own report — see ASSISTANT_CLOSE_TIMING for why that ordering matters.
+export const ASSISTANT_CONTENT_FADE_FALLBACK_MS = ASSISTANT_CLOSE_TIMING.guaranteeMs;
 
 /**
  * Owns the assistant panel lifecycle: open/close choreography, the thinking
@@ -210,6 +230,16 @@ export function useAssistantPanel({
     window.electronAPI?.setAssistantPanelBusy?.(assistantPanelBusy);
   }, [assistantPanelBusy]);
 
+  // The shell reports its own clip-path transitionend (VoiceModePanelCore
+  // onCollapsed); the timer set by completeContentFade is only the fallback.
+  const completeCollapse = useCallback(() => {
+    if (!closingRef.current || !contentFadeCompletedRef.current) return;
+    clearTimeout(closeTimerRef.current);
+    closingRef.current = false;
+    setClosing(false);
+    setMounted(false);
+  }, []);
+
   const completeContentFade = useCallback(() => {
     if (!closingRef.current || contentFadeCompletedRef.current) return;
     const closeState = closeAssistantSessionState({
@@ -226,12 +256,24 @@ export function useAssistantPanel({
     selectionContextRef.current = null;
     hasContentRef.current = false;
     clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = setTimeout(() => {
-      closingRef.current = false;
-      setClosing(false);
-      setMounted(false);
-    }, ASSISTANT_TRANSITION_MS);
-  }, []);
+    // The shell's own clip-path never transitions under reduced motion
+    // (src/index.css's blanket reduced-motion rule strips clip-path from
+    // every element's transition-property, the same trap that cost Task 3 a
+    // review round on a stripped `width`) — so onCollapsed can structurally
+    // never fire there, and this fallback is the ONLY path to
+    // completeCollapse. Falling through to the full fallback anyway would
+    // leave a shell already snapped to its closed circle sitting inside a
+    // still-expanded native window for most of ASSISTANT_COLLAPSE_FALLBACK_MS,
+    // since nothing else shrinks the window. Resolve at once instead,
+    // mirroring resolvePillShrinkWait's own reduced-motion short-circuit.
+    const prefersReducedMotion = Boolean(
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    );
+    closeTimerRef.current = setTimeout(
+      completeCollapse,
+      prefersReducedMotion ? 0 : ASSISTANT_COLLAPSE_FALLBACK_MS
+    );
+  }, [completeCollapse]);
 
   const beginClose = useCallback(
     (preserveNativeOwnership = false) => {
@@ -249,6 +291,12 @@ export function useAssistantPanel({
       contentFadeCompletedRef.current = false;
       setErrorDownplayActive(preserveNativeOwnership);
       setClosing(true);
+      // A ready response's actions own the footer; retreat them on close
+      // intent instead of riding out their slower normal handoff duration.
+      // The footer effect's own `!open` branch resets the phase to "pill"
+      // once completeContentFade flips `open` false, so this only needs to
+      // cover the visible retreat itself.
+      if (previousResponseReadyRef.current) setFooterPhase("actions-exiting");
 
       // Native interaction ownership must be released at close intent, not after
       // the renderer's opacity transition. If the transition event is delayed or
@@ -258,9 +306,12 @@ export function useAssistantPanel({
         void window.electronAPI?.setAssistantPanelOpen?.(false);
       }
 
-      // VoiceModePanelCore reports the actual content fade when it can. Keep the
-      // lifecycle owner here as a final guarantee so a missed child transition
-      // can never strand Agent Mode in its closing state.
+      // VoiceModePanelCore reports the actual content fade when it can — from
+      // the real transitionend, or from its own fallback one grace window
+      // after the fade. This is the lifecycle owner's final guarantee, one
+      // grace window later again, so the reporter always gets first refusal
+      // and a missed child transition still can never strand Agent Mode in
+      // its closing state.
       closeTimerRef.current = setTimeout(completeContentFade, ASSISTANT_CONTENT_FADE_FALLBACK_MS);
     },
     [recordingControlsRef, completeContentFade]
@@ -333,6 +384,7 @@ export function useAssistantPanel({
     getSelectionContext,
     handleClose,
     completeContentFade,
+    completeCollapse,
     noteDictationError,
   };
 }

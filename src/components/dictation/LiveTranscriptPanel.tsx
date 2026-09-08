@@ -3,7 +3,7 @@ import { Check, ChevronDown, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { useStickToBottom } from "../../hooks/useStickToBottom";
-import { splitTranscriptForShimmer } from "../../utils/liveTranscriptPresentation";
+import { splitTranscriptForTail } from "../../utils/liveTranscriptPresentation";
 
 export type LiveTranscriptPhase = "listening" | "live" | "cleanup" | "final";
 
@@ -40,10 +40,15 @@ export function LiveTranscriptPanel({
     handleTouchEnd,
   } = useStickToBottom<HTMLDivElement>(text, { resetToTop: !text });
   const { copied, copy: handleCopy } = useCopyFeedback(text, { resetMs: COPIED_RESET_MS });
-  const shouldShimmer = Boolean(text) && (phase === "live" || phase === "cleanup" || processing);
-  const shimmerParts = useMemo(
-    () => (shouldShimmer ? splitTranscriptForShimmer(text) : { settled: text, active: "" }),
-    [shouldShimmer, text]
+  const streaming = Boolean(text) && (phase === "live" || phase === "cleanup" || processing);
+  // The tail is rendered per word in BOTH states, on the same absolute-index
+  // keys. Committing (streaming has stopped) only drops `active`, so the
+  // words that were at 62% keep their spans and transition up to full
+  // opacity; collapsing them into one settled string here would unmount them
+  // and snap instead.
+  const tailParts = useMemo(
+    () => splitTranscriptForTail(text, streaming ? {} : { activeWordCount: 0 }),
+    [streaming, text]
   );
 
   return (
@@ -64,17 +69,23 @@ export function LiveTranscriptPanel({
             : "pointer-events-none translate-y-2 opacity-0 delay-0"
         }`}
         aria-label={t("transcriptionPreview.label")}
-        aria-busy={shouldShimmer}
+        aria-busy={streaming}
         aria-hidden={!contentVisible}
         aria-live="polite"
       >
         <div>
           {text ? (
             <p className="select-text whitespace-pre-wrap break-words text-base leading-relaxed text-foreground">
-              <span>{shimmerParts.settled}</span>
-              {shimmerParts.active && (
-                <span className="inline-response-shimmer">{shimmerParts.active}</span>
-              )}
+              <span>{tailParts.settled}</span>
+              {tailParts.tail.map((word) => (
+                <span
+                  key={word.index}
+                  className="live-transcript-word"
+                  data-active={word.active || undefined}
+                >
+                  {`${word.text}${word.separator}`}
+                </span>
+              ))}
             </p>
           ) : (
             <p className="text-base leading-relaxed text-muted-foreground/55">

@@ -50,7 +50,11 @@ export function createDictationErrorPillHandoff({
         }
       } catch {
         // A destroyed native window should not strand the next renderer mount
-        // in a permanently suppressed state.
+        // in a permanently suppressed state. This ALSO absorbs a hide-window
+        // that rejects because the main process refused it (an open or busy
+        // Assistant panel owns the window) — a second reason, named here
+        // rather than left implicit, since the reveal below must happen either
+        // way (Finding 4, final review 2026-09-08).
       }
 
       if (disposed || releaseGeneration !== generation) {

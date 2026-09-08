@@ -1032,8 +1032,12 @@ declare global {
           | "selection_manager_unavailable";
         error?: string;
       }>;
+      // Rejects when the main process refuses the hide (an open or busy
+      // Assistant panel owns the window) — never resolves without a hide.
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
+      onPillWillHide?: (callback: () => void) => () => void;
+      onPillWillShow?: (callback: () => void) => () => void;
       captureDictationTarget?: () => Promise<{ success: boolean; pid: number | null }>;
       onToggleDictation: (callback: () => void) => () => void;
       onToggleVoiceAgent?: (callback: () => void) => () => void;
@@ -1084,6 +1088,8 @@ declare global {
         }) => void
       ) => () => void;
       onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
+      onAgentDictationPillWillHide?: (callback: () => void) => () => void;
+      onAgentDictationPillWillShow?: (callback: () => void) => () => void;
       showAgentDictationFinalTranscript?: (text: string) => void;
       onAgentDictationPillFinalTranscript?: (callback: (text: string) => void) => () => void;
 

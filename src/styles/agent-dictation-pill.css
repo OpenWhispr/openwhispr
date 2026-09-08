@@ -6,3 +6,38 @@ body:has(.agent-dictation-pill-window) #root {
   overflow: hidden;
   background: transparent;
 }
+
+/* Fades the whole companion window out on the same clock as the assistant
+   panel's own close instead of the native window being cut dead the instant
+   hideAgentDictationPill fires. */
+.agent-dictation-pill-window {
+  transition: opacity var(--motion-companion-fade-ms, 160ms) ease-out;
+}
+
+.agent-dictation-pill-window[data-exiting="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* A single value broadcasts to every property index.css's blanket
+     reduced-motion rule forces into transition-property here (only opacity
+     survives) instead of being matched positionally against the wrong one —
+     same convention as dictation-panel.css's own close-fade override.
+
+     The value is the fade, NOT 1ms (corrected, Finding 5, final review
+     2026-09-08). Only opacity survives here, and index.css's own policy keeps
+     opacity at its normal speed because it carries meaning. 1ms also bought
+     nothing: WindowManager waits AGENT_DICTATION_PILL_FADE_MS + 20 before the
+     native hide either way, so the window simply sat invisible for the rest of
+     that wait instead of fading out over it.
+
+     Measured with the override removed, this element already computes 0.16s
+     (its own transition is a single-property shorthand, so its one duration
+     broadcasts on its own). The rule is kept, and kept a single value, so that
+     stays true if a second property is ever added to the shorthand above —
+     which is exactly when positional matching starts biting. */
+  .agent-dictation-pill-window {
+    transition-duration: var(--motion-companion-fade-ms, 160ms) !important;
+  }
+}

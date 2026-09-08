@@ -151,6 +151,75 @@ test("the idle pill keeps its configured resting dock", async () => {
   );
 });
 
+// resolveVoicePillTravelPresentation: how long the persistent pill takes to
+// glide to its next dock, and on what easing. The Assistant panel's shell
+// springs open on the pinned morph spring (Task 4); the pill's travel plays
+// the SAME spring so it arrives at the footer as the shell finishes. Live
+// Transcript's entrance is out of scope here and must keep its own
+// established timings and the transition's default CSS easing (no override).
+test("the pill travels on the morph spring, at the morph duration, while the Assistant panel is mounted", async () => {
+  const { resolveVoicePillTravelPresentation } = await load();
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
+
+  assert.deepEqual(
+    resolveVoicePillTravelPresentation({
+      assistantMounted: true,
+      liveTranscriptOpen: false,
+      liveTranscriptEntrancePhase: "idle",
+    }),
+    { durationMs: MOTION_TIMING.morphMs, ease: "var(--motion-morph-ease)" }
+  );
+});
+
+test("the Assistant panel's travel outranks a simultaneously-open Live Transcript phase", async () => {
+  const { resolveVoicePillTravelPresentation } = await load();
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
+
+  // Both flags are only ever true together mid-handoff, but the precedence
+  // still must pick the morph spring first, not fall through to Live
+  // Transcript's encapsulate timing.
+  assert.deepEqual(
+    resolveVoicePillTravelPresentation({
+      assistantMounted: true,
+      liveTranscriptOpen: true,
+      liveTranscriptEntrancePhase: "encapsulate",
+    }),
+    { durationMs: MOTION_TIMING.morphMs, ease: "var(--motion-morph-ease)" }
+  );
+});
+
+test("Live Transcript's own pill travel keeps its established timings and the default CSS easing", async () => {
+  const { resolveVoicePillTravelPresentation, LIVE_TRANSCRIPT_ENTRANCE_TIMING } = await load();
+
+  assert.deepEqual(
+    resolveVoicePillTravelPresentation({
+      assistantMounted: false,
+      liveTranscriptOpen: true,
+      liveTranscriptEntrancePhase: "encapsulate",
+    }),
+    { durationMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs, ease: undefined },
+    "the encapsulate phase keeps its own shorter duration"
+  );
+  assert.deepEqual(
+    resolveVoicePillTravelPresentation({
+      assistantMounted: false,
+      liveTranscriptOpen: true,
+      liveTranscriptEntrancePhase: "controls",
+    }),
+    { durationMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs, ease: undefined },
+    "any other open phase falls back to the horizontal-travel duration"
+  );
+  assert.deepEqual(
+    resolveVoicePillTravelPresentation({
+      assistantMounted: false,
+      liveTranscriptOpen: false,
+      liveTranscriptEntrancePhase: "idle",
+    }),
+    { durationMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs, ease: undefined },
+    "the resting pill (neither panel mounted) also uses the horizontal-travel duration, unmodified"
+  );
+});
+
 test("Live Transcript restores stop and cancel interactions without unlocking Assistant", async () => {
   const { resolveVoicePillInteraction } = await load();
 
@@ -324,6 +393,13 @@ test("listening entrance timers preserve the visual order", async () => {
   assert.ok(timeline.expandAtMs > 0);
   assert.ok(timeline.settleAtMs > timeline.expandAtMs);
   assert.ok(timeline.waveformAtMs > timeline.settleAtMs);
+
+  const { LISTENING_ENTRANCE_TIMING } = await load();
+  assert.equal(LISTENING_ENTRANCE_TIMING.thinkingMs, 420);
+  assert.equal(LISTENING_ENTRANCE_TIMING.expansionMs, 360);
+  assert.equal(timeline.expandAtMs, 420);
+  assert.equal(timeline.settleAtMs, 780);
+  assert.equal(timeline.waveformAtMs, 880);
 });
 
 test("Agent footer retreats actions before the compact pill enters", async () => {
@@ -467,6 +543,189 @@ test("Agent identity follows active requests and the complete panel lifecycle", 
       assistantPanelMounted: false,
     }),
     false
+  );
+});
+
+test("Agent identity ends at close intent so the colour fades inside the close spring", async () => {
+  const { resolveAgentModeActive } = await load();
+  const base = { isAssistantVoice: false, isRecording: false, isProcessing: false };
+  assert.equal(resolveAgentModeActive({ ...base, assistantPanelMounted: true }), true);
+  assert.equal(
+    resolveAgentModeActive({ ...base, assistantPanelMounted: true, assistantPanelClosing: true }),
+    false
+  );
+  // A live agent request keeps its identity even while a stale panel closes.
+  assert.equal(
+    resolveAgentModeActive({
+      isAssistantVoice: true,
+      isRecording: true,
+      isProcessing: false,
+      assistantPanelMounted: true,
+      assistantPanelClosing: true,
+    }),
+    true
+  );
+});
+
+// Decision 8: with auto-hide on, the leaf->ring morph (480ms) used to finish
+// 20ms before the auto-hide cut (500ms), so a user who had just talked to the
+// Agent watched the pill turn into the dictation logo and only then vanish.
+// The mark is now held through the exit and the morph runs while the window
+// is hidden. The App state that drives this has no test harness (src/App.jsx
+// is not rendered by any test and checkJs is off), so every decision it makes
+// lives here as a pure function instead.
+
+test("a held agent mark survives the panel unmount until released, and a recording start wins", async () => {
+  const { resolveAgentModeActive } = await load();
+  const idle = { isAssistantVoice: false, isRecording: false, isProcessing: false };
+  // Held -> true after the unmount.
+  assert.equal(
+    resolveAgentModeActive({ ...idle, assistantPanelMounted: false, heldThroughHide: true }),
+    true
+  );
+  // Cleared -> false.
+  assert.equal(
+    resolveAgentModeActive({ ...idle, assistantPanelMounted: false, heldThroughHide: false }),
+    false
+  );
+  // A new dictation recording is the dictation ring regardless of the hold
+  // (App clears the hold on recording start; the resolver alone must not
+  // brand it): with the hold cleared, a plain recording is not agent.
+  assert.equal(
+    resolveAgentModeActive({
+      isAssistantVoice: false,
+      isRecording: true,
+      isProcessing: false,
+      assistantPanelMounted: false,
+      heldThroughHide: false,
+    }),
+    false
+  );
+});
+
+test("only an auto-hide exit holds the agent mark past the panel close", async () => {
+  const { shouldHoldAgentMarkThroughHide } = await load();
+  assert.equal(
+    shouldHoldAgentMarkThroughHide({ floatingIconAutoHide: true, assistantPanelMounted: true }),
+    true,
+    "the pill is about to leave — carry the leaf out with it"
+  );
+  assert.equal(
+    shouldHoldAgentMarkThroughHide({ floatingIconAutoHide: false, assistantPanelMounted: true }),
+    false,
+    "the pill stays on screen, so the leaf->ring morph is a wanted, visible return"
+  );
+  assert.equal(
+    shouldHoldAgentMarkThroughHide({ floatingIconAutoHide: true, assistantPanelMounted: false }),
+    false,
+    "no Agent panel was closed, so there is no agent identity to hold"
+  );
+});
+
+test("a held agent mark is released by anything that keeps the pill on screen", async () => {
+  const { shouldReleaseAgentMarkHold } = await load();
+  const staged = { isRecording: false, isPreparing: false, floatingIconAutoHide: true };
+  assert.equal(
+    shouldReleaseAgentMarkHold(staged),
+    false,
+    "the staged exit is still pending — keep holding the leaf"
+  );
+  assert.equal(
+    shouldReleaseAgentMarkHold({ ...staged, isRecording: true }),
+    true,
+    "a new recording start wins over the hold"
+  );
+  assert.equal(
+    shouldReleaseAgentMarkHold({ ...staged, isPreparing: true }),
+    true,
+    "a recording that is still spinning up is already a new session"
+  );
+  assert.equal(
+    shouldReleaseAgentMarkHold({ ...staged, floatingIconAutoHide: false }),
+    true,
+    "auto-hide switched off cancels the exit the hold was staged for"
+  );
+});
+
+// Finding 3, final review 2026-09-08. Decision 8 lists exactly three
+// releases, and the third is the hideWindow IPC settling — which only ever
+// happens if the hide is SCHEDULED. It is not: App.jsx's auto-hide branch has
+// a precondition list, and anything on that list turning true inside the
+// 500ms delay makes the branch false, clears the pending timer and schedules
+// nothing. The hold then had no route out at all, so an idle, fully visible
+// pill wore the Agent leaf for the whole life of a toast. The previously
+// accepted premise — "it resolves when the toast clears and the hide fires" —
+// was wrong, because that hide is never armed.
+test("a held agent mark is released when something else claims the pill before the staged exit runs", async () => {
+  const { shouldReleaseAgentMarkHold } = await load();
+  const staged = {
+    isRecording: false,
+    isPreparing: false,
+    floatingIconAutoHide: true,
+    autoHideExitCancelled: false,
+  };
+
+  assert.equal(
+    shouldReleaseAgentMarkHold(staged),
+    false,
+    "the staged exit is still pending — keep holding the leaf"
+  );
+  assert.equal(
+    shouldReleaseAgentMarkHold({ ...staged, autoHideExitCancelled: true }),
+    true,
+    "a toast (or tip, or transcript) claiming the pill cancels the exit — release the leaf"
+  );
+  assert.equal(
+    shouldReleaseAgentMarkHold({
+      isRecording: false,
+      isPreparing: false,
+      floatingIconAutoHide: true,
+    }),
+    false,
+    "the new input defaults to false, so an omitted argument cannot release a hold by accident"
+  );
+});
+
+// The other half of the same fix: the release and the auto-hide gate must
+// read ONE precondition list. If they drift, the release either fires during
+// the Agent panel's own close (killing the feature outright) or misses the
+// case that stranded the hold.
+test("the pill's non-Agent claims are one list, and the Agent panel is deliberately not on it", async () => {
+  const { isPillClaimedApartFromAssistant } = await load();
+  const quiet = {
+    isRecording: false,
+    isVisuallyProcessing: false,
+    toastCount: 0,
+    dictationErrorPillHandoffActive: false,
+    handsFreeTipVisible: false,
+    holdMigrationCardVisible: false,
+    liveTranscriptMounted: false,
+  };
+
+  assert.equal(
+    isPillClaimedApartFromAssistant(quiet),
+    false,
+    "nothing on screen: the staged auto-hide exit is free to run"
+  );
+  for (const [key, value] of [
+    ["isRecording", true],
+    ["isVisuallyProcessing", true],
+    ["toastCount", 1],
+    ["dictationErrorPillHandoffActive", true],
+    ["handsFreeTipVisible", true],
+    ["holdMigrationCardVisible", true],
+    ["liveTranscriptMounted", true],
+  ]) {
+    assert.equal(
+      isPillClaimedApartFromAssistant({ ...quiet, [key]: value }),
+      true,
+      `${key} keeps the pill on screen, so it must block the auto-hide exit`
+    );
+  }
+  assert.equal(
+    isPillClaimedApartFromAssistant({ ...quiet, assistantPanelMounted: true }),
+    false,
+    "the Agent panel's own close is what the hold WAITS for — it must never count as a claim here"
   );
 });
 
@@ -727,5 +986,315 @@ test("activity handed back at close intent stays visible through the content fad
       hasLiveActivity: true,
     }),
     true
+  );
+});
+
+// resolvePillShrinkWait: what a shrinking pill window should wait for.
+//
+// Fix round 1 (review of task-3-report.md, 2026-09-07), findings 1+2: Task 3
+// wired App.jsx to wait on the pill's own width transitionend for EVERY
+// shrink unconditionally. Two cases have no such event to wait for and used
+// to burn the full settleFallbackMs fallback (480ms) doing nothing: (a) a
+// shrink the pill's width is not part of at all — closing a menu or toast,
+// retiring the hands-free tip — and (b) reduced motion, which strips `width`
+// from the pill's transition-property outright (src/index.css's blanket
+// rule), so even the pill's own RECORDING -> BASE narrow has nothing to fire
+// there. Both are handled here so App.jsx's callback stays a thin wrapper.
+
+function fakeElement() {
+  const listenersByType = new Map();
+  const setFor = (type) => {
+    let set = listenersByType.get(type);
+    if (!set) {
+      set = new Set();
+      listenersByType.set(type, set);
+    }
+    return set;
+  };
+  return {
+    addEventListener: (type, fn) => setFor(type).add(fn),
+    removeEventListener: (type, fn) => setFor(type).delete(fn),
+    fire(target, propertyName, type = "transitionend") {
+      for (const fn of [...setFor(type)]) fn({ target, propertyName, type });
+    },
+    get listenerCount() {
+      let total = 0;
+      for (const set of listenersByType.values()) total += set.size;
+      return total;
+    },
+  };
+}
+
+test("resolvePillShrinkWait resolves at once for any shrink that is not the pill's own narrow", async () => {
+  const { resolvePillShrinkWait } = await load();
+  const el = fakeElement();
+
+  for (const [prev, target] of [
+    ["BASE", "WITH_MENU"], // a grow: this helper is only ever called on a shrink, but must still no-op
+    ["WITH_MENU", "BASE"],
+    ["WITH_MENU", "RECORDING"],
+    ["HANDS_FREE_TIP", "BASE"],
+    ["WITH_TOAST", "WITH_MENU"],
+    ["EXPANDED", "WITH_MENU"],
+  ]) {
+    const result = await resolvePillShrinkWait({ target, prev, prefersReducedMotion: false, el });
+    assert.equal(result, undefined, `"${prev}" -> "${target}" must resolve at once`);
+    assert.equal(el.listenerCount, 0, `must never listen for a "${prev}" -> "${target}" shrink`);
+  }
+});
+
+test("resolvePillShrinkWait resolves at once under reduced motion, even for the pill's own narrow", async () => {
+  const { resolvePillShrinkWait } = await load();
+  const el = fakeElement();
+  const result = await resolvePillShrinkWait({
+    target: "BASE",
+    prev: "RECORDING",
+    prefersReducedMotion: true,
+    el,
+  });
+  assert.equal(result, "reduced-motion");
+  assert.equal(
+    el.listenerCount,
+    0,
+    "must never listen for a width transitionend that reduced motion cannot fire"
+  );
+});
+
+test("resolvePillShrinkWait waits for the real width transition on the pill's own narrow, falling back at exactly settleFallbackMs's boundary", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { resolvePillShrinkWait } = await load();
+  const { settleFallbackMs } = await import("../../src/utils/transitionSettled.ts");
+  const { LISTENING_ENTRANCE_TIMING } = await load();
+  const expectedFallbackMs = settleFallbackMs(LISTENING_ENTRANCE_TIMING.expansionMs);
+  assert.equal(expectedFallbackMs, 480, "sanity pin: 360ms pinned duration + 120ms grace");
+
+  const el = fakeElement(); // deliberately never fired
+  const settled = resolvePillShrinkWait({
+    target: "BASE",
+    prev: "RECORDING",
+    prefersReducedMotion: false,
+    el,
+  });
+  assert.equal(el.listenerCount, 2, "must register for both transitionend and transitioncancel");
+
+  let settledYet = false;
+  settled.then(() => (settledYet = true));
+  t.mock.timers.tick(expectedFallbackMs - 1);
+  await Promise.resolve();
+  assert.equal(settledYet, false, "must not resolve before settleFallbackMs's boundary");
+
+  t.mock.timers.tick(1);
+  assert.equal(await settled, "timeout");
+});
+
+test("resolvePillShrinkWait's own narrow resolves early when the real transitionend fires, not at the fallback", async () => {
+  const { resolvePillShrinkWait } = await load();
+  const el = fakeElement();
+  const settled = resolvePillShrinkWait({
+    target: "BASE",
+    prev: "RECORDING",
+    prefersReducedMotion: false,
+    el,
+  });
+  el.fire(el, "width");
+  assert.equal(await settled, "transitionend");
+});
+
+// resolveHandsFreeTipLadderVisible: does the window-size ladder still need
+// to reserve HANDS_FREE_TIP room?
+//
+// Fix round 2 (review of task-3-report.md's fix round 1, 2026-09-07): round
+// 1 made resolvePillShrinkWait resolve a HANDS_FREE_TIP -> BASE shrink at
+// once, correctly, since the pill's own width is not part of that
+// transition — but that only stays safe if the LADDER INPUT
+// (App.jsx's tipCardVisible) itself is not lying about whether something is
+// still on screen. Before this fix it read holdMigrationCard.visible alone,
+// which the hook returns as `visible && !exiting` — so it drops to false the
+// INSTANT dismissal starts, while the card stays mounted for its own 200ms
+// exit fade (`.hands-free-tip-card[data-exiting="true"]`,
+// dictation-panel.css). The old 340ms/480ms guesses happened to outlast that
+// fade by accident; round 1 removed that accident. This widens the decision
+// to the card's whole MOUNTED lifetime (visible OR exiting), so the ladder
+// only lets go once the card has actually unmounted and there is nothing
+// left to clip.
+
+test("resolveHandsFreeTipLadderVisible stays true for the migration card's whole mounted lifetime, including its exit fade", async () => {
+  const { resolveHandsFreeTipLadderVisible } = await load();
+  assert.equal(
+    resolveHandsFreeTipLadderVisible({
+      tip: null,
+      holdMigrationCardVisible: true,
+      holdMigrationCardExiting: false,
+    }),
+    true,
+    "the card is fully shown"
+  );
+  assert.equal(
+    resolveHandsFreeTipLadderVisible({
+      tip: null,
+      holdMigrationCardVisible: false,
+      holdMigrationCardExiting: true,
+    }),
+    true,
+    "the card is exiting — still mounted and fading, must still reserve room"
+  );
+  assert.equal(
+    resolveHandsFreeTipLadderVisible({
+      tip: null,
+      holdMigrationCardVisible: false,
+      holdMigrationCardExiting: false,
+    }),
+    false,
+    "the card has actually unmounted — nothing left to reserve room for"
+  );
+});
+
+test("resolveHandsFreeTipLadderVisible leaves the hands-free tip card's own visibility untouched by the widening", async () => {
+  const { resolveHandsFreeTipLadderVisible } = await load();
+  assert.equal(
+    resolveHandsFreeTipLadderVisible({
+      tip: { inputKind: "dictation" },
+      holdMigrationCardVisible: false,
+      holdMigrationCardExiting: false,
+    }),
+    true,
+    "the hands-free tip card has no exiting sub-state of its own; its own tip !== null is untouched"
+  );
+  assert.equal(
+    resolveHandsFreeTipLadderVisible({
+      tip: null,
+      holdMigrationCardVisible: false,
+      holdMigrationCardExiting: false,
+    }),
+    false
+  );
+});
+
+// Task 9: the pill's exit "zoop" is a transform transition, and the native
+// window waits for it. Two states have no transform transition to wait for at
+// all, so waiting would park the hide for the whole fallback window instead of
+// choreographing anything.
+test("the exit waits for its zoop only when there is really a zoop to wait for", async () => {
+  const { shouldAwaitPillZoop } = await load();
+
+  assert.equal(shouldAwaitPillZoop({ prefersReducedMotion: false, alreadyExited: false }), true);
+  // index.css's blanket reduced-motion rule strips transform from
+  // transition-property with !important, so the transitionend this waits on
+  // can never fire — the hide would only ever land on its fallback.
+  assert.equal(shouldAwaitPillZoop({ prefersReducedMotion: true, alreadyExited: false }), false);
+  // Re-entering a pose the element already holds starts no transition either.
+  assert.equal(shouldAwaitPillZoop({ prefersReducedMotion: false, alreadyExited: true }), false);
+  assert.equal(shouldAwaitPillZoop({ prefersReducedMotion: true, alreadyExited: true }), false);
+});
+
+// Task 10: the Live Transcript entrance's first two beats stop being bare
+// timers and start on the shell's own clip-path `transitionend`, with the old
+// timers kept only as fallbacks. resolveLiveTranscriptStageGate is the whole
+// decision: whether there is an event to wait for at all, and how long the
+// beat waits on its own if none arrives.
+test("each entrance gate waits for the shell's own stage transition, with the old timer plus a grace window behind it", async () => {
+  const { resolveLiveTranscriptStageGate, LIVE_TRANSCRIPT_ENTRANCE_TIMING, LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS } =
+    await load();
+
+  assert.deepEqual(
+    resolveLiveTranscriptStageGate({ stage: "encapsulated", prefersReducedMotion: false }),
+    {
+      awaitEvent: true,
+      waitMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs + LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS,
+    }
+  );
+  assert.deepEqual(resolveLiveTranscriptStageGate({ stage: "footer", prefersReducedMotion: false }), {
+    awaitEvent: true,
+    waitMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs + LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS,
+  });
+  assert.ok(
+    LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS > 0,
+    "the fallback must sit BEHIND the transition it backs up, never race it"
+  );
+});
+
+// The reduced-motion half, and the reason this needs its own decision rather
+// than a timeout: src/index.css's blanket `*, *::before, *::after` rule sets
+// transition-property with !important to a list that EXCLUDES clip-path, so
+// the shell's stage clip simply applies and there is no transition to end —
+// the same shape resolvePillShrinkWait uses for `width` and
+// shouldAwaitPillZoop for `transform`. Waiting anyway would hold every beat
+// for its whole fallback window and make the entrance SLOWER under reduced
+// motion than with motion on.
+test("reduced motion never waits for a clip-path transitionend that can structurally never fire", async () => {
+  const { resolveLiveTranscriptStageGate, LIVE_TRANSCRIPT_ENTRANCE_TIMING } = await load();
+
+  assert.deepEqual(
+    resolveLiveTranscriptStageGate({ stage: "encapsulated", prefersReducedMotion: true }),
+    { awaitEvent: false, waitMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs }
+  );
+  assert.deepEqual(resolveLiveTranscriptStageGate({ stage: "footer", prefersReducedMotion: true }), {
+    awaitEvent: false,
+    waitMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs,
+  });
+});
+
+// The stages and their durations must not change — only what triggers each
+// step. Under reduced motion (no event, plain timers) the chain must land on
+// exactly the instants getLiveTranscriptEntranceTimeline already publishes,
+// which is what "unchanged" means arithmetically.
+test("the reduced-motion gate chain lands on the entrance timeline's own published instants", async () => {
+  const {
+    resolveLiveTranscriptStageGate,
+    getLiveTranscriptEntranceTimeline,
+    LIVE_TRANSCRIPT_ENTRANCE_TIMING,
+  } = await load();
+  const timeline = getLiveTranscriptEntranceTimeline();
+
+  const encapsulated = resolveLiveTranscriptStageGate({
+    stage: "encapsulated",
+    prefersReducedMotion: true,
+  });
+  const footer = resolveLiveTranscriptStageGate({ stage: "footer", prefersReducedMotion: true });
+
+  assert.equal(
+    encapsulated.waitMs + LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateHoldMs,
+    timeline.horizontalAtMs,
+    "the horizontal phase must still start at its published instant"
+  );
+  assert.equal(
+    encapsulated.waitMs +
+      LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateHoldMs +
+      footer.waitMs +
+      LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsDelayMs,
+    timeline.controlsAtMs,
+    "the controls phase must still start at its published instant"
+  );
+});
+
+// Finding 2, final review 2026-09-08. One 120ms fade used to be described by
+// three unrelated hand-written numbers — the CSS's own
+// --motion-close-fade-ms, VoiceModePanelCore's 220ms report fallback, and
+// useAssistantPanel's 160ms guarantee — and the last two were in the wrong
+// ORDER: the hook's "final guarantee" fired 60ms BEFORE the core's report,
+// inverting the relationship both call sites' comments assert. Both are now
+// derived from the fade itself, here, so a retune moves all three together.
+test("the assistant close's two fallbacks derive from the fade they cover, in the right order", async () => {
+  const { ASSISTANT_CLOSE_TIMING } = await load();
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
+  const { settleFallbackMs } = await import("../../src/utils/transitionSettled.ts");
+
+  assert.equal(
+    ASSISTANT_CLOSE_TIMING.reportMs,
+    settleFallbackMs(MOTION_TIMING.closeFadeMs),
+    "the core's report fallback must be the close fade's own settle fallback"
+  );
+  assert.equal(
+    ASSISTANT_CLOSE_TIMING.guaranteeMs,
+    settleFallbackMs(ASSISTANT_CLOSE_TIMING.reportMs),
+    "the hook's guarantee must be one further grace window past the report"
+  );
+  assert.ok(
+    ASSISTANT_CLOSE_TIMING.reportMs > MOTION_TIMING.closeFadeMs,
+    "a report fallback that fired during the fade would cut it short"
+  );
+  assert.ok(
+    ASSISTANT_CLOSE_TIMING.guaranteeMs > ASSISTANT_CLOSE_TIMING.reportMs,
+    "the core REPORTS and the hook GUARANTEES — a guarantee that fires first inverts that"
   );
 });

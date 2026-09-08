@@ -80,6 +80,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("paste-at-captured-target", sessionId, text, options),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
+  onPillWillHide: registerListener("pill-will-hide", (callback) => () => callback()),
+  onPillWillShow: registerListener("pill-will-show", (callback) => () => callback()),
   captureDictationTarget: () => ipcRenderer.invoke("capture-dictation-target"),
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
@@ -124,6 +126,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onAgentDictationPillAudioLevelChanged: registerListener(
     "agent-dictation-pill-audio-level-changed",
     (callback) => (_event, level) => callback(level)
+  ),
+  onAgentDictationPillWillHide: registerListener(
+    "agent-dictation-pill-will-hide",
+    (callback) => () => callback()
+  ),
+  onAgentDictationPillWillShow: registerListener(
+    "agent-dictation-pill-will-show",
+    (callback) => () => callback()
   ),
   showAgentDictationFinalTranscript: (text) =>
     ipcRenderer.send("show-agent-dictation-final-transcript", text),

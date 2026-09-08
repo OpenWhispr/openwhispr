@@ -1333,8 +1333,18 @@ class IPCHandlers {
       this.meetingDetectionEngine?.setMeetingModeActive(false);
     });
 
+    // The renderer has already played the pill's exit before calling this, so
+    // there is nothing left to animate — hide now. It must never resolve
+    // without a hide behind it: App.jsx releases the held Agent mark when this
+    // settles, and a silent "done" on a window still on screen would play the
+    // leaf->ring morph in full view (the bug Task 8 exists to prevent). The
+    // one refusal hideDictationPanel has — an open or busy Assistant panel —
+    // therefore rejects.
     ipcMain.handle("hide-window", () => {
-      this.windowManager.hideDictationPanel();
+      const hidden = this.windowManager.hideDictationPanel({ animate: false });
+      if (!hidden) {
+        throw new Error("hide-window refused: an open or busy assistant panel owns the window");
+      }
     });
 
     ipcMain.handle("show-dictation-panel", () => {

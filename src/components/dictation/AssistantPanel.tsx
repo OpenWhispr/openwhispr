@@ -1,8 +1,22 @@
-import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy, Plus, X } from "lucide-react";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
+import {
+  rehypeWordRise,
+  type RehypeWordRiseOptions,
+  type RiseClock,
+} from "./rehypeWordRise";
+import { rehypeStreamCaret } from "./rehypeStreamCaret";
 import { Button } from "../ui/button";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
@@ -11,6 +25,8 @@ import { ChatInput } from "../chat/ChatInput";
 import { useWindowDrag } from "../../hooks/useWindowDrag";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { formatHotkeyListLabel } from "../../utils/hotkeys";
+import { MOTION_TIMING } from "../../utils/springEasing";
+import { splitStreamingMarkdown } from "../../utils/streamingMarkdown";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
   resolveAssistantFooterPresentation,
@@ -22,6 +38,7 @@ import {
   AGENT_TOOL_NAME_FALLBACK_KEY,
 } from "../../helpers/agentToolPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
+import { useCrossfadedLabel } from "../../hooks/useCrossfadedLabel";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
 import {
   normalizeAgentSelectionContext,
@@ -50,7 +67,15 @@ type AssistantFooterPhase =
   "pill" | "pill-entering" | "pill-exiting" | "actions-entering" | "actions" | "actions-exiting";
 
 const MANUAL_COPY_FEEDBACK_MS = 1800;
-const AUTO_COPY_FEEDBACK_MS = 6000;
+// Exported so tests can pin the auto-copy hold against the real constant
+// (fix round 1, finding 3) instead of retyping 6000, which a retune could
+// silently drift away from.
+export const AUTO_COPY_FEEDBACK_MS = 6000;
+
+// Shared by the settled (StableAssistantMarkdown) and tail (MarkdownRenderer)
+// halves of a streaming reply so the split is visually seamless.
+const RESPONSE_MARKDOWN_CLASS =
+  "text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]";
 
 interface AssistantPanelProps {
   /** Voice command waiting to be sent into the conversation (consumed on mount and on change). */
@@ -67,6 +92,10 @@ interface AssistantPanelProps {
   thinking: boolean;
   open: boolean;
   footerPhase: AssistantFooterPhase;
+  /** Whether the WHOLE panel is closing (not just the footer's own internal
+   * phase handoff) — retreats the footer actions on the close-fade's own
+   * duration instead of their slower normal entrance/handoff duration. */
+  closing: boolean;
   horizontalDirection: "left" | "right";
   onClose: () => void;
   onBusyChange: (busy: boolean) => void;
@@ -93,6 +122,7 @@ export function AssistantPanel({
   thinking,
   open,
   footerPhase,
+  closing,
   horizontalDirection,
   onClose,
   onBusyChange,
@@ -146,6 +176,10 @@ export function AssistantPanel({
   } = useCopyFeedback(responseContent, {
     resetMs: MANUAL_COPY_FEEDBACK_MS,
   });
+  // Pop on arrival is immediate (tool-check-pop plays on the Check icon);
+  // the revert back to "Copy to clipboard" crossfades over the same pinned
+  // duration the design page specifies, instead of hard-swapping.
+  const copiedLabel = useCrossfadedLabel(copied, MOTION_TIMING.copyCrossfadeMs);
 
   useEffect(() => {
     onConversationIdChange(persistence.conversationId);
@@ -279,6 +313,200 @@ export function AssistantPanel({
   const displayedResponseRef = useRef("");
   if (responseContent) displayedResponseRef.current = responseContent;
   const displayedResponse = responseContent || displayedResponseRef.current;
+
+  // While streaming, everything before the last paragraph break is "settled"
+  // and rendered once by the memoized StableAssistantMarkdown below — its
+  // input string stops changing once a boundary passes, so React bails out
+  // of re-rendering it and its words never re-animate. Only the tail (the
+  // current paragraph) re-renders per token. Once streaming ends the whole
+  // reply is one settled block with no live tail.
+  const isStreamingNow = Boolean(latestAssistantMessage?.isStreaming);
+  // The settled boundary must never retreat once advanced (fix round 3,
+  // finding 1): splitStreamingMarkdown is a pure function, so it cannot
+  // enforce that cross-call invariant by itself — the caller owns the
+  // previous boundary and passes it back in as a floor on every call.
+  // settledLengthRef IS that floor. It resets to 0 whenever the message
+  // being displayed changes identity (a brand new reply started, or there
+  // is none) — the floor is a promise about ONE growing message's own
+  // content, and message ids are stable across a single message's
+  // streaming updates (useChatStreaming keeps re-using the same id — see
+  // useChatStreaming.ts) but change for a genuinely new one. Resetting on
+  // anything looser (e.g. comparing content, or comparing settledMarkdown
+  // itself) would be circular: settledMarkdown is what this floor feeds
+  // INTO computing. Without the reset, a new reply's own early content
+  // would inherit the previous reply's (larger) floor and — since
+  // content.slice clamps past the string's end — instantly show as fully
+  // settled, skipping its own tail/rise treatment entirely.
+  const settledLengthRef = useRef(0);
+  const latestAssistantMessageIdRef = useRef<string | undefined>(undefined);
+  if (latestAssistantMessageIdRef.current !== latestAssistantMessage?.id) {
+    latestAssistantMessageIdRef.current = latestAssistantMessage?.id;
+    settledLengthRef.current = 0;
+  }
+  // The split itself must be SKIPPED, not just its result kept off the floor
+  // (fix round 5): on the guaranteed empty-content render (see the write-back
+  // comment below), recomputing against displayedResponse's fallback text
+  // still re-derives a split from the PREVIOUS reply — and since that reply
+  // has no trailing "\n\n" after its own last paragraph (nothing streams
+  // after a completed reply), computeNaturalBoundary correctly-by-its-own-
+  // logic carves that last paragraph OUT of settled and hands it back as a
+  // fresh "tail", even though the floor guard below stops that tail's length
+  // from being persisted anywhere. settledMarkdown changing shape (shrinking
+  // by one paragraph) is exactly what resets risenWordsRef a few lines down,
+  // so the previous reply's already-settled last paragraph gets rendered
+  // through the tail's rehypeWordRise with an empty risenWords map — and an
+  // already-read paragraph replays its rise animation, the very
+  // twitching-settled-text failure this task exists to prevent. This ref
+  // holds the last ACTUALLY DISPLAYED split so an empty-content render can
+  // reuse it verbatim instead of re-deriving one.
+  const previousSplitRef = useRef<{ settled: string; tail: string }>({ settled: "", tail: "" });
+  // Josh, 2026-09-08: a near-instant reply "appears extremely quickly with a
+  // small flicker". The flicker was the rise being KILLED, not a rise. The
+  // moment isStreaming goes false the split below used to collapse to
+  // { settled: everything, tail: "" }, which destroys the tail's word spans —
+  // and with them every in-flight CSS animation, snapping the text to its end
+  // state mid-cascade. On a fast reply that is most of the words, so the
+  // feature the user was meant to see is precisely the part that never plays.
+  // Holding the streaming split until the last assigned rise has finished
+  // costs nothing (the same text renders either way, only the span wrapping
+  // differs) and lets the cascade run to completion before the collapse.
+  //
+  // Decided DURING RENDER, not from an effect. An effect-driven hold is one
+  // commit too late: the render that flips isStreaming to false would already
+  // have collapsed the split and unmounted the spans, and the effect would
+  // then mount brand-new ones — the animation cancelled exactly as before,
+  // plus a restart. The deadline it reads cannot come from riseClockRef,
+  // either: the collapse render is itself a settledMarkdown change, so the
+  // cursor reset has already zeroed it by then. It is recorded on every
+  // streaming commit instead (below), and deliberately never cleared by that
+  // reset — it is a fact about animations already running in the DOM, not
+  // about the tail's index space.
+  const risesDoneAtRef = useRef(0);
+  const [, releaseRiseHold] = useState(0);
+  const holdingRises = !isStreamingNow && performance.now() < risesDoneAtRef.current;
+  const { settled: settledMarkdown, tail: tailMarkdown } = useMemo(() => {
+    // Nothing to show at all (no reply yet, or just reset) — do not reuse a
+    // stale cache from whatever was showing before; there is nothing before.
+    if (!displayedResponse) return { settled: "", tail: "" };
+    // The empty-content render: responseContent (this message's own content)
+    // is "", so displayedResponse is only non-empty via the fallback to the
+    // PREVIOUS reply's latched text (deliberate, not the bug — see above).
+    // Reuse exactly what was already on screen rather than re-deriving a
+    // split from it, per the comment above.
+    if (!responseContent) return previousSplitRef.current;
+    return isStreamingNow || holdingRises
+      ? splitStreamingMarkdown(displayedResponse, settledLengthRef.current)
+      : { settled: displayedResponse, tail: "" };
+  }, [displayedResponse, isStreamingNow, holdingRises, responseContent]);
+  previousSplitRef.current = { settled: settledMarkdown, tail: tailMarkdown };
+  // The write-back must ALSO be skipped on that same render (fix round 4):
+  // isStreamingNow is already true there (the new message says
+  // isStreaming: true), so without this guard, writing settledMarkdown.length
+  // back would re-poison the floor the id check above just reset to 0 on
+  // this SAME render — settledMarkdown may be the reused previous split
+  // above, but its LENGTH is still the previous reply's, not this one's.
+  // Gating on responseContent (not isStreamingNow alone) is exact, not just
+  // defensive: useChatStreaming never resets fullContent back to "" for an
+  // id once it has grown — a completed stream ends with isStreaming: false,
+  // an aborted/errored one ends with a non-empty error string, and a
+  // think-only empty completion is substituted with a non-empty placeholder
+  // (see useChatStreaming.ts) — so "" only ever means "this id's own content
+  // genuinely has nothing yet." Skipping the write leaves
+  // settledLengthRef.current at whatever the id check above just left it (0
+  // for a brand new id), which is what the very next render — the first
+  // real chunk — must see.
+  if (isStreamingNow && responseContent) settledLengthRef.current = settledMarkdown.length;
+  // Sticky per-word rise state for the tail's current settled-prefix cycle:
+  // real (HAST-order) word index -> its assigned delay, mutated in place by
+  // rehypeWordRise. Reset only when settledMarkdown itself changes — a
+  // paragraph boundary just moved words out from under the tail, so the new,
+  // shorter tail's indices restart at 0 — never by comparing word COUNTS:
+  // countWords(tailMarkdown) counts raw-markdown tokens ("-", "##", "1.",
+  // ">" all count as words there) while rehypeWordRise indexes real,
+  // parsed words, so the two counts can permanently disagree for anything
+  // but a plain paragraph (fix round 1, finding 1 — see rehypeWordRise.ts
+  // for the sticky-delay half of that same fix, finding 3).
+  const risenWordsRef = useRef<Map<number, number>>(new Map());
+  // The cascade cursor rehypeWordRise anchors each batch to, so absolute rise
+  // order is document order across chunk boundaries (see rehypeWordRise.ts).
+  // It resets in lockstep with risenWordsRef, and for the same reason: once
+  // the tail's indices restart at 0 the cursor's backlog belongs to words
+  // that are no longer in this tail, so carrying it forward would delay the
+  // rebased tail's first words by up to a full lag window. Resetting to 0
+  // (always in the past) makes the next batch anchor at `now`, which is the
+  // pre-2026-09-08 behaviour for exactly this path — deliberately unchanged
+  // here, because the rebase itself re-animates already-displayed words and
+  // that defect is being reported separately rather than widened.
+  const riseClockRef = useRef<RiseClock>({ nextRiseAt: 0 });
+  const settledMarkdownRef = useRef(settledMarkdown);
+  if (settledMarkdownRef.current !== settledMarkdown) {
+    settledMarkdownRef.current = settledMarkdown;
+    risenWordsRef.current = new Map();
+    riseClockRef.current = { nextRiseAt: 0 };
+  }
+  // unified/react-markdown's rehypePlugins entries must be [attacher, options]
+  // tuples — unified calls the attacher itself at freeze time. Passing the
+  // already-invoked transformer directly (rehypeWordRise({...})) makes
+  // unified call THAT as the attacher with no arguments, crashing on an
+  // undefined tree the moment a reply streams. Computed plain (no useMemo):
+  // react-markdown reprocesses whenever `content` changes regardless of
+  // whether this array's own reference is stable, and risenWordsRef.current
+  // is read fresh here every render anyway (a ref, not reactive state), so
+  // memoizing it would only add a dependency-array correctness question
+  // (what actually invalidates it — settledMarkdown changing, which the
+  // factory function doesn't itself reference) for no real benefit.
+  // Ordered, not a set: rehypeStreamCaret must run AFTER rehypeWordRise, so
+  // the caret it appends is never itself word-wrapped and never shifts a word
+  // index. Added only while the reply is actually streaming — the caret is the
+  // signal that more text is coming.
+  const tailPlugins: Array<
+    [typeof rehypeWordRise, RehypeWordRiseOptions] | [typeof rehypeStreamCaret, { className: string }]
+  > = [
+    [
+      rehypeWordRise,
+      {
+        risenWords: risenWordsRef.current,
+        staggerMs: MOTION_TIMING.wordStaggerMs,
+        clock: riseClockRef.current,
+        // Read fresh per render on purpose: this is the zero that the delays
+        // this walk assigns are measured from, and it is only ever consumed
+        // by a walk react-markdown actually runs (it reprocesses only when
+        // `content` changes, so an unchanged tail never sees a stale value).
+        now: performance.now(),
+        maxLagMs: MOTION_TIMING.riseMaxLagMs,
+      },
+    ],
+  ];
+  if (latestAssistantMessage?.isStreaming) {
+    tailPlugins.push([rehypeStreamCaret, { className: "assistant-stream-caret" }]);
+  }
+
+  // Records when every rise assigned so far will be done, for the hold above
+  // to read on the render that ends the stream. Deliberately no dependency
+  // array: it must observe the cursor AFTER react-markdown has run the walk
+  // for this commit (the walk happens while rendering the tail's children, so
+  // the component body above it can only ever see the previous value).
+  useEffect(() => {
+    if (isStreamingNow) {
+      risesDoneAtRef.current = riseClockRef.current.nextRiseAt + MOTION_TIMING.wordMs;
+    }
+  });
+
+  // The hold releases itself: this schedules the one render that happens at
+  // the deadline, after which the expression above evaluates false on its own.
+  // That deadline is an upper bound (the cursor points one stagger PAST the
+  // last word actually placed), which is the safe direction — too long merely
+  // delays a collapse nobody can see, too short reintroduces the snap.
+  // Deliberately a timer and not an animationend listener: what is being
+  // waited on is the whole cascade, not one element, and which span finishes
+  // last is not knowable from the DOM without tracking every one of them.
+  useEffect(() => {
+    if (!holdingRises) return undefined;
+    const remainingMs = Math.max(0, risesDoneAtRef.current - performance.now());
+    const timer = setTimeout(() => releaseRiseHold((tick) => tick + 1), remainingMs);
+    return () => clearTimeout(timer);
+  }, [holdingRises]);
+
   // Keep the previous response ineligible throughout a follow-up request. Audio
   // processing can return voiceState to idle one render before the chat stream
   // reports busy; without this latch, the old response briefly restores the
@@ -484,11 +712,32 @@ export function AssistantPanel({
                 ref={responseSelectionRootRef}
                 style={{ animation: "agent-message-in 160ms ease-out both" }}
               >
-                <StableAssistantMarkdown
-                  content={displayedResponse}
-                  className="text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
-                />
-                {latestAssistantMessage?.isStreaming && (
+                <div className={settledMarkdown && tailMarkdown ? "space-y-2" : undefined}>
+                  {settledMarkdown && (
+                    <StableAssistantMarkdown
+                      content={settledMarkdown}
+                      className={RESPONSE_MARKDOWN_CLASS}
+                    />
+                  )}
+                  {tailMarkdown && (
+                    <MarkdownRenderer
+                      content={tailMarkdown}
+                      className={RESPONSE_MARKDOWN_CLASS}
+                      rehypePlugins={tailPlugins}
+                    />
+                  )}
+                </div>
+                {/* The FALLBACK caret only. While there is a tail,
+                    rehypeStreamCaret puts the caret inside the last block,
+                    at the end of the text — as a sibling of a block-level
+                    element an inline span starts its own line, which is the
+                    "cursor hangs below the end of every sentence, almost like
+                    a line break" Josh reported from the rig on 2026-09-08.
+                    An empty tail has no block to host it (the boundary just
+                    moved and the next token has not landed), so the caret
+                    falls back to here, where it behaves exactly as it always
+                    did. */}
+                {latestAssistantMessage?.isStreaming && !tailMarkdown && (
                   <span
                     className="ml-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
                     style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
@@ -576,7 +825,15 @@ export function AssistantPanel({
             aria-hidden={footerPhase !== "actions"}
             style={
               {
-                "--assistant-actions-retreat-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.actionsRetreatMs}ms`,
+                // A close intent retreats the actions on the close-fade's own
+                // duration instead of the slower normal footer-handoff
+                // duration, so they finish retreating alongside the rest of
+                // the closing content instead of trailing behind it.
+                "--assistant-actions-retreat-duration": `${
+                  closing
+                    ? MOTION_TIMING.closeFadeMs
+                    : ASSISTANT_FOOTER_TRANSITION_TIMING.actionsRetreatMs
+                }ms`,
                 "--assistant-actions-entrance-duration": `${ASSISTANT_FOOTER_TRANSITION_TIMING.actionsEntranceMs}ms`,
               } as CSSProperties
             }
@@ -595,18 +852,77 @@ export function AssistantPanel({
             <Button
               type="button"
               size="sm"
-              className="rounded-full border-border/70 bg-surface-raised px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
+              // active: is not decoration here. Button's `default` variant
+              // carries `active:bg-primary/85`, and tailwind-merge only drops
+              // a variant class that this className supplies a REPLACEMENT
+              // for — the overrides below cover base and hover, so the
+              // primary blue survived on the pressed state alone and flashed
+              // (over the variant's own 200ms colour transition) on every
+              // copy. Josh, 2026-09-08: "I like the little tick jump, but the
+              // blue is a bit jarring." The press keeps the variant's
+              // active:scale, which is the part he liked.
+              className="rounded-full border-border/70 bg-surface-raised px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 active:bg-surface-3 dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90 dark:active:bg-white/90"
               onClick={() => void handleCopy()}
               aria-live="polite"
               tabIndex={footerPhase === "actions" ? 0 : -1}
             >
-              {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-              {copied ? t("common.copied") : t("assistant.panel.copyToClipboard")}
-              {!copied && (
-                <kbd className="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-medium dark:bg-black/10">
-                  C
-                </kbd>
-              )}
+              {/* A true crossfade needs both labels in the DOM at once, stacked
+                  in one grid cell (so the wrapper always sizes to the wider of
+                  the two — no width jump as opacity moves) rather than swapped:
+                  a single span whose content is replaced mid-transition means
+                  the outgoing content finishes fading to 0 fully BEFORE the
+                  incoming content mounts at 0 and fades back in — two 320ms
+                  windows through a blank frame, not one. The active (Check/
+                  Copied) layer's own content is still conditional on
+                  showActive, so the Check icon remounts (and its pop keyframe
+                  restarts) on every arrival, exactly as before; the inactive
+                  (Copy) layer's content is unconditional so it never remounts
+                  and can be transitioned into/out of smoothly. Neither layer
+                  transitions on arrival — transition is only ever declared
+                  while `fading` is true — so the pop stays the only motion an
+                  arrival shows. */}
+              <span className="assistant-copy-label inline-grid items-center justify-items-center">
+                <span
+                  className="assistant-copy-label-layer inline-flex items-center gap-1.5"
+                  data-copy-label-layer="active"
+                  style={{
+                    gridArea: "1 / 1",
+                    opacity: copiedLabel.showActive && !copiedLabel.fading ? 1 : 0,
+                    transition: copiedLabel.fading
+                      ? `opacity ${MOTION_TIMING.copyCrossfadeMs}ms ease-out`
+                      : "none",
+                  }}
+                  aria-hidden={copiedLabel.showActive && !copiedLabel.fading ? undefined : true}
+                >
+                  {copiedLabel.showActive && (
+                    <>
+                      <Check
+                        aria-hidden="true"
+                        style={{ animation: "tool-check-pop 300ms cubic-bezier(0.2, 0, 0, 1) both" }}
+                      />
+                      {t("common.copied")}
+                    </>
+                  )}
+                </span>
+                <span
+                  className="assistant-copy-label-layer inline-flex items-center gap-1.5"
+                  data-copy-label-layer="inactive"
+                  style={{
+                    gridArea: "1 / 1",
+                    opacity: !copiedLabel.showActive || copiedLabel.fading ? 1 : 0,
+                    transition: copiedLabel.fading
+                      ? `opacity ${MOTION_TIMING.copyCrossfadeMs}ms ease-out`
+                      : "none",
+                  }}
+                  aria-hidden={!copiedLabel.showActive || copiedLabel.fading ? undefined : true}
+                >
+                  <Copy aria-hidden="true" />
+                  {t("assistant.panel.copyToClipboard")}
+                  <kbd className="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-medium dark:bg-black/10">
+                    C
+                  </kbd>
+                </span>
+              </span>
             </Button>
           </div>
         )}

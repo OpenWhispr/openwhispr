@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -10,6 +11,7 @@ import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useListeningEntrancePhase } from "../../hooks/useListeningEntrancePhase";
 import { useLiveTranscriptPanel } from "../../hooks/useLiveTranscriptPanel";
+import { motionCssVariables } from "../../utils/springEasing";
 import {
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   resolveCompanionPillInteractive,
@@ -41,9 +43,14 @@ const DEFAULT_STATE: CompanionState = {
 const UNAVAILABLE_RESIZE = { success: false, message: "Window not available" };
 
 export default function AgentDictationPillOverlay() {
+  const motionVars = useMemo(() => motionCssVariables() as CSSProperties, []);
   const { t } = useTranslation();
   const [companionState, setCompanionState] = useState(DEFAULT_STATE);
   const [hovered, setHovered] = useState(false);
+  // Fades the whole companion window out on the panel's own close clock
+  // instead of the native window being cut dead — see
+  // agent-dictation-pill.css's [data-exiting="true"] rule.
+  const [exiting, setExiting] = useState(false);
   const audioLevelRef = useRef<number | null>(null);
   const assistantOpenRef = useRef(false);
 
@@ -56,6 +63,12 @@ export default function AgentDictationPillOverlay() {
     const disposeAudio = window.electronAPI.onAgentDictationPillAudioLevelChanged?.((level) => {
       audioLevelRef.current = level;
     });
+    const disposeWillHide = window.electronAPI.onAgentDictationPillWillHide?.(() => {
+      if (!disposed) setExiting(true);
+    });
+    const disposeWillShow = window.electronAPI.onAgentDictationPillWillShow?.(() => {
+      if (!disposed) setExiting(false);
+    });
     window.electronAPI
       .getAgentDictationPillState?.()
       .then(applyState)
@@ -64,16 +77,23 @@ export default function AgentDictationPillOverlay() {
       disposed = true;
       disposeState?.();
       disposeAudio?.();
+      disposeWillHide?.();
+      disposeWillShow?.();
     };
   }, []);
 
   // hideAgentDictationPill force-resets native click-through, but a hidden
   // window never fires mouseleave, so React's hovered flag would survive the
   // hide and desync the interactivity effect on the next show (first click
-  // falls through). Electron marks hidden windows document.hidden.
+  // falls through). Electron marks hidden windows document.hidden. The same
+  // hide also ends any in-flight fade, so a later show must not find the
+  // window still marked exiting.
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") setHovered(false);
+      if (document.visibilityState === "hidden") {
+        setHovered(false);
+        setExiting(false);
+      }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -205,7 +225,11 @@ export default function AgentDictationPillOverlay() {
   };
 
   return (
-    <main className="agent-dictation-pill-window dictation-window">
+    <main
+      className="agent-dictation-pill-window dictation-window"
+      data-exiting={exiting || undefined}
+      style={motionVars}
+    >
       <div
         className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50`}
         style={
@@ -254,14 +278,29 @@ export default function AgentDictationPillOverlay() {
         </div>
       </div>
 
+      {/* entrancePhase + freshMount are BOTH required, and both are read only
+          by dictation-panel.css's fresh-mount snap-gate, which needs
+          data-panel-entrance-phase="encapsulate" AND
+          data-panel-fresh-mount="true" together. Without them this window's
+          Live Transcript starts its entrance from the shared surface's
+          visible 40px pill circle instead of the invisible 52x108 corner box
+          — the companion pill hosts exactly the same VoiceModePanelCore as
+          App.jsx and needs exactly the same two props (Finding 1, final
+          review 2026-09-08; the main window has passed them since Task 4,
+          this window never did). `stage` cannot stand in for them: it
+          normalises the fresh-mount and closing phases to the same
+          "encapsulated" value. */}
       <VoiceModePanelCore
         mode={liveTranscript.mounted ? "live-transcript" : null}
         open={liveTranscript.open}
         stage={liveTranscriptEntrance.coreStage as VoiceModePanelStage}
+        entrancePhase={liveTranscript.entrancePhase}
+        freshMount={liveTranscript.freshMount}
         horizontalDirection={horizontalDirection}
         label={t("transcriptionPreview.label")}
         measurementRevision={liveTranscript.measurementText}
         onPreferredHeightChange={liveTranscript.requestHeight}
+        onStageSettled={liveTranscript.notifyStageSettled}
       >
         {liveTranscript.mounted && (
           <LiveTranscriptPanel
