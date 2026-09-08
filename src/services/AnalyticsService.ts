@@ -246,7 +246,10 @@ function isAnalyticsSummary(value: unknown): value is AnalyticsSummary {
 }
 
 export async function getAccountAnalyticsSummary(): Promise<AnalyticsSummary> {
-  const summary = await cloudGet<unknown>("/api/analytics/summary");
+  const params = new URLSearchParams({
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  });
+  const summary = await cloudGet<unknown>(`/api/analytics/summary?${params}`);
   // The cloud is an untrusted JSON boundary. Invalid buckets crash Heatmap
   // during render, outside the caller's async fallback, so validate the whole
   // shape before any part of it reaches component state.

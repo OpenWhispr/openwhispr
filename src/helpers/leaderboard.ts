@@ -10,7 +10,6 @@ import type {
 // the server actually used, and those win over these.
 export const LEADERBOARD_PAGE_SIZE = 20;
 export const LEADERBOARD_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
-export const LEADERBOARD_SHARE_MEMBER_LIMIT = 3;
 
 // Which metrics a week can rank is one fact: the weekly ones are what the
 // picker offers under "This week", and the lifetime ones are what forces a
@@ -46,9 +45,8 @@ export function resolveLeaderboardSurface({
   if (!selectedScope) {
     return "create";
   }
-  if (!participationReady) {
-    return participationError === "read" ? "participation_error" : "participation_loading";
-  }
+  if (participationError === "read") return "participation_error";
+  if (!participationReady) return "participation_loading";
   if (selectedScope.state === "invite") return "invite";
   return participating ? "board" : "sync";
 }
@@ -90,8 +88,9 @@ export function resolveLeaderboardScopeKey(
     return currentScopeKey;
   }
   return (
-    scopes.find((scope) => scope.kind === "workspace")?.key ??
+    scopes.find((scope) => scope.kind === "workspace" && scope.state === "ready")?.key ??
     scopes.find((scope) => scope.state === "ready")?.key ??
+    scopes.find((scope) => scope.kind === "workspace")?.key ??
     null
   );
 }
@@ -109,14 +108,6 @@ export function shouldShowLeaderboardEmptyStrip(
 
 export function shouldShowLeaderboardJumpToMe(memberCount: number): boolean {
   return memberCount >= 10;
-}
-
-export function leaderboardDisplayName(member: Pick<LeaderboardMember, "name" | "email">): string {
-  const name = member.name?.trim();
-  if (name) return name;
-  const localPart = member.email.split("@")[0] ?? "";
-  const firstToken = localPart.split(/[._+-]+/).find(Boolean) ?? "";
-  return firstToken ? `${firstToken.charAt(0).toUpperCase()}${firstToken.slice(1)}` : "Member";
 }
 
 export function normalizeLeaderboardSelection(

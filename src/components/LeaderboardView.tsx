@@ -11,7 +11,6 @@ import LeaderboardSection from "./LeaderboardSection";
 interface LeaderboardViewProps {
   disableInsightsSync: () => Promise<boolean>;
   onSignIn: () => void;
-  onInvite: () => void;
   participationEnabled: boolean;
   participationError: "read" | "write" | null;
   participationReady: boolean;
@@ -23,7 +22,6 @@ interface LeaderboardViewProps {
 export default function LeaderboardView({
   disableInsightsSync,
   onSignIn,
-  onInvite,
   participationEnabled,
   participationError,
   participationReady,
@@ -113,7 +111,6 @@ export default function LeaderboardView({
           oauthProtocolRegistered === false ? t("auth.social.protocolUnavailable") : ssoError
         }
         ssoStarting={ssoStarting}
-        onInvite={onInvite}
       />
     </>
   );

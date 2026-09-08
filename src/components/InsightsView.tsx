@@ -23,7 +23,6 @@ type ActivityDay = { date: string; words: number };
 
 interface InsightsViewProps {
   onSignIn: () => void;
-  onInvite: () => void;
 }
 
 const LeaderboardView = lazy(() => import("./LeaderboardView"));
@@ -388,7 +387,7 @@ function YourUsage({
   );
 }
 
-export default function InsightsView({ onSignIn, onInvite }: InsightsViewProps) {
+export default function InsightsView({ onSignIn }: InsightsViewProps) {
   const { t } = useTranslation();
   const { isLoaded, isSignedIn } = useAuth();
   const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
@@ -493,7 +492,6 @@ export default function InsightsView({ onSignIn, onInvite }: InsightsViewProps) 
             <LeaderboardView
               disableInsightsSync={disableInsightsSync}
               onSignIn={onSignIn}
-              onInvite={onInvite}
               participationEnabled={participationEnabled}
               participationError={participationError}
               participationReady={participationReady}

@@ -106,7 +106,7 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   assert.ok(section.includes("<LeaderboardSyncPreview"));
   assert.equal(section.includes("<LeaderboardSyncRow"), false);
   assert.equal(section.includes("activationDescription"), false);
-  assert.ok(controlPanel.includes("onInvite={() => setShowReferrals(true)}"));
+  assert.equal(controlPanel.includes("onInvite={() => setShowReferrals(true)}"), false);
 });
 
 test("leaderboard access waits for validated auth and labels ranked participants", () => {

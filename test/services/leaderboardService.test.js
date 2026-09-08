@@ -81,8 +81,53 @@ test("leaderboard access uses the authoritative production endpoint", async (t) 
   assert.equal(requests[0].path, "/api/leaderboard/access");
 });
 
+test("a pre-leaderboard API preserves legacy Insights sync as unconfigured", async (t) => {
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        cloudApiRequest: async () => ({ success: false, status: 404, error: "Not found" }),
+      },
+    },
+  });
+  const context = await validateAuthContext();
+  const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+  assert.deepEqual(await LeaderboardService.getParticipation(context), {
+    configured: false,
+    enabled: false,
+    updatedAt: null,
+  });
+});
+
+test("leaderboard services reject malformed success payloads", async (t) => {
+  captureRequests(t, { state: "ready" });
+  const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+  await assert.rejects(LeaderboardService.getAccess(), /Malformed leaderboard access/);
+});
+
 test("leaderboard requests carry scope, pagination, filters and no body data", async (t) => {
-  const response = { members: [] };
+  const response = {
+    scope: {
+      key: "workspace:workspace/one",
+      kind: "workspace",
+      id: "workspace/one",
+      name: "Workspace",
+    },
+    viewerUserId: "user_1",
+    metric: "mobile_words",
+    range: "week",
+    weekStart: "2026-08-31",
+    availableWeekStarts: ["2026-08-31"],
+    leaders: [],
+    members: [],
+    totalMembers: 0,
+    viewerRank: null,
+    page: 0,
+    pageSize: 20,
+    generatedAt: "2026-09-09T00:00:00.000Z",
+    refreshAfterSeconds: 3600,
+  };
   const requests = captureRequests(t, response);
   const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
 

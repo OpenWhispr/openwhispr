@@ -105,12 +105,12 @@ export function useInsightsSyncOptIn() {
     await refresh({ userId, authGeneration });
   }, [authGeneration, isLoaded, isSignedIn, userId]);
 
-  // Every surface that exposes the combined preference must reconcile its
-  // account half. Keeping this in the shared hook prevents Settings from
-  // showing a stale local-only value when the account left elsewhere.
+  // Every surface that exposes the combined preference reconciles on mount and
+  // auth changes. The shared store coalesces simultaneous reads from Settings
+  // and Insights; successful writes already publish their authoritative reply.
   useEffect(() => {
     void refreshParticipation();
-  }, [insightsSyncEnabled, refreshParticipation]);
+  }, [refreshParticipation]);
 
   // Participation can change on another surface or client. False wins because
   // enabling local uploads without leaderboard participation recreates the
@@ -259,6 +259,8 @@ export function useInsightsSyncOptIn() {
   // combined preference enabled.
   const joinLeaderboard = useCallback(async () => {
     if (!syncAllowedByPolicy) return false;
+    if (useLeaderboardParticipationStore.getState().updating) return false;
+    const syncWasEnabled = insightsSyncEnabled;
     const requestedAccountId = userId;
     const requestedAuthGeneration = getValidatedAuthGeneration();
     if (!requestedAccountId || requestedAuthGeneration == null) return false;
@@ -268,7 +270,9 @@ export function useInsightsSyncOptIn() {
       getValidatedAuthGeneration() !== requestedAuthGeneration
     )
       return false;
-    const joined = await useLeaderboardParticipationStore.getState().join({
+    const participation = useLeaderboardParticipationStore.getState();
+    if (participation.updating) return false;
+    const joined = await participation.join({
       userId: requestedAccountId,
       authGeneration: requestedAuthGeneration,
     });
@@ -279,7 +283,7 @@ export function useInsightsSyncOptIn() {
         promptAccountIdRef.current === requestedAccountId &&
         getValidatedAuthGeneration() === requestedAuthGeneration
       ) {
-        setInsightsSyncEnabled(false);
+        if (!syncWasEnabled) setInsightsSyncEnabled(false);
         toast({
           title: t("insights.leaderboard.activationError"),
           variant: "destructive",
@@ -300,7 +304,15 @@ export function useInsightsSyncOptIn() {
     setInsightsSyncEnabled(true);
     syncService.requestSyncAll("manual");
     return true;
-  }, [confirmInsightsSync, setInsightsSyncEnabled, syncAllowedByPolicy, t, toast, userId]);
+  }, [
+    confirmInsightsSync,
+    insightsSyncEnabled,
+    setInsightsSyncEnabled,
+    syncAllowedByPolicy,
+    t,
+    toast,
+    userId,
+  ]);
 
   const claiming = promptKind === "claim";
   const promptCount = claiming ? unclaimedCount : awaitingUploadCount;

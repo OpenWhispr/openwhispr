@@ -249,6 +249,7 @@ export interface LeaderboardAccess {
   joinableWorkspace: {
     id: string;
     name: string;
+    memberCount: number;
     requestState: "none" | "pending";
   } | null;
 }

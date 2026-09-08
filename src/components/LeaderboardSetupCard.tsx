@@ -29,7 +29,7 @@ export default function LeaderboardSetupCard({
       </div>
       <h2 className="mt-4 text-base font-semibold">{t("insights.leaderboard.setupTitle")}</h2>
       <p className="mt-2 max-w-md text-xs leading-relaxed text-muted-foreground">
-        {domain
+        {domain && colleagueCount > 0
           ? t("insights.leaderboard.setupDomainDescription", { count: colleagueCount, domain })
           : t("insights.leaderboard.setupDescription")}
       </p>

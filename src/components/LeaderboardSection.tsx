@@ -94,7 +94,6 @@ interface LeaderboardSectionProps {
   ssoActionDisabled: boolean;
   ssoRecoveryError: string | null;
   ssoStarting: boolean;
-  onInvite: () => void;
 }
 
 const ERROR_CARD_CHROME = "mt-8 rounded-2xl border border-border/50 bg-card/70 dark:border-white/8";
@@ -154,7 +153,6 @@ export default function LeaderboardSection({
   ssoActionDisabled,
   ssoRecoveryError,
   ssoStarting,
-  onInvite,
 }: LeaderboardSectionProps) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -162,7 +160,7 @@ export default function LeaderboardSection({
   const refresh = useWorkspaceStore((state) => state.refresh);
   const [access, setAccess] = useState<LeaderboardAccess | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
-  const [accessError, setAccessError] = useState(false);
+  const [accessError, setAccessError] = useState<"auth" | "generic" | null>(null);
   const [scopeKey, setScopeKey] = useState<string | null>(null);
   const [metric, setMetric] = useState<LeaderboardMetric>("total_words");
   const [range, setRange] = useState<LeaderboardRange>("week");
@@ -171,7 +169,7 @@ export default function LeaderboardSection({
   const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [failure, setFailure] = useState<{
-    kind: "generic" | "sso";
+    kind: "auth" | "generic" | "policy" | "sso";
     requestKey: string;
   } | null>(null);
   const [requestingJoin, setRequestingJoin] = useState(false);
@@ -207,16 +205,16 @@ export default function LeaderboardSection({
       if (!accountId) {
         setAccess(null);
         setAccessLoading(false);
-        setAccessError(false);
+        setAccessError(null);
         return;
       }
       if (authGeneration == null || getValidatedAuthGeneration() !== authGeneration) {
         setAccessLoading(true);
-        setAccessError(false);
+        setAccessError(null);
         return;
       }
       setAccessLoading(true);
-      setAccessError(false);
+      setAccessError(null);
       try {
         const response = await LeaderboardService.getAccess();
         if (requestId !== accessRequestIdRef.current) return;
@@ -227,7 +225,10 @@ export default function LeaderboardSection({
       } catch (loadError) {
         if (requestId !== accessRequestIdRef.current) return;
         console.error("Loading leaderboard access failed:", loadError);
-        setAccessError(true);
+        const requiresAccount =
+          loadError instanceof CloudApiError &&
+          (loadError.code === "ACCOUNT_REQUIRED" || loadError.status === 401);
+        setAccessError(requiresAccount ? "auth" : "generic");
       } finally {
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
       }
@@ -342,6 +343,22 @@ export default function LeaderboardSection({
         void loadAccess();
         return;
       }
+      if (code === "POLICY_CLOUD_BACKUP_BLOCKED" || code === "POLICY_UNRESOLVABLE") {
+        setLeaderboard(null);
+        setLoadedRequestKey(null);
+        setFailure({ kind: "policy", requestKey: selectedRequestKey });
+        return;
+      }
+      if (
+        code === "ACCOUNT_REQUIRED" ||
+        code === "AUTH_EXPIRED" ||
+        (loadError instanceof CloudApiError && loadError.status === 401)
+      ) {
+        setLeaderboard(null);
+        setLoadedRequestKey(null);
+        setFailure({ kind: "auth", requestKey: selectedRequestKey });
+        return;
+      }
       if (
         selectedScope.kind === "workspace" &&
         loadError instanceof CloudApiError &&
@@ -379,7 +396,7 @@ export default function LeaderboardSection({
   // constants are only what to assume before the first response arrives.
   const pageSize = leaderboard?.pageSize ?? LEADERBOARD_PAGE_SIZE;
   const refreshIntervalMs = leaderboard
-    ? leaderboard.refreshAfterSeconds * 1000
+    ? Math.max(60_000, leaderboard.refreshAfterSeconds * 1000)
     : LEADERBOARD_REFRESH_INTERVAL_MS;
 
   useEffect(() => {
@@ -548,8 +565,13 @@ export default function LeaderboardSection({
     return (
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}
-        message={t("insights.leaderboard.accessError")}
-        onRetry={() => void loadAccess()}
+        actionLabel={accessError === "auth" ? t("auth.passwordForm.signInLink") : undefined}
+        message={
+          accessError === "auth"
+            ? t("insights.leaderboard.signInDescription")
+            : t("insights.leaderboard.accessError")
+        }
+        onRetry={accessError === "auth" ? onSignIn : () => void loadAccess()}
       />
     );
   }
@@ -569,7 +591,7 @@ export default function LeaderboardSection({
         {funnelScopeSelect}
         <LeaderboardRequestJoinPreview
           className={funnelCardClassName}
-          colleagueCount={access.colleagueCount}
+          colleagueCount={access.joinableWorkspace.memberCount}
           domain={access.domain}
           workspaceName={access.joinableWorkspace.name}
           pending={access.joinableWorkspace.requestState === "pending"}
@@ -678,19 +700,25 @@ export default function LeaderboardSection({
   };
   const domainNeedsWorkspace =
     selectedScope.kind === "domain" && !scopes.some((scope) => scope.kind === "workspace");
+  const inviteableWorkspace =
+    selectedScope.kind === "workspace" &&
+    (selectedScope.role === "owner" || selectedScope.role === "admin")
+      ? selectedScope
+      : selectedScope.kind === "domain"
+        ? scopes.find(
+            (scope) =>
+              scope.kind === "workspace" && (scope.role === "owner" || scope.role === "admin")
+          )
+        : undefined;
+  const canGrowLeaderboard = domainNeedsWorkspace || Boolean(inviteableWorkspace);
   const openLeaderboardGrowthAction = () => {
     if (domainNeedsWorkspace) {
       setCreateWorkspaceOpen(true);
       return;
     }
-    if (
-      selectedScope.kind === "workspace" &&
-      (selectedScope.role === "owner" || selectedScope.role === "admin")
-    ) {
-      setInviteWorkspace({ id: selectedScope.id, name: selectedScope.name });
-      return;
+    if (inviteableWorkspace) {
+      setInviteWorkspace({ id: inviteableWorkspace.id, name: inviteableWorkspace.name });
     }
-    onInvite();
   };
   const leaveLeaderboards = () => {
     void onLeave().then((left) => {
@@ -712,7 +740,7 @@ export default function LeaderboardSection({
             {showScopeSelect ? (
               <Select value={selectedScope.key} onValueChange={setScopeKey}>
                 <SelectTrigger
-                  className="h-auto w-auto max-w-full gap-1 rounded-md border-0 bg-transparent p-0 text-sm font-semibold shadow-none hover:bg-transparent focus:border-0 focus:ring-0 dark:border-0"
+                  className="h-auto w-auto max-w-full gap-1 rounded-md border-0 bg-transparent p-0 text-sm font-semibold shadow-none hover:bg-transparent focus-visible:ring-2 focus-visible:ring-ring dark:border-0"
                   aria-label={t("insights.leaderboard.chooseBoard")}
                 >
                   <SelectValue />
@@ -789,7 +817,7 @@ export default function LeaderboardSection({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-40">
-              {!isSoloScope && (
+              {!isSoloScope && canGrowLeaderboard && (
                 <DropdownMenuItem className="gap-2 text-xs" onSelect={openLeaderboardGrowthAction}>
                   {domainNeedsWorkspace ? <Building2 size={13} /> : <UserPlus size={13} />}
                   {t(
@@ -839,20 +867,34 @@ export default function LeaderboardSection({
           onInvite={openLeaderboardGrowthAction}
           pendingInvites={pendingInvites}
         />
+      ) : visibleFailure === "policy" && !visibleLeaderboard ? (
+        <div className="flex min-h-48 items-center justify-center px-5 py-10 text-center">
+          <p className="text-sm font-medium">{t("insights.leaderboard.syncPolicyBlocked")}</p>
+        </div>
       ) : visibleFailure && !visibleLeaderboard ? (
         <LeaderboardRetryCard
           actionDisabled={visibleFailure === "sso" && ssoActionDisabled}
           actionLabel={
             visibleFailure === "sso"
               ? t(ssoStarting ? "auth.social.completeInBrowser" : "auth.sso.continueWithSSO")
-              : undefined
+              : visibleFailure === "auth"
+                ? t("auth.passwordForm.signInLink")
+                : undefined
           }
           message={
             visibleFailure === "sso"
               ? (ssoRecoveryError ?? t("auth.sso.companySignInTitle"))
-              : t("insights.leaderboard.error")
+              : visibleFailure === "auth"
+                ? t("insights.leaderboard.signInDescription")
+                : t("insights.leaderboard.error")
           }
-          onRetry={visibleFailure === "sso" ? onSsoSignIn : () => void load()}
+          onRetry={
+            visibleFailure === "sso"
+              ? onSsoSignIn
+              : visibleFailure === "auth"
+                ? onSignIn
+                : () => void load()
+          }
         />
       ) : !visibleLeaderboard ? (
         <div className="flex min-h-48 items-center justify-center text-muted-foreground">
@@ -883,9 +925,13 @@ export default function LeaderboardSection({
             <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-muted/10">
                 <tr className="border-y border-border/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="w-16 px-5 py-2.5 font-medium">{t("insights.leaderboard.rank")}</th>
-                  <th className="px-3 py-2.5 font-medium">{t("insights.leaderboard.member")}</th>
-                  <th className="w-56 px-5 py-2 text-right font-medium">
+                  <th scope="col" className="w-16 px-5 py-2.5 font-medium">
+                    {t("insights.leaderboard.rank")}
+                  </th>
+                  <th scope="col" className="px-3 py-2.5 font-medium">
+                    {t("insights.leaderboard.member")}
+                  </th>
+                  <th scope="col" className="w-56 px-5 py-2 text-right font-medium">
                     <Select
                       value={metric}
                       onValueChange={(value: LeaderboardMetric) => {
@@ -992,6 +1038,8 @@ export default function LeaderboardSection({
                     }
                   >
                     <LocateFixed size={14} />
+                    {visibleLeaderboard.viewerRank !== null &&
+                      `#${visibleLeaderboard.viewerRank} · `}
                     {t("insights.leaderboard.jumpToMe")}
                   </Button>
                 </Tooltip>

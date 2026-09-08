@@ -280,6 +280,27 @@ test("a participation read that fails offers a retry rather than a stale answer"
   assert.equal(store.getState().ready, true);
 });
 
+test("simultaneous participation reads for one account share one request", async (t) => {
+  let releaseRead;
+  const { context, requests, store } = await loadStore(t, {
+    cloudApiRequest: async () => {
+      await new Promise((resolve) => {
+        releaseRead = resolve;
+      });
+      return participation(true);
+    },
+  });
+
+  const first = store.getState().refresh(context);
+  const second = store.getState().refresh(context);
+  await waitFor(() => typeof releaseRead === "function");
+  assert.equal(requests.length, 1);
+
+  releaseRead();
+  await Promise.all([first, second]);
+  assert.equal(store.getState().enabled, true);
+});
+
 test("signing out drops the previous account's answer", async (t) => {
   const { store } = await loadStore(t, { cloudApiRequest: async () => participation(true) });
   store.setState({ enabled: true, ready: true, error: "read" });

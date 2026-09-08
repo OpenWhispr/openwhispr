@@ -265,7 +265,39 @@ test("account analytics accepts a complete cloud summary", async (t) => {
     scope: "account",
     timeZone: "UTC",
   });
-  assert.equal(requests[0].path, "/api/analytics/summary");
+  const requestUrl = new URL(requests[0].path, "https://api.openwhispr.com");
+  assert.equal(requestUrl.pathname, "/api/analytics/summary");
+  assert.equal(
+    requestUrl.searchParams.get("timeZone"),
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  );
+});
+
+test("account analytics sends UTC when the runtime exposes no timezone", async (t) => {
+  const requests = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return {
+            success: true,
+            data: { ...VALID_SUMMARY, scope: "account", timeZone: "UTC" },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { getAccountAnalyticsSummary } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+  t.mock.method(Intl, "DateTimeFormat", () => ({
+    resolvedOptions: () => ({ timeZone: "" }),
+  }));
+
+  await getAccountAnalyticsSummary();
+
+  const requestUrl = new URL(requests[0].path, "https://api.openwhispr.com");
+  assert.equal(requestUrl.searchParams.get("timeZone"), "UTC");
 });
 
 for (const [name, daily] of [

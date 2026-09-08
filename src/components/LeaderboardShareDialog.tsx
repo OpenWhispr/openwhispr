@@ -1,11 +1,6 @@
 import { useCallback, useState } from "react";
 import { Check, Download, Loader2, Share2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import {
-  LEADERBOARD_SHARE_MEMBER_LIMIT,
-  leaderboardDisplayName,
-  memberValue,
-} from "../helpers/leaderboard";
 import type { Leaderboard, LeaderboardMetric } from "../types/electron";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -18,24 +13,12 @@ interface LeaderboardShareDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-function drawRoundedRect(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number
-) {
-  context.beginPath();
-  context.roundRect(x, y, width, height, radius);
-  context.fill();
-}
-
 function createLeaderboardCard(
   leaderboard: Leaderboard,
-  metric: LeaderboardMetric,
+  cardTitle: string,
   metricLabel: string,
-  periodLabel: string
+  periodLabel: string,
+  locale: string
 ): string {
   const canvas = document.createElement("canvas");
   canvas.width = 1200;
@@ -60,35 +43,19 @@ function createLeaderboardCard(
 
   context.fillStyle = "#a5b4fc";
   context.font = "600 24px Inter, system-ui, sans-serif";
-  context.fillText("OPENWHISPR LEADERBOARD", 72, 74);
+  context.fillText(cardTitle.toLocaleUpperCase(locale), 72, 74);
   context.fillStyle = "#ffffff";
-  context.font = "700 50px Inter, system-ui, sans-serif";
-  context.fillText(leaderboard.scope.name.slice(0, 34), 72, 135);
+  context.font = "700 104px Inter, system-ui, sans-serif";
+  const rank = leaderboard.viewerRank === null ? "—" : `#${leaderboard.viewerRank}`;
+  context.fillText(rank, 72, 300);
   context.fillStyle = "#cbd5e1";
+  context.font = "500 30px Inter, system-ui, sans-serif";
+  context.fillText(`/ ${new Intl.NumberFormat(locale).format(leaderboard.totalMembers)}`, 76, 350);
   context.font = "400 22px Inter, system-ui, sans-serif";
-  context.fillText(`${metricLabel} · ${periodLabel}`, 72, 174);
-
-  const topMembers = leaderboard.leaders.slice(0, LEADERBOARD_SHARE_MEMBER_LIMIT);
-  topMembers.forEach((member, index) => {
-    const y = 210 + index * 72;
-    context.fillStyle = index === 0 ? "rgba(99,102,241,0.42)" : "rgba(255,255,255,0.08)";
-    drawRoundedRect(context, 72, y, 1056, 56, 16);
-    context.fillStyle = index === 0 ? "#fef3c7" : "#e2e8f0";
-    context.font = "700 22px Inter, system-ui, sans-serif";
-    context.fillText(`#${member.rank}`, 94, y + 36);
-    context.fillStyle = "#ffffff";
-    context.font = "600 22px Inter, system-ui, sans-serif";
-    context.fillText(leaderboardDisplayName(member).slice(0, 38), 180, y + 36);
-    context.textAlign = "right";
-    context.font = "700 24px Inter, system-ui, sans-serif";
-    const value = memberValue(member, metric);
-    context.fillText(value == null ? "—" : new Intl.NumberFormat().format(value), 1100, y + 36);
-    context.textAlign = "left";
-  });
-
+  context.fillText(`${metricLabel} · ${periodLabel}`, 72, 410);
   context.fillStyle = "#94a3b8";
-  context.font = "500 18px Inter, system-ui, sans-serif";
-  context.fillText("Made with OpenWhispr", 72, 600);
+  context.font = "600 18px Inter, system-ui, sans-serif";
+  context.fillText("OpenWhispr", 72, 600);
   return canvas.toDataURL("image/png");
 }
 
@@ -99,7 +66,7 @@ export default function LeaderboardShareDialog({
   open,
   onOpenChange,
 }: LeaderboardShareDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [status, setStatus] = useState<"copied" | "saved" | "failed" | null>(null);
 
@@ -107,11 +74,12 @@ export default function LeaderboardShareDialog({
     () =>
       createLeaderboardCard(
         leaderboard,
-        metric,
+        `OpenWhispr ${t("insights.leaderboard.title")}`,
         t(`insights.leaderboard.metrics.${metric}`),
-        periodLabel
+        periodLabel,
+        i18n.language
       ),
-    [leaderboard, metric, periodLabel, t]
+    [i18n.language, leaderboard, metric, periodLabel, t]
   );
 
   const copyImage = useCallback(async () => {
@@ -133,9 +101,7 @@ export default function LeaderboardShareDialog({
     }
   }, []);
 
-  const shareText = t("insights.leaderboard.shareText", {
-    workspace: leaderboard.scope.name,
-  });
+  const shareText = t("insights.leaderboard.shareText");
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) setStatus(null);
     onOpenChange(nextOpen);
@@ -151,29 +117,18 @@ export default function LeaderboardShareDialog({
 
         <div className="rounded-xl bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-900 p-5 text-white">
           <p className="text-[10px] font-semibold tracking-[0.18em] text-indigo-200">
-            OPENWHISPR LEADERBOARD
+            {`OpenWhispr ${t("insights.leaderboard.title")}`.toLocaleUpperCase(i18n.language)}
           </p>
-          <p className="mt-1 text-xl font-semibold">{leaderboard.scope.name}</p>
           <p className="mt-1 text-xs text-slate-300">
             {t(`insights.leaderboard.metrics.${metric}`)} · {periodLabel}
           </p>
-          <div className="mt-4 space-y-1.5">
-            {leaderboard.leaders.slice(0, LEADERBOARD_SHARE_MEMBER_LIMIT).map((member) => (
-              <div
-                key={member.userId}
-                className="flex items-center justify-between rounded-lg bg-white/8 px-3 py-2 text-sm"
-              >
-                <span className="truncate">
-                  <strong className="mr-3 text-indigo-200">#{member.rank}</strong>
-                  {leaderboardDisplayName(member)}
-                </span>
-                <strong className="ml-3">
-                  {memberValue(member, metric) == null
-                    ? "—"
-                    : new Intl.NumberFormat().format(memberValue(member, metric) ?? 0)}
-                </strong>
-              </div>
-            ))}
+          <div className="mt-6 rounded-lg bg-white/8 px-4 py-5">
+            <strong className="text-3xl">
+              {leaderboard.viewerRank === null ? "—" : `#${leaderboard.viewerRank}`}
+            </strong>
+            <span className="ml-2 text-sm text-slate-300">
+              / {new Intl.NumberFormat(i18n.language).format(leaderboard.totalMembers)}
+            </span>
           </div>
         </div>
 
@@ -193,7 +148,7 @@ export default function LeaderboardShareDialog({
               void run("download", async () => {
                 const result = await window.electronAPI.saveLeaderboardImage(
                   image(),
-                  `${leaderboard.scope.name}-leaderboard.png`
+                  "openwhispr-leaderboard.png"
                 );
                 if (!result.success) throw new Error(result.error || "Save failed");
                 if (!result.canceled) setStatus("saved");
@@ -216,7 +171,7 @@ export default function LeaderboardShareDialog({
               })
             }
           >
-            {busyAction === "x" ? <Loader2 className="animate-spin" /> : <span>𝕏</span>}
+            {busyAction === "x" ? <Loader2 className="animate-spin" /> : <span>X</span>}
             {t("insights.leaderboard.shareX")}
           </Button>
           <Button
@@ -242,6 +197,7 @@ export default function LeaderboardShareDialog({
         </div>
         {status && (
           <p
+            role="status"
             className={
               status === "failed"
                 ? "text-center text-xs text-destructive"

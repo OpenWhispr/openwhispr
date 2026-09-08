@@ -28,6 +28,7 @@ test("the combined opt-in reports claim failures before enabling sync or joining
       "__insightsAwaitingUploadCount",
       "__insightsUnclaimedCount",
       "__insightsSetEnabledValues",
+      "__insightsSyncEnabled",
       "__insightsSyncRequests",
       "__insightsToasts",
     ]) {
@@ -49,6 +50,7 @@ test("the combined opt-in reports claim failures before enabling sync or joining
   globalThis.__insightsAwaitingUploadCount = 1;
   globalThis.__insightsUnclaimedCount = 1;
   globalThis.__insightsSetEnabledValues = [];
+  globalThis.__insightsSyncEnabled = false;
   globalThis.__insightsSyncRequests = 0;
   globalThis.__insightsToasts = [];
 
@@ -97,8 +99,9 @@ test("the combined opt-in reports claim failures before enabling sync or joining
       `,
       "./useSettings": `
         export const useSettings = () => ({
-          insightsSyncEnabled: false,
+          insightsSyncEnabled: globalThis.__insightsSyncEnabled,
           setInsightsSyncEnabled: (enabled) => {
+            globalThis.__insightsSyncEnabled = enabled;
             globalThis.__insightsSetEnabledValues.push(enabled);
           }
         });
@@ -235,6 +238,19 @@ test("the combined opt-in reports claim failures before enabling sync or joining
   assert.equal(globalThis.__insightsSyncRequests, 1);
   assert.equal(globalThis.__insightsJoinCalls, 2);
   assert.equal(globalThis.__insightsToasts.length, 3);
+
+  await React.act(async () => {
+    root.render(React.createElement(Harness));
+    await Promise.resolve();
+  });
+  const settingsWritesBeforeLegacyFailure = globalThis.__insightsSetEnabledValues.length;
+  globalThis.__insightsJoinMode = "failure";
+  assert.equal(await enableAndJoin(), false);
+  assert.equal(
+    globalThis.__insightsSetEnabledValues.length,
+    settingsWritesBeforeLegacyFailure,
+    "a failed leaderboard join must preserve sync that was already enabled"
+  );
 
   const settingsWritesBeforeStaleFailure = globalThis.__insightsSetEnabledValues.length;
   const toastsBeforeStaleFailure = globalThis.__insightsToasts.length;

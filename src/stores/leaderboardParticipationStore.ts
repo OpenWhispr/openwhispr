@@ -41,6 +41,7 @@ interface LeaderboardParticipationState {
 let readId = 0;
 // Keep write invalidation separate so an older account cannot clear a newer account's pending state.
 let writeId = 0;
+let activeRefresh: { key: string; promise: Promise<void> } | null = null;
 
 export const useLeaderboardParticipationStore = create<LeaderboardParticipationState>(
   (set, get) => ({
@@ -53,9 +54,9 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     reset: () => {
       readId += 1;
       writeId += 1;
-      // updating with it: a write left running for the departing account would
-      // otherwise keep refresh() deferring the new account's read for as long
-      // as its request takes to settle.
+      activeRefresh = null;
+      // Reset updating too: a write left running for the departing account must
+      // not make refresh() skip the replacement account's read.
       set({ enabled: false, configured: false, ready: false, error: null, updating: false });
     },
 
@@ -70,32 +71,46 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     // source of truth for who is on a leaderboard, and nothing here may join or
     // leave one on the user's behalf.
     refresh: async (context) => {
-      // A write already in flight is the newer answer by definition — reading
-      // around it would settle the account on the state it is mid-change.
+      const key = `${context.userId}:${context.authGeneration}`;
+      if (activeRefresh?.key === key) {
+        await activeRefresh.promise;
+        return;
+      }
+      // A write already in flight is the newer answer by definition — skip a
+      // read that could settle the account on the state it is mid-change.
       if (get().updating) return;
-      const currentReadId = ++readId;
-      set({ ready: false, error: null });
+
+      const promise = (async () => {
+        const currentReadId = ++readId;
+        set({ ready: false, error: null });
+        try {
+          // An opt-out the network never delivered is retried first, so the answer
+          // below is the one the user asked for rather than the row it left behind.
+          const stillLeaving = await LeaderboardService.flushPendingLeave(context);
+          const participation = await LeaderboardService.getParticipation(context);
+          if (currentReadId !== readId) return;
+          set({
+            enabled: participation.enabled && !stillLeaving,
+            configured: participation.configured || stillLeaving,
+          });
+        } catch (error) {
+          if (currentReadId !== readId) return;
+          console.error("Reading leaderboard participation failed:", error);
+          // A read that failed leaves participation unknown, so it has to fail
+          // closed. Keeping the last answer would also let the leaderboard's 403
+          // recovery re-read, fail, and immediately re-issue the same 403 forever.
+          // The surface offers a Retry rather than a Join, which would ask an
+          // account that may already be on a leaderboard to join it again.
+          set({ enabled: false, configured: false, error: "read" });
+        } finally {
+          if (currentReadId === readId) set({ ready: true });
+        }
+      })();
+      activeRefresh = { key, promise };
       try {
-        // An opt-out the network never delivered is retried first, so the answer
-        // below is the one the user asked for rather than the row it left behind.
-        const stillLeaving = await LeaderboardService.flushPendingLeave(context);
-        const participation = await LeaderboardService.getParticipation(context);
-        if (currentReadId !== readId) return;
-        set({
-          enabled: participation.enabled && !stillLeaving,
-          configured: participation.configured || stillLeaving,
-        });
-      } catch (error) {
-        if (currentReadId !== readId) return;
-        console.error("Reading leaderboard participation failed:", error);
-        // A read that failed leaves participation unknown, so it has to fail
-        // closed. Keeping the last answer would also let the leaderboard's 403
-        // recovery re-read, fail, and immediately re-issue the same 403 forever.
-        // The surface offers a Retry rather than a Join, which would ask an
-        // account that may already be on a leaderboard to join it again.
-        set({ enabled: false, configured: false, error: "read" });
+        await promise;
       } finally {
-        if (currentReadId === readId) set({ ready: true });
+        if (activeRefresh?.promise === promise) activeRefresh = null;
       }
     },
 
@@ -150,7 +165,6 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
       writePendingLeaderboardLeave(userId);
       const generation = readId;
       get().publishAnswer(false, true, generation);
-      set({ updating: false });
     },
   })
 );
