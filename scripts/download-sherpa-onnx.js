@@ -15,7 +15,7 @@ const {
   compareVersions,
 } = require("../src/helpers/parakeetCapability");
 
-const SHERPA_ONNX_VERSION = "1.13.4";
+const SHERPA_ONNX_VERSION = "1.13.7";
 const GITHUB_RELEASE_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}`;
 
 // Binary configurations for each platform
@@ -66,14 +66,8 @@ const BINARIES = {
 
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 
-const VERSIONED_LIB_PATTERN = /^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/;
+const MACOS_ONNX_RUNTIME_LIBRARY = "libonnxruntime.dylib";
 const REQUIRED_MACOS_ARCHITECTURES = ["x86_64", "arm64"];
-
-// Upstream 1.13.4 ships an invalid arm64 signature on libonnxruntime; dyld SIGKILLs unsigned loads.
-function adhocSign(filePath, platformArch) {
-  if (process.platform !== "darwin" || !platformArch.startsWith("darwin")) return;
-  execFileSync("codesign", ["--force", "--sign", "-", filePath], { stdio: "ignore" });
-}
 
 function getDownloadUrl(archiveName) {
   return `${GITHUB_RELEASE_URL}/${archiveName}`;
@@ -138,17 +132,11 @@ function verifyPackagedMacosParakeet(
   } = {}
 ) {
   const binDirectory = path.join(appPath, "Contents", "Resources", "bin");
-  const libraries = readDirectory(binDirectory).filter((fileName) =>
-    /^libonnxruntime\.\d+(?:\.\d+)*\.dylib$/.test(fileName)
-  );
-
-  if (libraries.length !== 1) {
-    throw new Error(
-      `Expected one versioned ONNX Runtime library in ${binDirectory}, found ${libraries.length}`
-    );
+  if (!readDirectory(binDirectory).includes(MACOS_ONNX_RUNTIME_LIBRARY)) {
+    throw new Error(`Expected ${MACOS_ONNX_RUNTIME_LIBRARY} in ${binDirectory}`);
   }
 
-  const libraryPath = path.join(binDirectory, libraries[0]);
+  const libraryPath = path.join(binDirectory, MACOS_ONNX_RUNTIME_LIBRARY);
   const targets = parseMacosDeploymentTargets(runVtool(libraryPath));
   return { ...validateMacosDeploymentTargets(targets), libraryPath };
 }
@@ -175,24 +163,34 @@ function copyBinary(extractDir, binaryName, outputPath, platformArch) {
   fs.rmSync(outputPath, { force: true });
   fs.copyFileSync(foundPath, outputPath);
   setExecutable(outputPath);
-  adhocSign(outputPath, platformArch);
   console.log(`  ${platformArch}: Extracted to ${path.basename(outputPath)}`);
   return true;
 }
 
-function isCompleteInstall(markerPath, binaryPaths) {
+function readInstallMarker(markerPath) {
+  try {
+    return JSON.parse(fs.readFileSync(markerPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function isCompleteInstall(marker, binaryPaths) {
   if (binaryPaths.some((binaryPath) => !fs.existsSync(binaryPath))) return false;
 
-  try {
-    const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
-    return (
-      marker.version === SHERPA_ONNX_VERSION &&
-      Array.isArray(marker.libraries) &&
-      marker.libraries.every((lib) => fs.existsSync(path.join(BIN_DIR, lib)))
-    );
-  } catch {
-    return false;
-  }
+  return (
+    marker?.version === SHERPA_ONNX_VERSION &&
+    Array.isArray(marker.libraries) &&
+    marker.libraries.every(
+      (library) => typeof library === "string" && fs.existsSync(path.join(BIN_DIR, library))
+    )
+  );
+}
+
+function findObsoleteLibraries(previousLibraries, installedLibraries, directoryEntries) {
+  const previous = new Set(previousLibraries);
+  const installed = new Set(installedLibraries);
+  return directoryEntries.filter((file) => previous.has(file) && !installed.has(file));
 }
 
 async function downloadBinary(platformArch, config, isForce = false) {
@@ -205,10 +203,11 @@ async function downloadBinary(platformArch, config, isForce = false) {
   const onlineOutputPath = path.join(BIN_DIR, config.onlineOutputName);
   const diarizeOutputPath = path.join(BIN_DIR, config.diarizeOutputName);
   const installMarkerPath = path.join(BIN_DIR, `.sherpa-onnx-${platformArch}.json`);
+  const installMarker = readInstallMarker(installMarkerPath);
 
   if (
     !isForce &&
-    isCompleteInstall(installMarkerPath, [outputPath, onlineOutputPath, diarizeOutputPath])
+    isCompleteInstall(installMarker, [outputPath, onlineOutputPath, diarizeOutputPath])
   ) {
     console.log(`  ${platformArch}: Already exists (use --force to re-download)`);
     return true;
@@ -242,44 +241,29 @@ async function downloadBinary(platformArch, config, isForce = false) {
         ignoreReadErrors: true,
       });
 
-      // Separate versioned and unversioned libraries to create symlinks where possible
-      // e.g. libonnxruntime.dylib -> libonnxruntime.1.23.2.dylib (saves ~71MB)
-      const versionedLibs = new Map(); // base name -> versioned file name
-
       for (const libPath of libraries) {
         const libName = path.basename(libPath);
         const destPath = path.join(BIN_DIR, libName);
-
-        const versionMatch = libName.match(VERSIONED_LIB_PATTERN);
-        if (versionMatch) {
-          versionedLibs.set(`${versionMatch[1]}.${versionMatch[3]}`, libName);
-        }
 
         // rm first: copying onto an existing symlink would write through it
         fs.rmSync(destPath, { force: true });
         fs.copyFileSync(libPath, destPath);
         setExecutable(destPath);
-        adhocSign(destPath, platformArch);
         copiedLibraries.push(libName);
         console.log(`  ${platformArch}: Copied library ${libName}`);
       }
 
-      // Replace unversioned copies with symlinks to versioned ones (macOS/Linux only)
-      if (process.platform !== "win32") {
-        for (const [baseName, versionedName] of versionedLibs) {
-          const basePath = path.join(BIN_DIR, baseName);
-          fs.rmSync(basePath, { force: true });
-          fs.symlinkSync(versionedName, basePath);
-          console.log(`  ${platformArch}: Symlinked ${baseName} -> ${versionedName}`);
-
-          for (const file of fs.readdirSync(BIN_DIR)) {
-            const match = file.match(VERSIONED_LIB_PATTERN);
-            if (match && `${match[1]}.${match[3]}` === baseName && file !== versionedName) {
-              fs.unlinkSync(path.join(BIN_DIR, file));
-              console.log(`  ${platformArch}: Removed stale ${file}`);
-            }
-          }
-        }
+      const previousLibraries = Array.isArray(installMarker?.libraries)
+        ? installMarker.libraries
+        : [];
+      const obsoleteLibraries = findObsoleteLibraries(
+        previousLibraries,
+        copiedLibraries,
+        fs.readdirSync(BIN_DIR)
+      );
+      for (const file of obsoleteLibraries) {
+        fs.rmSync(path.join(BIN_DIR, file), { force: true });
+        console.log(`  ${platformArch}: Removed stale ${file}`);
       }
     }
 
@@ -366,6 +350,7 @@ module.exports = {
   SHERPA_ONNX_VERSION,
   BINARIES,
   BIN_DIR,
+  findObsoleteLibraries,
   getDownloadUrl,
   parseMacosDeploymentTargets,
   validateMacosDeploymentTargets,
