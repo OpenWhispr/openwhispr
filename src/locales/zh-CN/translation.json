@@ -2528,6 +2528,7 @@
         "turbo": "快速且质量良好"
       },
       "transcription": {
+        "openai_gpt_transcribe": "最新、最准确的转录",
         "openai_gpt_4o_mini_transcribe": "快速且准确的转录",
         "openai_gpt_4o_transcribe": "最准确的转录",
         "openai_whisper_1": "原始 Whisper 模型",

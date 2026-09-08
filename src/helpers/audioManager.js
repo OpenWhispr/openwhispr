@@ -108,6 +108,7 @@ import {
   payloadSendsDictionaryBias,
 } from "../utils/dictionaryEchoFilter.js";
 import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionaryPromptCap.js";
+import { dictionaryKeywords, usesTranscriptionKeywords } from "../utils/dictionaryKeywords.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
@@ -714,9 +715,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   // Whisper only accepts language "zh"; script (简体/繁體) is applied here. See #975.
   // No transcript exists yet, so only an explicit zh-CN/zh-TW may bias the prompt.
-  getWhisperPrompt(settings = getSettings()) {
+  getWhisperPrompt(settings = getSettings(), dictionaryPrompt = this.getCustomDictionaryPrompt()) {
     return mergeWhisperPrompt(
-      this.getCustomDictionaryPrompt(),
+      dictionaryPrompt,
       resolveChineseScriptTarget(
         this.getEffectiveSttLanguage(settings),
         settings.chineseScriptPreference
@@ -3063,7 +3064,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (!normalized || normalized === "whisper-1") {
       return false;
     }
-    if (normalized === "gpt-4o-transcribe" || normalized === "gpt-4o-transcribe-diarize") {
+    if (
+      normalized === "gpt-transcribe" ||
+      normalized === "gpt-4o-transcribe" ||
+      normalized === "gpt-4o-transcribe-diarize"
+    ) {
       return true;
     }
     return normalized.startsWith("gpt-4o-mini-transcribe");
@@ -3529,6 +3534,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       const endpoint = this.getTranscriptionEndpoint(route);
 
+      // gpt-transcribe takes the dictionary on its own keywords[] channel (see
+      // dictionaryKeywords), so its prompt carries only the Chinese script bias.
+      const usesKeywords = usesTranscriptionKeywords(model);
+      const dictionary = this.getCustomDictionaryPrompt();
+
       // Prompt budgets follow each provider's real limit (see dictionaryPromptCap):
       // Groq's 896-char request cap, the Whisper decoders' window, and a far
       // larger context guard for the 4o transcribe models, which are LLMs and
@@ -3536,7 +3546,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Whisper decoders read the tail of whatever they are given.
       const MAX_PROMPT_CHARS = dictionaryPromptLimit({ provider, endpoint, model });
       const trimmedPrompt = trimDictionaryPrompt(
-        this.getWhisperPrompt(apiSettings),
+        this.getWhisperPrompt(apiSettings, usesKeywords ? null : dictionary),
         MAX_PROMPT_CHARS
       );
       const dictionaryPrompt = trimmedPrompt.prompt;
@@ -3553,6 +3563,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         }
         formData.append("prompt", dictionaryPrompt);
+      }
+      if (usesKeywords) {
+        for (const keyword of dictionaryKeywords(dictionary)) {
+          formData.append("keywords[]", keyword);
+        }
       }
 
       const shouldStream = this.shouldStreamTranscription(model, provider);
@@ -3814,7 +3829,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (batchModel) return batchModel;
       return resolveByokModel(provider, s.cloudTranscriptionModel);
     } catch (error) {
-      return "gpt-4o-mini-transcribe";
+      return "gpt-transcribe";
     }
   }
 

@@ -2544,6 +2544,7 @@
         "turbo": "Быстрый с хорошим качеством"
       },
       "transcription": {
+        "openai_gpt_transcribe": "Новейшая и самая точная транскрипция",
         "openai_gpt_4o_mini_transcribe": "Быстрая и точная транскрипция",
         "openai_gpt_4o_transcribe": "Максимально точная транскрипция",
         "openai_whisper_1": "Оригинальная модель Whisper",

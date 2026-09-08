@@ -207,6 +207,12 @@
       "baseUrl": "https://api.openai.com/v1",
       "models": [
         {
+          "id": "gpt-transcribe",
+          "name": "GPT Transcribe",
+          "description": "Newest, most accurate transcription",
+          "descriptionKey": "models.descriptions.transcription.openai_gpt_transcribe"
+        },
+        {
           "id": "gpt-4o-mini-transcribe",
           "name": "GPT-4o Mini Transcribe",
           "description": "Fast and accurate transcription",
