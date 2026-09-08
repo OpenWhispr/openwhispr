@@ -16,10 +16,12 @@ const createHarness = ({ startImpl, stopImpl } = {}) => {
   let now = START_TIME;
   const calls = [];
   const interruptions = [];
+  const resumed = [];
 
   const watchdog = createMeetingSystemAudioWatchdog({
     now: () => now,
     onInterrupted: (payload) => interruptions.push(payload),
+    onResumed: () => resumed.push(now),
   });
 
   // Mirrors startManagedMeetingSystemAudio: capture is attached when it starts,
@@ -51,6 +53,7 @@ const createHarness = ({ startImpl, stopImpl } = {}) => {
     watchdog,
     calls,
     interruptions,
+    resumed,
     attach,
     advance,
     jump: (ms) => {
@@ -175,6 +178,33 @@ test("a device invalidation restarts without waiting for the stall window", asyn
   assert.deepEqual(h.interruptions, [
     { systemAudioStrategy: "native", reason: "device_invalidated", recovering: true },
   ]);
+});
+
+test("device warnings from retiring capture do not use another restart attempt", async () => {
+  const h = createHarness({ stopImpl: () => h.watchdog.reportDeviceInvalidated() });
+  startNative(h);
+
+  h.watchdog.reportDeviceInvalidated();
+  await flush();
+
+  assert.deepEqual(h.calls, ["stop", "start"]);
+  assert.equal(h.interruptions.length, 1);
+});
+
+test("replacement device warnings respect the restart cap", async () => {
+  const h = createHarness({ startImpl: () => h.watchdog.reportDeviceInvalidated() });
+  startNative(h);
+
+  h.watchdog.reportDeviceInvalidated();
+  await flush();
+
+  assert.equal(h.restarts(), MAX_RESTARTS);
+  assert.equal(h.interruptions.filter((entry) => entry.recovering).length, MAX_RESTARTS);
+  assert.deepEqual(h.interruptions.at(-1), {
+    systemAudioStrategy: "native",
+    reason: "device_invalidated",
+    recovering: false,
+  });
 });
 
 test("a restart that throws still clears the in-flight flag", async () => {
@@ -311,6 +341,35 @@ for (const systemAudioStrategy of ["native", "wasapi-loopback"]) {
   });
 }
 
+test("audible audio reports resumption once for each quiet warning", async () => {
+  const h = createHarness();
+  startNative(h);
+  assert.deepEqual(h.resumed, [], "ordinary audible capture is not a resumption");
+
+  for (let quietPeriod = 0; quietPeriod < 2; quietPeriod += 1) {
+    for (let elapsed = 0; elapsed <= GONE_QUIET_MS + TICK_MS; elapsed += TICK_MS) {
+      h.deliver(false);
+      await h.advance(TICK_MS);
+    }
+    assert.equal(h.resumed.length, quietPeriod, "silence must keep the warning active");
+    h.deliver(true);
+    assert.equal(h.resumed.length, quietPeriod + 1, "audible return clears the quiet warning");
+    h.deliver(true);
+    assert.equal(h.resumed.length, quietPeriod + 1, "subsequent audible chunks do not repeat it");
+  }
+});
+
+test("resumption does not clear historical capture interruptions", async () => {
+  const h = createHarness();
+  startNative(h);
+  h.watchdog.reportDeviceInvalidated();
+  await flush();
+  h.deliver(true);
+
+  assert.equal(h.interruptions.length, 1);
+  assert.deepEqual(h.resumed, []);
+});
+
 test("audible audio after exhausted recovery does not rearm the weaker quiet warning", async () => {
   const h = createHarness();
   startNative(h);
@@ -327,6 +386,7 @@ test("audible audio after exhausted recovery does not rearm the weaker quiet war
   assert.equal(h.restarts(), MAX_RESTARTS);
   assert.equal(h.interruptions.filter((entry) => !entry.recovering).length, 1);
   assert.equal(h.interruptions.filter((entry) => entry.reason === "gone_quiet").length, 0);
+  assert.deepEqual(h.resumed, [], "audible capture cannot dismiss exhausted recovery");
 });
 
 test("stop ends the session and a late restart cannot resurrect it", async () => {
@@ -378,12 +438,14 @@ test("a session that ends while the replacement is starting stops the orphan", a
   await h.advance(STALL_MS + TICK_MS);
   assert.deepEqual(h.calls, ["stop", "start"]);
 
+  h.watchdog.reportDeviceInvalidated();
   h.watchdog.stop();
   releaseStart();
   await flush();
   await flush();
 
   assert.deepEqual(h.calls, ["stop", "start", "stop"], "the helper it started must be killed");
+  assert.equal(h.interruptions.length, 1, "queued invalidation must not outlive its session");
 });
 
 test("starting again clears the previous session's attempt count", async () => {

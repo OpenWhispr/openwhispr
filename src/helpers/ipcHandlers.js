@@ -6604,24 +6604,42 @@ class IPCHandlers {
       meetingReconnectReplaySources = new Set();
     };
 
-    const queueMeetingReconnectAudio = (source, buffer) => {
+    const sendMeetingStreamingAudio = (streaming, buffer, capturedAt = null) => {
+      const firstSampleAt = streaming.audioBytesSent === 0 ? capturedAt : null;
+      const sent = streaming.sendAudio(buffer);
+      if (
+        sent &&
+        streaming.isConnected &&
+        firstSampleAt !== null &&
+        streaming.sessionStartedAt != null
+      ) {
+        // Deepgram/Corti time segments from the first PCM sample, which can
+        // precede a replacement socket's creation when replaying recovery audio.
+        streaming.sessionStartedAt = firstSampleAt;
+      }
+      return sent;
+    };
+
+    const queueMeetingReconnectAudio = (source, buffer, capturedAt = null) => {
       if (!meetingReconnectReplaySources.has(source)) return;
       const copy = Buffer.from(buffer);
       const queue = meetingReconnectAudioBuffers[source];
-      queue.push(copy);
+      queue.push({ buffer: copy, capturedAt });
       meetingReconnectAudioBytes[source] += copy.length;
       while (
         meetingReconnectAudioBytes[source] > MEETING_RECONNECT_BUFFER_MAX_BYTES &&
         queue.length > 1
       ) {
-        meetingReconnectAudioBytes[source] -= queue.shift().length;
+        meetingReconnectAudioBytes[source] -= queue.shift().buffer.length;
       }
     };
 
     const replayMeetingReconnectAudio = (source, streaming) => {
       if (!meetingReconnectReplaySources.has(source)) return true;
       const queue = meetingReconnectAudioBuffers[source];
-      const replayed = queue.every((buffer) => streaming.sendAudio(buffer));
+      const replayed = queue.every(({ buffer, capturedAt }) =>
+        sendMeetingStreamingAudio(streaming, buffer, capturedAt)
+      );
       debugLogger.info("Replayed meeting audio after reconnect", {
         source,
         chunks: queue.length,
@@ -6963,6 +6981,12 @@ class IPCHandlers {
     let meetingSystemAudioWatchdogWin = null;
 
     const meetingSystemAudioWatchdog = createMeetingSystemAudioWatchdog({
+      onResumed: () => {
+        const win = meetingSystemAudioWatchdogWin;
+        if (win && !win.isDestroyed()) {
+          win.webContents.send("meeting-system-audio-resumed");
+        }
+      },
       onInterrupted: (payload) => {
         // debugLogger.error flattens its arguments into one string, dropping
         // both the meta and the scope, so the give-up event would vanish from a
@@ -7088,7 +7112,7 @@ class IPCHandlers {
       }
     };
 
-    const dispatchMeetingAudioBuffer = (buffer, source, synthetic = false) => {
+    const dispatchMeetingAudioBuffer = (buffer, source, synthetic = false, capturedAt = null) => {
       if (meetingLocalMode) {
         // Local STT timestamps each batch with wall time, not a sample cursor.
         // Large synthetic gaps would dilute speech and inflate the next batch.
@@ -7149,8 +7173,8 @@ class IPCHandlers {
         }
       }
 
-      queueMeetingReconnectAudio(source, outbound);
-      const sent = streaming.sendAudio(outbound);
+      queueMeetingReconnectAudio(source, outbound, capturedAt);
+      const sent = sendMeetingStreamingAudio(streaming, outbound, capturedAt);
       if (synthetic) return;
       meetingSendCounts[source]++;
       if (meetingSendCounts[source] <= 5 || meetingSendCounts[source] % 100 === 0) {
@@ -8187,7 +8211,7 @@ class IPCHandlers {
       }
     };
 
-    const sendMeetingAudio = (audioBuffer, source, synthetic = false) => {
+    const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.
@@ -8238,7 +8262,7 @@ class IPCHandlers {
           }
         }
 
-        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic);
+        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic, capturedAt);
         return;
       }
 
@@ -8316,8 +8340,8 @@ class IPCHandlers {
         return manager.start({
           onChunk: (chunk) => {
             if (timeline) {
-              timeline.write(chunk, (buffer, synthetic) =>
-                sendMeetingAudio(buffer, "system", synthetic)
+              timeline.write(chunk, (buffer, synthetic, capturedAt) =>
+                sendMeetingAudio(buffer, "system", synthetic, capturedAt)
               );
             } else {
               sendMeetingAudio(chunk, "system");

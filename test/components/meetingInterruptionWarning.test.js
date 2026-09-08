@@ -46,6 +46,12 @@ async function setup(t) {
         if (listeners.interrupted === callback) listeners.interrupted = null;
       };
     },
+    onMeetingSystemAudioResumed(callback) {
+      listeners.resumed = callback;
+      return () => {
+        if (listeners.resumed === callback) listeners.resumed = null;
+      };
+    },
   };
   installBrowserGlobals(t, { window: { electronAPI: api } });
   installMicCaptureGlobals(t);
@@ -106,8 +112,40 @@ async function setup(t) {
       })
     );
   const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
-  return { store, render, interrupt, focus, reveal, i18n };
+  const resume = async () => React.act(async () => listeners.resumed?.());
+  return { store, render, interrupt, resume, focus, reveal, i18n };
 }
+
+test("audio resuming while hidden discards the quiet warning before focus", async (t) => {
+  const { interrupt, resume, focus, reveal } = await setup(t);
+  globalThis.document.visibilityState = "hidden";
+  await focus(false);
+  await interrupt({ reason: "gone_quiet" });
+  await resume();
+  await reveal();
+  await focus(true);
+  assert.equal(globalThis.__interruptionToasts.length, 0);
+});
+
+test("audio resuming with Mount absent clears its pending quiet warning", async (t) => {
+  const { render, interrupt, resume } = await setup(t);
+  await render(false);
+  await interrupt({ reason: "gone_quiet" });
+  await resume();
+  await render(true);
+  assert.equal(globalThis.__interruptionToasts.length, 0);
+});
+
+test("audio resuming dismisses a visible quiet warning even after unmount", async (t) => {
+  const { render, interrupt, resume } = await setup(t);
+  await interrupt({ reason: "gone_quiet" });
+  assert.equal(globalThis.__interruptionToasts.length, 1);
+  await render(false);
+  await resume();
+  assert.deepEqual(globalThis.__interruptionDismissals, ["1"]);
+  await render(true);
+  assert.equal(globalThis.__interruptionToasts.length, 1);
+});
 
 test("hidden and covered warnings wait for a focused visible window", async (t) => {
   const { interrupt, focus, reveal } = await setup(t);

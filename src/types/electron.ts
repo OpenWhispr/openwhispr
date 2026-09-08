@@ -684,6 +684,12 @@ export type SystemAudioMode = "native" | "loopback" | "portal" | "unsupported";
 export type SystemAudioStrategy =
   "native" | "loopback" | "pipewire-loopback" | "wasapi-loopback" | "unsupported";
 
+export interface MeetingSystemAudioInterruption {
+  systemAudioStrategy: SystemAudioStrategy;
+  reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet";
+  recovering: boolean;
+}
+
 export interface SystemAudioAccessResult {
   granted: boolean;
   status: "granted" | "denied" | "not-determined" | "restricted" | "unknown" | "unsupported";
@@ -2739,12 +2745,9 @@ declare global {
       ) => () => void;
       onMeetingSystemAudioDegraded?: (callback: () => void) => () => void;
       onMeetingSystemAudioInterrupted?: (
-        callback: (data: {
-          systemAudioStrategy: SystemAudioStrategy;
-          reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet";
-          recovering: boolean;
-        }) => void
+        callback: (data: MeetingSystemAudioInterruption) => void
       ) => () => void;
+      onMeetingSystemAudioResumed?: (callback: () => void) => () => void;
 
       // Speaker diarization
       downloadDiarizationModels?: () => Promise<{ success: boolean; error?: string }>;

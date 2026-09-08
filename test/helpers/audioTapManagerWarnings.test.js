@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const Module = require("node:module");
+const createMeetingSystemAudioWatchdog = require("../../src/helpers/meetingSystemAudioWatchdog");
 
 // The tap helper reports a stranded device as a stderr warning rather than by
 // exiting, so the forwarding path is the only thing that can tell the main
@@ -92,11 +93,9 @@ test("a warning during the start handshake neither resolves nor rejects it", asy
   const warnings = [];
   let settled = false;
 
-  const started = manager
-    .start({ onWarning: (warning) => warnings.push(warning) })
-    .then(() => {
-      settled = true;
-    });
+  const started = manager.start({ onWarning: (warning) => warnings.push(warning) }).then(() => {
+    settled = true;
+  });
 
   const child = lastChild;
   emitLine(child, { type: "warning", code: "listener_unavailable", message: "no listener" });
@@ -143,4 +142,49 @@ test("stop drops the warning handler along with the rest of the callbacks", asyn
 
   emitLine(child, { type: "warning", code: "device_invalidated", message: "changed" });
   assert.deepEqual(warnings, [], "a warning from the dead helper must not reach the new session");
+});
+
+test("a device warning beside the replacement start acknowledgement triggers another recovery", async (t) => {
+  const manager = createManager();
+  const interruptions = [];
+  const watchdog = createMeetingSystemAudioWatchdog({
+    onInterrupted: (payload) => interruptions.push(payload),
+  });
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const startCapture = () =>
+    manager.start({
+      onWarning: (warning) => {
+        if (warning.code === "device_invalidated") watchdog.reportDeviceInvalidated();
+      },
+    });
+  watchdog.attachCapture({ stop: () => manager.stop(), start: startCapture });
+  t.after(async () => {
+    watchdog.stop();
+    await manager.stop();
+  });
+
+  const started = startCapture();
+  emitLine(lastChild, { type: "start" });
+  await started;
+  watchdog.start({ systemAudioStrategy: "native", watchesDelivery: true });
+  emitLine(lastChild, { type: "warning", code: "device_invalidated" });
+  await flush();
+  await flush();
+  const replacement = lastChild;
+
+  // A busy main process can read both native messages in the same pipe chunk.
+  replacement.stderr.emit(
+    "data",
+    '{"type":"start"}\n{"type":"warning","code":"device_invalidated"}\n'
+  );
+  await flush();
+  await flush();
+
+  assert.notEqual(lastChild, replacement, "the invalidated replacement must be replaced too");
+  emitLine(lastChild, { type: "start" });
+  await flush();
+  assert.equal(interruptions.length, 2);
+  assert.ok(
+    interruptions.every((entry) => entry.reason === "device_invalidated" && entry.recovering)
+  );
 });

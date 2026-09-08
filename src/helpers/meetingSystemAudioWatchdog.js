@@ -32,7 +32,7 @@ const TICK_GAP_MS = 5_000;
 //
 // Tick-driven like meetingAutoEndController: every input updates state and the
 // owner calls tick() on an interval, so there is no timer to leak per session.
-const createMeetingSystemAudioWatchdog = ({ now = Date.now, onInterrupted }) => {
+const createMeetingSystemAudioWatchdog = ({ now = Date.now, onInterrupted, onResumed }) => {
   let session = null;
   let capture = null;
   // Bumped on every attach and detach. A restart suspended between its two
@@ -63,15 +63,16 @@ const createMeetingSystemAudioWatchdog = ({ now = Date.now, onInterrupted }) => 
     capture = null;
   };
 
-  const runRestart = async () => {
+  const runRestart = async (active) => {
     if (!capture) {
       return;
     }
     const target = capture;
     await target.stop().catch(() => {});
-    if (generation !== target.generation) {
+    if (generation !== target.generation || session !== active) {
       return;
     }
+    active.replacementStarting = true;
     await target.start();
     if (generation !== target.generation) {
       // The session ended while the helper was coming back up.
@@ -80,7 +81,15 @@ const createMeetingSystemAudioWatchdog = ({ now = Date.now, onInterrupted }) => 
   };
 
   const requestRestart = (reason) => {
-    if (!session || session.restartInFlight || session.recoveryFailed) {
+    if (!session || session.recoveryFailed) {
+      return;
+    }
+    if (session.restartInFlight) {
+      // Ignore the retiring helper, but retain a warning from its replacement:
+      // its start acknowledgement and warning can share the same stderr read.
+      if (reason === "device_invalidated" && session.replacementStarting) {
+        session.pendingDeviceInvalidation = true;
+      }
       return;
     }
 
@@ -100,19 +109,24 @@ const createMeetingSystemAudioWatchdog = ({ now = Date.now, onInterrupted }) => 
     notify(reason, true);
 
     Promise.resolve()
-      .then(runRestart)
+      .then(() => runRestart(active))
       .catch(() => {})
       .finally(() => {
         if (session !== active) {
           return;
         }
         active.restartInFlight = false;
+        active.replacementStarting = false;
         // Give the fresh capture a clean window even if the restart threw; the
         // next tick judges it on its own evidence either way.
         const at = now();
         active.lastChunkAt = at;
         if (active.lastAudibleAt !== null) {
           active.lastAudibleAt = at;
+        }
+        if (active.pendingDeviceInvalidation) {
+          active.pendingDeviceInvalidation = false;
+          requestRestart("device_invalidated");
         }
       });
   };
@@ -130,6 +144,8 @@ const createMeetingSystemAudioWatchdog = ({ now = Date.now, onInterrupted }) => 
       lastAudibleAt: null,
       restarts: 0,
       restartInFlight: false,
+      replacementStarting: false,
+      pendingDeviceInvalidation: false,
       recoveryFailed: false,
       quietReported: false,
     };
@@ -149,8 +165,9 @@ const createMeetingSystemAudioWatchdog = ({ now = Date.now, onInterrupted }) => 
     session.lastChunkAt = at;
     if (audible) {
       session.lastAudibleAt = at;
-      if (!session.recoveryFailed) {
+      if (session.quietReported && !session.recoveryFailed) {
         session.quietReported = false;
+        onResumed?.();
       }
     }
   };
