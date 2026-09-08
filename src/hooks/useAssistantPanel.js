@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  ASSISTANT_CLOSE_TIMING,
   getAssistantFooterTransitionTimeline,
   resolveAssistantThinkingTransition,
 } from "../helpers/voicePillPresentation";
@@ -7,6 +8,8 @@ import {
   closeAssistantSessionState,
   discardPendingAssistantCommand,
 } from "../helpers/assistantSessionState";
+import { MOTION_TIMING } from "../utils/springEasing";
+import { settleFallbackMs } from "../utils/transitionSettled";
 
 // The shell's own clip-path transitionend (VoiceModePanelCore's onCollapsed)
 // is the real signal; this is only the safety net (a torn-down node, a
@@ -14,8 +17,19 @@ import {
 // why that last case can never reach the real event at all). Exported so
 // tests can derive their expectations from the real constant instead of a
 // retyped literal.
-export const ASSISTANT_COLLAPSE_FALLBACK_MS = 560;
-export const ASSISTANT_CONTENT_FADE_FALLBACK_MS = 160;
+//
+// DERIVED, never hand-written (Finding 2, final review 2026-09-08). This must
+// stay >= the morph it is a net for: the shell's clip-path runs for
+// MOTION_TIMING.morphMs, and a fallback that fired first would unmount the
+// panel mid-transition — which hands useMainWindowSizeOwner's
+// returning-from-panel branch a native resize DURING a visible transition,
+// the one thing spec section 3 forbids. Written by hand it happened to equal
+// settleFallbackMs(morphMs); retuning morphMs 440 -> 600 would have broken it
+// silently, because the only test on it imported the constant itself.
+export const ASSISTANT_COLLAPSE_FALLBACK_MS = settleFallbackMs(MOTION_TIMING.morphMs);
+// The hook's guarantee on the CONTENT fade, one grace window past the core's
+// own report — see ASSISTANT_CLOSE_TIMING for why that ordering matters.
+export const ASSISTANT_CONTENT_FADE_FALLBACK_MS = ASSISTANT_CLOSE_TIMING.guaranteeMs;
 
 /**
  * Owns the assistant panel lifecycle: open/close choreography, the thinking
@@ -292,9 +306,12 @@ export function useAssistantPanel({
         void window.electronAPI?.setAssistantPanelOpen?.(false);
       }
 
-      // VoiceModePanelCore reports the actual content fade when it can. Keep the
-      // lifecycle owner here as a final guarantee so a missed child transition
-      // can never strand Agent Mode in its closing state.
+      // VoiceModePanelCore reports the actual content fade when it can — from
+      // the real transitionend, or from its own fallback one grace window
+      // after the fade. This is the lifecycle owner's final guarantee, one
+      // grace window later again, so the reporter always gets first refusal
+      // and a missed child transition still can never strand Agent Mode in
+      // its closing state.
       closeTimerRef.current = setTimeout(completeContentFade, ASSISTANT_CONTENT_FADE_FALLBACK_MS);
     },
     [recordingControlsRef, completeContentFade]

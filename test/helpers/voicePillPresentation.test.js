@@ -1184,3 +1184,35 @@ test("the reduced-motion gate chain lands on the entrance timeline's own publish
     "the controls phase must still start at its published instant"
   );
 });
+
+// Finding 2, final review 2026-09-08. One 120ms fade used to be described by
+// three unrelated hand-written numbers — the CSS's own
+// --motion-close-fade-ms, VoiceModePanelCore's 220ms report fallback, and
+// useAssistantPanel's 160ms guarantee — and the last two were in the wrong
+// ORDER: the hook's "final guarantee" fired 60ms BEFORE the core's report,
+// inverting the relationship both call sites' comments assert. Both are now
+// derived from the fade itself, here, so a retune moves all three together.
+test("the assistant close's two fallbacks derive from the fade they cover, in the right order", async () => {
+  const { ASSISTANT_CLOSE_TIMING } = await load();
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
+  const { settleFallbackMs } = await import("../../src/utils/transitionSettled.ts");
+
+  assert.equal(
+    ASSISTANT_CLOSE_TIMING.reportMs,
+    settleFallbackMs(MOTION_TIMING.closeFadeMs),
+    "the core's report fallback must be the close fade's own settle fallback"
+  );
+  assert.equal(
+    ASSISTANT_CLOSE_TIMING.guaranteeMs,
+    settleFallbackMs(ASSISTANT_CLOSE_TIMING.reportMs),
+    "the hook's guarantee must be one further grace window past the report"
+  );
+  assert.ok(
+    ASSISTANT_CLOSE_TIMING.reportMs > MOTION_TIMING.closeFadeMs,
+    "a report fallback that fired during the fade would cut it short"
+  );
+  assert.ok(
+    ASSISTANT_CLOSE_TIMING.guaranteeMs > ASSISTANT_CLOSE_TIMING.reportMs,
+    "the core REPORTS and the hook GUARANTEES — a guarantee that fires first inverts that"
+  );
+});

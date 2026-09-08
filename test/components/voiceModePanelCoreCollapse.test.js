@@ -63,12 +63,12 @@ function fakeTransitionEnd({ propertyName }) {
   };
 }
 
-async function mountCore(t, props) {
+async function mountCore(t, props, windowProps = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  installBrowserGlobals(t);
+  installBrowserGlobals(t, { window: windowProps });
   const container = installInteractiveDom(t);
   const { createRoot } = require("react-dom/client");
 
@@ -257,4 +257,46 @@ test("onCollapsed ignores a clip-path transitionend that bubbled up from a desce
     0,
     "a descendant's own clip-path transitionend (event.target !== event.currentTarget) must not report the shell's collapse"
   );
+});
+
+// Finding 2, final review 2026-09-08. The core's content-fade fallback was
+// the hand-written literal 220, one of three unrelated numbers describing the
+// same 120ms fade — and useAssistantPanel's own "final guarantee" was 160,
+// i.e. it fired FIRST, inverting the reporter/guarantor relationship both
+// files' comments assert. Timed here against the real exported constant so a
+// retune of the fade moves this test with it.
+//
+// The window stub forwards setTimeout/clearTimeout to globalThis at CALL
+// time, not at stub-creation time, so node's mock timers still intercept the
+// core's `window.setTimeout`.
+test("the content-fade fallback fires exactly at ASSISTANT_CLOSE_TIMING.reportMs when no transitionend arrives", async (t) => {
+  const { ASSISTANT_CLOSE_TIMING } = await vite.ssrLoadModule("/helpers/voicePillPresentation.js");
+  let fadeCalls = 0;
+
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  await mountCore(
+    t,
+    {
+      mode: "assistant",
+      open: false,
+      closing: true,
+      onClosingFadeComplete: () => {
+        fadeCalls += 1;
+      },
+    },
+    {
+      setTimeout: (...args) => globalThis.setTimeout(...args),
+      clearTimeout: (...args) => globalThis.clearTimeout(...args),
+    }
+  );
+
+  await React.act(async () => {
+    t.mock.timers.tick(ASSISTANT_CLOSE_TIMING.reportMs - 1);
+  });
+  assert.equal(fadeCalls, 0, "the fallback must not report before the fade could have finished");
+
+  await React.act(async () => {
+    t.mock.timers.tick(1);
+  });
+  assert.equal(fadeCalls, 1, "the fallback reports the content fade at the derived boundary");
 });

@@ -872,3 +872,43 @@ test("closing with a ready response retreats the footer actions immediately inst
     "a close intent while a response was ready must retreat the ACTIONS, not continue the pill/actions handoff"
   );
 });
+
+// Finding 2, final review 2026-09-08. ASSISTANT_COLLAPSE_FALLBACK_MS was the
+// hand-written literal 560, and the only test on it imported the constant
+// itself — so ANY value kept that test green. 560 happened to be
+// settleFallbackMs(MOTION_TIMING.morphMs); retuning morphMs 440 -> 600 (the
+// one knob the plan says owns the close spring) would have left the fallback
+// firing 40ms BEFORE the morph landed, unmounting the panel mid-transition
+// and handing useMainWindowSizeOwner's returning-from-panel branch a native
+// resize during a visible transition — the one thing spec section 3 forbids.
+// Both fallbacks are now derived; this binds them to what they cover.
+test("the assistant close's fallbacks are derived from the motion they cover, not hand-written", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-assistant-fallback-binding-test-",
+  });
+  const { ASSISTANT_COLLAPSE_FALLBACK_MS, ASSISTANT_CONTENT_FADE_FALLBACK_MS } =
+    await vite.ssrLoadModule("/hooks/useAssistantPanel.js");
+  const { ASSISTANT_CLOSE_TIMING } = await vite.ssrLoadModule("/helpers/voicePillPresentation.js");
+  const { MOTION_TIMING } = await vite.ssrLoadModule("/utils/springEasing.ts");
+  const { settleFallbackMs } = await vite.ssrLoadModule("/utils/transitionSettled.ts");
+
+  assert.equal(
+    ASSISTANT_COLLAPSE_FALLBACK_MS,
+    settleFallbackMs(MOTION_TIMING.morphMs),
+    "the collapse fallback must follow the morph duration it is a net for"
+  );
+  assert.ok(
+    ASSISTANT_COLLAPSE_FALLBACK_MS > MOTION_TIMING.morphMs,
+    "a collapse fallback at or under the morph unmounts the panel mid-transition"
+  );
+  assert.equal(
+    ASSISTANT_CONTENT_FADE_FALLBACK_MS,
+    ASSISTANT_CLOSE_TIMING.guaranteeMs,
+    "the hook's content-fade guarantee is the shared close timing's, not a third number"
+  );
+  assert.ok(
+    ASSISTANT_CONTENT_FADE_FALLBACK_MS > ASSISTANT_CLOSE_TIMING.reportMs,
+    "the core reports first; the hook only guarantees what the core could not report"
+  );
+});

@@ -87,6 +87,30 @@ export function resolveHandsFreeTipLadderVisible({
   return tip !== null || holdMigrationCardVisible || holdMigrationCardExiting;
 }
 
+// The two safety nets on the Agent panel's content fade. The fade itself is
+// ONE duration — MOTION_TIMING.closeFadeMs, emitted to CSS as
+// --motion-close-fade-ms — and both nets derive from it here so a retune moves
+// all three together instead of leaving three unrelated numbers describing the
+// same 120ms (Finding 2, final review 2026-09-08).
+//
+// `reportMs` is VoiceModePanelCore's. It reports the children's real opacity
+// transitionend when one arrives, and falls back to this when none can (a
+// torn-down node, or a child with no computed opacity delta). Reduced motion
+// is NOT such a case: src/index.css's blanket rule forces `opacity` INTO
+// transition-property, so the event still fires there.
+//
+// `guaranteeMs` is useAssistantPanel's, and is deliberately one further grace
+// window out. The core REPORTS and the hook GUARANTEES, so the hook's net must
+// never fire first — before this, the hook's 160ms undercut the core's 220ms
+// and inverted exactly the relationship both call sites' comments claim. Both
+// land on the same idempotent completeContentFade, so the ordering buys
+// truthful comments rather than a different outcome.
+const ASSISTANT_CONTENT_FADE_REPORT_MS = settleFallbackMs(MOTION_TIMING.closeFadeMs);
+export const ASSISTANT_CLOSE_TIMING = Object.freeze({
+  reportMs: ASSISTANT_CONTENT_FADE_REPORT_MS,
+  guaranteeMs: settleFallbackMs(ASSISTANT_CONTENT_FADE_REPORT_MS),
+});
+
 export const ASSISTANT_FOOTER_TRANSITION_TIMING = Object.freeze({
   pillRetreatMs: 180,
   actionsRetreatMs: 220,

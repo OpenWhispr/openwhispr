@@ -1,5 +1,6 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode, type TransitionEvent } from "react";
 import {
+  ASSISTANT_CLOSE_TIMING,
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   LIVE_TRANSCRIPT_SURFACE_LIMITS,
 } from "../../helpers/voicePillPresentation";
@@ -86,14 +87,19 @@ export function VoiceModePanelCore({
     closingFadeReportedRef.current = false;
     if (!closing || mode !== "assistant" || !onClosingFadeComplete) return undefined;
 
-    // A transition event is the primary signal. The fallback only covers
-    // reduced-motion, a renderer teardown, or a child with no computed
-    // opacity delta; it deliberately exceeds the real fade duration.
+    // A transition event is the primary signal. The fallback only covers a
+    // renderer teardown or a child with no computed opacity delta — NOT
+    // reduced motion, which keeps opacity in transition-property and so still
+    // fires the real event. It is derived from the fade it is a net for
+    // (ASSISTANT_CLOSE_TIMING.reportMs = the fade plus one grace window), so
+    // it can never drift from the CSS, and useAssistantPanel's own guarantee
+    // sits one further grace window past it (Finding 2, final review
+    // 2026-09-08).
     const fallback = window.setTimeout(() => {
       if (closingFadeReportedRef.current) return;
       closingFadeReportedRef.current = true;
       onClosingFadeComplete();
-    }, 220);
+    }, ASSISTANT_CLOSE_TIMING.reportMs);
     return () => window.clearTimeout(fallback);
   }, [closing, mode, onClosingFadeComplete]);
 
