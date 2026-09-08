@@ -183,7 +183,7 @@ test("custom dictionary prompt caps follow the provider's real limit", async (t)
   });
 });
 
-test("local whisper gets the head of a long dictionary, not whisper.cpp's tail", async (t) => {
+test("local whisper receives the dictionary whole, and echo checks see what it sent", async (t) => {
   const { window, setSettings, createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-dictionary-prompt-cap-local-test-",
     settingsKey: "__dictionaryPromptCapLocalSettings",
@@ -202,7 +202,9 @@ test("local whisper gets the head of a long dictionary, not whisper.cpp's tail",
   const result = await manager.processWithLocalWhisper(audioBlob, "base", {});
   assert.equal(result.success, true);
   assert.equal(seen.length, 1);
-  assert.ok(seen[0].length <= 900, `local prompt must stay capped, got ${seen[0].length}`);
-  assert.ok(longPrompt.startsWith(seen[0]), "truncation must keep the head of the list");
-  assert.equal(longPrompt[seen[0].length], ",", "truncation must end on a whole entry");
+  // A client-side character cut cannot give the head priority here: whisper.cpp
+  // reads ~223 prompt tokens and keeps the TAIL of anything longer, so trimming
+  // to 900 chars would only pick a different middle slice — and would leave the
+  // echo recovery classifying against a string the decoder never saw.
+  assert.equal(seen[0], longPrompt, "local whisper must receive the dictionary uncut");
 });

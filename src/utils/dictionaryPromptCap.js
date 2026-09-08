@@ -6,16 +6,24 @@
 // 890 leaves margin for UTF-16 vs codepoint counting drift.
 export const GROQ_PROMPT_CHARS = 890;
 
-// Whisper-family decoders (whisper-1, whisper.cpp) read at most 224 prompt
-// tokens, roughly 900 chars. Past that they silently keep only one end of the
-// list (OpenAI and whisper.cpp both keep the tail), so we trim client-side and
-// keep the head: the top of the user's list is what wins, everywhere.
+// Whisper-family decoders (whisper-1, Groq's whisper-large-v3, whisper.cpp) read
+// at most 223 prompt tokens and keep the TAIL of anything longer, silently. 900
+// chars is the historical client-side cut for them: it is well above what the
+// decoder reads, so it only bounds the request, never which words survive.
 export const WHISPER_PROMPT_CHARS = 900;
 
-// gpt-4o-transcribe / gpt-4o-mini-transcribe accept far longer prompts (verified
-// live to 40k chars); the only hard limit is the 16k-token context shared with
-// the audio (~8 tokens/s) and a 2k output reserve. ~1.7k tokens of dictionary
-// leaves room for long dictations while never touching a real-world list.
+// What the decoder's 223-token window is actually worth in characters. A
+// comma-separated list of names and technical terms tokenizes at ~2.3-2.9
+// chars/token (measured against Whisper's own BPE) — far denser than the ~4
+// chars/token rule of thumb for prose, because every ", " costs a token and
+// rare proper nouns fragment. Used to warn in the UI, not to trim: the true
+// budget is tokens, and no character count is right for every language.
+export const WHISPER_DECODER_PROMPT_CHARS = 550;
+
+// gpt-4o-transcribe / gpt-4o-mini-transcribe are LLMs, not Whisper decoders: no
+// 223-token prompt window, and verified live to 40k chars. The only hard limit
+// is the 16k-token context shared with the audio, so this is a guard against an
+// absurd list crowding out a long dictation, not a limit anyone should hit.
 export const TRANSCRIBE_PROMPT_CHARS = 8000;
 
 export function dictionaryPromptLimit({ provider = "", endpoint = "", model = "" } = {}) {
@@ -26,6 +34,9 @@ export function dictionaryPromptLimit({ provider = "", endpoint = "", model = ""
 
 // Cuts at the last comma inside the budget so no entry is sent half-spelled.
 // Returns the (possibly shorter) prompt plus what changed, for logging.
+// Callers must classify dictionary echoes against the returned prompt, not the
+// original: the echo filter needs 70% of the prompt's words back, which a full
+// echo of a trimmed prompt only clears when measured against the same string.
 export function trimDictionaryPrompt(prompt, maxChars) {
   if (!prompt || prompt.length <= maxChars) {
     return { prompt, originalLength: prompt ? prompt.length : 0, truncated: false };

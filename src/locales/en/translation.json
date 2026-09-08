@@ -3431,7 +3431,7 @@
     "wordsReady_other": "{{count}} words ready",
     "import": "Import",
     "yourDictionary": "Your dictionary",
-    "promptLimitNotice": "Your dictionary is {{chars}} characters. Groq and Whisper models only use about the first 900 — words nearer the top take priority there. Other models get the full list.",
+    "promptLimitNotice": "Your dictionary is {{chars}} characters. Groq and Whisper models read only the last few hundred characters of it, so a shorter list works better there. Other models get the full list.",
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
     "editWord": "Edit {{word}}",

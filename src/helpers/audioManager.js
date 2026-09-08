@@ -102,11 +102,7 @@ import {
   matchesDictionaryPrompt,
   payloadSendsDictionaryBias,
 } from "../utils/dictionaryEchoFilter.js";
-import {
-  WHISPER_PROMPT_CHARS,
-  dictionaryPromptLimit,
-  trimDictionaryPrompt,
-} from "../utils/dictionaryPromptCap.js";
+import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionaryPromptCap.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
@@ -2062,28 +2058,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         options.language = language;
       }
 
-      // Add custom dictionary as initial prompt to help Whisper recognize specific
-      // words. whisper.cpp reads at most 224 prompt tokens and would keep the TAIL of
-      // a longer list; trim to the head here so the top of the dictionary wins on
-      // this path too, matching the direct-API path and the dictionary UI.
+      // Add custom dictionary as initial prompt to help Whisper recognize specific words
       const customDictionaryPrompt = this.getCustomDictionaryPrompt();
-      const trimmedPrompt = trimDictionaryPrompt(this.getWhisperPrompt(), WHISPER_PROMPT_CHARS);
-      if (trimmedPrompt.truncated) {
-        logger.debug(
-          "Custom dictionary prompt truncated",
-          {
-            originalLength: trimmedPrompt.originalLength,
-            truncatedLength: trimmedPrompt.prompt.length,
-            maxChars: WHISPER_PROMPT_CHARS,
-          },
-          "transcription"
-        );
-      }
-      // Everything below classifies echoes against the prompt Whisper actually
-      // received, not the untrimmed list: the strict check needs 70% of the
-      // prompt's words back, and a full echo of a trimmed prompt clears that bar
-      // only when it is measured against the same string.
-      const dictionaryPrompt = trimmedPrompt.prompt;
+      const dictionaryPrompt = this.getWhisperPrompt();
       if (dictionaryPrompt) {
         options.initialPrompt = dictionaryPrompt;
       }

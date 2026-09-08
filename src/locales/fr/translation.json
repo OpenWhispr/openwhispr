@@ -3431,7 +3431,7 @@
     "wordsReady_other": "{{count}} mots prêts",
     "import": "Importer",
     "yourDictionary": "Votre dictionnaire",
-    "promptLimitNotice": "Votre dictionnaire compte {{chars}} caractères. Les modèles Groq et Whisper n'utilisent qu'environ les 900 premiers — les mots en haut de la liste sont prioritaires. Les autres modèles reçoivent la liste complète.",
+    "promptLimitNotice": "Votre dictionnaire compte {{chars}} caractères. Les modèles Groq et Whisper n'en lisent que les dernières centaines de caractères : une liste plus courte y fonctionne mieux. Les autres modèles reçoivent la liste complète.",
     "exportDictionary": "Exporter le dictionnaire",
     "exportFailed": "Échec de l'exportation",
     "editWord": "Modifier {{word}}",
