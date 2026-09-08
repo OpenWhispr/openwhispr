@@ -255,11 +255,13 @@ test("a settled paragraph keeps its DOM identity across tail-only growth, but ge
     null
   );
   // The new (shorter) tail's own word must still actually rise — this is
-  // the tail-shrink reset path (risenWordsRef resets to 0 when the new tail
-  // is shorter than the old one, since a boundary just moved words out from
-  // under it). Asserting only "no OTHER word wrongly rises" (the loop below)
-  // would pass vacuously if this reset broke and "India" silently lost its
-  // own rise trigger instead.
+  // the settled-boundary reset path (risenWordsRef's Map is replaced with a
+  // fresh, empty one whenever settledMarkdown itself changes, since a
+  // paragraph boundary just moved words out from under the tail and the new
+  // tail's real indices restart at 0 — fix round 1, findings 1+3). Asserting
+  // only "no OTHER word wrongly rises" (the loop below) would pass
+  // vacuously if this reset broke and "India" silently lost its own rise
+  // trigger instead.
   const newTailSpans = riseSpans(container);
   assert.equal(newTailSpans.length, 1, 'expected exactly one rise span ("India") after the boundary reset');
   assert.equal(newTailSpans[0].textContent, "India");
@@ -278,11 +280,16 @@ test("a settled paragraph keeps its DOM identity across tail-only growth, but ge
   assert.equal(riseSpans(container).length, 0, "a finished reply must carry no rise triggers at all");
   // The stronger check: "India" must not be word-wrapped AT ALL (not even a
   // rise-less span carrying data-word-index) — it went through the plain
-  // settled path, never through rehypeWordRise. "No rise spans" alone can
-  // pass for the wrong reason: a word that ages out of "new" (see the
-  // risenWordsRef reset above) also loses data-rise while still being
-  // word-wrapped, which would make the split's failure to stop splitting at
-  // end-of-stream invisible to a check that only looks for data-rise.
+  // settled path, never through rehypeWordRise. "No rise spans" alone would
+  // pass for the wrong reason if a future change reintroduced the
+  // pre-fix-round conditional "isNew" marking this design replaced: a word
+  // that aged out of "new" there lost data-rise while remaining
+  // word-wrapped, so a check that only looks for data-rise wouldn't catch
+  // the split still (wrongly) reaching rehypeWordRise at end-of-stream. The
+  // current design has no such state — every word rehypeWordRise touches is
+  // unconditionally marked (fix round 1) — so this assertion is currently
+  // implied by the one above; it's the one that would catch that specific
+  // regression shape if it ever came back.
   assert.equal(
     wordWrappedSpans(container).length,
     0,
@@ -294,11 +301,11 @@ test("the tail's per-word rise delay is wired to MOTION_TIMING.wordStaggerMs, no
   const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
   const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
 
-  // A tail that arrives as three words in a single update: firstNewWordIndex
-  // is 0 for all three (nothing has risen yet), so their delays are 0, 1x,
-  // and 2x the real stagger constant — computed from the import, never
-  // retyped, so a future change to MOTION_TIMING.wordStaggerMs keeps this
-  // test honest instead of quietly drifting.
+  // A tail that arrives as three words in a single update: each is brand
+  // new to risenWords (nothing has risen yet in this call), so their delays
+  // are 0, 1x, and 2x the real stagger constant — computed from the import,
+  // never retyped, so a future change to MOTION_TIMING.wordStaggerMs keeps
+  // this test honest instead of quietly drifting.
   await setAssistantMessage("Echo foxtrot golf", true);
   const spans = riseSpans(container).sort(
     (a, b) => Number(a.getAttribute("data-word-index")) - Number(b.getAttribute("data-word-index"))
@@ -515,4 +522,124 @@ test("a loose list settles with every item consistently loose — never a tight/
   await setAssistantMessage("- First\n\n- Second\n\n- Third\n\nAfter", true);
   assert.equal(listItems().length, 3);
   assertUniformLooseness("list complete");
+});
+
+// Fix round 2: an empty tail is NOT proof a list/blockquote has ended.
+// useChatStreaming calls setMessages with the full accumulated content on
+// every chunk, so a render landing exactly at "\n\n" — between finishing
+// one loose-list item and the next one starting — is a routine mid-stream
+// state, not a completion signal. Finding 2's original fix
+// (isSafeSettledBoundary returning !looksLikeListOrQuote(candidateTail))
+// treated that empty string as "doesn't look like a list/quote, so settle
+// here" — settling the item alone, only for the very next token (the next
+// item's marker) to prove the list continues, reverting the split and
+// UN-settling what had just settled: the already-displayed <p> is detached
+// and rebuilt, and its words regain data-rise, replaying their rise
+// animation. That is exactly the twitching-settled-text failure this whole
+// task exists to prevent. Two independent checks per the coordinator's own
+// instruction: settled DOM identity alone would miss a word wrongly
+// promoted to (then back out of) the settled path with identical-looking
+// final markup; the data-rise check alone would miss a settled node being
+// torn down and rebuilt. Both are asserted below.
+//
+// What this does NOT assert, deliberately: that Alpha's OWN tail span keeps
+// the same DOM node identity once a SUBSEQUENT sibling word arrives (e.g.
+// after "- Bravo" starts). Verified separately (a standalone check against
+// MarkdownRenderer + rehypeWordRise, outside this suite) that this is
+// already false for a plain paragraph with no list involved at all —
+// MarkdownRenderer's `components` map is built inline and unmemoized, so
+// every tail re-render gives every custom-mapped ancestor tag (p, li, ...)
+// a fresh type reference, which forces React to remount their entire
+// subtree regardless of the sticky, byte-identical delay VALUE fix round 1
+// shipped. That is a real, separate concern (flagged in the report, not
+// fixed here — out of scope for this finding, which is specifically about
+// the settled/tail SPLIT, not per-render remounting within the tail) and
+// asserting tail-span identity here would make this test fail for reasons
+// unrelated to the boundary bug it exists to cover.
+test("an empty tail right after a loose-list item is not proof the list ended — the settled prefix stays monotonic and Alpha never regains a rise trigger after being wrongly settled (fix round 2)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+
+  await setAssistantMessage("Intro para.\n\n- Alpha", true);
+  const introNode = findSettledParagraph(container, "Intro para.");
+  assert.ok(introNode, "expected the intro paragraph to already be settled once the list starts");
+  const alphaBefore = riseSpans(container).find((span) => span.textContent === "Alpha");
+  assert.ok(alphaBefore, "expected Alpha to be a risen tail word as the list's first item streams in");
+
+  // The chunk lands exactly at the "\n\n" boundary — content ends right
+  // after Alpha's own trailing blank line, with nothing yet to prove
+  // whether the list continues or has ended.
+  await setAssistantMessage("Intro para.\n\n- Alpha\n\n", true);
+
+  // Half 1: the settled prefix must keep its DOM identity through this
+  // empty-tail moment — it must not be torn down because of what the
+  // still-in-progress list does next.
+  assert.equal(
+    findSettledParagraph(container, "Intro para."),
+    introNode,
+    "the settled intro paragraph must keep its DOM identity through the empty-tail moment"
+  );
+
+  // Half 2: Alpha must still be found as a RISEN tail word, not have been
+  // promoted to plain settled text. The identity check above alone would
+  // not catch this — the intro paragraph's identity can stay perfectly
+  // stable while Alpha incorrectly settles and un-settles around it. Under
+  // the defect, Alpha is settled here (rendered as plain text via
+  // StableAssistantMarkdown, no span, no data-rise at all).
+  const alphaAtEmptyTail = riseSpans(container).find((span) => span.textContent === "Alpha");
+  assert.ok(
+    alphaAtEmptyTail,
+    "Alpha must still be a risen tail word at the empty-tail moment — an empty tail must never be read as proof the list ended"
+  );
+
+  // The next item's marker arrives. Under the defect, THIS is where Alpha
+  // would have visibly un-settled — its plain-settled <p> detached,
+  // replaced by a freshly risen span — as the split reverted. Confirm it
+  // never had to: the settled prefix is still the same node, and Alpha is
+  // (still) found risen with its delay VALUE unchanged (round 1's sticky
+  // guarantee) rather than having cycled through settled and back.
+  await setAssistantMessage("Intro para.\n\n- Alpha\n\n- Bravo", true);
+  assert.equal(
+    findSettledParagraph(container, "Intro para."),
+    introNode,
+    "the settled intro paragraph must still be the same node once the second item starts"
+  );
+  const alphaAfterBravo = riseSpans(container).find((span) => span.textContent === "Alpha");
+  assert.ok(alphaAfterBravo, "Alpha must still be found risen once Bravo starts — never settled in between");
+  assert.equal(
+    alphaAfterBravo.style.animationDelay,
+    alphaAtEmptyTail.style.animationDelay,
+    "Alpha's delay value must be unchanged — it was never removed from risenWords by a wrongful settle/un-settle cycle"
+  );
+});
+
+test("an empty tail right after a blockquote line is not proof the blockquote ended (fix round 2)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+
+  await setAssistantMessage("Intro para.\n\n> Alpha", true);
+  const introNode = findSettledParagraph(container, "Intro para.");
+  assert.ok(introNode);
+  const alphaBefore = riseSpans(container).find((span) => span.textContent === "Alpha");
+  assert.ok(alphaBefore, "expected Alpha to be a risen tail word as the blockquote's first line streams in");
+
+  await setAssistantMessage("Intro para.\n\n> Alpha\n\n", true);
+  assert.equal(
+    findSettledParagraph(container, "Intro para."),
+    introNode,
+    "the settled intro paragraph must keep its DOM identity through the empty-tail moment"
+  );
+  const alphaAtEmptyTail = riseSpans(container).find((span) => span.textContent === "Alpha");
+  assert.ok(
+    alphaAtEmptyTail,
+    "Alpha must still be a risen tail word at the empty-tail moment — an empty tail must never be read as proof the blockquote ended"
+  );
+
+  await setAssistantMessage("Intro para.\n\n> Alpha\n\n> Bravo", true);
+  assert.equal(findSettledParagraph(container, "Intro para."), introNode);
+  const alphaAfterBravo = riseSpans(container).find((span) => span.textContent === "Alpha");
+  assert.ok(alphaAfterBravo, "Alpha must still be found risen once Bravo starts — never settled in between");
+  assert.equal(
+    alphaAfterBravo.style.animationDelay,
+    alphaAtEmptyTail.style.animationDelay,
+    "Alpha's delay value must be unchanged"
+  );
 });

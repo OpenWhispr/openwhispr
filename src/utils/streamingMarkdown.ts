@@ -45,6 +45,18 @@ function isSafeSettledBoundary(candidateSettled: string, candidateTail: string):
   if (hasUnterminatedFence(candidateSettled)) return false;
   const lastBlockOfSettled = lastParagraphBlock(candidateSettled);
   if (!looksLikeListOrQuote(lastBlockOfSettled)) return true;
+  // Fix round 2, finding: an empty tail is NOT proof the list/quote ended —
+  // useChatStreaming calls setMessages with the full accumulated content on
+  // every chunk, so a render landing exactly at "\n\n" (between finishing
+  // one loose-list item and the next one starting) is routine, not a
+  // completion signal. Treating it as safe made the settled prefix
+  // NON-MONOTONIC: it would settle the item alone here, then un-settle it
+  // (detaching and re-rendering the already-displayed <p>, and re-marking
+  // its words data-rise) the instant the next item's marker arrived —
+  // exactly the twitching-settled-text failure this task exists to
+  // prevent. Only genuinely new, non-list/quote-shaped content in the tail
+  // proves the construct is done; nothing yet is not that proof.
+  if (candidateTail === "") return false;
   return !looksLikeListOrQuote(candidateTail);
 }
 
