@@ -14,6 +14,7 @@ import type {
 import type { CalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { sweepRetiredPromptOverrides } from "../config/retiredPrompts";
+import { sweepRetiredCloudModelSelections } from "../config/retiredCloudModels";
 import {
   deriveReasoningMode,
   buildReasoningScopePatches,
@@ -29,6 +30,11 @@ import {
 import { normalizeChineseScriptPreference } from "../utils/chineseScript";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import modelRegistryData from "../models/modelRegistryData.json";
+import { pickDefaultModelId } from "../models/providerDefaultModel";
+// Both are leaves: tinfoilModelCache imports only a type from ModelRegistry and
+// the switch store only zustand, so neither reopens the ModelRegistry cycle.
+import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
+import { recordTinfoilModelSwitch } from "./tinfoilModelSwitchStore";
 import {
   getTranscriptionSelection,
   isScreenContextAllowed,
@@ -73,9 +79,13 @@ export const LLM_POLICY_PROVIDER_IDS = [
 // Azure and Vertex remain intentionally unavailable in the desktop picker.
 export const LLM_ENTERPRISE_POLICY_PROVIDER_IDS = ["bedrock"] as const;
 
+// Managed transcription is Azure-only in this phase.
+export const TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS = ["azure"] as const;
+
 const TRANSCRIPTION_POLICY_CATALOG = {
-  modes: ["openwhispr", "providers", "local", "self-hosted"] as const,
+  modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"] as const,
   byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS,
+  enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
 };
 
 const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
@@ -148,8 +158,7 @@ function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion:
       : mode === "enterprise"
         ? modelRegistryData.enterpriseProviders
         : modelRegistryData.cloudProviders;
-  const defaultModel =
-    providers.find((provider) => provider.id === providerId)?.models[0]?.id ?? "";
+  const defaultModel = pickDefaultModelId(providers.find(({ id }) => id === providerId));
   return mode === "enterprise" && providerId === "bedrock"
     ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)
     : defaultModel;
@@ -158,6 +167,15 @@ function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion:
 function readString(key: string, fallback: string): string {
   if (!isBrowser) return fallback;
   return localStorage.getItem(key) ?? fallback;
+}
+
+// Literal rather than an import from ModelRegistry: ModelRegistry imports this
+// store, so importing back would create a require cycle.
+const DEFAULT_COHERE_MODEL = "cohere-transcribe-03-2026";
+
+function readLocalProvider(key: string): LocalTranscriptionProvider {
+  const stored = readString(key, "whisper");
+  return stored === "nvidia" || stored === "cohere" ? stored : "whisper";
 }
 
 function readBoolean(key: string, fallback: boolean): boolean {
@@ -226,6 +244,7 @@ const MEETING_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
   ["whisperModel", "meetingWhisperModel"],
   ["localTranscriptionProvider", "meetingLocalTranscriptionProvider"],
   ["parakeetModel", "meetingParakeetModel"],
+  ["cohereModel", "meetingCohereModel"],
   ["cloudTranscriptionProvider", "meetingCloudTranscriptionProvider"],
   ["cloudTranscriptionModel", "meetingCloudTranscriptionModel"],
   ["cloudTranscriptionBaseUrl", "meetingCloudTranscriptionBaseUrl"],
@@ -277,6 +296,7 @@ const BOOLEAN_SETTINGS = new Set([
   "translationDisableThinking",
   "preferBuiltInMic",
   "cloudBackupEnabled",
+  "insightsSyncEnabled",
   "telemetryEnabled",
   "audioCuesEnabled",
   "pauseMediaOnDictation",
@@ -432,6 +452,7 @@ const UPLOAD_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
   ["whisperModel", "uploadWhisperModel"],
   ["localTranscriptionProvider", "uploadLocalTranscriptionProvider"],
   ["parakeetModel", "uploadParakeetModel"],
+  ["cohereModel", "uploadCohereModel"],
   ["cloudTranscriptionProvider", "uploadCloudTranscriptionProvider"],
   ["cloudTranscriptionModel", "uploadCloudTranscriptionModel"],
   ["cloudTranscriptionBaseUrl", "uploadCloudTranscriptionBaseUrl"],
@@ -580,29 +601,47 @@ function migrateLLMScopeKeys() {
 
 migrateLLMScopeKeys();
 
-// Groq retired these models on 2026-08-16, so a scope still pointing at one
-// 404s on every request. Remap to the closest replacement Groq still serves.
-// Runs after migrateLLMScopeKeys so scope values live under their final keys.
-const RETIRED_GROQ_MODELS: Record<string, string> = {
-  "qwen/qwen3-32b": "openai/gpt-oss-120b",
-  "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
-  "llama-3.1-8b-instant": "openai/gpt-oss-20b",
-};
-
-function migrateRetiredGroqModels() {
-  if (!isBrowser) return;
-  if (localStorage.getItem("_retiredGroqModelsMigrated") === "1") return;
-
-  for (const { storeKeys } of Object.values(INFERENCE_SCOPES)) {
-    if (localStorage.getItem(storeKeys.provider) !== "groq") continue;
-    const replacement = RETIRED_GROQ_MODELS[localStorage.getItem(storeKeys.model) ?? ""];
-    if (replacement) localStorage.setItem(storeKeys.model, replacement);
-  }
-
-  localStorage.setItem("_retiredGroqModelsMigrated", "1");
+// Resolved offline, so a retired model's name survives only in the user's own
+// catalog cache and a replacement's only if we seed it. The raw-id fallback is
+// what the live-catalog reconcile shows too.
+function tinfoilModelName(modelId: string): string {
+  const named =
+    readCachedTinfoilModels().models.find((model) => model.id === modelId) ??
+    modelRegistryData.cloudProviders
+      .find((provider) => provider.id === "tinfoil")
+      ?.models.find((model) => model.id === modelId);
+  return named?.name ?? modelId;
 }
 
-migrateRetiredGroqModels();
+// A scope still pointing at a model its provider has retired 404s on every
+// request. Runs after migrateLLMScopeKeys so scope values live under their
+// final keys, and before the store reads them, so the first request of the
+// session already carries a model the provider serves.
+function migrateRetiredCloudModels() {
+  if (!isBrowser) return;
+  const swept = sweepRetiredCloudModelSelections(
+    localStorage,
+    Object.values(INFERENCE_SCOPES).map(({ storeKeys }) => storeKeys)
+  );
+  if (swept.length === 0) return;
+
+  logger.info(
+    "Repointed retired cloud model selections",
+    { scopes: swept.map(({ storeKey }) => storeKey) },
+    "settings"
+  );
+
+  // Tinfoil is the one provider that tells the user their model was switched
+  // out, and getting here first means reconcileSelectedModels no longer will.
+  const announced = new Set<string>();
+  for (const { provider, from, to } of swept) {
+    if (provider !== "tinfoil" || announced.has(from)) continue;
+    announced.add(from);
+    recordTinfoilModelSwitch({ from: tinfoilModelName(from), to: tinfoilModelName(to) });
+  }
+}
+
+migrateRetiredCloudModels();
 
 export interface SettingsState
   extends
@@ -662,6 +701,7 @@ export interface SettingsState
   meetingWhisperModel: string;
   meetingLocalTranscriptionProvider: LocalTranscriptionProvider;
   meetingParakeetModel: string;
+  meetingCohereModel: string;
   meetingCloudTranscriptionProvider: string;
   meetingCloudTranscriptionModel: string;
   meetingCloudTranscriptionBaseUrl: string;
@@ -674,6 +714,7 @@ export interface SettingsState
   uploadWhisperModel: string;
   uploadLocalTranscriptionProvider: LocalTranscriptionProvider;
   uploadParakeetModel: string;
+  uploadCohereModel: string;
   uploadCloudTranscriptionProvider: string;
   uploadCloudTranscriptionModel: string;
   uploadCloudTranscriptionBaseUrl: string;
@@ -764,6 +805,7 @@ export interface SettingsState
   setMeetingWhisperModel: (value: string) => void;
   setMeetingLocalTranscriptionProvider: (value: LocalTranscriptionProvider) => void;
   setMeetingParakeetModel: (value: string) => void;
+  setMeetingCohereModel: (value: string) => void;
   setMeetingCloudTranscriptionProvider: (value: string) => void;
   setMeetingCloudTranscriptionModel: (value: string) => void;
   setMeetingCloudTranscriptionBaseUrl: (value: string) => void;
@@ -776,6 +818,7 @@ export interface SettingsState
   setUploadWhisperModel: (value: string) => void;
   setUploadLocalTranscriptionProvider: (value: LocalTranscriptionProvider) => void;
   setUploadParakeetModel: (value: string) => void;
+  setUploadCohereModel: (value: string) => void;
   setUploadCloudTranscriptionProvider: (value: string) => void;
   setUploadCloudTranscriptionModel: (value: string) => void;
   setUploadCloudTranscriptionBaseUrl: (value: string) => void;
@@ -811,6 +854,7 @@ export interface SettingsState
   setWhisperModel: (value: string) => void;
   setLocalTranscriptionProvider: (value: LocalTranscriptionProvider) => void;
   setParakeetModel: (value: string) => void;
+  setCohereModel: (value: string) => void;
   setAllowOpenAIFallback: (value: boolean) => void;
   setAllowLocalFallback: (value: boolean) => void;
   setFallbackWhisperModel: (value: string) => void;
@@ -866,6 +910,7 @@ export interface SettingsState
 
   // Enterprise providers
   enterpriseSetupMode: EnterpriseSetupMode;
+  enterpriseTranscriptionSetupMode: EnterpriseSetupMode;
   bedrockAuthMode: string;
   bedrockRegion: string;
   bedrockProfile: string;
@@ -882,6 +927,7 @@ export interface SettingsState
   vertexApiKey: string;
   setBedrockAuthMode: (value: string) => void;
   setEnterpriseSetupMode: (value: EnterpriseSetupMode) => void;
+  setEnterpriseTranscriptionSetupMode: (value: EnterpriseSetupMode) => void;
   setBedrockRegion: (value: string) => void;
   setBedrockProfile: (value: string) => void;
   setBedrockAccessKeyId: (key: string) => void;
@@ -914,6 +960,7 @@ export interface SettingsState
 
   setTheme: (value: "light" | "dark" | "auto") => void;
   setCloudBackupEnabled: (value: boolean) => void;
+  setInsightsSyncEnabled: (value: boolean) => void;
   setTelemetryEnabled: (value: boolean) => void;
   setAudioRetentionDays: (days: number) => void;
   setTranscriptRetentionDays: (days: number) => void;
@@ -1210,10 +1257,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ),
   useLocalWhisper: readBoolean("useLocalWhisper", false),
   whisperModel: readString("whisperModel", "base"),
-  localTranscriptionProvider: (readString("localTranscriptionProvider", "whisper") === "nvidia"
-    ? "nvidia"
-    : "whisper") as LocalTranscriptionProvider,
+  localTranscriptionProvider: readLocalProvider("localTranscriptionProvider"),
   parakeetModel: readString("parakeetModel", ""),
+  cohereModel: readString("cohereModel", DEFAULT_COHERE_MODEL),
   allowOpenAIFallback: readBoolean("allowOpenAIFallback", false),
   allowLocalFallback: readBoolean("allowLocalFallback", false),
   fallbackWhisperModel: readString("fallbackWhisperModel", "base"),
@@ -1274,6 +1320,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (v === "auto" || v === "managed" || v === "manual") return v;
     return "auto" as EnterpriseSetupMode;
   })(),
+  enterpriseTranscriptionSetupMode: (() => {
+    const v = readString("enterpriseTranscriptionSetupMode", "auto");
+    if (v === "auto" || v === "managed" || v === "manual") return v;
+    return "auto" as EnterpriseSetupMode;
+  })(),
   bedrockAuthMode: readString("bedrockAuthMode", "sso"),
   bedrockRegion: readString("bedrockRegion", "us-east-1"),
   bedrockProfile: readString("bedrockProfile", ""),
@@ -1320,6 +1371,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return "auto" as const;
   })(),
   cloudBackupEnabled: readBoolean("cloudBackupEnabled", false),
+  insightsSyncEnabled: readBoolean("insightsSyncEnabled", false),
   telemetryEnabled: readBoolean("telemetryEnabled", false),
   audioRetentionDays: readNumber("audioRetentionDays", 30),
   transcriptRetentionDays: readNumber("transcriptRetentionDays", 0),
@@ -1432,11 +1484,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   meetingUseLocalWhisper: readBoolean("meetingUseLocalWhisper", false),
   meetingWhisperModel: readString("meetingWhisperModel", ""),
-  meetingLocalTranscriptionProvider: (readString("meetingLocalTranscriptionProvider", "whisper") ===
-  "nvidia"
-    ? "nvidia"
-    : "whisper") as LocalTranscriptionProvider,
+  meetingLocalTranscriptionProvider: readLocalProvider("meetingLocalTranscriptionProvider"),
   meetingParakeetModel: readString("meetingParakeetModel", ""),
+  meetingCohereModel: readString("meetingCohereModel", ""),
   meetingCloudTranscriptionProvider: readString("meetingCloudTranscriptionProvider", ""),
   meetingCloudTranscriptionModel: readString("meetingCloudTranscriptionModel", ""),
   meetingCloudTranscriptionBaseUrl: readString("meetingCloudTranscriptionBaseUrl", ""),
@@ -1454,11 +1504,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   uploadUseLocalWhisper: readBoolean("uploadUseLocalWhisper", false),
   uploadWhisperModel: readString("uploadWhisperModel", ""),
-  uploadLocalTranscriptionProvider: (readString("uploadLocalTranscriptionProvider", "whisper") ===
-  "nvidia"
-    ? "nvidia"
-    : "whisper") as LocalTranscriptionProvider,
+  uploadLocalTranscriptionProvider: readLocalProvider("uploadLocalTranscriptionProvider"),
   uploadParakeetModel: readString("uploadParakeetModel", ""),
+  uploadCohereModel: readString("uploadCohereModel", ""),
   uploadCloudTranscriptionProvider: readString("uploadCloudTranscriptionProvider", ""),
   uploadCloudTranscriptionModel: readString("uploadCloudTranscriptionModel", ""),
   uploadCloudTranscriptionBaseUrl: readString("uploadCloudTranscriptionBaseUrl", ""),
@@ -1532,6 +1580,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     useSettingsStore.setState({ meetingLocalTranscriptionProvider: value });
   },
   setMeetingParakeetModel: createStringSetter("meetingParakeetModel"),
+  setMeetingCohereModel: createStringSetter("meetingCohereModel"),
   setMeetingCloudTranscriptionProvider: createStringSetter("meetingCloudTranscriptionProvider"),
   setMeetingCloudTranscriptionModel: createStringSetter("meetingCloudTranscriptionModel"),
   setMeetingCloudTranscriptionBaseUrl: createStringSetter("meetingCloudTranscriptionBaseUrl"),
@@ -1551,6 +1600,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     useSettingsStore.setState({ uploadLocalTranscriptionProvider: value });
   },
   setUploadParakeetModel: createStringSetter("uploadParakeetModel"),
+  setUploadCohereModel: createStringSetter("uploadCohereModel"),
   setUploadCloudTranscriptionProvider: createStringSetter("uploadCloudTranscriptionProvider"),
   setUploadCloudTranscriptionModel: createStringSetter("uploadCloudTranscriptionModel"),
   setUploadCloudTranscriptionBaseUrl: createStringSetter("uploadCloudTranscriptionBaseUrl"),
@@ -1701,6 +1751,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ localTranscriptionProvider: value });
   },
   setParakeetModel: createStringSetter("parakeetModel"),
+  setCohereModel: createStringSetter("cohereModel"),
   setAllowOpenAIFallback: createBooleanSetter("allowOpenAIFallback"),
   setAllowLocalFallback: createBooleanSetter("allowLocalFallback"),
   setFallbackWhisperModel: createStringSetter("fallbackWhisperModel"),
@@ -1915,6 +1966,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setEnterpriseSetupMode: createStringSetter("enterpriseSetupMode") as (
     value: EnterpriseSetupMode
   ) => void,
+  setEnterpriseTranscriptionSetupMode: createStringSetter("enterpriseTranscriptionSetupMode") as (
+    value: EnterpriseSetupMode
+  ) => void,
   setBedrockAuthMode: (value: string) => {
     if (isBrowser) localStorage.setItem("bedrockAuthMode", value);
     set({ bedrockAuthMode: value });
@@ -2071,6 +2125,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   setCloudBackupEnabled: createBooleanSetter("cloudBackupEnabled"),
+  setInsightsSyncEnabled: createBooleanSetter("insightsSyncEnabled"),
   setTelemetryEnabled: createBooleanSetter("telemetryEnabled"),
   setMicWarmHoldSeconds: (value: number) => {
     const snapped = snapMicWarmHold(value);
@@ -2259,6 +2314,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.localTranscriptionProvider !== undefined)
       s.setLocalTranscriptionProvider(settings.localTranscriptionProvider);
     if (settings.parakeetModel !== undefined) s.setParakeetModel(settings.parakeetModel);
+    if (settings.cohereModel !== undefined) s.setCohereModel(settings.cohereModel);
     if (settings.allowOpenAIFallback !== undefined)
       s.setAllowOpenAIFallback(settings.allowOpenAIFallback);
     if (settings.allowLocalFallback !== undefined)
@@ -2457,6 +2513,7 @@ export interface ResolvedMeetingTranscription {
   whisperModel: string;
   localTranscriptionProvider: LocalTranscriptionProvider;
   parakeetModel: string;
+  cohereModel: string;
   cloudTranscriptionProvider: string;
   cloudTranscriptionModel: string;
   cloudTranscriptionBaseUrl: string;
@@ -2473,6 +2530,7 @@ export const selectResolvedMeetingTranscription = (
   whisperModel: state.meetingWhisperModel || state.whisperModel,
   localTranscriptionProvider: state.meetingLocalTranscriptionProvider,
   parakeetModel: state.meetingParakeetModel || state.parakeetModel,
+  cohereModel: state.meetingCohereModel || state.cohereModel,
   cloudTranscriptionProvider:
     state.meetingCloudTranscriptionProvider || state.cloudTranscriptionProvider,
   cloudTranscriptionModel: state.meetingCloudTranscriptionModel || state.cloudTranscriptionModel,
@@ -2489,6 +2547,7 @@ export interface ResolvedUploadTranscription {
   whisperModel: string;
   localTranscriptionProvider: LocalTranscriptionProvider;
   parakeetModel: string;
+  cohereModel: string;
   cloudTranscriptionProvider: string;
   cloudTranscriptionModel: string;
   cloudTranscriptionBaseUrl: string;
@@ -2505,6 +2564,7 @@ export const selectResolvedUploadTranscription = (
   whisperModel: state.uploadWhisperModel || state.whisperModel,
   localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
   parakeetModel: state.uploadParakeetModel || state.parakeetModel,
+  cohereModel: state.uploadCohereModel || state.cohereModel,
   cloudTranscriptionProvider:
     state.uploadCloudTranscriptionProvider || state.cloudTranscriptionProvider,
   cloudTranscriptionModel: state.uploadCloudTranscriptionModel || state.cloudTranscriptionModel,
@@ -2743,6 +2803,11 @@ export function selectPolicyEffectiveSettings(
         // as user authorization to send content there.
         writable[keys.baseUrl] = "";
       }
+    } else if (selection.mode === "enterprise") {
+      // The managed deployment/endpoint is resolved separately by
+      // enterpriseIdentityStore; the provider id here only needs to satisfy
+      // the policy gate (isTranscriptionContextAllowed).
+      writable[keys.provider] = selection.provider;
     }
   }
 
@@ -2848,7 +2913,7 @@ export function reconcileRetiredCloudModelSelections(): void {
     if (!provider || !model || provider === "tinfoil") continue;
     const providerDef = modelRegistryData.cloudProviders.find((p) => p.id === provider);
     if (!providerDef || reasoningModelBelongsToProvider(provider, model)) continue;
-    const replacement = providerDef.models[0]?.id;
+    const replacement = pickDefaultModelId(providerDef);
     if (!replacement) continue;
     setStringSetting(scope.storeKeys.model as keyof SettingsState, replacement);
     logger.info(

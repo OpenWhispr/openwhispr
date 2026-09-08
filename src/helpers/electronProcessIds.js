@@ -4,7 +4,7 @@ const { getOwnProcessPids } = require("./ownProcessPids");
 // loopback) are plain child processes, so they never appear in the Electron
 // process tree — yet the OS attributes their capture to their own pids.
 // Without excluding them, the app's own system-audio capture reads as an
-// external mic user and auto-end can never arm its countdown.
+// external mic user and auto-end can never arm its end detection.
 function collectAudioCaptureHelperPids(managers) {
   return managers
     .map((manager) => manager?.process?.pid)

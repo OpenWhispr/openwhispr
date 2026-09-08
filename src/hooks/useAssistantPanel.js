@@ -133,12 +133,17 @@ export function useAssistantPanel({
   const handleCommand = useCallback(
     (command) => {
       commandIdRef.current += 1;
+      // A follow-up spoken into an open panel stays panel-first: its answer is
+      // already streaming into a visible conversation, and delivering it to
+      // the external caret would snap that surface away mid-read.
+      const delivery = openRef.current ? null : (command.delivery ?? null);
       beginThinking();
       setPendingCommand({
         id: commandIdRef.current,
         text: command.text,
         attachment: command.attachment ?? null,
         selectedContext: command.selectedContext ?? null,
+        delivery,
       });
     },
     [beginThinking]
@@ -169,15 +174,20 @@ export function useAssistantPanel({
     mountedRef.current = mounted;
   }, [mounted]);
 
-  // The chat reports content, an error, or nothing at all; whichever it is,
-  // the thinking flourish must end and the panel must be visible so the
-  // outcome can be seen and the main-process busy gate releases.
   const handleCommandSettled = useCallback(
-    (id) => {
+    (id, { showPanel = true } = {}) => {
       if (id !== commandIdRef.current) return;
       if (!mountedRef.current || closingRef.current) return;
       setThinking(false);
-      void openPanel();
+      if (showPanel) {
+        void openPanel();
+        return;
+      }
+      openRef.current = false;
+      setOpen(false);
+      setBusy(false);
+      setResponseReady(false);
+      setMounted(false);
     },
     [openPanel]
   );

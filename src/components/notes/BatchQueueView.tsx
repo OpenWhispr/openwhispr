@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Check, X, Loader2, Clock, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
@@ -6,6 +7,7 @@ import type { QueueItem } from "../../stores/batchQueueStore";
 
 interface BatchQueueViewProps {
   queue: QueueItem[];
+  byokMaxFileSizeMb: number;
   completedCount: number;
   failedCount: number;
   totalCount: number;
@@ -29,8 +31,33 @@ function StatusIcon({ status }: { status: QueueItem["status"] }) {
   }
 }
 
+interface BatchWarningIndicatorProps {
+  transcriptionWarning: boolean;
+  diarizationWarning: boolean;
+  t: (key: string) => string;
+}
+
+export function BatchWarningIndicator({
+  transcriptionWarning,
+  diarizationWarning,
+  t,
+}: BatchWarningIndicatorProps): JSX.Element | null {
+  const messages: string[] = [];
+  if (transcriptionWarning) messages.push(t("notes.upload.partialWarning"));
+  if (diarizationWarning) messages.push(t("notes.upload.diarizationWarning"));
+  if (messages.length === 0) return null;
+
+  const label = messages.join(" ");
+  return (
+    <span className="flex shrink-0" role="img" title={label} aria-label={label}>
+      <AlertTriangle size={11} className="text-warning" />
+    </span>
+  );
+}
+
 export default function BatchQueueView({
   queue,
+  byokMaxFileSizeMb,
   completedCount,
   failedCount,
   totalCount,
@@ -108,10 +135,12 @@ export default function BatchQueueView({
               </div>
             )}
 
-            {item.status === "done" && item.warning && (
-              <span className="flex shrink-0" title={t("notes.upload.partialWarning")}>
-                <AlertTriangle size={11} className="text-amber-500/60" />
-              </span>
+            {item.status === "done" && (
+              <BatchWarningIndicator
+                transcriptionWarning={!!item.warning}
+                diarizationWarning={!!item.diarizationWarning}
+                t={t}
+              />
             )}
 
             {item.status === "done" && item.noteId && onOpenNote && (
@@ -127,9 +156,15 @@ export default function BatchQueueView({
             {item.status === "error" && item.error && (
               <span
                 className="text-[10px] text-destructive/50 truncate max-w-20"
-                title={t(`notes.upload.${item.error}`, { defaultValue: item.error })}
+                title={t(`notes.upload.${item.error}`, {
+                  defaultValue: item.error,
+                  size: byokMaxFileSizeMb,
+                })}
               >
-                {t(`notes.upload.${item.error}`, { defaultValue: item.error })}
+                {t(`notes.upload.${item.error}`, {
+                  defaultValue: item.error,
+                  size: byokMaxFileSizeMb,
+                })}
               </span>
             )}
 

@@ -8,23 +8,29 @@ class DragManager {
     this.dragOffset = { x: 0, y: 0 };
     this.mouseTrackingInterval = null;
     this.targetWindow = null;
+    this.activeWindow = null;
   }
 
   setTargetWindow(window) {
     this.targetWindow = window;
   }
 
-  async startWindowDrag() {
-    if (!this.targetWindow || this.targetWindow.isDestroyed()) {
+  /** Drags the configured target window by default; a caller that owns a
+   *  different frameless window (the control panel's manual titlebar) passes
+   *  it explicitly for the duration of one drag. */
+  async startWindowDrag(windowOverride = null) {
+    const win = windowOverride || this.targetWindow;
+    if (!win || win.isDestroyed()) {
       return { success: false, message: "Window not available" };
     }
 
     try {
       this.isDragging = true;
+      this.activeWindow = win;
 
       // Get current cursor position
       const cursorPos = screen.getCursorScreenPoint();
-      const windowPos = this.targetWindow.getPosition();
+      const windowPos = win.getPosition();
 
       // Calculate offset from cursor to window position
       this.dragOffset = {
@@ -47,6 +53,7 @@ class DragManager {
   async stopWindowDrag() {
     try {
       this.isDragging = false;
+      this.activeWindow = null;
       this.stopMouseTracking();
       debugLogger.info("Window drag stopped", undefined, "window-drag");
       return { success: true };
@@ -62,7 +69,7 @@ class DragManager {
     }
 
     this.mouseTrackingInterval = setInterval(() => {
-      if (this.isDragging && this.targetWindow && !this.targetWindow.isDestroyed()) {
+      if (this.isDragging && this.activeWindow && !this.activeWindow.isDestroyed()) {
         this.updateWindowPosition();
       }
     }, 16); // ~60fps
@@ -71,7 +78,7 @@ class DragManager {
   updateWindowPosition() {
     try {
       const cursorPos = screen.getCursorScreenPoint();
-      const { width, height } = this.targetWindow.getBounds();
+      const { width, height } = this.activeWindow.getBounds();
       const x = cursorPos.x - this.dragOffset.x;
       const y = cursorPos.y - this.dragOffset.y;
 
@@ -84,7 +91,7 @@ class DragManager {
       });
       const clamped = WindowPositionUtil.clampToWorkArea({ x, y, width, height }, display);
 
-      this.targetWindow.setPosition(clamped.x, clamped.y);
+      this.activeWindow.setPosition(clamped.x, clamped.y);
     } catch (error) {
       console.error("Error updating window position:", error);
       this.stopWindowDrag();

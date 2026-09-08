@@ -109,8 +109,8 @@ class MenuManager {
             {
               label: i18nMain.t("menu.learnMore"),
               click: async () => {
-                const { shell } = require("electron");
-                await shell.openExternal(sourceUrl);
+                const { openExternalUrl } = require("./externalUrlOpener");
+                await openExternalUrl(sourceUrl);
               },
             },
           ],

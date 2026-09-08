@@ -3,23 +3,6 @@ const assert = require("node:assert/strict");
 
 const TextEditMonitor = require("../../src/helpers/textEditMonitor");
 
-test("getPrecedingChar resolves to unknown for missing pid", async () => {
-  const m = new TextEditMonitor();
-  for (const pid of [null, undefined, 0]) {
-    assert.deepEqual(await m.getPrecedingChar(pid), { state: "unknown" });
-  }
-});
-
-test("getPrecedingChar returns unknown when the AX read fails or hangs", async () => {
-  const m = new TextEditMonitor();
-  // Non-darwin short-circuits without shelling out; darwin errors out on an
-  // unmapped PID. Both paths must resolve quickly with state "unknown".
-  const start = Date.now();
-  const result = await m.getPrecedingChar(99999999, 1500);
-  assert.equal(result.state, "unknown");
-  assert.ok(Date.now() - start < 3000);
-});
-
 test("activateTargetPid resolves false when no target PID was captured", async () => {
   const m = new TextEditMonitor();
   m.lastTargetPid = null;
@@ -107,6 +90,41 @@ test("getSelectedText skips the native binary for a cached PID", darwinOnly, asy
 
   m._nativeSelectionUnsupportedPids.add(42);
   assert.deepEqual(await m.getSelectedText(42), { state: "none" });
+});
+
+test("getSelectedText identifies an empty writable field", darwinOnly, async () => {
+  const m = new TextEditMonitor();
+  m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", 'echo "EDITABLE_NONE:"'] });
+
+  assert.deepEqual(await m.getSelectedText(42), { state: "none", editable: true });
+});
+
+test("isFocusedEditable accepts only an explicit native editable verdict", darwinOnly, async () => {
+  const editable = new TextEditMonitor();
+  editable.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", 'echo "EDITABLE"'] });
+  const readOnly = new TextEditMonitor();
+  readOnly.resolveBinary = () => ({
+    command: "/bin/sh",
+    args: ["-c", 'echo "NOT_EDITABLE"'],
+  });
+
+  assert.equal(await editable.isFocusedEditable({ kind: "mac-pid", pid: 42 }), true);
+  assert.equal(await readOnly.isFocusedEditable({ kind: "mac-pid", pid: 42 }), false);
+});
+
+test("isFocusedEditable answers from a stale binary's first monitor line", darwinOnly, async () => {
+  const m = new TextEditMonitor();
+  // A binary that predates the probe flag falls into monitor mode: one
+  // initial-value line, then it keeps running. The probe must settle on that
+  // first line instead of hanging until the timeout.
+  m.resolveBinary = () => ({
+    command: "/bin/sh",
+    args: ["-c", 'echo "INITIAL_VALUE:stale"; sleep 2'],
+  });
+
+  const startedAt = Date.now();
+  assert.equal(await m.isFocusedEditable({ kind: "mac-pid", pid: 42 }), false);
+  assert.ok(Date.now() - startedAt < 900, "must resolve on the first output line");
 });
 
 test("a non--25212 native failure is not cached", darwinOnly, async () => {

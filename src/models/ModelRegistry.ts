@@ -52,6 +52,8 @@ export interface CloudModelDefinition {
 export interface CloudProviderData {
   id: string;
   name: string;
+  /** Named default for providers whose list order isn't ours — see pickProviderDefaultModel. */
+  defaultModel?: string;
   models: CloudModelDefinition[];
 }
 
@@ -101,9 +103,11 @@ export interface ParakeetModelInfo {
   descriptionKey?: string;
   size: string;
   sizeMb: number;
+  expectedSizeBytes?: number;
   language: string;
   supportedLanguages: string[];
   runtime?: "offline" | "online";
+  modelType?: "transducer" | "cohere-transcribe";
   recommended?: boolean;
   downloadUrl: string;
   extractDir: string;
@@ -301,6 +305,10 @@ export const REASONING_PROVIDERS = buildReasoningProviders();
 
 export function getTinfoilModels(): CloudModelDefinition[] {
   return getTinfoilCloudProvider()?.models ?? [];
+}
+
+export function getCloudProviderDefaultModelId(providerId: string): string | undefined {
+  return modelData.cloudProviders.find((provider) => provider.id === providerId)?.defaultModel;
 }
 
 export function applyTinfoilModels(models: CloudModelDefinition[]): void {
@@ -525,6 +533,15 @@ export function getParakeetModelInfo(modelId: string): ParakeetModelInfo | undef
 
 export function isOnlineParakeetModel(modelId: string): boolean {
   return modelData.parakeetModels[modelId]?.runtime === "online";
+}
+
+export function isCohereTranscribeModel(modelId: string): boolean {
+  return modelData.parakeetModels[modelId]?.modelType === "cohere-transcribe";
+}
+
+// Both providers run on the parakeet/sherpa-onnx stack; only whisper differs.
+export function isSherpaLocalProvider(provider: string): boolean {
+  return provider === "nvidia" || provider === "cohere";
 }
 
 export const PARAKEET_MODEL_INFO = modelData.parakeetModels;

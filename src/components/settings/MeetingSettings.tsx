@@ -2,7 +2,8 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { usePolicyModeOptions } from "../../hooks/usePolicy";
+import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
+import { isModeAllowedByPolicy } from "../../stores/policyRules";
 import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
@@ -35,6 +36,7 @@ const noop = () => {};
 export function MeetingTranscriptionPanel() {
   const { t } = useTranslation();
   const startOnboarding = useStartOnboarding();
+  const policySnapshot = usePolicySnapshot();
 
   const {
     isSignedIn,
@@ -47,6 +49,8 @@ export function MeetingTranscriptionPanel() {
     setMeetingLocalTranscriptionProvider,
     meetingParakeetModel,
     setMeetingParakeetModel,
+    meetingCohereModel,
+    setMeetingCohereModel,
     meetingCloudTranscriptionProvider,
     setMeetingCloudTranscriptionProvider,
     meetingCloudTranscriptionModel,
@@ -109,16 +113,21 @@ export function MeetingTranscriptionPanel() {
 
   const handleLocalTranscriptionModelSelect = useCallback(
     (modelId: string, providerId?: string) => {
-      if (
-        providerId === "nvidia" ||
-        (!providerId && meetingLocalTranscriptionProvider === "nvidia")
-      ) {
+      const provider = providerId ?? meetingLocalTranscriptionProvider;
+      if (provider === "nvidia") {
         setMeetingParakeetModel(modelId);
+      } else if (provider === "cohere") {
+        setMeetingCohereModel(modelId);
       } else {
         setMeetingWhisperModel(modelId);
       }
     },
-    [meetingLocalTranscriptionProvider, setMeetingParakeetModel, setMeetingWhisperModel]
+    [
+      meetingLocalTranscriptionProvider,
+      setMeetingParakeetModel,
+      setMeetingCohereModel,
+      setMeetingWhisperModel,
+    ]
   );
 
   const renderTranscriptionPicker = (mode: "cloud" | "local") => (
@@ -130,7 +139,11 @@ export function MeetingTranscriptionPanel() {
       selectedCloudModel={meetingCloudTranscriptionModel}
       onCloudModelSelect={setMeetingCloudTranscriptionModel}
       selectedLocalModel={
-        meetingLocalTranscriptionProvider === "nvidia" ? meetingParakeetModel : meetingWhisperModel
+        meetingLocalTranscriptionProvider === "nvidia"
+          ? meetingParakeetModel
+          : meetingLocalTranscriptionProvider === "cohere"
+            ? meetingCohereModel
+            : meetingWhisperModel
       }
       onLocalModelSelect={handleLocalTranscriptionModelSelect}
       selectedLocalProvider={meetingLocalTranscriptionProvider}
@@ -144,8 +157,20 @@ export function MeetingTranscriptionPanel() {
     />
   );
 
+  // Only true when the org's policy actually allows the enterprise
+  // transcription mode — an empty list can also mean e.g. a self-hosted-only
+  // policy, where this specific explanation would be false.
+  const emptyListIsEnterpriseOnly =
+    transcriptionModes.length === 0 &&
+    isModeAllowedByPolicy(policySnapshot, "transcription", "enterprise");
+
   return (
     <div className="space-y-3">
+      {emptyListIsEnterpriseOnly && (
+        <p className="text-sm text-muted-foreground">
+          {t("settingsPage.transcription.meetingEnterpriseOnly")}
+        </p>
+      )}
       <InferenceModeSelector
         modes={transcriptionModes}
         activeMode={effectiveTranscriptionMode}

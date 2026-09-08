@@ -25,6 +25,31 @@
         "description": "Could not rebuild note files. Make sure the feature is enabled and the folder is writable."
       }
     },
+    "granolaImport": {
+      "title": "Import from Granola",
+      "description": "Import your meeting notes from a Granola CSV export",
+      "howTo": "In Granola: Settings → Profile → Export historical data → Generate CSV. The export is emailed to you, typically within a few hours.",
+      "chooseFile": "Choose CSV file",
+      "preview": {
+        "title": "Import from Granola",
+        "summary": "Found {{total}} notes: {{newCount}} new, {{duplicateCount}} already imported",
+        "warnings": "{{warningCount}} rows have issues (skipped or imported without a date)",
+        "confirm": "Import {{newCount}} notes",
+        "nothingNew": "All notes in this file have already been imported."
+      },
+      "done": {
+        "title": "Import complete",
+        "summary": "Imported {{imported}} notes into the \"Imported\" folder, skipped {{skipped}} duplicates"
+      },
+      "error": {
+        "title": "Import failed",
+        "EMPTY_FILE": "The file is empty.",
+        "HEADERS_UNRECOGNIZED": "This doesn't look like a Granola CSV export.",
+        "NO_DATA_ROWS": "No notes were found in this file.",
+        "FILE_TOO_LARGE": "This file is too large to import.",
+        "generic": "Something went wrong reading the file."
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "Identify and label speakers",
@@ -176,7 +201,10 @@
     "skip": "Skip",
     "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
     "policyAgentRestricted": "AI agent use is restricted by your organization.",
-    "policyTranscriptionRestricted": "Transcription is restricted by your organization."
+    "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
+    "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
+    "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
+    "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator."
   },
   "onboarding": {
     "rehaul": {
@@ -186,6 +214,7 @@
         "accessibilityDescription": "Pastes text into your active app.",
         "systemAudioTitle": "System Audio",
         "systemAudioDescription": "Captures audio from other apps.",
+        "screenContextDescription": "Lets your voice assistant see your screen. Never stored.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -452,7 +481,7 @@
       "title": "Voice Assistant Setup",
       "description": "Talk to your AI assistant with a single keypress",
       "hotkey": "Hotkey",
-      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. If text is highlighted, {{agentName}} edits and replaces that selection; otherwise the answer opens in a floating panel. No need to say “Hey {{agentName}}” first.",
+      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. If text is highlighted, {{agentName}} edits and replaces it. If a writable text field is focused, the answer is pasted at the cursor; otherwise it opens in a floating panel. No need to say “Hey {{agentName}}” first.",
       "test": "Try it",
       "testInstruction": "Select the sample text below, then press {{hotkey}} and say “make this shorter” — the edit lands right in the text box",
       "testSetHotkey": "Set a hotkey above to try it",
@@ -635,7 +664,8 @@
       "rawTranscript": "Raw Transcript",
       "clearAll": "Clear all",
       "clearAllTitle": "Clear All Transcriptions",
-      "clearAllDescription": "All transcriptions and audio files will be permanently removed.",
+      "clearAllDescription": "All transcriptions, audio files, and Insights counters will be permanently removed from this device and your account.",
+      "clearAllDescriptionDevice": "All transcriptions, audio files, and Insights counters will be permanently removed from this device. Counters already synced to an account are not affected.",
       "clearAllSuccess": "History cleared",
       "clearAllErrorTitle": "Couldn't clear history",
       "clearAllErrorDescription": "Something went wrong. Please try again.",
@@ -754,6 +784,35 @@
         "ssoHelp": "Uses your AWS CLI SSO configuration. Ensure you have run 'aws sso login'.",
         "keysHelp": "Enter your AWS IAM access keys."
       },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "Temporary AWS access expired.",
+          "ssoExpired": "AWS SSO session expired.",
+          "credentialsRejected": "AWS credentials were rejected. Check the access key ID, secret, and session token.",
+          "accessDenied": "AWS Bedrock denied this request. Ask your AWS administrator to grant permission to invoke the selected model in region {{region}}.",
+          "modelNotFound": "AWS Bedrock could not find the selected model in region {{region}}. Check the model ID and whether it is available in that region.",
+          "configurationRejected": "AWS Bedrock rejected the model configuration for region {{region}}. Check the model ID, inference profile, and region.",
+          "notConfigured": "AWS Bedrock is not configured correctly. Check the region and AWS credentials.",
+          "serviceUnavailable": "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an OpenWhispr outage. Please try again in a few minutes.",
+          "throttled": "AWS Bedrock is temporarily limiting requests because it is receiving too many. Please wait a moment and try again. If this continues, ask your AWS administrator to check your Bedrock usage and quotas.",
+          "timeout": "AWS Bedrock did not respond in time. Please try again. If this continues, check your internet connection and AWS Bedrock service status.",
+          "network": "AWS Bedrock could not be reached. Check your internet connection and try again.",
+          "unknown": "AWS Bedrock error: {{error}}",
+          "actions": {
+            "refreshManagedAccess": "Sign out and sign back in to refresh company access, then retry.",
+            "reauthenticate": "Run the command below in your terminal to re-authenticate:"
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "Technical details",
+        "httpStatus": "HTTP status",
+        "awsException": "AWS exception",
+        "awsRequestId": "AWS request ID",
+        "underlyingError": "Underlying error",
+        "copy": "Copy technical details",
+        "copyCommand": "Copy recovery command"
+      },
       "azure": {
         "endpointHelp": "Your Azure OpenAI resource endpoint (e.g., https://myresource.openai.azure.com).",
         "deploymentHelp": "The name of your model deployment in Azure OpenAI."
@@ -847,7 +906,10 @@
         "chunkLoss": "A network problem lost too much of the recording. Re-transcribe it from History.",
         "agentReasoningFailed": "Your voice assistant couldn't process the command — the raw transcript was inserted instead.",
         "screenContextSkipped": "The screenshot couldn't be sent, so your command ran without screen context.",
-        "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text."
+        "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text.",
+        "managedTranscriptionUnavailable": "Managed transcription is not available right now. Try again in a moment.",
+        "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
+        "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator."
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",
@@ -1000,7 +1062,7 @@
     "emailStep": {
       "checkingEmail": "Checking your email...",
       "continueWithEmail": "Continue with email",
-      "continueWithoutAccount": "Use OpenWhispr without an account",
+      "continueWithoutAccount": "Continue without an account",
       "emailLabel": "Email",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "Use a different email"
@@ -1891,16 +1953,20 @@
       "wordsRemaining": "{{remaining}} remaining",
       "deleteAccount": {
         "label": "Delete Account",
-        "labelDescription": "Permanently delete your account, all cloud data, and local data. This action cannot be undone.",
+        "labelDescription": "Permanently delete your account and personal cloud data. Other local users and workspace-owned content are preserved.",
         "button": "Delete My Account",
         "deleting": "Deleting...",
         "title": "Delete Your Account?",
-        "description": "This will permanently delete your OpenWhispr account, all cloud-synced notes, and all local data including transcriptions, audio recordings, downloaded models, calendar connections, and settings. This action cannot be undone.",
-        "confirmText": "Delete Everything",
+        "description": "This permanently deletes your OpenWhispr account and personal data. Workspace-owned content and data belonging to other local users stay on this device.",
+        "confirmText": "Delete Account",
+        "eraseDeviceLabel": "Also erase all data from this device",
+        "eraseDeviceDescription": "Deletes every local user's notes and workspace cache, downloaded models, settings, calendar connections, credentials, and recordings.",
+        "eraseDeviceWarning": "This device-wide erasure cannot be undone and affects every local user.",
         "successTitle": "Account Deleted",
-        "successDescription": "Your account and all data have been deleted. The app will now reload.",
+        "successDescription": "Your account and personal data were deleted. Other local users, workspaces, models, and device settings were preserved.",
+        "partialCleanupDescription": "Your account was deleted, but some local cleanup could not finish. Other users and workspace-owned content were preserved.",
         "failedTitle": "Deletion Failed",
-        "failedDescription": "Something went wrong deleting your account. Your local data may have been partially removed. Please try again."
+        "failedDescription": "Account deletion could not complete. No device-wide erasure was started. Please try again."
       },
       "profile": {
         "name": {
@@ -1950,7 +2016,7 @@
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
-      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the answer opens in the floating assistant panel. If text is highlighted, that text is sent to your configured Voice Assistant model and safely replaced with the result.",
+      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, highlighted text is safely replaced with the result. With auto-paste enabled, an answer pastes at a focused writable cursor; otherwise it opens in the floating assistant panel.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
@@ -2114,7 +2180,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Voice Assistant Hotkey",
-        "description": "Speak a command and the assistant answers in a floating panel with your notes, calendar, and web tools. Select text first to edit it in place."
+        "description": "Speak a command and the assistant uses your notes, calendar, and web tools. Its answer pastes at a focused writable cursor, replaces selected text, or opens in the floating panel."
       },
       "microphone": {
         "description": "Select which input device to use for dictation",
@@ -2328,6 +2394,10 @@
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
+      "insightsSync": "Sync personal Insights",
+      "insightsSyncDescription": "Sync word counts, the date and exact time of each dictation, durations, and model types across your devices. Transcript content is never included. When you're signed in, clearing history also removes these counters from this device and your account.",
+      "insightsSyncRequiresAccount": "Sign in to sync content-free Insights data across your devices.",
+      "insightsSyncRequiresHistory": "Turn on data retention to record Insights before syncing them across your devices.",
       "audioRetention": "Audio Retention",
       "audioRetentionDescription": "Store dictation audio locally for re-transcription and download. Files are automatically deleted after the retention period. Meeting audio is never stored.",
       "audioRetentionDisabled": "Disabled",
@@ -2342,7 +2412,7 @@
       "dataRetention": "Data Retention",
       "dataRetentionDescription": "Store transcriptions and audio locally in your history. When disabled, transcriptions are pasted but not saved.",
       "transcriptRetention": "Transcript Retention",
-      "transcriptRetentionDescription": "Automatically delete saved transcriptions and their audio after this period.",
+      "transcriptRetentionDescription": "Automatically delete saved transcriptions, their audio, and their Insights counters after this period.",
       "transcriptRetentionForever": "Forever",
       "hoursAgo": "{{count}}h ago",
       "justNow": "just now",
@@ -2392,7 +2462,9 @@
         "openwhisprDesc": "Reliable accuracy. No setup needed.",
         "providersDesc": "Bring your own API key.",
         "localDesc": "On-device models. Fully private.",
-        "selfHostedDesc": "Your own server on your network."
+        "selfHostedDesc": "Your own server on your network.",
+        "enterprise": "Enterprise cloud",
+        "enterpriseDesc": "Audio goes to your organization's own cloud."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
@@ -2417,6 +2489,10 @@
         "switchedSelfHosted": {
           "title": "Self-Hosted",
           "description": "Using your own server."
+        },
+        "switchedEnterprise": {
+          "title": "Enterprise cloud selected",
+          "description": "Dictation now uses the transcription deployment your organization manages."
         }
       },
       "gpuDevice": {
@@ -2474,7 +2550,8 @@
             "info": "Audio carried from each segment into the next to avoid abrupt cuts when concatenating."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet."
     },
     "intelligence": {
       "gpuDevice": {
@@ -2520,6 +2597,9 @@
     "learnMore": "Learn more",
     "noneAvailable": "No models available",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "Most accurate local ASR (5.42% avg WER, 14 languages). No auto language detection"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)",
         "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)",
@@ -2545,6 +2625,7 @@
         "groq_whisper_large_v3": "High accuracy speech recognition",
         "groq_whisper_large_v3_turbo": "216x real-time speed",
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
+        "gemini_3_5_transcribe": "Google's Gemini speech-to-text",
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
         "tinfoil_voxtral": "Verifiably private transcription"
@@ -2582,8 +2663,7 @@
         "anthropic_claude_opus_4_7": "Powerful Opus model",
         "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
         "anthropic_claude_opus_4_5": "Earlier Opus model",
-        "tinfoil_deepseek_v4_pro": "Private long-context reasoning in secure enclaves, 800K context",
-        "tinfoil_glm_5_2": "Private agentic engineering model in secure enclaves, 384K context",
+        "tinfoil_glm_5_3": "Private agentic coding model in secure enclaves, 1M context",
         "tinfoil_gemma4_31b": "Private multilingual reasoning model with tool calling, 256K context",
         "tinfoil_gpt_oss_120b": "Private open-weight reasoning model with tool use, 131K context",
         "tinfoil_llama3_3_70b": "Private conversational model with tool calling, 128K context",
@@ -2644,6 +2724,7 @@
   },
   "sidebar": {
     "home": "Home",
+    "insights": "Insights",
     "notes": "Notes",
     "upload": "Upload",
     "dictionary": "Dictionary",
@@ -2665,6 +2746,45 @@
     "chat": "Chat",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar"
+  },
+  "insights": {
+    "title": "Insights",
+    "description": "A private view of your dictation habits and momentum.",
+    "wordsSpoken": "Words spoken",
+    "currentStreak": "Current streak",
+    "wordsPerMinute": "Words per minute",
+    "dictations": "Dictations",
+    "allTime": "All time",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "longestStreak_one": "Longest: {{count}} day",
+    "longestStreak_other": "Longest: {{count}} days",
+    "wpmCoverage": "Based on {{count}}% of measured words",
+    "activity": "Speaking activity",
+    "activityDescription": "Words spoken over the last 6 months",
+    "activityLabel": "6-month speaking activity heatmap",
+    "activityLess": "Less",
+    "activityMore": "More",
+    "dayTooltip_one": "{{date}}: {{count}} word",
+    "dayTooltip_other": "{{date}}: {{count}} words",
+    "dataRetentionDisabled": "Data retention is off, so new dictations aren't counted in Insights — not on this device and not in your account. Counters already synced stay in your account.",
+    "onDevice": "On this device",
+    "synced": "Synced across devices",
+    "syncFallback": "Showing device data — sync unavailable",
+    "syncPrompt": "Sync content-free counters to combine local and cloud activity across devices.",
+    "enableSync": "Enable sync",
+    "claimTitle": "Include earlier dictations?",
+    "claimDescription_one": "{{count}} dictation on this device was recorded before you signed in. Including it sends only word counts, the date and exact time it happened, its duration, and the model type — never transcript content.",
+    "claimDescription_other": "{{count}} dictations on this device were recorded before you signed in. Including them sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
+    "claimInclude": "Include",
+    "claimSkip": "Not now",
+    "enableTitle": "Turn on Insights sync?",
+    "enableConfirm": "Turn on sync",
+    "enableDescription_one": "{{count}} dictation already recorded on this device will be uploaded to your account. Insights sync sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
+    "enableDescription_other": "{{count}} dictations already recorded on this device will be uploaded to your account. Insights sync sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
+    "emptyTitle": "No dictations yet",
+    "emptyBody": "Start dictating and your words, streaks, and daily activity will show up here.",
+    "loadError": "Insights couldn't be read from this device."
   },
   "workspaces": {
     "switcher": {
@@ -3045,6 +3165,7 @@
       "transcriptionComplete": "Transcription complete",
       "partialWarning": "Part of the audio couldn't be transcribed.",
       "partialWarningCount": "{{failed}} of {{total}} audio sections couldn't be transcribed.",
+      "diarizationWarning": "Speaker identification couldn't be applied. The transcript was saved without speaker labels.",
       "chunkLossExceeded": "Too much of the audio was lost to a network problem. Check your connection and try again.",
       "openNote": "Open Note",
       "uploadAnother": "Upload Another",
@@ -3066,8 +3187,8 @@
       "paidPlanRequired": "Cloud transcription for files over 25 MB requires a paid plan. Large files are processed with OpenWhispr Cloud for reliable, high-quality results.",
       "largeFileNote": "Large files are split and transcribed in parallel.",
       "chunkProgress": "Transcribing part {{completed}} of {{total}}...",
-      "byokTooLarge": "Third-party API keys only support files up to 25 MB.",
-      "byokTooLargeDetail": "For files over 25 MB, OpenWhispr Cloud handles splitting, parallel processing, and reassembly — so you get reliable results without depending on third-party provider limits.",
+      "byokTooLarge": "Third-party API keys only support files up to {{size}} MB.",
+      "byokTooLargeDetail": "For files over {{size}} MB, OpenWhispr Cloud handles splitting, parallel processing, and reassembly — so you get reliable results without depending on third-party provider limits.",
       "byokTooLargeNeedsAccount": "Create an account and upgrade to a paid plan to transcribe larger files with OpenWhispr Cloud.",
       "byokTooLargeNeedsUpgrade": "Upgrade to a paid plan to transcribe larger files with OpenWhispr Cloud.",
       "switchToCloudForLargeFiles": "Switch to OpenWhispr Cloud to transcribe this file.",
@@ -3116,7 +3237,12 @@
       "description": "Transcriptions & structured summaries",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
-      "autoEnded": "Recording stopped automatically after your meeting ended."
+      "autoEnded": "Recording stopped automatically after your meeting ended.",
+      "restartFailed": "Couldn't restart the meeting recording.",
+      "systemAudioSilent": {
+        "title": "No meeting audio detected yet",
+        "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
+      }
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
@@ -3374,8 +3500,10 @@
     "active": "GPU acceleration active",
     "ready": "GPU acceleration ready",
     "activating": "Activating GPU...",
-    "activationFailed": "GPU could not be activated",
-    "retry": "Retry",
+    "activationFailed": "GPU acceleration unavailable",
+    "activationFailedDescription": "OpenWhispr switched to CPU transcription.",
+    "reasoningActivationFailedDescription": "OpenWhispr switched to CPU processing.",
+    "retryActivation": "Retry GPU acceleration",
     "remove": "Remove",
     "dismiss": "Not now",
     "cancel": "Cancel"
@@ -3398,7 +3526,8 @@
       },
       "gpuFallback": {
         "title": "GPU acceleration unavailable",
-        "description": "Transcription is using the CPU instead. You can disable GPU acceleration in Settings."
+        "description": "OpenWhispr switched to CPU transcription.",
+        "retry": "Retry GPU"
       },
       "gpuPackMigration": {
         "title": "GPU pack needs re-downloading",
@@ -3406,7 +3535,7 @@
       },
       "cleanupFailed": {
         "title": "Cleanup failed",
-        "description": "Your dictation was pasted without AI cleanup."
+        "description": "Original dictation pasted without AI cleanup."
       }
     },
     "mic": {
@@ -3807,13 +3936,13 @@
     "start": "Take notes",
     "join": "Join & transcribe",
     "autoEnd": {
-      "title": "Meeting may have ended",
+      "title": "Meeting recording ended",
       "body": {
-        "micReleased": "No other app is using your microphone. Recording will stop in {{seconds}}s.",
-        "silence": "No audio detected. Recording will stop in {{seconds}}s.",
-        "processExit": "Your meeting app closed. Recording will stop in {{seconds}}s."
+        "micReleased": "No other app is using your microphone, so recording stopped automatically. Restart within {{seconds}}s.",
+        "silence": "No audio was detected, so recording stopped automatically. Restart within {{seconds}}s.",
+        "processExit": "Your meeting app closed, so recording stopped automatically. Restart within {{seconds}}s."
       },
-      "keep": "Keep recording"
+      "restart": "Restart recording"
     }
   }
 }

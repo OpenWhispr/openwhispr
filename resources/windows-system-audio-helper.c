@@ -32,6 +32,7 @@
 #include <initguid.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
+#include <endpointvolume.h>
 #include <fcntl.h>
 #include <io.h>
 #include <stdarg.h>
@@ -92,6 +93,15 @@ typedef struct {
 DEFINE_GUID(HELPER_IID_IAgileObject,
     0x94ea2b94, 0xe9cc, 0x49e0, 0xc0, 0xff, 0xee, 0x64, 0xca, 0x8f, 0x5b, 0x90);
 
+/* Render-endpoint metering, used to tell a broken capture apart from a quiet
+ * machine. Locally named for the same reason as the IIDs above. */
+DEFINE_GUID(HELPER_CLSID_MMDeviceEnumerator,
+    0xbcde0395, 0xe52f, 0x467c, 0x8e, 0x3d, 0xc4, 0x57, 0x92, 0x91, 0x69, 0x2e);
+DEFINE_GUID(HELPER_IID_IMMDeviceEnumerator,
+    0xa95664d2, 0x9614, 0x4f35, 0xa7, 0x46, 0xde, 0x8d, 0xb6, 0x36, 0x17, 0xe6);
+DEFINE_GUID(HELPER_IID_IAudioMeterInformation,
+    0xc02216f6, 0x8c67, 0x4b5b, 0x9d, 0x00, 0xd0, 0x08, 0xe7, 0x3e, 0x00, 0x64);
+
 #define DEFAULT_SAMPLE_RATE 24000
 #define CAPTURE_CHANNELS 2
 #define BYTES_PER_SAMPLE 2
@@ -104,6 +114,14 @@ DEFINE_GUID(HELPER_IID_IAgileObject,
 #define SILENCE_GAP_MAX_MS 5000
 #define SILENCE_FILL_CHUNK_FRAMES 2400
 #define BUFFER_DURATION_HNS 200000 /* 20 ms, matches the Microsoft sample */
+/* Sample magnitude (of 32767) above which captured audio counts as real and
+ * not converter dither — roughly -60 dBFS. */
+#define CAPTURE_AUDIBLE_LEVEL 32
+/* Render-endpoint peak (0.0-1.0) above which something is audibly playing. */
+#define ENDPOINT_AUDIBLE_PEAK 0.01f
+/* Consecutive one-second checks with a playing endpoint and a silent capture
+ * before we call process loopback broken. */
+#define CAPTURE_SILENT_CONFIRM_TICKS 5
 
 static volatile LONG g_running = TRUE;
 
@@ -329,6 +347,63 @@ static HRESULT activate_process_loopback(
 }
 
 /* ========================================================================
+ * Silent-capture detection
+ *
+ * Activation succeeding proves only that the OS exposes process loopback; on
+ * some machines it then delivers nothing but digital silence. Silence alone
+ * is ambiguous — an idle machine looks identical — so it only counts as a
+ * failure while a render endpoint is metering real output.
+ * ======================================================================== */
+
+static BOOL any_render_endpoint_audible(IMMDeviceEnumerator *enumerator)
+{
+    IMMDeviceCollection *devices = NULL;
+    UINT count = 0;
+    UINT i;
+    BOOL audible = FALSE;
+
+    if (FAILED(IMMDeviceEnumerator_EnumAudioEndpoints(enumerator, eRender, DEVICE_STATE_ACTIVE,
+                                                      &devices))) {
+        return FALSE;
+    }
+
+    if (SUCCEEDED(IMMDeviceCollection_GetCount(devices, &count))) {
+        for (i = 0; i < count && !audible; i++) {
+            IMMDevice *device = NULL;
+            IAudioMeterInformation *meter = NULL;
+            float peak = 0.0f;
+
+            if (FAILED(IMMDeviceCollection_Item(devices, i, &device))) {
+                continue;
+            }
+            if (SUCCEEDED(IMMDevice_Activate(device, &HELPER_IID_IAudioMeterInformation,
+                                             CLSCTX_ALL, NULL, (void **)&meter))) {
+                if (SUCCEEDED(IAudioMeterInformation_GetPeakValue(meter, &peak)) &&
+                    peak > ENDPOINT_AUDIBLE_PEAK) {
+                    audible = TRUE;
+                }
+                IAudioMeterInformation_Release(meter);
+            }
+            IMMDevice_Release(device);
+        }
+    }
+
+    IMMDeviceCollection_Release(devices);
+    return audible;
+}
+
+static BOOL samples_are_audible(const short *samples, UINT32 count)
+{
+    UINT32 i;
+    for (i = 0; i < count; i++) {
+        if (samples[i] > CAPTURE_AUDIBLE_LEVEL || samples[i] < -CAPTURE_AUDIBLE_LEVEL) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+/* ========================================================================
  * Capture loop
  * ======================================================================== */
 
@@ -366,7 +441,13 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
     size_t monoBufferFrames = 0;
     LARGE_INTEGER qpcFrequency;
     LARGE_INTEGER captureStart;
+    LARGE_INTEGER lastSilenceCheck;
     UINT64 emittedFrames = 0;
+    IMMDeviceEnumerator *deviceEnumerator = NULL;
+    /* Disarmed for good once real audio proves capture works, or once the
+     * warning has been emitted — either way there is nothing left to watch. */
+    BOOL silenceDetectionArmed = TRUE;
+    int endpointAudibleTicks = 0;
     const char *errorCode = NULL;
     HRESULT hr;
     int exitCode = 0;
@@ -409,6 +490,15 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
 
     QueryPerformanceFrequency(&qpcFrequency);
     QueryPerformanceCounter(&captureStart);
+    lastSilenceCheck = captureStart;
+
+    /* Best-effort: without a meter we simply never report a silent capture. */
+    if (FAILED(CoCreateInstance(&HELPER_CLSID_MMDeviceEnumerator, NULL, CLSCTX_ALL,
+                                &HELPER_IID_IMMDeviceEnumerator, (void **)&deviceEnumerator))) {
+        deviceEnumerator = NULL;
+        silenceDetectionArmed = FALSE;
+    }
+
     emit_event("start", NULL, NULL);
 
     while (InterlockedCompareExchange(&g_running, TRUE, TRUE)) {
@@ -456,6 +546,10 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
                     for (i = 0; i < frames; i++) {
                         monoBuffer[i] = (short)(((int)stereo[i * 2] + (int)stereo[i * 2 + 1]) / 2);
                     }
+                }
+
+                if (silenceDetectionArmed && samples_are_audible(monoBuffer, frames)) {
+                    silenceDetectionArmed = FALSE;
                 }
 
                 if (!write_pcm(monoBuffer, frames)) {
@@ -518,11 +612,26 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
             }
         }
 
+        if (silenceDetectionArmed &&
+            now.QuadPart - lastSilenceCheck.QuadPart >= qpcFrequency.QuadPart) {
+            lastSilenceCheck = now;
+            if (!any_render_endpoint_audible(deviceEnumerator)) {
+                endpointAudibleTicks = 0;
+            } else if (++endpointAudibleTicks >= CAPTURE_SILENT_CONFIRM_TICKS) {
+                silenceDetectionArmed = FALSE;
+                emit_event("warning", "capture_silent",
+                           "Process loopback captured silence while a render endpoint was playing");
+            }
+        }
+
         fflush(stdout);
     }
 
 done:
     IAudioClient_Stop(audioClient);
+    if (deviceEnumerator) {
+        IMMDeviceEnumerator_Release(deviceEnumerator);
+    }
     IAudioCaptureClient_Release(captureClient);
     IAudioClient_Release(audioClient);
     CloseHandle(samplesReadyEvent);

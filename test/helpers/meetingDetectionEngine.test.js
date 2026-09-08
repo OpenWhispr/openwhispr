@@ -91,3 +91,13 @@ test("explicitly dismissing an audio prompt still starts the mic cooldown", asyn
 
   assert.equal(audioDetector.dismissals, 1, "an explicit decline must keep its cooldown");
 });
+
+test("a detection card closed without a response allows the next prompt", () => {
+  const { engine, audioDetector, shown } = createEngine();
+
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0 });
+  engine.handleDetectionNotificationClosed(shown[0].detectionId);
+  audioDetector.emit("sustained-audio-detected", { durationMs: 4000, detectedAt: 1 });
+
+  assert.equal(shown.length, 2);
+});

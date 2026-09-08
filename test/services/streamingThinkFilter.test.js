@@ -56,10 +56,30 @@ test("an unterminated block suppresses everything after it", async () => {
   assert.equal(filter.finish(), "");
 });
 
-test("a stray close tag with no open block passes through", async () => {
+test("a stray close tag with no open block is dropped, keeping the text (#1861)", async () => {
   const { createStreamingThinkFilter } = await load();
   const filter = createStreamingThinkFilter();
-  assert.equal(filter("plain</think>text"), "plain</think>text");
+  assert.equal(filter("plain</think>text"), "plaintext");
+});
+
+test("a stray close tag split across chunks is dropped", async () => {
+  const { createStreamingThinkFilter } = await load();
+  const filter = createStreamingThinkFilter();
+  assert.equal(filterAll(filter, ["plain</th", "ink>text"]), "plaintext");
+});
+
+test("strips mixed-case and uppercase think blocks (#1861)", async () => {
+  const { createStreamingThinkFilter } = await load();
+  assert.equal(createStreamingThinkFilter()("<Think>reasoning</Think>Answer"), "Answer");
+  assert.equal(createStreamingThinkFilter()("<THINK>reasoning</THINK>Answer"), "Answer");
+  assert.equal(createStreamingThinkFilter()("plain</Think>text"), "plaintext");
+});
+
+test("an uppercase unterminated block suppresses everything after it", async () => {
+  const { createStreamingThinkFilter } = await load();
+  const filter = createStreamingThinkFilter();
+  assert.equal(filterAll(filter, ["Answer<THINK>never", " closes"]), "Answer");
+  assert.equal(filter.finish(), "");
 });
 
 test("resumes normal output after a closed nested block", async () => {
@@ -85,10 +105,32 @@ test("strips nested think blocks at every two-chunk boundary", async () => {
   }
 });
 
+test("strips mixed-case nested think blocks at every two-chunk boundary", async () => {
+  const { createStreamingThinkFilter } = await load();
+  const input = "<Think>a<THINK>b</think>c</THINK>Answer";
+
+  for (let split = 1; split < input.length; split += 1) {
+    const filter = createStreamingThinkFilter();
+    assert.equal(
+      filterAll(filter, [input.slice(0, split), input.slice(split)]),
+      "Answer",
+      `split at character ${split}`
+    );
+  }
+});
+
 test("buffers a possible opening tag and flushes it when the stream ends", async () => {
   const { createStreamingThinkFilter } = await load();
   const filter = createStreamingThinkFilter();
 
   assert.equal(filter("Answer<thi"), "Answer");
   assert.equal(filter.finish(), "<thi");
+});
+
+test("buffers a possible close tag and flushes it when the stream ends", async () => {
+  const { createStreamingThinkFilter } = await load();
+  const filter = createStreamingThinkFilter();
+
+  assert.equal(filter("text</thi"), "text");
+  assert.equal(filter.finish(), "</thi");
 });

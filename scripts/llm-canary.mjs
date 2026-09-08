@@ -38,7 +38,10 @@ const PROVIDERS = [
     id: "tinfoil",
     keyEnv: "LLM_CANARY_TINFOIL_KEY",
     base: "https://inference.tinfoil.sh/v1",
-    models: ["gpt-oss-120b", "deepseek-v4-flash", "llama3-3-70b"],
+    // glm-5-3 is the registry default, so it is the model most Tinfoil users
+    // are on — and the Tinfoil transport has no param-stripping ladder, so a
+    // reasoning-param rejection there hard-errors (#1611).
+    models: ["glm-5-3", "gpt-oss-120b", "deepseek-v4-flash", "llama3-3-70b"],
   },
   {
     id: "gemini",
@@ -169,8 +172,12 @@ for (const entry of PROVIDERS) {
       report.push(`| ${label} | _catalog_ | ⚠️ ${diff.error} |`);
     } else {
       if (diff.vanished.length) {
-        report.push(`| ${label} | _catalog_ | ⚠️ registry ids missing live: ${diff.vanished.join(", ")} |`);
-        failures.push(`${label}: registry ids vanished from live catalog: ${diff.vanished.join(", ")}`);
+        report.push(
+          `| ${label} | _catalog_ | ⚠️ registry ids missing live: ${diff.vanished.join(", ")} |`
+        );
+        failures.push(
+          `${label}: registry ids vanished from live catalog: ${diff.vanished.join(", ")}`
+        );
       }
       if (diff.newConstrained.length) {
         report.push(

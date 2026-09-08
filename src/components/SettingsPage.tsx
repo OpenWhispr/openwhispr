@@ -19,6 +19,7 @@ import {
   Key,
   Cpu,
   Network,
+  ShieldCheck,
   Sparkles,
   AlertTriangle,
   Loader2,
@@ -38,7 +39,10 @@ import {
   Languages,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
+import { AUTH_URL, signOut } from "../lib/auth";
+import { deleteAccount } from "../lib/accountDeletionRequest";
+import { executeAccountDeletion } from "../lib/accountDeletionFlow";
+import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
@@ -60,6 +64,7 @@ import {
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { useSettings } from "../hooks/useSettings";
 import { useDialogs } from "../hooks/useDialogs";
+import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
@@ -110,11 +115,17 @@ import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { startMigration, useMigration } from "../stores/noteStore.js";
+import {
+  startMigration,
+  useMigration,
+  loadFolders,
+  initializeNotesTree,
+} from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import {
   clearMissingLocalModelSelections,
+  TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
 } from "../stores/settingsStore";
@@ -127,6 +138,7 @@ import {
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
   isCloudBackupAllowed,
+  isEnterpriseTranscriptionOfferable,
   lockedLocalHistoryValue,
   maxAudioRetentionDays,
 } from "../stores/policyRules";
@@ -140,7 +152,8 @@ import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
-import { getTranscriptionProvider } from "../models/ModelRegistry";
+import { enterpriseProviderName, getTranscriptionProvider } from "../models/ModelRegistry";
+import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
 export type SettingsSectionType =
@@ -231,6 +244,243 @@ function SectionHeader({
   );
 }
 
+interface GranolaImportPreview {
+  total: number;
+  newCount: number;
+  duplicateCount: number;
+  sampleTitles: string[];
+  warningCount: number;
+}
+
+type GranolaImportState =
+  | { phase: "idle" }
+  | { phase: "picking" }
+  | { phase: "preview"; preview: GranolaImportPreview }
+  | { phase: "importing"; preview: GranolaImportPreview }
+  | { phase: "done"; imported: number; skipped: number };
+
+function GranolaImportSection({
+  showAlertDialog,
+}: {
+  showAlertDialog: (options: { title: string; description?: string }) => void;
+}) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<GranolaImportState>({ phase: "idle" });
+  // Guards double-clicks: handlers read stale closure state, so state alone
+  // can't prevent a second dialog/run being started in the same frame.
+  const requestInFlightRef = useRef(false);
+
+  const errorDescription = (code?: string) => {
+    switch (code) {
+      case "EMPTY_FILE":
+        return t("settings.granolaImport.error.EMPTY_FILE");
+      case "HEADERS_UNRECOGNIZED":
+        return t("settings.granolaImport.error.HEADERS_UNRECOGNIZED");
+      case "NO_DATA_ROWS":
+        return t("settings.granolaImport.error.NO_DATA_ROWS");
+      case "FILE_TOO_LARGE":
+        return t("settings.granolaImport.error.FILE_TOO_LARGE");
+      default:
+        return t("settings.granolaImport.error.generic");
+    }
+  };
+
+  const showImportError = (code?: string) => {
+    showAlertDialog({
+      title: t("settings.granolaImport.error.title"),
+      description: errorDescription(code),
+    });
+  };
+
+  const handleChooseFile = async () => {
+    if (requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
+    setState({ phase: "picking" });
+    try {
+      let result:
+        | Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportPickAndPreview>>>
+        | undefined;
+      try {
+        result = await window.electronAPI?.granolaImportPickAndPreview?.();
+      } catch {
+        setState({ phase: "idle" });
+        showImportError();
+        return;
+      }
+      if (!result || result.canceled) {
+        setState({ phase: "idle" });
+        return;
+      }
+      if (!result.success) {
+        setState({ phase: "idle" });
+        showImportError(result.error);
+        return;
+      }
+      setState({
+        phase: "preview",
+        preview: {
+          total: result.total ?? 0,
+          newCount: result.newCount ?? 0,
+          duplicateCount: result.duplicateCount ?? 0,
+          sampleTitles: result.sampleTitles ?? [],
+          warningCount: result.rowIssueCount ?? 0,
+        },
+      });
+    } finally {
+      requestInFlightRef.current = false;
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (state.phase !== "preview" || requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
+    setState({ phase: "importing", preview: state.preview });
+    try {
+      let result:
+        Awaited<ReturnType<NonNullable<typeof window.electronAPI.granolaImportRun>>> | undefined;
+      try {
+        result = await window.electronAPI?.granolaImportRun?.();
+      } catch {
+        result = undefined;
+      }
+      if (!result?.success) {
+        setState({ phase: "idle" });
+        showImportError(result?.error);
+        return;
+      }
+      const imported = result.imported ?? 0;
+      setState({ phase: "done", imported, skipped: result.skipped ?? 0 });
+      if (imported > 0) {
+        // One refresh + one batched sync pass — never per-note pushes.
+        void loadFolders();
+        void initializeNotesTree();
+        void syncService.requestSyncAll("manual");
+      }
+    } finally {
+      requestInFlightRef.current = false;
+    }
+  };
+
+  const dialogOpen =
+    state.phase === "preview" || state.phase === "importing" || state.phase === "done";
+  const preview = state.phase === "preview" || state.phase === "importing" ? state.preview : null;
+
+  return (
+    <div>
+      <SectionHeader
+        title={t("settings.granolaImport.title")}
+        description={t("settings.granolaImport.howTo")}
+      />
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settings.granolaImport.title")}
+            description={t("settings.granolaImport.description")}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              disabled={state.phase === "picking"}
+              onClick={handleChooseFile}
+            >
+              {state.phase === "picking" ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                t("settings.granolaImport.chooseFile")
+              )}
+            </Button>
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
+
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open && state.phase !== "importing") setState({ phase: "idle" });
+        }}
+      >
+        <DialogContent className="sm:max-w-90">
+          <DialogHeader>
+            <DialogTitle>
+              {state.phase === "done"
+                ? t("settings.granolaImport.done.title")
+                : t("settings.granolaImport.preview.title")}
+            </DialogTitle>
+            {state.phase === "done" ? (
+              <DialogDescription>
+                {t("settings.granolaImport.done.summary", {
+                  imported: state.imported,
+                  skipped: state.skipped,
+                })}
+              </DialogDescription>
+            ) : (
+              preview && (
+                <DialogDescription>
+                  {preview.newCount === 0
+                    ? t("settings.granolaImport.preview.nothingNew")
+                    : t("settings.granolaImport.preview.summary", {
+                        total: preview.total,
+                        newCount: preview.newCount,
+                        duplicateCount: preview.duplicateCount,
+                      })}
+                </DialogDescription>
+              )
+            )}
+          </DialogHeader>
+          {preview && (
+            <div className="space-y-2">
+              {preview.sampleTitles.length > 0 && (
+                <ul className="text-xs text-muted-foreground space-y-1">
+                  {preview.sampleTitles.map((title, index) => (
+                    <li key={`${index}-${title}`} className="truncate">
+                      {title}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {preview.warningCount > 0 && (
+                <p className="text-xs text-muted-foreground/80">
+                  {t("settings.granolaImport.preview.warnings", {
+                    warningCount: preview.warningCount,
+                  })}
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            {state.phase === "done" ? (
+              <Button size="sm" onClick={() => setState({ phase: "idle" })}>
+                {t("common.close")}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={state.phase === "importing"}
+                  onClick={() => setState({ phase: "idle" })}
+                >
+                  {t("common.cancel")}
+                </Button>
+                <Button size="sm" disabled={state.phase === "importing"} onClick={handleConfirm}>
+                  {state.phase === "importing" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    t("settings.granolaImport.preview.confirm", {
+                      newCount: preview?.newCount ?? 0,
+                    })
+                  )}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 interface TranscriptionSectionProps {
   isSignedIn: boolean;
   startOnboarding: () => void;
@@ -249,6 +499,8 @@ interface TranscriptionSectionProps {
   setWhisperModel: (model: string) => void;
   parakeetModel: string;
   setParakeetModel: (model: string) => void;
+  cohereModel: string;
+  setCohereModel: (model: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl: (url: string) => void;
   transcriptionMode: InferenceMode;
@@ -285,6 +537,8 @@ function TranscriptionSection({
   setWhisperModel,
   parakeetModel,
   setParakeetModel,
+  cohereModel,
+  setCohereModel,
   cloudTranscriptionBaseUrl,
   setCloudTranscriptionBaseUrl,
   transcriptionMode,
@@ -298,6 +552,15 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
+  const policySnapshot = usePolicySnapshot();
+  const enterpriseTranscriptionSetupMode = useSettingsStore(
+    (s) => s.enterpriseTranscriptionSetupMode
+  );
+  const setEnterpriseTranscriptionSetupMode = useSettingsStore(
+    (s) => s.setEnterpriseTranscriptionSetupMode
+  );
+  const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
+  const managedAvailable = useManagedScopeResolution("transcription", "managed");
   const {
     modes: transcriptionModes,
     effectiveMode: effectiveTranscriptionMode,
@@ -330,10 +593,23 @@ function TranscriptionSection({
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
       },
+      ...(isEnterpriseTranscriptionOfferable(policySnapshot)
+        ? [
+            {
+              id: "enterprise" as const,
+              label: t("settingsPage.transcription.modes.enterprise"),
+              description: t("settingsPage.transcription.modes.enterpriseDesc"),
+              icon: <ShieldCheck className="w-4 h-4" />,
+            },
+          ]
+        : []),
     ],
     "transcription",
     transcriptionMode,
-    { byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS }
+    {
+      byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS,
+      enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
+    }
   );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
@@ -346,12 +622,14 @@ function TranscriptionSection({
     setUseLocalWhisper(mode === "local");
     updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
     setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
 
     const toastKey = {
       openwhispr: "switchedCloud",
       providers: "switchedProviders",
       local: "switchedLocal",
       "self-hosted": "switchedSelfHosted",
+      enterprise: "switchedEnterprise",
     }[mode];
     toast({
       title: t(`settingsPage.transcription.toasts.${toastKey}.title`),
@@ -363,13 +641,16 @@ function TranscriptionSection({
 
   const handleLocalModelSelect = useCallback(
     (modelId: string, providerId?: string) => {
-      if (providerId === "nvidia" || (!providerId && localTranscriptionProvider === "nvidia")) {
+      const provider = providerId ?? localTranscriptionProvider;
+      if (provider === "nvidia") {
         setParakeetModel(modelId);
+      } else if (provider === "cohere") {
+        setCohereModel(modelId);
       } else {
         setWhisperModel(modelId);
       }
     },
-    [localTranscriptionProvider, setParakeetModel, setWhisperModel]
+    [localTranscriptionProvider, setParakeetModel, setCohereModel, setWhisperModel]
   );
 
   const selectedCloudModelStreams = Boolean(
@@ -401,7 +682,13 @@ function TranscriptionSection({
       onCloudProviderSelect={setCloudTranscriptionProvider}
       selectedCloudModel={cloudTranscriptionModel}
       onCloudModelSelect={setCloudTranscriptionModel}
-      selectedLocalModel={localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel}
+      selectedLocalModel={
+        localTranscriptionProvider === "nvidia"
+          ? parakeetModel
+          : localTranscriptionProvider === "cohere"
+            ? cohereModel
+            : whisperModel
+      }
       onLocalModelSelect={handleLocalModelSelect}
       selectedLocalProvider={localTranscriptionProvider}
       onLocalProviderSelect={setLocalTranscriptionProvider}
@@ -422,28 +709,113 @@ function TranscriptionSection({
     />
   );
 
+  // Local decoding still serves meetings and uploads under a managed-config
+  // error, so this stays a card alongside the rest of the section (including
+  // the GPU selector below) instead of an early return that hides it.
+  const errorCard =
+    managed.kind === "error" ? (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3" role="alert">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div>
+            <p className="text-sm font-medium">
+              {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {managed.messageKey ? t(managed.messageKey) : managed.message}
+            </p>
+          </div>
+        </div>
+      </div>
+    ) : null;
+
+  const managedCard =
+    managed.kind === "managed" ? (
+      <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
+        <div className="flex items-start gap-2.5">
+          <div className="rounded-md bg-primary/10 p-1.5 text-primary">
+            <ShieldCheck className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">
+              {t("settingsPage.aiModels.managedEnterprise.title")}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {enterpriseProviderName(managed.provider)} ·{" "}
+              <span className="font-mono">{managed.model}</span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("settingsPage.aiModels.managedEnterprise.description")}
+            </p>
+          </div>
+        </div>
+        {managed.mode !== "managed_required" && managed.allowManualSetup && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setEnterpriseTranscriptionSetupMode("manual")}
+            >
+              {t("settingsPage.aiModels.managedEnterprise.usePersonalSetup")}
+            </Button>
+          </div>
+        )}
+      </div>
+    ) : null;
+
   return (
     <div className="space-y-4">
-      <InferenceModeSelector
-        modes={transcriptionModes}
-        activeMode={effectiveTranscriptionMode}
-        onSelect={handleTranscriptionModeSelect}
-      />
+      {errorCard}
+      {managedCard}
+      {!errorCard && !managedCard && (
+        <>
+          {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  {t("settingsPage.aiModels.managedEnterprise.availableTitle")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settingsPage.aiModels.managedEnterprise.availableDescription", {
+                    provider: enterpriseProviderName(managedAvailable.provider),
+                  })}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setEnterpriseTranscriptionSetupMode("managed")}
+              >
+                {t("settingsPage.aiModels.managedEnterprise.useManaged")}
+              </Button>
+            </div>
+          )}
+          <InferenceModeSelector
+            modes={transcriptionModes}
+            activeMode={effectiveTranscriptionMode}
+            onSelect={handleTranscriptionModeSelect}
+          />
 
-      {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
-      {previewAvailable && renderPreviewToggle()}
+          {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+          {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+          {previewAvailable && renderPreviewToggle()}
 
-      {effectiveTranscriptionMode === "self-hosted" && (
-        <SelfHostedPanel
-          service="transcription"
-          url={remoteTranscriptionUrl}
-          onUrlChange={setRemoteTranscriptionUrl}
-          model={remoteTranscriptionModel}
-          onModelChange={setRemoteTranscriptionModel}
-        />
+          {effectiveTranscriptionMode === "self-hosted" && (
+            <SelfHostedPanel
+              service="transcription"
+              url={remoteTranscriptionUrl}
+              onUrlChange={setRemoteTranscriptionUrl}
+              model={remoteTranscriptionModel}
+              onModelChange={setRemoteTranscriptionModel}
+            />
+          )}
+        </>
       )}
 
+      {/* Local decoding still serves meetings and uploads, so the GPU choice stays reachable. */}
       <GpuDeviceSelector purpose="transcription" />
     </div>
   );
@@ -810,6 +1182,7 @@ export default function SettingsPage({
     whisperModel,
     localTranscriptionProvider,
     parakeetModel,
+    cohereModel,
     uiLanguage,
     preferredLanguage,
     chineseScriptPreference,
@@ -832,6 +1205,7 @@ export default function SettingsPage({
     setWhisperModel,
     setLocalTranscriptionProvider,
     setParakeetModel,
+    setCohereModel,
     setCloudTranscriptionProvider,
     setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl,
@@ -879,6 +1253,8 @@ export default function SettingsPage({
     setPanelStartPosition,
     cloudBackupEnabled,
     setCloudBackupEnabled,
+    insightsSyncEnabled,
+    setInsightsSyncEnabled,
     telemetryEnabled,
     setTelemetryEnabled,
     audioRetentionDays,
@@ -1438,6 +1814,12 @@ export default function SettingsPage({
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
   const { isSignedIn, isLoaded, user, refetch } = useAuth();
+  const {
+    canToggleSync: canToggleInsightsSync,
+    enableInsightsSync,
+    optInDialog: insightsOptInDialog,
+    syncAllowedByPolicy: insightsSyncAllowedByPolicy,
+  } = useInsightsSyncOptIn();
   // Signed out there is nothing to load and the plan grid is purely
   // promotional; signed in, no card may claim a plan until usage confirms one.
   const planStateKnown = !isSignedIn || usage?.status === "success";
@@ -1451,6 +1833,8 @@ export default function SettingsPage({
   });
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
+  const [eraseDeviceData, setEraseDeviceData] = useState(false);
   const { openBillingPortal, isOpening: isOpeningBilling } = useBillingPortal(usage);
   const [billingState, setBillingState] = useState<Record<string, boolean>>({
     pro: true,
@@ -1540,8 +1924,8 @@ export default function SettingsPage({
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
     try {
-      // Team content is membership-scoped, not account data: drop it locally
-      // before the session ends (never blocks sign-out).
+      // Clear account-scoped renderer/session state before ending the session.
+      // Workspace-owned rows remain cached behind their membership boundary.
       await syncService.purgeTeamSpacesForSignOut();
       await signOut();
       window.location.reload();
@@ -1557,47 +1941,65 @@ export default function SettingsPage({
   }, [showAlertDialog, t]);
 
   const handleDeleteAccount = useCallback(() => {
-    showConfirmDialog({
-      title: t("settingsPage.account.deleteAccount.title"),
-      description: t("settingsPage.account.deleteAccount.description"),
-      onConfirm: async () => {
-        setIsDeletingAccount(true);
-        try {
-          // Best-effort cloud cleanup (needs session cookies before sign-out)
-          try {
-            const { NotesService } = await import("../services/NotesService");
-            await NotesService.deleteAll();
-          } catch {}
+    setEraseDeviceData(false);
+    setIsDeleteAccountDialogOpen(true);
+  }, []);
 
-          const result = await deleteAccount();
-          if (result.error) {
-            logger.error("Server account deletion failed", result.error, "auth");
-          }
+  const confirmDeleteAccount = useCallback(async () => {
+    const accountId = user?.id;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) {
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.failedTitle"),
+        description: t("settingsPage.account.deleteAccount.failedDescription"),
+      });
+      return;
+    }
 
-          try {
-            await signOut();
-          } catch {}
-          await window.electronAPI?.cleanupApp();
+    setIsDeletingAccount(true);
+    try {
+      const result = await executeAccountDeletion({
+        eraseDeviceData,
+        dependencies: {
+          deleteRemoteAccount: deleteAccount,
+          deleteLocalAccountData: async () => {
+            const cleanup = await window.electronAPI?.deleteAccountData?.(
+              accountId,
+              authGeneration
+            );
+            if (!cleanup?.success) {
+              throw new Error(cleanup?.error ?? "Could not remove local account data");
+            }
+          },
+          clearWorkspaceSessionState: () => syncService.purgeTeamSpacesForSignOut(),
+          signOut,
+          eraseDeviceData: async () => {
+            const cleanup = await window.electronAPI?.cleanupApp();
+            if (!cleanup?.success) {
+              throw new Error(cleanup?.errors?.join(", ") || "Could not erase device data");
+            }
+          },
+        },
+      });
 
-          showAlertDialog({
-            title: t("settingsPage.account.deleteAccount.successTitle"),
-            description: t("settingsPage.account.deleteAccount.successDescription"),
-          });
-          setTimeout(() => window.location.reload(), 1000);
-        } catch (error) {
-          logger.error("Account deletion failed", error, "auth");
-          showAlertDialog({
-            title: t("settingsPage.account.deleteAccount.failedTitle"),
-            description: t("settingsPage.account.deleteAccount.failedDescription"),
-          });
-        } finally {
-          setIsDeletingAccount(false);
-        }
-      },
-      variant: "destructive",
-      confirmText: t("settingsPage.account.deleteAccount.confirmText"),
-    });
-  }, [showConfirmDialog, showAlertDialog, t]);
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.successTitle"),
+        description:
+          result.localCleanupFailures.length > 0
+            ? t("settingsPage.account.deleteAccount.partialCleanupDescription")
+            : t("settingsPage.account.deleteAccount.successDescription"),
+      });
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (error) {
+      logger.error("Account deletion failed", error, "auth");
+      showAlertDialog({
+        title: t("settingsPage.account.deleteAccount.failedTitle"),
+        description: t("settingsPage.account.deleteAccount.failedDescription"),
+      });
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  }, [eraseDeviceData, showAlertDialog, t, user?.id]);
 
   const renderWhisperVadSettings = () => (
     <div>
@@ -2807,6 +3209,9 @@ export default function SettingsPage({
               </SettingsPanel>
             </div>
 
+            {/* Import from Granola */}
+            <GranolaImportSection showAlertDialog={showAlertDialog} />
+
             {/* Floating Icon */}
             <div>
               <SectionHeader
@@ -3789,6 +4194,38 @@ EOF`,
               <SettingsPanel>
                 <SettingsPanelRow>
                   <SettingsRow
+                    label={t("settingsPage.privacy.insightsSync")}
+                    description={
+                      !isSignedIn
+                        ? t("settingsPage.privacy.insightsSyncRequiresAccount")
+                        : !insightsSyncAllowedByPolicy
+                          ? t("common.managedByOrg")
+                          : effectiveDataRetentionEnabled
+                            ? t("settingsPage.privacy.insightsSyncDescription")
+                            : t("settingsPage.privacy.insightsSyncRequiresHistory")
+                    }
+                  >
+                    {/* With history off nothing is counted anywhere: this
+                        device records no counter, and the cloud writes none
+                        either, because analyticsSyncEnabled withholds the
+                        localDate its analytics write requires. Turning this on
+                        could therefore only promise a sync that never happens —
+                        but an already-on toggle must stay switchable off. */}
+                    <Toggle
+                      checked={insightsSyncEnabled}
+                      disabled={
+                        !isSignedIn ||
+                        !canToggleInsightsSync ||
+                        (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
+                      }
+                      onChange={(enabled) =>
+                        enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)
+                      }
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
                     label={t("settingsPage.privacy.usageAnalytics")}
                     description={t("settingsPage.privacy.usageAnalyticsDescription")}
                   >
@@ -4295,6 +4732,8 @@ EOF`,
 
   return (
     <>
+      {insightsOptInDialog}
+
       <ConfirmDialog
         open={confirmDialog.open}
         onOpenChange={(open) => !open && hideConfirmDialog()}
@@ -4305,6 +4744,42 @@ EOF`,
         confirmText={confirmDialog.confirmText}
         cancelText={confirmDialog.cancelText}
       />
+
+      <ConfirmDialog
+        open={isDeleteAccountDialogOpen}
+        onOpenChange={(open) => {
+          setIsDeleteAccountDialogOpen(open);
+          if (!open) setEraseDeviceData(false);
+        }}
+        title={t("settingsPage.account.deleteAccount.title")}
+        description={t("settingsPage.account.deleteAccount.description")}
+        onConfirm={() => void confirmDeleteAccount()}
+        variant="destructive"
+        confirmText={t("settingsPage.account.deleteAccount.confirmText")}
+        confirmDisabled={isDeletingAccount}
+      >
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-border accent-destructive"
+            checked={eraseDeviceData}
+            onChange={(event) => setEraseDeviceData(event.target.checked)}
+          />
+          <span className="space-y-1">
+            <span className="block text-sm font-medium">
+              {t("settingsPage.account.deleteAccount.eraseDeviceLabel")}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {t("settingsPage.account.deleteAccount.eraseDeviceDescription")}
+            </span>
+            {eraseDeviceData && (
+              <span className="block text-xs font-medium text-destructive">
+                {t("settingsPage.account.deleteAccount.eraseDeviceWarning")}
+              </span>
+            )}
+          </span>
+        </label>
+      </ConfirmDialog>
 
       <AlertDialog
         open={alertDialog.open}
@@ -4343,6 +4818,8 @@ EOF`,
                   setWhisperModel={setWhisperModel}
                   parakeetModel={parakeetModel}
                   setParakeetModel={setParakeetModel}
+                  cohereModel={cohereModel}
+                  setCohereModel={setCohereModel}
                   cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
                   setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
                   transcriptionMode={transcriptionMode}
@@ -4356,7 +4833,7 @@ EOF`,
                   toast={toast}
                 />
                 {transcriptionMode === "local" &&
-                  localTranscriptionProvider !== "nvidia" &&
+                  localTranscriptionProvider === "whisper" &&
                   renderWhisperVadSettings()}
               </div>
             )}
@@ -4364,7 +4841,7 @@ EOF`,
               <div className="space-y-6">
                 <MeetingTranscriptionPanel />
                 {transcriptionMode === "local" &&
-                  localTranscriptionProvider !== "nvidia" &&
+                  localTranscriptionProvider === "whisper" &&
                   renderWhisperVadSettings()}
               </div>
             )}

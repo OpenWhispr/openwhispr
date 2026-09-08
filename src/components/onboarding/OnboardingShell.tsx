@@ -1,9 +1,10 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { OnboardingProgressState } from "./flow";
 import { Copy, Minus, Square, Undo2, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { useTranslation } from "react-i18next";
 import { getPlatform } from "../../utils/platform";
+import { useWindowControls } from "../../hooks/useWindowControls";
 // Imported (not referenced by path) so Vite fingerprints it and it resolves
 // under the packaged app's file:// origin. See .onboarding-compact-hero.
 import heroDither from "@/assets/onboarding-hero-dither.webp";
@@ -42,59 +43,18 @@ interface CompactOnboardingFrameProps {
 }
 
 /**
- * Minimise/close for the frameless window on Windows and Linux — macOS shows
- * its native traffic lights instead (the window manager keeps them visible on
- * the expanded scaffold). Close hides to the tray; the persisted session
- * resumes the flow on reopen, so this is never a way to lose progress.
- *
- * Compact keeps only minimise/close because its fixed card cannot resize.
- * Expanded adds maximize/restore alongside them.
+ * Window controls for the frameless window on Windows and Linux — macOS uses
+ * its native traffic lights, so OnboardingShell skips rendering this there.
+ * Close hides to the tray; the persisted session resumes the flow on reopen,
+ * so this is never a way to lose progress.
  */
-function OnboardingWindowControls({ compact }: { compact: boolean }) {
+function OnboardingWindowControls() {
   const { t } = useTranslation();
-  const [isMaximized, setIsMaximized] = useState(false);
-  const platform = getPlatform();
+  const { isMaximized, minimize, toggleMaximize, close } = useWindowControls();
 
-  useEffect(() => {
-    if (compact || platform === "darwin") return;
-    let mounted = true;
-    const syncIsMaximized = async (): Promise<void> => {
-      try {
-        const maximized = await window.electronAPI?.windowIsMaximized?.();
-        if (mounted) setIsMaximized(Boolean(maximized));
-      } catch {}
-    };
-
-    void syncIsMaximized();
-    const intervalId = window.setInterval(syncIsMaximized, 1000);
-    return () => {
-      mounted = false;
-      window.clearInterval(intervalId);
-    };
-  }, [compact, platform]);
-
-  const handleMinimize = async (): Promise<void> => {
-    try {
-      await window.electronAPI?.windowMinimize?.();
-    } catch {}
-  };
-
-  const handleMaximize = async (): Promise<void> => {
-    try {
-      await window.electronAPI?.windowMaximize?.();
-      const maximized = await window.electronAPI?.windowIsMaximized?.();
-      setIsMaximized(Boolean(maximized));
-    } catch {}
-  };
-
-  const handleClose = async (): Promise<void> => {
-    try {
-      await window.electronAPI?.windowClose?.();
-    } catch {}
-  };
-
-  if (platform === "darwin") return null;
-
+  const minimizeLabel = t("windowControls.minimize");
+  const maximizeLabel = t(isMaximized ? "windowControls.restore" : "windowControls.maximize");
+  const closeLabel = t("windowControls.close");
   const buttonClass =
     "inline-flex size-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 text-[var(--onboarding-text-secondary)] hover:bg-[var(--onboarding-surface-tertiary)] focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]";
 
@@ -105,30 +65,31 @@ function OnboardingWindowControls({ compact }: { compact: boolean }) {
     >
       <button
         type="button"
-        onClick={handleMinimize}
-        title={t("windowControls.minimize")}
+        onClick={minimize}
+        title={minimizeLabel}
+        aria-label={minimizeLabel}
         className={buttonClass}
       >
         <Minus className="size-4" aria-hidden="true" />
       </button>
-      {!compact && (
-        <button
-          type="button"
-          onClick={handleMaximize}
-          title={t(isMaximized ? "windowControls.restore" : "windowControls.maximize")}
-          className={buttonClass}
-        >
-          {isMaximized ? (
-            <Copy className="size-4" aria-hidden="true" />
-          ) : (
-            <Square className="size-3.5" aria-hidden="true" />
-          )}
-        </button>
-      )}
       <button
         type="button"
-        onClick={handleClose}
-        title={t("windowControls.close")}
+        onClick={toggleMaximize}
+        title={maximizeLabel}
+        aria-label={maximizeLabel}
+        className={buttonClass}
+      >
+        {isMaximized ? (
+          <Copy className="size-4" aria-hidden="true" />
+        ) : (
+          <Square className="size-3.5" aria-hidden="true" />
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={close}
+        title={closeLabel}
+        aria-label={closeLabel}
         className={buttonClass}
       >
         <X className="size-4" aria-hidden="true" />
@@ -242,18 +203,40 @@ export default function OnboardingShell({
         } as CSSProperties
       }
     >
-      {/* 48px, not a sliver: this is the frameless window's only title bar, so
-          it has to be a target someone can actually grab. Interactive overlays
-          in this band need z-60 + app-region: no-drag and must live outside the
-          step wrapper (a sibling here, or portalled to body) — the wrapper's
-          entry animation retains a transform, capping its descendants below
-          z-50. */}
+      {/* This is the frameless window's only title bar, so it has to be a
+          target someone can actually grab. Interactive overlays in this band
+          need z-60 + app-region: no-drag and must live outside the step wrapper
+          (a sibling here, or portalled to body) — the wrapper's entry animation
+          retains a transform, capping its descendants below z-50.
+
+          The native app-region strip stays 48px on every screen. A drag element
+          swallows the events under it, and it is a sibling of the step scroller
+          inside an overflow-hidden main, so a taller strip would eat wheel
+          scrolling over the top of a compact step — reachable, because
+          setOnboardingWindowMode clamps the compact window to the work area
+          height and the permissions list then overflows. */}
       <div
         className="absolute inset-x-0 top-0 z-50 h-12"
-        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+        style={{ WebkitAppRegion: "drag" } as CSSProperties}
+        data-window-drag-zone=""
         aria-hidden="true"
       />
-      <OnboardingWindowControls compact={compact} />
+      {/* macOS only: the transparent control panel drops app-region entirely,
+          so the JS fallback (useControlPanelWindowDrag) is the sole drag path
+          there and can widen the grab target to the full compact hero — the
+          dithered ramp reads as window chrome, so people grab it to move the
+          window. pointer-events-none keeps it out of the event path, so it can
+          never swallow scrolling or clicks the way the app-region strip does;
+          the fallback matches declared zones by their bounds, not by hit
+          testing, so being out of the event path costs it nothing. */}
+      {compact && (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-40 h-48"
+          data-window-drag-zone=""
+          aria-hidden="true"
+        />
+      )}
+      {getPlatform() !== "darwin" && <OnboardingWindowControls />}
 
       <div
         // Normally nothing scrolls here: each step sizes itself to the window and
@@ -378,7 +361,7 @@ export function CompactOnboardingFrame({
           {
             "--onboarding-hero-dither-light": `url(${heroDither})`,
             "--onboarding-hero-dither-dark": `url(${heroDitherDark})`,
-          } as React.CSSProperties
+          } as CSSProperties
         }
       />
       {showBrandMark && (

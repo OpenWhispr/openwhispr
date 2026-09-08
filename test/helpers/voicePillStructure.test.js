@@ -32,7 +32,7 @@ const pillFootprints = async () => {
 
 const renderPill = async (state, expanded, horizontalDirection = "right", overrides = {}) => {
   const { VoicePill } = await import("../../src/components/dictation/VoicePill.tsx");
-  const markup = renderStatic(VoicePill, {
+  return renderStatic(VoicePill, {
     variant: "floating",
     state,
     expanded,
@@ -40,43 +40,38 @@ const renderPill = async (state, expanded, horizontalDirection = "right", overri
     getAudioLevel: () => 0,
     ...overrides,
   });
-  // BorderBeam may emit <style> blocks anywhere in its output; strip them all
-  // so assertions target only the rendered DOM structure. Re-run until stable:
-  // a removal can splice the surrounding text into a new <style ...> match.
-  let stripped = markup;
-  for (let previous = ""; previous !== stripped;) {
-    previous = stripped;
-    stripped = stripped.replace(/<style[^>]*>[\s\S]*?<\/style>/g, "");
-  }
-  return stripped;
 };
 
-test("thinking and recording keep the same persistent Beam and pill roots", async () => {
+test("thinking and recording keep the same persistent glow and pill roots", async () => {
   const thinking = await renderPill("thinking", false);
   const recording = await renderPill("recording", true);
 
   for (const markup of [thinking, recording]) {
-    assert.match(markup, /^<div [^>]*data-beam="[^"]+"/);
-    assert.match(markup, /^<div [^>]*class="agent-thinking-beam/);
+    assert.match(markup, /^<span class="voice-pill-glow-anchor"/);
+    assert.match(markup, /class="processing-signal-glow"/);
+    assert.match(markup, /voice-pill-control/);
   }
-  assert.match(thinking, /^<div [^>]*data-active=""/);
-  assert.match(thinking, /plain-dictation-processing-glow/);
-  assert.doesNotMatch(recording, /data-active=""/);
-  assert.doesNotMatch(recording, /plain-dictation-processing-glow/);
+  assert.match(thinking, /class="processing-signal-glow" data-active="true"/);
+  assert.doesNotMatch(recording, /data-active/);
   const expectedBars = await totalWaveBars();
   assert.equal((thinking.match(/rounded-full bg-current/g) || []).length, expectedBars);
   assert.equal((recording.match(/rounded-full bg-current/g) || []).length, expectedBars);
 });
 
-test("plain dictation processing strengthens only the light-theme radial bloom", async () => {
+test("one Signal glow serves both identities: blue processing, purple agent", async () => {
   const styles = readDictationStyles();
   const agentThinking = await renderPill("thinking", false, "right", { agentMode: true });
+  // Listening must not glow in either identity: a glow before any transcript
+  // exists reads as work already in flight.
+  const agentListening = await renderPill("recording", false, "right", { agentMode: true });
 
+  assert.match(styles, /\.processing-signal-glow\s*\{/);
+  assert.match(styles, /:root:not\(\.dark\) \.processing-signal-glow\s*\{/);
   assert.match(
-    styles,
-    /:root:not\(\.dark\) \.agent-thinking-beam\.plain-dictation-processing-glow\s*\{/
+    agentThinking,
+    /class="processing-signal-glow" data-active="true" data-agent="true"/
   );
-  assert.doesNotMatch(agentThinking, /plain-dictation-processing-glow/);
+  assert.doesNotMatch(agentListening, /data-active/);
 });
 
 test("the pill renders exactly the footprints the native window ladder is sized around", async () => {
@@ -117,9 +112,9 @@ test("an idle Agent panel starts with the normal pill and expands only while lis
 
   assert.match(idleAgent, footprint.idle);
   assert.doesNotMatch(idleAgent, footprint.recording);
-  assert.doesNotMatch(idleAgent, /data-active=""/);
+  assert.doesNotMatch(idleAgent, /data-active/);
   assert.match(listeningAgent, footprint.recording);
-  assert.match(listeningAgent, /data-active=""/);
+  assert.doesNotMatch(listeningAgent, /data-active/);
 });
 
 test("the waveform stays to the right of the identity across docks and voice modes", async () => {
@@ -239,7 +234,7 @@ test("Live Transcript hands visual border ownership to the shared panel", async 
   assert.doesNotMatch(standalone, /data-integrated-with-panel/);
 });
 
-test("Agent Mode uses the supplied mark, a purple perimeter beam, and a neutral waveform", async () => {
+test("Agent Mode uses the supplied mark, a purple perimeter glow, and a neutral waveform", async () => {
   const agentRecording = await renderPill("recording", true, "right", {
     agentMode: true,
   });
@@ -250,13 +245,15 @@ test("Agent Mode uses the supplied mark, a purple perimeter beam, and a neutral 
   assert.match(AGENT_MODE_PATH, /^M6\.14226 /);
   assert.match(styles, /--color-agent-brand:/);
   assert.doesNotMatch(styles, /\.voice-pill-control\[data-agent-mode="true"\]\s*\{/);
-  assert.match(styles, /--beam-hue-base:/);
-  assert.match(styles, /--beam-inner-opacity: 0/);
-  assert.match(styles, /--beam-bloom-opacity: 0/);
+  // The agent glow is the same Signal treatment re-palettes to the agent's
+  // purple around the brand color.
+  assert.match(styles, /\.processing-signal-glow\[data-agent="true"\]\s*\{/);
+  assert.match(styles, /--signal-core: #8787ff/);
   assert.doesNotMatch(styles, /agent-waveform-background|agent-waveform-highlight/);
-  assert.match(agentRecording, /^<div [^>]*class="agent-thinking-beam/);
-  assert.match(agentRecording, /^<div [^>]*data-beam="[^"]+"/);
-  assert.match(agentRecording, /^<div [^>]*data-active=""/);
+  // Listening stays glow-free; the purple Signal glow is reserved for the
+  // post-recording thinking state so "hearing you" and "working" read apart.
+  assert.match(agentRecording, /class="processing-signal-glow" data-agent="true"/);
+  assert.doesNotMatch(agentRecording, /data-active/);
   assert.match(agentRecording, /data-agent-mode="true"/);
   assert.match(agentRecording, /voice-identity-final-agent/);
   assert.ok(agentRecording.includes(`d="${AGENT_MODE_PATH}"`));
@@ -268,15 +265,16 @@ test("Agent Mode uses the supplied mark, a purple perimeter beam, and a neutral 
   assert.doesNotMatch(normalRecording, /agent-waveform-background/);
 });
 
-test("Agent thinking keeps the purple beam on the same persistent pill root", async () => {
+test("Agent thinking keeps the purple glow on the same persistent pill root", async () => {
   const agentThinking = await renderPill("thinking", false, "right", {
     agentMode: true,
   });
 
-  assert.match(agentThinking, /^<div [^>]*class="agent-thinking-beam/);
-  assert.match(agentThinking, /^<div [^>]*data-beam="[^"]+"/);
-  assert.match(agentThinking, /^<div [^>]*data-active=""/);
-  assert.match(agentThinking, /^<div [^>]*data-agent-mode="true"/);
+  assert.match(
+    agentThinking,
+    /class="processing-signal-glow" data-active="true" data-agent="true"/
+  );
+  assert.match(agentThinking, /<div [^>]*data-agent-mode="true"/);
   assert.match(agentThinking, /data-agent-beam-active="true"/);
 });
 

@@ -824,7 +824,9 @@ h1 {
 }
 
 /* The compact first-run steps (auth + permissions, per COMPACT_STEPS in
-   OnboardingFlow.tsx) intentionally keep their existing 32px scale. */
+   OnboardingFlow.tsx) intentionally keep their existing 32px scale. Exception:
+   CompactPermissionsStep overrides its title to 30px (text-3xl!) so all four
+   permission rows fit the authored 480×624 window without scrolling. */
 .onboarding-canvas.compact .onboarding-display-title {
   font-size: 2rem; /* 32px */
 }

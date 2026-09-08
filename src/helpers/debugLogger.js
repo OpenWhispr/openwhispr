@@ -74,6 +74,7 @@ class DebugLogger {
 
       this.debug("Debug logging enabled", { logFile: this.logFile });
       this.info("System Info", {
+        appVersion: app.getVersion(),
         platform: process.platform,
         nodeVersion: process.version,
         electronVersion: process.versions.electron,

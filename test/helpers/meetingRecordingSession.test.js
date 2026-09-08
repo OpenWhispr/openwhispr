@@ -35,24 +35,46 @@ test("accepts legacy stops but rejects an expected ID for another active session
   assert.equal(canStopMeetingRecordingSession(null, "meeting-1"), false);
 });
 
-test("auto-end stop requests forward only a valid expected session ID", async () => {
+test("auto-end stop requests acknowledge only a completed scoped stop", async () => {
   const { requestMeetingRecordingAutoEnd } = await load();
   const requestedSessions = [];
+  const completedSessions = [];
   const errors = [];
   const stopRecording = async (sessionId) => {
     requestedSessions.push(sessionId);
+    return { stopped: sessionId === "meeting-2" };
   };
+  const onStopped = (sessionId, stopped) => completedSessions.push({ sessionId, stopped });
   const onError = (error, sessionId) => errors.push({ error, sessionId });
 
   assert.equal(
-    requestMeetingRecordingAutoEnd({ sessionId: "meeting-2" }, stopRecording, onError),
+    requestMeetingRecordingAutoEnd(
+      { sessionId: "meeting-2" },
+      stopRecording,
+      onStopped,
+      onError
+    ),
     true
   );
-  assert.equal(requestMeetingRecordingAutoEnd({ sessionId: "" }, stopRecording, onError), false);
-  assert.equal(requestMeetingRecordingAutoEnd(null, stopRecording, onError), false);
+  assert.equal(
+    requestMeetingRecordingAutoEnd({ sessionId: "meeting-1" }, stopRecording, onStopped, onError),
+    true
+  );
+  assert.equal(
+    requestMeetingRecordingAutoEnd({ sessionId: "" }, stopRecording, onStopped, onError),
+    false
+  );
+  assert.equal(requestMeetingRecordingAutoEnd(null, stopRecording, onStopped, onError), false);
+  await Promise.resolve();
   await Promise.resolve();
 
-  assert.deepEqual(requestedSessions, ["meeting-2"]);
+  assert.deepEqual(requestedSessions, ["meeting-2", "meeting-1"]);
+  // Both settle: the caller must learn about a stop that completed without a
+  // persisted result, or an auto-end ends the recording with no feedback.
+  assert.deepEqual(completedSessions, [
+    { sessionId: "meeting-2", stopped: true },
+    { sessionId: "meeting-1", stopped: false },
+  ]);
   assert.deepEqual(errors, []);
 });
 
@@ -65,8 +87,11 @@ test("a rejected auto-end stop is reported instead of swallowed", async () => {
   };
 
   assert.equal(
-    requestMeetingRecordingAutoEnd({ sessionId: "meeting-2" }, stopRecording, (error, sessionId) =>
-      errors.push({ error, sessionId })
+    requestMeetingRecordingAutoEnd(
+      { sessionId: "meeting-2" },
+      stopRecording,
+      () => undefined,
+      (error, sessionId) => errors.push({ error, sessionId })
     ),
     true
   );
@@ -74,6 +99,48 @@ test("a rejected auto-end stop is reported instead of swallowed", async () => {
   await Promise.resolve();
 
   assert.deepEqual(errors, [{ error: stopFailure, sessionId: "meeting-2" }]);
+});
+
+test("restart context preserves note identity and session speaker settings", async () => {
+  const { createMeetingAutoEndRestartContext } = await load();
+  const seedSegments = [{ id: "segment-1", text: "Hello", source: "mic" }];
+
+  assert.deepEqual(
+    createMeetingAutoEndRestartContext("meeting-2", "meeting-2", {
+      recordingNoteId: 42,
+      recordingNoteTitle: "Planning",
+      recordingFolderId: 8,
+      sessionDiarizationEnabled: false,
+      sessionExpectedCount: 5,
+      userTouchedStepper: true,
+      segments: seedSegments,
+    }),
+    {
+      sessionId: "meeting-2",
+      args: {
+        noteId: 42,
+        noteTitle: "Planning",
+        folderId: 8,
+        seedSegments,
+        diarizationEnabled: false,
+        expectedCount: 5,
+        expectedCountIsExplicit: true,
+        autoEndEligible: true,
+      },
+    }
+  );
+  assert.equal(
+    createMeetingAutoEndRestartContext("meeting-1", "meeting-2", {
+      recordingNoteId: 42,
+      recordingNoteTitle: "Planning",
+      recordingFolderId: 8,
+      sessionDiarizationEnabled: true,
+      sessionExpectedCount: 2,
+      userTouchedStepper: false,
+      segments: [],
+    }),
+    null
+  );
 });
 
 test("only meeting notes are eligible for automatic ending", async () => {
@@ -326,4 +393,193 @@ test("main-start rejection releases cancellation and replacement after one scope
 
   assert.equal(scopedStopCount, 1);
   assert.deepEqual(events, ["main-start:meeting-1", "main-stop:meeting-1", "capture:meeting-2"]);
+});
+
+const parseSegments = (raw) => JSON.parse(raw);
+
+test("restart seeds from the note's persisted transcript, not the stale live segments", async () => {
+  const { resolveMeetingAutoEndRestartSeed } = await load();
+  const diarized = [{ id: "a", text: "hello", speaker: "Ada" }];
+  const stale = [{ id: "a", text: "hello", speaker: null }];
+
+  const result = resolveMeetingAutoEndRestartSeed(
+    7,
+    { transcript: JSON.stringify(diarized), deleted_at: null },
+    parseSegments,
+    stale
+  );
+
+  assert.deepEqual(result, { ok: true, seedSegments: diarized });
+});
+
+test("restart refuses a note that was deleted during the restart window", async () => {
+  const { resolveMeetingAutoEndRestartSeed } = await load();
+
+  assert.deepEqual(
+    resolveMeetingAutoEndRestartSeed(
+      7,
+      { transcript: "[]", deleted_at: "2026-08-27T00:00:00Z" },
+      parseSegments,
+      []
+    ),
+    { ok: false, reason: "note-missing" }
+  );
+});
+
+test("restart refuses a note that no longer exists", async () => {
+  const { resolveMeetingAutoEndRestartSeed } = await load();
+
+  assert.deepEqual(resolveMeetingAutoEndRestartSeed(7, null, parseSegments, []), {
+    ok: false,
+    reason: "note-missing",
+  });
+});
+
+test("restart without a note keeps the live segments it captured", async () => {
+  const { resolveMeetingAutoEndRestartSeed } = await load();
+  const live = [{ id: "a", text: "hello" }];
+
+  assert.deepEqual(resolveMeetingAutoEndRestartSeed(null, null, parseSegments, live), {
+    ok: true,
+    seedSegments: live,
+  });
+});
+
+test("restart starts empty when the note has no transcript yet", async () => {
+  const { resolveMeetingAutoEndRestartSeed } = await load();
+
+  assert.deepEqual(
+    resolveMeetingAutoEndRestartSeed(7, { transcript: "", deleted_at: null }, parseSegments, [
+      { id: "a", text: "stale" },
+    ]),
+    { ok: true, seedSegments: [] }
+  );
+});
+
+// runMeetingAutoEndRestart owns every abort path, so the component can toast on
+// all of them instead of dropping some silently.
+function createRestartDeps(overrides = {}) {
+  const started = [];
+  return {
+    started,
+    deps: {
+      getActiveSessionId: () => null,
+      getLatestSegments: () => [],
+      getNote: async () => ({ transcript: "[]", deleted_at: null }),
+      parseSegments,
+      startRecording: async (args) => {
+        started.push(args);
+        return true;
+      },
+      ...overrides,
+    },
+  };
+}
+
+const restartContext = (sessionId = "meeting-1", args = {}) => ({
+  sessionId,
+  args: { noteId: 7, noteTitle: "Standup", folderId: 3, seedSegments: [], ...args },
+});
+
+test("a delivered restart starts a recording seeded from the note", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const { deps, started } = createRestartDeps({
+    getNote: async () => ({
+      transcript: JSON.stringify([{ id: "a", text: "hi" }]),
+      deleted_at: null,
+    }),
+  });
+
+  const outcome = await runMeetingAutoEndRestart(
+    { sessionId: "meeting-1" },
+    restartContext(),
+    deps
+  );
+
+  assert.deepEqual(outcome, { status: "started" });
+  assert.equal(started.length, 1);
+  assert.deepEqual(started[0].seedSegments, [{ id: "a", text: "hi" }]);
+  assert.equal(started[0].noteId, 7);
+});
+
+test("a restart whose context died reports an abort instead of failing silently", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const { deps, started } = createRestartDeps();
+
+  assert.deepEqual(await runMeetingAutoEndRestart({ sessionId: "meeting-1" }, null, deps), {
+    status: "aborted",
+    reason: "no-context",
+  });
+  assert.deepEqual(
+    await runMeetingAutoEndRestart({ sessionId: "meeting-9" }, restartContext(), deps),
+    { status: "aborted", reason: "no-context" }
+  );
+  assert.equal(started.length, 0);
+});
+
+test("a restart racing an already-live recording aborts before it starts one", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const { deps, started } = createRestartDeps({ getActiveSessionId: () => "meeting-other" });
+
+  assert.deepEqual(
+    await runMeetingAutoEndRestart({ sessionId: "meeting-1" }, restartContext(), deps),
+    { status: "aborted", reason: "already-recording" }
+  );
+  assert.equal(started.length, 0);
+});
+
+// The note read is awaited, so a manual recording can win the race after the
+// first guard passed. Starting anyway would adopt the old note under the user's
+// new recording.
+test("a recording that starts while the note is being read cancels the restart", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  let activeSessionId = null;
+  const noteRead = createDeferred();
+  const { deps, started } = createRestartDeps({
+    getActiveSessionId: () => activeSessionId,
+    getNote: () => noteRead.promise,
+  });
+
+  const outcome = runMeetingAutoEndRestart({ sessionId: "meeting-1" }, restartContext(), deps);
+  activeSessionId = "meeting-manual";
+  noteRead.resolve({ transcript: "[]", deleted_at: null });
+
+  assert.deepEqual(await outcome, { status: "aborted", reason: "already-recording" });
+  assert.equal(started.length, 0);
+});
+
+test("a restart whose note vanished aborts without starting a recording", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const { deps, started } = createRestartDeps({ getNote: async () => null });
+
+  assert.deepEqual(
+    await runMeetingAutoEndRestart({ sessionId: "meeting-1" }, restartContext(), deps),
+    { status: "aborted", reason: "note-missing" }
+  );
+  assert.equal(started.length, 0);
+});
+
+test("a restart that startRecording refuses reports an abort", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const { deps } = createRestartDeps({ startRecording: async () => false });
+
+  assert.deepEqual(
+    await runMeetingAutoEndRestart({ sessionId: "meeting-1" }, restartContext(), deps),
+    { status: "aborted", reason: "start-refused" }
+  );
+});
+
+test("a restart without a note keeps the segments captured at the stop", async () => {
+  const { runMeetingAutoEndRestart } = await load();
+  const live = [{ id: "a", text: "in person" }];
+  const { deps, started } = createRestartDeps({ getLatestSegments: () => live });
+
+  const outcome = await runMeetingAutoEndRestart(
+    { sessionId: "meeting-1" },
+    restartContext("meeting-1", { noteId: null }),
+    deps
+  );
+
+  assert.deepEqual(outcome, { status: "started" });
+  assert.deepEqual(started[0].seedSegments, live);
 });

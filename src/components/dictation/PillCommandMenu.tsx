@@ -68,7 +68,11 @@ export function PillCommandMenu({
       >
         {isRecording ? t("app.commandMenu.stopListening") : t("app.commandMenu.startListening")}
       </button>
-      {agentAllowed && (
+      {/* Opening the Agent panel mid-recording would strand the capture with no
+          surface (a translation recording becomes invisible AND un-stoppable:
+          its hotkey is blocked while the panel is open and Escape belongs to the
+          panel). Stop or finish the recording first. */}
+      {agentAllowed && !isRecording && (
         <>
           <div className="h-px bg-border" />
           <button

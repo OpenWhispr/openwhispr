@@ -74,13 +74,20 @@ test("activity ages out after each channel's tail with a single change", () => {
   monitor.tick(START);
   assert.deepEqual(changes, [{ micActive: true, systemActive: true }]);
 
-  monitor.tick(START + MIC_ACTIVITY_TAIL_MS - 1);
+  // Which tail is longer is a tuning decision, so derive the order from the
+  // constants: the point is that each channel ages out on its own tail.
+  const micFirst = MIC_ACTIVITY_TAIL_MS < SYSTEM_ACTIVITY_TAIL_MS;
+  const firstTail = Math.min(MIC_ACTIVITY_TAIL_MS, SYSTEM_ACTIVITY_TAIL_MS);
+  const secondTail = Math.max(MIC_ACTIVITY_TAIL_MS, SYSTEM_ACTIVITY_TAIL_MS);
+  assert.notEqual(firstTail, secondTail, "the tails must differ for this to be two changes");
+
+  monitor.tick(START + firstTail - 1);
   assert.equal(changes.length, 1, "still inside both tails");
 
-  monitor.tick(START + MIC_ACTIVITY_TAIL_MS);
-  assert.deepEqual(changes.at(-1), { micActive: false, systemActive: true });
+  monitor.tick(START + firstTail);
+  assert.deepEqual(changes.at(-1), { micActive: !micFirst, systemActive: micFirst });
 
-  monitor.tick(START + SYSTEM_ACTIVITY_TAIL_MS);
+  monitor.tick(START + secondTail);
   assert.deepEqual(changes.at(-1), { micActive: false, systemActive: false });
   assert.equal(changes.length, 3);
 });

@@ -18,6 +18,7 @@ export interface TranscriptionSettings {
   whisperModel: string;
   localTranscriptionProvider: LocalTranscriptionProvider;
   parakeetModel: string;
+  cohereModel: string;
   allowOpenAIFallback: boolean;
   allowLocalFallback: boolean;
   fallbackWhisperModel: string;
@@ -93,6 +94,7 @@ export interface ApiKeySettings {
 
 export interface PrivacySettings {
   cloudBackupEnabled: boolean;
+  insightsSyncEnabled: boolean;
   telemetryEnabled: boolean;
   audioRetentionDays: number;
   transcriptRetentionDays: number;
@@ -198,6 +200,8 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
+    cohereModel,
+    preferredLanguage,
     useCleanupModel,
     cleanupMode,
     cleanupModel,
@@ -209,12 +213,18 @@ function useSettingsInternal() {
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.syncStartupPreferences) return;
 
-    const model = localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel;
+    const model =
+      localTranscriptionProvider === "nvidia"
+        ? parakeetModel
+        : localTranscriptionProvider === "cohere"
+          ? cohereModel
+          : whisperModel;
     window.electronAPI
       .syncStartupPreferences({
         useLocalWhisper,
         localTranscriptionProvider,
         model: model || undefined,
+        language: preferredLanguage || undefined,
         useCleanupModel,
         cleanupMode,
         cleanupModel,
@@ -234,6 +244,8 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
+    cohereModel,
+    preferredLanguage,
     useCleanupModel,
     cleanupMode,
     cleanupModel,
@@ -248,6 +260,7 @@ function useSettingsInternal() {
     uiLanguage: store.uiLanguage,
     localTranscriptionProvider: store.localTranscriptionProvider,
     parakeetModel: store.parakeetModel,
+    cohereModel: store.cohereModel,
     allowOpenAIFallback: store.allowOpenAIFallback,
     allowLocalFallback: store.allowLocalFallback,
     fallbackWhisperModel: store.fallbackWhisperModel,
@@ -295,6 +308,7 @@ function useSettingsInternal() {
     setUiLanguage: store.setUiLanguage,
     setLocalTranscriptionProvider: store.setLocalTranscriptionProvider,
     setParakeetModel: store.setParakeetModel,
+    setCohereModel: store.setCohereModel,
     setAllowOpenAIFallback: store.setAllowOpenAIFallback,
     setAllowLocalFallback: store.setAllowLocalFallback,
     setFallbackWhisperModel: store.setFallbackWhisperModel,
@@ -398,6 +412,8 @@ function useSettingsInternal() {
     setWhisperVadSamplesOverlap: store.setWhisperVadSamplesOverlap,
     cloudBackupEnabled: store.cloudBackupEnabled,
     setCloudBackupEnabled: store.setCloudBackupEnabled,
+    insightsSyncEnabled: store.insightsSyncEnabled,
+    setInsightsSyncEnabled: store.setInsightsSyncEnabled,
     telemetryEnabled: store.telemetryEnabled,
     setTelemetryEnabled: store.setTelemetryEnabled,
     audioRetentionDays: store.audioRetentionDays,

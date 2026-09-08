@@ -17,11 +17,13 @@ import {
 import {
   getTranscriptionProviders,
   getParakeetModels,
+  isCohereTranscribeModel,
   getWhisperModels,
   modelRegistry,
   type CloudProviderData,
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
+import { pickDefaultModelId } from "../../models/providerDefaultModel";
 import type { OnboardingStepId } from "./flow";
 import { forgetPendingLocalModel, rememberPendingLocalModel } from "./pendingLocalModels";
 import { isLocalStageDownloadActive } from "./localDownloadState";
@@ -285,8 +287,7 @@ export function ByokProviderStep({
   };
 
   const chooseProvider = (providerId: string) => {
-    const provider = providers.find((item) => item.id === providerId);
-    const fallbackModel = provider?.models[0]?.id ?? "";
+    const fallbackModel = pickDefaultModelId(providers.find((item) => item.id === providerId));
     setSelectedProvider(providerId);
     setSelectedModel(fallbackModel);
     setDraftApiKey(providerCredential(providerId, store).value);
@@ -661,13 +662,17 @@ export function LocalModelSetupStep({
       }));
     }
     if (selectedProvider === "nvidia") {
-      return Object.entries(getParakeetModels()).map(([id, model]) => ({
-        id,
-        name: model.name,
-        size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
-        recommended: model.recommended,
-        icon: "nvidia",
-      }));
+      // Onboarding offers only the whisper/NVIDIA providers; Cohere models
+      // would otherwise commit provider "nvidia" with a Cohere model id.
+      return Object.entries(getParakeetModels())
+        .filter(([id]) => !isCohereTranscribeModel(id))
+        .map(([id, model]) => ({
+          id,
+          name: model.name,
+          size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
+          recommended: model.recommended,
+          icon: "nvidia",
+        }));
     }
     return Object.entries(getWhisperModels()).map(([id, model]) => ({
       id,

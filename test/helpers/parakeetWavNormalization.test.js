@@ -4,7 +4,7 @@ const Module = require("node:module");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { REQUIRED_MODEL_FILES } = require("../../src/helpers/parakeetModelInfo");
+const { getRequiredModelFiles } = require("../../src/helpers/parakeetModelInfo");
 
 const MODEL_NAME = "parakeet-tdt-0.6b-v3";
 
@@ -94,7 +94,7 @@ test("transcribes audible mono 16 kHz float32 WAV input", async () => {
   try {
     const modelDir = path.join(tempHome, ".cache", "openwhispr", "parakeet-models", MODEL_NAME);
     fs.mkdirSync(modelDir, { recursive: true });
-    for (const file of REQUIRED_MODEL_FILES) {
+    for (const file of getRequiredModelFiles(MODEL_NAME)) {
       fs.writeFileSync(path.join(modelDir, file), "");
     }
 
