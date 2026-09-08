@@ -43,7 +43,7 @@ test("creates a renamed release config for the current repository", () => {
     productName: "New Whispr",
     appId: "engineering.oppulence.newwhispr",
     protocolScheme: "newwhispr",
-    repository: "Oppulence-Engineering/openwhispr",
+    repository: "PlaybookMediaLLC/openwhispr",
     repositoryPrivate: true,
   });
 
@@ -65,7 +65,7 @@ test("creates a renamed release config for the current repository", () => {
   );
   assert.deepEqual(config.publish, {
     provider: "github",
-    owner: "Oppulence-Engineering",
+    owner: "PlaybookMediaLLC",
     repo: "openwhispr",
     private: true,
     releaseType: "draft",
@@ -97,7 +97,7 @@ test("requires renamed releases to use a distinct application identity", () => {
         productName: "New Whispr",
         appId: "com.gizmolabs.openwhispr",
         protocolScheme: "newwhispr",
-        repository: "Oppulence-Engineering/openwhispr",
+        repository: "PlaybookMediaLLC/openwhispr",
       }),
     /non-OpenWhispr RELEASE_APP_ID/
   );
@@ -108,7 +108,7 @@ test("requires renamed releases to use a distinct application identity", () => {
         productName: "New Whispr",
         appId: "engineering.oppulence.newwhispr",
         protocolScheme: "openwhispr",
-        repository: "Oppulence-Engineering/openwhispr",
+        repository: "PlaybookMediaLLC/openwhispr",
       }),
     /non-OpenWhispr RELEASE_PROTOCOL_SCHEME/
   );
@@ -121,7 +121,7 @@ test("requires forks to use an application identity distinct from canonical Open
         productName: "OpenWhispr",
         appId: "com.gizmolabs.openwhispr",
         protocolScheme: "openwhispr",
-        repository: "Oppulence-Engineering/openwhispr",
+        repository: "PlaybookMediaLLC/openwhispr",
       }),
     /fork release must use a non-OpenWhispr RELEASE_APP_ID/
   );
@@ -151,9 +151,11 @@ test("an Oppulence release never inherits the upstream Windows signing profile",
 
 test("release CI cannot redirect an Oppulence updater to the checkout repository", () => {
   const distribution = loadDistribution("distributions/oppulence-voice.json", process.cwd());
-  assert.equal(resolveReleaseRepository(distribution), "Oppulence-Engineering/openwhispr");
+  assert.equal(resolveReleaseRepository(distribution), "PlaybookMediaLLC/openwhispr");
+  // A fork or a mirror running this workflow must not be able to publish
+  // updates that the shipped app would then install.
   assert.throws(
-    () => resolveReleaseRepository(distribution, "PlaybookMediaLLC/openwhispr"),
+    () => resolveReleaseRepository(distribution, "someone-else/openwhispr"),
     /does not match distribution updater repository/
   );
 });

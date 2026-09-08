@@ -67,3 +67,17 @@ test("the macOS tray icon is a small template image", () => {
     "macOS template images must keep the Template suffix so Electron treats them as masks"
   );
 });
+
+test("the updater points at the repository that actually publishes releases", () => {
+  const distribution = loadDistribution("distributions/oppulence-voice.json", PROJECT_ROOT);
+
+  // release.yml refuses to publish when the checkout and the updater target
+  // disagree, so a stale owner here does not fail loudly at build time — it
+  // fails at the very end of a release, and any app that did ship would poll
+  // a repository that does not exist for updates it will never get.
+  assert.equal(distribution.updates.provider, "github");
+  assert.equal(
+    `${distribution.updates.owner}/${distribution.updates.repo}`,
+    "PlaybookMediaLLC/openwhispr"
+  );
+});

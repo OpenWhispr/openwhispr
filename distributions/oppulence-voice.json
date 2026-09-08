@@ -17,7 +17,7 @@
   },
   "updates": {
     "provider": "github",
-    "owner": "Oppulence-Engineering",
+    "owner": "PlaybookMediaLLC",
     "repo": "openwhispr",
     "private": false
   },
