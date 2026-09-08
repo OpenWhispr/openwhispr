@@ -968,6 +968,12 @@ class DatabaseManager {
         { table: "snippets", col: "client_snippet_id" },
       ];
       for (const { table, col } of syncTables) {
+        // Legacy SQLite timestamps are completion times without an offset. Once
+        // the user has cleared Insights, only a client-captured occurrence time
+        // can prove that a historical row happened afterward, so an ambiguous
+        // legacy row stays out rather than reviving a cleared counter. This is
+        // the eligibility policy; the boundary on the value actually written is
+        // enforced below, where the chosen instant is known.
         const rows = this.db.prepare(`SELECT id FROM ${table} WHERE ${col} IS NULL`).all();
         const stmt = this.db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`);
         for (const row of rows) {
@@ -1343,9 +1349,6 @@ class DatabaseManager {
       const clearState = this.db
         .prepare("SELECT cleared_through FROM analytics_device_clear_state WHERE id = 1")
         .get();
-      // Legacy SQLite timestamps are completion times without an offset. Once
-      // the user has cleared Insights, only a client-captured occurrence time
-      // can prove that a historical row happened afterward.
       const rows = this.db
         .prepare(
           `SELECT transcription.id, transcription.client_transcription_id,
@@ -1418,12 +1421,11 @@ class DatabaseManager {
             skipped += 1;
             continue;
           }
-          // Guards the instant actually written, which the query cannot: it
-          // filters on transcription.timestamp, and the value chosen above may
-          // be created_at instead. The two also disagree on shape -- SQLite
-          // reads a bare YYYY-MM-DD as zoned, because the day hyphen sits six
-          // from the end -- so this is the boundary that holds, not a
-          // restatement of the one above.
+          // Not a restatement of the query's clear filter: that one decides
+          // eligibility from transcription.timestamp, while this guards the
+          // instant actually chosen, which may be created_at. It also catches
+          // what the SQL shape test cannot -- a bare YYYY-MM-DD reads as zoned
+          // there, its day hyphen sitting six characters from the end.
           if (clearedThrough !== null && occurredAt.getTime() <= clearedThrough) {
             skipped += 1;
             continue;

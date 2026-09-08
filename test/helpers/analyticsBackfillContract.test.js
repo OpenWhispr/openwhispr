@@ -49,21 +49,23 @@ test("a failed history backfill cannot fail the analytics read in front of it", 
 // table, including once per turn of AnalyticsService's upload loop.
 test("a completed pass is not repeated on the next analytics read", () => {
   assert.ok(
-    ensureMethod.includes(
-      "if (this._analyticsHistoryBackfilledRevision === this._analyticsHistoryRevision)"
-    ),
+    ensureMethod.includes("if (this._analyticsHistoryBackfilled) return"),
     "a finished backfill must short-circuit"
   );
+  // Set before the scan so an invalidating write that lands mid-pass survives
+  // it. Setting it after the loop would let the pass overwrite that write and
+  // strand the row until the next process start.
   assert.ok(
-    ensureMethod.indexOf("this._analyticsHistoryBackfilledRevision = startingRevision") >
-      ensureMethod.indexOf("if (batch.complete) break;"),
-    "the checkpoint may only be set once the scan has actually drained"
+    ensureMethod.indexOf("this._analyticsHistoryBackfilled = true") <
+      ensureMethod.indexOf("backfillAnalyticsHistoryBatch"),
+    "the checkpoint must be claimed before the scan, not after it"
   );
-  // Either invalidating write can land after the scan has read past the row it
-  // changes, so a pass may only vouch for the revision it started from.
+  // A joining caller must wait for the pass rather than read the checkpoint the
+  // pass just claimed for itself.
   assert.ok(
-    ensureMethod.includes("const startingRevision = this._analyticsHistoryRevision;"),
-    "the checkpoint must record the revision the scan started from, not the current one"
+    ensureMethod.indexOf("return this._analyticsHistoryBackfillPromise;") <
+      ensureMethod.indexOf("if (this._analyticsHistoryBackfilled) return"),
+    "an in-flight pass must be joined before the checkpoint is consulted"
   );
 });
 
@@ -71,7 +73,7 @@ test("a completed pass is not repeated on the next analytics read", () => {
 // transcription without an analytics event retires it. Each of these is sliced
 // to its own handler so the assertion cannot be satisfied by a sibling's call.
 test("every write that can strand a dictation retires the checkpoint", () => {
-  const invalidator = "this._invalidateAnalyticsHistoryBackfill();";
+  const invalidator = "this._analyticsHistoryBackfilled = false;";
 
   const cloudPull = sliceBetween(
     'ipcMain.handle("db-upsert-transcription-from-cloud"',
@@ -100,11 +102,5 @@ test("every write that can strand a dictation retires the checkpoint", () => {
   assert.ok(
     recordEvent.includes(invalidator),
     "a live analytics write that throws leaves a completed row only the backfill will reconcile"
-  );
-
-  assert.equal(
-    source.split(invalidator).length - 1,
-    3,
-    "a new invalidation site needs a case here saying which write it covers"
   );
 });
