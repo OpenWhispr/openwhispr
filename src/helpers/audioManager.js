@@ -3503,9 +3503,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const endpoint = this.getTranscriptionEndpoint(model);
 
       // Prompt budgets follow each provider's real limit (see dictionaryPromptCap):
-      // Groq 890, Whisper-family 900, a generous context guard for the 4o
-      // transcribe models. Trimming keeps the head of the list, so the top of the
-      // user's dictionary is what wins.
+      // Groq's 896-char request cap, the Whisper decoders' window, and a far
+      // larger context guard for the 4o transcribe models, which are LLMs and
+      // read the whole thing. The cut is a request bound, not a priority rule:
+      // Whisper decoders read the tail of whatever they are given.
       const MAX_PROMPT_CHARS = dictionaryPromptLimit({ provider, endpoint, model });
       const trimmedPrompt = trimDictionaryPrompt(
         this.getWhisperPrompt(apiSettings),

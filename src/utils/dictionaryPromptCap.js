@@ -1,6 +1,6 @@
-// Per-provider budgets for the custom-dictionary STT prompt. One place, so the
-// direct-API path, the local whisper-server path and the dictionary UI agree on
-// where the list gets cut and which end survives.
+// Per-provider budgets for the custom-dictionary STT prompt on the direct-API
+// path, plus the decoder window the dictionary UI warns against. One place, so
+// the request bound and the warning cannot drift apart.
 
 // Groq rejects prompts > 896 chars (incl. when reached via a custom endpoint);
 // 890 leaves margin for UTF-16 vs codepoint counting drift.
