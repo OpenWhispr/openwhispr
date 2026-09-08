@@ -45,7 +45,9 @@ import {
   resolveVoicePillTravelPresentation,
   isVoicePillActivationKey,
   shouldActivateVoicePill,
+  shouldHoldAgentMarkThroughHide,
   shouldOfferLiveTranscriptReopen,
+  shouldReleaseAgentMarkHold,
   shouldSuppressPillForAssistantActions,
 } from "./helpers/voicePillPresentation";
 
@@ -440,6 +442,36 @@ export default function App() {
     return () => unsubscribe?.();
   }, [isRecording, isPreparing, isProcessing, cancelRecording, cancelProcessing]);
 
+  // Decision 8: with auto-hide on, an Agent panel close is the last thing the
+  // user sees before the pill leaves. Hold the leaf through the close spring
+  // and the exit so the leaf→ring morph runs while the window is already
+  // hidden — and the next show is correctly the dictation pill — instead of
+  // completing just before the window goes.
+  const [agentMarkHeldThroughHide, setAgentMarkHeldThroughHide] = useState(false);
+  // Lifted out of the callback so this stays as stable as assistant.handleClose
+  // already is: AssistantPanel keys its Escape listener on the onClose prop, so
+  // a wrapper that changed identity every render would rebind it every render.
+  const { handleClose: closeAssistantPanel } = assistant;
+  const handleAssistantClose = React.useCallback(() => {
+    if (
+      shouldHoldAgentMarkThroughHide({
+        floatingIconAutoHide,
+        assistantPanelMounted: assistant.mounted,
+      })
+    ) {
+      setAgentMarkHeldThroughHide(true);
+    }
+    closeAssistantPanel();
+  }, [floatingIconAutoHide, assistant.mounted, closeAssistantPanel]);
+
+  // The two releases that are derived state. The third — the hide itself
+  // landing — is in the auto-hide effect below.
+  useEffect(() => {
+    if (shouldReleaseAgentMarkHold({ isRecording, isPreparing, floatingIconAutoHide })) {
+      setAgentMarkHeldThroughHide(false);
+    }
+  }, [isRecording, isPreparing, floatingIconAutoHide]);
+
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {
     let hideTimeout;
@@ -457,7 +489,13 @@ export default function App() {
     ) {
       // Delay briefly so processing can start after recording stops without a flash
       hideTimeout = setTimeout(() => {
-        window.electronAPI?.hideWindow?.();
+        // Release a held Agent mark once the window is actually gone, so the
+        // leaf→ring morph plays out of sight. On SETTLE, not just on resolve:
+        // a rejected hide (the native window already destroyed — the same
+        // case dictationErrorPillHandoff guards) must not strand the leaf on
+        // a pill that will next be shown for plain dictation.
+        const releaseAgentMarkHold = () => setAgentMarkHeldThroughHide(false);
+        void window.electronAPI?.hideWindow?.().then(releaseAgentMarkHold, releaseAgentMarkHold);
       }, 500);
     } else if (!floatingIconAutoHide && prevAutoHideRef.current) {
       window.electronAPI?.showDictationPanel?.();
@@ -557,6 +595,7 @@ export default function App() {
     isProcessing: isVisuallyProcessing,
     assistantPanelMounted: assistant.mounted,
     assistantPanelClosing: assistant.closing,
+    heldThroughHide: agentMarkHeldThroughHide,
   });
   const assistantFooter = resolveAssistantFooterPresentation(assistant.footerPhase);
   const voicePillInteraction = resolveVoicePillInteraction({
@@ -876,7 +915,7 @@ export default function App() {
             footerPhase={assistant.footerPhase}
             closing={assistant.closing}
             horizontalDirection={voiceHorizontalDirection}
-            onClose={assistant.handleClose}
+            onClose={handleAssistantClose}
             onBusyChange={assistant.setBusy}
             onResponseReadyChange={assistant.setResponseReady}
             onResponseContent={assistant.handleResponseContent}

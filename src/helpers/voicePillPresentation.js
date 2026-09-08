@@ -326,6 +326,32 @@ export function resolveAgentModeActive({
 }
 
 /**
+ * Whether closing the Agent panel should hold its mark through the pill's
+ * exit (the `heldThroughHide` input above). Only an auto-hide exit needs it:
+ * the window is on its way out, and the leaf→ring morph would otherwise
+ * finish just before the pill vanishes, so the last thing a user who had
+ * just talked to the Agent sees is the pill turning into the dictation logo.
+ * With auto-hide off the pill stays on screen and that morph is a wanted,
+ * visible return to the dictation identity.
+ */
+export function shouldHoldAgentMarkThroughHide({ floatingIconAutoHide, assistantPanelMounted }) {
+  return Boolean(floatingIconAutoHide && assistantPanelMounted);
+}
+
+/**
+ * Whether a held Agent mark must be released while the pill is still on
+ * screen. The hold only exists to carry the leaf out of view, so anything
+ * that keeps the pill there has to drop it: a new recording, which owns the
+ * identity itself (a dictation wears the ring; an Agent command re-earns the
+ * leaf through isAssistantVoice), and auto-hide being switched off, which
+ * cancels the exit the hold was staged for. The third release — the
+ * hideWindow IPC settling — is not derived state and lives at that call site.
+ */
+export function shouldReleaseAgentMarkHold({ isRecording, isPreparing, floatingIconAutoHide }) {
+  return Boolean(isRecording || isPreparing || !floatingIconAutoHide);
+}
+
+/**
  * Select the content hosted by the persistent expanded voice surface. An open
  * mode outranks a sibling that is only mounted to finish its exit animation,
  * which lets the same core hand off without flashing the stale mode.

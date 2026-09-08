@@ -567,6 +567,86 @@ test("Agent identity ends at close intent so the colour fades inside the close s
   );
 });
 
+// Decision 8: with auto-hide on, the leaf->ring morph (480ms) used to finish
+// 20ms before the auto-hide cut (500ms), so a user who had just talked to the
+// Agent watched the pill turn into the dictation logo and only then vanish.
+// The mark is now held through the exit and the morph runs while the window
+// is hidden. The App state that drives this has no test harness (src/App.jsx
+// is not rendered by any test and checkJs is off), so every decision it makes
+// lives here as a pure function instead.
+
+test("a held agent mark survives the panel unmount until released, and a recording start wins", async () => {
+  const { resolveAgentModeActive } = await load();
+  const idle = { isAssistantVoice: false, isRecording: false, isProcessing: false };
+  // Held -> true after the unmount.
+  assert.equal(
+    resolveAgentModeActive({ ...idle, assistantPanelMounted: false, heldThroughHide: true }),
+    true
+  );
+  // Cleared -> false.
+  assert.equal(
+    resolveAgentModeActive({ ...idle, assistantPanelMounted: false, heldThroughHide: false }),
+    false
+  );
+  // A new dictation recording is the dictation ring regardless of the hold
+  // (App clears the hold on recording start; the resolver alone must not
+  // brand it): with the hold cleared, a plain recording is not agent.
+  assert.equal(
+    resolveAgentModeActive({
+      isAssistantVoice: false,
+      isRecording: true,
+      isProcessing: false,
+      assistantPanelMounted: false,
+      heldThroughHide: false,
+    }),
+    false
+  );
+});
+
+test("only an auto-hide exit holds the agent mark past the panel close", async () => {
+  const { shouldHoldAgentMarkThroughHide } = await load();
+  assert.equal(
+    shouldHoldAgentMarkThroughHide({ floatingIconAutoHide: true, assistantPanelMounted: true }),
+    true,
+    "the pill is about to leave — carry the leaf out with it"
+  );
+  assert.equal(
+    shouldHoldAgentMarkThroughHide({ floatingIconAutoHide: false, assistantPanelMounted: true }),
+    false,
+    "the pill stays on screen, so the leaf->ring morph is a wanted, visible return"
+  );
+  assert.equal(
+    shouldHoldAgentMarkThroughHide({ floatingIconAutoHide: true, assistantPanelMounted: false }),
+    false,
+    "no Agent panel was closed, so there is no agent identity to hold"
+  );
+});
+
+test("a held agent mark is released by anything that keeps the pill on screen", async () => {
+  const { shouldReleaseAgentMarkHold } = await load();
+  const staged = { isRecording: false, isPreparing: false, floatingIconAutoHide: true };
+  assert.equal(
+    shouldReleaseAgentMarkHold(staged),
+    false,
+    "the staged exit is still pending — keep holding the leaf"
+  );
+  assert.equal(
+    shouldReleaseAgentMarkHold({ ...staged, isRecording: true }),
+    true,
+    "a new recording start wins over the hold"
+  );
+  assert.equal(
+    shouldReleaseAgentMarkHold({ ...staged, isPreparing: true }),
+    true,
+    "a recording that is still spinning up is already a new session"
+  );
+  assert.equal(
+    shouldReleaseAgentMarkHold({ ...staged, floatingIconAutoHide: false }),
+    true,
+    "auto-hide switched off cancels the exit the hold was staged for"
+  );
+});
+
 test("Agent transcription contracts to the rotating thinking circle", async () => {
   const { resolveVoiceActivityPresentation } = await load();
   assert.deepEqual(
