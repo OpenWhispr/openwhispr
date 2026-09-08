@@ -75,7 +75,7 @@ test("accept_invite attributes the inviter and offers a direct join", async () =
   assert.ok(markup.includes("Sam invited you"));
 });
 
-test("invite keeps the teammate action primary and folds in sync", async () => {
+test("invite keeps the teammate action primary without a second sync control", async () => {
   const Invite = await component("LeaderboardSoloEmptyState");
   const markup = renderToStaticMarkup(
     createElement(Invite, {
@@ -83,52 +83,24 @@ test("invite keeps the teammate action primary and folds in sync", async () => {
       scopeName: "Acme",
       onInvite() {},
       pendingInvites: ["alex@acme.com"],
-      sync: {
-        canEnable: true,
-        enabled: false,
-        error: false,
-        onDisable() {},
-        onEnable() {},
-        ready: true,
-        updating: false,
-      },
     })
   );
   assertState(markup, "invite", "Invite teammates");
-  assert.ok(markup.includes("Analytics Sync"));
+  assert.doesNotMatch(markup, /role="switch"/);
   assert.ok(markup.includes("Invited: alex@acme.com"));
 });
 
-test("an enabled leaderboard row remains switchable off when enabling is blocked", async () => {
-  const SyncRow = await component("LeaderboardSyncRow");
-  const markup = renderToStaticMarkup(
-    createElement(SyncRow, {
-      canEnable: false,
-      enabled: true,
-      error: false,
-      onDisable() {},
-      onEnable() {},
-      ready: true,
-      updating: false,
-    })
-  );
-
-  assert.match(markup, /<button[^>]*aria-checked="true"/);
-  assert.doesNotMatch(markup, /<button[^>]*\sdisabled(?:=|>)/);
-});
-
-test("ready with sync off renders the dedicated sync preview", async () => {
+test("ready with sync off points to the single page-level action", async () => {
   const Sync = await component("LeaderboardSyncPreview");
   const markup = renderToStaticMarkup(
     createElement(Sync, {
       canEnable: true,
       error: false,
-      onEnable() {},
       scopeName: "Acme",
-      updating: false,
     })
   );
-  assertState(markup, "sync", "Opt-in to Leaderboards");
+  assertState(markup, "sync", "See where you rank in Acme");
+  assert.doesNotMatch(markup, /<button/);
 });
 
 test("a ready board with one of five participants renders the inline nudge", async () => {

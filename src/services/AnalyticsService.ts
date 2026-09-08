@@ -135,7 +135,11 @@ async function runStage(name: string, stage: () => Promise<void>): Promise<void>
 // coalescing keeps a caller that may upload from joining one that may not.
 let passQueue: Promise<unknown> = Promise.resolve();
 
-export function syncPendingAnalytics(options: { uploadAllowed?: boolean } = {}): Promise<number> {
+type AnalyticsUploadGate = boolean | (() => boolean | Promise<boolean>);
+
+export function syncPendingAnalytics(
+  options: { uploadAllowed?: AnalyticsUploadGate } = {}
+): Promise<number> {
   const pass = passQueue.then(
     () => runAnalyticsPass(options),
     () => runAnalyticsPass(options)
@@ -146,12 +150,16 @@ export function syncPendingAnalytics(options: { uploadAllowed?: boolean } = {}):
 
 async function runAnalyticsPass({
   uploadAllowed = true,
-}: { uploadAllowed?: boolean } = {}): Promise<number> {
+}: { uploadAllowed?: AnalyticsUploadGate } = {}): Promise<number> {
   // Erasures still go first, so a clear cannot race an older batch and
   // recreate data the user asked us to erase.
   await runStage("clear", pushAnalyticsClear);
   await runStage("deletes", pushAnalyticsDeletes);
-  if (!uploadAllowed) return 0;
+  // Resolve functions only after this pass reaches the head of passQueue.
+  // Consent can be revoked while an earlier pass is still running, so queuing
+  // an already-resolved `true` would let the delayed pass upload afterward.
+  const canUpload = typeof uploadAllowed === "function" ? await uploadAllowed() : uploadAllowed;
+  if (!canUpload) return 0;
 
   let synced = 0;
   // Ids this pass has already offered. The server deliberately withholds rows
@@ -237,10 +245,8 @@ function isAnalyticsSummary(value: unknown): value is AnalyticsSummary {
   );
 }
 
-export async function getAccountAnalyticsSummary(timeZone: string): Promise<AnalyticsSummary> {
-  const summary = await cloudGet<unknown>(
-    `/api/analytics/summary?timeZone=${encodeURIComponent(timeZone)}`
-  );
+export async function getAccountAnalyticsSummary(): Promise<AnalyticsSummary> {
+  const summary = await cloudGet<unknown>("/api/analytics/summary");
   // The cloud is an untrusted JSON boundary. Invalid buckets crash Heatmap
   // during render, outside the caller's async fallback, so validate the whole
   // shape before any part of it reaches component state.

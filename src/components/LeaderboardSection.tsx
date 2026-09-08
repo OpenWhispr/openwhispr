@@ -85,7 +85,7 @@ interface LeaderboardSectionProps {
   participationReady: boolean;
   participationError: "read" | "write" | null;
   participationUpdating: boolean;
-  onJoin: () => void;
+  /** Turns off Insights Sync locally and leaves every leaderboard. */
   onLeave: () => Promise<boolean>;
   onRefreshParticipation: () => void;
   onSignIn: () => void;
@@ -146,7 +146,6 @@ export default function LeaderboardSection({
   participationReady,
   participationError,
   participationUpdating,
-  onJoin,
   onLeave,
   onRefreshParticipation,
   onSignIn,
@@ -623,9 +622,7 @@ export default function LeaderboardSection({
       <LeaderboardSyncPreview
         canEnable={canJoin}
         error={participationError === "write"}
-        onEnable={onJoin}
         scopeName={selectedScope.name}
-        updating={participationUpdating}
       />
     );
   }
@@ -793,8 +790,7 @@ export default function LeaderboardSection({
                 {t("insights.leaderboard.refresh")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {/* The mirror of Join: publishing a name and an email must stay
-                  undoable from the surface that publishes it. */}
+              {/* The combined opt-in stays undoable from the leaderboard too. */}
               <DropdownMenuItem
                 disabled={participationUpdating}
                 className="gap-2 text-xs text-destructive focus:bg-destructive/10 focus:text-destructive"
@@ -818,15 +814,6 @@ export default function LeaderboardSection({
           scopeName={selectedScope.name}
           onInvite={inviteToLeaderboard}
           pendingInvites={pendingInvites}
-          sync={{
-            canEnable: canJoin,
-            enabled: participating,
-            error: participationError === "read" || participationError === "write",
-            onDisable: leaveLeaderboards,
-            onEnable: onJoin,
-            ready: participationReady,
-            updating: participationUpdating,
-          }}
         />
       ) : visibleFailure && !visibleLeaderboard ? (
         <LeaderboardRetryCard

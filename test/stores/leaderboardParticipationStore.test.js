@@ -9,6 +9,13 @@ const { installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 const PENDING_KEY = "leaderboardLeavePendingUserIds";
 const pendingUserIds = (storage) => JSON.parse(storage.getItem(PENDING_KEY) ?? "[]");
+const waitFor = async (predicate) => {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.fail("timed out waiting for the mocked request to start");
+};
 
 function loadStore(t, { initialStorage = {}, cloudApiRequest }) {
   const requests = [];
@@ -29,6 +36,7 @@ function loadStore(t, { initialStorage = {}, cloudApiRequest }) {
   // The module is cached across cases in this file, so each starts from unknown.
   useLeaderboardParticipationStore.setState({
     enabled: false,
+    configured: false,
     ready: false,
     error: null,
     updating: false,
@@ -48,6 +56,7 @@ test("a leave the account refused stops showing the user as participating", asyn
 
   assert.equal(await store.getState().leave("user_1"), false);
   assert.equal(store.getState().enabled, false);
+  assert.equal(store.getState().configured, true);
   assert.equal(store.getState().ready, true);
   assert.equal(store.getState().updating, false);
   assert.deepEqual(
@@ -75,6 +84,7 @@ test("a read started during a leave never reports the account still joined", asy
   });
 
   const leaving = store.getState().leave("user_1");
+  await waitFor(() => typeof releaseLeave === "function");
   await store.getState().refresh("user_1");
   assert.deepEqual(
     requests.map((request) => request.method),
@@ -121,7 +131,7 @@ test("a join retires the queued leave before its own request goes out", async (t
     cloudApiRequest: async () => participation(true),
   });
 
-  await store.getState().join("user_1");
+  assert.equal(await store.getState().join("user_1"), true);
   assert.deepEqual(requests, [
     {
       method: "PATCH",
@@ -137,7 +147,84 @@ test("a join retires the queued leave before its own request goes out", async (t
     "only the joining account's leave is retired"
   );
   assert.equal(store.getState().enabled, true);
+  assert.equal(store.getState().configured, true);
   assert.equal(store.getState().error, null);
+});
+
+test("a failed join reports that the combined opt-in did not complete", async (t) => {
+  const { storage, store } = loadStore(t, {
+    cloudApiRequest: async () => ({ success: false, status: 500, error: "server error" }),
+  });
+
+  assert.equal(await store.getState().join("user_1"), false);
+  assert.equal(store.getState().enabled, false);
+  assert.equal(store.getState().configured, true);
+  assert.equal(store.getState().error, "write");
+  assert.equal(store.getState().updating, false);
+  assert.deepEqual(
+    pendingUserIds(storage),
+    ["user_1"],
+    "an ambiguous failure must compensate if the server committed before the response was lost"
+  );
+});
+
+test("a newer join clears an older ambiguous join failure", async (t) => {
+  let releaseFirstJoin;
+  let requestCount = 0;
+  const { requests, storage, store } = loadStore(t, {
+    cloudApiRequest: async () => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        await new Promise((resolve) => {
+          releaseFirstJoin = resolve;
+        });
+        return { success: false, status: 0, error: "response lost" };
+      }
+      return participation(true);
+    },
+  });
+
+  const firstJoin = store.getState().join("user_1");
+  await waitFor(() => typeof releaseFirstJoin === "function");
+  const secondJoin = store.getState().join("user_1");
+  await Promise.resolve();
+  assert.equal(requests.length, 1, "same-account writes must not race at the API");
+
+  releaseFirstJoin();
+  assert.equal(await firstJoin, false);
+  assert.equal(await secondJoin, true);
+  assert.deepEqual(pendingUserIds(storage), [], "the latest explicit join wins");
+  assert.equal(store.getState().enabled, true);
+  assert.equal(store.getState().updating, false);
+});
+
+test("a newer join clears an older failed leave without being undone later", async (t) => {
+  let releaseLeave;
+  let requestCount = 0;
+  const { requests, storage, store } = loadStore(t, {
+    cloudApiRequest: async () => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        await new Promise((resolve) => {
+          releaseLeave = resolve;
+        });
+        return { success: false, status: 0, error: "offline" };
+      }
+      return participation(true);
+    },
+  });
+
+  const leave = store.getState().leave("user_1");
+  await waitFor(() => typeof releaseLeave === "function");
+  const join = store.getState().join("user_1");
+  await Promise.resolve();
+  assert.equal(requests.length, 1, "the newer join waits for the leave to settle");
+
+  releaseLeave();
+  assert.equal(await leave, false);
+  assert.equal(await join, true);
+  assert.deepEqual(pendingUserIds(storage), [], "the latest explicit join retires the leave");
+  assert.equal(store.getState().enabled, true);
 });
 
 test("a refresh flushes the pending leave before reporting the answer", async (t) => {
@@ -197,6 +284,7 @@ test("a write left over from the departing account cannot settle the next one", 
   });
 
   const leaving = store.getState().leave("user_1");
+  await waitFor(() => typeof releaseLeave === "function");
   store.getState().reset();
   assert.equal(
     store.getState().updating,
@@ -236,6 +324,7 @@ test("a departing account's write cannot clear a newer account's write state", a
   });
 
   const firstWrite = store.getState().leave("user_1");
+  await waitFor(() => typeof releaseFirstWrite === "function");
   store.getState().reset();
   const secondWrite = store.getState().join("user_2");
 
@@ -247,6 +336,7 @@ test("a departing account's write cannot clear a newer account's write state", a
     "the first account must not make the second account's pending write look complete"
   );
 
+  await waitFor(() => typeof releaseSecondWrite === "function");
   releaseSecondWrite();
   await secondWrite;
   assert.equal(store.getState().updating, false);
