@@ -312,6 +312,171 @@ test("an automatic clipboard delivery keeps the shared Copy button confirmed for
   assert.ok(scheduledDelays.includes(6000));
 });
 
+// The test above only proves useCopyFeedback itself honors whatever ms it is
+// given — it renders a bare Harness, retypes the literal 6000, and never
+// touches AssistantPanel. Fix round 1, finding 3: nothing in the suite pins
+// that AssistantPanel's OWN auto-copy delivery path actually feeds it
+// AUTO_COPY_FEEDBACK_MS — mutating that constant to 3000 left every test
+// green. This drives the real pendingCommand → sendMessage → onComplete →
+// deliverAssistantResponse → confirmCopied chain through the real component
+// and asserts against the imported constant, never a retyped 6000.
+test("the panel's own auto-copy delivery confirms the shared Copy button for AUTO_COPY_FEEDBACK_MS, not a retyped 6000", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  const confirmCopiedCalls = [];
+  globalThis.__assistantPanelConfirmCopiedCalls = confirmCopiedCalls;
+  t.after(() => {
+    delete globalThis.__assistantPanelConfirmCopiedCalls;
+  });
+  // deliverAssistantResponse (real, unmocked) resolves `copied: true` via
+  // this stub the moment its electronAPI.writeClipboard branch succeeds —
+  // no need to mock the delivery helper itself.
+  installBrowserGlobals(t, {
+    window: { electronAPI: { writeClipboard: async () => ({ success: true }) } },
+  });
+  const container = installInteractiveDom(t);
+
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-auto-copy-hold-panel-test-",
+    mockModules: {
+      "/chat/useChatPersistence": `
+        export function useChatPersistence() {
+          return {
+            messages: [],
+            setMessages() {},
+            conversationId: null,
+            async createConversation() { return 1; },
+            async loadConversation() {},
+            saveUserMessage() {},
+            saveAssistantMessage() {},
+            handleNewChat() {},
+          };
+        }
+      `,
+      "/chat/useChatStreaming": `
+        export function useChatStreaming() {
+          return { agentState: "idle", activeToolName: null, toolStatus: "", cancelStream() {} };
+        }
+      `,
+      // Bypasses the real send/stream pipeline entirely: calls onComplete
+      // synchronously with canned content, exercising AssistantPanel's OWN
+      // glue code (deliverAssistantResponse + confirmCopied(content,
+      // AUTO_COPY_FEEDBACK_MS)) without needing a real backend.
+      "/chat/useChatMessageSender": `
+        export function useChatMessageSender() {
+          return async (text, options) => {
+            if (options && options.onComplete) {
+              await options.onComplete({ content: "the delivered answer" });
+            }
+            return true;
+          };
+        }
+      `,
+      useVoiceDraft: `
+        export function useVoiceDraft() {
+          return { status: "idle", elapsed: 0, readLevel: () => 0, start() {}, stop() {}, cancel() {} };
+        }
+      `,
+      "/hooks/useWindowDrag": `
+        export function useWindowDrag() { return { handleMouseDown() {}, handleMouseUp() {} }; }
+      `,
+      "/hooks/useCopyFeedback": `
+        export function useCopyFeedback() {
+          return {
+            copied: false,
+            async copy() {},
+            confirmCopied(content, ms) {
+              globalThis.__assistantPanelConfirmCopiedCalls.push([content, ms]);
+            },
+          };
+        }
+      `,
+      "/stores/settingsStore": `
+        const state = { voiceAgentKey: [] };
+        export function useSettingsStore(selector) { return selector(state); }
+      `,
+      "/utils/hotkeys": `
+        export function formatHotkeyListLabel() { return ""; }
+      `,
+      "/ui/MarkdownRenderer": `
+        import React from "react";
+        export function MarkdownRenderer({ content, className }) {
+          return React.createElement("div", { className }, content);
+        }
+      `,
+      "/ui/useToast": `
+        export function useToast() { return { toast() {} }; }
+      `,
+    },
+  });
+  const [{ default: viteI18next }, { initReactI18next }] = await Promise.all([
+    vite.ssrLoadModule("i18next"),
+    vite.ssrLoadModule("react-i18next"),
+  ]);
+  const translation = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
+  );
+  await viteI18next.use(initReactI18next).init({
+    lng: "en",
+    resources: { en: { translation } },
+    interpolation: { escapeValue: false },
+  });
+  const { AssistantPanel, AUTO_COPY_FEEDBACK_MS } = await vite.ssrLoadModule(
+    "/components/dictation/AssistantPanel.tsx"
+  );
+  const { createRoot } = require("react-dom/client");
+
+  root = createRoot(container);
+  await React.act(async () => {
+    root.render(
+      React.createElement(AssistantPanel, {
+        pendingCommand: {
+          id: 1,
+          text: "hello",
+          attachment: null,
+          selectedContext: null,
+          delivery: { mode: "clipboard" },
+        },
+        onCommandConsumed: noop,
+        onCommandDiscarded: noop,
+        onCommandSettled: noop,
+        initialConversationId: null,
+        onConversationIdChange: noop,
+        voiceState: "idle",
+        thinking: false,
+        open: true,
+        footerPhase: "actions",
+        horizontalDirection: "right",
+        onClose: noop,
+        onBusyChange: noop,
+        onResponseReadyChange: noop,
+        onResponseContent: noop,
+        onConversationReset: noop,
+        onSelectionContextChange: noop,
+      })
+    );
+  });
+  // The pendingCommand effect's sendMessage(...).then(...) chain (and the
+  // mocked sender's own awaited onComplete inside it) resolve as
+  // microtasks beyond the act() pass that triggered them.
+  await React.act(async () => {
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+
+  assert.deepEqual(
+    confirmCopiedCalls,
+    [["the delivered answer", AUTO_COPY_FEEDBACK_MS]],
+    "the auto-copy delivery must confirm using the panel's own AUTO_COPY_FEEDBACK_MS constant"
+  );
+  assert.equal(
+    AUTO_COPY_FEEDBACK_MS,
+    6000,
+    "sanity: still the value the brief pinned — a change here is a deliberate retune, not silent drift"
+  );
+});
+
 test("a failed Assistant resize releases its open claim so opening can retry", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {

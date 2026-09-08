@@ -62,7 +62,10 @@ type AssistantFooterPhase =
   "pill" | "pill-entering" | "pill-exiting" | "actions-entering" | "actions" | "actions-exiting";
 
 const MANUAL_COPY_FEEDBACK_MS = 1800;
-const AUTO_COPY_FEEDBACK_MS = 6000;
+// Exported so tests can pin the auto-copy hold against the real constant
+// (fix round 1, finding 3) instead of retyping 6000, which a retune could
+// silently drift away from.
+export const AUTO_COPY_FEEDBACK_MS = 6000;
 
 // Shared by the settled (StableAssistantMarkdown) and tail (MarkdownRenderer)
 // halves of a streaming reply so the split is visually seamless.
@@ -742,27 +745,62 @@ export function AssistantPanel({
               aria-live="polite"
               tabIndex={footerPhase === "actions" ? 0 : -1}
             >
-              <span
-                className="assistant-copy-label inline-flex items-center gap-1.5"
-                style={{
-                  opacity: copiedLabel.fading ? 0 : 1,
-                  transition: `opacity ${MOTION_TIMING.copyCrossfadeMs}ms ease-out`,
-                }}
-              >
-                {copiedLabel.showActive ? (
-                  <Check
-                    aria-hidden="true"
-                    style={{ animation: "tool-check-pop 300ms cubic-bezier(0.2, 0, 0, 1) both" }}
-                  />
-                ) : (
+              {/* A true crossfade needs both labels in the DOM at once, stacked
+                  in one grid cell (so the wrapper always sizes to the wider of
+                  the two — no width jump as opacity moves) rather than swapped:
+                  a single span whose content is replaced mid-transition means
+                  the outgoing content finishes fading to 0 fully BEFORE the
+                  incoming content mounts at 0 and fades back in — two 320ms
+                  windows through a blank frame, not one. The active (Check/
+                  Copied) layer's own content is still conditional on
+                  showActive, so the Check icon remounts (and its pop keyframe
+                  restarts) on every arrival, exactly as before; the inactive
+                  (Copy) layer's content is unconditional so it never remounts
+                  and can be transitioned into/out of smoothly. Neither layer
+                  transitions on arrival — transition is only ever declared
+                  while `fading` is true — so the pop stays the only motion an
+                  arrival shows. */}
+              <span className="assistant-copy-label inline-grid items-center">
+                <span
+                  className="assistant-copy-label-layer inline-flex items-center gap-1.5"
+                  data-copy-label-layer="active"
+                  style={{
+                    gridArea: "1 / 1",
+                    opacity: copiedLabel.showActive && !copiedLabel.fading ? 1 : 0,
+                    transition: copiedLabel.fading
+                      ? `opacity ${MOTION_TIMING.copyCrossfadeMs}ms ease-out`
+                      : "none",
+                  }}
+                  aria-hidden={copiedLabel.showActive && !copiedLabel.fading ? undefined : true}
+                >
+                  {copiedLabel.showActive && (
+                    <>
+                      <Check
+                        aria-hidden="true"
+                        style={{ animation: "tool-check-pop 300ms cubic-bezier(0.2, 0, 0, 1) both" }}
+                      />
+                      {t("common.copied")}
+                    </>
+                  )}
+                </span>
+                <span
+                  className="assistant-copy-label-layer inline-flex items-center gap-1.5"
+                  data-copy-label-layer="inactive"
+                  style={{
+                    gridArea: "1 / 1",
+                    opacity: !copiedLabel.showActive || copiedLabel.fading ? 1 : 0,
+                    transition: copiedLabel.fading
+                      ? `opacity ${MOTION_TIMING.copyCrossfadeMs}ms ease-out`
+                      : "none",
+                  }}
+                  aria-hidden={!copiedLabel.showActive || copiedLabel.fading ? undefined : true}
+                >
                   <Copy aria-hidden="true" />
-                )}
-                {copiedLabel.showActive ? t("common.copied") : t("assistant.panel.copyToClipboard")}
-                {!copiedLabel.showActive && (
+                  {t("assistant.panel.copyToClipboard")}
                   <kbd className="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-medium dark:bg-black/10">
                     C
                   </kbd>
-                )}
+                </span>
               </span>
             </Button>
           </div>

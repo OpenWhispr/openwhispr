@@ -779,8 +779,23 @@
      (unlike a multi-value list, which can cycle onto the wrong property —
      the trap .voice-pill-position hit, above); that follows from the CSS
      Transitions spec's cycling rule, not from a real-browser measurement,
-     which this rule has not had. */
-  .assistant-copy-label {
+     which this rule has not had.
+     Fix round 1: targets .assistant-copy-label-layer, not
+     .assistant-copy-label — the crossfade moved from one swapped span to
+     two always-mounted, stacked layers (fix round 1, finding 1: the
+     one-span version was a fade-to-blank then a SECOND fade-in, not a
+     crossfade), and both layers carry this class, so one rule shortens
+     both the outgoing and the incoming fade together. That is also what
+     closes finding 2 (a ~319ms blank hold under reduced motion): the old
+     design still needed the JS revert timer's full 320ms to swap the DOM
+     content before anything could reappear, no matter how short the CSS
+     transition was; the two-layer design has no DOM-content-swap step for
+     reduced motion to wait behind — both opacities move (and, here,
+     finish moving in 1ms) independently of when the JS timer eventually
+     unmounts the now-invisible outgoing layer. Not independently
+     re-measured in a real browser under reduced motion — see the covering
+     test's own comment for exactly what is and is not proven here. */
+  .assistant-copy-label-layer {
     transition-duration: 1ms !important;
   }
 }
