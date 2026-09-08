@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Cloud, CloudUpload, Flame, Gauge, Loader2, Mic2 } from "lucide-react";
+import { BarChart3, Cloud, CloudUpload, Flame, Gauge, Loader2, Mic2, Trophy } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
@@ -13,6 +13,7 @@ import { syncService } from "../services/SyncService";
 import { buildAnalyticsActivityDays } from "../helpers/analytics";
 import { canOfferAnalyticsClaim } from "../services/syncPassPolicy";
 import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
+import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipationStore";
 import { usePolicyStore } from "../stores/policyStore";
 import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
@@ -398,6 +399,9 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
   );
   const { canToggleSync, enableInsightsSync, optInDialog, syncAllowedByPolicy, unclaimedCount } =
     useInsightsSyncOptIn();
+  const participationEnabled = useLeaderboardParticipationStore((state) => state.enabled);
+  const participationError = useLeaderboardParticipationStore((state) => state.error);
+  const participationReady = useLeaderboardParticipationStore((state) => state.ready);
   const [activeTab, setActiveTab] = useState("usage");
   const [syncError, setSyncError] = useState(false);
   // A managed workspace that forbids cloud backup forbids these counters with
@@ -426,38 +430,53 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
 
   return (
     <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-6 py-8">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-base! font-semibold! leading-none! tracking-normal! text-foreground">
-          {t("insights.title")}
-        </h1>
-        <div className="flex shrink-0 items-center gap-3">
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <Cloud size={13} />
-            {syncStatusLabel}
-          </div>
-          {showSyncAction && (
-            <Button
-              type="button"
-              size="sm"
-              disabled={syncActionDisabled}
-              onClick={() => void enableInsightsSync()}
-            >
-              <CloudUpload size={13} />
-              {t(syncActive ? "insights.claimInclude" : "insights.enableSync")}
-            </Button>
-          )}
-        </div>
-      </div>
+      <h1 className="text-base! font-semibold! leading-none! tracking-normal! text-foreground">
+        {t("insights.title")}
+      </h1>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6 flex flex-1 flex-col">
-        <TabsList className="h-7 self-start p-0.5 rounded-[7px]">
-          <TabsTrigger value="usage" className="h-6 px-2.5 text-xs rounded-[5px]">
-            {t("insights.yourUsage")}
-          </TabsTrigger>
-          <TabsTrigger value="leaderboard" className="h-6 px-2.5 text-xs rounded-[5px]">
-            {t("insights.leaderboard.title")}
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex min-h-8 items-center justify-between gap-4">
+          <TabsList className="h-7 p-0.5 rounded-[7px]">
+            <TabsTrigger value="usage" className="h-6 px-2.5 text-xs rounded-[5px]">
+              {t("insights.yourUsage")}
+            </TabsTrigger>
+            <TabsTrigger value="leaderboard" className="h-6 px-2.5 text-xs rounded-[5px]">
+              {t("insights.leaderboard.title")}
+            </TabsTrigger>
+          </TabsList>
+
+          {activeTab === "usage" ? (
+            <div className="flex shrink-0 items-center gap-3">
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Cloud size={13} />
+                {syncStatusLabel}
+              </div>
+              {showSyncAction && (
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  className="h-7 rounded-[7px] px-2.5 text-[11px]"
+                  disabled={syncActionDisabled}
+                  onClick={() => void enableInsightsSync()}
+                >
+                  <CloudUpload size={13} />
+                  {t(syncActive ? "insights.claimInclude" : "insights.enableSync")}
+                </Button>
+              )}
+            </div>
+          ) : (
+            isSignedIn &&
+            participationReady &&
+            participationError === null &&
+            !participationEnabled && (
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Trophy size={13} />
+                {t("insights.leaderboard.disabled")}
+              </div>
+            )
+          )}
+        </div>
 
         <TabsContent value="usage" className="mt-6 flex flex-1 flex-col">
           <YourUsage

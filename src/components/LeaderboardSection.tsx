@@ -97,7 +97,7 @@ interface LeaderboardSectionProps {
   ssoStarting: boolean;
 }
 
-const ERROR_CARD_CHROME = "mt-8 rounded-2xl border border-border/50 bg-card/70 dark:border-white/8";
+const ERROR_CARD_CHROME = "mt-6 rounded-2xl border border-border/50 bg-card/70 dark:border-white/8";
 
 function LeaderboardRetryCard({
   actionLabel,
@@ -551,14 +551,14 @@ export default function LeaderboardSection({
     </Select>
   ) : null;
   const funnelScopeSelect = scopeSelect ? (
-    <div className="mt-8 flex justify-end">{scopeSelect}</div>
+    <div className="mt-6 flex justify-end">{scopeSelect}</div>
   ) : null;
-  const funnelCardClassName = funnelScopeSelect ? "mt-4" : "mt-8";
+  const funnelCardClassName = funnelScopeSelect ? "mt-4" : "mt-6";
 
-  if (!isSignedIn) return <LeaderboardSignInPreview className="mt-8" onSignIn={onSignIn} />;
+  if (!isSignedIn) return <LeaderboardSignInPreview className="mt-6" onSignIn={onSignIn} />;
   if (accessLoading && !access) {
     return (
-      <section className="mt-8 flex min-h-48 items-center justify-center rounded-2xl border border-border/50 bg-card/70 text-muted-foreground dark:border-white/8">
+      <section className="mt-6 flex min-h-48 items-center justify-center rounded-2xl border border-border/50 bg-card/70 text-muted-foreground dark:border-white/8">
         <Loader2 size={18} className="animate-spin" />
       </section>
     );
@@ -643,7 +643,7 @@ export default function LeaderboardSection({
   }
   if (surface === "participation_loading") {
     return (
-      <section className="mt-8 flex min-h-48 items-center justify-center rounded-2xl border border-border/50 bg-card/70 text-muted-foreground dark:border-white/8">
+      <section className="mt-6 flex min-h-48 items-center justify-center rounded-2xl border border-border/50 bg-card/70 text-muted-foreground dark:border-white/8">
         <Loader2 size={18} className="animate-spin" />
       </section>
     );
@@ -733,7 +733,7 @@ export default function LeaderboardSection({
   return (
     <section
       data-leaderboard-state="board"
-      className="mt-8 overflow-hidden rounded-2xl border border-border/50 bg-card/70 dark:border-white/8"
+      className="mt-6 overflow-hidden rounded-2xl border border-border/50 bg-card/70 dark:border-white/8"
     >
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/40 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">

@@ -45,7 +45,10 @@ test("Insights Sync and leaderboard participation have separate owners", () => {
 
   assert.ok(settings.includes("if (enabled) void enableInsightsSync()"));
   assert.ok(settings.includes("disableInsightsSync()"));
-  assert.equal(settings.includes("useLeaderboardParticipation"), false);
+  assert.ok(settings.includes("useLeaderboardParticipation()"));
+  assert.ok(settings.includes("join: joinLeaderboard"));
+  assert.ok(settings.includes("leave: leaveLeaderboard"));
+  assert.ok(settings.includes("updateLeaderboardParticipation"));
   assert.ok(leaderboard.includes("useLeaderboardParticipation()"));
 });
 
@@ -66,6 +69,22 @@ test("joining obtains explicit analytics consent first without rollback coupling
     false,
     "a failed participation write must preserve accepted analytics consent"
   );
+});
+
+test("the Privacy leaderboard toggle preserves the same consent ordering", () => {
+  const settings = read("src/components/SettingsPage.tsx");
+  const updateStart = settings.indexOf("const updateLeaderboardParticipation");
+  const update = settings.slice(updateStart, settings.indexOf("// Signed out", updateStart));
+
+  assert.ok(update.includes("enableInsightsSync({ confirmWhenEmpty: true })"));
+  assert.ok(
+    update.indexOf("await enableInsightsSync({") < update.indexOf("await joinLeaderboard()")
+  );
+  assert.ok(update.includes("await leaveLeaderboard()"));
+  assert.equal(update.includes("disableInsightsSync"), false);
+  assert.ok(settings.includes('label={t("insights.leaderboard.title")}'));
+  assert.ok(settings.includes("checked={isSignedIn && leaderboardParticipationEnabled}"));
+  assert.ok(settings.includes('t("settingsPage.privacy.leaderboardDescription")'));
 });
 
 test("enabling sync with no queued rows needs no empty-data prompt", () => {

@@ -23,7 +23,7 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   assert.ok(insights.includes('t("insights.yourUsage")'));
   assert.ok(insights.includes('value="leaderboard"'));
   assert.ok(dictionary.includes('className="h-7 p-0.5 rounded-[7px]"'));
-  assert.ok(insights.includes('className="h-7 self-start p-0.5 rounded-[7px]"'));
+  assert.ok(insights.includes('className="h-7 p-0.5 rounded-[7px]"'));
   assert.ok(dictionary.includes('className="h-6 px-2.5 text-xs rounded-[5px]"'));
   assert.ok(insights.includes('className="h-6 px-2.5 text-xs rounded-[5px]"'));
   assert.ok(insights.includes("<LeaderboardView"));
@@ -34,6 +34,12 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   assert.ok(insights.includes("onClick={() => void enableInsightsSync()}"));
   assert.ok(insights.includes('"insights.enableSync"'));
   assert.ok(insights.includes("onSyncErrorChange={setSyncError}"));
+  assert.ok(insights.includes('activeTab === "usage"'));
+  assert.ok(insights.includes('variant="default"'));
+  assert.ok(insights.includes("participationReady &&"));
+  assert.ok(insights.includes("participationError === null"));
+  assert.ok(insights.includes("!participationEnabled"));
+  assert.ok(insights.includes('t("insights.leaderboard.disabled")'));
   const usageContent = insights.slice(
     insights.indexOf('<TabsContent value="usage"'),
     insights.indexOf('<TabsContent value="leaderboard"')

@@ -23,7 +23,7 @@ export default function LeaderboardJoinPreview({
         updating ? "insights.leaderboard.joiningLeaderboard" : "insights.leaderboard.joinCta"
       )}
       badge={scopeName}
-      className="mt-8"
+      className="mt-6"
       dataState="join"
       description={t("insights.leaderboard.joinDescription")}
       helperText={
