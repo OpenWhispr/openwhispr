@@ -7,17 +7,9 @@ const { installBrowserGlobals } = require("../lib/rendererTestHarness");
 // in Settings while the leaderboard is mounted behind it, and the re-read that
 // the sync-toggle flip fires before that leave has reached the account.
 
-const PENDING_KEY = "leaderboardLeavePendingUserIds";
-const pendingUserIds = (storage) => {
-  const legacy = JSON.parse(storage.getItem(PENDING_KEY) ?? "[]");
-  return [...new Set([...legacy, "user_1", "user_2"])].filter((userId) => {
-    const suffix = encodeURIComponent(userId);
-    if (storage.getItem(`leaderboardLeaveResolved:${suffix}`) === "true") return false;
-    return (
-      legacy.includes(userId) || storage.getItem(`leaderboardLeavePending:${suffix}`) === "true"
-    );
-  });
-};
+const pendingKey = (userId) => `leaderboardLeavePending:${encodeURIComponent(userId)}`;
+const pendingUserIds = (storage) =>
+  ["user_1", "user_2"].filter((userId) => storage.getItem(pendingKey(userId)) === "true");
 const waitFor = async (predicate) => {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     if (predicate()) return;
@@ -156,7 +148,7 @@ test("a read that resolves after a write is retired by it", async (t) => {
 
 test("a join retires the queued leave before its own request goes out", async (t) => {
   const { context, requests, storage, store } = await loadStore(t, {
-    initialStorage: { [PENDING_KEY]: '["user_1","user_2"]' },
+    initialStorage: { [pendingKey("user_1")]: "true", [pendingKey("user_2")]: "true" },
     cloudApiRequest: async () => participation(true),
   });
 
@@ -259,7 +251,7 @@ test("a newer join clears an older failed leave without being undone later", asy
 test("a refresh flushes the pending leave before reporting the answer", async (t) => {
   let accountEnabled = true;
   const { context, requests, storage, store } = await loadStore(t, {
-    initialStorage: { [PENDING_KEY]: '["user_1"]' },
+    initialStorage: { [pendingKey("user_1")]: "true" },
     cloudApiRequest: async (request) => {
       if (request.method === "PATCH") accountEnabled = request.body.enabled;
       return participation(accountEnabled);

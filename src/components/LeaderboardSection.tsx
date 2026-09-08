@@ -335,12 +335,7 @@ export default function LeaderboardSection({
         setFailure({ kind: "sso", requestKey: selectedRequestKey });
         return;
       }
-      if (
-        code === "LEADERBOARD_PARTICIPATION_REQUIRED" ||
-        // Compatibility with an API instance still rolling from the original
-        // combined Sync/participation contract.
-        code === "LEADERBOARD_SYNC_REQUIRED"
-      ) {
+      if (code === "LEADERBOARD_PARTICIPATION_REQUIRED") {
         setLeaderboard(null);
         onRefreshParticipation();
         return;

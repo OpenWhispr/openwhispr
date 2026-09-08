@@ -8,7 +8,7 @@ const {
   installHookDom,
 } = require("../lib/rendererTestHarness");
 
-test("leaderboard participation is account-scoped and compensates stale joins", async (t) => {
+test("leaderboard participation is account-scoped across auth changes", async (t) => {
   let root = null;
   let hook;
   t.after(() => {
@@ -131,8 +131,8 @@ test("leaderboard participation is account-scoped and compensates stale joins", 
   assert.deepEqual(globalThis.__participationPendingLeaves, []);
 
   globalThis.__participationJoinMode = "auth-change-success";
-  assert.equal(await invoke(hook.join), false);
-  assert.deepEqual(globalThis.__participationPendingLeaves, ["account-1"]);
+  assert.equal(await invoke(hook.join), true);
+  assert.deepEqual(globalThis.__participationPendingLeaves, []);
 
   globalThis.__participationAuthGeneration = null;
   globalThis.__participationJoinMode = "success";
@@ -143,7 +143,7 @@ test("leaderboard participation is account-scoped and compensates stale joins", 
 
   globalThis.__participationSessionUserId = "account-2";
   assert.equal(await invoke(hook.leave), false);
-  assert.deepEqual(globalThis.__participationPendingLeaves, ["account-1", "account-1"]);
+  assert.deepEqual(globalThis.__participationPendingLeaves, ["account-1"]);
 
   globalThis.__participationSessionUserId = "account-1";
   globalThis.__participationAuthGeneration = 8;

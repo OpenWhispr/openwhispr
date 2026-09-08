@@ -48,14 +48,7 @@ export function useLeaderboardParticipation() {
     if (store.updating) return false;
     const context = currentParticipationContext(userId);
     if (!context) return false;
-    const joined = await store.join(context);
-    if (!joined) return false;
-    const current = currentParticipationContext(userId);
-    if (!current || current.authGeneration !== context.authGeneration) {
-      writePendingLeaderboardLeave(userId);
-      return false;
-    }
-    return true;
+    return store.join(context);
   }, [userId]);
 
   const leave = useCallback(async () => {

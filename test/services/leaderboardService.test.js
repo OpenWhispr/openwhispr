@@ -17,16 +17,9 @@ function captureRequests(t, responseData) {
   return requests;
 }
 
-const pendingUserIds = (storage) => {
-  const legacy = JSON.parse(storage.getItem("leaderboardLeavePendingUserIds") ?? "[]");
-  return [...new Set([...legacy, "user_1", "user_2"])].filter((userId) => {
-    const suffix = encodeURIComponent(userId);
-    if (storage.getItem(`leaderboardLeaveResolved:${suffix}`) === "true") return false;
-    return (
-      legacy.includes(userId) || storage.getItem(`leaderboardLeavePending:${suffix}`) === "true"
-    );
-  });
-};
+const pendingKey = (userId) => `leaderboardLeavePending:${encodeURIComponent(userId)}`;
+const pendingUserIds = (storage) =>
+  ["user_1", "user_2"].filter((userId) => storage.getItem(pendingKey(userId)) === "true");
 
 async function validateAuthContext(userId = "user_1", authGeneration = 7, reset = true) {
   const auth = require("../../src/lib/authRequestContext.ts");
@@ -192,7 +185,7 @@ test("leaderboard requests carry scope, pagination, filters and no body data", a
 test("a pending leave is retried for the account that asked and cleared once it lands", async (t) => {
   const requests = [];
   const { storage } = installBrowserGlobals(t, {
-    initialStorage: { leaderboardLeavePendingUserIds: '["user_1","user_2"]' },
+    initialStorage: { [pendingKey("user_1")]: "true", [pendingKey("user_2")]: "true" },
     window: {
       electronAPI: {
         cloudApiRequest: async (request) => {
@@ -231,7 +224,7 @@ test("a pending leave is retried for the account that asked and cleared once it 
 
 test("a retry that fails keeps the leave pending for the next trigger", async (t) => {
   const { storage } = installBrowserGlobals(t, {
-    initialStorage: { leaderboardLeavePendingUserIds: '["user_1","user_2"]' },
+    initialStorage: { [pendingKey("user_1")]: "true", [pendingKey("user_2")]: "true" },
     window: {
       electronAPI: {
         cloudApiRequest: async () => ({ success: false, status: 0, error: "offline" }),
@@ -262,7 +255,7 @@ test("an explicit join stays newer than a pending leave already in flight", asyn
   });
   t.after(() => releasePendingLeave());
   const { storage } = installBrowserGlobals(t, {
-    initialStorage: { leaderboardLeavePendingUserIds: '["user_1"]' },
+    initialStorage: { [pendingKey("user_1")]: "true" },
     window: {
       electronAPI: {
         cloudApiRequest: async (request) => {
@@ -326,7 +319,7 @@ test("a queued participation write cannot adopt a replacement account's auth", a
   });
   t.after(() => releasePendingLeave());
   installBrowserGlobals(t, {
-    initialStorage: { leaderboardLeavePendingUserIds: '["user_1"]' },
+    initialStorage: { [pendingKey("user_1")]: "true" },
     window: {
       electronAPI: {
         cloudApiRequest: async (request) => {

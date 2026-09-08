@@ -28,6 +28,8 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   assert.ok(insights.includes('className="h-6 px-2.5 text-xs rounded-[5px]"'));
   assert.ok(insights.includes("<LeaderboardView"));
   assert.ok(insights.includes("syncService.syncAnalyticsNow()"));
+  assert.ok(insights.includes("const authValidated = hasValidatedAuthContext()"));
+  assert.ok(insights.includes("isSignedIn &&\n    authValidated &&\n    insightsSyncEnabled"));
   assert.equal(insights.includes("syncPendingAnalytics"), false);
   assert.ok(insights.includes("onClick={() => void enableInsightsSync()}"));
   assert.ok(insights.includes('"insights.enableSync"'));

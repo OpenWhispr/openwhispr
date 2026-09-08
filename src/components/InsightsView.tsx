@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
+import { hasValidatedAuthContext } from "../lib/authRequestContext";
 import {
   getAccountAnalyticsSummary,
   subscribeToAnalyticsRefresh,
@@ -390,6 +391,7 @@ function YourUsage({
 export default function InsightsView({ onSignIn }: InsightsViewProps) {
   const { t } = useTranslation();
   const { isLoaded, isSignedIn } = useAuth();
+  const authValidated = hasValidatedAuthContext();
   const { dataRetentionEnabled: personalDataRetentionEnabled, insightsSyncEnabled } = useSettings();
   const dataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
@@ -401,7 +403,11 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
   // A managed workspace that forbids cloud backup forbids these counters with
   // it, so the page stays device-scoped even with the preference left on.
   const syncActive =
-    isSignedIn && insightsSyncEnabled && syncAllowedByPolicy && dataRetentionEnabled;
+    isSignedIn &&
+    authValidated &&
+    insightsSyncEnabled &&
+    syncAllowedByPolicy &&
+    dataRetentionEnabled;
   const claimAvailable = canOfferAnalyticsClaim({
     signedIn: isSignedIn,
     syncAllowedByPolicy,
@@ -409,7 +415,8 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
     insightsSyncEnabled,
     unclaimedCount,
   });
-  const showSyncAction = activeTab === "usage" && isSignedIn && (!syncActive || claimAvailable);
+  const showSyncAction =
+    activeTab === "usage" && isSignedIn && authValidated && (!syncActive || claimAvailable);
   const syncActionDisabled = !canToggleSync || !dataRetentionEnabled || !syncAllowedByPolicy;
   const syncStatusLabel = syncActive
     ? syncError

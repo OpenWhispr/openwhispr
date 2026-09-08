@@ -198,7 +198,7 @@ test("an undelivered leave is durable and retried without gating analytics", () 
   assert.equal(sync.includes("LeaderboardService.getParticipation("), false);
 });
 
-test("an ambiguous join is compensated without racing a newer account choice", () => {
+test("only an ambiguous request failure compensates a join", () => {
   const hook = read("src/hooks/useLeaderboardParticipation.ts");
   const service = read("src/services/LeaderboardService.ts");
   const serviceJoin = service.slice(
@@ -211,9 +211,8 @@ test("an ambiguous join is compensated without racing a newer account choice", (
     serviceJoin.indexOf("writePendingLeaderboardLeave(userId)") < serviceJoin.indexOf("throw error")
   );
   const hookJoin = hook.slice(hook.indexOf("const join"), hook.indexOf("const leave"));
-  assert.ok(
-    hookJoin.indexOf("writePendingLeaderboardLeave(userId)") > hookJoin.indexOf("const joined =")
-  );
+  assert.ok(hookJoin.includes("return store.join(context)"));
+  assert.equal(hookJoin.includes("writePendingLeaderboardLeave(userId)"), false);
 });
 
 test("a completed participation write outranks reads already in flight", () => {
