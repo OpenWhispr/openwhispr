@@ -63,7 +63,14 @@ test("arrival: the active (Check/Copied) layer is fully opaque and untransitione
     copied: true,
   });
 
-  assert.match(markup, /class="assistant-copy-label inline-grid items-center"/);
+  // justify-items-center pins the fix for the constant-width button leaving
+  // the shorter "Copied" layer's content stranded against the left edge of
+  // the wider grid cell: it stops each stacked layer from stretching to
+  // fill the cell, so its own content centers instead. This only proves the
+  // class reaches the rendered markup — renderToStaticMarkup does no layout,
+  // so whether the content actually paints centered is a computed-layout
+  // claim a real browser would have to settle.
+  assert.match(markup, /class="assistant-copy-label inline-grid items-center justify-items-center"/);
 
   const active = layerOpenTag(markup, "active");
   assert.match(active, /opacity:1/);

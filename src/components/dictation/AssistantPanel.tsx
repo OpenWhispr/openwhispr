@@ -773,7 +773,7 @@ export function AssistantPanel({
                   transitions on arrival — transition is only ever declared
                   while `fading` is true — so the pop stays the only motion an
                   arrival shows. */}
-              <span className="assistant-copy-label inline-grid items-center">
+              <span className="assistant-copy-label inline-grid items-center justify-items-center">
                 <span
                   className="assistant-copy-label-layer inline-flex items-center gap-1.5"
                   data-copy-label-layer="active"
