@@ -17,7 +17,7 @@ function recordEvent(db, eventId, overrides = {}) {
   });
 }
 
-test("historical transcriptions backfill in restart-safe account-neutral batches", (t) => {
+test("historical transcriptions reconcile in restart-safe account-neutral batches", (t) => {
   const db = createDb(t);
   if (!db) return;
 
@@ -32,7 +32,7 @@ test("historical transcriptions backfill in restart-safe account-neutral batches
     "one two three",
     "completed",
     "legacy-local",
-    "2026-09-01 10:00:00",
+    "2026-09-01T09:59:00.000Z",
     "2026-09-01 10:00:00",
     2_000,
     "local-whisper",
@@ -44,7 +44,7 @@ test("historical transcriptions backfill in restart-safe account-neutral batches
     null,
     "completed",
     "legacy-ambiguous",
-    "2026-09-02 10:00:00",
+    "2026-09-02T09:59:00.000Z",
     "2026-09-02 10:00:00",
     null,
     "deepgram-streaming",
@@ -52,11 +52,23 @@ test("historical transcriptions backfill in restart-safe account-neutral batches
     null
   );
   insertTranscription.run(
+    "ambiguous post-clear words",
+    null,
+    "completed",
+    "legacy-post-clear-ambiguous",
+    "2026-09-03 10:00:00",
+    "2026-09-03 10:00:00",
+    null,
+    null,
+    null,
+    null
+  );
+  insertTranscription.run(
     "cleared words",
     null,
     "completed",
     "legacy-cleared",
-    "2026-08-01 10:00:00",
+    "2026-08-01T09:59:00.000Z",
     "2026-08-01 10:00:00",
     null,
     null,
@@ -128,8 +140,11 @@ test("historical transcriptions backfill in restart-safe account-neutral batches
   db.setActiveAccountId("account-a");
 
   const batches = [];
+  let afterId = 0;
   do {
-    batches.push(db.backfillAnalyticsHistoryBatch(1));
+    const batch = db.backfillAnalyticsHistoryBatch({ afterId, limit: 1 });
+    batches.push(batch);
+    afterId = batch.nextCursor;
   } while (!batches[batches.length - 1].complete);
 
   assert.equal(
@@ -142,7 +157,8 @@ test("historical transcriptions backfill in restart-safe account-neutral batches
   assert.deepEqual(
     db.db
       .prepare(
-        `SELECT event_id, account_id, word_count, spoken_duration_ms, mode, counter_version
+        `SELECT event_id, account_id, word_count, spoken_duration_ms, mode,
+                counter_version, created_at
          FROM analytics_events WHERE deleted_at IS NULL ORDER BY event_id`
       )
       .all(),
@@ -154,6 +170,7 @@ test("historical transcriptions backfill in restart-safe account-neutral batches
         spoken_duration_ms: null,
         mode: "unknown",
         counter_version: 2,
+        created_at: "2026-09-02 10:00:00",
       },
       {
         event_id: "legacy-local",
@@ -162,25 +179,98 @@ test("historical transcriptions backfill in restart-safe account-neutral batches
         spoken_duration_ms: 2_000,
         mode: "local",
         counter_version: 2,
+        created_at: "2026-09-01 10:00:00",
       },
     ]
   );
-  assert.equal(
-    db.db
-      .prepare("SELECT value FROM analytics_metadata WHERE key = 'history_backfill_version'")
-      .get().value,
-    "1"
-  );
-  assert.equal(
-    db.db.prepare("SELECT 1 FROM analytics_metadata WHERE key = 'history_backfill_cursor'").get(),
-    undefined
-  );
-  assert.deepEqual(db.backfillAnalyticsHistoryBatch(1), {
+  assert.deepEqual(db.backfillAnalyticsHistoryBatch(), {
     complete: true,
+    nextCursor: 0,
     scanned: 0,
     inserted: 0,
     skipped: 0,
   });
+});
+
+test("analytics reconciliation picks up later eligibility and usable processed text", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const insert = db.db.prepare(
+    `INSERT INTO transcriptions (
+       text, raw_text, status, client_transcription_id, timestamp, created_at
+     ) VALUES (?, ?, ?, ?, ?, ?)`
+  );
+  insert.run(
+    "processed text wins",
+    "   ",
+    "completed",
+    "empty-raw",
+    "2026-09-01 10:00:00",
+    "2026-09-01 10:00:00"
+  );
+  insert.run(
+    "retry succeeds later",
+    null,
+    "failed",
+    "retried-later",
+    "2026-09-02 10:00:00",
+    "2026-09-02 10:00:00"
+  );
+
+  assert.equal(db.backfillAnalyticsHistoryBatch().inserted, 1);
+  assert.equal(db.getAnalyticsSummary().totalWords, 3);
+
+  db.db
+    .prepare("UPDATE transcriptions SET status = 'completed' WHERE client_transcription_id = ?")
+    .run("retried-later");
+  assert.equal(db.backfillAnalyticsHistoryBatch().inserted, 1);
+  assert.equal(db.getAnalyticsSummary().totalWords, 6);
+
+  insert.run(
+    "pulled after startup",
+    null,
+    "completed",
+    "pulled-later",
+    "2025-01-01 10:00:00",
+    "2025-01-01 10:00:00"
+  );
+  assert.equal(db.backfillAnalyticsHistoryBatch().inserted, 1);
+  assert.equal(db.backfillAnalyticsHistoryBatch().scanned, 0);
+});
+
+test("backfill preserves the transcription creation time for retention", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.db
+    .prepare(
+      `INSERT INTO transcriptions (
+         text, status, client_transcription_id, timestamp, created_at
+       ) VALUES ('old words', 'completed', 'old-retained',
+                 '2020-01-01T09:59:00.000Z', '2020-01-01 10:00:00')`
+    )
+    .run();
+
+  assert.equal(db.backfillAnalyticsHistoryBatch().inserted, 1);
+  assert.equal(
+    db.db.prepare("SELECT created_at FROM analytics_events WHERE event_id = 'old-retained'").get()
+      .created_at,
+    "2020-01-01 10:00:00"
+  );
+  assert.equal(db.deleteTranscriptionsExpiredBefore(30).analyticsPurged, 1);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
+});
+
+test("new transcription rows retain the original analytics occurrence time", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const occurredAt = "2026-09-01T09:58:00.000Z";
+  const result = db.saveTranscription("saved words", "saved words", {
+    analyticsOccurredAt: occurredAt,
+  });
+  assert.equal(result.transcription.timestamp, occurredAt.replace("T", " "));
 });
 
 test("analytics stays content-free and idempotent, and only syncs the signed-in account", (t) => {

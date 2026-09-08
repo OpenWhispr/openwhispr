@@ -676,27 +676,35 @@ class IPCHandlers {
     }
   }
 
-  _ensureAnalyticsHistoryBackfilled() {
+  async _ensureAnalyticsHistoryBackfilled() {
     if (this._analyticsHistoryBackfillPromise) return this._analyticsHistoryBackfillPromise;
-    this._analyticsHistoryBackfillPromise = (async () => {
+    const backfillPromise = (async () => {
       let inserted = 0;
       let scanned = 0;
+      let afterId = 0;
       while (true) {
-        const batch = this.databaseManager.backfillAnalyticsHistoryBatch();
+        const batch = this.databaseManager.backfillAnalyticsHistoryBatch({ afterId });
         inserted += batch.inserted;
         scanned += batch.scanned;
         if (batch.complete) break;
+        afterId = batch.nextCursor;
         await new Promise((resolve) => setImmediate(resolve));
       }
       if (inserted > 0) broadcastToWindows("analytics-changed");
       debugLogger.info("Analytics history backfill complete", { inserted, scanned }, "analytics");
       return { inserted, scanned };
-    })().catch((error) => {
-      this._analyticsHistoryBackfillPromise = null;
+    })();
+    this._analyticsHistoryBackfillPromise = backfillPromise;
+    try {
+      return await backfillPromise;
+    } catch (error) {
       debugLogger.error("Analytics history backfill failed", { error: error.message }, "analytics");
       throw error;
-    });
-    return this._analyticsHistoryBackfillPromise;
+    } finally {
+      if (this._analyticsHistoryBackfillPromise === backfillPromise) {
+        this._analyticsHistoryBackfillPromise = null;
+      }
+    }
   }
 
   // The dictation slot reports its own changes from the renderer. Slots
@@ -6253,6 +6261,7 @@ class IPCHandlers {
         if (updated) {
           setImmediate(() => {
             broadcastToWindows("transcription-updated", updated);
+            void this._ensureAnalyticsHistoryBackfilled().catch(() => {});
           });
         }
         return { success: true, transcription: updated };

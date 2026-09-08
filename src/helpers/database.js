@@ -116,8 +116,8 @@ const SELECTED_CALENDAR_EVENT_FILTER = `(
   ))
 )`;
 
-function parseAnalyticsTimestamp(createdAt, timestamp) {
-  for (const value of [createdAt, timestamp]) {
+function parseAnalyticsTimestamp(...values) {
+  for (const value of values) {
     if (typeof value !== "string" || value.trim().length === 0) continue;
     const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value)
       ? `${value.replace(" ", "T")}Z`
@@ -126,6 +126,13 @@ function parseAnalyticsTimestamp(createdAt, timestamp) {
     if (Number.isFinite(parsed.getTime())) return parsed;
   }
   return null;
+}
+
+function hasExplicitAnalyticsTimestamp(value) {
+  return (
+    typeof value === "string" &&
+    (value.trim().endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(value.trim()))
+  );
 }
 
 class DatabaseManager {
@@ -1004,10 +1011,6 @@ class DatabaseManager {
           id INTEGER PRIMARY KEY CHECK (id = 1),
           cleared_through TEXT NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS analytics_metadata (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL
-        );
       `);
       // Repair databases created before analytics deletion tombstones were
       // introduced. SQLite has no ADD COLUMN IF NOT EXISTS syntax.
@@ -1285,14 +1288,23 @@ class DatabaseManager {
       errorCode = null,
       routeKind = null,
       clientTranscriptionId = randomUUID(),
+      analyticsOccurredAt = null,
     } = {}
   ) {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
+      // Keep the existing SQLite-friendly separator so mixed old/new rows
+      // continue to sort chronologically, while the trailing Z marks this as
+      // an exact client-captured instant for clear-state reconciliation.
+      const occurredAt =
+        parseAnalyticsTimestamp(analyticsOccurredAt)?.toISOString().replace("T", " ") ?? null;
       const stmt = this.db.prepare(
-        "INSERT INTO transcriptions (text, raw_text, status, error_message, error_code, route_kind, client_transcription_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        `INSERT INTO transcriptions (
+           text, raw_text, status, error_message, error_code, route_kind,
+           client_transcription_id, timestamp
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`
       );
       const result = stmt.run(
         text,
@@ -1301,7 +1313,8 @@ class DatabaseManager {
         errorMessage,
         errorCode,
         routeKind,
-        clientTranscriptionId
+        clientTranscriptionId,
+        occurredAt
       );
 
       const fetchStmt = this.db.prepare("SELECT * FROM transcriptions WHERE id = ?");
@@ -1314,51 +1327,60 @@ class DatabaseManager {
     }
   }
 
-  backfillAnalyticsHistoryBatch(limit = 250) {
+  backfillAnalyticsHistoryBatch({ afterId = 0, limit = 250 } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const version = Number(
-        this.db
-          .prepare("SELECT value FROM analytics_metadata WHERE key = 'history_backfill_version'")
-          .get()?.value ?? 0
-      );
-      if (version >= 1) return { complete: true, scanned: 0, inserted: 0, skipped: 0 };
-
-      const safeLimit = Math.max(1, Math.min(Number(limit) || 250, 1_000));
-      const cursor = Number(
-        this.db
-          .prepare("SELECT value FROM analytics_metadata WHERE key = 'history_backfill_cursor'")
-          .get()?.value ?? 0
-      );
+      const safeLimit = Math.max(1, Math.min(Math.trunc(Number(limit)) || 250, 1_000));
+      const safeAfterId = Math.max(0, Math.trunc(Number(afterId)) || 0);
+      const clearState = this.db
+        .prepare("SELECT cleared_through FROM analytics_device_clear_state WHERE id = 1")
+        .get();
+      // Legacy SQLite timestamps are completion times without an offset. Once
+      // the user has cleared Insights, only a client-captured occurrence time
+      // can prove that a historical row happened afterward.
       const rows = this.db
         .prepare(
-          `SELECT id, client_transcription_id, text, raw_text, timestamp, created_at,
+          `SELECT transcription.id, transcription.client_transcription_id,
+                  transcription.text, transcription.raw_text, transcription.timestamp,
+                  transcription.created_at,
                   audio_duration_ms, provider, model
-           FROM transcriptions
-           WHERE id > ? AND deleted_at IS NULL AND status = 'completed'
-             AND TRIM(COALESCE(raw_text, text, '')) != ''
-           ORDER BY id ASC
+           FROM transcriptions transcription
+           WHERE transcription.id > ?
+             AND transcription.deleted_at IS NULL
+             AND transcription.status = 'completed'
+             AND TRIM(COALESCE(NULLIF(TRIM(transcription.raw_text), ''), transcription.text, '')) != ''
+             AND NOT EXISTS (
+               SELECT 1 FROM analytics_events event
+               WHERE event.event_id = TRIM(transcription.client_transcription_id)
+             )
+             AND (
+               ? IS NULL
+               OR (
+                 (TRIM(transcription.timestamp) LIKE '%Z'
+                  OR SUBSTR(TRIM(transcription.timestamp), -6, 1) IN ('+', '-'))
+                 AND JULIANDAY(transcription.timestamp) > JULIANDAY(?)
+               )
+             )
+           ORDER BY transcription.id ASC
            LIMIT ?`
         )
-        .all(cursor, safeLimit);
+        .all(
+          safeAfterId,
+          clearState?.cleared_through ?? null,
+          clearState?.cleared_through ?? null,
+          safeLimit
+        );
 
       let inserted = 0;
       let skipped = 0;
       const fallbackTime = new Date();
-      const clearState = this.db
-        .prepare("SELECT cleared_through FROM analytics_device_clear_state WHERE id = 1")
-        .get();
       const clearedThrough = clearState ? Date.parse(clearState.cleared_through) : Number.NaN;
       const insert = this.db.prepare(
         `INSERT INTO analytics_events (
            event_id, account_id, occurred_at, local_date, word_count,
-           spoken_duration_ms, mode, provider, model, counter_version
-         ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+           spoken_duration_ms, mode, provider, model, counter_version, created_at
+         ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME(?))
          ON CONFLICT(event_id) DO NOTHING`
-      );
-      const setMetadata = this.db.prepare(
-        `INSERT INTO analytics_metadata (key, value) VALUES (?, ?)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value`
       );
       const assignClientId = this.db.prepare(
         `UPDATE transcriptions SET client_transcription_id = ?
@@ -1367,18 +1389,24 @@ class DatabaseManager {
 
       const writeBatch = this.db.transaction(() => {
         for (const row of rows) {
-          const wordCount = countSpokenWords(row.raw_text || row.text);
+          const sourceText = row.raw_text?.trim() ? row.raw_text : row.text;
+          const wordCount = countSpokenWords(sourceText);
           if (wordCount === 0) {
             skipped += 1;
             continue;
           }
 
-          const storedOccurredAt = parseAnalyticsTimestamp(row.created_at, row.timestamp);
+          const createdAt = parseAnalyticsTimestamp(row.created_at);
+          const explicitOccurredAt = hasExplicitAnalyticsTimestamp(row.timestamp)
+            ? parseAnalyticsTimestamp(row.timestamp)
+            : null;
+          const storedOccurredAt =
+            explicitOccurredAt ?? createdAt ?? parseAnalyticsTimestamp(row.timestamp);
           if (
             clearState &&
-            (!storedOccurredAt ||
+            (!explicitOccurredAt ||
               !Number.isFinite(clearedThrough) ||
-              storedOccurredAt.getTime() <= clearedThrough)
+              explicitOccurredAt.getTime() <= clearedThrough)
           ) {
             skipped += 1;
             continue;
@@ -1396,26 +1424,18 @@ class DatabaseManager {
             inferHistoricalAnalyticsMode(row.provider),
             row.provider || null,
             row.model || null,
-            ANALYTICS_COUNTER_VERSION
+            ANALYTICS_COUNTER_VERSION,
+            (createdAt ?? occurredAt).toISOString()
           );
           if (result.changes > 0) inserted += 1;
           else skipped += 1;
-        }
-
-        if (rows.length > 0) {
-          setMetadata.run("history_backfill_cursor", String(rows[rows.length - 1].id));
-        }
-        if (rows.length < safeLimit) {
-          setMetadata.run("history_backfill_version", "1");
-          this.db
-            .prepare("DELETE FROM analytics_metadata WHERE key = 'history_backfill_cursor'")
-            .run();
         }
       });
       writeBatch();
 
       return {
         complete: rows.length < safeLimit,
+        nextCursor: rows.length > 0 ? Number(rows[rows.length - 1].id) : safeAfterId,
         scanned: rows.length,
         inserted,
         skipped,
