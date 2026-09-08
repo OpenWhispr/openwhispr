@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.2](https://github.com/PlaybookMediaLLC/openwhispr/compare/v1.11.1...v1.11.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* **cli-bridge:** build the Oppulence public API lazily ([96825c1](https://github.com/PlaybookMediaLLC/openwhispr/commit/96825c11d9d4c669469ff23cc1004ddc8fb38e60))
+
 ## [1.11.1](https://github.com/PlaybookMediaLLC/openwhispr/compare/v1.11.0...v1.11.1) (2026-09-08)
 
 
