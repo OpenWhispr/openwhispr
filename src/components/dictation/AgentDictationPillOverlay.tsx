@@ -278,10 +278,24 @@ export default function AgentDictationPillOverlay() {
         </div>
       </div>
 
+      {/* entrancePhase + freshMount are BOTH required, and both are read only
+          by dictation-panel.css's fresh-mount snap-gate, which needs
+          data-panel-entrance-phase="encapsulate" AND
+          data-panel-fresh-mount="true" together. Without them this window's
+          Live Transcript starts its entrance from the shared surface's
+          visible 40px pill circle instead of the invisible 52x108 corner box
+          — the companion pill hosts exactly the same VoiceModePanelCore as
+          App.jsx and needs exactly the same two props (Finding 1, final
+          review 2026-09-08; the main window has passed them since Task 4,
+          this window never did). `stage` cannot stand in for them: it
+          normalises the fresh-mount and closing phases to the same
+          "encapsulated" value. */}
       <VoiceModePanelCore
         mode={liveTranscript.mounted ? "live-transcript" : null}
         open={liveTranscript.open}
         stage={liveTranscriptEntrance.coreStage as VoiceModePanelStage}
+        entrancePhase={liveTranscript.entrancePhase}
+        freshMount={liveTranscript.freshMount}
         horizontalDirection={horizontalDirection}
         label={t("transcriptionPreview.label")}
         measurementRevision={liveTranscript.measurementText}

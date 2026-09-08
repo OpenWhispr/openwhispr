@@ -246,6 +246,36 @@ function installInteractiveDom(t) {
     focus() {
       this.ownerDocument.activeElement = this;
     }
+
+    // The DOM's own `children`: element nodes only, no text or comments.
+    // ExpandingPanelShell walks this to sum its direct children's heights.
+    get children() {
+      return this.childNodes.filter((child) => child.nodeType === 1);
+    }
+
+    // Deliberately supports ONLY the bare `[attribute]` form — the one shape
+    // the renderer components mounted through this harness actually use
+    // (ExpandingPanelShell's `[data-panel-size-source]`). Anything else
+    // throws instead of quietly returning an empty list, which would read as
+    // "no matches" and make a test pass for the wrong reason.
+    querySelectorAll(selector) {
+      const attribute = /^\[([\w-]+)\]$/.exec(String(selector).trim());
+      if (!attribute) {
+        throw new Error(
+          `installInteractiveDom's querySelectorAll supports only "[attribute]", got: ${selector}`
+        );
+      }
+      const found = [];
+      const walk = (node) => {
+        for (const child of node.childNodes) {
+          if (child.nodeType !== 1) continue;
+          if (child.attributes.has(attribute[1])) found.push(child);
+          walk(child);
+        }
+      };
+      walk(this);
+      return found;
+    }
   }
 
   const documentListeners = new Map();
