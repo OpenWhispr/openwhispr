@@ -17,6 +17,172 @@ function recordEvent(db, eventId, overrides = {}) {
   });
 }
 
+test("historical transcriptions backfill in restart-safe account-neutral batches", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const insertTranscription = db.db.prepare(
+    `INSERT INTO transcriptions (
+       text, raw_text, status, client_transcription_id, timestamp, created_at,
+       audio_duration_ms, provider, model, deleted_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  insertTranscription.run(
+    "enhanced text",
+    "one two three",
+    "completed",
+    "legacy-local",
+    "2026-09-01 10:00:00",
+    "2026-09-01 10:00:00",
+    2_000,
+    "local-whisper",
+    "small",
+    null
+  );
+  insertTranscription.run(
+    "four five",
+    null,
+    "completed",
+    "legacy-ambiguous",
+    "2026-09-02 10:00:00",
+    "2026-09-02 10:00:00",
+    null,
+    "deepgram-streaming",
+    "nova-3",
+    null
+  );
+  insertTranscription.run(
+    "cleared words",
+    null,
+    "completed",
+    "legacy-cleared",
+    "2026-08-01 10:00:00",
+    "2026-08-01 10:00:00",
+    null,
+    null,
+    null,
+    null
+  );
+  insertTranscription.run(
+    "failed words",
+    null,
+    "failed",
+    "legacy-failed",
+    "2026-09-03 10:00:00",
+    "2026-09-03 10:00:00",
+    null,
+    null,
+    null,
+    null
+  );
+  insertTranscription.run(
+    "timestamp unavailable",
+    null,
+    "completed",
+    "legacy-invalid-time",
+    "not-a-time",
+    "not-a-time",
+    null,
+    null,
+    null,
+    null
+  );
+  insertTranscription.run(
+    "deleted words",
+    null,
+    "completed",
+    "legacy-deleted",
+    "2026-09-03 10:00:00",
+    "2026-09-03 10:00:00",
+    null,
+    null,
+    null,
+    "2026-09-03 11:00:00"
+  );
+  insertTranscription.run(
+    "existing words",
+    null,
+    "completed",
+    "legacy-existing",
+    "2026-09-04 10:00:00",
+    "2026-09-04 10:00:00",
+    null,
+    null,
+    null,
+    null
+  );
+  db.db
+    .prepare(
+      "INSERT INTO analytics_device_clear_state (id, cleared_through) VALUES (1, '2026-08-15T00:00:00.000Z')"
+    )
+    .run();
+  recordEvent(db, "legacy-existing", {
+    wordCount: 2,
+    occurredAt: "2026-09-04T10:00:00.000Z",
+  });
+  db.db
+    .prepare(
+      "UPDATE analytics_events SET deleted_at = '2026-09-04T11:00:00.000Z' WHERE event_id = 'legacy-existing'"
+    )
+    .run();
+  db.setActiveAccountId("account-a");
+
+  const batches = [];
+  do {
+    batches.push(db.backfillAnalyticsHistoryBatch(1));
+  } while (!batches[batches.length - 1].complete);
+
+  assert.equal(
+    batches.reduce((total, batch) => total + batch.inserted, 0),
+    2
+  );
+  assert.equal(db.getAnalyticsSummary().totalWords, 5);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 2);
+  assert.equal(db.countUnclaimedAnalyticsEvents(), 2, "the active account does not adopt history");
+  assert.deepEqual(
+    db.db
+      .prepare(
+        `SELECT event_id, account_id, word_count, spoken_duration_ms, mode, counter_version
+         FROM analytics_events WHERE deleted_at IS NULL ORDER BY event_id`
+      )
+      .all(),
+    [
+      {
+        event_id: "legacy-ambiguous",
+        account_id: null,
+        word_count: 2,
+        spoken_duration_ms: null,
+        mode: "unknown",
+        counter_version: 2,
+      },
+      {
+        event_id: "legacy-local",
+        account_id: null,
+        word_count: 3,
+        spoken_duration_ms: 2_000,
+        mode: "local",
+        counter_version: 2,
+      },
+    ]
+  );
+  assert.equal(
+    db.db
+      .prepare("SELECT value FROM analytics_metadata WHERE key = 'history_backfill_version'")
+      .get().value,
+    "1"
+  );
+  assert.equal(
+    db.db.prepare("SELECT 1 FROM analytics_metadata WHERE key = 'history_backfill_cursor'").get(),
+    undefined
+  );
+  assert.deepEqual(db.backfillAnalyticsHistoryBatch(1), {
+    complete: true,
+    scanned: 0,
+    inserted: 0,
+    skipped: 0,
+  });
+});
+
 test("analytics stays content-free and idempotent, and only syncs the signed-in account", (t) => {
   const db = createDb(t);
   if (!db) return;

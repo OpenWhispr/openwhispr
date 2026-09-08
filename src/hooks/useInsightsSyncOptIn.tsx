@@ -212,14 +212,14 @@ export function useInsightsSyncOptIn() {
     const requestedAccountId = userId;
     const requestedAuthGeneration = getValidatedAuthGeneration();
     if (!requestedAccountId || requestedAuthGeneration == null) return;
-    if (!insightsSyncEnabled && !(await enableInsightsSync())) return;
+    if (!(await enableInsightsSync())) return;
     if (
       promptAccountIdRef.current !== requestedAccountId ||
       getValidatedAuthGeneration() !== requestedAuthGeneration
     )
       return;
     await useLeaderboardParticipationStore.getState().join(requestedAccountId);
-  }, [enableInsightsSync, insightsSyncEnabled, syncAllowedByPolicy, userId]);
+  }, [enableInsightsSync, syncAllowedByPolicy, userId]);
 
   const claiming = promptKind === "claim";
   const answerClaimPrompt = (claimed: boolean) => {

@@ -624,6 +624,7 @@ class IPCHandlers {
     this._retentionSettingsSynced = false;
     this._noteFilesEnabled = false;
     this._granolaImportPending = null;
+    this._analyticsHistoryBackfillPromise = null;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
     this.whisperVadSettings = {
@@ -637,6 +638,9 @@ class IPCHandlers {
     this._setupRetentionCleanup();
     this._logDetectedGpus();
     this.setupHandlers();
+    setImmediate(() => {
+      void this._ensureAnalyticsHistoryBackfilled().catch(() => {});
+    });
     // Lives for the app's lifetime; IPCHandlers has no teardown path.
     tokenStore.subscribe(({ generation, token }) => {
       this.enterpriseIdentityManager?.clear();
@@ -670,6 +674,29 @@ class IPCHandlers {
         this._syncStartupEnv({}, ["WHISPER_VULKAN_DEVICE"]);
       });
     }
+  }
+
+  _ensureAnalyticsHistoryBackfilled() {
+    if (this._analyticsHistoryBackfillPromise) return this._analyticsHistoryBackfillPromise;
+    this._analyticsHistoryBackfillPromise = (async () => {
+      let inserted = 0;
+      let scanned = 0;
+      while (true) {
+        const batch = this.databaseManager.backfillAnalyticsHistoryBatch();
+        inserted += batch.inserted;
+        scanned += batch.scanned;
+        if (batch.complete) break;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      if (inserted > 0) broadcastToWindows("analytics-changed");
+      debugLogger.info("Analytics history backfill complete", { inserted, scanned }, "analytics");
+      return { inserted, scanned };
+    })().catch((error) => {
+      this._analyticsHistoryBackfillPromise = null;
+      debugLogger.error("Analytics history backfill failed", { error: error.message }, "analytics");
+      throw error;
+    });
+    return this._analyticsHistoryBackfillPromise;
   }
 
   // The dictation slot reports its own changes from the renderer. Slots
@@ -1413,10 +1440,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("analytics-get-summary", async () => {
+      await this._ensureAnalyticsHistoryBackfilled();
       return this.databaseManager.getAnalyticsSummary();
     });
 
     ipcMain.handle("analytics-get-pending", async (_event, limit) => {
+      await this._ensureAnalyticsHistoryBackfilled();
       return this.databaseManager.getPendingAnalyticsEvents(limit);
     });
 
@@ -1441,10 +1470,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("analytics-count-unclaimed", async () => {
+      await this._ensureAnalyticsHistoryBackfilled();
       return this.databaseManager.countUnclaimedAnalyticsEvents();
     });
 
     ipcMain.handle("analytics-count-awaiting-upload", async () => {
+      await this._ensureAnalyticsHistoryBackfilled();
       return this.databaseManager.countAnalyticsEventsAwaitingUpload();
     });
 

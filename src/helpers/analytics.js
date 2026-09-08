@@ -77,6 +77,11 @@ function modeFromStoredProvider(provider) {
   return "byok";
 }
 
+export function inferHistoricalAnalyticsMode(provider) {
+  const mode = modeFromStoredProvider(provider);
+  return mode === "byok" ? "unknown" : mode;
+}
+
 // The provider that actually ran wins when it names a concrete engine or ends
 // in "-fallback", which proves the selected route never ran. Streaming provider
 // names ("deepgram-streaming") are too coarse to tell BYOK from OpenWhispr

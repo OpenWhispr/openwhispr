@@ -88,6 +88,11 @@ test("a join publishes the account only after the sync opt-in has landed", () =>
     join.includes("!(await enableInsightsSync())) return"),
     "a declined opt-in must abandon the join instead of publishing anyway"
   );
+  assert.equal(
+    join.includes("!insightsSyncEnabled &&"),
+    false,
+    "an already-enabled device must still offer newly backfilled anonymous history"
+  );
 });
 
 // The prompt can outlive the account that opened it. Accepting it after an

@@ -5,6 +5,7 @@ const {
   buildAnalyticsActivityDays,
   calculateStreaks,
   countSpokenWords,
+  inferHistoricalAnalyticsMode,
   resolveAnalyticsMode,
   summarizeAnalyticsDays,
 } = require("../../src/helpers/analytics.js");
@@ -64,6 +65,12 @@ test("analytics credits a fallback to the provider that actually ran", () => {
     ),
     "openwhispr_cloud"
   );
+});
+
+test("historical analytics do not guess an ambiguous provider mode", () => {
+  assert.equal(inferHistoricalAnalyticsMode("local-whisper"), "local");
+  assert.equal(inferHistoricalAnalyticsMode("openwhispr"), "openwhispr_cloud");
+  assert.equal(inferHistoricalAnalyticsMode("deepgram-streaming"), "unknown");
 });
 
 test("analytics computes weighted WPM, coverage, and streaks from day totals", () => {

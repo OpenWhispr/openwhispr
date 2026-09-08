@@ -6,7 +6,13 @@ const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { parseEventTime } = require("./calendarAvailability");
-const { ANALYTICS_COUNTER_VERSION, summarizeAnalyticsDays } = require("./analytics");
+const {
+  ANALYTICS_COUNTER_VERSION,
+  countSpokenWords,
+  inferHistoricalAnalyticsMode,
+  localDateKey,
+  summarizeAnalyticsDays,
+} = require("./analytics");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -109,6 +115,18 @@ const SELECTED_CALENDAR_EVENT_FILTER = `(
     SELECT 1 FROM apple_calendars WHERE apple_calendars.id = calendar_events.calendar_id
   ))
 )`;
+
+function parseAnalyticsTimestamp(createdAt, timestamp) {
+  for (const value of [createdAt, timestamp]) {
+    if (typeof value !== "string" || value.trim().length === 0) continue;
+    const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value)
+      ? `${value.replace(" ", "T")}Z`
+      : value;
+    const parsed = new Date(normalized);
+    if (Number.isFinite(parsed.getTime())) return parsed;
+  }
+  return null;
+}
 
 class DatabaseManager {
   constructor() {
@@ -986,6 +1004,10 @@ class DatabaseManager {
           id INTEGER PRIMARY KEY CHECK (id = 1),
           cleared_through TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS analytics_metadata (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
       `);
       // Repair databases created before analytics deletion tombstones were
       // introduced. SQLite has no ADD COLUMN IF NOT EXISTS syntax.
@@ -1288,6 +1310,122 @@ class DatabaseManager {
       return { id: result.lastInsertRowid, success: true, transcription };
     } catch (error) {
       debugLogger.error("Error saving transcription", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  backfillAnalyticsHistoryBatch(limit = 250) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const version = Number(
+        this.db
+          .prepare("SELECT value FROM analytics_metadata WHERE key = 'history_backfill_version'")
+          .get()?.value ?? 0
+      );
+      if (version >= 1) return { complete: true, scanned: 0, inserted: 0, skipped: 0 };
+
+      const safeLimit = Math.max(1, Math.min(Number(limit) || 250, 1_000));
+      const cursor = Number(
+        this.db
+          .prepare("SELECT value FROM analytics_metadata WHERE key = 'history_backfill_cursor'")
+          .get()?.value ?? 0
+      );
+      const rows = this.db
+        .prepare(
+          `SELECT id, client_transcription_id, text, raw_text, timestamp, created_at,
+                  audio_duration_ms, provider, model
+           FROM transcriptions
+           WHERE id > ? AND deleted_at IS NULL AND status = 'completed'
+             AND TRIM(COALESCE(raw_text, text, '')) != ''
+           ORDER BY id ASC
+           LIMIT ?`
+        )
+        .all(cursor, safeLimit);
+
+      let inserted = 0;
+      let skipped = 0;
+      const fallbackTime = new Date();
+      const clearState = this.db
+        .prepare("SELECT cleared_through FROM analytics_device_clear_state WHERE id = 1")
+        .get();
+      const clearedThrough = clearState ? Date.parse(clearState.cleared_through) : Number.NaN;
+      const insert = this.db.prepare(
+        `INSERT INTO analytics_events (
+           event_id, account_id, occurred_at, local_date, word_count,
+           spoken_duration_ms, mode, provider, model, counter_version
+         ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(event_id) DO NOTHING`
+      );
+      const setMetadata = this.db.prepare(
+        `INSERT INTO analytics_metadata (key, value) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+      );
+      const assignClientId = this.db.prepare(
+        `UPDATE transcriptions SET client_transcription_id = ?
+         WHERE id = ? AND (client_transcription_id IS NULL OR TRIM(client_transcription_id) = '')`
+      );
+
+      const writeBatch = this.db.transaction(() => {
+        for (const row of rows) {
+          const wordCount = countSpokenWords(row.raw_text || row.text);
+          if (wordCount === 0) {
+            skipped += 1;
+            continue;
+          }
+
+          const storedOccurredAt = parseAnalyticsTimestamp(row.created_at, row.timestamp);
+          if (
+            clearState &&
+            (!storedOccurredAt ||
+              !Number.isFinite(clearedThrough) ||
+              storedOccurredAt.getTime() <= clearedThrough)
+          ) {
+            skipped += 1;
+            continue;
+          }
+          const occurredAt = storedOccurredAt ?? fallbackTime;
+
+          const eventId = row.client_transcription_id?.trim() || randomUUID();
+          if (!row.client_transcription_id?.trim()) assignClientId.run(eventId, row.id);
+          const result = insert.run(
+            eventId,
+            occurredAt.toISOString(),
+            localDateKey(occurredAt),
+            wordCount,
+            Number(row.audio_duration_ms) > 0 ? Number(row.audio_duration_ms) : null,
+            inferHistoricalAnalyticsMode(row.provider),
+            row.provider || null,
+            row.model || null,
+            ANALYTICS_COUNTER_VERSION
+          );
+          if (result.changes > 0) inserted += 1;
+          else skipped += 1;
+        }
+
+        if (rows.length > 0) {
+          setMetadata.run("history_backfill_cursor", String(rows[rows.length - 1].id));
+        }
+        if (rows.length < safeLimit) {
+          setMetadata.run("history_backfill_version", "1");
+          this.db
+            .prepare("DELETE FROM analytics_metadata WHERE key = 'history_backfill_cursor'")
+            .run();
+        }
+      });
+      writeBatch();
+
+      return {
+        complete: rows.length < safeLimit,
+        scanned: rows.length,
+        inserted,
+        skipped,
+      };
+    } catch (error) {
+      debugLogger.error(
+        "Error backfilling analytics history",
+        { error: error.message },
+        "database"
+      );
       throw error;
     }
   }
