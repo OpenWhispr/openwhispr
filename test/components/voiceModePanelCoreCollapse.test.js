@@ -243,7 +243,10 @@ test("onCollapsed ignores a clip-path transitionend that bubbled up from a desce
       )
     );
   });
-  const child = findElement(container, (el) => (el.getAttribute("class") || "") === "fake-descendant");
+  const child = findElement(
+    container,
+    (el) => (el.getAttribute("class") || "") === "fake-descendant"
+  );
   assert.ok(child, "fixture setup: the descendant child renders");
 
   await React.act(async () => {

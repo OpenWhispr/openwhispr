@@ -53,6 +53,10 @@ const AGENT_DICTATION_PILL_SIZE = Object.freeze({ ...WINDOW_SIZES.BASE });
 // renderer's own opacity fade. The main process has no import path into that
 // renderer-only module, so this is a deliberate, named duplicate of the same
 // value rather than a derived one; the +20ms grace below is this file's own.
+// Exposed as WindowManager.AGENT_DICTATION_PILL_FADE_MS (below the class) so
+// a test binds the two values together instead of letting them drift apart
+// silently — the exact duplicated-literal class of regression this plan has
+// already cost fix rounds on elsewhere (fix round 1, finding 3).
 const AGENT_DICTATION_PILL_FADE_MS = 160;
 const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
 const { ONBOARDING_DEMO_KINDS, isOnboardingInputAllowed } = require("./onboardingInputPolicy");
@@ -2069,27 +2073,10 @@ class WindowManager {
   }
 
   showAgentDictationPill() {
-    let pillWindow = this.agentDictationPillWindow;
-    if (pillWindow && !pillWindow.isDestroyed() && this._agentDictationPillHideTimer) {
-      // A show cancels a pending fade-then-hide — the window must stay put,
-      // not disappear out from under a request that arrived mid-fade. Only
-      // meaningful when a hide was actually in flight: an ordinary show (no
-      // pending hide, e.g. the very first show once did-finish-load marks
-      // the companion ready) must not tell the renderer to reverse a fade it
-      // never started. Runs ahead of the guards below: a show can be
-      // requested (and must still cancel a pending hide) even while
-      // onboarding or a closed panel stops the rest of this method from
-      // doing anything else.
-      clearTimeout(this._agentDictationPillHideTimer);
-      this._agentDictationPillHideTimer = null;
-      if (this._agentDictationPillReady) {
-        pillWindow.webContents.send("agent-dictation-pill-will-show");
-      }
-    }
-
     if (this._onboardingActive) return;
     if (!this._assistantPanelOpen || !this.mainWindow || this.mainWindow.isDestroyed()) return;
 
+    let pillWindow = this.agentDictationPillWindow;
     if (!pillWindow || pillWindow.isDestroyed()) {
       pillWindow = new BrowserWindow({
         ...NOTIFICATION_WINDOW_CONFIG,
@@ -2118,6 +2105,13 @@ class WindowManager {
         this.agentDictationPillWindow = null;
         this._agentDictationPillReady = false;
         this._agentDictationPillSize = AGENT_DICTATION_PILL_SIZE;
+        // A pending fade-then-hide belongs to THIS window; without clearing
+        // it here, a stale timer outlives the window it was scheduled for
+        // and later runs _hideAgentDictationPillNow() against whatever
+        // replacement window has since taken agentDictationPillWindow's
+        // place (fix round 1, finding 2).
+        clearTimeout(this._agentDictationPillHideTimer);
+        this._agentDictationPillHideTimer = null;
       });
       pillWindow.webContents.on("did-finish-load", () => {
         if (this.agentDictationPillWindow !== pillWindow) return;
@@ -2140,6 +2134,12 @@ class WindowManager {
         // Readiness must drop immediately: with a dead renderer the fail-closed
         // dictation gate would otherwise approve recordings nobody can see.
         this._agentDictationPillReady = false;
+        // close() is asynchronous — `closed` (above) won't run until later,
+        // so a pending fade-then-hide timer is cleared here too rather than
+        // relying on that eventual cleanup (same reasoning as `closed`,
+        // fix round 1, finding 2).
+        clearTimeout(this._agentDictationPillHideTimer);
+        this._agentDictationPillHideTimer = null;
         if (!pillWindow.isDestroyed()) pillWindow.close();
       });
 
@@ -2163,6 +2163,21 @@ class WindowManager {
     }
 
     if (!this._agentDictationPillReady) return;
+    // A show cancels a pending fade-then-hide — the window must stay put,
+    // not disappear out from under a request that arrived mid-fade. This
+    // must sit AFTER the guards above, not before: a show request that is
+    // itself blocked (onboarding, panel closed) must never cancel a pending
+    // hide it cannot honour, or the fade completes its "will-hide" half but
+    // never its native hide, stranding the pill visible with nothing left
+    // to hide it (fix round 1, finding 1). Only meaningful when a hide was
+    // actually in flight: an ordinary show (no pending hide, e.g. the very
+    // first show once did-finish-load marks the companion ready) must not
+    // tell the renderer to reverse a fade it never started.
+    if (this._agentDictationPillHideTimer) {
+      clearTimeout(this._agentDictationPillHideTimer);
+      this._agentDictationPillHideTimer = null;
+      pillWindow.webContents.send("agent-dictation-pill-will-show");
+    }
     this.positionAgentDictationPill();
     WindowPositionUtil.setupAlwaysOnTop(pillWindow);
     if (!pillWindow.isVisible()) pillWindow.showInactive();
@@ -2695,5 +2710,10 @@ class WindowManager {
     });
   }
 }
+
+// Exposed so a test that can see both this file and springEasing.ts (which
+// this main-process file cannot import) can bind the two duplicated values
+// together — see AGENT_DICTATION_PILL_FADE_MS's own comment above.
+WindowManager.AGENT_DICTATION_PILL_FADE_MS = AGENT_DICTATION_PILL_FADE_MS;
 
 module.exports = WindowManager;
