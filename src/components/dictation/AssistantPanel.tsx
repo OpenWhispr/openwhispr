@@ -2,7 +2,6 @@ import {
   memo,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -22,7 +21,7 @@ import { useWindowDrag } from "../../hooks/useWindowDrag";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { formatHotkeyListLabel } from "../../utils/hotkeys";
 import { MOTION_TIMING } from "../../utils/springEasing";
-import { splitStreamingMarkdown, countWords } from "../../utils/streamingMarkdown";
+import { splitStreamingMarkdown } from "../../utils/streamingMarkdown";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
   resolveAssistantFooterPresentation,
@@ -311,27 +310,36 @@ export function AssistantPanel({
         : { settled: displayedResponse, tail: "" },
     [displayedResponse, isStreamingNow]
   );
-  // Words already risen in the current tail; reset whenever the tail restarts
-  // (a paragraph boundary just moved its words into the settled half, so the
-  // new, shorter tail's words are all new again).
-  const risenWordsRef = useRef(0);
-  const tailWordCount = countWords(tailMarkdown);
-  if (tailWordCount < risenWordsRef.current) risenWordsRef.current = 0;
-  const firstNewWordIndex = risenWordsRef.current;
-  useLayoutEffect(() => {
-    risenWordsRef.current = tailWordCount;
-  });
+  // Sticky per-word rise state for the tail's current settled-prefix cycle:
+  // real (HAST-order) word index -> its assigned delay, mutated in place by
+  // rehypeWordRise. Reset only when settledMarkdown itself changes — a
+  // paragraph boundary just moved words out from under the tail, so the new,
+  // shorter tail's indices restart at 0 — never by comparing word COUNTS:
+  // countWords(tailMarkdown) counts raw-markdown tokens ("-", "##", "1.",
+  // ">" all count as words there) while rehypeWordRise indexes real,
+  // parsed words, so the two counts can permanently disagree for anything
+  // but a plain paragraph (fix round 1, finding 1 — see rehypeWordRise.ts
+  // for the sticky-delay half of that same fix, finding 3).
+  const risenWordsRef = useRef<Map<number, number>>(new Map());
+  const settledMarkdownRef = useRef(settledMarkdown);
+  if (settledMarkdownRef.current !== settledMarkdown) {
+    settledMarkdownRef.current = settledMarkdown;
+    risenWordsRef.current = new Map();
+  }
   // unified/react-markdown's rehypePlugins entries must be [attacher, options]
   // tuples — unified calls the attacher itself at freeze time. Passing the
   // already-invoked transformer directly (rehypeWordRise({...})) makes
   // unified call THAT as the attacher with no arguments, crashing on an
-  // undefined tree the moment a reply streams.
-  const tailPlugins = useMemo<
-    Array<[typeof rehypeWordRise, { firstNewWordIndex: number; staggerMs: number }]>
-  >(
-    () => [[rehypeWordRise, { firstNewWordIndex, staggerMs: MOTION_TIMING.wordStaggerMs }]],
-    [firstNewWordIndex]
-  );
+  // undefined tree the moment a reply streams. Computed plain (no useMemo):
+  // react-markdown reprocesses whenever `content` changes regardless of
+  // whether this array's own reference is stable, and risenWordsRef.current
+  // is read fresh here every render anyway (a ref, not reactive state), so
+  // memoizing it would only add a dependency-array correctness question
+  // (what actually invalidates it — settledMarkdown changing, which the
+  // factory function doesn't itself reference) for no real benefit.
+  const tailPlugins: Array<[typeof rehypeWordRise, { risenWords: Map<number, number>; staggerMs: number }]> = [
+    [rehypeWordRise, { risenWords: risenWordsRef.current, staggerMs: MOTION_TIMING.wordStaggerMs }],
+  ];
 
   // Keep the previous response ineligible throughout a follow-up request. Audio
   // processing can return voiceState to idle one render before the chat stream

@@ -23,249 +23,15 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const React = require("react");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installInteractiveDom,
+  findElement,
+  findAllElements,
+} = require("../lib/rendererTestHarness");
 
 const noop = () => {};
-
-// Adapted from test/helpers/assistantPanel.test.js's installInteractiveDom —
-// the minimal fake DOM this repo already uses to run react-dom's createRoot
-// under Node for interactive (not just static-markup) component tests. Kept
-// as a local copy rather than a shared import so this task's test stays
-// self-contained; the two will drift only in the sense that either could be
-// extracted later, not in behavior.
-function installInteractiveDom(t) {
-  const originalDocument = globalThis.document;
-  const originalNode = globalThis.Node;
-  const originalElement = globalThis.Element;
-  const originalHTMLElement = globalThis.HTMLElement;
-  const originalHTMLIFrameElement = globalThis.HTMLIFrameElement;
-  const originalActEnvironment = globalThis.IS_REACT_ACT_ENVIRONMENT;
-  const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
-  const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
-
-  class FakeNode {
-    constructor(nodeType, nodeName, ownerDocument) {
-      this.nodeType = nodeType;
-      this.nodeName = nodeName;
-      this.ownerDocument = ownerDocument;
-      this.parentNode = null;
-      this.childNodes = [];
-    }
-
-    appendChild(child) {
-      return this.insertBefore(child, null);
-    }
-
-    insertBefore(child, before) {
-      if (child.parentNode) child.parentNode.removeChild(child);
-      const index = before === null ? this.childNodes.length : this.childNodes.indexOf(before);
-      this.childNodes.splice(index < 0 ? this.childNodes.length : index, 0, child);
-      child.parentNode = this;
-      return child;
-    }
-
-    removeChild(child) {
-      const index = this.childNodes.indexOf(child);
-      if (index >= 0) this.childNodes.splice(index, 1);
-      child.parentNode = null;
-      return child;
-    }
-
-    contains(candidate) {
-      for (let current = candidate; current; current = current.parentNode) {
-        if (current === this) return true;
-      }
-      return false;
-    }
-
-    get firstChild() {
-      return this.childNodes[0] ?? null;
-    }
-
-    get lastChild() {
-      return this.childNodes.at(-1) ?? null;
-    }
-
-    get nextSibling() {
-      if (!this.parentNode) return null;
-      const index = this.parentNode.childNodes.indexOf(this);
-      return this.parentNode.childNodes[index + 1] ?? null;
-    }
-
-    get textContent() {
-      return this.childNodes.map((child) => child.textContent).join("");
-    }
-
-    set textContent(value) {
-      for (const child of this.childNodes) child.parentNode = null;
-      this.childNodes = [];
-      if (value !== "") this.appendChild(this.ownerDocument.createTextNode(String(value)));
-    }
-  }
-
-  class Element extends FakeNode {}
-  class HTMLElement extends Element {}
-  class HTMLIFrameElement extends HTMLElement {}
-
-  class FakeText extends FakeNode {
-    constructor(value, ownerDocument) {
-      super(3, "#text", ownerDocument);
-      this.nodeValue = value;
-    }
-
-    get textContent() {
-      return this.nodeValue;
-    }
-
-    set textContent(value) {
-      this.nodeValue = String(value);
-    }
-  }
-
-  class FakeElement extends HTMLElement {
-    constructor(tagName, ownerDocument, namespaceURI = "http://www.w3.org/1999/xhtml") {
-      super(1, tagName.toUpperCase(), ownerDocument);
-      this.tagName = tagName.toUpperCase();
-      this.namespaceURI = namespaceURI;
-      this.attributes = new Map();
-      this.listeners = new Map();
-      this.style = {
-        setProperty: (name, value) => {
-          this.style[name] = value;
-        },
-        removeProperty: (name) => {
-          delete this.style[name];
-        },
-      };
-    }
-
-    setAttribute(name, value) {
-      this.attributes.set(name, String(value));
-    }
-
-    getAttribute(name) {
-      return this.attributes.get(name) ?? null;
-    }
-
-    removeAttribute(name) {
-      this.attributes.delete(name);
-    }
-
-    addEventListener(type, listener) {
-      const listeners = this.listeners.get(type) ?? new Set();
-      listeners.add(listener);
-      this.listeners.set(type, listeners);
-    }
-
-    removeEventListener(type, listener) {
-      this.listeners.get(type)?.delete(listener);
-    }
-
-    dispatchEvent(event) {
-      if (!event.target) event.target = this;
-      for (let current = this; current; current = event.bubbles ? current.parentNode : null) {
-        event.currentTarget = current;
-        for (const listener of current.listeners?.get(event.type) ?? []) listener(event);
-        if (event.cancelBubble) break;
-      }
-      return !event.defaultPrevented;
-    }
-
-    focus() {
-      this.ownerDocument.activeElement = this;
-    }
-  }
-
-  const documentListeners = new Map();
-  const document = {
-    nodeType: 9,
-    nodeName: "#document",
-    activeElement: null,
-    createElement: (tagName) => new FakeElement(tagName, document),
-    createElementNS: (namespaceURI, tagName) => new FakeElement(tagName, document, namespaceURI),
-    createTextNode: (value) => new FakeText(String(value), document),
-    createComment: (value) => {
-      const comment = new FakeNode(8, "#comment", document);
-      comment.nodeValue = String(value);
-      return comment;
-    },
-    addEventListener(type, listener) {
-      const listeners = documentListeners.get(type) ?? new Set();
-      listeners.add(listener);
-      documentListeners.set(type, listeners);
-    },
-    removeEventListener(type, listener) {
-      documentListeners.get(type)?.delete(listener);
-    },
-  };
-  const container = new FakeElement("div", document);
-  document.documentElement = container;
-  document.body = container;
-  document.defaultView = globalThis.window;
-  Object.assign(globalThis.window, {
-    Node: FakeNode,
-    Element,
-    HTMLElement,
-    HTMLIFrameElement,
-    document,
-    getSelection: () => ({
-      isCollapsed: true,
-      rangeCount: 0,
-      removeAllRanges() {},
-    }),
-  });
-  globalThis.document = document;
-  globalThis.Node = FakeNode;
-  globalThis.Element = Element;
-  globalThis.HTMLElement = HTMLElement;
-  globalThis.HTMLIFrameElement = HTMLIFrameElement;
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  globalThis.requestAnimationFrame = (callback) => {
-    callback();
-    return 1;
-  };
-  globalThis.cancelAnimationFrame = noop;
-
-  t.after(() => {
-    if (originalDocument === undefined) delete globalThis.document;
-    else globalThis.document = originalDocument;
-    if (originalNode === undefined) delete globalThis.Node;
-    else globalThis.Node = originalNode;
-    if (originalElement === undefined) delete globalThis.Element;
-    else globalThis.Element = originalElement;
-    if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
-    else globalThis.HTMLElement = originalHTMLElement;
-    if (originalHTMLIFrameElement === undefined) delete globalThis.HTMLIFrameElement;
-    else globalThis.HTMLIFrameElement = originalHTMLIFrameElement;
-    if (originalActEnvironment === undefined) delete globalThis.IS_REACT_ACT_ENVIRONMENT;
-    else globalThis.IS_REACT_ACT_ENVIRONMENT = originalActEnvironment;
-    if (originalRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
-    else globalThis.requestAnimationFrame = originalRequestAnimationFrame;
-    if (originalCancelAnimationFrame === undefined) delete globalThis.cancelAnimationFrame;
-    else globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
-  });
-
-  return container;
-}
-
-function findElement(root, predicate) {
-  if (root.nodeType === 1 && predicate(root)) return root;
-  for (const child of root.childNodes) {
-    const match = findElement(child, predicate);
-    if (match) return match;
-  }
-  return null;
-}
-
-function findAllElements(root, predicate) {
-  const found = [];
-  const walk = (node) => {
-    if (node.nodeType === 1 && predicate(node)) found.push(node);
-    for (const child of node.childNodes) walk(child);
-  };
-  walk(root);
-  return found;
-}
 
 // Mounts the REAL AssistantPanel with everything except its heavy app-wiring
 // dependencies mocked (same list test/helpers/assistantPanel.test.js already
@@ -552,4 +318,201 @@ test("the tail's per-word rise delay is wired to MOTION_TIMING.wordStaggerMs, no
       `${2 * MOTION_TIMING.wordStaggerMs}ms`,
     ]
   );
+});
+
+// Fix round 1, finding 1: the word-index bookkeeping used to derive
+// firstNewWordIndex from countWords(tailMarkdown) — a count of
+// whitespace-separated RAW MARKDOWN tokens. Markdown syntax ("- ", "1. ",
+// "## ", "> ") tokenizes into extra "words" there that do not exist once
+// actually rendered (rehypeWordRise counts only real, parsed words), so the
+// two counts permanently disagree for anything but a plain paragraph — the
+// threshold overshoots the real index and, within a couple of renders, NO
+// further real word is ever marked as new again. A plain-paragraph fixture
+// cannot see this (its raw token count and real word count happen to match
+// exactly), which is exactly why every fixture up to this point missed it.
+//
+// Each case below streams the SAME content across three growing stages
+// (mirroring real token-by-token arrival) and asserts that words from every
+// stage — not just the very first one ever seen — eventually carry a rise
+// trigger.
+async function assertAllWordsEventuallyRise(t, stages, expectedWords) {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+  for (const content of stages) {
+    await setAssistantMessage(content, true);
+  }
+  const risenTexts = new Set(riseSpans(container).map((span) => span.textContent));
+  for (const word of expectedWords) {
+    assert.ok(
+      risenTexts.has(word),
+      `expected "${word}" to have risen at some point; words that actually rose: ${[...risenTexts].join(", ") || "(none)"}`
+    );
+  }
+}
+
+test("a bullet list's later items still rise, not just the first word ever seen (fix round 1, finding 1)", async (t) => {
+  await assertAllWordsEventuallyRise(
+    t,
+    ["- Alpha", "- Alpha\n- Bravo", "- Alpha\n- Bravo\n- Charlie"],
+    ["Alpha", "Bravo", "Charlie"]
+  );
+});
+
+test("an ordered list's later items still rise, not just the first word ever seen (fix round 1, finding 1)", async (t) => {
+  await assertAllWordsEventuallyRise(
+    t,
+    ["1. Alpha", "1. Alpha\n2. Bravo", "1. Alpha\n2. Bravo\n3. Charlie"],
+    ["Alpha", "Bravo", "Charlie"]
+  );
+});
+
+test("a heading followed by paragraph text still rises past the heading (fix round 1, finding 1)", async (t) => {
+  await assertAllWordsEventuallyRise(
+    t,
+    ["## Alpha", "## Alpha\nBravo", "## Alpha\nBravo Charlie"],
+    ["Alpha", "Bravo", "Charlie"]
+  );
+});
+
+test("a blockquote's later words still rise, not just the first word ever seen (fix round 1, finding 1)", async (t) => {
+  await assertAllWordsEventuallyRise(
+    t,
+    ["> Alpha", "> Alpha Bravo", "> Alpha Bravo Charlie"],
+    ["Alpha", "Bravo", "Charlie"]
+  );
+});
+
+// Fix round 1, finding 3: firstNewWordIndex used to be a single threshold
+// recomputed every render, so a word marked "new" this render fell back
+// below the (advancing) threshold on the very next one — cancelling its
+// still-in-flight CSS animation and snapping it to its end state, rather
+// than letting the started rise finish. The direct, decisive signal is
+// this: once a word is assigned a delay, that EXACT delay must never
+// change while it's still in the tail — recomputing it (even to the "same"
+// value by coincidence) is exactly the bug; asserting byte-identical style
+// strings across renders is what would catch a regression back to
+// per-render recomputation.
+test("a word's rise delay never changes once assigned — an in-flight animation is never restarted (fix round 1, finding 3)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+
+  await setAssistantMessage("Echo foxtrot", true);
+  const echoBefore = riseSpans(container).find((span) => span.textContent === "Echo");
+  assert.ok(echoBefore, "expected Echo to have risen on its first appearance");
+  const echoDelay = echoBefore.style.animationDelay;
+
+  await setAssistantMessage("Echo foxtrot golf", true);
+  const echoAfterOneGrowth = riseSpans(container).find((span) => span.textContent === "Echo");
+  assert.ok(echoAfterOneGrowth, "Echo must still be marked risen after the tail grows once");
+  assert.equal(
+    echoAfterOneGrowth.style.animationDelay,
+    echoDelay,
+    "Echo's delay must be the exact same value — a changed value means its animation was recomputed, i.e. restarted"
+  );
+
+  await setAssistantMessage("Echo foxtrot golf hotel", true);
+  const echoAfterTwoGrowths = riseSpans(container).find((span) => span.textContent === "Echo");
+  assert.equal(
+    echoAfterTwoGrowths?.style.animationDelay,
+    echoDelay,
+    "still unchanged after a second growth — sticky, not a one-render coincidence"
+  );
+});
+
+// Fix round 1, finding 2: settled and tail are two INDEPENDENT documents —
+// each parsed on its own by a separate MarkdownRenderer call — so a
+// boundary that split a list, a fenced code block, or a blockquote used to
+// produce genuinely wrong rendered output (not just an animation
+// imperfection). These three tests drive the real component through the
+// exact symptoms the fix round measured, rather than only checking
+// splitStreamingMarkdown's boundary decisions in isolation (which cannot
+// prove what actually reaches the screen).
+test("a numbered list never splits into two <ol> elements while streaming, and settles as one unit (fix round 1, finding 2)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+  const listItems = () => findAllElements(container, (el) => el.tagName === "LI");
+  const orderedLists = () => findAllElements(container, (el) => el.tagName === "OL");
+
+  await setAssistantMessage("1. First", true);
+  assert.equal(orderedLists().length, 1, "one item so far: exactly one <ol>");
+  assert.equal(listItems().length, 1);
+
+  await setAssistantMessage("1. First\n\n2. Second", true);
+  assert.equal(
+    orderedLists().length,
+    1,
+    "a second item must join the SAME list — a split boundary would have produced a fresh, separately-numbered <ol> here"
+  );
+  assert.equal(listItems().length, 2);
+
+  await setAssistantMessage("1. First\n\n2. Second\n\n3. Third", true);
+  assert.equal(orderedLists().length, 1, "a third item must still be the same single list");
+  assert.equal(listItems().length, 3);
+
+  // A genuinely new block (not itself list-shaped) follows: the list is now
+  // complete and settles as one unit — still exactly one <ol>, never two.
+  await setAssistantMessage("1. First\n\n2. Second\n\n3. Third\n\nAfter", true);
+  assert.equal(orderedLists().length, 1, "the completed list must still be a single <ol>, not split across settled/tail");
+  assert.equal(listItems().length, 3);
+  assert.match(container.textContent, /After/);
+});
+
+test("a fenced code block's internal blank line never renders as a stray paragraph while the fence is still open (fix round 1, finding 2)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+  const codeBlocks = () => findAllElements(container, (el) => el.tagName === "PRE");
+  const strayParagraphs = () =>
+    findAllElements(container, (el) => el.tagName === "P" && el.textContent.includes("code2"));
+
+  await setAssistantMessage("Before.\n\n```js\ncode1", true);
+  assert.equal(codeBlocks().length, 1, "the opening fence must render as a code block from its first line");
+
+  // The blank line INSIDE the still-open fence looks exactly like a
+  // paragraph boundary by text alone — this is the specific case that used
+  // to split the fence's opener away from its own content.
+  await setAssistantMessage("Before.\n\n```js\ncode1\n\ncode2", true);
+  assert.equal(
+    strayParagraphs().length,
+    0,
+    "code2 must never render as a plain paragraph while the fence is still open"
+  );
+  assert.equal(codeBlocks().length, 1, "still one code block, now containing both lines");
+  assert.match(codeBlocks()[0].textContent, /code1/);
+  assert.match(codeBlocks()[0].textContent, /code2/);
+
+  // The fence closes, followed by unrelated text: still exactly one code
+  // block, and the following text is plain, not swallowed into it.
+  await setAssistantMessage("Before.\n\n```js\ncode1\n\ncode2\n```\n\nAfter", true);
+  assert.equal(codeBlocks().length, 1);
+  assert.equal(strayParagraphs().length, 0);
+  assert.match(container.textContent, /After/);
+});
+
+test("a loose list settles with every item consistently loose — never a tight/loose mismatch between older and newest items (fix round 1, finding 2)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+  const listItems = () => findAllElements(container, (el) => el.tagName === "LI");
+  const looseness = () => listItems().map((li) => li.childNodes.some((child) => child.tagName === "P"));
+  const assertUniformLooseness = (stageLabel) => {
+    const flags = looseness();
+    assert.ok(
+      flags.every((isLoose) => isLoose === flags[0]),
+      `at "${stageLabel}", every item must share the same loose/tight rendering, got: ${flags.join(", ")}`
+    );
+  };
+
+  await setAssistantMessage("- First\n\n- Second", true);
+  assertUniformLooseness("- First\n\n- Second");
+
+  // Mid-list, before anything proves it complete: this is the specific
+  // moment the bug showed up — a split boundary would have settled First
+  // and Second together (loose, since a blank line separates them) while
+  // Third sat alone in the tail (a single item, always tight on its own),
+  // visibly reflowing the instant it later joined the settled list.
+  await setAssistantMessage("- First\n\n- Second\n\n- Third", true);
+  assertUniformLooseness("- First\n\n- Second\n\n- Third (still streaming)");
+
+  // A trailing paragraph proves the list complete, settling all three items
+  // together as ONE parse — so CommonMark's loose/tight determination (a
+  // property of the WHOLE list, decided by whether ANY blank line
+  // separates its items) is made once, consistently, instead of being
+  // decided piecemeal as items crossed the boundary one at a time.
+  await setAssistantMessage("- First\n\n- Second\n\n- Third\n\nAfter", true);
+  assert.equal(listItems().length, 3);
+  assertUniformLooseness("list complete");
 });
