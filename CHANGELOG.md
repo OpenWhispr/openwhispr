@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.1](https://github.com/PlaybookMediaLLC/openwhispr/compare/v1.11.0...v1.11.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **release:** point the Oppulence Voice updater at the repo that publishes it ([8f65c40](https://github.com/PlaybookMediaLLC/openwhispr/commit/8f65c40cb44fdc9d92c11ca47dff08bb551472bb))
+
 # [1.11.0](https://github.com/PlaybookMediaLLC/openwhispr/compare/v1.10.0...v1.11.0) (2026-09-08)
 
 
