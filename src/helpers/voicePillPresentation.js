@@ -420,16 +420,64 @@ export function shouldHoldAgentMarkThroughHide({ floatingIconAutoHide, assistant
 }
 
 /**
+ * Everything OTHER than the Agent panel's own close that keeps the floating
+ * pill on screen: the auto-hide preconditions minus the panel itself. ONE
+ * list, read both by the auto-hide gate and by the mark-hold release below,
+ * because a release that guessed at a different set would either fire during
+ * the very close it is waiting for or miss the case that stranded it
+ * (Finding 3, final review 2026-09-08).
+ *
+ * `isPreparing` is deliberately absent: App.jsx's isVisuallyProcessing is
+ * already isProcessing || isPreparing || isStopping.
+ */
+export function isPillClaimedApartFromAssistant({
+  isRecording,
+  isVisuallyProcessing,
+  toastCount,
+  dictationErrorPillHandoffActive,
+  handsFreeTipVisible,
+  holdMigrationCardVisible,
+  liveTranscriptMounted,
+}) {
+  return Boolean(
+    isRecording ||
+    isVisuallyProcessing ||
+    toastCount !== 0 ||
+    dictationErrorPillHandoffActive ||
+    handsFreeTipVisible ||
+    holdMigrationCardVisible ||
+    liveTranscriptMounted
+  );
+}
+
+/**
  * Whether a held Agent mark must be released while the pill is still on
  * screen. The hold only exists to carry the leaf out of view, so anything
  * that keeps the pill there has to drop it: a new recording, which owns the
  * identity itself (a dictation wears the ring; an Agent command re-earns the
- * leaf through isAssistantVoice), and auto-hide being switched off, which
- * cancels the exit the hold was staged for. The third release — the
- * hideWindow IPC settling — is not derived state and lives at that call site.
+ * leaf through isAssistantVoice), auto-hide being switched off, which cancels
+ * the exit the hold was staged for, and — `autoHideExitCancelled` — some
+ * OTHER surface claiming the pill before the staged exit could run.
+ *
+ * That last one closes Finding 3 (final review 2026-09-08). Decision 8 listed
+ * only three releases, the third being the hideWindow IPC settling (not
+ * derived state, so it lives at that call site). The gap: with auto-hide on,
+ * a toast appearing inside the 500ms auto-hide delay makes the auto-hide
+ * branch's condition false, so the hide is never even SCHEDULED — no IPC ever
+ * settles, and the idle, fully visible pill wore the Agent leaf for the whole
+ * life of the toast. Same for a hands-free tip, a mounted live transcript, a
+ * dictation-error handoff, or processing starting. The caller passes
+ * "the auto-hide preconditions stopped holding, and it is not the Agent
+ * panel's own close still finishing" — the panel unmounting is what the hold
+ * is waiting for, never a reason to drop it.
  */
-export function shouldReleaseAgentMarkHold({ isRecording, isPreparing, floatingIconAutoHide }) {
-  return Boolean(isRecording || isPreparing || !floatingIconAutoHide);
+export function shouldReleaseAgentMarkHold({
+  isRecording,
+  isPreparing,
+  floatingIconAutoHide,
+  autoHideExitCancelled = false,
+}) {
+  return Boolean(isRecording || isPreparing || !floatingIconAutoHide || autoHideExitCancelled);
 }
 
 /**

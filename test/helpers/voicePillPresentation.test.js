@@ -647,6 +647,88 @@ test("a held agent mark is released by anything that keeps the pill on screen", 
   );
 });
 
+// Finding 3, final review 2026-09-08. Decision 8 lists exactly three
+// releases, and the third is the hideWindow IPC settling — which only ever
+// happens if the hide is SCHEDULED. It is not: App.jsx's auto-hide branch has
+// a precondition list, and anything on that list turning true inside the
+// 500ms delay makes the branch false, clears the pending timer and schedules
+// nothing. The hold then had no route out at all, so an idle, fully visible
+// pill wore the Agent leaf for the whole life of a toast. The previously
+// accepted premise — "it resolves when the toast clears and the hide fires" —
+// was wrong, because that hide is never armed.
+test("a held agent mark is released when something else claims the pill before the staged exit runs", async () => {
+  const { shouldReleaseAgentMarkHold } = await load();
+  const staged = {
+    isRecording: false,
+    isPreparing: false,
+    floatingIconAutoHide: true,
+    autoHideExitCancelled: false,
+  };
+
+  assert.equal(
+    shouldReleaseAgentMarkHold(staged),
+    false,
+    "the staged exit is still pending — keep holding the leaf"
+  );
+  assert.equal(
+    shouldReleaseAgentMarkHold({ ...staged, autoHideExitCancelled: true }),
+    true,
+    "a toast (or tip, or transcript) claiming the pill cancels the exit — release the leaf"
+  );
+  assert.equal(
+    shouldReleaseAgentMarkHold({
+      isRecording: false,
+      isPreparing: false,
+      floatingIconAutoHide: true,
+    }),
+    false,
+    "the new input defaults to false, so an omitted argument cannot release a hold by accident"
+  );
+});
+
+// The other half of the same fix: the release and the auto-hide gate must
+// read ONE precondition list. If they drift, the release either fires during
+// the Agent panel's own close (killing the feature outright) or misses the
+// case that stranded the hold.
+test("the pill's non-Agent claims are one list, and the Agent panel is deliberately not on it", async () => {
+  const { isPillClaimedApartFromAssistant } = await load();
+  const quiet = {
+    isRecording: false,
+    isVisuallyProcessing: false,
+    toastCount: 0,
+    dictationErrorPillHandoffActive: false,
+    handsFreeTipVisible: false,
+    holdMigrationCardVisible: false,
+    liveTranscriptMounted: false,
+  };
+
+  assert.equal(
+    isPillClaimedApartFromAssistant(quiet),
+    false,
+    "nothing on screen: the staged auto-hide exit is free to run"
+  );
+  for (const [key, value] of [
+    ["isRecording", true],
+    ["isVisuallyProcessing", true],
+    ["toastCount", 1],
+    ["dictationErrorPillHandoffActive", true],
+    ["handsFreeTipVisible", true],
+    ["holdMigrationCardVisible", true],
+    ["liveTranscriptMounted", true],
+  ]) {
+    assert.equal(
+      isPillClaimedApartFromAssistant({ ...quiet, [key]: value }),
+      true,
+      `${key} keeps the pill on screen, so it must block the auto-hide exit`
+    );
+  }
+  assert.equal(
+    isPillClaimedApartFromAssistant({ ...quiet, assistantPanelMounted: true }),
+    false,
+    "the Agent panel's own close is what the hold WAITS for — it must never count as a claim here"
+  );
+});
+
 test("Agent transcription contracts to the rotating thinking circle", async () => {
   const { resolveVoiceActivityPresentation } = await load();
   assert.deepEqual(

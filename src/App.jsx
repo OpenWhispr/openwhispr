@@ -44,6 +44,7 @@ import {
   resolveVoicePillDock,
   resolveVoicePillInteraction,
   resolveVoicePillTravelPresentation,
+  isPillClaimedApartFromAssistant,
   isVoicePillActivationKey,
   shouldActivateVoicePill,
   shouldHoldAgentMarkThroughHide,
@@ -475,29 +476,52 @@ export default function App() {
     closeAssistantPanel();
   }, [floatingIconAutoHide, assistant.mounted, closeAssistantPanel]);
 
-  // The two releases that are derived state. The third — the hide itself
+  // Everything OTHER than the Agent panel's own close that keeps the pill on
+  // screen. Read once, from the tested helper, so the mark-hold release below
+  // and the auto-hide effect after it can never drift apart — the release has
+  // to know exactly which preconditions the exit is waiting on (Finding 3,
+  // final review 2026-09-08).
+  const pillClaimedApartFromAssistant = isPillClaimedApartFromAssistant({
+    isRecording,
+    isVisuallyProcessing,
+    toastCount,
+    dictationErrorPillHandoffActive,
+    handsFreeTipVisible: handsFreeTip.tip !== null,
+    holdMigrationCardVisible: holdMigrationCard.visible,
+    liveTranscriptMounted: liveTranscript.mounted,
+  });
+
+  // The three releases that are derived state. The fourth — the hide itself
   // landing — is in the auto-hide effect below.
   useEffect(() => {
-    if (shouldReleaseAgentMarkHold({ isRecording, isPreparing, floatingIconAutoHide })) {
+    if (
+      shouldReleaseAgentMarkHold({
+        isRecording,
+        isPreparing,
+        floatingIconAutoHide,
+        // The Agent panel still being mounted is the close this hold was
+        // staged for, so it is never a cancellation. Anything else claiming
+        // the pill once that close has finished IS one: the auto-hide branch
+        // below then never schedules the hide, so no IPC can ever settle and
+        // release the mark.
+        autoHideExitCancelled: !assistant.mounted && pillClaimedApartFromAssistant,
+      })
+    ) {
       setAgentMarkHeldThroughHide(false);
     }
-  }, [isRecording, isPreparing, floatingIconAutoHide]);
+  }, [
+    isRecording,
+    isPreparing,
+    floatingIconAutoHide,
+    assistant.mounted,
+    pillClaimedApartFromAssistant,
+  ]);
 
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {
     let hideTimeout;
 
-    if (
-      floatingIconAutoHide &&
-      !isRecording &&
-      !isVisuallyProcessing &&
-      toastCount === 0 &&
-      !dictationErrorPillHandoffActive &&
-      handsFreeTip.tip === null &&
-      !holdMigrationCard.visible &&
-      !assistant.mounted &&
-      !liveTranscript.mounted
-    ) {
+    if (floatingIconAutoHide && !pillClaimedApartFromAssistant && !assistant.mounted) {
       // Delay briefly so processing can start after recording stops without a flash
       hideTimeout = setTimeout(() => {
         // Release a held Agent mark only once the window is actually gone, so
@@ -508,7 +532,8 @@ export default function App() {
         // than resolving on that. A hide that never lands keeps the pill on
         // screen, where a stale-but-static leaf is the smaller wrong than a
         // visible identity morph — and shouldReleaseAgentMarkHold above still
-        // clears it on the next recording or when auto-hide goes off.
+        // clears it on the next recording, when auto-hide goes off, or when
+        // something else claims the pill before this exit can run.
         void hideWithZoop().then((result) => {
           if (result.hidden) setAgentMarkHeldThroughHide(false);
         });
@@ -519,18 +544,11 @@ export default function App() {
 
     prevAutoHideRef.current = floatingIconAutoHide;
     return () => clearTimeout(hideTimeout);
-  }, [
-    isRecording,
-    isVisuallyProcessing,
-    floatingIconAutoHide,
-    toastCount,
-    dictationErrorPillHandoffActive,
-    handsFreeTip.tip,
-    holdMigrationCard.visible,
-    assistant.mounted,
-    liveTranscript.mounted,
-    hideWithZoop,
-  ]);
+    // pillClaimedApartFromAssistant stands in for the seven inputs it is
+    // derived from. While the 500ms timer is armed every one of them is
+    // pinned at its quiet value, so none can change without flipping this
+    // boolean — the effect re-runs on exactly the same commits as before.
+  }, [floatingIconAutoHide, pillClaimedApartFromAssistant, assistant.mounted, hideWithZoop]);
 
   // Memoized so the Escape listener below keeps binding once: hideWithZoop is
   // itself stable, and this closure now reads it rather than only globals.
