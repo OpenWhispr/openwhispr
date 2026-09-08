@@ -3,29 +3,45 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const source = fs.readFileSync(
-  path.join(__dirname, "../../src/helpers/ipcHandlers.js"),
-  "utf8"
-);
-const ensureMethod = source.slice(
-  source.indexOf("  async _ensureAnalyticsHistoryBackfilled()"),
-  source.indexOf("  // The dictation slot reports its own changes")
+const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
+
+// Anchored on the method's own signature and the one that follows it, so the
+// slice cannot silently widen to cover half the file.
+function sliceBetween(startAnchor, endAnchor) {
+  const start = source.indexOf(startAnchor);
+  assert.notEqual(start, -1, `anchor not found: ${startAnchor}`);
+  const end = source.indexOf(endAnchor, start + startAnchor.length);
+  assert.notEqual(end, -1, `anchor not found after ${startAnchor}: ${endAnchor}`);
+  return source.slice(start, end);
+}
+
+const ensureMethod = sliceBetween(
+  "  async _ensureAnalyticsHistoryBackfilled()",
+  "  // The dictation slot reports its own changes"
 );
 
 // Reconciliation runs ahead of every analytics read. Letting it reject means a
 // failed scan blanks a summary SQLite could have answered: InsightsView treats
 // a rejected getAnalyticsSummary as "reading local Insights failed" and shows
 // the error state instead of the numbers it already has.
+//
+// The absorbing catch has to sit on the shared promise, not around the
+// creator's await: a caller that arrives mid-pass is handed that promise
+// directly, so a catch outside it protects only whoever started the scan.
 test("a failed history backfill cannot fail the analytics read in front of it", () => {
-  assert.ok(ensureMethod.length > 0, "the slice must actually cover the method");
+  const joinReturn = ensureMethod.indexOf("return this._analyticsHistoryBackfillPromise;");
+  const absorbingCatch = ensureMethod.indexOf(".catch((error) => {");
+  assert.notEqual(joinReturn, -1, "joining callers must be handed the shared promise");
+  assert.notEqual(absorbingCatch, -1, "the shared promise must absorb its own failure");
+  assert.ok(
+    absorbingCatch <
+      ensureMethod.indexOf("this._analyticsHistoryBackfillPromise = backfillPromise"),
+    "the catch must be attached before the promise is published to joining callers"
+  );
   assert.equal(
     /catch \(error\) \{[\s\S]*?\bthrow\b/.test(ensureMethod),
     false,
     "the backfill must absorb its own failure rather than rethrow into the handler"
-  );
-  assert.ok(
-    ensureMethod.includes("return { inserted: 0, scanned: 0 };"),
-    "a failed pass still has to answer its callers"
   );
 });
 
@@ -51,26 +67,44 @@ test("a completed pass is not repeated on the next analytics read", () => {
   );
 });
 
-// The checkpoint is only safe if everything that can add an eligible row
-// retires it. A new dictation records its own event, so the writes that matter
-// are a retry that lands and a transcription pulled from the cloud.
-test("both writes that can add eligible history retire the checkpoint", () => {
-  const pullHandler = source.slice(
-    source.indexOf('ipcMain.handle("db-upsert-transcription-from-cloud"'),
-    source.indexOf('ipcMain.handle("db-mark-transcription-synced"')
+// The checkpoint is only sound if every write that can leave a completed
+// transcription without an analytics event retires it. Each of these is sliced
+// to its own handler so the assertion cannot be satisfied by a sibling's call.
+test("every write that can strand a dictation retires the checkpoint", () => {
+  const invalidator = "this._invalidateAnalyticsHistoryBackfill();";
+
+  const cloudPull = sliceBetween(
+    'ipcMain.handle("db-upsert-transcription-from-cloud"',
+    'ipcMain.handle("db-mark-transcription-synced"'
   );
   assert.ok(
-    pullHandler.includes("this._analyticsHistoryRevision += 1"),
-    "a cloud pull brings history this device has never reconciled"
+    cloudPull.includes(invalidator),
+    "a cloud pull brings history this device has never reconciled, and can flip a row to completed"
   );
 
-  const retryPath = source.slice(
-    source.indexOf('broadcastToWindows("transcription-updated", updated)')
+  const retry = sliceBetween(
+    'ipcMain.handle("retry-transcription"',
+    "return { success: true, transcription: updated };"
   );
   assert.ok(
-    retryPath
-      .slice(0, retryPath.indexOf("return { success: true, transcription: updated };"))
-      .includes("this._analyticsHistoryRevision += 1"),
+    retry.includes(invalidator),
     "a retry that reaches completed makes its own row eligible"
+  );
+
+  // The renderer only warns when the live write fails and still saves the
+  // transcription, so this is the path that strands an ordinary dictation.
+  const recordEvent = sliceBetween(
+    'ipcMain.handle("analytics-record-event"',
+    'ipcMain.handle("analytics-get-summary"'
+  );
+  assert.ok(
+    recordEvent.includes(invalidator),
+    "a live analytics write that throws leaves a completed row only the backfill will reconcile"
+  );
+
+  assert.equal(
+    source.split(invalidator).length - 1,
+    3,
+    "a new invalidation site needs a case here saying which write it covers"
   );
 });

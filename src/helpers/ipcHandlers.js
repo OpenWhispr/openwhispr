@@ -683,6 +683,14 @@ class IPCHandlers {
     }
   }
 
+  // Every write that can leave a completed transcription without an analytics
+  // event goes through here. Missing one is the failure mode this checkpoint
+  // has -- the row waits for the next process start instead of the next read --
+  // so the call sites are named rather than open-coded.
+  _invalidateAnalyticsHistoryBackfill() {
+    this._analyticsHistoryRevision += 1;
+  }
+
   // Reconciliation is best-effort. Analytics reads await it so later-eligible
   // history shows up before the numbers are read, which means a failure here
   // must never fail the read itself: a broken scan would otherwise blank an
@@ -693,6 +701,11 @@ class IPCHandlers {
     }
     if (this._analyticsHistoryBackfillPromise) return this._analyticsHistoryBackfillPromise;
     const startingRevision = this._analyticsHistoryRevision;
+    // The failure is absorbed inside this promise rather than around the
+    // creator's await, because callers that join an in-flight pass are handed
+    // this promise directly and would otherwise receive the raw rejection --
+    // which is every analytics read that arrives while the startup pass is
+    // still scanning.
     const backfillPromise = (async () => {
       let inserted = 0;
       let scanned = 0;
@@ -723,16 +736,20 @@ class IPCHandlers {
         );
       }
       return { inserted, scanned };
-    })();
-    this._analyticsHistoryBackfillPromise = backfillPromise;
-    try {
-      return await backfillPromise;
-    } catch (error) {
+    })().catch((error) => {
       debugLogger.error("Analytics history backfill failed", { error: error.message }, "analytics");
       return { inserted: 0, scanned: 0 };
-    } finally {
-      this._analyticsHistoryBackfillPromise = null;
-    }
+    });
+    this._analyticsHistoryBackfillPromise = backfillPromise;
+    // Cleared after the assignment above, never inside the pass: a scan that
+    // finishes without ever awaiting would otherwise strand its own resolved
+    // promise here and every later read would join a pass that already ended.
+    void backfillPromise.then(() => {
+      if (this._analyticsHistoryBackfillPromise === backfillPromise) {
+        this._analyticsHistoryBackfillPromise = null;
+      }
+    });
+    return backfillPromise;
   }
 
   // The dictation slot reports its own changes from the renderer. Slots
@@ -1464,7 +1481,16 @@ class IPCHandlers {
     });
 
     ipcMain.handle("analytics-record-event", async (_event, input) => {
-      const result = this.databaseManager.recordAnalyticsEvent(input);
+      // The renderer only warns when this write fails, then saves the
+      // transcription as completed anyway -- leaving a row the backfill is
+      // the only thing that will ever reconcile.
+      let result;
+      try {
+        result = this.databaseManager.recordAnalyticsEvent(input);
+      } catch (error) {
+        this._invalidateAnalyticsHistoryBackfill();
+        throw error;
+      }
       // Dictation and the control panel are separate renderers, so the
       // Insights view can only learn about a new event through the main process.
       if (result?.success && !result.ignored) {
@@ -2566,7 +2592,7 @@ class IPCHandlers {
       // Pulled history predates this device's analytics events, and the upsert
       // can also flip an existing row to completed. Left to the next analytics
       // read rather than started here: a pull arrives one row at a time.
-      this._analyticsHistoryRevision += 1;
+      this._invalidateAnalyticsHistoryBackfill();
       return this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription);
     });
     ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId) =>
@@ -6294,7 +6320,7 @@ class IPCHandlers {
           setImmediate(() => {
             broadcastToWindows("transcription-updated", updated);
             // A row that just reached "completed" is newly eligible.
-            this._analyticsHistoryRevision += 1;
+            this._invalidateAnalyticsHistoryBackfill();
             void this._ensureAnalyticsHistoryBackfilled();
           });
         }

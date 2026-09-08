@@ -264,6 +264,39 @@ test("a dictation whose time cannot be read stays out instead of landing on toda
   assert.equal(summary.currentStreakDays, 0, "and must not manufacture a streak");
 });
 
+// SQLite reads a bare YYYY-MM-DD as carrying a zone, because the day hyphen
+// sits six characters from the end, so the query's shape test admits a row the
+// JS side then dates from created_at instead. Nothing writes that shape today,
+// but the boundary has to hold on the instant actually written, not on the
+// column the query happened to filter.
+test("history the user cleared cannot come back through a mis-shaped timestamp", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.db
+    .prepare(
+      `INSERT INTO transcriptions (
+         text, status, client_transcription_id, timestamp, created_at
+       ) VALUES ('cleared words', 'completed', 'shape-bypass', '2027-01-01',
+                 '2026-01-02 03:04:05')`
+    )
+    .run();
+  db.db
+    .prepare(
+      "INSERT INTO analytics_device_clear_state (id, cleared_through) VALUES (1, '2026-08-15T00:00:00.000Z')"
+    )
+    .run();
+
+  assert.deepEqual(db.backfillAnalyticsHistoryBatch(), {
+    complete: true,
+    nextCursor: 1,
+    scanned: 1,
+    inserted: 0,
+    skipped: 1,
+  });
+  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
+});
+
 // upsertTranscriptionFromCloud carries the cloud created_at but lets timestamp
 // default to the local pull, so trusting a naive timestamp would date every
 // pulled dictation to the day this device happened to sync.

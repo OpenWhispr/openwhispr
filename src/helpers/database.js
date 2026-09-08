@@ -1303,7 +1303,6 @@ class DatabaseManager {
       // spoken rather than when the row was written -- earlier by the length
       // of the recording plus transcription. History reads it through
       // normalizeDbDate, which already branches on a trailing zone.
-      //
       // Keep the existing SQLite-friendly separator so mixed old/new rows
       // continue to sort chronologically, while the trailing Z marks this as
       // an exact client-captured instant for clear-state reconciliation.
@@ -1382,6 +1381,7 @@ class DatabaseManager {
 
       let inserted = 0;
       let skipped = 0;
+      const clearedThrough = clearState ? Date.parse(clearState.cleared_through) : null;
       const insert = this.db.prepare(
         `INSERT INTO analytics_events (
            event_id, account_id, occurred_at, local_date, word_count,
@@ -1404,19 +1404,27 @@ class DatabaseManager {
           }
 
           const createdAt = parseAnalyticsTimestamp(row.created_at);
-          const timestampAt = parseAnalyticsTimestamp(row.timestamp);
-          // The query above is the single owner of the clear boundary: it
-          // already admits a row only when its timestamp is a client-captured
-          // instant strictly newer than cleared_through. Re-deriving that here
-          // would be a second definition of the same rule.
+          // A naive timestamp can be a sync artifact rather than an occurrence
+          // time, so it is never the answer: created_at carries the cloud row's
+          // own instant, while timestamp defaulted to the moment of the pull.
           const occurredAt =
-            (hasExplicitAnalyticsTimestamp(row.timestamp) ? timestampAt : null) ??
-            createdAt ??
-            timestampAt;
-          // Falling back to now would date an old dictation today, inflating
+            (hasExplicitAnalyticsTimestamp(row.timestamp)
+              ? parseAnalyticsTimestamp(row.timestamp)
+              : null) ?? createdAt;
+          // Guessing a date would put an old dictation on today, inflating
           // today's counters and manufacturing a current streak out of a row
           // whose age we could not read. It stays out instead.
           if (!occurredAt) {
+            skipped += 1;
+            continue;
+          }
+          // Guards the instant actually written, which the query cannot: it
+          // filters on transcription.timestamp, and the value chosen above may
+          // be created_at instead. The two also disagree on shape -- SQLite
+          // reads a bare YYYY-MM-DD as zoned, because the day hyphen sits six
+          // from the end -- so this is the boundary that holds, not a
+          // restatement of the one above.
+          if (clearedThrough !== null && occurredAt.getTime() <= clearedThrough) {
             skipped += 1;
             continue;
           }
