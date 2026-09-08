@@ -577,28 +577,38 @@ test("the pill's travel between docks can be driven onto the morph spring by an 
 // no CSS syntax for "this duration applies to THESE named properties only"
 // once transition-property itself is a fixed, unrelated list.
 //
-// Separately, and independently: .voice-pill-position never transitions
-// opacity in the FIRST place, in EITHER motion mode. Measured: its own
-// unlayered `transition: left, bottom, transform` shorthand already beats
-// Tailwind's layered `transition-opacity duration-150` (from the element's
-// className) for transition-property even in NORMAL motion — unlayered
-// beats layered for normal-importance declarations regardless of reduced
-// motion. So there was never an opacity fade here for a reduced-motion rule
-// to protect; fix round 1's comment claiming otherwise was wrong. The rule
-// is deleted rather than re-fixed, since it can reach nothing index.css has
-// not already handled for left/bottom/transform (excluded from transition-
-// property entirely — stronger than any duration this file could set) and
-// cannot protect an opacity fade that does not exist on this element.
+// Opacity is not the same story in both modes, though (correction, fix
+// round 3, review 2026-09-08, measured in a real browser — this comment
+// previously and wrongly claimed opacity never transitions here "in EITHER
+// motion mode"): this element's own rule never names opacity, and nothing
+// else reaches it in NORMAL motion either — its unlayered
+// `transition: left, bottom, transform` shorthand already beats Tailwind's
+// layered `transition-opacity duration-150` (from the element's className)
+// for transition-property there. Under REDUCED motion, though, the SAME
+// index.css rule above forces opacity INTO transition-property for every
+// element — so deleting this rule left opacity inheriting this element's
+// own --voice-pill-travel-duration, 180/320/440ms depending on panel state
+// (resolveVoicePillTravelPresentation sets it), instead of the 1ms this
+// rule used to force. Real, deliberate behaviour change, left as the
+// browser's own outcome: it reads closer to index.css's "opacity keeps its
+// meaning" policy than 1ms did. The rule is still deleted rather than
+// re-fixed, though — not because opacity is untouched (it isn't, under
+// reduced motion), but because any duration it named would have cycled onto
+// index.css's forced property list the same way (paragraph above), so it
+// could never have protected a CHOSEN opacity duration regardless.
 //
-// What this test CAN verify from source text alone: (a) the premise — this
-// element's own transition never names opacity, so there is nothing here to
-// protect — and (b) a regression guard that no rule targeting
-// .voice-pill-position exists inside the reduced-motion block at all. It
-// does NOT and CANNOT verify actual computed transition-duration under
-// reduced motion — this test harness has no browser. That requires a real
-// browser measurement, as the review did; do not reintroduce a rule here on
-// CSS-text reasoning alone.
-test("`.voice-pill-position` needs no reduced-motion override: it never transitions opacity in the first place", async () => {
+// What this test CAN verify from source text alone: (a) that
+// .voice-pill-position's own rule never names opacity, and (b) a regression
+// guard that no rule targeting .voice-pill-position exists inside the
+// reduced-motion block at all. It does NOT verify the cascade-computed
+// transition-duration opacity actually ends up with under reduced motion
+// (now real, per the paragraph above) — this test harness has no browser.
+// That requires a real browser measurement, as the review did twice: once
+// to prove the deleted rule was ineffective, again to prove its deletion
+// changed opacity's real behaviour under reduced motion. Do not reintroduce
+// a rule here on CSS-text reasoning alone, and do not read this test as
+// proving opacity is untouched under reduced motion — it is not.
+test("`.voice-pill-position` has no reduced-motion rule of its own — left/bottom/transform are already excluded by index.css; opacity there now inherits the travel duration instead of snapping, a deliberate side effect", async () => {
   const dictationPanelCss = readDictationPanelCss();
 
   const baseRule = [
@@ -631,7 +641,7 @@ test("`.voice-pill-position` needs no reduced-motion override: it never transiti
   assert.doesNotMatch(
     stripCssComments(reducedMotionBlock),
     /\.voice-pill-position/,
-    "expected no reduced-motion RULE for .voice-pill-position at all (comments naming it, e.g. explaining its absence, are fine and stripped first) — it reaches nothing index.css hasn't already handled for left/bottom/transform, and cannot protect an opacity fade that doesn't exist on this element"
+    "expected no reduced-motion RULE for .voice-pill-position at all (comments naming it, e.g. explaining its absence, are fine and stripped first) — it reaches nothing index.css hasn't already handled for left/bottom/transform, and could never have protected a chosen opacity duration anyway (any duration it named would cycle onto index.css's forced property list the same way); opacity now inherits the travel duration under reduced motion as a deliberate side effect of deleting it, not something this rule could have prevented"
   );
 });
 

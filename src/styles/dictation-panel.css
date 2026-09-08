@@ -674,16 +674,27 @@
   /* .voice-pill-position needs no override here (fix round 1's Finding-4 fix
      is deleted, not repaired — fix round 2, Finding A, review 2026-09-08,
      measured in a real browser): its left/bottom/transform are ALREADY
-     excluded from transition-property by the blanket rule above (stronger
-     than any duration this file could set — a true no-transition, not just
-     a fast one), and it never transitions opacity in the first place, in
-     EITHER motion mode — its own unlayered shorthand already beats
-     Tailwind's layered `transition-opacity duration-150` for transition-
-     property even in normal motion. There is nothing left for a per-rule
-     override here to protect. See the covering test in
-     voicePillStructure.test.js for the full reasoning and its own explicit
-     limits (source-text checks only — this needs a real browser to verify
-     computed duration, which is exactly how this was caught). */
+     excluded from transition-property by index.css's `*, *::before,
+     *::after` reduced-motion rule (stronger than any duration this file
+     could set — a true no-transition, not just a fast one). Opacity is not
+     the same story in both modes, though (correction, fix round 3, review
+     2026-09-08, measured in a real browser — this comment previously and
+     wrongly claimed opacity never transitions here "in EITHER motion
+     mode"): this element never transitions opacity in NORMAL motion (its
+     own unlayered shorthand already beats Tailwind's layered
+     `transition-opacity duration-150` for transition-property there), but
+     under REDUCED motion that SAME index.css rule forces opacity INTO
+     transition-property for every element, so here it inherits this
+     element's own --voice-pill-travel-duration — 180/320/440ms depending on
+     panel state (resolveVoicePillTravelPresentation sets it) — instead of
+     snapping. That is a real, deliberate behaviour change from the 1ms this
+     deleted rule used to force, left as the browser's own outcome: it reads
+     closer to index.css's own "opacity keeps its meaning" policy than 1ms
+     did. See the covering test in voicePillStructure.test.js for the full
+     reasoning and its own explicit limits (source-text checks only — this
+     needs a real browser to verify computed duration, which is exactly how
+     both this rule's original ineffectiveness and this comment's later
+     wrong claim were caught). */
 
   .hands-free-tip-card {
     animation: none;
