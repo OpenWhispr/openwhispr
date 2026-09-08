@@ -225,7 +225,7 @@ jobs:
             PR_TEST_RESULT=$(gh pr view "$PR_NUMBER" \
               --repo "$GITHUB_REPOSITORY" \
               --json statusCheckRollup \
-              --jq '[.statusCheckRollup[] | select(.name == "tests" and .workflowName == "Tests")][-1].conclusion // empty')
+              --jq '[.statusCheckRollup[] | select(.name == "pr-quality" and .workflowName == "Tests")][-1].conclusion // empty')
             if [ "$PR_TEST_RESULT" = "SUCCESS" ]; then
               break
             fi
