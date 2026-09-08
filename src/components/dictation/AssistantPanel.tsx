@@ -832,7 +832,16 @@ export function AssistantPanel({
             <Button
               type="button"
               size="sm"
-              className="rounded-full border-border/70 bg-surface-raised px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90"
+              // active: is not decoration here. Button's `default` variant
+              // carries `active:bg-primary/85`, and tailwind-merge only drops
+              // a variant class that this className supplies a REPLACEMENT
+              // for — the overrides below cover base and hover, so the
+              // primary blue survived on the pressed state alone and flashed
+              // (over the variant's own 200ms colour transition) on every
+              // copy. Josh, 2026-09-08: "I like the little tick jump, but the
+              // blue is a bit jarring." The press keeps the variant's
+              // active:scale, which is the part he liked.
+              className="rounded-full border-border/70 bg-surface-raised px-4 font-medium text-foreground shadow-sm hover:bg-surface-3 active:bg-surface-3 dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:bg-white/90 dark:active:bg-white/90"
               onClick={() => void handleCopy()}
               aria-live="polite"
               tabIndex={footerPhase === "actions" ? 0 : -1}

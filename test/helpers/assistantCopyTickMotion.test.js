@@ -250,3 +250,49 @@ test("index.css's blanket reduced-motion rule still forces every element's anima
   assert.match(block, /\*,\s*\n\s*\*::before,\s*\n\s*\*::after\s*\{/, "expected the universal selector");
   assert.match(block, /animation-duration:\s*0\.01ms\s*!important/);
 });
+
+// Josh, 2026-09-08, on the rig: "I don't like the selected state once you
+// press copy. I like the little tick jump, but the blue is a bit jarring."
+//
+// The copy button takes Button's `default` variant, whose pressed state is
+// `active:bg-primary/85`. tailwind-merge only drops a variant class that the
+// caller supplies a REPLACEMENT for, and the caller's overrides covered the
+// base and hover backgrounds but not the pressed one — so full primary blue
+// survived on :active alone and flashed, over the variant's own 200ms colour
+// transition, on every copy. This asserts against the CLASS LIST THE MERGE
+// ACTUALLY PRODUCED, which is the only place that outcome is visible: the
+// source className and the variant definition each look correct on their own.
+test("the copy button's pressed state is never the primary blue (Josh 2026-09-08)", async (t) => {
+  const markup = await renderAssistantPanel(t, [{ id: "a", role: "assistant", content: "hi", isStreaming: false }], {
+    footerPhase: "actions",
+  });
+
+  const labelAt = markup.indexOf("assistant-copy-label");
+  assert.ok(labelAt > 0, "fixture-integrity check: the copy button must be rendered");
+  const buttonAt = markup.lastIndexOf("<button", labelAt);
+  const classMatch = /class="([^"]*)"/.exec(markup.slice(buttonAt, labelAt));
+  assert.ok(classMatch, "fixture-integrity check: the copy button must carry a class attribute");
+  const classes = classMatch[1].split(/\s+/);
+
+  // Non-vacuity, and the whole reason this test exists: the variant really
+  // does ship a primary-blue pressed state, so "no active:bg-primary on the
+  // button" is a fact about the merge, not about a class nobody ever added.
+  const buttonSource = fs.readFileSync(path.join(sourceRoot, "src/components/ui/button.tsx"), "utf8");
+  assert.match(
+    buttonSource,
+    /active:bg-primary\//,
+    "fixture-integrity check: Button's default variant must still declare a primary-blue pressed state, or this test proves nothing"
+  );
+
+  assert.ok(
+    !classes.some((name) => name.startsWith("active:bg-primary")),
+    `the copy button must not keep the variant's primary-blue pressed state (classes: ${classMatch[1]})`
+  );
+  // The override must actually be present, not merely absent-by-accident: a
+  // pressed state with no background at all would also pass the check above
+  // while leaving the button free to inherit a future variant's colour.
+  assert.ok(
+    classes.some((name) => name.startsWith("active:bg-")),
+    `the copy button must declare its own pressed-state background (classes: ${classMatch[1]})`
+  );
+});
