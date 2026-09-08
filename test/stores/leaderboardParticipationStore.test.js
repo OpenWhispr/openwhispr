@@ -136,7 +136,10 @@ test("a join retires the queued leave before its own request goes out", async (t
     {
       method: "PATCH",
       path: "/api/analytics/participation",
-      body: { enabled: true },
+      // The zone rides along with the join because that is what starts the
+      // account's history reconciliation, and only this device knows which
+      // calendar day its dictations belong to.
+      body: { enabled: true, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
       public: undefined,
       expectedAuthGeneration: undefined,
     },

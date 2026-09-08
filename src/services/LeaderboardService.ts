@@ -20,7 +20,12 @@ async function getParticipation(): Promise<AnalyticsParticipation> {
 async function setParticipation(enabled: boolean): Promise<AnalyticsParticipation> {
   const response = await cloudPatch<DataWrap<AnalyticsParticipation>>(
     "/api/analytics/participation",
-    { enabled }
+    // Opting in is what starts the account's history reconciliation, and only
+    // this device knows the calendar day its dictations belong to. Without it
+    // the server buckets that history in UTC, which is the wrong day for
+    // anyone west of UTC, and it does not revisit a row it has written.
+    // Leaving starts nothing, so it carries no zone.
+    enabled ? { enabled, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } : { enabled }
   );
   return response.data;
 }
