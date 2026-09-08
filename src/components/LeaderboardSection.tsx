@@ -31,6 +31,7 @@ import {
   resolveLeaderboardScopeKey,
   resolveLeaderboardSurface,
   shouldShowLeaderboardEmptyStrip,
+  shouldShowLeaderboardJumpToMe,
   selectionForRange,
   WEEKLY_METRICS,
 } from "../helpers/leaderboard";
@@ -65,6 +66,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
@@ -413,6 +415,7 @@ export default function LeaderboardSection({
 
   const visibleMembers = useMemo(() => visibleLeaderboard?.members ?? [], [visibleLeaderboard]);
   const isSoloScope = selectedScope?.state === "invite";
+  const showJumpToMe = shouldShowLeaderboardJumpToMe(visibleLeaderboard?.totalMembers ?? 0);
 
   useEffect(() => {
     const rank = pendingScrollRankRef.current;
@@ -509,18 +512,17 @@ export default function LeaderboardSection({
   );
 
   const showScopeSelect = scopes.length > 1 || (scopes.length === 1 && !selectedScope);
+  const scopeOptions = scopes.map((scope) => (
+    <SelectItem key={scope.key} value={scope.key}>
+      {scope.name}
+    </SelectItem>
+  ));
   const scopeSelect = showScopeSelect ? (
     <Select value={selectedScope?.key} onValueChange={setScopeKey}>
       <SelectTrigger className="h-8 w-44 rounded-lg text-xs">
         <SelectValue placeholder={t("insights.leaderboard.chooseBoard")} />
       </SelectTrigger>
-      <SelectContent>
-        {scopes.map((scope) => (
-          <SelectItem key={scope.key} value={scope.key}>
-            {scope.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
+      <SelectContent>{scopeOptions}</SelectContent>
     </Select>
   ) : null;
   const funnelScopeSelect = scopeSelect ? (
@@ -692,7 +694,19 @@ export default function LeaderboardSection({
             {selectedScope.kind === "workspace" ? <Building2 size={16} /> : <Globe2 size={16} />}
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">{selectedScope.name}</h2>
+            {showScopeSelect ? (
+              <Select value={selectedScope.key} onValueChange={setScopeKey}>
+                <SelectTrigger
+                  className="h-auto w-auto max-w-full gap-1 rounded-md border-0 bg-transparent p-0 text-sm font-semibold shadow-none hover:bg-transparent focus:border-0 focus:ring-0 dark:border-0"
+                  aria-label={t("insights.leaderboard.chooseBoard")}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>{scopeOptions}</SelectContent>
+              </Select>
+            ) : (
+              <h2 className="truncate text-sm font-semibold">{selectedScope.name}</h2>
+            )}
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Users size={11} />
@@ -707,29 +721,40 @@ export default function LeaderboardSection({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {scopeSelect}
-          {!isSoloScope && (
-            <Button size="sm" onClick={inviteToLeaderboard}>
-              <UserPlus size={14} />
-              {t("insights.leaderboard.inviteCta")}
-            </Button>
-          )}
           {visibleLeaderboard && (
-            <Button variant="outline-flat" size="sm" onClick={() => setShareOpen(true)}>
-              <Share2 size={14} />
-              {t("insights.leaderboard.share")}
-            </Button>
+            <Select
+              value={range === "all" ? "all" : activeWeekStart}
+              onValueChange={(value) => {
+                const nextRange: LeaderboardRange = value === "all" ? "all" : "week";
+                const next = selectionForRange(metric, nextRange);
+                setMetric(next.metric);
+                setRange(next.range);
+                setWeekStart(nextRange === "week" ? value : null);
+                setPage(0);
+              }}
+            >
+              <SelectTrigger className="h-8 w-44 rounded-lg border border-border/40 bg-background/30 px-2.5 text-xs font-medium shadow-none hover:bg-muted/40">
+                <CalendarDays size={13} className="text-muted-foreground" />
+                <SelectValue>
+                  {range === "all"
+                    ? t("insights.leaderboard.allTime")
+                    : activeWeekStart
+                      ? formatWeek(activeWeekStart)
+                      : t("insights.leaderboard.thisWeek")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("insights.leaderboard.allTime")}</SelectItem>
+                {visibleLeaderboard.availableWeekStarts.map((value, index) => (
+                  <SelectItem key={value} value={value}>
+                    {index === 0
+                      ? `${t("insights.leaderboard.thisWeek")} · ${formatWeek(value)}`
+                      : formatWeek(value)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
-          <Button
-            variant="outline-flat"
-            size="icon"
-            className="size-8"
-            onClick={() => void load()}
-            disabled={loading || !cloudAccessAllowed}
-            aria-label={t("insights.leaderboard.refresh")}
-          >
-            <RefreshCw size={14} className={loading ? "animate-spin" : undefined} />
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -742,6 +767,27 @@ export default function LeaderboardSection({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-40">
+              {!isSoloScope && (
+                <DropdownMenuItem className="gap-2 text-xs" onSelect={inviteToLeaderboard}>
+                  <UserPlus size={13} />
+                  {t("insights.leaderboard.inviteCta")}
+                </DropdownMenuItem>
+              )}
+              {visibleLeaderboard && (
+                <DropdownMenuItem className="gap-2 text-xs" onSelect={() => setShareOpen(true)}>
+                  <Share2 size={13} />
+                  {t("insights.leaderboard.share")}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                className="gap-2 text-xs"
+                disabled={loading || !cloudAccessAllowed}
+                onSelect={() => void load()}
+              >
+                <RefreshCw size={13} className={loading ? "animate-spin" : undefined} />
+                {t("insights.leaderboard.refresh")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {/* The mirror of Join: publishing a name and an email must stay
                   undoable from the surface that publishes it. */}
               <DropdownMenuItem
@@ -819,55 +865,6 @@ export default function LeaderboardSection({
             periodLabel={periodLabel}
             title={t("insights.leaderboard.topPerformers")}
           />
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-muted/10 px-5 py-3">
-            <div className="flex rounded-lg border border-border/40 bg-muted/40 p-0.5">
-              {(["week", "all"] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={range === value}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30 ${
-                    range === value
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                  onClick={() => {
-                    const next = selectionForRange(metric, value);
-                    setMetric(next.metric);
-                    setRange(next.range);
-                    setWeekStart(null);
-                    setPage(0);
-                  }}
-                >
-                  {t(`insights.leaderboard.${value === "week" ? "thisWeek" : "allTime"}`)}
-                </button>
-              ))}
-            </div>
-            {range === "week" && (
-              <Select
-                value={weekStart ?? visibleLeaderboard.weekStart ?? undefined}
-                onValueChange={(value) => {
-                  setWeekStart(value);
-                  setPage(0);
-                }}
-              >
-                <SelectTrigger className="h-8 w-44 rounded-lg text-xs">
-                  <CalendarDays size={13} className="text-muted-foreground" />
-                  <SelectValue placeholder={t("insights.leaderboard.history")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {visibleLeaderboard.availableWeekStarts.map((value, index) => (
-                    <SelectItem key={value} value={value}>
-                      {index === 0
-                        ? `${t("insights.leaderboard.thisWeek")} · ${formatWeek(value)}`
-                        : formatWeek(value)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
@@ -962,88 +959,92 @@ export default function LeaderboardSection({
             </table>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-muted/10 px-5 py-3">
-            <Tooltip
-              content={
-                visibleLeaderboard.viewerRank !== null
-                  ? t("insights.leaderboard.jumpToMe")
-                  : t("insights.leaderboard.jumpUnavailable")
-              }
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={visibleLeaderboard.viewerRank === null}
-                onClick={() =>
-                  visibleLeaderboard.viewerRank !== null &&
-                  jumpToRank(visibleLeaderboard.viewerRank)
-                }
-              >
-                <LocateFixed size={14} />
-                {t("insights.leaderboard.jumpToMe")}
-              </Button>
-            </Tooltip>
+          {(showJumpToMe || visibleLeaderboard.totalMembers > pageSize) && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-muted/10 px-5 py-3">
+              {showJumpToMe && (
+                <Tooltip
+                  content={
+                    visibleLeaderboard.viewerRank !== null
+                      ? t("insights.leaderboard.jumpToMe")
+                      : t("insights.leaderboard.jumpUnavailable")
+                  }
+                >
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={visibleLeaderboard.viewerRank === null}
+                    onClick={() =>
+                      visibleLeaderboard.viewerRank !== null &&
+                      jumpToRank(visibleLeaderboard.viewerRank)
+                    }
+                  >
+                    <LocateFixed size={14} />
+                    {t("insights.leaderboard.jumpToMe")}
+                  </Button>
+                </Tooltip>
+              )}
 
-            {visibleLeaderboard.totalMembers > pageSize && (
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  disabled={page === 0}
-                  onClick={() => setPage((current) => Math.max(0, current - 1))}
-                  aria-label={t("insights.leaderboard.previous")}
-                >
-                  <ChevronLeft size={15} />
-                </Button>
-                {editingRank ? (
-                  <form
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      jumpToRank(Number(rankInput));
-                      setEditingRank(false);
-                    }}
+              {visibleLeaderboard.totalMembers > pageSize && (
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    disabled={page === 0}
+                    onClick={() => setPage((current) => Math.max(0, current - 1))}
+                    aria-label={t("insights.leaderboard.previous")}
                   >
-                    <Input
-                      autoFocus
-                      type="number"
-                      min={1}
-                      max={visibleLeaderboard.totalMembers}
-                      value={rankInput}
-                      onChange={(event) => setRankInput(event.target.value)}
-                      onBlur={() => setEditingRank(false)}
-                      className="h-7 w-24 text-center text-xs"
-                      aria-label={t("insights.leaderboard.jumpToRank")}
-                    />
-                  </form>
-                ) : (
-                  <button
-                    type="button"
-                    className="rounded px-2 py-1 text-xs tabular-nums text-muted-foreground hover:bg-muted hover:text-foreground"
-                    onClick={() => {
-                      setRankInput(String(page * pageSize + 1));
-                      setEditingRank(true);
-                    }}
-                    title={t("insights.leaderboard.jumpToRank")}
+                    <ChevronLeft size={15} />
+                  </Button>
+                  {editingRank ? (
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        jumpToRank(Number(rankInput));
+                        setEditingRank(false);
+                      }}
+                    >
+                      <Input
+                        autoFocus
+                        type="number"
+                        min={1}
+                        max={visibleLeaderboard.totalMembers}
+                        value={rankInput}
+                        onChange={(event) => setRankInput(event.target.value)}
+                        onBlur={() => setEditingRank(false)}
+                        className="h-7 w-24 text-center text-xs"
+                        aria-label={t("insights.leaderboard.jumpToRank")}
+                      />
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="rounded px-2 py-1 text-xs tabular-nums text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={() => {
+                        setRankInput(String(page * pageSize + 1));
+                        setEditingRank(true);
+                      }}
+                      title={t("insights.leaderboard.jumpToRank")}
+                    >
+                      {page * pageSize + 1}–
+                      {Math.min((page + 1) * pageSize, visibleLeaderboard.totalMembers)} /{" "}
+                      {visibleLeaderboard.totalMembers}
+                    </button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    disabled={page >= pages - 1}
+                    onClick={() => setPage((current) => Math.min(pages - 1, current + 1))}
+                    aria-label={t("insights.leaderboard.next")}
                   >
-                    {page * pageSize + 1}–
-                    {Math.min((page + 1) * pageSize, visibleLeaderboard.totalMembers)} /{" "}
-                    {visibleLeaderboard.totalMembers}
-                  </button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  disabled={page >= pages - 1}
-                  onClick={() => setPage((current) => Math.min(pages - 1, current + 1))}
-                  aria-label={t("insights.leaderboard.next")}
-                >
-                  <ChevronRight size={15} />
-                </Button>
-              </div>
-            )}
-          </div>
+                    <ChevronRight size={15} />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 

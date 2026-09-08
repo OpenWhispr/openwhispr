@@ -103,6 +103,10 @@ export function shouldShowLeaderboardEmptyStrip(
   return participantCount <= 1 && missingLeaderboardMembers(memberCount, participantCount) > 0;
 }
 
+export function shouldShowLeaderboardJumpToMe(memberCount: number): boolean {
+  return memberCount >= 10;
+}
+
 export function leaderboardDisplayName(member: Pick<LeaderboardMember, "name" | "email">): string {
   const name = member.name?.trim();
   if (name) return name;

@@ -126,3 +126,32 @@ test("a ready board with one of five participants renders the inline nudge", asy
   assertState(markup, "empty_strip", "Copy a nudge");
   assert.ok(markup.includes("4 teammates haven&#x27;t turned on Analytics Sync"));
 });
+
+test("podium cards accent all three placements", async () => {
+  const Podium = await component("LeaderboardPodium");
+  const members = [1, 2, 3].map((rank) => ({
+    userId: `user-${rank}`,
+    name: `Member ${rank}`,
+    email: `member-${rank}@acme.com`,
+    image: null,
+    rank,
+    totalWords: 1_000 - rank,
+    desktopWords: 900 - rank,
+    mobileWords: 100,
+    wordsPerMinute: 120,
+    currentDailyStreak: 5,
+  }));
+  const markup = renderToStaticMarkup(
+    createElement(Podium, {
+      formatValue: (member) => String(member.totalWords),
+      members,
+      metricLabel: "Total words",
+      periodLabel: "Sep 7 – Sep 13",
+      title: "Top performers",
+    })
+  );
+
+  assert.ok(markup.includes("border-amber-400/25 bg-amber-400/5"));
+  assert.ok(markup.includes("border-slate-400/30 bg-slate-400/5"));
+  assert.ok(markup.includes("border-orange-500/25 bg-orange-500/5"));
+});

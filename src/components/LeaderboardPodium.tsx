@@ -13,14 +13,14 @@ const PODIUM_PLACEMENTS = [
   },
   {
     memberIndex: 1,
-    cardClass: "border-border/40 bg-background/35 sm:min-h-40",
-    rankClass: "bg-foreground/6 text-muted-foreground",
-    iconClass: "text-muted-foreground/70",
+    cardClass: "border-slate-400/30 bg-slate-400/5 sm:min-h-40 dark:border-slate-300/20",
+    rankClass: "bg-slate-400/12 text-slate-600 dark:text-slate-300",
+    iconClass: "text-slate-500 dark:text-slate-300",
     Icon: Medal,
   },
   {
     memberIndex: 2,
-    cardClass: "border-border/40 bg-background/35 sm:min-h-40",
+    cardClass: "border-orange-500/25 bg-orange-500/5 sm:min-h-40",
     rankClass: "bg-orange-400/10 text-orange-600 dark:text-orange-400",
     iconClass: "text-orange-500/80",
     Icon: Medal,

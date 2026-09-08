@@ -41,7 +41,8 @@ test("the metric tiers agree with the selection rules", async () => {
 });
 
 test("rank jumps and pagination clamp safely at 20 rows per page", async () => {
-  const { LEADERBOARD_PAGE_SIZE, pageCount, pageForRank } = await load();
+  const { LEADERBOARD_PAGE_SIZE, pageCount, pageForRank, shouldShowLeaderboardJumpToMe } =
+    await load();
   assert.equal(LEADERBOARD_PAGE_SIZE, 20);
   assert.equal(pageCount(0), 1);
   assert.equal(pageCount(20), 1);
@@ -50,6 +51,8 @@ test("rank jumps and pagination clamp safely at 20 rows per page", async () => {
   assert.equal(pageForRank(20, 55), 0);
   assert.equal(pageForRank(21, 55), 1);
   assert.equal(pageForRank(10_000, 55), 2);
+  assert.equal(shouldShowLeaderboardJumpToMe(9), false);
+  assert.equal(shouldShowLeaderboardJumpToMe(10), true);
 });
 
 // The response carries the page size the server actually used, so a server that
