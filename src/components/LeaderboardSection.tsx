@@ -682,6 +682,11 @@ export default function LeaderboardSection({
     }
     onInvite();
   };
+  const leaveLeaderboards = () => {
+    void onLeave().then((left) => {
+      if (!left) toast({ title: t("insights.leaderboard.leavePending") });
+    });
+  };
 
   return (
     <section
@@ -793,11 +798,7 @@ export default function LeaderboardSection({
               <DropdownMenuItem
                 disabled={participationUpdating}
                 className="gap-2 text-xs text-destructive focus:bg-destructive/10 focus:text-destructive"
-                onSelect={() =>
-                  void onLeave().then((left) => {
-                    if (!left) toast({ title: t("insights.leaderboard.leavePending") });
-                  })
-                }
+                onSelect={leaveLeaderboards}
               >
                 <LogOut size={13} />
                 {t("insights.leaderboard.leave")}
@@ -821,6 +822,7 @@ export default function LeaderboardSection({
             canEnable: canJoin,
             enabled: participating,
             error: participationError === "read" || participationError === "write",
+            onDisable: leaveLeaderboards,
             onEnable: onJoin,
             ready: participationReady,
             updating: participationUpdating,

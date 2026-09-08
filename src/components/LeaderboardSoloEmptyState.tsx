@@ -18,6 +18,7 @@ export default function LeaderboardSoloEmptyState({
     canEnable: boolean;
     enabled: boolean;
     error: boolean;
+    onDisable: () => void;
     onEnable: () => void;
     ready: boolean;
     updating: boolean;

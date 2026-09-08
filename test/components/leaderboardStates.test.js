@@ -87,6 +87,7 @@ test("invite keeps the teammate action primary and folds in sync", async () => {
         canEnable: true,
         enabled: false,
         error: false,
+        onDisable() {},
         onEnable() {},
         ready: true,
         updating: false,
@@ -96,6 +97,24 @@ test("invite keeps the teammate action primary and folds in sync", async () => {
   assertState(markup, "invite", "Invite teammates");
   assert.ok(markup.includes("Analytics Sync"));
   assert.ok(markup.includes("Invited: alex@acme.com"));
+});
+
+test("an enabled leaderboard row remains switchable off when enabling is blocked", async () => {
+  const SyncRow = await component("LeaderboardSyncRow");
+  const markup = renderToStaticMarkup(
+    createElement(SyncRow, {
+      canEnable: false,
+      enabled: true,
+      error: false,
+      onDisable() {},
+      onEnable() {},
+      ready: true,
+      updating: false,
+    })
+  );
+
+  assert.match(markup, /<button[^>]*aria-checked="true"/);
+  assert.doesNotMatch(markup, /<button[^>]*\sdisabled(?:=|>)/);
 });
 
 test("ready with sync off renders the dedicated sync preview", async () => {

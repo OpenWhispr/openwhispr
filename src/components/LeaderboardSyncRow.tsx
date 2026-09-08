@@ -6,6 +6,7 @@ export default function LeaderboardSyncRow({
   canEnable,
   enabled,
   error,
+  onDisable,
   onEnable,
   ready,
   updating,
@@ -13,12 +14,13 @@ export default function LeaderboardSyncRow({
   canEnable: boolean;
   enabled: boolean;
   error: boolean;
+  onDisable: () => void;
   onEnable: () => void;
   ready: boolean;
   updating: boolean;
 }) {
   const { t } = useTranslation();
-  const disabled = enabled || !ready || !canEnable || updating;
+  const disabled = !ready || updating || (!enabled && !canEnable);
   const hint = error
     ? t("insights.leaderboard.activationError")
     : !canEnable && ready
@@ -40,7 +42,7 @@ export default function LeaderboardSyncRow({
         aria-checked={enabled}
         aria-label={t("insights.leaderboard.syncRowLabel")}
         disabled={disabled}
-        onClick={onEnable}
+        onClick={enabled ? onDisable : onEnable}
         className={cn(
           "relative h-5 w-9 shrink-0 rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60",
           enabled ? "bg-primary" : "bg-muted-foreground/25"
