@@ -11,7 +11,11 @@ import { useTranslation } from "react-i18next";
 import { Check, Copy, Plus, X } from "lucide-react";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
-import { rehypeWordRise } from "./rehypeWordRise";
+import {
+  rehypeWordRise,
+  type RehypeWordRiseOptions,
+  type RiseClock,
+} from "./rehypeWordRise";
 import { Button } from "../ui/button";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
@@ -355,6 +359,30 @@ export function AssistantPanel({
   // holds the last ACTUALLY DISPLAYED split so an empty-content render can
   // reuse it verbatim instead of re-deriving one.
   const previousSplitRef = useRef<{ settled: string; tail: string }>({ settled: "", tail: "" });
+  // Josh, 2026-09-08: a near-instant reply "appears extremely quickly with a
+  // small flicker". The flicker was the rise being KILLED, not a rise. The
+  // moment isStreaming goes false the split below used to collapse to
+  // { settled: everything, tail: "" }, which destroys the tail's word spans —
+  // and with them every in-flight CSS animation, snapping the text to its end
+  // state mid-cascade. On a fast reply that is most of the words, so the
+  // feature the user was meant to see is precisely the part that never plays.
+  // Holding the streaming split until the last assigned rise has finished
+  // costs nothing (the same text renders either way, only the span wrapping
+  // differs) and lets the cascade run to completion before the collapse.
+  //
+  // Decided DURING RENDER, not from an effect. An effect-driven hold is one
+  // commit too late: the render that flips isStreaming to false would already
+  // have collapsed the split and unmounted the spans, and the effect would
+  // then mount brand-new ones — the animation cancelled exactly as before,
+  // plus a restart. The deadline it reads cannot come from riseClockRef,
+  // either: the collapse render is itself a settledMarkdown change, so the
+  // cursor reset has already zeroed it by then. It is recorded on every
+  // streaming commit instead (below), and deliberately never cleared by that
+  // reset — it is a fact about animations already running in the DOM, not
+  // about the tail's index space.
+  const risesDoneAtRef = useRef(0);
+  const [, releaseRiseHold] = useState(0);
+  const holdingRises = !isStreamingNow && performance.now() < risesDoneAtRef.current;
   const { settled: settledMarkdown, tail: tailMarkdown } = useMemo(() => {
     // Nothing to show at all (no reply yet, or just reset) — do not reuse a
     // stale cache from whatever was showing before; there is nothing before.
@@ -365,10 +393,10 @@ export function AssistantPanel({
     // Reuse exactly what was already on screen rather than re-deriving a
     // split from it, per the comment above.
     if (!responseContent) return previousSplitRef.current;
-    return isStreamingNow
+    return isStreamingNow || holdingRises
       ? splitStreamingMarkdown(displayedResponse, settledLengthRef.current)
       : { settled: displayedResponse, tail: "" };
-  }, [displayedResponse, isStreamingNow, responseContent]);
+  }, [displayedResponse, isStreamingNow, holdingRises, responseContent]);
   previousSplitRef.current = { settled: settledMarkdown, tail: tailMarkdown };
   // The write-back must ALSO be skipped on that same render (fix round 4):
   // isStreamingNow is already true there (the new message says
@@ -398,10 +426,22 @@ export function AssistantPanel({
   // but a plain paragraph (fix round 1, finding 1 — see rehypeWordRise.ts
   // for the sticky-delay half of that same fix, finding 3).
   const risenWordsRef = useRef<Map<number, number>>(new Map());
+  // The cascade cursor rehypeWordRise anchors each batch to, so absolute rise
+  // order is document order across chunk boundaries (see rehypeWordRise.ts).
+  // It resets in lockstep with risenWordsRef, and for the same reason: once
+  // the tail's indices restart at 0 the cursor's backlog belongs to words
+  // that are no longer in this tail, so carrying it forward would delay the
+  // rebased tail's first words by up to a full lag window. Resetting to 0
+  // (always in the past) makes the next batch anchor at `now`, which is the
+  // pre-2026-09-08 behaviour for exactly this path — deliberately unchanged
+  // here, because the rebase itself re-animates already-displayed words and
+  // that defect is being reported separately rather than widened.
+  const riseClockRef = useRef<RiseClock>({ nextRiseAt: 0 });
   const settledMarkdownRef = useRef(settledMarkdown);
   if (settledMarkdownRef.current !== settledMarkdown) {
     settledMarkdownRef.current = settledMarkdown;
     risenWordsRef.current = new Map();
+    riseClockRef.current = { nextRiseAt: 0 };
   }
   // unified/react-markdown's rehypePlugins entries must be [attacher, options]
   // tuples — unified calls the attacher itself at freeze time. Passing the
@@ -414,9 +454,48 @@ export function AssistantPanel({
   // memoizing it would only add a dependency-array correctness question
   // (what actually invalidates it — settledMarkdown changing, which the
   // factory function doesn't itself reference) for no real benefit.
-  const tailPlugins: Array<[typeof rehypeWordRise, { risenWords: Map<number, number>; staggerMs: number }]> = [
-    [rehypeWordRise, { risenWords: risenWordsRef.current, staggerMs: MOTION_TIMING.wordStaggerMs }],
+  const tailPlugins: Array<[typeof rehypeWordRise, RehypeWordRiseOptions]> = [
+    [
+      rehypeWordRise,
+      {
+        risenWords: risenWordsRef.current,
+        staggerMs: MOTION_TIMING.wordStaggerMs,
+        clock: riseClockRef.current,
+        // Read fresh per render on purpose: this is the zero that the delays
+        // this walk assigns are measured from, and it is only ever consumed
+        // by a walk react-markdown actually runs (it reprocesses only when
+        // `content` changes, so an unchanged tail never sees a stale value).
+        now: performance.now(),
+        maxLagMs: MOTION_TIMING.riseMaxLagMs,
+      },
+    ],
   ];
+
+  // Records when every rise assigned so far will be done, for the hold above
+  // to read on the render that ends the stream. Deliberately no dependency
+  // array: it must observe the cursor AFTER react-markdown has run the walk
+  // for this commit (the walk happens while rendering the tail's children, so
+  // the component body above it can only ever see the previous value).
+  useEffect(() => {
+    if (isStreamingNow) {
+      risesDoneAtRef.current = riseClockRef.current.nextRiseAt + MOTION_TIMING.wordMs;
+    }
+  });
+
+  // The hold releases itself: this schedules the one render that happens at
+  // the deadline, after which the expression above evaluates false on its own.
+  // That deadline is an upper bound (the cursor points one stagger PAST the
+  // last word actually placed), which is the safe direction — too long merely
+  // delays a collapse nobody can see, too short reintroduces the snap.
+  // Deliberately a timer and not an animationend listener: what is being
+  // waited on is the whole cascade, not one element, and which span finishes
+  // last is not knowable from the DOM without tracking every one of them.
+  useEffect(() => {
+    if (!holdingRises) return undefined;
+    const remainingMs = Math.max(0, risesDoneAtRef.current - performance.now());
+    const timer = setTimeout(() => releaseRiseHold((tick) => tick + 1), remainingMs);
+    return () => clearTimeout(timer);
+  }, [holdingRises]);
 
   // Keep the previous response ineligible throughout a follow-up request. Audio
   // processing can return voiceState to idle one render before the chat stream

@@ -83,6 +83,17 @@ export const MOTION_TIMING = Object.freeze({
   zoopMs: 200,
   wordMs: 320,
   wordStaggerMs: 28,
+  // How far the per-word rise cascade may fall behind the text arriving.
+  // Added 2026-09-08 from Josh's rig testing, after the plan's own numbers
+  // shipped: wordStaggerMs alone cannot bound a cascade, because a stream
+  // delivering words faster than one per 28ms makes the backlog grow without
+  // limit. rehypeWordRise spreads each batch over what is left of this
+  // window, shrinking the stagger to fit, so the cascade settles at the
+  // arrival rate instead of running long past the end of the reply. 600ms is
+  // just under two rise durations: deep enough for the sweep to read as
+  // left-to-right, short enough that the last word of a near-instant reply
+  // lands within ~920ms of the first.
+  riseMaxLagMs: 600,
   copyCrossfadeMs: 320,
   companionFadeMs: 160,
   closeFadeMs: 120,

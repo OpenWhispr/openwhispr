@@ -35,6 +35,10 @@ test("the pinned timings and CSS variables match the design page", async () => {
     zoopMs: 200,
     wordMs: 320,
     wordStaggerMs: 28,
+    // Not from the design page: added 2026-09-08 after rig testing, to bound
+    // the per-word cascade's backlog (see springEasing.ts for why a stagger
+    // alone cannot). Pinned here like the rest so a retune is a visible diff.
+    riseMaxLagMs: 600,
     copyCrossfadeMs: 320,
     companionFadeMs: 160,
     closeFadeMs: 120,

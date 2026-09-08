@@ -200,6 +200,28 @@ const riseSpans = (container) =>
 const wordWrappedSpans = (container) =>
   findAllElements(container, (el) => el.tagName === "SPAN" && el.getAttribute("data-word-index") !== null);
 
+// Since 2026-09-08 the end of a stream no longer collapses the split on the
+// spot: AssistantPanel HOLDS the streaming split until the last per-word rise
+// it assigned has finished, because collapsing destroys the tail's spans and
+// with them every in-flight animation (Josh's rig report: a near-instant reply
+// "appears extremely quickly with a small flicker" — the flicker was the
+// cascade being killed, not played). So "the reply collapsed" is now a
+// statement about a moment AFTER that hold, and the tests that assert it wait
+// for the release rather than sampling the frame the stream ended on.
+const waitForRiseCollapse = async (container, { timeoutMs = 4000 } = {}) => {
+  const deadline = Date.now() + timeoutMs;
+  while (wordWrappedSpans(container).length > 0) {
+    if (Date.now() > deadline) {
+      throw new Error(
+        "the streaming split never collapsed to plain markdown — the rise hold did not release"
+      );
+    }
+    await React.act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+  }
+};
+
 test("a settled paragraph keeps its DOM identity across tail-only growth, but genuinely re-renders once new content joins it — and the whole reply collapses to one plain block when streaming ends", async (t) => {
   const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
 
@@ -296,6 +318,7 @@ test("a settled paragraph keeps its DOM identity across tail-only growth, but ge
   // reply renders as one plain block" — no live tail, so no rise spans left
   // anywhere, even though the words that were briefly a tail are still on screen.
   await setAssistantMessage("Alpha bravo.\n\nCharlie delta.\n\nEcho foxtrot golf hotel.\n\nIndia", false);
+  await waitForRiseCollapse(container);
   assert.match(container.textContent, /India/);
   assert.equal(riseSpans(container).length, 0, "a finished reply must carry no rise triggers at all");
   // The stronger check: "India" must not be word-wrapped AT ALL (not even a
@@ -983,6 +1006,7 @@ test("the completed previous reply does not re-split or re-animate on the empty-
     false,
     "assistant-1"
   );
+  await waitForRiseCollapse(container);
   const lastParagraphBefore = findSettledParagraph(container, "Paragraph three.");
   assert.ok(
     lastParagraphBefore,
@@ -1027,5 +1051,64 @@ test("the completed previous reply does not re-split or re-animate on the empty-
     paragraphTexts(container),
     ["Hello there friend, how are you today"],
     "round 4 guarantee: the new reply must still be one paragraph, not split at the first chunk's length"
+  );
+});
+
+// THE REGRESSION TEST for Josh's 2026-09-08 rig feedback on a fast reply:
+// "the text-streaming animation was almost instant ... it appears extremely
+// quickly with a small flicker". The flicker was not a rise playing badly, it
+// was the rise being destroyed: the instant isStreaming went false the split
+// collapsed to { settled: everything, tail: "" }, tearing down the tail's word
+// spans mid-cascade and snapping every unfinished word to its end state. The
+// faster the reply, the larger the share of words killed that way — which is
+// exactly why it showed up on the low-latency runs and not the slow ones.
+//
+// DOM node identity is the decisive signal, as elsewhere in this file: a CSS
+// animation lives on an element, so proving the element survived the end of
+// the stream proves its animation was not cancelled. Comparing rendered markup
+// could not tell the two cases apart.
+test("ending a stream holds the tail's word spans until their rises finish, then collapses (Josh 2026-09-08)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+
+  // One paragraph, 30 words, delivered in a single chunk — the shape of a
+  // near-instant reply. No "\n\n", so nothing settles and the whole reply is
+  // the tail. 30 words over the 600ms lag window is a 20ms stagger, so the
+  // last rise is still running for ~900ms after this render.
+  const reply = Array.from({ length: 30 }, (_, i) => `word${i}`).join(" ");
+  await setAssistantMessage(reply, true);
+  const risingBefore = riseSpans(container);
+  assert.equal(risingBefore.length, 30, "fixture-integrity check: the whole reply must be the tail");
+  const firstSpanBefore = risingBefore[0];
+  const lastSpanBefore = risingBefore[risingBefore.length - 1];
+
+  // The stream ends with the cascade still in flight.
+  await setAssistantMessage(reply, false);
+
+  const risingAfter = riseSpans(container);
+  assert.equal(
+    risingAfter.length,
+    30,
+    "the tail must still be word-wrapped immediately after the stream ends — collapsing here is what killed the animation"
+  );
+  assert.equal(
+    risingAfter[0],
+    firstSpanBefore,
+    "the first word's span must be the very same DOM node — a replaced node means its animation was cancelled"
+  );
+  assert.equal(
+    risingAfter[risingAfter.length - 1],
+    lastSpanBefore,
+    "the last word's span — the one with the most rise left to run — must survive the end of the stream"
+  );
+
+  // The hold is a delay, not a new resting state: the reply must still end up
+  // as one plain, un-wrapped block, exactly as it did before this change.
+  await waitForRiseCollapse(container);
+  assert.match(container.textContent, /word29/);
+  assert.equal(riseSpans(container).length, 0, "the released hold must leave no rise triggers behind");
+  assert.equal(
+    wordWrappedSpans(container).length,
+    0,
+    "the released hold must collapse to plain markdown, never a permanently word-wrapped reply"
   );
 });
