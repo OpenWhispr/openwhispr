@@ -3277,7 +3277,7 @@
       "acceptInviteTitle": "{{workspace}} に招待されています",
       "acceptInviteDescription": "{{inviter}} さんから招待されました。参加してチームのリーダーボードを確認しましょう。",
       "acceptInviteDescriptionNoInviter": "{{workspace}} に参加してチームのリーダーボードを確認しましょう。",
-      "acceptInviteCta": "{{workspace}} に参加",
+      "acceptInviteCta": "チームに参加",
       "joining": "参加中…",
       "inviteAcceptedTitle": "ワークスペースに参加しました",
       "inviteAcceptedDescription": "{{workspace}} のリーダーボードを表示できます。",

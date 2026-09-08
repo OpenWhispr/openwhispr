@@ -3277,7 +3277,7 @@
       "acceptInviteTitle": "你已受邀加入 {{workspace}}",
       "acceptInviteDescription": "{{inviter}} 邀请了你。加入后即可查看团队排行榜。",
       "acceptInviteDescriptionNoInviter": "加入 {{workspace}} 后即可查看团队排行榜。",
-      "acceptInviteCta": "加入 {{workspace}}",
+      "acceptInviteCta": "加入团队",
       "joining": "正在加入…",
       "inviteAcceptedTitle": "已加入工作区",
       "inviteAcceptedDescription": "你现在可以查看 {{workspace}} 的排行榜。",

@@ -10,6 +10,7 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   const sidebar = read("src/components/ControlPanelSidebar.tsx");
   const insights = read("src/components/InsightsView.tsx");
   const leaderboard = read("src/components/LeaderboardView.tsx");
+  const dictionary = read("src/components/DictionaryView.tsx");
 
   assert.equal(sidebar.includes('| "leaderboard"'), false);
   assert.equal(sidebar.includes('{ id: "leaderboard"'), false);
@@ -21,6 +22,13 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   assert.ok(insights.includes('value="usage"'));
   assert.ok(insights.includes('t("insights.yourUsage")'));
   assert.ok(insights.includes('value="leaderboard"'));
+  for (const className of [
+    'className="h-7 p-0.5 rounded-[7px]"',
+    'className="h-6 px-2.5 text-xs rounded-[5px]"',
+  ]) {
+    assert.ok(dictionary.includes(className));
+    assert.ok(insights.includes(className));
+  }
   assert.ok(insights.includes("<LeaderboardView"));
   assert.ok(insights.includes("syncService.syncAnalyticsNow()"));
   assert.equal(insights.includes("syncPendingAnalytics"), false);

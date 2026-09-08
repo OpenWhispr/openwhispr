@@ -2804,7 +2804,7 @@
       "acceptInviteTitle": "You're invited to {{workspace}}",
       "acceptInviteDescription": "{{inviter}} invited you. Join to see the team board.",
       "acceptInviteDescriptionNoInviter": "Join {{workspace}} to see the team board.",
-      "acceptInviteCta": "Join {{workspace}}",
+      "acceptInviteCta": "Join Team",
       "joining": "Joining…",
       "inviteAcceptedTitle": "Workspace joined",
       "inviteAcceptedDescription": "You can now see the {{workspace}} leaderboard.",

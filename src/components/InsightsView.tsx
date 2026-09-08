@@ -28,9 +28,6 @@ interface InsightsViewProps {
 
 const LeaderboardView = lazy(() => import("./LeaderboardView"));
 
-const tabTriggerClassName =
-  "rounded-none! border-b-2 border-transparent bg-transparent! px-0! pt-0! pb-2! text-xs text-foreground/50 shadow-none! hover:text-foreground/70 data-[state=active]:border-foreground/60 data-[state=active]:bg-transparent! data-[state=active]:text-foreground data-[state=active]:shadow-none!";
-
 const ACTIVITY_INTENSITY_CLASSES = [
   "bg-foreground/6 dark:bg-white/6",
   "bg-primary/25",
@@ -471,11 +468,11 @@ export default function InsightsView({ onSignIn, onInvite }: InsightsViewProps) 
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-        <TabsList className="h-auto! w-full justify-start gap-5 rounded-none! border-b border-border/40 bg-transparent! p-0!">
-          <TabsTrigger value="usage" className={tabTriggerClassName}>
+        <TabsList className="h-7 p-0.5 rounded-[7px]">
+          <TabsTrigger value="usage" className="h-6 px-2.5 text-xs rounded-[5px]">
             {t("insights.yourUsage")}
           </TabsTrigger>
-          <TabsTrigger value="leaderboard" className={tabTriggerClassName}>
+          <TabsTrigger value="leaderboard" className="h-6 px-2.5 text-xs rounded-[5px]">
             {t("insights.leaderboard.title")}
           </TabsTrigger>
         </TabsList>
