@@ -16,7 +16,7 @@ test("loads the Oppulence Voice distribution with its owned update identity", ()
   assert.equal(distribution.windowsSafeCacheDirectory, "OppulenceVoice");
   assert.deepEqual(distribution.updates, {
     provider: "github",
-    owner: "Oppulence-Engineering",
+    owner: "PlaybookMediaLLC",
     repo: "openwhispr",
     private: false,
   });
