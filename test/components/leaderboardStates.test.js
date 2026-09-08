@@ -90,17 +90,20 @@ test("invite keeps the teammate action primary without a second sync control", a
   assert.ok(markup.includes("Invited: alex@acme.com"));
 });
 
-test("ready with sync off points to the single page-level action", async () => {
-  const Sync = await component("LeaderboardSyncPreview");
+test("ready while not participating offers an explicit leaderboard join", async () => {
+  const Join = await component("LeaderboardJoinPreview");
   const markup = renderToStaticMarkup(
-    createElement(Sync, {
-      canEnable: true,
+    createElement(Join, {
+      canJoin: true,
       error: false,
+      onJoin() {},
       scopeName: "Acme",
+      updating: false,
     })
   );
-  assertState(markup, "sync", "See where you rank in Acme");
-  assert.doesNotMatch(markup, /<button/);
+  assertState(markup, "join", "See where you rank in Acme");
+  assert.match(markup, /<button/);
+  assert.ok(markup.includes("Join leaderboards"));
 });
 
 test("a ready board with one of five participants renders the inline nudge", async () => {
@@ -115,7 +118,7 @@ test("a ready board with one of five participants renders the inline nudge", asy
     )
   );
   assertState(markup, "empty_strip", "Copy a nudge");
-  assert.ok(markup.includes("4 teammates haven&#x27;t turned on Analytics Sync"));
+  assert.ok(markup.includes("4 teammates haven&#x27;t joined the leaderboard yet"));
 });
 
 test("podium cards accent all three placements", async () => {

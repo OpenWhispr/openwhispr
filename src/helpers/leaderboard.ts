@@ -25,7 +25,7 @@ export type LeaderboardSurface =
   | "invite"
   | "participation_loading"
   | "participation_error"
-  | "sync"
+  | "join"
   | "board";
 
 export function resolveLeaderboardSurface({
@@ -48,7 +48,7 @@ export function resolveLeaderboardSurface({
   if (participationError === "read") return "participation_error";
   if (!participationReady) return "participation_loading";
   if (selectedScope.state === "invite") return "invite";
-  return participating ? "board" : "sync";
+  return participating ? "board" : "join";
 }
 
 export function leaderboardRequestKey(

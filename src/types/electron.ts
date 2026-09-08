@@ -181,6 +181,11 @@ export interface PendingAnalyticsClear {
   cleared_through: string;
 }
 
+export interface AnalyticsSyncContext {
+  accountId: string;
+  authGeneration: number;
+}
+
 export interface AnalyticsDailyBucket {
   date: string;
   words: number;
@@ -1229,20 +1234,31 @@ declare global {
         input: AnalyticsEventInput
       ) => Promise<{ success: boolean; eventId?: string; ignored?: boolean }>;
       getAnalyticsSummary: () => Promise<AnalyticsSummary>;
-      getPendingAnalyticsEvents: (limit?: number) => Promise<PendingAnalyticsEvent[]>;
+      getPendingAnalyticsEvents: (
+        limit?: number,
+        context?: AnalyticsSyncContext
+      ) => Promise<PendingAnalyticsEvent[]>;
       markAnalyticsEventsSynced: (
-        eventIds: string[]
+        eventIds: string[],
+        context?: AnalyticsSyncContext
       ) => Promise<{ success: boolean; updated: number }>;
-      getPendingAnalyticsDeletes: (limit?: number) => Promise<Array<{ event_id: string }>>;
+      getPendingAnalyticsDeletes: (
+        limit?: number,
+        context?: AnalyticsSyncContext
+      ) => Promise<Array<{ event_id: string }>>;
       hardDeleteAnalyticsEvents: (
-        eventIds: string[]
+        eventIds: string[],
+        context?: AnalyticsSyncContext
       ) => Promise<{ success: boolean; deleted: number }>;
-      getPendingAnalyticsClear: () => Promise<PendingAnalyticsClear | null>;
+      getPendingAnalyticsClear: (
+        context?: AnalyticsSyncContext
+      ) => Promise<PendingAnalyticsClear | null>;
       completeAnalyticsClear: (
-        clearedThrough: string
+        clearedThrough: string,
+        context?: AnalyticsSyncContext
       ) => Promise<{ success: boolean; deleted: number }>;
-      countUnclaimedAnalyticsEvents: () => Promise<number>;
-      countAnalyticsEventsAwaitingUpload: () => Promise<number>;
+      countUnclaimedAnalyticsEvents: (context?: AnalyticsSyncContext) => Promise<number>;
+      countAnalyticsEventsAwaitingUpload: (context?: AnalyticsSyncContext) => Promise<number>;
       claimAnonymousAnalyticsEvents: (
         accountId: string,
         expectedAuthGeneration: number

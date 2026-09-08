@@ -29,7 +29,7 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   assert.ok(insights.includes("<LeaderboardView"));
   assert.ok(insights.includes("syncService.syncAnalyticsNow()"));
   assert.equal(insights.includes("syncPendingAnalytics"), false);
-  assert.ok(insights.includes("onClick={() => void joinLeaderboard()}"));
+  assert.ok(insights.includes("onClick={() => void enableInsightsSync()}"));
   assert.ok(insights.includes('"insights.enableSync"'));
   assert.ok(insights.includes("onSyncErrorChange={setSyncError}"));
   const usageContent = insights.slice(
@@ -47,22 +47,20 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   );
   assert.ok(leaderboard.includes("<LeaderboardSection"));
   assert.equal(
-    leaderboard.includes("useInsightsSyncOptIn"),
+    leaderboard.includes("useInsightsSyncOptIn()"),
     false,
     "the nested tab must reuse the page's opt-in owner instead of duplicating analytics IPCs"
   );
-  assert.equal(leaderboard.includes("onJoin="), false);
+  assert.ok(leaderboard.includes("onJoin={joinLeaderboard}"));
   assert.equal(leaderboard.includes('<h1 className="text-base!'), false);
   assert.equal(leaderboard.includes('t("insights.leaderboard.description")'), false);
 });
 
-test("combined sync consent copy is concise and discloses profile sharing", () => {
+test("analytics and leaderboard consent copy are concise and independently scoped", () => {
   for (const locale of ["en", "de", "es", "fr", "it", "ja", "pt", "ru", "zh-CN", "zh-TW"]) {
     const { insights } = JSON.parse(read(`src/locales/${locale}/translation.json`));
     const descriptions = [
-      insights.syncAndJoinDisclosure,
-      insights.syncAndJoinEmptyDescription,
-      insights.leaderboard.syncDescription,
+      insights.leaderboard.joinDescription,
       ...Object.entries(insights)
         .filter(([key]) => /^(claim|enable)Description_/.test(key))
         .map(([, value]) => value),
@@ -74,8 +72,8 @@ test("combined sync consent copy is concise and discloses profile sharing", () =
   }
 
   const english = JSON.parse(read("src/locales/en/translation.json")).insights;
-  assert.match(english.leaderboard.syncDescription, /name, email, and activity/);
-  assert.doesNotMatch(english.leaderboard.syncDescription, /Only activity counters/);
+  assert.match(english.leaderboard.joinDescription, /name, email, and activity/);
+  assert.doesNotMatch(english.enableDescription_other, /name|email|leaderboard/);
 });
 
 test("leaderboard access is plan agnostic and invitation led", () => {
@@ -103,7 +101,7 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   assert.ok(section.includes("resolveLeaderboardScopeKey"));
   assert.ok(section.includes('t("insights.leaderboard.chooseBoard")'));
   assert.ok(section.includes('selectedScope?.state === "invite"'));
-  assert.ok(section.includes("<LeaderboardSyncPreview"));
+  assert.ok(section.includes("<LeaderboardJoinPreview"));
   assert.equal(section.includes("<LeaderboardSyncRow"), false);
   assert.equal(section.includes("activationDescription"), false);
   assert.equal(controlPanel.includes("onInvite={() => setShowReferrals(true)}"), false);

@@ -61,7 +61,7 @@ import LeaderboardSetupCard from "./LeaderboardSetupCard";
 import LeaderboardShareDialog from "./LeaderboardShareDialog";
 import LeaderboardSignInPreview from "./LeaderboardSignInPreview";
 import LeaderboardSoloEmptyState from "./LeaderboardSoloEmptyState";
-import LeaderboardSyncPreview from "./LeaderboardSyncPreview";
+import LeaderboardJoinPreview from "./LeaderboardJoinPreview";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -86,8 +86,9 @@ interface LeaderboardSectionProps {
   participationReady: boolean;
   participationError: "read" | "write" | null;
   participationUpdating: boolean;
-  /** Turns off Insights Sync locally and leaves every leaderboard. */
+  /** Removes the account from every leaderboard without changing this device's Sync setting. */
   onLeave: () => Promise<boolean>;
+  onJoin: () => Promise<boolean>;
   onRefreshParticipation: () => void;
   onSignIn: () => void;
   onSsoSignIn: () => void;
@@ -146,6 +147,7 @@ export default function LeaderboardSection({
   participationReady,
   participationError,
   participationUpdating,
+  onJoin,
   onLeave,
   onRefreshParticipation,
   onSignIn,
@@ -333,7 +335,12 @@ export default function LeaderboardSection({
         setFailure({ kind: "sso", requestKey: selectedRequestKey });
         return;
       }
-      if (code === "LEADERBOARD_SYNC_REQUIRED") {
+      if (
+        code === "LEADERBOARD_PARTICIPATION_REQUIRED" ||
+        // Compatibility with an API instance still rolling from the original
+        // combined Sync/participation contract.
+        code === "LEADERBOARD_SYNC_REQUIRED"
+      ) {
         setLeaderboard(null);
         onRefreshParticipation();
         return;
@@ -646,12 +653,14 @@ export default function LeaderboardSection({
       </section>
     );
   }
-  if (surface === "sync") {
+  if (surface === "join") {
     return (
-      <LeaderboardSyncPreview
-        canEnable={canJoin}
+      <LeaderboardJoinPreview
+        canJoin={canJoin}
         error={participationError === "write"}
+        onJoin={onJoin}
         scopeName={selectedScope.name}
+        updating={participationUpdating}
       />
     );
   }
@@ -842,7 +851,7 @@ export default function LeaderboardSection({
                 {t("insights.leaderboard.refresh")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {/* The combined opt-in stays undoable from the leaderboard too. */}
+              {/* Participation remains undoable without changing this device's Sync setting. */}
               <DropdownMenuItem
                 disabled={participationUpdating}
                 className="gap-2 text-xs text-destructive focus:bg-destructive/10 focus:text-destructive"
@@ -858,7 +867,7 @@ export default function LeaderboardSection({
 
       {surface === "board" && !cloudAccessAllowed ? (
         <div className="flex min-h-48 items-center justify-center px-5 py-10 text-center">
-          <p className="text-sm font-medium">{t("insights.leaderboard.syncPolicyBlocked")}</p>
+          <p className="text-sm font-medium">{t("insights.leaderboard.joinPolicyBlocked")}</p>
         </div>
       ) : isSoloScope ? (
         <LeaderboardSoloEmptyState
@@ -869,7 +878,7 @@ export default function LeaderboardSection({
         />
       ) : visibleFailure === "policy" && !visibleLeaderboard ? (
         <div className="flex min-h-48 items-center justify-center px-5 py-10 text-center">
-          <p className="text-sm font-medium">{t("insights.leaderboard.syncPolicyBlocked")}</p>
+          <p className="text-sm font-medium">{t("insights.leaderboard.joinPolicyBlocked")}</p>
         </div>
       ) : visibleFailure && !visibleLeaderboard ? (
         <LeaderboardRetryCard

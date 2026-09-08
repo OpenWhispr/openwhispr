@@ -394,19 +394,8 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
   const dataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, personalDataRetentionEnabled)
   );
-  const {
-    canToggleSync,
-    disableInsightsSync,
-    joinLeaderboard,
-    optInDialog,
-    participationEnabled,
-    participationError,
-    participationReady,
-    participationUpdating,
-    refreshParticipation,
-    syncAllowedByPolicy,
-    unclaimedCount,
-  } = useInsightsSyncOptIn();
+  const { canToggleSync, enableInsightsSync, optInDialog, syncAllowedByPolicy, unclaimedCount } =
+    useInsightsSyncOptIn();
   const [activeTab, setActiveTab] = useState("usage");
   const [syncError, setSyncError] = useState(false);
   // A managed workspace that forbids cloud backup forbids these counters with
@@ -420,13 +409,8 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
     insightsSyncEnabled,
     unclaimedCount,
   });
-  const showSyncAction = isSignedIn && (!syncActive || !participationEnabled || claimAvailable);
-  const syncActionDisabled =
-    !canToggleSync ||
-    !dataRetentionEnabled ||
-    !syncAllowedByPolicy ||
-    !participationReady ||
-    participationError === "read";
+  const showSyncAction = activeTab === "usage" && isSignedIn && (!syncActive || claimAvailable);
+  const syncActionDisabled = !canToggleSync || !dataRetentionEnabled || !syncAllowedByPolicy;
   const syncStatusLabel = syncActive
     ? syncError
       ? t("insights.syncFallback")
@@ -449,16 +433,10 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
               type="button"
               size="sm"
               disabled={syncActionDisabled}
-              onClick={() => void joinLeaderboard()}
+              onClick={() => void enableInsightsSync()}
             >
-              {participationUpdating ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <CloudUpload size={13} />
-              )}
-              {t(
-                participationUpdating ? "insights.leaderboard.enablingSync" : "insights.enableSync"
-              )}
+              <CloudUpload size={13} />
+              {t(syncActive ? "insights.claimInclude" : "insights.enableSync")}
             </Button>
           )}
         </div>
@@ -490,13 +468,9 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
         <TabsContent value="leaderboard" className="mt-0">
           <Suspense fallback={null}>
             <LeaderboardView
-              disableInsightsSync={disableInsightsSync}
+              enableInsightsSync={enableInsightsSync}
+              insightsSyncEnabled={insightsSyncEnabled}
               onSignIn={onSignIn}
-              participationEnabled={participationEnabled}
-              participationError={participationError}
-              participationReady={participationReady}
-              participationUpdating={participationUpdating}
-              refreshParticipation={refreshParticipation}
               syncAllowedByPolicy={syncAllowedByPolicy}
             />
           </Suspense>

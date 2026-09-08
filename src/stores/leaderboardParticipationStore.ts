@@ -6,10 +6,9 @@ import {
 } from "../services/LeaderboardService";
 
 /**
- * The account's leaderboard participation, shared by every surface that reads
- * or changes it. Settings and the Insights page can both mount
- * useInsightsSyncOptIn, and while each kept its own copy an opt-out taken in one
- * left the other showing a roster the user had already left.
+ * The account's leaderboard participation, shared by every leaderboard surface
+ * that reads or changes it. It is independent of this device's Insights Sync
+ * setting.
  *
  * Nothing here joins on the user's behalf: only join() ever sends `true`, and
  * a leave the network refused is held on the device and retried until the
@@ -34,8 +33,7 @@ interface LeaderboardParticipationState {
 }
 
 // A completed write is the newest answer there is, so it retires every read
-// still in flight — including one the sync toggle started after the request
-// went out, which would otherwise settle the account on pre-write state.
+// still in flight, which would otherwise settle the account on pre-write state.
 // Writes read the same counter: one taken out for the departing account has no
 // answer to give about the account that replaced it.
 let readId = 0;

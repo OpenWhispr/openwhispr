@@ -128,15 +128,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-get-transcriptions", limit, options),
   recordAnalyticsEvent: (input) => ipcRenderer.invoke("analytics-record-event", input),
   getAnalyticsSummary: () => ipcRenderer.invoke("analytics-get-summary"),
-  getPendingAnalyticsEvents: (limit) => ipcRenderer.invoke("analytics-get-pending", limit),
-  markAnalyticsEventsSynced: (eventIds) => ipcRenderer.invoke("analytics-mark-synced", eventIds),
-  getPendingAnalyticsDeletes: (limit) => ipcRenderer.invoke("analytics-get-pending-deletes", limit),
-  hardDeleteAnalyticsEvents: (eventIds) => ipcRenderer.invoke("analytics-hard-delete", eventIds),
-  getPendingAnalyticsClear: () => ipcRenderer.invoke("analytics-get-pending-clear"),
-  completeAnalyticsClear: (clearedThrough) =>
-    ipcRenderer.invoke("analytics-complete-clear", clearedThrough),
-  countUnclaimedAnalyticsEvents: () => ipcRenderer.invoke("analytics-count-unclaimed"),
-  countAnalyticsEventsAwaitingUpload: () => ipcRenderer.invoke("analytics-count-awaiting-upload"),
+  getPendingAnalyticsEvents: (limit, context) =>
+    ipcRenderer.invoke("analytics-get-pending", limit, context),
+  markAnalyticsEventsSynced: (eventIds, context) =>
+    ipcRenderer.invoke("analytics-mark-synced", eventIds, context),
+  getPendingAnalyticsDeletes: (limit, context) =>
+    ipcRenderer.invoke("analytics-get-pending-deletes", limit, context),
+  hardDeleteAnalyticsEvents: (eventIds, context) =>
+    ipcRenderer.invoke("analytics-hard-delete", eventIds, context),
+  getPendingAnalyticsClear: (context) => ipcRenderer.invoke("analytics-get-pending-clear", context),
+  completeAnalyticsClear: (clearedThrough, context) =>
+    ipcRenderer.invoke("analytics-complete-clear", clearedThrough, context),
+  countUnclaimedAnalyticsEvents: (context) =>
+    ipcRenderer.invoke("analytics-count-unclaimed", context),
+  countAnalyticsEventsAwaitingUpload: (context) =>
+    ipcRenderer.invoke("analytics-count-awaiting-upload", context),
   claimAnonymousAnalyticsEvents: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("analytics-claim-anonymous", accountId, expectedAuthGeneration),
   clearTranscriptions: () => ipcRenderer.invoke("db-clear-transcriptions"),

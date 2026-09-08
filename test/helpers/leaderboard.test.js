@@ -124,7 +124,7 @@ test("leaderboard surfaces fail closed on unknown participation before scope sta
     }),
     "participation_error"
   );
-  assert.equal(surface({ selectedScope: { ...scope, state: "ready" } }), "sync");
+  assert.equal(surface({ selectedScope: { ...scope, state: "ready" } }), "join");
   assert.equal(
     surface({ selectedScope: { ...scope, state: "ready" }, participating: true }),
     "board"

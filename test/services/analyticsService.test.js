@@ -669,6 +669,86 @@ test("a queued analytics pass resolves its upload gate only when it starts", asy
   assert.equal(eventReads, 0, "revocation is checked before pending rows are read");
 });
 
+test("revoking upload consent stops a multi-batch drain after its active request", async (t) => {
+  const pending = Array.from({ length: 201 }, (_, index) => ({
+    ...EVENT,
+    event_id: `event-${index}`,
+  }));
+  const retired = new Set();
+  const posted = [];
+  let uploadAllowed = true;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => null,
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async (limit) =>
+          pending.filter((event) => !retired.has(event.event_id)).slice(0, limit),
+        markAnalyticsEventsSynced: async (eventIds) => {
+          eventIds.forEach((eventId) => retired.add(eventId));
+          return { success: true, updated: eventIds.length };
+        },
+        cloudApiRequest: async (request) => {
+          posted.push(request.body.events);
+          uploadAllowed = false;
+          return {
+            success: true,
+            data: { accepted: request.body.events.map((event) => event.event_id) },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  assert.equal(await syncPendingAnalytics({ uploadAllowed: () => uploadAllowed }), 200);
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0].length, 200);
+  assert.equal(retired.has("event-200"), false, "the next batch stays pending after revocation");
+});
+
+test("analytics queue and cloud operations carry one pinned account context", async (t) => {
+  const context = { accountId: "account-1", authGeneration: 17 };
+  const localCalls = [];
+  const requests = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async (received) => {
+          localCalls.push(["clear", received]);
+          return null;
+        },
+        getPendingAnalyticsDeletes: async (_limit, received) => {
+          localCalls.push(["deletes", received]);
+          return [];
+        },
+        getPendingAnalyticsEvents: async (_limit, received) => {
+          localCalls.push(["events", received]);
+          return [EVENT];
+        },
+        markAnalyticsEventsSynced: async (_eventIds, received) => {
+          localCalls.push(["synced", received]);
+          return { success: true, updated: 1 };
+        },
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return { success: true, data: { accepted: [EVENT.event_id] } };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  assert.equal(await syncPendingAnalytics({ context }), 1);
+  assert.deepEqual(
+    localCalls,
+    ["clear", "deletes", "events", "synced"].map((name) => [name, context])
+  );
+  assert.equal(requests[0].expectedAuthGeneration, 17);
+});
+
 test("a withheld row is offered once per pass, not once per batch behind it", async (t) => {
   // The server withholds rows it could not store, which correctly keeps them
   // pending. They sit at the head of an oldest-first queue, so re-reading from

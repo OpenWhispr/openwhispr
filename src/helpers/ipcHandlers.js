@@ -45,6 +45,27 @@ const serializeIpcError =
       return { error: error.message, code: error.code, messageKey: error.messageKey };
     }
   };
+
+// Analytics uploads cross two asynchronous boundaries: renderer -> main and
+// main -> cloud. Pin every local queue operation to the same authenticated
+// account generation so a delayed pass cannot adopt a replacement session.
+function assertAnalyticsSyncContext(context) {
+  if (context == null) return null;
+  const state = tokenStore.getState();
+  if (
+    typeof context !== "object" ||
+    typeof context.accountId !== "string" ||
+    context.accountId.length === 0 ||
+    !Number.isInteger(context.authGeneration) ||
+    !state.token ||
+    state.generation !== context.authGeneration
+  ) {
+    throw Object.assign(new Error("Authentication context changed during analytics sync"), {
+      code: "AUTH_CONTEXT_CHANGED",
+    });
+  }
+  return context.accountId;
+}
 // Which diarization dialect a resolved endpoint speaks, for Custom endpoints
 // that front a known provider. Null when the host offers no known dialect.
 const diarizationHost = (endpoint) => {
@@ -1416,36 +1437,44 @@ class IPCHandlers {
       return this.databaseManager.getAnalyticsSummary();
     });
 
-    ipcMain.handle("analytics-get-pending", async (_event, limit) => {
-      return this.databaseManager.getPendingAnalyticsEvents(limit);
+    ipcMain.handle("analytics-get-pending", async (_event, limit, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.getPendingAnalyticsEvents(limit, accountId);
     });
 
-    ipcMain.handle("analytics-mark-synced", async (_event, eventIds) => {
-      return this.databaseManager.markAnalyticsEventsSynced(eventIds);
+    ipcMain.handle("analytics-mark-synced", async (_event, eventIds, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.markAnalyticsEventsSynced(eventIds, accountId);
     });
 
-    ipcMain.handle("analytics-get-pending-deletes", async (_event, limit) => {
-      return this.databaseManager.getPendingAnalyticsDeletes(limit);
+    ipcMain.handle("analytics-get-pending-deletes", async (_event, limit, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.getPendingAnalyticsDeletes(limit, accountId);
     });
 
-    ipcMain.handle("analytics-hard-delete", async (_event, eventIds) => {
-      return this.databaseManager.hardDeleteAnalyticsEvents(eventIds);
+    ipcMain.handle("analytics-hard-delete", async (_event, eventIds, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.hardDeleteAnalyticsEvents(eventIds, accountId);
     });
 
-    ipcMain.handle("analytics-get-pending-clear", async () => {
-      return this.databaseManager.getPendingAnalyticsClear();
+    ipcMain.handle("analytics-get-pending-clear", async (_event, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.getPendingAnalyticsClear(accountId);
     });
 
-    ipcMain.handle("analytics-complete-clear", async (_event, clearedThrough) => {
-      return this.databaseManager.completeAnalyticsClear(clearedThrough);
+    ipcMain.handle("analytics-complete-clear", async (_event, clearedThrough, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.completeAnalyticsClear(clearedThrough, accountId);
     });
 
-    ipcMain.handle("analytics-count-unclaimed", async () => {
+    ipcMain.handle("analytics-count-unclaimed", async (_event, context) => {
+      assertAnalyticsSyncContext(context);
       return this.databaseManager.countUnclaimedAnalyticsEvents();
     });
 
-    ipcMain.handle("analytics-count-awaiting-upload", async () => {
-      return this.databaseManager.countAnalyticsEventsAwaitingUpload();
+    ipcMain.handle("analytics-count-awaiting-upload", async (_event, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.countAnalyticsEventsAwaitingUpload(accountId);
     });
 
     ipcMain.handle(

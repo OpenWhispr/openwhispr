@@ -1,38 +1,58 @@
-// Leaves the user already asked for that have not reached the account yet, one
-// entry per account. Tagged with the account that asked, so the retry can only
-// ever take that account off a leaderboard — never put a different one on — and
-// held as a set, so a second account signing in and leaving cannot discard the
-// opt-out the first one is still waiting to deliver.
-const KEY = "leaderboardLeavePendingUserIds";
+// Leaves the user already asked for that have not reached the account yet.
+// Each account owns its own key so two renderer windows changing different
+// accounts cannot lose either intent through a shared read-modify-write array.
+const LEGACY_KEY = "leaderboardLeavePendingUserIds";
+const PENDING_PREFIX = "leaderboardLeavePending:";
+const RESOLVED_PREFIX = "leaderboardLeaveResolved:";
 
-function readPendingUserIds(): string[] {
+function accountKey(prefix: string, userId: string): string {
+  return `${prefix}${encodeURIComponent(userId)}`;
+}
+
+function legacyPendingIncludes(userId: string): boolean {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : [];
+    const parsed: unknown = JSON.parse(localStorage.getItem(LEGACY_KEY) ?? "[]");
+    return Array.isArray(parsed) && parsed.includes(userId);
   } catch {
-    return [];
+    return false;
   }
 }
 
-function writePendingUserIds(userIds: string[]): void {
+export function readPendingLeaderboardLeave(userId: string): boolean {
   try {
-    if (userIds.length === 0) localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, JSON.stringify(userIds));
+    const pendingKey = accountKey(PENDING_PREFIX, userId);
+    const resolvedKey = accountKey(RESOLVED_PREFIX, userId);
+    if (localStorage.getItem(resolvedKey) === "true") return false;
+    if (localStorage.getItem(pendingKey) === "true") return true;
+    if (!legacyPendingIncludes(userId)) return false;
+
+    // Adopt the old shared-array record lazily. A per-account resolved marker
+    // lets clear remain atomic without rewriting that legacy array.
+    localStorage.setItem(pendingKey, "true");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function writePendingLeaderboardLeave(userId: string): void {
+  try {
+    localStorage.removeItem(accountKey(RESOLVED_PREFIX, userId));
+    localStorage.setItem(accountKey(PENDING_PREFIX, userId), "true");
   } catch {
     // Losing the record only costs the retry; the account preference is unchanged.
   }
 }
 
-export function readPendingLeaderboardLeave(userId: string): boolean {
-  return readPendingUserIds().includes(userId);
-}
-
-export function writePendingLeaderboardLeave(userId: string): void {
-  const pending = readPendingUserIds();
-  if (!pending.includes(userId)) writePendingUserIds([...pending, userId]);
-}
-
 export function clearPendingLeaderboardLeave(userId: string): void {
-  const pending = readPendingUserIds();
-  if (pending.includes(userId)) writePendingUserIds(pending.filter((id) => id !== userId));
+  try {
+    localStorage.removeItem(accountKey(PENDING_PREFIX, userId));
+    // Suppress a migrated legacy entry without rewriting shared state. A new
+    // Leave removes this marker before installing its own pending key.
+    const resolvedKey = accountKey(RESOLVED_PREFIX, userId);
+    if (legacyPendingIncludes(userId)) localStorage.setItem(resolvedKey, "true");
+    else localStorage.removeItem(resolvedKey);
+  } catch {
+    // A failed clear only causes an idempotent leave retry.
+  }
 }

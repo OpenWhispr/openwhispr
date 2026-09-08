@@ -8,7 +8,16 @@ const { installBrowserGlobals } = require("../lib/rendererTestHarness");
 // the sync-toggle flip fires before that leave has reached the account.
 
 const PENDING_KEY = "leaderboardLeavePendingUserIds";
-const pendingUserIds = (storage) => JSON.parse(storage.getItem(PENDING_KEY) ?? "[]");
+const pendingUserIds = (storage) => {
+  const legacy = JSON.parse(storage.getItem(PENDING_KEY) ?? "[]");
+  return [...new Set([...legacy, "user_1", "user_2"])].filter((userId) => {
+    const suffix = encodeURIComponent(userId);
+    if (storage.getItem(`leaderboardLeaveResolved:${suffix}`) === "true") return false;
+    return (
+      legacy.includes(userId) || storage.getItem(`leaderboardLeavePending:${suffix}`) === "true"
+    );
+  });
+};
 const waitFor = async (predicate) => {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     if (predicate()) return;
@@ -86,9 +95,8 @@ test("a leave the account refused stops showing the user as participating", asyn
   );
 });
 
-// The Settings opt-out flips insightsSyncEnabled, which fires the leaderboard's
-// re-read while the leave PATCH is still in flight. Before participation was
-// shared, that read reported the row the leave was busy changing.
+// A refresh trigger can arrive while the leave PATCH is still in flight. The
+// read must not report the row the leave is busy changing.
 test("a read started during a leave never reports the account still joined", async (t) => {
   let releaseLeave;
   const { context, requests, store } = await loadStore(t, {
@@ -172,7 +180,7 @@ test("a join retires the queued leave before its own request goes out", async (t
   assert.equal(store.getState().error, null);
 });
 
-test("a failed join reports that the combined opt-in did not complete", async (t) => {
+test("a failed join reports that participation did not change", async (t) => {
   const { context, storage, store } = await loadStore(t, {
     cloudApiRequest: async () => ({ success: false, status: 500, error: "server error" }),
   });

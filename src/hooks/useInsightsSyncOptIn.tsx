@@ -7,21 +7,17 @@ import {
   cancelInsightsConsent,
   requestInsightsConsent,
 } from "../helpers/insightsConsentCoordinator";
-import {
-  getAuthRequestContextSnapshot,
-  getValidatedAuthGeneration,
-} from "../lib/authRequestContext";
-import { writePendingLeaderboardLeave } from "../lib/pendingLeaderboardLeave";
-import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipationStore";
+import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { canChangeCloudBackupPreference, isCloudBackupAllowed } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import { syncService } from "../services/SyncService.js";
+import type { AnalyticsSyncContext } from "../types/electron";
 import { useAuth } from "./useAuth";
 import { useSettings } from "./useSettings";
 
 /**
- * Single owner of the Insights and Leaderboards opt-in, shared by Settings and
- * the Insights page. Dictations recorded before signing in stay
+ * Single owner of the Insights Sync opt-in, shared by Settings and the Insights
+ * page. Dictations recorded before signing in stay
  * unattributed until the user says otherwise here — signing in never adopts
  * them on its own — so the prompt is the only path that claims them.
  *
@@ -37,37 +33,26 @@ import { useSettings } from "./useSettings";
  * user already had them.
  *
  * unclaimedCount is kept live rather than read only at opt-in time, because
- * more rows appear after it: the toggle survives sign-out, so anything spoken
- * before the next sign-in is unattributed with sync already on. It is what
- * canOfferAnalyticsClaim uses to keep offering this prompt.
+ * account-scope bootstrap can leave new rows unattributed even after the
+ * setting was enabled. It is what canOfferAnalyticsClaim uses to keep offering
+ * this prompt.
  *
- * Joining publishes a name and email to teammates, so the combined action waits
- * for the analytics consent to land before it enables participation. Declining
- * that prompt declines both parts of the opt-in.
- *
- * Leaving is the opposite combined action: sync stops on the device before the
- * account request, and a failed leaderboard leave is retried until it lands.
- * A confirmed server-side leave also turns off local sync, so the two states do
- * not drift when participation changes outside the current surface.
- *
- * Participation itself lives in leaderboardParticipationStore rather than here:
- * Settings and the Insights page can both mount this hook, and an opt-out taken
- * in one has to reach the other.
+ * Leaderboard participation is separate account-level consent. Enabling or
+ * disabling this device's Insights Sync never publishes or removes that account.
  */
+export interface EnableInsightsSyncOptions {
+  /** Join must obtain explicit Sync consent even when no rows are queued yet. */
+  confirmWhenEmpty?: boolean;
+}
+
 export function useInsightsSyncOptIn() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { isLoaded, isSignedIn, user } = useAuth();
+  const { user } = useAuth();
   const userId = user?.id ?? null;
-  const authGeneration = getValidatedAuthGeneration();
   const { insightsSyncEnabled, setInsightsSyncEnabled } = useSettings();
   const [unclaimedCount, setUnclaimedCount] = useState(0);
   const [awaitingUploadCount, setAwaitingUploadCount] = useState(0);
-  const participationReady = useLeaderboardParticipationStore((state) => state.ready);
-  const participationEnabled = useLeaderboardParticipationStore((state) => state.enabled);
-  const participationConfigured = useLeaderboardParticipationStore((state) => state.configured);
-  const participationError = useLeaderboardParticipationStore((state) => state.error);
-  const participationUpdating = useLeaderboardParticipationStore((state) => state.updating);
   const consentOwnerRef = useRef({});
   // Separate from the counts: a live count must never be what holds the dialog
   // open, or it reopens itself on mount for anyone with rows left behind.
@@ -76,65 +61,15 @@ export function useInsightsSyncOptIn() {
   const [promptKind, setPromptKind] = useState<"enable" | "claim" | null>(null);
   const promptAccountIdRef = useRef(userId);
   const syncAllowedByPolicy = usePolicyStore(isCloudBackupAllowed);
-  const canToggleSync =
-    canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled) &&
-    !participationUpdating;
+  const canToggleSync = canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled);
 
   const reportActivationFailure = useCallback(
     (error: unknown) => {
-      console.error("Claiming earlier Insights events failed:", error);
+      console.error("Enabling Insights Sync failed:", error);
       toast({ title: t("insights.syncEnableError"), variant: "destructive" });
     },
     [t, toast]
   );
-
-  // Without a validated account credential there is no safe account to read, so
-  // keep participation unknown until auth revalidation reruns this callback.
-  const refreshParticipation = useCallback(async () => {
-    const { refresh, reset } = useLeaderboardParticipationStore.getState();
-    if (
-      !isLoaded ||
-      !isSignedIn ||
-      !userId ||
-      authGeneration == null ||
-      getValidatedAuthGeneration() !== authGeneration
-    ) {
-      reset();
-      return;
-    }
-    await refresh({ userId, authGeneration });
-  }, [authGeneration, isLoaded, isSignedIn, userId]);
-
-  // Every surface that exposes the combined preference reconciles on mount and
-  // auth changes. The shared store coalesces simultaneous reads from Settings
-  // and Insights; successful writes already publish their authoritative reply.
-  useEffect(() => {
-    void refreshParticipation();
-  }, [refreshParticipation]);
-
-  // Participation can change on another surface or client. False wins because
-  // enabling local uploads without leaderboard participation recreates the
-  // split state this combined preference is meant to prevent.
-  useEffect(() => {
-    if (
-      !insightsSyncEnabled ||
-      !participationReady ||
-      !participationConfigured ||
-      participationEnabled ||
-      participationError !== null ||
-      participationUpdating
-    )
-      return;
-    setInsightsSyncEnabled(false);
-  }, [
-    insightsSyncEnabled,
-    participationConfigured,
-    participationEnabled,
-    participationError,
-    participationReady,
-    participationUpdating,
-    setInsightsSyncEnabled,
-  ]);
 
   // The claim lands before the pass is requested so the rows it adopts go up
   // with it, rather than waiting for the next ambient one.
@@ -160,41 +95,21 @@ export function useInsightsSyncOptIn() {
         getValidatedAuthGeneration() !== expectedAuthGeneration
       )
         return false;
+      setInsightsSyncEnabled(true);
+      syncService.requestSyncAll("manual");
       return true;
     },
-    [reportActivationFailure]
+    [reportActivationFailure, setInsightsSyncEnabled]
   );
 
-  const leaveLeaderboard = useCallback(async () => {
-    if (!userId) return true;
-    const participation = useLeaderboardParticipationStore.getState();
-    const current = getAuthRequestContextSnapshot();
-    if (current.sessionUserId !== userId) {
-      participation.queueLeave(userId);
-      return false;
-    }
-    const requestedAuthGeneration = getValidatedAuthGeneration();
-    if (requestedAuthGeneration == null) {
-      participation.queueLeave(userId);
-      return false;
-    }
-    return participation.leave({ userId, authGeneration: requestedAuthGeneration });
-  }, [userId]);
-
-  const disableInsightsSync = useCallback(async () => {
-    // The device stops uploading straight away: an opt-out that waits on the
-    // network is an opt-out the user loses whenever the network is down.
+  const disableInsightsSync = useCallback(() => {
     setInsightsSyncEnabled(false);
-    // Signed out there is no account row to clear, and the call could only fail
-    // for want of a credential.
-    if (!isSignedIn) return true;
-    return leaveLeaderboard();
-  }, [isSignedIn, leaveLeaderboard, setInsightsSyncEnabled]);
+  }, [setInsightsSyncEnabled]);
 
-  const refreshCounts = useCallback(async () => {
+  const refreshCounts = useCallback(async (context?: AnalyticsSyncContext) => {
     const [unclaimed, awaitingUpload] = await Promise.all([
-      window.electronAPI.countUnclaimedAnalyticsEvents().catch(() => 0),
-      window.electronAPI.countAnalyticsEventsAwaitingUpload().catch(() => 0),
+      window.electronAPI.countUnclaimedAnalyticsEvents(context),
+      window.electronAPI.countAnalyticsEventsAwaitingUpload(context),
     ]);
     setUnclaimedCount(unclaimed);
     setAwaitingUploadCount(awaitingUpload);
@@ -204,8 +119,13 @@ export function useInsightsSyncOptIn() {
   // Every claim, purge and new dictation broadcasts analytics-changed, so the
   // counts follow the rows without polling.
   useEffect(() => {
-    void refreshCounts();
-    return window.electronAPI.onAnalyticsChanged?.(() => void refreshCounts());
+    const refresh = () => {
+      void refreshCounts().catch((error) => {
+        console.error("Reading Insights Sync counts failed:", error);
+      });
+    };
+    refresh();
+    return window.electronAPI.onAnalyticsChanged?.(refresh);
   }, [refreshCounts]);
 
   // Consent belongs to the account that opened the prompt. If auth changes
@@ -223,96 +143,55 @@ export function useInsightsSyncOptIn() {
     return () => cancelInsightsConsent(owner, false);
   }, []);
 
-  // Resolves once the upload consent has settled, so the combined action can
-  // wait for the user's answer before it publishes participation.
-  const confirmInsightsSync = useCallback(async () => {
-    if (!syncAllowedByPolicy) return false;
-    const requestedAccountId = userId;
-    const requestedAuthGeneration = getValidatedAuthGeneration();
-    if (!requestedAccountId || requestedAuthGeneration == null) return false;
-    const { unclaimed, awaitingUpload } = await refreshCounts();
-    if (
-      promptAccountIdRef.current !== requestedAccountId ||
-      getValidatedAuthGeneration() !== requestedAuthGeneration
-    )
-      return false;
-    // Already on: the pre-sign-in rows are the only thing still unanswered.
-    // Turning it on: ask about everything the first pass would send, not just
-    // the pre-sign-in slice. Even with nothing queued, joining publishes the
-    // account profile and therefore still needs an explicit confirmation.
-    const pending = insightsSyncEnabled ? unclaimed : awaitingUpload;
-    const accepted = await requestInsightsConsent({
-      accountId: requestedAccountId,
-      authGeneration: requestedAuthGeneration,
-      kind: insightsSyncEnabled ? "claim" : "enable",
-      owner: consentOwnerRef.current,
-      open: setPromptKind,
-      close: () => setPromptKind(null),
-    });
-    if (!accepted) return false;
-    return prepareInsightsSync(pending > 0, requestedAccountId, requestedAuthGeneration);
-  }, [insightsSyncEnabled, prepareInsightsSync, refreshCounts, syncAllowedByPolicy, userId]);
-
-  // The product exposes one enable action for Insights and Leaderboards. The
-  // analytics consent must land before the account is published. Sync turns on
-  // only after that write succeeds, so a refused join cannot leave half of the
-  // combined preference enabled.
-  const joinLeaderboard = useCallback(async () => {
-    if (!syncAllowedByPolicy) return false;
-    if (useLeaderboardParticipationStore.getState().updating) return false;
-    const syncWasEnabled = insightsSyncEnabled;
-    const requestedAccountId = userId;
-    const requestedAuthGeneration = getValidatedAuthGeneration();
-    if (!requestedAccountId || requestedAuthGeneration == null) return false;
-    if (!(await confirmInsightsSync())) return false;
-    if (
-      promptAccountIdRef.current !== requestedAccountId ||
-      getValidatedAuthGeneration() !== requestedAuthGeneration
-    )
-      return false;
-    const participation = useLeaderboardParticipationStore.getState();
-    if (participation.updating) return false;
-    const joined = await participation.join({
-      userId: requestedAccountId,
-      authGeneration: requestedAuthGeneration,
-    });
-    if (!joined) {
-      // A stale account's fenced request must not change the replacement
-      // account's device preference or show its failure in the new session.
-      if (
-        promptAccountIdRef.current === requestedAccountId &&
-        getValidatedAuthGeneration() === requestedAuthGeneration
-      ) {
-        if (!syncWasEnabled) setInsightsSyncEnabled(false);
-        toast({
-          title: t("insights.leaderboard.activationError"),
-          variant: "destructive",
+  const enableInsightsSync = useCallback(
+    async (options: EnableInsightsSyncOptions = {}) => {
+      if (!syncAllowedByPolicy) return false;
+      const requestedAccountId = userId;
+      const requestedAuthGeneration = getValidatedAuthGeneration();
+      if (!requestedAccountId || requestedAuthGeneration == null) return false;
+      let counts: { unclaimed: number; awaitingUpload: number };
+      try {
+        counts = await refreshCounts({
+          accountId: requestedAccountId,
+          authGeneration: requestedAuthGeneration,
         });
+      } catch (error) {
+        reportActivationFailure(error);
+        return false;
       }
-      return false;
-    }
-    if (
-      promptAccountIdRef.current !== requestedAccountId ||
-      getValidatedAuthGeneration() !== requestedAuthGeneration
-    ) {
-      // The join response landed, but its consenting account is no longer the
-      // active auth context. Do not issue a leave with somebody else's token;
-      // retain the compensating opt-out for this account's next valid pass.
-      writePendingLeaderboardLeave(requestedAccountId);
-      return false;
-    }
-    setInsightsSyncEnabled(true);
-    syncService.requestSyncAll("manual");
-    return true;
-  }, [
-    confirmInsightsSync,
-    insightsSyncEnabled,
-    setInsightsSyncEnabled,
-    syncAllowedByPolicy,
-    t,
-    toast,
-    userId,
-  ]);
+      const { unclaimed, awaitingUpload } = counts;
+      if (
+        promptAccountIdRef.current !== requestedAccountId ||
+        getValidatedAuthGeneration() !== requestedAuthGeneration
+      )
+        return false;
+      // Already on: the pre-sign-in rows are the only thing still unanswered.
+      // Turning it on: ask about everything the first pass would send, not just
+      // the pre-sign-in slice. Nothing queued means there is nothing to claim.
+      const pending = insightsSyncEnabled ? unclaimed : awaitingUpload;
+      if (pending === 0 && !options.confirmWhenEmpty) {
+        return prepareInsightsSync(false, requestedAccountId, requestedAuthGeneration);
+      }
+      const accepted = await requestInsightsConsent({
+        accountId: requestedAccountId,
+        authGeneration: requestedAuthGeneration,
+        kind: insightsSyncEnabled ? "claim" : "enable",
+        owner: consentOwnerRef.current,
+        open: setPromptKind,
+        close: () => setPromptKind(null),
+      });
+      if (!accepted) return false;
+      return prepareInsightsSync(pending > 0, requestedAccountId, requestedAuthGeneration);
+    },
+    [
+      insightsSyncEnabled,
+      prepareInsightsSync,
+      refreshCounts,
+      reportActivationFailure,
+      syncAllowedByPolicy,
+      userId,
+    ]
+  );
 
   const claiming = promptKind === "claim";
   const promptCount = claiming ? unclaimedCount : awaitingUploadCount;
@@ -329,16 +208,16 @@ export function useInsightsSyncOptIn() {
         // Also covers Esc and the overlay: a dismissed prompt is a declined one.
         answerClaimPrompt(false);
       }}
-      title={t("insights.syncAndJoinTitle")}
-      description={`${t(
+      title={t(claiming ? "insights.claimTitle" : "insights.enableTitle")}
+      description={t(
         promptCount === 0
-          ? "insights.syncAndJoinEmptyDescription"
+          ? "insights.syncPrompt"
           : claiming
             ? "insights.claimDescription"
             : "insights.enableDescription",
         { count: promptCount }
-      )} ${t("insights.syncAndJoinDisclosure")}`}
-      confirmText={t("insights.syncAndJoinConfirm")}
+      )}
+      confirmText={t(claiming ? "insights.claimInclude" : "insights.enableConfirm")}
       cancelText={t("insights.claimSkip")}
       onConfirm={() => answerClaimPrompt(true)}
     />
@@ -347,13 +226,8 @@ export function useInsightsSyncOptIn() {
   return {
     canToggleSync,
     disableInsightsSync,
-    joinLeaderboard,
+    enableInsightsSync,
     optInDialog,
-    participationEnabled,
-    participationError,
-    participationReady,
-    participationUpdating,
-    refreshParticipation,
     syncAllowedByPolicy,
     unclaimedCount,
   };

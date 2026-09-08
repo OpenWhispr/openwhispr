@@ -17,8 +17,16 @@ function captureRequests(t, responseData) {
   return requests;
 }
 
-const pendingUserIds = (storage) =>
-  JSON.parse(storage.getItem("leaderboardLeavePendingUserIds") ?? "[]");
+const pendingUserIds = (storage) => {
+  const legacy = JSON.parse(storage.getItem("leaderboardLeavePendingUserIds") ?? "[]");
+  return [...new Set([...legacy, "user_1", "user_2"])].filter((userId) => {
+    const suffix = encodeURIComponent(userId);
+    if (storage.getItem(`leaderboardLeaveResolved:${suffix}`) === "true") return false;
+    return (
+      legacy.includes(userId) || storage.getItem(`leaderboardLeavePending:${suffix}`) === "true"
+    );
+  });
+};
 
 async function validateAuthContext(userId = "user_1", authGeneration = 7, reset = true) {
   const auth = require("../../src/lib/authRequestContext.ts");
@@ -39,7 +47,7 @@ async function validateAuthContext(userId = "user_1", authGeneration = 7, reset 
   return { userId, authGeneration };
 }
 
-test("participation uses the account endpoint for both reads and sync-controlled updates", async (t) => {
+test("participation uses the account endpoint for reads, joins, and leaves", async (t) => {
   const participation = { configured: true, enabled: true, updatedAt: null };
   const requests = captureRequests(t, participation);
   const context = await validateAuthContext();

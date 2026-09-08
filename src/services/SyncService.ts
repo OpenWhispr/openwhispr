@@ -37,7 +37,6 @@ import {
   isCloudBackupAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
-import { useSettingsStore } from "../stores/settingsStore";
 import {
   buildNoteCreatePayload,
   buildNoteUpdatePayload,
@@ -2204,15 +2203,13 @@ export class SyncService {
   }
 
   // The Insights view uses this same guarded path before reading the account
-  // summary. Keeping the participation check here prevents a foreground
-  // refresh from bypassing the account-wide half of the combined preference.
+  // summary, so queued uploads and foreground refreshes use one consent gate.
   async syncAnalyticsNow(): Promise<boolean> {
     return this.syncAnalytics();
   }
 
   // Push-only: the account summary is read live by the Insights view, so there
-  // is nothing to pull back into the device's own counters. Returns whether
-  // uploads were allowed after reconciling account participation.
+  // is nothing to pull back into the device's own counters.
   private async syncAnalytics(): Promise<boolean> {
     const consent = this.consent();
     if (!consent.shared) return false;
@@ -2223,40 +2220,38 @@ export class SyncService {
     // A leaderboard opt-out outlives the window that made it, so every pass
     // retries the one this account is still waiting for. It only ever leaves.
     await LeaderboardService.flushPendingLeave(participationContext);
+    // Participation controls roster visibility, not analytics consent. A
+    // missing or failed participation route must never interrupt Insights Sync.
     const uploadRequested = consent.analytics;
     let uploadAllowed = false;
     const verifyUploadAllowed = async (): Promise<boolean> => {
+      await assertAuthGenerationCurrent(authGeneration);
+      const current = getAuthRequestContextSnapshot();
+      if (
+        current.sessionUserId !== accountId ||
+        current.sessionGeneration !== authGeneration ||
+        current.validatedGeneration !== authGeneration
+      ) {
+        throw Object.assign(new Error("Authentication context changed during analytics sync"), {
+          code: "AUTH_CONTEXT_CHANGED",
+        });
+      }
       // A pass requested while local sync was off may run erasures, but must
       // never gain upload authority merely because a later setting changed.
-      if (!uploadRequested || !this.consent().analytics) return false;
-      try {
-        const participation = await LeaderboardService.getParticipation(participationContext);
-        // A leaderboard leave is account-scoped and may have happened on
-        // another device. Reconcile it before this device uploads another
-        // counter. Accounts that predate the combined preference have no row,
-        // so their existing Insights choice remains unchanged until they make
-        // an explicit leaderboard choice.
-        if (participation.configured && !participation.enabled) {
-          useSettingsStore.getState().setInsightsSyncEnabled(false);
-        }
-        uploadAllowed =
-          (!participation.configured || participation.enabled) && this.consent().analytics;
-        return uploadAllowed;
-      } catch (err) {
-        if (isAuthContextError(err)) throw err;
-        // Participation is the account-wide half of this preference. When it
-        // cannot be verified, fail closed for uploads but still let queued
-        // analytics erasures run below.
-        console.error("Checking leaderboard participation failed:", err);
-        return false;
-      }
+      uploadAllowed = uploadRequested && this.consent().analytics;
+      return uploadAllowed;
     };
     try {
       // Revoking retention/Insights consent blocks new uploads, never deletion
       // of rows that may already exist in the account. The gate itself reaches
       // the head of AnalyticsService's queue before it resolves, so a local
       // opt-out while another pass runs still wins before rows are read.
-      if ((await syncPendingAnalytics({ uploadAllowed: verifyUploadAllowed })) > 0) {
+      if (
+        (await syncPendingAnalytics({
+          uploadAllowed: verifyUploadAllowed,
+          context: { accountId, authGeneration },
+        })) > 0
+      ) {
         this.analyticsPassMovedWork = true;
       }
     } catch (err) {
@@ -2264,6 +2259,7 @@ export class SyncService {
       // A rejected batch stays pending for the next pass; the rest of this one
       // still has folders, notes, and transcriptions to finish.
       console.error("Analytics sync failed:", err);
+      return false;
     }
     return uploadAllowed && this.consent().analytics;
   }

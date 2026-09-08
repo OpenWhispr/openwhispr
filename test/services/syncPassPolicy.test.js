@@ -80,8 +80,8 @@ test("consent: disabling local history stops pending Insights uploads", async ()
 });
 
 // --- canOfferAnalyticsClaim -------------------------------------------------
-// insightsSyncEnabled is device-scoped and survives sign-out, so counters
-// spoken before the next sign-in are unattributed with the toggle still on.
+// Account-scope bootstrap can leave rows unattributed while the local setting
+// is on, so those counters can still need a claim after sign-in.
 
 const OFFER = {
   signedIn: true,

@@ -1702,7 +1702,7 @@ export default function SettingsPage({
   const {
     canToggleSync: canToggleInsightsSync,
     disableInsightsSync,
-    joinLeaderboard,
+    enableInsightsSync,
     optInDialog: insightsOptInDialog,
     syncAllowedByPolicy: insightsSyncAllowedByPolicy,
   } = useInsightsSyncOptIn();
@@ -4088,9 +4088,7 @@ EOF`,
                         : !insightsSyncAllowedByPolicy
                           ? t("common.managedByOrg")
                           : effectiveDataRetentionEnabled
-                            ? `${t("settingsPage.privacy.insightsSyncDescription")} ${t(
-                                "insights.leaderboard.syncDescription"
-                              )}`
+                            ? t("settingsPage.privacy.insightsSyncDescription")
                             : t("settingsPage.privacy.insightsSyncRequiresHistory")
                     }
                   >
@@ -4108,10 +4106,8 @@ EOF`,
                         (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
                       }
                       onChange={(enabled) => {
-                        // A failed opt-out is reported on the leaderboard, the
-                        // only surface that knows whether the account was on one.
-                        if (enabled) void joinLeaderboard();
-                        else void disableInsightsSync();
+                        if (enabled) void enableInsightsSync();
+                        else disableInsightsSync();
                       }}
                     />
                   </SettingsRow>

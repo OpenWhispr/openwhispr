@@ -96,6 +96,14 @@ export async function cloudPost<T = unknown>(path: string, body?: unknown): Prom
   return cloudRequest<T>("POST", path, body);
 }
 
+export async function cloudPostForAuthGeneration<T = unknown>(
+  path: string,
+  body: unknown,
+  authGeneration: number
+): Promise<T> {
+  return cloudRequest<T>("POST", path, body, false, authGeneration);
+}
+
 export async function cloudPatch<T = unknown>(path: string, body?: unknown): Promise<T> {
   return cloudRequest<T>("PATCH", path, body);
 }
@@ -112,9 +120,16 @@ export async function cloudDelete<T = unknown>(path: string, body?: unknown): Pr
   return cloudRequest<T>("DELETE", path, body);
 }
 
+export async function cloudDeleteForAuthGeneration<T = unknown>(
+  path: string,
+  body: unknown,
+  authGeneration: number
+): Promise<T> {
+  return cloudRequest<T>("DELETE", path, body, false, authGeneration);
+}
+
 export function isAuthContextError(error: unknown): boolean {
-  return (
-    error instanceof CloudApiError &&
-    (error.code === "AUTH_CONTEXT_CHANGED" || error.code === "AUTH_CONTEXT_UNVALIDATED")
-  );
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return code === "AUTH_CONTEXT_CHANGED" || code === "AUTH_CONTEXT_UNVALIDATED";
 }
