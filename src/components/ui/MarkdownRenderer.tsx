@@ -1,15 +1,18 @@
+import type { ComponentProps } from "react";
 import Markdown from "react-markdown";
 import { cn } from "../lib/utils";
 
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  rehypePlugins?: ComponentProps<typeof Markdown>["rehypePlugins"];
 }
 
-export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, className, rehypePlugins }: MarkdownRendererProps) {
   return (
     <div className={cn("prose prose-sm max-w-none", className)}>
       <Markdown
+        rehypePlugins={rehypePlugins}
         components={{
           h1: ({ children }) => (
             <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0">{children}</h1>

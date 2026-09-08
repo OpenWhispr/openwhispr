@@ -666,6 +666,21 @@
   color: oklch(0.27 0.09 285);
 }
 
+/* Streaming reply: each newly arrived word rises in once on the word spring.
+   Settled words carry no animation; their spans stay in place as the tail grows. */
+.assistant-word[data-rise="true"] {
+  display: inline-block;
+  animation: assistant-word-rise var(--motion-word-ms, 320ms)
+    var(--motion-word-ease, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+@keyframes assistant-word-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .expanding-panel-surface {
     transition-duration: 1ms;
@@ -744,5 +759,9 @@
 
   .assistant-response-content-updating {
     filter: none;
+  }
+
+  .assistant-word[data-rise="true"] {
+    animation: none;
   }
 }

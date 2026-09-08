@@ -1,8 +1,18 @@
-import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy, Plus, X } from "lucide-react";
 import { BrandMarkIcon } from "./BrandMarkIcon";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
+import { rehypeWordRise } from "./rehypeWordRise";
 import { Button } from "../ui/button";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
@@ -11,6 +21,8 @@ import { ChatInput } from "../chat/ChatInput";
 import { useWindowDrag } from "../../hooks/useWindowDrag";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { formatHotkeyListLabel } from "../../utils/hotkeys";
+import { MOTION_TIMING } from "../../utils/springEasing";
+import { splitStreamingMarkdown, countWords } from "../../utils/streamingMarkdown";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
   resolveAssistantFooterPresentation,
@@ -51,6 +63,11 @@ type AssistantFooterPhase =
 
 const MANUAL_COPY_FEEDBACK_MS = 1800;
 const AUTO_COPY_FEEDBACK_MS = 6000;
+
+// Shared by the settled (StableAssistantMarkdown) and tail (MarkdownRenderer)
+// halves of a streaming reply so the split is visually seamless.
+const RESPONSE_MARKDOWN_CLASS =
+  "text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]";
 
 interface AssistantPanelProps {
   /** Voice command waiting to be sent into the conversation (consumed on mount and on change). */
@@ -279,6 +296,43 @@ export function AssistantPanel({
   const displayedResponseRef = useRef("");
   if (responseContent) displayedResponseRef.current = responseContent;
   const displayedResponse = responseContent || displayedResponseRef.current;
+
+  // While streaming, everything before the last paragraph break is "settled"
+  // and rendered once by the memoized StableAssistantMarkdown below — its
+  // input string stops changing once a boundary passes, so React bails out
+  // of re-rendering it and its words never re-animate. Only the tail (the
+  // current paragraph) re-renders per token. Once streaming ends the whole
+  // reply is one settled block with no live tail.
+  const isStreamingNow = Boolean(latestAssistantMessage?.isStreaming);
+  const { settled: settledMarkdown, tail: tailMarkdown } = useMemo(
+    () =>
+      isStreamingNow
+        ? splitStreamingMarkdown(displayedResponse)
+        : { settled: displayedResponse, tail: "" },
+    [displayedResponse, isStreamingNow]
+  );
+  // Words already risen in the current tail; reset whenever the tail restarts
+  // (a paragraph boundary just moved its words into the settled half, so the
+  // new, shorter tail's words are all new again).
+  const risenWordsRef = useRef(0);
+  const tailWordCount = countWords(tailMarkdown);
+  if (tailWordCount < risenWordsRef.current) risenWordsRef.current = 0;
+  const firstNewWordIndex = risenWordsRef.current;
+  useLayoutEffect(() => {
+    risenWordsRef.current = tailWordCount;
+  });
+  // unified/react-markdown's rehypePlugins entries must be [attacher, options]
+  // tuples — unified calls the attacher itself at freeze time. Passing the
+  // already-invoked transformer directly (rehypeWordRise({...})) makes
+  // unified call THAT as the attacher with no arguments, crashing on an
+  // undefined tree the moment a reply streams.
+  const tailPlugins = useMemo<
+    Array<[typeof rehypeWordRise, { firstNewWordIndex: number; staggerMs: number }]>
+  >(
+    () => [[rehypeWordRise, { firstNewWordIndex, staggerMs: MOTION_TIMING.wordStaggerMs }]],
+    [firstNewWordIndex]
+  );
+
   // Keep the previous response ineligible throughout a follow-up request. Audio
   // processing can return voiceState to idle one render before the chat stream
   // reports busy; without this latch, the old response briefly restores the
@@ -484,10 +538,21 @@ export function AssistantPanel({
                 ref={responseSelectionRootRef}
                 style={{ animation: "agent-message-in 160ms ease-out both" }}
               >
-                <StableAssistantMarkdown
-                  content={displayedResponse}
-                  className="text-[15px] leading-relaxed text-foreground selection:bg-agent-brand/35 selection:text-foreground [&_p]:text-[15px] [&_li]:text-[15px]"
-                />
+                <div className={settledMarkdown && tailMarkdown ? "space-y-2" : undefined}>
+                  {settledMarkdown && (
+                    <StableAssistantMarkdown
+                      content={settledMarkdown}
+                      className={RESPONSE_MARKDOWN_CLASS}
+                    />
+                  )}
+                  {tailMarkdown && (
+                    <MarkdownRenderer
+                      content={tailMarkdown}
+                      className={RESPONSE_MARKDOWN_CLASS}
+                      rehypePlugins={tailPlugins}
+                    />
+                  )}
+                </div>
                 {latestAssistantMessage?.isStreaming && (
                   <span
                     className="ml-0.5 inline-block h-4 w-0.5 align-middle bg-foreground/70"
