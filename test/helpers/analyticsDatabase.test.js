@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { createDb } = require("./harness/db.js");
+const { localDateKey } = require("../../src/helpers/analytics.js");
 
 function recordEvent(db, eventId, overrides = {}) {
   db.recordAnalyticsEvent({
@@ -237,6 +238,53 @@ test("analytics reconciliation picks up later eligibility and usable processed t
   );
   assert.equal(db.backfillAnalyticsHistoryBatch().inserted, 1);
   assert.equal(db.backfillAnalyticsHistoryBatch().scanned, 0);
+});
+
+test("a dictation whose time cannot be read stays out instead of landing on today", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.db
+    .prepare(
+      `INSERT INTO transcriptions (
+         text, status, client_transcription_id, timestamp, created_at
+       ) VALUES ('undateable words', 'completed', 'no-usable-time', 'not-a-time', 'not-a-time')`
+    )
+    .run();
+
+  assert.deepEqual(db.backfillAnalyticsHistoryBatch(), {
+    complete: true,
+    nextCursor: 1,
+    scanned: 1,
+    inserted: 0,
+    skipped: 1,
+  });
+  const summary = db.getAnalyticsSummary();
+  assert.equal(summary.totalDictations, 0, "an undateable row must not become today's dictation");
+  assert.equal(summary.currentStreakDays, 0, "and must not manufacture a streak");
+});
+
+// upsertTranscriptionFromCloud carries the cloud created_at but lets timestamp
+// default to the local pull, so trusting a naive timestamp would date every
+// pulled dictation to the day this device happened to sync.
+test("a cloud-pulled dictation is dated from its creation time, not the pull", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.upsertTranscriptionFromCloud({
+    client_transcription_id: "pulled-history",
+    id: "cloud-1",
+    text: "three pulled words",
+    status: "completed",
+    created_at: "2026-03-04 08:00:00",
+  });
+
+  assert.equal(db.backfillAnalyticsHistoryBatch().inserted, 1);
+  assert.equal(
+    db.db.prepare("SELECT local_date FROM analytics_events WHERE event_id = 'pulled-history'").get()
+      .local_date,
+    localDateKey(new Date("2026-03-04T08:00:00Z"))
+  );
 });
 
 test("backfill preserves the transcription creation time for retention", (t) => {

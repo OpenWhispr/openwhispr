@@ -625,6 +625,13 @@ class IPCHandlers {
     this._noteFilesEnabled = false;
     this._granolaImportPending = null;
     this._analyticsHistoryBackfillPromise = null;
+    // Bumped by the only two writes that can make history newly eligible: a
+    // retry that lands, and a transcription pulled from the cloud. A fresh
+    // dictation records its own event, so it is never a backfill candidate.
+    // A revision rather than a flag because either write can land mid-scan,
+    // after the pass has already read past the row it changes.
+    this._analyticsHistoryRevision = 0;
+    this._analyticsHistoryBackfilledRevision = -1;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
     this.whisperVadSettings = {
@@ -639,7 +646,7 @@ class IPCHandlers {
     this._logDetectedGpus();
     this.setupHandlers();
     setImmediate(() => {
-      void this._ensureAnalyticsHistoryBackfilled().catch(() => {});
+      void this._ensureAnalyticsHistoryBackfilled();
     });
     // Lives for the app's lifetime; IPCHandlers has no teardown path.
     tokenStore.subscribe(({ generation, token }) => {
@@ -676,22 +683,45 @@ class IPCHandlers {
     }
   }
 
+  // Reconciliation is best-effort. Analytics reads await it so later-eligible
+  // history shows up before the numbers are read, which means a failure here
+  // must never fail the read itself: a broken scan would otherwise blank an
+  // Insights summary that SQLite could have answered perfectly well.
   async _ensureAnalyticsHistoryBackfilled() {
+    if (this._analyticsHistoryBackfilledRevision === this._analyticsHistoryRevision) {
+      return { inserted: 0, scanned: 0 };
+    }
     if (this._analyticsHistoryBackfillPromise) return this._analyticsHistoryBackfillPromise;
+    const startingRevision = this._analyticsHistoryRevision;
     const backfillPromise = (async () => {
       let inserted = 0;
       let scanned = 0;
+      let skipped = 0;
       let afterId = 0;
       while (true) {
         const batch = this.databaseManager.backfillAnalyticsHistoryBatch({ afterId });
         inserted += batch.inserted;
         scanned += batch.scanned;
+        skipped += batch.skipped;
         if (batch.complete) break;
         afterId = batch.nextCursor;
         await new Promise((resolve) => setImmediate(resolve));
       }
+      // A finished pass is this process's checkpoint. Without it every analytics
+      // read re-walks the whole transcriptions table -- including each turn of
+      // AnalyticsService's upload loop, which reads pending events per batch.
+      // A write that landed mid-scan leaves the revision ahead of where this
+      // pass started, and the next read reconciles again rather than trusting
+      // a scan that may have already read past the row that changed.
+      this._analyticsHistoryBackfilledRevision = startingRevision;
       if (inserted > 0) broadcastToWindows("analytics-changed");
-      debugLogger.info("Analytics history backfill complete", { inserted, scanned }, "analytics");
+      if (scanned > 0) {
+        debugLogger.info(
+          "Analytics history backfill complete",
+          { inserted, skipped, scanned },
+          "analytics"
+        );
+      }
       return { inserted, scanned };
     })();
     this._analyticsHistoryBackfillPromise = backfillPromise;
@@ -699,11 +729,9 @@ class IPCHandlers {
       return await backfillPromise;
     } catch (error) {
       debugLogger.error("Analytics history backfill failed", { error: error.message }, "analytics");
-      throw error;
+      return { inserted: 0, scanned: 0 };
     } finally {
-      if (this._analyticsHistoryBackfillPromise === backfillPromise) {
-        this._analyticsHistoryBackfillPromise = null;
-      }
+      this._analyticsHistoryBackfillPromise = null;
     }
   }
 
@@ -2534,9 +2562,13 @@ class IPCHandlers {
     ipcMain.handle("db-get-transcription-by-client-id", (_, clientId) =>
       this.databaseManager.getTranscriptionByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-transcription-from-cloud", (_, cloudTranscription) =>
-      this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription)
-    );
+    ipcMain.handle("db-upsert-transcription-from-cloud", (_, cloudTranscription) => {
+      // Pulled history predates this device's analytics events, and the upsert
+      // can also flip an existing row to completed. Left to the next analytics
+      // read rather than started here: a pull arrives one row at a time.
+      this._analyticsHistoryRevision += 1;
+      return this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription);
+    });
     ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId) =>
       this.databaseManager.markTranscriptionSynced(id, cloudId)
     );
@@ -6261,7 +6293,9 @@ class IPCHandlers {
         if (updated) {
           setImmediate(() => {
             broadcastToWindows("transcription-updated", updated);
-            void this._ensureAnalyticsHistoryBackfilled().catch(() => {});
+            // A row that just reached "completed" is newly eligible.
+            this._analyticsHistoryRevision += 1;
+            void this._ensureAnalyticsHistoryBackfilled();
           });
         }
         return { success: true, transcription: updated };

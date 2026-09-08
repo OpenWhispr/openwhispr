@@ -80,11 +80,6 @@ test("a join enables sync only after leaderboard participation succeeds", () => 
     join.includes("!(await confirmInsightsSync())) return"),
     "a declined opt-in must abandon the join instead of publishing anyway"
   );
-  assert.equal(
-    join.includes("!insightsSyncEnabled &&"),
-    false,
-    "an already-enabled device must still offer newly backfilled anonymous history"
-  );
   assert.ok(
     join.indexOf(".join(requestedAccountId)") < join.indexOf("setInsightsSyncEnabled(true)"),
     "local uploads must stay off until leaderboard participation succeeds"

@@ -116,18 +116,22 @@ const SELECTED_CALENDAR_EVENT_FILTER = `(
   ))
 )`;
 
-function parseAnalyticsTimestamp(...values) {
-  for (const value of values) {
-    if (typeof value !== "string" || value.trim().length === 0) continue;
-    const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value)
-      ? `${value.replace(" ", "T")}Z`
-      : value;
-    const parsed = new Date(normalized);
-    if (Number.isFinite(parsed.getTime())) return parsed;
-  }
-  return null;
+// SQLite's CURRENT_TIMESTAMP carries no zone designator and the ECMAScript
+// parser reads that form as local time, so the naive form is pinned to UTC
+// before parsing. Returns null for anything unreadable.
+function parseAnalyticsTimestamp(value) {
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value)
+    ? `${value.replace(" ", "T")}Z`
+    : value;
+  const parsed = new Date(normalized);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
 }
 
+// An explicit zone marks an instant this app captured at dictation time. A
+// naive timestamp may instead be a sync artifact: upsertTranscriptionFromCloud
+// keeps the cloud created_at but lets timestamp default to the local pull, so
+// a naive value must never outrank created_at when dating a historical row.
 function hasExplicitAnalyticsTimestamp(value) {
   return (
     typeof value === "string" &&
@@ -1295,6 +1299,11 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
+      // With an occurrence time this column carries when the dictation was
+      // spoken rather than when the row was written -- earlier by the length
+      // of the recording plus transcription. History reads it through
+      // normalizeDbDate, which already branches on a trailing zone.
+      //
       // Keep the existing SQLite-friendly separator so mixed old/new rows
       // continue to sort chronologically, while the trailing Z marks this as
       // an exact client-captured instant for clear-state reconciliation.
@@ -1373,8 +1382,6 @@ class DatabaseManager {
 
       let inserted = 0;
       let skipped = 0;
-      const fallbackTime = new Date();
-      const clearedThrough = clearState ? Date.parse(clearState.cleared_through) : Number.NaN;
       const insert = this.db.prepare(
         `INSERT INTO analytics_events (
            event_id, account_id, occurred_at, local_date, word_count,
@@ -1397,21 +1404,22 @@ class DatabaseManager {
           }
 
           const createdAt = parseAnalyticsTimestamp(row.created_at);
-          const explicitOccurredAt = hasExplicitAnalyticsTimestamp(row.timestamp)
-            ? parseAnalyticsTimestamp(row.timestamp)
-            : null;
-          const storedOccurredAt =
-            explicitOccurredAt ?? createdAt ?? parseAnalyticsTimestamp(row.timestamp);
-          if (
-            clearState &&
-            (!explicitOccurredAt ||
-              !Number.isFinite(clearedThrough) ||
-              explicitOccurredAt.getTime() <= clearedThrough)
-          ) {
+          const timestampAt = parseAnalyticsTimestamp(row.timestamp);
+          // The query above is the single owner of the clear boundary: it
+          // already admits a row only when its timestamp is a client-captured
+          // instant strictly newer than cleared_through. Re-deriving that here
+          // would be a second definition of the same rule.
+          const occurredAt =
+            (hasExplicitAnalyticsTimestamp(row.timestamp) ? timestampAt : null) ??
+            createdAt ??
+            timestampAt;
+          // Falling back to now would date an old dictation today, inflating
+          // today's counters and manufacturing a current streak out of a row
+          // whose age we could not read. It stays out instead.
+          if (!occurredAt) {
             skipped += 1;
             continue;
           }
-          const occurredAt = storedOccurredAt ?? fallbackTime;
 
           const eventId = row.client_transcription_id?.trim() || randomUUID();
           if (!row.client_transcription_id?.trim()) assignClientId.run(eventId, row.id);
