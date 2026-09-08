@@ -20,7 +20,8 @@ interface WorkspaceState {
   refreshMembers: (workspaceId: string) => Promise<void>;
 }
 
-const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
+// Shared by every window of this origin; the dictation window mirrors it (lib/accountScopeMirror).
+export const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
 
 function readActiveWorkspaceId(): string | null {
   if (typeof window === "undefined") return null;

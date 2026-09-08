@@ -21,6 +21,7 @@ class AudioTapManager {
     this.stderrBuffer = "";
     this.onChunk = null;
     this.onError = null;
+    this.onWarning = null;
     this.isStopping = false;
     this.permissionStatus = this._loadPermissionStatus();
     this._requestPromise = null;
@@ -108,13 +109,14 @@ class AudioTapManager {
     return this._requestPromise;
   }
 
-  async start({ onChunk, onError } = {}) {
+  async start({ onChunk, onError, onWarning } = {}) {
     if (!this.isSupported()) {
       throw new Error("macOS 14.2 or later is required for native system audio capture.");
     }
     if (this.process) {
       this.onChunk = onChunk || null;
       this.onError = onError || null;
+      this.onWarning = onWarning || null;
       return;
     }
     if (this._requestPromise) {
@@ -124,6 +126,7 @@ class AudioTapManager {
     const binaryPath = this._prepareBinary();
     this.onChunk = onChunk || null;
     this.onError = onError || null;
+    this.onWarning = onWarning || null;
     this.isStopping = false;
     this.stderrBuffer = "";
 
@@ -171,6 +174,11 @@ class AudioTapManager {
           if (message.type === "start") {
             this._persistPermissionStatus("granted");
             finish(resolve);
+            return;
+          }
+
+          if (message.type === "warning") {
+            this.onWarning?.(message);
             return;
           }
 
@@ -258,6 +266,7 @@ class AudioTapManager {
     this.stderrBuffer = "";
     this.onChunk = null;
     this.onError = null;
+    this.onWarning = null;
     this.isStopping = false;
   }
 

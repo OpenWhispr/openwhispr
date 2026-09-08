@@ -125,13 +125,26 @@ function fitDictationErrorWindowToWorkArea(requestedSize, workArea) {
   };
 }
 
+// The pill docks 12px from the window's bottom corner (voice-pill-position
+// classes); the remaining area is click-through headroom so the hover
+// tooltip and the Signal glow's halo render without clipping at the window
+// bounds. Sized with dictation-panel.css's dock insets — change together.
+// The box fits the compact pill + gap + hover cancel (134px) inside its 184px
+// usable width, so the cancel control never clips. Those three numbers are
+// VOICE_PILL_FOOTPRINT.recording and VOICE_PILL_CANCEL in
+// src/helpers/voicePillPresentation.js — the renderer-side half of this
+// contract, and the only place they are defined.
+const PILL_WINDOW_SIZE = { width: 208, height: 120 };
+
 const WINDOW_SIZES = {
-  // The pill docks 12px from the window's bottom corner (voice-pill-position
-  // classes); the remaining area is click-through headroom so the hover
-  // tooltip and the Signal glow's halo render without clipping at the window
-  // bounds. Sized with dictation-panel.css's dock insets — change together.
-  BASE: { width: 176, height: 120 },
-  RECORDING: { width: 208, height: 120 },
+  // BASE and RECORDING are deliberately the same box. Resizing a transparent
+  // always-on-top window paints one compositor frame of the stale texture
+  // inside the new bounds before the renderer catches up — no resize mask can
+  // cover it — so recording edges must never call setBounds. The keys stay
+  // distinct for the size ladder's ranking; identical bounds make the native
+  // resize a no-op.
+  BASE: PILL_WINDOW_SIZE,
+  RECORDING: PILL_WINDOW_SIZE,
   DICTATION_ERROR: { width: DICTATION_ERROR_WINDOW_LIMITS.width, height: 112 },
   DICTATION_ERROR_WITH_TRANSCRIPT: {
     width: DICTATION_ERROR_WINDOW_LIMITS.width,
@@ -347,11 +360,20 @@ class WindowPositionUtil {
       // macOS: Use panel level for proper floating behavior
       // This ensures the window stays on top across spaces and fullscreen apps
       window.setAlwaysOnTop(true, "floating", 1);
-      window.setVisibleOnAllWorkspaces(true, {
-        visibleOnFullScreen: true,
-        skipTransformProcessType: true, // Keep Dock/Command-Tab behaviour
-      });
-      window.setFullScreenable(false);
+      // Re-applying the collection behavior when nothing drifted makes the
+      // window server momentarily pull the window out of the active Space,
+      // which blinks the entire visible window. Enforce calls land on hot
+      // paths (assistant panel open/close, window show), so Spaces membership
+      // is only touched when it was actually lost.
+      if (!window.isVisibleOnAllWorkspaces()) {
+        window.setVisibleOnAllWorkspaces(true, {
+          visibleOnFullScreen: true,
+          skipTransformProcessType: true, // Keep Dock/Command-Tab behaviour
+        });
+      }
+      if (window.isFullScreenable()) {
+        window.setFullScreenable(false);
+      }
 
       if (window.isVisible()) {
         window.setAlwaysOnTop(true, "floating", 1);

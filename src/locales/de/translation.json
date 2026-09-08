@@ -201,7 +201,10 @@
     "skip": "Überspringen",
     "policyAiProcessingRestricted": "Die KI-Verarbeitung ist durch Ihre Organisation eingeschränkt.",
     "policyAgentRestricted": "Die Nutzung des KI-Agenten ist durch Ihre Organisation eingeschränkt.",
-    "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt."
+    "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt.",
+    "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
+    "managedConfigUnavailable": "Der verwaltete Unternehmenszugriff ist nicht verfügbar. Melden Sie sich erneut an oder wenden Sie sich an Ihren Administrator.",
+    "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator."
   },
   "onboarding": {
     "rehaul": {
@@ -661,7 +664,8 @@
       "rawTranscript": "Rohtranskript",
       "clearAll": "Alle löschen",
       "clearAllTitle": "Alle Transkriptionen löschen",
-      "clearAllDescription": "Alle Transkriptionen und Audiodateien werden dauerhaft entfernt.",
+      "clearAllDescription": "Alle Transkriptionen, Audiodateien und Insights-Zähler werden dauerhaft von diesem Gerät und aus Ihrem Konto entfernt.",
+      "clearAllDescriptionDevice": "Alle Transkriptionen, Audiodateien und Insights-Zähler werden dauerhaft von diesem Gerät entfernt. Bereits mit einem Konto synchronisierte Zähler bleiben davon unberührt.",
       "clearAllSuccess": "Verlauf gelöscht",
       "clearAllErrorTitle": "Verlauf konnte nicht gelöscht werden",
       "clearAllErrorDescription": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
@@ -780,6 +784,35 @@
         "ssoHelp": "Verwendet Ihre AWS-CLI-SSO-Konfiguration. Stellen Sie sicher, dass Sie 'aws sso login' ausgeführt haben.",
         "keysHelp": "Geben Sie Ihre AWS-IAM-Zugriffsschlüssel ein."
       },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "Der temporäre AWS-Zugriff ist abgelaufen.",
+          "ssoExpired": "Die AWS-SSO-Sitzung ist abgelaufen.",
+          "credentialsRejected": "Die AWS-Anmeldedaten wurden abgelehnt. Prüfe Zugriffsschlüssel-ID, Geheimnis und Sitzungstoken.",
+          "accessDenied": "AWS Bedrock hat diese Anfrage abgelehnt. Bitte deinen AWS-Administrator um die Berechtigung, das ausgewählte Modell in der Region {{region}} aufzurufen.",
+          "modelNotFound": "AWS Bedrock konnte das ausgewählte Modell in der Region {{region}} nicht finden. Prüfe die Modell-ID und ob das Modell dort verfügbar ist.",
+          "configurationRejected": "AWS Bedrock hat die Modellkonfiguration für die Region {{region}} abgelehnt. Prüfe Modell-ID, Inferenzprofil und Region.",
+          "notConfigured": "AWS Bedrock ist nicht richtig konfiguriert. Prüfe Region und AWS-Anmeldedaten.",
+          "serviceUnavailable": "AWS Bedrock ist wegen hoher Nachfrage vorübergehend nicht verfügbar. Dies ist ein Problem des AWS-Dienstes und kein OpenWhispr-Ausfall. Versuche es in einigen Minuten erneut.",
+          "throttled": "AWS Bedrock begrenzt Anfragen vorübergehend, weil zu viele eingehen. Warte kurz und versuche es erneut. Wenn das Problem anhält, bitte deinen AWS-Administrator, Bedrock-Nutzung und Kontingente zu prüfen.",
+          "timeout": "AWS Bedrock hat nicht rechtzeitig geantwortet. Versuche es erneut. Wenn das Problem anhält, prüfe deine Internetverbindung und den Status des AWS-Bedrock-Dienstes.",
+          "network": "AWS Bedrock konnte nicht erreicht werden. Prüfe deine Internetverbindung und versuche es erneut.",
+          "unknown": "AWS-Bedrock-Fehler: {{error}}",
+          "actions": {
+            "refreshManagedAccess": "Melde dich ab und wieder an, um den Unternehmenszugriff zu erneuern, und versuche es dann erneut.",
+            "reauthenticate": "Führe den folgenden Befehl im Terminal aus, um dich erneut zu authentifizieren:"
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "Technische Details",
+        "httpStatus": "HTTP-Status",
+        "awsException": "AWS-Ausnahme",
+        "awsRequestId": "AWS-Anfrage-ID",
+        "underlyingError": "Zugrunde liegender Fehler",
+        "copy": "Technische Details kopieren",
+        "copyCommand": "Wiederherstellungsbefehl kopieren"
+      },
       "azure": {
         "endpointHelp": "Endpoint-URL Ihrer Azure-OpenAI-Ressource (z. B. https://myresource.openai.azure.com).",
         "deploymentHelp": "Name Ihres Modell-Deployments in Azure OpenAI."
@@ -873,7 +906,10 @@
         "chunkLoss": "Ein Netzwerkproblem hat zu viel von der Aufnahme verloren. Transkribieren Sie sie über den Verlauf erneut.",
         "agentReasoningFailed": "Ihr Sprachassistent konnte den Befehl nicht verarbeiten – stattdessen wurde das unbearbeitete Transkript eingefügt.",
         "screenContextSkipped": "Der Screenshot konnte nicht gesendet werden, daher lief Ihr Befehl ohne Bildschirmkontext.",
-        "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text."
+        "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text.",
+        "managedTranscriptionUnavailable": "Die verwaltete Transkription ist derzeit nicht verfügbar. Versuchen Sie es gleich noch einmal.",
+        "managedRouteInvalid": "Die verwaltete Transkription konnte aufgrund einer Konfigurationsabweichung nicht gestartet werden. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
+        "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
@@ -2356,6 +2392,10 @@
       "cloudNotesMigrationDone": "Alle Notizen gesichert",
       "description": "Steuern Sie, welche Daten Ihr Gerät verlassen. Standardmäßig ist alles deaktiviert.",
       "title": "Datenschutz",
+      "insightsSync": "Persönliche Statistiken synchronisieren",
+      "insightsSyncDescription": "Synchronisieren Sie Wortanzahl, Datum und genaue Uhrzeit jedes Diktats, Dauer und Modelltyp geräteübergreifend. Transkriptionsinhalte werden nie übertragen. Wenn Sie angemeldet sind, werden diese Zähler beim Löschen des Verlaufs auch von diesem Gerät und aus Ihrem Konto entfernt.",
+      "insightsSyncRequiresAccount": "Melden Sie sich an, um inhaltsfreie Statistikdaten geräteübergreifend zu synchronisieren.",
+      "insightsSyncRequiresHistory": "Aktivieren Sie die Datenaufbewahrung, um Statistiken zu erfassen, bevor Sie sie geräteübergreifend synchronisieren.",
       "usageAnalytics": "Nutzungsanalysen",
       "usageAnalyticsDescription": "Helfen Sie uns, OpenWhispr zu verbessern, indem Sie anonyme Leistungsdaten teilen. Wir senden niemals Transkriptionsinhalte – nur Timing- und Fehlerdaten.",
       "audioRetention": "Audio-Aufbewahrung",
@@ -2372,7 +2412,7 @@
       "dataRetention": "Datenaufbewahrung",
       "dataRetentionDescription": "Transkriptionen und Audio lokal im Verlauf speichern. Wenn deaktiviert, werden Transkriptionen eingefügt, aber nicht gespeichert.",
       "transcriptRetention": "Transkript-Aufbewahrung",
-      "transcriptRetentionDescription": "Gespeicherte Transkriptionen und deren Audio nach diesem Zeitraum automatisch löschen.",
+      "transcriptRetentionDescription": "Gespeicherte Transkriptionen, deren Audio und deren Insights-Zähler nach diesem Zeitraum automatisch löschen.",
       "transcriptRetentionForever": "Unbegrenzt",
       "hoursAgo": "vor {{count}} Std.",
       "justNow": "gerade eben",
@@ -2422,7 +2462,9 @@
         "openwhisprDesc": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
         "providersDesc": "Eigenen API-Schlüssel nutzen.",
         "localDesc": "Modelle auf dem Gerät. Voll privat.",
-        "selfHostedDesc": "Eigener Server in Ihrem Netzwerk."
+        "selfHostedDesc": "Eigener Server in Ihrem Netzwerk.",
+        "enterprise": "Unternehmens-Cloud",
+        "enterpriseDesc": "Audio wird an die eigene Cloud Ihrer Organisation gesendet."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
@@ -2447,6 +2489,10 @@
         "switchedSelfHosted": {
           "title": "Selbst gehostet",
           "description": "Verwendung Ihres eigenen Servers."
+        },
+        "switchedEnterprise": {
+          "title": "Unternehmens-Cloud ausgewählt",
+          "description": "Diktate verwenden jetzt die von Ihrer Organisation verwaltete Transkription."
         }
       },
       "gpuDevice": {
@@ -2504,7 +2550,8 @@
             "info": "Audio, das von einem Segment ins nächste übertragen wird, um abrupte Schnitte beim Zusammenfügen zu vermeiden."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt."
     },
     "intelligence": {
       "gpuDevice": {
@@ -2616,8 +2663,7 @@
         "anthropic_claude_opus_4_7": "Leistungsstarkes Opus-Modell",
         "anthropic_claude_opus_4_6": "Vorherige Opus-Generation, 1M Kontext",
         "anthropic_claude_opus_4_5": "Früheres Opus-Modell",
-        "tinfoil_deepseek_v4_pro": "Privates Long-Context-Reasoning in sicheren Enklaven, 800K Kontext",
-        "tinfoil_glm_5_2": "Privates agentisches Engineering-Modell in sicheren Enklaven, 384K Kontext",
+        "tinfoil_glm_5_3": "Privates agentisches Coding-Modell in sicheren Enklaven, 1M Kontext",
         "tinfoil_gemma4_31b": "Privates mehrsprachiges Reasoning-Modell mit Tool-Aufrufen, 256K Kontext",
         "tinfoil_gpt_oss_120b": "Privates Open-Weight-Reasoning-Modell mit Tool-Nutzung, 131K Kontext",
         "tinfoil_llama3_3_70b": "Privates Konversationsmodell mit Tool-Aufrufen, 128K Kontext",
@@ -2676,7 +2722,47 @@
       }
     }
   },
+  "insights": {
+    "title": "Statistiken",
+    "description": "Ein privater Blick auf Ihre Diktiergewohnheiten und Ihren Fortschritt.",
+    "wordsSpoken": "Gesprochene Wörter",
+    "currentStreak": "Aktuelle Serie",
+    "wordsPerMinute": "Wörter pro Minute",
+    "dictations": "Diktate",
+    "allTime": "Gesamt",
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tage",
+    "longestStreak_one": "Längste: {{count}} Tag",
+    "longestStreak_other": "Längste: {{count}} Tage",
+    "wpmCoverage": "Basierend auf {{count}} % der gemessenen Wörter",
+    "activity": "Sprechaktivität",
+    "activityDescription": "Gesprochene Wörter der letzten 6 Monate",
+    "activityLabel": "Heatmap der Sprechaktivität über 6 Monate",
+    "activityLess": "Weniger",
+    "activityMore": "Mehr",
+    "dayTooltip_one": "{{date}}: {{count}} Wort",
+    "dayTooltip_other": "{{date}}: {{count}} Wörter",
+    "dataRetentionDisabled": "Die Datenaufbewahrung ist deaktiviert, daher werden neue Diktate in den Statistiken nicht gezählt – weder auf diesem Gerät noch in Ihrem Konto. Bereits synchronisierte Zähler bleiben in Ihrem Konto.",
+    "onDevice": "Auf diesem Gerät",
+    "synced": "Geräteübergreifend synchronisiert",
+    "syncFallback": "Gerätedaten werden angezeigt – Synchronisierung nicht verfügbar",
+    "syncPrompt": "Synchronisieren Sie inhaltsfreie Zähler, um lokale und Cloud-Aktivität geräteübergreifend zusammenzuführen.",
+    "enableSync": "Synchronisierung aktivieren",
+    "claimTitle": "Frühere Diktate einbeziehen?",
+    "claimDescription_one": "{{count}} Diktat wurde auf diesem Gerät vor Ihrer Anmeldung aufgezeichnet. Wird es einbezogen, werden nur Wortanzahl, Datum und genaue Uhrzeit der Aufnahme, Dauer und Modelltyp übertragen – nie Transkriptionsinhalte.",
+    "claimDescription_other": "{{count}} Diktate wurden auf diesem Gerät vor Ihrer Anmeldung aufgezeichnet. Werden sie einbezogen, werden nur Wortanzahl, Datum und genaue Uhrzeit der jeweiligen Aufnahme, Dauer und Modelltyp übertragen – nie Transkriptionsinhalte.",
+    "claimInclude": "Einbeziehen",
+    "claimSkip": "Jetzt nicht",
+    "enableTitle": "Insights-Synchronisierung aktivieren?",
+    "enableConfirm": "Synchronisierung aktivieren",
+    "enableDescription_one": "{{count}} bereits auf diesem Gerät aufgezeichnetes Diktat wird in Ihr Konto hochgeladen. Die Insights-Synchronisierung überträgt nur Wortanzahl, Datum und genaue Uhrzeit der jeweiligen Aufnahme, Dauer und Modelltyp – nie Transkriptionsinhalte.",
+    "enableDescription_other": "{{count}} bereits auf diesem Gerät aufgezeichnete Diktate werden in Ihr Konto hochgeladen. Die Insights-Synchronisierung überträgt nur Wortanzahl, Datum und genaue Uhrzeit der jeweiligen Aufnahme, Dauer und Modelltyp – nie Transkriptionsinhalte.",
+    "emptyTitle": "Noch keine Diktate",
+    "emptyBody": "Beginnen Sie zu diktieren – Ihre Wörter, Serien und tägliche Aktivität erscheinen dann hier.",
+    "loadError": "Insights konnten von diesem Gerät nicht gelesen werden."
+  },
   "sidebar": {
+    "insights": "Statistiken",
     "home": "Startseite",
     "notes": "Notizen",
     "upload": "Hochladen",
@@ -3079,6 +3165,7 @@
       "transcriptionComplete": "Transkription abgeschlossen",
       "partialWarning": "Ein Teil der Audiodatei konnte nicht transkribiert werden.",
       "partialWarningCount": "{{failed}} von {{total}} Audioabschnitten konnten nicht transkribiert werden.",
+      "diarizationWarning": "Die Sprechererkennung konnte nicht angewendet werden. Das Transkript wurde ohne Sprecherkennzeichnungen gespeichert.",
       "chunkLossExceeded": "Wegen eines Netzwerkproblems ging zu viel Audio verloren. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
       "openNote": "Notiz öffnen",
       "uploadAnother": "Weitere hochladen",
@@ -3155,6 +3242,18 @@
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
+      },
+      "systemAudioInterrupted": {
+        "title": "Meeting-Ton unterbrochen",
+        "description": "Die Aufnahme des Systemtons wurde unterbrochen und startet neu. Einige Sekunden des Gesprächs können im Transkript fehlen."
+      },
+      "systemAudioStopped": {
+        "title": "Meeting-Ton gestoppt",
+        "description": "OpenWhispr nimmt die anderen Teilnehmer nicht mehr auf. Beenden Sie die Aufnahme und starten Sie sie erneut, oder prüfen Sie Ihr Audioausgabegerät."
+      },
+      "systemAudioQuiet": {
+        "title": "Meeting-Audio ist verstummt",
+        "description": "Seit einigen Minuten war niemand zu hören. Falls das Gespräch noch läuft, prüfen Sie Ihr Audioausgabegerät."
       }
     },
     "meetingPill": {
@@ -3344,6 +3443,7 @@
     "wordsReady_other": "{{count}} Wörter bereit",
     "import": "Importieren",
     "yourDictionary": "Dein Wörterbuch",
+    "promptLimitNotice": "Dein Wörterbuch umfasst {{chars}} Zeichen. Groq- und Whisper-Modelle lesen davon nur die letzten paar hundert Zeichen – eine kürzere Liste funktioniert dort besser. Andere Modelle erhalten die vollständige Liste.",
     "exportDictionary": "Wörterbuch exportieren",
     "exportFailed": "Export fehlgeschlagen",
     "editWord": "{{word}} bearbeiten",

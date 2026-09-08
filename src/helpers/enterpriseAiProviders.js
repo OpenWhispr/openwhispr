@@ -8,7 +8,9 @@
 // app startup doesn't eager-load ~100 MB of AWS/Azure/Google SDKs for users
 // who never select an enterprise provider.
 
-function getEnterpriseAIModel(provider, model, apiKey, enterprise) {
+const { isAllowedAzureEndpoint } = require("./enterpriseManagedConfig.mjs");
+
+async function getEnterpriseAIModel(provider, model, apiKey, enterprise) {
   switch (provider) {
     case "bedrock":
       return createBedrockModel(model, enterprise);
@@ -21,35 +23,55 @@ function getEnterpriseAIModel(provider, model, apiKey, enterprise) {
   }
 }
 
-function createBedrockModel(model, enterprise) {
+async function createBedrockModel(model, enterprise) {
   const { createAmazonBedrock } = require("@ai-sdk/amazon-bedrock");
   const region = enterprise?.bedrockRegion || "us-east-1";
+  const explicitCredentialSource = enterprise?.managedCredentialProvider
+    ? "managed credential provider"
+    : enterprise?.bedrockProfile
+      ? "profile credential provider"
+      : enterprise?.bedrockAccessKeyId || enterprise?.bedrockSecretAccessKey
+        ? "static credentials"
+        : null;
+  const credentials = enterprise?.managedCredentialProvider
+    ? await enterprise.managedCredentialProvider()
+    : enterprise?.bedrockProfile
+      ? await require("@aws-sdk/credential-providers").fromNodeProviderChain({
+          profile: enterprise.bedrockProfile,
+        })()
+      : explicitCredentialSource
+        ? {
+            accessKeyId: enterprise.bedrockAccessKeyId,
+            secretAccessKey: enterprise.bedrockSecretAccessKey,
+            sessionToken: enterprise.bedrockSessionToken,
+          }
+        : null;
 
-  if (enterprise?.managedCredentialProvider) {
-    return createAmazonBedrock({
-      region,
-      credentialProvider: enterprise.managedCredentialProvider,
-    })(model);
+  if (
+    explicitCredentialSource &&
+    (!credentials ||
+      typeof credentials.accessKeyId !== "string" ||
+      credentials.accessKeyId.length === 0 ||
+      typeof credentials.secretAccessKey !== "string" ||
+      credentials.secretAccessKey.length === 0)
+  ) {
+    const error = new Error(
+      `AWS ${explicitCredentialSource} returned invalid credentials. Expected accessKeyId and secretAccessKey.`
+    );
+    error.name = "CredentialsProviderError";
+    throw error;
   }
 
-  if (enterprise?.bedrockProfile) {
-    const { fromNodeProviderChain } = require("@aws-sdk/credential-providers");
-    return createAmazonBedrock({
-      region,
-      credentialProvider: fromNodeProviderChain({ profile: enterprise.bedrockProfile }),
-    })(model);
-  }
-
-  if (enterprise?.bedrockAccessKeyId && enterprise?.bedrockSecretAccessKey) {
-    return createAmazonBedrock({
-      region,
-      accessKeyId: enterprise.bedrockAccessKeyId,
-      secretAccessKey: enterprise.bedrockSecretAccessKey,
-      sessionToken: enterprise.bedrockSessionToken,
-    })(model);
-  }
-
-  return createAmazonBedrock({ region })(model);
+  return createAmazonBedrock({
+    region,
+    ...(credentials
+      ? {
+          accessKeyId: credentials.accessKeyId,
+          secretAccessKey: credentials.secretAccessKey,
+          sessionToken: credentials.sessionToken,
+        }
+      : {}),
+  })(model);
 }
 
 function createAzureModel(model, apiKey, enterprise) {
@@ -62,23 +84,22 @@ function createAzureModel(model, apiKey, enterprise) {
   })(model);
 }
 
+// One allowlist for managed Azure hosts (resource, AI Services, and Foundry),
+// shared with the envelope validator so the two can never disagree.
+//
+// @ai-sdk/azure appends `/v1` and `?api-version=` itself ONLY when the base
+// URL's hostname ends in `.openai.azure.com`; for every other host it uses the
+// base URL verbatim and sends no api-version, so the version segment has to be
+// part of it here or AI Services / Foundry requests land on `/openai/<path>`
+// and 404.
 function toAzureOpenAIBaseUrl(endpoint) {
-  const url = new URL(endpoint);
-  const hostname = url.hostname.toLowerCase();
-  if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    (url.port && url.port !== "443") ||
-    !hostname.endsWith(".openai.azure.com") ||
-    hostname.length <= ".openai.azure.com".length ||
-    (url.pathname !== "" && url.pathname !== "/") ||
-    url.search ||
-    url.hash
-  ) {
+  if (!isAllowedAzureEndpoint(endpoint)) {
     throw new Error("Managed Azure OpenAI requires a public Azure resource origin");
   }
-  return `${url.origin}/openai`;
+  const url = new URL(endpoint);
+  return url.hostname.endsWith(".openai.azure.com")
+    ? `${url.origin}/openai`
+    : `${url.origin}/openai/v1`;
 }
 
 function createVertexModel(model, apiKey, enterprise) {

@@ -6,6 +6,7 @@ const {
   cleanupFiles,
   downloadFile,
   findBinaryInDir,
+  findLibrariesInDir,
   parseArgs,
   setExecutable,
 } = require("./lib/download-utils");
@@ -13,9 +14,21 @@ const {
   PARAKEET_MINIMUM_MACOS_VERSION,
   compareVersions,
 } = require("../src/helpers/parakeetCapability");
+const { renameImportedModule } = require("./lib/pe-imports");
 
 const SHERPA_ONNX_VERSION = "1.13.4";
 const GITHUB_RELEASE_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}`;
+
+// Windows 11 ships an older onnxruntime.dll in System32, and on some machines
+// the loader resolves the bare import name to that copy instead of the one
+// beside the exe (#2054: "requested API version [27] is not available").
+// So the bundled runtime ships under a private name and every sherpa image
+// gets its import table rewritten to match. The replacement must not be
+// longer than the upstream name because the string is patched in place.
+// Drop this once ORT ships version-suffixed DLLs (microsoft/onnxruntime#27893)
+// and sherpa-onnx picks them up.
+const WINDOWS_ONNXRUNTIME_UPSTREAM_NAME = "onnxruntime.dll";
+const WINDOWS_ONNXRUNTIME_PRIVATE_NAME = "ow-onnxrt.dll";
 
 // Binary configurations for each platform
 // Note: macOS uses universal2 builds that work on both arm64 and x64
@@ -163,40 +176,6 @@ function extractTarBz2(archivePath, destDir) {
   });
 }
 
-function findLibrariesInDir(dir, pattern, maxDepth = 5, currentDepth = 0) {
-  if (currentDepth >= maxDepth) return [];
-
-  const results = [];
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-
-      if (entry.isDirectory()) {
-        results.push(...findLibrariesInDir(fullPath, pattern, maxDepth, currentDepth + 1));
-      } else if (matchesPattern(entry.name, pattern)) {
-        results.push(fullPath);
-      }
-    }
-  } catch {
-    // Ignore permission errors
-  }
-
-  return results;
-}
-
-function matchesPattern(filename, pattern) {
-  if (pattern === "*.dylib") {
-    return filename.endsWith(".dylib");
-  } else if (pattern === "*.dll") {
-    return filename.endsWith(".dll");
-  } else if (pattern === "*.so*") {
-    return /\.so(\.\d+)*$/.test(filename) || filename.endsWith(".so");
-  }
-  return false;
-}
-
 function copyBinary(extractDir, binaryName, outputPath, platformArch) {
   const foundPath = findBinaryInDir(extractDir, binaryName);
 
@@ -213,15 +192,57 @@ function copyBinary(extractDir, binaryName, outputPath, platformArch) {
   return true;
 }
 
-function isCompleteInstall(markerPath, binaryPaths) {
+function privatizeWindowsOnnxRuntime({ binDir, binaryPaths, libraryNames }) {
+  const isUpstreamRuntime = (name) => name.toLowerCase() === WINDOWS_ONNXRUNTIME_UPSTREAM_NAME;
+  const upstreamName = libraryNames.find(isUpstreamRuntime);
+  if (!upstreamName) {
+    throw new Error(
+      `${WINDOWS_ONNXRUNTIME_UPSTREAM_NAME} not found among extracted libraries (${libraryNames.join(", ")}); the upstream archive layout changed`
+    );
+  }
+
+  // Upstream's Windows CI copies every DLL into both bin/ and lib/ of the
+  // archive, so the extracted list carries each name twice for one file.
+  const shippedLibraries = [
+    ...new Set(
+      libraryNames.map((name) =>
+        isUpstreamRuntime(name) ? WINDOWS_ONNXRUNTIME_PRIVATE_NAME : name
+      )
+    ),
+  ];
+  const privatePath = path.join(binDir, WINDOWS_ONNXRUNTIME_PRIVATE_NAME);
+  fs.rmSync(privatePath, { force: true });
+  fs.renameSync(path.join(binDir, upstreamName), privatePath);
+
+  const imagePaths = [...binaryPaths, ...shippedLibraries.map((name) => path.join(binDir, name))];
+  for (const imagePath of imagePaths) {
+    const image = fs.readFileSync(imagePath);
+    const patched = renameImportedModule(
+      image,
+      WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
+      WINDOWS_ONNXRUNTIME_PRIVATE_NAME
+    );
+    if (patched === 0) continue;
+    fs.writeFileSync(imagePath, image);
+    console.log(
+      `  win32: ${path.basename(imagePath)} now imports ${WINDOWS_ONNXRUNTIME_PRIVATE_NAME}`
+    );
+  }
+
+  return shippedLibraries;
+}
+
+function isCompleteInstall(markerPath, binaryPaths, { platformArch, binDir = BIN_DIR }) {
   if (binaryPaths.some((binaryPath) => !fs.existsSync(binaryPath))) return false;
 
   try {
     const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+    if (marker.version !== SHERPA_ONNX_VERSION || !Array.isArray(marker.libraries)) return false;
+    if (marker.libraries.some((lib) => !fs.existsSync(path.join(binDir, lib)))) return false;
+    // A win32 marker without this field predates the rename: the exes on disk
+    // still import onnxruntime.dll and must be re-extracted.
     return (
-      marker.version === SHERPA_ONNX_VERSION &&
-      Array.isArray(marker.libraries) &&
-      marker.libraries.every((lib) => fs.existsSync(path.join(BIN_DIR, lib)))
+      !platformArch.startsWith("win32") || marker.onnxRuntime === WINDOWS_ONNXRUNTIME_PRIVATE_NAME
     );
   } catch {
     return false;
@@ -241,12 +262,15 @@ async function downloadBinary(platformArch, config, isForce = false) {
 
   if (
     !isForce &&
-    isCompleteInstall(installMarkerPath, [outputPath, onlineOutputPath, diarizeOutputPath])
+    isCompleteInstall(installMarkerPath, [outputPath, onlineOutputPath, diarizeOutputPath], {
+      platformArch,
+    })
   ) {
     console.log(`  ${platformArch}: Already exists (use --force to re-download)`);
     return true;
   }
-  if (isForce && fs.existsSync(installMarkerPath)) fs.unlinkSync(installMarkerPath);
+  // A failed repair must not leave a previous marker certifying partially patched binaries.
+  if (fs.existsSync(installMarkerPath)) fs.unlinkSync(installMarkerPath);
 
   const url = getDownloadUrl(config.archiveName);
   console.log(`  ${platformArch}: Downloading from ${url}`);
@@ -271,7 +295,9 @@ async function downloadBinary(platformArch, config, isForce = false) {
     // Copy shared libraries
     const copiedLibraries = [];
     if (config.libPattern) {
-      const libraries = findLibrariesInDir(extractDir, config.libPattern);
+      const libraries = findLibrariesInDir(extractDir, config.libPattern, {
+        ignoreReadErrors: true,
+      });
 
       // Separate versioned and unversioned libraries to create symlinks where possible
       // e.g. libonnxruntime.dylib -> libonnxruntime.1.23.2.dylib (saves ~71MB)
@@ -314,9 +340,22 @@ async function downloadBinary(platformArch, config, isForce = false) {
       }
     }
 
+    const isWindowsTarget = platformArch.startsWith("win32");
+    const shippedLibraries = isWindowsTarget
+      ? privatizeWindowsOnnxRuntime({
+          binDir: BIN_DIR,
+          binaryPaths: [outputPath, onlineOutputPath, diarizeOutputPath],
+          libraryNames: copiedLibraries,
+        })
+      : copiedLibraries;
+
     fs.writeFileSync(
       installMarkerPath,
-      JSON.stringify({ version: SHERPA_ONNX_VERSION, libraries: copiedLibraries })
+      JSON.stringify({
+        version: SHERPA_ONNX_VERSION,
+        libraries: shippedLibraries,
+        ...(isWindowsTarget ? { onnxRuntime: WINDOWS_ONNXRUNTIME_PRIVATE_NAME } : {}),
+      })
     );
     return true;
   } catch (error) {
@@ -397,8 +436,12 @@ module.exports = {
   SHERPA_ONNX_VERSION,
   BINARIES,
   BIN_DIR,
+  WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
+  WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
   getDownloadUrl,
+  isCompleteInstall,
   parseMacosDeploymentTargets,
+  privatizeWindowsOnnxRuntime,
   validateMacosDeploymentTargets,
   verifyPackagedMacosParakeet,
 };

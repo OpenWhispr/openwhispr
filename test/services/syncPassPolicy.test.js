@@ -14,6 +14,8 @@ const SIGNED_IN = {
   backupEnabled: true,
   subscribed: true,
   backupAllowedByPolicy: true,
+  dataRetentionEnabled: true,
+  insightsSyncEnabled: true,
 };
 
 test("consent: a free account still syncs shared notes and team spaces", async () => {
@@ -31,7 +33,7 @@ test("consent: a free account still syncs shared notes and team spaces", async (
 test("consent: sharing survives the cloud-backup toggle being off", async () => {
   const { resolveSyncConsent } = await load();
   const consent = resolveSyncConsent({ ...SIGNED_IN, backupEnabled: false });
-  assert.deepEqual(consent, { shared: true, backup: false });
+  assert.deepEqual(consent, { shared: true, backup: false, analytics: true });
 });
 
 test("consent: backup needs the plan, the toggle, and org policy together", async () => {
@@ -51,8 +53,71 @@ test("consent: nothing syncs without a validated signed-in session", async () =>
   for (const off of ["authValidated", "signedIn"]) {
     assert.deepEqual(
       resolveSyncConsent({ ...SIGNED_IN, [off]: false }),
-      { shared: false, backup: false },
+      { shared: false, backup: false, analytics: false },
       `${off} off must stop every pass`
+    );
+  }
+});
+
+test("consent: Insights counters answer to their own opt-in, not the plan", async () => {
+  const { resolveSyncConsent } = await load();
+  assert.equal(
+    resolveSyncConsent({ ...SIGNED_IN, backupEnabled: false, subscribed: false }).analytics,
+    true
+  );
+  for (const off of ["insightsSyncEnabled", "backupAllowedByPolicy"]) {
+    assert.equal(
+      resolveSyncConsent({ ...SIGNED_IN, [off]: false }).analytics,
+      false,
+      `analytics must not run with ${off} off`
+    );
+  }
+});
+
+test("consent: disabling local history stops pending Insights uploads", async () => {
+  const { resolveSyncConsent } = await load();
+  assert.equal(resolveSyncConsent({ ...SIGNED_IN, dataRetentionEnabled: false }).analytics, false);
+});
+
+// --- canOfferAnalyticsClaim -------------------------------------------------
+// insightsSyncEnabled is device-scoped and survives sign-out, so counters
+// spoken before the next sign-in are unattributed with the toggle still on.
+
+const OFFER = {
+  signedIn: true,
+  syncAllowedByPolicy: true,
+  dataRetentionEnabled: true,
+  insightsSyncEnabled: false,
+  unclaimedCount: 0,
+};
+
+test("claim offer: counters stay offerable once sync is already on", async () => {
+  const { canOfferAnalyticsClaim } = await load();
+  // The bug: signed out, dictated, signed back in. Those rows are excluded
+  // from the account summary the view then shows, so hiding the offer behind
+  // the toggle dropped the visible totals with no way to get them back.
+  assert.equal(
+    canOfferAnalyticsClaim({ ...OFFER, insightsSyncEnabled: true, unclaimedCount: 2 }),
+    true
+  );
+  // Sync on and nothing left behind: there is nothing to ask about.
+  assert.equal(canOfferAnalyticsClaim({ ...OFFER, insightsSyncEnabled: true }), false);
+});
+
+test("claim offer: the opt-in prompt still shows before sync is turned on", async () => {
+  const { canOfferAnalyticsClaim } = await load();
+  assert.equal(canOfferAnalyticsClaim(OFFER), true);
+  for (const off of ["signedIn", "syncAllowedByPolicy", "dataRetentionEnabled"]) {
+    assert.equal(canOfferAnalyticsClaim({ ...OFFER, [off]: false }), false, `${off} off`);
+    assert.equal(
+      canOfferAnalyticsClaim({
+        ...OFFER,
+        [off]: false,
+        insightsSyncEnabled: true,
+        unclaimedCount: 2,
+      }),
+      false,
+      `${off} off must hide the claim offer too`
     );
   }
 });
@@ -93,6 +158,18 @@ test("team-only backoff: an idle account waits, and the first launch always runs
   );
   // No recorded pass (fresh profile) must never be held back.
   assert.equal(shouldRunAmbientTeamOnlyPass({ emptyStreak: 9, lastPassAt: null, now }), true);
+});
+
+test("ambient streak: a counter upload counts as work without borrowing the team flag", async () => {
+  const { nextAmbientEmptyStreak } = await load();
+  // The bug: an analytics push was not pass work at all, so a backup-off
+  // account with Insights on backed off to hourly while counters queued up.
+  assert.equal(nextAmbientEmptyStreak(3, { team: false, analytics: true }), 0);
+  // The over-correction: setting the team flag on any analytics consent pinned
+  // every such account to the 5-minute cadence. Work, not consent, resets it.
+  assert.equal(nextAmbientEmptyStreak(3, { team: false, analytics: false }), 4);
+  assert.equal(nextAmbientEmptyStreak(3, { team: true, analytics: false }), 0);
+  assert.equal(nextAmbientEmptyStreak(0, { team: false, analytics: false }), 1);
 });
 
 // --- resolvePullCursorAdvance ----------------------------------------------
