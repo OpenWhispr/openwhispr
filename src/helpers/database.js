@@ -968,12 +968,6 @@ class DatabaseManager {
         { table: "snippets", col: "client_snippet_id" },
       ];
       for (const { table, col } of syncTables) {
-        // Legacy SQLite timestamps are completion times without an offset. Once
-        // the user has cleared Insights, only a client-captured occurrence time
-        // can prove that a historical row happened afterward, so an ambiguous
-        // legacy row stays out rather than reviving a cleared counter. This is
-        // the eligibility policy; the boundary on the value actually written is
-        // enforced below, where the chosen instant is known.
         const rows = this.db.prepare(`SELECT id FROM ${table} WHERE ${col} IS NULL`).all();
         const stmt = this.db.prepare(`UPDATE ${table} SET ${col} = ? WHERE id = ?`);
         for (const row of rows) {
@@ -1349,6 +1343,12 @@ class DatabaseManager {
       const clearState = this.db
         .prepare("SELECT cleared_through FROM analytics_device_clear_state WHERE id = 1")
         .get();
+      // Legacy SQLite timestamps are completion times without an offset. Once
+      // the user has cleared Insights, only a client-captured occurrence time
+      // can prove that a historical row happened afterward, so an ambiguous
+      // legacy row stays out rather than reviving a cleared counter. That is
+      // the eligibility rule below; the boundary on the instant actually
+      // written is enforced in the loop, where the chosen value is known.
       const rows = this.db
         .prepare(
           `SELECT transcription.id, transcription.client_transcription_id,
