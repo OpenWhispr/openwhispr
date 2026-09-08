@@ -38,3 +38,36 @@ export function splitTranscriptForShimmer(
     active: normalized.slice(activeStart).trimStart(),
   };
 }
+
+export interface TailWord {
+  index: number;
+  text: string;
+  active: boolean;
+}
+
+/**
+ * Opacity-only tail: the newest words sit at 62% and settle to 100% when
+ * they leave the active window. Words stay individually rendered for a few
+ * more positions so that settle can transition instead of stepping, and
+ * their absolute index keeps each span stable across deltas.
+ *
+ * `activeWordCount: 0` is the commit: every word stays rendered at its same
+ * index and simply stops being active, so the 62% -> 100% change is a real
+ * transition rather than a remount at the new opacity.
+ */
+export function splitTranscriptForTail(
+  text: string,
+  { activeWordCount = 6, settlingWordCount = 6 } = {}
+): { settled: string; tail: TailWord[] } {
+  const normalized = text.trim();
+  if (!normalized) return { settled: "", tail: [] };
+  const words = normalized.split(/\s+/);
+  const tailStart = Math.max(0, words.length - activeWordCount - settlingWordCount);
+  const activeStart = Math.max(0, words.length - activeWordCount);
+  const tail = words.slice(tailStart).map((word, offset) => {
+    const index = tailStart + offset;
+    return { index, text: word, active: index >= activeStart };
+  });
+  const settled = tailStart > 0 ? `${words.slice(0, tailStart).join(" ")} ` : "";
+  return { settled, tail };
+}

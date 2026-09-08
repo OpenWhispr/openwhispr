@@ -1104,3 +1104,83 @@ test("the exit waits for its zoop only when there is really a zoop to wait for",
   assert.equal(shouldAwaitPillZoop({ prefersReducedMotion: false, alreadyExited: true }), false);
   assert.equal(shouldAwaitPillZoop({ prefersReducedMotion: true, alreadyExited: true }), false);
 });
+
+// Task 10: the Live Transcript entrance's first two beats stop being bare
+// timers and start on the shell's own clip-path `transitionend`, with the old
+// timers kept only as fallbacks. resolveLiveTranscriptStageGate is the whole
+// decision: whether there is an event to wait for at all, and how long the
+// beat waits on its own if none arrives.
+test("each entrance gate waits for the shell's own stage transition, with the old timer plus a grace window behind it", async () => {
+  const { resolveLiveTranscriptStageGate, LIVE_TRANSCRIPT_ENTRANCE_TIMING, LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS } =
+    await load();
+
+  assert.deepEqual(
+    resolveLiveTranscriptStageGate({ stage: "encapsulated", prefersReducedMotion: false }),
+    {
+      awaitEvent: true,
+      waitMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs + LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS,
+    }
+  );
+  assert.deepEqual(resolveLiveTranscriptStageGate({ stage: "footer", prefersReducedMotion: false }), {
+    awaitEvent: true,
+    waitMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs + LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS,
+  });
+  assert.ok(
+    LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS > 0,
+    "the fallback must sit BEHIND the transition it backs up, never race it"
+  );
+});
+
+// The reduced-motion half, and the reason this needs its own decision rather
+// than a timeout: src/index.css's blanket `*, *::before, *::after` rule sets
+// transition-property with !important to a list that EXCLUDES clip-path, so
+// the shell's stage clip simply applies and there is no transition to end —
+// the same shape resolvePillShrinkWait uses for `width` and
+// shouldAwaitPillZoop for `transform`. Waiting anyway would hold every beat
+// for its whole fallback window and make the entrance SLOWER under reduced
+// motion than with motion on.
+test("reduced motion never waits for a clip-path transitionend that can structurally never fire", async () => {
+  const { resolveLiveTranscriptStageGate, LIVE_TRANSCRIPT_ENTRANCE_TIMING } = await load();
+
+  assert.deepEqual(
+    resolveLiveTranscriptStageGate({ stage: "encapsulated", prefersReducedMotion: true }),
+    { awaitEvent: false, waitMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs }
+  );
+  assert.deepEqual(resolveLiveTranscriptStageGate({ stage: "footer", prefersReducedMotion: true }), {
+    awaitEvent: false,
+    waitMs: LIVE_TRANSCRIPT_ENTRANCE_TIMING.horizontalMs,
+  });
+});
+
+// The stages and their durations must not change — only what triggers each
+// step. Under reduced motion (no event, plain timers) the chain must land on
+// exactly the instants getLiveTranscriptEntranceTimeline already publishes,
+// which is what "unchanged" means arithmetically.
+test("the reduced-motion gate chain lands on the entrance timeline's own published instants", async () => {
+  const {
+    resolveLiveTranscriptStageGate,
+    getLiveTranscriptEntranceTimeline,
+    LIVE_TRANSCRIPT_ENTRANCE_TIMING,
+  } = await load();
+  const timeline = getLiveTranscriptEntranceTimeline();
+
+  const encapsulated = resolveLiveTranscriptStageGate({
+    stage: "encapsulated",
+    prefersReducedMotion: true,
+  });
+  const footer = resolveLiveTranscriptStageGate({ stage: "footer", prefersReducedMotion: true });
+
+  assert.equal(
+    encapsulated.waitMs + LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateHoldMs,
+    timeline.horizontalAtMs,
+    "the horizontal phase must still start at its published instant"
+  );
+  assert.equal(
+    encapsulated.waitMs +
+      LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateHoldMs +
+      footer.waitMs +
+      LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsDelayMs,
+    timeline.controlsAtMs,
+    "the controls phase must still start at its published instant"
+  );
+});

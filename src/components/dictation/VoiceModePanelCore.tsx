@@ -39,6 +39,15 @@ interface VoiceModePanelCoreProps {
   // onClosingFadeComplete above (the CHILDREN's opacity fade, which reports
   // much earlier in the same close sequence).
   onCollapsed?: () => void;
+  // Fired on the shell's own clip-path transitionend while
+  // mode === "live-transcript" && open, naming the stage that has just
+  // finished settling. Only the two GATED stages report: "encapsulated" and
+  // "footer" are each followed by another beat of the entrance, so each one
+  // is something to wait for; "content" is the last stage and gates nothing.
+  // Distinct from onCollapsed above, which reads the same property on the
+  // same element for the assistant's CLOSE — mode and open/closing keep the
+  // two apart.
+  onStageSettled?: (stage: "encapsulated" | "footer") => void;
   onPreferredHeightChange: (
     height: number,
     measurementRevision?: string | number | null
@@ -63,6 +72,7 @@ export function VoiceModePanelCore({
   measurementRevision = null,
   onClosingFadeComplete,
   onCollapsed,
+  onStageSettled,
   onPreferredHeightChange,
   children,
 }: VoiceModePanelCoreProps) {
@@ -88,6 +98,17 @@ export function VoiceModePanelCore({
   }, [closing, mode, onClosingFadeComplete]);
 
   const handleTransitionEndCapture = (event: TransitionEvent<HTMLElement>) => {
+    if (
+      mode === "live-transcript" &&
+      open &&
+      event.propertyName === "clip-path" &&
+      event.target === event.currentTarget &&
+      (stage === "encapsulated" || stage === "footer")
+    ) {
+      onStageSettled?.(stage);
+      return;
+    }
+
     if (
       closing &&
       !open &&

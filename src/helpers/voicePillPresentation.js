@@ -167,6 +167,42 @@ export function getLiveTranscriptEntranceTimeline(timing = LIVE_TRANSCRIPT_ENTRA
   };
 }
 
+// How far BEHIND its own stage transition each entrance gate's fallback timer
+// sits. The gate is a race — the shell's clip-path transitionend against this
+// timer — so the timer must never win a healthy frame, only rescue a shell
+// that never reports (a torn-down node, a stage whose clip-path happened not
+// to change). Deliberately smaller than transitionSettled's own
+// SETTLE_FALLBACK_GRACE_MS: this gate's beat is followed by more entrance, so
+// a late fallback is felt as a stall rather than absorbed.
+export const LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS = 80;
+
+/**
+ * How the Live Transcript entrance waits for one of its two gated stages.
+ *
+ * Normally it races the shell's own `clip-path` transitionend against the
+ * stage's published duration plus a grace window, so the next beat starts
+ * when the surface has genuinely finished moving rather than when a timer
+ * guesses it has.
+ *
+ * Under reduced motion there is no event to race. src/index.css's blanket
+ * `*, *::before, *::after` rule sets `transition-property` with `!important`
+ * to a list that EXCLUDES clip-path, so the stage clip simply applies and no
+ * transitionend can ever fire — the same shape resolvePillShrinkWait handles
+ * for `width` and shouldAwaitPillZoop for `transform`. Arming the gate anyway
+ * would hold every beat for its whole fallback window and make the entrance
+ * SLOWER with reduced motion on than off, so the gate is skipped and the beat
+ * keeps its original published instant instead.
+ */
+export function resolveLiveTranscriptStageGate({
+  stage,
+  prefersReducedMotion,
+  timing = LIVE_TRANSCRIPT_ENTRANCE_TIMING,
+}) {
+  const stageDurationMs = stage === "encapsulated" ? timing.encapsulateMs : timing.horizontalMs;
+  if (prefersReducedMotion) return { awaitEvent: false, waitMs: stageDurationMs };
+  return { awaitEvent: true, waitMs: stageDurationMs + LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS };
+}
+
 export function resolveLiveTranscriptEntrancePresentation(phase) {
   const effectivePhase = phase === "idle" ? "encapsulate" : phase;
   const encapsulating = effectivePhase === "encapsulate";

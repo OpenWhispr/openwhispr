@@ -286,6 +286,7 @@ export default function AgentDictationPillOverlay() {
         label={t("transcriptionPreview.label")}
         measurementRevision={liveTranscript.measurementText}
         onPreferredHeightChange={liveTranscript.requestHeight}
+        onStageSettled={liveTranscript.notifyStageSettled}
       >
         {liveTranscript.mounted && (
           <LiveTranscriptPanel

@@ -534,6 +534,31 @@
   }
 }
 
+/* Live transcript tail: the newest words sit at 62% and settle to full
+   opacity when they leave the active window — an opacity change only, so
+   nothing repaints text every frame. This supersedes the stepped
+   background-clip sweep above for the transcript; that rule stays in the
+   stylesheet (nothing is removed in this change) and is simply no longer
+   referenced by it.
+
+   ONE property, ONE duration, deliberately: index.css's blanket
+   reduced-motion rule forces transition-property to its own fixed list
+   without touching transition-duration, and a comma-separated duration would
+   then be matched by POSITION against that list and cycle onto the wrong
+   property (the trap .voice-pill-position hit, and the base
+   .assistant-pill-presence rule after it). A single value broadcasts to all
+   of them, so this rule needs no reduced-motion override at all: opacity is
+   in that forced list and keeps its normal speed there, which is exactly what
+   index.css's own policy asks for. */
+.live-transcript-word {
+  opacity: 1;
+  transition: opacity 240ms ease-out;
+}
+
+.live-transcript-word[data-active="true"] {
+  opacity: 0.62;
+}
+
 /* Let the retained answer recede before the surface sweep begins. The filter
    transitions once and then stays still; only the lightweight sweep repeats. */
 .assistant-response-content {
@@ -696,7 +721,7 @@
   --pill-exit-origin: calc(100% - 20px) 50%;
   transition:
     transform var(--motion-show-ms, 260ms) var(--motion-show-ease, cubic-bezier(0.2, 0, 0, 1)),
-    opacity 120ms linear;
+    opacity var(--motion-close-fade-ms, 120ms) linear;
 }
 
 .assistant-pill-presence[data-horizontal-direction="left"] {
@@ -800,11 +825,33 @@
      finding 4 — review measured 0.001s reaching the tip card in a real
      browser): that rule also owns the tip card's in-place-of-pill opacity
      swap, and collapsing it to 1ms works against index.css's own stated
-     policy that opacity keeps its normal speed. Scoping to the exit leaves
-     that swap at its 120ms, and leaves the unzoop's fade-back there too. */
+     policy that opacity keeps its normal speed. Scoping to the exit keeps
+     that swap — and the unzoop's fade-back — off this 1ms; the rule below is
+     what actually holds them at the fade duration. */
   .assistant-pill-presence[data-pill-exit="zoop"] {
     transition-duration: 1ms !important;
     transition-delay: 0ms !important;
+  }
+
+  /* The tip card's in-place-of-pill opacity swap (App.jsx toggles `opacity-0`
+     on this element) and the unzoop's fade-back. Measured in a real browser
+     BEFORE this rule existed: that swap landed at 260ms, not the 120ms the
+     base rule names — scoping the 1ms above to the exit was necessary but not
+     sufficient, because the base rule's own shorthand still reaches here.
+
+     Its `transition` contributes a TWO-value transition-duration (0.26s for
+     transform, 0.12s for opacity, in that order). index.css's blanket rule
+     forces transition-property to its own list — opacity FIRST — and leaves
+     transition-duration alone, so the durations are matched by POSITION and
+     opacity picked up the TRANSFORM's 0.26s. Splitting that shorthand into
+     named longhands cannot fix it: once transition-property is a fixed,
+     unrelated list there is no syntax for "this duration applies to THESE
+     properties". ONE value, never a list, is the remedy this file already
+     uses twice — it broadcasts to every property in the forced list instead
+     of cycling onto the wrong one. Not 1ms, for the reason stated just
+     above: this restores the intended fade, it does not delete it. */
+  .assistant-pill-presence {
+    transition-duration: var(--motion-close-fade-ms, 120ms) !important;
   }
 
   .processing-signal-glow[data-active="true"],

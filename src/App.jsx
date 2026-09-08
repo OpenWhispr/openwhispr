@@ -926,6 +926,7 @@ export default function App() {
         onPreferredHeightChange={liveTranscript.requestHeight}
         onClosingFadeComplete={assistant.completeContentFade}
         onCollapsed={assistant.completeCollapse}
+        onStageSettled={liveTranscript.notifyStageSettled}
       >
         {activeVoicePanelMode === "assistant" && assistant.mounted && (
           <AssistantPanel

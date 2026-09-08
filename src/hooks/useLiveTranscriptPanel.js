@@ -4,6 +4,7 @@ import {
   getLiveTranscriptEntranceTimeline,
   LIVE_TRANSCRIPT_ENTRANCE_TIMING,
   LIVE_TRANSCRIPT_SURFACE_LIMITS,
+  resolveLiveTranscriptStageGate,
   shouldOfferLiveTranscriptReopen,
 } from "../helpers/voicePillPresentation";
 
@@ -57,6 +58,10 @@ export function useLiveTranscriptPanel({
   const openPromiseRef = useRef(null);
   const openGenerationRef = useRef(0);
   const entranceTimersRef = useRef([]);
+  // One resolver per GATED entrance stage ("encapsulated", "footer"), armed
+  // while that beat is waiting on the shell's own clip-path transitionend and
+  // dropped the moment it is used or the entrance is abandoned.
+  const stageGatesRef = useRef({});
   const sourceTextRef = useRef("");
   const contentReadyRef = useRef(false);
   const textSchedulerRef = useRef(null);
@@ -174,6 +179,21 @@ export function useLiveTranscriptPanel({
   const clearEntranceTimers = useCallback(() => {
     for (const timer of entranceTimersRef.current) clearTimeout(timer);
     entranceTimersRef.current = [];
+    // The gates go with the timers. An abandoned entrance leaves a shell
+    // behind that may still report a stage; without this, that late report
+    // would be consumed by the STALE chain instead of the new entrance's gate
+    // for the same stage, and the new one would only ever reach its fallback.
+    stageGatesRef.current = {};
+  }, []);
+
+  // Routed here from VoiceModePanelCore's onStageSettled: the shell's own
+  // clip-path transition for this stage has finished, so the beat waiting on
+  // it may proceed now instead of at its fallback.
+  const notifyStageSettled = useCallback((stage) => {
+    const openGate = stageGatesRef.current[stage];
+    if (!openGate) return;
+    delete stageGatesRef.current[stage];
+    openGate();
   }, []);
 
   const clearFinalHide = useCallback(() => {
@@ -259,14 +279,58 @@ export function useLiveTranscriptPanel({
         if (generation !== openGenerationRef.current) return;
         setOpen(true);
         const timeline = getLiveTranscriptEntranceTimeline();
+        // Read once per open, like the assistant panel's own collapse does: a
+        // preference change mid-entrance is not worth re-deriving.
+        const prefersReducedMotion = Boolean(
+          window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        );
         entranceTimersRef.current = [
-          setTimeout(() => setEntrancePhase("horizontal"), timeline.horizontalAtMs),
-          setTimeout(() => setEntrancePhase("controls"), timeline.controlsAtMs),
           setTimeout(() => {
             prepareBufferedText();
             setEntrancePhase("prepare");
           }, timeline.prepareAtMs),
         ];
+
+        const holdFor = (ms) =>
+          new Promise((resolve) => {
+            entranceTimersRef.current.push(setTimeout(resolve, ms));
+          });
+        // Each gated beat races the shell's own report against its published
+        // duration plus a grace window. resolveLiveTranscriptStageGate owns
+        // the whole decision, including "there is no event to race" under
+        // reduced motion, where the beat keeps its original instant.
+        const settleStage = (stage) => {
+          const { awaitEvent, waitMs } = resolveLiveTranscriptStageGate({
+            stage,
+            prefersReducedMotion,
+          });
+          return new Promise((resolve) => {
+            const timer = setTimeout(resolve, waitMs);
+            entranceTimersRef.current.push(timer);
+            if (!awaitEvent) return;
+            stageGatesRef.current[stage] = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+          });
+        };
+
+        // The stages and their durations are unchanged; only what triggers
+        // each step is. Everything from `prepare` onward keeps its own
+        // absolute timer above, because nothing there is waiting on a
+        // transition of the shell's.
+        void (async () => {
+          await settleStage("encapsulated");
+          if (generation !== openGenerationRef.current) return;
+          await holdFor(LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateHoldMs);
+          if (generation !== openGenerationRef.current) return;
+          setEntrancePhase("horizontal");
+          await settleStage("footer");
+          if (generation !== openGenerationRef.current) return;
+          await holdFor(LIVE_TRANSCRIPT_ENTRANCE_TIMING.controlsDelayMs);
+          if (generation !== openGenerationRef.current) return;
+          setEntrancePhase("controls");
+        })();
 
         const finishEntrance = setTimeout(async () => {
           // ResizeObserver has now seen the hidden buffered transcript. Wait
@@ -487,6 +551,7 @@ export function useLiveTranscriptPanel({
     close,
     reopen,
     holdFinal,
+    notifyStageSettled,
     showFinalText,
     dismissForError,
   };

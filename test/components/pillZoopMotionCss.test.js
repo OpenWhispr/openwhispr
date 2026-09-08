@@ -74,6 +74,35 @@ function animatedProperties(ruleBody) {
   return segments.map((segment) => segment.trim().split(/\s+/)[0]);
 }
 
+// The comma-separated values of one declaration, split on TOP-LEVEL commas
+// only — var(--x, fallback) and cubic-bezier(...) each carry commas of their
+// own that a naive regex would miscount as extra values. A transition
+// duration LIST is the bug this file keeps guarding against; a single value
+// that merely contains a var() fallback is not one.
+function declarationValues(ruleBody, property) {
+  const start = ruleBody.indexOf(`${property}:`);
+  assert.ok(start >= 0, `expected a ${property} declaration`);
+  const value = ruleBody.slice(
+    start + property.length + 1,
+    ruleBody.indexOf(";", start)
+  );
+  const values = [];
+  let depth = 0;
+  let current = "";
+  for (const character of value) {
+    if (character === "(") depth += 1;
+    else if (character === ")") depth -= 1;
+    if (character === "," && depth === 0) {
+      values.push(current);
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  values.push(current);
+  return values.map((entry) => entry.trim());
+}
+
 // Every flat `selector { body }` rule inside one already-extracted block.
 // Selectors are normalised to one line so a multi-line selector list reads the
 // same as a single-line one.
@@ -205,10 +234,13 @@ test("reduced motion shortens the exit with a single broadcast value, and never 
     "a comma-separated duration list would cycle onto index.css's forced property list"
   );
 
-  // Fix round 1, finding 4: the override must reach the ZOOP only. The bare
-  // .assistant-pill-presence also owns the tip-card in-place-of-pill opacity
-  // swap, and index.css's reduced-motion policy is explicit that opacity
-  // keeps its normal speed — collapsing that swap to 1ms works against it.
+  // Fix round 1, finding 4 said the 1ms override must reach the ZOOP only:
+  // the bare .assistant-pill-presence also owns the tip-card
+  // in-place-of-pill opacity swap, and index.css's reduced-motion policy is
+  // explicit that opacity keeps its normal speed, so collapsing that swap to
+  // 1ms works against it. That scoping still holds — but it is NOT the same
+  // thing as leaving the bare rule alone, which is what round 1 did and what
+  // the next test corrects.
   const overrides = flatRules(block).filter(
     (candidate) =>
       candidate.selector.includes(".assistant-pill-presence") &&
@@ -216,7 +248,75 @@ test("reduced motion shortens the exit with a single broadcast value, and never 
   );
   assert.deepEqual(
     overrides.map((candidate) => candidate.selector),
-    ['.assistant-pill-presence[data-pill-exit="zoop"]'],
-    "no reduced-motion transition override may target the bare .assistant-pill-presence"
+    ['.assistant-pill-presence[data-pill-exit="zoop"]', ".assistant-pill-presence"],
+    "exactly two reduced-motion transition overrides here: the exit's 1ms, and the bare rule's own single-value opacity duration"
+  );
+  const bare = overrides.at(-1);
+  assert.doesNotMatch(
+    bare.body,
+    /transition-duration:\s*1ms/,
+    "the tip-card opacity swap must NOT be collapsed to 1ms — index.css's own policy keeps opacity at its normal speed"
+  );
+});
+
+// Carried item, Task 10 (measured in a real browser before this fix): under
+// reduced motion the tip-card opacity swap landed at 260ms, not the 120ms the
+// base rule names and the comment above claims.
+//
+// Cause: the base `.assistant-pill-presence` rule's `transition` shorthand
+// contributes a TWO-value transition-duration — 0.26s for transform, 0.12s
+// for opacity, in that order. index.css's blanket reduced-motion rule then
+// forces transition-property with !important to its own fixed list, whose
+// FIRST entry is opacity, and leaves transition-duration untouched. Durations
+// are matched by POSITION against that forced list, so opacity picked up the
+// TRANSFORM's 0.26s. Exactly the trap .voice-pill-position hit and the zoop
+// override above already documents — sitting, unnoticed, in the base rule.
+//
+// Splitting the shorthand into named longhands does NOT fix it: there is no
+// CSS syntax for "this duration applies to THESE named properties" once
+// transition-property is a fixed unrelated list, so a two-value duration
+// cycles just the same however it is spelled. The remedy the file already
+// uses twice is the one that works: ONE value in the reduced-motion block,
+// which broadcasts to every property in the forced list instead of cycling.
+//
+// Verified from CSS text via cascade rules, as with every other test in this
+// file. The 260ms it replaces was a real-browser measurement; that the fix
+// now computes to 120ms has NOT been re-measured in a browser here.
+test("the tip-card opacity swap gets an explicit single-value duration under reduced motion, not the transform's by positional cycling", async () => {
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
+  const css = readCss("src/styles/dictation-panel.css");
+  const block = stripCssComments(
+    extractBalancedBlock(css, "@media (prefers-reduced-motion: reduce)")
+  );
+
+  const bare = flatRules(block).find(
+    (candidate) => candidate.selector === ".assistant-pill-presence"
+  );
+  assert.ok(bare, "expected a reduced-motion duration for the bare .assistant-pill-presence");
+  assert.match(
+    bare.body,
+    new RegExp(
+      `transition-duration:\\s*var\\(--motion-close-fade-ms,\\s*${MOTION_TIMING.closeFadeMs}ms\\)`
+    ),
+    "the swap must name its own duration, derived from MOTION_TIMING.closeFadeMs rather than retyped"
+  );
+  assert.equal(
+    declarationValues(bare.body, "transition-duration").length,
+    1,
+    "a comma-separated duration list would cycle onto index.css's forced property list all over again"
+  );
+  assert.equal((bare.body.match(/transition-duration:/g) ?? []).length, 1);
+
+  // The base rule it corrects must still be the two-value shorthand: this fix
+  // deliberately leaves normal motion (where the durations ARE matched by
+  // name, and opacity correctly gets 0.12s) untouched.
+  const baseRule = extractRule(
+    stripCssComments(css),
+    ".assistant-pill-presence {\n  --pill-exit-origin"
+  );
+  assert.match(
+    baseRule,
+    new RegExp(`opacity var\\(--motion-close-fade-ms, ${MOTION_TIMING.closeFadeMs}ms\\) linear`),
+    "the base rule keeps naming the fade explicitly, from the same pinned constant"
   );
 });

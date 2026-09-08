@@ -61,12 +61,59 @@ function installControllableRaf(t) {
 // regardless of how many `await`s the real implementation chains internally.
 const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-async function mountLiveTranscriptHook(t, { cachePrefix }) {
+// Task 10: the entrance's first two beats race the shell's own clip-path
+// transitionend against their old timers, so a test has to be able to see
+// exactly which timers were armed, at which delays, and which of them a
+// settling stage cancelled. Delay 0 passes straight through to the real
+// timer so flushMicrotasks below keeps working while this is installed.
+function captureEntranceTimers(t) {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const timers = [];
+  globalThis.setTimeout = (callback, delay, ...rest) => {
+    if (!delay) return originalSetTimeout(callback, delay, ...rest);
+    const timer = { callback, delay, cancelled: false, fired: false };
+    timers.push(timer);
+    return timer;
+  };
+  globalThis.clearTimeout = (timer) => {
+    if (timer && typeof timer === "object" && "cancelled" in timer) {
+      timer.cancelled = true;
+      return;
+    }
+    originalClearTimeout(timer);
+  };
+  t.after(() => {
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  });
+
+  const live = (delay) =>
+    timers.filter((timer) => timer.delay === delay && !timer.cancelled && !timer.fired);
+  return {
+    live,
+    one: (delay, what) => {
+      const matches = live(delay);
+      assert.equal(matches.length, 1, `${what}: expected exactly one live ${delay}ms timer`);
+      return matches[0];
+    },
+    none: (delay, what) => assert.equal(live(delay).length, 0, what),
+    run: async (timer) => {
+      timer.fired = true;
+      await React.act(async () => {
+        timer.callback();
+        await flushMicrotasks();
+      });
+    },
+  };
+}
+
+async function mountLiveTranscriptHook(t, { cachePrefix, window: windowProps } = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  installBrowserGlobals(t, {});
+  installBrowserGlobals(t, windowProps ? { window: windowProps } : {});
   const container = installHookDom(t);
   const raf = installControllableRaf(t);
   const vite = await createRendererServer(t, { cachePrefix });
@@ -96,7 +143,14 @@ async function mountLiveTranscriptHook(t, { cachePrefix }) {
     });
   };
 
-  return { raf, reopen, read: () => result };
+  const settle = async (stage) => {
+    await React.act(async () => {
+      result.notifyStageSettled(stage);
+      await flushMicrotasks();
+    });
+  };
+
+  return { raf, reopen, settle, read: () => result };
 }
 
 test("a genuine fresh mount (never open before) is tagged freshMount=true, at the exact frame the snap-gate needs", async (t) => {
@@ -149,4 +203,169 @@ test("reopening WHILE still mounted (mid-collapse, before the 320ms unmount time
     false,
     "mounted was already true before this open — not a real rest -> mounted transition, so the CSS snap-gate must not fire for it"
   );
+});
+
+// ---------------------------------------------------------------------------
+// Task 10: the entrance becomes event-driven. Its STAGES and DURATIONS are
+// unchanged — only what triggers each step. The first beat (encapsulate ->
+// horizontal) and the second (horizontal -> controls) now start when the
+// shell reports its own clip-path transition finished; their old timers stay
+// armed behind them, at the stage duration plus a grace window, so a shell
+// that never reports still advances. Every instant below is derived from
+// LIVE_TRANSCRIPT_ENTRANCE_TIMING / getLiveTranscriptEntranceTimeline, never
+// retyped.
+const loadEntranceTiming = () => import("../../src/helpers/voicePillPresentation.js");
+
+test("the entrance's first two beats start on the shell's own stage transitions, with the old timers behind them", async (t) => {
+  const {
+    LIVE_TRANSCRIPT_ENTRANCE_TIMING: timing,
+    LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS: grace,
+    getLiveTranscriptEntranceTimeline,
+  } = await loadEntranceTiming();
+  const timeline = getLiveTranscriptEntranceTimeline();
+  const { raf, reopen, settle, read } = await mountLiveTranscriptHook(t, {
+    cachePrefix: "openwhispr-live-transcript-entrance-gate-",
+  });
+  const timers = captureEntranceTimers(t);
+
+  await reopen();
+  await raf.flush();
+  assert.equal(read().open, true, "sanity: the open frame has run");
+  assert.equal(read().entrancePhase, "encapsulate");
+
+  // Beat 1 is armed as a race: the shell's "encapsulated" stage settling, or
+  // its own duration plus the grace window.
+  const encapsulateFallback = timers.one(
+    timing.encapsulateMs + grace,
+    "the encapsulate gate's fallback"
+  );
+  // Everything from `prepare` onward keeps its original absolute instant.
+  timers.one(timeline.prepareAtMs, "the prepare timer");
+  timers.one(timeline.panelAtMs, "the panel timer");
+
+  await settle("encapsulated");
+  assert.equal(
+    encapsulateFallback.cancelled,
+    true,
+    "a settled stage must cancel its own fallback, not run both"
+  );
+  assert.equal(
+    read().entrancePhase,
+    "encapsulate",
+    "the stage settling only opens the hold; the phase advances after it"
+  );
+
+  const hold = timers.one(timing.encapsulateHoldMs, "the encapsulate hold");
+  await timers.run(hold);
+  assert.equal(read().entrancePhase, "horizontal");
+
+  // Beat 2, same shape, on the footer stage.
+  const footerFallback = timers.one(timing.horizontalMs + grace, "the footer gate's fallback");
+  await settle("footer");
+  assert.equal(footerFallback.cancelled, true);
+  assert.equal(read().entrancePhase, "horizontal");
+
+  const controlsDelay = timers.one(timing.controlsDelayMs, "the controls delay");
+  await timers.run(controlsDelay);
+  assert.equal(read().entrancePhase, "controls");
+});
+
+test("a shell that never reports still advances, on the old timers plus their grace window", async (t) => {
+  const { LIVE_TRANSCRIPT_ENTRANCE_TIMING: timing, LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS: grace } =
+    await loadEntranceTiming();
+  const { raf, reopen, read } = await mountLiveTranscriptHook(t, {
+    cachePrefix: "openwhispr-live-transcript-entrance-fallback-",
+  });
+  const timers = captureEntranceTimers(t);
+
+  await reopen();
+  await raf.flush();
+
+  await timers.run(timers.one(timing.encapsulateMs + grace, "the encapsulate fallback"));
+  await timers.run(timers.one(timing.encapsulateHoldMs, "the encapsulate hold"));
+  assert.equal(read().entrancePhase, "horizontal");
+
+  await timers.run(timers.one(timing.horizontalMs + grace, "the footer fallback"));
+  await timers.run(timers.one(timing.controlsDelayMs, "the controls delay"));
+  assert.equal(read().entrancePhase, "controls");
+});
+
+// Reduced motion: src/index.css's blanket `*, *::before, *::after` rule sets
+// transition-property with !important to a list that EXCLUDES clip-path, so
+// the shell's stage clip simply applies and NO transitionend can ever arrive.
+// The gate must therefore not be armed at all, and the beat must keep its
+// ORIGINAL instant rather than the fallback's stage-duration-plus-grace —
+// otherwise the entrance would run slower with reduced motion on than off.
+test("reduced motion arms no stage gate and keeps the entrance's original instants", async (t) => {
+  const { LIVE_TRANSCRIPT_ENTRANCE_TIMING: timing, LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS: grace } =
+    await loadEntranceTiming();
+  const { raf, reopen, settle, read } = await mountLiveTranscriptHook(t, {
+    cachePrefix: "openwhispr-live-transcript-entrance-reduced-motion-",
+    window: { matchMedia: () => ({ matches: true }) },
+  });
+  const timers = captureEntranceTimers(t);
+
+  await reopen();
+  await raf.flush();
+
+  timers.none(
+    timing.encapsulateMs + grace,
+    "no fallback-with-grace may be armed when there is no event to fall back FROM"
+  );
+  const encapsulate = timers.one(timing.encapsulateMs, "the encapsulate beat's own timer");
+
+  // A stray settle (the shell's opacity transition still fires under reduced
+  // motion, and a future caller could mis-route one) must change nothing.
+  await settle("encapsulated");
+  assert.equal(encapsulate.cancelled, false, "no gate is armed, so nothing can cancel this beat");
+  assert.equal(read().entrancePhase, "encapsulate");
+
+  await timers.run(encapsulate);
+  await timers.run(timers.one(timing.encapsulateHoldMs, "the encapsulate hold"));
+  assert.equal(read().entrancePhase, "horizontal");
+
+  timers.none(timing.horizontalMs + grace, "the footer beat likewise arms no gate");
+  await timers.run(timers.one(timing.horizontalMs, "the footer beat's own timer"));
+  await timers.run(timers.one(timing.controlsDelayMs, "the controls delay"));
+  assert.equal(read().entrancePhase, "controls");
+});
+
+// Reopening inside close()'s 320ms unmount window starts a SECOND entrance
+// while the first one's chain is still suspended on its gate. The old chain
+// must be unable to touch the new one: its fallback is cancelled and its gate
+// is dropped, so one settling stage advances exactly one entrance.
+test("a re-open during the close leaves no stale gate that could advance the new entrance", async (t) => {
+  const { LIVE_TRANSCRIPT_ENTRANCE_TIMING: timing, LIVE_TRANSCRIPT_STAGE_GATE_GRACE_MS: grace } =
+    await loadEntranceTiming();
+  const { raf, reopen, settle, read } = await mountLiveTranscriptHook(t, {
+    cachePrefix: "openwhispr-live-transcript-entrance-reopen-",
+  });
+  const timers = captureEntranceTimers(t);
+
+  await reopen();
+  await raf.flush();
+  const firstFallback = timers.one(timing.encapsulateMs + grace, "the first entrance's fallback");
+
+  await React.act(async () => {
+    read().close();
+  });
+  assert.equal(read().mounted, true, "sanity: still mounted — this is the 320ms close window");
+  assert.equal(firstFallback.cancelled, true, "closing must cancel the entrance's own timers");
+
+  // The abandoned chain's gate must be gone too, not merely its timer.
+  await settle("encapsulated");
+  timers.none(timing.encapsulateHoldMs, "a closed entrance must not resume on a late stage report");
+
+  await reopen();
+  await raf.flush();
+  assert.equal(read().freshMount, false, "sanity: a mid-collapse reopen is not a fresh mount");
+  timers.one(timing.encapsulateMs + grace, "the second entrance arms exactly one fallback");
+
+  await settle("encapsulated");
+  const hold = timers.one(
+    timing.encapsulateHoldMs,
+    "one settling stage must advance exactly one entrance"
+  );
+  await timers.run(hold);
+  assert.equal(read().entrancePhase, "horizontal");
 });
