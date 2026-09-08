@@ -105,3 +105,30 @@ test("the size owner's hide is a thunk the error handoff awaits inside a try", (
   );
   assert.match(handoff, /try \{[\s\S]*await hideWindow\(\);[\s\S]*\} catch \{/);
 });
+
+// Finding 4, final review 2026-09-08. App.jsx's comment on
+// usePillExitChoreography claimed "Every renderer-initiated hide goes through
+// this". It never did: the size owner hands the dictation-error pill handoff a
+// raw hideWindow thunk, and AppRouter hides the overlay during onboarding
+// before App has mounted. Both are safe — the pill is invisible or absent — but
+// a false single-funnel claim is exactly what a later task builds on, so the
+// comment now names them and this pins the set. A fourth hide added anywhere
+// fails here, forcing an explicit choice: route it through the zoop, or
+// document it as another exception and say why it cannot be seen.
+test("exactly two renderer hides sit outside the pill's zoop funnel, and both are the documented ones", () => {
+  const files = callSites().map((site) => site.file);
+
+  assert.ok(
+    files.includes("src/hooks/usePillExitChoreography.js"),
+    "the zoop funnel itself must still be the hide path for a pill that is on screen"
+  );
+  assert.ok(
+    !files.includes("src/App.jsx"),
+    "App's own hides go through hideWithZoop — a direct call here would be a hard cut"
+  );
+  assert.deepEqual(
+    files.filter((file) => file !== "src/hooks/usePillExitChoreography.js").sort(),
+    ["src/AppRouter.jsx", "src/hooks/useMainWindowSizeOwner.js"],
+    "these two bypass the zoop on purpose; anything else must be justified in App.jsx's funnel comment"
+  );
+});

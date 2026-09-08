@@ -454,7 +454,21 @@ export default function App() {
   // completing just before the window goes.
   const [agentMarkHeldThroughHide, setAgentMarkHeldThroughHide] = useState(false);
   // The pill leaves with a zoop before the native window hides, and springs
-  // back on the next show. Every renderer-initiated hide goes through this.
+  // back on the next show. This is the funnel for every hide that could be
+  // SEEN — i.e. every hide taken while the pill is on screen and visible.
+  //
+  // It is NOT every renderer-initiated hide, which is what this comment used
+  // to claim (Finding 4, final review 2026-09-08). Two sit outside it on
+  // purpose, and neither can produce a visible hard cut:
+  //   - AppRouter.jsx hides the dictation overlay during onboarding, before
+  //     this component has mounted at all. There is no pill to zoop.
+  //   - useMainWindowSizeOwner hands the dictation-error pill handoff a raw
+  //     hideWindow thunk. That hide runs only while the handoff still holds
+  //     the pill suppressed at opacity 0 — a proven ordering, not an
+  //     assumption: dictationErrorPillHandoff.test.js's "auto-hide closes the
+  //     native window before releasing DOM suppression" pins the hide BEFORE
+  //     the reveal. Routing it through the zoop would animate an already
+  //     invisible pill and delay the hide for nothing.
   const { exiting: pillExiting, hideWithZoop } = usePillExitChoreography({
     pillPresenceRef,
     recording: isRecording || isPreparing,

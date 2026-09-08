@@ -37,6 +37,14 @@ export function useMainWindowSizeOwner({
     const handoff = createDictationErrorPillHandoff({
       onSuppressedChange: setHandoffActive,
       shouldAutoHide: () => useSettingsStore.getState().floatingIconAutoHide,
+      // A RAW hide, deliberately not routed through usePillExitChoreography's
+      // zoop funnel (Finding 4, final review 2026-09-08 — App.jsx's comment on
+      // that funnel names this exception and why it is safe). The handoff only
+      // reaches this while it still has the pill suppressed at opacity 0, so
+      // there is no visible pill for a zoop to play on and no hard cut to
+      // avoid. hide-window REJECTS when the main process refuses; releaseAfter
+      // awaits this inside its own try/catch, so the rejection is contained —
+      // see that catch's own comment for what it does and does not promise.
       hideWindow: () => window.electronAPI?.hideWindow?.(),
     });
     handoffRef.current = handoff;
