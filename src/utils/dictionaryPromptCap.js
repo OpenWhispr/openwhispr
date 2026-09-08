@@ -26,10 +26,15 @@ export const WHISPER_DECODER_PROMPT_CHARS = 550;
 // absurd list crowding out a long dictation, not a limit anyone should hit.
 export const TRANSCRIBE_PROMPT_CHARS = 8000;
 
+// Only the 4o transcribe family is known to read past a Whisper decoder's
+// prompt window, so it alone earns the generous budget. Everything else falls
+// back to the Whisper budget on purpose: custom and self-hosted endpoints take
+// whatever model name the user typed, and most of those servers are
+// Whisper-family under a name that never says "whisper".
 export function dictionaryPromptLimit({ provider = "", endpoint = "", model = "" } = {}) {
   if (provider === "groq" || endpoint.includes("api.groq.com")) return GROQ_PROMPT_CHARS;
-  if (model.toLowerCase().includes("whisper")) return WHISPER_PROMPT_CHARS;
-  return TRANSCRIBE_PROMPT_CHARS;
+  if (model.toLowerCase().startsWith("gpt-4o")) return TRANSCRIBE_PROMPT_CHARS;
+  return WHISPER_PROMPT_CHARS;
 }
 
 // Cuts at the last comma inside the budget so no entry is sent half-spelled.

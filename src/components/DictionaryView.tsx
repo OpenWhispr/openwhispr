@@ -39,8 +39,9 @@ export default function DictionaryView() {
 
   const pendingImportCount = useMemo(() => parseDictionaryImportText(bulkText).length, [bulkText]);
 
-  // Length of the exact prompt string the STT request builds (words + snippet
-  // triggers, comma-joined), so the warning fires on real request size.
+  // Length of the prompt string the STT request builds (words + snippet
+  // triggers, comma-joined), so the warning fires on real request size. A
+  // Chinese script bias adds ~21 chars on top for zh-CN / zh-TW users.
   const promptChars = useMemo(
     () => getDictionaryHintWords({ customDictionary, snippets }).join(", ").length,
     [customDictionary, snippets]

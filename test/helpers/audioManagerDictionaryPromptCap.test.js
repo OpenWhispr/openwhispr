@@ -1,43 +1,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { loadAudioManager: loadSharedAudioManager } = require("./harness/audioManager");
 
-// audioManager pulls in the whole renderer graph, so every test here needs the
-// same store/service stubs. `settingsKey` names the globalThis slot each test
-// swaps its settings through, keeping the module cache per-test isolated.
-async function loadAudioManager(t, { cachePrefix, settingsKey }) {
-  const { window } = installBrowserGlobals(t);
-  const vite = await createRendererServer(t, {
-    cachePrefix,
-    mockModules: {
-      "/utils/logger": "export default { debug() {}, info() {}, warn() {}, error() {} };",
-      "/stores/settingsStore": `
-        export const getSettings = () => globalThis.${settingsKey};
-        export const getEffectiveCleanupModel = () => null;
-        export const isCloudCleanupMode = () => false;
-        export const isCloudDictationAgentMode = () => false;
-        export const isCloudTranslationMode = () => false;
-      `,
-      "/services/ReasoningService": "export default class ReasoningService {};",
-      "/services/SyncService.js": "export const syncService = {};",
-      "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
-      "/utils/permissions": "export const isAccessibilitySkipped = () => false;",
-    },
-  });
-  t.after(() => {
-    delete globalThis[settingsKey];
-  });
-
-  const AudioManager = (await vite.ssrLoadModule("/helpers/audioManager.js")).default;
+// Every case drives a prototype-only manager through the shared renderer
+// harness; only the model, endpoint and dictionary prompt differ per case.
+async function loadAudioManager(t, opts) {
+  const loaded = await loadSharedAudioManager(t, opts);
   return {
-    window,
-    vite,
-    setSettings: (settings) => {
-      globalThis[settingsKey] = settings;
-    },
-    // Prototype-only instance: the constructor wires up media devices we don't need.
+    ...loaded,
     createManager: (overrides = {}) =>
-      Object.assign(Object.create(AudioManager.prototype), {
+      loaded.createManager({
         getEffectiveSttLanguage: () => "auto",
         getTranscriptionModel: () => "whisper-1",
         getAPIKey: async () => "test-key",
@@ -159,6 +131,32 @@ test("custom dictionary prompt caps follow the provider's real limit", async (t)
     );
     assert.ok(longPrompt.startsWith(prompts[0]), "truncation must keep the head of the list");
   });
+
+  await t.test(
+    "a self-hosted server with a free-text model name is treated as Whisper",
+    async () => {
+      setSettings({
+        useLocalWhisper: false,
+        allowLocalFallback: false,
+        cloudTranscriptionProvider: "custom",
+      });
+      const prompts = capturePrompts(t);
+      // Self-hosted and custom endpoints take whatever model name the user typed;
+      // most such servers are Whisper-family under a name that never says so.
+      const manager = createManager({
+        getTranscriptionModel: () => "Systran/faster-distil-large-v3",
+        getTranscriptionEndpoint: () => "https://stt.internal.example/v1/audio/transcriptions",
+        getWhisperPrompt: () => longPrompt,
+      });
+
+      await manager.processWithOpenAIAPI(audioBlob, {});
+      assert.equal(prompts.length, 1);
+      assert.ok(
+        prompts[0].length <= 900,
+        `an unrecognized model must not get the 4o budget, got ${prompts[0].length}`
+      );
+    }
+  );
 
   await t.test("4o transcribe still gets a context guard on absurd lists", async () => {
     setSettings({
