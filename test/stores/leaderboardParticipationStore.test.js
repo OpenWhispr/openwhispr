@@ -139,7 +139,10 @@ test("a join retires the queued leave before its own request goes out", async (t
       // The zone rides along with the join because that is what starts the
       // account's history reconciliation, and only this device knows which
       // calendar day its dictations belong to.
-      body: { enabled: true, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+      body: {
+        enabled: true,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      },
       public: undefined,
       expectedAuthGeneration: undefined,
     },
@@ -152,6 +155,18 @@ test("a join retires the queued leave before its own request goes out", async (t
   assert.equal(store.getState().enabled, true);
   assert.equal(store.getState().configured, true);
   assert.equal(store.getState().error, null);
+});
+
+test("a join sends UTC when the runtime exposes no timezone", async (t) => {
+  const { requests, store } = loadStore(t, {
+    cloudApiRequest: async () => participation(true),
+  });
+  t.mock.method(Intl, "DateTimeFormat", () => ({
+    resolvedOptions: () => ({ timeZone: "" }),
+  }));
+
+  assert.equal(await store.getState().join("user_1"), true);
+  assert.deepEqual(requests[0].body, { enabled: true, timeZone: "UTC" });
 });
 
 test("a failed join reports that the combined opt-in did not complete", async (t) => {
