@@ -6,6 +6,13 @@ const os = require("node:os");
 const path = require("node:path");
 const { getRequiredModelFiles } = require("../../src/helpers/parakeetModelInfo");
 
+// Names below come from the selected distribution manifest, the same way the
+// source derives them. Hardcoding the default distribution's values made these
+// fail under any other manifest, including the release build's.
+const { resolveReleaseDistribution } = require("../../src/helpers/releaseIdentity");
+const DISTRIBUTION = resolveReleaseDistribution(require("../../package.json").distribution);
+const NAMESPACE = DISTRIBUTION.runtimeNamespace;
+
 const MODEL_NAME = "parakeet-tdt-0.6b-v3";
 
 function createFloat32Wav(sampleValue, sampleCount = 160) {
@@ -92,7 +99,7 @@ test("transcribes audible mono 16 kHz float32 WAV input", async () => {
   }
 
   try {
-    const modelDir = path.join(tempHome, ".cache", "openwhispr", "parakeet-models", MODEL_NAME);
+    const modelDir = path.join(tempHome, ".cache", NAMESPACE, "parakeet-models", MODEL_NAME);
     fs.mkdirSync(modelDir, { recursive: true });
     for (const file of getRequiredModelFiles(MODEL_NAME)) {
       fs.writeFileSync(path.join(modelDir, file), "");

@@ -4,6 +4,14 @@ const { EventEmitter } = require("node:events");
 
 const KDEShortcutManager = require("../../src/helpers/kdeShortcut");
 
+// Names below come from the selected distribution manifest, the same way
+// kdeShortcut.js derives them. Hardcoding the default distribution's values
+// made these fail under any other manifest, including the release build's.
+const { resolveReleaseDistribution } = require("../../src/helpers/releaseIdentity");
+const DISTRIBUTION = resolveReleaseDistribution(require("../../package.json").distribution);
+const NAMESPACE = DISTRIBUTION.runtimeNamespace;
+const PRODUCT = DISTRIBUTION.productName;
+
 test("modifier-only KDE shortcuts are rejected for push-to-talk on Wayland", async () => {
   const previousSessionType = process.env.XDG_SESSION_TYPE;
   process.env.XDG_SESSION_TYPE = "wayland";
@@ -61,6 +69,6 @@ test("KDE release events use the same friendly-name fallback as press events", a
   manager.callbacks.set("dictation", (_hotkey, phase) => phases.push(phase));
 
   assert.equal(await manager._listenForComponent(), true);
-  component.emit("globalShortcutReleased", "openwhispr", "OpenWhispr dictation");
+  component.emit("globalShortcutReleased", NAMESPACE, `${PRODUCT} dictation`);
   assert.deepEqual(phases, ["up"]);
 });

@@ -6,6 +6,16 @@ const Module = require("node:module");
 const os = require("node:os");
 const path = require("node:path");
 
+const { resolveReleaseDistribution } = require("../../src/helpers/releaseIdentity");
+
+// These names come from the selected distribution manifest, exactly as
+// hyprlandShortcut.js derives them. Hardcoding the default distribution's
+// values made every one of these tests fail under any other manifest,
+// including the one the release build uses.
+const DISTRIBUTION = resolveReleaseDistribution(require("../../package.json").distribution);
+const BIND_NAMESPACE = DISTRIBUTION.runtimeNamespace;
+const DBUS = DISTRIBUTION.linux;
+
 const modulePath = require.resolve("../../src/helpers/hyprlandShortcut");
 const originalLoad = Module._load;
 const ENV_KEYS = ["HYPRLAND_CONFIG", "HYPRLAND_INSTANCE_SIGNATURE", "XDG_CONFIG_HOME"];
@@ -56,8 +66,7 @@ function successfulHyprctl(provider) {
   };
 }
 
-const DBUS_COMMAND =
-  "dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.Toggle";
+const DBUS_COMMAND = `dbus-send --session --type=method_call --dest=${DBUS.dbusServiceName} ${DBUS.dbusObjectPath} ${DBUS.dbusInterface}.Toggle`;
 
 test(
   "persists a legacy binding through hyprland.conf",
@@ -75,10 +84,10 @@ test(
     assert.ok(
       fs
         .readFileSync(configPath, "utf8")
-        .includes(`source = ${path.join(configDir, "openwhispr-binds.conf")}\n`)
+        .includes(`source = ${path.join(configDir, `${BIND_NAMESPACE}-binds.conf`)}\n`)
     );
     assert.match(
-      fs.readFileSync(path.join(configDir, "openwhispr-binds.conf"), "utf8"),
+      fs.readFileSync(path.join(configDir, `${BIND_NAMESPACE}-binds.conf`), "utf8"),
       /bind = CTRL SHIFT, Return, exec, dbus-send/
     );
     assert.equal(await manager.unregisterKeybinding(), true);
@@ -110,17 +119,23 @@ test(
     assert.equal(hyprctl.calls.filter(({ args }) => args[0] === "systeminfo").length, 1);
 
     assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().path, luaPath);
-    assert.match(fs.readFileSync(luaPath, "utf8"), /pcall\(require, .+openwhispr-binds\.lua/);
+    assert.match(
+      fs.readFileSync(luaPath, "utf8"),
+      new RegExp(`pcall\\(require, .+${BIND_NAMESPACE}-binds\\.lua`)
+    );
     assert.equal(
-      (fs.readFileSync(luaPath, "utf8").match(/openwhispr-binds\.lua/g) || []).length,
+      (
+        fs.readFileSync(luaPath, "utf8").match(new RegExp(`${BIND_NAMESPACE}-binds\\.lua`, "g")) ||
+        []
+      ).length,
       1
     );
-    const binds = fs.readFileSync(path.join(configDir, "openwhispr-binds.lua"), "utf8");
-    assert.match(binds, /^-- OpenWhispr keybinds/m);
+    const binds = fs.readFileSync(path.join(configDir, `${BIND_NAMESPACE}-binds.lua`), "utf8");
+    assert.match(binds, new RegExp(`^-- ${DISTRIBUTION.productName} keybinds`, "m"));
     assert.match(binds, /hl\.bind\("CTRL \+ SHIFT \+ RETURN", hl\.dsp\.exec_cmd\("dbus-send/);
     assert.doesNotMatch(
       fs.readFileSync(path.join(configDir, "hyprland.conf"), "utf8"),
-      /openwhispr/
+      new RegExp(BIND_NAMESPACE)
     );
     assert.equal(hyprctl.calls.filter(({ args }) => args[0] === "systeminfo").length, 1);
   })
@@ -249,7 +264,7 @@ test(
     assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), false);
     assert.equal(manager.isRegistered, false);
     assert.equal(manager.currentBinding, null);
-    assert.equal(fs.existsSync(path.join(configDir, "openwhispr-binds.lua")), false);
+    assert.equal(fs.existsSync(path.join(configDir, `${BIND_NAMESPACE}-binds.lua`)), false);
   })
 );
 
@@ -292,7 +307,10 @@ test(
     assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().path, configPath);
     assert.equal(hyprctl.calls.filter(({ args }) => args[0] === "systeminfo").length, 0);
     assert.match(fs.readFileSync(configPath, "utf8"), /pcall\(require,/);
-    assert.equal(fs.existsSync(path.join(path.dirname(configPath), "openwhispr-binds.lua")), true);
+    assert.equal(
+      fs.existsSync(path.join(path.dirname(configPath), `${BIND_NAMESPACE}-binds.lua`)),
+      true
+    );
   })
 );
 
@@ -314,7 +332,7 @@ test(
     assert.equal(await manager.registerKeybinding("Control+Shift+Enter"), true);
     assert.equal(calls.filter(({ args }) => args[0] === "systeminfo").length, 1);
     assert.equal(calls.filter(({ args }) => args[0] === "eval").length, 2);
-    assert.equal(fs.existsSync(path.join(configDir, "openwhispr-binds.lua")), true);
+    assert.equal(fs.existsSync(path.join(configDir, `${BIND_NAMESPACE}-binds.lua`)), true);
   })
 );
 
@@ -343,7 +361,7 @@ test(
   "replaces an old dofile loader before a trailing top-level return",
   withTempHyprConfig(async (configDir) => {
     const luaPath = path.join(configDir, "hyprland.lua");
-    const bindsPath = path.join(configDir, "openwhispr-binds.lua");
+    const bindsPath = path.join(configDir, `${BIND_NAMESPACE}-binds.lua`);
     fs.mkdirSync(configDir, { recursive: true });
     fs.writeFileSync(
       luaPath,
@@ -360,7 +378,7 @@ test(
     const content = fs.readFileSync(luaPath, "utf8");
     const protectedLoader = `pcall(require, "${bindsPath}")`;
     assert.doesNotMatch(content, /dofile\(/);
-    assert.equal((content.match(/openwhispr-binds\.lua/g) || []).length, 1);
+    assert.equal((content.match(new RegExp(`${BIND_NAMESPACE}-binds\\.lua`, "g")) || []).length, 1);
     assert.ok(content.indexOf(protectedLoader) < content.indexOf("return {}"));
   })
 );
@@ -369,7 +387,7 @@ test(
   "removes the previous header wording when rewriting managed binds",
   withTempHyprConfig(async (configDir) => {
     const configPath = path.join(configDir, "hyprland.conf");
-    const bindsPath = path.join(configDir, "openwhispr-binds.conf");
+    const bindsPath = path.join(configDir, `${BIND_NAMESPACE}-binds.conf`);
     fs.mkdirSync(configDir, { recursive: true });
     fs.writeFileSync(configPath, "# legacy config\n");
     fs.writeFileSync(
@@ -387,7 +405,12 @@ test(
 
     const content = fs.readFileSync(bindsPath, "utf8");
     assert.doesNotMatch(content, /matching source line/);
-    assert.equal((content.match(/OpenWhispr keybinds/g) || []).length, 1);
+    // The stale header is replaced by this distribution's, exactly once,
+    // rather than being appended alongside it.
+    assert.equal(
+      (content.match(new RegExp(`${DISTRIBUTION.productName} keybinds`, "g")) || []).length,
+      1
+    );
   })
 );
 
@@ -395,10 +418,10 @@ test(
   "removes stale managed legacy artifacts after migrating to Lua",
   withTempHyprConfig(async (configDir) => {
     const confPath = path.join(configDir, "hyprland.conf");
-    const legacyBindsPath = path.join(configDir, "openwhispr-binds.conf");
+    const legacyBindsPath = path.join(configDir, `${BIND_NAMESPACE}-binds.conf`);
     fs.mkdirSync(configDir, { recursive: true });
     fs.writeFileSync(path.join(configDir, "hyprland.lua"), "-- lua config\n");
-    fs.writeFileSync(confPath, "# keep this comment\nsource = ./openwhispr-binds.conf\n");
+    fs.writeFileSync(confPath, `# keep this comment\nsource = ./${BIND_NAMESPACE}-binds.conf\n`);
     fs.writeFileSync(
       legacyBindsPath,
       "# OpenWhispr keybinds (managed automatically)\n" +
