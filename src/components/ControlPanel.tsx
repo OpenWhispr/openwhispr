@@ -48,6 +48,7 @@ import {
   isTranscriptionContextAllowed,
   isUpdateRequiredByOrg,
 } from "../stores/policyRules";
+import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import {
   useIsMeetingMode,
   useIsNarrowWindow,
@@ -60,7 +61,7 @@ import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
-import { eligibleGpuOffers, type GpuOffers } from "../utils/gpuBannerPolicy";
+import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
 import {
   setActiveNoteId,
   setActiveFolderId,
@@ -101,6 +102,7 @@ const toggleIconClass =
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
+const InsightsView = React.lazy(() => import("./InsightsView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
 const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
@@ -157,10 +159,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     folderId: number;
     event: any;
   } | null>(null);
-  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<GpuOffers>({
-    transcription: false,
-    intelligence: null,
-  });
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
   );
@@ -221,6 +219,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       };
     })
   );
+  const gpuAccelAvailable = useGpuBannerAvailability({
+    settings: gpuBannerSettings,
+    agentAllowedByPolicy,
+    dismissed: gpuBannerDismissed,
+    settingsOpen: showSettings,
+    platform,
+  });
 
   const {
     confirmDialog,
@@ -408,43 +413,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [authLoaded, isSignedIn, setUseLocalWhisper, setCloudTranscriptionMode]);
 
   useEffect(() => {
-    if (platform === "darwin" || gpuBannerDismissed) return;
-    const offers = eligibleGpuOffers({ ...gpuBannerSettings, agentAllowedByPolicy });
-    // A run that loses its settings mid-probe must not publish: switching to a
-    // cloud mode resolves with no IPC at all, so an older local-mode run would
-    // otherwise land last and re-raise the banner for the rest of the session.
-    let cancelled = false;
-    const detect = async () => {
-      const results: GpuOffers = { transcription: false, intelligence: null };
-      if (offers.transcription) {
-        try {
-          const status = await window.electronAPI?.getCudaWhisperStatus?.();
-          if (status?.gpuInfo.hasNvidiaGpu && status.gpuInfo.cudaSupported) {
-            if (!status.downloaded) results.transcription = true;
-          } else {
-            const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
-            if (vulkan?.vulkan.available && !vulkan.downloaded) results.transcription = true;
-          }
-        } catch {}
-      }
-      if (offers.intelligence) {
-        try {
-          const [gpu, vulkan] = await Promise.all([
-            window.electronAPI?.detectVulkanGpu?.(),
-            window.electronAPI?.getLlamaVulkanStatus?.(),
-          ]);
-          if (gpu?.available && !vulkan?.downloaded) results.intelligence = offers.intelligence;
-        } catch {}
-      }
-      if (!cancelled) setGpuAccelAvailable(results);
-    };
-    detect();
-    return () => {
-      cancelled = true;
-    };
-  }, [gpuBannerSettings, agentAllowedByPolicy, gpuBannerDismissed]);
-
-  useEffect(() => {
     const drain = async () => {
       const data = await window.electronAPI?.getPendingMeetingNoteNavigation?.();
       if (!data) return;
@@ -576,7 +544,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const clearAllTranscriptions = useCallback(() => {
     showConfirmDialog({
       title: t("controlPanel.history.clearAllTitle"),
-      description: t("controlPanel.history.clearAllDescription"),
+      description: t(
+        isSignedIn
+          ? "controlPanel.history.clearAllDescription"
+          : "controlPanel.history.clearAllDescriptionDevice"
+      ),
       onConfirm: async () => {
         try {
           const result = await window.electronAPI.clearTranscriptions();
@@ -603,7 +575,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       },
       variant: "destructive",
     });
-  }, [showConfirmDialog, showAlertDialog, toast, t]);
+  }, [isSignedIn, showConfirmDialog, showAlertDialog, toast, t]);
 
   const showAudioInFolder = useCallback(
     async (id: number) => {
@@ -629,11 +601,20 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     async (id: number, options?: { isRecover?: boolean }) => {
       try {
         const s = getSettings();
-        if (!isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
+        const managed = getManagedTranscriptionResolution();
+        if (managed?.kind === "error") {
+          toast({
+            title: managed.messageKey ? t(managed.messageKey) : managed.message,
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!managed && !isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
           toast({ title: t("common.managedByOrg"), variant: "default" });
           return;
         }
         const result = await window.electronAPI.retryTranscription(id, {
+          managed,
           useLocalWhisper: s.useLocalWhisper,
           localTranscriptionProvider: s.localTranscriptionProvider,
           cloudTranscriptionMode: s.cloudTranscriptionMode,
@@ -643,6 +624,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           cortiEnvironment: s.cortiEnvironment,
           cortiTenant: s.cortiTenant,
           parakeetModel: s.parakeetModel,
+          cohereModel: s.cohereModel,
           whisperModel: s.whisperModel,
           preferredLanguage: s.preferredLanguage,
           transcriptionMode: s.transcriptionMode,
@@ -806,7 +788,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         } else {
           toast({
             title: t("controlPanel.history.retryError"),
-            description: result.error,
+            description: result.messageKey ? t(result.messageKey) : result.error,
             variant: "destructive",
           });
         }
@@ -1058,6 +1040,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             {isSidePanelLayout && (
               <div
                 className={platform === "darwin" ? "ml-[84px] mt-[16px]" : "ml-2"}
+                data-no-window-drag=""
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
                 <Button
@@ -1073,7 +1056,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
             <div className="flex-1" />
             {platform !== "darwin" && (
-              <div className="pr-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+              <div
+                className="pr-1"
+                data-no-window-drag=""
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+              >
                 <WindowControls />
               </div>
             )}
@@ -1206,6 +1193,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 onOpenIntegrations={() => setActiveView("integrations")}
               />
             )}
+            {activeView === "insights" && (
+              <Suspense fallback={null}>
+                <InsightsView />
+              </Suspense>
+            )}
             {activeView === "chat" && agentAllowedByPolicy && (
               <Suspense fallback={null}>
                 <ChatView />
@@ -1263,6 +1255,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             className={`absolute z-40 flex h-10 items-center ${
               platform === "darwin" ? "left-21 top-2" : "left-2 top-0"
             }`}
+            data-no-window-drag=""
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
             onMouseLeave={sidebarCollapsed ? leaveSidebarToggle : undefined}

@@ -65,6 +65,12 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "."),
         "@distribution/logo": path.resolve(envDir, distribution.assets.rendererLogo),
         "@distribution/icon": path.resolve(envDir, distribution.assets.rendererIcon),
+        // Optional: a distribution that wants its own onboarding glyph points
+        // this at an image; the default distribution maps it to an empty
+        // module so the built-in SVG keeps rendering.
+        "@distribution/mark": distribution.assets.onboardingMark
+          ? path.resolve(envDir, distribution.assets.onboardingMark)
+          : path.resolve(__dirname, "config/emptyDistributionMark.ts"),
       },
     },
     server: {

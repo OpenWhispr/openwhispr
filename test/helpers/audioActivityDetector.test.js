@@ -107,6 +107,9 @@ function createDetector(
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+// flush() pends on the mocked setTimeout, so mock-timer tests drain the
+// reconcile promise chain through the unmocked immediate queue instead.
+const flushImmediate = () => new Promise((resolve) => setImmediate(resolve));
 const createDeferred = () => {
   let resolve;
   let reject;
@@ -224,21 +227,6 @@ test("win32: MIC_START/MIC_STOP pids are tracked across partial chunks", async (
   assert.notEqual(detector._sustainedTimer, null, "one mic is still active");
 
   children[0].stdout.emit("data", "MIC_STOP 22\n");
-  assert.equal(detector._sustainedTimer, null);
-  detector.stop();
-});
-
-test("linux: pactl source-output events drive the sustained timer", async () => {
-  const { detector, children, calls } = createDetector("linux");
-
-  await detector.start();
-  assert.equal(calls[0].command, "pactl");
-  assert.deepEqual(calls[0].args, ["subscribe"]);
-
-  children[0].stdout.emit("data", "Event 'new' on source-output #7\n");
-  assert.notEqual(detector._sustainedTimer, null);
-
-  children[0].stdout.emit("data", "Event 'remove' on source-output #7\n");
   assert.equal(detector._sustainedTimer, null);
   detector.stop();
 });
@@ -494,7 +482,11 @@ test("win32: unattributable sessions (pid 0) count as external capture", async (
   detector.stop();
 });
 
-test("linux: reconciles source-output ownership at startup and on events", async () => {
+// Mirrors LINUX_RECONCILE_MIN_SPACING_MS in audioActivityDetector.js.
+const RECONCILE_SPACING_MS = 1000;
+
+test("linux: reconciles source-output ownership at startup and on events", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children, execCalls } = createDetector("linux", {
     excludedProcessIds: () => [700],
     execResponses: [
@@ -519,8 +511,9 @@ test("linux: reconciles source-output ownership at startup and on events", async
     externalMicActive: true,
   });
 
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
   children[0].stdout.emit("data", "Event 'change' on source-output #1\n");
-  await flush();
+  await flushImmediate();
 
   assert.deepEqual(
     execCalls.map(({ command }) => command),
@@ -533,42 +526,91 @@ test("linux: reconciles source-output ownership at startup and on events", async
   detector.stop();
 });
 
-test("linux: a burst of subscribe events coalesces into at most two reconciles", async () => {
+test("linux: a subscribe-event burst runs one leading and one spaced trailing reconcile", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children, execCalls } = createDetector("linux", {
     excludedProcessIds: () => [700],
     execResponses: [
       { stdout: "[]" },
-      { stdout: JSON.stringify([{ index: 1, properties: { "application.process.id": "800" } }]) },
+      { stdout: "[]" },
       { stdout: JSON.stringify([{ index: 1, properties: { "application.process.id": "800" } }]) },
     ],
   });
+  const reconciles = () =>
+    execCalls.filter(({ command }) => command === "pactl --format=json list source-outputs").length;
 
   await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+
   children[0].stdout.emit(
     "data",
     [
       "Event 'new' on source-output #1",
-      "Event 'new' on source-output #2",
       "Event 'change' on source-output #1",
-      "Event 'remove' on source-output #2",
+      "Event 'change' on source-output #1",
+      "Event 'change' on source-output #1",
       "",
     ].join("\n")
   );
-  await flush();
+  await flushImmediate();
+  assert.equal(reconciles(), 2, "the first event after quiet must reconcile immediately");
 
-  assert.equal(
-    execCalls.filter(({ command }) => command === "pactl --format=json list source-outputs").length,
-    3,
-    "startup reconcile plus one running and one trailing reconcile"
-  );
+  t.mock.timers.tick(RECONCILE_SPACING_MS - 1);
+  await flushImmediate();
+  assert.equal(reconciles(), 2, "the rest of the burst must wait out the spacing");
+
+  t.mock.timers.tick(1);
+  await flushImmediate();
+  assert.equal(reconciles(), 3, "the last event of the burst must get a trailing reconcile");
   assert.deepEqual(detector.getExternalMicState(), {
     reliable: true,
     externalMicActive: true,
   });
+
+  t.mock.timers.tick(RECONCILE_SPACING_MS * 2);
+  await flushImmediate();
+  assert.equal(reconciles(), 3, "a finished burst must not keep reconciling");
   detector.stop();
 });
 
-test("linux: module streams without a process id stay excluded without costing reliability", async () => {
+test("linux: a single event reconciles promptly and schedules no trailing reconcile", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children, execCalls } = createDetector("linux", {
+    execResponses: [{ stdout: "[]" }, { stdout: "[]" }],
+  });
+
+  await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'change' on source-output #1\n");
+  await flushImmediate();
+  assert.equal(execCalls.length, 2, "a lone event must reconcile without added latency");
+
+  t.mock.timers.tick(RECONCILE_SPACING_MS * 2);
+  await flushImmediate();
+  assert.equal(execCalls.length, 2, "a lone event must not produce a ghost trailing reconcile");
+  detector.stop();
+});
+
+test("linux: an event inside the spacing window defers its reconcile to the boundary", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children, execCalls } = createDetector("linux", {
+    execResponses: [{ stdout: "[]" }, { stdout: "[]" }],
+  });
+
+  await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS / 2);
+  children[0].stdout.emit("data", "Event 'change' on source-output #1\n");
+  await flushImmediate();
+  assert.equal(execCalls.length, 1, "inside the window only the startup reconcile may have run");
+
+  t.mock.timers.tick(RECONCILE_SPACING_MS / 2);
+  await flushImmediate();
+  assert.equal(execCalls.length, 2, "the deferred reconcile must run at the spacing boundary");
+  detector.stop();
+});
+
+test("linux: module streams without a process id stay excluded without costing reliability", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("linux", {
     excludedProcessIds: () => [700],
     execResponses: [
@@ -591,16 +633,18 @@ test("linux: module streams without a process id stay excluded without costing r
   detector.on("external-mic-state-changed", (state) => externalStates.push(state));
 
   await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
   children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
-  await flush();
+  await flushImmediate();
 
   assert.deepEqual(detector.getExternalMicState(), {
     reliable: true,
     externalMicActive: true,
   });
 
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
   children[0].stdout.emit("data", "Event 'remove' on source-output #2\n");
-  await flush();
+  await flushImmediate();
 
   assert.deepEqual(detector.getExternalMicState(), {
     reliable: true,
@@ -609,7 +653,8 @@ test("linux: module streams without a process id stay excluded without costing r
   detector.stop();
 });
 
-test("linux: ownership query failure is unreliable while aggregate events still prompt", async () => {
+test("linux: ownership query failure is unreliable while aggregate events still prompt", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("linux", {
     execResponses: [{ stdout: "[]" }, { stdout: "not-json" }],
   });
@@ -622,8 +667,9 @@ test("linux: ownership query failure is unreliable while aggregate events still 
     externalMicActive: false,
   });
 
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
   children[0].stdout.emit("data", "Event 'new' on source-output #7\n");
-  await flush();
+  await flushImmediate();
 
   assert.deepEqual(detector.getExternalMicState(), {
     reliable: false,
@@ -892,4 +938,159 @@ test("win32: our own capture cannot cancel a real meeting already in progress", 
   assert.deepEqual([...detector._activeMicPids], [9001]);
   assert.notEqual(detector._sustainedTimer, null);
   detector.stop();
+});
+
+const RECONCILE_SPACING = 1000;
+const linuxStream = (index, processId) => ({
+  index,
+  properties: { "application.process.id": String(processId) },
+});
+const linuxStreams = (...processIds) =>
+  JSON.stringify(processIds.map((processId, index) => linuxStream(index + 1, processId)));
+
+test("linux: an owned source event cannot prompt before ownership reconciliation", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const ownership = createDeferred();
+  const { detector, children } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [{ stdout: "[]" }, { promise: ownership.promise }],
+  });
+  let detections = 0;
+  detector.on("sustained-audio-detected", () => detections++);
+
+  await detector.start();
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  t.mock.timers.tick(RECONCILE_SPACING + SUSTAINED_MS);
+  await flushImmediate();
+  assert.equal(detections, 0);
+
+  ownership.resolve({ stdout: linuxStreams(700), stderr: "" });
+  await flushImmediate();
+  assert.equal(detector._lastKnownMicState, false);
+  detector.stop();
+});
+
+test("linux: a later capture process re-prompts while the same process does not", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const CHROME = 17111;
+  const ZOOM = 22222;
+  const { detector, children } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      { stdout: "[]" },
+      { stdout: linuxStreams(CHROME) },
+      { stdout: linuxStreams(CHROME) },
+      { stdout: "[]" },
+      { stdout: linuxStreams(ZOOM) },
+    ],
+  });
+  let detections = 0;
+  detector.on("sustained-audio-detected", () => detections++);
+
+  await detector.start();
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 1);
+
+  children[0].stdout.emit("data", "Event 'change' on source-output #1\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 1);
+
+  children[0].stdout.emit("data", "Event 'remove' on source-output #1\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+
+  children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 2);
+  detector.stop();
+});
+
+test("linux: polling reports only external capture as mic activity", async () => {
+  const { detector } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [{ stdout: linuxStreams(700) }, { stdout: linuxStreams(900) }],
+  });
+
+  assert.equal(await detector._checkLinux(), false);
+  assert.equal(await detector._checkLinux(), true);
+});
+
+test("linux: a capture pid swapped inside one reconcile does not re-prompt", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const AUDIO_SERVICE = 17111;
+  const RESPAWNED_AUDIO_SERVICE = 17999;
+  const { detector, children } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      { stdout: "[]" },
+      { stdout: linuxStreams(AUDIO_SERVICE) },
+      // The call never went quiet: one reconcile sees the old stream gone and
+      // the app's replacement capture helper already in its place.
+      { stdout: linuxStreams(RESPAWNED_AUDIO_SERVICE) },
+    ],
+  });
+  let detections = 0;
+  detector.on("sustained-audio-detected", () => detections++);
+
+  await detector.start();
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 1);
+
+  children[0].stdout.emit("data", "Event 'change' on source-output #2\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 1, "a card must not drop over a call that never ended");
+  detector.stop();
+});
+
+test("linux: polling never reports ownership as reliable", async () => {
+  const { detector } = createDetector("linux", {
+    spawnError: "spawn ENOENT",
+    excludedProcessIds: () => [700],
+    execResponses: [{ stdout: linuxStreams(900) }],
+  });
+  detector._isMicActive = undefined;
+  delete detector._isMicActive;
+
+  await detector.start();
+  await flush();
+
+  assert.equal(detector._eventDriven, false);
+  assert.equal(detector._pidScopedCapability, true, "the poll still scopes the re-arm by pid");
+  // The poller stops sampling for the whole of a recording, so a snapshot it
+  // took cannot be handed to auto-end as live ownership evidence.
+  assert.deepEqual(detector.getExternalMicState(), { reliable: false, externalMicActive: false });
+  detector.setUserRecording(true);
+  assert.deepEqual(detector.getExternalMicState(), { reliable: false, externalMicActive: false });
+  detector.stop();
+});
+
+test("linux: a listing with no attributable stream falls through to the unfiltered check", async () => {
+  const { detector, execCalls } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      {
+        stdout: JSON.stringify([{ index: 1, properties: { "media.name": "echo-cancel source" } }]),
+      },
+      { stdout: "0\tsink\n" },
+    ],
+  });
+
+  assert.equal(await detector._checkLinux(), true);
+  assert.deepEqual(
+    execCalls.map((call) => call.command),
+    ["pactl --format=json list source-outputs", "pactl list source-outputs short"]
+  );
+  assert.equal(detector._pidScopedCapability, false);
 });

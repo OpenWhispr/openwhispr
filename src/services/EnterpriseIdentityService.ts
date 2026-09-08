@@ -1,4 +1,4 @@
-import type { ManagedEnterpriseConfig } from "../types/enterpriseIdentity";
+import type { ManagedEnterpriseConfig, ManagedEnterpriseScope } from "../types/enterpriseIdentity";
 import { distribution } from "../config/distribution";
 
 export interface ManagedEnterpriseConfigResult {
@@ -11,6 +11,7 @@ export interface ManagedEnterpriseConfigResult {
   code?: string;
   error?: string;
   enforcementRequired?: boolean;
+  enforcedScopes?: ManagedEnterpriseScope[];
 }
 
 export async function getManagedEnterpriseConfig(
@@ -28,7 +29,15 @@ export async function getManagedEnterpriseConfig(
       error: `Managed enterprise AI requires a newer version of ${distribution.productName}.`,
     };
   }
-  return request(accountId, workspaceId, authGeneration, forceRefresh);
+  // The IPC boundary type carries scope names as bare strings (see
+  // src/types/electron.ts); the main process only ever populates them from
+  // ManagedEnterpriseScope values (see managedScopesForConfig).
+  return request(
+    accountId,
+    workspaceId,
+    authGeneration,
+    forceRefresh
+  ) as Promise<ManagedEnterpriseConfigResult>;
 }
 
 export function clearManagedEnterpriseIdentity(): void {

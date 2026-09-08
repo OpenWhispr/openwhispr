@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Download, Trash2, Cloud, Lock, X, Zap, Check } from "lucide-react";
+import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "lucide-react";
 import { ProviderIcon } from "./ui/ProviderIcon";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
@@ -18,6 +18,8 @@ import {
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
   PARAKEET_MODEL_INFO,
+  isCohereTranscribeModel,
+  isSherpaLocalProvider,
 } from "../models/ModelRegistry";
 import {
   MODEL_PICKER_COLORS,
@@ -221,6 +223,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "groq", name: "Groq" },
   { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
+  { id: "gemini", name: "Gemini" },
   { id: "corti", name: "Corti" },
   { id: "tinfoil", name: "Tinfoil" },
   { id: "custom", name: "Custom" },
@@ -232,6 +235,7 @@ interface ProviderCredentialField {
     | "groqApiKey"
     | "xaiApiKey"
     | "mistralApiKey"
+    | "geminiApiKey"
     | "cortiClientId"
     | "cortiClientSecret"
     | "cortiEnvironment"
@@ -262,6 +266,10 @@ const PROVIDER_CREDENTIALS: Record<
   mistral: {
     consoleUrl: "https://console.mistral.ai/api-keys",
     fields: [{ key: "mistralApiKey", input: "secret" }],
+  },
+  gemini: {
+    consoleUrl: "https://aistudio.google.com/apikey",
+    fields: [{ key: "geminiApiKey", input: "secret" }],
   },
   corti: {
     consoleUrl: "https://www.corti.ai/?utm_source=referral&utm_content=&utm_campaign=openwhispr",
@@ -296,6 +304,7 @@ const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
 const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> = [
   { id: "whisper", name: "OpenAI" },
   { id: "nvidia", name: "NVIDIA" },
+  { id: "cohere", name: "Cohere" },
 ];
 
 interface ModeToggleProps {
@@ -365,6 +374,8 @@ export default function TranscriptionModelPicker({
   const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
+  const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
@@ -430,11 +441,11 @@ export default function TranscriptionModelPicker({
     if (parakeetCapability?.supported !== false) return;
 
     // Tabs are pure browse state, so the browsed tab and the committed
-    // provider must each leave "nvidia" on their own: moving the tab off the
-    // disabled Parakeet entry keeps the UI usable, while committing "whisper"
+    // provider must each leave the sherpa tabs on their own: moving the tab off
+    // the disabled entry keeps the UI usable, while committing "whisper"
     // is what actually reroutes transcription on unsupported Macs.
-    if (internalLocalProvider === "nvidia") setInternalLocalProvider("whisper");
-    if (selectedLocalProvider === "nvidia") onLocalProviderSelect?.("whisper");
+    if (isSherpaLocalProvider(internalLocalProvider)) setInternalLocalProvider("whisper");
+    if (isSherpaLocalProvider(selectedLocalProvider)) onLocalProviderSelect?.("whisper");
   }, [internalLocalProvider, onLocalProviderSelect, parakeetCapability, selectedLocalProvider]);
 
   const localModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -474,7 +485,7 @@ export default function TranscriptionModelPicker({
   const localProviderTabs = useMemo(
     () =>
       LOCAL_PROVIDER_TABS.map((provider) =>
-        provider.id === "nvidia" && parakeetCapability?.supported === false
+        isSherpaLocalProvider(provider.id) && parakeetCapability?.supported === false
           ? {
               ...provider,
               disabled: true,
@@ -628,7 +639,7 @@ export default function TranscriptionModelPicker({
     if (internalLocalProvider === "whisper" && !hasLoadedRef.current) {
       hasLoadedRef.current = true;
       loadLocalModelsRef.current?.();
-    } else if (internalLocalProvider === "nvidia" && !hasLoadedParakeetRef.current) {
+    } else if (isSherpaLocalProvider(internalLocalProvider) && !hasLoadedParakeetRef.current) {
       hasLoadedParakeetRef.current = true;
       loadParakeetModelsRef.current?.();
     }
@@ -854,9 +865,10 @@ export default function TranscriptionModelPicker({
 
   const handleParakeetModelSelect = useCallback(
     (modelId: string) => {
-      setInternalLocalProvider("nvidia");
-      onLocalProviderSelect?.("nvidia");
-      onLocalModelSelect(modelId, "nvidia");
+      const provider = isCohereTranscribeModel(modelId) ? "cohere" : "nvidia";
+      setInternalLocalProvider(provider);
+      onLocalProviderSelect?.(provider);
+      onLocalModelSelect(modelId, provider);
     },
     [onLocalModelSelect, onLocalProviderSelect]
   );
@@ -922,6 +934,7 @@ export default function TranscriptionModelPicker({
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    geminiApiKey,
     cortiClientId,
     cortiClientSecret,
     cortiEnvironment,
@@ -933,6 +946,7 @@ export default function TranscriptionModelPicker({
     groqApiKey: setGroqApiKey,
     xaiApiKey: setXaiApiKey,
     mistralApiKey: setMistralApiKey,
+    geminiApiKey: setGeminiApiKey,
     cortiClientId: setCortiClientId,
     cortiClientSecret: setCortiClientSecret,
     cortiEnvironment: setCortiEnvironment,
@@ -968,7 +982,7 @@ export default function TranscriptionModelPicker({
       );
     }
 
-    if (downloadingParakeetModel && internalLocalProvider === "nvidia") {
+    if (downloadingParakeetModel && isSherpaLocalProvider(internalLocalProvider)) {
       const modelInfo = PARAKEET_MODEL_INFO[downloadingParakeetModel];
       return (
         <DownloadProgressBar
@@ -1065,15 +1079,18 @@ export default function TranscriptionModelPicker({
     [showConfirmDialog, deleteParakeetModel, t]
   );
 
-  const renderParakeetModels = () => {
-    const modelsToRender =
+  // Both sherpa-onnx tabs share one downloaded-models list; each renders only
+  // its own vendor's registry entries.
+  const renderParakeetModels = (provider: "nvidia" | "cohere") => {
+    const modelsToRender = (
       parakeetModels.length === 0
         ? Object.entries(PARAKEET_MODEL_INFO).map(([modelId, info]) => ({
             model: modelId,
             downloaded: false,
             size_mb: info.sizeMb,
           }))
-        : parakeetModels;
+        : parakeetModels
+    ).filter((model) => isCohereTranscribeModel(model.model) === (provider === "cohere"));
 
     return (
       <div className="space-y-0.5">
@@ -1101,7 +1118,7 @@ export default function TranscriptionModelPicker({
               isCancelling={isCancellingParakeet}
               isInstalling={isInstallingParakeet}
               recommended={info.recommended}
-              provider="nvidia"
+              provider={provider}
               onSelect={() => handleParakeetModelSelect(modelId)}
               onDelete={() => handleParakeetDelete(modelId)}
               onDownload={() =>
@@ -1288,55 +1305,79 @@ export default function TranscriptionModelPicker({
             !gpuDismissed &&
             !gpuDownloading &&
             gpuBackend && (
-              <div className="rounded-md border border-border bg-surface-1 p-2.5">
+              <div
+                className={`rounded-md border p-2.5 ${
+                  gpuDownloaded && gpuFailed
+                    ? "border-warning/40 bg-warning/5"
+                    : "border-border bg-surface-1"
+                }`}
+              >
                 {gpuDownloaded ? (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      {gpuFailed ? (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-warning" />
-                          <span className="text-xs font-medium text-foreground">
+                  gpuFailed ? (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-2">
+                        <CircleAlert size={15} className="mt-0.5 shrink-0 text-warning" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-foreground">
                             {t("gpu.activationFailed")}
-                          </span>
-                          <button
+                          </p>
+                          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                            {t("gpu.activationFailedDescription")}
+                          </p>
+                          <Button
                             onClick={handleGpuRetry}
-                            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+                            size="sm"
+                            className="mt-2 h-7 px-3 text-xs"
                           >
-                            {t("gpu.retry")}
-                          </button>
-                        </>
-                      ) : gpuActivating ? (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.activating")}
-                          </span>
-                        </>
-                      ) : gpuActive ? (
-                        <>
-                          <Check size={13} className="text-success" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.active")}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
-                          <span className="text-xs font-medium text-foreground">
-                            {t("gpu.ready")}
-                          </span>
-                        </>
-                      )}
+                            {t("gpu.retryActivation")}
+                          </Button>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={handleGpuDelete}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 shrink-0 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        {t("gpu.remove")}
+                      </Button>
                     </div>
-                    <Button
-                      onClick={handleGpuDelete}
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
-                    >
-                      {t("gpu.remove")}
-                    </Button>
-                  </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        {gpuActivating ? (
+                          <>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.activating")}
+                            </span>
+                          </>
+                        ) : gpuActive ? (
+                          <>
+                            <Check size={13} className="text-success" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.active")}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
+                            <span className="text-xs font-medium text-foreground">
+                              {t("gpu.ready")}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <Button
+                        onClick={handleGpuDelete}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        {t("gpu.remove")}
+                      </Button>
+                    </div>
+                  )
                 ) : (
                   <div className="flex items-start gap-2.5">
                     <Zap size={13} className="text-primary shrink-0 mt-0.5" />
@@ -1368,7 +1409,8 @@ export default function TranscriptionModelPicker({
 
           <div>
             {internalLocalProvider === "whisper" && renderLocalModels()}
-            {internalLocalProvider === "nvidia" && renderParakeetModels()}
+            {(internalLocalProvider === "nvidia" || internalLocalProvider === "cohere") &&
+              renderParakeetModels(internalLocalProvider)}
           </div>
         </>
       )}

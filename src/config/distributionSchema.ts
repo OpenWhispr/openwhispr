@@ -121,6 +121,8 @@ export const DistributionSchema = z
       macIcon: AssetPath,
       windowsIcon: AssetPath,
       linuxIcon: AssetPath,
+      /** Optional glyph for the onboarding shell; omit to keep the built-in SVG. */
+      onboardingMark: AssetPath.nullish(),
       macAssetCatalog: z
         .object({
           file: AssetPath,

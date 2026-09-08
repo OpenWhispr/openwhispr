@@ -31,9 +31,14 @@ export function LiveTranscriptPanel({
   onHoldChange,
 }: LiveTranscriptPanelProps) {
   const { t } = useTranslation();
-  const { scrollRef, handleScroll } = useStickToBottom<HTMLDivElement>(text, {
-    resetToTop: !text,
-  });
+  const {
+    scrollRef,
+    handleScroll,
+    handleWheel,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  } = useStickToBottom<HTMLDivElement>(text, { resetToTop: !text });
   const { copied, copy: handleCopy } = useCopyFeedback(text, { resetMs: COPIED_RESET_MS });
   const shouldShimmer = Boolean(text) && (phase === "live" || phase === "cleanup" || processing);
   const shimmerParts = useMemo(
@@ -46,6 +51,10 @@ export function LiveTranscriptPanel({
       <main
         ref={scrollRef}
         onScroll={handleScroll}
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         onMouseEnter={() => onHoldChange?.(true)}
         onMouseLeave={() => onHoldChange?.(false)}
         data-panel-scroll-region

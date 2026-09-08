@@ -9,6 +9,7 @@ import groqIcon from "@/assets/icons/providers/groq.svg";
 // eye SVG is 163x108, and ProviderIcon renders a square img, so it came out
 // squashed in every row. WebP because NVIDIA ships the tile as raster art.
 import nvidiaIcon from "@/assets/icons/providers/nvidia.webp";
+import cohereIcon from "@/assets/icons/providers/cohere.svg";
 import openaiOssIcon from "@/assets/icons/providers/openai-oss.svg";
 import gemmaIcon from "@/assets/icons/providers/gemma.svg";
 import liquidaiIcon from "@/assets/icons/providers/liquidai.svg";
@@ -30,6 +31,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   qwen: qwenIcon,
   groq: groqIcon,
   nvidia: nvidiaIcon,
+  cohere: cohereIcon,
   "openai-oss": openaiOssIcon,
   gemma: gemmaIcon,
   liquidai: liquidaiIcon,

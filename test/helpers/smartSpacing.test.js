@@ -3,154 +3,59 @@ const assert = require("node:assert/strict");
 
 const { applySmartSpacing } = require("../../src/helpers/smartSpacing");
 
-const prepend = (text, precedingChar) =>
-  applySmartSpacing({ text, mode: "prepend", precedingChar });
-
-const append = (text) => applySmartSpacing({ text, mode: "append" });
-
-test("prepend: adds space after a regular letter", () => {
-  assert.equal(prepend("hello", "d"), " hello");
+test("adds trailing space to normal text", () => {
+  assert.equal(applySmartSpacing("hello"), "hello ");
 });
 
-test("prepend: adds space after a digit", () => {
-  assert.equal(prepend("dollars", "5"), " dollars");
+test("adds trailing space after punctuation", () => {
+  assert.equal(applySmartSpacing("hello."), "hello. ");
+  assert.equal(applySmartSpacing("hello!"), "hello! ");
 });
 
-test("prepend: no space at field start (empty precedingChar)", () => {
-  assert.equal(prepend("hello", ""), "hello");
+test("does not double-up when text already ends with whitespace", () => {
+  assert.equal(applySmartSpacing("hello "), "hello ");
+  assert.equal(applySmartSpacing("hello\n"), "hello\n");
+  assert.equal(applySmartSpacing("hello\t"), "hello\t");
 });
 
-test("prepend: no space when precedingChar is null/undefined", () => {
-  assert.equal(prepend("hello", null), "hello");
-  assert.equal(prepend("hello", undefined), "hello");
+test("handles empty transcript", () => {
+  assert.equal(applySmartSpacing(""), "");
 });
 
-test("prepend: no space after existing whitespace", () => {
-  assert.equal(prepend("hello", " "), "hello");
-  assert.equal(prepend("hello", "\t"), "hello");
-  assert.equal(prepend("hello", "\n"), "hello");
+test("does not append a trailing space after CJK ideographs", () => {
+  assert.equal(applySmartSpacing("你好"), "你好");
+  assert.equal(applySmartSpacing("日本語"), "日本語");
 });
 
-test("prepend: no space after opening brackets", () => {
-  assert.equal(prepend("hello", "("), "hello");
-  assert.equal(prepend("hello", "["), "hello");
-  assert.equal(prepend("hello", "{"), "hello");
-  assert.equal(prepend("hello", "<"), "hello");
+test("does not append a trailing space after kana", () => {
+  assert.equal(applySmartSpacing("こんにちは"), "こんにちは");
+  assert.equal(applySmartSpacing("カタカナ"), "カタカナ");
 });
 
-test("prepend: no space after opening quotes", () => {
-  assert.equal(prepend("hello", '"'), "hello");
-  assert.equal(prepend("hello", "'"), "hello");
-  assert.equal(prepend("hello", "`"), "hello");
-  assert.equal(prepend("hello", "“"), "hello");
+test("does not append a trailing space after full-width punctuation", () => {
+  assert.equal(applySmartSpacing("你好。"), "你好。");
+  assert.equal(applySmartSpacing("すごい！"), "すごい！");
+  assert.equal(applySmartSpacing("何？"), "何？");
+  assert.equal(applySmartSpacing("はい、"), "はい、");
+  assert.equal(applySmartSpacing("「引用」"), "「引用」");
+  assert.equal(applySmartSpacing("（括弧）"), "（括弧）");
 });
 
-test("prepend: no space when transcript already starts with whitespace", () => {
-  assert.equal(prepend(" hello", "d"), " hello");
-  assert.equal(prepend("\nhello", "d"), "\nhello");
+test("does not append a trailing space after halfwidth CJK punctuation and vertical forms", () => {
+  assert.equal(applySmartSpacing("ﾃｽﾄ｡"), "ﾃｽﾄ｡");
+  assert.equal(applySmartSpacing("你好︒"), "你好︒");
 });
 
-test("prepend: no space when transcript starts with closing punctuation", () => {
-  // "Hello" + ", world" → "Hello, world" (not "Hello , world")
-  assert.equal(prepend(", world", "o"), ", world");
-  assert.equal(prepend(". Period.", "o"), ". Period.");
-  assert.equal(prepend("! exclamation", "o"), "! exclamation");
-  assert.equal(prepend("? question", "o"), "? question");
-  assert.equal(prepend("; semicolon", "o"), "; semicolon");
-  assert.equal(prepend(": colon", "o"), ": colon");
-  assert.equal(prepend(") close paren", "o"), ") close paren");
+test("uses the last character for mixed-script text", () => {
+  assert.equal(applySmartSpacing("hello 你好"), "hello 你好");
+  assert.equal(applySmartSpacing("你好 hello"), "你好 hello ");
 });
 
-test("prepend: adds space when preceding char is sentence punctuation (no space yet)", () => {
-  assert.equal(prepend("World", "."), " World");
-  assert.equal(prepend("World", "!"), " World");
-  assert.equal(prepend("World", "?"), " World");
+test("keeps trailing spaces after Hangul because Korean uses word spacing", () => {
+  assert.equal(applySmartSpacing("안녕하세요"), "안녕하세요 ");
 });
 
-test("prepend: no space when preceding is whitespace, even after period+space sequence", () => {
-  assert.equal(prepend("World", " "), "World");
-});
-
-test("prepend: handles unicode preceding chars", () => {
-  assert.equal(prepend("hello", "д"), " hello");
-});
-
-test("prepend: handles empty transcript", () => {
-  assert.equal(prepend("", "a"), "");
-});
-
-test("append: adds trailing space to normal text", () => {
-  assert.equal(append("hello"), "hello ");
-});
-
-test("append: adds trailing space after punctuation", () => {
-  assert.equal(append("hello."), "hello. ");
-  assert.equal(append("hello!"), "hello! ");
-});
-
-test("append: does not double-up when text already ends with whitespace", () => {
-  assert.equal(append("hello "), "hello ");
-  assert.equal(append("hello\n"), "hello\n");
-  assert.equal(append("hello\t"), "hello\t");
-});
-
-test("append: handles empty transcript", () => {
-  assert.equal(append(""), "");
-});
-
-test("append: no trailing space after CJK ideographs", () => {
-  assert.equal(append("你好"), "你好");
-  assert.equal(append("日本語"), "日本語");
-});
-
-test("append: no trailing space after kana", () => {
-  assert.equal(append("こんにちは"), "こんにちは");
-  assert.equal(append("カタカナ"), "カタカナ");
-});
-
-test("append: no trailing space after full-width punctuation", () => {
-  assert.equal(append("你好。"), "你好。");
-  assert.equal(append("すごい！"), "すごい！");
-  assert.equal(append("何？"), "何？");
-  assert.equal(append("はい、"), "はい、");
-  assert.equal(append("「引用」"), "「引用」");
-  assert.equal(append("（括弧）"), "（括弧）");
-});
-
-test("append: no trailing space after halfwidth CJK punctuation and vertical forms", () => {
-  assert.equal(append("ﾃｽﾄ｡"), "ﾃｽﾄ｡");
-  assert.equal(append("你好︒"), "你好︒");
-});
-
-test("append: last character decides for mixed-script text", () => {
-  assert.equal(append("hello 你好"), "hello 你好");
-  assert.equal(append("你好 hello"), "你好 hello ");
-});
-
-test("append: keeps trailing space after Hangul (Korean uses word spacing)", () => {
-  assert.equal(append("안녕하세요"), "안녕하세요 ");
-});
-
-test("returns text unchanged for unknown mode", () => {
-  assert.equal(applySmartSpacing({ text: "hello", mode: "noop" }), "hello");
-});
-
-test("returns text unchanged for non-string input", () => {
-  assert.equal(applySmartSpacing({ text: null, mode: "append" }), null);
-  assert.equal(applySmartSpacing({ text: undefined, mode: "append" }), undefined);
-});
-
-test("integration: typical dictation flow", () => {
-  // Field starts empty: "" → "Hello there"
-  assert.equal(prepend("Hello there.", ""), "Hello there.");
-
-  // After append fallback, next paste's preceding char is " "
-  // Field: "Hello there. " → user dictates again
-  assert.equal(prepend("How are you?", " "), "How are you?");
-
-  // No fallback was used; preceding char is "."
-  assert.equal(prepend("How are you?", "."), " How are you?");
-
-  // User dictates a closing tag: "(" → "first part)"
-  assert.equal(prepend("first part)", "("), "first part)");
+test("returns non-string input unchanged", () => {
+  assert.equal(applySmartSpacing(null), null);
+  assert.equal(applySmartSpacing(undefined), undefined);
 });

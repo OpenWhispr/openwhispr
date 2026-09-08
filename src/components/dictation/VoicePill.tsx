@@ -1,13 +1,12 @@
 import { forwardRef, type HTMLAttributes } from "react";
-import { BorderBeam, type BorderBeamTheme } from "border-beam";
 import { ChevronUp } from "lucide-react";
 import { cn } from "../lib/utils";
 import { PillWaveform } from "./PillWaveform";
 import { VoiceIdentityIcon } from "./VoiceIdentityIcon";
-import { WAVEFORM_BAR_COUNT } from "./waveformMath";
+import { RESTING_WAVE_SILHOUETTE, WAVEFORM_BAR_COUNT } from "./waveformMath";
 import {
-  LISTENING_ENTRANCE_TIMING,
   VOICE_PILL_FOOTPRINT,
+  VOICE_PILL_GROW_TRANSITION,
 } from "../../helpers/voicePillPresentation";
 
 export type VoicePillState =
@@ -19,22 +18,17 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   getAudioLevel: () => number | null;
   expanded?: boolean;
   collapseToLogo?: boolean;
-  beamActive?: boolean;
   waveformVisible?: boolean;
   waveformOnlyWhileRecording?: boolean;
   integratedWithPanel?: boolean;
+  /** The cancel button's liquid skin owns the fused surface; go headless. */
+  liquidFused?: boolean;
   agentMode?: boolean;
-  beamTheme?: BorderBeamTheme;
   showExpandChevron?: boolean;
   isDragging?: boolean;
   horizontalDirection?: "left" | "right";
 }
 
-const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms cubic-bezier(0.2, 0, 0, 1)`;
-// A pronounced eleven-bar rhythm keeps rounded short bars readable while tall
-// peaks use nearly the full lane. The same silhouette and footprint is shared
-// by dictation, Agent Mode, and Live Transcript.
-const RESTING_WAVE_SILHOUETTE = [6, 12, 5, 9, 7, 22, 18, 5, 20, 12, 17];
 // Sized from WAVEFORM_BAR_COUNT so a bar-count change can never silently
 // desync the resting silhouette from the live waveform's footprint.
 const RESTING_WAVE_HEIGHTS = Array.from(
@@ -42,6 +36,14 @@ const RESTING_WAVE_HEIGHTS = Array.from(
   (_, index) => RESTING_WAVE_SILHOUETTE[index % RESTING_WAVE_SILHOUETTE.length]
 );
 
+// Icon↔waveform spacing inside the compact pill. Together with the 98px
+// recording footprint and pr-1.5, centering lands the documented 6/12 edge
+// insets (VOICE_PILL_FOOTPRINT in voicePillPresentation.js).
+const COMPACT_CONTENT_GAP_PX = 6;
+
+// Mirrored by .liquid-cancel-skin[data-pill-state] in dictation-panel.css,
+// which redraws this chrome while the cancel skin owns the fused surface —
+// change together.
 const STATE_APPEARANCE: Record<VoicePillState, string> = {
   idle: "border-border-hover bg-surface-1 text-muted-foreground dark:border-border/50",
   hover: "border-border-hover bg-surface-3 text-foreground",
@@ -59,12 +61,11 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     getAudioLevel,
     expanded = false,
     collapseToLogo = false,
-    beamActive,
     waveformVisible = true,
     waveformOnlyWhileRecording = false,
     integratedWithPanel = false,
+    liquidFused = false,
     agentMode = false,
-    beamTheme = "auto",
     showExpandChevron = false,
     isDragging = false,
     horizontalDirection = "right",
@@ -77,18 +78,20 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const isRecording = state === "recording";
   const isProcessing = state === "processing";
   const isThinking = state === "thinking";
-  const showThinkingBeam = beamActive ?? isThinking;
   const isUnavailable = state === "unavailable";
-  // An idle Agent pill is a resting control, not a progress indicator. Keep
-  // its Beam for the active listening/thinking lifecycle only so reopening an
-  // Agent surface never looks like work is already in flight.
-  const showBorderBeam = !isUnavailable && (showThinkingBeam || (agentMode && isRecording));
+  // One Signal glow (comet orbit over a breathing halo) serves both
+  // identities; only the palette differs. It lights for the real thinking
+  // state alone — glowing during the entrance or while listening would read
+  // as work already in flight before any transcript exists.
+  const showSignalGlow = !isUnavailable && isThinking;
   const isPanel = variant === "panel";
   const collapseToIdentity = collapseToLogo || isThinking;
   const showCompactPill =
     !collapseToIdentity && (isRecording || expanded || (isPanel && !waveformOnlyWhileRecording));
   const showDivider = showCompactPill && waveformVisible && !isRecording;
-  const dividerMargin = showCompactPill ? (showDivider ? 4 : 3) : 0;
+  // The hidden divider's margins are what carry the compact pill's 6px
+  // icon↔waveform gap; a visible divider keeps 4px flanking its 1px rule.
+  const dividerMargin = showCompactPill ? (showDivider ? 4 : COMPACT_CONTENT_GAP_PX / 2) : 0;
   const identitySize = 22;
   const floatingHover = !isPanel && state === "hover";
   const footprint = showCompactPill ? VOICE_PILL_FOOTPRINT.recording : VOICE_PILL_FOOTPRINT.idle;
@@ -98,7 +101,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       ref={ref}
       className={cn(
         "voice-pill-control relative flex items-center justify-center overflow-hidden rounded-full border",
-        showCompactPill && "pr-1",
+        showCompactPill && "pr-1.5",
         "shadow-[var(--shadow-card)]",
         STATE_APPEARANCE[state],
         className
@@ -110,14 +113,18 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         width: footprint.width,
         height: footprint.height,
         cursor: isProcessing || isThinking ? "not-allowed" : isDragging ? "grabbing" : "pointer",
-        boxShadow: floatingHover ? "var(--shadow-card-hover-subtle)" : undefined,
-        transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, padding-left ${GROW_TRANSITION}, padding-right ${GROW_TRANSITION}, background-color 220ms ease-out, border-color 220ms ease-out, box-shadow 220ms ease-out`,
+        // Yields to the fused rule's `box-shadow: none` while the liquid skin
+        // owns the chrome — an inline shadow would outrank it and paint a
+        // phantom capsule when a de-fusing skin lingers over a hovered pill.
+        boxShadow: floatingHover && !liquidFused ? "var(--shadow-card-hover-subtle)" : undefined,
+        transition: `width ${VOICE_PILL_GROW_TRANSITION}, height ${VOICE_PILL_GROW_TRANSITION}, padding-left ${VOICE_PILL_GROW_TRANSITION}, padding-right ${VOICE_PILL_GROW_TRANSITION}, background-color 220ms ease-out, border-color 220ms ease-out, box-shadow 220ms ease-out`,
         ...style,
       }}
       data-horizontal-direction={horizontalDirection}
       data-integrated-with-panel={integratedWithPanel || undefined}
+      data-liquid-fused={liquidFused || undefined}
       data-agent-mode={agentMode || undefined}
-      data-agent-beam-active={(agentMode && showThinkingBeam) || undefined}
+      data-agent-beam-active={(agentMode && isThinking) || undefined}
       data-expand-chevron={showExpandChevron || undefined}
       {...props}
     >
@@ -164,7 +171,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
           marginLeft: dividerMargin,
           marginRight: dividerMargin,
           opacity: showDivider ? 1 : 0,
-          transition: `width ${GROW_TRANSITION}, margin ${GROW_TRANSITION}, opacity 180ms ease-out`,
+          transition: `width ${VOICE_PILL_GROW_TRANSITION}, margin ${VOICE_PILL_GROW_TRANSITION}, opacity 180ms ease-out`,
         }}
       />
 
@@ -173,7 +180,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         style={{
           width: showCompactPill ? 52 : 0,
           height: showCompactPill ? 24 : 32,
-          transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}`,
+          transition: `width ${VOICE_PILL_GROW_TRANSITION}, height ${VOICE_PILL_GROW_TRANSITION}`,
         }}
       >
         <div
@@ -206,24 +213,16 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   );
 
   return (
-    <BorderBeam
-      size="sm"
-      theme={beamTheme}
-      duration={1.6}
-      colorVariant={agentMode ? "ocean" : "colorful"}
-      brightness={agentMode ? 1.35 : 1.3}
-      saturation={agentMode ? 1.35 : undefined}
-      hueRange={agentMode ? 8 : undefined}
-      strength={agentMode ? 0.9 : 0.85}
-      active={showBorderBeam}
-      borderRadius={20}
-      className={cn(
-        "agent-thinking-beam inline-flex rounded-full",
-        isThinking && !agentMode && "plain-dictation-processing-glow"
-      )}
-      data-agent-mode={agentMode || undefined}
-    >
+    <span className="voice-pill-glow-anchor">
+      <span
+        aria-hidden="true"
+        className="processing-signal-glow"
+        data-active={showSignalGlow ? "true" : undefined}
+        data-agent={agentMode || undefined}
+      >
+        <span className="processing-signal-ring" />
+      </span>
       {pill}
-    </BorderBeam>
+    </span>
   );
 });

@@ -4,7 +4,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installHookDom,
+} = require("../lib/rendererTestHarness");
 
 // Real end-to-end coverage for useChatStreaming.ts's empty-response fallback
 // and its interaction with cancellation (Esc/Stop, or an unmount mid-stream).
@@ -27,10 +31,10 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 // for its markup-only assertions), but this narrower technique — one
 // synchronous render, then calling the returned functions like any other
 // closures — does not need any of those. The one thing SSR genuinely cannot
-// do is run `useEffect` bodies, so the unmount cleanup that also calls
-// `cancelStream()` (see useChatStreaming.ts's mount/unmount effect) is
-// exercised by code reading, not by this test: it is a single, unconditional
-// call to the same `cancelStream` these tests already prove correct.
+// do is run `useEffect` bodies, so the unmount-mid-stream test mounts the
+// hook for real (installHookDom + createRoot) to drive the actual unmount
+// cleanup, whose cancel must persist the partial reply rather than drop it
+// the way an explicit Esc/Stop cancel does.
 function createOpenAiChunk(delta, finishReason = null) {
   return {
     id: "chatcmpl-cancellation-test",
@@ -45,8 +49,12 @@ const EMPTY_RESPONSE_TEXT = JSON.parse(
   fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
 ).agentMode.chat.emptyResponse;
 
-async function renderChatStreaming(t, { electronAPI = {}, settings = {} } = {}) {
+async function renderChatStreaming(
+  t,
+  { electronAPI = {}, settings = {}, onStreamComplete, live = false } = {}
+) {
   installBrowserGlobals(t, { window: { electronAPI } });
+  const container = live ? installHookDom(t) : null;
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-cancellation-test-",
   });
@@ -99,18 +107,35 @@ async function renderChatStreaming(t, { electronAPI = {}, settings = {} } = {}) 
     captured = useChatStreaming({
       messages,
       setMessages,
+      onStreamComplete,
       onResponseContent: () => {
         responseContentCalls += 1;
       },
     });
     return null;
   }
-  renderToStaticMarkup(React.createElement(Harness));
+
+  let unmount;
+  if (live) {
+    const { createRoot } = require("react-dom/client");
+    const root = createRoot(container);
+    await React.act(async () => root.render(React.createElement(Harness)));
+    let unmounted = false;
+    unmount = async () => {
+      if (unmounted) return;
+      unmounted = true;
+      await React.act(async () => root.unmount());
+    };
+    t.after(unmount);
+  } else {
+    renderToStaticMarkup(React.createElement(Harness));
+  }
 
   return {
     captured,
     getMessages: () => messages,
     getResponseContentCalls: () => responseContentCalls,
+    unmount,
   };
 }
 
@@ -129,13 +154,49 @@ test("a genuine empty completion still shows the empty-response fallback", async
     });
   };
 
+  let completionCalls = 0;
   const { captured, getMessages } = await renderChatStreaming(t);
 
-  await captured.sendToAI("hello", []);
+  await captured.sendToAI("hello", [], {
+    suppressResponseContent: true,
+    onComplete: () => {
+      completionCalls += 1;
+    },
+  });
 
   const [message] = getMessages();
   assert.equal(message.content, EMPTY_RESPONSE_TEXT);
   assert.equal(message.isStreaming, false);
+  assert.equal(completionCalls, 0);
+});
+
+test("a completed response runs its request delivery hook without opening response content", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  globalThis.fetch = async () => {
+    const contentEvent = `data: ${JSON.stringify(
+      createOpenAiChunk({ content: "Agent answer" })
+    )}\n\n`;
+    const finishEvent = `data: ${JSON.stringify(createOpenAiChunk({}, "stop"))}\n\n`;
+    return new Response(`${contentEvent}${finishEvent}data: [DONE]\n\n`, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  const completions = [];
+  const { captured, getResponseContentCalls } = await renderChatStreaming(t);
+
+  await captured.sendToAI("hello", [], {
+    suppressResponseContent: true,
+    onComplete: (result) => completions.push(result),
+  });
+
+  assert.equal(getResponseContentCalls(), 0);
+  assert.equal(completions.length, 1);
+  assert.equal(completions[0].content, "Agent answer");
 });
 
 test("cancelling during RAG setup does not start an assistant reply", async (t) => {
@@ -199,9 +260,19 @@ test("cancelling before any token arrives never shows the empty-response fallbac
     return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
   };
 
-  const { captured, getMessages } = await renderChatStreaming(t);
+  let streamCompleteCalls = 0;
+  const { captured, getMessages } = await renderChatStreaming(t, {
+    onStreamComplete: () => {
+      streamCompleteCalls += 1;
+    },
+  });
 
-  const sendPromise = captured.sendToAI("hello", []);
+  let completionCalls = 0;
+  const sendPromise = captured.sendToAI("hello", [], {
+    onComplete: () => {
+      completionCalls += 1;
+    },
+  });
 
   const waitForMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
   for (let i = 0; i < 50 && !fetchStarted; i++) await waitForMicrotasks();
@@ -219,6 +290,83 @@ test("cancelling before any token arrives never shows the empty-response fallbac
   assert.notEqual(message.content, EMPTY_RESPONSE_TEXT);
   assert.equal(message.content, "");
   assert.equal(message.isStreaming, false);
+  assert.equal(completionCalls, 0, "a cancelled request must never deliver a response");
+  assert.equal(streamCompleteCalls, 0, "a cancelled request must never persist a partial reply");
+});
+
+test("an unmount mid-stream persists the partial reply without delivering it", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const encoder = new TextEncoder();
+  let releaseTail;
+  const tailGate = new Promise((resolve) => {
+    releaseTail = resolve;
+  });
+  globalThis.fetch = async () =>
+    new Response(
+      new ReadableStream({
+        async start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify(createOpenAiChunk({ content: "Partial reply" }))}\n\n`
+            )
+          );
+          // Hold the stream open across the unmount so the tail arrives after
+          // the cleanup's cancel, the way a page navigation interrupts a send.
+          await tailGate;
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(createOpenAiChunk({}, "stop"))}\n\n`)
+          );
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        },
+      }),
+      { status: 200, headers: { "content-type": "text/event-stream" } }
+    );
+
+  const persisted = [];
+  const { captured, getMessages, unmount } = await renderChatStreaming(t, {
+    live: true,
+    onStreamComplete: (_id, content) => persisted.push(content),
+  });
+
+  let completionCalls = 0;
+  let sendPromise;
+  const waitForMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+  await React.act(async () => {
+    sendPromise = captured.sendToAI("hello", [], {
+      onComplete: () => {
+        completionCalls += 1;
+      },
+    });
+    for (
+      let i = 0;
+      i < 50 && !getMessages().some((m) => m.content === "Partial reply");
+      i++
+    ) {
+      await waitForMicrotasks();
+    }
+  });
+  assert.ok(
+    getMessages().some((m) => m.content === "Partial reply"),
+    "the partial token must arrive before the unmount"
+  );
+
+  await unmount();
+  releaseTail();
+  await sendPromise;
+
+  assert.deepEqual(
+    persisted,
+    ["Partial reply"],
+    "an unmounted stream must keep its partial reply in history"
+  );
+  assert.equal(completionCalls, 0, "an unmounted request must never deliver a response");
+  const assistantMessage = getMessages().find((m) => m.role === "assistant");
+  assert.equal(assistantMessage.isStreaming, false);
 });
 
 test("cancelling a tool-ineligible raw stream after reading starts shows no error", async (t) => {

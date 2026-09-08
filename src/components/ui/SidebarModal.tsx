@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { SettingsLayoutProvider } from "./useSettingsLayout";
+import { useDismissGuard } from "./useDismissGuard";
 
 export interface SidebarItem<T extends string> {
   id: T;
@@ -42,6 +43,7 @@ export default function SidebarModal<T extends string>({
   header,
 }: SidebarModalProps<T>) {
   const { t } = useTranslation();
+  const { registerContent, shouldBlockDismiss } = useDismissGuard<HTMLDivElement>();
 
   const [isCompact, setIsCompact] = React.useState(false);
   const observerRef = React.useRef<ResizeObserver | null>(null);
@@ -107,8 +109,15 @@ export default function SidebarModal<T extends string>({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
+          ref={registerContent}
           onEscapeKeyDown={(e) => {
             if (document.querySelector("[data-capturing]")) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            // A dropdown open over this panel makes the panel inert, so the
+            // click that closes the dropdown lands on the overlay and would
+            // otherwise take the whole settings modal with it.
+            if (shouldBlockDismiss(e)) e.preventDefault();
           }}
           className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-4xl translate-x-[-50%] translate-y-[-50%] rounded-xl p-0 overflow-hidden bg-background border border-border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] dark:bg-surface-1 dark:border-border-subtle dark:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98"
         >

@@ -11,6 +11,7 @@ import { ConversationsService } from "./ConversationsService.js";
 import { FoldersService } from "./FoldersService.js";
 import { SpacesService, type MySpace } from "./SpacesService.js";
 import { TranscriptionsService } from "./TranscriptionsService.js";
+import { syncPendingAnalytics } from "./AnalyticsService.js";
 import { DictionaryService } from "./DictionaryService.js";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError, isAuthContextError } from "./cloudApi.js";
@@ -27,7 +28,11 @@ import {
 } from "../lib/teamSpacesCapability";
 import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag";
 import { readNoteConflictIds } from "../lib/noteConflictRegistry";
-import { cloudBackupResumed, isCloudBackupAllowed } from "../stores/policyRules";
+import {
+  cloudBackupResumed,
+  effectiveLocalHistoryEnabled,
+  isCloudBackupAllowed,
+} from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import {
   buildNoteCreatePayload,
@@ -41,6 +46,7 @@ import {
   isPermissionDenialCode,
   isSpaceAccessErrorCode,
   keepPurgedSpaceEntry,
+  nextAmbientEmptyStreak,
   normalizePurgedSpaceEntries,
   prunePurgedSpaceEntries,
   recordUpdate404,
@@ -123,9 +129,16 @@ const TEAM_SPACES_MAX_RETRY_MS = AUTO_SYNC_INTERVAL_MS;
 // Web Lock name serializing syncAll() across windows (each renderer has its
 // own SyncService instance, but localStorage and the local DB are shared).
 const SYNC_ALL_LOCK = "openwhispr-sync-all";
-// localStorage keys gating canSync(); a change in another window means sync
-// may have just become possible (sign-in, subscription, backup enabled).
-const CAN_SYNC_KEYS = ["isSignedIn", "cloudBackupEnabled", "isSubscribed"];
+// localStorage keys gating what a pass may sync; a change in another window
+// means sync may have just become possible (sign-in, subscription, backup
+// enabled, Insights opt-in).
+const CAN_SYNC_KEYS = [
+  "isSignedIn",
+  "cloudBackupEnabled",
+  "isSubscribed",
+  "insightsSyncEnabled",
+  "dataRetentionEnabled",
+];
 
 // Cross-window guard against a space purge racing an in-flight pull: every
 // purge initiator records the cloud space id here, and pull/upsert paths park
@@ -180,8 +193,7 @@ function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   }
 }
 
-// Call BEFORE purgeSpace, from every purge path (sync revocation, sign-out,
-// and the UI's delete-space flow).
+// Call BEFORE purgeSpace from revocation and UI delete-space flows.
 export async function markSpacePurged(
   cloudSpaceId: string,
   reason: PurgedSpaceReason
@@ -243,14 +255,23 @@ export class SyncService {
   // Set by any pass that actually moves team or shared content; drives the
   // ambient team-only backoff (see shouldRunAmbientTeamOnlyPass).
   private teamPassMovedWork = false;
+  // The same, for Insights counters. Kept separate so neither kind of work is
+  // ever inferred from the other (see nextAmbientEmptyStreak).
+  private analyticsPassMovedWork = false;
 
   private consent(): SyncConsent {
+    const policyState = usePolicyStore.getState();
     return resolveSyncConsent({
       authValidated: hasValidatedAuthContext(),
       signedIn: localStorage.getItem("isSignedIn") === "true",
       backupEnabled: localStorage.getItem("cloudBackupEnabled") === "true",
       subscribed: readIsSubscribed(),
-      backupAllowedByPolicy: isCloudBackupAllowed(usePolicyStore.getState()),
+      backupAllowedByPolicy: isCloudBackupAllowed(policyState),
+      dataRetentionEnabled: effectiveLocalHistoryEnabled(
+        policyState,
+        localStorage.getItem("dataRetentionEnabled") !== "false"
+      ),
+      insightsSyncEnabled: localStorage.getItem("insightsSyncEnabled") === "true",
     });
   }
 
@@ -288,7 +309,12 @@ export class SyncService {
     const streak = Number(localStorage.getItem("teamOnlyPass.emptyStreak") ?? 0);
     localStorage.setItem(
       "teamOnlyPass.emptyStreak",
-      String(this.teamPassMovedWork ? 0 : streak + 1)
+      String(
+        nextAmbientEmptyStreak(streak, {
+          team: this.teamPassMovedWork,
+          analytics: this.analyticsPassMovedWork,
+        })
+      )
     );
     localStorage.setItem("teamOnlyPass.lastAt", String(Date.now()));
   }
@@ -298,21 +324,18 @@ export class SyncService {
     localStorage.setItem("teamSpacesCapability.probedAt", new Date().toISOString());
   }
 
-  // Sign-out leaves no team content behind: purge every team space locally and
-  // forget the capability probe + team cursors so the next account re-probes
-  // and backfills from scratch. Never throws — a failed purge must not block
-  // signing out.
+  // Sign-out clears account-scoped renderer/session state without deleting
+  // workspace-owned rows. The main-process account scope hides those rows as
+  // soon as the bearer token is cleared.
   async purgeTeamSpacesForSignOut(): Promise<void> {
-    // Wait for the sync lock: an in-flight pass (often in another window)
-    // still holds a pre-purge space map, and its remaining rows would
-    // re-insert team content after the purge — unreachable by any later
-    // cleanup once the guard entries below are gone.
+    // Wait for the sync lock so an in-flight pass cannot repopulate renderer
+    // state after this account boundary has been cleared.
     try {
-      await navigator.locks.request(SYNC_ALL_LOCK, () => this.purgeAllTeamSpaces());
+      await navigator.locks.request(SYNC_ALL_LOCK, () => this.clearTeamSpaceSessionState());
     } catch (err) {
-      console.error("Sign-out purge could not take the sync lock:", err);
-      // Never block sign-out: purge unfenced rather than not at all.
-      await this.purgeAllTeamSpaces();
+      console.error("Sign-out cleanup could not take the sync lock:", err);
+      // Never block sign-out: clear session state even if the lock failed.
+      await this.clearTeamSpaceSessionState();
     }
   }
 
@@ -325,15 +348,13 @@ export class SyncService {
     let purgedCount = 0;
     await navigator.locks.request(SYNC_ALL_LOCK, async () => {
       await assertAuthGenerationCurrent(authGeneration);
-      let localSpaces = (await window.electronAPI.getSpaces?.()) ?? [];
-      const localTeamSpaces = localSpaces.filter((space) => space.kind === "team");
-      if (localTeamSpaces.length === 0) {
-        await assertAuthGenerationCurrent(authGeneration);
-        return;
-      }
-
       const remoteSpaces = await SpacesService.mySpacesForAuthValidation(authGeneration);
       await assertAuthGenerationCurrent(authGeneration);
+      await prunePurgedSpaceIds(new Set(remoteSpaces.map((space) => space.id)));
+      await upsertCloudSpaces(remoteSpaces);
+      await assertAuthGenerationCurrent(authGeneration);
+      let localSpaces = (await window.electronAPI.getSpaces?.()) ?? [];
+      const localTeamSpaces = localSpaces.filter((space) => space.kind === "team");
       const initial = partitionLocalTeamSpaces(localTeamSpaces, remoteSpaces);
       for (const space of initial.unproven) {
         await assertAuthGenerationCurrent(authGeneration);
@@ -367,30 +388,12 @@ export class SyncService {
     return purgedCount;
   }
 
-  private async purgeAllTeamSpaces(): Promise<void> {
-    try {
-      const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
-      for (const space of spaces) {
-        if (space.kind !== "team") continue;
-        try {
-          // "revoked", not "deleted": the whole guard key is removed once the
-          // sign-out purge completes, and if that removal ever fails a revoked
-          // entry self-heals on the next pass instead of locking the space out.
-          if (space.cloud_space_id) await markSpacePurged(space.cloud_space_id, "revoked");
-          await window.electronAPI.purgeSpace?.(space.id, { mode: "destructive" });
-        } catch (err) {
-          console.error(`Purging space ${space.id} on sign-out failed:`, err);
-        }
-      }
-    } catch (err) {
-      console.error("Team space purge on sign-out failed:", err);
-    }
+  private async clearTeamSpaceSessionState(): Promise<void> {
     clearTeamSpacesCapability();
     localStorage.removeItem("teamSpacesCapability.probedAt");
     localStorage.removeItem("lastSyncedAt.notes.team");
     localStorage.removeItem("lastSyncedAt.folders.team");
-    // The guard protected any pass still in flight during the purge; drop it
-    // so the next account (possibly a member of the same spaces) starts clean.
+    // The next account must establish its own remote membership view.
     localStorage.removeItem(PURGED_SPACE_GUARD_KEY);
     // Pre-spaces guard key; stale entries are meaningless now.
     localStorage.removeItem("purgedTeamIds");
@@ -484,6 +487,7 @@ export class SyncService {
     }
     this.syncing = true;
     this.teamPassMovedWork = false;
+    this.analyticsPassMovedWork = false;
     let teamSpacesReady = false;
     try {
       // Ambient passes skip when another window holds the lock — that pass
@@ -519,8 +523,17 @@ export class SyncService {
           await this.syncFolders(true);
           if (!hasValidatedAuthContext()) return;
           await this.syncNotes(true);
-          this.recordTeamOnlyPass();
         }
+        if (!hasValidatedAuthContext()) return;
+        // Outside the branch above: Insights uploads ride their own opt-in,
+        // while queued erasures run for every authenticated account.
+        await this.syncAnalytics();
+        // Stamped after the push, so a pass that moved counters is recorded as
+        // work rather than as another empty one. A pass that loses auth before
+        // reaching here now leaves the streak unstamped where it used to stamp
+        // it, which only makes the next pass due immediately -- the right answer
+        // after an interruption.
+        if (!full) this.recordTeamOnlyPass();
         if (!hasValidatedAuthContext()) return;
         if (teamSpacesReady) {
           if (this.teamSpacesRetryTimer) {
@@ -2177,6 +2190,25 @@ export class SyncService {
       if (!snapshot) localStorage.setItem("lastSyncedAt.conversations", syncStartedAt);
     } catch (err) {
       console.error("Conversation pull failed:", err);
+    }
+  }
+
+  // Push-only: the account summary is read live by the Insights view, so there
+  // is nothing to pull back into the device's own counters.
+  private async syncAnalytics(): Promise<void> {
+    const consent = this.consent();
+    if (!consent.shared) return;
+    try {
+      // Revoking retention/Insights consent blocks new uploads, never deletion
+      // of rows that may already exist in the account.
+      if ((await syncPendingAnalytics({ uploadAllowed: consent.analytics })) > 0) {
+        this.analyticsPassMovedWork = true;
+      }
+    } catch (err) {
+      if (isAuthContextError(err)) throw err;
+      // A rejected batch stays pending for the next pass; the rest of this one
+      // still has folders, notes, and transcriptions to finish.
+      console.error("Analytics sync failed:", err);
     }
   }
 

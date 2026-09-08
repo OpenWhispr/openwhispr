@@ -18,7 +18,8 @@
     "paths": {
       "@/*": ["./*"],
       "@distribution/logo": ["./assets/logo.svg"],
-      "@distribution/icon": ["./assets/icon.png"]
+      "@distribution/icon": ["./assets/icon.png"],
+      "@distribution/mark": ["./config/emptyDistributionMark.ts"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],

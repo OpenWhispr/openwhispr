@@ -18,6 +18,7 @@ import { AlertDialog } from "./ui/dialog";
 import { useAuth } from "../hooks/useAuth";
 import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
+import { useScreenRecordingPermission } from "../hooks/useScreenRecordingPermission";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -26,7 +27,7 @@ import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useRequiredLocalModels } from "../hooks/useRequiredLocalModels";
 import { usePolicyStore } from "../stores/policyStore";
-import { isAgentAllowed } from "../stores/policyRules";
+import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import { formatHotkeyInstruction } from "./onboarding/hotkeyPresentation";
@@ -77,6 +78,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
   const agentAllowed = usePolicyStore(isAgentAllowed);
+  const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
   const settings = useSettings();
   const settingsStore = useSettingsStore();
   const {
@@ -121,6 +123,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setPermissionAlert({ title: dialog.title, description: dialog.description })
   );
   const systemAudio = useSystemAudioPermission();
+  const {
+    granted: screenRecordingGranted,
+    needsRelaunch: screenRecordingNeedsRelaunch,
+    request: requestScreenRecordingAccess,
+  } = useScreenRecordingPermission();
   const { supportsPushToTalk, pushToTalkUnavailableReason } = useHotkeyModeInfo(
     "onboarding",
     dictationHotkey
@@ -168,6 +175,38 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     session.authPath === "account" &&
     (!workspacesLoaded ||
       (!activeWorkspace && skipSetupChoiceForEnterprise && Boolean(enterpriseWorkspace)));
+
+  // The setting turns on only once the permission is actually granted, so an
+  // Enable click whose System Settings grant is abandoned can't leave screen
+  // context armed to activate silently on some later grant.
+  const [screenContextRequested, setScreenContextRequested] = useState(false);
+
+  const applyScreenContext = useCallback(() => {
+    settingsStore.setVoiceAgentScreenContext(true);
+    // Keeps the dictation overlay out of its own screenshots.
+    void window.electronAPI?.setScreenContextEnabled?.(true);
+  }, [settingsStore]);
+
+  const enableScreenContext = useCallback(async () => {
+    setScreenContextRequested(true);
+    const granted = await requestScreenRecordingAccess();
+    if (granted) applyScreenContext();
+    return granted;
+  }, [applyScreenContext, requestScreenRecordingAccess]);
+
+  // macOS grants Screen Recording in System Settings, outside the app; the
+  // permission hook re-checks on window focus. When the grant lands, complete
+  // the opt-in the Enable click started — within this session only.
+  useEffect(() => {
+    if (!screenContextRequested || !screenRecordingGranted) return;
+    if (settingsStore.voiceAgentScreenContext) return;
+    applyScreenContext();
+  }, [
+    screenContextRequested,
+    screenRecordingGranted,
+    settingsStore.voiceAgentScreenContext,
+    applyScreenContext,
+  ]);
 
   const requiredModels = useRequiredLocalModels();
   // Latched for the session once the step is entered (or resumed at), so a
@@ -649,6 +688,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           <CompactPermissionsStep
             permissions={permissions}
             systemAudio={systemAudio}
+            screenContext={
+              agentAllowed && screenContextAllowed
+                ? {
+                    enabled: settingsStore.voiceAgentScreenContext,
+                    granted: screenRecordingGranted,
+                    needsRelaunch: screenRecordingNeedsRelaunch,
+                    request: enableScreenContext,
+                  }
+                : undefined
+            }
             onContinue={() => void continueFromCurrentStep()}
           />
         );

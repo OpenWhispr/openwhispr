@@ -25,6 +25,31 @@
         "description": "ノートファイルを再構築できませんでした。機能が有効になっており、フォルダーに書き込み可能であることを確認してください。"
       }
     },
+    "granolaImport": {
+      "title": "Granola からインポート",
+      "description": "Granola の CSV エクスポートから会議ノートをインポート",
+      "howTo": "Granola で Settings → Profile → Export historical data → Generate CSV を実行します。エクスポートは通常数時間以内にメールで届きます。",
+      "chooseFile": "CSV ファイルを選択",
+      "preview": {
+        "title": "Granola からインポート",
+        "summary": "{{total}} 件のノートが見つかりました: 新規 {{newCount}} 件、インポート済み {{duplicateCount}} 件",
+        "warnings": "{{warningCount}} 行に問題があります(スキップ、または日付なしでインポート)",
+        "confirm": "{{newCount}} 件のノートをインポート",
+        "nothingNew": "このファイルのノートはすべてインポート済みです。"
+      },
+      "done": {
+        "title": "インポート完了",
+        "summary": "{{imported}} 件のノートを「Imported」フォルダにインポートし、{{skipped}} 件の重複をスキップしました"
+      },
+      "error": {
+        "title": "インポートに失敗しました",
+        "EMPTY_FILE": "ファイルが空です。",
+        "HEADERS_UNRECOGNIZED": "Granola の CSV エクスポートではないようです。",
+        "NO_DATA_ROWS": "このファイルにはノートが見つかりませんでした。",
+        "FILE_TOO_LARGE": "このファイルは大きすぎてインポートできません。",
+        "generic": "ファイルの読み込み中に問題が発生しました。"
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "話者を識別してラベル付け",
@@ -176,7 +201,10 @@
     "skip": "スキップ",
     "policyAiProcessingRestricted": "AI処理は組織によって制限されています。",
     "policyAgentRestricted": "AIエージェントの使用は組織によって制限されています。",
-    "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。"
+    "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。",
+    "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
+    "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
+    "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。"
   },
   "onboarding": {
     "rehaul": {
@@ -186,6 +214,7 @@
         "accessibilityDescription": "アクティブなアプリにテキストを貼り付けます。",
         "systemAudioTitle": "システムオーディオ",
         "systemAudioDescription": "ほかのアプリの音声を取り込みます。",
+        "screenContextDescription": "音声アシスタントが作業中の画面を確認できます。保存はされません。",
         "enable": "有効にする",
         "enabled": "有効"
       },
@@ -452,7 +481,7 @@
       "title": "音声アシスタント設定",
       "description": "ワンキーでAIアシスタントに話しかけられます",
       "hotkey": "ホットキー",
-      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えます。テキストが選択されていれば、{{agentName}}がその選択範囲を編集して置き換えます。選択がなければ、答えはフローティングパネルに表示されます。「Hey {{agentName}}」と言う必要はありません。",
+      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えます。テキストが選択されていれば、{{agentName}}が編集して置き換えます。編集可能なテキスト欄にフォーカスがある場合、回答はカーソル位置に貼り付けられ、それ以外の場合はフローティングパネルに表示されます。「Hey {{agentName}}」と言う必要はありません。",
       "test": "試す",
       "testInstruction": "下のサンプルテキストを選択して {{hotkey}} を押し、「短くして」と話してください。編集結果がそのままテキストボックスに反映されます",
       "testSetHotkey": "上でホットキーを設定すると試せます",
@@ -621,7 +650,8 @@
       "failedOffline": "オフラインです",
       "clearAll": "すべて削除",
       "clearAllTitle": "すべての文字起こしを削除",
-      "clearAllDescription": "すべての文字起こしと音声ファイルが完全に削除されます。",
+      "clearAllDescription": "すべての文字起こし、音声ファイル、Insights のカウントが、このデバイスとアカウントから完全に削除されます。",
+      "clearAllDescriptionDevice": "すべての文字起こし、音声ファイル、Insights のカウントが、このデバイスから完全に削除されます。アカウントに同期済みのカウントには影響しません。",
       "clearAllSuccess": "履歴を削除しました",
       "clearAllErrorTitle": "履歴を削除できませんでした",
       "clearAllErrorDescription": "問題が発生しました。もう一度お試しください。",
@@ -754,6 +784,35 @@
         "ssoHelp": "AWS CLI の SSO 設定を使用します。'aws sso login' を実行済みであることを確認してください。",
         "keysHelp": "AWS IAM のアクセスキーを入力してください。"
       },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "AWS の一時アクセスの有効期限が切れました。",
+          "ssoExpired": "AWS SSO セッションの有効期限が切れました。",
+          "credentialsRejected": "AWS によって認証情報が拒否されました。アクセスキー ID、シークレット、セッショントークンを確認してください。",
+          "accessDenied": "AWS Bedrock がこのリクエストを拒否しました。リージョン {{region}} で選択したモデルを呼び出す権限を AWS 管理者に依頼してください。",
+          "modelNotFound": "AWS Bedrock はリージョン {{region}} で選択したモデルを見つけられませんでした。モデル ID とそのリージョンでの提供状況を確認してください。",
+          "configurationRejected": "AWS Bedrock はリージョン {{region}} のモデル設定を拒否しました。モデル ID、推論プロファイル、リージョンを確認してください。",
+          "notConfigured": "AWS Bedrock が正しく設定されていません。リージョンと AWS 認証情報を確認してください。",
+          "serviceUnavailable": "需要が高いため、AWS Bedrock は一時的に利用できません。これは OpenWhispr の障害ではなく AWS サービス側の問題です。数分後にもう一度お試しください。",
+          "throttled": "リクエストが多すぎるため、AWS Bedrock は一時的にリクエストを制限しています。少し待ってから再試行してください。続く場合は、AWS 管理者に Bedrock の使用量とクォータの確認を依頼してください。",
+          "timeout": "AWS Bedrock が時間内に応答しませんでした。もう一度お試しください。続く場合は、インターネット接続と AWS Bedrock サービスの状態を確認してください。",
+          "network": "AWS Bedrock に接続できませんでした。インターネット接続を確認して、もう一度お試しください。",
+          "unknown": "AWS Bedrock エラー: {{error}}",
+          "actions": {
+            "refreshManagedAccess": "サインアウトして再度サインインし、会社のアクセスを更新してから再試行してください。",
+            "reauthenticate": "再認証するには、ターミナルで次のコマンドを実行してください:"
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "技術情報",
+        "httpStatus": "HTTP ステータス",
+        "awsException": "AWS 例外",
+        "awsRequestId": "AWS リクエスト ID",
+        "underlyingError": "原因となったエラー",
+        "copy": "技術情報をコピー",
+        "copyCommand": "復旧コマンドをコピー"
+      },
       "azure": {
         "endpointHelp": "Azure OpenAI リソースのエンドポイント（例: https://myresource.openai.azure.com）。",
         "deploymentHelp": "Azure OpenAI 内のモデルデプロイメント名。"
@@ -847,7 +906,10 @@
         "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
         "agentReasoningFailed": "音声アシスタントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
         "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。",
-        "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声テキスト変換 から更新してください。"
+        "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声テキスト変換 から更新してください。",
+        "managedTranscriptionUnavailable": "マネージド文字起こしは現在利用できません。しばらくしてからもう一度お試しください。",
+        "managedRouteInvalid": "設定の不一致により、マネージド文字起こしを開始できませんでした。もう一度お試しいただくか、管理者にお問い合わせください。",
+        "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。"
       },
       "translationFallback": {
         "unreachableTitle": "翻訳を利用できません",
@@ -1001,7 +1063,7 @@
     "emailStep": {
       "checkingEmail": "メールアドレスを確認しています...",
       "continueWithEmail": "メールで続ける",
-      "continueWithoutAccount": "アカウントなしで OpenWhispr を使う",
+      "continueWithoutAccount": "アカウントなしで続ける",
       "emailLabel": "メールアドレス",
       "emailPlaceholder": "you@example.com",
       "useDifferentEmail": "別のメールアドレスを使用"
@@ -1602,16 +1664,20 @@
       "wordsRemaining": "残り {{remaining}}",
       "deleteAccount": {
         "label": "アカウントを削除",
-        "labelDescription": "アカウント、すべてのクラウドデータ、ローカルデータを完全に削除します。この操作は元に戻せません。",
+        "labelDescription": "アカウントと個人のクラウドデータを完全に削除します。他のローカルユーザーとワークスペース所有のコンテンツは保持されます。",
         "button": "アカウントを削除",
         "deleting": "削除中...",
         "title": "アカウントを削除しますか？",
-        "description": "OpenWhispr アカウント、すべてのクラウド同期ノート、すべてのローカルデータ（文字起こし、音声録音、ダウンロード済みモデル、カレンダー接続、設定を含む）が完全に削除されます。この操作は元に戻せません。",
-        "confirmText": "すべて削除",
+        "description": "OpenWhispr アカウントと個人データを完全に削除します。ワークスペース所有のコンテンツと他のローカルユーザーのデータはこのデバイスに残ります。",
+        "confirmText": "アカウントを削除",
+        "eraseDeviceLabel": "このデバイス上のすべてのデータも消去する",
+        "eraseDeviceDescription": "すべてのローカルユーザーのノートとワークスペースキャッシュ、ダウンロード済みモデル、設定、カレンダー接続、認証情報、録音を削除します。",
+        "eraseDeviceWarning": "このデバイス全体の消去は元に戻せず、すべてのローカルユーザーに影響します。",
         "successTitle": "アカウントが削除されました",
-        "successDescription": "アカウントとすべてのデータが削除されました。アプリが再読み込みされます。",
+        "successDescription": "アカウントと個人データが削除されました。他のローカルユーザー、ワークスペース、モデル、デバイス設定は保持されました。",
+        "partialCleanupDescription": "アカウントは削除されましたが、一部のローカルクリーンアップを完了できませんでした。他のユーザーとワークスペース所有のコンテンツは保持されました。",
         "failedTitle": "削除に失敗しました",
-        "failedDescription": "アカウントの削除中にエラーが発生しました。ローカルデータが部分的に削除された可能性があります。もう一度お試しください。"
+        "failedDescription": "アカウントの削除を完了できませんでした。デバイス全体の消去は開始されていません。もう一度お試しください。"
       },
       "profile": {
         "name": {
@@ -1661,7 +1727,7 @@
       },
       "examplesTitle": "例",
       "helper": "声に出して言いやすい短い名前を選びましょう",
-      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、回答がフローティングのアシスタントパネルに表示されます。テキストが選択されている場合、そのテキストは設定済みの音声アシスタントモデルに送信され、結果で安全に置き換えられます。",
+      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、選択中のテキストは結果で安全に置き換えられます。自動貼り付けが有効で編集可能なテキスト欄にフォーカスがある場合、回答はカーソル位置に貼り付けられ、それ以外の場合はフローティングのアシスタントパネルに表示されます。",
       "howItWorksTitle": "仕組み",
       "instructionMode": "指示",
       "placeholder": "例: ジャービス、ノヴァ、アトラス...",
@@ -1825,7 +1891,7 @@
       },
       "voiceAgentHotkey": {
         "title": "音声アシスタントホットキー",
-        "description": "コマンドを話すと、アシスタントがノート・カレンダー・ウェブツールを使ってフローティングパネルで答えます。テキストを選択してから話すと、その場で編集されます。"
+        "description": "コマンドを話すと、アシスタントがノート・カレンダー・ウェブツールを使います。回答はフォーカス中の編集可能なカーソル位置に貼り付けられるか、選択テキストを置き換えるか、フローティングパネルに表示されます。"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -2037,12 +2103,16 @@
       "cloudNotesMigrationDone": "すべてのノートがバックアップされました",
       "description": "デバイスからのデータ送信を管理します。初期設定ではすべてオフです。",
       "title": "プライバシー",
+      "insightsSync": "個人の統計を同期",
+      "insightsSyncDescription": "単語数、日付と各ディクテーションの正確な時刻、長さ、モデルの種類をデバイス間で同期します。文字起こしの内容は送信されません。サインイン中に履歴を消去すると、これらのカウントもこのデバイスとアカウントから削除されます。",
+      "insightsSyncRequiresAccount": "サインインすると、内容を含まない統計データをデバイス間で同期できます。",
+      "insightsSyncRequiresHistory": "データ保持を有効にすると統計が記録され、デバイス間で同期できるようになります。",
       "usageAnalytics": "使用状況の分析",
       "usageAnalyticsDescription": "匿名のパフォーマンスデータを共有して OpenWhispr の改善にご協力ください。文字起こしの内容は送信されません。タイミングとエラーデータのみです。",
       "dataRetention": "データ保持",
       "dataRetentionDescription": "文字起こしと音声を履歴にローカル保存します。無効にすると、文字起こしは貼り付けられますが保存されません。",
       "transcriptRetention": "文字起こしの保持",
-      "transcriptRetentionDescription": "保存された文字起こしとその音声を、この期間の経過後に自動的に削除します。",
+      "transcriptRetentionDescription": "保存された文字起こし、その音声、およびその Insights カウンターを、この期間の経過後に自動的に削除します。",
       "transcriptRetentionForever": "無期限",
       "hoursAgo": "{{count}}時間前",
       "justNow": "たった今",
@@ -2103,7 +2173,9 @@
         "openwhisprDesc": "信頼できる精度。設定不要。",
         "providersDesc": "自分のAPIキーを使用。",
         "localDesc": "端末上のモデル。完全プライベート。",
-        "selfHostedDesc": "自前サーバーをネットワーク上に。"
+        "selfHostedDesc": "自前サーバーをネットワーク上に。",
+        "enterprise": "エンタープライズクラウド",
+        "enterpriseDesc": "音声は組織自身のクラウドに送信されます。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "信頼できる精度。設定不要。",
@@ -2128,6 +2200,10 @@
         "switchedSelfHosted": {
           "title": "セルフホスト",
           "description": "独自のサーバーを使用します。"
+        },
+        "switchedEnterprise": {
+          "title": "エンタープライズクラウドを選択しました",
+          "description": "音声入力は組織が管理する文字起こしを使用します。"
         }
       },
       "gpuDevice": {
@@ -2185,7 +2261,8 @@
             "info": "区間を連結するときに途切れないよう、次の区間に延長する音声の長さです。"
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "組織はエンタープライズクラウドの文字起こしのみを許可しており、会議の録音にはまだ対応していません。"
     },
     "intelligence": {
       "gpuDevice": {
@@ -2431,6 +2508,9 @@
     "learnMore": "詳細を見る",
     "noneAvailable": "利用可能なモデルがありません",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "最高精度のローカルASR(平均WER 5.42%、14言語)。言語の自動検出はありません"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "高速多言語 ASR、自動言語検出対応（25 言語）",
         "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）",
@@ -2452,6 +2532,7 @@
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
+        "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
         "xai_grok_stt": "xAIによる高精度音声認識",
         "tinfoil_voxtral": "検証可能なプライベート文字起こし"
@@ -2489,8 +2570,7 @@
         "anthropic_claude_opus_4_7": "高性能な Opus モデル",
         "anthropic_claude_opus_4_6": "前世代の Opus、100 万トークンコンテキスト",
         "anthropic_claude_opus_4_5": "旧世代の Opus モデル",
-        "tinfoil_deepseek_v4_pro": "セキュアエンクレーブ内のプライベート長文脈推論、800K コンテキスト",
-        "tinfoil_glm_5_2": "セキュアエンクレーブ内のプライベート・エージェント型エンジニアリングモデル、384K コンテキスト",
+        "tinfoil_glm_5_3": "セキュアエンクレーブ内のプライベート・エージェント型コーディングモデル、1M コンテキスト",
         "tinfoil_gemma4_31b": "ツール呼び出し対応のプライベート多言語推論モデル、256K コンテキスト",
         "tinfoil_gpt_oss_120b": "ツール使用対応のプライベート・オープンウェイト推論モデル、131K コンテキスト",
         "tinfoil_llama3_3_70b": "ツール呼び出し対応のプライベート会話モデル、128K コンテキスト",
@@ -2818,6 +2898,7 @@
       "transcriptionComplete": "文字起こし完了",
       "partialWarning": "音声の一部を文字起こしできませんでした。",
       "partialWarningCount": "{{total}}個の音声セクションのうち{{failed}}個を文字起こしできませんでした。",
+      "diarizationWarning": "話者識別を適用できませんでした。文字起こしは話者ラベルなしで保存されました。",
       "chunkLossExceeded": "ネットワークの問題で音声の大部分が失われました。接続を確認してもう一度お試しください。",
       "openNote": "ノートを開く",
       "uploadAnother": "別のファイルをアップロード",
@@ -2839,8 +2920,8 @@
       "largeFileNote": "大容量ファイルは分割され、並列で文字起こしされます。",
       "chunkProgress": "パート {{completed}} / {{total}} を文字起こし中...",
       "paidPlanRequired": "25 MB を超えるファイルのクラウド文字起こしには有料プランが必要です。大容量ファイルは OpenWhispr Cloud で信頼性の高い高品質な結果を得られます。",
-      "byokTooLarge": "サードパーティの API キーは 25 MB までのファイルのみ対応しています。",
-      "byokTooLargeDetail": "25 MB を超えるファイルは、OpenWhispr Cloud が分割・並列処理・結合を行います。サードパーティの制限に依存せず、信頼性の高い結果が得られます。",
+      "byokTooLarge": "サードパーティの API キーは {{size}} MB までのファイルのみ対応しています。",
+      "byokTooLargeDetail": "{{size}} MB を超えるファイルは、OpenWhispr Cloud が分割・並列処理・結合を行います。サードパーティの制限に依存せず、信頼性の高い結果が得られます。",
       "byokTooLargeNeedsAccount": "アカウントを作成し、有料プランにアップグレードすると、OpenWhispr Cloud でより大きなファイルを文字起こしできます。",
       "byokTooLargeNeedsUpgrade": "有料プランにアップグレードすると、OpenWhispr Cloud でより大きなファイルを文字起こしできます。",
       "switchToCloudForLargeFiles": "このファイルを文字起こしするには OpenWhispr Cloud に切り替えてください。",
@@ -2889,7 +2970,12 @@
       "description": "文字起こしと構造化されたサマリー",
       "back": "戻る",
       "restrictedByOrg": "会議の文字起こしは組織によって制限されています。",
-      "autoEnded": "会議の終了後、録音は自動的に停止しました。"
+      "autoEnded": "会議の終了後、録音は自動的に停止しました。",
+      "restartFailed": "会議の録音を再開できませんでした。",
+      "systemAudioSilent": {
+        "title": "会議の音声がまだ検出されていません",
+        "description": "これまでのところ、音声を拾っているのはマイクのみです。ビデオ会議中の場合は、会議の音声がこのコンピューターで再生されており、ミュートになっていないことを確認してください。対面で録音している場合は、この通知は無視してかまいません。マイクが室内の音を拾います。"
+      }
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",
@@ -3134,7 +3220,47 @@
       "playSignal": "シグナルを再生"
     }
   },
+  "insights": {
+    "title": "統計",
+    "description": "ディクテーションの習慣と継続状況をプライベートに確認できます。",
+    "wordsSpoken": "話した単語数",
+    "currentStreak": "現在の連続日数",
+    "wordsPerMinute": "1分あたりの単語数",
+    "dictations": "ディクテーション数",
+    "allTime": "全期間",
+    "days_one": "{{count}} 日",
+    "days_other": "{{count}} 日",
+    "longestStreak_one": "最長: {{count}} 日",
+    "longestStreak_other": "最長: {{count}} 日",
+    "wpmCoverage": "計測できた単語の {{count}}% に基づく",
+    "activity": "発話アクティビティ",
+    "activityDescription": "過去6か月間に話した単語数",
+    "activityLabel": "6か月間の発話アクティビティのヒートマップ",
+    "activityLess": "少ない",
+    "activityMore": "多い",
+    "dayTooltip_one": "{{date}}: {{count}} 語",
+    "dayTooltip_other": "{{date}}: {{count}} 語",
+    "dataRetentionDisabled": "データ保持が無効なため、新しいディクテーションは統計に集計されません。このデバイスでもアカウントでも加算されません。すでに同期済みのカウントはアカウントに残ります。",
+    "onDevice": "このデバイス上",
+    "synced": "デバイス間で同期済み",
+    "syncFallback": "デバイスのデータを表示中 — 同期は利用できません",
+    "syncPrompt": "内容を含まないカウンターを同期して、ローカルとクラウドのアクティビティをデバイス間でまとめます。",
+    "enableSync": "同期を有効にする",
+    "claimTitle": "以前のディクテーションを含めますか？",
+    "claimDescription_one": "サインイン前にこのデバイスで記録されたディクテーションが {{count}} 件あります。含めると、送信されるのは単語数、日付と記録された正確な時刻、長さ、モデルの種類だけで、文字起こしの内容は送信されません。",
+    "claimDescription_other": "サインイン前にこのデバイスで記録されたディクテーションが {{count}} 件あります。含めると、送信されるのは単語数、日付と記録された正確な時刻、長さ、モデルの種類だけで、文字起こしの内容は送信されません。",
+    "claimInclude": "含める",
+    "claimSkip": "今はしない",
+    "enableTitle": "Insights の同期をオンにしますか？",
+    "enableConfirm": "同期をオンにする",
+    "enableDescription_one": "このデバイスで記録済みのディクテーション {{count}} 件がアカウントにアップロードされます。Insights の同期で送信されるのは単語数、日付と記録された正確な時刻、長さ、モデルの種類だけで、文字起こしの内容は送信されません。",
+    "enableDescription_other": "このデバイスで記録済みのディクテーション {{count}} 件がアカウントにアップロードされます。Insights の同期で送信されるのは単語数、日付と記録された正確な時刻、長さ、モデルの種類だけで、文字起こしの内容は送信されません。",
+    "emptyTitle": "まだディクテーションがありません",
+    "emptyBody": "ディクテーションを始めると、単語数・連続記録・日々のアクティビティがここに表示されます。",
+    "loadError": "このデバイスから Insights を読み取れませんでした。"
+  },
   "sidebar": {
+    "insights": "統計",
     "home": "ホーム",
     "notes": "ノート",
     "upload": "アップロード",
@@ -3209,8 +3335,10 @@
     "active": "GPU アクセラレーション有効",
     "ready": "GPUアクセラレーション準備完了",
     "activating": "GPU を有効化中...",
-    "activationFailed": "GPU を有効化できませんでした",
-    "retry": "再試行",
+    "activationFailed": "GPU アクセラレーションを利用できません",
+    "activationFailedDescription": "OpenWhispr は CPU 文字起こしに切り替えました。",
+    "reasoningActivationFailedDescription": "OpenWhispr は CPU 処理に切り替えました。",
+    "retryActivation": "GPU アクセラレーションを再試行",
     "remove": "削除",
     "dismiss": "後で",
     "cancel": "キャンセル"
@@ -3233,7 +3361,8 @@
       },
       "gpuFallback": {
         "title": "GPU アクセラレーションを利用できません",
-        "description": "文字起こしは代わりに CPU を使用しています。設定で GPU アクセラレーションを無効にできます。"
+        "description": "OpenWhispr は CPU 文字起こしに切り替えました。",
+        "retry": "GPU を再試行"
       },
       "gpuPackMigration": {
         "title": "GPU パックの再ダウンロードが必要です",
@@ -3807,13 +3936,13 @@
     "start": "メモを取る",
     "join": "参加して文字起こし",
     "autoEnd": {
-      "title": "会議が終了した可能性があります",
+      "title": "会議の録音が終了しました",
       "body": {
-        "micReleased": "ほかのアプリはマイクを使用していません。録音は{{seconds}}秒後に停止します。",
-        "silence": "音声が検出されません。録音は{{seconds}}秒後に停止します。",
-        "processExit": "会議アプリが終了しました。録音は{{seconds}}秒後に停止します。"
+        "micReleased": "ほかのアプリがマイクを使用していないため、録音を自動停止しました。{{seconds}}秒以内に再開できます。",
+        "silence": "音声が検出されなかったため、録音を自動停止しました。{{seconds}}秒以内に再開できます。",
+        "processExit": "会議アプリが終了したため、録音を自動停止しました。{{seconds}}秒以内に再開できます。"
       },
-      "keep": "録音を続ける"
+      "restart": "録音を再開"
     }
   }
 }

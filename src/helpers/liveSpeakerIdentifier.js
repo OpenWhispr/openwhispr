@@ -49,6 +49,13 @@ const MATCH_THRESHOLD = 0.65;
 const MATCH_MARGIN = 0.03;
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
 const DEFAULT_VAD_STATE_SHAPE = [2, 1, 64];
+// The VAD graph is tiny (~64 ops per 512-sample window at ~31 Hz); ORT's
+// default thread pool spins one worker per core for no throughput gain.
+const VAD_SESSION_OPTIONS = {
+  intraOpNumThreads: 1,
+  interOpNumThreads: 1,
+  executionMode: "sequential",
+};
 
 function appendFloat32(existing, next) {
   if (!existing.length) return next;
@@ -60,16 +67,17 @@ function appendFloat32(existing, next) {
   return merged;
 }
 
+function totalSampleCount(chunks) {
+  let total = 0;
+  for (const chunk of chunks) total += chunk.length;
+  return total;
+}
+
 function concatFloat32Arrays(chunks) {
   if (chunks.length === 0) return new Float32Array(0);
   if (chunks.length === 1) return chunks[0];
 
-  let totalLength = 0;
-  for (const chunk of chunks) {
-    totalLength += chunk.length;
-  }
-
-  const merged = new Float32Array(totalLength);
+  const merged = new Float32Array(totalSampleCount(chunks));
   let offset = 0;
   for (const chunk of chunks) {
     merged.set(chunk, offset);
@@ -80,8 +88,7 @@ function concatFloat32Arrays(chunks) {
 }
 
 function trimChunksToMaxSamples(chunks, maxSamples) {
-  let total = 0;
-  for (const chunk of chunks) total += chunk.length;
+  let total = totalSampleCount(chunks);
   while (total > maxSamples && chunks.length > 0) {
     total -= chunks[0].length;
     chunks.shift();
@@ -403,7 +410,7 @@ class LiveSpeakerIdentifier {
     const ort = loadOnnxRuntime();
     if (!ort) return;
 
-    this.session = await ort.InferenceSession.create(vadModelPath);
+    this.session = await ort.InferenceSession.create(vadModelPath, VAD_SESSION_OPTIONS);
     this.vadStateInputs = (this.session.inputNames || []).filter((name) => /state|h|c/i.test(name));
     this.vadStateOutputs = (this.session.outputNames || []).filter((name) =>
       /state|h|c/i.test(name)
@@ -571,14 +578,12 @@ class LiveSpeakerIdentifier {
   }
 
   async _identifyActiveSpeechSegment(force = false) {
-    const allSamples = concatFloat32Arrays(this.speechChunks);
-    if (allSamples.length < LIVE_IDENTIFICATION_MIN_SAMPLES) {
+    // Runs on every speech window (~31x/sec), so the cheap gates must come
+    // first — concatenating up to 32s of float32 per window is ~64 MB/s of
+    // wasted main-thread memcpy during continuous speech.
+    if (totalSampleCount(this.speechChunks) < LIVE_IDENTIFICATION_MIN_SAMPLES) {
       return;
     }
-    const currentSamples =
-      allSamples.length > MAX_EMBEDDING_SAMPLES
-        ? allSamples.subarray(allSamples.length - MAX_EMBEDDING_SAMPLES)
-        : allSamples;
 
     if (
       !force &&
@@ -588,6 +593,12 @@ class LiveSpeakerIdentifier {
     ) {
       return;
     }
+
+    const allSamples = concatFloat32Arrays(this.speechChunks);
+    const currentSamples =
+      allSamples.length > MAX_EMBEDDING_SAMPLES
+        ? allSamples.subarray(allSamples.length - MAX_EMBEDDING_SAMPLES)
+        : allSamples;
 
     const embedding = await speakerEmbeddings.extractEmbeddingFromSamples(currentSamples);
     if (!embedding) {

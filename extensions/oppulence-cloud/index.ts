@@ -13,7 +13,7 @@ import {
   WorkOSTokenBundleSchema,
   type OppulenceAuthStatus,
   type WorkOSTokenBundle,
-} from "../../src/config/openwhisprApi";
+} from "../../src/config/openwhisprApi.ts";
 
 const { net, safeStorage, shell } = electron;
 const require = createRequire(import.meta.url);

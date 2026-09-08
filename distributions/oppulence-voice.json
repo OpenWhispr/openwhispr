@@ -31,10 +31,11 @@
   "assets": {
     "rendererLogo": "distributions/oppulence-voice/assets/oppulence-mark.png",
     "rendererIcon": "distributions/oppulence-voice/assets/oppulence-mark.png",
-    "trayIcon": "distributions/oppulence-voice/assets/oppulence-mark.png",
-    "macIcon": "distributions/oppulence-voice/assets/oppulence-mark.png",
-    "windowsIcon": "distributions/oppulence-voice/assets/oppulence-mark.png",
+    "trayIcon": "distributions/oppulence-voice/assets/oppulence-trayTemplate@3x.png",
+    "macIcon": "distributions/oppulence-voice/assets/oppulence-mark.icns",
+    "windowsIcon": "distributions/oppulence-voice/assets/oppulence-mark.ico",
     "linuxIcon": "distributions/oppulence-voice/assets/oppulence-mark.png",
+    "onboardingMark": "distributions/oppulence-voice/assets/oppulence-mark.png",
     "macAssetCatalog": null
   },
   "signing": {
@@ -44,5 +45,8 @@
     "managedCloud": true,
     "rowboatExport": true
   },
-  "extensions": ["oppulence-cloud", "rowboat-export"]
+  "extensions": [
+    "oppulence-cloud",
+    "rowboat-export"
+  ]
 }

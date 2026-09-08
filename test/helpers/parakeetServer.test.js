@@ -181,3 +181,53 @@ test("transcribe without a signal is unchanged", async () => {
   assert.equal(result.text, "one two three");
   assert.equal(fake.calls.length, 3);
 });
+
+test("cohere models segment at 30s and start the server with the resolved language", async () => {
+  const fake = fakeWsServer([{ text: "one" }, { text: "two" }]);
+  const startArgs = [];
+  fake.start = async (...args) => {
+    startArgs.push(args);
+  };
+  const manager = managerWith(fake);
+
+  const result = await manager.transcribe(wavFromSeconds([{ seconds: 31 }]), {
+    modelName: "cohere-transcribe-03-2026",
+    language: "pl",
+  });
+
+  assert.equal(result.text, "one two");
+  assert.deepEqual(fake.calls, [30 * SAMPLE_RATE * 4, 1 * SAMPLE_RATE * 4]);
+  assert.equal(startArgs.length, 1);
+  assert.equal(startArgs[0][0], "cohere-transcribe-03-2026");
+  assert.equal(startArgs[0][2], "offline");
+  assert.equal(startArgs[0][3], "pl");
+});
+
+test("cohere models fall back to English when the app language has no match", async () => {
+  const fake = fakeWsServer([{ text: "hello" }]);
+  const startArgs = [];
+  fake.start = async (...args) => {
+    startArgs.push(args);
+  };
+  const manager = managerWith(fake);
+
+  await manager.transcribe(wavFromSeconds([{ seconds: 5 }]), {
+    modelName: "cohere-transcribe-03-2026",
+    language: "auto",
+  });
+
+  assert.equal(startArgs[0][3], "en");
+});
+
+test("transducer models start the server without a language", async () => {
+  const fake = fakeWsServer([{ text: "hello" }]);
+  const startArgs = [];
+  fake.start = async (...args) => {
+    startArgs.push(args);
+  };
+  const manager = managerWith(fake);
+
+  await manager.transcribe(wavFromSeconds([{ seconds: 5 }]), { language: "pl" });
+
+  assert.equal(startArgs[0][3], null);
+});

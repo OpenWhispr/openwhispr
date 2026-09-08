@@ -52,7 +52,7 @@ test("calculates privacy-safe availability from connected provider caches", () =
     { start: "2026-08-25T10:15:00.000Z", end: "2026-08-25T12:00:00.000Z", durationMinutes: 105 },
   ]);
   assert.equal(result.isEntireRangeFree, false);
-  assert.deepEqual(result.coverage, { source: "local-calendar-cache", lookaheadDays: 7 });
+  assert.deepEqual(result.coverage, { source: "local-calendar-cache", lookaheadDays: 31 });
   // The seeded title, attendee email, and meeting link all contain "private".
   assert.doesNotMatch(JSON.stringify(result), /private/i);
 });

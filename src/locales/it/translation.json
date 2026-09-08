@@ -25,6 +25,31 @@
         "description": "Impossibile ricostruire i file delle note. Assicurati che la funzione sia abilitata e che la cartella sia scrivibile."
       }
     },
+    "granolaImport": {
+      "title": "Importa da Granola",
+      "description": "Importa le note delle riunioni da un'esportazione CSV di Granola",
+      "howTo": "In Granola: Settings → Profile → Export historical data → Generate CSV. L'esportazione arriva via e-mail, di solito entro poche ore.",
+      "chooseFile": "Scegli file CSV",
+      "preview": {
+        "title": "Importa da Granola",
+        "summary": "Trovate {{total}} note: {{newCount}} nuove, {{duplicateCount}} già importate",
+        "warnings": "{{warningCount}} righe presentano problemi (saltate o importate senza data)",
+        "confirm": "Importa {{newCount}} note",
+        "nothingNew": "Tutte le note di questo file sono già state importate."
+      },
+      "done": {
+        "title": "Importazione completata",
+        "summary": "{{imported}} note importate nella cartella \"Imported\", {{skipped}} duplicati saltati"
+      },
+      "error": {
+        "title": "Importazione non riuscita",
+        "EMPTY_FILE": "Il file è vuoto.",
+        "HEADERS_UNRECOGNIZED": "Questo non sembra un'esportazione CSV di Granola.",
+        "NO_DATA_ROWS": "Nessuna nota trovata in questo file.",
+        "FILE_TOO_LARGE": "Questo file è troppo grande per essere importato.",
+        "generic": "Si è verificato un errore durante la lettura del file."
+      }
+    },
     "meeting": {
       "speakerDetection": {
         "title": "Identifica ed etichetta i partecipanti",
@@ -176,7 +201,10 @@
     "skip": "Salta",
     "policyAiProcessingRestricted": "L’elaborazione con IA è limitata dalla tua organizzazione.",
     "policyAgentRestricted": "L’uso dell’agente IA è limitato dalla tua organizzazione.",
-    "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione."
+    "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione.",
+    "managedConfigLoading": "Verifica della configurazione gestita della tua organizzazione in corso. Riprova tra un momento.",
+    "managedConfigUnavailable": "L'accesso aziendale gestito non è disponibile. Accedi di nuovo o contatta l'amministratore.",
+    "managedPolicyConflict": "L'accesso gestito è bloccato dai criteri del tuo spazio di lavoro. Contatta l'amministratore."
   },
   "onboarding": {
     "rehaul": {
@@ -186,6 +214,7 @@
         "accessibilityDescription": "Incolla il testo nell’app attiva.",
         "systemAudioTitle": "Audio di Sistema",
         "systemAudioDescription": "Acquisisce l’audio da altre app.",
+        "screenContextDescription": "Consente all’assistente vocale di vedere lo schermo. Mai salvato.",
         "enable": "Attiva",
         "enabled": "Attivato"
       },
@@ -452,7 +481,7 @@
       "title": "Configurazione dell'assistente vocale",
       "description": "Parla con il tuo assistente IA con un solo tasto",
       "hotkey": "Scorciatoia",
-      "howItWorks": "Premi il tasto e di' cosa vuoi — ad esempio “scrivi un breve messaggio di ringraziamento”. Se c'è del testo evidenziato, {{agentName}} modifica e sostituisce quella selezione; altrimenti la risposta si apre in un pannello flottante. Non serve dire prima “Hey {{agentName}}”.",
+      "howItWorks": "Premi il tasto e di' cosa vuoi — ad esempio “scrivi un breve messaggio di ringraziamento”. Se c'è del testo evidenziato, {{agentName}} lo modifica e sostituisce. Se è attivo un campo di testo modificabile, la risposta viene incollata al cursore; altrimenti si apre in un pannello flottante. Non serve dire prima “Hey {{agentName}}”.",
       "test": "Provalo",
       "testInstruction": "Seleziona il testo di esempio qui sotto, premi {{hotkey}} e di' «rendilo più corto» — la modifica arriva direttamente nella casella di testo",
       "testSetHotkey": "Imposta una scorciatoia sopra per provarlo",
@@ -621,7 +650,8 @@
       "failedOffline": "Offline",
       "clearAll": "Cancella tutto",
       "clearAllTitle": "Cancella tutte le trascrizioni",
-      "clearAllDescription": "Tutte le trascrizioni e i file audio verranno rimossi definitivamente.",
+      "clearAllDescription": "Tutte le trascrizioni, i file audio e i conteggi di Insights verranno rimossi definitivamente da questo dispositivo e dal tuo account.",
+      "clearAllDescriptionDevice": "Tutte le trascrizioni, i file audio e i conteggi di Insights verranno rimossi definitivamente da questo dispositivo. I conteggi già sincronizzati con un account non saranno interessati.",
       "clearAllSuccess": "Cronologia cancellata",
       "clearAllErrorTitle": "Impossibile cancellare la cronologia",
       "clearAllErrorDescription": "Qualcosa è andato storto. Riprova.",
@@ -754,6 +784,35 @@
         "ssoHelp": "Usa la tua configurazione SSO di AWS CLI. Assicurati di aver eseguito 'aws sso login'.",
         "keysHelp": "Inserisci le tue chiavi di accesso AWS IAM."
       },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "L’accesso AWS temporaneo è scaduto.",
+          "ssoExpired": "La sessione SSO AWS è scaduta.",
+          "credentialsRejected": "Le credenziali AWS sono state rifiutate. Controlla l’ID della chiave di accesso, il segreto e il token di sessione.",
+          "accessDenied": "AWS Bedrock ha rifiutato questa richiesta. Chiedi all’amministratore AWS l’autorizzazione a richiamare il modello selezionato nella regione {{region}}.",
+          "modelNotFound": "AWS Bedrock non ha trovato il modello selezionato nella regione {{region}}. Controlla l’ID del modello e la sua disponibilità in quella regione.",
+          "configurationRejected": "AWS Bedrock ha rifiutato la configurazione del modello per la regione {{region}}. Controlla l’ID del modello, il profilo di inferenza e la regione.",
+          "notConfigured": "AWS Bedrock non è configurato correttamente. Controlla la regione e le credenziali AWS.",
+          "serviceUnavailable": "AWS Bedrock è temporaneamente non disponibile a causa dell’elevata richiesta. È un problema del servizio AWS, non un’interruzione di OpenWhispr. Riprova tra qualche minuto.",
+          "throttled": "AWS Bedrock sta limitando temporaneamente le richieste perché ne riceve troppe. Attendi un momento e riprova. Se il problema continua, chiedi all’amministratore AWS di controllare l’utilizzo e le quote di Bedrock.",
+          "timeout": "AWS Bedrock non ha risposto in tempo. Riprova. Se il problema continua, controlla la connessione Internet e lo stato del servizio AWS Bedrock.",
+          "network": "Impossibile raggiungere AWS Bedrock. Controlla la connessione Internet e riprova.",
+          "unknown": "Errore AWS Bedrock: {{error}}",
+          "actions": {
+            "refreshManagedAccess": "Esci e accedi di nuovo per aggiornare l’accesso aziendale, quindi riprova.",
+            "reauthenticate": "Esegui il comando seguente nel terminale per autenticarti di nuovo:"
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "Dettagli tecnici",
+        "httpStatus": "Stato HTTP",
+        "awsException": "Eccezione AWS",
+        "awsRequestId": "ID richiesta AWS",
+        "underlyingError": "Errore sottostante",
+        "copy": "Copia dettagli tecnici",
+        "copyCommand": "Copia comando di ripristino"
+      },
       "azure": {
         "endpointHelp": "L'endpoint della tua risorsa Azure OpenAI (ad es. https://myresource.openai.azure.com).",
         "deploymentHelp": "Nome del deployment del tuo modello in Azure OpenAI."
@@ -847,7 +906,10 @@
         "chunkLoss": "Un problema di rete ha fatto perdere troppa parte della registrazione. Ritrascrivila dalla cronologia.",
         "agentReasoningFailed": "L'assistente vocale non è riuscito a elaborare il comando; è stata inserita la trascrizione grezza.",
         "screenContextSkipped": "Non è stato possibile inviare lo screenshot, quindi il comando è stato eseguito senza contesto dello schermo.",
-        "customEndpointInvalid": "L'endpoint di trascrizione personalizzato non è configurato o il suo URL non è valido. Aggiornalo in Impostazioni → Da voce a testo."
+        "customEndpointInvalid": "L'endpoint di trascrizione personalizzato non è configurato o il suo URL non è valido. Aggiornalo in Impostazioni → Da voce a testo.",
+        "managedTranscriptionUnavailable": "La trascrizione gestita non è disponibile al momento. Riprova tra un momento.",
+        "managedRouteInvalid": "La trascrizione gestita non è potuta partire per un'incoerenza di configurazione. Riprova o contatta l'amministratore.",
+        "managedAuthRejected": "Le credenziali di trascrizione gestita della tua organizzazione sono state rifiutate. Contatta l'amministratore."
       },
       "translationFallback": {
         "unreachableTitle": "Traduzione non disponibile",
@@ -1001,7 +1063,7 @@
     "emailStep": {
       "checkingEmail": "Verifica dell'e-mail in corso...",
       "continueWithEmail": "Continua con l'e-mail",
-      "continueWithoutAccount": "Usa OpenWhispr senza account",
+      "continueWithoutAccount": "Continua senza account",
       "emailLabel": "E-mail",
       "emailPlaceholder": "tu@esempio.com",
       "useDifferentEmail": "Usa un'altra e-mail"
@@ -1602,16 +1664,20 @@
       "wordsRemaining": "{{remaining}} rimanenti",
       "deleteAccount": {
         "label": "Elimina account",
-        "labelDescription": "Elimina permanentemente il tuo account, tutti i dati cloud e i dati locali. Questa azione non può essere annullata.",
+        "labelDescription": "Elimina permanentemente il tuo account e i dati cloud personali. Gli altri utenti locali e i contenuti degli spazi di lavoro vengono conservati.",
         "button": "Elimina il mio account",
         "deleting": "Eliminazione...",
         "title": "Eliminare il tuo account?",
-        "description": "Questo eliminerà permanentemente il tuo account OpenWhispr, tutte le note sincronizzate nel cloud e tutti i dati locali, incluse trascrizioni, registrazioni audio, modelli scaricati, connessioni calendario e impostazioni. Questa azione non può essere annullata.",
-        "confirmText": "Elimina tutto",
+        "description": "Questo elimina permanentemente il tuo account OpenWhispr e i dati personali. I contenuti degli spazi di lavoro e i dati degli altri utenti locali restano su questo dispositivo.",
+        "confirmText": "Elimina account",
+        "eraseDeviceLabel": "Elimina anche tutti i dati da questo dispositivo",
+        "eraseDeviceDescription": "Elimina note e cache degli spazi di tutti gli utenti locali, modelli scaricati, impostazioni, calendari, credenziali e registrazioni.",
+        "eraseDeviceWarning": "Questa cancellazione dell’intero dispositivo non può essere annullata e riguarda tutti gli utenti locali.",
         "successTitle": "Account eliminato",
-        "successDescription": "Il tuo account e tutti i dati sono stati eliminati. L'app si ricaricherà ora.",
+        "successDescription": "Il tuo account e i dati personali sono stati eliminati. Gli altri utenti locali, spazi di lavoro, modelli e impostazioni sono stati conservati.",
+        "partialCleanupDescription": "Il tuo account è stato eliminato, ma parte della pulizia locale non è stata completata. Gli altri utenti e i contenuti degli spazi di lavoro sono stati conservati.",
         "failedTitle": "Eliminazione fallita",
-        "failedDescription": "Qualcosa è andato storto durante l'eliminazione del tuo account. I tuoi dati locali potrebbero essere stati parzialmente rimossi. Riprova."
+        "failedDescription": "Impossibile completare l’eliminazione dell’account. Non è stata avviata alcuna cancellazione dell’intero dispositivo. Riprova."
       },
       "profile": {
         "name": {
@@ -1661,7 +1727,7 @@
       },
       "examplesTitle": "Esempi",
       "helper": "Scegli qualcosa di breve e naturale da dire ad alta voce",
-      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, la risposta si apre nel pannello flottante dell'assistente. Se c'è del testo evidenziato, quel testo viene inviato al tuo modello di Assistente vocale configurato e sostituito in sicurezza con il risultato.",
+      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, il testo evidenziato viene sostituito in sicurezza con il risultato. Con l'incolla automatico attivo, la risposta viene incollata al cursore di un campo modificabile attivo; altrimenti si apre nel pannello flottante dell'assistente.",
       "howItWorksTitle": "Come funziona",
       "instructionMode": "Istruzione",
       "placeholder": "es. Jarvis, Nova, Atlas...",
@@ -1825,7 +1891,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Scorciatoia dell'assistente vocale",
-        "description": "Pronuncia un comando e l'assistente risponde in un pannello flottante con le tue note, il calendario e gli strumenti web. Seleziona prima del testo per modificarlo sul posto."
+        "description": "Pronuncia un comando e l'assistente usa le tue note, il calendario e gli strumenti web. La risposta viene incollata a un cursore modificabile attivo, sostituisce il testo selezionato o si apre nel pannello flottante."
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",
@@ -2037,12 +2103,16 @@
       "cloudNotesMigrationDone": "Tutte le note salvate nel cloud",
       "description": "Controlla quali dati escono dal tuo dispositivo. Tutto è disattivato per impostazione predefinita.",
       "title": "Privacy",
+      "insightsSync": "Sincronizza le Statistiche personali",
+      "insightsSyncDescription": "Sincronizza conteggi di parole, la data e l'ora esatta di ogni dettatura, durate e tipi di modello tra i tuoi dispositivi. Il contenuto delle trascrizioni non è mai incluso. Quando hai effettuato l'accesso, cancellare la cronologia rimuove questi conteggi anche da questo dispositivo e dal tuo account.",
+      "insightsSyncRequiresAccount": "Accedi per sincronizzare i dati delle Statistiche senza contenuti tra i tuoi dispositivi.",
+      "insightsSyncRequiresHistory": "Attiva la conservazione dei dati per registrare le Statistiche prima di sincronizzarle tra i tuoi dispositivi.",
       "usageAnalytics": "Analisi dell'utilizzo",
       "usageAnalyticsDescription": "Aiutaci a migliorare OpenWhispr condividendo metriche di prestazione anonime. Non inviamo mai il contenuto delle trascrizioni, solo dati su tempi ed errori.",
       "dataRetention": "Conservazione dei dati",
       "dataRetentionDescription": "Salva trascrizioni e audio localmente nella cronologia. Se disattivato, le trascrizioni vengono incollate ma non salvate.",
       "transcriptRetention": "Conservazione delle trascrizioni",
-      "transcriptRetentionDescription": "Elimina automaticamente le trascrizioni salvate e il relativo audio dopo questo periodo.",
+      "transcriptRetentionDescription": "Elimina automaticamente le trascrizioni salvate, il relativo audio e i relativi contatori di Insights dopo questo periodo.",
       "transcriptRetentionForever": "Per sempre",
       "hoursAgo": "{{count}}h fa",
       "justNow": "adesso",
@@ -2103,7 +2173,9 @@
         "openwhisprDesc": "Risultati affidabili. Nessuna configurazione necessaria.",
         "providersDesc": "Usa la tua chiave API.",
         "localDesc": "Modelli sul dispositivo. Totalmente privato.",
-        "selfHostedDesc": "Il tuo server nella tua rete."
+        "selfHostedDesc": "Il tuo server nella tua rete.",
+        "enterprise": "Cloud aziendale",
+        "enterpriseDesc": "L'audio viene inviato al cloud della tua organizzazione."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Risultati affidabili. Nessuna configurazione necessaria.",
@@ -2128,6 +2200,10 @@
         "switchedSelfHosted": {
           "title": "Self-hosted",
           "description": "Utilizzo del tuo server."
+        },
+        "switchedEnterprise": {
+          "title": "Cloud aziendale selezionato",
+          "description": "La dettatura ora usa la trascrizione gestita dalla tua organizzazione."
         }
       },
       "gpuDevice": {
@@ -2185,7 +2261,8 @@
             "info": "Audio esteso da un segmento al successivo per evitare tagli netti nella concatenazione."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "La tua organizzazione consente solo la trascrizione su cloud aziendale, che non copre ancora la registrazione delle riunioni."
     },
     "intelligence": {
       "gpuDevice": {
@@ -2431,6 +2508,9 @@
     "learnMore": "Scopri di più",
     "noneAvailable": "Nessun modello disponibile",
     "descriptions": {
+      "cohere": {
+        "cohere_transcribe_03_2026": "ASR locale più preciso (5,42% WER medio, 14 lingue). Nessun rilevamento automatico della lingua"
+      },
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilingue veloce con rilevamento automatico della lingua (25 lingue)",
         "parakeet_unified_en_0_6b": "ASR solo inglese con precisione all'avanguardia (5,91% WER medio)",
@@ -2452,6 +2532,7 @@
         "groq_whisper_large_v3_turbo": "Velocità 216x in tempo reale",
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
+        "gemini_3_5_transcribe": "Riconoscimento vocale Gemini di Google",
         "corti_transcribe": "Trascrizione medica di livello clinico",
         "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI",
         "tinfoil_voxtral": "Trascrizione verificabilmente privata"
@@ -2489,8 +2570,7 @@
         "anthropic_claude_opus_4_7": "Modello Opus potente",
         "anthropic_claude_opus_4_6": "Generazione Opus precedente, contesto da 1M",
         "anthropic_claude_opus_4_5": "Modello Opus meno recente",
-        "tinfoil_deepseek_v4_pro": "Ragionamento privato a contesto lungo in enclave sicure, contesto 800K",
-        "tinfoil_glm_5_2": "Modello privato di ingegneria agentica in enclave sicure, contesto 384K",
+        "tinfoil_glm_5_3": "Modello privato di coding agentico in enclave sicure, contesto 1M",
         "tinfoil_gemma4_31b": "Modello privato di ragionamento multilingue con chiamata di strumenti, contesto 256K",
         "tinfoil_gpt_oss_120b": "Modello privato di ragionamento open-weight con uso di strumenti, contesto 131K",
         "tinfoil_llama3_3_70b": "Modello privato conversazionale con chiamata di strumenti, contesto 128K",
@@ -2834,6 +2914,7 @@
       "transcriptionComplete": "Trascrizione completata",
       "partialWarning": "Non è stato possibile trascrivere una parte dell'audio.",
       "partialWarningCount": "Non è stato possibile trascrivere {{failed}} sezioni audio su {{total}}.",
+      "diarizationWarning": "Non è stato possibile applicare l'identificazione dei parlanti. La trascrizione è stata salvata senza etichette dei parlanti.",
       "chunkLossExceeded": "Troppo audio è andato perso a causa di un problema di rete. Controlla la connessione e riprova.",
       "openNote": "Apri nota",
       "uploadAnother": "Carica un altro",
@@ -2855,8 +2936,8 @@
       "largeFileNote": "I file di grandi dimensioni vengono suddivisi e trascritti in parallelo.",
       "chunkProgress": "Trascrizione parte {{completed}} di {{total}}...",
       "paidPlanRequired": "La trascrizione cloud per file superiori a 25 MB richiede un piano a pagamento. I file di grandi dimensioni vengono elaborati con OpenWhispr Cloud per risultati affidabili e di alta qualità.",
-      "byokTooLarge": "Le chiavi API di terze parti supportano solo file fino a 25 MB.",
-      "byokTooLargeDetail": "Per file superiori a 25 MB, OpenWhispr Cloud gestisce la suddivisione, l'elaborazione parallela e il riassemblaggio — per risultati affidabili senza dipendere dai limiti dei provider di terze parti.",
+      "byokTooLarge": "Le chiavi API di terze parti supportano solo file fino a {{size}} MB.",
+      "byokTooLargeDetail": "Per file superiori a {{size}} MB, OpenWhispr Cloud gestisce la suddivisione, l'elaborazione parallela e il riassemblaggio — per risultati affidabili senza dipendere dai limiti dei provider di terze parti.",
       "byokTooLargeNeedsAccount": "Crea un account e passa a un piano a pagamento per trascrivere file più grandi con OpenWhispr Cloud.",
       "byokTooLargeNeedsUpgrade": "Passa a un piano a pagamento per trascrivere file più grandi con OpenWhispr Cloud.",
       "switchToCloudForLargeFiles": "Passa a OpenWhispr Cloud per trascrivere questo file.",
@@ -2905,7 +2986,12 @@
       "description": "Trascrizioni e riassunti strutturati",
       "back": "Indietro",
       "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione.",
-      "autoEnded": "La registrazione si è interrotta automaticamente al termine della riunione."
+      "autoEnded": "La registrazione si è interrotta automaticamente al termine della riunione.",
+      "restartFailed": "Impossibile riavviare la registrazione della riunione.",
+      "systemAudioSilent": {
+        "title": "Nessun audio della riunione rilevato finora",
+        "description": "Finora solo il tuo microfono ha captato suoni. Sei in una videochiamata? Verifica che l'audio della riunione venga riprodotto su questo computer e non sia disattivato. Stai registrando di persona? Puoi ignorare questo avviso: il tuo microfono cattura la stanza."
+      }
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
@@ -3134,7 +3220,47 @@
     "importList": "Importa un elenco",
     "agentDefault": "Aggiunto di default"
   },
+  "insights": {
+    "title": "Statistiche",
+    "description": "Una visione privata delle tue abitudini di dettatura e della tua costanza.",
+    "wordsSpoken": "Parole dettate",
+    "currentStreak": "Serie attuale",
+    "wordsPerMinute": "Parole al minuto",
+    "dictations": "Dettature",
+    "allTime": "Da sempre",
+    "days_one": "{{count}} giorno",
+    "days_other": "{{count}} giorni",
+    "longestStreak_one": "Record: {{count}} giorno",
+    "longestStreak_other": "Record: {{count}} giorni",
+    "wpmCoverage": "Basato sul {{count}} % delle parole misurate",
+    "activity": "Attività di dettatura",
+    "activityDescription": "Parole dettate negli ultimi 6 mesi",
+    "activityLabel": "Mappa di calore dell'attività di dettatura su 6 mesi",
+    "activityLess": "Meno",
+    "activityMore": "Più",
+    "dayTooltip_one": "{{date}}: {{count}} parola",
+    "dayTooltip_other": "{{date}}: {{count}} parole",
+    "dataRetentionDisabled": "La conservazione dei dati è disattivata, quindi le nuove dettature non vengono conteggiate nelle Statistiche: né su questo dispositivo né nel tuo account. I conteggi già sincronizzati restano nel tuo account.",
+    "onDevice": "Su questo dispositivo",
+    "synced": "Sincronizzato tra i dispositivi",
+    "syncFallback": "Dati del dispositivo — sincronizzazione non disponibile",
+    "syncPrompt": "Sincronizza contatori senza contenuti per combinare l'attività locale e quella cloud su tutti i dispositivi.",
+    "enableSync": "Attiva la sincronizzazione",
+    "claimTitle": "Includere le dettature precedenti?",
+    "claimDescription_one": "{{count}} dettatura è stata registrata su questo dispositivo prima dell'accesso. Includendola vengono inviati solo il conteggio delle parole, la data e l'ora esatta in cui è avvenuta, la sua durata e il tipo di modello, mai il contenuto delle trascrizioni.",
+    "claimDescription_other": "{{count}} dettature sono state registrate su questo dispositivo prima dell'accesso. Includendole vengono inviati solo i conteggi delle parole, la data e l'ora esatta di ciascuna, le durate e i tipi di modello, mai il contenuto delle trascrizioni.",
+    "claimInclude": "Includi",
+    "claimSkip": "Non ora",
+    "enableTitle": "Attivare la sincronizzazione di Insights?",
+    "enableConfirm": "Attiva sincronizzazione",
+    "enableDescription_one": "{{count}} dettatura già registrata su questo dispositivo verrà caricata sul tuo account. La sincronizzazione di Insights invia solo i conteggi delle parole, la data e l'ora esatta di ciascuna, le durate e i tipi di modello, mai il contenuto delle trascrizioni.",
+    "enableDescription_other": "{{count}} dettature già registrate su questo dispositivo verranno caricate sul tuo account. La sincronizzazione di Insights invia solo i conteggi delle parole, la data e l'ora esatta di ciascuna, le durate e i tipi di modello, mai il contenuto delle trascrizioni.",
+    "emptyTitle": "Ancora nessuna dettatura",
+    "emptyBody": "Inizia a dettare: qui compariranno le tue parole, le serie e l'attività quotidiana.",
+    "loadError": "Non è stato possibile leggere gli Insights da questo dispositivo."
+  },
   "sidebar": {
+    "insights": "Statistiche",
     "home": "Home",
     "notes": "Note",
     "upload": "Carica",
@@ -3209,8 +3335,10 @@
     "active": "Accelerazione GPU attiva",
     "ready": "Accelerazione GPU pronta",
     "activating": "Attivazione GPU...",
-    "activationFailed": "Impossibile attivare la GPU",
-    "retry": "Riprova",
+    "activationFailed": "Accelerazione GPU non disponibile",
+    "activationFailedDescription": "OpenWhispr sta usando la trascrizione CPU.",
+    "reasoningActivationFailedDescription": "OpenWhispr sta usando l'elaborazione CPU.",
+    "retryActivation": "Riprova l'accelerazione GPU",
     "remove": "Rimuovi",
     "dismiss": "Non ora",
     "cancel": "Annulla"
@@ -3233,7 +3361,8 @@
       },
       "gpuFallback": {
         "title": "Accelerazione GPU non disponibile",
-        "description": "La trascrizione sta usando la CPU. Puoi disattivare l'accelerazione GPU nelle Impostazioni."
+        "description": "OpenWhispr sta usando la trascrizione CPU.",
+        "retry": "Riprova GPU"
       },
       "gpuPackMigration": {
         "title": "Il pacchetto GPU deve essere scaricato di nuovo",
@@ -3807,13 +3936,13 @@
     "start": "Prendi appunti",
     "join": "Partecipa e trascrivi",
     "autoEnd": {
-      "title": "La riunione potrebbe essere finita",
+      "title": "Registrazione della riunione terminata",
       "body": {
-        "micReleased": "Nessun'altra app sta usando il microfono. La registrazione si fermerà tra {{seconds}}s.",
-        "silence": "Nessun audio rilevato. La registrazione si fermerà tra {{seconds}}s.",
-        "processExit": "L'app della riunione è stata chiusa. La registrazione si fermerà tra {{seconds}}s."
+        "micReleased": "Nessun’altra app sta usando il microfono, quindi la registrazione si è interrotta automaticamente. Riavviala entro {{seconds}} s.",
+        "silence": "Non è stato rilevato audio, quindi la registrazione si è interrotta automaticamente. Riavviala entro {{seconds}} s.",
+        "processExit": "L’app della riunione è stata chiusa, quindi la registrazione si è interrotta automaticamente. Riavviala entro {{seconds}} s."
       },
-      "keep": "Continua a registrare"
+      "restart": "Riavvia registrazione"
     }
   }
 }
