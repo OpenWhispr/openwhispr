@@ -149,6 +149,9 @@ const createMeetingSystemAudioWatchdog = ({ now = Date.now, onInterrupted }) => 
     session.lastChunkAt = at;
     if (audible) {
       session.lastAudibleAt = at;
+      if (!session.recoveryFailed) {
+        session.quietReported = false;
+      }
     }
   };
 

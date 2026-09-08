@@ -7088,8 +7088,11 @@ class IPCHandlers {
       }
     };
 
-    const dispatchMeetingAudioBuffer = (buffer, source) => {
+    const dispatchMeetingAudioBuffer = (buffer, source, synthetic = false) => {
       if (meetingLocalMode) {
+        // Local STT timestamps each batch with wall time, not a sample cursor.
+        // Large synthetic gaps would dilute speech and inflate the next batch.
+        if (synthetic) return;
         meetingLocalBuffers[source].push(buffer);
         return;
       }
@@ -7132,7 +7135,7 @@ class IPCHandlers {
             zeroed: outbound !== buffer,
           });
         }
-      } else if (source === "system" && buffer.length >= 2) {
+      } else if (source === "system" && buffer.length >= 2 && !synthetic) {
         // System chunks stream verbatim (no gate), so a periodic level readout
         // is the only way field logs can tell real audio from capture silence.
         const chunkCount = meetingSendCounts.system + 1;
@@ -7148,6 +7151,7 @@ class IPCHandlers {
 
       queueMeetingReconnectAudio(source, outbound);
       const sent = streaming.sendAudio(outbound);
+      if (synthetic) return;
       meetingSendCounts[source]++;
       if (meetingSendCounts[source] <= 5 || meetingSendCounts[source] % 100 === 0) {
         debugLogger.debug("Meeting audio send", {
@@ -8183,19 +8187,25 @@ class IPCHandlers {
       }
     };
 
-    const sendMeetingAudio = (audioBuffer, source) => {
+    const sendMeetingAudio = (audioBuffer, source, synthetic = false) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.
-      this.meetingDetectionEngine?.recordMeetingAudioChunk(source, outboundBuffer);
+      if (!synthetic) {
+        this.meetingDetectionEngine?.recordMeetingAudioChunk(source, outboundBuffer);
+      }
 
       if (source === "system") {
         const receivedAt = Date.now();
-        meetingEchoLeakDetector.recordSystemChunk(outboundBuffer, receivedAt);
-        if (meetingAecEnabled && !this.meetingAecManager?.processSystemBuffer(outboundBuffer)) {
-          meetingAecEnabled = false;
+        // Recovery silence repairs sample clocks, but is not current capture
+        // evidence or an AEC reference for the mic arriving now.
+        if (!synthetic) {
+          meetingEchoLeakDetector.recordSystemChunk(outboundBuffer, receivedAt);
+          if (meetingAecEnabled && !this.meetingAecManager?.processSystemBuffer(outboundBuffer)) {
+            meetingAecEnabled = false;
+          }
+          flushPendingMeetingMicChunks();
         }
-        flushPendingMeetingMicChunks();
 
         if (meetingLiveSpeakerActive) {
           // identification.startTime counts samples from the first chunk the
@@ -8216,20 +8226,19 @@ class IPCHandlers {
         }
         meetingDiarizationStream.write(outboundBuffer);
 
-        // Every chunk feeds the watchdog, not just the first audible one: it
-        // needs the gaps after the call has been heard, which is where the
-        // capture dies silently.
-        const { rms, peak } = computeChunkStats(outboundBuffer);
-        const audible = rms >= MEETING_MIC_SILENCE_RMS || peak >= MEETING_MIC_SILENCE_PEAK;
-        meetingSystemAudioWatchdog.recordChunk(audible);
-        if (audible && !meetingSystemAudioHeard) {
-          // A call is audibly underway: diarization stays on the system
-          // channel, so stop paying the mic capture's disk cost.
-          meetingSystemAudioHeard = true;
-          dropMeetingMicDiarizationCapture();
+        if (!synthetic) {
+          // Every real chunk feeds the watchdog, including actual silence.
+          const { rms, peak } = computeChunkStats(outboundBuffer);
+          const audible = rms >= MEETING_MIC_SILENCE_RMS || peak >= MEETING_MIC_SILENCE_PEAK;
+          meetingSystemAudioWatchdog.recordChunk(audible);
+          if (audible && !meetingSystemAudioHeard) {
+            // A call is audibly underway, so stop paying the mic capture's disk cost.
+            meetingSystemAudioHeard = true;
+            dropMeetingMicDiarizationCapture();
+          }
         }
 
-        dispatchMeetingAudioBuffer(outboundBuffer, "system");
+        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic);
         return;
       }
 
@@ -8298,10 +8307,21 @@ class IPCHandlers {
 
     const startManagedMeetingSystemAudio = (event, manager, warningLabel, onWarningCode) => {
       const win = BrowserWindow.fromWebContents(event.sender);
-      const startCapture = () =>
-        manager.start({
+      const timeline =
+        manager === this.audioTapManager ? require("./meetingAudioTimeline")() : null;
+      let captureStarted = false;
+      const startCapture = () => {
+        if (captureStarted) timeline?.markRestart();
+        captureStarted = true;
+        return manager.start({
           onChunk: (chunk) => {
-            sendMeetingAudio(chunk, "system");
+            if (timeline) {
+              timeline.write(chunk, (buffer, synthetic) =>
+                sendMeetingAudio(buffer, "system", synthetic)
+              );
+            } else {
+              sendMeetingAudio(chunk, "system");
+            }
           },
           onError: (error) => {
             if (win && !win.isDestroyed()) {
@@ -8317,11 +8337,10 @@ class IPCHandlers {
             onWarningCode?.(warning.code);
           },
         });
+      };
 
-      // Recovery restarts the helper process rather than rebuilding capture in
-      // place, so the stop half is a process exit and stays idempotent. The
-      // gap costs ~250ms of audio, which shifts later diarization timestamps
-      // earlier by that much; under the restart cap it stays below a second.
+      // Keep the native sample timeline through recovery, including the stall
+      // before detection and the helper restart. New sessions get a new timeline.
       meetingSystemAudioWatchdog.attachCapture({
         stop: () => manager.stop(),
         start: startCapture,

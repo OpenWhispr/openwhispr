@@ -291,6 +291,44 @@ test("a session that was never audible does not report going quiet", async () =>
   assert.deepEqual(h.interruptions, []);
 });
 
+for (const systemAudioStrategy of ["native", "wasapi-loopback"]) {
+  test(`${systemAudioStrategy} warns again when a new quiet period follows audible recovery`, async () => {
+    const h = createHarness();
+    h.attach();
+    h.watchdog.start({ systemAudioStrategy, watchesDelivery: systemAudioStrategy === "native" });
+
+    for (let quietPeriod = 0; quietPeriod < 2; quietPeriod += 1) {
+      h.deliver(true);
+      for (let elapsed = 0; elapsed <= GONE_QUIET_MS + TICK_MS; elapsed += TICK_MS) {
+        h.deliver(false);
+        await h.advance(TICK_MS);
+      }
+      assert.equal(h.interruptions.length, quietPeriod + 1);
+    }
+
+    assert.deepEqual(h.calls, [], "silence is a warning, never a reason to restart");
+    assert.ok(h.interruptions.every((entry) => entry.reason === "gone_quiet"));
+  });
+}
+
+test("audible audio after exhausted recovery does not rearm the weaker quiet warning", async () => {
+  const h = createHarness();
+  startNative(h);
+  await h.advance((STALL_MS + TICK_MS) * (MAX_RESTARTS + 1));
+
+  h.deliver(true);
+  for (let elapsed = 0; elapsed <= GONE_QUIET_MS + TICK_MS; elapsed += TICK_MS) {
+    h.deliver(false);
+    await h.advance(TICK_MS);
+  }
+  h.watchdog.reportDeviceInvalidated();
+  await flush();
+
+  assert.equal(h.restarts(), MAX_RESTARTS);
+  assert.equal(h.interruptions.filter((entry) => !entry.recovering).length, 1);
+  assert.equal(h.interruptions.filter((entry) => entry.reason === "gone_quiet").length, 0);
+});
+
 test("stop ends the session and a late restart cannot resurrect it", async () => {
   let release;
   const h = createHarness({

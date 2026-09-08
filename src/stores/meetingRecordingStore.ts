@@ -105,6 +105,7 @@ interface MeetingRecordingState {
   systemAudioInterrupted: { recovering: boolean; reason: string } | null;
   /** Bumped on every interruption report so a repeated one still re-notifies. */
   systemAudioInterruptedNonce: number;
+  systemAudioInterruptedDeliveredNonce: number;
   currentMicLevel: number;
   micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
   windowWidth: number;
@@ -444,6 +445,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   systemAudioSilentWarning: false,
   systemAudioInterrupted: null,
   systemAudioInterruptedNonce: 0,
+  systemAudioInterruptedDeliveredNonce: 0,
   currentMicLevel: 0,
   micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
