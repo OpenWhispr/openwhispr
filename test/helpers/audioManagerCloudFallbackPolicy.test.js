@@ -500,6 +500,71 @@ test("proxied providers dispatch through the registry", async (t) => {
   });
 });
 
+test("proxied providers only run the dictionary-echo check when they sent bias", async (t) => {
+  const { window, setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-proxy-echo-gate-test-",
+    settingsKey: "__proxyEchoGateSettings",
+  });
+  captureFetch(t, rejectFetch("proxied providers must not fetch from the renderer"));
+
+  // [provider, preload channel, whether buildPayload carries dictionary bias]
+  const proxied = [
+    ["tinfoil", "proxyTinfoilTranscription", true],
+    ["mistral", "proxyMistralTranscription", true],
+    ["gemini", "proxyGeminiTranscription", true],
+    ["xai", "proxyXaiTranscription", true],
+    ["corti", "proxyCortiTranscription", false],
+  ];
+  for (const [, channel] of proxied) {
+    window.electronAPI[channel] = async () => ({ text: "Ozempic" });
+  }
+
+  const audioBlob = new Blob([new Uint8Array([1, 2, 3])], { type: "audio/webm" });
+  const settingsFor = (provider) => ({
+    allowLocalFallback: false,
+    cloudTranscriptionProvider: provider,
+    transcriptionMode: "providers",
+    useLocalWhisper: false,
+  });
+  // The matcher's verdict is not under test; forcing it leaves only the gate
+  // (#1759) to decide whether the transcript is discarded.
+  const managerWith = (dictionary) =>
+    createManager({
+      getTranscriptionModel: () => "voxtral-mini-latest",
+      getWhisperPrompt: () => dictionary.join(", ") || null,
+      getKeyterms: () => dictionary,
+      isDictionaryEcho: () => true,
+    });
+
+  await t.test("providers that received the dictionary still discard an echo", async () => {
+    const manager = managerWith(["Ozempic"]);
+    for (const [provider, , sendsBias] of proxied) {
+      if (!sendsBias) continue;
+      setSettings(settingsFor(provider));
+      await assert.rejects(
+        manager.processWithOpenAIAPI(audioBlob),
+        (error) => error.code === "DICTIONARY_ECHO",
+        provider
+      );
+    }
+  });
+
+  await t.test("a provider that never received the dictionary keeps the transcript", async () => {
+    setSettings(settingsFor("corti"));
+    const result = await managerWith(["Ozempic"]).processWithOpenAIAPI(audioBlob);
+    assert.equal(result.rawText, "Ozempic");
+  });
+
+  await t.test("an empty dictionary sends no bias, so no provider can discard", async () => {
+    const manager = managerWith([]);
+    for (const [provider] of proxied) {
+      setSettings(settingsFor(provider));
+      const result = await manager.processWithOpenAIAPI(audioBlob);
+      assert.equal(result.rawText, "Ozempic", provider);
+    }
+  });
+});
+
 test("config-error code survives a failed local fallback", async (t) => {
   const { window, setSettings, createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-fallback-wrap-test-",

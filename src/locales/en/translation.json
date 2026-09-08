@@ -661,7 +661,8 @@
       "rawTranscript": "Raw Transcript",
       "clearAll": "Clear all",
       "clearAllTitle": "Clear All Transcriptions",
-      "clearAllDescription": "All transcriptions and audio files will be permanently removed.",
+      "clearAllDescription": "All transcriptions, audio files, and Insights counters will be permanently removed from this device and your account.",
+      "clearAllDescriptionDevice": "All transcriptions, audio files, and Insights counters will be permanently removed from this device. Counters already synced to an account are not affected.",
       "clearAllSuccess": "History cleared",
       "clearAllErrorTitle": "Couldn't clear history",
       "clearAllErrorDescription": "Something went wrong. Please try again.",
@@ -779,6 +780,35 @@
       "bedrock": {
         "ssoHelp": "Uses your AWS CLI SSO configuration. Ensure you have run 'aws sso login'.",
         "keysHelp": "Enter your AWS IAM access keys."
+      },
+      "errors": {
+        "bedrock": {
+          "temporaryAccessExpired": "Temporary AWS access expired.",
+          "ssoExpired": "AWS SSO session expired.",
+          "credentialsRejected": "AWS credentials were rejected. Check the access key ID, secret, and session token.",
+          "accessDenied": "AWS Bedrock denied this request. Ask your AWS administrator to grant permission to invoke the selected model in region {{region}}.",
+          "modelNotFound": "AWS Bedrock could not find the selected model in region {{region}}. Check the model ID and whether it is available in that region.",
+          "configurationRejected": "AWS Bedrock rejected the model configuration for region {{region}}. Check the model ID, inference profile, and region.",
+          "notConfigured": "AWS Bedrock is not configured correctly. Check the region and AWS credentials.",
+          "serviceUnavailable": "AWS Bedrock is temporarily unavailable due to high demand. This is an AWS service issue, not an OpenWhispr outage. Please try again in a few minutes.",
+          "throttled": "AWS Bedrock is temporarily limiting requests because it is receiving too many. Please wait a moment and try again. If this continues, ask your AWS administrator to check your Bedrock usage and quotas.",
+          "timeout": "AWS Bedrock did not respond in time. Please try again. If this continues, check your internet connection and AWS Bedrock service status.",
+          "network": "AWS Bedrock could not be reached. Check your internet connection and try again.",
+          "unknown": "AWS Bedrock error: {{error}}",
+          "actions": {
+            "refreshManagedAccess": "Sign out and sign back in to refresh company access, then retry.",
+            "reauthenticate": "Run the command below in your terminal to re-authenticate:"
+          }
+        }
+      },
+      "technicalDetails": {
+        "title": "Technical details",
+        "httpStatus": "HTTP status",
+        "awsException": "AWS exception",
+        "awsRequestId": "AWS request ID",
+        "underlyingError": "Underlying error",
+        "copy": "Copy technical details",
+        "copyCommand": "Copy recovery command"
       },
       "azure": {
         "endpointHelp": "Your Azure OpenAI resource endpoint (e.g., https://myresource.openai.azure.com).",
@@ -2358,6 +2388,10 @@
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
+      "insightsSync": "Sync personal Insights",
+      "insightsSyncDescription": "Sync word counts, the date and exact time of each dictation, durations, and model types across your devices. Transcript content is never included. When you're signed in, clearing history also removes these counters from this device and your account.",
+      "insightsSyncRequiresAccount": "Sign in to sync content-free Insights data across your devices.",
+      "insightsSyncRequiresHistory": "Turn on data retention to record Insights before syncing them across your devices.",
       "audioRetention": "Audio Retention",
       "audioRetentionDescription": "Store dictation audio locally for re-transcription and download. Files are automatically deleted after the retention period. Meeting audio is never stored.",
       "audioRetentionDisabled": "Disabled",
@@ -2372,7 +2406,7 @@
       "dataRetention": "Data Retention",
       "dataRetentionDescription": "Store transcriptions and audio locally in your history. When disabled, transcriptions are pasted but not saved.",
       "transcriptRetention": "Transcript Retention",
-      "transcriptRetentionDescription": "Automatically delete saved transcriptions and their audio after this period.",
+      "transcriptRetentionDescription": "Automatically delete saved transcriptions, their audio, and their Insights counters after this period.",
       "transcriptRetentionForever": "Forever",
       "hoursAgo": "{{count}}h ago",
       "justNow": "just now",
@@ -2616,8 +2650,7 @@
         "anthropic_claude_opus_4_7": "Powerful Opus model",
         "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
         "anthropic_claude_opus_4_5": "Earlier Opus model",
-        "tinfoil_deepseek_v4_pro": "Private long-context reasoning in secure enclaves, 800K context",
-        "tinfoil_glm_5_2": "Private agentic engineering model in secure enclaves, 384K context",
+        "tinfoil_glm_5_3": "Private agentic coding model in secure enclaves, 1M context",
         "tinfoil_gemma4_31b": "Private multilingual reasoning model with tool calling, 256K context",
         "tinfoil_gpt_oss_120b": "Private open-weight reasoning model with tool use, 131K context",
         "tinfoil_llama3_3_70b": "Private conversational model with tool calling, 128K context",
@@ -2678,6 +2711,7 @@
   },
   "sidebar": {
     "home": "Home",
+    "insights": "Insights",
     "notes": "Notes",
     "upload": "Upload",
     "dictionary": "Dictionary",
@@ -2699,6 +2733,45 @@
     "chat": "Chat",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar"
+  },
+  "insights": {
+    "title": "Insights",
+    "description": "A private view of your dictation habits and momentum.",
+    "wordsSpoken": "Words spoken",
+    "currentStreak": "Current streak",
+    "wordsPerMinute": "Words per minute",
+    "dictations": "Dictations",
+    "allTime": "All time",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "longestStreak_one": "Longest: {{count}} day",
+    "longestStreak_other": "Longest: {{count}} days",
+    "wpmCoverage": "Based on {{count}}% of measured words",
+    "activity": "Speaking activity",
+    "activityDescription": "Words spoken over the last 6 months",
+    "activityLabel": "6-month speaking activity heatmap",
+    "activityLess": "Less",
+    "activityMore": "More",
+    "dayTooltip_one": "{{date}}: {{count}} word",
+    "dayTooltip_other": "{{date}}: {{count}} words",
+    "dataRetentionDisabled": "Data retention is off, so new dictations aren't counted in Insights — not on this device and not in your account. Counters already synced stay in your account.",
+    "onDevice": "On this device",
+    "synced": "Synced across devices",
+    "syncFallback": "Showing device data — sync unavailable",
+    "syncPrompt": "Sync content-free counters to combine local and cloud activity across devices.",
+    "enableSync": "Enable sync",
+    "claimTitle": "Include earlier dictations?",
+    "claimDescription_one": "{{count}} dictation on this device was recorded before you signed in. Including it sends only word counts, the date and exact time it happened, its duration, and the model type — never transcript content.",
+    "claimDescription_other": "{{count}} dictations on this device were recorded before you signed in. Including them sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
+    "claimInclude": "Include",
+    "claimSkip": "Not now",
+    "enableTitle": "Turn on Insights sync?",
+    "enableConfirm": "Turn on sync",
+    "enableDescription_one": "{{count}} dictation already recorded on this device will be uploaded to your account. Insights sync sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
+    "enableDescription_other": "{{count}} dictations already recorded on this device will be uploaded to your account. Insights sync sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
+    "emptyTitle": "No dictations yet",
+    "emptyBody": "Start dictating and your words, streaks, and daily activity will show up here.",
+    "loadError": "Insights couldn't be read from this device."
   },
   "workspaces": {
     "switcher": {
@@ -3079,6 +3152,7 @@
       "transcriptionComplete": "Transcription complete",
       "partialWarning": "Part of the audio couldn't be transcribed.",
       "partialWarningCount": "{{failed}} of {{total}} audio sections couldn't be transcribed.",
+      "diarizationWarning": "Speaker identification couldn't be applied. The transcript was saved without speaker labels.",
       "chunkLossExceeded": "Too much of the audio was lost to a network problem. Check your connection and try again.",
       "openNote": "Open Note",
       "uploadAnother": "Upload Another",
@@ -3413,8 +3487,10 @@
     "active": "GPU acceleration active",
     "ready": "GPU acceleration ready",
     "activating": "Activating GPU...",
-    "activationFailed": "GPU could not be activated",
-    "retry": "Retry",
+    "activationFailed": "GPU acceleration unavailable",
+    "activationFailedDescription": "OpenWhispr switched to CPU transcription.",
+    "reasoningActivationFailedDescription": "OpenWhispr switched to CPU processing.",
+    "retryActivation": "Retry GPU acceleration",
     "remove": "Remove",
     "dismiss": "Not now",
     "cancel": "Cancel"
@@ -3437,7 +3513,8 @@
       },
       "gpuFallback": {
         "title": "GPU acceleration unavailable",
-        "description": "Transcription is using the CPU instead. You can disable GPU acceleration in Settings."
+        "description": "OpenWhispr switched to CPU transcription.",
+        "retry": "Retry GPU"
       },
       "gpuPackMigration": {
         "title": "GPU pack needs re-downloading",
@@ -3445,7 +3522,7 @@
       },
       "cleanupFailed": {
         "title": "Cleanup failed",
-        "description": "Your dictation was pasted without AI cleanup."
+        "description": "Original dictation pasted without AI cleanup."
       }
     },
     "mic": {

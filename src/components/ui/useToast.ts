@@ -2,6 +2,13 @@ import * as React from "react";
 
 export type ToastPresentation = "standard" | "dictation-error";
 
+export interface TechnicalErrorDetailsData {
+  status?: number;
+  exceptionType?: string;
+  requestId?: string;
+  underlyingError?: string;
+}
+
 export interface ToastActionConfig {
   label: string;
   icon?: "retry" | "transcript";
@@ -13,6 +20,9 @@ export interface ToastProps {
   id?: string;
   title?: string;
   description?: string;
+  secondaryDescription?: string;
+  copyCommand?: string;
+  technicalDetails?: TechnicalErrorDetailsData;
   action?: React.ReactNode;
   actions?: ToastActionConfig[];
   presentation?: ToastPresentation;

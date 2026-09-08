@@ -963,7 +963,10 @@ class ReasoningService extends BaseReasoningService {
     this.requestCancellationGeneration += 1;
     for (const controller of this.activeRequestControllers) controller.abort();
     this.activeRequestControllers.clear();
-    if (typeof window !== "undefined") window.electronAPI?.cancelCloudReason?.();
+    if (typeof window !== "undefined") {
+      window.electronAPI?.cancelCloudReason?.();
+      window.electronAPI?.cancelEnterpriseReasoning?.();
+    }
     this.cancelActiveStream();
   }
 

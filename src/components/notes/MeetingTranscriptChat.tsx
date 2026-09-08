@@ -1,7 +1,8 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Check, Loader2, ShieldCheck, Sparkles, Users, X } from "lucide-react";
+import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { Toggle } from "../ui/toggle";
 import { cn } from "../lib/utils";
@@ -50,7 +51,6 @@ const SPEAKER_BORDER_COLORS = [
   "border-l-red-400/50",
 ];
 
-const STICKY_SCROLL_THRESHOLD_PX = 80;
 // One unlabelled line of transcript; measureElement corrects each row on mount.
 const ESTIMATED_ROW_PX = 56;
 // Renders a screenful before the scroll element has been measured, instead of
@@ -754,8 +754,20 @@ export function MeetingTranscriptChat({
   onToggleSelect,
 }: MeetingTranscriptChatProps) {
   const { t } = useTranslation();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const shouldStickToBottomRef = useRef(true);
+  const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
+  // The scroller mounts only once content exists, and a recording opens with
+  // partials before its first final segment — the follow effect must re-run on
+  // that mount too, or it runs against a null node and never attaches its
+  // resize observer.
+  const followDep = useMemo(() => ({ segments, hasContent }), [segments, hasContent]);
+  const {
+    scrollRef,
+    handleScroll,
+    handleWheel,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  } = useStickToBottom<HTMLDivElement>(followDep);
 
   // Rows are keyed by segment id, not index: segments are inserted by timestamp
   // and retracted mid-list, which would misalign an index-keyed size cache.
@@ -769,26 +781,6 @@ export function MeetingTranscriptChat({
   });
   const totalSize = virtualizer.getTotalSize();
 
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const updateStickyScroll = () => {
-      shouldStickToBottomRef.current =
-        el.scrollHeight - el.scrollTop - el.clientHeight < STICKY_SCROLL_THRESHOLD_PX;
-    };
-
-    updateStickyScroll();
-    el.addEventListener("scroll", updateStickyScroll);
-    return () => el.removeEventListener("scroll", updateStickyScroll);
-  }, []);
-
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el || !shouldStickToBottomRef.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [segments, micPartial, systemPartial, totalSize]);
-
-  const hasContent = segments.length > 0 || micPartial || systemPartial;
   const systemPartialSpeakerLabel =
     systemPartialSpeakerName ||
     (systemPartialSpeakerId
@@ -952,74 +944,81 @@ export function MeetingTranscriptChat({
       )}
       <div
         ref={scrollRef}
+        onScroll={handleScroll}
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         className="flex-1 min-h-0 overflow-y-auto px-4 pt-2 agent-chat-scroll pb-[var(--floating-inset,96px)]"
       >
-        <div style={{ height: totalSize, width: "100%", position: "relative" }}>
-          {virtualizer.getVirtualItems().map((virtualItem) => {
-            const i = virtualItem.index;
-            const segment = segments[i];
-            const selfSide = isSelfSide(segment);
-            const isSystemSpeaker = !!segment.speaker && !selfSide;
-            const { key, activeName } = rowMeta[i];
-            return (
-              <div
-                key={segment.id}
-                data-index={i}
-                ref={virtualizer.measureElement}
-                className="pb-1.5"
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${virtualItem.start}px)`,
-                }}
-              >
-                <SegmentRow
-                  segment={segment}
-                  selfSide={selfSide}
-                  sameSpeaker={i > 0 && rowMeta[i - 1].key === key}
-                  isFirst={i === 0}
-                  isNewest={i === segments.length - 1}
-                  colorIdx={isSystemSpeaker ? (colorByKey.get(key) ?? 0) : 0}
-                  isSelected={selectedSegmentIds?.has(segment.id) ?? false}
-                  activeName={activeName}
-                  matchedProfile={activeName ? profilesByName.get(activeName) : undefined}
-                  speakerProfiles={speakerProfiles}
-                  participants={participants}
-                  onMapSpeaker={onMapSpeaker}
-                  onConfirmSuggestion={onConfirmSuggestion}
-                  onDismissSuggestion={onDismissSuggestion}
-                  onAttachSpeakerEmail={onAttachSpeakerEmail}
-                  onToggleSelect={onToggleSelect}
-                  t={t}
-                />
-              </div>
-            );
-          })}
-        </div>
+        <div>
+          <div style={{ height: totalSize, width: "100%", position: "relative" }}>
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const i = virtualItem.index;
+              const segment = segments[i];
+              const selfSide = isSelfSide(segment);
+              const isSystemSpeaker = !!segment.speaker && !selfSide;
+              const { key, activeName } = rowMeta[i];
+              return (
+                <div
+                  key={segment.id}
+                  data-index={i}
+                  ref={virtualizer.measureElement}
+                  className="pb-1.5"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                >
+                  <SegmentRow
+                    segment={segment}
+                    selfSide={selfSide}
+                    sameSpeaker={i > 0 && rowMeta[i - 1].key === key}
+                    isFirst={i === 0}
+                    isNewest={i === segments.length - 1}
+                    colorIdx={isSystemSpeaker ? (colorByKey.get(key) ?? 0) : 0}
+                    isSelected={selectedSegmentIds?.has(segment.id) ?? false}
+                    activeName={activeName}
+                    matchedProfile={activeName ? profilesByName.get(activeName) : undefined}
+                    speakerProfiles={speakerProfiles}
+                    participants={participants}
+                    onMapSpeaker={onMapSpeaker}
+                    onConfirmSuggestion={onConfirmSuggestion}
+                    onDismissSuggestion={onDismissSuggestion}
+                    onAttachSpeakerEmail={onAttachSpeakerEmail}
+                    onToggleSelect={onToggleSelect}
+                    t={t}
+                  />
+                </div>
+              );
+            })}
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          {[
-            { text: micPartial, source: "mic" as const, speakerLabel: undefined },
-            {
-              text: systemPartial,
-              source: "system" as const,
-              speakerLabel: systemPartialSpeakerLabel,
-            },
-          ].map(
-            ({ text, source, speakerLabel }) =>
-              text && (
-                <PartialBubble
-                  key={source}
-                  text={text}
-                  source={source}
-                  speakerLabel={speakerLabel}
-                  speakerState={source === "system" ? systemPartialSpeakerState : undefined}
-                  t={t}
-                />
-              )
-          )}
+          <div className="flex flex-col gap-1.5">
+            {[
+              { text: micPartial, source: "mic" as const, speakerLabel: undefined },
+              {
+                text: systemPartial,
+                source: "system" as const,
+                speakerLabel: systemPartialSpeakerLabel,
+              },
+            ].map(
+              ({ text, source, speakerLabel }) =>
+                text && (
+                  <PartialBubble
+                    key={source}
+                    text={text}
+                    source={source}
+                    speakerLabel={speakerLabel}
+                    speakerState={source === "system" ? systemPartialSpeakerState : undefined}
+                    t={t}
+                  />
+                )
+            )}
+          </div>
         </div>
       </div>
     </div>

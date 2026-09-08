@@ -126,6 +126,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-save-transcription", text, rawText, options),
   getTranscriptions: (limit, options) =>
     ipcRenderer.invoke("db-get-transcriptions", limit, options),
+  recordAnalyticsEvent: (input) => ipcRenderer.invoke("analytics-record-event", input),
+  getAnalyticsSummary: () => ipcRenderer.invoke("analytics-get-summary"),
+  getPendingAnalyticsEvents: (limit) => ipcRenderer.invoke("analytics-get-pending", limit),
+  markAnalyticsEventsSynced: (eventIds) => ipcRenderer.invoke("analytics-mark-synced", eventIds),
+  getPendingAnalyticsDeletes: (limit) => ipcRenderer.invoke("analytics-get-pending-deletes", limit),
+  hardDeleteAnalyticsEvents: (eventIds) => ipcRenderer.invoke("analytics-hard-delete", eventIds),
+  getPendingAnalyticsClear: () => ipcRenderer.invoke("analytics-get-pending-clear"),
+  completeAnalyticsClear: (clearedThrough) =>
+    ipcRenderer.invoke("analytics-complete-clear", clearedThrough),
+  countUnclaimedAnalyticsEvents: () => ipcRenderer.invoke("analytics-count-unclaimed"),
+  countAnalyticsEventsAwaitingUpload: () =>
+    ipcRenderer.invoke("analytics-count-awaiting-upload"),
+  claimAnonymousAnalyticsEvents: () => ipcRenderer.invoke("analytics-claim-anonymous"),
   clearTranscriptions: () => ipcRenderer.invoke("db-clear-transcriptions"),
   deleteTranscription: (id) => ipcRenderer.invoke("db-delete-transcription", id),
 
@@ -345,6 +358,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const listener = (_event, transcription) => callback?.(transcription);
     ipcRenderer.on("transcription-updated", listener);
     return () => ipcRenderer.removeListener("transcription-updated", listener);
+  },
+  onAnalyticsChanged: (callback) => {
+    const listener = () => callback?.();
+    ipcRenderer.on("analytics-changed", listener);
+    return () => ipcRenderer.removeListener("analytics-changed", listener);
   },
 
   // BYOK API keys (get/save for every provider in the secretKeys manifest)
@@ -623,6 +641,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Node-only SDKs (AWS/Azure/Google credential providers) can resolve.
   processEnterpriseReasoning: (text, modelId, agentName, config) =>
     ipcRenderer.invoke("process-enterprise-reasoning", text, modelId, agentName, config),
+  cancelEnterpriseReasoning: () => ipcRenderer.send("enterprise-reasoning-cancel"),
   enterpriseStreamStart: (payload) => ipcRenderer.invoke("enterprise-stream-start", payload),
   enterpriseStreamCancel: (streamId) => ipcRenderer.invoke("enterprise-stream-cancel", streamId),
   onEnterpriseStreamPart: registerListener(
