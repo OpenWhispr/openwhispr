@@ -6,11 +6,24 @@ const path = require("node:path");
 
 const load = () => import("../../src/helpers/linuxAutostart.js");
 
+// The Linux app name comes from the selected distribution manifest, exactly as
+// linuxAutostart.js derives it. Hardcoding the default's made these fail under
+// any other manifest, including the release build's.
+const { resolveReleaseDistribution } = require("../../src/helpers/releaseIdentity");
+const LINUX_APP_NAME = resolveReleaseDistribution(require("../../package.json").distribution).linux
+  .appName;
+
 // Assigning undefined to process.env coerces to the string "undefined", which
 // would leak a bogus value into every later test in this file.
 const MANAGED_ENV = ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_DATA_DIRS", "APPIMAGE", "NODE_ENV"];
 
-const ICON_THEME_SUBPATH = path.join("icons", "hicolor", "256x256", "apps", "open-whispr.png");
+const ICON_THEME_SUBPATH = path.join(
+  "icons",
+  "hicolor",
+  "256x256",
+  "apps",
+  `${LINUX_APP_NAME}.png`
+);
 
 function setEnv(name, value) {
   if (value === undefined) delete process.env[name];
@@ -103,9 +116,9 @@ test(
   withTmpXdgDirs(async () => {
     const { buildDesktopFileContents } = await load();
 
-    const contents = buildDesktopFileContents("/a/b/OpenWhispr.AppImage", "open-whispr");
+    const contents = buildDesktopFileContents("/a/b/OpenWhispr.AppImage", "some-icon-name");
     assert.match(contents, /^Exec="\/a\/b\/OpenWhispr\.AppImage" --hidden$/m);
-    assert.match(contents, /^Icon=open-whispr$/m);
+    assert.match(contents, /^Icon=some-icon-name$/m);
     assert.match(contents, /^X-GNOME-Autostart-enabled=true$/m);
   })
 );
@@ -176,7 +189,10 @@ test(
     writeEntry(path.join(root, "system-data", ICON_THEME_SUBPATH), "pretend png");
 
     setAutostartEnabled(true);
-    assert.match(fs.readFileSync(getDesktopFilePath(), "utf8"), /^Icon=open-whispr$/m);
+    assert.match(
+      fs.readFileSync(getDesktopFilePath(), "utf8"),
+      new RegExp(`^Icon=${LINUX_APP_NAME}$`, "m")
+    );
     assert.ok(!fs.existsSync(path.join(root, "data", ICON_THEME_SUBPATH)));
   })
 );

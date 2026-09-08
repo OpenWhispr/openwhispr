@@ -5,6 +5,14 @@ const path = require("path");
 const Module = require("node:module");
 const { describe, it, beforeEach, afterEach } = require("node:test");
 
+// Names below come from the selected distribution manifest, the same way the
+// source derives them. Hardcoding the default distribution's values made these
+// fail under any other manifest, including the release build's.
+const { resolveReleaseDistribution } = require("../../src/helpers/releaseIdentity");
+const DISTRIBUTION = resolveReleaseDistribution(require("../../package.json").distribution);
+const NAMESPACE = DISTRIBUTION.runtimeNamespace;
+const WINDOWS_CACHE_DIR = DISTRIBUTION.windowsSafeCacheDirectory;
+
 describe("modelDirUtils cache policy (#1279, #1399)", () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
   const originalEnv = { ...process.env };
@@ -37,9 +45,9 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
   function createRedirectedWindowsFixture() {
     setPlatform("win32");
     const home = path.join(tempRoot, "Users", "stan");
-    const legacyRoot = path.join(home, ".cache", "openwhispr");
+    const legacyRoot = path.join(home, ".cache", NAMESPACE);
     const redirectedProfile = path.join(tempRoot, "RedirectedUsers", "stan");
-    const redirectedRoot = path.join(redirectedProfile, ".cache", "openwhispr");
+    const redirectedRoot = path.join(redirectedProfile, ".cache", NAMESPACE);
     process.env.USERPROFILE = redirectedProfile;
     return { home, legacyRoot, redirectedRoot };
   }
@@ -124,7 +132,7 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
 
     const { getCacheRoot } = loadFresh(home);
 
-    assert.strictEqual(getCacheRoot(), path.join(xdgCacheHome, "openwhispr"));
+    assert.strictEqual(getCacheRoot(), path.join(xdgCacheHome, NAMESPACE));
   });
 
   it("gives OPENWHISPR_CACHE_ROOT precedence over XDG_CACHE_HOME", () => {
@@ -146,7 +154,7 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
 
     const { getCacheRoot } = loadFresh(home);
 
-    assert.strictEqual(getCacheRoot(), path.join(home, ".cache", "openwhispr"));
+    assert.strictEqual(getCacheRoot(), path.join(home, ".cache", NAMESPACE));
   });
 
   it("preserves the macOS home-cache default", () => {
@@ -155,7 +163,7 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
 
     const { getCacheRoot } = loadFresh(home);
 
-    assert.strictEqual(getCacheRoot(), path.join(home, ".cache", "openwhispr"));
+    assert.strictEqual(getCacheRoot(), path.join(home, ".cache", NAMESPACE));
   });
 
   it("honors OPENWHISPR_CACHE_ROOT on macOS", () => {
@@ -178,7 +186,7 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
 
     const { getCacheRoot } = loadFresh(home);
 
-    assert.strictEqual(getCacheRoot(), path.join(programData, "OpenWhispr", "cache"));
+    assert.strictEqual(getCacheRoot(), path.join(programData, WINDOWS_CACHE_DIR, "cache"));
   });
 
   it("skips an unsafe ProgramData fallback", () => {
@@ -191,7 +199,7 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
 
     const { getCacheRoot } = loadFresh(home);
 
-    assert.strictEqual(getCacheRoot(), path.join(systemDrive, "OpenWhispr", "cache"));
+    assert.strictEqual(getCacheRoot(), path.join(systemDrive, WINDOWS_CACHE_DIR, "cache"));
   });
 
   it("keeps all model consumers on the selected cache root", () => {
@@ -221,7 +229,7 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
       path.join(tempRoot, "使用者", "詩涵")
     );
     const root = getCacheRoot();
-    assert.strictEqual(root, path.join(programData, "OpenWhispr", "cache"));
+    assert.strictEqual(root, path.join(programData, WINDOWS_CACHE_DIR, "cache"));
     assert.ok(fs.existsSync(root));
     assert.strictEqual(getModelsDirForService("whisper"), path.join(root, "whisper-models"));
   });
@@ -230,7 +238,7 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
     setPlatform("win32");
     const home = path.join(tempRoot, "Users", "stan");
     const { getCacheRoot } = loadFresh(home);
-    assert.strictEqual(getCacheRoot(), path.join(home, ".cache", "openwhispr"));
+    assert.strictEqual(getCacheRoot(), path.join(home, ".cache", NAMESPACE));
   });
 
   it("migrates legacy model dirs into the safe root and leaves home-based dirs alone", () => {
@@ -239,7 +247,7 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
     process.env.ProgramData = programData;
 
     const home = path.join(tempRoot, "使用者", "詩涵");
-    const legacyRoot = path.join(home, ".cache", "openwhispr");
+    const legacyRoot = path.join(home, ".cache", NAMESPACE);
     fs.mkdirSync(path.join(legacyRoot, "whisper-models"), { recursive: true });
     fs.writeFileSync(path.join(legacyRoot, "whisper-models", "ggml-base.bin"), "model");
     fs.mkdirSync(path.join(legacyRoot, "models"), { recursive: true });
@@ -250,7 +258,7 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
     const { getCacheRoot } = loadFresh(home);
     const root = getCacheRoot();
 
-    assert.strictEqual(root, path.join(programData, "OpenWhispr", "cache"));
+    assert.strictEqual(root, path.join(programData, WINDOWS_CACHE_DIR, "cache"));
     assert.strictEqual(
       fs.readFileSync(path.join(root, "whisper-models", "ggml-base.bin"), "utf8"),
       "model"
@@ -422,11 +430,11 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
     process.env.ProgramData = programData;
 
     const home = path.join(tempRoot, "使用者", "詩涵");
-    const legacyDir = path.join(home, ".cache", "openwhispr", "whisper-models");
+    const legacyDir = path.join(home, ".cache", NAMESPACE, "whisper-models");
     fs.mkdirSync(legacyDir, { recursive: true });
     fs.writeFileSync(path.join(legacyDir, "ggml-base.bin"), "old");
 
-    const newDir = path.join(programData, "OpenWhispr", "cache", "whisper-models");
+    const newDir = path.join(programData, WINDOWS_CACHE_DIR, "cache", "whisper-models");
     fs.mkdirSync(newDir, { recursive: true });
     fs.writeFileSync(path.join(newDir, "ggml-base.bin"), "new");
 
