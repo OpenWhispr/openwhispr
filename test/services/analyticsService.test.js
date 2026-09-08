@@ -243,24 +243,29 @@ test("a failed account clear stays pending without stalling the rest of the pass
 });
 
 test("account analytics accepts a complete cloud summary", async (t) => {
+  const requests = [];
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
-        cloudApiRequest: async () => ({
-          success: true,
-          data: { ...VALID_SUMMARY, scope: "account", timeZone: "UTC" },
-        }),
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return {
+            success: true,
+            data: { ...VALID_SUMMARY, scope: "account", timeZone: "UTC" },
+          };
+        },
       },
     },
   });
   const vite = await createRendererServer(t);
   const { getAccountAnalyticsSummary } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
 
-  assert.deepEqual(await getAccountAnalyticsSummary("UTC"), {
+  assert.deepEqual(await getAccountAnalyticsSummary(), {
     ...VALID_SUMMARY,
     scope: "account",
     timeZone: "UTC",
   });
+  assert.equal(requests[0].path, "/api/analytics/summary");
 });
 
 for (const [name, daily] of [
@@ -286,10 +291,7 @@ for (const [name, daily] of [
       "/services/AnalyticsService.ts"
     );
 
-    await assert.rejects(
-      getAccountAnalyticsSummary("UTC"),
-      /Malformed analytics summary from cloud/
-    );
+    await assert.rejects(getAccountAnalyticsSummary(), /Malformed analytics summary from cloud/);
   });
 }
 
@@ -580,6 +582,59 @@ test("overlapping passes are serialized rather than posting the same batch twice
   assert.equal(requests.length, 1, "the second pass waits and then finds nothing left to send");
   assert.equal(first, 1);
   assert.equal(second, 0);
+});
+
+test("a queued analytics pass resolves its upload gate only when it starts", async (t) => {
+  let releaseFirstPass;
+  let markFirstPassStarted;
+  let clearReads = 0;
+  let eventReads = 0;
+  const firstPassStarted = new Promise((resolve) => {
+    markFirstPassStarted = resolve;
+  });
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => {
+          clearReads += 1;
+          if (clearReads === 1) {
+            markFirstPassStarted();
+            await new Promise((resolve) => {
+              releaseFirstPass = resolve;
+            });
+          }
+          return null;
+        },
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async () => {
+          eventReads += 1;
+          return [EVENT];
+        },
+        cloudApiRequest: async () => {
+          throw new Error("a revoked queued pass must not reach the API");
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  const blocking = syncPendingAnalytics({ uploadAllowed: false });
+  await firstPassStarted;
+  let uploadAllowed = true;
+  let gateReads = 0;
+  const queued = syncPendingAnalytics({
+    uploadAllowed: async () => {
+      gateReads += 1;
+      return uploadAllowed;
+    },
+  });
+  uploadAllowed = false;
+  releaseFirstPass();
+
+  await Promise.all([blocking, queued]);
+  assert.equal(gateReads, 1);
+  assert.equal(eventReads, 0, "revocation is checked before pending rows are read");
 });
 
 test("a withheld row is offered once per pass, not once per batch behind it", async (t) => {

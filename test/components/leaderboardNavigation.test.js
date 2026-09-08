@@ -5,21 +5,59 @@ const path = require("node:path");
 
 const read = (relativePath) => fs.readFileSync(path.join(__dirname, "../..", relativePath), "utf8");
 
-test("the leaderboard is a standalone control-panel view", () => {
+test("the leaderboard is tabbed inside the Insights view", () => {
   const controlPanel = read("src/components/ControlPanel.tsx");
   const sidebar = read("src/components/ControlPanelSidebar.tsx");
   const insights = read("src/components/InsightsView.tsx");
   const leaderboard = read("src/components/LeaderboardView.tsx");
 
-  assert.ok(sidebar.includes('| "leaderboard"'));
-  assert.ok(sidebar.includes('{ id: "leaderboard"'));
-  assert.ok(controlPanel.includes('activeView === "leaderboard"'));
-  assert.ok(controlPanel.includes("<LeaderboardView"));
-  assert.equal(insights.includes("LeaderboardSection"), false);
+  assert.equal(sidebar.includes('| "leaderboard"'), false);
+  assert.equal(sidebar.includes('{ id: "leaderboard"'), false);
+  assert.equal(controlPanel.includes('activeView === "leaderboard"'), false);
+  assert.equal(controlPanel.includes('import("./LeaderboardView")'), false);
+  assert.ok(controlPanel.includes("<InsightsView"));
+  assert.ok(insights.includes('useState("usage")'));
+  assert.equal(insights.match(/<TabsTrigger/g)?.length, 2);
+  assert.ok(insights.includes('value="usage"'));
+  assert.ok(insights.includes('t("insights.yourUsage")'));
+  assert.ok(insights.includes('value="leaderboard"'));
+  assert.ok(insights.includes("<LeaderboardView"));
+  assert.ok(insights.includes("syncService.syncAnalyticsNow()"));
+  assert.equal(insights.includes("syncPendingAnalytics"), false);
+  assert.ok(insights.includes("onClick={() => void joinLeaderboard()}"));
+  assert.ok(insights.includes('"insights.syncAndJoinConfirm"'));
+  assert.ok(insights.includes("onSyncErrorChange={setSyncError}"));
   assert.ok(leaderboard.includes("<LeaderboardSection"));
-  assert.ok(leaderboard.includes('<h1 className="text-base!'));
-  assert.ok(leaderboard.includes('t("insights.leaderboard.title")'));
+  assert.equal(
+    leaderboard.includes("useInsightsSyncOptIn"),
+    false,
+    "the nested tab must reuse the page's opt-in owner instead of duplicating analytics IPCs"
+  );
+  assert.equal(leaderboard.includes("onJoin="), false);
+  assert.equal(leaderboard.includes('<h1 className="text-base!'), false);
   assert.equal(leaderboard.includes('t("insights.leaderboard.description")'), false);
+});
+
+test("combined sync consent copy is concise and discloses profile sharing", () => {
+  for (const locale of ["en", "de", "es", "fr", "it", "ja", "pt", "ru", "zh-CN", "zh-TW"]) {
+    const { insights } = JSON.parse(read(`src/locales/${locale}/translation.json`));
+    const descriptions = [
+      insights.syncAndJoinDisclosure,
+      insights.syncAndJoinEmptyDescription,
+      insights.leaderboard.syncDescription,
+      ...Object.entries(insights)
+        .filter(([key]) => /^(claim|enable)Description_/.test(key))
+        .map(([, value]) => value),
+    ];
+    for (const description of descriptions) {
+      assert.ok(description.length <= 190, `${locale} consent copy is too long`);
+      assert.doesNotMatch(description, /[—–]/, `${locale} consent copy must not use long dashes`);
+    }
+  }
+
+  const english = JSON.parse(read("src/locales/en/translation.json")).insights;
+  assert.match(english.leaderboard.syncDescription, /name, email, and activity/);
+  assert.doesNotMatch(english.leaderboard.syncDescription, /Only activity counters/);
 });
 
 test("leaderboard access is plan agnostic and invitation led", () => {
@@ -42,6 +80,7 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   assert.ok(section.includes('t("insights.leaderboard.chooseBoard")'));
   assert.ok(section.includes('selectedScope?.state === "invite"'));
   assert.ok(section.includes("<LeaderboardSyncPreview"));
+  assert.equal(section.includes("<LeaderboardSyncRow"), false);
   assert.equal(section.includes("activationDescription"), false);
   assert.ok(controlPanel.includes("onInvite={() => setShowReferrals(true)}"));
 });

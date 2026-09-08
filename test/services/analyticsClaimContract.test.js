@@ -45,49 +45,71 @@ test("the Insights view asks the predicate whether to offer the claim", () => {
   );
 });
 
-// Joining a leaderboard publishes a name and an email to teammates, so it is a
-// consent of its own: syncing counters must never imply it, and the sync switch
-// must take it back down when it goes off.
-test("only an explicit join opts the account into a leaderboard", () => {
+// The product exposes one opt-in for analytics sync and leaderboard
+// participation. It still has to sequence the upload consent before publishing
+// the account, and the Settings toggle must use that same combined path.
+test("one explicit opt-in enables analytics and leaderboard participation", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
   const store = read("src/stores/leaderboardParticipationStore.ts");
   const settings = read("src/components/SettingsPage.tsx");
-  const activate = hook.slice(
-    hook.indexOf("const activate"),
-    hook.indexOf("const leaveLeaderboard")
-  );
-  assert.equal(
-    activate.includes("LeaderboardParticipationStore"),
-    false,
-    "turning Insights sync on must not join a leaderboard"
-  );
   assert.ok(hook.includes("const joinLeaderboard"));
   assert.ok(store.includes("LeaderboardService.setParticipation(true)"));
   assert.ok(store.includes("LeaderboardService.setParticipation(false)"));
+  assert.ok(settings.includes("if (enabled) void joinLeaderboard()"));
   assert.ok(settings.includes("disableInsightsSync()"));
   assert.equal(
-    settings.includes("enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)"),
+    settings.includes("enableInsightsSync"),
     false,
-    "Settings must not bypass the account-level opt-out"
+    "Settings must not expose an analytics-only enable path"
   );
 });
 
-// The claim prompt can still decline the whole opt-in, and a declined opt-in is
-// a join the user never agreed to — so the PATCH has to wait for the answer.
-test("a join publishes the account only after the sync opt-in has landed", () => {
+// Consent comes first, then participation, then local uploads. This order keeps
+// either failure from leaving only one half of the combined preference on.
+test("a join enables sync only after leaderboard participation succeeds", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
   const join = hook.slice(
     hook.indexOf("const joinLeaderboard"),
     hook.indexOf("const answerClaimPrompt")
   );
   assert.ok(
-    join.indexOf("await enableInsightsSync()") < join.indexOf(".join(requestedAccountId)"),
-    "the account must not be published before the opt-in the join depends on"
+    join.indexOf("await confirmInsightsSync()") < join.indexOf(".join(requestedAccountId)"),
+    "the account must not be published before the user accepts the upload"
   );
   assert.ok(
-    join.includes("!(await enableInsightsSync())) return"),
+    join.includes("!(await confirmInsightsSync())) return"),
     "a declined opt-in must abandon the join instead of publishing anyway"
   );
+  assert.ok(
+    join.indexOf(".join(requestedAccountId)") < join.indexOf("setInsightsSyncEnabled(true)"),
+    "local uploads must stay off until leaderboard participation succeeds"
+  );
+  const failedJoin = join.slice(join.indexOf("if (!joined) {"), join.indexOf("const claiming"));
+  assert.ok(
+    failedJoin.includes("promptAccountIdRef.current === requestedAccountId") &&
+      failedJoin.includes("getValidatedAuthGeneration() === requestedAuthGeneration"),
+    "only the account that requested the join may change this device's preference"
+  );
+  assert.ok(
+    failedJoin.indexOf("setInsightsSyncEnabled(false)") >
+      failedJoin.indexOf("promptAccountIdRef.current === requestedAccountId"),
+    "a current account's failed join must restore the combined preference to off"
+  );
+});
+
+test("a zero-history join still asks before publishing the account profile", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const confirm = hook.slice(
+    hook.indexOf("const confirmInsightsSync"),
+    hook.indexOf("const joinLeaderboard")
+  );
+  assert.equal(
+    confirm.includes("if (pending === 0)"),
+    false,
+    "no queued counters does not remove the name-and-email disclosure"
+  );
+  assert.ok(confirm.includes("requestInsightsConsent({"));
+  assert.ok(confirm.includes("prepareInsightsSync(pending > 0"));
 });
 
 // The prompt can outlive the account that opened it. Accepting it after an
@@ -127,23 +149,23 @@ test("claiming anonymous Insights is bound to the consenting auth context", () =
   );
 });
 
-// Publishing a name and an email to colleagues has to be undoable where it is
-// published, not only through a switch labelled Insights sync.
-test("the leaderboard surface can leave without touching the sync switch", () => {
+// The opt-out remains available on the leaderboard, but it is the same combined
+// transition as the Settings switch: stop local uploads, then leave the account.
+test("leaving from the leaderboard disables sync and participation together", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
   const store = read("src/stores/leaderboardParticipationStore.ts");
   const section = read("src/components/LeaderboardSection.tsx");
   const view = read("src/components/LeaderboardView.tsx");
-  const leave = hook.slice(
-    hook.indexOf("const leaveLeaderboard"),
-    hook.indexOf("const disableInsightsSync")
+  const disable = hook.slice(
+    hook.indexOf("const disableInsightsSync"),
+    hook.indexOf("const refreshCounts")
   );
   assert.ok(store.slice(store.indexOf("leave: async")).includes("setParticipation(false)"));
-  assert.equal(
-    leave.includes("setInsightsSyncEnabled"),
-    false,
-    "leaving a leaderboard must not be entangled with the device sync switch"
+  assert.ok(
+    disable.indexOf("setInsightsSyncEnabled(false)") < disable.indexOf("leaveLeaderboard()"),
+    "the device must stop uploading before the account leave is attempted"
   );
+  assert.ok(view.includes("onLeave={disableInsightsSync}"));
   assert.ok(section.includes('t("insights.leaderboard.leave")'));
   assert.ok(section.includes("onLeave()"));
   // Device settings and managed policy can be off while the account row still
@@ -155,18 +177,16 @@ test("the leaderboard surface can leave without touching the sync switch", () =>
       section.indexOf("!visibleLeaderboard ?"),
     "a managed policy change must hide cached roster data without hiding Leave"
   );
-  // The toggle may still be read as a re-read trigger, but it must never reach
-  // the section: that is what would hide Leave from an account that is ranked.
+  // The account answer still controls whether the roster and its opt-out are
+  // visible, including while an offline leave is waiting to reach the API.
   assert.equal(
     view.slice(view.indexOf("<LeaderboardSection")).includes("insightsSyncEnabled"),
     false,
     "the leaderboard must follow the account's participation, not this device's sync toggle"
   );
-  // The opt-out itself reaches this view through the shared participation
-  // store; the toggle stays a re-read trigger for changes made off-device.
   assert.ok(
-    view.includes("[insightsSyncEnabled, refreshParticipation]"),
-    "flipping the device toggle off must re-read the account instead of leaving a roster up"
+    hook.includes("participationEnabled ||") && hook.includes("setInsightsSyncEnabled(false)"),
+    "a confirmed server-side leave must reconcile local sync to off"
   );
 });
 
@@ -175,7 +195,7 @@ test("turning Insights sync off stops the device before it calls the account", (
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
   const disable = hook.slice(
     hook.indexOf("const disableInsightsSync"),
-    hook.indexOf("const refreshUnclaimedCount")
+    hook.indexOf("const refreshCounts")
   );
   assert.ok(
     disable.indexOf("setInsightsSyncEnabled(false)") < disable.indexOf("leaveLeaderboard()"),
@@ -229,7 +249,7 @@ test("an unknown participation answer offers a retry instead of a join", () => {
     "the retry surface has to return before the sync action is reached"
   );
   assert.equal(retrySurface.includes("onJoin"), false);
-  assert.ok(syncSurface.includes("onEnable={onJoin}"));
+  assert.equal(syncSurface.includes("onEnable"), false);
 });
 
 // An opt-out the network refused is still an opt-out. It holds on the device
@@ -242,7 +262,7 @@ test("a leave the account never took is kept and retried until it does", () => {
   const leave = store.slice(store.indexOf("leave: async"));
   assert.ok(leave.includes("writePendingLeaderboardLeave(userId)"));
   assert.ok(
-    leave.includes("publishAnswer(false, generation)"),
+    leave.includes("publishAnswer(false, true, generation)"),
     "a pending leave must stop showing the user as participating"
   );
   const hookJoin = hook.slice(
@@ -250,7 +270,7 @@ test("a leave the account never took is kept and retried until it does", () => {
     hook.indexOf("const answerClaimPrompt")
   );
   assert.ok(
-    hookJoin.indexOf(".join(requestedAccountId)") > hookJoin.indexOf("await enableInsightsSync()"),
+    hookJoin.indexOf(".join(requestedAccountId)") > hookJoin.indexOf("await confirmInsightsSync()"),
     "a declined opt-in never joins, so the leave it stopped short of must survive"
   );
   const join = store.slice(store.indexOf("join: async"), store.indexOf("leave: async"));
@@ -268,6 +288,31 @@ test("a leave the account never took is kept and retried until it does", () => {
     read("src/services/SyncService.ts").includes("LeaderboardService.flushPendingLeave("),
     "every sync pass has to retry it, so the opt-out outlives the window that made it"
   );
+  assert.ok(
+    read("src/services/SyncService.ts").includes("pendingLeaderboardLeave"),
+    "a queued opt-out must bypass ambient backoff on the next sync trigger"
+  );
+});
+
+test("an ambiguous join is compensated without racing a newer account choice", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const store = read("src/stores/leaderboardParticipationStore.ts");
+  const join = store.slice(store.indexOf("join: async"), store.indexOf("leave: async"));
+  assert.ok(join.includes("serializeAccountWrite(userId"));
+  assert.ok(join.includes("writePendingLeaderboardLeave(userId)"));
+  assert.ok(
+    join.indexOf("writePendingLeaderboardLeave(userId)") < join.indexOf("throw error"),
+    "the rollback marker must be written before the next same-account write starts"
+  );
+  const hookJoin = hook.slice(
+    hook.indexOf("const joinLeaderboard"),
+    hook.indexOf("const claiming")
+  );
+  assert.ok(
+    hookJoin.indexOf("writePendingLeaderboardLeave(requestedAccountId)") >
+      hookJoin.indexOf("const joined ="),
+    "only a join that may have landed needs post-auth-change compensation"
+  );
 });
 
 // The sync toggle re-reads participation, and joining flips that toggle — so a
@@ -276,7 +321,7 @@ test("a leave the account never took is kept and retried until it does", () => {
 test("a completed participation write outranks every read still in flight", () => {
   const store = read("src/stores/leaderboardParticipationStore.ts");
   const publish = store.slice(
-    store.indexOf("publishAnswer: (enabled, generation)"),
+    store.indexOf("publishAnswer: (enabled, configured, generation)"),
     store.indexOf("refresh: async")
   );
   assert.ok(
@@ -300,12 +345,12 @@ test("a completed participation write outranks every read still in flight", () =
   }
 });
 
-// Settings and the leaderboard each mount this hook, so participation cannot
-// live in it: an opt-out taken behind the Settings modal has to reach the board
+// Settings and Insights can each mount this hook, so participation cannot live
+// in it: an opt-out taken behind the Settings modal has to reach the page
 // rendered under it, including when the leave fails and is only queued.
 test("every surface reads one participation source, not a copy per hook instance", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
-  for (const field of ["Enabled", "Ready", "Error", "Updating"]) {
+  for (const field of ["Configured", "Enabled", "Ready", "Error", "Updating"]) {
     assert.ok(
       hook.includes(`const participation${field} = useLeaderboardParticipationStore(`),
       `participation${field} must come from the shared store`
@@ -315,6 +360,10 @@ test("every surface reads one participation source, not a copy per hook instance
     /useState[^\n]*[Pp]articipation/.test(hook),
     false,
     "a per-instance copy is what left one surface showing a roster the other had left"
+  );
+  assert.ok(
+    hook.includes("!participationConfigured ||"),
+    "an unconfigured account must keep its pre-leaderboard Insights preference"
   );
   assert.equal(
     hook.includes("participationReadIdRef"),
@@ -341,7 +390,7 @@ test("opting out while signed out stops at the device", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
   const disable = hook.slice(
     hook.indexOf("const disableInsightsSync"),
-    hook.indexOf("const refreshUnclaimedCount")
+    hook.indexOf("const refreshCounts")
   );
   assert.ok(
     disable.indexOf("if (!isSignedIn) return true;") < disable.indexOf("leaveLeaderboard()"),
@@ -365,7 +414,7 @@ test("an account scope purge drops the participation answer with the rest of the
   );
   const reset = store.slice(
     store.indexOf("reset: () => {"),
-    store.indexOf("publishAnswer: (enabled, generation)")
+    store.indexOf("publishAnswer: (enabled, configured, generation)")
   );
   assert.ok(
     reset.includes("readId += 1"),

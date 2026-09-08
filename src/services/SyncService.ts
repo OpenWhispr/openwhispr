@@ -30,12 +30,14 @@ import {
 } from "../lib/teamSpacesCapability";
 import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag";
 import { readNoteConflictIds } from "../lib/noteConflictRegistry";
+import { readPendingLeaderboardLeave } from "../lib/pendingLeaderboardLeave";
 import {
   cloudBackupResumed,
   effectiveLocalHistoryEnabled,
   isCloudBackupAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { useSettingsStore } from "../stores/settingsStore";
 import {
   buildNoteCreatePayload,
   buildNoteUpdatePayload,
@@ -579,7 +581,13 @@ export class SyncService {
       reason === "start" &&
       this.canSyncTeamSpaces() &&
       localStorage.getItem("teamSpacesCapability.probedAt") == null;
-    const bypassThrottle = waitForLock || firstTeamSpacesProbe;
+    // A leaderboard opt-out is a user-requested account mutation, not ambient
+    // sync work. Retry it on the next trigger even when an otherwise idle
+    // collaboration-only pass has backed off.
+    const pendingLeaderboardLeave = readPendingLeaderboardLeave(
+      getAuthRequestContextSnapshot().sessionUserId
+    );
+    const bypassThrottle = waitForLock || firstTeamSpacesProbe || pendingLeaderboardLeave;
     if (
       !bypassThrottle &&
       (this.syncing || Date.now() - this.lastCompletedSyncAt() < AUTO_SYNC_THROTTLE_MS)
@@ -2195,18 +2203,56 @@ export class SyncService {
     }
   }
 
+  // The Insights view uses this same guarded path before reading the account
+  // summary. Keeping the participation check here prevents a foreground
+  // refresh from bypassing the account-wide half of the combined preference.
+  async syncAnalyticsNow(): Promise<boolean> {
+    return this.syncAnalytics();
+  }
+
   // Push-only: the account summary is read live by the Insights view, so there
-  // is nothing to pull back into the device's own counters.
-  private async syncAnalytics(): Promise<void> {
+  // is nothing to pull back into the device's own counters. Returns whether
+  // uploads were allowed after reconciling account participation.
+  private async syncAnalytics(): Promise<boolean> {
     const consent = this.consent();
-    if (!consent.shared) return;
+    if (!consent.shared) return false;
     // A leaderboard opt-out outlives the window that made it, so every pass
     // retries the one this account is still waiting for. It only ever leaves.
     await LeaderboardService.flushPendingLeave(getAuthRequestContextSnapshot().sessionUserId);
+    const uploadRequested = consent.analytics;
+    let uploadAllowed = false;
+    const verifyUploadAllowed = async (): Promise<boolean> => {
+      // A pass requested while local sync was off may run erasures, but must
+      // never gain upload authority merely because a later setting changed.
+      if (!uploadRequested || !this.consent().analytics) return false;
+      try {
+        const participation = await LeaderboardService.getParticipation();
+        // A leaderboard leave is account-scoped and may have happened on
+        // another device. Reconcile it before this device uploads another
+        // counter. Accounts that predate the combined preference have no row,
+        // so their existing Insights choice remains unchanged until they make
+        // an explicit leaderboard choice.
+        if (participation.configured && !participation.enabled) {
+          useSettingsStore.getState().setInsightsSyncEnabled(false);
+        }
+        uploadAllowed =
+          (!participation.configured || participation.enabled) && this.consent().analytics;
+        return uploadAllowed;
+      } catch (err) {
+        if (isAuthContextError(err)) throw err;
+        // Participation is the account-wide half of this preference. When it
+        // cannot be verified, fail closed for uploads but still let queued
+        // analytics erasures run below.
+        console.error("Checking leaderboard participation failed:", err);
+        return false;
+      }
+    };
     try {
       // Revoking retention/Insights consent blocks new uploads, never deletion
-      // of rows that may already exist in the account.
-      if ((await syncPendingAnalytics({ uploadAllowed: consent.analytics })) > 0) {
+      // of rows that may already exist in the account. The gate itself reaches
+      // the head of AnalyticsService's queue before it resolves, so a local
+      // opt-out while another pass runs still wins before rows are read.
+      if ((await syncPendingAnalytics({ uploadAllowed: verifyUploadAllowed })) > 0) {
         this.analyticsPassMovedWork = true;
       }
     } catch (err) {
@@ -2215,6 +2261,7 @@ export class SyncService {
       // still has folders, notes, and transcriptions to finish.
       console.error("Analytics sync failed:", err);
     }
+    return uploadAllowed && this.consent().analytics;
   }
 
   private async syncTranscriptions(): Promise<void> {

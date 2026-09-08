@@ -1,28 +1,17 @@
 import { Building2, Clock3, Globe2, UserPlus, UserRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import LeaderboardSyncRow from "./LeaderboardSyncRow";
 
 export default function LeaderboardSoloEmptyState({
   scopeKind,
   scopeName,
   onInvite,
   pendingInvites,
-  sync,
 }: {
   scopeKind: "workspace" | "domain";
   scopeName: string;
   onInvite: () => void;
   pendingInvites: string[];
-  sync: {
-    canEnable: boolean;
-    enabled: boolean;
-    error: boolean;
-    onDisable: () => void;
-    onEnable: () => void;
-    ready: boolean;
-    updating: boolean;
-  };
 }) {
   const { t } = useTranslation();
   const ScopeIcon = scopeKind === "workspace" ? Building2 : Globe2;
@@ -79,7 +68,6 @@ export default function LeaderboardSoloEmptyState({
             </p>
           </div>
         )}
-        <LeaderboardSyncRow {...sync} />
       </div>
     </div>
   );

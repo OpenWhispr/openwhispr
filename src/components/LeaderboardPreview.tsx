@@ -11,7 +11,7 @@ interface LeaderboardPreviewProps {
   actionDisabled?: boolean;
   actionIcon?: LucideIcon;
   actionIconClassName?: string;
-  actionLabel: string;
+  actionLabel?: string;
   badge?: string;
   className?: string;
   children?: ReactNode;
@@ -19,7 +19,7 @@ interface LeaderboardPreviewProps {
   description: string;
   helperText?: string;
   icon: LucideIcon;
-  onAction: () => void;
+  onAction?: () => void;
   title: string;
 }
 
@@ -106,10 +106,12 @@ export default function LeaderboardPreview({
           )}
           <h2 className={cn("text-base font-semibold", badge ? "mt-3" : "mt-4")}>{title}</h2>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{description}</p>
-          <Button className="mt-5 w-full" onClick={onAction} disabled={actionDisabled}>
-            {ActionIcon && <ActionIcon size={14} className={actionIconClassName} />}
-            {actionLabel}
-          </Button>
+          {actionLabel && onAction && (
+            <Button className="mt-5 w-full" onClick={onAction} disabled={actionDisabled}>
+              {ActionIcon && <ActionIcon size={14} className={actionIconClassName} />}
+              {actionLabel}
+            </Button>
+          )}
           {helperText && <p className="mt-3 text-[11px] text-muted-foreground">{helperText}</p>}
           {children}
         </div>
