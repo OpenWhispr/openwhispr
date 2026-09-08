@@ -179,6 +179,26 @@
   --assistant-footer-origin: left center;
 }
 
+/* The hover cancel is out of flow so revealing it cannot move the pill out
+   from under the pointer. Padding bridges the visual gap into the parent's
+   hover region, and direction keeps the control on the display-inward side. */
+.voice-pill-cancel-slot {
+  position: absolute;
+  top: 50%;
+  display: flex;
+  transform: translateY(-50%);
+}
+
+[data-horizontal-direction="right"] > .voice-pill-cancel-slot {
+  right: 100%;
+  padding-right: 0.5rem;
+}
+
+[data-horizontal-direction="left"] > .voice-pill-cancel-slot {
+  left: 100%;
+  padding-left: 0.5rem;
+}
+
 .assistant-response-actions[data-assistant-footer-phase="actions-entering"] {
   pointer-events: none;
   animation: assistant-footer-enter var(--assistant-actions-entrance-duration, 220ms)

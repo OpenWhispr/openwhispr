@@ -13,6 +13,7 @@ const OVERRIDDEN_VOICE_SURFACE_GEOMETRY = `
     minSurfaceHeight: 120,
     maxSurfaceWidth: 700,
   };
+  export const DICTATION_ERROR_SURFACE_LIMITS = { minHeight: 88, maxHeight: 240 };
   export const LIVE_TRANSCRIPT_SURFACE_LIMITS = { minHeight: 91, maxHeight: 321 };
 `;
 
@@ -22,6 +23,7 @@ function loadWindowConfigWithGeometry(assistantPanelSizeLimits) {
     if (request === "./voiceSurfaceGeometry") {
       return {
         ASSISTANT_PANEL_SIZE_LIMITS: assistantPanelSizeLimits,
+        DICTATION_ERROR_SURFACE_LIMITS: { minHeight: 88, maxHeight: 240 },
         LIVE_TRANSCRIPT_SURFACE_LIMITS: { minHeight: 91, maxHeight: 321 },
       };
     }
@@ -63,6 +65,10 @@ test("the main and renderer geometry adapters agree with the native assistant fo
     rendererGeometry.LIVE_TRANSCRIPT_SURFACE_LIMITS,
     geometry.LIVE_TRANSCRIPT_SURFACE_LIMITS
   );
+  assert.deepEqual(
+    rendererGeometry.DICTATION_ERROR_SURFACE_LIMITS,
+    geometry.DICTATION_ERROR_SURFACE_LIMITS
+  );
 });
 
 test("renderer presentation consumes the shared live-transcript geometry", async (t) => {
@@ -81,13 +87,14 @@ test("renderer presentation consumes the shared live-transcript geometry", async
   });
 });
 
-test("DictationErrorCard reports content height at the shared expected width", async (t) => {
+test("DictationErrorCard reports capped rendered height and exposes dismiss", async (t) => {
   const card = {
     getBoundingClientRect: () => ({ width: 500 }),
     offsetHeight: 120,
-    scrollHeight: 137,
+    scrollHeight: 900,
   };
   const reportedHeights = [];
+  let dismissCount = 0;
   const originalResizeObserver = globalThis.ResizeObserver;
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
@@ -127,6 +134,7 @@ test("DictationErrorCard reports content height at the shared expected width", a
       "lucide-react": `
         export function RotateCcw() { return null; }
         export function ScrollText() { return null; }
+        export function X() { return null; }
       `,
       react: `
         export function useLayoutEffect(effect) {
@@ -143,11 +151,19 @@ test("DictationErrorCard reports content height at the shared expected width", a
     "/components/dictation/DictationErrorCard.tsx"
   );
 
-  DictationErrorCard({
+  const rendered = DictationErrorCard({
     actions: [],
     onAction() {},
+    onDismiss: () => {
+      dismissCount += 1;
+    },
+    dismissLabel: "Dismiss",
     onPreferredHeightChange: (height) => reportedHeights.push(height),
   });
 
-  assert.deepEqual(reportedHeights, [137]);
+  const dismissButton = rendered.props.children.find((child) => child?.type === "button");
+  dismissButton.props.onClick();
+
+  assert.deepEqual(reportedHeights, [120]);
+  assert.equal(dismissCount, 1);
 });

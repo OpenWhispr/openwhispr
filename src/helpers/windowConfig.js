@@ -1,6 +1,9 @@
 const path = require("path");
 const { getLinuxSessionInfo } = require("./linuxSession");
-const { ASSISTANT_PANEL_SIZE_LIMITS } = require("./voiceSurfaceGeometry");
+const {
+  ASSISTANT_PANEL_SIZE_LIMITS,
+  DICTATION_ERROR_SURFACE_LIMITS,
+} = require("./voiceSurfaceGeometry");
 
 const FOCUSLESS_OVERLAY_ROLES = new Set(["main", "notification"]);
 
@@ -45,7 +48,8 @@ const ASSISTANT_WINDOW_SIZE = {
 const DICTATION_ERROR_WINDOW_LIMITS = {
   width: ASSISTANT_WINDOW_SIZE.width,
   gutter: 24,
-  minSurfaceHeight: 88,
+  minSurfaceHeight: DICTATION_ERROR_SURFACE_LIMITS.minHeight,
+  maxSurfaceHeight: DICTATION_ERROR_SURFACE_LIMITS.maxHeight,
 };
 
 function fitAssistantWindowToWorkArea(requestedSize, workArea) {
@@ -109,7 +113,10 @@ function fitDictationErrorContentWindowToWorkArea(requestedSurfaceHeight, workAr
   const limits = DICTATION_ERROR_WINDOW_LIMITS;
   const fitted = fitContentWindowToWorkArea(limits, requestedSurfaceHeight, {
     width: fitAssistantWindowToWorkArea(ASSISTANT_WINDOW_SIZE, workArea).width,
-    maximumSurfaceHeight: Math.max(1, workArea.height - limits.gutter),
+    maximumSurfaceHeight: Math.min(
+      limits.maxSurfaceHeight,
+      Math.max(1, workArea.height - limits.gutter)
+    ),
   });
   return { ...fitted, height: Math.min(workArea.height, fitted.height) };
 }

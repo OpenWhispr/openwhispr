@@ -222,9 +222,10 @@ class WindowManager {
       return;
     }
 
-    if (process.platform === "win32") {
-      // Windows click-through forwarding is unreliable for this floating panel.
-      // Keep the panel interactive so the mic button and cancel button are always clickable.
+    if (process.platform === "win32" || process.platform === "linux") {
+      // Windows forwarding is unreliable and Linux ignores `forward`
+      // entirely. Returning either window to click-through after mouseleave
+      // prevents every later mouseenter, so its controls become unreachable.
       this.mainWindow.setIgnoreMouseEvents(false);
       return;
     }

@@ -25,11 +25,15 @@ test("dictation error windows share the assistant width and grow for the transcr
   );
 });
 
-test("dictation error windows grow to their full content and stay within the work area", () => {
+test("dictation error windows cap long content and stay within the work area", () => {
   const { fitDictationErrorContentWindowToWorkArea } = require("../../src/helpers/windowConfig");
   assert.deepEqual(fitDictationErrorContentWindowToWorkArea(132, { width: 1440, height: 900 }), {
     width: 466,
     height: 156,
+  });
+  assert.deepEqual(fitDictationErrorContentWindowToWorkArea(1200, { width: 1440, height: 900 }), {
+    width: 466,
+    height: 264,
   });
   assert.deepEqual(fitDictationErrorContentWindowToWorkArea(1200, { width: 320, height: 240 }), {
     width: 201,

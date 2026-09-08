@@ -7,6 +7,10 @@
     "minSurfaceHeight": 152,
     "maxSurfaceWidth": 600
   },
+  "DICTATION_ERROR_SURFACE_LIMITS": {
+    "minHeight": 88,
+    "maxHeight": 240
+  },
   "LIVE_TRANSCRIPT_SURFACE_LIMITS": {
     "minHeight": 152,
     "maxHeight": 538
