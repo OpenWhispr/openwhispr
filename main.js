@@ -1,6 +1,11 @@
 // Chromium picks the display backend before JS runs, so appendSwitch is too
 // late — the flag has to come from a relaunch.
 const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
+const {
+  usesKeyRelease,
+  resolveDictationPress,
+  resolveDictationRelease,
+} = require("./src/helpers/activationMode");
 
 if (shouldForceXWayland(process.argv)) {
   const { spawn } = require("child_process");
@@ -1339,7 +1344,15 @@ async function startApp() {
           // Capture target app PID BEFORE showing the overlay
           if (textEditMonitor) textEditMonitor.captureTargetPid();
           const activationMode = windowManager.getActivationMode();
-          if (activationMode === "push") {
+          const pressAction = resolveDictationPress({
+            mode: activationMode,
+            isRecording: windowManager.isDictationRecording(),
+          });
+          if (pressAction === "stop") {
+            debugLogger?.debug("[Globe] Stopping latched dictation (hybrid tap)");
+            globeLastStopTime = Date.now();
+            windowManager.sendStopDictation();
+          } else if (pressAction === "hold") {
             const now = Date.now();
             if (now - globeLastStopTime < POST_STOP_COOLDOWN_MS) {
               debugLogger?.debug("[Globe] Ignored — cooldown active");
@@ -1393,22 +1406,25 @@ async function startApp() {
 
       if (hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey)) {
         const activationMode = windowManager.getActivationMode();
-        if (activationMode === "push") {
+        if (usesKeyRelease(activationMode)) {
           if (globeKeyDownTime === 0 && !globeKeyIsRecording) {
-            // The press was ignored (dictation was processing); releasing it
-            // must not cancel preparation or hide the thinking pill.
+            // The press was ignored (dictation was processing), or it was the
+            // hybrid stop tap; releasing it must not cancel preparation or
+            // hide the thinking pill.
             debugLogger?.debug("[Globe] Release without a registered press — ignored");
           } else {
+            const heldMs = Date.now() - globeKeyDownTime;
+            const wasRecording = globeKeyIsRecording;
             globeKeyDownTime = 0;
+            globeKeyIsRecording = false;
             globeLastStopTime = Date.now();
-            if (globeKeyIsRecording) {
-              globeKeyIsRecording = false;
-              debugLogger?.debug("[Globe] Stopping dictation (push release)");
-              windowManager.sendStopDictation();
-            } else {
-              windowManager.sendCancelDictationPreparation();
-              windowManager.hideDictationPanel();
-            }
+            const action = resolveDictationRelease({
+              mode: activationMode,
+              heldMs,
+              isRecording: wasRecording,
+            });
+            debugLogger?.debug("[Globe] Release", { action, heldMs, wasRecording });
+            windowManager.applyDictationRelease(action, wasRecording);
           }
         }
       }
@@ -1466,7 +1482,14 @@ async function startApp() {
 
       const activationMode = windowManager.getActivationMode();
       if (textEditMonitor) textEditMonitor.captureTargetPid();
-      if (activationMode === "push") {
+      const pressAction = resolveDictationPress({
+        mode: activationMode,
+        isRecording: windowManager.isDictationRecording(),
+      });
+      if (pressAction === "stop") {
+        rightModLastStopTime = Date.now();
+        windowManager.sendStopDictation();
+      } else if (pressAction === "hold") {
         if (rightModActiveKey && rightModActiveKey !== modifier) return;
         const now = Date.now();
         if (now - rightModLastStopTime < POST_STOP_COOLDOWN_MS) return;
@@ -1492,22 +1515,25 @@ async function startApp() {
         if (!isLiveWindow(windowManager.mainWindow)) return;
 
         const activationMode = windowManager.getActivationMode();
-        if (activationMode === "push" && (!rightModActiveKey || rightModActiveKey === modifier)) {
+        if (
+          usesKeyRelease(activationMode) &&
+          (!rightModActiveKey || rightModActiveKey === modifier)
+        ) {
           if (rightModDownTime === 0 && !rightModIsRecording) {
             // The press was ignored (dictation was processing); releasing it
             // must not cancel preparation or hide the thinking pill.
             debugLogger?.debug("[RightMod] Release without a registered press — ignored");
           } else {
+            const heldMs = Date.now() - rightModDownTime;
+            const wasRecording = rightModIsRecording;
             rightModActiveKey = null;
             rightModDownTime = 0;
+            rightModIsRecording = false;
             rightModLastStopTime = Date.now();
-            if (rightModIsRecording) {
-              rightModIsRecording = false;
-              windowManager.sendStopDictation();
-            } else {
-              windowManager.sendCancelDictationPreparation();
-              windowManager.hideDictationPanel();
-            }
+            windowManager.applyDictationRelease(
+              resolveDictationRelease({ mode: activationMode, heldMs, isRecording: wasRecording }),
+              wasRecording
+            );
           }
         }
       }
@@ -1555,7 +1581,14 @@ async function startApp() {
       const activationMode = windowManager.getActivationMode();
       if (textEditMonitor) textEditMonitor.captureTargetPid();
 
-      if (activationMode === "push") {
+      const pressAction = resolveDictationPress({
+        mode: activationMode,
+        isRecording: windowManager.isDictationRecording(),
+      });
+      if (pressAction === "stop") {
+        mouseButtonLastStopTime = Date.now();
+        windowManager.sendStopDictation();
+      } else if (pressAction === "hold") {
         if (mouseButtonActiveButton && mouseButtonActiveButton !== button) return;
         const now = Date.now();
         if (now - mouseButtonLastStopTime < POST_STOP_COOLDOWN_MS) return;
@@ -1585,7 +1618,7 @@ async function startApp() {
 
       const activationMode = windowManager.getActivationMode();
       if (
-        activationMode === "push" &&
+        usesKeyRelease(activationMode) &&
         (!mouseButtonActiveButton || mouseButtonActiveButton === button)
       ) {
         if (mouseButtonDownTime === 0 && !mouseButtonIsRecording) {
@@ -1593,16 +1626,16 @@ async function startApp() {
           // must not cancel preparation or hide the thinking pill.
           debugLogger?.debug("[MouseButton] Release without a registered press — ignored");
         } else {
+          const heldMs = Date.now() - mouseButtonDownTime;
+          const wasRecording = mouseButtonIsRecording;
           mouseButtonActiveButton = null;
           mouseButtonDownTime = 0;
+          mouseButtonIsRecording = false;
           mouseButtonLastStopTime = Date.now();
-          if (mouseButtonIsRecording) {
-            mouseButtonIsRecording = false;
-            windowManager.sendStopDictation();
-          } else {
-            windowManager.sendCancelDictationPreparation();
-            windowManager.hideDictationPanel();
-          }
+          windowManager.applyDictationRelease(
+            resolveDictationRelease({ mode: activationMode, heldMs, isRecording: wasRecording }),
+            wasRecording
+          );
         }
       }
     });
@@ -1674,7 +1707,7 @@ async function startApp() {
     const dispatchNativeKeyDown = (key) => {
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
-        if (windowManager.getActivationMode() === "push") {
+        if (usesKeyRelease(windowManager.getActivationMode())) {
           windowManager.startWindowsPushToTalk(key);
         } else {
           windowManager.sendToggleDictation();
@@ -1699,7 +1732,7 @@ async function startApp() {
         windowManager.handleWindowsPushKeyUp(key);
       } else if (
         isLiveWindow(windowManager.mainWindow) &&
-        windowManager.getActivationMode() === "push"
+        usesKeyRelease(windowManager.getActivationMode())
       ) {
         windowManager.handleWindowsPushKeyUp(key);
       }

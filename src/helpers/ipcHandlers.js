@@ -5,6 +5,7 @@ const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
+const { usesKeyRelease } = require("./activationMode");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { openExternalUrl } = require("./externalUrlOpener");
@@ -3993,7 +3994,7 @@ class IPCHandlers {
           );
           await hotkeyManager.hyprlandManager.registerKeybinding(
             effectiveHotkey,
-            this.windowManager.getActivationMode() === "push"
+            usesKeyRelease(this.windowManager.getActivationMode())
           );
         }
 
@@ -4007,7 +4008,7 @@ class IPCHandlers {
             effectiveHotkey,
             "dictation",
             callback,
-            this.windowManager.getActivationMode() === "push"
+            usesKeyRelease(this.windowManager.getActivationMode())
           );
           if (result !== true) {
             debugLogger.warn(

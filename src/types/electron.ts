@@ -2085,8 +2085,8 @@ declare global {
       saveDictationKey?: (key: string) => Promise<void>;
 
       // Activation mode persistence (file-based for reliable startup)
-      getActivationMode?: () => Promise<"tap" | "push">;
-      saveActivationMode?: (mode: "tap" | "push") => Promise<void>;
+      getActivationMode?: () => Promise<"tap" | "push" | "hybrid">;
+      saveActivationMode?: (mode: "tap" | "push" | "hybrid") => Promise<void>;
 
       // Debug logging
       getLogLevel?: () => Promise<string>;
@@ -2143,7 +2143,7 @@ declare global {
       openWhisperModelsFolder?: () => Promise<{ success: boolean; error?: string }>;
 
       // Windows Push-to-Talk notifications
-      notifyActivationModeChanged?: (mode: "tap" | "push") => void;
+      notifyActivationModeChanged?: (mode: "tap" | "push" | "hybrid") => void;
       notifyHotkeyChanged?: (hotkey: string) => void;
       registerMeetingHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       notifyFloatingIconAutoHideChanged?: (enabled: boolean) => void;

@@ -821,7 +821,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     {t(
                       activationMode === "push"
                         ? "onboarding.activation.holdDescription"
-                        : "onboarding.activation.tapDescription"
+                        : activationMode === "hybrid"
+                          ? "onboarding.activation.hybridDescription"
+                          : "onboarding.activation.tapDescription"
                     )}
                   </p>
                 </div>
@@ -835,7 +837,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 />
               </div>
-              {getPlatform() === "linux" && activationMode === "push" && (
+              {getPlatform() === "linux" && activationMode !== "tap" && (
                 <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
               )}
             </div>

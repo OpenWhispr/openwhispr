@@ -204,7 +204,8 @@
     "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione.",
     "managedConfigLoading": "Verifica della configurazione gestita della tua organizzazione in corso. Riprova tra un momento.",
     "managedConfigUnavailable": "L'accesso aziendale gestito non è disponibile. Accedi di nuovo o contatta l'amministratore.",
-    "managedPolicyConflict": "L'accesso gestito è bloccato dai criteri del tuo spazio di lavoro. Contatta l'amministratore."
+    "managedPolicyConflict": "L'accesso gestito è bloccato dai criteri del tuo spazio di lavoro. Contatta l'amministratore.",
+    "hybrid": "Both"
   },
   "onboarding": {
     "rehaul": {
@@ -475,7 +476,8 @@
       "test": "Test",
       "hotkeyToStartStop": "{{hotkey}} per avviare/fermare",
       "holdHotkey": "Tieni premuto {{hotkey}}",
-      "textareaPlaceholder": "Clicca qui e usa la scorciatoia per dettare..."
+      "textareaPlaceholder": "Clicca qui e usa la scorciatoia per dettare...",
+      "hybridDescription": "Tap to keep it on, hold to talk"
     },
     "voiceAgent": {
       "title": "Configurazione dell'assistente vocale",

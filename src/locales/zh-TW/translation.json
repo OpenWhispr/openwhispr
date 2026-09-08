@@ -204,7 +204,8 @@
     "policyTranscriptionRestricted": "轉錄已被您的組織限制。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
-    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。"
+    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。",
+    "hybrid": "Both"
   },
   "onboarding": {
     "rehaul": {
@@ -475,7 +476,8 @@
       "test": "測試",
       "hotkeyToStartStop": "{{hotkey}} 開始/停止",
       "holdHotkey": "按住 {{hotkey}}",
-      "textareaPlaceholder": "點擊這裡，然後使用快捷鍵開始語音輸入..."
+      "textareaPlaceholder": "點擊這裡，然後使用快捷鍵開始語音輸入...",
+      "hybridDescription": "Tap to keep it on, hold to talk"
     },
     "voiceAgent": {
       "title": "語音助理設定",

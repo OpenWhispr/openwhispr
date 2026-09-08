@@ -3,6 +3,7 @@ import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
+import { normalizeActivationMode, type ActivationMode } from "../helpers/activationMode";
 import logger from "../utils/logger";
 import whisperVadConstants from "../constants/whisperVad.json";
 import type {
@@ -951,7 +952,7 @@ export interface SettingsState
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
   setSpokenLanguages: (languages: string[]) => void;
-  setActivationMode: (mode: "tap" | "push") => void;
+  setActivationMode: (mode: ActivationMode) => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
   setMicrophoneSelectionMode: (mode: MicrophoneSelectionMode) => void;
@@ -1351,8 +1352,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
-  activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
-    "tap" | "push",
+  activationMode: normalizeActivationMode(readString("activationMode", "tap")),
 
   microphoneSelectionMode: (() => {
     const mode = readString("microphoneSelectionMode", "system");
@@ -2085,7 +2085,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ spokenLanguages: languages });
   },
 
-  setActivationMode: (mode: "tap" | "push") => {
+  setActivationMode: (mode: ActivationMode) => {
     if (isBrowser) localStorage.setItem("activationMode", mode);
     set({ activationMode: mode });
     if (isBrowser) {
@@ -3174,8 +3174,9 @@ export async function initializeSettings(): Promise<void> {
     try {
       let envMode = await window.electronAPI.getActivationMode?.();
       if (envMode && envMode !== state.activationMode) {
-        if (isBrowser) localStorage.setItem("activationMode", envMode);
-        useSettingsStore.setState({ activationMode: envMode });
+        const nextMode = normalizeActivationMode(envMode);
+        if (isBrowser) localStorage.setItem("activationMode", nextMode);
+        useSettingsStore.setState({ activationMode: nextMode });
       }
     } catch (err) {
       logger.warn(

@@ -26,9 +26,15 @@ test("an unsupported Hold option stays explained while Tap remains usable", () =
   );
   const buttons = markup.match(/<button[^>]*>/g);
 
-  assert.equal(buttons.length, 2);
+  assert.equal(buttons.length, 3);
   assert.doesNotMatch(buttons[0], /disabled/);
   assert.match(buttons[1], /disabled/);
+  // Hybrid needs key-release events too, so it is unavailable wherever Hold is.
+  assert.match(buttons[2], /disabled/);
+  assert.match(
+    buttons[2],
+    /aria-label="common\.hybrid: Choose a hotkey with a non-modifier key\."/
+  );
   assert.match(buttons[1], /title="Choose a hotkey with a non-modifier key\."/);
   assert.match(buttons[1], /aria-label="common\.hold: Choose a hotkey with a non-modifier key\."/);
 });

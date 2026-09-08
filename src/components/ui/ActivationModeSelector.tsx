@@ -1,7 +1,9 @@
-import { MousePointerClick, MicVocal } from "lucide-react";
+import { MousePointerClick, MicVocal, Pointer } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-type ActivationMode = "tap" | "push";
+// Mirrors ActivationMode in src/helpers/activationMode.js (kept inline so the
+// node --test renderer harness can load this file without a type import).
+type ActivationMode = "tap" | "push" | "hybrid";
 
 interface ActivationModeSelectorProps {
   value: ActivationMode;
@@ -9,10 +11,18 @@ interface ActivationModeSelectorProps {
   pushDisabledReason?: string;
 }
 
+// Hybrid rides on the push-to-talk plumbing, so it is unavailable wherever Hold is.
 const OPTIONS = [
-  { mode: "tap", Icon: MousePointerClick, labelKey: "common.tap" },
-  { mode: "push", Icon: MicVocal, labelKey: "common.hold" },
+  { mode: "tap", Icon: MousePointerClick, labelKey: "common.tap", needsPush: false },
+  { mode: "push", Icon: MicVocal, labelKey: "common.hold", needsPush: true },
+  { mode: "hybrid", Icon: Pointer, labelKey: "common.hybrid", needsPush: true },
 ] as const;
+
+const INDICATOR_OFFSET: Record<ActivationMode, string> = {
+  tap: "translate-x-0",
+  push: "translate-x-[calc(100%+2px)]",
+  hybrid: "translate-x-[calc(200%+4px)]",
+};
 
 export function ActivationModeSelector({
   value,
@@ -26,15 +36,15 @@ export function ActivationModeSelector({
       {/* Sliding indicator */}
       <div
         className={`
-          absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded
+          absolute top-0.5 bottom-0.5 w-[calc(33.333%-2px)] rounded
           bg-surface-raised border border-border-subtle
           transition-transform duration-200 ease-out
-          ${value === "push" ? "translate-x-[calc(100%+4px)]" : "translate-x-0"}
+          ${INDICATOR_OFFSET[value] ?? INDICATOR_OFFSET.tap}
         `}
       />
 
-      {OPTIONS.map(({ mode, Icon, labelKey }) => {
-        const disabledReason = mode === "push" ? pushDisabledReason : undefined;
+      {OPTIONS.map(({ mode, Icon, labelKey, needsPush }) => {
+        const disabledReason = needsPush ? pushDisabledReason : undefined;
         const disabled = Boolean(disabledReason);
         const label = t(labelKey);
 

@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef } from "react";
 import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
+import type { ActivationMode } from "../helpers/activationMode";
 import { useLocalStorage } from "./useLocalStorage";
 import type {
   ChineseScriptPreference,
@@ -59,7 +60,7 @@ export interface HotkeySettings {
   meetingKey: string;
   voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
-  activationMode: "tap" | "push";
+  activationMode: ActivationMode;
 }
 
 export interface OnboardingSettings {
