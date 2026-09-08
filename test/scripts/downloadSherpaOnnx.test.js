@@ -3,10 +3,13 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const vm = require("node:vm");
+const { createRequire } = require("node:module");
 
 const { listImportedModules } = require("../../scripts/lib/pe-imports");
 const { buildPeImage } = require("../helpers/harness/peFixture");
 const {
+  BINARIES,
   SHERPA_ONNX_VERSION,
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
@@ -162,4 +165,95 @@ test("non-Windows markers do not need the onnxRuntime field", (t) => {
     isCompleteInstall(marker, [binary], { platformArch: "darwin-arm64", binDir: dir }),
     true
   );
+});
+
+test("a failed automatic Windows repair stays incomplete and retries DLL patching", async (t) => {
+  const root = makeBinDir(t);
+  const binDir = path.join(root, "resources", "bin");
+  fs.mkdirSync(binDir, { recursive: true });
+  const config = BINARIES["win32-x64"];
+  const binaryPaths = EXE_NAMES.map((name) => path.join(binDir, name));
+  const markerPath = path.join(binDir, ".sherpa-onnx-win32-x64.json");
+  const options = { platformArch: "win32-x64", binDir };
+  const sourcePath = require.resolve("../../scripts/download-sherpa-onnx");
+  const requireFromDownloader = createRequire(sourcePath);
+  let downloads = 0;
+  let failPatch = false;
+  let patchFailureInjected = false;
+
+  const downloadBinary = vm.runInNewContext(
+    `${fs.readFileSync(sourcePath, "utf8")}\ndownloadBinary;`,
+    {
+      __dirname: path.join(root, "scripts"),
+      module: { exports: {} },
+      process,
+      console,
+      require(name) {
+        if (name === "fs") {
+          return {
+            ...fs,
+            writeFileSync(filePath, ...args) {
+              if (failPatch && filePath === binaryPaths[1]) {
+                patchFailureInjected = true;
+                throw Object.assign(new Error("simulated patch write failure"), { code: "EBUSY" });
+              }
+              return fs.writeFileSync(filePath, ...args);
+            },
+          };
+        }
+        if (name === "./lib/download-utils") {
+          return {
+            ...requireFromDownloader(name),
+            async downloadFile(_url, destination) {
+              downloads += 1;
+              fs.writeFileSync(destination, "fixture archive");
+            },
+          };
+        }
+        if (name === "child_process") {
+          return {
+            execFileSync(command, args, { cwd }) {
+              assert.equal(command, "tar");
+              const extractDir = path.resolve(cwd, args[args.indexOf("-C") + 1]);
+              writeFakeBundle(extractDir);
+              [config.binaryPath, config.onlineBinaryPath, config.diarizeBinaryPath].forEach(
+                (name, index) => {
+                  fs.renameSync(
+                    path.join(extractDir, EXE_NAMES[index]),
+                    path.join(extractDir, name)
+                  );
+                }
+              );
+            },
+          };
+        }
+        return requireFromDownloader(name);
+      },
+    },
+    { filename: sourcePath }
+  );
+
+  assert.equal(await downloadBinary("win32-x64", config), true);
+  assert.equal(isCompleteInstall(markerPath, binaryPaths, options), true);
+  assert.equal(await downloadBinary("win32-x64", config), true);
+  assert.equal(downloads, 1);
+
+  fs.unlinkSync(binaryPaths[1]);
+  failPatch = true;
+  assert.equal(await downloadBinary("win32-x64", config), false);
+  assert.equal(patchFailureInjected, true);
+  assert.ok(listImportedModules(fs.readFileSync(binaryPaths[1])).includes("onnxruntime.dll"));
+  assert.equal(fs.existsSync(path.join(binDir, "onnxruntime.dll")), false);
+  assert.equal(fs.existsSync(markerPath), false);
+  assert.equal(isCompleteInstall(markerPath, binaryPaths, options), false);
+
+  failPatch = false;
+  assert.equal(await downloadBinary("win32-x64", config), true);
+  assert.equal(downloads, 3);
+  assert.equal(isCompleteInstall(markerPath, binaryPaths, options), true);
+  for (const imagePath of [...binaryPaths, path.join(binDir, "sherpa-onnx-c-api.dll")]) {
+    const imports = listImportedModules(fs.readFileSync(imagePath));
+    assert.ok(imports.includes("ow-onnxrt.dll"), imagePath);
+    assert.ok(!imports.some((name) => name.toLowerCase() === "onnxruntime.dll"), imagePath);
+  }
 });

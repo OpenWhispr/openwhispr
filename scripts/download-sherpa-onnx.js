@@ -269,7 +269,8 @@ async function downloadBinary(platformArch, config, isForce = false) {
     console.log(`  ${platformArch}: Already exists (use --force to re-download)`);
     return true;
   }
-  if (isForce && fs.existsSync(installMarkerPath)) fs.unlinkSync(installMarkerPath);
+  // A failed repair must not leave a previous marker certifying partially patched binaries.
+  if (fs.existsSync(installMarkerPath)) fs.unlinkSync(installMarkerPath);
 
   const url = getDownloadUrl(config.archiveName);
   console.log(`  ${platformArch}: Downloading from ${url}`);
