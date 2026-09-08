@@ -2,10 +2,11 @@
 // circle; the companion fades with it): the assistant shell's direct
 // children must fade AND retreat on Task 1's pinned close-fade variable (not
 // a hardcoded guess), the closing state must actually apply that retreat,
-// reduced motion must shorten the fade instead of silently inheriting a
-// mismatched duration via CSS's transition-property/duration positional
-// cycling (the same trap .voice-pill-position hit, named in the task's own
-// constraints), and the companion pill's own fade must do the same. Verified
+// reduced motion must keep that fade at its normal speed (index.css's own
+// policy: opacity carries meaning) on ONE broadcastable duration rather than
+// silently inheriting a mismatched one via CSS's transition-property/duration
+// positional cycling (the same trap .voice-pill-position hit, named in the
+// task's own constraints), and the companion pill's own fade must do the same. Verified
 // from CSS text via cascade rules, not a live browser — see each test's own
 // comment for what that does and does not prove.
 const test = require("node:test");
@@ -98,7 +99,8 @@ test("the assistant shell's direct children fade and retreat on Task 1's pinned 
   assert.match(closingRule, /transform:\s*translateY\(4px\)/);
 });
 
-test("reduced motion shortens the assistant children's close fade instead of inheriting a duration positionally", async () => {
+test("reduced motion keeps the assistant children's close fade at its normal speed, on one broadcastable duration", async () => {
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
   const css = stripCssComments(readCss("src/styles/dictation-panel.css"));
   const reducedMotionBlock = extractBalancedBlock(css, "@media (prefers-reduced-motion: reduce)");
   assert.ok(reducedMotionBlock);
@@ -116,7 +118,20 @@ test("reduced motion shortens the assistant children's close fade instead of inh
     '.expanding-panel-surface[data-panel-mode="assistant"] > * {'
   );
   assert.ok(override, "expected a reduced-motion override for the assistant children");
-  assert.match(override.trim(), /^transition-duration:\s*1ms\s*!important;?$/);
+
+  // Finding 5, final review 2026-09-08: this was 1ms, which DELETED the fade
+  // rather than de-animating movement. Transform is already stripped from the
+  // property list, so opacity is all that is left — and index.css's own policy
+  // is that opacity carries meaning and keeps its normal speed. Same value the
+  // pill's own .assistant-pill-presence override already uses.
+  assert.match(
+    override.trim(),
+    /^transition-duration:\s*var\(--motion-close-fade-ms,\s*[\d.]+ms\)\s*!important;?$/,
+    "reduced motion must keep the close fade, not collapse it to 1ms"
+  );
+  const fallbackMatch = override.match(/var\(--motion-close-fade-ms,\s*([\d.]+)ms\)/);
+  assert.ok(fallbackMatch, "expected a --motion-close-fade-ms fallback duration");
+  assert.equal(Number(fallbackMatch[1]), MOTION_TIMING.closeFadeMs);
 });
 
 test("the companion pill fades on Task 1's pinned companion-fade variable, with a fallback matching MOTION_TIMING.companionFadeMs", async () => {
@@ -137,12 +152,26 @@ test("the companion pill fades on Task 1's pinned companion-fade variable, with 
   assert.match(exitingRule, /pointer-events:\s*none/);
 });
 
-test("reduced motion shortens the companion pill's own fade", async () => {
+test("reduced motion keeps the companion pill's own fade at its normal speed", async () => {
+  const { MOTION_TIMING } = await import("../../src/utils/springEasing.ts");
   const css = stripCssComments(readCss("src/styles/agent-dictation-pill.css"));
   const reducedMotionBlock = extractBalancedBlock(css, "@media (prefers-reduced-motion: reduce)");
   assert.ok(reducedMotionBlock, "expected agent-dictation-pill.css to have a reduced-motion block");
 
   const override = extractRule(reducedMotionBlock, ".agent-dictation-pill-window {");
   assert.ok(override, "expected a reduced-motion override for .agent-dictation-pill-window");
-  assert.match(override.trim(), /^transition-duration:\s*1ms\s*!important;?$/);
+
+  // Finding 5, final review 2026-09-08: this was 1ms. Only opacity survives
+  // index.css's forced property list here, and that file's own policy keeps
+  // opacity at normal speed. 1ms also bought nothing — WindowManager waits
+  // AGENT_DICTATION_PILL_FADE_MS + 20 before the native hide either way, so
+  // the window just sat invisible for the rest of that wait.
+  assert.match(
+    override.trim(),
+    /^transition-duration:\s*var\(--motion-companion-fade-ms,\s*[\d.]+ms\)\s*!important;?$/,
+    "reduced motion must keep the companion fade, not collapse it to 1ms"
+  );
+  const fallbackMatch = override.match(/var\(--motion-companion-fade-ms,\s*([\d.]+)ms\)/);
+  assert.ok(fallbackMatch, "expected a --motion-companion-fade-ms fallback duration");
+  assert.equal(Number(fallbackMatch[1]), MOTION_TIMING.companionFadeMs);
 });
