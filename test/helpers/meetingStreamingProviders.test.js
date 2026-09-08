@@ -18,7 +18,9 @@ test("every allowed realtime provider has a streaming client (no silent OpenAI f
   const { STREAMING_CLIENT_BY_PROVIDER, ALLOWED_MEETING_PROVIDERS } = await load();
 
   for (const provider of ALLOWED_MEETING_PROVIDERS) {
-    if (provider === "local") continue;
+    // local and self-hosted transcribe buffered chunks, they never open a
+    // realtime streaming socket, so they have no streaming client by design.
+    if (provider === "local" || provider === "self-hosted") continue;
     assert.equal(
       typeof STREAMING_CLIENT_BY_PROVIDER[provider],
       "function",
@@ -89,4 +91,10 @@ test("connection identity includes every provider-specific option", async () => 
     getMeetingConnectionKey(options),
     getMeetingConnectionKey({ ...options, tenant: "tenant-b" })
   );
+});
+
+test("allow-list accepts self-hosted meeting transcription", async () => {
+  const { ALLOWED_MEETING_PROVIDERS } = await load();
+
+  assert.equal(ALLOWED_MEETING_PROVIDERS.has("self-hosted"), true);
 });

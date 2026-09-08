@@ -61,7 +61,26 @@ test("BYOK OpenAI never downgrades to managed cloud when its key is unavailable"
   );
 });
 
-test("self-hosted mode never follows a stale Tinfoil provider", async () => {
+test("self-hosted mode routes to the chunked HTTP batch transcriber", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  assert.deepEqual(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      transcriptionMode: "self-hosted",
+      remoteTranscriptionUrl: "https://llama-swap.rodaddy.live/v1",
+      remoteTranscriptionModel: "whisper-large-v3-turbo",
+    }),
+    {
+      provider: "self-hosted",
+      endpoint: "https://llama-swap.rodaddy.live/v1/audio/transcriptions",
+      model: "whisper-large-v3-turbo",
+      language: "en",
+    }
+  );
+});
+
+test("self-hosted mode fails closed when its URL is not configured", async () => {
   const { resolveMeetingTranscriptionOptions } = await load();
 
   assert.throws(
@@ -69,8 +88,9 @@ test("self-hosted mode never follows a stale Tinfoil provider", async () => {
       resolveMeetingTranscriptionOptions({
         ...baseOptions,
         transcriptionMode: "self-hosted",
+        remoteTranscriptionUrl: "   ",
       }),
-    /Self-hosted realtime transcription is not supported/
+    /not configured/
   );
 });
 
