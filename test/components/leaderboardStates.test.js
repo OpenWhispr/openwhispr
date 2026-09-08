@@ -109,7 +109,7 @@ test("ready with sync off renders the dedicated sync preview", async () => {
       updating: false,
     })
   );
-  assertState(markup, "sync", "Turn on Analytics Sync");
+  assertState(markup, "sync", "Opt-in to Leaderboards");
 });
 
 test("a ready board with one of five participants renders the inline nudge", async () => {

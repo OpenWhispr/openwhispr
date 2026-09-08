@@ -19,6 +19,7 @@ test("the leaderboard is a standalone control-panel view", () => {
   assert.ok(leaderboard.includes("<LeaderboardSection"));
   assert.ok(leaderboard.includes('<h1 className="text-base!'));
   assert.ok(leaderboard.includes('t("insights.leaderboard.title")'));
+  assert.equal(leaderboard.includes('t("insights.leaderboard.description")'), false);
 });
 
 test("leaderboard access is plan agnostic and invitation led", () => {

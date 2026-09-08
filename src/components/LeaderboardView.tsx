@@ -99,9 +99,6 @@ export default function LeaderboardView({ onSignIn, onInvite }: LeaderboardViewP
         <h1 className="text-base! font-semibold! leading-none! tracking-normal! text-foreground">
           {t("insights.leaderboard.title")}
         </h1>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {t("insights.leaderboard.description")}
-        </p>
       </header>
 
       <LeaderboardSection
