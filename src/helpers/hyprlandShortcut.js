@@ -64,6 +64,11 @@ const BINDS_FILENAMES = {
   conf: `${DISTRIBUTION.runtimeNamespace}-binds.conf`,
   lua: `${DISTRIBUTION.runtimeNamespace}-binds.lua`,
 };
+// A rebuild under a different distribution changes the namespace, so files
+// written by an earlier install keep their old names. Cleanup has to look for
+// those too, or the user is left with a stale binds file the app no longer
+// manages and a dead source line in their Hyprland config.
+const MANAGED_BINDS_FILENAME_PATTERN = /^[a-z0-9][\w.-]*-binds\.(conf|lua)$/i;
 const MANAGED_HEADER_TEXT = [
   `${DISTRIBUTION.productName} keybinds (managed automatically)`,
   "If you delete this file, also remove the matching load line from your Hyprland config.",
@@ -73,6 +78,13 @@ const MANAGED_HEADER_VARIANTS = new Set([
   "OpenWhispr keybinds (managed automatically)",
   "If you delete this file, also remove the matching source line from your Hyprland config.",
 ]);
+
+function isManagedBindsContent(content) {
+  return (
+    [...MANAGED_HEADER_VARIANTS].some((header) => content.includes(header)) ||
+    content.includes(DBUS_SERVICE_NAME)
+  );
+}
 
 function isManagedHeaderLine(line) {
   return MANAGED_HEADER_VARIANTS.has(line.trim().replace(/^(#|--)\s*/, ""));
@@ -463,7 +475,9 @@ class HyprlandShortcutManager {
         .split("\n")
         .filter((line) => {
           const trimmed = line.trim();
-          return !(trimmed.includes(BINDS_FILENAMES.conf) && /^source\s*=/.test(trimmed));
+          if (!/^source\s*=/.test(trimmed)) return true;
+          const sourced = path.basename(trimmed.split("=").slice(1).join("=").trim());
+          return !MANAGED_BINDS_FILENAME_PATTERN.test(sourced);
         })
         .join("\n");
       if (newContent !== content) fs.writeFileSync(legacyConfigPath, newContent, "utf-8");
@@ -471,14 +485,30 @@ class HyprlandShortcutManager {
       if (err.code !== "ENOENT") throw err;
     }
 
+    for (const candidate of this._legacyBindsFiles(configDir, legacyBindsPath)) {
+      try {
+        const content = fs.readFileSync(candidate, "utf-8");
+        // Only delete a file this app wrote: either header wording, or the
+        // dbus service it binds to.
+        if (isManagedBindsContent(content)) fs.unlinkSync(candidate);
+      } catch (err) {
+        if (err.code !== "ENOENT") throw err;
+      }
+    }
+  }
+
+  /** The current namespace's .conf, plus any left by a previous namespace. */
+  _legacyBindsFiles(configDir, currentConfPath) {
+    const files = new Set([currentConfPath]);
     try {
-      const content = fs.readFileSync(legacyBindsPath, "utf-8");
-      if (content.includes(MANAGED_HEADER_TEXT[0]) || content.includes(DBUS_SERVICE_NAME)) {
-        fs.unlinkSync(legacyBindsPath);
+      for (const entry of fs.readdirSync(configDir)) {
+        if (entry === BINDS_FILENAMES.lua) continue;
+        if (MANAGED_BINDS_FILENAME_PATTERN.test(entry)) files.add(path.join(configDir, entry));
       }
     } catch (err) {
       if (err.code !== "ENOENT") throw err;
     }
+    return files;
   }
 
   _getConfig() {

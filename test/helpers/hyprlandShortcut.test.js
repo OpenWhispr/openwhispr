@@ -462,3 +462,39 @@ test("punctuation accelerators validate and convert to XKB key names", () => {
     "CTRL, plus"
   );
 });
+
+test(
+  "cleans up binds left by a previous distribution namespace",
+  withTempHyprConfig(async (configDir) => {
+    // Rebuilding under a different distribution renames the binds file. The
+    // old one is still ours and still sourced, so it has to be removed too;
+    // otherwise the user keeps a dead source line and an orphaned file that
+    // nothing manages.
+    const confPath = path.join(configDir, "hyprland.conf");
+    const strayBinds = path.join(configDir, "previous-namespace-binds.conf");
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(configDir + "/hyprland.lua", "-- lua config\n");
+    fs.writeFileSync(confPath, `# keep this comment\nsource = ./previous-namespace-binds.conf\n`);
+    fs.writeFileSync(
+      strayBinds,
+      "# OpenWhispr keybinds (managed automatically)\n" +
+        `bind = CTRL SHIFT, Return, exec, ${DBUS_COMMAND}\n`
+    );
+    const hyprctl = successfulHyprctl("lua");
+    const HyprlandShortcutManager = loadManager(hyprctl.execFileSync);
+
+    assert.equal(
+      await new HyprlandShortcutManager().registerKeybinding("Control+Shift+Enter"),
+      true
+    );
+
+    assert.equal(
+      fs.existsSync(strayBinds),
+      false,
+      "the previous namespace's binds file is removed"
+    );
+    const conf = fs.readFileSync(confPath, "utf8");
+    assert.doesNotMatch(conf, /previous-namespace-binds\.conf/);
+    assert.match(conf, /# keep this comment/, "unrelated config is preserved");
+  })
+);
