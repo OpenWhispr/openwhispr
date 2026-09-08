@@ -1,5 +1,6 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
+const { computePcm16Rms } = require("../utils/audioUtils");
 
 const SAMPLE_RATE = 16000;
 const WEBSOCKET_TIMEOUT_MS = 15000;
@@ -12,6 +13,10 @@ const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
 // Google documents a 1000-phrase ceiling but only promises quality up to 100;
 // the batch dictionary paths truncate the same array at 100.
 const MAX_CUSTOM_VOCABULARY = 100;
+// Trailing room noise in dictation recordings measures 0.003-0.010 RMS while
+// speech frames sit above ~0.0105, so only a frame at this level is a new
+// utterance rather than the tail of a turn the server already closed.
+const TURN_REOPEN_RMS = 0.012;
 const GEMINI_LIVE_MODEL = "gemini-3.5-transcribe-live";
 
 // In managed mode the model comes from the BYOK-shaped settings, which still
@@ -231,7 +236,10 @@ class GeminiLiveStreaming {
       // Partials are revised, not appended to ("The quick brown" becomes
       // "the quick brown fox"), so consumers must replace the whole string.
       const partial = serverContent.interimInputTranscription?.text;
-      if (partial) this.onPartialTranscript?.(partial);
+      if (partial) {
+        this._turnEnded = false;
+        this.onPartialTranscript?.(partial);
+      }
 
       const final = serverContent.inputTranscription?.text?.trim();
       if (final) {
@@ -245,9 +253,10 @@ class GeminiLiveStreaming {
         });
       }
 
-      // Only a generationComplete after audioStreamEnd answers our turn;
-      // anything earlier cannot be the reply to it.
-      if (serverContent.generationComplete && this._audioStreamEndSentAt) this._resolveTurnEnd();
+      // The server closes a turn on trailing silence, often before the hotkey is
+      // released; that generationComplete already answers the final. Speech
+      // (a loud frame or a new partial) reopens a turn, so a later stop waits again.
+      if (serverContent.generationComplete) this._resolveTurnEnd();
     } catch (err) {
       debugLogger.error("Gemini Live message parse error", { error: err.message });
     }
@@ -343,6 +352,7 @@ class GeminiLiveStreaming {
       })
     );
     this.audioBytesSent += pcmBuffer.length;
+    if (this._turnEnded && computePcm16Rms(pcmBuffer) >= TURN_REOPEN_RMS) this._turnEnded = false;
   }
 
   sendAudio(pcmBuffer) {

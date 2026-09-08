@@ -7,7 +7,8 @@ const {
   buildGeminiLiveUrl,
 } = require("../../src/helpers/geminiLiveStreaming");
 
-const FRAME = Buffer.alloc(1600); // one 50ms worklet frame at 16kHz s16le
+const FRAME = Buffer.alloc(1600); // one 50ms worklet frame at 16kHz s16le (silence)
+const LOUD_FRAME = Buffer.alloc(1600, 0x20); // same frame at speech level (~0.25 RMS)
 
 // Loopback Live server. `script(socket, message)` reacts to each client
 // message; the default answers `setup` with setupComplete, like the real one.
@@ -338,12 +339,53 @@ test("disconnect spends only what is left of the budget since audioStreamEnd", a
   );
 });
 
-test("a mid-dictation generationComplete does not end the turn early", async () => {
+test("a turn the server closed before the hotkey release answers the stop immediately", async () => {
   await withServer(
-    async ({ streaming }) => {
+    async ({ streaming, received }) => {
       await streaming.connect({ token: "t", mode: "byok" });
       streaming.sendAudio(FRAME);
       await new Promise((resolve) => setTimeout(resolve, 30));
+      // Trailing silence let the server finalize on its own; nothing more will come.
+      assert.equal(streaming._turnEnded, true);
+      // Room-noise frames keep arriving until the hotkey is released; they are not speech.
+      streaming.sendAudio(FRAME);
+      assert.equal(streaming._turnEnded, true);
+
+      const startedAt = Date.now();
+      assert.deepEqual(await streaming.disconnect(true), { text: "already final" });
+      assert.ok(Date.now() - startedAt < 500, "must not wait out the budget for a second turn end");
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      assert.equal(
+        received.filter((message) => message.realtimeInput?.audioStreamEnd).length,
+        1,
+        "the stream is still closed cleanly"
+      );
+    },
+    (socket, message) => {
+      if (message.setup) {
+        socket.send(JSON.stringify({ setupComplete: {} }));
+        return;
+      }
+      if (message.realtimeInput?.audio) {
+        socket.send(
+          JSON.stringify({ serverContent: { inputTranscription: { text: "already final" } } })
+        );
+        socket.send(JSON.stringify({ serverContent: { generationComplete: true } }));
+      }
+    }
+  );
+});
+
+test("speech after a closed turn reopens it, so the stop waits for the last turn", async () => {
+  await withServer(
+    async ({ streaming }) => {
+      await streaming.connect({ token: "t", mode: "byok" });
+      streaming.sendAudio(Buffer.alloc(1600, 1));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      assert.equal(streaming._turnEnded, true);
+
+      // The user keeps talking: a speech-level frame reopens the turn and the stop must wait.
+      streaming.sendAudio(LOUD_FRAME);
       assert.equal(streaming._turnEnded, false);
 
       assert.deepEqual(await streaming.disconnect(true), { text: "first segment last words" });
@@ -353,7 +395,8 @@ test("a mid-dictation generationComplete does not end the turn early", async () 
         socket.send(JSON.stringify({ setupComplete: {} }));
         return;
       }
-      if (message.realtimeInput?.audio) {
+      const audio = message.realtimeInput?.audio;
+      if (audio && Buffer.from(audio.data, "base64")[0] !== LOUD_FRAME[0]) {
         socket.send(
           JSON.stringify({ serverContent: { inputTranscription: { text: "first segment" } } })
         );
