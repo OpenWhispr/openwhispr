@@ -953,3 +953,79 @@ test("clearing all messages outside of a stream (the shape of a new-conversation
   const hiSpan = riseSpans(container).find((span) => span.textContent === "Hi");
   assert.ok(hiSpan, "the new reply's own first word must still rise after a between-streams reset");
 });
+
+// Fix round 5: round 4 stopped the empty-content render from POISONING the
+// floor, but it did not stop that render from RECOMPUTING settled/tail at
+// all. On that render, displayedResponse still shows the completed previous
+// reply (via the deliberate fallback), isStreamingNow is already true (the
+// new message says isStreaming: true), and settledLengthRef was just reset
+// to 0 by the id check — so splitStreamingMarkdown(previousReplyFullText, 0)
+// runs for real and, having no trailing "\n\n" after the previous reply's
+// LAST paragraph to include it in "settled", correctly-by-its-own-logic
+// carves that last paragraph out as a fresh "tail". settledMarkdown changing
+// (the 3-paragraph text shrinking to 2 paragraphs) resets risenWordsRef (see
+// the block below the split, keyed on settledMarkdown identity), and the
+// tail then renders through rehypeWordRise with an empty risenWords map —
+// so the previous reply's own last paragraph, already read and settled,
+// gets marked newly risen and re-plays its CSS rise animation. Byte-identical
+// at d98f746f (fix round 3) — not round 4's regression, a pre-existing
+// property of the id-keyed reset that round 4 correctly scoped out.
+test("the completed previous reply does not re-split or re-animate on the empty-content render that starts the next reply (fix round 5)", async (t) => {
+  const { container, setAssistantMessage } = await mountStreamingAssistantPanel(t);
+
+  await setAssistantMessage(
+    "Paragraph one.\n\nParagraph two.\n\nParagraph three.",
+    true,
+    "assistant-1"
+  );
+  await setAssistantMessage(
+    "Paragraph one.\n\nParagraph two.\n\nParagraph three.",
+    false,
+    "assistant-1"
+  );
+  const lastParagraphBefore = findSettledParagraph(container, "Paragraph three.");
+  assert.ok(
+    lastParagraphBefore,
+    "fixture-integrity check: reply 1's last paragraph must be showing, settled"
+  );
+  assert.equal(
+    riseSpans(container).length,
+    0,
+    "fixture-integrity check: a completed reply must show no risen words at all"
+  );
+
+  // THE EMPTY-CONTENT RENDER: a brand new id, no chunk delivered yet.
+  await setAssistantMessage("", true, "assistant-2");
+
+  assert.equal(
+    riseSpans(container).length,
+    0,
+    "the previous reply's already-settled words must not become risen again on the empty-content render"
+  );
+  assert.equal(
+    wordWrappedSpans(container).length,
+    0,
+    "the previous reply must render as a single settled document with no live tail at all on the empty-content render — any word-wrapped span means it was re-split into settled+tail"
+  );
+  assert.equal(
+    findSettledParagraph(container, "Paragraph three."),
+    lastParagraphBefore,
+    "the previous reply's last paragraph must keep its exact DOM node — a fresh node restarts its CSS rise animation from the 'from' keyframe even without a new data-rise marker"
+  );
+  assert.ok(
+    container.textContent.includes("Paragraph three."),
+    "the previous reply's content must still be fully visible, unchanged"
+  );
+
+  // Continue into reply 2's real chunks — round 4's guarantees must still hold.
+  await setAssistantMessage("Hello there", true, "assistant-2");
+  const helloSpan = riseSpans(container).find((span) => span.textContent === "Hello");
+  assert.ok(helloSpan, "round 4 guarantee: the new reply's first word must still rise");
+
+  await setAssistantMessage("Hello there friend, how are you today", true, "assistant-2");
+  assert.deepEqual(
+    paragraphTexts(container),
+    ["Hello there friend, how are you today"],
+    "round 4 guarantee: the new reply must still be one paragraph, not split at the first chunk's length"
+  );
+});

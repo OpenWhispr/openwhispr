@@ -325,33 +325,54 @@ export function AssistantPanel({
     latestAssistantMessageIdRef.current = latestAssistantMessage?.id;
     settledLengthRef.current = 0;
   }
-  const { settled: settledMarkdown, tail: tailMarkdown } = useMemo(
-    () =>
-      isStreamingNow
-        ? splitStreamingMarkdown(displayedResponse, settledLengthRef.current)
-        : { settled: displayedResponse, tail: "" },
-    [displayedResponse, isStreamingNow]
-  );
-  // The write-back must be skipped on the guaranteed empty-content render at
-  // the start of every new reply: useChatStreaming.ts appends
-  // {content: "", isStreaming: true} for the new id BEFORE awaiting the
-  // first chunk, which is a render on its own. On exactly that render,
-  // responseContent (this message's own content) is "", so displayedResponse
-  // falls back to displayedResponseRef.current — the PREVIOUS reply's latched
-  // text (see above; that fallback is deliberate, so the UI doesn't flash
-  // empty). isStreamingNow is already true, so without this guard,
-  // settledMarkdown here reflects the PREVIOUS reply's boundary, and writing
-  // it back would immediately re-poison the floor the id check above just
-  // reset to 0 on this SAME render. Gating on responseContent (not
-  // isStreamingNow alone) is exact, not just defensive: useChatStreaming
-  // never resets fullContent back to "" for an id once it has grown — a
-  // completed stream ends with isStreaming: false, an aborted/errored one
-  // ends with a non-empty error string, and a think-only empty completion is
-  // substituted with a non-empty placeholder (see useChatStreaming.ts) — so
-  // "" only ever means "this id's own content genuinely has nothing yet."
-  // Skipping the write leaves settledLengthRef.current at whatever the id
-  // check above just left it (0 for a brand new id), which is what the very
-  // next render — the first real chunk — must see.
+  // The split itself must be SKIPPED, not just its result kept off the floor
+  // (fix round 5): on the guaranteed empty-content render (see the write-back
+  // comment below), recomputing against displayedResponse's fallback text
+  // still re-derives a split from the PREVIOUS reply — and since that reply
+  // has no trailing "\n\n" after its own last paragraph (nothing streams
+  // after a completed reply), computeNaturalBoundary correctly-by-its-own-
+  // logic carves that last paragraph OUT of settled and hands it back as a
+  // fresh "tail", even though the floor guard below stops that tail's length
+  // from being persisted anywhere. settledMarkdown changing shape (shrinking
+  // by one paragraph) is exactly what resets risenWordsRef a few lines down,
+  // so the previous reply's already-settled last paragraph gets rendered
+  // through the tail's rehypeWordRise with an empty risenWords map — and an
+  // already-read paragraph replays its rise animation, the very
+  // twitching-settled-text failure this task exists to prevent. This ref
+  // holds the last ACTUALLY DISPLAYED split so an empty-content render can
+  // reuse it verbatim instead of re-deriving one.
+  const previousSplitRef = useRef<{ settled: string; tail: string }>({ settled: "", tail: "" });
+  const { settled: settledMarkdown, tail: tailMarkdown } = useMemo(() => {
+    // Nothing to show at all (no reply yet, or just reset) — do not reuse a
+    // stale cache from whatever was showing before; there is nothing before.
+    if (!displayedResponse) return { settled: "", tail: "" };
+    // The empty-content render: responseContent (this message's own content)
+    // is "", so displayedResponse is only non-empty via the fallback to the
+    // PREVIOUS reply's latched text (deliberate, not the bug — see above).
+    // Reuse exactly what was already on screen rather than re-deriving a
+    // split from it, per the comment above.
+    if (!responseContent) return previousSplitRef.current;
+    return isStreamingNow
+      ? splitStreamingMarkdown(displayedResponse, settledLengthRef.current)
+      : { settled: displayedResponse, tail: "" };
+  }, [displayedResponse, isStreamingNow, responseContent]);
+  previousSplitRef.current = { settled: settledMarkdown, tail: tailMarkdown };
+  // The write-back must ALSO be skipped on that same render (fix round 4):
+  // isStreamingNow is already true there (the new message says
+  // isStreaming: true), so without this guard, writing settledMarkdown.length
+  // back would re-poison the floor the id check above just reset to 0 on
+  // this SAME render — settledMarkdown may be the reused previous split
+  // above, but its LENGTH is still the previous reply's, not this one's.
+  // Gating on responseContent (not isStreamingNow alone) is exact, not just
+  // defensive: useChatStreaming never resets fullContent back to "" for an
+  // id once it has grown — a completed stream ends with isStreaming: false,
+  // an aborted/errored one ends with a non-empty error string, and a
+  // think-only empty completion is substituted with a non-empty placeholder
+  // (see useChatStreaming.ts) — so "" only ever means "this id's own content
+  // genuinely has nothing yet." Skipping the write leaves
+  // settledLengthRef.current at whatever the id check above just left it (0
+  // for a brand new id), which is what the very next render — the first
+  // real chunk — must see.
   if (isStreamingNow && responseContent) settledLengthRef.current = settledMarkdown.length;
   // Sticky per-word rise state for the tail's current settled-prefix cycle:
   // real (HAST-order) word index -> its assigned delay, mutated in place by
