@@ -58,6 +58,14 @@ const AGENT_DICTATION_PILL_SIZE = Object.freeze({ ...WINDOW_SIZES.BASE });
 // silently — the exact duplicated-literal class of regression this plan has
 // already cost fix rounds on elsewhere (fix round 1, finding 3).
 const AGENT_DICTATION_PILL_FADE_MS = 160;
+// How long an animated hide waits for the renderer's own hide-window IPC
+// before hiding anyway. Matches the renderer's zoop settle window —
+// settleFallbackMs(MOTION_TIMING.zoopMs) in src/utils, i.e. the pinned zoop
+// duration plus the shared scheduling grace. Same deliberate-duplicate
+// arrangement as AGENT_DICTATION_PILL_FADE_MS above (no import path from main
+// into renderer-only modules), exposed below the class so a test binds the
+// two together instead of letting them drift apart silently.
+const PILL_HIDE_FALLBACK_MS = 320;
 const { centeredBounds, clampedBounds } = require("./onboardingWindowBounds");
 const { ONBOARDING_DEMO_KINDS, isOnboardingInputAllowed } = require("./onboardingInputPolicy");
 
@@ -78,6 +86,7 @@ class WindowManager {
     // teardown path (id-matched end, onboarding exit, control panel closed).
     this.onOnboardingDemoTeardown = null;
     this.notificationWindow = null;
+    this._pillHideTimer = null;
     this.agentDictationPillWindow = null;
     this._agentDictationPillReady = false;
     this._agentDictationPillHideTimer = null;
@@ -1774,10 +1783,21 @@ class WindowManager {
     if (this._onboardingActive) return;
     const { focus = false, reposition = false, targetPidPromise } = options;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    // A show cancels a pending zoop-then-hide — the window must stay put, not
+    // disappear out from under a request that arrived mid-collapse. Placed
+    // after the guards above so a show that is itself blocked (onboarding, no
+    // window) never cancels a hide it cannot honour — the stranding shape
+    // Task 7's review found on the companion pill — and before the
+    // panel-open branch below, because that branch is an ACCEPTED show too:
+    // a panel opening mid-zoop would otherwise have its window pulled out
+    // from under it by the timer.
+    clearTimeout(this._pillHideTimer);
+    this._pillHideTimer = null;
     if (this._assistantPanelOpen) {
       // The open panel owns geometry (no reposition), but it must never be
       // left invisible: surface the window if something hid it.
       if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
+      this._notifyPillWillShow();
       if (focus) this.mainWindow.focus();
       return;
     }
@@ -1794,9 +1814,22 @@ class WindowManager {
         this.mainWindow.show();
       }
     }
+    this._notifyPillWillShow();
     if (focus) {
       this.mainWindow.focus();
     }
+  }
+
+  // Sent AFTER the window is on screen, so the first visible frame still
+  // holds the collapsed exit pose and the pill unzoops out of it. Sent on
+  // EVERY accepted show, not only when this process had a hide pending: a
+  // renderer-initiated hide (Escape, the menu's Hide, auto-hide) leaves the
+  // pill exited with no timer here at all, and without this the window would
+  // come back with an invisible pill. That is the opposite of the companion
+  // pill's rule in showAgentDictationPill, whose "will-show" only ever
+  // reverses a fade this process itself started.
+  _notifyPillWillShow() {
+    this.mainWindow.webContents.send("pill-will-show");
   }
 
   setOnboardingActive(active) {
@@ -2010,12 +2043,39 @@ class WindowManager {
     dockManager.setControlPanelVisible(false);
   }
 
-  hideDictationPanel() {
+  // The pill zoops out on the renderer's clock and then asks for the hide
+  // (hide-window IPC -> animate:false). The timer only covers a renderer that
+  // never answers — a route with no pill mounted (onboarding), or a dead one.
+  // An open (or busy) assistant panel keeps its window.
+  //
+  // Returns false ONLY for that refusal, and true whenever the window is
+  // hidden or a hide has actually been started. The hide-window IPC turns a
+  // false into a rejection: App.jsx releases the held Agent mark when that
+  // call settles, so a silent "done" on a window still on screen would play
+  // the leaf->ring morph in full view — the exact bug Task 8 exists to
+  // prevent. Nothing may resolve that IPC without a hide behind it.
+  hideDictationPanel({ animate = true } = {}) {
     // An open panel, or a command still thinking toward one, must not lose
     // its window (a PTT tap during thinking used to hide it — the panel then
     // opened invisibly and nothing could show it again).
-    if (this._assistantPanelOpen || this._assistantPanelBusy) return;
+    if (this._assistantPanelOpen || this._assistantPanelBusy) return false;
     this._mainWindowPlacementCoordinator.cancelPending();
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return true;
+    // Nothing on screen to zoop: an already-hidden window would otherwise sit
+    // through the whole fallback waiting for a collapse nobody can see.
+    if (!animate || !this.mainWindow.isVisible()) {
+      this._hideMainWindowNow();
+      return true;
+    }
+    if (this._pillHideTimer) return true;
+    this.mainWindow.webContents.send("pill-will-hide");
+    this._pillHideTimer = setTimeout(() => this._hideMainWindowNow(), PILL_HIDE_FALLBACK_MS);
+    return true;
+  }
+
+  _hideMainWindowNow() {
+    clearTimeout(this._pillHideTimer);
+    this._pillHideTimer = null;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.hide();
   }
 
@@ -2282,6 +2342,12 @@ class WindowManager {
 
     this.mainWindow.on("closed", () => {
       this.dragManager.cleanup();
+      // A pending zoop-then-hide belongs to THIS window; without clearing it
+      // here a stale timer outlives the window it was scheduled for and later
+      // hides whatever replacement has since taken mainWindow's place (the
+      // same hazard the companion pill's `closed` handler clears).
+      clearTimeout(this._pillHideTimer);
+      this._pillHideTimer = null;
       const pillWindow = this.agentDictationPillWindow;
       if (pillWindow && !pillWindow.isDestroyed()) pillWindow.close();
       this.mainWindow = null;
@@ -2715,5 +2781,6 @@ class WindowManager {
 // this main-process file cannot import) can bind the two duplicated values
 // together — see AGENT_DICTATION_PILL_FADE_MS's own comment above.
 WindowManager.AGENT_DICTATION_PILL_FADE_MS = AGENT_DICTATION_PILL_FADE_MS;
+WindowManager.PILL_HIDE_FALLBACK_MS = PILL_HIDE_FALLBACK_MS;
 
 module.exports = WindowManager;

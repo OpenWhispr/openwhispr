@@ -1087,3 +1087,20 @@ test("resolveHandsFreeTipLadderVisible leaves the hands-free tip card's own visi
     false
   );
 });
+
+// Task 9: the pill's exit "zoop" is a transform transition, and the native
+// window waits for it. Two states have no transform transition to wait for at
+// all, so waiting would park the hide for the whole fallback window instead of
+// choreographing anything.
+test("the exit waits for its zoop only when there is really a zoop to wait for", async () => {
+  const { shouldAwaitPillZoop } = await load();
+
+  assert.equal(shouldAwaitPillZoop({ prefersReducedMotion: false, alreadyExited: false }), true);
+  // index.css's blanket reduced-motion rule strips transform from
+  // transition-property with !important, so the transitionend this waits on
+  // can never fire — the hide would only ever land on its fallback.
+  assert.equal(shouldAwaitPillZoop({ prefersReducedMotion: true, alreadyExited: false }), false);
+  // Re-entering a pose the element already holds starts no transition either.
+  assert.equal(shouldAwaitPillZoop({ prefersReducedMotion: false, alreadyExited: true }), false);
+  assert.equal(shouldAwaitPillZoop({ prefersReducedMotion: true, alreadyExited: true }), false);
+});

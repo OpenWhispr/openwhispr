@@ -45,6 +45,27 @@ export function resolvePillShrinkWait({ target, prev, prefersReducedMotion, el }
 }
 
 /**
+ * Whether the pill's exit must wait for its "zoop" (the transform collapse in
+ * `.assistant-pill-presence[data-pill-exit="zoop"]`) before the native window
+ * hides. Two states have no transform transition to wait for at all, and
+ * waiting anyway would park the window on screen for the whole fallback
+ * window instead of choreographing anything:
+ *
+ * - Reduced motion. src/index.css's blanket `*, *::before, *::after` rule
+ *   sets `transition-property` with `!important` to a list that EXCLUDES
+ *   transform, so the transform transitionend this waits on can structurally
+ *   never fire — the same shape resolvePillShrinkWait above short-circuits
+ *   for `width`. The pose still applies (instantly), so the window hides on
+ *   exactly the hard cut reduced motion asks for.
+ * - The pill is already collapsed (a repeat hide against a window that is
+ *   already gone): re-applying a pose the element already holds starts no
+ *   transition, so nothing would ever settle.
+ */
+export function shouldAwaitPillZoop({ prefersReducedMotion, alreadyExited }) {
+  return !prefersReducedMotion && !alreadyExited;
+}
+
+/**
  * Whether the window-size ladder still needs to reserve HANDS_FREE_TIP room.
  * Tracks the Hold migration card through its whole MOUNTED lifetime (visible
  * OR exiting), not its `visible` sub-state alone: resolvePillShrinkWait

@@ -144,10 +144,16 @@ Module._load = originalLoad;
 
 function fakeWindow({ visible }) {
   const calls = [];
+  // IPC messages are recorded apart from `calls` on purpose: the assertions
+  // below are about window verbs, and Task 9's pill-will-show/pill-will-hide
+  // would otherwise change every one of them.
+  const messages = [];
   let isVisible = visible;
   return {
     calls,
+    messages,
     window: {
+      webContents: { send: (channel, payload) => messages.push({ channel, payload }) },
       isDestroyed: () => false,
       isVisible: () => isVisible,
       isMinimized: () => false,
@@ -181,7 +187,7 @@ function makeManager(windowState) {
   manager._notifyMainWindowHorizontalDirection = () => undefined;
   manager.showAgentDictationPill = () => undefined;
   manager.hideAgentDictationPill = () => undefined;
-  return { manager, calls: fake.calls };
+  return { manager, calls: fake.calls, messages: fake.messages };
 }
 
 test("the Agent companion follows the edge opposite the panel", () => {
@@ -370,26 +376,45 @@ test("opening the assistant panel surfaces a hidden pill window before focusing 
 });
 
 test("showDictationPanel still surfaces a hidden window while the panel is open", () => {
-  const { manager, calls } = makeManager({ visible: false });
+  const { manager, calls, messages } = makeManager({ visible: false });
   // Panel open but the window got hidden afterwards (tray Hide raced the open).
   manager._assistantPanelOpen = true;
   manager.showDictationPanel({ focus: true });
   assert.deepEqual(calls, ["showInactive", "focus"]);
+  // Task 9: an accepted show always tells the renderer to unzoop, including
+  // on this early-return path — a renderer-initiated hide leaves the pill in
+  // its exited pose with no main-side timer to cancel, so without this the
+  // window would come back with an invisible pill.
+  assert.deepEqual(
+    messages.map((message) => message.channel),
+    ["pill-will-show"]
+  );
 });
 
 test("hideDictationPanel refuses while an assistant command is busy or the panel is open", () => {
-  const { manager, calls } = makeManager({ visible: true });
+  const { manager, calls, messages } = makeManager({ visible: true });
   manager.setAssistantPanelBusy(true);
-  manager.hideDictationPanel();
+  assert.equal(manager.hideDictationPanel(), false);
   assert.deepEqual(calls, [], "a thinking command must not lose its window");
+  assert.deepEqual(messages, [], "and it is never even asked to zoop");
   manager.setAssistantPanelBusy(false);
   manager.setAssistantPanelOpen(true);
   calls.length = 0;
-  manager.hideDictationPanel();
+  assert.equal(manager.hideDictationPanel(), false);
   assert.deepEqual(calls, []);
   manager.setAssistantPanelOpen(false);
   calls.length = 0;
-  manager.hideDictationPanel();
+  messages.length = 0;
+  // Task 9: an accepted hide asks the renderer to zoop first and hides only
+  // once its hide-window IPC lands (or the fallback expires — see
+  // windowManagerPillHide.test.js). The renderer's own request skips that.
+  assert.equal(manager.hideDictationPanel(), true);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(
+    messages.map((message) => message.channel),
+    ["pill-will-hide"]
+  );
+  assert.equal(manager.hideDictationPanel({ animate: false }), true);
   assert.deepEqual(calls, ["hide"]);
 });
 

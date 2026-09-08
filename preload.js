@@ -80,6 +80,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("paste-at-captured-target", sessionId, text, options),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
+  onPillWillHide: registerListener("pill-will-hide", (callback) => () => callback()),
+  onPillWillShow: registerListener("pill-will-show", (callback) => () => callback()),
   captureDictationTarget: () => ipcRenderer.invoke("capture-dictation-target"),
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),

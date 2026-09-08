@@ -684,6 +684,50 @@
   }
 }
 
+/* Exit "zoop": the pill collapses into its own centre with a 2px squash, the
+   opacity leaving over the last 40%; the native window hides after (main's
+   PILL_HIDE_FALLBACK_MS only covers a renderer that never answers). Show is
+   the mirror on the show spring, whose ~4% overshoot is the spring's own —
+   springLinearEasing(380, 28) in springEasing.ts, not a separate keyframe.
+   This rule also replaces the wrapper's former Tailwind `transition-opacity
+   duration-150`: an unlayered shorthand here beats that layered utility for
+   transition-property, so leaving both would have been a silent conflict. */
+.assistant-pill-presence {
+  --pill-exit-origin: calc(100% - 20px) 50%;
+  transition:
+    transform var(--motion-show-ms, 260ms) var(--motion-show-ease, cubic-bezier(0.2, 0, 0, 1)),
+    opacity 120ms linear;
+}
+
+.assistant-pill-presence[data-horizontal-direction="left"] {
+  --pill-exit-origin: 20px 50%;
+}
+
+.voice-pill-position-center .assistant-pill-presence {
+  --pill-exit-origin: 50% 50%;
+}
+
+/* Scoped away from the Assistant footer's own phases on purpose. The rule at
+   the top of this file gives this SAME element
+   `transform-origin: var(--assistant-footer-origin)` (right/left center),
+   which the footer's enter/retreat keyframes pivot their scale(0.68) on; an
+   unscoped override here would silently retune that shipped choreography.
+   A hide never happens while a footer phase is set (the panel must be
+   unmounted first), so the exit and its return both read the pill's own
+   centre and the origin never snaps mid-transition. */
+.assistant-pill-presence:not([data-assistant-footer-phase]) {
+  transform-origin: var(--pill-exit-origin);
+}
+
+.assistant-pill-presence[data-pill-exit="zoop"] {
+  transform: scale(0.04, 0.03);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--motion-zoop-ms, 200ms) var(--motion-zoop-ease, cubic-bezier(0.4, 0, 1, 1)),
+    opacity 80ms linear 120ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .expanding-panel-surface {
     transition-duration: 1ms;
@@ -739,6 +783,22 @@
   .assistant-response-actions,
   .assistant-pill-presence {
     animation-duration: 1ms !important;
+  }
+
+  /* The pill's exit/return transition. index.css's blanket rule already
+     strips transform from transition-property here (so the collapse pose
+     applies instantly and no transform transitionend can ever fire — which
+     is why usePillExitChoreography stops waiting for one under reduced
+     motion), but it leaves opacity IN and never touches duration or delay.
+     Left alone the 80ms-after-120ms fade would still run, holding the window
+     up behind it. ONE value each, never a list: duration and delay are
+     matched by POSITION against index.css's forced property list, so a
+     comma-separated list would cycle onto the wrong property — the same trap
+     the pill's travel rule hit. A single value broadcasts to all of them. */
+  .assistant-pill-presence,
+  .assistant-pill-presence[data-pill-exit="zoop"] {
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
   }
 
   .processing-signal-glow[data-active="true"],

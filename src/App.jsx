@@ -14,6 +14,7 @@ import { useHandsFreeTip } from "./hooks/useHandsFreeTip";
 import { useMainProcessNotifications } from "./hooks/useMainProcessNotifications";
 import { useListeningEntrancePhase } from "./hooks/useListeningEntrancePhase";
 import { useWindowResizeCompensation } from "./hooks/useWindowResizeCompensation";
+import { usePillExitChoreography } from "./hooks/usePillExitChoreography";
 import { useSettingsStore } from "./stores/settingsStore";
 import { isAgentAllowed } from "./stores/policyRules";
 import { usePolicyStore } from "./stores/policyStore";
@@ -68,6 +69,9 @@ export default function App() {
   const [isHovered, setIsHovered] = useState(false);
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
   const buttonRef = useRef(null);
+  // The element the exit zoop actually plays on — usePillExitChoreography
+  // waits for ITS transform transition before the native window hides.
+  const pillPresenceRef = useRef(null);
   const { toast, dismiss, toastCount, dictationErrorActionCount, dismissByPresentation } =
     useToast();
   const { t } = useTranslation();
@@ -448,6 +452,13 @@ export default function App() {
   // hidden — and the next show is correctly the dictation pill — instead of
   // completing just before the window goes.
   const [agentMarkHeldThroughHide, setAgentMarkHeldThroughHide] = useState(false);
+  // The pill leaves with a zoop before the native window hides, and springs
+  // back on the next show. Every renderer-initiated hide goes through this.
+  const { exiting: pillExiting, hideWithZoop } = usePillExitChoreography({
+    pillPresenceRef,
+    recording: isRecording || isPreparing,
+  });
+
   // Lifted out of the callback so this stays as stable as assistant.handleClose
   // already is: AssistantPanel keys its Escape listener on the onClose prop, so
   // a wrapper that changed identity every render would rebind it every render.
@@ -489,13 +500,18 @@ export default function App() {
     ) {
       // Delay briefly so processing can start after recording stops without a flash
       hideTimeout = setTimeout(() => {
-        // Release a held Agent mark once the window is actually gone, so the
-        // leaf→ring morph plays out of sight. On SETTLE, not just on resolve:
-        // a rejected hide (the native window already destroyed — the same
-        // case dictationErrorPillHandoff guards) must not strand the leaf on
-        // a pill that will next be shown for plain dictation.
-        const releaseAgentMarkHold = () => setAgentMarkHeldThroughHide(false);
-        void window.electronAPI?.hideWindow?.().then(releaseAgentMarkHold, releaseAgentMarkHold);
+        // Release a held Agent mark only once the window is actually gone, so
+        // the leaf→ring morph plays out of sight. Releasing on any settle (the
+        // rule until Task 9) would play it in full view on the one path where
+        // the hide does NOT happen: hideDictationPanel refuses while the
+        // Assistant panel owns the window, and hide-window now rejects rather
+        // than resolving on that. A hide that never lands keeps the pill on
+        // screen, where a stale-but-static leaf is the smaller wrong than a
+        // visible identity morph — and shouldReleaseAgentMarkHold above still
+        // clears it on the next recording or when auto-hide goes off.
+        void hideWithZoop().then((result) => {
+          if (result.hidden) setAgentMarkHeldThroughHide(false);
+        });
       }, 500);
     } else if (!floatingIconAutoHide && prevAutoHideRef.current) {
       window.electronAPI?.showDictationPanel?.();
@@ -513,11 +529,14 @@ export default function App() {
     holdMigrationCard.visible,
     assistant.mounted,
     liveTranscript.mounted,
+    hideWithZoop,
   ]);
 
-  const handleClose = () => {
-    window.electronAPI.hideWindow();
-  };
+  // Memoized so the Escape listener below keeps binding once: hideWithZoop is
+  // itself stable, and this closure now reads it rather than only globals.
+  const handleClose = React.useCallback(() => {
+    void hideWithZoop();
+  }, [hideWithZoop]);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -548,6 +567,7 @@ export default function App() {
     isProcessing,
     cancelRecording,
     cancelProcessing,
+    handleClose,
   ]);
 
   // Determine current mic state
@@ -690,10 +710,16 @@ export default function App() {
         data-assistant-actions-suppressed={assistantActionsSuppressPill || undefined}
         aria-hidden={pillVisuallySuppressed || undefined}
       >
+        {/* No Tailwind transition utilities on the wrapper below:
+            .assistant-pill-presence in dictation-panel.css owns its transition
+            now (transform for the zoop/unzoop, opacity for the
+            in-place-of-pill swap). */}
         <div
-          className={`assistant-pill-presence relative flex items-center gap-2 transition-opacity duration-150 ease-out ${
+          ref={pillPresenceRef}
+          className={`assistant-pill-presence relative flex items-center gap-2 ${
             tipCardInPlaceOfPill ? "pointer-events-none opacity-0" : ""
           }`}
+          data-pill-exit={pillExiting ? "zoop" : undefined}
           data-assistant-footer-phase={assistant.open ? assistant.footerPhase : undefined}
           data-horizontal-direction={voiceHorizontalDirection}
           style={{
