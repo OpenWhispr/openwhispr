@@ -112,6 +112,8 @@ function fakeWindow({ visible }) {
       focus: () => calls.push("focus"),
       blur: () => calls.push("blur"),
       setFocusable: (value) => calls.push(`focusable:${value}`),
+      setAlwaysOnTop: (value) => calls.push(`alwaysOnTop:${value}`),
+      setSkipTaskbar: (value) => calls.push(`skipTaskbar:${value}`),
       setContentProtection: () => undefined,
       getBounds: () => ({ x: 0, y: 0, width: 96, height: 96 }),
     },
@@ -312,7 +314,12 @@ test("live transcript events are mirrored to the companion only for plain dictat
 test("opening the assistant panel surfaces a hidden pill window before focusing it", () => {
   const { manager, calls } = makeManager({ visible: false });
   manager.setAssistantPanelOpen(true);
-  assert.deepEqual(calls, ["showInactive", "focusable:true", "focus"]);
+  const expected = ["showInactive"];
+  if (process.platform === "linux") {
+    expected.push("alwaysOnTop:false", "skipTaskbar:false");
+  }
+  expected.push("focusable:true", "focus");
+  assert.deepEqual(calls, expected);
 });
 
 test("showDictationPanel still surfaces a hidden window while the panel is open", () => {
