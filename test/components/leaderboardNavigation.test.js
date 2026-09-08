@@ -53,3 +53,22 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   assert.equal(section.includes("activationDescription"), false);
   assert.ok(controlPanel.includes("onInvite={() => setShowReferrals(true)}"));
 });
+
+test("an SSO-required board starts company reauthentication directly", () => {
+  const section = read("src/components/LeaderboardSection.tsx");
+  const view = read("src/components/LeaderboardView.tsx");
+  const recovery = section.slice(
+    section.indexOf('visibleFailure === "sso"'),
+    section.indexOf(") : !visibleLeaderboard")
+  );
+  assert.ok(
+    recovery.includes('"auth.sso.continueWithSSO"'),
+    "the recovery card must name the existing SSO action"
+  );
+  assert.ok(recovery.includes("onSsoSignIn"));
+  assert.ok(view.includes("signInWithSSO(email)"));
+  assert.ok(view.includes("getOAuthProtocolRegistered"));
+  assert.ok(view.includes('t("auth.social.protocolUnavailable")'));
+  assert.ok(view.includes("oauthProtocolRegistered !== true || ssoStarting"));
+  assert.ok(view.includes('window.addEventListener("focus", handleFocus)'));
+});

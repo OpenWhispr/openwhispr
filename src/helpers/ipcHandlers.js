@@ -1448,17 +1448,24 @@ class IPCHandlers {
       return this.databaseManager.countAnalyticsEventsAwaitingUpload();
     });
 
-    ipcMain.handle("analytics-claim-anonymous", async () => {
-      const result = this.databaseManager.claimAnonymousAnalyticsEvents();
-      // Claimed rows are only pushed by the Insights view's reload, and the
-      // claim itself changes nothing it renders, so tell it to reload.
-      if (result?.claimed > 0) {
-        setImmediate(() => {
-          broadcastToWindows("analytics-changed");
-        });
+    ipcMain.handle(
+      "analytics-claim-anonymous",
+      async (_event, accountId, expectedAuthGeneration) => {
+        const state = tokenStore.getState();
+        if (!state.token || state.generation !== expectedAuthGeneration) {
+          return { success: false, claimed: 0, code: "AUTH_CONTEXT_CHANGED" };
+        }
+        const result = this.databaseManager.claimAnonymousAnalyticsEvents(accountId);
+        // Claimed rows are only pushed by the Insights view's reload, and the
+        // claim itself changes nothing it renders, so tell it to reload.
+        if (result?.claimed > 0) {
+          setImmediate(() => {
+            broadcastToWindows("analytics-changed");
+          });
+        }
+        return result;
       }
-      return result;
-    });
+    );
 
     ipcMain.handle("db-clear-transcriptions", async (event) => {
       this.audioStorageManager.deleteAllAudio();

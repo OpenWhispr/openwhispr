@@ -3320,7 +3320,7 @@
       "emptyStrip_one": "1 коллега ещё не включил Analytics Sync. После этого начнётся рейтинг.",
       "emptyStrip_other": "{{count}} коллег ещё не включили Analytics Sync. После этого начнётся рейтинг.",
       "copyNudge": "Скопировать напоминание",
-      "nudgeText": "Включите Analytics Sync в OpenWhispr → Insights → Рейтинг, чтобы мы могли увидеть рейтинг команды.",
+      "nudgeText": "Включите Analytics Sync в OpenWhispr → Рейтинг, чтобы мы могли увидеть рейтинг команды.",
       "nudgeCopied": "Напоминание скопировано",
       "nudgeCopyError": "Не удалось скопировать напоминание",
       "syncTitle": "Узнайте своё место в {{scope}}",

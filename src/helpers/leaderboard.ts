@@ -10,6 +10,7 @@ import type {
 // the server actually used, and those win over these.
 export const LEADERBOARD_PAGE_SIZE = 20;
 export const LEADERBOARD_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+export const LEADERBOARD_SHARE_MEMBER_LIMIT = 3;
 
 // Which metrics a week can rank is one fact: the weekly ones are what the
 // picker offers under "This week", and the lifetime ones are what forces a
@@ -45,11 +46,21 @@ export function resolveLeaderboardSurface({
     if (access.state === "accept_invite" || access.state === "request_join") return access.state;
     return "create";
   }
-  if (selectedScope.state === "invite") return "invite";
   if (!participationReady) {
     return participationError === "read" ? "participation_error" : "participation_loading";
   }
+  if (selectedScope.state === "invite") return "invite";
   return participating ? "board" : "sync";
+}
+
+export function leaderboardRequestKey(
+  scopeKey: string | null,
+  metric: LeaderboardMetric,
+  range: LeaderboardRange,
+  weekStart: string | null,
+  page: number
+): string {
+  return JSON.stringify([scopeKey, metric, range, weekStart, page]);
 }
 
 export function domainToWorkspaceName(domain: string | null): string {

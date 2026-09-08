@@ -3282,7 +3282,7 @@
       "emptyStrip_one": "还有 1 位队友未开启 Analytics Sync。开启后即可开始排名。",
       "emptyStrip_other": "还有 {{count}} 位队友未开启 Analytics Sync。开启后即可开始排名。",
       "copyNudge": "复制提醒",
-      "nudgeText": "请在 OpenWhispr → Insights → 排行榜中开启 Analytics Sync，这样我们就能查看团队排行榜。",
+      "nudgeText": "请在 OpenWhispr → 排行榜中开启 Analytics Sync，这样我们就能查看团队排行榜。",
       "nudgeCopied": "提醒已复制",
       "nudgeCopyError": "无法复制提醒",
       "syncTitle": "查看你在 {{scope}} 中的排名",

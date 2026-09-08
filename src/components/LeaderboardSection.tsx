@@ -24,6 +24,7 @@ import {
   domainToWorkspaceName,
   missingLeaderboardMembers,
   memberValue,
+  leaderboardRequestKey,
   normalizeLeaderboardSelection,
   pageCount,
   pageForRank,
@@ -73,9 +74,11 @@ import { useToast } from "./ui/useToast";
 
 interface LeaderboardSectionProps {
   accountId: string | null;
+  authGeneration: number | null;
   isSignedIn: boolean;
   /** The account row says joined — what the roster and Leave hang on, not the device toggle. */
   participating: boolean;
+  cloudAccessAllowed: boolean;
   canJoin: boolean;
   participationReady: boolean;
   participationError: "read" | "write" | null;
@@ -84,16 +87,24 @@ interface LeaderboardSectionProps {
   onLeave: () => Promise<boolean>;
   onRefreshParticipation: () => void;
   onSignIn: () => void;
+  onSsoSignIn: () => void;
+  ssoActionDisabled: boolean;
+  ssoRecoveryError: string | null;
+  ssoStarting: boolean;
   onInvite: () => void;
 }
 
 const ERROR_CARD_CHROME = "mt-8 rounded-2xl border border-border/50 bg-card/70 dark:border-white/8";
 
 function LeaderboardRetryCard({
+  actionLabel,
+  actionDisabled = false,
   className,
   message,
   onRetry,
 }: {
+  actionLabel?: string;
+  actionDisabled?: boolean;
   className?: string;
   message: string;
   onRetry: () => void;
@@ -107,8 +118,8 @@ function LeaderboardRetryCard({
       )}
     >
       <p className="text-sm font-medium">{message}</p>
-      <Button variant="outline" size="sm" onClick={onRetry}>
-        {t("insights.leaderboard.retry")}
+      <Button variant="outline" size="sm" onClick={onRetry} disabled={actionDisabled}>
+        {actionLabel ?? t("insights.leaderboard.retry")}
       </Button>
     </div>
   );
@@ -125,8 +136,10 @@ function scrollToRank(rank: number) {
 
 export default function LeaderboardSection({
   accountId,
+  authGeneration,
   isSignedIn,
   participating,
+  cloudAccessAllowed,
   canJoin,
   participationReady,
   participationError,
@@ -135,6 +148,10 @@ export default function LeaderboardSection({
   onLeave,
   onRefreshParticipation,
   onSignIn,
+  onSsoSignIn,
+  ssoActionDisabled,
+  ssoRecoveryError,
+  ssoStarting,
   onInvite,
 }: LeaderboardSectionProps) {
   const { t, i18n } = useTranslation();
@@ -149,8 +166,12 @@ export default function LeaderboardSection({
   const [range, setRange] = useState<LeaderboardRange>("week");
   const [weekStart, setWeekStart] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [failure, setFailure] = useState<{
+    kind: "generic" | "sso";
+    requestKey: string;
+  } | null>(null);
   const [requestingJoin, setRequestingJoin] = useState(false);
   const [joiningInvitation, setJoiningInvitation] = useState(false);
   const [pendingInvites, setPendingInvites] = useState<string[]>([]);
@@ -167,6 +188,15 @@ export default function LeaderboardSection({
   const requestIdRef = useRef(0);
   const scopes = useMemo(() => access?.scopes ?? [], [access]);
   const selectedScope = scopes.find((scope) => scope.key === scopeKey);
+  const selectedRequestKey = leaderboardRequestKey(
+    selectedScope?.key ?? null,
+    metric,
+    range,
+    weekStart,
+    page
+  );
+  const visibleLeaderboard = loadedRequestKey === selectedRequestKey ? leaderboard : null;
+  const visibleFailure = failure?.requestKey === selectedRequestKey ? failure.kind : null;
 
   const loadAccess = useCallback(
     async (preferredScopeKey?: string) => {
@@ -250,12 +280,25 @@ export default function LeaderboardSection({
     if (!participating) requestIdRef.current += 1;
   }, [participating]);
 
+  useEffect(() => {
+    if (cloudAccessAllowed) return;
+    requestIdRef.current += 1;
+    setLeaderboard(null);
+    setLoadedRequestKey(null);
+  }, [cloudAccessAllowed]);
+
   const load = useCallback(async () => {
-    if (!selectedScope || selectedScope.state !== "ready" || !participating || !participationReady)
+    if (
+      !cloudAccessAllowed ||
+      !selectedScope ||
+      selectedScope.state !== "ready" ||
+      !participating ||
+      !participationReady
+    )
       return;
     const requestId = ++requestIdRef.current;
     setLoading(true);
-    setError(false);
+    setFailure(null);
     try {
       const response = await LeaderboardService.getLeaderboard(selectedScope, {
         metric,
@@ -266,6 +309,7 @@ export default function LeaderboardSection({
       });
       if (requestId !== requestIdRef.current) return;
       setLeaderboard(response);
+      setLoadedRequestKey(selectedRequestKey);
       if (response.page !== page) setPage(response.page);
       lastLoadedAtRef.current = Date.now();
     } catch (loadError) {
@@ -275,6 +319,12 @@ export default function LeaderboardSection({
       // can never clear it. Re-read exactly that gate so the surface settles on
       // the card that matches reality instead of a dead "Try again".
       const code = loadError instanceof CloudApiError ? loadError.code : undefined;
+      if (code === "SSO_REQUIRED") {
+        setLeaderboard(null);
+        setLoadedRequestKey(null);
+        setFailure({ kind: "sso", requestKey: selectedRequestKey });
+        return;
+      }
       if (code === "LEADERBOARD_SYNC_REQUIRED") {
         setLeaderboard(null);
         onRefreshParticipation();
@@ -285,11 +335,22 @@ export default function LeaderboardSection({
         void loadAccess();
         return;
       }
-      setError(true);
+      if (
+        selectedScope.kind === "workspace" &&
+        loadError instanceof CloudApiError &&
+        loadError.status === 404
+      ) {
+        setLeaderboard(null);
+        setAccess(null);
+        void loadAccess();
+        return;
+      }
+      setFailure({ kind: "generic", requestKey: selectedRequestKey });
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [
+    cloudAccessAllowed,
     loadAccess,
     metric,
     onRefreshParticipation,
@@ -298,12 +359,14 @@ export default function LeaderboardSection({
     participationReady,
     range,
     selectedScope,
+    selectedRequestKey,
     weekStart,
   ]);
 
   useEffect(() => {
+    if (authGeneration == null) return;
     void load();
-  }, [load]);
+  }, [authGeneration, load]);
 
   // The server owns how big a page is and how long a snapshot stays fresh; the
   // constants are only what to assume before the first response arrives.
@@ -313,7 +376,13 @@ export default function LeaderboardSection({
     : LEADERBOARD_REFRESH_INTERVAL_MS;
 
   useEffect(() => {
-    if (!selectedScope || selectedScope.state !== "ready" || !participating || !participationReady)
+    if (
+      !cloudAccessAllowed ||
+      !selectedScope ||
+      selectedScope.state !== "ready" ||
+      !participating ||
+      !participationReady
+    )
       return;
     const refreshIfStale = () => {
       if (
@@ -331,12 +400,19 @@ export default function LeaderboardSection({
       window.removeEventListener("focus", refreshIfStale);
       document.removeEventListener("visibilitychange", refreshIfStale);
     };
-  }, [load, participating, participationReady, refreshIntervalMs, selectedScope]);
+  }, [
+    cloudAccessAllowed,
+    load,
+    participating,
+    participationReady,
+    refreshIntervalMs,
+    selectedScope,
+  ]);
 
   const pages = pageCount(leaderboard?.totalMembers ?? 0, pageSize);
   useEffect(() => setPage((current) => Math.min(current, pages - 1)), [pages]);
 
-  const visibleMembers = useMemo(() => leaderboard?.members ?? [], [leaderboard]);
+  const visibleMembers = useMemo(() => visibleLeaderboard?.members ?? [], [visibleLeaderboard]);
   const isSoloScope = selectedScope?.state === "invite";
 
   useEffect(() => {
@@ -561,7 +637,7 @@ export default function LeaderboardSection({
     end.setDate(end.getDate() + 6);
     return `${date.format(start)} – ${date.format(end)}`;
   };
-  const activeWeekStart = weekStart ?? leaderboard?.weekStart;
+  const activeWeekStart = weekStart ?? visibleLeaderboard?.weekStart;
   const periodLabel =
     range === "all"
       ? t("insights.leaderboard.allTime")
@@ -580,9 +656,12 @@ export default function LeaderboardSection({
     return number.format(value);
   };
   const jumpToRank = (rank: number) => {
-    if (!leaderboard?.totalMembers) return;
-    const resolvedRank = Math.max(1, Math.min(leaderboard.totalMembers, Math.trunc(rank) || 1));
-    const targetPage = pageForRank(resolvedRank, leaderboard.totalMembers, pageSize);
+    if (!visibleLeaderboard?.totalMembers) return;
+    const resolvedRank = Math.max(
+      1,
+      Math.min(visibleLeaderboard.totalMembers, Math.trunc(rank) || 1)
+    );
+    const targetPage = pageForRank(resolvedRank, visibleLeaderboard.totalMembers, pageSize);
     // Staying on the page renders nothing new, so the row is already there and
     // the effect that scrolls after a page load never runs.
     if (targetPage === page) {
@@ -636,7 +715,7 @@ export default function LeaderboardSection({
               {t("insights.leaderboard.inviteCta")}
             </Button>
           )}
-          {leaderboard?.canShare && (
+          {visibleLeaderboard?.canShare && (
             <Button variant="outline-flat" size="sm" onClick={() => setShareOpen(true)}>
               <Share2 size={14} />
               {t("insights.leaderboard.share")}
@@ -647,7 +726,7 @@ export default function LeaderboardSection({
             size="icon"
             className="size-8"
             onClick={() => void load()}
-            disabled={loading}
+            disabled={loading || !cloudAccessAllowed}
             aria-label={t("insights.leaderboard.refresh")}
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : undefined} />
@@ -683,7 +762,11 @@ export default function LeaderboardSection({
         </div>
       </div>
 
-      {isSoloScope ? (
+      {surface === "board" && !cloudAccessAllowed ? (
+        <div className="flex min-h-48 items-center justify-center px-5 py-10 text-center">
+          <p className="text-sm font-medium">{t("insights.leaderboard.syncPolicyBlocked")}</p>
+        </div>
+      ) : isSoloScope ? (
         <LeaderboardSoloEmptyState
           scopeKind={selectedScope.kind}
           scopeName={selectedScope.name}
@@ -698,27 +781,40 @@ export default function LeaderboardSection({
             updating: participationUpdating,
           }}
         />
-      ) : error && !leaderboard ? (
+      ) : visibleFailure && !visibleLeaderboard ? (
         <LeaderboardRetryCard
-          message={t("insights.leaderboard.error")}
-          onRetry={() => void load()}
+          actionDisabled={visibleFailure === "sso" && ssoActionDisabled}
+          actionLabel={
+            visibleFailure === "sso"
+              ? t(ssoStarting ? "auth.social.completeInBrowser" : "auth.sso.continueWithSSO")
+              : undefined
+          }
+          message={
+            visibleFailure === "sso"
+              ? (ssoRecoveryError ?? t("auth.sso.companySignInTitle"))
+              : t("insights.leaderboard.error")
+          }
+          onRetry={visibleFailure === "sso" ? onSsoSignIn : () => void load()}
         />
-      ) : !leaderboard ? (
+      ) : !visibleLeaderboard ? (
         <div className="flex min-h-48 items-center justify-center text-muted-foreground">
           <Loader2 size={18} className="animate-spin" />
         </div>
       ) : (
         <>
-          {shouldShowLeaderboardEmptyStrip(selectedScope.memberCount, leaderboard.totalMembers) && (
+          {shouldShowLeaderboardEmptyStrip(
+            selectedScope.memberCount,
+            visibleLeaderboard.totalMembers
+          ) && (
             <LeaderboardEmptyStrip
               missingCount={missingLeaderboardMembers(
                 selectedScope.memberCount,
-                leaderboard.totalMembers
+                visibleLeaderboard.totalMembers
               )}
             />
           )}
           <LeaderboardPodium
-            members={leaderboard.leaders}
+            members={visibleLeaderboard.leaders}
             formatValue={formatValue}
             metricLabel={t(`insights.leaderboard.metrics.${metric}`)}
             periodLabel={periodLabel}
@@ -751,7 +847,7 @@ export default function LeaderboardSection({
             </div>
             {range === "week" && (
               <Select
-                value={weekStart ?? leaderboard.weekStart ?? undefined}
+                value={weekStart ?? visibleLeaderboard.weekStart ?? undefined}
                 onValueChange={(value) => {
                   setWeekStart(value);
                   setPage(0);
@@ -762,7 +858,7 @@ export default function LeaderboardSection({
                   <SelectValue placeholder={t("insights.leaderboard.history")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {leaderboard.availableWeekStarts.map((value, index) => (
+                  {visibleLeaderboard.availableWeekStarts.map((value, index) => (
                     <SelectItem key={value} value={value}>
                       {index === 0
                         ? `${t("insights.leaderboard.thisWeek")} · ${formatWeek(value)}`
@@ -808,7 +904,7 @@ export default function LeaderboardSection({
               </thead>
               <tbody>
                 {visibleMembers.map((member) => {
-                  const isViewer = member.userId === leaderboard.viewerUserId;
+                  const isViewer = member.userId === visibleLeaderboard.viewerUserId;
                   return (
                     <tr
                       id={`leaderboard-rank-${member.rank}`}
@@ -870,7 +966,7 @@ export default function LeaderboardSection({
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 bg-muted/10 px-5 py-3">
             <Tooltip
               content={
-                leaderboard.viewerRank !== null
+                visibleLeaderboard.viewerRank !== null
                   ? t("insights.leaderboard.jumpToMe")
                   : t("insights.leaderboard.jumpUnavailable")
               }
@@ -878,9 +974,10 @@ export default function LeaderboardSection({
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={leaderboard.viewerRank === null}
+                disabled={visibleLeaderboard.viewerRank === null}
                 onClick={() =>
-                  leaderboard.viewerRank !== null && jumpToRank(leaderboard.viewerRank)
+                  visibleLeaderboard.viewerRank !== null &&
+                  jumpToRank(visibleLeaderboard.viewerRank)
                 }
               >
                 <LocateFixed size={14} />
@@ -888,7 +985,7 @@ export default function LeaderboardSection({
               </Button>
             </Tooltip>
 
-            {leaderboard.totalMembers > pageSize && (
+            {visibleLeaderboard.totalMembers > pageSize && (
               <div className="flex items-center gap-1.5">
                 <Button
                   variant="ghost"
@@ -912,7 +1009,7 @@ export default function LeaderboardSection({
                       autoFocus
                       type="number"
                       min={1}
-                      max={leaderboard.totalMembers}
+                      max={visibleLeaderboard.totalMembers}
                       value={rankInput}
                       onChange={(event) => setRankInput(event.target.value)}
                       onBlur={() => setEditingRank(false)}
@@ -931,8 +1028,8 @@ export default function LeaderboardSection({
                     title={t("insights.leaderboard.jumpToRank")}
                   >
                     {page * pageSize + 1}–
-                    {Math.min((page + 1) * pageSize, leaderboard.totalMembers)} /{" "}
-                    {leaderboard.totalMembers}
+                    {Math.min((page + 1) * pageSize, visibleLeaderboard.totalMembers)} /{" "}
+                    {visibleLeaderboard.totalMembers}
                   </button>
                 )}
                 <Button
@@ -951,9 +1048,9 @@ export default function LeaderboardSection({
         </>
       )}
 
-      {leaderboard && (
+      {visibleLeaderboard && (
         <LeaderboardShareDialog
-          leaderboard={leaderboard}
+          leaderboard={visibleLeaderboard}
           metric={metric}
           periodLabel={periodLabel}
           open={shareOpen}

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/ui/dialog";
+import {
+  answerInsightsConsent,
+  cancelInsightsConsent,
+  requestInsightsConsent,
+} from "../helpers/insightsConsentCoordinator";
+import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipationStore";
 import { canChangeCloudBackupPreference, isCloudBackupAllowed } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
@@ -54,14 +60,13 @@ export function useInsightsSyncOptIn() {
   const participationEnabled = useLeaderboardParticipationStore((state) => state.enabled);
   const participationError = useLeaderboardParticipationStore((state) => state.error);
   const participationUpdating = useLeaderboardParticipationStore((state) => state.updating);
-  // Settles when the claim prompt is answered, so an opt-in that opens it can
-  // wait for the answer instead of racing ahead of the user.
-  const claimAnswerRef = useRef<((claimed: boolean) => void) | null>(null);
+  const consentOwnerRef = useRef({});
   // Separate from the counts: a live count must never be what holds the dialog
   // open, or it reopens itself on mount for anyone with rows left behind.
   // "enable" asks about everything the first pass would upload; "claim" is the
   // narrower question that is left once sync is already on.
   const [promptKind, setPromptKind] = useState<"enable" | "claim" | null>(null);
+  const promptAccountIdRef = useRef(userId);
   const syncAllowedByPolicy = usePolicyStore(isCloudBackupAllowed);
   const canToggleSync =
     canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled) &&
@@ -81,14 +86,24 @@ export function useInsightsSyncOptIn() {
   // The claim lands before the pass is requested so the rows it adopts go up
   // with it, rather than waiting for the next ambient one.
   const activate = useCallback(
-    async (claimAnonymous: boolean) => {
+    async (claimAnonymous: boolean, expectedAccountId: string, expectedAuthGeneration: number) => {
       if (claimAnonymous) {
-        await window.electronAPI.claimAnonymousAnalyticsEvents().catch((error) => {
-          console.error("Claiming earlier Insights events failed:", error);
-        });
+        const result = await window.electronAPI
+          .claimAnonymousAnalyticsEvents(expectedAccountId, expectedAuthGeneration)
+          .catch((error) => {
+            console.error("Claiming earlier Insights events failed:", error);
+            return { success: false, claimed: 0 };
+          });
+        if (!result.success) return false;
       }
+      if (
+        promptAccountIdRef.current !== expectedAccountId ||
+        getValidatedAuthGeneration() !== expectedAuthGeneration
+      )
+        return false;
       setInsightsSyncEnabled(true);
       syncService.requestSyncAll("manual");
+      return true;
     },
     [setInsightsSyncEnabled]
   );
@@ -125,26 +140,52 @@ export function useInsightsSyncOptIn() {
     return window.electronAPI.onAnalyticsChanged?.(() => void refreshCounts());
   }, [refreshCounts]);
 
+  // Consent belongs to the account that opened the prompt. If auth changes
+  // while it is open, settle that account's request as declined and close it;
+  // otherwise accepting the stale dialog could publish the replacement account.
+  useEffect(() => {
+    if (promptAccountIdRef.current === userId) return;
+    promptAccountIdRef.current = userId;
+    cancelInsightsConsent(consentOwnerRef.current);
+  }, [userId]);
+
+  useEffect(() => {
+    const owner = consentOwnerRef.current;
+    // Unmount removes the dialog itself; only settle callers still awaiting it.
+    return () => cancelInsightsConsent(owner, false);
+  }, []);
+
   // Resolves once the opt-in has settled, so a caller that needs sync on before
   // it acts can wait for the user's answer rather than assume it.
   const enableInsightsSync = useCallback(async () => {
     if (!syncAllowedByPolicy) return false;
+    const requestedAccountId = userId;
+    const requestedAuthGeneration = getValidatedAuthGeneration();
+    if (!requestedAccountId || requestedAuthGeneration == null) return false;
     const { unclaimed, awaitingUpload } = await refreshCounts();
+    if (
+      promptAccountIdRef.current !== requestedAccountId ||
+      getValidatedAuthGeneration() !== requestedAuthGeneration
+    )
+      return false;
     // Already on: the pre-sign-in rows are the only thing still unanswered.
     // Turning it on: ask about everything the first pass would send, not just
     // the pre-sign-in slice. Nothing queued means nothing to disclose.
     const pending = insightsSyncEnabled ? unclaimed : awaitingUpload;
     if (pending === 0) {
-      await activate(false);
-      return true;
+      return activate(false, requestedAccountId, requestedAuthGeneration);
     }
-    const claimed = await new Promise<boolean>((resolve) => {
-      claimAnswerRef.current = resolve;
-      setPromptKind(insightsSyncEnabled ? "claim" : "enable");
+    const claimed = await requestInsightsConsent({
+      accountId: requestedAccountId,
+      authGeneration: requestedAuthGeneration,
+      kind: insightsSyncEnabled ? "claim" : "enable",
+      owner: consentOwnerRef.current,
+      open: setPromptKind,
+      close: () => setPromptKind(null),
     });
-    if (claimed) await activate(true);
-    return claimed;
-  }, [activate, insightsSyncEnabled, refreshCounts, syncAllowedByPolicy]);
+    if (!claimed) return false;
+    return activate(true, requestedAccountId, requestedAuthGeneration);
+  }, [activate, insightsSyncEnabled, refreshCounts, syncAllowedByPolicy, userId]);
 
   // Joining publishes the account, and the counters it ranks still have to
   // reach the server — so the sync opt-in has to land first. Declining it
@@ -152,14 +193,21 @@ export function useInsightsSyncOptIn() {
   // never feeds.
   const joinLeaderboard = useCallback(async () => {
     if (!syncAllowedByPolicy) return;
+    const requestedAccountId = userId;
+    const requestedAuthGeneration = getValidatedAuthGeneration();
+    if (!requestedAccountId || requestedAuthGeneration == null) return;
     if (!insightsSyncEnabled && !(await enableInsightsSync())) return;
-    await useLeaderboardParticipationStore.getState().join(userId);
+    if (
+      promptAccountIdRef.current !== requestedAccountId ||
+      getValidatedAuthGeneration() !== requestedAuthGeneration
+    )
+      return;
+    await useLeaderboardParticipationStore.getState().join(requestedAccountId);
   }, [enableInsightsSync, insightsSyncEnabled, syncAllowedByPolicy, userId]);
 
   const claiming = promptKind === "claim";
   const answerClaimPrompt = (claimed: boolean) => {
-    claimAnswerRef.current?.(claimed);
-    claimAnswerRef.current = null;
+    answerInsightsConsent(consentOwnerRef.current, claimed);
   };
 
   const optInDialog = (

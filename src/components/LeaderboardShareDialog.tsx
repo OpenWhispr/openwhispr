@@ -1,7 +1,11 @@
 import { useCallback, useState } from "react";
 import { Check, Download, Loader2, Share2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { leaderboardDisplayName, memberValue } from "../helpers/leaderboard";
+import {
+  LEADERBOARD_SHARE_MEMBER_LIMIT,
+  leaderboardDisplayName,
+  memberValue,
+} from "../helpers/leaderboard";
 import type { Leaderboard, LeaderboardMetric } from "../types/electron";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -64,7 +68,7 @@ function createLeaderboardCard(
   context.font = "400 22px Inter, system-ui, sans-serif";
   context.fillText(`${metricLabel} · ${periodLabel}`, 72, 174);
 
-  const topMembers = leaderboard.leaders;
+  const topMembers = leaderboard.leaders.slice(0, LEADERBOARD_SHARE_MEMBER_LIMIT);
   topMembers.forEach((member, index) => {
     const y = 210 + index * 72;
     context.fillStyle = index === 0 ? "rgba(99,102,241,0.42)" : "rgba(255,255,255,0.08)";
@@ -154,7 +158,7 @@ export default function LeaderboardShareDialog({
             {t(`insights.leaderboard.metrics.${metric}`)} · {periodLabel}
           </p>
           <div className="mt-4 space-y-1.5">
-            {leaderboard.leaders.slice(0, 3).map((member) => (
+            {leaderboard.leaders.slice(0, LEADERBOARD_SHARE_MEMBER_LIMIT).map((member) => (
               <div
                 key={member.userId}
                 className="flex items-center justify-between rounded-lg bg-white/8 px-3 py-2 text-sm"

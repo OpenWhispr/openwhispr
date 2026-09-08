@@ -3282,7 +3282,7 @@
       "emptyStrip_one": "1 人のメンバーがまだ Analytics Sync を有効にしていません。有効にするとランキングが始まります。",
       "emptyStrip_other": "{{count}} 人のメンバーがまだ Analytics Sync を有効にしていません。有効にするとランキングが始まります。",
       "copyNudge": "案内をコピー",
-      "nudgeText": "チームのリーダーボードを表示するには、OpenWhispr → Insights → リーダーボードで Analytics Sync を有効にしてください。",
+      "nudgeText": "チームのリーダーボードを表示するには、OpenWhispr → リーダーボードで Analytics Sync を有効にしてください。",
       "nudgeCopied": "案内をコピーしました",
       "nudgeCopyError": "案内をコピーできませんでした",
       "syncTitle": "{{scope}} での順位を確認しましょう",

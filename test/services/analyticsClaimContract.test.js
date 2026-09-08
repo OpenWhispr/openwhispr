@@ -81,12 +81,48 @@ test("a join publishes the account only after the sync opt-in has landed", () =>
     hook.indexOf("const answerClaimPrompt")
   );
   assert.ok(
-    join.indexOf("await enableInsightsSync()") < join.indexOf(".join(userId)"),
+    join.indexOf("await enableInsightsSync()") < join.indexOf(".join(requestedAccountId)"),
     "the account must not be published before the opt-in the join depends on"
   );
   assert.ok(
     join.includes("!(await enableInsightsSync())) return"),
     "a declined opt-in must abandon the join instead of publishing anyway"
+  );
+});
+
+// The prompt can outlive the account that opened it. Accepting it after an
+// account switch must not claim counters or publish the replacement account.
+test("an account switch cancels a pending Insights consent and leaderboard join", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const accountEffect = hook.slice(
+    hook.indexOf("if (promptAccountIdRef.current === userId) return"),
+    hook.indexOf("// Resolves once the opt-in has settled")
+  );
+  assert.ok(accountEffect.includes("cancelInsightsConsent(consentOwnerRef.current)"));
+  assert.ok(hook.includes("promptAccountIdRef.current !== requestedAccountId"));
+  const join = hook.slice(hook.indexOf("const joinLeaderboard"), hook.indexOf("const claiming"));
+  assert.ok(join.includes("promptAccountIdRef.current !== requestedAccountId"));
+  assert.ok(
+    join.indexOf("promptAccountIdRef.current !== requestedAccountId") <
+      join.indexOf(".join(requestedAccountId)"),
+    "the captured account must still be current before the participation write starts"
+  );
+});
+
+test("claiming anonymous Insights is bound to the consenting auth context", () => {
+  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
+  const preload = read("preload.js");
+  const handlers = read("src/helpers/ipcHandlers.js");
+  const database = read("src/helpers/database.js");
+  assert.ok(
+    hook.includes(".claimAnonymousAnalyticsEvents(expectedAccountId, expectedAuthGeneration)")
+  );
+  assert.ok(hook.includes("getValidatedAuthGeneration() !== expectedAuthGeneration"));
+  assert.ok(preload.includes('"analytics-claim-anonymous", accountId, expectedAuthGeneration'));
+  assert.ok(handlers.includes("state.generation !== expectedAuthGeneration"));
+  assert.ok(
+    database.includes("accountId !== this.activeAccountId"),
+    "the database mutation must reject a claim aimed at a departed account"
   );
 });
 
@@ -109,10 +145,14 @@ test("the leaderboard surface can leave without touching the sync switch", () =>
   );
   assert.ok(section.includes('t("insights.leaderboard.leave")'));
   assert.ok(section.includes("onLeave()"));
-  // The device toggle is per device and can be off while the account row still
-  // says joined — gating on it would hide Leave from an account that is ranked.
+  // Device settings and managed policy can be off while the account row still
+  // says joined. Neither may hide Leave from an account that is still ranked.
+  assert.ok(view.includes("participating={isSignedIn && participationEnabled}"));
+  assert.ok(view.includes("cloudAccessAllowed={syncAllowedByPolicy}"));
   assert.ok(
-    view.includes("participating={isSignedIn && syncAllowedByPolicy && participationEnabled}")
+    section.indexOf('surface === "board" && !cloudAccessAllowed ?') <
+      section.indexOf("!visibleLeaderboard ?"),
+    "a managed policy change must hide cached roster data without hiding Leave"
   );
   // The toggle may still be read as a re-read trigger, but it must never reach
   // the section: that is what would hide Leave from an account that is ranked.
@@ -209,7 +249,7 @@ test("a leave the account never took is kept and retried until it does", () => {
     hook.indexOf("const answerClaimPrompt")
   );
   assert.ok(
-    hookJoin.indexOf(".join(userId)") > hookJoin.indexOf("await enableInsightsSync()"),
+    hookJoin.indexOf(".join(requestedAccountId)") > hookJoin.indexOf("await enableInsightsSync()"),
     "a declined opt-in never joins, so the leave it stopped short of must survive"
   );
   const join = store.slice(store.indexOf("join: async"), store.indexOf("leave: async"));

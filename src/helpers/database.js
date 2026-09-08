@@ -1542,15 +1542,21 @@ class DatabaseManager {
 
   // Device-local rows stay unattributed until the signed-in user explicitly
   // asks for them, so signing in never silently adopts someone else's history.
-  claimAnonymousAnalyticsEvents() {
+  claimAnonymousAnalyticsEvents(expectedAccountId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      if (!this.activeAccountId) return { success: false, claimed: 0 };
+      const accountId =
+        typeof expectedAccountId === "string" && expectedAccountId.trim().length > 0
+          ? expectedAccountId.trim()
+          : null;
+      if (!accountId || accountId !== this.activeAccountId) {
+        return { success: false, claimed: 0 };
+      }
       const result = this.db
         .prepare(
           "UPDATE analytics_events SET account_id = ? WHERE account_id IS NULL AND deleted_at IS NULL"
         )
-        .run(this.activeAccountId);
+        .run(accountId);
       return { success: true, claimed: result.changes };
     } catch (error) {
       debugLogger.error("Error claiming analytics events", { error: error.message }, "database");

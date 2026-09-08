@@ -2809,7 +2809,7 @@
       "emptyStrip_one": "1 teammate hasn't turned on Analytics Sync yet. Rankings start when they do.",
       "emptyStrip_other": "{{count}} teammates haven't turned on Analytics Sync yet. Rankings start when they do.",
       "copyNudge": "Copy a nudge",
-      "nudgeText": "Turn on Analytics Sync in OpenWhispr → Insights → Leaderboard so we can see the team board.",
+      "nudgeText": "Turn on Analytics Sync in OpenWhispr → Leaderboard so we can see the team board.",
       "nudgeCopied": "Nudge copied",
       "nudgeCopyError": "Couldn't copy the nudge",
       "syncTitle": "See where you rank in {{scope}}",

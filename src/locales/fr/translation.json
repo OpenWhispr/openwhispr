@@ -2784,7 +2784,7 @@
       "emptyStrip_one": "1 coéquipier n'a pas encore activé Analytics Sync. Le classement commencera ensuite.",
       "emptyStrip_other": "{{count}} coéquipiers n'ont pas encore activé Analytics Sync. Le classement commencera ensuite.",
       "copyNudge": "Copier un rappel",
-      "nudgeText": "Activez Analytics Sync dans OpenWhispr → Insights → Classement pour que nous puissions voir le classement de l'équipe.",
+      "nudgeText": "Activez Analytics Sync dans OpenWhispr → Classement pour que nous puissions voir le classement de l'équipe.",
       "nudgeCopied": "Rappel copié",
       "nudgeCopyError": "Impossible de copier le rappel",
       "syncTitle": "Découvrez votre classement dans {{scope}}",

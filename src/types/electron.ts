@@ -1244,7 +1244,10 @@ declare global {
       ) => Promise<{ success: boolean; deleted: number }>;
       countUnclaimedAnalyticsEvents: () => Promise<number>;
       countAnalyticsEventsAwaitingUpload: () => Promise<number>;
-      claimAnonymousAnalyticsEvents: () => Promise<{ success: boolean; claimed: number }>;
+      claimAnonymousAnalyticsEvents: (
+        accountId: string,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; claimed: number; code?: string }>;
       clearTranscriptions: () => Promise<{ cleared: number; success: boolean }>;
       deleteTranscription: (id: number) => Promise<{ success: boolean }>;
       getTranscriptionById: (id: number) => Promise<TranscriptionItem | null>;

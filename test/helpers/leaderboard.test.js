@@ -61,7 +61,7 @@ test("pagination follows the page size the response reports", async () => {
   assert.equal(pageForRank(55, 55, 50), 1);
 });
 
-test("leaderboard surfaces follow scope state before participation state", async () => {
+test("leaderboard surfaces fail closed on unknown participation before scope state", async () => {
   const { resolveLeaderboardSurface } = await load();
   const access = {
     state: "create",
@@ -94,7 +94,14 @@ test("leaderboard surfaces follow scope state before participation state", async
   assert.equal(surface(), "create");
   assert.equal(surface({ access: { ...access, state: "accept_invite" } }), "accept_invite");
   assert.equal(surface({ access: { ...access, state: "request_join" } }), "request_join");
-  assert.equal(surface({ selectedScope: scope, participationReady: false }), "invite");
+  assert.equal(
+    surface({ selectedScope: scope, participationReady: false }),
+    "participation_loading"
+  );
+  assert.equal(
+    surface({ selectedScope: scope, participationReady: false, participationError: "read" }),
+    "participation_error"
+  );
   assert.equal(
     surface({ selectedScope: { ...scope, state: "ready" }, participationReady: false }),
     "participation_loading"
@@ -112,6 +119,21 @@ test("leaderboard surfaces follow scope state before participation state", async
     surface({ selectedScope: { ...scope, state: "ready" }, participating: true }),
     "board"
   );
+});
+
+test("leaderboard request identity changes with every ranking control", async () => {
+  const { leaderboardRequestKey } = await load();
+  const current = leaderboardRequestKey("workspace:one", "total_words", "week", null, 0);
+  assert.equal(current, leaderboardRequestKey("workspace:one", "total_words", "week", null, 0));
+  for (const changed of [
+    leaderboardRequestKey("workspace:two", "total_words", "week", null, 0),
+    leaderboardRequestKey("workspace:one", "desktop_words", "week", null, 0),
+    leaderboardRequestKey("workspace:one", "total_words", "all", null, 0),
+    leaderboardRequestKey("workspace:one", "total_words", "week", "2026-08-24", 0),
+    leaderboardRequestKey("workspace:one", "total_words", "week", null, 1),
+  ]) {
+    assert.notEqual(changed, current);
+  }
 });
 
 test("workspace defaults are readable and derived only from the company domain", async () => {

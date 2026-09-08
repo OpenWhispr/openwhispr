@@ -3282,7 +3282,7 @@
       "emptyStrip_one": "1 colega ainda não ativou o Analytics Sync. A classificação começa quando o fizer.",
       "emptyStrip_other": "{{count}} colegas ainda não ativaram o Analytics Sync. A classificação começa quando o fizerem.",
       "copyNudge": "Copiar lembrete",
-      "nudgeText": "Ative o Analytics Sync em OpenWhispr → Insights → Classificação para podermos ver a classificação da equipa.",
+      "nudgeText": "Ative o Analytics Sync em OpenWhispr → Classificação para podermos ver a classificação da equipa.",
       "nudgeCopied": "Lembrete copiado",
       "nudgeCopyError": "Não foi possível copiar o lembrete",
       "syncTitle": "Veja sua posição em {{scope}}",

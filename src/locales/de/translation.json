@@ -2784,7 +2784,7 @@
       "emptyStrip_one": "1 Teammitglied hat Analytics Sync noch nicht aktiviert. Die Rangliste startet danach.",
       "emptyStrip_other": "{{count}} Teammitglieder haben Analytics Sync noch nicht aktiviert. Die Rangliste startet danach.",
       "copyNudge": "Erinnerung kopieren",
-      "nudgeText": "Aktiviere Analytics Sync in OpenWhispr → Insights → Bestenliste, damit wir die Team-Bestenliste sehen können.",
+      "nudgeText": "Aktiviere Analytics Sync in OpenWhispr → Bestenliste, damit wir die Team-Bestenliste sehen können.",
       "nudgeCopied": "Erinnerung kopiert",
       "nudgeCopyError": "Erinnerung konnte nicht kopiert werden",
       "syncTitle": "Sieh, wo du bei {{scope}} stehst",
