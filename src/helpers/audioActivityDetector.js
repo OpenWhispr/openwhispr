@@ -144,11 +144,6 @@ class AudioActivityDetector extends EventEmitter {
     } else {
       this._eventDriven = false;
       this._startPolling();
-      debugLogger.info(
-        "Audio activity detector started (polling)",
-        { intervalMs: CHECK_INTERVAL_MS, threshold: SUSTAINED_THRESHOLD_CHECKS },
-        "meeting"
-      );
     }
   }
 
@@ -304,7 +299,11 @@ class AudioActivityDetector extends EventEmitter {
         }
 
         this._listenerProcess = child;
-        this._readLines(child.stdout, onLine);
+        this._readLines(child.stdout, (line) => {
+          // stdout can still drain after exit or after a replacement listener starts.
+          if (this._listenerProcess !== child || this._isStale(generation)) return;
+          onLine(line);
+        });
         child.stderr.on("data", (data) => {
           debugLogger.debug(`${label} stderr`, { output: data.toString().trim() }, "meeting");
         });
@@ -364,7 +363,7 @@ class AudioActivityDetector extends EventEmitter {
   _tryEventDrivenDarwin(generation) {
     const binaryPath = resolveBundledBinary("macos-mic-listener", "meeting");
     if (!binaryPath) {
-      debugLogger.warn("macos-mic-listener binary not found, will use polling", {}, "meeting");
+      debugLogger.warn("macos-mic-listener binary not found", {}, "meeting");
       return false;
     }
 
@@ -380,23 +379,22 @@ class AudioActivityDetector extends EventEmitter {
   _parseDarwinListenerLine(line) {
     if (!this._running) return;
 
-    if (line === "CAPABILITY PID") {
-      this._setPidScopedCapability(true);
-      return;
-    }
-    if (line === "CAPABILITY AGGREGATE") {
-      this._setPidScopedCapability(false);
-      return;
-    }
-    if (line === "MIC_ACTIVE") {
-      this._onMicStateChanged(true);
-      return;
-    }
-    if (line === "MIC_INACTIVE") {
-      this._onMicStateChanged(false);
+    if (line === "CAPABILITY PID" || line === "CAPABILITY AGGREGATE") {
+      const pidScoped = line === "CAPABILITY PID";
+      debugLogger.info(
+        "macOS microphone detection capability",
+        { capability: pidScoped ? "PID" : "AGGREGATE" },
+        "meeting"
+      );
+      if (!pidScoped) this._activeMicPids.clear();
+      this._setPidScopedCapability(pidScoped);
+      if (!pidScoped) this._onMicStateChanged(false);
       return;
     }
 
+    // Device-wide activity also includes playback on combined input/output devices.
+    // Only a PID-capable listener can attribute activity to a microphone user.
+    if (!this._pidScopedCapability) return;
     this._parsePidScopedListenerLine(line);
   }
 
@@ -770,8 +768,25 @@ class AudioActivityDetector extends EventEmitter {
   // ---------------------------------------------------------------------------
 
   _startPolling() {
+    if (process.platform === "darwin") {
+      this._clearSustainedTimer();
+      this.audioActiveStart = null;
+      this._lastKnownMicState = false;
+      debugLogger.info(
+        "macOS microphone listener unavailable; automatic audio prompts paused",
+        {},
+        "meeting"
+      );
+      return;
+    }
+
     this._check();
     this.checkInterval = setInterval(() => this._check(), CHECK_INTERVAL_MS);
+    debugLogger.info(
+      "Audio activity detector started (polling)",
+      { intervalMs: CHECK_INTERVAL_MS, threshold: SUSTAINED_THRESHOLD_CHECKS },
+      "meeting"
+    );
   }
 
   async _check() {
@@ -825,26 +840,12 @@ class AudioActivityDetector extends EventEmitter {
 
   async _isMicActive() {
     switch (process.platform) {
-      case "darwin":
-        return this._checkDarwin();
       case "win32":
         return this._checkWin32();
       case "linux":
         return this._checkLinux();
       default:
         return false;
-    }
-  }
-
-  async _checkDarwin() {
-    try {
-      const { stdout } = await execAsync(
-        "ioreg -l -w 0 | grep '\"IOAudioEngineState\" = 1'",
-        EXEC_OPTS
-      );
-      return stdout.trim().length > 0;
-    } catch {
-      return false;
     }
   }
 

@@ -2,8 +2,8 @@
  * macOS Microphone Listener
  *
  * Uses CoreAudio process objects when available to emit PID-scoped microphone
- * transitions. Older systems fall back to aggregate device activity for the
- * meeting-start prompt only.
+ * transitions. Older systems report aggregate device activity without reliable
+ * microphone attribution.
  *
  * Compile: swiftc -O macos-mic-listener.swift -o macos-mic-listener -framework CoreAudio -framework Foundation
  */
@@ -219,21 +219,27 @@ func removeProcessMonitoring() {
 // list yields no readable object at all — a systemic failure where reported
 // state could no longer be trusted.
 func prepareProcessSnapshot(
-    _ processObjects: [AudioObjectID]
+    _ processObjects: [AudioObjectID],
+    readPid: (AudioObjectID) -> pid_t? = getProcessPid,
+    readInputRunning: (AudioObjectID) -> Bool? = isProcessRunningInput,
+    readBundleID: (AudioObjectID) -> String? = {
+        stringProperty($0, selector: kAudioProcessPropertyBundleID)
+    }
 ) -> (pids: [AudioObjectID: pid_t], active: Set<pid_t>)? {
     var pids: [AudioObjectID: pid_t] = [:]
     var active: Set<pid_t> = []
 
     for processObject in processObjects {
         guard
-            let processId = getProcessPid(processObject),
-            let isRunningInput = isProcessRunningInput(processObject)
+            let processId = readPid(processObject),
+            let isRunningInput = readInputRunning(processObject)
         else {
             continue
         }
 
         pids[processObject] = processId
-        if isRunningInput {
+        // CoreSpeech also processes ordinary playback, so it is not evidence of a meeting.
+        if isRunningInput && readBundleID(processObject) != "com.apple.CoreSpeech" {
             active.insert(processId)
         }
     }
@@ -542,6 +548,37 @@ func setupSignalHandlers() {
     }
 }
 
+#if MIC_LISTENER_STATE_TEST
+struct ProcessFixture: Decodable {
+    let objectID: AudioObjectID
+    let pid: pid_t?
+    let inputRunning: Bool?
+    let bundleID: String?
+}
+
+do {
+    let fixtures = try JSONDecoder().decode(
+        [ProcessFixture].self,
+        from: Data(CommandLine.arguments[1].utf8)
+    )
+    let processes = Dictionary(uniqueKeysWithValues: fixtures.map { ($0.objectID, $0) })
+    if let snapshot = prepareProcessSnapshot(
+        fixtures.map(\.objectID),
+        readPid: { processes[$0]?.pid },
+        readInputRunning: { processes[$0]?.inputRunning },
+        readBundleID: { processes[$0]?.bundleID }
+    ) {
+        let result = ["pids": snapshot.pids.values.sorted(), "active": snapshot.active.sorted()]
+        let data = try JSONSerialization.data(withJSONObject: result)
+        emit(String(decoding: data, as: UTF8.self))
+    } else {
+        emit("null")
+    }
+} catch {
+    emitError("Native snapshot test failed: \(error)")
+    exit(1)
+}
+#else
 if CommandLine.arguments.contains("--print-default-input") {
     exit(printDefaultInputDevice())
 }
@@ -572,3 +609,4 @@ heartbeatTimer.setEventHandler {
 heartbeatTimer.resume()
 
 CFRunLoopRun()
+#endif

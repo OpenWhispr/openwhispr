@@ -618,10 +618,10 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 
 **Microphone Detection** (unscheduled/browser meetings like Google Meet):
 
-- macOS: `macos-mic-listener` binary — CoreAudio `kAudioDevicePropertyDeviceIsRunningSomewhere` property listeners with hot-plug support
-- Windows: `windows-mic-listener.exe` — WASAPI `IAudioSessionManager2` session monitoring, `--exclude-pid` for self-mic exclusion
+- macOS: `macos-mic-listener` binary — CoreAudio process-object input monitoring, excluding the background `com.apple.CoreSpeech` service. Only `CAPABILITY PID` activity can trigger audio prompts; aggregate device activity and unavailable listeners cannot attribute microphone use, so they do not trigger prompts. Capability is logged at info level.
+- Windows: `windows-mic-listener.exe` — WASAPI `IAudioSessionManager2` session monitoring; self-mic exclusion happens in JavaScript using current OpenWhispr and capture-helper PIDs
 - Linux: `pactl subscribe` — PulseAudio source-output events
-- All platforms: Graceful fallback to polling if native binary/command unavailable
+- Windows/Linux: Fall back to polling if the native binary/command is unavailable. On macOS, calendar reminders remain available when attributed audio detection is unavailable; auto-end uses its existing silence fallback.
 
 **Calendar Reminders** (scheduled meetings):
 
