@@ -2083,7 +2083,13 @@
         "availableTitle": "Configuration de l'organisation disponible",
         "availableDescription": "Utilisez {{provider}} sans gérer d'identifiants.",
         "useManaged": "Utiliser la version gérée"
-      }
+      },
+      "removeFillerWords": "Supprimer les mots de remplissage",
+      "removeFillerWordsDescription": "Supprime automatiquement les sons de remplissage comme euh, hum, ben des transcriptions",
+      "fillerWordsLabel": "Mots de remplissage à supprimer :",
+      "fillerWordsAdd": "Ajouter",
+      "fillerWordsReset": "Réinitialiser",
+      "fillerWordsPlaceholder": "Ajouter un mot"
     },
     "developer": {
       "clearCache": "Vider le cache",

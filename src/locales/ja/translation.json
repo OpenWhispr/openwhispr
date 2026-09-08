@@ -1794,7 +1794,13 @@
         "availableTitle": "組織の設定が利用できます",
         "availableDescription": "認証情報を管理せずに {{provider}} を使用できます。",
         "useManaged": "マネージドを使用"
-      }
+      },
+      "removeFillerWords": "フィラーを削除",
+      "removeFillerWordsDescription": "「えー」「あー」「うーん」などのフィラーを文字起こしから自動的に削除します",
+      "fillerWordsLabel": "削除するフィラー:",
+      "fillerWordsAdd": "追加",
+      "fillerWordsReset": "リセット",
+      "fillerWordsPlaceholder": "単語を追加"
     },
     "developer": {
       "clearCache": "キャッシュをクリア",

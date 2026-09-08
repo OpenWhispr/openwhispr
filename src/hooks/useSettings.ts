@@ -42,6 +42,8 @@ export interface TranscriptionSettings {
 export interface CleanupSettings {
   autoGenerateNoteTitle: boolean;
   useCleanupModel: boolean;
+  removeFillerWords: boolean;
+  fillerWords: string[];
   useDictationAgent: boolean;
   cleanupModel: string;
   cleanupProvider: string;
@@ -286,6 +288,8 @@ function useSettingsInternal() {
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,
     setAutoGenerateNoteTitle: store.setAutoGenerateNoteTitle,
     useCleanupModel: store.useCleanupModel,
+    removeFillerWords: store.removeFillerWords,
+    fillerWords: store.fillerWords,
     useDictationAgent: store.useDictationAgent,
     cleanupModel: store.cleanupModel,
     cleanupProvider: store.cleanupProvider,
@@ -329,6 +333,8 @@ function useSettingsInternal() {
     setCustomDictionary: store.setCustomDictionary,
     updateCustomDictionary: store.updateCustomDictionary,
     setUseCleanupModel: store.setUseCleanupModel,
+    setRemoveFillerWords: store.setRemoveFillerWords,
+    setFillerWords: store.setFillerWords,
     setUseDictationAgent: store.setUseDictationAgent,
     setCleanupModel: store.setCleanupModel,
     setCleanupProvider: store.setCleanupProvider,

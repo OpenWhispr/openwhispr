@@ -29,6 +29,7 @@ import { followsSystemDefaultMic } from "./micSelectionRecovery";
 import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
+import { DEFAULT_FILLER_WORDS, removeFillerWords } from "./fillerWords";
 import {
   ANALYTICS_COUNTER_VERSION,
   countSpokenWords,
@@ -2881,7 +2882,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async processTranscriptionCore(text, source, wasCancelled = neverCancelled) {
-    const normalizedText = typeof text === "string" ? text.trim() : "";
+    let normalizedText = typeof text === "string" ? text.trim() : "";
 
     if (!normalizedText) {
       logger.logReasoning("TRANSCRIPTION_EMPTY_SKIPPING_REASONING", {
@@ -2890,6 +2891,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
       return normalizedText;
     }
+    // Filler words come out before anything else looks at the transcript: the
+    // cleanup model should never see them, and the no-cleanup path still gets
+    // them removed. Pure string work, so no model call and no added latency.
+    const fillerSettings = getSettings() || {};
+    if (fillerSettings.removeFillerWords) {
+      const withoutFillers = removeFillerWords(
+        normalizedText,
+        fillerSettings.fillerWords || DEFAULT_FILLER_WORDS
+      );
+      if (withoutFillers !== normalizedText) {
+        logger.logReasoning("FILLER_WORDS_REMOVED", {
+          removed: normalizedText.length - withoutFillers.length,
+        });
+        normalizedText = withoutFillers;
+      }
+    }
+
     if (wasCancelled()) return normalizedText;
 
     logger.logReasoning("TRANSCRIPTION_RECEIVED", {

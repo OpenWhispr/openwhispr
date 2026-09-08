@@ -1794,7 +1794,13 @@
         "availableTitle": "Configurazione dell'organizzazione disponibile",
         "availableDescription": "Usa {{provider}} senza gestire credenziali.",
         "useManaged": "Usa la versione gestita"
-      }
+      },
+      "removeFillerWords": "Rimuovi intercalari",
+      "removeFillerWordsDescription": "Rimuove automaticamente suoni di riempimento come ehm, uhm, eh dalle trascrizioni",
+      "fillerWordsLabel": "Intercalari da rimuovere:",
+      "fillerWordsAdd": "Aggiungi",
+      "fillerWordsReset": "Ripristina",
+      "fillerWordsPlaceholder": "Aggiungi parola"
     },
     "developer": {
       "clearCache": "Svuota cache",
