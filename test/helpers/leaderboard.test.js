@@ -77,7 +77,6 @@ test("leaderboard surfaces fail closed on unknown participation before scope sta
     id: "one",
     name: "One",
     memberCount: 1,
-    canShare: true,
     state: "invite",
     role: "owner",
   };

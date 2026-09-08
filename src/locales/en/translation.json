@@ -2760,6 +2760,7 @@
     "syncFallback": "Showing device data — sync unavailable",
     "syncPrompt": "Sync content-free counters to combine local and cloud activity across devices.",
     "enableSync": "Enable sync",
+    "syncEnableError": "Insights sync couldn't be enabled. Please try again.",
     "claimTitle": "Include earlier dictations?",
     "claimDescription_one": "{{count}} dictation on this device was recorded before you signed in. Including it sends only word counts, the date and exact time it happened, its duration, and the model type — never transcript content.",
     "claimDescription_other": "{{count}} dictations on this device were recorded before you signed in. Including them sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",

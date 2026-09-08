@@ -3233,6 +3233,7 @@
     "syncFallback": "Dati del dispositivo — sincronizzazione non disponibile",
     "syncPrompt": "Sincronizza contatori senza contenuti per combinare l'attività locale e quella cloud su tutti i dispositivi.",
     "enableSync": "Attiva la sincronizzazione",
+    "syncEnableError": "Non è stato possibile attivare la sincronizzazione di Insights. Riprova.",
     "claimTitle": "Includere le dettature precedenti?",
     "claimDescription_one": "{{count}} dettatura è stata registrata su questo dispositivo prima dell'accesso. Includendola vengono inviati solo il conteggio delle parole, la data e l'ora esatta in cui è avvenuta, la sua durata e il tipo di modello, mai il contenuto delle trascrizioni.",
     "claimDescription_other": "{{count}} dettature sono state registrate su questo dispositivo prima dell'accesso. Includendole vengono inviati solo i conteggi delle parole, la data e l'ora esatta di ciascuna, le durate e i tipi di modello, mai il contenuto delle trascrizioni.",

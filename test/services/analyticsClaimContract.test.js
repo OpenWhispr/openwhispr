@@ -114,8 +114,9 @@ test("claiming anonymous Insights is bound to the consenting auth context", () =
   const preload = read("preload.js");
   const handlers = read("src/helpers/ipcHandlers.js");
   const database = read("src/helpers/database.js");
-  assert.ok(
-    hook.includes(".claimAnonymousAnalyticsEvents(expectedAccountId, expectedAuthGeneration)")
+  assert.match(
+    hook,
+    /\.claimAnonymousAnalyticsEvents\(\s*expectedAccountId,\s*expectedAuthGeneration\s*\)/
   );
   assert.ok(hook.includes("getValidatedAuthGeneration() !== expectedAuthGeneration"));
   assert.ok(preload.includes('"analytics-claim-anonymous", accountId, expectedAuthGeneration'));

@@ -74,7 +74,6 @@ test("leaderboard requests carry scope, pagination, filters and no body data", a
         id: "workspace/one",
         name: "Workspace",
         memberCount: 2,
-        canShare: false,
         state: "ready",
         role: "member",
       },
@@ -82,7 +81,6 @@ test("leaderboard requests carry scope, pagination, filters and no body data", a
         metric: "mobile_words",
         range: "week",
         weekStart: "2026-08-31",
-        timeZone: "Asia/Kolkata",
         page: 2,
       }
     ),
@@ -91,7 +89,7 @@ test("leaderboard requests carry scope, pagination, filters and no body data", a
   assert.equal(requests[0].method, "GET");
   assert.equal(
     requests[0].path,
-    "/api/workspaces/workspace%2Fone/leaderboard?metric=mobile_words&range=week&timeZone=Asia%2FKolkata&page=2&weekStart=2026-08-31"
+    "/api/workspaces/workspace%2Fone/leaderboard?metric=mobile_words&range=week&page=2&weekStart=2026-08-31"
   );
   assert.equal(requests[0].body, undefined);
 
@@ -102,21 +100,16 @@ test("leaderboard requests carry scope, pagination, filters and no body data", a
       id: "acme.test",
       name: "acme.test",
       memberCount: 3,
-      canShare: true,
       state: "ready",
       role: null,
     },
     {
       metric: "total_words",
       range: "all",
-      timeZone: "UTC",
       page: 0,
     }
   );
-  assert.equal(
-    requests[1].path,
-    "/api/leaderboard/domain?metric=total_words&range=all&timeZone=UTC&page=0"
-  );
+  assert.equal(requests[1].path, "/api/leaderboard/domain?metric=total_words&range=all&page=0");
 });
 
 // An opt-out the network never delivered has to reach the account eventually,

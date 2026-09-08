@@ -58,14 +58,12 @@ async function getLeaderboard(
     metric: LeaderboardMetric;
     range: LeaderboardRange;
     weekStart?: string | null;
-    timeZone: string;
     page: number;
   }
 ): Promise<Leaderboard> {
   const params = new URLSearchParams({
     metric: query.metric,
     range: query.range,
-    timeZone: query.timeZone,
     page: String(query.page),
   });
   if (query.range === "week" && query.weekStart) params.set("weekStart", query.weekStart);

@@ -3233,6 +3233,7 @@
     "syncFallback": "正在顯示本裝置資料 — 同步無法使用",
     "syncPrompt": "同步不含內容的計數，將本機與雲端的活動跨裝置合併。",
     "enableSync": "啟用同步",
+    "syncEnableError": "無法啟用 Insights 同步。請再試一次。",
     "claimTitle": "要包含較早的聽寫嗎？",
     "claimDescription_one": "本裝置上有 {{count}} 次聽寫是在你登入前記錄的。納入後只會傳送字數、記錄的日期與精確時間、時長與模型類型，不會傳送轉錄內容。",
     "claimDescription_other": "本裝置上有 {{count}} 次聽寫是在你登入前記錄的。納入後只會傳送字數、記錄的日期與精確時間、時長與模型類型，不會傳送轉錄內容。",

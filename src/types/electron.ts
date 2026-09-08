@@ -232,7 +232,6 @@ export interface LeaderboardAccessScope {
   id: string;
   name: string;
   memberCount: number;
-  canShare: boolean;
   state: "ready" | "invite";
   role: WorkspaceRole | null;
 }
@@ -272,7 +271,6 @@ export interface Leaderboard {
   viewerRank: number | null;
   page: number;
   pageSize: number;
-  canShare: boolean;
   generatedAt: string;
   refreshAfterSeconds: number;
 }

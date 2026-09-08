@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../components/ui/dialog";
+import { useToast } from "../components/ui/useToast";
 import {
   answerInsightsConsent,
   cancelInsightsConsent,
@@ -51,6 +52,7 @@ import { useSettings } from "./useSettings";
  */
 export function useInsightsSyncOptIn() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { isLoaded, isSignedIn, user } = useAuth();
   const userId = user?.id ?? null;
   const { insightsSyncEnabled, setInsightsSyncEnabled } = useSettings();
@@ -72,6 +74,14 @@ export function useInsightsSyncOptIn() {
     canChangeCloudBackupPreference(syncAllowedByPolicy, insightsSyncEnabled) &&
     !participationUpdating;
 
+  const reportActivationFailure = useCallback(
+    (error: unknown) => {
+      console.error("Claiming earlier Insights events failed:", error);
+      toast({ title: t("insights.syncEnableError"), variant: "destructive" });
+    },
+    [t, toast]
+  );
+
   // Signed out there is no account to read, so the store goes back to unknown
   // rather than keeping the previous user's answer.
   const refreshParticipation = useCallback(async () => {
@@ -88,13 +98,19 @@ export function useInsightsSyncOptIn() {
   const activate = useCallback(
     async (claimAnonymous: boolean, expectedAccountId: string, expectedAuthGeneration: number) => {
       if (claimAnonymous) {
-        const result = await window.electronAPI
-          .claimAnonymousAnalyticsEvents(expectedAccountId, expectedAuthGeneration)
-          .catch((error) => {
-            console.error("Claiming earlier Insights events failed:", error);
-            return { success: false, claimed: 0 };
-          });
-        if (!result.success) return false;
+        try {
+          const result = await window.electronAPI.claimAnonymousAnalyticsEvents(
+            expectedAccountId,
+            expectedAuthGeneration
+          );
+          if (!result.success) {
+            reportActivationFailure(result.code ?? "The local account scope changed");
+            return false;
+          }
+        } catch (error) {
+          reportActivationFailure(error);
+          return false;
+        }
       }
       if (
         promptAccountIdRef.current !== expectedAccountId ||
@@ -105,7 +121,7 @@ export function useInsightsSyncOptIn() {
       syncService.requestSyncAll("manual");
       return true;
     },
-    [setInsightsSyncEnabled]
+    [reportActivationFailure, setInsightsSyncEnabled]
   );
 
   const leaveLeaderboard = useCallback(

@@ -2735,6 +2735,7 @@
     "syncFallback": "Données de l'appareil affichées — synchronisation indisponible",
     "syncPrompt": "Synchronisez des compteurs sans contenu pour combiner l'activité locale et cloud sur tous vos appareils.",
     "enableSync": "Activer la synchronisation",
+    "syncEnableError": "La synchronisation d’Insights n’a pas pu être activée. Réessayez.",
     "claimTitle": "Inclure les dictées antérieures ?",
     "claimDescription_one": "{{count}} dictée a été enregistrée sur cet appareil avant votre connexion. L'inclure n'envoie que le nombre de mots, la date et l'heure exacte à laquelle elle a eu lieu, sa durée et le type de modèle : jamais le contenu des transcriptions.",
     "claimDescription_other": "{{count}} dictées ont été enregistrées sur cet appareil avant votre connexion. Les inclure n'envoie que le nombre de mots, la date et l'heure exacte de chacune, les durées et les types de modèle : jamais le contenu des transcriptions.",

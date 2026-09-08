@@ -3281,6 +3281,7 @@
     "syncFallback": "Mostrando datos del dispositivo: sincronización no disponible",
     "syncPrompt": "Sincroniza contadores sin contenido para combinar la actividad local y la de la nube entre dispositivos.",
     "enableSync": "Activar sincronización",
+    "syncEnableError": "No se pudo activar la sincronización de Insights. Inténtalo de nuevo.",
     "claimTitle": "¿Incluir dictados anteriores?",
     "claimDescription_one": "{{count}} dictado de este dispositivo se grabó antes de que iniciaras sesión. Al incluirlo solo se envían el recuento de palabras, la fecha y la hora exacta en que ocurrió, su duración y el tipo de modelo, nunca el contenido de las transcripciones.",
     "claimDescription_other": "{{count}} dictados de este dispositivo se grabaron antes de que iniciaras sesión. Al incluirlos solo se envían los recuentos de palabras, la fecha y la hora exacta de cada uno, las duraciones y los tipos de modelo, nunca el contenido de las transcripciones.",

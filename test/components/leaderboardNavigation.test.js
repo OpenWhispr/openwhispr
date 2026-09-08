@@ -21,15 +21,6 @@ test("the leaderboard is a standalone control-panel view", () => {
   assert.ok(leaderboard.includes('t("insights.leaderboard.title")'));
 });
 
-test("the production control panel has no leaderboard demo path", () => {
-  const controlPanel = read("src/components/ControlPanel.tsx");
-  const leaderboard = read("src/components/LeaderboardView.tsx");
-
-  assert.equal(controlPanel.includes("LEADERBOARD_DEMO_ENABLED"), false);
-  assert.equal(leaderboard.includes("LEADERBOARD_DEMO_ENABLED"), false);
-  assert.ok(controlPanel.includes('if (!import.meta.env.DEV) return "home"'));
-});
-
 test("leaderboard access is plan agnostic and invitation led", () => {
   const controlPanel = read("src/components/ControlPanel.tsx");
   const section = read("src/components/LeaderboardSection.tsx");

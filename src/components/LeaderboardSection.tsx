@@ -304,7 +304,6 @@ export default function LeaderboardSection({
         metric,
         range,
         weekStart,
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
         page,
       });
       if (requestId !== requestIdRef.current) return;
@@ -715,7 +714,7 @@ export default function LeaderboardSection({
               {t("insights.leaderboard.inviteCta")}
             </Button>
           )}
-          {visibleLeaderboard?.canShare && (
+          {visibleLeaderboard && (
             <Button variant="outline-flat" size="sm" onClick={() => setShareOpen(true)}>
               <Share2 size={14} />
               {t("insights.leaderboard.share")}

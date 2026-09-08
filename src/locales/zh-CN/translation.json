@@ -3233,6 +3233,7 @@
     "syncFallback": "正在显示本设备数据 — 同步不可用",
     "syncPrompt": "同步不含内容的计数，将本地与云端的活动跨设备合并。",
     "enableSync": "启用同步",
+    "syncEnableError": "无法启用 Insights 同步。请重试。",
     "claimTitle": "包含更早的听写吗？",
     "claimDescription_one": "本设备上有 {{count}} 次听写是在你登录前记录的。将其纳入只会发送字数、记录的日期和精确时间、时长和模型类型，不会发送转录内容。",
     "claimDescription_other": "本设备上有 {{count}} 次听写是在你登录前记录的。将它们纳入只会发送字数、记录的日期和精确时间、时长和模型类型，不会发送转录内容。",
