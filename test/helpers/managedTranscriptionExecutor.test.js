@@ -68,7 +68,7 @@ test("posts multipart audio to the workspace deployment with an Entra bearer", a
   assert.equal(calls.length, 1);
   assert.equal(
     calls[0].url,
-    "https://acme.services.ai.azure.com/openai/v1/audio/transcriptions?api-version=preview"
+    "https://acme.services.ai.azure.com/openai/deployments/gpt-4o-transcribe/audio/transcriptions?api-version=2025-03-01-preview"
   );
   assert.equal(calls[0].init.headers.Authorization, "Bearer entra-token");
   const body = calls[0].init.body;
@@ -78,6 +78,22 @@ test("posts multipart audio to the workspace deployment with an Entra bearer", a
   assert.equal(body.get("prompt"), "Möbius");
   assert.equal(body.get("file").name, "audio.webm");
   assert.ok(calls[0].init.signal instanceof AbortSignal);
+});
+
+test("sends .opus uploads under an .ogg filename, the container Azure recognises", async () => {
+  // Proven live 2026-09-07: identical Ogg-Opus bytes are rejected as "Unsupported
+  // file format opus" under a .opus name and transcribed under a .ogg name.
+  const calls = [];
+  const run = executor({
+    fetch: async (_url, init) => {
+      calls.push(init);
+      return new Response(JSON.stringify({ text: "ok" }), { status: 200 });
+    },
+  });
+  await run({}, route, { ...input, fileName: "ow-url-123.opus", contentType: "audio/ogg" });
+  const file = calls[0].body.get("file");
+  assert.equal(file.name, "ow-url-123.ogg");
+  assert.equal(file.type, "audio/ogg");
 });
 
 test("maps Azure failures to coded errors", async () => {

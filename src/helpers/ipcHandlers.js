@@ -166,6 +166,9 @@ const AUDIO_MIME_TYPES = {
 };
 
 const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
+// The enterprise "Test Connection" probe only needs one word back, but the
+// Azure Responses API rejects max_output_tokens below 16.
+const CONNECTION_TEST_MAX_OUTPUT_TOKENS = 16;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 const { createAbortError } = require("./abortError");
@@ -642,6 +645,7 @@ class IPCHandlers {
       if (!token) {
         this.databaseManager.setActiveAccountId(null);
         accountScopeBinding.clear();
+        broadcastToWindows("active-account-scope-changed", null);
       }
       broadcastToWindows("auth-token-state-changed", {
         generation,
@@ -2046,8 +2050,19 @@ class IPCHandlers {
       this.databaseManager.setActiveAccountId(accountId);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
+      broadcastToWindows(
+        "active-account-scope-changed",
+        accountId !== null ? { accountId, authGeneration: state.generation } : null
+      );
       return { success: true };
     });
+
+    ipcMain.handle("get-active-account-scope", () =>
+      accountScopeBinding.resolveActiveAccountScope({
+        ...tokenStore.getState(),
+        binding: accountScopeBinding.read(),
+      })
+    );
 
     ipcMain.handle("delete-account-data", async (_event, accountId, expectedGeneration) => {
       const state = tokenStore.getState();
@@ -4454,7 +4469,7 @@ class IPCHandlers {
             return generateText({
               model,
               prompt: "Say hello in one word.",
-              maxOutputTokens: 10,
+              maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
               abortSignal,
               maxRetries: 0,
             });
@@ -4464,7 +4479,7 @@ class IPCHandlers {
           await generateText({
             model,
             prompt: "Say hello in one word.",
-            maxOutputTokens: 10,
+            maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
           });
         }
 
