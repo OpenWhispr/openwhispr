@@ -78,7 +78,7 @@ function createFakeChild(spawnError) {
 // here. Both spellings feed the detector's excluded-pid provider.
 function createDetector(
   platform,
-  { excludedProcessIds, ownPids, execResponses = [], spawnError } = {}
+  { excludedProcessIds, ownPids, execResponses = [], spawnError, isMeetingAppRunning } = {}
 ) {
   const getExcludedProcessIds =
     excludedProcessIds ?? (ownPids ? () => [...ownPids] : () => [process.pid]);
@@ -110,7 +110,7 @@ function createDetector(
     logEntries
   );
 
-  const detector = new AudioActivityDetector(getExcludedProcessIds);
+  const detector = new AudioActivityDetector(getExcludedProcessIds, isMeetingAppRunning);
   detector._isMicActive = async () => false;
   return { detector, children, calls, execCalls, logEntries };
 }
@@ -311,7 +311,7 @@ test("darwin: PID events exclude current OpenWhispr processes and continue durin
   detector.stop();
 });
 
-test("darwin: aggregate playback cannot prompt, even after recording and cooldown gates lift", async (t) => {
+test("darwin: aggregate playback cannot prompt without a running meeting app, even after gates lift", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("darwin");
   t.after(() => detector.stop());
@@ -334,7 +334,6 @@ test("darwin: aggregate playback cannot prompt, even after recording and cooldow
   });
   assert.deepEqual(externalStates, []);
   assert.deepEqual(detections, []);
-  assert.equal(detector._lastKnownMicState, false);
   assert.equal(detector._sustainedTimer, null);
   detector.stop();
 });
@@ -437,6 +436,174 @@ test("darwin: capability changes are logged at info level", async (t) => {
       { message: "macOS microphone detection capability", data: { capability: "AGGREGATE" } },
     ]
   );
+});
+
+test("darwin: aggregate activity prompts once a running meeting app corroborates it", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin", { isMeetingAppRunning: () => true });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY AGGREGATE\nMIC_ACTIVE\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 1);
+  assert.equal(detections[0].attributed, false);
+  assert.deepEqual(detector.getExternalMicState(), { reliable: false, externalMicActive: false });
+
+  children[0].stdout.emit("data", "MIC_INACTIVE\n");
+  assert.equal(detector._sustainedTimer, null);
+});
+
+test("darwin: a meeting app launching during aggregate activity is re-evaluated", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  let meetingAppRunning = false;
+  const { detector, children } = createDetector("darwin", {
+    isMeetingAppRunning: () => meetingAppRunning,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY AGGREGATE\nMIC_ACTIVE\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.deepEqual(detections, [], "device activity alone is not a meeting");
+
+  meetingAppRunning = true;
+  detector.notifyMeetingAppsChanged();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1, "the running meeting app corroborates the live device");
+  assert.equal(detections[0].attributed, false);
+});
+
+test("darwin: a meeting app quitting before the sustained window cancels the aggregate prompt", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  let meetingAppRunning = true;
+  const { detector, children } = createDetector("darwin", {
+    isMeetingAppRunning: () => meetingAppRunning,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY AGGREGATE\nMIC_ACTIVE\n");
+  meetingAppRunning = false;
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.deepEqual(detections, []);
+  assert.equal(detector.hasPrompted, false, "an uncorroborated edge must not consume the prompt");
+});
+
+test("darwin: attributed transitions prompt without a running meeting app", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin", { isMeetingAppRunning: () => false });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.equal(detections.length, 1);
+  assert.equal(detections[0].attributed, true);
+});
+
+test("darwin: regaining PID capability discards unattributed aggregate state", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  let meetingAppRunning = false;
+  const { detector, children } = createDetector("darwin", {
+    isMeetingAppRunning: () => meetingAppRunning,
+  });
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY AGGREGATE\nMIC_ACTIVE\nCAPABILITY PID\n");
+  meetingAppRunning = true;
+  detector.notifyMeetingAppsChanged();
+  t.mock.timers.tick(SUSTAINED_MS);
+
+  assert.deepEqual(detections, [], "the PID transitions that follow are the only evidence");
+  assert.equal(detector._lastKnownMicState, false);
+});
+
+test("darwin: a crashed listener is respawned with backoff and attributed detection resumes", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  children[0].emit("exit", 1);
+  assert.equal(children.length, 1, "the respawn must wait for the backoff delay");
+
+  t.mock.timers.tick(RESPAWN_MS);
+  await flushImmediate();
+  assert.equal(children.length, 2);
+  assert.equal(detector._eventDriven, true);
+
+  children[1].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1);
+  assert.deepEqual(detector.getExternalMicState(), { reliable: true, externalMicActive: true });
+});
+
+test("darwin: repeated listener crashes back off exponentially", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  t.after(() => detector.stop());
+
+  await detector.start();
+  children[0].emit("exit", 1);
+  t.mock.timers.tick(RESPAWN_MS);
+  await flushImmediate();
+  assert.equal(children.length, 2);
+
+  children[1].emit("exit", 1);
+  t.mock.timers.tick(RESPAWN_MS);
+  await flushImmediate();
+  assert.equal(children.length, 2, "the second retry must wait twice as long");
+  t.mock.timers.tick(RESPAWN_MS);
+  await flushImmediate();
+  assert.equal(children.length, 3);
+});
+
+test("darwin: stop() cancels a pending listener respawn", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  t.after(() => detector.stop());
+
+  await detector.start();
+  children[0].emit("exit", 1);
+  detector.stop();
+  // The stale timer would fire inside the restart's spawn window, when no
+  // listener is registered yet, and launch a duplicate.
+  const restarted = detector.start();
+  t.mock.timers.tick(RESPAWN_MS * 64);
+  await restarted;
+  await flushImmediate();
+
+  assert.equal(children.length, 2, "only the restart may spawn a listener");
+});
+
+test("darwin: a listener that fails to launch is not respawned", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin", { spawnError: "spawn ENOENT" });
+  t.after(() => detector.stop());
+
+  await detector.start();
+  t.mock.timers.tick(RESPAWN_MS * 64);
+  await flushImmediate();
+
+  assert.equal(children.length, 1);
 });
 
 test("darwin: exclusion-provider failure emits reliability loss", async () => {
@@ -900,6 +1067,35 @@ test("darwin: native snapshots exclude background speech while preserving meetin
       assert.deepEqual(JSON.parse(result.stdout), expected);
     });
   }
+
+  // Aggregate mode is entered on transient snapshot failures too, so the
+  // heartbeat retries PID monitoring; the JS side already accepts a later
+  // CAPABILITY PID.
+  const recoveryScenarios = [
+    {
+      name: "a successful retry re-announces PID capability and the live captures",
+      fixture: { startSucceeds: true, activePids: [102, 101] },
+      expected: { lines: ["CAPABILITY PID", "MIC_START 101", "MIC_START 102"], mode: "process" },
+    },
+    {
+      name: "a failed retry stays in aggregate mode without emitting anything",
+      fixture: { startSucceeds: false, activePids: [] },
+      expected: { lines: [], mode: "aggregate" },
+    },
+  ];
+  for (const { name, fixture, expected } of recoveryScenarios) {
+    await t.test(name, () => {
+      const result = childProcess.spawnSync(
+        executablePath,
+        ["--recover-from-aggregate", JSON.stringify(fixture)],
+        { encoding: "utf8", timeout: 5000 }
+      );
+      assert.equal(result.status, 0, result.error?.message || result.stderr);
+      const lines = result.stdout.trim().split("\n");
+      const summary = JSON.parse(lines.pop());
+      assert.deepEqual({ lines, mode: summary.mode }, expected);
+    });
+  }
 });
 
 test("win32: portable native state seam handles reference counts and failures", (t) => {
@@ -951,6 +1147,8 @@ test("win32: portable native state seam handles reference counts and failures", 
 // Mirrors SUSTAINED_EVENT_DRIVEN_MS and COOLDOWN_MS in audioActivityDetector.js.
 const SUSTAINED_MS = 2 * 1000;
 const COOLDOWN_MS = 5 * 60 * 1000;
+// Mirrors LISTENER_RESPAWN_BASE_MS in audioActivityDetector.js.
+const RESPAWN_MS = 5 * 1000;
 
 test("darwin: a mic edge swallowed by the recording gate is re-evaluated when recording stops", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });

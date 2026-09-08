@@ -3,7 +3,8 @@
  *
  * Uses CoreAudio process objects when available to emit PID-scoped microphone
  * transitions. Older systems report aggregate device activity without reliable
- * microphone attribution.
+ * microphone attribution; PID monitoring is retried from the heartbeat because
+ * a transient snapshot failure lands in the same mode.
  *
  * Compile: swiftc -O macos-mic-listener.swift -o macos-mic-listener -framework CoreAudio -framework Foundation
  */
@@ -23,6 +24,8 @@ var activeInputPids: Set<pid_t> = []
 var processListListenerRegistered = false
 var inputDevices: [AudioDeviceID] = []
 var previouslyAggregateActive = false
+var aggregateHeartbeats = 0
+let processRetryHeartbeats = 6
 var signalSources: [DispatchSourceSignal] = []
 
 func stringProperty(
@@ -524,6 +527,20 @@ func startAggregateFallback() {
     emit(previouslyAggregateActive ? "MIC_ACTIVE" : "MIC_INACTIVE")
 }
 
+func announceProcessMonitoring() {
+    emit("CAPABILITY PID")
+    for processId in activeInputPids.sorted() {
+        emit("MIC_START \(processId)")
+    }
+}
+
+func recoverProcessMonitoring(start: () -> Bool = startProcessMonitoring) {
+    guard listenerMode == .aggregate, start() else { return }
+    removeAggregateMonitoring()
+    listenerMode = .process
+    announceProcessMonitoring()
+}
+
 func removeAllListeners() {
     switch listenerMode {
     case .process:
@@ -556,23 +573,41 @@ struct ProcessFixture: Decodable {
     let bundleID: String?
 }
 
+struct RecoveryFixture: Decodable {
+    let startSucceeds: Bool
+    let activePids: [pid_t]
+}
+
 do {
-    let fixtures = try JSONDecoder().decode(
-        [ProcessFixture].self,
-        from: Data(CommandLine.arguments[1].utf8)
-    )
-    let processes = Dictionary(uniqueKeysWithValues: fixtures.map { ($0.objectID, $0) })
-    if let snapshot = prepareProcessSnapshot(
-        fixtures.map(\.objectID),
-        readPid: { processes[$0]?.pid },
-        readInputRunning: { processes[$0]?.inputRunning },
-        readBundleID: { processes[$0]?.bundleID }
-    ) {
-        let result = ["pids": snapshot.pids.values.sorted(), "active": snapshot.active.sorted()]
-        let data = try JSONSerialization.data(withJSONObject: result)
-        emit(String(decoding: data, as: UTF8.self))
+    if CommandLine.arguments[1] == "--recover-from-aggregate" {
+        let fixture = try JSONDecoder().decode(
+            RecoveryFixture.self,
+            from: Data(CommandLine.arguments[2].utf8)
+        )
+        listenerMode = .aggregate
+        recoverProcessMonitoring(start: {
+            activeInputPids = Set(fixture.activePids)
+            return fixture.startSucceeds
+        })
+        emit(#"{"mode":"\#(listenerMode == .process ? "process" : "aggregate")"}"#)
     } else {
-        emit("null")
+        let fixtures = try JSONDecoder().decode(
+            [ProcessFixture].self,
+            from: Data(CommandLine.arguments[1].utf8)
+        )
+        let processes = Dictionary(uniqueKeysWithValues: fixtures.map { ($0.objectID, $0) })
+        if let snapshot = prepareProcessSnapshot(
+            fixtures.map(\.objectID),
+            readPid: { processes[$0]?.pid },
+            readInputRunning: { processes[$0]?.inputRunning },
+            readBundleID: { processes[$0]?.bundleID }
+        ) {
+            let result = ["pids": snapshot.pids.values.sorted(), "active": snapshot.active.sorted()]
+            let data = try JSONSerialization.data(withJSONObject: result)
+            emit(String(decoding: data, as: UTF8.self))
+        } else {
+            emit("null")
+        }
     }
 } catch {
     emitError("Native snapshot test failed: \(error)")
@@ -586,10 +621,7 @@ if CommandLine.arguments.contains("--print-default-input") {
 setupSignalHandlers()
 if startProcessMonitoring() {
     listenerMode = .process
-    emit("CAPABILITY PID")
-    for processId in activeInputPids.sorted() {
-        emit("MIC_START \(processId)")
-    }
+    announceProcessMonitoring()
 } else {
     startAggregateFallback()
 }
@@ -602,6 +634,10 @@ heartbeatTimer.setEventHandler {
         reconcileProcessMonitoring()
     case .aggregate:
         checkAndEmitAggregateState()
+        aggregateHeartbeats += 1
+        if aggregateHeartbeats % processRetryHeartbeats == 0 {
+            recoverProcessMonitoring()
+        }
     case .none:
         break
     }
