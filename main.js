@@ -488,9 +488,10 @@ function initializeCoreManagers() {
     calendarReminderScheduler
   );
   appleCalendarManager = new AppleCalendarManager(databaseManager, calendarReminderScheduler);
+  const meetingProcessDetector = new MeetingProcessDetector();
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
-    new MeetingProcessDetector(),
+    meetingProcessDetector,
     new AudioActivityDetector(
       // The capture-helper managers are created a few lines below; the provider
       // is only invoked on mic events, long after initialization completes.
@@ -500,7 +501,8 @@ function initializeCoreManagers() {
           linuxPortalAudioManager,
           windowsLoopbackAudioManager,
         ])
-      )
+      ),
+      () => meetingProcessDetector.getDetectedProcesses().length > 0
     ),
     windowManager,
     databaseManager

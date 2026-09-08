@@ -5,8 +5,8 @@ import { PillWaveform } from "./PillWaveform";
 import { VoiceIdentityIcon } from "./VoiceIdentityIcon";
 import { RESTING_WAVE_SILHOUETTE, WAVEFORM_BAR_COUNT } from "./waveformMath";
 import {
-  LISTENING_ENTRANCE_TIMING,
   VOICE_PILL_FOOTPRINT,
+  VOICE_PILL_GROW_TRANSITION,
 } from "../../helpers/voicePillPresentation";
 
 export type VoicePillState =
@@ -21,13 +21,14 @@ interface VoicePillProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"
   waveformVisible?: boolean;
   waveformOnlyWhileRecording?: boolean;
   integratedWithPanel?: boolean;
+  /** The cancel button's liquid skin owns the fused surface; go headless. */
+  liquidFused?: boolean;
   agentMode?: boolean;
   showExpandChevron?: boolean;
   isDragging?: boolean;
   horizontalDirection?: "left" | "right";
 }
 
-const GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms cubic-bezier(0.2, 0, 0, 1)`;
 // Sized from WAVEFORM_BAR_COUNT so a bar-count change can never silently
 // desync the resting silhouette from the live waveform's footprint.
 const RESTING_WAVE_HEIGHTS = Array.from(
@@ -35,6 +36,14 @@ const RESTING_WAVE_HEIGHTS = Array.from(
   (_, index) => RESTING_WAVE_SILHOUETTE[index % RESTING_WAVE_SILHOUETTE.length]
 );
 
+// Icon↔waveform spacing inside the compact pill. Together with the 98px
+// recording footprint and pr-1.5, centering lands the documented 6/12 edge
+// insets (VOICE_PILL_FOOTPRINT in voicePillPresentation.js).
+const COMPACT_CONTENT_GAP_PX = 6;
+
+// Mirrored by .liquid-cancel-skin[data-pill-state] in dictation-panel.css,
+// which redraws this chrome while the cancel skin owns the fused surface —
+// change together.
 const STATE_APPEARANCE: Record<VoicePillState, string> = {
   idle: "border-border-hover bg-surface-1 text-muted-foreground dark:border-border/50",
   hover: "border-border-hover bg-surface-3 text-foreground",
@@ -55,6 +64,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
     waveformVisible = true,
     waveformOnlyWhileRecording = false,
     integratedWithPanel = false,
+    liquidFused = false,
     agentMode = false,
     showExpandChevron = false,
     isDragging = false,
@@ -79,7 +89,9 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
   const showCompactPill =
     !collapseToIdentity && (isRecording || expanded || (isPanel && !waveformOnlyWhileRecording));
   const showDivider = showCompactPill && waveformVisible && !isRecording;
-  const dividerMargin = showCompactPill ? (showDivider ? 4 : 3) : 0;
+  // The hidden divider's margins are what carry the compact pill's 6px
+  // icon↔waveform gap; a visible divider keeps 4px flanking its 1px rule.
+  const dividerMargin = showCompactPill ? (showDivider ? 4 : COMPACT_CONTENT_GAP_PX / 2) : 0;
   const identitySize = 22;
   const floatingHover = !isPanel && state === "hover";
   const footprint = showCompactPill ? VOICE_PILL_FOOTPRINT.recording : VOICE_PILL_FOOTPRINT.idle;
@@ -89,7 +101,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       ref={ref}
       className={cn(
         "voice-pill-control relative flex items-center justify-center overflow-hidden rounded-full border",
-        showCompactPill && "pr-1",
+        showCompactPill && "pr-1.5",
         "shadow-[var(--shadow-card)]",
         STATE_APPEARANCE[state],
         className
@@ -101,12 +113,16 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         width: footprint.width,
         height: footprint.height,
         cursor: isProcessing || isThinking ? "not-allowed" : isDragging ? "grabbing" : "pointer",
-        boxShadow: floatingHover ? "var(--shadow-card-hover-subtle)" : undefined,
-        transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}, padding-left ${GROW_TRANSITION}, padding-right ${GROW_TRANSITION}, background-color 220ms ease-out, border-color 220ms ease-out, box-shadow 220ms ease-out`,
+        // Yields to the fused rule's `box-shadow: none` while the liquid skin
+        // owns the chrome — an inline shadow would outrank it and paint a
+        // phantom capsule when a de-fusing skin lingers over a hovered pill.
+        boxShadow: floatingHover && !liquidFused ? "var(--shadow-card-hover-subtle)" : undefined,
+        transition: `width ${VOICE_PILL_GROW_TRANSITION}, height ${VOICE_PILL_GROW_TRANSITION}, padding-left ${VOICE_PILL_GROW_TRANSITION}, padding-right ${VOICE_PILL_GROW_TRANSITION}, background-color 220ms ease-out, border-color 220ms ease-out, box-shadow 220ms ease-out`,
         ...style,
       }}
       data-horizontal-direction={horizontalDirection}
       data-integrated-with-panel={integratedWithPanel || undefined}
+      data-liquid-fused={liquidFused || undefined}
       data-agent-mode={agentMode || undefined}
       data-agent-beam-active={(agentMode && isThinking) || undefined}
       data-expand-chevron={showExpandChevron || undefined}
@@ -155,7 +171,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
           marginLeft: dividerMargin,
           marginRight: dividerMargin,
           opacity: showDivider ? 1 : 0,
-          transition: `width ${GROW_TRANSITION}, margin ${GROW_TRANSITION}, opacity 180ms ease-out`,
+          transition: `width ${VOICE_PILL_GROW_TRANSITION}, margin ${VOICE_PILL_GROW_TRANSITION}, opacity 180ms ease-out`,
         }}
       />
 
@@ -164,7 +180,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         style={{
           width: showCompactPill ? 52 : 0,
           height: showCompactPill ? 24 : 32,
-          transition: `width ${GROW_TRANSITION}, height ${GROW_TRANSITION}`,
+          transition: `width ${VOICE_PILL_GROW_TRANSITION}, height ${VOICE_PILL_GROW_TRANSITION}`,
         }}
       >
         <div

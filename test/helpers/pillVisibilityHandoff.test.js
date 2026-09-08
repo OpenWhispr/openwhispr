@@ -3,12 +3,12 @@ const assert = require("node:assert/strict");
 const { deferred } = require("./harness/deferred");
 
 test("the resting pill stays suppressed until bounds and compositor frames settle", async () => {
-  const { createDictationErrorPillHandoff } =
-    await import("../../src/utils/dictationErrorPillHandoff.ts");
+  const { createPillVisibilityHandoff } =
+    await import("../../src/utils/pillVisibilityHandoff.ts");
   const bounds = deferred();
   const frames = deferred();
   const visibility = [];
-  const handoff = createDictationErrorPillHandoff({
+  const handoff = createPillVisibilityHandoff({
     onSuppressedChange: (suppressed) => visibility.push(suppressed),
     waitForFrames: () => frames.promise,
   });
@@ -26,11 +26,11 @@ test("the resting pill stays suppressed until bounds and compositor frames settl
 });
 
 test("a new error invalidates an older in-flight pill reveal", async () => {
-  const { createDictationErrorPillHandoff } =
-    await import("../../src/utils/dictationErrorPillHandoff.ts");
+  const { createPillVisibilityHandoff } =
+    await import("../../src/utils/pillVisibilityHandoff.ts");
   const bounds = deferred();
   const visibility = [];
-  const handoff = createDictationErrorPillHandoff({
+  const handoff = createPillVisibilityHandoff({
     onSuppressedChange: (suppressed) => visibility.push(suppressed),
     waitForFrames: async () => {},
   });
@@ -45,10 +45,10 @@ test("a new error invalidates an older in-flight pill reveal", async () => {
 });
 
 test("a rejecting settleBounds still releases suppression instead of stranding the pill", async () => {
-  const { createDictationErrorPillHandoff } =
-    await import("../../src/utils/dictationErrorPillHandoff.ts");
+  const { createPillVisibilityHandoff } =
+    await import("../../src/utils/pillVisibilityHandoff.ts");
   const visibility = [];
-  const handoff = createDictationErrorPillHandoff({
+  const handoff = createPillVisibilityHandoff({
     onSuppressedChange: (suppressed) => visibility.push(suppressed),
     waitForFrames: async () => assert.fail("frames must not be awaited after a settle failure"),
   });
@@ -63,10 +63,10 @@ test("a rejecting settleBounds still releases suppression instead of stranding t
 });
 
 test("a rejecting hideWindow still releases suppression instead of stranding the pill", async () => {
-  const { createDictationErrorPillHandoff } =
-    await import("../../src/utils/dictationErrorPillHandoff.ts");
+  const { createPillVisibilityHandoff } =
+    await import("../../src/utils/pillVisibilityHandoff.ts");
   const visibility = [];
-  const handoff = createDictationErrorPillHandoff({
+  const handoff = createPillVisibilityHandoff({
     onSuppressedChange: (suppressed) => visibility.push(suppressed),
     shouldAutoHide: () => true,
     hideWindow: async () => {
@@ -82,11 +82,11 @@ test("a rejecting hideWindow still releases suppression instead of stranding the
 });
 
 test("cancel supersedes an in-flight release but keeps the pill suppressed", async () => {
-  const { createDictationErrorPillHandoff } =
-    await import("../../src/utils/dictationErrorPillHandoff.ts");
+  const { createPillVisibilityHandoff } =
+    await import("../../src/utils/pillVisibilityHandoff.ts");
   const bounds = deferred();
   const visibility = [];
-  const handoff = createDictationErrorPillHandoff({
+  const handoff = createPillVisibilityHandoff({
     onSuppressedChange: (suppressed) => visibility.push(suppressed),
     waitForFrames: async () => {},
   });
@@ -110,11 +110,11 @@ test("cancel supersedes an in-flight release but keeps the pill suppressed", asy
 });
 
 test("dispose permanently silences the handoff, including releases started later", async () => {
-  const { createDictationErrorPillHandoff } =
-    await import("../../src/utils/dictationErrorPillHandoff.ts");
+  const { createPillVisibilityHandoff } =
+    await import("../../src/utils/pillVisibilityHandoff.ts");
   const bounds = deferred();
   const visibility = [];
-  const handoff = createDictationErrorPillHandoff({
+  const handoff = createPillVisibilityHandoff({
     onSuppressedChange: (suppressed) => visibility.push(suppressed),
     waitForFrames: async () => {},
   });
@@ -133,10 +133,10 @@ test("dispose permanently silences the handoff, including releases started later
 });
 
 test("auto-hide closes the native window before releasing DOM suppression", async () => {
-  const { createDictationErrorPillHandoff } =
-    await import("../../src/utils/dictationErrorPillHandoff.ts");
+  const { createPillVisibilityHandoff } =
+    await import("../../src/utils/pillVisibilityHandoff.ts");
   const order = [];
-  const handoff = createDictationErrorPillHandoff({
+  const handoff = createPillVisibilityHandoff({
     onSuppressedChange: (suppressed) => order.push(suppressed ? "suppress" : "release"),
     shouldAutoHide: () => true,
     hideWindow: async () => order.push("hide"),

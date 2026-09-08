@@ -180,6 +180,7 @@ export function useAuth() {
 
       if (accountScopeRequiresPurge(resolvedUserId)) {
         markAccountScopePurgeRequired();
+        useSettingsStore.getState().setInsightsSyncEnabled(false);
       }
       if (accountScopeRequiresReconciliation(resolvedUserId)) {
         // This legacy marker drives every already-running SyncService window;

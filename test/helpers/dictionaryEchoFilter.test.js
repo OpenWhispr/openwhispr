@@ -282,3 +282,73 @@ test("a dangling separator does not outweigh non-dictionary words", async () => 
     false
   );
 });
+
+// #1759: the echo check must only run when the outgoing payload actually
+// carried dictionary bias. Payload shapes below mirror what each provider's
+// buildPayload in audioManager.js really produces.
+
+test("payloadSendsDictionaryBias: Corti payload carries no bias field at all", async () => {
+  const { payloadSendsDictionaryBias } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(
+    payloadSendsDictionaryBias({
+      audioBuffer: new ArrayBuffer(4),
+      language: "en",
+      environment: "us",
+      tenant: "clinic",
+    }),
+    false
+  );
+});
+
+test("payloadSendsDictionaryBias: Tinfoil-style prompt string counts as bias", async () => {
+  const { payloadSendsDictionaryBias } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), prompt: "Ozempic, Parakeet" }),
+    true
+  );
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), prompt: "   " }),
+    false
+  );
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), prompt: undefined }),
+    false
+  );
+});
+
+test("payloadSendsDictionaryBias: Mistral contextBias tokens count as bias", async () => {
+  const { payloadSendsDictionaryBias } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(
+    payloadSendsDictionaryBias({
+      audioBuffer: new ArrayBuffer(4),
+      model: "voxtral",
+      contextBias: ["Machine", "Learning"],
+    }),
+    true
+  );
+  // empty dictionary: buildPayload omits the field entirely
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), model: "voxtral" }),
+    false
+  );
+});
+
+test("payloadSendsDictionaryBias: xAI/Gemini keyterms count as bias", async () => {
+  const { payloadSendsDictionaryBias } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), keyterms: ["Ozempic"] }),
+    true
+  );
+  assert.equal(payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4) }), false);
+  assert.equal(
+    payloadSendsDictionaryBias({ audioBuffer: new ArrayBuffer(4), keyterms: [] }),
+    false
+  );
+});
+
+test("payloadSendsDictionaryBias: nullish or malformed payloads never enable the check", async () => {
+  const { payloadSendsDictionaryBias } = await import("../../src/utils/dictionaryEchoFilter.js");
+  assert.equal(payloadSendsDictionaryBias(null), false);
+  assert.equal(payloadSendsDictionaryBias(undefined), false);
+  assert.equal(payloadSendsDictionaryBias("prompt"), false);
+});

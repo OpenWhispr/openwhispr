@@ -11,7 +11,12 @@ import {
   resolveInitialSpeakerCountOverride,
   resolveParticipantSpeakerCountSync,
 } from "../utils/participants";
-import type { NoteItem, SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
+import type {
+  MeetingSystemAudioInterruption,
+  NoteItem,
+  SystemAudioAccessResult,
+  SystemAudioStrategy,
+} from "../types/electron";
 import type { CalendarAttendee } from "../types/calendar";
 import {
   DEFAULT_SYSTEM_AUDIO_ACCESS,
@@ -101,6 +106,11 @@ interface MeetingRecordingState {
   errorNonce: number;
   /** Latched once per recording when main reports the system-audio tap has produced only silence. */
   systemAudioSilentWarning: boolean;
+  /** Most recent interruption; quiet warnings clear when audible system audio resumes. */
+  systemAudioInterrupted: { recovering: boolean; reason: string } | null;
+  /** Bumped on every interruption report so a repeated one still re-notifies. */
+  systemAudioInterruptedNonce: number;
+  systemAudioInterruptedDeliveredNonce: number;
   currentMicLevel: number;
   micCaptureStatus: "inactive" | "active" | "reconnecting" | "unavailable";
   windowWidth: number;
@@ -438,6 +448,9 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   error: null,
   errorNonce: 0,
   systemAudioSilentWarning: false,
+  systemAudioInterrupted: null,
+  systemAudioInterruptedNonce: 0,
+  systemAudioInterruptedDeliveredNonce: 0,
   currentMicLevel: 0,
   micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
@@ -818,10 +831,23 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       completedDiarization: null,
       error: null,
       systemAudioSilentWarning: false,
+      systemAudioInterrupted: null,
       micCaptureStatus: "inactive",
     });
 
     isRecordingFlag = true;
+    let systemAudioAvailabilityResolved = false;
+    let pendingSystemAudioInterruption: MeetingSystemAudioInterruption | null = null;
+    const publishSystemAudioInterruption = (data: MeetingSystemAudioInterruption): void => {
+      logger.warn("Meeting system audio was interrupted", data, "meeting");
+      useMeetingRecordingStore.setState((state) => ({
+        systemAudioInterrupted: {
+          recovering: data.recovering === true,
+          reason: data.reason,
+        },
+        systemAudioInterruptedNonce: state.systemAudioInterruptedNonce + 1,
+      }));
+    };
     let setupMicResult: MediaStream | null = null;
     let setupSystemCaptureResult: { stream: MediaStream | null; error: Error | null } = {
       stream: null,
@@ -850,6 +876,32 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     };
 
     try {
+      // Main capture can fail while microphone permission is still pending.
+      // Keep its latest report until setup establishes whether this session
+      // actually has system audio, including a possible mic-only fallback.
+      const interruptedCleanup = window.electronAPI?.onMeetingSystemAudioInterrupted?.((data) => {
+        if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+        if (!systemAudioAvailabilityResolved) {
+          pendingSystemAudioInterruption = data;
+        } else if (sessionSystemAudioActive) {
+          publishSystemAudioInterruption(data);
+        }
+      });
+      const resumedCleanup = window.electronAPI?.onMeetingSystemAudioResumed?.(() => {
+        if (activeRecordingSessionId !== sessionId || !isRecordingFlag) return;
+        if (pendingSystemAudioInterruption?.reason === "gone_quiet") {
+          pendingSystemAudioInterruption = null;
+        }
+        if (useMeetingRecordingStore.getState().systemAudioInterrupted?.reason === "gone_quiet") {
+          useMeetingRecordingStore.setState({ systemAudioInterrupted: null });
+        }
+      });
+      ipcCleanups.push(() => {
+        pendingSystemAudioInterruption = null;
+        interruptedCleanup?.();
+        resumedCleanup?.();
+      });
+
       if (preparePromise) {
         logger.debug("Waiting for in-flight prepare to finish...", {}, "meeting");
         await preparePromise;
@@ -956,6 +1008,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         setupSystemCaptureResult = { stream: null, error: null };
         isRecordingFlag = false;
         isStartingFlag = false;
+        await cleanup();
         releaseSession();
         return;
       }
@@ -1407,6 +1460,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       const systemAudioAvailable = systemAudioHandledInMain || systemStream !== null;
       sessionSystemAudioActive = systemAudioAvailable;
+      systemAudioAvailabilityResolved = true;
+      if (systemAudioAvailable && pendingSystemAudioInterruption) {
+        publishSystemAudioInterruption(pendingSystemAudioInterruption);
+      }
+      pendingSystemAudioInterruption = null;
       try {
         const availabilityResult =
           await window.electronAPI?.meetingTranscriptionSetSystemAudioAvailable?.(
@@ -1494,6 +1552,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemPartialSpeakerId: null,
       systemPartialSpeakerName: null,
       systemAudioSilentWarning: false,
+      systemAudioInterrupted: null,
       currentMicLevel: 0,
     });
     return { diarizationSessionId: null, stopped: false };
@@ -1580,6 +1639,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       systemPartialSpeakerId: null,
       systemPartialSpeakerName: null,
       systemAudioSilentWarning: false,
+      systemAudioInterrupted: null,
       currentMicLevel: 0,
     });
 

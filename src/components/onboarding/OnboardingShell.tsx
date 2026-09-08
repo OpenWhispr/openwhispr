@@ -203,17 +203,39 @@ export default function OnboardingShell({
         } as CSSProperties
       }
     >
-      {/* 48px, not a sliver: this is the frameless window's only title bar, so
-          it has to be a target someone can actually grab. Interactive overlays
-          in this band need z-60 + app-region: no-drag and must live outside the
-          step wrapper (a sibling here, or portalled to body) — the wrapper's
-          entry animation retains a transform, capping its descendants below
-          z-50. */}
+      {/* This is the frameless window's only title bar, so it has to be a
+          target someone can actually grab. Interactive overlays in this band
+          need z-60 + app-region: no-drag and must live outside the step wrapper
+          (a sibling here, or portalled to body) — the wrapper's entry animation
+          retains a transform, capping its descendants below z-50.
+
+          The native app-region strip stays 48px on every screen. A drag element
+          swallows the events under it, and it is a sibling of the step scroller
+          inside an overflow-hidden main, so a taller strip would eat wheel
+          scrolling over the top of a compact step — reachable, because
+          setOnboardingWindowMode clamps the compact window to the work area
+          height and the permissions list then overflows. */}
       <div
         className="absolute inset-x-0 top-0 z-50 h-12"
         style={{ WebkitAppRegion: "drag" } as CSSProperties}
+        data-window-drag-zone=""
         aria-hidden="true"
       />
+      {/* macOS only: the transparent control panel drops app-region entirely,
+          so the JS fallback (useControlPanelWindowDrag) is the sole drag path
+          there and can widen the grab target to the full compact hero — the
+          dithered ramp reads as window chrome, so people grab it to move the
+          window. pointer-events-none keeps it out of the event path, so it can
+          never swallow scrolling or clicks the way the app-region strip does;
+          the fallback matches declared zones by their bounds, not by hit
+          testing, so being out of the event path costs it nothing. */}
+      {compact && (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-40 h-48"
+          data-window-drag-zone=""
+          aria-hidden="true"
+        />
+      )}
       {getPlatform() !== "darwin" && <OnboardingWindowControls />}
 
       <div

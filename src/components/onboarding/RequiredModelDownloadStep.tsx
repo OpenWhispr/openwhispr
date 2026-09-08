@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AlertCircle, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
@@ -40,8 +40,13 @@ export function RequiredModelDownloadStep({
   const whisperDownload = useModelDownload({ modelType: "whisper", onDownloadComplete: refresh });
   const parakeetDownload = useModelDownload({ modelType: "parakeet", onDownloadComplete: refresh });
 
-  const [failedModels, setFailedModels] = useState<Record<string, string>>({});
-  const lastStartedRef = useRef<{ family: ModelFamily; id: string } | null>(null);
+  const failedModels = useMemo(
+    (): Record<string, string> => ({
+      ...whisperDownload.downloadErrors,
+      ...parakeetDownload.downloadErrors,
+    }),
+    [whisperDownload.downloadErrors, parakeetDownload.downloadErrors]
+  );
   const startedAnyRef = useRef(false);
   const autoAdvancedRef = useRef(false);
 
@@ -52,30 +57,10 @@ export function RequiredModelDownloadStep({
   const missingSet = useMemo(() => new Set(missing), [missing]);
   const anyDownloadActive = whisperDownload.isDownloading || parakeetDownload.isDownloading;
 
-  // useModelDownload clears its downloading state on error, so the failing
-  // model id has to be remembered here to pin the error to its row.
-  useEffect(() => {
-    const last = lastStartedRef.current;
-    if (!last) return;
-    const error =
-      last.family === "whisper" ? whisperDownload.downloadError : parakeetDownload.downloadError;
-    if (!error) return;
-    setFailedModels((current) =>
-      current[last.id] === error ? current : { ...current, [last.id]: error }
-    );
-  }, [whisperDownload.downloadError, parakeetDownload.downloadError]);
-
   const startDownload = useCallback(
-    (modelId: string) => {
+    (modelId: string): void => {
       startedAnyRef.current = true;
-      setFailedModels((current) => {
-        if (!(modelId in current)) return current;
-        const next = { ...current };
-        delete next[modelId];
-        return next;
-      });
       const family = familyOf(modelId);
-      lastStartedRef.current = { family, id: modelId };
       const download = family === "parakeet" ? parakeetDownload : whisperDownload;
       void download.downloadModel(modelId);
     },
@@ -102,7 +87,7 @@ export function RequiredModelDownloadStep({
     }
   }, [loading, missing, onProceed]);
 
-  const hasFailures = Object.keys(failedModels).length > 0;
+  const hasFailures = required.some((modelId): boolean => !!failedModels[modelId]);
 
   return (
     <section className={`mt-5 ${SETUP_CARD_CLASS}`}>
