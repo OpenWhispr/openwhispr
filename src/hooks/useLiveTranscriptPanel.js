@@ -34,8 +34,19 @@ export function useLiveTranscriptPanel({
   const [phase, setPhase] = useState("listening");
   const [entrancePhase, setEntrancePhase] = useState("idle");
   const [manuallyCollapsed, setManuallyCollapsed] = useState(false);
+  // True only when this open is a genuine rest -> mounted transition (mounted
+  // was actually false immediately before it). close() leaves `mounted` true
+  // for LIVE_TRANSCRIPT_CLOSE_UNMOUNT_MS so the collapse can finish visually,
+  // so a reopen inside that window re-enters entrancePhase="encapsulate" too
+  // — indistinguishable from a fresh mount by entrancePhase alone. Consumed
+  // by dictation-panel.css's fresh-mount snap-gate (data-panel-fresh-mount),
+  // which must fire ONLY for a real fresh mount — snapping a mid-collapse
+  // frame pops it instead of letting the transition reverse smoothly (fix
+  // round 2, Finding B, review 2026-09-08).
+  const [freshMount, setFreshMount] = useState(false);
 
   const openRef = useRef(open);
+  const mountedRef = useRef(mounted);
   const suppressedRef = useRef(false);
   const reopenEligibleRef = useRef(false);
   const closeTimerRef = useRef(null);
@@ -66,6 +77,10 @@ export function useLiveTranscriptPanel({
   useLayoutEffect(() => {
     openRef.current = open;
   }, [open]);
+
+  useLayoutEffect(() => {
+    mountedRef.current = mounted;
+  }, [mounted]);
 
   useLayoutEffect(() => {
     phaseRef.current = phase;
@@ -232,6 +247,12 @@ export function useLiveTranscriptPanel({
       textSchedulerRef.current.cancel();
       setText("");
       setEntrancePhase("encapsulate");
+      // Read BEFORE flipping mounted true: captures whether this open is a
+      // real rest -> mounted transition (fresh) or a reopen while already
+      // mounted (mid-collapse, close()'s pending unmount timer just got
+      // cleared above by clearTimeout(closeTimerRef.current) — mounted never
+      // actually dropped to false for this cycle).
+      setFreshMount(!mountedRef.current);
       setMounted(true);
       cancelAnimationFrame(openFrameRef.current);
       openFrameRef.current = requestAnimationFrame(() => {
@@ -459,6 +480,7 @@ export function useLiveTranscriptPanel({
     measurementText,
     phase,
     entrancePhase,
+    freshMount,
     manuallyCollapsed,
     openRef,
     requestHeight,

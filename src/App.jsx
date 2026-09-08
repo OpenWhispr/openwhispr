@@ -849,6 +849,9 @@ export default function App() {
         entrancePhase={
           activeVoicePanelMode === "live-transcript" ? liveTranscript.entrancePhase : undefined
         }
+        freshMount={
+          activeVoicePanelMode === "live-transcript" ? liveTranscript.freshMount : undefined
+        }
         horizontalDirection={voiceHorizontalDirection}
         label={activeVoicePanelLabel}
         measurementRevision={

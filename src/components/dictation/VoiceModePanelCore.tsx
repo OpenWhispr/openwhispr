@@ -21,6 +21,14 @@ interface VoiceModePanelCoreProps {
   // apart, which is what gates the fresh-mount snap in dictation-panel.css
   // without also silencing the closing animation.
   entrancePhase?: string | null;
+  // True only when THIS open is a genuine rest -> mounted transition (see
+  // useLiveTranscriptPanel's freshMount). Reopening while still mounted
+  // (mid-collapse, inside close()'s unmount delay) also passes through
+  // entrancePhase="encapsulate", so entrancePhase alone cannot tell a real
+  // fresh mount apart from that case — freshMount is the second, required
+  // signal the snap-gate needs so a mid-collapse reopen reverses smoothly
+  // instead of popping (fix round 2, Finding B, review 2026-09-08).
+  freshMount?: boolean;
   horizontalDirection?: "left" | "right";
   label?: string;
   measurementRevision?: string | number | null;
@@ -43,6 +51,7 @@ export function VoiceModePanelCore({
   closing = false,
   stage = "content",
   entrancePhase = null,
+  freshMount = false,
   horizontalDirection = "right",
   label,
   measurementRevision = null,
@@ -103,6 +112,7 @@ export function VoiceModePanelCore({
       data-panel-closing={closing ? "true" : undefined}
       data-panel-stage={isLiveTranscript ? stage : "content"}
       data-panel-entrance-phase={isLiveTranscript ? (entrancePhase ?? undefined) : undefined}
+      data-panel-fresh-mount={isLiveTranscript && freshMount ? "true" : undefined}
       data-panel-direction={horizontalDirection}
       style={
         {

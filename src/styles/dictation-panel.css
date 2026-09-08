@@ -66,8 +66,19 @@
    pre-open frame — CLOSING reaches the identical mode=live-transcript,
    not-open combination but with entrancePhase="idle", and must keep
    playing its own already-correct animated collapse. Finding 1, review
-   2026-09-08. */
-.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-entrance-phase="encapsulate"]:not(.expanding-panel-surface-open) {
+   2026-09-08.
+
+   entrancePhase alone is not enough, though: close() leaves `mounted` true
+   for LIVE_TRANSCRIPT_CLOSE_UNMOUNT_MS (320ms) so the collapse can finish
+   visually, and a reopen INSIDE that window re-enters entrancePhase=
+   "encapsulate" too — which would snap a still-mid-collapse frame straight
+   to the closed corner-box (a pop) instead of letting its already-in-flight
+   transition reverse smoothly. data-panel-fresh-mount="true" is the second,
+   required condition: it is true only when `mounted` was actually false
+   immediately before this open (a real rest -> mounted transition), so a
+   reopen while already mounted does not match this rule at all. Finding B,
+   review 2026-09-08 (fix round 2). */
+.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-entrance-phase="encapsulate"][data-panel-fresh-mount="true"]:not(.expanding-panel-surface-open) {
   transition: none;
 }
 
@@ -660,24 +671,19 @@
     transition-duration: 1ms;
   }
 
-  /* Only left/bottom/transform collapse here — the pill's own opacity fade
-     (Tailwind's `transition-opacity duration-150` in its className) keeps
-     its normal speed, matching index.css's policy just above that opacity
-     carries meaning and stays at normal speed. Naming these three properties
-     explicitly, instead of a bare un-named `transition-duration`, is what
-     keeps this rule from also reaching opacity: a blanket
-     `transition-duration: 1ms !important` reaches EVERY property in
-     transition-property — opacity included — because `!important` beats a
-     non-important declaration regardless of which rule or cascade layer
-     contributed it (Tailwind's utilities live in `@layer utilities`; this
-     file is unlayered, so it already wins left/bottom/transform without
-     needing `!important` at all). Finding 4, review 2026-09-08. */
-  .voice-pill-position {
-    transition:
-      left 1ms,
-      bottom 1ms,
-      transform 1ms;
-  }
+  /* .voice-pill-position needs no override here (fix round 1's Finding-4 fix
+     is deleted, not repaired — fix round 2, Finding A, review 2026-09-08,
+     measured in a real browser): its left/bottom/transform are ALREADY
+     excluded from transition-property by the blanket rule above (stronger
+     than any duration this file could set — a true no-transition, not just
+     a fast one), and it never transitions opacity in the first place, in
+     EITHER motion mode — its own unlayered shorthand already beats
+     Tailwind's layered `transition-opacity duration-150` for transition-
+     property even in normal motion. There is nothing left for a per-rule
+     override here to protect. See the covering test in
+     voicePillStructure.test.js for the full reasoning and its own explicit
+     limits (source-text checks only — this needs a real browser to verify
+     computed duration, which is exactly how this was caught). */
 
   .hands-free-tip-card {
     animation: none;

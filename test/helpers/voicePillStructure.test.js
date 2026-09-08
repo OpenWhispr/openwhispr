@@ -42,6 +42,13 @@ const extractMediaBlock = (source, mediaSelectorText) => {
   return source.slice(start, i);
 };
 
+// For "no rule targets this selector" regression guards: a comment
+// EXPLAINING why a selector has no rule (e.g. ".voice-pill-position needs no
+// override here") legitimately names that selector in prose, which would
+// otherwise false-positive an indexOf/regex absence check meant to catch an
+// actual CSS RULE. Strip comments first so only real rules are searched.
+const stripCssComments = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+
 // The pill renders the resting silhouette and the live waveform as two
 // stacked bar sets, both sized from the shared bar count.
 const totalWaveBars = async () => {
@@ -395,11 +402,12 @@ test("Live Transcript's own closed corner-box geometry survives Task 4, rescoped
 // tell it apart from CLOSING, which reaches the identical mode=live-
 // transcript+not-open combination but with entrancePhase="idle" and must
 // keep animating.
-test("Live Transcript's fresh-mount frame is tagged apart from its closing frame — the only signal that can gate one without silencing the other", async () => {
-  const freshMount = await renderVoiceModePanelCore({
+test("Live Transcript's fresh-mount frame is tagged apart from its closing AND its mid-collapse-reopen frames — data-panel-entrance-phase alone cannot do it", async () => {
+  const freshMountMarkup = await renderVoiceModePanelCore({
     mode: "live-transcript",
     open: false,
     entrancePhase: "encapsulate",
+    freshMount: true,
     horizontalDirection: "right",
   });
   const closing = await renderVoiceModePanelCore({
@@ -408,25 +416,53 @@ test("Live Transcript's fresh-mount frame is tagged apart from its closing frame
     entrancePhase: "idle",
     horizontalDirection: "right",
   });
+  // Fix round 2, Finding B (review 2026-09-08): close() leaves `mounted`
+  // true for its 320ms unmount delay, so a reopen INSIDE that window
+  // re-enters entrancePhase="encapsulate" too — the same value a genuine
+  // fresh mount uses. freshMount=false is the only signal that tells this
+  // apart from a real rest -> mounted transition (see
+  // useLiveTranscriptPanel.test.js for the hook-level proof that it's
+  // actually computed correctly; this test only proves the WIRING renders
+  // it onto the right attribute).
+  const reopenMidCollapse = await renderVoiceModePanelCore({
+    mode: "live-transcript",
+    open: false,
+    entrancePhase: "encapsulate",
+    freshMount: false,
+    horizontalDirection: "right",
+  });
   const openedEntrance = await renderVoiceModePanelCore({
     mode: "live-transcript",
     open: true,
     entrancePhase: "encapsulate",
+    freshMount: true,
     horizontalDirection: "right",
   });
 
-  assert.match(freshMount, /data-panel-mode="live-transcript"/);
-  assert.match(freshMount, /data-panel-entrance-phase="encapsulate"/);
-  assert.doesNotMatch(freshMount, /expanding-panel-surface-open/);
+  assert.match(freshMountMarkup, /data-panel-mode="live-transcript"/);
+  assert.match(freshMountMarkup, /data-panel-entrance-phase="encapsulate"/);
+  assert.match(freshMountMarkup, /data-panel-fresh-mount="true"/);
+  assert.doesNotMatch(freshMountMarkup, /expanding-panel-surface-open/);
 
   // Closing renders the SAME mode+not-open combination — entrancePhase is
-  // the ONLY difference available to tell it apart from a fresh mount.
+  // the first difference available to tell it apart from a fresh mount.
   assert.match(closing, /data-panel-mode="live-transcript"/);
   assert.doesNotMatch(closing, /expanding-panel-surface-open/);
   assert.doesNotMatch(
     closing,
     /data-panel-entrance-phase="encapsulate"/,
-    "closing must NOT carry the fresh-mount tag, or its own animated collapse would be silenced too"
+    "closing must NOT carry the fresh-mount phase, or its own animated collapse would be silenced too"
+  );
+
+  // Reopening mid-collapse DOES carry entrancePhase="encapsulate" (same as a
+  // real fresh mount) — data-panel-fresh-mount is what must differ.
+  assert.match(reopenMidCollapse, /data-panel-mode="live-transcript"/);
+  assert.match(reopenMidCollapse, /data-panel-entrance-phase="encapsulate"/);
+  assert.doesNotMatch(reopenMidCollapse, /expanding-panel-surface-open/);
+  assert.doesNotMatch(
+    reopenMidCollapse,
+    /data-panel-fresh-mount="true"/,
+    "reopening while already mounted must NOT carry the fresh-mount tag, or its in-flight collapse would pop instead of reversing smoothly"
   );
 
   // Once open, the gate must no longer apply even though entrancePhase
@@ -437,35 +473,39 @@ test("Live Transcript's fresh-mount frame is tagged apart from its closing frame
   assert.match(openedEntrance, /data-panel-entrance-phase="encapsulate"/);
 });
 
-test("Assistant mode never carries Live Transcript's entrance-phase attribute", async () => {
-  // Pass a truthy entrancePhase despite mode="assistant" (App.jsx never
-  // actually does this — it gates entrancePhase to undefined itself for
-  // non-Live-Transcript modes — but the component's OWN gate must not rely
-  // on that alone: a null/undefined-only prop would make this assertion
-  // pass whether or not the isLiveTranscript check exists at all, proven by
-  // this exact mutation during review).
+test("Assistant mode never carries Live Transcript's entrance-phase or fresh-mount attributes", async () => {
+  // Pass truthy values despite mode="assistant" (App.jsx never actually does
+  // this — it gates both to undefined itself for non-Live-Transcript modes —
+  // but the component's OWN gate must not rely on that alone: a
+  // null/undefined-only prop would make this assertion pass whether or not
+  // the isLiveTranscript check exists at all, proven by this exact mutation
+  // during review).
   const assistantFresh = await renderVoiceModePanelCore({
     mode: "assistant",
     open: false,
     entrancePhase: "encapsulate",
+    freshMount: true,
     horizontalDirection: "right",
   });
   const assistantOpen = await renderVoiceModePanelCore({
     mode: "assistant",
     open: true,
     entrancePhase: "encapsulate",
+    freshMount: true,
     horizontalDirection: "right",
   });
 
   assert.doesNotMatch(assistantFresh, /data-panel-entrance-phase/);
+  assert.doesNotMatch(assistantFresh, /data-panel-fresh-mount/);
   assert.doesNotMatch(assistantOpen, /data-panel-entrance-phase/);
+  assert.doesNotMatch(assistantOpen, /data-panel-fresh-mount/);
 });
 
 test("Live Transcript's fresh-mount frame disables its transition, so it snaps to the closed corner-box instead of animating there from the shared circle rest-state", async () => {
   const styles = readDictationStyles();
 
   const freshMountGate = [
-    '.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-entrance-phase="encapsulate"]:not(.expanding-panel-surface-open) {',
+    '.expanding-panel-surface[data-panel-mode="live-transcript"][data-panel-entrance-phase="encapsulate"][data-panel-fresh-mount="true"]:not(.expanding-panel-surface-open) {',
     "  transition: none;",
     "}",
   ].join("\n");
@@ -475,10 +515,22 @@ test("Live Transcript's fresh-mount frame disables its transition, so it snaps t
     "expected a rule disabling transition specifically for Live Transcript's fresh-mount, pre-open frame"
   );
 
-  // Regression guard: the gate must be scoped to the "encapsulate" phase
-  // specifically, not merely "mode=live-transcript, not open" — the latter
-  // ALSO matches while CLOSING (open removed, mode still mounted for its
-  // 320ms unmount delay), which must keep animating, not snap shut.
+  // Regression guard, fix round 2 Finding B: the gate must ALSO require
+  // data-panel-fresh-mount="true" — not just phase+mode+not-open, which
+  // ALSO matches a reopen mid-collapse (entrancePhase re-enters
+  // "encapsulate" there too) and would snap its in-flight collapse instead
+  // of letting it reverse smoothly.
+  assert.doesNotMatch(
+    styles,
+    /\.expanding-panel-surface\[data-panel-mode="live-transcript"\]\[data-panel-entrance-phase="encapsulate"\]:not\(\.expanding-panel-surface-open\)\s*\{\s*transition:\s*none/,
+    "must require data-panel-fresh-mount=\"true\" too — phase+mode+not-open alone also matches a mid-collapse reopen"
+  );
+
+  // Regression guard, fix round 1 Finding 1: the gate must be scoped to the
+  // "encapsulate" phase specifically, not merely "mode=live-transcript, not
+  // open" — the latter ALSO matches while CLOSING (open removed, mode still
+  // mounted for its 320ms unmount delay), which must keep animating, not
+  // snap shut.
   assert.doesNotMatch(
     styles,
     /\.expanding-panel-surface\[data-panel-mode="live-transcript"\]:not\(\.expanding-panel-surface-open\)\s*\{\s*transition:\s*none/,
@@ -505,49 +557,69 @@ test("the pill's travel between docks can be driven onto the morph spring by an 
   );
 });
 
-test("the pill's travel collapses to near-instant under reduced motion, without flattening its own opacity fade", async () => {
+// Fix round 2, Finding A (review 2026-09-08): measured in a real browser
+// (Vite + Tailwind build, headless Chrome, --force-prefers-reduced-motion,
+// getComputedStyle sampled per frame), fix round 1's ".voice-pill-position
+// { transition: left 1ms, bottom 1ms, transform 1ms; }" reached NOTHING —
+// transition-duration measured 1ms both BEFORE and AFTER that fix, byte-
+// identical in effect to the blanket !important version it replaced.
+//
+// Root cause: index.css's `*, *::before, *::after` reduced-motion rule sets
+// `transition-property: opacity, color, background-color, border-color,
+// fill, stroke, box-shadow, filter !important`. Cascade importance is
+// compared BEFORE cascade layers — so that !important wins transition-
+// property regardless of this file being unlayered, REGARDLESS of what
+// .voice-pill-position's own rule names. Whatever transition-duration THIS
+// rule contributes (1ms, unlayered, so it DOES win that longhand) then
+// cycles positionally onto index.css's forced 8-item property list, landing
+// on opacity — its first entry — no matter what property names this rule
+// used. Naming left/bottom/transform explicitly cannot fix this: there is
+// no CSS syntax for "this duration applies to THESE named properties only"
+// once transition-property itself is a fixed, unrelated list.
+//
+// Separately, and independently: .voice-pill-position never transitions
+// opacity in the FIRST place, in EITHER motion mode. Measured: its own
+// unlayered `transition: left, bottom, transform` shorthand already beats
+// Tailwind's layered `transition-opacity duration-150` (from the element's
+// className) for transition-property even in NORMAL motion — unlayered
+// beats layered for normal-importance declarations regardless of reduced
+// motion. So there was never an opacity fade here for a reduced-motion rule
+// to protect; fix round 1's comment claiming otherwise was wrong. The rule
+// is deleted rather than re-fixed, since it can reach nothing index.css has
+// not already handled for left/bottom/transform (excluded from transition-
+// property entirely — stronger than any duration this file could set) and
+// cannot protect an opacity fade that does not exist on this element.
+//
+// What this test CAN verify from source text alone: (a) the premise — this
+// element's own transition never names opacity, so there is nothing here to
+// protect — and (b) a regression guard that no rule targeting
+// .voice-pill-position exists inside the reduced-motion block at all. It
+// does NOT and CANNOT verify actual computed transition-duration under
+// reduced motion — this test harness has no browser. That requires a real
+// browser measurement, as the review did; do not reintroduce a rule here on
+// CSS-text reasoning alone.
+test("`.voice-pill-position` needs no reduced-motion override: it never transitions opacity in the first place", async () => {
   const dictationPanelCss = readDictationPanelCss();
 
-  // .expanding-panel-surface's own pre-existing, bare `transition-duration:
-  // 1ms;` rule (unchanged by this task) already collapses its clip-path/
-  // opacity/transform uniformly for the base (non-Live-Transcript) case, and
-  // is correctly beaten by Live Transcript's own MORE SPECIFIC transition
-  // rule when data-panel-mode="live-transcript" (specificity (0,2,0) beats
-  // this rule's (0,1,0) even though this rule comes later in the file) — so
-  // only .voice-pill-position genuinely needs a NEW override here.
-  const pillTravelOverride = [
-    "  .voice-pill-position {",
-    "    transition:",
-    "      left 1ms,",
-    "      bottom 1ms,",
-    "      transform 1ms;",
-    "  }",
+  const baseRule = [
+    ".voice-pill-position {",
+    "  transition:",
+    "    left var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1)),",
+    "    bottom var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1)),",
+    "    transform var(--voice-pill-travel-duration, 320ms) var(--voice-pill-travel-ease, cubic-bezier(0.2, 0, 0, 1));",
+    "  will-change: left, bottom, transform;",
+    "}",
   ].join("\n");
-
-  assert.ok(
-    dictationPanelCss.includes(pillTravelOverride),
-    "expected the pill's left/bottom/transform travel to collapse to 1ms under reduced motion"
-  );
-
-  // Regression guard (Finding 4, review 2026-09-08): a bare, un-named
-  // `transition-duration: 1ms !important` on .voice-pill-position ALSO
-  // flattened its separate Tailwind-driven opacity fade
-  // (`transition-opacity duration-150` in the element's className) to 1ms,
-  // because `!important` beats a non-important declaration regardless of
-  // which cascade layer contributed it (Tailwind's utilities live in
-  // `@layer utilities`; this file is unlayered) — contradicting index.css's
-  // policy that opacity keeps its normal speed under reduced motion. Naming
-  // exactly left/bottom/transform, and never `!important`, is what keeps
-  // this rule from reaching opacity again.
   assert.doesNotMatch(
-    dictationPanelCss,
-    /\.voice-pill-position(\s*,\s*\.[\w-]+)?\s*\{\s*transition-duration:\s*1ms\s*!important/,
-    "must not reintroduce a blanket !important transition-duration on .voice-pill-position"
+    baseRule,
+    /opacity/,
+    "sanity: the expected snippet itself must not mention opacity"
+  );
+  assert.ok(
+    dictationPanelCss.includes(baseRule),
+    "expected .voice-pill-position's own (only) transition to name just left/bottom/transform — never opacity"
   );
 
-  // Confirm the override actually lives inside dictation-panel.css's OWN
-  // reduced-motion media query (see readDictationPanelCss's comment for why
-  // this must NOT be checked against the index.css-prefixed concatenation).
   const reducedMotionBlock = extractMediaBlock(
     dictationPanelCss,
     "@media (prefers-reduced-motion: reduce)"
@@ -556,9 +628,10 @@ test("the pill's travel collapses to near-instant under reduced motion, without 
     reducedMotionBlock,
     "expected dictation-panel.css to have its own reduced-motion media block"
   );
-  assert.ok(
-    reducedMotionBlock.includes(pillTravelOverride),
-    "expected the pill-travel override to live inside dictation-panel.css's OWN reduced-motion media query"
+  assert.doesNotMatch(
+    stripCssComments(reducedMotionBlock),
+    /\.voice-pill-position/,
+    "expected no reduced-motion RULE for .voice-pill-position at all (comments naming it, e.g. explaining its absence, are fine and stripped first) — it reaches nothing index.css hasn't already handled for left/bottom/transform, and cannot protect an opacity fade that doesn't exist on this element"
   );
 });
 
