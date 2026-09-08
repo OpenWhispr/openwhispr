@@ -75,8 +75,14 @@ test("leaderboard access is plan agnostic and invitation led", () => {
 
   assert.equal(section.includes("LeaderboardFreePreview"), false);
   assert.equal(view.includes("onUpgrade"), false);
-  assert.ok(section.includes("inviteToLeaderboard"));
-  assert.ok(section.includes('t("insights.leaderboard.inviteCta")'));
+  assert.ok(section.includes("openLeaderboardGrowthAction"));
+  assert.ok(section.includes('"insights.leaderboard.inviteCta"'));
+  assert.ok(section.includes('selectedScope.kind === "domain"'));
+  assert.ok(section.includes('scope.kind === "workspace"'));
+  assert.ok(section.includes('"settingsPage.workspace.empty.create"'));
+  assert.ok(section.includes("setCreateWorkspaceOpen(true)"));
+  assert.ok(section.includes("boardParticipantCount"));
+  assert.ok(section.includes("visibleLeaderboard?.totalMembers"));
   assert.ok(section.includes("<LeaderboardSetupCard"));
   assert.ok(section.includes("<LeaderboardSoloEmptyState"));
   assert.ok(section.includes("<LeaderboardAcceptInvitePreview"));
@@ -91,6 +97,26 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   assert.equal(section.includes("<LeaderboardSyncRow"), false);
   assert.equal(section.includes("activationDescription"), false);
   assert.ok(controlPanel.includes("onInvite={() => setShowReferrals(true)}"));
+});
+
+test("leaderboard access waits for validated auth and labels ranked participants", () => {
+  const section = read("src/components/LeaderboardSection.tsx");
+  const accessLoader = section.slice(
+    section.indexOf("const loadAccess"),
+    section.indexOf("useEffect(() =>", section.indexOf("const loadAccess"))
+  );
+  const boardHeader = section.slice(
+    section.indexOf('data-leaderboard-state="board"'),
+    section.indexOf("<DropdownMenu", section.indexOf('data-leaderboard-state="board"'))
+  );
+
+  assert.ok(
+    accessLoader.indexOf("authGeneration == null") <
+      accessLoader.indexOf("LeaderboardService.getAccess()")
+  );
+  assert.ok(accessLoader.includes("[accountId, authGeneration]"));
+  assert.ok(boardHeader.includes("boardParticipantCount"));
+  assert.equal(boardHeader.includes("selectedScope.memberCount"), false);
 });
 
 test("an SSO-required board starts company reauthentication directly", () => {

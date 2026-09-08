@@ -17,7 +17,26 @@ const waitFor = async (predicate) => {
   assert.fail("timed out waiting for the mocked request to start");
 };
 
-function loadStore(t, { initialStorage = {}, cloudApiRequest }) {
+async function validateAuthContext(userId = "user_1", authGeneration = 7, reset = true) {
+  const auth = require("../../src/lib/authRequestContext.ts");
+  if (reset) auth.resetAuthRequestContextForTests();
+  const token = `token-${userId}-${authGeneration}`;
+  global.window.location ??= { origin: "https://desktop.openwhispr.test" };
+  global.window.electronAPI.authGetTokenState = async () => ({ token, generation: authGeneration });
+  await auth.handleAuthRequestSuccess({
+    data: { user: { id: userId } },
+    response: new Response("{}", { status: 200 }),
+    request: {
+      url: "https://auth.openwhispr.test/api/auth/get-session",
+      headers: new Headers({ Authorization: `Bearer ${token}` }),
+      openWhisprAuthGeneration: authGeneration,
+    },
+  });
+  assert.equal(auth.commitValidatedAuthContext(authGeneration, userId), true);
+  return { userId, authGeneration };
+}
+
+async function loadStore(t, { initialStorage = {}, cloudApiRequest }) {
   const requests = [];
   const { storage } = installBrowserGlobals(t, {
     initialStorage,
@@ -41,7 +60,8 @@ function loadStore(t, { initialStorage = {}, cloudApiRequest }) {
     error: null,
     updating: false,
   });
-  return { requests, storage, store: useLeaderboardParticipationStore };
+  const context = await validateAuthContext();
+  return { context, requests, storage, store: useLeaderboardParticipationStore };
 }
 
 const participation = (enabled) => ({
@@ -50,11 +70,11 @@ const participation = (enabled) => ({
 });
 
 test("a leave the account refused stops showing the user as participating", async (t) => {
-  const { storage, store } = loadStore(t, {
+  const { context, storage, store } = await loadStore(t, {
     cloudApiRequest: async () => ({ success: false, status: 0, error: "offline" }),
   });
 
-  assert.equal(await store.getState().leave("user_1"), false);
+  assert.equal(await store.getState().leave(context), false);
   assert.equal(store.getState().enabled, false);
   assert.equal(store.getState().configured, true);
   assert.equal(store.getState().ready, true);
@@ -71,7 +91,7 @@ test("a leave the account refused stops showing the user as participating", asyn
 // shared, that read reported the row the leave was busy changing.
 test("a read started during a leave never reports the account still joined", async (t) => {
   let releaseLeave;
-  const { requests, store } = loadStore(t, {
+  const { context, requests, store } = await loadStore(t, {
     cloudApiRequest: async (request) => {
       if (request.method === "PATCH") {
         await new Promise((resolve) => {
@@ -83,9 +103,9 @@ test("a read started during a leave never reports the account still joined", asy
     },
   });
 
-  const leaving = store.getState().leave("user_1");
+  const leaving = store.getState().leave(context);
   await waitFor(() => typeof releaseLeave === "function");
-  await store.getState().refresh("user_1");
+  await store.getState().refresh(context);
   assert.deepEqual(
     requests.map((request) => request.method),
     ["PATCH"],
@@ -100,7 +120,7 @@ test("a read started during a leave never reports the account still joined", asy
 
 test("a read that resolves after a write is retired by it", async (t) => {
   let releaseRead;
-  const { store } = loadStore(t, {
+  const { context, store } = await loadStore(t, {
     cloudApiRequest: async (request) => {
       if (request.method === "GET") {
         await new Promise((resolve) => {
@@ -112,12 +132,13 @@ test("a read that resolves after a write is retired by it", async (t) => {
     },
   });
 
-  const reading = store.getState().refresh("user_1");
-  await store.getState().leave("user_1");
-  assert.equal(store.getState().enabled, false);
+  const reading = store.getState().refresh(context);
+  await waitFor(() => typeof releaseRead === "function");
+  const leaving = store.getState().leave(context);
 
   releaseRead();
   await reading;
+  await leaving;
   assert.equal(
     store.getState().enabled,
     false,
@@ -126,19 +147,19 @@ test("a read that resolves after a write is retired by it", async (t) => {
 });
 
 test("a join retires the queued leave before its own request goes out", async (t) => {
-  const { requests, storage, store } = loadStore(t, {
+  const { context, requests, storage, store } = await loadStore(t, {
     initialStorage: { [PENDING_KEY]: '["user_1","user_2"]' },
     cloudApiRequest: async () => participation(true),
   });
 
-  assert.equal(await store.getState().join("user_1"), true);
+  assert.equal(await store.getState().join(context), true);
   assert.deepEqual(requests, [
     {
       method: "PATCH",
       path: "/api/analytics/participation",
       body: { enabled: true },
-      public: undefined,
-      expectedAuthGeneration: undefined,
+      public: false,
+      expectedAuthGeneration: 7,
     },
   ]);
   assert.deepEqual(
@@ -152,11 +173,11 @@ test("a join retires the queued leave before its own request goes out", async (t
 });
 
 test("a failed join reports that the combined opt-in did not complete", async (t) => {
-  const { storage, store } = loadStore(t, {
+  const { context, storage, store } = await loadStore(t, {
     cloudApiRequest: async () => ({ success: false, status: 500, error: "server error" }),
   });
 
-  assert.equal(await store.getState().join("user_1"), false);
+  assert.equal(await store.getState().join(context), false);
   assert.equal(store.getState().enabled, false);
   assert.equal(store.getState().configured, true);
   assert.equal(store.getState().error, "write");
@@ -171,7 +192,7 @@ test("a failed join reports that the combined opt-in did not complete", async (t
 test("a newer join clears an older ambiguous join failure", async (t) => {
   let releaseFirstJoin;
   let requestCount = 0;
-  const { requests, storage, store } = loadStore(t, {
+  const { context, requests, storage, store } = await loadStore(t, {
     cloudApiRequest: async () => {
       requestCount += 1;
       if (requestCount === 1) {
@@ -184,9 +205,9 @@ test("a newer join clears an older ambiguous join failure", async (t) => {
     },
   });
 
-  const firstJoin = store.getState().join("user_1");
+  const firstJoin = store.getState().join(context);
   await waitFor(() => typeof releaseFirstJoin === "function");
-  const secondJoin = store.getState().join("user_1");
+  const secondJoin = store.getState().join(context);
   await Promise.resolve();
   assert.equal(requests.length, 1, "same-account writes must not race at the API");
 
@@ -201,7 +222,7 @@ test("a newer join clears an older ambiguous join failure", async (t) => {
 test("a newer join clears an older failed leave without being undone later", async (t) => {
   let releaseLeave;
   let requestCount = 0;
-  const { requests, storage, store } = loadStore(t, {
+  const { context, requests, storage, store } = await loadStore(t, {
     cloudApiRequest: async () => {
       requestCount += 1;
       if (requestCount === 1) {
@@ -214,9 +235,9 @@ test("a newer join clears an older failed leave without being undone later", asy
     },
   });
 
-  const leave = store.getState().leave("user_1");
+  const leave = store.getState().leave(context);
   await waitFor(() => typeof releaseLeave === "function");
-  const join = store.getState().join("user_1");
+  const join = store.getState().join(context);
   await Promise.resolve();
   assert.equal(requests.length, 1, "the newer join waits for the leave to settle");
 
@@ -229,7 +250,7 @@ test("a newer join clears an older failed leave without being undone later", asy
 
 test("a refresh flushes the pending leave before reporting the answer", async (t) => {
   let accountEnabled = true;
-  const { requests, storage, store } = loadStore(t, {
+  const { context, requests, storage, store } = await loadStore(t, {
     initialStorage: { [PENDING_KEY]: '["user_1"]' },
     cloudApiRequest: async (request) => {
       if (request.method === "PATCH") accountEnabled = request.body.enabled;
@@ -237,7 +258,7 @@ test("a refresh flushes the pending leave before reporting the answer", async (t
     },
   });
 
-  await store.getState().refresh("user_1");
+  await store.getState().refresh(context);
   assert.deepEqual(
     requests.map((request) => request.method),
     ["PATCH", "GET"],
@@ -248,19 +269,19 @@ test("a refresh flushes the pending leave before reporting the answer", async (t
 });
 
 test("a participation read that fails offers a retry rather than a stale answer", async (t) => {
-  const { store } = loadStore(t, {
+  const { context, store } = await loadStore(t, {
     cloudApiRequest: async () => ({ success: false, status: 0, error: "offline" }),
   });
   store.setState({ enabled: true, ready: true });
 
-  await store.getState().refresh("user_1");
+  await store.getState().refresh(context);
   assert.equal(store.getState().enabled, false);
   assert.equal(store.getState().error, "read");
   assert.equal(store.getState().ready, true);
 });
 
 test("signing out drops the previous account's answer", async (t) => {
-  const { store } = loadStore(t, { cloudApiRequest: async () => participation(true) });
+  const { store } = await loadStore(t, { cloudApiRequest: async () => participation(true) });
   store.setState({ enabled: true, ready: true, error: "read" });
 
   store.getState().reset();
@@ -274,7 +295,7 @@ test("signing out drops the previous account's answer", async (t) => {
 // and the read it defers must not stay deferred for as long as it takes to fail.
 test("a write left over from the departing account cannot settle the next one", async (t) => {
   let releaseLeave;
-  const { storage, store } = loadStore(t, {
+  const { context, storage, store } = await loadStore(t, {
     cloudApiRequest: async () => {
       await new Promise((resolve) => {
         releaseLeave = resolve;
@@ -283,7 +304,7 @@ test("a write left over from the departing account cannot settle the next one", 
     },
   });
 
-  const leaving = store.getState().leave("user_1");
+  const leaving = store.getState().leave(context);
   await waitFor(() => typeof releaseLeave === "function");
   store.getState().reset();
   assert.equal(
@@ -307,7 +328,7 @@ test("a departing account's write cannot clear a newer account's write state", a
   let releaseFirstWrite;
   let releaseSecondWrite;
   let requestCount = 0;
-  const { store } = loadStore(t, {
+  const { context, store } = await loadStore(t, {
     cloudApiRequest: async () => {
       requestCount += 1;
       if (requestCount === 1) {
@@ -323,10 +344,11 @@ test("a departing account's write cannot clear a newer account's write state", a
     },
   });
 
-  const firstWrite = store.getState().leave("user_1");
+  const firstWrite = store.getState().leave(context);
   await waitFor(() => typeof releaseFirstWrite === "function");
   store.getState().reset();
-  const secondWrite = store.getState().join("user_2");
+  const user2 = await validateAuthContext("user_2", 8, false);
+  const secondWrite = store.getState().join(user2);
 
   releaseFirstWrite();
   await firstWrite;

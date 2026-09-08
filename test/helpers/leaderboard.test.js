@@ -97,6 +97,14 @@ test("leaderboard surfaces fail closed on unknown participation before scope sta
   assert.equal(surface({ access: { ...access, state: "accept_invite" } }), "accept_invite");
   assert.equal(surface({ access: { ...access, state: "request_join" } }), "request_join");
   assert.equal(
+    surface({ access: { ...access, state: "accept_invite" }, selectedScope: scope }),
+    "accept_invite"
+  );
+  assert.equal(
+    surface({ access: { ...access, state: "request_join" }, selectedScope: scope }),
+    "request_join"
+  );
+  assert.equal(
     surface({ selectedScope: scope, participationReady: false }),
     "participation_loading"
   );
@@ -146,22 +154,26 @@ test("workspace defaults are readable and derived only from the company domain",
   assert.equal(domainToWorkspaceName(null), "");
 });
 
-test("scope selection defaults to a membership and leaves domain-only users in the funnel", async () => {
+test("scope selection defaults to a membership and then a ready domain board", async () => {
   const { resolveLeaderboardScopeKey } = await load();
   const domain = {
     key: "domain:acme.com",
     kind: "domain",
     id: "acme.com",
     name: "acme.com",
+    state: "ready",
   };
   const workspace = {
     key: "workspace:one",
     kind: "workspace",
     id: "one",
     name: "One",
+    state: "ready",
   };
+  const unavailableDomain = { ...domain, key: "domain:solo.test", state: "invite" };
 
-  assert.equal(resolveLeaderboardScopeKey([domain], null), null);
+  assert.equal(resolveLeaderboardScopeKey([domain], null), domain.key);
+  assert.equal(resolveLeaderboardScopeKey([unavailableDomain], null), null);
   assert.equal(resolveLeaderboardScopeKey([domain, workspace], null), workspace.key);
   assert.equal(resolveLeaderboardScopeKey([workspace, domain], domain.key), domain.key);
   assert.equal(resolveLeaderboardScopeKey([domain, workspace], null, workspace.key), workspace.key);

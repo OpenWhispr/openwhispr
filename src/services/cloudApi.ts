@@ -68,6 +68,16 @@ export async function cloudGet<T = unknown>(path: string): Promise<T> {
   return cloudRequest<T>("GET", path);
 }
 
+// Account-scoped work may wait behind another renderer operation. Preserve the
+// credential generation from the caller so a queued request cannot adopt a
+// replacement account's token when it eventually reaches the main process.
+export async function cloudGetForAuthGeneration<T = unknown>(
+  path: string,
+  authGeneration: number
+): Promise<T> {
+  return cloudRequest<T>("GET", path, undefined, false, authGeneration);
+}
+
 // Account-scope bootstrap is the only authenticated call allowed before the
 // candidate session generation has been committed for ordinary sync.
 export async function cloudGetForAuthValidation<T = unknown>(
@@ -88,6 +98,14 @@ export async function cloudPost<T = unknown>(path: string, body?: unknown): Prom
 
 export async function cloudPatch<T = unknown>(path: string, body?: unknown): Promise<T> {
   return cloudRequest<T>("PATCH", path, body);
+}
+
+export async function cloudPatchForAuthGeneration<T = unknown>(
+  path: string,
+  body: unknown,
+  authGeneration: number
+): Promise<T> {
+  return cloudRequest<T>("PATCH", path, body, false, authGeneration);
 }
 
 export async function cloudDelete<T = unknown>(path: string, body?: unknown): Promise<T> {

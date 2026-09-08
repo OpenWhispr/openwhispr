@@ -22,6 +22,9 @@ test("the combined opt-in reports claim failures before enabling sync or joining
       "__insightsJoinCalls",
       "__insightsJoinMode",
       "__insightsParticipationRefreshes",
+      "__insightsParticipationResets",
+      "__insightsQueuedLeaves",
+      "__insightsSessionUserId",
       "__insightsAwaitingUploadCount",
       "__insightsUnclaimedCount",
       "__insightsSetEnabledValues",
@@ -40,6 +43,9 @@ test("the combined opt-in reports claim failures before enabling sync or joining
   globalThis.__insightsJoinCalls = 0;
   globalThis.__insightsJoinMode = "success";
   globalThis.__insightsParticipationRefreshes = 0;
+  globalThis.__insightsParticipationResets = 0;
+  globalThis.__insightsQueuedLeaves = [];
+  globalThis.__insightsSessionUserId = "account-1";
   globalThis.__insightsAwaitingUploadCount = 1;
   globalThis.__insightsUnclaimedCount = 1;
   globalThis.__insightsSetEnabledValues = [];
@@ -98,6 +104,9 @@ test("the combined opt-in reports claim failures before enabling sync or joining
         });
       `,
       "/lib/authRequestContext": `
+        export const getAuthRequestContextSnapshot = () => ({
+          sessionUserId: globalThis.__insightsSessionUserId
+        });
         export const getValidatedAuthGeneration = () => globalThis.__insightsAuthGeneration;
       `,
       "/services/SyncService.js": `
@@ -113,7 +122,7 @@ test("the combined opt-in reports claim failures before enabling sync or joining
           error: null,
           updating: false,
           refresh: async () => { globalThis.__insightsParticipationRefreshes += 1; },
-          reset: () => {},
+          reset: () => { globalThis.__insightsParticipationResets += 1; },
           join: async () => {
             globalThis.__insightsJoinCalls += 1;
             if (globalThis.__insightsJoinMode.startsWith("auth-change")) {
@@ -122,7 +131,8 @@ test("the combined opt-in reports claim failures before enabling sync or joining
             return globalThis.__insightsJoinMode === "success" ||
               globalThis.__insightsJoinMode === "auth-change-success";
           },
-          leave: async () => true
+          leave: async () => true,
+          queueLeave: (userId) => { globalThis.__insightsQueuedLeaves.push(userId); }
         };
         export const useLeaderboardParticipationStore = (selector) => selector(state);
         useLeaderboardParticipationStore.getState = () => state;
@@ -156,6 +166,29 @@ test("the combined opt-in reports claim failures before enabling sync or joining
     globalThis.__insightsParticipationRefreshes,
     1,
     "every combined-preference surface reconciles account participation on mount"
+  );
+
+  globalThis.__insightsAuthGeneration = null;
+  await React.act(async () => {
+    root.render(React.createElement(Harness));
+    await Promise.resolve();
+  });
+  assert.equal(globalThis.__insightsParticipationRefreshes, 1);
+  assert.equal(
+    globalThis.__insightsParticipationResets,
+    1,
+    "an unvalidated credential must not start an account request"
+  );
+
+  globalThis.__insightsAuthGeneration = 7;
+  await React.act(async () => {
+    root.render(React.createElement(Harness));
+    await Promise.resolve();
+  });
+  assert.equal(
+    globalThis.__insightsParticipationRefreshes,
+    2,
+    "auth revalidation must retry participation automatically"
   );
 
   const enableAndJoin = async () => {
@@ -234,6 +267,23 @@ test("the combined opt-in reports claim failures before enabling sync or joining
     globalThis.__insightsClaimCalls,
     claimCallsBeforeEmptyJoin,
     "zero pending rows need disclosure, not a pointless claim mutation"
+  );
+
+  globalThis.__insightsAuthGeneration = null;
+  assert.equal(await hook.disableInsightsSync(), false);
+  assert.deepEqual(
+    globalThis.__insightsQueuedLeaves,
+    ["account-1"],
+    "an opt-out taken during auth revalidation must wait for that account instead of being lost"
+  );
+
+  globalThis.__insightsAuthGeneration = 8;
+  globalThis.__insightsSessionUserId = "account-2";
+  assert.equal(await hook.disableInsightsSync(), false);
+  assert.deepEqual(
+    globalThis.__insightsQueuedLeaves,
+    ["account-1", "account-1"],
+    "a click on the departing account's stale surface remains scoped to that account"
   );
 
   await React.act(async () => root.unmount());

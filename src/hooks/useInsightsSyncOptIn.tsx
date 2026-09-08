@@ -7,7 +7,10 @@ import {
   cancelInsightsConsent,
   requestInsightsConsent,
 } from "../helpers/insightsConsentCoordinator";
-import { getValidatedAuthGeneration } from "../lib/authRequestContext";
+import {
+  getAuthRequestContextSnapshot,
+  getValidatedAuthGeneration,
+} from "../lib/authRequestContext";
 import { writePendingLeaderboardLeave } from "../lib/pendingLeaderboardLeave";
 import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipationStore";
 import { canChangeCloudBackupPreference, isCloudBackupAllowed } from "../stores/policyRules";
@@ -56,6 +59,7 @@ export function useInsightsSyncOptIn() {
   const { toast } = useToast();
   const { isLoaded, isSignedIn, user } = useAuth();
   const userId = user?.id ?? null;
+  const authGeneration = getValidatedAuthGeneration();
   const { insightsSyncEnabled, setInsightsSyncEnabled } = useSettings();
   const [unclaimedCount, setUnclaimedCount] = useState(0);
   const [awaitingUploadCount, setAwaitingUploadCount] = useState(0);
@@ -84,16 +88,22 @@ export function useInsightsSyncOptIn() {
     [t, toast]
   );
 
-  // Signed out there is no account to read, so the store goes back to unknown
-  // rather than keeping the previous user's answer.
+  // Without a validated account credential there is no safe account to read, so
+  // keep participation unknown until auth revalidation reruns this callback.
   const refreshParticipation = useCallback(async () => {
     const { refresh, reset } = useLeaderboardParticipationStore.getState();
-    if (!isLoaded || !isSignedIn) {
+    if (
+      !isLoaded ||
+      !isSignedIn ||
+      !userId ||
+      authGeneration == null ||
+      getValidatedAuthGeneration() !== authGeneration
+    ) {
       reset();
       return;
     }
-    await refresh(userId);
-  }, [isLoaded, isSignedIn, userId]);
+    await refresh({ userId, authGeneration });
+  }, [authGeneration, isLoaded, isSignedIn, userId]);
 
   // Every surface that exposes the combined preference must reconcile its
   // account half. Keeping this in the shared hook prevents Settings from
@@ -155,10 +165,21 @@ export function useInsightsSyncOptIn() {
     [reportActivationFailure]
   );
 
-  const leaveLeaderboard = useCallback(
-    () => useLeaderboardParticipationStore.getState().leave(userId),
-    [userId]
-  );
+  const leaveLeaderboard = useCallback(async () => {
+    if (!userId) return true;
+    const participation = useLeaderboardParticipationStore.getState();
+    const current = getAuthRequestContextSnapshot();
+    if (current.sessionUserId !== userId) {
+      participation.queueLeave(userId);
+      return false;
+    }
+    const requestedAuthGeneration = getValidatedAuthGeneration();
+    if (requestedAuthGeneration == null) {
+      participation.queueLeave(userId);
+      return false;
+    }
+    return participation.leave({ userId, authGeneration: requestedAuthGeneration });
+  }, [userId]);
 
   const disableInsightsSync = useCallback(async () => {
     // The device stops uploading straight away: an opt-out that waits on the
@@ -247,7 +268,10 @@ export function useInsightsSyncOptIn() {
       getValidatedAuthGeneration() !== requestedAuthGeneration
     )
       return false;
-    const joined = await useLeaderboardParticipationStore.getState().join(requestedAccountId);
+    const joined = await useLeaderboardParticipationStore.getState().join({
+      userId: requestedAccountId,
+      authGeneration: requestedAuthGeneration,
+    });
     if (!joined) {
       // A stale account's fenced request must not change the replacement
       // account's device preference or show its failure in the new session.

@@ -51,10 +51,13 @@ test("the Insights view asks the predicate whether to offer the claim", () => {
 test("one explicit opt-in enables analytics and leaderboard participation", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
   const store = read("src/stores/leaderboardParticipationStore.ts");
+  const service = read("src/services/LeaderboardService.ts");
   const settings = read("src/components/SettingsPage.tsx");
   assert.ok(hook.includes("const joinLeaderboard"));
-  assert.ok(store.includes("LeaderboardService.setParticipation(true)"));
-  assert.ok(store.includes("LeaderboardService.setParticipation(false)"));
+  assert.ok(store.includes("LeaderboardService.joinParticipation(context)"));
+  assert.ok(store.includes("LeaderboardService.leaveParticipation(context)"));
+  assert.ok(service.includes("setParticipation(true, authGeneration)"));
+  assert.ok(service.includes("setParticipation(false, authGeneration)"));
   assert.ok(settings.includes("if (enabled) void joinLeaderboard()"));
   assert.ok(settings.includes("disableInsightsSync()"));
   assert.equal(
@@ -73,7 +76,7 @@ test("a join enables sync only after leaderboard participation succeeds", () => 
     hook.indexOf("const answerClaimPrompt")
   );
   assert.ok(
-    join.indexOf("await confirmInsightsSync()") < join.indexOf(".join(requestedAccountId)"),
+    join.indexOf("await confirmInsightsSync()") < join.indexOf(".join({"),
     "the account must not be published before the user accepts the upload"
   );
   assert.ok(
@@ -81,7 +84,7 @@ test("a join enables sync only after leaderboard participation succeeds", () => 
     "a declined opt-in must abandon the join instead of publishing anyway"
   );
   assert.ok(
-    join.indexOf(".join(requestedAccountId)") < join.indexOf("setInsightsSyncEnabled(true)"),
+    join.indexOf(".join({") < join.indexOf("setInsightsSyncEnabled(true)"),
     "local uploads must stay off until leaderboard participation succeeds"
   );
   const failedJoin = join.slice(join.indexOf("if (!joined) {"), join.indexOf("const claiming"));
@@ -125,8 +128,7 @@ test("an account switch cancels a pending Insights consent and leaderboard join"
   const join = hook.slice(hook.indexOf("const joinLeaderboard"), hook.indexOf("const claiming"));
   assert.ok(join.includes("promptAccountIdRef.current !== requestedAccountId"));
   assert.ok(
-    join.indexOf("promptAccountIdRef.current !== requestedAccountId") <
-      join.indexOf(".join(requestedAccountId)"),
+    join.indexOf("promptAccountIdRef.current !== requestedAccountId") < join.indexOf(".join({"),
     "the captured account must still be current before the participation write starts"
   );
 });
@@ -160,7 +162,7 @@ test("leaving from the leaderboard disables sync and participation together", ()
     hook.indexOf("const disableInsightsSync"),
     hook.indexOf("const refreshCounts")
   );
-  assert.ok(store.slice(store.indexOf("leave: async")).includes("setParticipation(false)"));
+  assert.ok(store.slice(store.indexOf("leave: async")).includes("leaveParticipation(context)"));
   assert.ok(
     disable.indexOf("setInsightsSyncEnabled(false)") < disable.indexOf("leaveLeaderboard()"),
     "the device must stop uploading before the account leave is attempted"
@@ -221,7 +223,7 @@ test("a participation read that fails cannot leave the board looking joined", ()
   // The one write the read may make is the leave the user already asked for,
   // and flushPendingLeave can only send `false` (see leaderboardService.test).
   assert.ok(
-    refresh.includes("LeaderboardService.flushPendingLeave(userId)"),
+    refresh.includes("LeaderboardService.flushPendingLeave(context)"),
     "an undelivered opt-out must land before the read reports the account joined"
   );
 });
@@ -260,7 +262,16 @@ test("a leave the account never took is kept and retried until it does", () => {
   const store = read("src/stores/leaderboardParticipationStore.ts");
   const service = read("src/services/LeaderboardService.ts");
   const leave = store.slice(store.indexOf("leave: async"));
-  assert.ok(leave.includes("writePendingLeaderboardLeave(userId)"));
+  assert.ok(service.includes("writePendingLeaderboardLeave(userId)"));
+  const serviceLeave = service.slice(
+    service.indexOf("async function leaveParticipation"),
+    service.indexOf("async function flushPendingLeave")
+  );
+  assert.ok(
+    serviceLeave.indexOf("writePendingLeaderboardLeave(userId)") <
+      serviceLeave.indexOf("serializeParticipationOperation(context"),
+    "leave intent must become durable before it waits behind another account operation"
+  );
   assert.ok(
     leave.includes("publishAnswer(false, true, generation)"),
     "a pending leave must stop showing the user as participating"
@@ -270,20 +281,24 @@ test("a leave the account never took is kept and retried until it does", () => {
     hook.indexOf("const answerClaimPrompt")
   );
   assert.ok(
-    hookJoin.indexOf(".join(requestedAccountId)") > hookJoin.indexOf("await confirmInsightsSync()"),
+    hookJoin.indexOf(".join({") > hookJoin.indexOf("await confirmInsightsSync()"),
     "a declined opt-in never joins, so the leave it stopped short of must survive"
   );
-  const join = store.slice(store.indexOf("join: async"), store.indexOf("leave: async"));
+  const join = service.slice(
+    service.indexOf("async function joinParticipation"),
+    service.indexOf("async function leaveParticipation")
+  );
   assert.ok(
-    join.indexOf("clearPendingLeaderboardLeave(userId)") < join.indexOf("setParticipation(true)"),
-    "an explicit join is the account's newest answer, and retiring the leave only after the join lands lets the read the sync toggle fires flush it into a PATCH racing that join"
+    join.indexOf("clearPendingLeaderboardLeave(userId)") <
+      join.indexOf("setParticipation(true, authGeneration)"),
+    "an explicit join retires the older leave before issuing its serialized PATCH true"
   );
   const flush = service.slice(
     service.indexOf("async function flushPendingLeave"),
     service.indexOf("async function getAccess")
   );
-  assert.ok(flush.includes("setParticipation(false)"));
-  assert.equal(flush.includes("setParticipation(true)"), false, "the retry may only leave");
+  assert.ok(flush.includes("setParticipation(false, authGeneration)"));
+  assert.equal(flush.includes("setParticipation(true,"), false, "the retry may only leave");
   assert.ok(
     read("src/services/SyncService.ts").includes("LeaderboardService.flushPendingLeave("),
     "every sync pass has to retry it, so the opt-out outlives the window that made it"
@@ -296,9 +311,12 @@ test("a leave the account never took is kept and retried until it does", () => {
 
 test("an ambiguous join is compensated without racing a newer account choice", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
-  const store = read("src/stores/leaderboardParticipationStore.ts");
-  const join = store.slice(store.indexOf("join: async"), store.indexOf("leave: async"));
-  assert.ok(join.includes("serializeAccountWrite(userId"));
+  const service = read("src/services/LeaderboardService.ts");
+  const join = service.slice(
+    service.indexOf("async function joinParticipation"),
+    service.indexOf("async function leaveParticipation")
+  );
+  assert.ok(join.includes("serializeParticipationOperation(context"));
   assert.ok(join.includes("writePendingLeaderboardLeave(userId)"));
   assert.ok(
     join.indexOf("writePendingLeaderboardLeave(userId)") < join.indexOf("throw error"),

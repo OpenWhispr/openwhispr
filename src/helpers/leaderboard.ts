@@ -42,8 +42,8 @@ export function resolveLeaderboardSurface({
   participationReady: boolean;
   participationError: "read" | "write" | null;
 }): LeaderboardSurface {
+  if (access.state === "accept_invite" || access.state === "request_join") return access.state;
   if (!selectedScope) {
-    if (access.state === "accept_invite" || access.state === "request_join") return access.state;
     return "create";
   }
   if (!participationReady) {
@@ -89,7 +89,11 @@ export function resolveLeaderboardScopeKey(
   if (currentScopeKey && scopes.some((scope) => scope.key === currentScopeKey)) {
     return currentScopeKey;
   }
-  return scopes.find((scope) => scope.kind === "workspace")?.key ?? null;
+  return (
+    scopes.find((scope) => scope.kind === "workspace")?.key ??
+    scopes.find((scope) => scope.state === "ready")?.key ??
+    null
+  );
 }
 
 export function missingLeaderboardMembers(memberCount: number, participantCount: number): number {

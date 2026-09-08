@@ -2216,9 +2216,13 @@ export class SyncService {
   private async syncAnalytics(): Promise<boolean> {
     const consent = this.consent();
     if (!consent.shared) return false;
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) return false;
+    const participationContext = { userId: accountId, authGeneration };
     // A leaderboard opt-out outlives the window that made it, so every pass
     // retries the one this account is still waiting for. It only ever leaves.
-    await LeaderboardService.flushPendingLeave(getAuthRequestContextSnapshot().sessionUserId);
+    await LeaderboardService.flushPendingLeave(participationContext);
     const uploadRequested = consent.analytics;
     let uploadAllowed = false;
     const verifyUploadAllowed = async (): Promise<boolean> => {
@@ -2226,7 +2230,7 @@ export class SyncService {
       // never gain upload authority merely because a later setting changed.
       if (!uploadRequested || !this.consent().analytics) return false;
       try {
-        const participation = await LeaderboardService.getParticipation();
+        const participation = await LeaderboardService.getParticipation(participationContext);
         // A leaderboard leave is account-scoped and may have happened on
         // another device. Reconcile it before this device uploads another
         // counter. Accounts that predate the combined preference have no row,

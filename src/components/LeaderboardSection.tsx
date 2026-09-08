@@ -35,6 +35,7 @@ import {
   selectionForRange,
   WEEKLY_METRICS,
 } from "../helpers/leaderboard";
+import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { CloudApiError } from "../services/cloudApi";
 import { LeaderboardService } from "../services/LeaderboardService";
 import { InvitationsService } from "../services/InvitationsService";
@@ -198,6 +199,7 @@ export default function LeaderboardSection({
   );
   const visibleLeaderboard = loadedRequestKey === selectedRequestKey ? leaderboard : null;
   const visibleFailure = failure?.requestKey === selectedRequestKey ? failure.kind : null;
+  const boardParticipantCount = visibleLeaderboard?.totalMembers ?? null;
 
   const loadAccess = useCallback(
     async (preferredScopeKey?: string) => {
@@ -205,6 +207,11 @@ export default function LeaderboardSection({
       if (!accountId) {
         setAccess(null);
         setAccessLoading(false);
+        setAccessError(false);
+        return;
+      }
+      if (authGeneration == null || getValidatedAuthGeneration() !== authGeneration) {
+        setAccessLoading(true);
         setAccessError(false);
         return;
       }
@@ -225,7 +232,7 @@ export default function LeaderboardSection({
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
       }
     },
-    [accountId]
+    [accountId, authGeneration]
   );
 
   useEffect(() => {
@@ -669,7 +676,13 @@ export default function LeaderboardSection({
     pendingScrollRankRef.current = resolvedRank;
     setPage(targetPage);
   };
-  const inviteToLeaderboard = () => {
+  const domainNeedsWorkspace =
+    selectedScope.kind === "domain" && !scopes.some((scope) => scope.kind === "workspace");
+  const openLeaderboardGrowthAction = () => {
+    if (domainNeedsWorkspace) {
+      setCreateWorkspaceOpen(true);
+      return;
+    }
     if (
       selectedScope.kind === "workspace" &&
       (selectedScope.role === "owner" || selectedScope.role === "admin")
@@ -710,11 +723,18 @@ export default function LeaderboardSection({
               <h2 className="truncate text-sm font-semibold">{selectedScope.name}</h2>
             )}
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Users size={11} />
-                {t("workspaces.join.memberCount", { count: selectedScope.memberCount })}
-              </span>
-              <span aria-hidden="true" className="size-0.5 rounded-full bg-muted-foreground/50" />
+              {boardParticipantCount != null && (
+                <>
+                  <span className="flex items-center gap-1">
+                    <Users size={11} />
+                    {t("workspaces.join.memberCount", { count: boardParticipantCount })}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="size-0.5 rounded-full bg-muted-foreground/50"
+                  />
+                </>
+              )}
               <span className="flex items-center gap-1">
                 <Clock3 size={11} />
                 {t("insights.leaderboard.refreshCadence")}
@@ -770,9 +790,13 @@ export default function LeaderboardSection({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-40">
               {!isSoloScope && (
-                <DropdownMenuItem className="gap-2 text-xs" onSelect={inviteToLeaderboard}>
-                  <UserPlus size={13} />
-                  {t("insights.leaderboard.inviteCta")}
+                <DropdownMenuItem className="gap-2 text-xs" onSelect={openLeaderboardGrowthAction}>
+                  {domainNeedsWorkspace ? <Building2 size={13} /> : <UserPlus size={13} />}
+                  {t(
+                    domainNeedsWorkspace
+                      ? "settingsPage.workspace.empty.create"
+                      : "insights.leaderboard.inviteCta"
+                  )}
                 </DropdownMenuItem>
               )}
               {visibleLeaderboard && (
@@ -812,7 +836,7 @@ export default function LeaderboardSection({
         <LeaderboardSoloEmptyState
           scopeKind={selectedScope.kind}
           scopeName={selectedScope.name}
-          onInvite={inviteToLeaderboard}
+          onInvite={openLeaderboardGrowthAction}
           pendingInvites={pendingInvites}
         />
       ) : visibleFailure && !visibleLeaderboard ? (
