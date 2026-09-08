@@ -3315,7 +3315,7 @@
       "acceptInviteTitle": "Вас пригласили в {{workspace}}",
       "acceptInviteDescription": "{{inviter}} пригласил вас. Присоединитесь, чтобы увидеть рейтинг команды.",
       "acceptInviteDescriptionNoInviter": "Присоединитесь к {{workspace}}, чтобы увидеть рейтинг команды.",
-      "acceptInviteCta": "Присоединиться к {{workspace}}",
+      "acceptInviteCta": "Присоединиться к команде",
       "joining": "Присоединение…",
       "inviteAcceptedTitle": "Вы присоединились к рабочему пространству",
       "inviteAcceptedDescription": "Теперь вам доступен рейтинг {{workspace}}.",

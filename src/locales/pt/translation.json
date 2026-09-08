@@ -3277,7 +3277,7 @@
       "acceptInviteTitle": "Recebeu um convite para {{workspace}}",
       "acceptInviteDescription": "{{inviter}} convidou-o. Entre para ver a classificação da equipa.",
       "acceptInviteDescriptionNoInviter": "Entre em {{workspace}} para ver a classificação da equipa.",
-      "acceptInviteCta": "Entrar em {{workspace}}",
+      "acceptInviteCta": "Entrar na equipe",
       "joining": "A entrar…",
       "inviteAcceptedTitle": "Entrou no espaço de trabalho",
       "inviteAcceptedDescription": "Já pode ver a classificação de {{workspace}}.",

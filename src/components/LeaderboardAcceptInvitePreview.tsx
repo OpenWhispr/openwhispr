@@ -23,9 +23,7 @@ export default function LeaderboardAcceptInvitePreview({
       actionIcon={joining ? Loader2 : Check}
       actionIconClassName={joining ? "animate-spin" : undefined}
       actionLabel={
-        joining
-          ? t("insights.leaderboard.joining")
-          : t("insights.leaderboard.acceptInviteCta", { workspace: workspaceName })
+        joining ? t("insights.leaderboard.joining") : t("insights.leaderboard.acceptInviteCta")
       }
       badge={workspaceName}
       className={className}

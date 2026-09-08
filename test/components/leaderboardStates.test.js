@@ -71,7 +71,7 @@ test("accept_invite attributes the inviter and offers a direct join", async () =
       workspaceName: "Acme",
     })
   );
-  assertState(markup, "accept_invite", "Join Acme");
+  assertState(markup, "accept_invite", "Join Team");
   assert.ok(markup.includes("Sam invited you"));
 });
 

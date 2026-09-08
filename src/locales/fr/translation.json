@@ -2779,7 +2779,7 @@
       "acceptInviteTitle": "Vous êtes invité dans {{workspace}}",
       "acceptInviteDescription": "{{inviter}} vous a invité. Rejoignez l'espace pour voir le classement de l'équipe.",
       "acceptInviteDescriptionNoInviter": "Rejoignez {{workspace}} pour voir le classement de l'équipe.",
-      "acceptInviteCta": "Rejoindre {{workspace}}",
+      "acceptInviteCta": "Rejoindre l’équipe",
       "joining": "Connexion en cours…",
       "inviteAcceptedTitle": "Espace de travail rejoint",
       "inviteAcceptedDescription": "Vous pouvez maintenant voir le classement de {{workspace}}.",

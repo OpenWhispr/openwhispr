@@ -2779,7 +2779,7 @@
       "acceptInviteTitle": "Du wurdest zu {{workspace}} eingeladen",
       "acceptInviteDescription": "{{inviter}} hat dich eingeladen. Tritt bei, um die Team-Bestenliste zu sehen.",
       "acceptInviteDescriptionNoInviter": "Tritt {{workspace}} bei, um die Team-Bestenliste zu sehen.",
-      "acceptInviteCta": "{{workspace}} beitreten",
+      "acceptInviteCta": "Team beitreten",
       "joining": "Beitritt läuft…",
       "inviteAcceptedTitle": "Workspace beigetreten",
       "inviteAcceptedDescription": "Du kannst jetzt die Bestenliste von {{workspace}} sehen.",
