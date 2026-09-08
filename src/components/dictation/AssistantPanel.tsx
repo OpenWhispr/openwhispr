@@ -33,6 +33,7 @@ import {
   AGENT_TOOL_NAME_FALLBACK_KEY,
 } from "../../helpers/agentToolPresentation";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
+import { useCrossfadedLabel } from "../../hooks/useCrossfadedLabel";
 import type { AgentState, ChatImageAttachment } from "../chat/types";
 import {
   normalizeAgentSelectionContext,
@@ -162,6 +163,10 @@ export function AssistantPanel({
   } = useCopyFeedback(responseContent, {
     resetMs: MANUAL_COPY_FEEDBACK_MS,
   });
+  // Pop on arrival is immediate (tool-check-pop plays on the Check icon);
+  // the revert back to "Copy to clipboard" crossfades over the same pinned
+  // duration the design page specifies, instead of hard-swapping.
+  const copiedLabel = useCrossfadedLabel(copied, MOTION_TIMING.copyCrossfadeMs);
 
   useEffect(() => {
     onConversationIdChange(persistence.conversationId);
@@ -737,13 +742,28 @@ export function AssistantPanel({
               aria-live="polite"
               tabIndex={footerPhase === "actions" ? 0 : -1}
             >
-              {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-              {copied ? t("common.copied") : t("assistant.panel.copyToClipboard")}
-              {!copied && (
-                <kbd className="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-medium dark:bg-black/10">
-                  C
-                </kbd>
-              )}
+              <span
+                className="assistant-copy-label inline-flex items-center gap-1.5"
+                style={{
+                  opacity: copiedLabel.fading ? 0 : 1,
+                  transition: `opacity ${MOTION_TIMING.copyCrossfadeMs}ms ease-out`,
+                }}
+              >
+                {copiedLabel.showActive ? (
+                  <Check
+                    aria-hidden="true"
+                    style={{ animation: "tool-check-pop 300ms cubic-bezier(0.2, 0, 0, 1) both" }}
+                  />
+                ) : (
+                  <Copy aria-hidden="true" />
+                )}
+                {copiedLabel.showActive ? t("common.copied") : t("assistant.panel.copyToClipboard")}
+                {!copiedLabel.showActive && (
+                  <kbd className="ml-1 rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-medium dark:bg-black/10">
+                    C
+                  </kbd>
+                )}
+              </span>
             </Button>
           </div>
         )}

@@ -764,4 +764,23 @@
   .assistant-word[data-rise="true"] {
     animation: none;
   }
+
+  /* The copy tick's pop-in needs no rule here: it's an inline CSS
+     *animation* (Check's `animation: tool-check-pop 300ms ...`), and the
+     universal `*, *::before, *::after` rule above already forces every
+     element's animation-duration to 0.01ms !important, regardless of an
+     inline style's own (non-important) duration — so the pop is already
+     reduced to imperceptible without a rule targeting it here.
+     The label crossfade needs one: it's an inline *transition*, and that
+     same universal rule only forces transition-property (already
+     includes opacity), never transition-duration — left alone, its 320ms
+     would run unshortened under reduced motion. A single value here
+     broadcasts to every property in the universal rule's forced list
+     (unlike a multi-value list, which can cycle onto the wrong property —
+     the trap .voice-pill-position hit, above); that follows from the CSS
+     Transitions spec's cycling rule, not from a real-browser measurement,
+     which this rule has not had. */
+  .assistant-copy-label {
+    transition-duration: 1ms !important;
+  }
 }
