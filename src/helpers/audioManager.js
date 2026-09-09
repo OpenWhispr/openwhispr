@@ -1347,10 +1347,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         cohereModel,
       } = getSettings();
       const isNvidia = localTranscriptionProvider === "nvidia";
+      // Self-hosted (OpenAI-compatible batch endpoint) feeds the same chunked
+      // preview as local models; each chunk is one POST to the endpoint.
+      let selfHostedPreview = !useLocalWhisper && isSelfHostedTranscription(getSettings());
+      let selfHostedEndpoint = null;
+      if (selfHostedPreview) {
+        try {
+          selfHostedEndpoint = this.getTranscriptionEndpoint(
+            resolveSelfHostedTranscriptionModel(getSettings()) || ""
+          );
+        } catch (error) {
+          logger.warn(
+            "Self-hosted preview endpoint unavailable",
+            { error: error.message },
+            "audio"
+          );
+          selfHostedPreview = false;
+        }
+      }
       // Online models stream+commit during capture, so PCM runs even with preview off.
       const streamingCommit = useLocalWhisper && isNvidia && isOnlineParakeetModel(parakeetModel);
       this._streamingCommitActive = false;
-      if (useLocalWhisper && (showTranscriptionPreview || streamingCommit)) {
+      if ((useLocalWhisper || selfHostedPreview) && (showTranscriptionPreview || streamingCommit)) {
         try {
           this._previewAudioContext = new AudioContext({ sampleRate: 16000 });
           this._previewSource = this._previewAudioContext.createMediaStreamSource(micStream);
@@ -1369,16 +1387,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           };
           this._previewSource.connect(this._previewProcessor);
 
-          const model = isNvidia
-            ? parakeetModel
-            : localTranscriptionProvider === "cohere"
-              ? cohereModel
-              : whisperModel;
+          const model = selfHostedPreview
+            ? resolveSelfHostedTranscriptionModel(getSettings())
+            : isNvidia
+              ? parakeetModel
+              : localTranscriptionProvider === "cohere"
+                ? cohereModel
+                : whisperModel;
           const language = getBaseLanguageCode(getSettings().preferredLanguage);
           window.electronAPI?.startDictationPreview?.({
-            provider: localTranscriptionProvider,
+            provider: selfHostedPreview ? "self-hosted" : localTranscriptionProvider,
             model,
             language,
+            ...(selfHostedPreview ? { endpoint: selfHostedEndpoint } : {}),
             display: shouldDisplayDictationPreview(
               showTranscriptionPreview,
               this.voiceAgentRequested

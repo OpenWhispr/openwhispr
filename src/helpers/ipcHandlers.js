@@ -5,6 +5,7 @@ const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
+const { transcribeSelfHostedChunk } = require("./selfHostedChunkTranscription");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { openExternalUrl } = require("./externalUrlOpener");
@@ -7781,6 +7782,8 @@ class IPCHandlers {
     let dictationPreviewProvider = null;
     let dictationPreviewModel = null;
     let dictationPreviewLanguage = null;
+    // Self-hosted preview: the resolved /audio/transcriptions URL for chunks.
+    let dictationPreviewEndpoint = null;
     let dictationPreviewSessionActive = false;
     let dictationPreviewChunkCount = 0;
     // Online-runtime models stream here instead of the 1.5s chunked path.
@@ -7859,7 +7862,15 @@ class IPCHandlers {
         const wav = pcm16ToWav(pcm);
 
         let result;
-        if (isSherpaLocalProvider(dictationPreviewProvider)) {
+        if (dictationPreviewProvider === "self-hosted") {
+          result = await transcribeSelfHostedChunk({
+            endpoint: dictationPreviewEndpoint,
+            model: dictationPreviewModel,
+            language: dictationPreviewLanguage,
+            wav,
+            fetchImpl: proxyFetch,
+          });
+        } else if (isSherpaLocalProvider(dictationPreviewProvider)) {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: dictationPreviewModel,
             language: dictationPreviewLanguage,
@@ -8784,7 +8795,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "start-dictation-preview",
-      async (_event, { provider, model, language, display = true }) => {
+      async (_event, { provider, model, language, display = true, endpoint = null }) => {
         resetDictationPreviewState();
         const gen = dictationPreviewGen;
         dictationPreviewMode = true;
@@ -8792,6 +8803,7 @@ class IPCHandlers {
         dictationPreviewProvider = provider;
         dictationPreviewModel = model;
         dictationPreviewLanguage = language || null;
+        dictationPreviewEndpoint = endpoint || null;
         dictationPreviewDisplay = display;
         dictationPreviewChunkCount = 0;
         if (display) this.windowManager.showTranscriptionPreview("");

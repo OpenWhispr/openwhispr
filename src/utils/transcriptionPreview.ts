@@ -4,7 +4,12 @@ export function supportsLiveTranscriptionPreview(
   mode: InferenceMode,
   selectedCloudModelStreams = false
 ): boolean {
-  return mode === "local" || (mode === "providers" && selectedCloudModelStreams);
+  // Self-hosted rides the same 1.5s chunked preview path as local models.
+  return (
+    mode === "local" ||
+    mode === "self-hosted" ||
+    (mode === "providers" && selectedCloudModelStreams)
+  );
 }
 
 export function buildLiveTranscriptionPreview(committedText = "", partialText = ""): string {
