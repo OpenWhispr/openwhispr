@@ -37,11 +37,28 @@ test("rejects obviously malformed input", async () => {
   }
 });
 
+// Scoped to handleEmailContinue rather than the whole file: handleSubmit
+// legitimately splits on "@" for the signup name default, and the surrounding
+// component is free to mention "+" for unrelated reasons.
+function emailGateSource() {
+  const source = fs.readFileSync(AUTH_STEP, "utf8");
+  const start = source.indexOf("const handleEmailContinue");
+  assert.notEqual(start, -1, "handleEmailContinue not found - update this pin");
+  const end = source.indexOf("\n  const ", start + 1);
+  assert.notEqual(end, -1, "could not find the end of handleEmailContinue");
+  const body = source.slice(start, end);
+  // Guard against a silently empty slice passing the assertions below.
+  assert.ok(body.length > 200, "extracted gate body looks truncated");
+  return body;
+}
+
 // Regression pin for #1700: the sign-in gate rejected any local part containing
 // "+", locking out accounts the website had already created with that address.
-test("the auth email gate does not special-case plus addressing", () => {
-  const source = fs.readFileSync(AUTH_STEP, "utf8");
-  assert.match(source, /EMAIL_REGEX\.test\(/);
-  assert.doesNotMatch(source, /localPart/);
-  assert.doesNotMatch(source, /plusAlias/);
+test("the email gate validates with the shared regex", () => {
+  assert.match(emailGateSource(), /EMAIL_REGEX\.test\(/);
+});
+
+test("the email gate contains no plus special-casing in any form", () => {
+  // Catches includes("+"), split("+"), a "+" regex - not just the original shape.
+  assert.doesNotMatch(emailGateSource(), /\+/);
 });
