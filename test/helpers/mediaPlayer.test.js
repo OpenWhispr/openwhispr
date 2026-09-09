@@ -16,7 +16,10 @@ const originalPlatform = process.platform;
 function setPlatform(platform) {
   Object.defineProperty(process, "platform", { value: platform, configurable: true });
 }
-test.afterEach(() => setPlatform(originalPlatform));
+test.afterEach(() => {
+  setPlatform(originalPlatform);
+  Module._load = originalLoad;
+});
 
 // A child whose pipes only close when the test says so, so a helper that never
 // finishes can be observed the way the reporter's stuck PowerShell behaved.
@@ -64,8 +67,12 @@ function createFakeChild() {
   return child;
 }
 
-// Loads a fresh MediaPlayer singleton for `platform`. `spawnSync` throws so a
-// regression back to a blocking call fails every test in this file (#2073).
+// Loads a fresh MediaPlayer singleton for `platform`. Every synchronous
+// child_process entry point throws, so a regression back to a blocking call
+// fails every test in this file (#2073). The stub stays installed for the whole
+// test rather than just the initial require, so a call added inside a function
+// is caught too, and it only answers requires made by the two modules under
+// test, so node:test's own requires are untouched.
 function loadMediaPlayer(platform, { existingPaths = () => false, warnThrows = false } = {}) {
   delete require.cache[modulePath];
   delete require.cache[processUtilPath];
@@ -77,10 +84,19 @@ function loadMediaPlayer(platform, { existingPaths = () => false, warnThrows = f
     calls.push({ cmd: path.basename(cmd), args, options, child });
     return child;
   };
-  const spawnSync = () => {
-    throw new Error("spawnSync must never run on the media pause/resume path (#2073)");
+  const syncSpawn = () => {
+    throw new Error(
+      "no synchronous child-process call may run on the media pause/resume path (#2073)"
+    );
   };
+  const mockedRequesters = new Set([modulePath, processUtilPath]);
   Module._load = function loadWithMocks(request, parent, isMain) {
+    if (!mockedRequesters.has(parent?.filename)) {
+      return originalLoad.call(this, request, parent, isMain);
+    }
+    // A "node:"-prefixed require reaches the same builtin, so it must not be
+    // the way a blocking call slips past the stub.
+    const builtin = request.startsWith("node:") ? request.slice(5) : request;
     if (request === "./debugLogger") {
       // The real logger requires electron at load time.
       return {
@@ -95,10 +111,16 @@ function loadMediaPlayer(platform, { existingPaths = () => false, warnThrows = f
         error() {},
       };
     }
-    if (request === "child_process") {
-      return { ...childProcess, spawn, spawnSync, execFileSync: spawnSync, execSync: spawnSync };
+    if (builtin === "child_process") {
+      return {
+        ...childProcess,
+        spawn,
+        spawnSync: syncSpawn,
+        execSync: syncSpawn,
+        execFileSync: syncSpawn,
+      };
     }
-    if (request === "fs") {
+    if (builtin === "fs") {
       // Binary resolution hits the real filesystem; pin it so the host's
       // downloaded binaries can't change which fallback runs. Only existsSync
       // is stubbed, which covers nircmd and the macOS mediaremote adapter;
@@ -108,11 +130,7 @@ function loadMediaPlayer(platform, { existingPaths = () => false, warnThrows = f
     }
     return originalLoad.call(this, request, parent, isMain);
   };
-  try {
-    return { mediaPlayer: require(modulePath), calls, logs };
-  } finally {
-    Module._load = originalLoad;
-  }
+  return { mediaPlayer: require(modulePath), calls, logs };
 }
 
 // Lets any pending continuation run, for assertions that something did *not*
@@ -217,8 +235,9 @@ test("win32: a PowerShell that never closes its pipes is killed at the deadline 
   assert.equal(calls.length, 1, "nothing is killed before the deadline");
   t.mock.timers.tick(1);
 
-  // taskkill /t, not child.kill: PowerShell's csc.exe grandchild inherits the
-  // pipes and has to die with it.
+  // taskkill /t, not child.kill: on Windows that takes down descendants the
+  // helper spawned, which a bare kill would orphan. It only fires while the
+  // child is still live — killProcess skips one that has already exited.
   const taskkill = await waitForCall(calls, 1);
   assert.equal(taskkill.cmd, "taskkill");
   assert.deepEqual(taskkill.args, ["/pid", "4242", "/f", "/t"]);
@@ -259,9 +278,11 @@ test("win32: resume after a media-key pause toggles the media key again", async 
   assert.equal(mediaPlayer._didPause, false);
 });
 
-// PowerShell's Add-Type compiles through csc.exe, which inherits the pipes; if
-// the parent is killed while a grandchild holds them, our read ends stay open
-// forever unless they are destroyed — one leaked pair per timed-out dictation.
+// Dropping our own read ends is what actually lets the deadline resolve: a
+// descendant holding the helper's inherited pipes keeps "close" from firing, so
+// without the destroy we leak a stuck pair per timed-out dictation. Only the
+// media-key path spawns such a descendant, through Add-Type -TypeDefinition and
+// its csc.exe; the GSMTC scripts use Add-Type -AssemblyName and spawn nothing.
 test("win32: a timed-out helper has its stdio destroyed so stuck pipes don't accumulate", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { mediaPlayer, calls } = loadMediaPlayer("win32");
