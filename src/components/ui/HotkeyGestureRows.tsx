@@ -34,7 +34,15 @@ function GestureRow({
   );
 }
 
-function VerbChip({ icon, label, accent = false }: { icon: ReactNode; label: string; accent?: boolean }) {
+function VerbChip({
+  icon,
+  label,
+  accent = false,
+}: {
+  icon: ReactNode;
+  label: string;
+  accent?: boolean;
+}) {
   return (
     <span
       className={
@@ -66,7 +74,10 @@ export function HotkeyGestureRows({ slot, hotkey, mode }: HotkeyGestureRowsProps
   if (mode === "tap") {
     return (
       <div className="flex flex-col">
-        <GestureRow title={t("settingsPage.general.hotkey.gestures.tapOnlyTitle")} tokens={keycaps} />
+        <GestureRow
+          title={t("settingsPage.general.hotkey.gestures.tapOnlyTitle")}
+          tokens={keycaps}
+        />
         {/* A Hold that is missing with no explanation reads as broken, so say
             why — but only when main actually gave a reason. A null reason
             means main believes Hold IS supported (an onboarding Tap choice, a
@@ -89,7 +100,10 @@ export function HotkeyGestureRows({ slot, hotkey, mode }: HotkeyGestureRowsProps
         detail={t("settingsPage.general.hotkey.gestures.holdDetail")}
         tokens={
           <>
-            <VerbChip icon={<Hand className="size-3" aria-hidden="true" />} label={t("common.hold")} />
+            <VerbChip
+              icon={<Hand className="size-3" aria-hidden="true" />}
+              label={t("common.hold")}
+            />
             {plus}
             {keycaps}
           </>

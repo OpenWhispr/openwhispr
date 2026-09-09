@@ -10693,9 +10693,7 @@ class IPCHandlers {
       const windowManager = this.windowManager;
       const hotkey = windowManager.hotkeyManager.getSlotHotkey?.(slotName);
       const preferred =
-        hotkey && windowManager.hotkeyManager.supportsPushToTalk(hotkey, slotName)
-          ? "push"
-          : "tap";
+        hotkey && windowManager.hotkeyManager.supportsPushToTalk(hotkey, slotName) ? "push" : "tap";
       if (windowManager.getSlotActivationMode(slotName) === preferred) return;
       await windowManager.setSlotActivationModeCache(slotName, preferred, {
         notifyFailure: false,
