@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Managed enterprise providers no longer require SSO. Require SSO stays an independent workspace control.
 - Managed Azure text processing accepts AI Foundry and AI Services endpoints.
 
+### Fixed
+
+- **Note recordings and note formatting could go to OpenWhispr Cloud for a user who is Local everywhere else.** Profiles that upgraded straight from 1.6.7 or earlier to 1.6.10 or later had their Note Recording settings copied from dictation before the mode those settings are read from existed, so the copy skipped the two modes and Note Recording fell back to OpenWhispr Cloud while every other setting said Local. The copy now runs after the modes exist, profiles that already went through it get their Note Recording modes re-derived from what was copied, and a Local flag that 1.6.8–1.6.9's mode-less toggle set under a stale cloud mode is followed into Note Recording. Anyone who ran 1.6.8 or 1.6.9 in between was unaffected. Users whose copied settings name a custom endpoint or a provider without a streaming model will now see Note Recording ask them to pick Local or a streaming provider instead of quietly using OpenWhispr Cloud.
+
 ## [1.9.2] - 2026-08-29
 
 A repair release for two 1.9.1 regressions. Windows desktop sign-in works again — every provider button had gone dead — and the three transcription paths that only failed in packaged builds are back on all platforms. Meetings get three fixes of their own: recordings that captured only your voice on Windows, prompts that stopped appearing after the first call, and swipe-to-dismiss on the prompt cards.
