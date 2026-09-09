@@ -15,6 +15,7 @@ function createHarness(values = {}) {
     refCursor: 0,
     values,
     refs: {},
+    socialSignIns: [],
     discoveryCalls: [],
     discoveryResult: { exists: false },
     discoveryError: null,
@@ -40,7 +41,7 @@ async function settleAsyncHandler() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test("email authentication discovers accounts before choosing sign-in or sign-up", async (t) => {
+test("authentication discovers accounts and exposes Apple sign-in off macOS", async (t) => {
   installBrowserGlobals(t, { window: { electronAPI: {} } });
   // The compact Back control is portalled to body (it has to out-stack the
   // onboarding shell's drag band), so rendering reads document.body.
@@ -105,7 +106,10 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
           },
           signIn: { async email() { return {}; } },
         };
-        export async function signInWithSocial() { return {}; }
+        export async function signInWithSocial(provider) {
+          globalThis.__authenticationStepHarness.socialSignIns.push(provider);
+          return {};
+        }
         export async function signInWithSSO() { return {}; }
         export function updateLastSignInTime() {}
       `,
@@ -221,4 +225,13 @@ test("email authentication discovers accounts before choosing sign-in or sign-up
   assert.equal(duplicateRace.values[AUTH_MODE_INDEX], "sign-in");
   assert.equal(duplicateRace.values[PASSWORD_INDEX], "");
   assert.equal(duplicateRace.values[ERROR_INDEX], "auth.errors.accountExistsSignIn");
+
+  const linuxSocialSignIn = createHarness();
+  const appleProvider = findElement(
+    render(linuxSocialSignIn),
+    (node) => node.props?.label === "Apple" && typeof node.props?.onClick === "function"
+  );
+  assert.ok(appleProvider, "Apple sign-in should render on Linux");
+  await appleProvider.props.onClick();
+  assert.deepEqual(linuxSocialSignIn.socialSignIns, ["apple"]);
 });
