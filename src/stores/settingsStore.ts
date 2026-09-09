@@ -472,36 +472,71 @@ function migrateUploadTranscription() {
 
 migrateUploadTranscription();
 
-// Each scope's picker renders `*TranscriptionMode`, but routing obeys the
-// `*UseLocalWhisper` flag beside it (dictation: audioManager's processAudio and
-// shouldUseStreaming; upload: fileTranscription). A since-removed post-sign-in
-// effect wrote only the dictation flag, so a user who picked Local saw
-// "Local · Active" while their audio went to OpenWhispr Cloud — and clicking
-// Local was a no-op, because each picker skips the mode it already renders
-// (#2086). Runs after the meeting and upload one-shot copies, which mirror the
-// dictation pair wholesale — desync included — and then latch.
+// Dictation and upload render `*TranscriptionMode` in their picker but route on
+// two other keys beside it: `*UseLocalWhisper` (audioManager's processAudio and
+// shouldUseStreaming; fileTranscription) and `*CloudTranscriptionMode` (the
+// `isOpenWhisprCloud` test). A since-removed post-sign-in effect wrote both of
+// those and neither mode, so a user who picked Local saw "Local · Active" — and
+// one who picked their own API keys or endpoint saw "API Keys · Active" — while
+// their audio went to OpenWhispr Cloud. Clicking the shown mode was a no-op,
+// because each picker skips the mode it already renders (#2086). Runs after the
+// upload one-shot copy, which mirrors the dictation keys wholesale — desync
+// included — and then latches.
 //
-// Deliberately one-directional. A stale non-local mode over a local flag must
-// never start uploading a local user's audio: the mode-less Settings toggle
-// wrote the flag alone until 6fb0c906, so profiles with a stale cloud mode and
-// correct local routing exist in the field. The reverse desync leaves a picker
-// showing cloud while routing stays on-device — wrong on screen, not a leak.
-const LOCAL_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
-  ["transcriptionMode", "useLocalWhisper"],
-  ["meetingTranscriptionMode", "meetingUseLocalWhisper"],
-  ["uploadTranscriptionMode", "uploadUseLocalWhisper"],
+// Note Recording is absent on purpose: resolveMeetingTranscriptionOptions
+// branches on `meetingTranscriptionMode`, the same key MeetingSettings renders,
+// so its picker and its router cannot disagree. `meetingUseLocalWhisper` has no
+// reader, and repairing it would only write reassuring dead state.
+//
+// Deliberately one-directional — every rule moves away from our servers, toward
+// what the picker already shows. Completing it symmetrically would take profiles
+// the field really holds and start uploading their audio: the mode-less Settings
+// toggle wrote the local flag alone until 6fb0c906, and the onboarding provider
+// step writes `cloudTranscriptionMode` before the commit that derives the mode.
+//
+// Not folded into TRANSCRIPTION_CONTEXT_KEYS: that lives below the store, so it
+// is still in its temporal dead zone here, and it covers all three contexts.
+const TRANSCRIPTION_ROUTING_KEYS: ReadonlyArray<{
+  mode: string;
+  useLocal: string;
+  cloudMode: string;
+}> = [
+  { mode: "transcriptionMode", useLocal: "useLocalWhisper", cloudMode: "cloudTranscriptionMode" },
+  {
+    mode: "uploadTranscriptionMode",
+    useLocal: "uploadUseLocalWhisper",
+    cloudMode: "uploadCloudTranscriptionMode",
+  },
 ];
 
-function reconcileLocalTranscriptionFlags(): void {
-  if (!isBrowser) return;
-  for (const [modeKey, flagKey] of LOCAL_TRANSCRIPTION_PAIRS) {
-    if (localStorage.getItem(modeKey) === "local" && localStorage.getItem(flagKey) !== "true") {
-      localStorage.setItem(flagKey, "true");
+function reconcileTranscriptionRouting(): string[] {
+  if (!isBrowser) return [];
+  const repaired: string[] = [];
+  for (const keys of TRANSCRIPTION_ROUTING_KEYS) {
+    const mode = localStorage.getItem(keys.mode);
+    if (mode === "local" && localStorage.getItem(keys.useLocal) !== "true") {
+      localStorage.setItem(keys.useLocal, "true");
+      repaired.push(keys.useLocal);
+    }
+    if (
+      (mode === "providers" || mode === "self-hosted") &&
+      localStorage.getItem(keys.cloudMode) === "openwhispr"
+    ) {
+      localStorage.setItem(keys.cloudMode, "byok");
+      repaired.push(keys.cloudMode);
     }
   }
+  return repaired;
 }
 
-reconcileLocalTranscriptionFlags();
+const repairedTranscriptionRoutingKeys = reconcileTranscriptionRouting();
+if (repairedTranscriptionRoutingKeys.length > 0) {
+  logger.info(
+    "Repaired transcription routing that disagreed with the selected mode",
+    { keys: repairedTranscriptionRoutingKeys },
+    "settings"
+  );
+}
 
 function migrateAgentMode() {
   if (!isBrowser) return;
