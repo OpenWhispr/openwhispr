@@ -680,11 +680,6 @@
       },
       "retryTranslationMode": "翻译模式"
     },
-    "cloudMigration": {
-      "title": "欢迎使用 OpenWhispr 云端",
-      "description": "我们已将转录切换到 OpenWhispr 云端，以获得更快、更准确的结果。你之前的设置已保存——随时可以在设置中切换回去。",
-      "viewSettings": "查看设置"
-    },
     "aiCta": {
       "title": "用 AI 提升你的转录质量",
       "description": "在你说话的同时，自动修正语法、标点和格式。",

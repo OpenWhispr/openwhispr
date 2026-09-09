@@ -680,11 +680,6 @@
       },
       "retryTranslationMode": "Translation Mode"
     },
-    "cloudMigration": {
-      "title": "Welcome to OpenWhispr Cloud",
-      "description": "We've switched your transcription to OpenWhispr Cloud for faster, more accurate results. Your previous settings are saved — switch back anytime in Settings.",
-      "viewSettings": "View Settings"
-    },
     "aiCta": {
       "title": "Enhance your transcriptions with AI",
       "description": "Automatically fix grammar, punctuation, and formatting as you speak.",

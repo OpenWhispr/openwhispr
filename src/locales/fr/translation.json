@@ -680,11 +680,6 @@
       },
       "retryTranslationMode": "Mode Traduction"
     },
-    "cloudMigration": {
-      "title": "Bienvenue sur OpenWhispr Cloud",
-      "description": "Nous avons basculé la transcription vers OpenWhispr Cloud pour des résultats plus rapides et plus précis. Vos anciens réglages sont conservés : vous pouvez revenir en arrière à tout moment dans Paramètres.",
-      "viewSettings": "Voir les paramètres"
-    },
     "aiCta": {
       "title": "Améliorez vos transcriptions avec l'IA",
       "description": "Corrige automatiquement grammaire, ponctuation et mise en forme pendant que vous parlez.",
