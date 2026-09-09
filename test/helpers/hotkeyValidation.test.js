@@ -223,3 +223,48 @@ test("mixing left and right versions of the same modifier is rejected across pre
   assert.equal(crossMix.valid, false);
   assert.equal(crossMix.errorCode, "LEFT_RIGHT_MIX");
 });
+
+// GNOME's GlobalShortcuts portal, KDE's KGlobalAccel and Hyprland all need a
+// regular key in the combo before they will report a release, and without a
+// release there is no Hold and no double-press latch. Recommending a
+// modifier-only combo therefore costs the user the feature silently, which is
+// how Control+Super shipped as the Linux default in the first place.
+test("every Linux example carries a regular key", async () => {
+  const { getValidExamples } = await load();
+  const { isModifierOnlyHotkey } = require("../../src/helpers/hotkeyManager");
+
+  // GNOME, KDE and Hyprland cannot report a release for a modifier-only combo,
+  // so an example without a regular key silently costs the user Hold.
+  for (const example of getValidExamples("linux")) {
+    assert.equal(
+      isModifierOnlyHotkey(example),
+      false,
+      `Linux example "${example}" is modifier-only and cannot Hold`
+    );
+  }
+});
+
+test("the Linux default hotkey carries a regular key so it can Hold", async () => {
+  const { isModifierOnlyHotkey } = require("../../src/helpers/hotkeyManager");
+  const { getDefaultHotkey } = await import("../../src/utils/hotkeys.ts");
+
+  const withPlatform = (platform, run) => {
+    const had = "window" in globalThis;
+    const previous = globalThis.window;
+    globalThis.window = { electronAPI: { getPlatform: () => platform } };
+    try {
+      return run();
+    } finally {
+      if (had) globalThis.window = previous;
+      else delete globalThis.window;
+    }
+  };
+
+  const linuxDefault = withPlatform("linux", getDefaultHotkey);
+  assert.equal(linuxDefault, "Control+Super+Space");
+  assert.equal(isModifierOnlyHotkey(linuxDefault), false);
+
+  // Windows keeps the modifier-only combo: its low-level keyboard hook sees
+  // both edges, so nothing there needs a regular key.
+  assert.equal(withPlatform("win32", getDefaultHotkey), "Control+Super");
+});

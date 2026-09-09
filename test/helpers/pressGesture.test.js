@@ -8,7 +8,7 @@ const {
 } = require("../../src/helpers/pressGesture");
 
 const T0 = 100000;
-const IN_WINDOW = DOUBLE_PRESS_MIN_GAP_MS + 100; // 250ms with the shipped constants
+const IN_WINDOW = DOUBLE_PRESS_MIN_GAP_MS + 100; // 150ms with the shipped constants
 
 test("a push down with no primed quick release proceeds normally", () => {
   const tracker = new PressGestureTracker();

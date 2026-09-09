@@ -8,12 +8,17 @@
 // a fast second press.
 //
 // A double-press is two key-downs of the same slot between
-// DOUBLE_PRESS_MIN_GAP_MS and DOUBLE_PRESS_MAX_GAP_MS apart. The floor matters:
-// the same physical press can be delivered twice (a DE backend phase plus the
-// low-level listener), and those duplicates arrive inside the floor, matching
-// the existing 150 ms toggle debounce.
-const DOUBLE_PRESS_MIN_GAP_MS = 150;
-const DOUBLE_PRESS_MAX_GAP_MS = 400;
+// DOUBLE_PRESS_MIN_GAP_MS and DOUBLE_PRESS_MAX_GAP_MS apart.
+//
+// The floor only has to reject one physical press delivered twice (a DE backend
+// phase plus the low-level listener). Measured duplicates arrive ~1 ms apart,
+// while real double-presses measured 146-177 ms — so the original 150 ms floor
+// discarded genuine second presses. 50 ms is fifty times the observed duplicate
+// skew and far below any human cadence.
+//
+// The ceiling matches the Windows double-click default (500 ms); GTK's is 400.
+const DOUBLE_PRESS_MIN_GAP_MS = 50;
+const DOUBLE_PRESS_MAX_GAP_MS = 500;
 // An Fn interrupt (Fn used as a navigation modifier) this soon after a latch
 // means the "double press" was really a quick tap followed by Fn+key; a latch
 // older than this is a deliberate hands-free session and survives Fn combos.

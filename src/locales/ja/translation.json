@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" には通常のキーが含まれていないため、離したことをデスクトップ環境が検出できません。{{suggestion}} をお試しください。",
+      "holdUnsupportedOnDesktop": "お使いのデスクトップ環境はキーを離したことを通知できません。押しながら話すには GNOME 48 以降、KDE Plasma、または X11 セッションが必要です。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
       "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
       "trySuggestions": "お試しください: {{suggestions}}",

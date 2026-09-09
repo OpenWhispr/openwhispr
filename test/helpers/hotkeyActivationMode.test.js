@@ -470,3 +470,34 @@ test("GNOME without the portal converges even a plain key to Tap", async () => {
     { savedHotkey: "F8", activationMode: "push", portalAvailable: false }
   );
 });
+
+// A user whose Hold vanished needs to know which of the two causes they hit:
+// a hotkey they can change, or a desktop that cannot report a key release at
+// all (GNOME before 48 ships no GlobalShortcuts portal, and no hotkey helps).
+// One shared message would send half of them chasing a fix that does not exist.
+test("the unavailable reason names the hotkey or the desktop, never both", () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  // DEFAULT_HOTKEY is resolved at module load, so the Linux default only exists
+  // in a copy of the module loaded under a Linux platform.
+  const modulePath = require.resolve("../../src/helpers/hotkeyManager");
+  const cached = require.cache[modulePath];
+  delete require.cache[modulePath];
+  try {
+    const LinuxHotkeyManager = require("../../src/helpers/hotkeyManager");
+    const manager = new LinuxHotkeyManager();
+    manager.useGnome = true;
+
+    manager.gnomeManager = { supportsPushToTalk: () => true };
+    const hotkeyReason = manager.getPushToTalkUnavailableReason("Control+Super");
+    assert.match(hotkeyReason, /Control\+Super\+Space/);
+
+    manager.gnomeManager = { supportsPushToTalk: () => false };
+    const desktopReason = manager.getPushToTalkUnavailableReason("Control+Super+Space");
+    assert.match(desktopReason, /GNOME 48/);
+    assert.notEqual(desktopReason, hotkeyReason);
+  } finally {
+    require.cache[modulePath] = cached;
+    Object.defineProperty(process, "platform", originalPlatform);
+  }
+});

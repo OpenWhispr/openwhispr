@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "Le scorciatoie con i tasti del mouse sono attualmente supportate solo su macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" non contiene un tasto normale, quindi il desktop non può rilevare quando lo rilasci. Prova {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Il tuo desktop non può segnalare il rilascio di un tasto. Tieni premuto per parlare richiede GNOME 48 o successivo, KDE Plasma o una sessione X11.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
       "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
       "trySuggestions": "Prova: {{suggestions}}",

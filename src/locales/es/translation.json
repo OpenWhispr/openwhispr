@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "Los atajos con botones del ratón solo son compatibles con macOS por ahora.",
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" no incluye una tecla normal, así que tu escritorio no puede detectar cuándo la sueltas. Prueba {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Tu escritorio no puede informar cuándo se suelta una tecla. Mantener para hablar necesita GNOME 48 o posterior, KDE Plasma o una sesión X11.",
       "registrationFailed": "No se pudo registrar \"{{hotkey}}\". Puede estar en uso por otra aplicación.",
       "updateFailedCheckFormat": "No se pudo actualizar el atajo a \"{{hotkey}}\". Comprueba que el formato sea válido.",
       "trySuggestions": "Prueba: {{suggestions}}",

@@ -13,8 +13,12 @@ const HOTKEY_REGISTRATION_DELAY_MS = 1000;
 // Fallback hotkeys tried when primary hotkey registration fails on startup
 const FALLBACK_HOTKEYS = ["F8", "F9", "Control+Shift+Space"];
 
-// Default hotkey for dictation if no saved value exists
-const DEFAULT_HOTKEY = "Control+Super";
+// Default hotkey for dictation if no saved value exists.
+// Linux gets a regular key in the combo: GNOME's portal, KDE's KGlobalAccel and
+// Hyprland all need one to report a key release, and without a release there is
+// no Hold and no double-press latch. Windows keeps Control+Super, where the
+// low-level keyboard hook sees both edges of a modifier-only combo.
+const DEFAULT_HOTKEY = process.platform === "linux" ? "Control+Super+Space" : "Control+Super";
 
 // Slots routed through GNOME native gsettings (not globalShortcut).
 // Temporary slots like "cancel" stay on globalShortcut.
@@ -92,7 +96,7 @@ class HotkeyManager extends EventEmitter {
     // Each slot holds a list of hotkeys (#936). `accelerators` mirrors `hotkeys`
     // index-for-index (null for native-listener entries).
     this.slots = new Map();
-    const defaultDictation = process.platform === "darwin" ? "GLOBE" : "Control+Super";
+    const defaultDictation = process.platform === "darwin" ? "GLOBE" : DEFAULT_HOTKEY;
     this.slots.set("dictation", { hotkeys: [defaultDictation], callback: null, accelerators: [] });
     this.isInitialized = false;
     this.isListeningMode = false;
@@ -269,7 +273,7 @@ class HotkeyManager extends EventEmitter {
     } else if (process.platform === "win32" && isCompound) {
       suggestions = ["Control+Super", "Control+Alt", "Control+Shift+K"];
     } else if (process.platform === "linux" && isCompound) {
-      suggestions = ["Control+Super", "Control+Shift+K", "Super+Shift+R"];
+      suggestions = ["Control+Super+Space", "Control+Shift+K", "Super+Shift+R"];
     }
 
     return suggestions.filter((s) => s !== failedHotkey).slice(0, 3);
@@ -549,12 +553,22 @@ class HotkeyManager extends EventEmitter {
     this.emit("dictation-activation-mode-settled", preferredMode);
   }
 
+  // Two different causes read the same way to a user whose Hold just vanished,
+  // so keep them apart: a hotkey they can fix themselves, versus a desktop that
+  // cannot report a key release at all (GNOME before 48 has no GlobalShortcuts
+  // portal, and no hotkey helps there).
   getPushToTalkUnavailableReason(hotkey = this.currentHotkey, slotName = "dictation") {
     if (this.isUsingNativeShortcut() && isModifierOnlyHotkey(hotkey)) {
-      return i18nMain.t("hotkey.errors.osReserved", { hotkey });
+      return i18nMain.t("hotkey.errors.holdNeedsRegularKey", {
+        hotkey,
+        suggestion: DEFAULT_HOTKEY,
+      });
     }
     if (slotName !== "dictation" && this.useHyprland) {
       return i18nMain.t("hotkey.errors.holdUnsupportedOnHyprland");
+    }
+    if (this.useGnome && !this.gnomeManager?.supportsPushToTalk?.()) {
+      return i18nMain.t("hotkey.errors.holdUnsupportedOnDesktop");
     }
     return i18nMain.t("windows.pttUnavailable");
   }
@@ -1362,24 +1376,12 @@ class HotkeyManager extends EventEmitter {
   }
 
   /**
-   * Returns the effective default hotkey for the current platform.
-   * On platforms where Control+Super doesn't work (X11 modifier-only,
-   * GNOME gsettings requires a regular key), returns the first fallback (F8).
+   * Returns the effective default hotkey for the current platform. Every
+   * default now carries a regular key on the platforms that need one, so this
+   * is the platform default with no Linux escape hatch.
    */
   getEffectiveDefaultHotkey() {
-    if (process.platform === "darwin") return "GLOBE";
-    if (process.platform !== "linux") return DEFAULT_HOTKEY;
-
-    const isX11 = !GnomeShortcutManager.isWayland();
-
-    // Modifier-only combos (e.g. Control+Super) don't work on:
-    // - X11: XGrabKey can't capture modifier-only sequences
-    // - GNOME (X11/Wayland): gsettings requires a regular key in the combo
-    if ((isX11 || GnomeShortcutManager.isGnome()) && isModifierOnlyHotkey(DEFAULT_HOTKEY)) {
-      return FALLBACK_HOTKEYS[0];
-    }
-
-    return DEFAULT_HOTKEY;
+    return process.platform === "darwin" ? "GLOBE" : DEFAULT_HOTKEY;
   }
 
   /**

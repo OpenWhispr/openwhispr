@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "滑鼠按鍵快捷鍵目前僅在 macOS 上受支援。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" 中沒有一般按鍵，因此桌面環境無法偵測您何時放開。請嘗試 {{suggestion}}。",
+      "holdUnsupportedOnDesktop": "您的桌面環境無法回報按鍵放開事件。按住說話需要 GNOME 48 或更新版本、KDE Plasma 或 X11 工作階段。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
       "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
       "trySuggestions": "試試看：{{suggestions}}",

@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "Maustasten-Hotkeys werden derzeit nur auf macOS unterstützt.",
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" enthält keine normale Taste, daher kann Ihre Desktop-Umgebung das Loslassen nicht erkennen. Versuchen Sie {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Ihre Desktop-Umgebung kann das Loslassen einer Taste nicht melden. Halten zum Sprechen benötigt GNOME 48 oder neuer, KDE Plasma oder eine X11-Sitzung.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
       "updateFailedCheckFormat": "Hotkey konnte nicht auf \"{{hotkey}}\" aktualisiert werden. Prüfen Sie, ob das Format gültig ist.",
       "trySuggestions": "Versuchen Sie: {{suggestions}}",

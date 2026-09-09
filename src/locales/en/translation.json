@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" has no regular key, so your desktop cannot tell when you release it. Try {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Your desktop cannot report when a key is released. Hold to speak needs GNOME 48 or newer, KDE Plasma, or an X11 session.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
       "trySuggestions": "Try: {{suggestions}}",

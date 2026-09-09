@@ -197,11 +197,15 @@ export function isCompoundHotkey(hotkey: string): boolean {
 /**
  * Gets the default hotkey for the current platform.
  * - macOS: GLOBE key (Fn key on modern Macs)
- * - Windows/Linux: Control+Super (Ctrl+Win / Ctrl+Super)
+ * - Windows: Control+Super (Ctrl+Win)
+ * - Linux: Control+Super+Space — the desktop backends need a regular key in
+ *   the combo to report a release, and without a release there is no Hold.
+ *   Mirrors DEFAULT_HOTKEY in src/helpers/hotkeyManager.js.
  */
 export function getDefaultHotkey(): string {
   const platform = getPlatform();
-  return platform === "darwin" ? "GLOBE" : "Control+Super";
+  if (platform === "darwin") return "GLOBE";
+  return platform === "linux" ? "Control+Super+Space" : "Control+Super";
 }
 
 /**

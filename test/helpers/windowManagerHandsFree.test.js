@@ -82,6 +82,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 const WindowManager = require("../../src/helpers/windowManager");
+const { DOUBLE_PRESS_MAX_GAP_MS } = require("../../src/helpers/pressGesture");
 Module._load = originalLoad;
 
 function makeManager() {
@@ -164,7 +165,8 @@ test("a quick push release keeps the preparation warm through the double-press w
 
   assert.equal(channels(sent).includes("cancel-dictation-preparation"), false);
 
-  t.mock.timers.tick(400);
+  // The preparation is held for whatever remains of the double-press window.
+  t.mock.timers.tick(DOUBLE_PRESS_MAX_GAP_MS);
   assert.equal(channels(sent).includes("cancel-dictation-preparation"), true);
   assert.equal(channels(sent).includes("__hide-panel"), true);
 });
