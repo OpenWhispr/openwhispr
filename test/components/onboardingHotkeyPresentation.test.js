@@ -50,25 +50,26 @@ test("the dictation step never opens on a chord that would overwrite the user's 
       confirmed,
     });
 
-  // Nothing of the user's to lose: onboard on the macOS default.
+  // Nothing of the user's to lose: main auto-registers and persists GLOBE before
+  // onboarding runs, so an unconfirmed one is not a choice anybody made.
   assert.equal(onMac("", false), "RightOption");
   assert.equal(onMac("", true), "RightOption");
   assert.equal(onMac("GLOBE", false), "RightOption");
 
-  // A hotkey the user picked survives, confirmed or not. `confirmed` is false for
-  // a session rebuilt by the legacy numeric migration and for any session written
-  // before the resume flags existed, and finalizeOnboarding re-registers whatever
-  // this returns — so returning the macOS default here would erase their chord.
+  // A chord the user accepted on the hotkey step survives, and so does any chord
+  // that isn't the platform default. finalizeOnboarding re-registers whatever this
+  // returns, so substituting here would erase it. parseOnboardingSession infers
+  // `confirmed` for sessions written before the flag existed.
   assert.equal(onMac("Control+Shift+D", false), "Control+Shift+D");
   assert.equal(onMac("Control+Shift+D", true), "Control+Shift+D");
   assert.equal(onMac("GLOBE", true), "GLOBE");
 });
 
-test("the assistant step keeps a saved chord whether or not onboarding confirmed it", async () => {
+test("the assistant step keeps a saved chord and otherwise offers the opt-in default", async () => {
   const { DEFAULT_ASSISTANT_ONBOARDING_HOTKEY, resolveOnboardingAssistantHotkey } = await load();
 
   // voiceAgentKey is opt-in with no platform default, so anything saved is the
-  // user's own pick and there is no default for a confirmed flag to tell it from.
+  // user's own pick and nothing may substitute for it.
   assert.equal(resolveOnboardingAssistantHotkey("Alt+Space"), "Alt+Space");
   assert.equal(
     resolveOnboardingAssistantHotkey(DEFAULT_ASSISTANT_ONBOARDING_HOTKEY),

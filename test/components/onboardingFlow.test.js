@@ -419,3 +419,34 @@ test("the tray suppression predicate matches only an active required-models sess
     false
   );
 });
+
+test("a session written before the resume flags infers its hotkey confirmations", async () => {
+  const { createOnboardingSession, parseOnboardingSession } = await load();
+  const preResumeSession = (currentStepId) => {
+    const { resume, ...session } = { ...createOnboardingSession(), currentStepId };
+    void resume;
+    return JSON.stringify({ ...session, authPath: "account" });
+  };
+
+  // The shipped build persists this shape. Read back as "never confirmed", a
+  // macOS session resuming past the hotkey step lets finalizeOnboarding replace
+  // the chord the user confirmed on that build, with no screen ever showing it.
+  const past = parseOnboardingSession(preResumeSession("notes"));
+  assert.equal(past.resume.dictationHotkeyConfirmed, true);
+  assert.equal(past.resume.assistantHotkeyConfirmed, true);
+
+  // Not yet reached is genuinely unconfirmed: the step still has to be shown, and
+  // onboarding stays free to open it on the platform's onboarding chord.
+  const before = parseOnboardingSession(preResumeSession("permissions"));
+  assert.equal(before.resume.dictationHotkeyConfirmed, false);
+  assert.equal(before.resume.assistantHotkeyConfirmed, false);
+
+  // Standing on the step is not having finished it.
+  const on = parseOnboardingSession(preResumeSession("dictation-hotkey"));
+  assert.equal(on.resume.dictationHotkeyConfirmed, false);
+  assert.equal(on.resume.assistantHotkeyConfirmed, false);
+
+  // Nothing else is inferred — a demo the user never ran must still gate Continue.
+  assert.equal(past.resume.dictationDemoCompleted, false);
+  assert.equal(past.resume.assistantDemoCompleted, false);
+});

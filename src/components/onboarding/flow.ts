@@ -297,7 +297,33 @@ function parseLocalModelDraft(value: unknown): OnboardingLocalModelDraft | undef
   };
 }
 
-function parseOnboardingResumeState(value: unknown): OnboardingResumeState {
+/**
+ * Sessions written before `resume` existed carry no confirmation flags, and
+ * reading them as "never confirmed" is not safe: the hotkey flags decide whether
+ * onboarding may replace a registered chord with the platform's onboarding one,
+ * and finalizeOnboarding re-registers that on routes which never show the hotkey
+ * step again. Having moved past the step is the evidence those builds left —
+ * their Continue was gated on confirming.
+ *
+ * Only the hotkey flags are inferred. The demo flags gate nothing but a Continue
+ * on the step the user is standing on, so guessing them would skip practice the
+ * user never did.
+ */
+function inferResumeFlagsFromStep(currentStepId: OnboardingStepId): OnboardingResumeState {
+  const isPast = (stepId: OnboardingStepId) =>
+    STEP_ORDER.indexOf(currentStepId) > STEP_ORDER.indexOf(stepId);
+  return {
+    ...createOnboardingResumeState(),
+    dictationHotkeyConfirmed: isPast("dictation-hotkey"),
+    assistantHotkeyConfirmed: isPast("assistant-hotkey"),
+  };
+}
+
+function parseOnboardingResumeState(
+  value: unknown,
+  currentStepId: OnboardingStepId
+): OnboardingResumeState {
+  if (value === undefined) return inferResumeFlagsFromStep(currentStepId);
   const defaults = createOnboardingResumeState();
   if (!isRecord(value)) return defaults;
 
@@ -374,7 +400,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
       authPath,
       setupMode,
       selfHostedRequested: parsed.selfHostedRequested ?? false,
-      resume: parseOnboardingResumeState(parsed.resume),
+      resume: parseOnboardingResumeState(parsed.resume, parsed.currentStepId),
     };
   } catch {
     return null;

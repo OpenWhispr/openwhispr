@@ -112,11 +112,14 @@ export const DEFAULT_ASSISTANT_ONBOARDING_HOTKEY = "CommandOrControl+Shift+Space
  * The chord the dictation step opens on.
  *
  * macOS onboards on Right Option rather than the platform default, but only when
- * there is nothing of the user's to lose: `confirmed` is false for a session the
- * legacy numeric migration rebuilt (and for any session written before the resume
- * flags existed), so a saved hotkey that isn't simply the platform default is
- * treated as the user's own choice and kept. finalizeOnboarding re-registers
- * whatever this returns, so overwriting it here overwrites their real hotkey.
+ * there is nothing of the user's to lose. `dictationKey` is not that signal on its
+ * own — main auto-registers and persists the platform default before onboarding
+ * ever runs — so `confirmed` is what separates a chord the user stood on the
+ * hotkey step and accepted from one that merely got registered for them.
+ * finalizeOnboarding re-registers whatever this returns, so substituting over a
+ * confirmed chord overwrites their real hotkey with no screen ever saying so.
+ * parseOnboardingSession is responsible for `confirmed` being true for sessions
+ * that predate the flag.
  */
 export const resolveOnboardingDictationHotkey = ({
   platform,
@@ -135,11 +138,9 @@ export const resolveOnboardingDictationHotkey = ({
 };
 
 /**
- * The chord the assistant step opens on.
- *
- * Unlike dictation, `voiceAgentKey` has no platform default and no substitution,
- * so a saved chord is always the user's own pick and is kept — there is nothing
- * here for a `confirmed` flag to tell apart.
+ * The chord the assistant step opens on. `voiceAgentKey` is opt-in with no
+ * platform default and nothing auto-registers it, so anything saved is the user's
+ * own pick and there is no substitution to make.
  */
 export const resolveOnboardingAssistantHotkey = (savedHotkey: string): string =>
   savedHotkey || DEFAULT_ASSISTANT_ONBOARDING_HOTKEY;
