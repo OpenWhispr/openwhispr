@@ -193,6 +193,10 @@ export default function LeaderboardSection({
   const lastLoadedAtRef = useRef(0);
   const requestIdRef = useRef(0);
   const participationRecoveryAttemptedRef = useRef(false);
+  const skipAutomaticLoadRef = useRef<{
+    authGeneration: number | null;
+    requestKey: string;
+  } | null>(null);
   const weekStartsCacheRef = useRef(new Map<string, LeaderboardWeekStartsCacheEntry>());
   const scopes = useMemo(() => access?.scopes ?? [], [access]);
   const selectedScope = scopes.find((scope) => scope.key === scopeKey);
@@ -289,6 +293,7 @@ export default function LeaderboardSection({
   useEffect(() => {
     requestIdRef.current += 1;
     participationRecoveryAttemptedRef.current = false;
+    skipAutomaticLoadRef.current = null;
     setLeaderboard((current) => (current?.scope.key === scopeKey ? current : null));
     setWeekStart(null);
     setPage(0);
@@ -303,6 +308,7 @@ export default function LeaderboardSection({
 
   useEffect(() => {
     participationRecoveryAttemptedRef.current = false;
+    skipAutomaticLoadRef.current = null;
   }, [authGeneration]);
 
   useEffect(() => {
@@ -351,9 +357,19 @@ export default function LeaderboardSection({
         });
       }
       participationRecoveryAttemptedRef.current = false;
+      const responseRequestKey = leaderboardRequestKey(
+        selectedScope.key,
+        metric,
+        range,
+        weekStart,
+        response.page
+      );
       setLeaderboard(nextLeaderboard);
-      setLoadedRequestKey(selectedRequestKey);
-      if (response.page !== page) setPage(response.page);
+      setLoadedRequestKey(responseRequestKey);
+      if (response.page !== page) {
+        skipAutomaticLoadRef.current = { authGeneration, requestKey: responseRequestKey };
+        setPage(response.page);
+      }
       lastLoadedAtRef.current = Date.now();
     } catch (loadError) {
       if (requestId !== requestIdRef.current) return;
@@ -415,6 +431,7 @@ export default function LeaderboardSection({
       if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [
+    authGeneration,
     cloudAccessAllowed,
     loadAccess,
     metric,
@@ -430,8 +447,15 @@ export default function LeaderboardSection({
 
   useEffect(() => {
     if (authGeneration == null) return;
+    const skippedLoad = skipAutomaticLoadRef.current;
+    skipAutomaticLoadRef.current = null;
+    if (
+      skippedLoad?.authGeneration === authGeneration &&
+      skippedLoad.requestKey === selectedRequestKey
+    )
+      return;
     void load();
-  }, [authGeneration, load]);
+  }, [authGeneration, load, selectedRequestKey]);
 
   // The server owns how big a page is and how long a snapshot stays fresh; the
   // constants are only what to assume before the first response arrives.
@@ -632,8 +656,7 @@ export default function LeaderboardSection({
         {funnelScopeSelect}
         <LeaderboardRequestJoinPreview
           className={funnelCardClassName}
-          colleagueCount={access.joinableWorkspace.memberCount}
-          domain={access.domain}
+          memberCount={access.joinableWorkspace.memberCount}
           workspaceName={access.joinableWorkspace.name}
           pending={access.joinableWorkspace.requestState === "pending"}
           requesting={requestingJoin}

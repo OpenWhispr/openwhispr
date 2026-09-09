@@ -42,15 +42,14 @@ test("create renders the workspace funnel and its primary action", async () => {
     })
   );
   assertState(markup, "create", "Create workspace");
-  assert.ok(markup.includes("3 people at acme.com use OpenWhispr"));
+  assert.ok(markup.includes("3 people at acme.com have joined leaderboards"));
 });
 
 test("request_join names the matched team and preserves the pending CTA", async () => {
   const RequestJoin = await component("LeaderboardRequestJoinPreview");
   const markup = renderToStaticMarkup(
     createElement(RequestJoin, {
-      colleagueCount: 14,
-      domain: "acme.com",
+      memberCount: 14,
       onRequest() {},
       pending: true,
       requesting: false,
@@ -58,7 +57,8 @@ test("request_join names the matched team and preserves the pending CTA", async 
     })
   );
   assertState(markup, "request_join", "Request sent");
-  assert.ok(markup.includes("14 people at acme.com already use Acme"));
+  assert.ok(markup.includes("Acme has 14 members"));
+  assert.equal(markup.includes("acme.com"), false);
 });
 
 test("accept_invite attributes the inviter and offers a direct join", async () => {

@@ -131,6 +131,24 @@ test("participation disagreement retries once without entering an auth flow", ()
   assert.equal(recovery.includes("authClearSession"), false);
 });
 
+test("a server-clamped page stays visible without an automatic duplicate request", () => {
+  const section = read("src/components/LeaderboardSection.tsx");
+  const responseHandling = section.slice(
+    section.indexOf("const responseRequestKey = leaderboardRequestKey("),
+    section.indexOf("lastLoadedAtRef.current = Date.now()")
+  );
+  const automaticLoad = section.slice(
+    section.indexOf("const skippedLoad = skipAutomaticLoadRef.current"),
+    section.indexOf("// The server owns how big a page is")
+  );
+
+  assert.ok(responseHandling.includes("response.page"));
+  assert.ok(responseHandling.includes("setLoadedRequestKey(responseRequestKey)"));
+  assert.ok(responseHandling.includes("skipAutomaticLoadRef.current"));
+  assert.ok(automaticLoad.includes("skippedLoad.requestKey === selectedRequestKey"));
+  assert.ok(automaticLoad.indexOf("return;") < automaticLoad.indexOf("void load()"));
+});
+
 test("leaderboard access waits for validated auth and labels ranked participants", () => {
   const section = read("src/components/LeaderboardSection.tsx");
   const accessLoader = section.slice(

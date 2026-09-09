@@ -4,16 +4,14 @@ import LeaderboardPreview from "./LeaderboardPreview";
 
 export default function LeaderboardRequestJoinPreview({
   className,
-  colleagueCount,
-  domain,
+  memberCount,
   onRequest,
   pending,
   requesting,
   workspaceName,
 }: {
   className?: string;
-  colleagueCount: number;
-  domain: string | null;
+  memberCount: number;
   onRequest: () => void;
   pending: boolean;
   requesting: boolean;
@@ -36,8 +34,7 @@ export default function LeaderboardRequestJoinPreview({
       className={className}
       dataState="request_join"
       description={t("insights.leaderboard.requestJoinDescription", {
-        count: colleagueCount,
-        domain: domain ?? workspaceName,
+        count: memberCount,
         workspace: workspaceName,
       })}
       icon={Send}
