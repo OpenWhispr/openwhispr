@@ -25,7 +25,7 @@ import type { OnboardingSetupMode } from "./flow";
 import { getOnboardingSetupAvailability, hasAvailableOnboardingSetup } from "./setupEligibility";
 import { BrandMark } from "./OnboardingShell";
 import openAIIcon from "../../assets/icons/providers/openai.svg";
-import nvidiaIcon from "../../assets/icons/providers/nvidia.webp";
+import orukIcon from "../../assets/icons/providers/oruk.webp";
 // Only the Local card opens the warning dialog now — BYOK goes
 // straight through from the "Choose your API setup" modal.
 import warningBackdrop from "../../assets/onboarding-setup-warning-hero.webp";
@@ -238,21 +238,16 @@ export default function SetupChoiceStep({
                       className="size-4 invert dark:invert-0"
                     />
                   </span>
-                  {/* The tile is its own green field, so it fills the chip and gets
-                      clipped to the circle — the old lime-500 circle sat behind a
-                      green eye mark, which read as green on green. The mark and
-                      wordmark both fall inside the inscribed circle, so nothing of
-                      the logo is lost to the crop. */}
                   <span className="size-9 overflow-hidden rounded-full ring-[1.33px] ring-[var(--onboarding-surface)]">
                     <img
-                      src={nvidiaIcon}
+                      src={orukIcon}
                       alt=""
                       aria-hidden="true"
                       width={40}
                       height={40}
                       decoding="async"
                       draggable={false}
-                      className="size-full object-cover"
+                      className="size-full object-contain p-1"
                     />
                   </span>
                 </span>

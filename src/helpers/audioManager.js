@@ -1877,7 +1877,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const useLocalWhisper = settings.useLocalWhisper;
       const localProvider = settings.localTranscriptionProvider;
       const whisperModel = settings.whisperModel;
-      const parakeetModel = settings.parakeetModel || "parakeet-tdt-0.6b-v3";
+      const parakeetModel = settings.parakeetModel || "orukeet-v0.1.0-q8";
 
       const cloudTranscriptionMode = settings.cloudTranscriptionMode;
       const isSignedIn = settings.isSignedIn;
@@ -2232,7 +2232,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async processWithLocalParakeet(
     audioBlob,
-    model = "parakeet-tdt-0.6b-v3",
+    model = "orukeet-v0.1.0-q8",
     metadata = {},
     wasCancelled = neverCancelled
   ) {

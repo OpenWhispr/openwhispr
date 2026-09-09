@@ -29,7 +29,7 @@ export function resolveMeetingTranscriptionOptions({
       localProvider,
       localModel:
         localProvider === "nvidia"
-          ? parakeetModel || "parakeet-tdt-0.6b-v3"
+          ? parakeetModel || "orukeet-v0.1.0-q8"
           : localProvider === "cohere"
             ? cohereModel || "cohere-transcribe-03-2026"
             : whisperModel || "base",

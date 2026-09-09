@@ -108,6 +108,12 @@ export interface ParakeetModelInfo {
   supportedLanguages: string[];
   runtime?: "offline" | "online";
   modelType?: "transducer" | "cohere-transcribe";
+  engine?: "nemo-speech";
+  organization?: { id: string; name: string };
+  fileName?: string;
+  sha256?: string;
+  license?: string;
+  modelCardUrl?: string;
   recommended?: boolean;
   downloadUrl: string;
   extractDir: string;

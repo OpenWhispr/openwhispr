@@ -1,0 +1,198 @@
+{
+  "asr-nvidia-cpu": {
+    "platforms": {
+      "linux_aarch64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 20126005,
+        "platform": "linux_aarch64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-linux-aarch64-cpu.tar.gz",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-linux-aarch64-cpu.tar.gz",
+            "sha256": "0e4112255d566de7bdd142f239e984995c4447103ba8feb41f2bb5c559d561d3",
+            "size_bytes": 4328117,
+            "extract": "native-tar"
+          }
+        ]
+      },
+      "linux_x86_64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 22580525,
+        "platform": "linux_x86_64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-linux-x86_64-cpu.tar.gz",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-linux-x86_64-cpu.tar.gz",
+            "sha256": "0f74131d631ad2c694cf0ec53490866bb6461147959589a69fb6fc231944065b",
+            "size_bytes": 4583913,
+            "extract": "native-tar"
+          }
+        ]
+      },
+      "macos_arm64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 18689264,
+        "platform": "macos_arm64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-macos-aarch64-cpu.tar.gz",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-macos-aarch64-cpu.tar.gz",
+            "sha256": "971661d38d4bf97a63c528d13041a964316d25068d8df045e5b4839848092f25",
+            "size_bytes": 3299661,
+            "extract": "native-tar"
+          }
+        ]
+      },
+      "macos_x86_64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 19998576,
+        "platform": "macos_x86_64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-macos-x86_64-cpu.tar.gz",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-macos-x86_64-cpu.tar.gz",
+            "sha256": "042a4612e07460fab6a39b5d862aa1e39d0ac3eaedfdb979f3f5fc12de510c20",
+            "size_bytes": 3618245,
+            "extract": "native-tar"
+          }
+        ]
+      },
+      "win_amd64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 17893349,
+        "platform": "win_amd64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-windows-x86_64-cpu.zip",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-windows-x86_64-cpu.zip",
+            "sha256": "5e4ea81046012edcd77fd8848de8eefb5a4ba38cc26f52eb544ab184695a75d6",
+            "size_bytes": 4730421,
+            "extract": "zip"
+          }
+        ]
+      }
+    }
+  },
+  "asr-nvidia-cuda": {
+    "platforms": {
+      "linux_aarch64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 185219170,
+        "platform": "linux_aarch64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-linux-aarch64-cuda12.tar.gz",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-linux-aarch64-cuda12.tar.gz",
+            "sha256": "20ab68b0f8b4ace1e30b6605859935b1a059fc149d7b24f7a4b4d95cbf2f0c2d",
+            "size_bytes": 46978869,
+            "extract": "native-tar"
+          }
+        ]
+      },
+      "linux_x86_64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 382882626,
+        "platform": "linux_x86_64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-linux-x86_64-cuda.tar.gz",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-linux-x86_64-cuda.tar.gz",
+            "sha256": "e68628f396489c98fb353e070efaea5bc4977409ae7734fce56c251a79e29147",
+            "size_bytes": 107310946,
+            "extract": "native-tar"
+          }
+        ]
+      },
+      "win_amd64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 132678065,
+        "platform": "win_amd64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-windows-x86_64-cuda.zip",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-windows-x86_64-cuda.zip",
+            "sha256": "ba024204e76ca2fa4eefa8787506c3c49e418147f627f60cf9206a582b60089c",
+            "size_bytes": 106044768,
+            "extract": "zip"
+          }
+        ]
+      }
+    }
+  },
+  "asr-nvidia-vulkan": {
+    "platforms": {
+      "linux_aarch64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 155884789,
+        "platform": "linux_aarch64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-linux-aarch64-vulkan.tar.gz",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-linux-aarch64-vulkan.tar.gz",
+            "sha256": "4ccc58a2e850dbc4b5d7ce8b44a74b54a7074d936b215548d469798af646f62f",
+            "size_bytes": 17714836,
+            "extract": "native-tar"
+          }
+        ]
+      },
+      "linux_x86_64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 158816701,
+        "platform": "linux_x86_64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-linux-x86_64-vulkan.tar.gz",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-linux-x86_64-vulkan.tar.gz",
+            "sha256": "ce7b7c3c8771cb7450b26e6d4bd8fb2c5e35bcd9fe0076387f35052e9b9523ae",
+            "size_bytes": 18014113,
+            "extract": "native-tar"
+          }
+        ]
+      },
+      "win_amd64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 75318757,
+        "platform": "win_amd64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-windows-x86_64-vulkan.zip",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-windows-x86_64-vulkan.zip",
+            "sha256": "b5e7b04a637da4eb25a60253e2db65774998e8dfb48c08b4db763009b82ac7ac",
+            "size_bytes": 21967184,
+            "extract": "zip"
+          }
+        ]
+      }
+    }
+  },
+  "asr-nvidia-metal": {
+    "platforms": {
+      "macos_arm64": {
+        "version": "0.1.0-native",
+        "component_api": 1,
+        "install_bytes": 21148144,
+        "platform": "macos_arm64",
+        "archives": [
+          {
+            "name": "nemo-speech-0.1.0-macos-aarch64-metal.tar.gz",
+            "url": "https://github.com/NVIDIA/NeMo-Speech.cpp/releases/download/v0.1.0/nemo-speech-0.1.0-macos-aarch64-metal.tar.gz",
+            "sha256": "f1dff4f9dd9c96214f8cb78b982812459132df8a4ad1a42409fd94de4a366244",
+            "size_bytes": 3465028,
+            "extract": "native-tar"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -39,6 +39,7 @@ import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 import {
   getAllReasoningModels,
   getBatchTranscriptionModel,
+  getParakeetModelInfo,
   getTranscriptionProviders,
   isSherpaLocalProvider,
 } from "../../models/ModelRegistry";
@@ -489,7 +490,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (isOpenWhisprCloud) return t("notes.upload.openwhisprCloud");
     if (useLocalWhisper) {
       if (localTranscriptionProvider === "nvidia")
-        return `Parakeet · ${parakeetModel || "default"}`;
+        return getParakeetModelInfo(parakeetModel)?.name || parakeetModel || "Parakeet";
       if (localTranscriptionProvider === "cohere") return `Cohere · ${cohereModel || "default"}`;
       return `Whisper · ${whisperModel || "base"}`;
     }

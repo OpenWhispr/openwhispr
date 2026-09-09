@@ -21,6 +21,7 @@ const {
   getRequiredModelFiles,
   isSherpaLocalProvider,
 } = require("./parakeetModelInfo");
+const { installOrukeetModel } = require("./orukeetModel");
 
 function getParakeetModelConfig(modelName) {
   const modelInfo = modelRegistryData.parakeetModels[modelName];
@@ -67,7 +68,10 @@ class ParakeetManager {
   // Cohere models keep their weights in encoder.int8.onnx.data; transducers in
   // encoder.int8.onnx. Used as the reported on-disk size of a model.
   _getModelWeightsSize(modelDir) {
-    for (const file of ["encoder.int8.onnx.data", "encoder.int8.onnx"]) {
+    const nativeFile = modelRegistryData.parakeetModels[path.basename(modelDir)]?.fileName;
+    for (const file of [nativeFile, "encoder.int8.onnx.data", "encoder.int8.onnx"].filter(
+      Boolean
+    )) {
       try {
         return fs.statSync(path.join(modelDir, file)).size;
       } catch {}
@@ -223,7 +227,7 @@ class ParakeetManager {
   }
 
   async transcribeLocalParakeet(audioBlob, options = {}) {
-    const model = options.model || "parakeet-tdt-0.6b-v3";
+    const model = options.model || "orukeet-v0.1.0-q8";
     assertParakeetSupported();
     const serverAvailable = this.serverManager.isAvailable(getModelRuntime(model));
 
@@ -329,6 +333,10 @@ class ParakeetManager {
 
     if (this.currentDownloadProcess) {
       throw createDownloadInProgressError(modelName, this.currentDownloadProcess.model);
+    }
+
+    if (getModelRuntime(modelName) === "orukeet") {
+      return installOrukeetModel(this, modelName, progressCallback);
     }
 
     const archivePath = path.join(modelsDir, `${modelName}.tar.bz2`);
@@ -606,6 +614,7 @@ class ParakeetManager {
 
   async deleteParakeetModel(modelName) {
     const modelPath = this.getModelPath(modelName);
+    if (getModelRuntime(modelName) === "orukeet") await this.serverManager.nativeServer.stop();
 
     if (fs.existsSync(modelPath)) {
       try {
@@ -629,6 +638,7 @@ class ParakeetManager {
   }
 
   async deleteAllParakeetModels() {
+    await this.serverManager.stopServer();
     const modelsDir = this.getModelsDir();
     let totalFreed = 0;
     let deletedCount = 0;

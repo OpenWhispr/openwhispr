@@ -832,6 +832,7 @@
     }
   },
   "transcription": {
+    "modelCard": "模型卡",
     "deleteModel": {
       "title": "删除模型",
       "description": "确定要删除此模型吗？如果需要再次使用，你需要重新下载。"
@@ -2515,7 +2516,8 @@
         "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）",
         "parakeet_unified_en_0_6b": "仅英语 ASR，最先进的准确度（平均 WER 5.91%）",
         "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron 英语流式语音识别",
-        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron 多语言流式语音识别，自动语言检测（15 种语言）"
+        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron 多语言流式语音识别，自动语言检测（15 种语言）",
+        "orukeet": "针对多语言语音识别微调的 Parakeet"
       },
       "whisper": {
         "tiny": "最快速度，较低质量",

@@ -1,3 +1,4 @@
+import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ProviderIcon } from "../ui/ProviderIcon";
@@ -53,7 +54,10 @@ function downloadDisplay(download: ActiveDownload) {
     return { name: getWhisperModelInfo(download.id)?.name ?? download.id, provider: "openai" };
   }
   if (download.kind === "parakeet") {
-    return { name: getParakeetModelInfo(download.id)?.name ?? download.id, provider: "nvidia" };
+    return {
+      name: getParakeetModelInfo(download.id)?.name ?? download.id,
+      provider: getASRModelOrganization(download.id),
+    };
   }
   const localModel = modelRegistry.getModel(download.id);
   return {

@@ -562,7 +562,10 @@ function initializeCoreManagers() {
 
 function registerSidecars() {
   if (whisperManager) sidecarRegistry.register("whisper", () => whisperManager.stopServer());
-  if (parakeetManager) sidecarRegistry.register("parakeet", () => parakeetManager.stopServer());
+  if (parakeetManager) {
+    sidecarRegistry.register("parakeet", () => parakeetManager.stopServer());
+    sidecarRegistry.register("orukeet", () => parakeetManager.serverManager.nativeServer.stop());
+  }
   if (diarizationManager) {
     sidecarRegistry.register("diarization", () => diarizationManager.shutdown());
   }

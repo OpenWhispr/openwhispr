@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { initializeOrukeetDefaults } from "../helpers/orukeetDefaults";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
@@ -64,6 +65,7 @@ let _ReasoningService: typeof import("../services/ReasoningService").default | n
 // dereference the bare localStorage global, and test harnesses import this
 // store with partial window stubs that don't define it.
 const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
+if (isBrowser) initializeOrukeetDefaults(localStorage);
 
 export const TRANSCRIPTION_POLICY_PROVIDER_IDS = [
   ...modelRegistryData.transcriptionProviders.map((provider) => provider.id),
@@ -445,8 +447,7 @@ migrateProviderSettings();
 // persists is available to copy. Before this context existed the upload page
 // used the base dictation settings, so copy each value the user actually set
 // into the matching `upload*` key. Fresh installs have no base keys persisted,
-// so nothing is copied and the upload context falls through to its OpenWhispr
-// Cloud defaults.
+// and receive the Orukeet defaults before these migrations run.
 const UPLOAD_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
   ["useLocalWhisper", "uploadUseLocalWhisper"],
   ["whisperModel", "uploadWhisperModel"],

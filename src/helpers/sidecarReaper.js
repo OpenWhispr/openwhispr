@@ -3,6 +3,8 @@ const debugLogger = require("./debugLogger");
 const sidecarPidFile = require("./sidecarPidFile");
 
 const EXPECTED_BINARY_FRAGMENTS = {
+  orukeet: ["orukeet-sidecar"],
+  "orukeet-probe": ["orukeet-device-info"],
   parakeet: ["sherpa-onnx-ws-", "sherpa-onnx-online-ws-"],
   whisper: ["whisper-server"],
   llama: ["llama-server"],

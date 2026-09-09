@@ -832,6 +832,7 @@
     }
   },
   "transcription": {
+    "modelCard": "Modellkarte",
     "deleteModel": {
       "title": "Modell löschen",
       "description": "Möchten Sie dieses Modell wirklich löschen? Sie müssen es erneut herunterladen, wenn Sie es wieder verwenden möchten."
@@ -2604,7 +2605,8 @@
         "parakeet_tdt_0_6b_v3": "Schnelle mehrsprachige ASR mit automatischer Spracherkennung (25 Sprachen)",
         "parakeet_unified_en_0_6b": "Englisch-only ASR mit Spitzen-Genauigkeit (5,91% durchschnittliche WER)",
         "nemotron_speech_streaming_en_0_6b": "Englische Streaming-ASR von NVIDIA Nemotron",
-        "nemotron_3_5_asr_streaming_0_6b": "Mehrsprachige Streaming-ASR von NVIDIA Nemotron mit automatischer Spracherkennung (15 Sprachen)"
+        "nemotron_3_5_asr_streaming_0_6b": "Mehrsprachige Streaming-ASR von NVIDIA Nemotron mit automatischer Spracherkennung (15 Sprachen)",
+        "orukeet": "Feinabgestimmtes Parakeet für mehrsprachige Spracherkennung"
       },
       "diarization": {
         "segmentation": "Sprachgrenzerkennung für die Sprecherzuordnung",

@@ -6122,7 +6122,7 @@ class IPCHandlers {
                 ? settings.cohereModel
                 : settings.parakeetModel) ||
               process.env.PARAKEET_MODEL ||
-              "parakeet-tdt-0.6b-v3";
+              "orukeet-v0.1.0-q8";
             result = await this.parakeetManager.transcribeLocalParakeet(buffer, {
               model,
               language,

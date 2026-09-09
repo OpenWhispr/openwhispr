@@ -1,0 +1,42 @@
+name: Orukeet native inference
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "resources/orukeet/**"
+      - "src/helpers/orukeet*.js"
+      - "scripts/*orukeet*.js"
+      - "src/models/modelRegistryData.json"
+      - ".github/workflows/orukeet-native.yml"
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      OPENWHISPR_ORUKEET_BUILD_DEVICE: cpu
+      OPENWHISPR_ORUKEET_DEVICE: cpu
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run build:orukeet
+      - run: node scripts/verify-orukeet-build.js
+      - name: Fetch the public test recording
+        shell: bash
+        run: curl --fail --location --output fixture.wav https://raw.githubusercontent.com/Oruk-AI/orukeet/main/demos/fixtures/jfk.wav
+      - name: Download and check real inference, concurrency and recovery
+        run: node scripts/benchmark-orukeet.js --audio fixture.wav --output orukeet-native-result.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: orukeet-native-${{ matrix.os }}
+          path: orukeet-native-result.json

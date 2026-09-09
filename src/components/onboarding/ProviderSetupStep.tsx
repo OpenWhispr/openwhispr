@@ -1,3 +1,9 @@
+import {
+  LOCAL_ASR_ORGANIZATIONS,
+  getASRModelOrganization,
+  getSelectedASROrganization,
+  usesParakeetManager,
+} from "../../helpers/localASROrganization";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -17,7 +23,6 @@ import {
 import {
   getTranscriptionProviders,
   getParakeetModels,
-  isCohereTranscribeModel,
   getWhisperModels,
   modelRegistry,
   type CloudProviderData,
@@ -587,7 +592,14 @@ export function LocalModelSetupStep({
   const { t } = useTranslation();
   const store = useSettingsStore();
   const assistant = stepId === "local-assistant";
-  const [selectedProvider, setSelectedProvider] = useState(assistant ? "qwen" : "whisper");
+  const [selectedProvider, setSelectedProvider] = useState(
+    assistant
+      ? "qwen"
+      : getSelectedASROrganization(
+          useSettingsStore.getState().localTranscriptionProvider,
+          useSettingsStore.getState().parakeetModel
+        )
+  );
   const [selectedModel, setSelectedModel] = useState("");
   const [downloadedWhisper, setDownloadedWhisper] = useState<Set<string>>(new Set());
   const [downloadedParakeet, setDownloadedParakeet] = useState<Set<string>>(new Set());
@@ -637,9 +649,7 @@ export function LocalModelSetupStep({
       ? modelRegistry.getProvider(saved.chatAgentProvider)
         ? saved.chatAgentProvider
         : "qwen"
-      : saved.localTranscriptionProvider === "nvidia"
-        ? "nvidia"
-        : "whisper";
+      : getSelectedASROrganization(saved.localTranscriptionProvider, saved.parakeetModel);
     setSelectedProvider(defaultProvider);
     setSelectedModel("");
     onReadinessChange(false);
@@ -653,10 +663,10 @@ export function LocalModelSetupStep({
         icon: provider.id,
       }));
     }
-    return [
-      { id: "whisper", name: "OpenAI", icon: "openai" },
-      { id: "nvidia", name: "NVIDIA", icon: "nvidia" },
-    ];
+    return LOCAL_ASR_ORGANIZATIONS.map((organization) => ({
+      ...organization,
+      icon: organization.id === "whisper" ? "openai" : organization.id,
+    }));
   }, [assistant]);
 
   const models = useMemo(() => {
@@ -669,17 +679,15 @@ export function LocalModelSetupStep({
         icon: selectedProvider,
       }));
     }
-    if (selectedProvider === "nvidia") {
-      // Onboarding offers only the whisper/NVIDIA providers; Cohere models
-      // would otherwise commit provider "nvidia" with a Cohere model id.
+    if (usesParakeetManager(selectedProvider)) {
       return Object.entries(getParakeetModels())
-        .filter(([id]) => !isCohereTranscribeModel(id))
+        .filter(([id]) => getASRModelOrganization(id) === selectedProvider)
         .map(([id, model]) => ({
           id,
           name: model.name,
           size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
           recommended: model.recommended,
-          icon: "nvidia",
+          icon: selectedProvider,
         }));
     }
     return Object.entries(getWhisperModels()).map(([id, model]) => ({
@@ -694,12 +702,12 @@ export function LocalModelSetupStep({
   const currentProvider = providerOptions.find((provider) => provider.id === selectedProvider);
   const activeDownload = assistant
     ? llmDownload
-    : selectedProvider === "nvidia"
+    : usesParakeetManager(selectedProvider)
       ? parakeetDownload
       : whisperDownload;
   const downloadedModels = assistant
     ? downloadedLlm
-    : selectedProvider === "nvidia"
+    : usesParakeetManager(selectedProvider)
       ? downloadedParakeet
       : downloadedWhisper;
   const selectedReady = Boolean(selectedModel && downloadedModels.has(selectedModel));
@@ -716,7 +724,10 @@ export function LocalModelSetupStep({
         store.setChatAgentMode("local");
         store.setChatAgentProvider(selectedProvider);
         store.setChatAgentModel(modelId);
-      } else if (selectedProvider === "nvidia") {
+      } else if (selectedProvider === "cohere") {
+        store.setLocalTranscriptionProvider("cohere");
+        store.setCohereModel(modelId);
+      } else if (usesParakeetManager(selectedProvider)) {
         store.setLocalTranscriptionProvider("nvidia");
         store.setParakeetModel(modelId);
       } else {
@@ -744,12 +755,17 @@ export function LocalModelSetupStep({
       (assistant || !activeDownload.isDownloading)
     ) {
       rememberPendingLocalModel(kind, {
-        provider: selectedProvider,
+        provider: selectedProvider === "oruk" ? "nvidia" : selectedProvider,
         modelId,
       });
     }
     void activeDownload.downloadModel(modelId, (downloadedId): void => {
-      if (isPendingLocalModel(kind, { provider: selectedProvider, modelId: downloadedId })) {
+      if (
+        isPendingLocalModel(kind, {
+          provider: selectedProvider === "oruk" ? "nvidia" : selectedProvider,
+          modelId: downloadedId,
+        })
+      ) {
         selectInstalledModel(downloadedId);
         return;
       }
@@ -762,9 +778,13 @@ export function LocalModelSetupStep({
         ? saved.chatAgentMode === "local" &&
           saved.chatAgentProvider === selectedProvider &&
           saved.chatAgentModel === downloadedId
-        : saved.localTranscriptionProvider === selectedProvider &&
-          (selectedProvider === "nvidia" ? saved.parakeetModel : saved.whisperModel) ===
-            downloadedId;
+        : getSelectedASROrganization(saved.localTranscriptionProvider, saved.parakeetModel) ===
+            selectedProvider &&
+          (selectedProvider === "cohere"
+            ? saved.cohereModel
+            : usesParakeetManager(selectedProvider)
+              ? saved.parakeetModel
+              : saved.whisperModel) === downloadedId;
       if (alreadySelected) setSelectedModel(downloadedId);
     });
   };

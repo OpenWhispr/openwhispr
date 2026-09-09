@@ -1,3 +1,9 @@
+import {
+  LOCAL_ASR_ORGANIZATIONS,
+  getASRModelOrganization,
+  getSelectedASROrganization,
+  usesParakeetManager,
+} from "../helpers/localASROrganization";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -18,7 +24,6 @@ import {
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
   PARAKEET_MODEL_INFO,
-  isCohereTranscribeModel,
   isSherpaLocalProvider,
 } from "../models/ModelRegistry";
 import {
@@ -63,6 +68,7 @@ interface LocalModelCardProps {
   recommended?: boolean;
   provider: string;
   languageLabel?: string;
+  modelCardUrl?: string;
   onSelect: () => void;
   onDelete: () => void;
   onDownload: () => void;
@@ -84,6 +90,7 @@ function LocalModelCard({
   recommended,
   provider,
   languageLabel,
+  modelCardUrl,
   onSelect,
   onDelete,
   onDownload,
@@ -189,6 +196,20 @@ function LocalModelCard({
           )}
         </div>
       </div>
+      {modelCardUrl && (
+        <a
+          href={modelCardUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => {
+            event.stopPropagation();
+            createExternalLinkHandler(modelCardUrl)(event);
+          }}
+          className="inline-block ml-7 mb-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          {t("transcription.modelCard")}
+        </a>
+      )}
     </div>
   );
 }
@@ -301,11 +322,8 @@ const PROVIDER_CREDENTIALS: Record<
 
 const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
 
-const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> = [
-  { id: "whisper", name: "OpenAI" },
-  { id: "nvidia", name: "NVIDIA" },
-  { id: "cohere", name: "Cohere" },
-];
+const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> =
+  LOCAL_ASR_ORGANIZATIONS;
 
 interface ModeToggleProps {
   useLocalWhisper: boolean;
@@ -394,7 +412,9 @@ export default function TranscriptionModelPicker({
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
   const [parakeetCapability, setParakeetCapability] = useState<ParakeetCheckResult | null>(null);
   const [browsedCloudProvider, setBrowsedCloudProvider] = useState<string | null>(null);
-  const [internalLocalProvider, setInternalLocalProvider] = useState(selectedLocalProvider);
+  const [internalLocalProvider, setInternalLocalProvider] = useState(
+    getSelectedASROrganization(selectedLocalProvider, selectedLocalModel)
+  );
   const hasLoadedRef = useRef(false);
   const hasLoadedParakeetRef = useRef(false);
   const [gpuBackend, setGpuBackend] = useState<"cuda" | "vulkan" | null>(null);
@@ -414,11 +434,12 @@ export default function TranscriptionModelPicker({
   const [gpuActive, setGpuActive] = useState(false);
 
   useEffect(() => {
-    if (selectedLocalProvider !== internalLocalProvider) {
-      setInternalLocalProvider(selectedLocalProvider);
+    const organization = getSelectedASROrganization(selectedLocalProvider, selectedLocalModel);
+    if (organization !== internalLocalProvider) {
+      setInternalLocalProvider(organization);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync prop→state: only re-run when the prop changes
-  }, [selectedLocalProvider]);
+  }, [selectedLocalProvider, selectedLocalModel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -639,7 +660,7 @@ export default function TranscriptionModelPicker({
     if (internalLocalProvider === "whisper" && !hasLoadedRef.current) {
       hasLoadedRef.current = true;
       loadLocalModelsRef.current?.();
-    } else if (isSherpaLocalProvider(internalLocalProvider) && !hasLoadedParakeetRef.current) {
+    } else if (usesParakeetManager(internalLocalProvider) && !hasLoadedParakeetRef.current) {
       hasLoadedParakeetRef.current = true;
       loadParakeetModelsRef.current?.();
     }
@@ -861,8 +882,9 @@ export default function TranscriptionModelPicker({
 
   const handleParakeetModelSelect = useCallback(
     (modelId: string) => {
-      const provider = isCohereTranscribeModel(modelId) ? "cohere" : "nvidia";
-      setInternalLocalProvider(provider);
+      const organization = getASRModelOrganization(modelId);
+      const provider = organization === "cohere" ? "cohere" : "nvidia";
+      setInternalLocalProvider(organization);
       onLocalProviderSelect?.(provider);
       onLocalModelSelect(modelId, provider);
     },
@@ -1073,24 +1095,27 @@ export default function TranscriptionModelPicker({
 
   // Both sherpa-onnx tabs share one downloaded-models list; each renders only
   // its own vendor's registry entries.
-  const renderParakeetModels = (provider: "nvidia" | "cohere") => {
-    const modelsToRender = (
+  const renderParakeetModels = () => {
+    const modelsToRender =
       parakeetModels.length === 0
         ? Object.entries(PARAKEET_MODEL_INFO).map(([modelId, info]) => ({
             model: modelId,
             downloaded: false,
             size_mb: info.sizeMb,
           }))
-        : parakeetModels
-    ).filter((model) => isCohereTranscribeModel(model.model) === (provider === "cohere"));
+        : parakeetModels;
+    const organizationModels = modelsToRender.filter(
+      (model) => getASRModelOrganization(model.model) === internalLocalProvider
+    );
 
     return (
       <div className="space-y-0.5">
-        {modelsToRender.map((model) => {
+        {organizationModels.map((model) => {
           const modelId = model.model;
           const info = PARAKEET_MODEL_INFO[modelId] ?? {
             name: modelId,
             description: t("transcription.fallback.parakeetModelDescription"),
+            modelCardUrl: undefined,
             size: t("common.unknown"),
             language: "en",
             recommended: false,
@@ -1110,7 +1135,8 @@ export default function TranscriptionModelPicker({
               isCancelling={isCancellingParakeetModel(modelId)}
               isInstalling={parakeetDownloads[modelId]?.phase === "installing"}
               recommended={info.recommended}
-              provider={provider}
+              provider={getASRModelOrganization(modelId)}
+              modelCardUrl={info.modelCardUrl}
               onSelect={() => handleParakeetModelSelect(modelId)}
               onDelete={() => handleParakeetDelete(modelId)}
               onDownload={() =>
@@ -1401,8 +1427,7 @@ export default function TranscriptionModelPicker({
 
           <div>
             {internalLocalProvider === "whisper" && renderLocalModels()}
-            {(internalLocalProvider === "nvidia" || internalLocalProvider === "cohere") &&
-              renderParakeetModels(internalLocalProvider)}
+            {usesParakeetManager(internalLocalProvider) && renderParakeetModels()}
           </div>
         </>
       )}

@@ -19,6 +19,7 @@ function getModelInfo(modelName) {
 }
 
 function getModelRuntime(modelName) {
+  if (getModelInfo(modelName)?.engine === "nemo-speech") return "orukeet";
   return getModelInfo(modelName)?.runtime === "online" ? "online" : "offline";
 }
 
@@ -29,6 +30,8 @@ function getModelType(modelName) {
 }
 
 function getRequiredModelFiles(modelName) {
+  const model = getModelInfo(modelName);
+  if (model?.engine === "nemo-speech") return [model.fileName];
   return getModelType(modelName) === "cohere-transcribe"
     ? COHERE_TRANSCRIBE_MODEL_FILES
     : TRANSDUCER_MODEL_FILES;
