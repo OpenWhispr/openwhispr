@@ -1,5 +1,6 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
+const { realtimeUrlFromBase } = require("./realtimeUrl");
 
 const WEBSOCKET_TIMEOUT_MS = 15000;
 const DISCONNECT_TIMEOUT_MS = 3000;
@@ -94,7 +95,14 @@ class OpenAIRealtimeStreaming {
       streamLabel,
       vadThreshold,
     } = options;
-    if (!apiKey) throw new Error(`${this.providerLabel} API key is required`);
+    // The base URL travels with its credential so the two cannot separate.
+    const connection =
+      apiKey && typeof apiKey === "object"
+        ? { key: apiKey.key || "", baseUrl: apiKey.baseUrl || "" }
+        : { key: apiKey || "", baseUrl: "" };
+    if (!connection.key && !connection.baseUrl) {
+      throw new Error(`${this.providerLabel} API key is required`);
+    }
 
     if (this.isConnected || this.isConnecting) {
       debugLogger.debug(`${this.providerLabel} already connected/connecting`, this._logContext());
@@ -121,15 +129,19 @@ class OpenAIRealtimeStreaming {
     this._sessionExpired = false;
     this._connectionLossNotified = false;
 
-    const url = "wss://api.openai.com/v1/realtime?intent=transcription";
-    debugLogger.debug(`${this.providerLabel} connecting`, this._logContext({ model: this.model }));
+    const url = realtimeUrlFromBase(connection.baseUrl, this.model);
+    debugLogger.debug(
+      `${this.providerLabel} connecting`,
+      this._logContext({ model: this.model, customBaseUrl: !!connection.baseUrl })
+    );
 
     // Attested providers (Tinfoil) supply their socket via an async factory.
     let ws;
     try {
+      const headers = connection.key ? { Authorization: `Bearer ${connection.key}` } : undefined;
       ws = createSocket
         ? await createSocketWithTimeout(createSocket, WEBSOCKET_TIMEOUT_MS)
-        : new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` } });
+        : new WebSocket(url, headers ? { headers } : undefined);
     } catch (err) {
       this.isConnecting = false;
       this.cleanup();

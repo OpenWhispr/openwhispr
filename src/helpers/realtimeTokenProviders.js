@@ -74,6 +74,13 @@ const REALTIME_TOKEN_PROVIDERS = {
 
   "openai-realtime": async ({ environmentManager, postServerToken }, options, streams) => {
     if (options.mode === "byok") {
+      // Empty keys are valid: the batch Custom path allows unauthenticated endpoints.
+      if (options.baseUrl) {
+        return duplicate(streams, {
+          key: environmentManager.getCustomTranscriptionKey?.() || "",
+          baseUrl: options.baseUrl,
+        });
+      }
       const apiKey = environmentManager.getOpenAIKey();
       if (!apiKey) throw new Error("No OpenAI API key configured. Add your key in Settings.");
       return duplicate(streams, apiKey);
