@@ -53,12 +53,20 @@ function createFakeChild() {
     if (stderr) child.stderr.emit("data", Buffer.from(stderr));
     child.emit("close", status);
   };
+  // A helper that printed its result and exited, but whose pipes a descendant
+  // still holds open. Node sets exitCode at "exit"; "close" is what's stuck,
+  // so the deadline fires with the outcome already known.
+  child.exitLeavingPipesOpen = (status, stdout = "") => {
+    if (stdout) child.stdout.emit("data", Buffer.from(stdout));
+    child.exitCode = status;
+    child.emit("exit", status, null);
+  };
   return child;
 }
 
 // Loads a fresh MediaPlayer singleton for `platform`. `spawnSync` throws so a
 // regression back to a blocking call fails every test in this file (#2073).
-function loadMediaPlayer(platform, { existingPaths = () => false } = {}) {
+function loadMediaPlayer(platform, { existingPaths = () => false, warnThrows = false } = {}) {
   delete require.cache[modulePath];
   delete require.cache[processUtilPath];
   setPlatform(platform);
@@ -78,7 +86,12 @@ function loadMediaPlayer(platform, { existingPaths = () => false } = {}) {
       return {
         debug: (message, meta) => logs.push({ level: "debug", message, meta }),
         info() {},
-        warn: (message, meta) => logs.push({ level: "warn", message, meta }),
+        warn: (message, meta) => {
+          logs.push({ level: "warn", message, meta });
+          // debugLogger.write ends in an unguarded logStream.write, so a
+          // broken sink throws straight back into the caller.
+          if (warnThrows) throw new Error("log stream is broken");
+        },
         error() {},
       };
     }
@@ -99,6 +112,14 @@ function loadMediaPlayer(platform, { existingPaths = () => false } = {}) {
     return { mediaPlayer: require(modulePath), calls, logs };
   } finally {
     Module._load = originalLoad;
+  }
+}
+
+// Lets any pending continuation run, for assertions that something did *not*
+// happen and so have no call to wait for.
+async function drain(turns = 10) {
+  for (let i = 0; i < turns; i += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
   }
 }
 
@@ -261,6 +282,71 @@ test("win32: a timed-out helper has its stdio destroyed so stuck pipes don't acc
   assert.equal(await pausing, true);
   assert.equal(calls.length, 3);
   assert.deepEqual(mediaPlayer._pausedWinApps, []);
+});
+
+// The deadline can arrive after the helper has already done its job and
+// exited, with only its pipes held open by a descendant — the shape behind
+// #2073. Its exit code and the output we buffered are the real result;
+// discarding them sends the pause into the media-key fallback, which toggles
+// playback back ON mid-dictation and then leaves it paused afterwards.
+test("win32: a GSMTC run that exited before the deadline is honoured, not reported as a timeout", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { mediaPlayer, calls } = loadMediaPlayer("win32");
+
+  const pausing = mediaPlayer.pauseMedia();
+  const gsmtc = await waitForCall(calls, 0);
+  gsmtc.child.exitLeavingPipesOpen(0, "Spotify.exe\n");
+
+  t.mock.timers.tick(5000);
+  await drain();
+
+  // Asserted before awaiting the pause: a fallback spawn means the pause is
+  // waiting on a media key this test never finishes, which would hang here.
+  assert.equal(calls.length, 1, "no media-key toggle: GSMTC had already paused it");
+  assert.equal(await pausing, true);
+  assert.deepEqual(mediaPlayer._pausedWinApps, ["Spotify.exe"]);
+});
+
+// spawnSync capped output at 1 MB and killed anything past it. Without a
+// replacement cap a runaway helper buffers in the main process until its
+// deadline, and a large enough payload makes the settle path throw after it
+// has marked itself settled — stalling the serialized queue for good.
+test("win32: a helper that floods stdout has its output capped", async () => {
+  const { mediaPlayer, calls } = loadMediaPlayer("win32");
+
+  const pausing = mediaPlayer.pauseMedia();
+  const gsmtc = await waitForCall(calls, 0);
+  const chunk = "A".repeat(512 * 1024);
+  for (let i = 0; i < 4; i += 1) gsmtc.child.stdout.emit("data", Buffer.from(chunk));
+  gsmtc.child.finish(0);
+
+  assert.equal(await pausing, true);
+  const buffered = mediaPlayer._pausedWinApps.join("").length;
+  assert.ok(buffered > 0, "output up to the cap is still delivered");
+  assert.ok(
+    buffered <= 1024 * 1024 + chunk.length,
+    `stdout should be capped, buffered ${buffered} bytes of the 2 MB emitted`
+  );
+});
+
+// Teardown and logging at the deadline are best effort, but the deadline must
+// still settle: an unsettled promise sits at the head of the serial queue and
+// kills every later pause and resume for the rest of the session.
+test("win32: a logger that throws at the deadline still settles and leaves the queue usable", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { mediaPlayer, calls } = loadMediaPlayer("win32", { warnThrows: true });
+
+  const pausing = mediaPlayer.pauseMedia();
+  await waitForCall(calls, 0);
+  t.mock.timers.tick(5000);
+
+  // calls: [gsmtc, taskkill, media-key fallback]
+  (await waitForCall(calls, 2)).child.finish(0);
+  assert.equal(await pausing, true);
+
+  const resuming = mediaPlayer.resumeMedia();
+  (await waitForCall(calls, 3)).child.finish(0);
+  assert.equal(await resuming, true);
 });
 
 // A quick tap stops the recording before the pause has decided which apps it

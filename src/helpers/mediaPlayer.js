@@ -4,11 +4,17 @@ const fs = require("fs");
 const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
 
+// spawnSync capped a child's output at 1 MB and killed anything past it. Keep
+// that bound: these helpers emit a few KB, and an unbounded buffer would let a
+// runaway one grow main-process memory until its deadline.
+const MAX_OUTPUT_BYTES = 1024 * 1024;
+
 // Runs `cmd args` asynchronously and resolves with
 // { status, stdout, stderr, timedOut }. Times out after `timeout` ms; on
-// timeout, kills the child and resolves with status: null. A spawn failure
-// also resolves with status: null but timedOut: false. Never rejects —
-// callers branch on status === 0.
+// timeout it kills the child and resolves with the exit code the child already
+// reported, or status: null and timedOut: true when it never exited. A spawn
+// failure also resolves with status: null but timedOut: false. Output is
+// capped at MAX_OUTPUT_BYTES. Never rejects — callers branch on status === 0.
 //
 // Every media helper goes through here rather than spawnSync: a synchronous
 // spawn parks the Electron main thread in a nested libuv loop until the
@@ -25,6 +31,12 @@ function spawnAsync(cmd, args, { timeout = 3000 } = {}) {
     }
 
     const chunks = { stdout: [], stderr: [] };
+    let bufferedBytes = 0;
+    const collect = (stream, chunk) => {
+      if (bufferedBytes >= MAX_OUTPUT_BYTES) return;
+      bufferedBytes += chunk.length;
+      chunks[stream].push(chunk);
+    };
     let settled = false;
     const settle = (status, timedOut = false) => {
       if (settled) return;
@@ -39,30 +51,35 @@ function spawnAsync(cmd, args, { timeout = 3000 } = {}) {
     };
 
     const timer = setTimeout(() => {
-      // killProcess runs taskkill /t on Windows, which takes the whole tree
-      // down: PowerShell's Add-Type compiles through csc.exe, which inherits
-      // these pipes and would otherwise outlive its parent still holding them.
-      // Dropping our own ends too means the deadline resolves promptly even if
-      // a descendant lingers.
+      // A helper can finish its work and exit while a descendant it spawned
+      // keeps the inherited pipes open, so the deadline can arrive with the
+      // outcome already known. Honour that exit code: discarding it sends the
+      // Windows pause into the media-key fallback, which toggles playback back
+      // on mid-dictation and then leaves it paused afterwards (#2073).
+      const exitCode = child.exitCode;
       try {
+        // A no-op once the child has exited; dropping our own pipe ends is
+        // what lets the deadline resolve while a descendant lingers.
         killProcess(child, "SIGKILL");
         child.stdout.destroy();
         child.stderr.destroy();
         debugLogger.warn(
-          "Media helper timed out; killed",
-          { cmd: path.basename(cmd), timeout },
+          "Media helper timed out",
+          { cmd: path.basename(cmd), timeout, exitCode },
           "media"
         );
       } catch {
         // Teardown and logging are best effort; the deadline must still settle
         // below, or the serialized queue stalls for the rest of the session.
       }
-      settle(null, true);
+      settle(exitCode, exitCode === null);
     }, timeout);
 
-    child.stdout.on("data", (d) => chunks.stdout.push(d));
-    child.stderr.on("data", (d) => chunks.stderr.push(d));
+    child.stdout.on("data", (d) => collect("stdout", d));
+    child.stderr.on("data", (d) => collect("stderr", d));
     child.on("error", (err) => {
+      // Pushed past the cap on purpose: this is the only diagnostic a failed
+      // spawn produces, and it must not be the thing the cap drops.
       chunks.stderr.push(Buffer.from(String(err?.message || err)));
       settle(null);
     });
