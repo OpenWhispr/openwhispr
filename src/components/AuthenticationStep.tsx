@@ -15,6 +15,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "lucide-react";
 import logger from "../utils/logger";
+import { EMAIL_REGEX } from "../utils/validation";
 import { getCachedPlatform } from "../utils/platform";
 import ForgotPasswordView from "./ForgotPasswordView";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
@@ -229,9 +230,8 @@ export default function AuthenticationStep({
   const handleEmailContinue = useCallback(async () => {
     if (!email.trim() || !authClient) return;
 
-    const localPart = email.trim().split("@")[0];
-    if (localPart?.includes("+")) {
-      setError(t("auth.errors.plusAliasUnsupported"));
+    if (!EMAIL_REGEX.test(email.trim())) {
+      setError(t("auth.errors.invalidEmail"));
       return;
     }
 
