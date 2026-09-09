@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Choosing Local after signing in no longer silently routes dictation to OpenWhispr Cloud.** Restarting onboarding from Settings (Create Free Account, the plan cards, or picking OpenWhispr Cloud while signed out) armed a post-sign-in "cloud migration" that flipped the routing flag but not the mode the Settings picker reads, so Settings showed "Local · Active", audio went to the cloud, and clicking Local did nothing. That migration is gone — onboarding's setup choice is the only writer — and already-affected profiles are repaired on the next launch from the mode they chose. (#2086)
+- **Choosing Local after signing in no longer silently routes dictation to OpenWhispr Cloud.** Restarting onboarding from Settings (Create Free Account, the plan cards, or picking OpenWhispr Cloud while signed out) armed a post-sign-in "cloud migration" that flipped the routing flag but not the mode the Settings picker reads, so Settings showed "Local · Active", audio went to the cloud, and clicking Local did nothing. That migration is gone — nothing switches your engine behind your back — and a profile already stuck this way is repaired on the next launch from the mode its picker shows, for dictation, note recording and audio upload alike. The repair only ever moves toward local, so it can never start uploading audio that was staying on your device. (#2086)
 
 ## [1.9.2] - 2026-08-29
 

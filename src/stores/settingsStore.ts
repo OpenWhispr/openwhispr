@@ -440,41 +440,6 @@ function migrateProviderSettings() {
 
 migrateProviderSettings();
 
-function isInferenceMode(value: string | null): value is InferenceMode {
-  return (
-    value === "local" ||
-    value === "openwhispr" ||
-    value === "providers" ||
-    value === "self-hosted" ||
-    value === "enterprise"
-  );
-}
-
-// `transcriptionMode` is what the Settings picker renders and what the user last
-// chose; `useLocalWhisper` is the flag routing actually obeys. A since-removed
-// post-sign-in effect wrote only the flag, so a user who picked Local in
-// onboarding saw "Local · Active" while audio went to OpenWhispr Cloud and
-// clicking Local was a no-op (#2086). Repair the pair from the mode on every
-// launch. Dictation scope only: the meeting and upload mode readers default to
-// "openwhispr" when unset, so reconciling those from an absent key could flip a
-// local user to the cloud. Runs before migrateUploadTranscription() so its
-// one-time copy inherits the repaired flag.
-function reconcileTranscriptionModeFlags(): void {
-  if (!isBrowser) return;
-  const mode = localStorage.getItem("transcriptionMode");
-  if (isInferenceMode(mode)) {
-    const expected = mode === "local" ? "true" : "false";
-    if (localStorage.getItem("useLocalWhisper") !== expected) {
-      localStorage.setItem("useLocalWhisper", expected);
-    }
-  }
-  // Hand-off keys of the removed effect; nothing reads them anymore.
-  localStorage.removeItem("pendingCloudMigration");
-  localStorage.removeItem("cloudMigrationShown");
-}
-
-reconcileTranscriptionModeFlags();
-
 // One-time seed of the dedicated audio-upload transcription settings. Runs
 // after migrateProviderSettings() so the `transcriptionMode` it derives and
 // persists is available to copy. Before this context existed the upload page
@@ -506,6 +471,37 @@ function migrateUploadTranscription() {
 }
 
 migrateUploadTranscription();
+
+// Each scope's picker renders `*TranscriptionMode`, but routing obeys the
+// `*UseLocalWhisper` flag beside it (dictation: audioManager's processAudio and
+// shouldUseStreaming; upload: fileTranscription). A since-removed post-sign-in
+// effect wrote only the dictation flag, so a user who picked Local saw
+// "Local · Active" while their audio went to OpenWhispr Cloud — and clicking
+// Local was a no-op, because each picker skips the mode it already renders
+// (#2086). Runs after the meeting and upload one-shot copies, which mirror the
+// dictation pair wholesale — desync included — and then latch.
+//
+// Deliberately one-directional. A stale non-local mode over a local flag must
+// never start uploading a local user's audio: the mode-less Settings toggle
+// wrote the flag alone until 6fb0c906, so profiles with a stale cloud mode and
+// correct local routing exist in the field. The reverse desync leaves a picker
+// showing cloud while routing stays on-device — wrong on screen, not a leak.
+const LOCAL_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
+  ["transcriptionMode", "useLocalWhisper"],
+  ["meetingTranscriptionMode", "meetingUseLocalWhisper"],
+  ["uploadTranscriptionMode", "uploadUseLocalWhisper"],
+];
+
+function reconcileLocalTranscriptionFlags(): void {
+  if (!isBrowser) return;
+  for (const [modeKey, flagKey] of LOCAL_TRANSCRIPTION_PAIRS) {
+    if (localStorage.getItem(modeKey) === "local" && localStorage.getItem(flagKey) !== "true") {
+      localStorage.setItem(flagKey, "true");
+    }
+  }
+}
+
+reconcileLocalTranscriptionFlags();
 
 function migrateAgentMode() {
   if (!isBrowser) return;
