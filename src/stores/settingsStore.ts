@@ -383,7 +383,10 @@ function migrateProviderSettings() {
 
   const reasoningMode = localStorage.getItem("cloudReasoningMode");
   const reasoningProvider = localStorage.getItem("reasoningProvider");
-  localStorage.setItem("reasoningMode", deriveLegacyReasoningMode(reasoningMode, reasoningProvider));
+  localStorage.setItem(
+    "reasoningMode",
+    deriveLegacyReasoningMode(reasoningMode, reasoningProvider)
+  );
 
   if (reasoningProvider === "custom" && reasoningMode === "byok") {
     localStorage.setItem("remoteReasoningType", "openai-compatible");
