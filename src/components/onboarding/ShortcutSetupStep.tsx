@@ -142,6 +142,26 @@ export default function ShortcutSetupStep({
     onClearSelection?.();
   };
 
+  // The box opens pre-filled with one of the recommendations, so the row carries
+  // the rest — without them the alternatives are reachable only by first clearing
+  // the chord the step just offered. Once the user has a chord of their own,
+  // suggesting others is noise.
+  const suggestions =
+    confirmed || hasCapturedChord ? [] : recommendations.filter((hotkey) => hotkey !== candidate);
+  const recommendationRow = suggestions.length > 0 && (
+    <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-base leading-[1.4] text-[var(--onboarding-text-tertiary)]">
+      <span>{recommendedLabel}</span>
+      {suggestions.map((hotkey) => (
+        <span
+          key={hotkey}
+          className="rounded-full bg-[var(--onboarding-surface-tertiary)] px-3 py-1.5 text-sm text-[var(--onboarding-text-secondary)]"
+        >
+          {formatRecommendedHotkey(hotkey)}
+        </span>
+      ))}
+    </div>
+  );
+
   const captureInput = (
     <HotkeyInput
       key={captureKey}
@@ -180,6 +200,8 @@ export default function ShortcutSetupStep({
               <HotkeyChord value={heldModifiers || candidate} compact={dense} />
             )}
           </div>
+
+          {recommendationRow}
 
           <div
             className={`mt-auto flex flex-col items-center gap-2.5 pb-1 ${dense ? "translate-y-3 pt-5" : "pt-8"}`}
@@ -235,17 +257,7 @@ export default function ShortcutSetupStep({
             )}
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-base leading-[1.4] text-[var(--onboarding-text-tertiary)]">
-            <span>{recommendedLabel}</span>
-            {recommendations.map((hotkey) => (
-              <span
-                key={hotkey}
-                className="rounded-full bg-[var(--onboarding-surface-tertiary)] px-3 py-1.5 text-sm text-[var(--onboarding-text-secondary)]"
-              >
-                {formatRecommendedHotkey(hotkey)}
-              </span>
-            ))}
-          </div>
+          {recommendationRow}
         </>
       )}
     </div>

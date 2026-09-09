@@ -22,7 +22,7 @@ function textContent(node) {
   return textContent(node.props?.children);
 }
 
-test("shortcut selection requires the same chord twice and keeps confirmation keyboard-driven", async (t) => {
+async function createShortcutHarness(t, overrides = {}) {
   globalThis.__shortcutSetupHarness = {
     cursor: 0,
     values: {},
@@ -104,27 +104,38 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
     onClearSelection: () => {
       harness.cleared += 1;
     },
+    ...overrides,
   };
-  const render = (overrides = {}) => {
+  const render = (renderOverrides = {}) => {
     harness.cursor = 0;
-    return ShortcutSetupStep({ ...props, ...overrides });
+    return ShortcutSetupStep({ ...props, ...renderOverrides });
   };
   // The step adjusts its seeded chord during render, which makes React re-render
   // synchronously before it paints; this harness has to run the component again to
   // observe that. The third pass pins that the adjustment settles instead of
   // re-triggering itself.
-  const renderSettled = (overrides = {}) => {
-    render(overrides);
-    const settled = render(overrides);
+  const renderSettled = (renderOverrides = {}) => {
+    render(renderOverrides);
+    const settled = render(renderOverrides);
     assert.equal(
-      textContent(render(overrides)),
+      textContent(render(renderOverrides)),
       textContent(settled),
       "the seeded chord should settle after one adjustment"
     );
     return settled;
   };
-  const input = (tree) => findElement(tree, (node) => node.type?.name === "HotkeyInput");
-  const chord = (tree) => findElement(tree, (node) => node.type?.name === "HotkeyChord");
+
+  return {
+    harness,
+    render,
+    renderSettled,
+    input: (tree) => findElement(tree, (node) => node.type?.name === "HotkeyInput"),
+    chord: (tree) => findElement(tree, (node) => node.type?.name === "HotkeyChord"),
+  };
+}
+
+test("shortcut selection requires the same chord twice and keeps confirmation keyboard-driven", async (t) => {
+  const { harness, render, renderSettled, input, chord } = await createShortcutHarness(t);
 
   // The step opens with the recommended chord already in the box, so it asks for a
   // first press; "press it again" only applies once a chord has actually been captured.
@@ -137,6 +148,15 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
       (node) => node.type === "button" && textContent(node) === "Choose another shortcut"
     ),
     "an unconfirmed shortcut should still expose the reset action"
+  );
+  // The box only offers one of the recommendations, so the rest have to stay on
+  // screen — otherwise the alternatives are reachable only by first clearing the
+  // chord the step just pre-filled.
+  assert.match(textContent(initialTree), /RecommendedGlobe\/FnCtrl \+ R/);
+  assert.doesNotMatch(
+    textContent(initialTree),
+    /Right Option/,
+    "the chord already in the box should not be repeated as a suggestion"
   );
   // Main resolves the shortcut it can actually register after this step is already
   // open, so a late correction has to reach the box — without reading as a capture.
@@ -155,6 +175,7 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(harness.confirmed, ["RightOption"]);
   assert.deepEqual(harness.changed, ["RightOption"]);
+  assert.equal(harness.cleared, 0, "confirming the offered chord discards nothing");
 
   const confirmedTree = render();
   const chooseAnother = findElement(
@@ -163,6 +184,9 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
   );
   assert.ok(chooseAnother);
   chooseAnother.props.onClick();
+  // Resetting has to reach the caller, or the chord it recorded from the confirmed
+  // press stays registered behind an empty box.
+  assert.equal(harness.cleared, 1);
   harness.confirmed.length = 0;
   harness.changed.length = 0;
 
@@ -172,6 +196,7 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
   input(emptyTree).props.onChange("Control+Alt");
   assert.deepEqual(harness.confirmed, []);
   assert.deepEqual(harness.changed, []);
+  assert.equal(harness.cleared, 2, "a fresh capture supersedes whatever the caller held");
 
   const candidateTree = render();
   assert.match(
@@ -196,6 +221,39 @@ test("shortcut selection requires the same chord twice and keeps confirmation ke
   }
 
   input(candidateTree).props.onChange("Control+Alt");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(harness.confirmed, ["Control+Alt"]);
+  assert.deepEqual(harness.changed, ["Control+Alt"]);
+});
+
+test("a shortcut confirmed in an earlier session reopens confirmed", async (t) => {
+  const { harness, render, input } = await createShortcutHarness(t, {
+    value: "Control+Alt",
+    initiallyConfirmed: true,
+  });
+
+  // Resuming onto this step must not ask for the chord again, and must not offer
+  // alternatives to a choice the user already made.
+  const resumedTree = render();
+  assert.match(textContent(resumedTree), /Control \+ Alt/);
+  assert.doesNotMatch(textContent(resumedTree), /Capture/);
+  assert.doesNotMatch(textContent(resumedTree), /confirmAgain/);
+  assert.doesNotMatch(textContent(resumedTree), /Recommended/);
+
+  // Pressing it again is the user starting over, not re-confirming: the caller has
+  // to drop the chord it holds before a new one can replace it.
+  input(resumedTree).props.onChange("Control+Alt");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(harness.confirmed, []);
+  assert.deepEqual(harness.changed, []);
+  assert.equal(harness.cleared, 1);
+
+  const recapturedTree = render();
+  assert.match(
+    textContent(recapturedTree),
+    /onboarding\.rehaul\.hotkey\.confirmAgain:Control \+ Alt/
+  );
+  input(recapturedTree).props.onChange("Control+Alt");
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(harness.confirmed, ["Control+Alt"]);
   assert.deepEqual(harness.changed, ["Control+Alt"]);
