@@ -118,7 +118,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       platform,
       savedHotkey: parseHotkeyList(settings.dictationKey)[0] ?? "",
       platformDefault: getDefaultHotkey(),
-      confirmed: dictationHotkeyConfirmed,
     })
   );
   const [assistantHotkey, setAssistantHotkey] = useState(() =>

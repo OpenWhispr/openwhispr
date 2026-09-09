@@ -109,30 +109,26 @@ export const MACOS_DEFAULT_ONBOARDING_HOTKEY = "RightOption";
 export const DEFAULT_ASSISTANT_ONBOARDING_HOTKEY = "CommandOrControl+Shift+Space";
 
 /**
- * The chord the dictation step opens on.
+ * The chord the dictation step opens on: the user's own if they have one, and
+ * otherwise the chord this platform onboards new installs with — Right Option on
+ * macOS rather than the platform default.
  *
- * macOS onboards on Right Option rather than the platform default, but only when
- * there is nothing of the user's to lose: `confirmed` is false for a session the
- * legacy numeric migration rebuilt (and for any session written before the resume
- * flags existed), so a saved hotkey that isn't simply the platform default is
- * treated as the user's own choice and kept. finalizeOnboarding re-registers
- * whatever this returns, so overwriting it here overwrites their real hotkey.
+ * A saved chord always wins, the platform default included. `dictationKey` stays
+ * empty until a hotkey actually registers, so any stored value is one the user
+ * confirmed — and finalizeOnboarding re-registers whatever this returns on routes
+ * that never show the hotkey step again, so substituting here would overwrite
+ * their real hotkey with no screen ever saying so.
  */
 export const resolveOnboardingDictationHotkey = ({
   platform,
   savedHotkey,
   platformDefault,
-  confirmed,
 }: {
   platform: Platform;
   savedHotkey: string;
   platformDefault: string;
-  confirmed: boolean;
-}): string => {
-  if (platform !== "darwin") return savedHotkey || platformDefault;
-  if (savedHotkey && (confirmed || savedHotkey !== platformDefault)) return savedHotkey;
-  return MACOS_DEFAULT_ONBOARDING_HOTKEY;
-};
+}): string =>
+  savedHotkey || (platform === "darwin" ? MACOS_DEFAULT_ONBOARDING_HOTKEY : platformDefault);
 
 /**
  * The chord the assistant step opens on.

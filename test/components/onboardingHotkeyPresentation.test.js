@@ -42,26 +42,21 @@ test("macOS recommends Right Option first, followed by Globe/Fn and Ctrl + R", a
 
 test("the dictation step never opens on a chord that would overwrite the user's own", async () => {
   const { resolveOnboardingDictationHotkey } = await load();
-  const onMac = (savedHotkey, confirmed) =>
+  const onMac = (savedHotkey) =>
     resolveOnboardingDictationHotkey({
       platform: "darwin",
       savedHotkey,
       platformDefault: "GLOBE",
-      confirmed,
     });
 
   // Nothing of the user's to lose: onboard on the macOS default.
-  assert.equal(onMac("", false), "RightOption");
-  assert.equal(onMac("", true), "RightOption");
-  assert.equal(onMac("GLOBE", false), "RightOption");
+  assert.equal(onMac(""), "RightOption");
 
-  // A hotkey the user picked survives, confirmed or not. `confirmed` is false for
-  // a session rebuilt by the legacy numeric migration and for any session written
-  // before the resume flags existed, and finalizeOnboarding re-registers whatever
-  // this returns — so returning the macOS default here would erase their chord.
-  assert.equal(onMac("Control+Shift+D", false), "Control+Shift+D");
-  assert.equal(onMac("Control+Shift+D", true), "Control+Shift+D");
-  assert.equal(onMac("GLOBE", true), "GLOBE");
+  // Any saved chord survives. dictationKey is empty until a hotkey actually
+  // registers, so a stored value — the platform default included — is one the user
+  // confirmed, and finalizeOnboarding re-registers whatever this returns.
+  assert.equal(onMac("Control+Shift+D"), "Control+Shift+D");
+  assert.equal(onMac("GLOBE"), "GLOBE");
 });
 
 test("the assistant step keeps a saved chord whether or not onboarding confirmed it", async () => {
@@ -81,19 +76,16 @@ test("only macOS substitutes an onboarding default for the platform one", async 
   const { resolveOnboardingDictationHotkey } = await load();
 
   for (const platform of ["win32", "linux"]) {
-    for (const confirmed of [false, true]) {
-      const resolve = (savedHotkey) =>
-        resolveOnboardingDictationHotkey({
-          platform,
-          savedHotkey,
-          platformDefault: "Control+Super",
-          confirmed,
-        });
-      assert.equal(resolve(""), "Control+Super");
-      assert.equal(resolve("Control+Super"), "Control+Super");
-      assert.equal(resolve("F8"), "F8");
-      assert.equal(resolve("Control+Shift+D"), "Control+Shift+D");
-    }
+    const resolve = (savedHotkey) =>
+      resolveOnboardingDictationHotkey({
+        platform,
+        savedHotkey,
+        platformDefault: "Control+Super",
+      });
+    assert.equal(resolve(""), "Control+Super");
+    assert.equal(resolve("Control+Super"), "Control+Super");
+    assert.equal(resolve("F8"), "F8");
+    assert.equal(resolve("Control+Shift+D"), "Control+Shift+D");
   }
 });
 
