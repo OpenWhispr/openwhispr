@@ -107,5 +107,6 @@ async function transcribe() {
   }
 })().catch((error) => {
   console.error(error);
-  process.exitCode = 1;
+  if (realElectron) realElectron.app.exit(1);
+  else process.exitCode = 1;
 });

@@ -663,10 +663,12 @@ export function LocalModelSetupStep({
         icon: provider.id,
       }));
     }
-    return LOCAL_ASR_ORGANIZATIONS.map((organization) => ({
-      ...organization,
-      icon: organization.id === "whisper" ? "openai" : organization.id,
-    }));
+    return LOCAL_ASR_ORGANIZATIONS.filter((organization) => organization.id !== "cohere").map(
+      (organization) => ({
+        ...organization,
+        icon: organization.id === "whisper" ? "openai" : organization.id,
+      })
+    );
   }, [assistant]);
 
   const models = useMemo(() => {

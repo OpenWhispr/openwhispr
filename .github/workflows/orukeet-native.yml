@@ -34,7 +34,13 @@ jobs:
         shell: bash
         run: curl --fail --location --output fixture.wav https://raw.githubusercontent.com/Oruk-AI/orukeet/main/demos/fixtures/jfk.wav
       - name: Download and check real inference, concurrency and recovery
-        run: node scripts/benchmark-orukeet.js --audio fixture.wav --output orukeet-native-result.json
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run --auto-servernum npx --no-install electron --no-sandbox scripts/benchmark-orukeet.js --audio fixture.wav --output orukeet-native-result.json
+          else
+            npx --no-install electron scripts/benchmark-orukeet.js --audio fixture.wav --output orukeet-native-result.json
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
