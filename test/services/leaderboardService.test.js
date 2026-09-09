@@ -182,6 +182,83 @@ test("leaderboard requests carry scope, pagination, filters and no body data", a
   );
 });
 
+// The renderer formats these week values with Intl and drives a refresh timer
+// off refreshAfterSeconds, both outside any try block. A shape that survives
+// validation but not formatting throws during render, where the only boundary
+// left is the app-level one that replaces the whole control panel.
+const boardResponse = (overrides) => ({
+  scope: { key: "domain:acme.test", kind: "domain", id: "acme.test", name: "acme.test" },
+  viewerUserId: "user_1",
+  metric: "total_words",
+  range: "week",
+  weekStart: "2026-08-31",
+  availableWeekStarts: ["2026-08-31"],
+  leaders: [],
+  members: [],
+  totalMembers: 0,
+  viewerRank: null,
+  page: 0,
+  pageSize: 20,
+  generatedAt: "2026-09-09T00:00:00.000Z",
+  refreshAfterSeconds: 3600,
+  ...overrides,
+});
+
+const domainScope = {
+  key: "domain:acme.test",
+  kind: "domain",
+  id: "acme.test",
+  name: "acme.test",
+  memberCount: 3,
+  state: "ready",
+  role: null,
+};
+
+for (const [label, overrides] of [
+  ["an empty weekStart", { weekStart: "" }],
+  ["an unparseable weekStart", { weekStart: "not-a-date" }],
+  ["a weekStart that is not a real day", { weekStart: "2026-02-30" }],
+  ["a timestamp where a calendar day belongs", { weekStart: "2026-08-31T00:00:00.000Z" }],
+  ["an empty entry in availableWeekStarts", { availableWeekStarts: ["2026-08-31", ""] }],
+  ["an unparseable entry in availableWeekStarts", { availableWeekStarts: ["nope"] }],
+  [
+    "more weeks than a year can hold",
+    { availableWeekStarts: Array.from({ length: 54 }, () => "2026-08-31") },
+  ],
+  ["a refresh interval no timer can hold", { refreshAfterSeconds: 2 ** 31 }],
+]) {
+  test(`the leaderboard is rejected when it carries ${label}`, async (t) => {
+    captureRequests(t, boardResponse(overrides));
+    const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+    await assert.rejects(
+      LeaderboardService.getLeaderboard(domainScope, { metric: "total_words", range: "week" }),
+      /Malformed leaderboard/
+    );
+  });
+}
+
+test("a board with no week selected and a full year of history stays valid", async (t) => {
+  captureRequests(
+    t,
+    boardResponse({
+      range: "all",
+      weekStart: null,
+      availableWeekStarts: Array.from({ length: 53 }, (_, week) =>
+        new Date(Date.UTC(2026, 0, 5 + week * 7)).toISOString().slice(0, 10)
+      ),
+    })
+  );
+  const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+  const board = await LeaderboardService.getLeaderboard(domainScope, {
+    metric: "total_words",
+    range: "all",
+  });
+  assert.equal(board.weekStart, null);
+  assert.equal(board.availableWeekStarts.length, 53);
+});
+
 // An opt-out the network never delivered has to reach the account eventually,
 // and only ever in the leaving direction: the account preference is the one
 // source of truth for who is on a leaderboard, so a device may take itself off

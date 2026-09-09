@@ -27,6 +27,15 @@ export interface LeaderboardParticipationAuthContext {
   authGeneration: number;
 }
 
+// The API lists 52 weeks of history plus the current week when it has no rows
+// of its own, so anything longer is not a board this client can have asked for.
+const LEADERBOARD_MAX_WEEK_STARTS = 53;
+
+// The refresh window drives setInterval, which silently clamps a delay past a
+// signed 32-bit millisecond count to 1ms — turning an implausible value into a
+// request loop against an endpoint that re-aggregates the roster on every call.
+const LEADERBOARD_MAX_REFRESH_SECONDS = 86_400;
+
 const LEADERBOARD_METRICS = new Set<LeaderboardMetric>([
   "total_words",
   "words_per_minute",
@@ -52,6 +61,15 @@ function isNullableString(value: unknown): value is string | null {
 
 function isNonnegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+// The week picker formats these with Intl in the render body, where an
+// unparseable value throws past every async fallback. "Is a string" is not
+// enough: the round trip also rejects a well-shaped day that does not exist.
+function isCalendarDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function responseData(value: unknown, label: string): unknown {
@@ -147,9 +165,10 @@ function isLeaderboard(value: unknown): value is Leaderboard {
     isNullableString(value.viewerUserId) &&
     LEADERBOARD_METRICS.has(value.metric as LeaderboardMetric) &&
     (value.range === "week" || value.range === "all") &&
-    isNullableString(value.weekStart) &&
+    (value.weekStart === null || isCalendarDate(value.weekStart)) &&
     Array.isArray(value.availableWeekStarts) &&
-    value.availableWeekStarts.every((week) => typeof week === "string") &&
+    value.availableWeekStarts.length <= LEADERBOARD_MAX_WEEK_STARTS &&
+    value.availableWeekStarts.every(isCalendarDate) &&
     Array.isArray(value.leaders) &&
     value.leaders.every(isLeaderboardMember) &&
     Array.isArray(value.members) &&
@@ -163,7 +182,8 @@ function isLeaderboard(value: unknown): value is Leaderboard {
     typeof value.generatedAt === "string" &&
     typeof value.refreshAfterSeconds === "number" &&
     Number.isFinite(value.refreshAfterSeconds) &&
-    value.refreshAfterSeconds > 0
+    value.refreshAfterSeconds > 0 &&
+    value.refreshAfterSeconds <= LEADERBOARD_MAX_REFRESH_SECONDS
   );
 }
 
