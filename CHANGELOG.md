@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Managed enterprise providers no longer require SSO. Require SSO stays an independent workspace control.
 - Managed Azure text processing accepts AI Foundry and AI Services endpoints.
 
+### Fixed
+
+- Windows and Linux media pause/resume no longer block the main process. A slow or stuck PowerShell, nircmd, playerctl or dbus-send helper previously froze hotkeys, IPC and the dictation window until it exited, so a dictation could no longer be stopped and its recording was lost. Pause, resume and toggle now also run one at a time, so a quick tap can no longer strand media paused — previously possible on macOS. (#2073)
+
 ## [1.9.2] - 2026-08-29
 
 A repair release for two 1.9.1 regressions. Windows desktop sign-in works again — every provider button had gone dead — and the three transcription paths that only failed in packaged builds are back on all platforms. Meetings get three fixes of their own: recordings that captured only your voice on Windows, prompts that stopped appearing after the first call, and swipe-to-dismiss on the prompt cards.
