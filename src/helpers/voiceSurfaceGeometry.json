@@ -8,7 +8,7 @@
     "maxSurfaceWidth": 600
   },
   "LIVE_TRANSCRIPT_SURFACE_LIMITS": {
-    "minHeight": 152,
+    "minHeight": 188,
     "maxHeight": 538
   }
 }
