@@ -1,5 +1,5 @@
 import type { InferenceProvider } from "./types";
-import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl } from "../../../config/constants";
+import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, normalizeBaseUrl } from "../../../config/constants";
 import { getCloudModel, getOpenAiApiConfig } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
@@ -37,7 +37,22 @@ const REASONING_MODEL_MIN_OUTPUT_TOKENS = 25_000;
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
 const probedBases = new Set<string>();
 
-function readStoredPreference(base: string): "responses" | "chat" | undefined {
+function getPreferenceStorageKey(base: string, model?: string): string {
+  const normalizedBase = normalizeBaseUrl(base) || base.trim().replace(/\/+$/, "");
+  const trimmedModel = model?.trim();
+  return trimmedModel ? `${normalizedBase}#${trimmedModel}` : normalizedBase;
+}
+
+function readStoredPreference(base: string, model?: string): "responses" | "chat" | undefined {
+  const normalizedBase = normalizeBaseUrl(base) || base.trim().replace(/\/+$/, "");
+  const modelKey = model ? getPreferenceStorageKey(base, model) : undefined;
+
+  if (modelKey && endpointPreferenceCache.has(modelKey)) {
+    return endpointPreferenceCache.get(modelKey);
+  }
+  if (endpointPreferenceCache.has(normalizedBase)) {
+    return endpointPreferenceCache.get(normalizedBase);
+  }
   if (endpointPreferenceCache.has(base)) {
     return endpointPreferenceCache.get(base);
   }
@@ -51,10 +66,16 @@ function readStoredPreference(base: string): "responses" | "chat" | undefined {
     if (!raw) return undefined;
     const parsed = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return undefined;
-    const value = parsed[base];
-    if (value === "responses" || value === "chat") {
-      endpointPreferenceCache.set(base, value);
-      return value;
+
+    if (modelKey && (parsed[modelKey] === "responses" || parsed[modelKey] === "chat")) {
+      endpointPreferenceCache.set(modelKey, parsed[modelKey]);
+      return parsed[modelKey];
+    }
+
+    const baseValue = parsed[normalizedBase] ?? parsed[base];
+    if (baseValue === "responses" || baseValue === "chat") {
+      endpointPreferenceCache.set(normalizedBase, baseValue);
+      return baseValue;
     }
   } catch {
     return undefined;
@@ -63,8 +84,11 @@ function readStoredPreference(base: string): "responses" | "chat" | undefined {
   return undefined;
 }
 
-function rememberPreference(base: string, preference: "responses" | "chat"): void {
-  endpointPreferenceCache.set(base, preference);
+function rememberPreference(base: string, preference: "responses" | "chat", model?: string): void {
+  const normalizedBase = normalizeBaseUrl(base) || base.trim().replace(/\/+$/, "");
+  const key = getPreferenceStorageKey(base, model);
+
+  endpointPreferenceCache.set(key, preference);
 
   if (typeof window === "undefined" || !window.localStorage) {
     return;
@@ -74,12 +98,23 @@ function rememberPreference(base: string, preference: "responses" | "chat"): voi
     const raw = window.localStorage.getItem(OPENAI_ENDPOINT_PREF_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
     const data = typeof parsed === "object" && parsed !== null ? parsed : {};
-    data[base] = preference;
+    data[key] = preference;
+    if (!model) {
+      data[normalizedBase] = preference;
+    }
     window.localStorage.setItem(OPENAI_ENDPOINT_PREF_STORAGE_KEY, JSON.stringify(data));
   } catch {}
 }
 
-function getEndpointCandidates(base: string): Array<{ url: string; type: "responses" | "chat" }> {
+function clearEndpointPreferenceCache(): void {
+  endpointPreferenceCache.clear();
+  probedBases.clear();
+}
+
+function getEndpointCandidates(
+  base: string,
+  model?: string
+): Array<{ url: string; type: "responses" | "chat" }> {
   const lower = base.toLowerCase();
 
   if (lower.endsWith("/responses") || lower.endsWith("/chat/completions")) {
@@ -87,9 +122,12 @@ function getEndpointCandidates(base: string): Array<{ url: string; type: "respon
     return [{ url: base, type }];
   }
 
-  const preference = readStoredPreference(base);
+  const preference = readStoredPreference(base, model);
   if (preference === "chat") {
-    return [{ url: buildApiUrl(base, "/chat/completions"), type: "chat" }];
+    return [
+      { url: buildApiUrl(base, "/chat/completions"), type: "chat" },
+      { url: buildApiUrl(base, "/responses"), type: "responses" },
+    ];
   }
 
   return [
@@ -205,7 +243,7 @@ export const openaiProvider: InferenceProvider = {
       endpointCandidates = [{ url: buildApiUrl(openAiBase, "/chat/completions"), type: "chat" }];
     } else {
       await detectServerType(openAiBase);
-      endpointCandidates = getEndpointCandidates(openAiBase);
+      endpointCandidates = getEndpointCandidates(openAiBase, model);
     }
     const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
     // Only the user's own endpoint is self-hosted; isCustomEndpoint also covers OpenRouter.
@@ -223,7 +261,7 @@ export const openaiProvider: InferenceProvider = {
       base: openAiBase,
       isCustomEndpoint,
       candidates: endpointCandidates.map((candidate) => candidate.url),
-      preference: readStoredPreference(openAiBase) || null,
+      preference: readStoredPreference(openAiBase, model) || null,
     });
 
     if (isCustomEndpoint) {
@@ -241,7 +279,9 @@ export const openaiProvider: InferenceProvider = {
       let lastError: Error | null = null;
       let lastRetryableError: Error | null = null;
 
-      for (const { url: endpoint, type } of endpointCandidates) {
+      for (let i = 0; i < endpointCandidates.length; i++) {
+        const { url: endpoint, type } = endpointCandidates[i];
+        const hasAlternativeCandidate = i < endpointCandidates.length - 1;
         const controller = new AbortController();
         const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
@@ -312,7 +352,7 @@ export const openaiProvider: InferenceProvider = {
             );
 
             const isUnsupportedEndpoint =
-              (res.status === 404 || res.status === 405) && type === "responses";
+              (res.status === 404 || res.status === 405) && hasAlternativeCandidate;
 
             if (isUnsupportedEndpoint) {
               lastError = providerHttpError({
@@ -321,7 +361,8 @@ export const openaiProvider: InferenceProvider = {
                 body: errorData,
                 headers: res.headers,
               });
-              rememberPreference(openAiBase, "chat");
+              const fallbackType = type === "responses" ? "chat" : "responses";
+              rememberPreference(openAiBase, fallbackType, model);
               logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
                 attemptedEndpoint: endpoint,
                 error: redactProviderBody(errorMessage),
@@ -337,7 +378,7 @@ export const openaiProvider: InferenceProvider = {
             });
           }
 
-          rememberPreference(openAiBase, type);
+          rememberPreference(openAiBase, type, model);
           return res.json();
         } catch (error) {
           if ((error as Error).name === "AbortError") {
@@ -347,9 +388,10 @@ export const openaiProvider: InferenceProvider = {
           if (retryStrategy.shouldRetry(lastError)) {
             lastRetryableError = lastError;
           }
-          if (type === "responses") {
+          if (hasAlternativeCandidate) {
             logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
               attemptedEndpoint: endpoint,
+              model,
               error: (error as Error).message,
             });
             continue;
@@ -467,4 +509,11 @@ export const openaiProvider: InferenceProvider = {
 
     return responseText;
   },
+};
+
+export {
+  getEndpointCandidates,
+  readStoredPreference,
+  rememberPreference,
+  clearEndpointPreferenceCache,
 };
