@@ -6,14 +6,16 @@ const debugLogger = require("./debugLogger");
 
 // Force a key-up if the native listener never reports one (e.g. a missed release
 // while another window had focus), so a held key can't get stuck recording.
-const WATCHDOG_MS = 30000;
+// Aligned with Windows and macOS push-to-talk maximum duration (5 minutes, #1594, #2047).
+const WATCHDOG_MS = 300000;
 
 class LinuxKeyManager extends EventEmitter {
-  constructor() {
+  constructor(options = {}) {
     super();
-    this.isSupported = process.platform === "linux";
+    this.isSupported = options.isSupported ?? process.platform === "linux";
     this.hasReportedError = false;
     this.hasReportedUnavailable = false;
+    this.watchdogMs = typeof options.watchdogMs === "number" ? options.watchdogMs : WATCHDOG_MS;
     this.listeners = new Map(); // key string -> { child, watchdog }
   }
 
@@ -110,7 +112,7 @@ class LinuxKeyManager extends EventEmitter {
     if (entry.watchdog) clearTimeout(entry.watchdog);
     debugLogger.debug("[LinuxKeyManager] Stopping key listener", { key });
     try {
-      entry.child.kill();
+      entry.child?.kill?.();
     } catch {
       // Already gone
     }
@@ -135,12 +137,13 @@ class LinuxKeyManager extends EventEmitter {
       if (entry) {
         if (entry.watchdog) clearTimeout(entry.watchdog);
         entry.watchdog = setTimeout(() => {
-          debugLogger.warn("[LinuxKeyManager] Watchdog: no KEY_UP within 30s, forcing release", {
-            key,
-          });
+          debugLogger.warn(
+            `[LinuxKeyManager] Watchdog: no KEY_UP within ${Math.round(this.watchdogMs / 1000)}s, forcing release`,
+            { key }
+          );
           entry.watchdog = null;
           this.emit("key-up", key);
-        }, WATCHDOG_MS);
+        }, this.watchdogMs);
       }
       this.emit("key-down", key);
       return;
@@ -230,5 +233,8 @@ class LinuxKeyManager extends EventEmitter {
     return null;
   }
 }
+
+LinuxKeyManager.WATCHDOG_MS = WATCHDOG_MS;
+LinuxKeyManager.DEFAULT_WATCHDOG_MS = WATCHDOG_MS;
 
 module.exports = LinuxKeyManager;
