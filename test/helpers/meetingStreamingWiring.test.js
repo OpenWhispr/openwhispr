@@ -84,3 +84,76 @@ test("a silent Windows capture hands the live session to renderer loopback", () 
     2
   );
 });
+
+test("the system-audio watchdog is armed beside the silence timer and torn down with it", () => {
+  // Same gate as the one-shot warning: never armed for a mic-only session.
+  assert.match(
+    source,
+    /result\.systemAudioStrategy && result\.systemAudioStrategy !== "unsupported"[\s\S]{0,240}?startMeetingSystemAudioWatchdog\(meetingConnectionWin, result\.systemAudioStrategy\)/
+  );
+  // Only the macOS tap emits a chunk per period, so only it can be judged on
+  // delivery gaps; the loopback helpers may legitimately go idle.
+  assert.match(source, /watchesDelivery: systemAudioStrategy === "native"/);
+
+  // The ticker is the only timer the controller owns, and leaking one would
+  // keep judging a session that has already ended.
+  assert.match(
+    source,
+    /const stopMeetingSystemAudioWatchdog = \(\) => \{[\s\S]{0,400}?clearMeetingSystemAudioTicker\(\);[\s\S]{0,300}?meetingSystemAudioWatchdog\.stop\(\);/
+  );
+
+  // Arming runs after capture has started and attached itself, so it must clear
+  // only the ticker. Calling the full teardown here detaches the capture the
+  // start path just installed, which is how the first draft shipped a watchdog
+  // that reported stalls it could not recover from.
+  const armStart = source.indexOf("const startMeetingSystemAudioWatchdog");
+  assert.ok(armStart >= 0);
+  const armSection = source.slice(armStart, source.indexOf("const rollbackMeetingTranscriptionStart"));
+  assert.match(armSection, /clearMeetingSystemAudioTicker\(\);/);
+  assert.doesNotMatch(armSection, /stopMeetingSystemAudioWatchdog\(\);/);
+  assert.doesNotMatch(armSection, /detachCapture\(\)/);
+
+  // Every path that clears the one-shot timer also stops the watchdog, plus the
+  // mic-only fallback, which strands the restart hook on a dead manager.
+  for (const [label, from, to] of [
+    [
+      "rollback",
+      "const rollbackMeetingTranscriptionStart",
+      "const setupDictationCallbacks",
+    ],
+    ["stop", "const stopMeetingTranscription", "const meetingTranscriptionLifecycle"],
+    ["mic-only fallback", "const fallBackToMicOnly", "const startMeetingSystemAudio = async"],
+  ]) {
+    const start = source.indexOf(from);
+    const end = source.indexOf(to);
+    assert.ok(start >= 0 && end > start, `${label} section not found`);
+    assert.match(source.slice(start, end), /stopMeetingSystemAudioWatchdog\(\);/, label);
+  }
+});
+
+test("the watchdog sees every system chunk and the helper's device warning", () => {
+  // The audible check used to be skipped once the call had been heard, which is
+  // exactly the window in which the tap dies (#1990).
+  assert.match(
+    source,
+    /const audible = rms >= MEETING_MIC_SILENCE_RMS \|\| peak >= MEETING_MIC_SILENCE_PEAK;\s*meetingSystemAudioWatchdog\.recordChunk\(audible\);/
+  );
+  assert.match(
+    source,
+    /if \(code === "device_invalidated"\) \{\s*meetingSystemAudioWatchdog\.reportDeviceInvalidated\(\);/
+  );
+
+  // Recovery bounces the helper process, so the capture must be attached by the
+  // same call that started it, not by the arming path.
+  const managedStart = source.indexOf("const startManagedMeetingSystemAudio");
+  assert.ok(managedStart >= 0);
+  const managedSection = source.slice(managedStart, source.indexOf("const fallBackToMicOnly"));
+  assert.match(
+    managedSection,
+    /meetingSystemAudioWatchdog\.attachCapture\(\{\s*stop: \(\) => manager\.stop\(\),\s*start: startCapture,/
+  );
+
+  // The interruption reaches the renderer; a log-only warning would leave the
+  // user watching a recording that has stopped hearing the call.
+  assert.match(source, /send\("meeting-system-audio-interrupted", payload\)/);
+});

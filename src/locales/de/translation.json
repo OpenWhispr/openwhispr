@@ -201,7 +201,10 @@
     "skip": "Überspringen",
     "policyAiProcessingRestricted": "Die KI-Verarbeitung ist durch Ihre Organisation eingeschränkt.",
     "policyAgentRestricted": "Die Nutzung des KI-Agenten ist durch Ihre Organisation eingeschränkt.",
-    "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt."
+    "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt.",
+    "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
+    "managedConfigUnavailable": "Der verwaltete Unternehmenszugriff ist nicht verfügbar. Melden Sie sich erneut an oder wenden Sie sich an Ihren Administrator.",
+    "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator."
   },
   "onboarding": {
     "rehaul": {
@@ -903,7 +906,10 @@
         "chunkLoss": "Ein Netzwerkproblem hat zu viel von der Aufnahme verloren. Transkribieren Sie sie über den Verlauf erneut.",
         "agentReasoningFailed": "Ihr Sprachassistent konnte den Befehl nicht verarbeiten – stattdessen wurde das unbearbeitete Transkript eingefügt.",
         "screenContextSkipped": "Der Screenshot konnte nicht gesendet werden, daher lief Ihr Befehl ohne Bildschirmkontext.",
-        "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text."
+        "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text.",
+        "managedTranscriptionUnavailable": "Die verwaltete Transkription ist derzeit nicht verfügbar. Versuchen Sie es gleich noch einmal.",
+        "managedRouteInvalid": "Die verwaltete Transkription konnte aufgrund einer Konfigurationsabweichung nicht gestartet werden. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
+        "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
@@ -2459,7 +2465,9 @@
         "openwhisprDesc": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
         "providersDesc": "Eigenen API-Schlüssel nutzen.",
         "localDesc": "Modelle auf dem Gerät. Voll privat.",
-        "selfHostedDesc": "Eigener Server in Ihrem Netzwerk."
+        "selfHostedDesc": "Eigener Server in Ihrem Netzwerk.",
+        "enterprise": "Unternehmens-Cloud",
+        "enterpriseDesc": "Audio wird an die eigene Cloud Ihrer Organisation gesendet."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
@@ -2484,6 +2492,10 @@
         "switchedSelfHosted": {
           "title": "Selbst gehostet",
           "description": "Verwendung Ihres eigenen Servers."
+        },
+        "switchedEnterprise": {
+          "title": "Unternehmens-Cloud ausgewählt",
+          "description": "Diktate verwenden jetzt die von Ihrer Organisation verwaltete Transkription."
         }
       },
       "gpuDevice": {
@@ -2541,7 +2553,8 @@
             "info": "Audio, das von einem Segment ins nächste übertragen wird, um abrupte Schnitte beim Zusammenfügen zu vermeiden."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt."
     },
     "intelligence": {
       "gpuDevice": {
@@ -3318,6 +3331,18 @@
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
+      },
+      "systemAudioInterrupted": {
+        "title": "Meeting-Ton unterbrochen",
+        "description": "Die Aufnahme des Systemtons wurde unterbrochen und startet neu. Einige Sekunden des Gesprächs können im Transkript fehlen."
+      },
+      "systemAudioStopped": {
+        "title": "Meeting-Ton gestoppt",
+        "description": "OpenWhispr nimmt die anderen Teilnehmer nicht mehr auf. Beenden Sie die Aufnahme und starten Sie sie erneut, oder prüfen Sie Ihr Audioausgabegerät."
+      },
+      "systemAudioQuiet": {
+        "title": "Meeting-Audio ist verstummt",
+        "description": "Seit einigen Minuten war niemand zu hören. Falls das Gespräch noch läuft, prüfen Sie Ihr Audioausgabegerät."
       }
     },
     "meetingPill": {
@@ -3507,6 +3532,7 @@
     "wordsReady_other": "{{count}} Wörter bereit",
     "import": "Importieren",
     "yourDictionary": "Dein Wörterbuch",
+    "promptLimitNotice": "Dein Wörterbuch umfasst {{chars}} Zeichen. Groq- und Whisper-Modelle lesen davon nur die letzten paar hundert Zeichen – eine kürzere Liste funktioniert dort besser. Andere Modelle erhalten die vollständige Liste.",
     "exportDictionary": "Wörterbuch exportieren",
     "exportFailed": "Export fehlgeschlagen",
     "editWord": "{{word}} bearbeiten",

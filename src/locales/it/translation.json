@@ -201,7 +201,10 @@
     "skip": "Salta",
     "policyAiProcessingRestricted": "L’elaborazione con IA è limitata dalla tua organizzazione.",
     "policyAgentRestricted": "L’uso dell’agente IA è limitato dalla tua organizzazione.",
-    "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione."
+    "policyTranscriptionRestricted": "La trascrizione è limitata dalla tua organizzazione.",
+    "managedConfigLoading": "Verifica della configurazione gestita della tua organizzazione in corso. Riprova tra un momento.",
+    "managedConfigUnavailable": "L'accesso aziendale gestito non è disponibile. Accedi di nuovo o contatta l'amministratore.",
+    "managedPolicyConflict": "L'accesso gestito è bloccato dai criteri del tuo spazio di lavoro. Contatta l'amministratore."
   },
   "onboarding": {
     "rehaul": {
@@ -903,7 +906,10 @@
         "chunkLoss": "Un problema di rete ha fatto perdere troppa parte della registrazione. Ritrascrivila dalla cronologia.",
         "agentReasoningFailed": "L'assistente vocale non è riuscito a elaborare il comando; è stata inserita la trascrizione grezza.",
         "screenContextSkipped": "Non è stato possibile inviare lo screenshot, quindi il comando è stato eseguito senza contesto dello schermo.",
-        "customEndpointInvalid": "L'endpoint di trascrizione personalizzato non è configurato o il suo URL non è valido. Aggiornalo in Impostazioni → Da voce a testo."
+        "customEndpointInvalid": "L'endpoint di trascrizione personalizzato non è configurato o il suo URL non è valido. Aggiornalo in Impostazioni → Da voce a testo.",
+        "managedTranscriptionUnavailable": "La trascrizione gestita non è disponibile al momento. Riprova tra un momento.",
+        "managedRouteInvalid": "La trascrizione gestita non è potuta partire per un'incoerenza di configurazione. Riprova o contatta l'amministratore.",
+        "managedAuthRejected": "Le credenziali di trascrizione gestita della tua organizzazione sono state rifiutate. Contatta l'amministratore."
       },
       "translationFallback": {
         "unreachableTitle": "Traduzione non disponibile",
@@ -2170,7 +2176,9 @@
         "openwhisprDesc": "Risultati affidabili. Nessuna configurazione necessaria.",
         "providersDesc": "Usa la tua chiave API.",
         "localDesc": "Modelli sul dispositivo. Totalmente privato.",
-        "selfHostedDesc": "Il tuo server nella tua rete."
+        "selfHostedDesc": "Il tuo server nella tua rete.",
+        "enterprise": "Cloud aziendale",
+        "enterpriseDesc": "L'audio viene inviato al cloud della tua organizzazione."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Risultati affidabili. Nessuna configurazione necessaria.",
@@ -2195,6 +2203,10 @@
         "switchedSelfHosted": {
           "title": "Self-hosted",
           "description": "Utilizzo del tuo server."
+        },
+        "switchedEnterprise": {
+          "title": "Cloud aziendale selezionato",
+          "description": "La dettatura ora usa la trascrizione gestita dalla tua organizzazione."
         }
       },
       "gpuDevice": {
@@ -2252,7 +2264,8 @@
             "info": "Audio esteso da un segmento al successivo per evitare tagli netti nella concatenazione."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "La tua organizzazione consente solo la trascrizione su cloud aziendale, che non copre ancora la registrazione delle riunioni."
     },
     "intelligence": {
       "gpuDevice": {
@@ -2981,6 +2994,18 @@
       "systemAudioSilent": {
         "title": "Nessun audio della riunione rilevato finora",
         "description": "Finora solo il tuo microfono ha captato suoni. Sei in una videochiamata? Verifica che l'audio della riunione venga riprodotto su questo computer e non sia disattivato. Stai registrando di persona? Puoi ignorare questo avviso: il tuo microfono cattura la stanza."
+      },
+      "systemAudioInterrupted": {
+        "title": "Audio della riunione interrotto",
+        "description": "L'acquisizione dell'audio di sistema si è interrotta e sta ripartendo. Alcuni secondi della chiamata potrebbero mancare nella trascrizione."
+      },
+      "systemAudioStopped": {
+        "title": "Audio della riunione fermo",
+        "description": "OpenWhispr non sta più captando gli altri partecipanti. Interrompi la registrazione e riavviala, oppure controlla il dispositivo di uscita audio."
+      },
+      "systemAudioQuiet": {
+        "title": "L'audio della riunione è diventato silenzioso",
+        "description": "Non si sente nessuno da qualche minuto. Se la chiamata è ancora in corso, controlla il dispositivo di uscita audio."
       }
     },
     "meetingPill": {
@@ -3170,6 +3195,7 @@
     "wordsReady_other": "{{count}} parole pronte",
     "import": "Importa",
     "yourDictionary": "Il tuo dizionario",
+    "promptLimitNotice": "Il tuo dizionario contiene {{chars}} caratteri. I modelli Groq e Whisper ne leggono solo le ultime centinaia di caratteri, quindi lì conviene un elenco più corto. Gli altri modelli ricevono l'elenco completo.",
     "exportDictionary": "Esporta dizionario",
     "exportFailed": "Esportazione non riuscita",
     "editWord": "Modifica {{word}}",

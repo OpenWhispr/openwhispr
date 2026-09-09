@@ -93,12 +93,14 @@ const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
 const AudioStorageManager = require("./audioStorage");
+const LocalModelDownloadStatus = require("./localModelDownloadStatus");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
 const { registerMeetingAutoEndLifecycleHandlers } = require("./meetingAutoEndLifecycle");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
+const createMeetingSystemAudioWatchdog = require("./meetingSystemAudioWatchdog");
 const {
   partitionPendingMicFinals,
   isRiskyMicDuplicateProfile,
@@ -188,6 +190,9 @@ const AUDIO_MIME_TYPES = {
 };
 
 const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
+// The enterprise "Test Connection" probe only needs one word back, but the
+// Azure Responses API rejects max_output_tokens below 16.
+const CONNECTION_TEST_MAX_OUTPUT_TOKENS = 16;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 const { createAbortError } = require("./abortError");
@@ -640,6 +645,7 @@ class IPCHandlers {
     this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
     this.audioStorageManager = new AudioStorageManager();
+    this.localModelDownloadStatus = new LocalModelDownloadStatus();
     this._retentionCleanupInterval = null;
     this._retentionSettings = { ...DEFAULT_RETENTION_SETTINGS }; // Synced from renderer
     this._retentionSettingsSynced = false;
@@ -664,6 +670,7 @@ class IPCHandlers {
       if (!token) {
         this.databaseManager.setActiveAccountId(null);
         accountScopeBinding.clear();
+        broadcastToWindows("active-account-scope-changed", null);
       }
       broadcastToWindows("auth-token-state-changed", {
         generation,
@@ -717,6 +724,26 @@ class IPCHandlers {
       meetingSileroEnabled: current.meetingSileroEnabled !== false,
       ...sanitizeWhisperVadConfig(current),
     };
+  }
+
+  _updateNativeModelDownloadStatus(modelType, modelId, progressData) {
+    if (progressData.type === "complete") {
+      return this.localModelDownloadStatus.finish(modelType, modelId);
+    }
+
+    if (progressData.type === "installing") {
+      return this.localModelDownloadStatus.update(modelType, modelId, {
+        phase: "installing",
+        progress: progressData.percentage || 100,
+      });
+    }
+
+    return this.localModelDownloadStatus.update(modelType, modelId, {
+      phase: "downloading",
+      progress: progressData.percentage || 0,
+      downloadedBytes: progressData.downloaded_bytes || 0,
+      totalBytes: progressData.total_bytes || 0,
+    });
   }
 
   _setWhisperVadSettings(update = {}) {
@@ -2083,8 +2110,19 @@ class IPCHandlers {
       this.databaseManager.setActiveAccountId(accountId);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
+      broadcastToWindows(
+        "active-account-scope-changed",
+        accountId !== null ? { accountId, authGeneration: state.generation } : null
+      );
       return { success: true };
     });
+
+    ipcMain.handle("get-active-account-scope", () =>
+      accountScopeBinding.resolveActiveAccountScope({
+        ...tokenStore.getState(),
+        binding: accountScopeBinding.read(),
+      })
+    );
 
     ipcMain.handle("delete-account-data", async (_event, accountId, expectedGeneration) => {
       const state = tokenStore.getState();
@@ -3102,24 +3140,39 @@ class IPCHandlers {
     });
 
     ipcMain.handle("download-whisper-model", async (event, modelName) => {
+      const hadActiveDownload = this.localModelDownloadStatus.has("whisper", modelName);
+      this.localModelDownloadStatus.start("whisper", modelName);
       try {
         const result = await this.whisperManager.downloadWhisperModel(modelName, (progressData) => {
-          if (!event.sender.isDestroyed()) {
-            event.sender.send("whisper-download-progress", progressData);
-          }
+          const status = this._updateNativeModelDownloadStatus("whisper", modelName, progressData);
+          this.windowManager.sendToControlPanel("whisper-download-progress", {
+            ...progressData,
+            sequence: status?.sequence,
+          });
         });
+        const status = this.localModelDownloadStatus.has("whisper", modelName)
+          ? this.localModelDownloadStatus.finish("whisper", modelName)
+          : null;
+        if (status) {
+          this.windowManager.sendToControlPanel("whisper-download-progress", {
+            type: "complete",
+            model: modelName,
+            percentage: 100,
+            sequence: status.sequence,
+          });
+        }
         return result;
       } catch (error) {
-        if (
-          error.code !== "DOWNLOAD_IN_PROGRESS" &&
-          error.code !== "DOWNLOAD_CANCELLED" &&
-          !event.sender.isDestroyed()
-        ) {
-          event.sender.send("whisper-download-progress", {
+        const status = hadActiveDownload
+          ? null
+          : this.localModelDownloadStatus.finish("whisper", modelName);
+        if (!hadActiveDownload && error.code !== "DOWNLOAD_IN_PROGRESS") {
+          this.windowManager.sendToControlPanel("whisper-download-progress", {
             type: "error",
             model: modelName,
             error: error.message,
             code: error.code || "DOWNLOAD_FAILED",
+            sequence: status?.sequence,
           });
         }
         return {
@@ -3436,27 +3489,46 @@ class IPCHandlers {
     });
 
     ipcMain.handle("download-parakeet-model", async (event, modelName) => {
+      const hadActiveDownload = this.localModelDownloadStatus.has("parakeet", modelName);
+      this.localModelDownloadStatus.start("parakeet", modelName);
       try {
         const result = await this.parakeetManager.downloadParakeetModel(
           modelName,
           (progressData) => {
-            if (!event.sender.isDestroyed()) {
-              event.sender.send("parakeet-download-progress", progressData);
-            }
+            const status = this._updateNativeModelDownloadStatus(
+              "parakeet",
+              modelName,
+              progressData
+            );
+            this.windowManager.sendToControlPanel("parakeet-download-progress", {
+              ...progressData,
+              sequence: status?.sequence,
+            });
           }
         );
+        const status = this.localModelDownloadStatus.has("parakeet", modelName)
+          ? this.localModelDownloadStatus.finish("parakeet", modelName)
+          : null;
+        if (status) {
+          this.windowManager.sendToControlPanel("parakeet-download-progress", {
+            type: "complete",
+            model: modelName,
+            percentage: 100,
+            sequence: status.sequence,
+          });
+        }
         return result;
       } catch (error) {
-        if (
-          error.code !== "DOWNLOAD_IN_PROGRESS" &&
-          error.code !== "DOWNLOAD_CANCELLED" &&
-          !event.sender.isDestroyed()
-        ) {
-          event.sender.send("parakeet-download-progress", {
+        const status = hadActiveDownload
+          ? null
+          : this.localModelDownloadStatus.finish("parakeet", modelName);
+        if (!hadActiveDownload && error.code !== "DOWNLOAD_IN_PROGRESS") {
+          this.windowManager.sendToControlPanel("parakeet-download-progress", {
             type: "error",
             model: modelName,
             error: error.message,
             code: error.code || "DOWNLOAD_FAILED",
+            sequence: status?.sequence,
           });
         }
         return {
@@ -4092,6 +4164,14 @@ class IPCHandlers {
       return await this.windowManager.stopWindowDrag();
     });
 
+    ipcMain.handle("start-control-panel-drag", async () => {
+      return await this.windowManager.startControlPanelDrag();
+    });
+
+    ipcMain.handle("stop-control-panel-drag", async () => {
+      return await this.windowManager.stopControlPanelDrag();
+    });
+
     ipcMain.handle("open-external", async (event, url) => {
       try {
         const { protocol } = new URL(url);
@@ -4138,56 +4218,67 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("model-get-active-downloads", async () => {
+      return this.localModelDownloadStatus.getActiveDownloads();
+    });
+
     ipcMain.handle("model-check", async (_, modelId) => {
       const modelManager = require("./modelManagerBridge").default;
       return modelManager.isModelDownloaded(modelId);
     });
 
     ipcMain.handle("model-download", async (event, modelId) => {
-      let lastProgress = {
-        progress: 0,
-        downloadedSize: 0,
-        totalSize: 0,
-      };
-
+      if (this.localModelDownloadStatus.has("llm", modelId)) {
+        return {
+          success: false,
+          error: "Model is already being downloaded",
+          code: "DOWNLOAD_IN_PROGRESS",
+          details: { modelId },
+        };
+      }
+      // Claim ownership before the manager's asynchronous filesystem preflight.
+      this.localModelDownloadStatus.start("llm", modelId);
       try {
         const modelManager = require("./modelManagerBridge").default;
         const result = await modelManager.downloadModel(
           modelId,
           (progress, downloadedSize, totalSize) => {
-            lastProgress = { progress, downloadedSize, totalSize };
-            if (!event.sender.isDestroyed()) {
-              event.sender.send("model-download-progress", {
-                modelId,
-                progress,
-                downloadedSize,
-                totalSize,
-              });
-            }
+            const status = this.localModelDownloadStatus.update("llm", modelId, {
+              phase: "downloading",
+              progress,
+              downloadedBytes: downloadedSize,
+              totalBytes: totalSize,
+            });
+            this.windowManager.sendToControlPanel("model-download-progress", {
+              modelId,
+              type: "progress",
+              progress,
+              downloadedSize,
+              totalSize,
+              sequence: status.sequence,
+            });
           }
         );
-        if (!event.sender.isDestroyed()) {
-          event.sender.send("model-download-progress", {
-            type: "complete",
-            modelId,
-            progress: 100,
-            downloadedSize: lastProgress.downloadedSize,
-            totalSize: lastProgress.totalSize,
-          });
-        }
+        const status = this.localModelDownloadStatus.finish("llm", modelId);
+        this.windowManager.sendToControlPanel("model-download-progress", {
+          modelId,
+          type: "complete",
+          progress: 100,
+          downloadedSize: status?.downloadedBytes,
+          totalSize: status?.totalBytes,
+          sequence: status?.sequence,
+        });
         return { success: true, path: result };
       } catch (error) {
-        if (
-          error.code !== "DOWNLOAD_IN_PROGRESS" &&
-          error.code !== "DOWNLOAD_CANCELLED" &&
-          !event.sender.isDestroyed()
-        ) {
-          event.sender.send("model-download-progress", {
-            type: "error",
+        const status = this.localModelDownloadStatus.finish("llm", modelId);
+        if (error.code !== "DOWNLOAD_IN_PROGRESS") {
+          this.windowManager.sendToControlPanel("model-download-progress", {
             modelId,
+            type: "error",
             error: error.message,
             code: error.code,
             details: error.details,
+            sequence: status?.sequence,
           });
         }
         return {
@@ -4532,7 +4623,7 @@ class IPCHandlers {
             return generateText({
               model,
               prompt: "Say hello in one word.",
-              maxOutputTokens: 10,
+              maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
               abortSignal,
               maxRetries: 0,
             });
@@ -4542,7 +4633,7 @@ class IPCHandlers {
           await generateText({
             model,
             prompt: "Say hello in one word.",
-            maxOutputTokens: 10,
+            maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
           });
         }
 
@@ -5848,6 +5939,35 @@ class IPCHandlers {
         },
       };
     };
+    const { createManagedTranscriptionExecutor } = require("./managedTranscriptionExecutor");
+    const executeManagedTranscription = createManagedTranscriptionExecutor({
+      resolveEnterpriseRuntime,
+      proxyFetch,
+      buildUrl: async (endpoint, deployment, apiVersion) => {
+        const { buildManagedAzureTranscriptionUrl } = await import("../utils/urlUtils.ts");
+        return buildManagedAzureTranscriptionUrl(endpoint, deployment, apiVersion);
+      },
+    });
+    this.executeManagedTranscription = executeManagedTranscription;
+
+    ipcMain.handle(
+      "managed-transcribe",
+      serializeIpcError(
+        async (event, { audioBuffer, fileName, mimeType, language, prompt, managed }) => {
+          const text = await executeManagedTranscription(
+            event,
+            { provider: managed.provider, context: managed.context, language },
+            {
+              audioBuffer: Buffer.from(audioBuffer),
+              fileName: fileName || "audio.webm",
+              contentType: mimeType || "audio/webm",
+              prompt,
+            }
+          );
+          return { text };
+        }
+      )
+    );
     const handleSttConfigRequest = createCloudConfigRequestHandler({
       getApiUrl,
       getAuthHeader,
@@ -6023,6 +6143,7 @@ class IPCHandlers {
         const route = resolveTranscriptionRoute({
           settings: settings || {},
           providers: transcriptionProviderBaseUrls(),
+          managed: settings?.managed,
           request: { effectiveLanguage: language },
         });
 
@@ -6039,7 +6160,14 @@ class IPCHandlers {
           throw err;
         }
 
-        if (route.transport === "http-batch" && route.provider === "self-hosted") {
+        if (route.transport === "managed") {
+          const text = await this.executeManagedTranscription(event, route, {
+            audioBuffer: buffer,
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+          });
+          result = { text, source: "azure-managed", model: route.deployment };
+        } else if (route.transport === "http-batch" && route.provider === "self-hosted") {
           const formData = new FormData();
           formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
           if (route.model) {
@@ -6681,24 +6809,42 @@ class IPCHandlers {
       meetingReconnectReplaySources = new Set();
     };
 
-    const queueMeetingReconnectAudio = (source, buffer) => {
+    const sendMeetingStreamingAudio = (streaming, buffer, capturedAt = null) => {
+      const firstSampleAt = streaming.audioBytesSent === 0 ? capturedAt : null;
+      const sent = streaming.sendAudio(buffer);
+      if (
+        sent &&
+        streaming.isConnected &&
+        firstSampleAt !== null &&
+        streaming.sessionStartedAt != null
+      ) {
+        // Deepgram/Corti time segments from the first PCM sample, which can
+        // precede a replacement socket's creation when replaying recovery audio.
+        streaming.sessionStartedAt = firstSampleAt;
+      }
+      return sent;
+    };
+
+    const queueMeetingReconnectAudio = (source, buffer, capturedAt = null) => {
       if (!meetingReconnectReplaySources.has(source)) return;
       const copy = Buffer.from(buffer);
       const queue = meetingReconnectAudioBuffers[source];
-      queue.push(copy);
+      queue.push({ buffer: copy, capturedAt });
       meetingReconnectAudioBytes[source] += copy.length;
       while (
         meetingReconnectAudioBytes[source] > MEETING_RECONNECT_BUFFER_MAX_BYTES &&
         queue.length > 1
       ) {
-        meetingReconnectAudioBytes[source] -= queue.shift().length;
+        meetingReconnectAudioBytes[source] -= queue.shift().buffer.length;
       }
     };
 
     const replayMeetingReconnectAudio = (source, streaming) => {
       if (!meetingReconnectReplaySources.has(source)) return true;
       const queue = meetingReconnectAudioBuffers[source];
-      const replayed = queue.every((buffer) => streaming.sendAudio(buffer));
+      const replayed = queue.every(({ buffer, capturedAt }) =>
+        sendMeetingStreamingAudio(streaming, buffer, capturedAt)
+      );
       debugLogger.info("Replayed meeting audio after reconnect", {
         source,
         chunks: queue.length,
@@ -7033,8 +7179,34 @@ class IPCHandlers {
     const MEETING_MIC_BLEED_LOOKBACK_MS = 500;
     const MEETING_MIC_STATS_LOG_LIMIT = 200;
     const MEETING_SYSTEM_AUDIO_SILENCE_WARNING_MS = 45000;
+    const MEETING_SYSTEM_AUDIO_TICK_MS = 2000;
     let meetingMicStatsLogCount = 0;
     let meetingSystemAudioSilenceTimer = null;
+    let meetingSystemAudioTicker = null;
+    let meetingSystemAudioWatchdogWin = null;
+
+    const meetingSystemAudioWatchdog = createMeetingSystemAudioWatchdog({
+      onResumed: () => {
+        const win = meetingSystemAudioWatchdogWin;
+        if (win && !win.isDestroyed()) {
+          win.webContents.send("meeting-system-audio-resumed");
+        }
+      },
+      onInterrupted: (payload) => {
+        // debugLogger.error flattens its arguments into one string, dropping
+        // both the meta and the scope, so the give-up event would vanish from a
+        // log filtered on "meeting", the one filter used to triage this bug.
+        if (payload.recovering) {
+          debugLogger.warn("Meeting system audio interrupted, restarting", payload, "meeting");
+        } else {
+          debugLogger.warn("Meeting system audio capture gave up", payload, "meeting");
+        }
+        const win = meetingSystemAudioWatchdogWin;
+        if (win && !win.isDestroyed()) {
+          win.webContents.send("meeting-system-audio-interrupted", payload);
+        }
+      },
+    });
     let meetingStartedAt = null;
     let meetingSendCounts = { mic: 0, system: 0 };
     const meetingEchoLeakDetector = new MeetingEchoLeakDetector();
@@ -7145,8 +7317,11 @@ class IPCHandlers {
       }
     };
 
-    const dispatchMeetingAudioBuffer = (buffer, source) => {
+    const dispatchMeetingAudioBuffer = (buffer, source, synthetic = false, capturedAt = null) => {
       if (meetingLocalMode) {
+        // Local STT timestamps each batch with wall time, not a sample cursor.
+        // Large synthetic gaps would dilute speech and inflate the next batch.
+        if (synthetic) return;
         meetingLocalBuffers[source].push(buffer);
         return;
       }
@@ -7189,7 +7364,7 @@ class IPCHandlers {
             zeroed: outbound !== buffer,
           });
         }
-      } else if (source === "system" && buffer.length >= 2) {
+      } else if (source === "system" && buffer.length >= 2 && !synthetic) {
         // System chunks stream verbatim (no gate), so a periodic level readout
         // is the only way field logs can tell real audio from capture silence.
         const chunkCount = meetingSendCounts.system + 1;
@@ -7203,8 +7378,9 @@ class IPCHandlers {
         }
       }
 
-      queueMeetingReconnectAudio(source, outbound);
-      const sent = streaming.sendAudio(outbound);
+      queueMeetingReconnectAudio(source, outbound, capturedAt);
+      const sent = sendMeetingStreamingAudio(streaming, outbound, capturedAt);
+      if (synthetic) return;
       meetingSendCounts[source]++;
       if (meetingSendCounts[source] <= 5 || meetingSendCounts[source] % 100 === 0) {
         debugLogger.debug("Meeting audio send", {
@@ -7856,8 +8032,43 @@ class IPCHandlers {
       }, MEETING_SYSTEM_AUDIO_SILENCE_WARNING_MS);
     };
 
+    const clearMeetingSystemAudioTicker = () => {
+      if (meetingSystemAudioTicker) {
+        clearInterval(meetingSystemAudioTicker);
+        meetingSystemAudioTicker = null;
+      }
+    };
+
+    const stopMeetingSystemAudioWatchdog = () => {
+      clearMeetingSystemAudioTicker();
+      // Detaches the capture too, which strands any restart still in flight.
+      meetingSystemAudioWatchdog.stop();
+      meetingSystemAudioWatchdogWin = null;
+    };
+
+    // Rolling counterpart to the one-shot warning above, which only covers a
+    // session that never produced audio and stops watching once any arrives.
+    const startMeetingSystemAudioWatchdog = (win, systemAudioStrategy) => {
+      // Deliberately not stopMeetingSystemAudioWatchdog(): capture is already
+      // running and attached by this point, and detaching it here would leave a
+      // watchdog that reports stalls it cannot recover from.
+      clearMeetingSystemAudioTicker();
+      meetingSystemAudioWatchdogWin = win;
+      meetingSystemAudioWatchdog.start({
+        systemAudioStrategy,
+        // Only the macOS tap delivers a chunk every period regardless of what
+        // is playing; a gap from the loopback helpers proves nothing.
+        watchesDelivery: systemAudioStrategy === "native",
+      });
+      meetingSystemAudioTicker = setInterval(
+        () => meetingSystemAudioWatchdog.tick(),
+        MEETING_SYSTEM_AUDIO_TICK_MS
+      );
+    };
+
     const rollbackMeetingTranscriptionStart = async () => {
       clearMeetingSystemAudioSilenceTimer();
+      stopMeetingSystemAudioWatchdog();
       if (this.audioTapManager) {
         await this.audioTapManager.stop().catch(() => {});
       }
@@ -8087,6 +8298,7 @@ class IPCHandlers {
         // in-person recordings where a silent system tap is expected.
         if (result.systemAudioStrategy && result.systemAudioStrategy !== "unsupported") {
           armMeetingSystemAudioSilenceTimer(meetingConnectionWin, result.systemAudioStrategy);
+          startMeetingSystemAudioWatchdog(meetingConnectionWin, result.systemAudioStrategy);
         }
         return { ...result, sessionId: recordingSessionId };
       };
@@ -8204,19 +8416,25 @@ class IPCHandlers {
       }
     };
 
-    const sendMeetingAudio = (audioBuffer, source) => {
+    const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.
-      this.meetingDetectionEngine?.recordMeetingAudioChunk(source, outboundBuffer);
+      if (!synthetic) {
+        this.meetingDetectionEngine?.recordMeetingAudioChunk(source, outboundBuffer);
+      }
 
       if (source === "system") {
         const receivedAt = Date.now();
-        meetingEchoLeakDetector.recordSystemChunk(outboundBuffer, receivedAt);
-        if (meetingAecEnabled && !this.meetingAecManager?.processSystemBuffer(outboundBuffer)) {
-          meetingAecEnabled = false;
+        // Recovery silence repairs sample clocks, but is not current capture
+        // evidence or an AEC reference for the mic arriving now.
+        if (!synthetic) {
+          meetingEchoLeakDetector.recordSystemChunk(outboundBuffer, receivedAt);
+          if (meetingAecEnabled && !this.meetingAecManager?.processSystemBuffer(outboundBuffer)) {
+            meetingAecEnabled = false;
+          }
+          flushPendingMeetingMicChunks();
         }
-        flushPendingMeetingMicChunks();
 
         if (meetingLiveSpeakerActive) {
           // identification.startTime counts samples from the first chunk the
@@ -8237,17 +8455,19 @@ class IPCHandlers {
         }
         meetingDiarizationStream.write(outboundBuffer);
 
-        if (!meetingSystemAudioHeard) {
+        if (!synthetic) {
+          // Every real chunk feeds the watchdog, including actual silence.
           const { rms, peak } = computeChunkStats(outboundBuffer);
-          if (rms >= MEETING_MIC_SILENCE_RMS || peak >= MEETING_MIC_SILENCE_PEAK) {
-            // A call is audibly underway: diarization stays on the system
-            // channel, so stop paying the mic capture's disk cost.
+          const audible = rms >= MEETING_MIC_SILENCE_RMS || peak >= MEETING_MIC_SILENCE_PEAK;
+          meetingSystemAudioWatchdog.recordChunk(audible);
+          if (audible && !meetingSystemAudioHeard) {
+            // A call is audibly underway, so stop paying the mic capture's disk cost.
             meetingSystemAudioHeard = true;
             dropMeetingMicDiarizationCapture();
           }
         }
 
-        dispatchMeetingAudioBuffer(outboundBuffer, "system");
+        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic, capturedAt);
         return;
       }
 
@@ -8316,24 +8536,46 @@ class IPCHandlers {
 
     const startManagedMeetingSystemAudio = (event, manager, warningLabel, onWarningCode) => {
       const win = BrowserWindow.fromWebContents(event.sender);
-      return manager.start({
-        onChunk: (chunk) => {
-          sendMeetingAudio(chunk, "system");
-        },
-        onError: (error) => {
-          if (win && !win.isDestroyed()) {
-            win.webContents.send("meeting-transcription-error", error.message);
-          }
-        },
-        onWarning: (warning) => {
-          debugLogger.warn(
-            warningLabel,
-            { code: warning.code, message: warning.message },
-            "meeting"
-          );
-          onWarningCode?.(warning.code);
-        },
+      const timeline =
+        manager === this.audioTapManager ? require("./meetingAudioTimeline")() : null;
+      let captureStarted = false;
+      const startCapture = () => {
+        if (captureStarted) timeline?.markRestart();
+        captureStarted = true;
+        return manager.start({
+          onChunk: (chunk) => {
+            if (timeline) {
+              timeline.write(chunk, (buffer, synthetic, capturedAt) =>
+                sendMeetingAudio(buffer, "system", synthetic, capturedAt)
+              );
+            } else {
+              sendMeetingAudio(chunk, "system");
+            }
+          },
+          onError: (error) => {
+            if (win && !win.isDestroyed()) {
+              win.webContents.send("meeting-transcription-error", error.message);
+            }
+          },
+          onWarning: (warning) => {
+            debugLogger.warn(
+              warningLabel,
+              { code: warning.code, message: warning.message },
+              "meeting"
+            );
+            onWarningCode?.(warning.code);
+          },
+        });
+      };
+
+      // Keep the native sample timeline through recovery, including the stall
+      // before detection and the helper restart. New sessions get a new timeline.
+      meetingSystemAudioWatchdog.attachCapture({
+        stop: () => manager.stop(),
+        start: startCapture,
       });
+
+      return startCapture();
     };
 
     const fallBackToMicOnly = async (context) => {
@@ -8347,6 +8589,8 @@ class IPCHandlers {
         });
       }
       this._meetingSystemStreaming = null;
+      // No system capture left to recover, so drop the restart hook with it.
+      stopMeetingSystemAudioWatchdog();
       await stopLiveSpeakerIdentification().catch(() => {});
     };
 
@@ -8361,7 +8605,14 @@ class IPCHandlers {
           await startManagedMeetingSystemAudio(
             event,
             this.audioTapManager,
-            "macOS system audio tap warning"
+            "macOS system audio tap warning",
+            (code) => {
+              // The tap is pinned to the devices it saw at creation, so a route
+              // change can strand it. Restart before the stall window elapses.
+              if (code === "device_invalidated") {
+                meetingSystemAudioWatchdog.reportDeviceInvalidated();
+              }
+            }
           );
           return { systemAudioMode, systemAudioStrategy };
         } catch (error) {
@@ -8435,6 +8686,7 @@ class IPCHandlers {
       }
       this.meetingDetectionEngine?.setUserRecording(false);
       clearMeetingSystemAudioSilenceTimer();
+      stopMeetingSystemAudioWatchdog();
       try {
         if (this.audioTapManager) {
           await this.audioTapManager.stop();
@@ -9394,6 +9646,7 @@ class IPCHandlers {
           transcriptionMode,
           remoteTranscriptionUrl,
           remoteTranscriptionModel,
+          managed,
         }
       ) => {
         const fs = require("fs");
@@ -9417,12 +9670,31 @@ class IPCHandlers {
               cortiTenant: tenant,
             },
             providers: transcriptionProviderBaseUrls(),
+            managed,
             request: { effectiveLanguage: language || undefined },
           });
 
           // Fail closed: a misconfigured route must never fall through to a default.
           if (route.transport === "error") {
-            return { success: false, error: route.message, code: route.code };
+            return {
+              success: false,
+              error: route.message,
+              code: route.code,
+              messageKey: route.messageKey,
+            };
+          }
+
+          if (route.transport === "managed") {
+            if (fs.statSync(realByok).size > route.sizeCapBytes) {
+              return { success: false, error: byokSizeCapError(route.sizeCapBytes) };
+            }
+            const ext = path.extname(realByok).toLowerCase().replace(".", "");
+            const text = await this.executeManagedTranscription(event, route, {
+              audioBuffer: fs.readFileSync(realByok),
+              fileName: path.basename(realByok),
+              contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+            });
+            return { success: true, text };
           }
 
           if (route.transport === "http-batch" && route.provider === "self-hosted") {
@@ -9618,7 +9890,12 @@ class IPCHandlers {
           return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
         } catch (error) {
           debugLogger.error("BYOK audio file transcription error", { error: error.message });
-          return { success: false, error: error.message };
+          return {
+            success: false,
+            error: error.message,
+            code: error.code,
+            messageKey: error.messageKey,
+          };
         }
       }
     );

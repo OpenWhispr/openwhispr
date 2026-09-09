@@ -1,5 +1,9 @@
 import { withSessionRefresh } from "../lib/auth";
 import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
+import {
+  getManagedTranscriptionResolution,
+  isManagedTranscriptionActive,
+} from "./managedTranscription";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
 import type { LocalTranscriptionProvider } from "../types/electron";
 
@@ -8,6 +12,7 @@ export interface FileTranscriptionResult {
   text?: string;
   error?: string;
   code?: string;
+  messageKey?: string;
   diarized?: boolean;
   // The transcript succeeded, but requested speaker labels could not be applied.
   diarizationWarning?: boolean;
@@ -88,7 +93,19 @@ export async function transcribeFile(
   diarize: boolean,
   opts: { requestId?: string; timestamps?: boolean } = {}
 ): Promise<FileTranscriptionResult> {
-  if (cfg.isOpenWhisprCloud) {
+  // Managed enterprise STT outranks every personal lane, OpenWhispr Cloud and
+  // local included: under managed_required no audio may leave the tenant.
+  const managed = getManagedTranscriptionResolution();
+  if (managed?.kind === "error") {
+    return {
+      success: false,
+      error: managed.message,
+      code: managed.code,
+      messageKey: managed.messageKey,
+    };
+  }
+
+  if (!managed && cfg.isOpenWhisprCloud) {
     return withSessionRefresh(async () => {
       const r = await window.electronAPI.transcribeAudioFileCloud!(filePath, opts);
       if (!r.success && r.code) {
@@ -100,7 +117,7 @@ export async function transcribeFile(
     });
   }
 
-  if (cfg.useLocalWhisper) {
+  if (!managed && cfg.useLocalWhisper) {
     const provider = cfg.localTranscriptionProvider as LocalTranscriptionProvider;
     return window.electronAPI.transcribeAudioFile(filePath, {
       provider,
@@ -133,16 +150,23 @@ export async function transcribeFile(
       cortiTenant: cfg.cortiTenant,
     },
     providers: getTranscriptionProviders(),
+    managed,
     request: { effectiveLanguage: cfg.language || undefined },
   });
   if (route.transport === "error") {
-    return { success: false, error: route.message, code: route.code };
+    return {
+      success: false,
+      error: route.message,
+      code: route.code,
+      messageKey: route.messageKey,
+    };
   }
 
   // Self-hosted fields make the handler route to the configured server
   // (fail-closed on misconfiguration) instead of stale BYOK settings.
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
+    managed: managed?.kind === "managed" ? managed : undefined,
     apiKey: cfg.getApiKey(),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
@@ -165,6 +189,7 @@ export function shouldUseByokDiarize(
   cfg: FileTranscriptionConfig,
   diarizationEnabled: boolean
 ): boolean {
+  if (isManagedTranscriptionActive()) return false;
   return (
     diarizationEnabled &&
     !cfg.useLocalWhisper &&

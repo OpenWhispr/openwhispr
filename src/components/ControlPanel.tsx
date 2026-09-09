@@ -48,6 +48,7 @@ import {
   isTranscriptionContextAllowed,
   isUpdateRequiredByOrg,
 } from "../stores/policyRules";
+import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import {
   useIsMeetingMode,
   useIsNarrowWindow,
@@ -600,11 +601,20 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     async (id: number, options?: { isRecover?: boolean }) => {
       try {
         const s = getSettings();
-        if (!isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
+        const managed = getManagedTranscriptionResolution();
+        if (managed?.kind === "error") {
+          toast({
+            title: managed.messageKey ? t(managed.messageKey) : managed.message,
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!managed && !isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
           toast({ title: t("common.managedByOrg"), variant: "default" });
           return;
         }
         const result = await window.electronAPI.retryTranscription(id, {
+          managed,
           useLocalWhisper: s.useLocalWhisper,
           localTranscriptionProvider: s.localTranscriptionProvider,
           cloudTranscriptionMode: s.cloudTranscriptionMode,
@@ -778,7 +788,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         } else {
           toast({
             title: t("controlPanel.history.retryError"),
-            description: result.error,
+            description: result.messageKey ? t(result.messageKey) : result.error,
             variant: "destructive",
           });
         }
@@ -1030,6 +1040,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             {isSidePanelLayout && (
               <div
                 className={platform === "darwin" ? "ml-[84px] mt-[16px]" : "ml-2"}
+                data-no-window-drag=""
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
                 <Button
@@ -1045,7 +1056,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
             <div className="flex-1" />
             {platform !== "darwin" && (
-              <div className="pr-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+              <div
+                className="pr-1"
+                data-no-window-drag=""
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+              >
                 <WindowControls />
               </div>
             )}
@@ -1245,6 +1260,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             className={`absolute z-40 flex h-10 items-center ${
               platform === "darwin" ? "left-21 top-2" : "left-2 top-0"
             }`}
+            data-no-window-drag=""
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             onMouseEnter={sidebarCollapsed ? showSidebarPeek : undefined}
             onMouseLeave={sidebarCollapsed ? leaveSidebarToggle : undefined}

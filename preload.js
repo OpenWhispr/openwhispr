@@ -234,6 +234,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSpaces: () => ipcRenderer.invoke("db-get-spaces"),
   setActiveAccountScope: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("set-active-account-scope", accountId, expectedAuthGeneration),
+  getActiveAccountScope: () => ipcRenderer.invoke("get-active-account-scope"),
+  onActiveAccountScopeChanged: registerListener(
+    "active-account-scope-changed",
+    (callback) => (_event, scope) => callback(scope)
+  ),
   deleteAccountData: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("delete-account-data", accountId, expectedAuthGeneration),
   updateSpace: (id, updates) => ipcRenderer.invoke("db-update-space", id, updates),
@@ -511,6 +516,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getHyprlandConfigStatus: () => ipcRenderer.invoke("get-hyprland-config-status"),
   startWindowDrag: () => ipcRenderer.invoke("start-window-drag"),
   stopWindowDrag: () => ipcRenderer.invoke("stop-window-drag"),
+  startControlPanelDrag: () => ipcRenderer.invoke("start-control-panel-drag"),
+  stopControlPanelDrag: () => ipcRenderer.invoke("stop-control-panel-drag"),
   getMainWindowHorizontalDirection: () =>
     ipcRenderer.invoke("get-main-window-horizontal-direction"),
   onMainWindowHorizontalDirectionChanged: registerListener(
@@ -564,6 +571,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Model management functions
   modelGetAll: () => ipcRenderer.invoke("model-get-all"),
+  modelGetActiveDownloads: () => ipcRenderer.invoke("model-get-active-downloads"),
   modelCheck: (modelId) => ipcRenderer.invoke("model-check", modelId),
   modelDownload: (modelId) => ipcRenderer.invoke("model-download", modelId),
   modelDelete: (modelId) => ipcRenderer.invoke("model-delete", modelId),
@@ -671,6 +679,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, snapshot) => callback(snapshot)
   ),
   clearManagedEnterpriseIdentity: () => ipcRenderer.invoke("clear-managed-enterprise-identity"),
+  managedTranscribe: (data) => ipcRenderer.invoke("managed-transcribe", data),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),
@@ -891,6 +900,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onMeetingSystemAudioDegraded: registerListener(
     "meeting-system-audio-degraded",
+    (callback) => () => callback()
+  ),
+  onMeetingSystemAudioInterrupted: registerListener(
+    "meeting-system-audio-interrupted",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingSystemAudioResumed: registerListener(
+    "meeting-system-audio-resumed",
     (callback) => () => callback()
   ),
 

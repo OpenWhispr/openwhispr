@@ -2,7 +2,10 @@ import type { ModelDefinition } from "../models/ModelRegistry";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { OrgPolicy } from "./policy";
-import type { ManagedEnterpriseConfig } from "./enterpriseIdentity";
+import type {
+  ManagedEnterpriseConfig,
+  ManagedEnterpriseRequestContext,
+} from "./enterpriseIdentity";
 import type { CalendarAvailabilityRequest, CalendarAvailabilityResult } from "./calendar";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
@@ -130,6 +133,12 @@ export interface AuthTokenState {
 export interface AuthTokenMutationResult extends AuthTokenState {
   success: boolean;
   code?: string;
+}
+
+/** The validated account scope the main process holds, as seen by any window. */
+export interface ActiveAccountScope {
+  accountId: string;
+  authGeneration: number;
 }
 
 export interface TranscriptionItem {
@@ -766,6 +775,12 @@ export type SystemAudioMode = "native" | "loopback" | "portal" | "unsupported";
 export type SystemAudioStrategy =
   "native" | "loopback" | "pipewire-loopback" | "wasapi-loopback" | "unsupported";
 
+export interface MeetingSystemAudioInterruption {
+  systemAudioStrategy: SystemAudioStrategy;
+  reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet";
+  recovering: boolean;
+}
+
 export interface SystemAudioAccessResult {
   granted: boolean;
   status: "granted" | "denied" | "not-determined" | "restricted" | "unknown" | "unsupported";
@@ -835,6 +850,17 @@ export interface WhisperDownloadProgressData {
   error?: string;
   code?: string;
   result?: any;
+  sequence?: number;
+}
+
+export interface LocalModelDownloadStatus {
+  modelType: "whisper" | "parakeet" | "llm";
+  modelId: string;
+  phase: "downloading" | "installing";
+  progress: number;
+  downloadedBytes: number;
+  totalBytes: number;
+  sequence: number;
 }
 
 export interface ParakeetCheckResult {
@@ -886,6 +912,7 @@ export interface ParakeetDownloadProgressData {
   total_bytes?: number;
   error?: string;
   code?: string;
+  sequence?: number;
 }
 
 export interface ParakeetTranscriptionResult {
@@ -971,6 +998,7 @@ export type LocalLLMDownloadProgressEvent =
       progress: number;
       downloadedSize: number;
       totalSize: number;
+      sequence?: number;
     }
   | {
       type: "complete";
@@ -978,6 +1006,7 @@ export type LocalLLMDownloadProgressEvent =
       progress: 100;
       downloadedSize?: number;
       totalSize?: number;
+      sequence?: number;
     }
   | {
       type: "error";
@@ -985,6 +1014,7 @@ export type LocalLLMDownloadProgressEvent =
       error: string;
       code?: string;
       details?: unknown;
+      sequence?: number;
     };
 
 export interface ConversationPreview {
@@ -1308,12 +1338,19 @@ declare global {
           remoteTranscriptionType?: SelfHostedType;
           remoteTranscriptionUrl?: string;
           remoteTranscriptionModel?: string;
+          managed?: {
+            kind: "managed";
+            provider: "azure";
+            deployment: string;
+            context: ManagedEnterpriseRequestContext;
+          };
         }
       ) => Promise<{
         success: boolean;
         transcription?: TranscriptionItem;
         error?: string;
         code?: TranscriptionErrorCode;
+        messageKey?: string;
       }>;
       updateTranscriptionText: (
         id: number,
@@ -1439,6 +1476,10 @@ declare global {
         accountId: string | null,
         expectedAuthGeneration?: number
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      getActiveAccountScope?: () => Promise<ActiveAccountScope | null>;
+      onActiveAccountScopeChanged?: (
+        callback: (scope: ActiveAccountScope | null) => void
+      ) => () => void;
       deleteAccountData?: (
         accountId: string,
         expectedAuthGeneration: number
@@ -1739,6 +1780,7 @@ declare global {
 
       // Local AI model management
       modelGetAll: () => Promise<LocalLLMModelStatus[]>;
+      modelGetActiveDownloads: () => Promise<LocalModelDownloadStatus[]>;
       modelCheck: (modelId: string) => Promise<boolean>;
       modelDownload: (modelId: string) => Promise<{
         success: boolean;
@@ -1872,6 +1914,8 @@ declare global {
       getPlatform: () => string;
       startWindowDrag: () => Promise<void>;
       stopWindowDrag: () => Promise<void>;
+      startControlPanelDrag: () => Promise<void>;
+      stopControlPanelDrag: () => Promise<void>;
       setMainWindowInteractivity: (interactive: boolean) => Promise<void>;
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
       resizeMainWindow: (
@@ -2112,6 +2156,7 @@ declare global {
         code?: string;
         error?: string;
         enforcementRequired?: boolean;
+        enforcedScopes?: string[];
       }>;
       onManagedEnterpriseConfigChanged?: (
         callback: (snapshot: {
@@ -2121,9 +2166,18 @@ declare global {
           config: ManagedEnterpriseConfig | null;
           code: string | null;
           enforcementRequired?: boolean;
+          enforcedScopes?: string[];
         }) => void
       ) => () => void;
       clearManagedEnterpriseIdentity?: () => Promise<void>;
+      managedTranscribe?: (data: {
+        audioBuffer: ArrayBuffer;
+        fileName: string;
+        mimeType: string;
+        language?: string;
+        prompt?: string;
+        managed: { provider: "azure"; context: ManagedEnterpriseRequestContext };
+      }) => Promise<{ text?: string; error?: string; code?: string; messageKey?: string }>;
 
       // Dictation key persistence (file-based for reliable startup)
       getDictationKey?: () => Promise<string | null>;
@@ -2406,6 +2460,12 @@ declare global {
         transcriptionMode?: string;
         remoteTranscriptionUrl?: string;
         remoteTranscriptionModel?: string;
+        managed?: {
+          kind: "managed";
+          provider: "azure";
+          deployment: string;
+          context: ManagedEnterpriseRequestContext;
+        };
       }) => Promise<{
         success: boolean;
         text?: string;
@@ -2839,6 +2899,10 @@ declare global {
         callback: (data: { systemAudioStrategy: SystemAudioStrategy }) => void
       ) => () => void;
       onMeetingSystemAudioDegraded?: (callback: () => void) => () => void;
+      onMeetingSystemAudioInterrupted?: (
+        callback: (data: MeetingSystemAudioInterruption) => void
+      ) => () => void;
+      onMeetingSystemAudioResumed?: (callback: () => void) => () => void;
 
       // Speaker diarization
       downloadDiarizationModels?: () => Promise<{ success: boolean; error?: string }>;

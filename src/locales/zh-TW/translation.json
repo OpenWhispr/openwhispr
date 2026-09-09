@@ -201,7 +201,10 @@
     "skip": "略過",
     "policyAiProcessingRestricted": "AI 處理已被您的組織限制。",
     "policyAgentRestricted": "AI 代理的使用已被您的組織限制。",
-    "policyTranscriptionRestricted": "轉錄已被您的組織限制。"
+    "policyTranscriptionRestricted": "轉錄已被您的組織限制。",
+    "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
+    "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
+    "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。"
   },
   "onboarding": {
     "rehaul": {
@@ -903,7 +906,10 @@
         "chunkLoss": "網路問題導致錄音大部分遺失。請從歷史記錄中重新轉錄。",
         "agentReasoningFailed": "語音助理無法處理該指令，已改為插入原始逐字稿。",
         "screenContextSkipped": "截圖無法傳送，因此已在沒有螢幕內容的情況下執行你的指令。",
-        "customEndpointInvalid": "自訂轉錄端點未設定或其 URL 無效。請在「設定 → 語音轉文字」中更新。"
+        "customEndpointInvalid": "自訂轉錄端點未設定或其 URL 無效。請在「設定 → 語音轉文字」中更新。",
+        "managedTranscriptionUnavailable": "託管轉錄目前無法使用。請稍候再試。",
+        "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
+        "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。"
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
@@ -2170,7 +2176,9 @@
         "openwhisprDesc": "準確可靠，無需設定。",
         "providersDesc": "使用你自己的 API Key。",
         "localDesc": "裝置端模型，完全私密。",
-        "selfHostedDesc": "你的伺服器，在你的網路上。"
+        "selfHostedDesc": "你的伺服器，在你的網路上。",
+        "enterprise": "企業雲端",
+        "enterpriseDesc": "音訊會傳送到貴組織自己的雲端。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "準確可靠，無需設定。",
@@ -2195,6 +2203,10 @@
         "switchedSelfHosted": {
           "title": "自架主機",
           "description": "使用你自己的伺服器。"
+        },
+        "switchedEnterprise": {
+          "title": "已選擇企業雲端",
+          "description": "聽寫現在使用貴組織管理的轉錄部署。"
         }
       },
       "gpuDevice": {
@@ -2252,7 +2264,8 @@
             "info": "將每個片段延伸到下一個片段的音訊量，避免拼接時出現突兀截斷。"
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "貴組織僅允許企業雲端轉錄，尚不支援會議錄音。"
     },
     "intelligence": {
       "gpuDevice": {
@@ -2981,6 +2994,18 @@
       "systemAudioSilent": {
         "title": "尚未偵測到會議音訊",
         "description": "到目前為止，只有您的麥克風收到聲音。正在進行視訊通話？請檢查會議音訊是否正在此電腦上播放且未被靜音。正在進行現場錄音？您可以忽略此提示——您的麥克風會收錄房間內的聲音。"
+      },
+      "systemAudioInterrupted": {
+        "title": "會議音訊已中斷",
+        "description": "系統音訊擷取已停止，正在重新啟動。逐字稿中可能會缺少幾秒鐘的通話內容。"
+      },
+      "systemAudioStopped": {
+        "title": "會議音訊已停止",
+        "description": "OpenWhispr 已無法擷取其他與會者的聲音。請停止錄製後重新開始，或檢查您的音訊輸出裝置。"
+      },
+      "systemAudioQuiet": {
+        "title": "會議音訊已靜默",
+        "description": "已有幾分鐘未偵測到任何人聲。如果通話仍在進行，請檢查您的聲音輸出裝置。"
       }
     },
     "meetingPill": {
@@ -3169,6 +3194,7 @@
     "wordsReady_other": "{{count}} 個詞語就緒",
     "import": "匯入",
     "yourDictionary": "你的詞典",
+    "promptLimitNotice": "字典目前共 {{chars}} 個字元。Groq 與 Whisper 模型只會讀取其中最後幾百個字元，因此清單越短效果越好；其他模型會收到完整清單。",
     "exportDictionary": "匯出詞典",
     "exportFailed": "匯出失敗",
     "editWord": "編輯 {{word}}",
