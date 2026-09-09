@@ -1,0 +1,41 @@
+name: Update WinGet package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-winget:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get release version
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            version="$RELEASE_TAG"
+          else
+            version=$(gh release view --json tagName -q .tagName)
+          fi
+          version="${version#v}"
+          if ! echo "$version" | grep -qP '^\d+\.\d+\.\d+$'; then
+            echo "::error::Invalid version format: $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Submit to winget-pkgs
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: OpenWhispr.OpenWhispr
+          release-tag: v${{ steps.release.outputs.version }}
+          installers-regex: 'OpenWhispr-Setup-.*\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}
