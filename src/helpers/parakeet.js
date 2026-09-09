@@ -90,7 +90,7 @@ class ParakeetManager {
       await this.logDependencyStatus();
 
       const { localTranscriptionProvider, parakeetModel, language } = settings;
-      const capability = getParakeetCapability();
+      const capability = getParakeetCapability({ modelName: parakeetModel });
 
       if (
         capability.supported &&
@@ -197,7 +197,7 @@ class ParakeetManager {
 
   async startServer(modelName, language) {
     this.validateModelName(modelName);
-    const capability = getParakeetCapability();
+    const capability = getParakeetCapability({ modelName });
     if (!capability.supported) {
       return { success: false, code: capability.code, reason: capability.message };
     }
@@ -228,7 +228,7 @@ class ParakeetManager {
 
   async transcribeLocalParakeet(audioBlob, options = {}) {
     const model = options.model || "orukeet-v0.1.0-q8";
-    assertParakeetSupported();
+    assertParakeetSupported({ modelName: model });
     const serverAvailable = this.serverManager.isAvailable(getModelRuntime(model));
 
     debugLogger.logSTTPipeline("transcribeLocalParakeet - start", {
@@ -321,7 +321,7 @@ class ParakeetManager {
 
   async downloadParakeetModel(modelName, progressCallback = null) {
     this.validateModelName(modelName);
-    assertParakeetSupported();
+    assertParakeetSupported({ modelName });
     const modelConfig = getParakeetModelConfig(modelName);
 
     const modelPath = this.getModelPath(modelName);

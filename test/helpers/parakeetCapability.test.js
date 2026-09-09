@@ -39,3 +39,13 @@ test("Parakeet capability gating does not change Windows or Linux", () => {
     });
   }
 });
+
+test("Orukeet keeps its native runtime on macOS below the ONNX floor", () => {
+  const options = { platform: "darwin", systemVersion: "14.8" };
+  assert.deepEqual(getParakeetCapability({ ...options, modelName: "orukeet-v0.1.0-q8" }), {
+    supported: true,
+  });
+  for (const modelName of ["parakeet-tdt-0.6b-v3", "cohere-transcribe-03-2026", "unknown-model"]) {
+    assert.equal(getParakeetCapability({ ...options, modelName }).supported, false);
+  }
+});

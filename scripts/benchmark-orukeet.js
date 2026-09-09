@@ -102,7 +102,17 @@ async function transcribe() {
   } finally {
     await manager.stopServer();
     fs.writeFileSync(args.output, JSON.stringify(receipt, null, 2) + "\n");
-    fs.rmSync(profile, { recursive: true, force: true });
+    // Chromium holds the Electron profile open on Windows until app exit.
+    // Remove the model cache now; the runner owns the remaining temporary profile.
+    fs.rmSync(
+      realElectron && process.platform === "win32" ? path.join(profile, "cache") : profile,
+      {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100,
+      }
+    );
     if (realElectron) realElectron.app.quit();
   }
 })().catch((error) => {

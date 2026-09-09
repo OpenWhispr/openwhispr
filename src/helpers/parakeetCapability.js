@@ -1,3 +1,5 @@
+const modelRegistryData = require("../models/modelRegistryData.json");
+
 const PARAKEET_MINIMUM_MACOS_VERSION = "15.5";
 const PARAKEET_UNSUPPORTED_OS_CODE = "PARAKEET_UNSUPPORTED_OS";
 
@@ -14,7 +16,12 @@ function compareVersions(left, right) {
   return 0;
 }
 
-function getParakeetCapability({ platform = process.platform, systemVersion } = {}) {
+function getParakeetCapability({ platform = process.platform, systemVersion, modelName } = {}) {
+  // The ONNX Runtime floor applies to sherpa models. Orukeet uses a separately
+  // built native SDK, whose loader and device checks run when its worker starts.
+  if (modelRegistryData.parakeetModels[modelName]?.engine === "nemo-speech") {
+    return { supported: true };
+  }
   if (platform !== "darwin") return { supported: true };
 
   const detectedVersion =

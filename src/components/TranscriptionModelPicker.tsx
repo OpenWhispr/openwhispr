@@ -466,8 +466,17 @@ export default function TranscriptionModelPicker({
     // the disabled entry keeps the UI usable, while committing "whisper"
     // is what actually reroutes transcription on unsupported Macs.
     if (isSherpaLocalProvider(internalLocalProvider)) setInternalLocalProvider("whisper");
-    if (isSherpaLocalProvider(selectedLocalProvider)) onLocalProviderSelect?.("whisper");
-  }, [internalLocalProvider, onLocalProviderSelect, parakeetCapability, selectedLocalProvider]);
+    if (
+      isSherpaLocalProvider(getSelectedASROrganization(selectedLocalProvider, selectedLocalModel))
+    )
+      onLocalProviderSelect?.("whisper");
+  }, [
+    internalLocalProvider,
+    onLocalProviderSelect,
+    parakeetCapability,
+    selectedLocalProvider,
+    selectedLocalModel,
+  ]);
 
   const localModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const parakeetModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
