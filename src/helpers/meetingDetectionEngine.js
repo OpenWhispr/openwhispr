@@ -89,14 +89,16 @@ class MeetingDetectionEngine {
   }
 
   _bindListeners() {
-    // Process detection is context-only — track running apps but don't trigger notifications.
-    // This avoids false positives from apps like FaceTime running in the background.
+    // Process detection is context-only — a running app never prompts by itself
+    // (FaceTime idles in the background), but it corroborates device activity
+    // the mic detector could not attribute to a process.
     this.meetingProcessDetector.on("meeting-process-detected", (data) => {
       debugLogger.info(
         "Meeting app running (context only)",
         { processKey: data.processKey, appName: data.appName },
         "meeting"
       );
+      this.audioActivityDetector.notifyMeetingAppsChanged();
     });
 
     this.meetingProcessDetector.on("meeting-process-ended", (data) => {

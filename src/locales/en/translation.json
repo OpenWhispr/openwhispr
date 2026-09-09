@@ -202,7 +202,10 @@
     "skip": "Skip",
     "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
     "policyAgentRestricted": "AI assistant use is restricted by your organization.",
-    "policyTranscriptionRestricted": "Transcription is restricted by your organization."
+    "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
+    "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
+    "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
+    "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator."
   },
   "onboarding": {
     "rehaul": {
@@ -413,7 +416,7 @@
         "download": "Download",
         "downloadingShort": "Downloading",
         "selected": "Selected",
-        "selectModel": "Select model",
+        "use": "Use",
         "downloadInProgress": "Download in progress",
         "cancelDownload": "Cancel download of {{model}}",
         "downloads": "Model downloads",
@@ -662,7 +665,8 @@
       "rawTranscript": "Raw Transcript",
       "clearAll": "Clear all",
       "clearAllTitle": "Clear All Transcriptions",
-      "clearAllDescription": "All transcriptions and audio files will be permanently removed.",
+      "clearAllDescription": "All transcriptions, audio files, and Insights counters will be permanently removed from this device and your account.",
+      "clearAllDescriptionDevice": "All transcriptions, audio files, and Insights counters will be permanently removed from this device. Counters already synced to an account are not affected.",
       "clearAllSuccess": "History cleared",
       "clearAllErrorTitle": "Couldn't clear history",
       "clearAllErrorDescription": "Something went wrong. Please try again.",
@@ -903,7 +907,10 @@
         "chunkLoss": "A network problem lost too much of the recording. Re-transcribe it from History.",
         "agentReasoningFailed": "Your voice assistant couldn't process the command — the raw transcript was inserted instead.",
         "screenContextSkipped": "The screenshot couldn't be sent, so your command ran without screen context.",
-        "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text."
+        "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text.",
+        "managedTranscriptionUnavailable": "Managed transcription is not available right now. Try again in a moment.",
+        "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
+        "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator."
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",
@@ -2388,6 +2395,10 @@
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
+      "insightsSync": "Sync personal Insights",
+      "insightsSyncDescription": "Sync word counts, the date and exact time of each dictation, durations, and model types across your devices. Transcript content is never included. When you're signed in, clearing history also removes these counters from this device and your account.",
+      "insightsSyncRequiresAccount": "Sign in to sync content-free Insights data across your devices.",
+      "insightsSyncRequiresHistory": "Turn on data retention to record Insights before syncing them across your devices.",
       "audioRetention": "Audio Retention",
       "audioRetentionDescription": "Store dictation audio locally for re-transcription and download. Files are automatically deleted after the retention period. Meeting audio is never stored.",
       "audioRetentionDisabled": "Disabled",
@@ -2402,7 +2413,7 @@
       "dataRetention": "Data Retention",
       "dataRetentionDescription": "Store transcriptions and audio locally in your history. When disabled, transcriptions are pasted but not saved.",
       "transcriptRetention": "Transcript Retention",
-      "transcriptRetentionDescription": "Automatically delete saved transcriptions and their audio after this period.",
+      "transcriptRetentionDescription": "Automatically delete saved transcriptions, their audio, and their Insights counters after this period.",
       "transcriptRetentionForever": "Forever",
       "hoursAgo": "{{count}}h ago",
       "justNow": "just now",
@@ -2452,7 +2463,9 @@
         "openwhisprDesc": "Reliable accuracy. No setup needed.",
         "providersDesc": "Bring your own API key.",
         "localDesc": "On-device models. Fully private.",
-        "selfHostedDesc": "Your own server on your network."
+        "selfHostedDesc": "Your own server on your network.",
+        "enterprise": "Enterprise cloud",
+        "enterpriseDesc": "Audio goes to your organization's own cloud."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
@@ -2477,6 +2490,10 @@
         "switchedSelfHosted": {
           "title": "Self-Hosted",
           "description": "Using your own server."
+        },
+        "switchedEnterprise": {
+          "title": "Enterprise cloud selected",
+          "description": "Dictation now uses the transcription deployment your organization manages."
         }
       },
       "gpuDevice": {
@@ -2534,7 +2551,8 @@
             "info": "Audio carried from each segment into the next to avoid abrupt cuts when concatenating."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet."
     },
     "intelligence": {
       "gpuDevice": {
@@ -2707,6 +2725,7 @@
   },
   "sidebar": {
     "home": "Home",
+    "insights": "Insights",
     "notes": "Notes",
     "upload": "Upload",
     "dictionary": "Dictionary",
@@ -2728,6 +2747,45 @@
     "chat": "Chat",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar"
+  },
+  "insights": {
+    "title": "Insights",
+    "description": "A private view of your dictation habits and momentum.",
+    "wordsSpoken": "Words spoken",
+    "currentStreak": "Current streak",
+    "wordsPerMinute": "Words per minute",
+    "dictations": "Dictations",
+    "allTime": "All time",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "longestStreak_one": "Longest: {{count}} day",
+    "longestStreak_other": "Longest: {{count}} days",
+    "wpmCoverage": "Based on {{count}}% of measured words",
+    "activity": "Speaking activity",
+    "activityDescription": "Words spoken over the last 6 months",
+    "activityLabel": "6-month speaking activity heatmap",
+    "activityLess": "Less",
+    "activityMore": "More",
+    "dayTooltip_one": "{{date}}: {{count}} word",
+    "dayTooltip_other": "{{date}}: {{count}} words",
+    "dataRetentionDisabled": "Data retention is off, so new dictations aren't counted in Insights — not on this device and not in your account. Counters already synced stay in your account.",
+    "onDevice": "On this device",
+    "synced": "Synced across devices",
+    "syncFallback": "Showing device data — sync unavailable",
+    "syncPrompt": "Sync content-free counters to combine local and cloud activity across devices.",
+    "enableSync": "Enable sync",
+    "claimTitle": "Include earlier dictations?",
+    "claimDescription_one": "{{count}} dictation on this device was recorded before you signed in. Including it sends only word counts, the date and exact time it happened, its duration, and the model type — never transcript content.",
+    "claimDescription_other": "{{count}} dictations on this device were recorded before you signed in. Including them sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
+    "claimInclude": "Include",
+    "claimSkip": "Not now",
+    "enableTitle": "Turn on Insights sync?",
+    "enableConfirm": "Turn on sync",
+    "enableDescription_one": "{{count}} dictation already recorded on this device will be uploaded to your account. Insights sync sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
+    "enableDescription_other": "{{count}} dictations already recorded on this device will be uploaded to your account. Insights sync sends only word counts, the date and exact time each one happened, durations, and model types — never transcript content.",
+    "emptyTitle": "No dictations yet",
+    "emptyBody": "Start dictating and your words, streaks, and daily activity will show up here.",
+    "loadError": "Insights couldn't be read from this device."
   },
   "workspaces": {
     "switcher": {
@@ -3185,6 +3243,18 @@
       "systemAudioSilent": {
         "title": "No meeting audio detected yet",
         "description": "Only your microphone has picked up sound so far. On a video call? Check that the meeting audio is playing on this computer and isn't muted. Recording in person? You can ignore this — your microphone captures the room."
+      },
+      "systemAudioInterrupted": {
+        "title": "Meeting audio interrupted",
+        "description": "System audio capture stopped and is restarting. A few seconds of the call may be missing from the transcript."
+      },
+      "systemAudioStopped": {
+        "title": "Meeting audio stopped",
+        "description": "OpenWhispr is no longer capturing the other participants. Stop and start the recording again, or check your sound output device."
+      },
+      "systemAudioQuiet": {
+        "title": "Meeting audio has gone quiet",
+        "description": "No one has been heard for a few minutes. If the call is still going, check your sound output device."
       }
     },
     "meetingPill": {
@@ -3374,6 +3444,7 @@
     "wordsReady_other": "{{count}} words ready",
     "import": "Import",
     "yourDictionary": "Your dictionary",
+    "promptLimitNotice": "Your dictionary is {{chars}} characters. Groq and Whisper models read only the last few hundred characters of it, so a shorter list works better there. Other models get the full list.",
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
     "editWord": "Edit {{word}}",

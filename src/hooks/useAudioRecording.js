@@ -13,6 +13,7 @@ import {
   isScreenContextAllowed,
   isTranscriptionContextAllowed,
 } from "../stores/policyRules";
+import { isManagedTranscriptionActive } from "../services/managedTranscription";
 import { usePolicyStore } from "../stores/policyStore";
 import { getOnboardingDemoKind } from "../utils/onboardingDemo";
 import {
@@ -118,7 +119,8 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!audioManagerRef.current) return false;
         const policyState = usePolicyStore.getState();
         if (
-          !isTranscriptionContextAllowed(policyState, getSettings(), "dictation") ||
+          (!isManagedTranscriptionActive() &&
+            !isTranscriptionContextAllowed(policyState, getSettings(), "dictation")) ||
           (voiceAgentRequested && !isAgentAllowed(policyState))
         ) {
           toast({ title: t("common.managedByOrg"), variant: "default" });
@@ -538,6 +540,13 @@ export const useAudioRecording = (toast, options = {}) => {
           const persistencePromise = audioManagerRef.current
             .saveTranscription(result.text, result.rawText ?? result.text, {
               clientTranscriptionId: result.clientTranscriptionId,
+              // Spread rather than set: a result with no analytics timestamp
+              // must not gain the key as undefined, matching how audioManager
+              // carries this field and keeping the options object exactly what
+              // callers without Insights data expect.
+              ...(result.analyticsOccurredAt
+                ? { analyticsOccurredAt: result.analyticsOccurredAt }
+                : {}),
             })
             .then(
               (persisted) => {

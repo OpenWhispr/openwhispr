@@ -189,7 +189,9 @@ export default function InferenceConfigEditor({
             <p className="text-sm font-medium">
               {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{managed.message}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {managed.messageKey ? t(managed.messageKey) : managed.message}
+            </p>
           </div>
         </div>
       </div>

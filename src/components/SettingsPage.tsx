@@ -18,6 +18,7 @@ import {
   Key,
   Cpu,
   Network,
+  ShieldCheck,
   Sparkles,
   AlertTriangle,
   Loader2,
@@ -62,6 +63,7 @@ import {
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { useSettings } from "../hooks/useSettings";
 import { useDialogs } from "../hooks/useDialogs";
+import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
@@ -122,6 +124,7 @@ import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import {
   clearMissingLocalModelSelections,
+  TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
 } from "../stores/settingsStore";
@@ -134,6 +137,7 @@ import {
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
   isCloudBackupAllowed,
+  isEnterpriseTranscriptionOfferable,
   lockedLocalHistoryValue,
   maxAudioRetentionDays,
 } from "../stores/policyRules";
@@ -147,7 +151,8 @@ import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
-import { getTranscriptionProvider } from "../models/ModelRegistry";
+import { enterpriseProviderName, getTranscriptionProvider } from "../models/ModelRegistry";
+import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
 export type SettingsSectionType =
@@ -546,6 +551,15 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
+  const policySnapshot = usePolicySnapshot();
+  const enterpriseTranscriptionSetupMode = useSettingsStore(
+    (s) => s.enterpriseTranscriptionSetupMode
+  );
+  const setEnterpriseTranscriptionSetupMode = useSettingsStore(
+    (s) => s.setEnterpriseTranscriptionSetupMode
+  );
+  const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
+  const managedAvailable = useManagedScopeResolution("transcription", "managed");
   const {
     modes: transcriptionModes,
     effectiveMode: effectiveTranscriptionMode,
@@ -578,10 +592,23 @@ function TranscriptionSection({
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
       },
+      ...(isEnterpriseTranscriptionOfferable(policySnapshot)
+        ? [
+            {
+              id: "enterprise" as const,
+              label: t("settingsPage.transcription.modes.enterprise"),
+              description: t("settingsPage.transcription.modes.enterpriseDesc"),
+              icon: <ShieldCheck className="w-4 h-4" />,
+            },
+          ]
+        : []),
     ],
     "transcription",
     transcriptionMode,
-    { byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS }
+    {
+      byokProviders: TRANSCRIPTION_POLICY_PROVIDER_IDS,
+      enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
+    }
   );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
@@ -594,12 +621,14 @@ function TranscriptionSection({
     setUseLocalWhisper(mode === "local");
     updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
     setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
 
     const toastKey = {
       openwhispr: "switchedCloud",
       providers: "switchedProviders",
       local: "switchedLocal",
       "self-hosted": "switchedSelfHosted",
+      enterprise: "switchedEnterprise",
     }[mode];
     toast({
       title: t(`settingsPage.transcription.toasts.${toastKey}.title`),
@@ -679,28 +708,113 @@ function TranscriptionSection({
     />
   );
 
+  // Local decoding still serves meetings and uploads under a managed-config
+  // error, so this stays a card alongside the rest of the section (including
+  // the GPU selector below) instead of an early return that hides it.
+  const errorCard =
+    managed.kind === "error" ? (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3" role="alert">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div>
+            <p className="text-sm font-medium">
+              {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {managed.messageKey ? t(managed.messageKey) : managed.message}
+            </p>
+          </div>
+        </div>
+      </div>
+    ) : null;
+
+  const managedCard =
+    managed.kind === "managed" ? (
+      <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
+        <div className="flex items-start gap-2.5">
+          <div className="rounded-md bg-primary/10 p-1.5 text-primary">
+            <ShieldCheck className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">
+              {t("settingsPage.aiModels.managedEnterprise.title")}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {enterpriseProviderName(managed.provider)} ·{" "}
+              <span className="font-mono">{managed.model}</span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("settingsPage.aiModels.managedEnterprise.description")}
+            </p>
+          </div>
+        </div>
+        {managed.mode !== "managed_required" && managed.allowManualSetup && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setEnterpriseTranscriptionSetupMode("manual")}
+            >
+              {t("settingsPage.aiModels.managedEnterprise.usePersonalSetup")}
+            </Button>
+          </div>
+        )}
+      </div>
+    ) : null;
+
   return (
     <div className="space-y-4">
-      <InferenceModeSelector
-        modes={transcriptionModes}
-        activeMode={effectiveTranscriptionMode}
-        onSelect={handleTranscriptionModeSelect}
-      />
+      {errorCard}
+      {managedCard}
+      {!errorCard && !managedCard && (
+        <>
+          {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  {t("settingsPage.aiModels.managedEnterprise.availableTitle")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settingsPage.aiModels.managedEnterprise.availableDescription", {
+                    provider: enterpriseProviderName(managedAvailable.provider),
+                  })}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setEnterpriseTranscriptionSetupMode("managed")}
+              >
+                {t("settingsPage.aiModels.managedEnterprise.useManaged")}
+              </Button>
+            </div>
+          )}
+          <InferenceModeSelector
+            modes={transcriptionModes}
+            activeMode={effectiveTranscriptionMode}
+            onSelect={handleTranscriptionModeSelect}
+          />
 
-      {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
-      {previewAvailable && renderPreviewToggle()}
+          {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+          {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+          {previewAvailable && renderPreviewToggle()}
 
-      {effectiveTranscriptionMode === "self-hosted" && (
-        <SelfHostedPanel
-          service="transcription"
-          url={remoteTranscriptionUrl}
-          onUrlChange={setRemoteTranscriptionUrl}
-          model={remoteTranscriptionModel}
-          onModelChange={setRemoteTranscriptionModel}
-        />
+          {effectiveTranscriptionMode === "self-hosted" && (
+            <SelfHostedPanel
+              service="transcription"
+              url={remoteTranscriptionUrl}
+              onUrlChange={setRemoteTranscriptionUrl}
+              model={remoteTranscriptionModel}
+              onModelChange={setRemoteTranscriptionModel}
+            />
+          )}
+        </>
       )}
 
+      {/* Local decoding still serves meetings and uploads, so the GPU choice stays reachable. */}
       <GpuDeviceSelector purpose="transcription" />
     </div>
   );
@@ -1138,6 +1252,8 @@ export default function SettingsPage({
     setPanelStartPosition,
     cloudBackupEnabled,
     setCloudBackupEnabled,
+    insightsSyncEnabled,
+    setInsightsSyncEnabled,
     telemetryEnabled,
     setTelemetryEnabled,
     audioRetentionDays,
@@ -1697,6 +1813,12 @@ export default function SettingsPage({
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
   const { isSignedIn, isLoaded, user, refetch } = useAuth();
+  const {
+    canToggleSync: canToggleInsightsSync,
+    enableInsightsSync,
+    optInDialog: insightsOptInDialog,
+    syncAllowedByPolicy: insightsSyncAllowedByPolicy,
+  } = useInsightsSyncOptIn();
   // Signed out there is nothing to load and the plan grid is purely
   // promotional; signed in, no card may claim a plan until usage confirms one.
   const planStateKnown = !isSignedIn || usage?.status === "success";
@@ -4072,6 +4194,38 @@ EOF`,
               <SettingsPanel>
                 <SettingsPanelRow>
                   <SettingsRow
+                    label={t("settingsPage.privacy.insightsSync")}
+                    description={
+                      !isSignedIn
+                        ? t("settingsPage.privacy.insightsSyncRequiresAccount")
+                        : !insightsSyncAllowedByPolicy
+                          ? t("common.managedByOrg")
+                          : effectiveDataRetentionEnabled
+                            ? t("settingsPage.privacy.insightsSyncDescription")
+                            : t("settingsPage.privacy.insightsSyncRequiresHistory")
+                    }
+                  >
+                    {/* With history off nothing is counted anywhere: this
+                        device records no counter, and the cloud writes none
+                        either, because analyticsSyncEnabled withholds the
+                        localDate its analytics write requires. Turning this on
+                        could therefore only promise a sync that never happens —
+                        but an already-on toggle must stay switchable off. */}
+                    <Toggle
+                      checked={insightsSyncEnabled}
+                      disabled={
+                        !isSignedIn ||
+                        !canToggleInsightsSync ||
+                        (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
+                      }
+                      onChange={(enabled) =>
+                        enabled ? enableInsightsSync() : setInsightsSyncEnabled(false)
+                      }
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
                     label={t("settingsPage.privacy.usageAnalytics")}
                     description={t("settingsPage.privacy.usageAnalyticsDescription")}
                   >
@@ -4578,6 +4732,8 @@ EOF`,
 
   return (
     <>
+      {insightsOptInDialog}
+
       <ConfirmDialog
         open={confirmDialog.open}
         onOpenChange={(open) => !open && hideConfirmDialog()}

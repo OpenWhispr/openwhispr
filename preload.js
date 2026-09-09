@@ -126,6 +126,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-save-transcription", text, rawText, options),
   getTranscriptions: (limit, options) =>
     ipcRenderer.invoke("db-get-transcriptions", limit, options),
+  recordAnalyticsEvent: (input) => ipcRenderer.invoke("analytics-record-event", input),
+  getAnalyticsSummary: () => ipcRenderer.invoke("analytics-get-summary"),
+  getPendingAnalyticsEvents: (limit) => ipcRenderer.invoke("analytics-get-pending", limit),
+  markAnalyticsEventsSynced: (eventIds) => ipcRenderer.invoke("analytics-mark-synced", eventIds),
+  getPendingAnalyticsDeletes: (limit) => ipcRenderer.invoke("analytics-get-pending-deletes", limit),
+  hardDeleteAnalyticsEvents: (eventIds) => ipcRenderer.invoke("analytics-hard-delete", eventIds),
+  getPendingAnalyticsClear: () => ipcRenderer.invoke("analytics-get-pending-clear"),
+  completeAnalyticsClear: (clearedThrough) =>
+    ipcRenderer.invoke("analytics-complete-clear", clearedThrough),
+  countUnclaimedAnalyticsEvents: () => ipcRenderer.invoke("analytics-count-unclaimed"),
+  countAnalyticsEventsAwaitingUpload: () =>
+    ipcRenderer.invoke("analytics-count-awaiting-upload"),
+  claimAnonymousAnalyticsEvents: () => ipcRenderer.invoke("analytics-claim-anonymous"),
   clearTranscriptions: () => ipcRenderer.invoke("db-clear-transcriptions"),
   deleteTranscription: (id) => ipcRenderer.invoke("db-delete-transcription", id),
 
@@ -215,6 +228,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSpaces: () => ipcRenderer.invoke("db-get-spaces"),
   setActiveAccountScope: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("set-active-account-scope", accountId, expectedAuthGeneration),
+  getActiveAccountScope: () => ipcRenderer.invoke("get-active-account-scope"),
+  onActiveAccountScopeChanged: registerListener(
+    "active-account-scope-changed",
+    (callback) => (_event, scope) => callback(scope)
+  ),
   deleteAccountData: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("delete-account-data", accountId, expectedAuthGeneration),
   updateSpace: (id, updates) => ipcRenderer.invoke("db-update-space", id, updates),
@@ -345,6 +363,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const listener = (_event, transcription) => callback?.(transcription);
     ipcRenderer.on("transcription-updated", listener);
     return () => ipcRenderer.removeListener("transcription-updated", listener);
+  },
+  onAnalyticsChanged: (callback) => {
+    const listener = () => callback?.();
+    ipcRenderer.on("analytics-changed", listener);
+    return () => ipcRenderer.removeListener("analytics-changed", listener);
   },
 
   // BYOK API keys (get/save for every provider in the secretKeys manifest)
@@ -484,6 +507,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getHyprlandConfigStatus: () => ipcRenderer.invoke("get-hyprland-config-status"),
   startWindowDrag: () => ipcRenderer.invoke("start-window-drag"),
   stopWindowDrag: () => ipcRenderer.invoke("stop-window-drag"),
+  startControlPanelDrag: () => ipcRenderer.invoke("start-control-panel-drag"),
+  stopControlPanelDrag: () => ipcRenderer.invoke("stop-control-panel-drag"),
   getMainWindowHorizontalDirection: () =>
     ipcRenderer.invoke("get-main-window-horizontal-direction"),
   onMainWindowHorizontalDirectionChanged: registerListener(
@@ -537,6 +562,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Model management functions
   modelGetAll: () => ipcRenderer.invoke("model-get-all"),
+  modelGetActiveDownloads: () => ipcRenderer.invoke("model-get-active-downloads"),
   modelCheck: (modelId) => ipcRenderer.invoke("model-check", modelId),
   modelDownload: (modelId) => ipcRenderer.invoke("model-download", modelId),
   modelDelete: (modelId) => ipcRenderer.invoke("model-delete", modelId),
@@ -644,6 +670,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, snapshot) => callback(snapshot)
   ),
   clearManagedEnterpriseIdentity: () => ipcRenderer.invoke("clear-managed-enterprise-identity"),
+  managedTranscribe: (data) => ipcRenderer.invoke("managed-transcribe", data),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),
@@ -864,6 +891,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onMeetingSystemAudioDegraded: registerListener(
     "meeting-system-audio-degraded",
+    (callback) => () => callback()
+  ),
+  onMeetingSystemAudioInterrupted: registerListener(
+    "meeting-system-audio-interrupted",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingSystemAudioResumed: registerListener(
+    "meeting-system-audio-resumed",
     (callback) => () => callback()
   ),
 

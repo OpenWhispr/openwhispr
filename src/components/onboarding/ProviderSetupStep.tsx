@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AudioLines, Check, Circle, CircleCheck, Download, MousePointer2 } from "lucide-react";
+import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ProviderConnectionTest from "./ProviderConnectionTest";
 import { Button } from "../ui/button";
@@ -33,6 +33,7 @@ import {
 import { useDebouncedCallback } from "../../hooks/useDebouncedCallback";
 import {
   forgetPendingLocalModel,
+  isPendingLocalModel,
   readPendingLocalModels,
   rememberPendingLocalModel,
 } from "./pendingLocalModels";
@@ -113,10 +114,12 @@ function StepPrimaryAction({
 
 function StepSecondaryAction({
   onClick,
+  disabled = false,
   className = "",
   children,
 }: {
   onClick: () => void;
+  disabled?: boolean;
   className?: string;
   children: ReactNode;
 }) {
@@ -125,6 +128,7 @@ function StepSecondaryAction({
       type="button"
       variant="outline-flat"
       onClick={onClick}
+      disabled={disabled}
       className={`h-9 rounded-[38px]! border! border-[var(--onboarding-control-border)]! bg-transparent! px-5 text-sm font-medium leading-[1.4] text-[var(--onboarding-text-primary)] shadow-none! hover:bg-[var(--onboarding-surface-hover)]! ${className}`}
     >
       {children}
@@ -802,7 +806,8 @@ export function LocalModelSetupStep({
   }, [onReadinessChange, selectedReady]);
 
   const selectInstalledModel = useCallback(
-    (modelId: string) => {
+    (modelId: string): void => {
+      const kind = assistant ? "assistant" : "dictation";
       setSelectedModel(modelId);
       if (assistant) {
         store.setChatAgentMode("local");
@@ -816,23 +821,49 @@ export function LocalModelSetupStep({
         store.setWhisperModel(modelId);
       }
       if (localStorage.getItem("localSetupPending") !== "true") {
-        forgetPendingLocalModel(assistant ? "assistant" : "dictation", modelId);
+        forgetPendingLocalModel(kind, modelId);
       }
     },
     [assistant, selectedProvider, store]
   );
 
-  const downloadModel = (modelId: string) => {
-    // downloadModel refuses (toast only) while another download of this kind
-    // runs; recording the pending selection for a refused download leaves a
-    // stale entry that a much later download would silently activate.
-    if (!activeDownload.isDownloading) {
-      rememberPendingLocalModel(assistant ? "assistant" : "dictation", {
+  const chooseInstalledModel = (modelId: string): void => {
+    forgetPendingLocalModel(assistant ? "assistant" : "dictation");
+    selectInstalledModel(modelId);
+  };
+
+  const downloadModel = (modelId: string): void => {
+    const kind = assistant ? "assistant" : "dictation";
+    // LLMs can download concurrently; a refused duplicate or native transfer
+    // must not replace the selection waiting for an accepted download.
+    if (
+      !activeDownload.isDownloadingModel(modelId) &&
+      (assistant || !activeDownload.isDownloading)
+    ) {
+      rememberPendingLocalModel(kind, {
         provider: selectedProvider,
         modelId,
       });
     }
-    void activeDownload.downloadModel(modelId, selectInstalledModel);
+    void activeDownload.downloadModel(modelId, (downloadedId): void => {
+      if (isPendingLocalModel(kind, { provider: selectedProvider, modelId: downloadedId })) {
+        selectInstalledModel(downloadedId);
+        return;
+      }
+      if (readPendingLocalModels()[kind]) return;
+
+      // The tray can activate and consume this selection before the initiating
+      // IPC resolves. Reflect that activation without replacing a newer choice.
+      const saved = useSettingsStore.getState();
+      const alreadySelected = assistant
+        ? saved.chatAgentMode === "local" &&
+          saved.chatAgentProvider === selectedProvider &&
+          saved.chatAgentModel === downloadedId
+        : saved.localTranscriptionProvider === selectedProvider &&
+          (selectedProvider === "nvidia" ? saved.parakeetModel : saved.whisperModel) ===
+            downloadedId;
+      if (alreadySelected) setSelectedModel(downloadedId);
+    });
   };
 
   const chooseProvider = (providerId: string) => {
@@ -846,10 +877,24 @@ export function LocalModelSetupStep({
     parakeet: parakeetDownload.isDownloading,
     llm: llmDownload.isDownloading,
   });
-  const canProceed = selectedReady;
+  const pendingSelection = readPendingLocalModels()[assistant ? "assistant" : "dictation"];
+  const pendingDownload = assistant
+    ? llmDownload
+    : pendingSelection?.provider === "nvidia"
+      ? parakeetDownload
+      : whisperDownload;
+  // Only the pending selection will activate in the background. Other transfers
+  // can outlive it when the user cancels the newest of several downloads.
+  const hasPendingDownload = Boolean(
+    pendingSelection && pendingDownload.isDownloadingModel(pendingSelection.modelId)
+  );
+  const canProceed = selectedReady || hasPendingDownload;
 
   const proceed = () => {
-    if (anyDownloadActive) {
+    // Leaving mid-download is the same situation as "download in background":
+    // this step unmounts, so the tray is what finishes the job, and it only
+    // applies the pending selection while localSetupPending is set.
+    if (hasPendingDownload && !selectedReady) {
       localStorage.setItem("localSetupPending", "true");
     }
     onProceed();
@@ -894,9 +939,10 @@ export function LocalModelSetupStep({
       <div className="onboarding-list-scroll mt-4 h-56 rounded-2xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface-secondary)]">
         {models.map((model) => {
           const isDownloaded = downloadedModels.has(model.id);
-          const isDownloading = activeDownload.isDownloadingModel(model.id);
+          const download = activeDownload.downloads[model.id];
+          const isDownloading = Boolean(download);
           const isSelected = selectedModel === model.id && isDownloaded;
-          const percentage = Math.round(activeDownload.downloadProgress.percentage);
+          const percentage = Math.round(download?.progress ?? 0);
           return (
             <div
               key={model.id}
@@ -912,7 +958,7 @@ export function LocalModelSetupStep({
               <button
                 type="button"
                 disabled={!isDownloaded}
-                onClick={() => selectInstalledModel(model.id)}
+                onClick={() => chooseInstalledModel(model.id)}
                 className="min-w-0 flex-1 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default"
               >
                 <span className="block truncate text-base font-medium text-[var(--onboarding-text-primary)]">
@@ -942,27 +988,26 @@ export function LocalModelSetupStep({
                   />
                   <span className="relative">{percentage}%</span>
                   <span className="relative whitespace-nowrap">
-                    {activeDownload.isInstalling
+                    {download?.phase === "installing"
                       ? t("onboarding.rehaul.local.installing")
                       : t("onboarding.rehaul.local.downloadingShort")}
                   </span>
                 </span>
               ) : isSelected ? (
-                // The active model uses the filled accent treatment.
+                // Same token as the Use pill it replaces on click.
                 <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-[var(--onboarding-accent)] px-3 text-sm text-[var(--onboarding-accent-foreground)]">
-                  <CircleCheck className="size-4" />
+                  <Check className="size-4" />
                   {t("onboarding.rehaul.local.selected")}
                 </span>
               ) : isDownloaded ? (
-                // Downloaded alternatives use the lighter accent treatment until
+                // Installed alternatives remain explicit primary actions until
                 // they become the active selection.
                 <Button
                   type="button"
-                  onClick={() => selectInstalledModel(model.id)}
-                  className="h-8 gap-1.5 rounded-full border-0! bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-3 text-sm font-normal text-[var(--onboarding-accent)] shadow-none! hover:bg-[color-mix(in_srgb,var(--onboarding-accent)_18%,transparent)] hover:shadow-none!"
+                  onClick={() => chooseInstalledModel(model.id)}
+                  className="h-8 gap-1.5 rounded-full border-0! bg-[var(--onboarding-accent)] px-3 text-sm font-normal text-[var(--onboarding-accent-foreground)] shadow-none! hover:bg-[var(--onboarding-accent-hover)] hover:shadow-none!"
                 >
-                  <Circle className="size-4" />
-                  {t("onboarding.rehaul.local.selectModel")}
+                  {t("onboarding.rehaul.local.use")}
                 </Button>
               ) : (
                 <Button
@@ -984,7 +1029,7 @@ export function LocalModelSetupStep({
             model": leaving with nothing on disk still commits useLocalWhisper,
             and whisper.js then refuses to load the selected model. */}
         {anyDownloadActive && (
-          <StepSecondaryAction onClick={skip} className="h-10!">
+          <StepSecondaryAction onClick={skip} disabled={!canProceed} className="h-10!">
             {t("common.skip")}
           </StepSecondaryAction>
         )}

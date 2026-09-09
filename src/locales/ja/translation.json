@@ -202,7 +202,10 @@
     "skip": "スキップ",
     "policyAiProcessingRestricted": "AI処理は組織によって制限されています。",
     "policyAgentRestricted": "AIアシスタントの使用は組織によって制限されています。",
-    "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。"
+    "policyTranscriptionRestricted": "文字起こしは組織によって制限されています。",
+    "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
+    "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
+    "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。"
   },
   "onboarding": {
     "rehaul": {
@@ -413,7 +416,7 @@
         "download": "ダウンロード",
         "downloadingShort": "ダウンロード中",
         "selected": "選択済み",
-        "selectModel": "モデルを選択",
+        "use": "使用",
         "downloadInProgress": "ダウンロード中",
         "cancelDownload": "{{model}} のダウンロードをキャンセル",
         "downloads": "モデルのダウンロード",
@@ -648,7 +651,8 @@
       "failedOffline": "オフラインです",
       "clearAll": "すべて削除",
       "clearAllTitle": "すべての文字起こしを削除",
-      "clearAllDescription": "すべての文字起こしと音声ファイルが完全に削除されます。",
+      "clearAllDescription": "すべての文字起こし、音声ファイル、Insights のカウントが、このデバイスとアカウントから完全に削除されます。",
+      "clearAllDescriptionDevice": "すべての文字起こし、音声ファイル、Insights のカウントが、このデバイスから完全に削除されます。アカウントに同期済みのカウントには影響しません。",
       "clearAllSuccess": "履歴を削除しました",
       "clearAllErrorTitle": "履歴を削除できませんでした",
       "clearAllErrorDescription": "問題が発生しました。もう一度お試しください。",
@@ -903,7 +907,10 @@
         "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
         "agentReasoningFailed": "音声アシスタントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
         "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。",
-        "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声テキスト変換 から更新してください。"
+        "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声テキスト変換 から更新してください。",
+        "managedTranscriptionUnavailable": "マネージド文字起こしは現在利用できません。しばらくしてからもう一度お試しください。",
+        "managedRouteInvalid": "設定の不一致により、マネージド文字起こしを開始できませんでした。もう一度お試しいただくか、管理者にお問い合わせください。",
+        "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。"
       },
       "translationFallback": {
         "unreachableTitle": "翻訳を利用できません",
@@ -2097,12 +2104,16 @@
       "cloudNotesMigrationDone": "すべてのノートがバックアップされました",
       "description": "デバイスからのデータ送信を管理します。初期設定ではすべてオフです。",
       "title": "プライバシー",
+      "insightsSync": "個人の統計を同期",
+      "insightsSyncDescription": "単語数、日付と各ディクテーションの正確な時刻、長さ、モデルの種類をデバイス間で同期します。文字起こしの内容は送信されません。サインイン中に履歴を消去すると、これらのカウントもこのデバイスとアカウントから削除されます。",
+      "insightsSyncRequiresAccount": "サインインすると、内容を含まない統計データをデバイス間で同期できます。",
+      "insightsSyncRequiresHistory": "データ保持を有効にすると統計が記録され、デバイス間で同期できるようになります。",
       "usageAnalytics": "使用状況の分析",
       "usageAnalyticsDescription": "匿名のパフォーマンスデータを共有して OpenWhispr の改善にご協力ください。文字起こしの内容は送信されません。タイミングとエラーデータのみです。",
       "dataRetention": "データ保持",
       "dataRetentionDescription": "文字起こしと音声を履歴にローカル保存します。無効にすると、文字起こしは貼り付けられますが保存されません。",
       "transcriptRetention": "文字起こしの保持",
-      "transcriptRetentionDescription": "保存された文字起こしとその音声を、この期間の経過後に自動的に削除します。",
+      "transcriptRetentionDescription": "保存された文字起こし、その音声、およびその Insights カウンターを、この期間の経過後に自動的に削除します。",
       "transcriptRetentionForever": "無期限",
       "hoursAgo": "{{count}}時間前",
       "justNow": "たった今",
@@ -2163,7 +2174,9 @@
         "openwhisprDesc": "信頼できる精度。設定不要。",
         "providersDesc": "自分のAPIキーを使用。",
         "localDesc": "端末上のモデル。完全プライベート。",
-        "selfHostedDesc": "自前サーバーをネットワーク上に。"
+        "selfHostedDesc": "自前サーバーをネットワーク上に。",
+        "enterprise": "エンタープライズクラウド",
+        "enterpriseDesc": "音声は組織自身のクラウドに送信されます。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "信頼できる精度。設定不要。",
@@ -2188,6 +2201,10 @@
         "switchedSelfHosted": {
           "title": "セルフホスト",
           "description": "独自のサーバーを使用します。"
+        },
+        "switchedEnterprise": {
+          "title": "エンタープライズクラウドを選択しました",
+          "description": "音声入力は組織が管理する文字起こしを使用します。"
         }
       },
       "gpuDevice": {
@@ -2245,7 +2262,8 @@
             "info": "区間を連結するときに途切れないよう、次の区間に延長する音声の長さです。"
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "組織はエンタープライズクラウドの文字起こしのみを許可しており、会議の録音にはまだ対応していません。"
     },
     "intelligence": {
       "gpuDevice": {
@@ -2958,6 +2976,18 @@
       "systemAudioSilent": {
         "title": "会議の音声がまだ検出されていません",
         "description": "これまでのところ、音声を拾っているのはマイクのみです。ビデオ会議中の場合は、会議の音声がこのコンピューターで再生されており、ミュートになっていないことを確認してください。対面で録音している場合は、この通知は無視してかまいません。マイクが室内の音を拾います。"
+      },
+      "systemAudioInterrupted": {
+        "title": "会議の音声が中断されました",
+        "description": "システム音声の取り込みが停止し、再起動しています。通話の数秒間が文字起こしから欠落する可能性があります。"
+      },
+      "systemAudioStopped": {
+        "title": "会議の音声が停止しました",
+        "description": "OpenWhispr は他の参加者の音声を取り込めなくなりました。録音を停止してもう一度開始するか、音声出力デバイスを確認してください。"
+      },
+      "systemAudioQuiet": {
+        "title": "会議の音声が無音になりました",
+        "description": "数分間、誰の声も検出されていません。通話が続いている場合は、音声出力デバイスを確認してください。"
       }
     },
     "meetingPill": {
@@ -3090,6 +3120,7 @@
     "wordsReady_other": "{{count}} 個の単語が準備完了",
     "import": "インポート",
     "yourDictionary": "あなたの辞書",
+    "promptLimitNotice": "辞書は現在{{chars}}文字です。GroqとWhisperのモデルはその末尾の数百文字しか読み取らないため、リストは短いほうが効果的です。その他のモデルには全リストが送信されます。",
     "exportDictionary": "辞書をエクスポート",
     "exportFailed": "エクスポートに失敗しました",
     "editWord": "{{word}} を編集",
@@ -3203,7 +3234,47 @@
       "playSignal": "シグナルを再生"
     }
   },
+  "insights": {
+    "title": "統計",
+    "description": "ディクテーションの習慣と継続状況をプライベートに確認できます。",
+    "wordsSpoken": "話した単語数",
+    "currentStreak": "現在の連続日数",
+    "wordsPerMinute": "1分あたりの単語数",
+    "dictations": "ディクテーション数",
+    "allTime": "全期間",
+    "days_one": "{{count}} 日",
+    "days_other": "{{count}} 日",
+    "longestStreak_one": "最長: {{count}} 日",
+    "longestStreak_other": "最長: {{count}} 日",
+    "wpmCoverage": "計測できた単語の {{count}}% に基づく",
+    "activity": "発話アクティビティ",
+    "activityDescription": "過去6か月間に話した単語数",
+    "activityLabel": "6か月間の発話アクティビティのヒートマップ",
+    "activityLess": "少ない",
+    "activityMore": "多い",
+    "dayTooltip_one": "{{date}}: {{count}} 語",
+    "dayTooltip_other": "{{date}}: {{count}} 語",
+    "dataRetentionDisabled": "データ保持が無効なため、新しいディクテーションは統計に集計されません。このデバイスでもアカウントでも加算されません。すでに同期済みのカウントはアカウントに残ります。",
+    "onDevice": "このデバイス上",
+    "synced": "デバイス間で同期済み",
+    "syncFallback": "デバイスのデータを表示中 — 同期は利用できません",
+    "syncPrompt": "内容を含まないカウンターを同期して、ローカルとクラウドのアクティビティをデバイス間でまとめます。",
+    "enableSync": "同期を有効にする",
+    "claimTitle": "以前のディクテーションを含めますか？",
+    "claimDescription_one": "サインイン前にこのデバイスで記録されたディクテーションが {{count}} 件あります。含めると、送信されるのは単語数、日付と記録された正確な時刻、長さ、モデルの種類だけで、文字起こしの内容は送信されません。",
+    "claimDescription_other": "サインイン前にこのデバイスで記録されたディクテーションが {{count}} 件あります。含めると、送信されるのは単語数、日付と記録された正確な時刻、長さ、モデルの種類だけで、文字起こしの内容は送信されません。",
+    "claimInclude": "含める",
+    "claimSkip": "今はしない",
+    "enableTitle": "Insights の同期をオンにしますか？",
+    "enableConfirm": "同期をオンにする",
+    "enableDescription_one": "このデバイスで記録済みのディクテーション {{count}} 件がアカウントにアップロードされます。Insights の同期で送信されるのは単語数、日付と記録された正確な時刻、長さ、モデルの種類だけで、文字起こしの内容は送信されません。",
+    "enableDescription_other": "このデバイスで記録済みのディクテーション {{count}} 件がアカウントにアップロードされます。Insights の同期で送信されるのは単語数、日付と記録された正確な時刻、長さ、モデルの種類だけで、文字起こしの内容は送信されません。",
+    "emptyTitle": "まだディクテーションがありません",
+    "emptyBody": "ディクテーションを始めると、単語数・連続記録・日々のアクティビティがここに表示されます。",
+    "loadError": "このデバイスから Insights を読み取れませんでした。"
+  },
   "sidebar": {
+    "insights": "統計",
     "home": "ホーム",
     "notes": "ノート",
     "upload": "アップロード",

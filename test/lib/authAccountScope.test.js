@@ -56,6 +56,44 @@ test("a direct account replacement purges before remembering the new user", () =
   assert.equal(decide({ userId: "user-b", previousUserId: "user-a", wasSignedIn: true }), "purge");
 });
 
+test("an account replacement clears the previous user's Insights sync consent", async (t) => {
+  const { values, restore } = installStorage({
+    "openwhispr:accountScopeUserId": "user-a",
+    "openwhispr:accountScopeValidated": "true",
+    isSignedIn: "true",
+    insightsSyncEnabled: "true",
+  });
+  t.after(restore);
+
+  await reconcileAccountScope("user-b", {
+    purge: async () => {},
+    verify: async () => {
+      throw new Error("unexpected verification");
+    },
+  });
+
+  assert.equal(values.get("insightsSyncEnabled"), "false");
+});
+
+test("sign-out clears the previous user's Insights sync consent", async (t) => {
+  const { values, restore } = installStorage({
+    "openwhispr:accountScopeUserId": "user-a",
+    "openwhispr:accountScopeValidated": "true",
+    isSignedIn: "true",
+    insightsSyncEnabled: "true",
+  });
+  t.after(restore);
+
+  await reconcileAccountScope(null, {
+    purge: async () => {},
+    verify: async () => {
+      throw new Error("unexpected verification");
+    },
+  });
+
+  assert.equal(values.get("insightsSyncEnabled"), "false");
+});
+
 test("reauthentication after signed-out state purges any retained account scope", () => {
   assert.equal(decide({ userId: "user-a", previousUserId: "user-a", wasSignedIn: false }), "purge");
 });

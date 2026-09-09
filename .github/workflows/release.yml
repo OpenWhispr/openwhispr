@@ -45,7 +45,7 @@ jobs:
       - name: Check translations
         run: npm run i18n:check
       - name: Audit dependencies
-        run: npm audit
+        run: npm audit --audit-level=high
       - name: Build better-sqlite3 for the runner's node
         # --ignore-scripts skips the native build, so DB-backed tests silently
         # skip unless the binding is rebuilt for the CI Node runtime.

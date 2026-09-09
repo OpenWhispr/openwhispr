@@ -8,7 +8,9 @@ import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.ts
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
 import { LEGACY_ONBOARDING_STEP_KEY, ONBOARDING_SESSION_KEY } from "./components/onboarding/flow";
 import { useAuth } from "./hooks/useAuth";
+import { useControlPanelWindowDrag } from "./hooks/useControlPanelWindowDrag";
 import { useTheme } from "./hooks/useTheme";
+import { mirrorActiveAccountScope } from "./lib/accountScopeMirror";
 import { usePolicyStore } from "./stores/policyStore";
 import { resolveSettledControlPanelWindowMode } from "./utils/controlPanelWindowMode.ts";
 import { isControlPanelWindow } from "./utils/windowContext.ts";
@@ -59,6 +61,8 @@ function MainApp() {
 
   const isControlPanel = isControlPanelWindow();
   const isDictationPanel = !isControlPanel;
+  // Covers every surface this window hosts: onboarding, reauth, the panel.
+  useControlPanelWindowDrag(isControlPanel);
 
   useEffect(() => {
     if (isControlPanel) {
@@ -79,6 +83,13 @@ function MainApp() {
         .catch(() => {});
     }
   }, [autoSyncReady, isControlPanel]);
+
+  useEffect(() => {
+    // The dictation window cannot resolve a session (see mirrorActiveAccountScope),
+    // so its policy and managed identity follow the main process's account scope.
+    if (!isDictationPanel) return;
+    return mirrorActiveAccountScope();
+  }, [isDictationPanel]);
 
   useEffect(() => {
     if (!authLoaded) return;

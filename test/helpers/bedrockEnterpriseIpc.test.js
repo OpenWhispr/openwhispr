@@ -197,6 +197,30 @@ test.beforeEach(() => {
   resolveManagedRuntime = async () => ({ managed: false });
 });
 
+test("Check connection asks for at least 16 output tokens, the Azure Responses API minimum", async () => {
+  // Live 2026-09-07: Azure rejected the probe with "Invalid 'max_output_tokens':
+  // integer below minimum value. Expected a value >= 16, but got 10 instead."
+  const probes = [
+    ["bedrock", { model: "anthropic.claude-haiku", bedrockRegion: "eu-west-1" }],
+    ["azure", { model: "gpt-4.1-mini", azureEndpoint: "https://acme.openai.azure.com" }],
+  ];
+  for (const [provider, config] of probes) {
+    const result = await handlers.get("test-enterprise-connection")(
+      { sender: sender(3) },
+      provider,
+      config
+    );
+    assert.deepEqual(result, { success: true }, provider);
+  }
+  assert.equal(generateCalls.length, probes.length);
+  for (const call of generateCalls) {
+    assert.ok(
+      call.maxOutputTokens >= 16,
+      `maxOutputTokens ${call.maxOutputTokens} is below Azure's minimum of 16`
+    );
+  }
+});
+
 test("Check connection uses the Bedrock retry policy and disables nested AI SDK retries", async () => {
   let attempts = 0;
   generateBehavior = async () => {

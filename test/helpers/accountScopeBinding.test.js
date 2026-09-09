@@ -130,3 +130,19 @@ test("clear removes the binding and read tolerates absence and corruption", (t) 
   assert.equal(binding.read(), null);
   binding.clear();
 });
+
+test("resolveActiveAccountScope pairs the restorable account with the current credential generation", () => {
+  const valid = { version: 1, accountId: "account-a", tokenHash: sha256("token-a") };
+  assert.deepEqual(
+    binding.resolveActiveAccountScope({ token: "token-a", generation: 3, binding: valid }),
+    { accountId: "account-a", authGeneration: 3 }
+  );
+  assert.equal(
+    binding.resolveActiveAccountScope({ token: "rotated-token", generation: 4, binding: valid }),
+    null
+  );
+  assert.equal(
+    binding.resolveActiveAccountScope({ token: null, generation: 4, binding: null }),
+    null
+  );
+});

@@ -103,6 +103,33 @@ export function isEnterpriseProviderAllowed(
   );
 }
 
+/**
+ * Whether an enterprise cloud may run managed transcription. The field is
+ * absent on servers that predate it; absent means none.
+ */
+export function isTranscriptionEnterpriseProviderAllowed(
+  state: PolicyDecisionSnapshot,
+  providerId: string
+): boolean {
+  return managedPolicyDecision(state, (policy) =>
+    (policy.transcription.allowedEnterpriseProviders ?? []).includes(providerId)
+  );
+}
+
+/**
+ * Whether the "Enterprise cloud" transcription tile should ever be shown as
+ * a selectable option. Unlike every other mode, "enterprise" can only ever
+ * resolve for a managed org — resolveEffectivePolicySelection requires a
+ * managed policy with a matching allowedEnterpriseProviders entry. Offering
+ * the tile to an unmanaged/idle user would let them pick a mode with no
+ * personal configuration surface and no managed resolution, which then
+ * fails every dictation and upload closed via the transcription route's
+ * fail-closed guard.
+ */
+export function isEnterpriseTranscriptionOfferable(state: PolicyDecisionSnapshot): boolean {
+  return state.status === "managed";
+}
+
 /** Whether the AI agent (dictation, voice, and chat) is allowed. */
 export function isAgentAllowed(state: PolicyDecisionSnapshot): boolean {
   return managedPolicyDecision(state, (policy) => policy.features.agentEnabled);
@@ -205,13 +232,13 @@ export function resolveEffectivePolicySelection(
     policy[scope].allowedByokProviders.includes(provider)
   );
   const allowedEnterpriseProviders = (catalog.enterpriseProviders ?? []).filter((provider) =>
-    policy.llm.allowedEnterpriseProviders.includes(provider)
+    (policy[scope].allowedEnterpriseProviders ?? []).includes(provider)
   );
   const modeIsUsable = (mode: InferenceMode): boolean => {
     if (!catalog.modes.includes(mode)) return false;
     if (!policy[scope].allowedModes.includes(mode)) return false;
     if (mode === "providers") return allowedByokProviders.length > 0;
-    if (mode === "enterprise") return scope === "llm" && allowedEnterpriseProviders.length > 0;
+    if (mode === "enterprise") return allowedEnterpriseProviders.length > 0;
     return true;
   };
 
@@ -263,8 +290,13 @@ export function isTranscriptionSelectionAllowed(
   selection: TranscriptionSelection
 ): boolean {
   if (!isModeAllowedByPolicy(state, "transcription", selection.mode)) return false;
-  if (selection.mode !== "providers") return true;
-  return isProviderAllowedByPolicy(state, "transcription", selection.provider);
+  if (selection.mode === "providers") {
+    return isProviderAllowedByPolicy(state, "transcription", selection.provider);
+  }
+  if (selection.mode === "enterprise") {
+    return isTranscriptionEnterpriseProviderAllowed(state, selection.provider);
+  }
+  return true;
 }
 
 export type TranscriptionPolicyContext = "dictation" | "meeting" | "upload";
@@ -394,13 +426,10 @@ function policyModeHasAvailableProvider(
       : policy[scope].allowedByokProviders.length > 0;
   }
   if (mode === "enterprise") {
-    const selectableProviders = providerCatalog?.enterpriseProviders ?? ["bedrock"];
-    return (
-      scope === "llm" &&
-      selectableProviders.some((provider) =>
-        policy.llm.allowedEnterpriseProviders.includes(provider)
-      )
-    );
+    const allowed = policy[scope].allowedEnterpriseProviders ?? [];
+    const selectable =
+      providerCatalog?.enterpriseProviders ?? (scope === "llm" ? ["bedrock"] : ["azure"]);
+    return selectable.some((provider) => allowed.includes(provider));
   }
   return true;
 }

@@ -30,6 +30,12 @@ import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./m
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import {
+  ANALYTICS_COUNTER_VERSION,
+  countSpokenWords,
+  localDateKey,
+  resolveAnalyticsMode,
+} from "./analytics";
+import {
   getSettings,
   useSettingsStore,
   getEffectiveCleanupModel,
@@ -38,10 +44,12 @@ import {
   isCloudTranslationMode,
   selectResolvedLLMConfig,
 } from "../stores/settingsStore";
+
 import {
   effectiveAudioRetentionDays,
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
+  isCloudBackupAllowed,
   isTranscriptionContextAllowed,
   isTranscriptionSelectionAllowed,
 } from "../stores/policyRules";
@@ -56,6 +64,10 @@ import {
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import { resolveByokModel, resolveTranscriptionRoute } from "./transcriptionRoute.ts";
+import {
+  getManagedTranscriptionResolution,
+  isManagedTranscriptionActive,
+} from "../services/managedTranscription.ts";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isSelfHostedTranscription,
@@ -90,6 +102,7 @@ import {
   matchesDictionaryPrompt,
   payloadSendsDictionaryBias,
 } from "../utils/dictionaryEchoFilter.js";
+import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionaryPromptCap.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
@@ -134,6 +147,20 @@ function getEffectiveRetentionPreferences() {
     dataRetentionEnabled: effectiveLocalHistoryEnabled(policyState, settings.dataRetentionEnabled),
     audioRetentionDays: effectiveAudioRetentionDays(policyState, settings.audioRetentionDays),
   };
+}
+
+// Insights sync is opt-in, so nothing analytics-only may ride along on a cloud
+// request until the user has enabled it. History retention gates it too: the
+// local write below the same gate is skipped, and the cloud must not keep rows
+// the device never recorded. Managed workspaces that forbid cloud backup forbid
+// these counters with it — they are user data leaving the device like any other.
+function analyticsSyncEnabled(settings = getSettings()) {
+  return (
+    settings.isSignedIn &&
+    settings.insightsSyncEnabled &&
+    isCloudBackupAllowed(usePolicyStore.getState()) &&
+    getEffectiveRetentionPreferences().dataRetentionEnabled
+  );
 }
 
 const providerSupportsImages = (providerId) =>
@@ -221,6 +248,9 @@ function resolveReasoningRoute(
       cleanupConfig: {
         inferenceScope: /** @type {const} */ ("dictationCleanup"),
         disableThinking: settings.cleanupDisableThinking,
+        // The chain's cleanup step is the same deterministic transform — see
+        // the cleanup route below for why the value has to be explicit.
+        temperature: 0,
       },
       config: {
         ...translation.config,
@@ -280,6 +310,9 @@ function resolveReasoningRoute(
       config: {
         inferenceScope: /** @type {const} */ ("dictationCleanup"),
         disableThinking: settings.cleanupDisableThinking,
+        // Cleanup is a deterministic transform: pass 0 explicitly, because the IPC-bridged
+        // providers (local bridge, Anthropic, enterprise) otherwise apply their own default.
+        temperature: 0,
       },
     };
   }
@@ -364,6 +397,29 @@ const STREAMING_PROVIDERS = {
 
 // Batch providers that must transcribe via a main-process proxy (CORS,
 // non-Bearer auth, OAuth, or attested transport) instead of a renderer fetch.
+function audioExtensionForMime(mimeType) {
+  if (mimeType.includes("ogg")) return "ogg";
+  if (mimeType.includes("mp4")) return "mp4";
+  if (mimeType.includes("mpeg")) return "mp3";
+  if (mimeType.includes("wav")) return "wav";
+  return "webm";
+}
+
+// Workspace-managed Azure STT: the Entra token lives in the main process, so
+// dictation dispatches over IPC exactly like the proxied providers below.
+const MANAGED_TRANSCRIPTION_SPEC = {
+  displayName: "Managed Azure",
+  ipc: () => window.electronAPI?.managedTranscribe,
+  buildPayload: ({ audioBuffer, language, dictionaryPrompt, managedResolution, mimeType }) => ({
+    audioBuffer,
+    fileName: `audio.${audioExtensionForMime(mimeType)}`,
+    mimeType,
+    language,
+    prompt: dictionaryPrompt || undefined,
+    managed: { provider: managedResolution.provider, context: managedResolution.context },
+  }),
+};
+
 const PROXY_TRANSCRIPTION_PROVIDERS = {
   tinfoil: {
     displayName: "Tinfoil",
@@ -862,7 +918,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   isRecordingAllowedByPolicy() {
     const policyState = usePolicyStore.getState();
     return (
-      isTranscriptionContextAllowed(policyState, getSettings(), "dictation") &&
+      (isManagedTranscriptionActive() ||
+        isTranscriptionContextAllowed(policyState, getSettings(), "dictation")) &&
       (!this.voiceAgentRequested || isAgentAllowed(policyState))
     );
   }
@@ -1484,6 +1541,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const durationSeconds = this.recordingStartTime
       ? (Date.now() - this.recordingStartTime) / 1000
       : null;
+    const analyticsOccurredAt = new Date(this.recordingStartTime || Date.now()).toISOString();
     this.recordingStartTime = null;
     const recordingCheck = evaluateFinishedRecording({
       blobSize: audioBlob.size,
@@ -1516,6 +1574,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       audioBlob,
       {
         durationSeconds,
+        analyticsOccurredAt,
         ...(salvagedRecording ? { salvagedRecording: true } : {}),
         ...(previewStop?.streamed ? { streamedText: previewStop.text } : {}),
       },
@@ -1833,7 +1892,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       let result;
       let activeModel;
-      if (useLocalWhisper) {
+      // Managed enterprise STT outranks the local and OpenWhispr Cloud lanes,
+      // matching the LLM scopes; users opt out via "Use personal setup" when
+      // the administrator allows it. Error resolutions fail closed inside
+      // processWithOpenAIAPI with their own code.
+      const managedTranscription = getManagedTranscriptionResolution();
+      if (managedTranscription) {
+        activeModel =
+          managedTranscription.kind === "managed" ? managedTranscription.deployment : null;
+        result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
+      } else if (useLocalWhisper) {
         if (isSherpaLocalProvider(localProvider)) {
           activeModel = localProvider === "cohere" ? settings.cohereModel : parakeetModel;
           result = await this.processWithLocalParakeet(
@@ -1881,7 +1949,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       result = withSalvageWarning(result, metadata.salvagedRecording);
 
-      result = { ...result, ...this._takePendingResultExtras() };
+      result = {
+        ...result,
+        ...(metadata.analyticsOccurredAt
+          ? { analyticsOccurredAt: metadata.analyticsOccurredAt }
+          : {}),
+        ...this._takePendingResultExtras(),
+      };
       this.onTranscriptionComplete?.(result);
 
       if (result?.source === "openwhispr") {
@@ -3129,7 +3203,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const audioSizeBytes = audioBlob.size;
     const audioFormat = audioBlob.type;
     const opts = {};
+    const analyticsOccurredAt = new Date(metadata.analyticsOccurredAt || Date.now());
     if (language) opts.language = language;
+    if (analyticsSyncEnabled(settings)) {
+      opts.analyticsOccurredAt = analyticsOccurredAt.toISOString();
+      opts.localDate = localDateKey(analyticsOccurredAt);
+    }
     const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
     if (
       (settings.useCleanupModel && cleanupCloudMode === "openwhispr") ||
@@ -3293,6 +3372,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       wordsUsed: result.wordsUsed,
       wordsRemaining: result.wordsRemaining,
       clientTranscriptionId: result.clientTranscriptionId,
+      analyticsOccurredAt: analyticsOccurredAt.toISOString(),
       ...(result.warning ? { warning: result.warning } : {}),
     };
   }
@@ -3335,13 +3415,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "transcription"
       );
 
-      const apiKey = await this.getAPIKey();
+      // Managed enterprise STT outranks every personal setting.
+      const managedResolution = getManagedTranscriptionResolution();
+      if (managedResolution?.kind === "error") {
+        throw Object.assign(new Error(managedResolution.message), {
+          code: managedResolution.code,
+          messageKey: managedResolution.messageKey,
+        });
+      }
+
+      const apiKey = managedResolution ? null : await this.getAPIKey();
       const optimizedAudio = audioBlob;
 
       // Dispatch before endpoint resolution (which defaults to OpenAI and would leak
       // the key). Self-hosted wins, so a leftover proxied provider isn't diverted here.
-      const proxySpec = PROXY_TRANSCRIPTION_PROVIDERS[provider];
-      if (proxySpec && !isSelfHostedTranscription(apiSettings)) {
+      const proxySpec = managedResolution
+        ? MANAGED_TRANSCRIPTION_SPEC
+        : PROXY_TRANSCRIPTION_PROVIDERS[provider];
+      if (proxySpec && (managedResolution || !isSelfHostedTranscription(apiSettings))) {
+        const providerName = managedResolution ? "azure-managed" : provider;
         const call = proxySpec.ipc();
         if (!call) {
           throw new Error(`${proxySpec.displayName} transcription is unavailable in this window`);
@@ -3352,6 +3444,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           model,
           language,
           apiSettings,
+          managedResolution,
+          mimeType: optimizedAudio.type || "audio/webm",
           dictionaryPrompt: this.getWhisperPrompt(apiSettings),
           keyterms: this.getKeyterms()
             .map((t) => t.trim().slice(0, 50))
@@ -3374,27 +3468,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(proxyText, provider, wasCancelled);
+        const text = await this.processTranscription(proxyText, providerName, wasCancelled);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
-        const source = (await this.isReasoningAvailable()) ? `${provider}-reasoned` : provider;
+        const source = (await this.isReasoningAvailable())
+          ? `${providerName}-reasoned`
+          : providerName;
         return { success: true, text, rawText: proxyText, source, timings };
       }
 
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
       const mimeType = optimizedAudio.type || "audio/webm";
-      const extension = mimeType.includes("webm")
-        ? "webm"
-        : mimeType.includes("ogg")
-          ? "ogg"
-          : mimeType.includes("mp4")
-            ? "mp4"
-            : mimeType.includes("mpeg")
-              ? "mp3"
-              : mimeType.includes("wav")
-                ? "wav"
-                : "webm";
+      const extension = audioExtensionForMime(mimeType);
 
       logger.debug(
         "FormData preparation",
@@ -3416,21 +3502,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       const endpoint = this.getTranscriptionEndpoint(model);
 
-      // Groq rejects prompts > 896 chars (incl. when reached via "custom" provider).
-      // 890 leaves margin for UTF-16 vs codepoint counting drift.
-      const isGroqEndpoint = provider === "groq" || endpoint.includes("api.groq.com");
-      const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : 900;
-      let dictionaryPrompt = this.getWhisperPrompt(apiSettings);
+      // Prompt budgets follow each provider's real limit (see dictionaryPromptCap):
+      // Groq's 896-char request cap, the Whisper decoders' window, and a far
+      // larger context guard for the 4o transcribe models, which are LLMs and
+      // read the whole thing. The cut is a request bound, not a priority rule:
+      // Whisper decoders read the tail of whatever they are given.
+      const MAX_PROMPT_CHARS = dictionaryPromptLimit({ provider, endpoint, model });
+      const trimmedPrompt = trimDictionaryPrompt(
+        this.getWhisperPrompt(apiSettings),
+        MAX_PROMPT_CHARS
+      );
+      const dictionaryPrompt = trimmedPrompt.prompt;
       if (dictionaryPrompt) {
-        if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
-          const originalLength = dictionaryPrompt.length;
-          const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
-          const lastComma = truncated.lastIndexOf(",");
-          dictionaryPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
+        if (trimmedPrompt.truncated) {
           logger.debug(
             "Custom dictionary prompt truncated",
             {
-              originalLength,
+              originalLength: trimmedPrompt.originalLength,
               truncatedLength: dictionaryPrompt.length,
               maxChars: MAX_PROMPT_CHARS,
             },
@@ -3750,7 +3838,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async saveTranscription(text, rawText = null, { clientTranscriptionId } = {}) {
+  async saveTranscription(
+    text,
+    rawText = null,
+    { clientTranscriptionId, analyticsOccurredAt } = {}
+  ) {
     const { dataRetentionEnabled, audioRetentionDays } = getEffectiveRetentionPreferences();
     if (!dataRetentionEnabled) {
       logger.debug("Skipping transcription save — data retention disabled", {}, "audio");
@@ -3759,9 +3851,31 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return true;
     }
 
+    const eventId = clientTranscriptionId || crypto.randomUUID();
+    const occurredAt = analyticsOccurredAt ? new Date(analyticsOccurredAt) : new Date();
+    const metadata = this.lastAudioMetadata || {};
+    try {
+      await window.electronAPI.recordAnalyticsEvent({
+        eventId,
+        wordCount: countSpokenWords(rawText || text),
+        occurredAt: occurredAt.toISOString(),
+        localDate: localDateKey(occurredAt),
+        spokenDurationMs: metadata.durationMs || null,
+        mode: resolveAnalyticsMode(getSettings(), metadata.provider),
+        provider: metadata.provider || null,
+        model: metadata.model || null,
+      });
+    } catch (analyticsError) {
+      logger.warn(
+        "Failed to record local analytics event",
+        { error: analyticsError.message },
+        "analytics"
+      );
+    }
+
     try {
       const result = await window.electronAPI.saveTranscription(text, rawText, {
-        clientTranscriptionId,
+        clientTranscriptionId: eventId,
         routeKind: this.translationRequested ? "translation" : null,
       });
       if (result?.id) syncService.debouncedPush("transcription", result.id);
@@ -3902,6 +4016,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   shouldUseStreaming(isSignedInOverride) {
     const s = getSettings();
     if (s.useLocalWhisper) return false;
+
+    // Managed enterprise STT is batch-only and outranks personal streaming
+    // setups; an error resolution must fail closed on the batch path too.
+    if (getManagedTranscriptionResolution()) return false;
 
     // Self-hosted transcription is batch HTTP to the user's server, never cloud realtime WS.
     if (isSelfHostedTranscription(s)) return false;
@@ -4621,6 +4739,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const durationSeconds = this.recordingStartTime
       ? (Date.now() - this.recordingStartTime) / 1000
       : null;
+    const analyticsOccurredAt = new Date(this.recordingStartTime || Date.now());
 
     // Enter processing synchronously, before any mic/provider await. This is
     // the authoritative guard that makes a second hotkey a no-op for the full
@@ -4756,7 +4875,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const streamingAudioBytesSent = stopResult?.audioBytesSent || 0;
     const streamingSttLanguage =
       getBaseLanguageCode(this.getEffectiveSttLanguage(stSettings)) || undefined;
-    const streamingSttWordCount = finalText ? finalText.split(/\s+/).filter(Boolean).length : 0;
+    const streamingSttWordCount = countSpokenWords(finalText);
     // Reasoning below reassigns `finalText` to the cleaned-up/agent output, so
     // snapshot the pre-reasoning transcript now to report as `rawText` — matching
     // the batch path, which already keeps raw and processed text separate.
@@ -4918,6 +5037,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // and cloud audio never cross over (see resolveStreamingFallbackTarget).
     let usedBatchFallback = false;
     let batchWarning = null;
+    let batchFallbackResult = null;
     if (!finalText && durationSeconds > 2 && fallbackBlob?.size > 0) {
       const target = resolveStreamingFallbackTarget(getSettings());
       if (target === "skip") {
@@ -4938,7 +5058,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             target === "cloud"
               ? await this.processWithOpenWhisprCloud(
                   fallbackBlob,
-                  { durationSeconds },
+                  {
+                    durationSeconds,
+                    analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+                  },
                   wasCancelled
                 )
               : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds }, wasCancelled);
@@ -4946,6 +5069,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           if (batchResult?.text) {
             finalText = batchResult.text;
             usedBatchFallback = true;
+            batchFallbackResult = batchResult;
             batchWarning = batchResult.warning || null;
             logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
           }
@@ -4964,19 +5088,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       const tBeforePaste = performance.now();
       const clientTotalMs = Math.round(tBeforePaste - t0);
+      const clientTranscriptionId =
+        batchFallbackResult?.clientTranscriptionId || crypto.randomUUID();
+      const resultAnalyticsOccurredAt =
+        batchFallbackResult?.analyticsOccurredAt || analyticsOccurredAt.toISOString();
       this.lastAudioMetadata = {
         durationMs: durationSeconds
           ? Math.round(durationSeconds * 1000)
           : Math.round(tBeforePaste - t0),
-        provider: `${this.getStreamingProviderName()}-streaming`,
-        model: streamingSttModel || null,
+        provider: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
+        model: batchFallbackResult ? null : streamingSttModel || null,
       };
       if (wasCancelled()) return true;
       this.onTranscriptionComplete?.({
         success: true,
         text: finalText,
-        rawText: rawStreamingText || finalText,
-        source: `${this.getStreamingProviderName()}-streaming`,
+        rawText: batchFallbackResult?.rawText || rawStreamingText || finalText,
+        source: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
+        clientTranscriptionId,
+        analyticsOccurredAt: resultAnalyticsOccurredAt,
         ...this._takePendingResultExtras(),
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
@@ -4997,6 +5127,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
                   clientTotalMs,
+                  // Always sent, like the batch cloud path: this id is what
+                  // makes the row the server writes and the local one the same
+                  // event. Held back until opt-in, a later sync would push the
+                  // local copy under a second id and double every total.
+                  // Cosmetic caveat: the server labels its row mode
+                  // "openwhispr_cloud" whatever actually transcribed the audio,
+                  // and BYOK streaming reaches here too (tinfoil-realtime,
+                  // corti, openai-realtime — see resolveStreamingProviderName).
+                  // That row only exists when localDate rides along, which is
+                  // exactly when this device also pushes its own copy under the
+                  // same id, and last-write-wins replaces the label with the
+                  // real mode. Neither summary renders mode either way.
+                  clientTranscriptionId,
+                  ...(analyticsSyncEnabled()
+                    ? {
+                        localDate: localDateKey(analyticsOccurredAt),
+                        analyticsOccurredAt: analyticsOccurredAt.toISOString(),
+                        analyticsWordCount: streamingSttWordCount,
+                        analyticsCounterVersion: ANALYTICS_COUNTER_VERSION,
+                      }
+                    : {}),
                 }
               );
               if (!res.success) {

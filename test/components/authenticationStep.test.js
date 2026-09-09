@@ -26,6 +26,7 @@ function createHarness() {
     discoveryError: null,
     signupResult: {},
     ssoResult: {},
+    portalContainers: [],
   };
 }
 
@@ -73,13 +74,19 @@ async function settleAsyncHandler() {
 
 test("email authentication discovers accounts, restores drafts, and persists them once per pause", async (t) => {
   installBrowserGlobals(t, { window: { electronAPI: {} } });
+  // The compact Back control is portalled to body (it has to out-stack the
+  // onboarding shell's drag band), so rendering reads document.body.
+  const originalDocument = globalThis.document;
+  globalThis.document = { body: {} };
   t.after(() => {
     delete globalThis.__authenticationStepHarness;
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
   });
 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-authentication-step-",
-    noExternal: ["react", "react-i18next", "lucide-react"],
+    noExternal: ["react", "react-dom", "react-i18next", "lucide-react"],
     mockModules: {
       // A minimal renderer rather than react-dom: it returns the element tree so
       // the assertions can read rendered output, and it collects effects so the
@@ -160,6 +167,14 @@ test("email authentication discovers accounts, restores drafts, and persists the
           return harness.discoveryResult;
         }
       `,
+      // Keep portalled children in the returned tree so findElement still
+      // reaches them; this harness walks elements rather than mounting a DOM.
+      // The container is recorded so the escape-the-drag-band contract is
+      // asserted rather than stubbed away.
+      "react-dom": `export function createPortal(children, container) {
+        globalThis.__authenticationStepHarness.portalContainers.push(container);
+        return children;
+      }`,
       "/utils/logger": `export default { error() {} };`,
       "/utils/platform": `export function getCachedPlatform() { return "linux"; }`,
       "/ForgotPasswordView": `export default function ForgotPasswordView() { return null; }`,
@@ -216,6 +231,11 @@ test("email authentication discovers accounts, restores drafts, and persists the
   assert.ok(passwordField(signIn), "a known account goes straight to the password step");
   assert.match(textContent(signIn), /auth\.passwordForm\.signIn/);
   assert.match(textContent(signIn), /auth\.passwordForm\.forgotPassword/);
+  assert.ok(existingAccount.portalContainers.length > 0, "the compact Back should be portalled");
+  assert.ok(
+    existingAccount.portalContainers.every((container) => container === globalThis.document.body),
+    "the compact Back must escape the shell's drag band through document.body"
+  );
   assert.deepEqual(existingAccount.discoveryCalls, [
     { email: "returning@example.com", authUrl: "https://auth.example.test" },
   ]);

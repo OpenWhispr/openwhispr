@@ -202,7 +202,10 @@
     "skip": "Überspringen",
     "policyAiProcessingRestricted": "Die KI-Verarbeitung ist durch Ihre Organisation eingeschränkt.",
     "policyAgentRestricted": "Die Nutzung des KI-Assistenten ist durch Ihre Organisation eingeschränkt.",
-    "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt."
+    "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt.",
+    "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
+    "managedConfigUnavailable": "Der verwaltete Unternehmenszugriff ist nicht verfügbar. Melden Sie sich erneut an oder wenden Sie sich an Ihren Administrator.",
+    "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator."
   },
   "onboarding": {
     "rehaul": {
@@ -413,7 +416,7 @@
         "download": "Herunterladen",
         "downloadingShort": "Wird geladen",
         "selected": "Ausgewählt",
-        "selectModel": "Modell auswählen",
+        "use": "Verwenden",
         "downloadInProgress": "Download läuft",
         "cancelDownload": "Download von {{model}} abbrechen",
         "downloads": "Modell-Downloads",
@@ -662,7 +665,8 @@
       "rawTranscript": "Rohtranskript",
       "clearAll": "Alle löschen",
       "clearAllTitle": "Alle Transkriptionen löschen",
-      "clearAllDescription": "Alle Transkriptionen und Audiodateien werden dauerhaft entfernt.",
+      "clearAllDescription": "Alle Transkriptionen, Audiodateien und Insights-Zähler werden dauerhaft von diesem Gerät und aus Ihrem Konto entfernt.",
+      "clearAllDescriptionDevice": "Alle Transkriptionen, Audiodateien und Insights-Zähler werden dauerhaft von diesem Gerät entfernt. Bereits mit einem Konto synchronisierte Zähler bleiben davon unberührt.",
       "clearAllSuccess": "Verlauf gelöscht",
       "clearAllErrorTitle": "Verlauf konnte nicht gelöscht werden",
       "clearAllErrorDescription": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
@@ -903,7 +907,10 @@
         "chunkLoss": "Ein Netzwerkproblem hat zu viel von der Aufnahme verloren. Transkribieren Sie sie über den Verlauf erneut.",
         "agentReasoningFailed": "Ihr Sprachassistent konnte den Befehl nicht verarbeiten – stattdessen wurde das unbearbeitete Transkript eingefügt.",
         "screenContextSkipped": "Der Screenshot konnte nicht gesendet werden, daher lief Ihr Befehl ohne Bildschirmkontext.",
-        "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text."
+        "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text.",
+        "managedTranscriptionUnavailable": "Die verwaltete Transkription ist derzeit nicht verfügbar. Versuchen Sie es gleich noch einmal.",
+        "managedRouteInvalid": "Die verwaltete Transkription konnte aufgrund einer Konfigurationsabweichung nicht gestartet werden. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
+        "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
@@ -2386,6 +2393,10 @@
       "cloudNotesMigrationDone": "Alle Notizen gesichert",
       "description": "Steuern Sie, welche Daten Ihr Gerät verlassen. Standardmäßig ist alles deaktiviert.",
       "title": "Datenschutz",
+      "insightsSync": "Persönliche Statistiken synchronisieren",
+      "insightsSyncDescription": "Synchronisieren Sie Wortanzahl, Datum und genaue Uhrzeit jedes Diktats, Dauer und Modelltyp geräteübergreifend. Transkriptionsinhalte werden nie übertragen. Wenn Sie angemeldet sind, werden diese Zähler beim Löschen des Verlaufs auch von diesem Gerät und aus Ihrem Konto entfernt.",
+      "insightsSyncRequiresAccount": "Melden Sie sich an, um inhaltsfreie Statistikdaten geräteübergreifend zu synchronisieren.",
+      "insightsSyncRequiresHistory": "Aktivieren Sie die Datenaufbewahrung, um Statistiken zu erfassen, bevor Sie sie geräteübergreifend synchronisieren.",
       "usageAnalytics": "Nutzungsanalysen",
       "usageAnalyticsDescription": "Helfen Sie uns, OpenWhispr zu verbessern, indem Sie anonyme Leistungsdaten teilen. Wir senden niemals Transkriptionsinhalte – nur Timing- und Fehlerdaten.",
       "audioRetention": "Audio-Aufbewahrung",
@@ -2402,7 +2413,7 @@
       "dataRetention": "Datenaufbewahrung",
       "dataRetentionDescription": "Transkriptionen und Audio lokal im Verlauf speichern. Wenn deaktiviert, werden Transkriptionen eingefügt, aber nicht gespeichert.",
       "transcriptRetention": "Transkript-Aufbewahrung",
-      "transcriptRetentionDescription": "Gespeicherte Transkriptionen und deren Audio nach diesem Zeitraum automatisch löschen.",
+      "transcriptRetentionDescription": "Gespeicherte Transkriptionen, deren Audio und deren Insights-Zähler nach diesem Zeitraum automatisch löschen.",
       "transcriptRetentionForever": "Unbegrenzt",
       "hoursAgo": "vor {{count}} Std.",
       "justNow": "gerade eben",
@@ -2452,7 +2463,9 @@
         "openwhisprDesc": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
         "providersDesc": "Eigenen API-Schlüssel nutzen.",
         "localDesc": "Modelle auf dem Gerät. Voll privat.",
-        "selfHostedDesc": "Eigener Server in Ihrem Netzwerk."
+        "selfHostedDesc": "Eigener Server in Ihrem Netzwerk.",
+        "enterprise": "Unternehmens-Cloud",
+        "enterpriseDesc": "Audio wird an die eigene Cloud Ihrer Organisation gesendet."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
@@ -2477,6 +2490,10 @@
         "switchedSelfHosted": {
           "title": "Selbst gehostet",
           "description": "Verwendung Ihres eigenen Servers."
+        },
+        "switchedEnterprise": {
+          "title": "Unternehmens-Cloud ausgewählt",
+          "description": "Diktate verwenden jetzt die von Ihrer Organisation verwaltete Transkription."
         }
       },
       "gpuDevice": {
@@ -2534,7 +2551,8 @@
             "info": "Audio, das von einem Segment ins nächste übertragen wird, um abrupte Schnitte beim Zusammenfügen zu vermeiden."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt."
     },
     "intelligence": {
       "gpuDevice": {
@@ -2705,7 +2723,47 @@
       }
     }
   },
+  "insights": {
+    "title": "Statistiken",
+    "description": "Ein privater Blick auf Ihre Diktiergewohnheiten und Ihren Fortschritt.",
+    "wordsSpoken": "Gesprochene Wörter",
+    "currentStreak": "Aktuelle Serie",
+    "wordsPerMinute": "Wörter pro Minute",
+    "dictations": "Diktate",
+    "allTime": "Gesamt",
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tage",
+    "longestStreak_one": "Längste: {{count}} Tag",
+    "longestStreak_other": "Längste: {{count}} Tage",
+    "wpmCoverage": "Basierend auf {{count}} % der gemessenen Wörter",
+    "activity": "Sprechaktivität",
+    "activityDescription": "Gesprochene Wörter der letzten 6 Monate",
+    "activityLabel": "Heatmap der Sprechaktivität über 6 Monate",
+    "activityLess": "Weniger",
+    "activityMore": "Mehr",
+    "dayTooltip_one": "{{date}}: {{count}} Wort",
+    "dayTooltip_other": "{{date}}: {{count}} Wörter",
+    "dataRetentionDisabled": "Die Datenaufbewahrung ist deaktiviert, daher werden neue Diktate in den Statistiken nicht gezählt – weder auf diesem Gerät noch in Ihrem Konto. Bereits synchronisierte Zähler bleiben in Ihrem Konto.",
+    "onDevice": "Auf diesem Gerät",
+    "synced": "Geräteübergreifend synchronisiert",
+    "syncFallback": "Gerätedaten werden angezeigt – Synchronisierung nicht verfügbar",
+    "syncPrompt": "Synchronisieren Sie inhaltsfreie Zähler, um lokale und Cloud-Aktivität geräteübergreifend zusammenzuführen.",
+    "enableSync": "Synchronisierung aktivieren",
+    "claimTitle": "Frühere Diktate einbeziehen?",
+    "claimDescription_one": "{{count}} Diktat wurde auf diesem Gerät vor Ihrer Anmeldung aufgezeichnet. Wird es einbezogen, werden nur Wortanzahl, Datum und genaue Uhrzeit der Aufnahme, Dauer und Modelltyp übertragen – nie Transkriptionsinhalte.",
+    "claimDescription_other": "{{count}} Diktate wurden auf diesem Gerät vor Ihrer Anmeldung aufgezeichnet. Werden sie einbezogen, werden nur Wortanzahl, Datum und genaue Uhrzeit der jeweiligen Aufnahme, Dauer und Modelltyp übertragen – nie Transkriptionsinhalte.",
+    "claimInclude": "Einbeziehen",
+    "claimSkip": "Jetzt nicht",
+    "enableTitle": "Insights-Synchronisierung aktivieren?",
+    "enableConfirm": "Synchronisierung aktivieren",
+    "enableDescription_one": "{{count}} bereits auf diesem Gerät aufgezeichnetes Diktat wird in Ihr Konto hochgeladen. Die Insights-Synchronisierung überträgt nur Wortanzahl, Datum und genaue Uhrzeit der jeweiligen Aufnahme, Dauer und Modelltyp – nie Transkriptionsinhalte.",
+    "enableDescription_other": "{{count}} bereits auf diesem Gerät aufgezeichnete Diktate werden in Ihr Konto hochgeladen. Die Insights-Synchronisierung überträgt nur Wortanzahl, Datum und genaue Uhrzeit der jeweiligen Aufnahme, Dauer und Modelltyp – nie Transkriptionsinhalte.",
+    "emptyTitle": "Noch keine Diktate",
+    "emptyBody": "Beginnen Sie zu diktieren – Ihre Wörter, Serien und tägliche Aktivität erscheinen dann hier.",
+    "loadError": "Insights konnten von diesem Gerät nicht gelesen werden."
+  },
   "sidebar": {
+    "insights": "Statistiken",
     "home": "Startseite",
     "notes": "Notizen",
     "upload": "Hochladen",
@@ -3185,6 +3243,18 @@
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."
+      },
+      "systemAudioInterrupted": {
+        "title": "Meeting-Ton unterbrochen",
+        "description": "Die Aufnahme des Systemtons wurde unterbrochen und startet neu. Einige Sekunden des Gesprächs können im Transkript fehlen."
+      },
+      "systemAudioStopped": {
+        "title": "Meeting-Ton gestoppt",
+        "description": "OpenWhispr nimmt die anderen Teilnehmer nicht mehr auf. Beenden Sie die Aufnahme und starten Sie sie erneut, oder prüfen Sie Ihr Audioausgabegerät."
+      },
+      "systemAudioQuiet": {
+        "title": "Meeting-Audio ist verstummt",
+        "description": "Seit einigen Minuten war niemand zu hören. Falls das Gespräch noch läuft, prüfen Sie Ihr Audioausgabegerät."
       }
     },
     "meetingPill": {
@@ -3374,6 +3444,7 @@
     "wordsReady_other": "{{count}} Wörter bereit",
     "import": "Importieren",
     "yourDictionary": "Dein Wörterbuch",
+    "promptLimitNotice": "Dein Wörterbuch umfasst {{chars}} Zeichen. Groq- und Whisper-Modelle lesen davon nur die letzten paar hundert Zeichen – eine kürzere Liste funktioniert dort besser. Andere Modelle erhalten die vollständige Liste.",
     "exportDictionary": "Wörterbuch exportieren",
     "exportFailed": "Export fehlgeschlagen",
     "editWord": "{{word}} bearbeiten",

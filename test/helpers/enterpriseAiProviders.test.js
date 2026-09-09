@@ -30,7 +30,6 @@ test("builds the Azure SDK base below the public resource origin", () => {
 
 test("rejects unsupported managed Azure endpoint forms", () => {
   for (const endpoint of [
-    "https://example.services.ai.azure.com",
     "https://example.openai.azure.us",
     "https://example.openai.azure.com/openai",
     "https://example.openai.azure.com?api-key=secret",

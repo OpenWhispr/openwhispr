@@ -202,7 +202,10 @@
     "skip": "Passer",
     "policyAiProcessingRestricted": "Le traitement par IA est restreint par votre organisation.",
     "policyAgentRestricted": "L’utilisation de l’assistant IA est restreinte par votre organisation.",
-    "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation."
+    "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation.",
+    "managedConfigLoading": "Vérification de la configuration gérée de votre organisation en cours. Réessayez dans un instant.",
+    "managedConfigUnavailable": "L'accès d'entreprise géré est indisponible. Reconnectez-vous ou contactez votre administrateur.",
+    "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur."
   },
   "onboarding": {
     "rehaul": {
@@ -413,7 +416,7 @@
         "download": "Télécharger",
         "downloadingShort": "Téléchargement",
         "selected": "Sélectionné",
-        "selectModel": "Sélectionner le modèle",
+        "use": "Utiliser",
         "downloadInProgress": "Téléchargement en cours",
         "cancelDownload": "Annuler le téléchargement de {{model}}",
         "downloads": "Téléchargements de modèles",
@@ -662,7 +665,8 @@
       "rawTranscript": "Transcription brute",
       "clearAll": "Tout effacer",
       "clearAllTitle": "Effacer toutes les transcriptions",
-      "clearAllDescription": "Toutes les transcriptions et fichiers audio seront définitivement supprimés.",
+      "clearAllDescription": "Toutes les transcriptions, tous les fichiers audio et les compteurs Insights seront définitivement supprimés de cet appareil et de votre compte.",
+      "clearAllDescriptionDevice": "Toutes les transcriptions, tous les fichiers audio et les compteurs Insights seront définitivement supprimés de cet appareil. Les compteurs déjà synchronisés avec un compte ne seront pas affectés.",
       "clearAllSuccess": "Historique effacé",
       "clearAllErrorTitle": "Impossible d'effacer l'historique",
       "clearAllErrorDescription": "Une erreur est survenue. Veuillez réessayer.",
@@ -903,7 +907,10 @@
         "chunkLoss": "Un problème réseau a fait perdre une trop grande partie de l'enregistrement. Retranscrivez-le depuis l'historique.",
         "agentReasoningFailed": "Votre assistant vocal n'a pas pu traiter la commande ; la transcription brute a été insérée à la place.",
         "screenContextSkipped": "La capture n'a pas pu être envoyée ; votre commande a été exécutée sans contexte d'écran.",
-        "customEndpointInvalid": "Votre point de terminaison de transcription personnalisé n'est pas configuré ou son URL est invalide. Mettez-le à jour dans Réglages → Parole en texte."
+        "customEndpointInvalid": "Votre point de terminaison de transcription personnalisé n'est pas configuré ou son URL est invalide. Mettez-le à jour dans Réglages → Parole en texte.",
+        "managedTranscriptionUnavailable": "La transcription gérée n'est pas disponible pour le moment. Réessayez dans un instant.",
+        "managedRouteInvalid": "La transcription gérée n'a pas pu démarrer en raison d'une incohérence de configuration. Réessayez ou contactez votre administrateur.",
+        "managedAuthRejected": "Les identifiants de transcription gérée de votre organisation ont été refusés. Contactez votre administrateur."
       },
       "translationFallback": {
         "unreachableTitle": "Traduction indisponible",
@@ -2386,6 +2393,10 @@
       "cloudNotesMigrationDone": "Toutes les notes sauvegardées",
       "description": "Contrôlez quelles données quittent votre appareil. Tout est désactivé par défaut.",
       "title": "Confidentialité",
+      "insightsSync": "Synchroniser les Statistiques personnelles",
+      "insightsSyncDescription": "Synchronisez le nombre de mots, la date et l'heure exacte de chaque dictée, les durées et les types de modèle entre vos appareils. Le contenu des transcriptions n'est jamais inclus. Lorsque vous êtes connecté, effacer l'historique supprime également ces compteurs de cet appareil et de votre compte.",
+      "insightsSyncRequiresAccount": "Connectez-vous pour synchroniser des données de Statistiques sans contenu entre vos appareils.",
+      "insightsSyncRequiresHistory": "Activez la conservation des données pour enregistrer les Statistiques avant de les synchroniser entre vos appareils.",
       "usageAnalytics": "Analyse d'utilisation",
       "usageAnalyticsDescription": "Aidez-nous à améliorer OpenWhispr en partageant des métriques de performance anonymes. Nous n'envoyons jamais le contenu de vos transcriptions — uniquement des données de performance et d'erreurs.",
       "audioRetention": "Conservation de l'audio",
@@ -2402,7 +2413,7 @@
       "dataRetention": "Conservation des données",
       "dataRetentionDescription": "Stocker les transcriptions et l'audio localement dans votre historique. Lorsque désactivé, les transcriptions sont collées mais pas enregistrées.",
       "transcriptRetention": "Conservation des transcriptions",
-      "transcriptRetentionDescription": "Supprimer automatiquement les transcriptions enregistrées et leur audio après cette période.",
+      "transcriptRetentionDescription": "Supprimer automatiquement les transcriptions enregistrées, leur audio et leurs compteurs Insights après cette période.",
       "transcriptRetentionForever": "Toujours",
       "hoursAgo": "il y a {{count}}h",
       "justNow": "à l'instant",
@@ -2452,7 +2463,9 @@
         "openwhisprDesc": "Résultats fiables. Aucune configuration requise.",
         "providersDesc": "Utilisez votre propre clé API.",
         "localDesc": "Modèles sur l'appareil. 100 % privé.",
-        "selfHostedDesc": "Votre serveur sur votre réseau."
+        "selfHostedDesc": "Votre serveur sur votre réseau.",
+        "enterprise": "Cloud d'entreprise",
+        "enterpriseDesc": "L'audio est envoyé vers le cloud de votre organisation."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Résultats fiables. Aucune configuration requise.",
@@ -2477,6 +2490,10 @@
         "switchedSelfHosted": {
           "title": "Auto-hébergé",
           "description": "Utilisation de votre propre serveur."
+        },
+        "switchedEnterprise": {
+          "title": "Cloud d'entreprise sélectionné",
+          "description": "La dictée utilise désormais la transcription gérée par votre organisation."
         }
       },
       "gpuDevice": {
@@ -2534,7 +2551,8 @@
             "info": "Audio prolongé d'un segment au suivant pour éviter les coupures brusques lors de la concaténation."
           }
         }
-      }
+      },
+      "meetingEnterpriseOnly": "Votre organisation n'autorise que la transcription cloud d'entreprise, qui ne couvre pas encore l'enregistrement des réunions."
     },
     "intelligence": {
       "gpuDevice": {
@@ -2705,7 +2723,47 @@
       }
     }
   },
+  "insights": {
+    "title": "Statistiques",
+    "description": "Une vue privée de vos habitudes de dictée et de votre régularité.",
+    "wordsSpoken": "Mots dictés",
+    "currentStreak": "Série en cours",
+    "wordsPerMinute": "Mots par minute",
+    "dictations": "Dictées",
+    "allTime": "Depuis le début",
+    "days_one": "{{count}} jour",
+    "days_other": "{{count}} jours",
+    "longestStreak_one": "Record : {{count}} jour",
+    "longestStreak_other": "Record : {{count}} jours",
+    "wpmCoverage": "Basé sur {{count}} % des mots mesurés",
+    "activity": "Activité de dictée",
+    "activityDescription": "Mots dictés au cours des 6 derniers mois",
+    "activityLabel": "Carte de chaleur de l'activité de dictée sur 6 mois",
+    "activityLess": "Moins",
+    "activityMore": "Plus",
+    "dayTooltip_one": "{{date}} : {{count}} mot",
+    "dayTooltip_other": "{{date}} : {{count}} mots",
+    "dataRetentionDisabled": "La conservation des données est désactivée : les nouvelles dictées ne sont comptabilisées dans les Statistiques ni sur cet appareil ni dans votre compte. Les compteurs déjà synchronisés restent dans votre compte.",
+    "onDevice": "Sur cet appareil",
+    "synced": "Synchronisé entre les appareils",
+    "syncFallback": "Données de l'appareil affichées — synchronisation indisponible",
+    "syncPrompt": "Synchronisez des compteurs sans contenu pour combiner l'activité locale et cloud sur tous vos appareils.",
+    "enableSync": "Activer la synchronisation",
+    "claimTitle": "Inclure les dictées antérieures ?",
+    "claimDescription_one": "{{count}} dictée a été enregistrée sur cet appareil avant votre connexion. L'inclure n'envoie que le nombre de mots, la date et l'heure exacte à laquelle elle a eu lieu, sa durée et le type de modèle : jamais le contenu des transcriptions.",
+    "claimDescription_other": "{{count}} dictées ont été enregistrées sur cet appareil avant votre connexion. Les inclure n'envoie que le nombre de mots, la date et l'heure exacte de chacune, les durées et les types de modèle : jamais le contenu des transcriptions.",
+    "claimInclude": "Inclure",
+    "claimSkip": "Pas maintenant",
+    "enableTitle": "Activer la synchronisation d'Insights ?",
+    "enableConfirm": "Activer la synchronisation",
+    "enableDescription_one": "{{count}} dictée déjà enregistrée sur cet appareil sera envoyée vers votre compte. La synchronisation d'Insights n'envoie que le nombre de mots, la date et l'heure exacte de chacune, les durées et les types de modèle : jamais le contenu des transcriptions.",
+    "enableDescription_other": "{{count}} dictées déjà enregistrées sur cet appareil seront envoyées vers votre compte. La synchronisation d'Insights n'envoie que le nombre de mots, la date et l'heure exacte de chacune, les durées et les types de modèle : jamais le contenu des transcriptions.",
+    "emptyTitle": "Aucune dictée pour l'instant",
+    "emptyBody": "Commencez à dicter : vos mots, vos séries et votre activité quotidienne apparaîtront ici.",
+    "loadError": "Impossible de lire les Insights depuis cet appareil."
+  },
   "sidebar": {
+    "insights": "Statistiques",
     "home": "Accueil",
     "notes": "Notes",
     "upload": "Importer",
@@ -3185,6 +3243,18 @@
       "systemAudioSilent": {
         "title": "Aucun son de réunion détecté pour le moment",
         "description": "Seul votre microphone a capté du son jusqu'à présent. Vous êtes en visioconférence ? Vérifiez que le son de la réunion est diffusé sur cet ordinateur et qu'il n'est pas coupé. Vous enregistrez en présentiel ? Vous pouvez ignorer ce message : votre microphone capte la salle."
+      },
+      "systemAudioInterrupted": {
+        "title": "Son de la réunion interrompu",
+        "description": "La capture du son système s'est arrêtée et redémarre. Quelques secondes de l'appel peuvent manquer dans la transcription."
+      },
+      "systemAudioStopped": {
+        "title": "Son de la réunion arrêté",
+        "description": "OpenWhispr ne capte plus les autres participants. Arrêtez l'enregistrement puis relancez-le, ou vérifiez votre périphérique de sortie audio."
+      },
+      "systemAudioQuiet": {
+        "title": "L'audio de la réunion est devenu silencieux",
+        "description": "Personne n'a été entendu depuis quelques minutes. Si l'appel est toujours en cours, vérifiez votre périphérique de sortie audio."
       }
     },
     "meetingPill": {
@@ -3374,6 +3444,7 @@
     "wordsReady_other": "{{count}} mots prêts",
     "import": "Importer",
     "yourDictionary": "Votre dictionnaire",
+    "promptLimitNotice": "Votre dictionnaire compte {{chars}} caractères. Les modèles Groq et Whisper n'en lisent que les dernières centaines de caractères : une liste plus courte y fonctionne mieux. Les autres modèles reçoivent la liste complète.",
     "exportDictionary": "Exporter le dictionnaire",
     "exportFailed": "Échec de l'exportation",
     "editWord": "Modifier {{word}}",
