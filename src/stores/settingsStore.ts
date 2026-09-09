@@ -594,6 +594,63 @@ function migrateLLMScopeKeys() {
 
 migrateLLMScopeKeys();
 
+// Builds before 1.10.0 ran migrateMeetingFollowFlags() before
+// migrateProviderSettings() had created `transcriptionMode` / `reasoningMode`,
+// so a profile upgrading straight from ≤1.6.7 copied every Note Recording key
+// except the two modes and then latched the follow flags. Both mode readers
+// default to "openwhispr" with no fallback (selectResolvedMeetingTranscription,
+// selectResolvedLLMConfig), so a Local-everywhere user's note recordings and
+// note formatting went to OpenWhispr Cloud.
+//
+// Re-derive each mode from the snapshot the copy did write, with the same
+// functions migrateProviderSettings() uses — not from today's dictation keys,
+// which the user may have changed since. Runs after migrateLLMScopeKeys() so a
+// pre-1.7.0 profile's reasoning snapshot is under its final `noteFormatting*`
+// names. `noteFormattingCloudMode` is the reasoning-side signal: the scope
+// editor can write the provider alone but only ever writes cloudMode together
+// with mode. Idempotent — writing the mode retires its own guard — and it never
+// touches `meetingUseLocalWhisper`, which nothing reads.
+function healSkippedMeetingFollowModes(): Record<string, InferenceMode> {
+  if (!isBrowser) return {};
+  const healed: Record<string, InferenceMode> = {};
+
+  const meetingUseLocal = localStorage.getItem("meetingUseLocalWhisper");
+  const meetingCloudMode = localStorage.getItem("meetingCloudTranscriptionMode");
+  if (
+    localStorage.getItem("meetingTranscriptionMode") === null &&
+    (meetingUseLocal !== null || meetingCloudMode !== null)
+  ) {
+    const mode = deriveTranscriptionMode(
+      meetingUseLocal === "true",
+      meetingCloudMode,
+      localStorage.getItem("meetingCloudTranscriptionProvider")
+    );
+    localStorage.setItem("meetingTranscriptionMode", mode);
+    healed.meetingTranscriptionMode = mode;
+  }
+
+  const noteFormattingCloudMode = localStorage.getItem("noteFormattingCloudMode");
+  if (localStorage.getItem("noteFormattingMode") === null && noteFormattingCloudMode !== null) {
+    const mode = deriveLegacyReasoningMode(
+      noteFormattingCloudMode,
+      localStorage.getItem("noteFormattingProvider")
+    );
+    localStorage.setItem("noteFormattingMode", mode);
+    healed.noteFormattingMode = mode;
+  }
+
+  return healed;
+}
+
+const healedMeetingFollowModes = healSkippedMeetingFollowModes();
+if (Object.keys(healedMeetingFollowModes).length > 0) {
+  logger.info(
+    "Re-derived Note Recording modes the follow-flag migration had skipped",
+    healedMeetingFollowModes,
+    "settings"
+  );
+}
+
 // Resolved offline, so a retired model's name survives only in the user's own
 // catalog cache and a replacement's only if we seed it. The raw-id fallback is
 // what the live-catalog reconcile shows too.

@@ -198,4 +198,135 @@ test("Note Recording modes survive the follow-flag migration", async (t) => {
       assert.equal(countWrites("noteFormattingMode"), 1);
     }
   );
+
+  await t.test("a profile that latched before the modes existed is re-derived", async () => {
+    const { mod, state } = await load(LATCHED_LOCAL);
+    assert.equal(storage.getItem("meetingTranscriptionMode"), "local");
+    assert.equal(storage.getItem("noteFormattingMode"), "local");
+    assert.equal(state.meetingTranscriptionMode, "local");
+    assert.equal(mod.selectResolvedNoteFormatting(state).mode, "local");
+    assert.equal(meetingRoute(mod, state).provider, "local");
+    assert.equal(
+      writes.includes("meetingUseLocalWhisper"),
+      false,
+      "no write to a key nothing reads"
+    );
+  });
+
+  await t.test(
+    "a latched profile still holding meetingReasoning* keys is moved, then healed",
+    async () => {
+      const { _llmScopeKeysMigrated, noteFormattingCloudMode, noteFormattingProvider, ...pre170 } =
+        LATCHED_LOCAL;
+      const { state } = await load({
+        ...pre170,
+        meetingCloudReasoningMode: "byok",
+        meetingReasoningProvider: "llama",
+      });
+      assert.equal(storage.getItem("meetingReasoningProvider"), null, "scope-key rename ran first");
+      assert.equal(storage.getItem("noteFormattingCloudMode"), "byok");
+      assert.equal(state.noteFormattingMode, "local");
+    }
+  );
+
+  await t.test("every registry local provider heals note formatting to local", async () => {
+    for (const provider of modelRegistryData.localProviders.map((entry) => entry.id)) {
+      const { state } = await load({ ...LATCHED_LOCAL, noteFormattingProvider: provider });
+      assert.equal(state.noteFormattingMode, "local", provider);
+    }
+  });
+
+  await t.test("a latched cloud profile keeps the cloud it chose", async () => {
+    const { state } = await load({
+      ...LATCHED_LOCAL,
+      transcriptionMode: "openwhispr",
+      useLocalWhisper: "false",
+      meetingUseLocalWhisper: "false",
+      meetingCloudTranscriptionMode: "openwhispr",
+      noteFormattingCloudMode: "openwhispr",
+    });
+    assert.equal(state.meetingTranscriptionMode, "openwhispr", "reconstructed, not localized");
+    assert.equal(state.noteFormattingMode, "openwhispr");
+  });
+
+  // groq has no streaming model, so Note Recording will refuse it — parity with
+  // the 1.6.8 cohort, and away from our servers. Assert the mode, not the throw.
+  await t.test("a latched BYOK profile is re-derived to its own provider", async () => {
+    const { mod, state } = await load({
+      ...LATCHED_LOCAL,
+      transcriptionMode: "providers",
+      useLocalWhisper: "false",
+      meetingUseLocalWhisper: "false",
+      meetingCloudTranscriptionMode: "byok",
+      meetingCloudTranscriptionProvider: "groq",
+      noteFormattingProvider: "anthropic",
+    });
+    const resolved = mod.selectResolvedMeetingTranscription(state);
+    assert.equal(resolved.transcriptionMode, "providers");
+    assert.equal(resolved.cloudTranscriptionProvider, "groq");
+    assert.equal(state.noteFormattingMode, "providers");
+  });
+
+  await t.test(
+    "the heal reads the Note Recording snapshot, not today's dictation keys",
+    async () => {
+      // Dictation moved to the cloud after 1.6.10; Note Recording's copy still says local.
+      const { state } = await load({
+        ...LATCHED_LOCAL,
+        transcriptionMode: "openwhispr",
+        useLocalWhisper: "false",
+        cloudTranscriptionMode: "openwhispr",
+      });
+      assert.equal(state.meetingTranscriptionMode, "local");
+      assert.equal(state.transcriptionMode, "openwhispr", "dictation untouched");
+    }
+  );
+
+  await t.test("an explicit Note Recording choice is never overwritten", async () => {
+    for (const mode of ["openwhispr", "providers", "local"]) {
+      const { state } = await load({
+        ...LATCHED_LOCAL,
+        meetingTranscriptionMode: mode,
+        meetingUseLocalWhisper: String(mode === "local"),
+        meetingCloudTranscriptionMode: mode === "openwhispr" ? "openwhispr" : "byok",
+        noteFormattingMode: mode,
+      });
+      assert.equal(state.meetingTranscriptionMode, mode);
+      assert.equal(state.noteFormattingMode, mode);
+      assert.equal(writes.includes("meetingTranscriptionMode"), false, `${mode}: untouched`);
+      assert.equal(writes.includes("noteFormattingMode"), false, `${mode}: untouched`);
+    }
+  });
+
+  // The scope editor can set a provider alone; only cloudMode proves a copy.
+  // (Also the signed-out-at-1.6.7 cohort: no cloudReasoningMode ever persisted.)
+  await t.test("a note-formatting provider on its own is not a copy", async () => {
+    const { noteFormattingCloudMode, meetingUseLocalWhisper, ...seed } = LATCHED_LOCAL;
+    const { state } = await load({ ...seed, noteFormattingProvider: "anthropic" });
+    assert.equal(storage.getItem("noteFormattingMode"), null);
+    assert.equal(state.noteFormattingMode, "openwhispr", "store default, not derived");
+    assert.equal(writes.includes("noteFormattingMode"), false);
+  });
+
+  await t.test("the heal is idempotent", async () => {
+    await load(LATCHED_LOCAL);
+    const { state } = await reload();
+    assert.equal(state.meetingTranscriptionMode, "local");
+    assert.equal(writes.includes("meetingTranscriptionMode"), false, "second load is silent");
+    assert.equal(writes.includes("noteFormattingMode"), false);
+  });
+
+  // PR #2093's meeting case, kept here too: a local mode over a false flag is
+  // consistent state and must not be touched in either direction.
+  await t.test("a local mode over a false flag is left alone", async () => {
+    const { state } = await load({
+      ...LATCHED_LOCAL,
+      meetingTranscriptionMode: "local",
+      meetingUseLocalWhisper: "false",
+    });
+    assert.equal(state.meetingTranscriptionMode, "local");
+    assert.equal(storage.getItem("meetingUseLocalWhisper"), "false");
+    assert.equal(writes.includes("meetingUseLocalWhisper"), false);
+    assert.equal(writes.includes("meetingTranscriptionMode"), false);
+  });
 });
