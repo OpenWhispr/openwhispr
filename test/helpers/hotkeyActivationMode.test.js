@@ -44,3 +44,20 @@ test("a failed activation-mode registration preserves Tap and notifies the user"
   assert.equal(failures.length, 1);
   assert.equal(failures[0].hotkey, "Alt+R");
 });
+
+test("per-hotkey modes fall back to the legacy mode for unconfigured hotkeys", async () => {
+  const manager = new HotkeyManager();
+  manager.currentHotkey = "F8";
+
+  assert.equal(await manager.setActivationModes({ F8: "push" }), true);
+  assert.equal(manager.getActivationMode("F8"), "push");
+  assert.equal(manager.getActivationMode("F9"), "tap");
+});
+
+test("Globe and Fn share the same native listener activation mode", async () => {
+  const manager = new HotkeyManager();
+  manager.currentHotkey = "Fn";
+
+  assert.equal(await manager.setActivationModes({ Fn: "push" }), true);
+  assert.equal(manager.getActivationMode("GLOBE"), "push");
+});

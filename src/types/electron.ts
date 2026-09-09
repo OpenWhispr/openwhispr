@@ -2087,6 +2087,7 @@ declare global {
       // Activation mode persistence (file-based for reliable startup)
       getActivationMode?: () => Promise<"tap" | "push">;
       saveActivationMode?: (mode: "tap" | "push") => Promise<void>;
+      getActivationModes?: () => Promise<Record<string, "tap" | "push">>;
 
       // Debug logging
       getLogLevel?: () => Promise<string>;
@@ -2144,6 +2145,7 @@ declare global {
 
       // Windows Push-to-Talk notifications
       notifyActivationModeChanged?: (mode: "tap" | "push") => void;
+      notifyActivationModesChanged?: (modes: Record<string, "tap" | "push">) => void;
       notifyHotkeyChanged?: (hotkey: string) => void;
       registerMeetingHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       notifyFloatingIconAutoHideChanged?: (enabled: boolean) => void;

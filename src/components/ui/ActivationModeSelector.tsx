@@ -7,6 +7,7 @@ interface ActivationModeSelectorProps {
   value: ActivationMode;
   onChange: (mode: ActivationMode) => void;
   pushDisabledReason?: string;
+  disabled?: boolean;
 }
 
 const OPTIONS = [
@@ -18,6 +19,7 @@ export function ActivationModeSelector({
   value,
   onChange,
   pushDisabledReason,
+  disabled = false,
 }: ActivationModeSelectorProps) {
   const { t } = useTranslation();
 
@@ -35,21 +37,21 @@ export function ActivationModeSelector({
 
       {OPTIONS.map(({ mode, Icon, labelKey }) => {
         const disabledReason = mode === "push" ? pushDisabledReason : undefined;
-        const disabled = Boolean(disabledReason);
+        const isDisabled = disabled || Boolean(disabledReason);
         const label = t(labelKey);
 
         return (
           <button
             key={mode}
             type="button"
-            disabled={disabled}
+            disabled={isDisabled}
             title={disabledReason}
             aria-label={disabledReason ? `${label}: ${disabledReason}` : undefined}
             onClick={() => onChange(mode)}
             className={`
               relative z-10 flex-1 flex items-center justify-center gap-1 rounded px-2.5 py-1
               transition-colors duration-150
-              ${disabled ? "cursor-not-allowed" : "cursor-pointer"}
+              ${isDisabled ? "cursor-not-allowed" : "cursor-pointer"}
               ${value === mode ? "text-foreground" : "text-muted-foreground hover:text-foreground"}
             `}
           >

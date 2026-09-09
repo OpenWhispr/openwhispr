@@ -33,3 +33,34 @@ test("provider migrations classify every registry local provider as local", asyn
     assert.equal(state.chatAgentMode, "local", `${providerId}: chatAgentMode`);
   }
 });
+
+test("main-process activation modes replace a stale renderer map even when empty", async (t) => {
+  const { storage } = installBrowserGlobals(t, {
+    initialStorage: {
+      dictationKey: "F8",
+      activationMode: "tap",
+      activationModeByHotkey: JSON.stringify({ F8: "push" }),
+    },
+    window: {
+      electronAPI: {
+        getActivationMode: async () => "tap",
+        getActivationModes: async () => ({}),
+        setDictionary: async () => {},
+      },
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-activation-mode-sync-test-",
+    mockModules: {
+      "/utils/agentName": "export const ensureAgentNameInDictionary = () => {};",
+    },
+  });
+  const { initializeSettings, useSettingsStore } = await vite.ssrLoadModule(
+    "/stores/settingsStore.ts"
+  );
+
+  await initializeSettings();
+
+  assert.deepEqual(useSettingsStore.getState().activationModeByHotkey, {});
+  assert.equal(storage.getItem("activationModeByHotkey"), "{}");
+});

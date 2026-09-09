@@ -132,7 +132,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     "onboarding",
     dictationHotkey
   );
-  const { activationMode, setActivationMode } = settings;
+  const { activationMode, activationModeByHotkey, setActivationModeForHotkey } = settings;
+  const dictationActivationMode = activationModeByHotkey[dictationHotkey] ?? activationMode;
   // This hook also starts the membership fetch for already-authenticated users;
   // relying on the login transition alone would leave resumed onboarding stuck
   // waiting for workspace resolution after an app restart.
@@ -819,15 +820,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   </p>
                   <p className="mt-1 text-sm text-[var(--onboarding-text-secondary)]">
                     {t(
-                      activationMode === "push"
+                      dictationActivationMode === "push"
                         ? "onboarding.activation.holdDescription"
                         : "onboarding.activation.tapDescription"
                     )}
                   </p>
                 </div>
                 <ActivationModeSelector
-                  value={activationMode}
-                  onChange={setActivationMode}
+                  value={dictationActivationMode}
+                  onChange={(mode) => setActivationModeForHotkey(dictationHotkey, mode)}
                   pushDisabledReason={
                     !supportsPushToTalk
                       ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
@@ -835,7 +836,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 />
               </div>
-              {getPlatform() === "linux" && activationMode === "push" && (
+              {getPlatform() === "linux" && dictationActivationMode === "push" && (
                 <LinuxPttSetupInfo isAvailable={supportsPushToTalk} />
               )}
             </div>
@@ -851,7 +852,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         const description = t(
           assistant
             ? "onboarding.rehaul.assistantDemo.description"
-            : activationMode === "push"
+            : dictationActivationMode === "push"
               ? "onboarding.activation.holdHotkey"
               : "onboarding.rehaul.dictationDemo.description",
           // Formatted for reading: the raw accelerator would show internal

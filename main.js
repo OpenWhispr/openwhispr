@@ -1005,6 +1005,7 @@ async function startApp() {
   applyOpenWhisprOriginHeader(session.defaultSession);
 
   await windowManager.setActivationModeCache(environmentManager.getActivationMode());
+  await windowManager.setActivationModesCache(environmentManager.getActivationModes());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 
@@ -1031,6 +1032,35 @@ async function startApp() {
       })
       .catch((err) => {
         debugLogger.error("Failed to change activation mode", { error: err.message }, "hotkey");
+      });
+  });
+
+  ipcMain.on("activation-modes-changed", (_event, modes) => {
+    activationModeChangeQueue = activationModeChangeQueue
+      .then(async () => {
+        const success = await windowManager.setActivationModesCache(modes);
+        const effectiveModes = windowManager.hotkeyManager.getActivationModes();
+        if (success) {
+          environmentManager.saveActivationModes(effectiveModes);
+        } else {
+          for (const browserWindow of BrowserWindow.getAllWindows()) {
+            if (!browserWindow.isDestroyed()) {
+              browserWindow.webContents.send("setting-updated", {
+                key: "activationModeByHotkey",
+                value: effectiveModes,
+              });
+            }
+          }
+        }
+        windowManager.resetWindowsPushState();
+        windowManager.reconcileNativeKeyListeners();
+      })
+      .catch((err) => {
+        debugLogger.error(
+          "Failed to change per-hotkey activation modes",
+          { error: err.message },
+          "hotkey"
+        );
       });
   });
 
@@ -1322,7 +1352,7 @@ async function startApp() {
       debugLogger?.debug("[Globe] globe-down received", {
         currentHotkey,
         mainWindowLive,
-        activationMode: mainWindowLive ? windowManager.getActivationMode() : "n/a",
+        activationMode: mainWindowLive ? windowManager.getActivationMode("GLOBE") : "n/a",
       });
 
       // Forward to control panel for hotkey capture
@@ -1338,7 +1368,7 @@ async function startApp() {
         } else if (mainWindowLive) {
           // Capture target app PID BEFORE showing the overlay
           if (textEditMonitor) textEditMonitor.captureTargetPid();
-          const activationMode = windowManager.getActivationMode();
+          const activationMode = windowManager.getActivationMode("GLOBE");
           if (activationMode === "push") {
             const now = Date.now();
             if (now - globeLastStopTime < POST_STOP_COOLDOWN_MS) {
@@ -1392,7 +1422,7 @@ async function startApp() {
       }
 
       if (hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey)) {
-        const activationMode = windowManager.getActivationMode();
+        const activationMode = windowManager.getActivationMode("GLOBE");
         if (activationMode === "push") {
           if (globeKeyDownTime === 0 && !globeKeyIsRecording) {
             // The press was ignored (dictation was processing); releasing it
@@ -1464,7 +1494,7 @@ async function startApp() {
       if (!isLiveWindow(windowManager.mainWindow)) return;
       if (windowManager.isDictationProcessing()) return;
 
-      const activationMode = windowManager.getActivationMode();
+      const activationMode = windowManager.getActivationMode(modifier);
       if (textEditMonitor) textEditMonitor.captureTargetPid();
       if (activationMode === "push") {
         if (rightModActiveKey && rightModActiveKey !== modifier) return;
@@ -1491,7 +1521,7 @@ async function startApp() {
       if (hotkeyManager.slotHasHotkey("dictation", modifier)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
 
-        const activationMode = windowManager.getActivationMode();
+        const activationMode = windowManager.getActivationMode(modifier);
         if (activationMode === "push" && (!rightModActiveKey || rightModActiveKey === modifier)) {
           if (rightModDownTime === 0 && !rightModIsRecording) {
             // The press was ignored (dictation was processing); releasing it
@@ -1552,7 +1582,7 @@ async function startApp() {
       if (!isLiveWindow(windowManager.mainWindow)) return;
       if (windowManager.isDictationProcessing()) return;
 
-      const activationMode = windowManager.getActivationMode();
+      const activationMode = windowManager.getActivationMode(button);
       if (textEditMonitor) textEditMonitor.captureTargetPid();
 
       if (activationMode === "push") {
@@ -1583,7 +1613,7 @@ async function startApp() {
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
 
-      const activationMode = windowManager.getActivationMode();
+      const activationMode = windowManager.getActivationMode(button);
       if (
         activationMode === "push" &&
         (!mouseButtonActiveButton || mouseButtonActiveButton === button)
@@ -1674,7 +1704,7 @@ async function startApp() {
     const dispatchNativeKeyDown = (key) => {
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
-        if (windowManager.getActivationMode() === "push") {
+        if (windowManager.getActivationMode(key) === "push") {
           windowManager.startWindowsPushToTalk(key);
         } else {
           windowManager.sendToggleDictation();
@@ -1699,7 +1729,7 @@ async function startApp() {
         windowManager.handleWindowsPushKeyUp(key);
       } else if (
         isLiveWindow(windowManager.mainWindow) &&
-        windowManager.getActivationMode() === "push"
+        windowManager.getActivationMode(key) === "push"
       ) {
         windowManager.handleWindowsPushKeyUp(key);
       }
