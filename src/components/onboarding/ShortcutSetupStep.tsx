@@ -142,6 +142,38 @@ export default function ShortcutSetupStep({
     onClearSelection?.();
   };
 
+  // The box opens pre-filled with one of the recommendations, so the row carries
+  // the rest — without them the alternatives are reachable only by first clearing
+  // the chord the step just offered. Once the user has a chord of their own,
+  // suggesting others is noise.
+  const visibleRecommendations =
+    confirmed || hasCapturedChord
+      ? []
+      : // Deduplicate on the printed label, not the accelerator: GLOBE and Fn are
+        // distinct chords that both render as "Globe/Fn".
+        recommendations.filter(
+          (hotkey) => formatRecommendedHotkey(hotkey) !== formatRecommendedHotkey(candidate)
+        );
+  const recommendationRow = visibleRecommendations.length > 0 && (
+    <div
+      className={`flex flex-wrap items-center justify-center leading-[1.4] text-[var(--onboarding-text-tertiary)] ${
+        dense ? "mt-3 gap-2 text-sm" : "mt-6 gap-3 text-base"
+      }`}
+    >
+      <span>{recommendedLabel}</span>
+      {visibleRecommendations.map((hotkey) => (
+        <span
+          key={hotkey}
+          className={`rounded-full bg-[var(--onboarding-surface-tertiary)] text-[var(--onboarding-text-secondary)] ${
+            dense ? "px-2.5 py-1 text-xs" : "px-3 py-1.5 text-sm"
+          }`}
+        >
+          {formatRecommendedHotkey(hotkey)}
+        </span>
+      ))}
+    </div>
+  );
+
   const captureInput = (
     <HotkeyInput
       key={captureKey}
@@ -180,6 +212,8 @@ export default function ShortcutSetupStep({
               <HotkeyChord value={heldModifiers || candidate} compact={dense} />
             )}
           </div>
+
+          {recommendationRow}
 
           <div
             className={`mt-auto flex flex-col items-center gap-2.5 pb-1 ${dense ? "translate-y-3 pt-5" : "pt-8"}`}
@@ -235,17 +269,7 @@ export default function ShortcutSetupStep({
             )}
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-base leading-[1.4] text-[var(--onboarding-text-tertiary)]">
-            <span>{recommendedLabel}</span>
-            {recommendations.map((hotkey) => (
-              <span
-                key={hotkey}
-                className="rounded-full bg-[var(--onboarding-surface-tertiary)] px-3 py-1.5 text-sm text-[var(--onboarding-text-secondary)]"
-              >
-                {formatRecommendedHotkey(hotkey)}
-              </span>
-            ))}
-          </div>
+          {recommendationRow}
         </>
       )}
     </div>
