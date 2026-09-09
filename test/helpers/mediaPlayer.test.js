@@ -135,8 +135,8 @@ function loadMediaPlayer(platform, { existingPaths = () => false, warnThrows = f
 
 // Lets any pending continuation run, for assertions that something did *not*
 // happen and so have no call to wait for.
-async function drain(turns = 10) {
-  for (let i = 0; i < turns; i += 1) {
+async function drain() {
+  for (let i = 0; i < 10; i += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
 }
@@ -229,7 +229,7 @@ test("win32: a PowerShell that never closes its pipes is killed at the deadline 
   const { mediaPlayer, calls, logs } = loadMediaPlayer("win32");
 
   const pausing = mediaPlayer.pauseMedia();
-  const gsmtc = await waitForCall(calls, 0);
+  await waitForCall(calls, 0);
 
   t.mock.timers.tick(4999);
   assert.equal(calls.length, 1, "nothing is killed before the deadline");
