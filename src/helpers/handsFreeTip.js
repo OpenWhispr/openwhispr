@@ -4,7 +4,7 @@ import { getDefaultHotkey, parseHotkeyList } from "../utils/hotkeys";
 // hands-free gesture would serve the user better than keeping a key down.
 export const HANDS_FREE_TIP_HOLD_MS = 120000;
 export const HANDS_FREE_TIP_MAX_SHOWS = 3;
-export const HANDS_FREE_TIP_DURATION_MS = 6000;
+export const HANDS_FREE_TIP_DURATION_MS = 7000;
 
 const SHOWN_COUNT_KEY = "handsFreeTipShownCount";
 const HANDS_FREE_USED_KEY = "handsFreeUsed";
