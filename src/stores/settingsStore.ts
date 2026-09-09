@@ -485,21 +485,23 @@ migrateUploadTranscription();
 //
 // Note Recording is absent on purpose: resolveMeetingTranscriptionOptions
 // branches on `meetingTranscriptionMode`, the same key MeetingSettings renders,
-// so its picker and its router cannot disagree. `meetingUseLocalWhisper` has no
-// reader, and repairing it would only write reassuring dead state.
+// so its picker and its router cannot disagree. No router reads
+// `meetingUseLocalWhisper` — selectResolvedMeetingTranscription still exposes it,
+// but its one consumer passes only the mode — so repairing it would write state
+// nothing routes on. Anything that starts reading it must reconcile it first.
 //
-// Deliberately one-directional — every rule moves away from our servers, toward
-// what the picker already shows. Completing it symmetrically would take profiles
-// the field really holds and start uploading their audio: the mode-less Settings
-// toggle wrote the local flag alone until 6fb0c906, and the onboarding provider
-// step writes `cloudTranscriptionMode` before the commit that derives the mode.
+// Completing either rule symmetrically would take profiles the field really
+// holds and start uploading their audio: the mode-less Settings toggle wrote the
+// local flag alone until 6fb0c906, and the onboarding provider step writes
+// `cloudTranscriptionMode` before the commit that derives the mode.
 //
-// Not folded into TRANSCRIPTION_CONTEXT_KEYS: that lives below the store, so it
-// is still in its temporal dead zone here, and it covers all three contexts.
+// Kept separate from TRANSCRIPTION_CONTEXT_KEYS rather than sharing it: that
+// table carries provider/model/baseUrl too and belongs beside its consumers far
+// below, and it covers the meeting context this repair must skip.
 const TRANSCRIPTION_ROUTING_KEYS: ReadonlyArray<{
-  mode: string;
-  useLocal: string;
-  cloudMode: string;
+  mode: keyof SettingsState;
+  useLocal: keyof SettingsState;
+  cloudMode: keyof SettingsState;
 }> = [
   { mode: "transcriptionMode", useLocal: "useLocalWhisper", cloudMode: "cloudTranscriptionMode" },
   {
@@ -509,8 +511,8 @@ const TRANSCRIPTION_ROUTING_KEYS: ReadonlyArray<{
   },
 ];
 
-function reconcileTranscriptionRouting(): string[] {
-  if (!isBrowser) return [];
+function reconcileTranscriptionRouting(): void {
+  if (!isBrowser) return;
   const repaired: string[] = [];
   for (const keys of TRANSCRIPTION_ROUTING_KEYS) {
     const mode = localStorage.getItem(keys.mode);
@@ -518,6 +520,10 @@ function reconcileTranscriptionRouting(): string[] {
       localStorage.setItem(keys.useLocal, "true");
       repaired.push(keys.useLocal);
     }
+    // Tests the stored value, not the `upload… || dictation…` fallback the upload
+    // resolver applies: deriveTranscriptionMode only yields these two modes when
+    // the scope's own cloud key is set, so an unset key is a scope that never
+    // chose rather than a desync.
     if (
       (mode === "providers" || mode === "self-hosted") &&
       localStorage.getItem(keys.cloudMode) === "openwhispr"
@@ -526,17 +532,19 @@ function reconcileTranscriptionRouting(): string[] {
       repaired.push(keys.cloudMode);
     }
   }
-  return repaired;
-}
+  if (repaired.length === 0) return;
 
-const repairedTranscriptionRoutingKeys = reconcileTranscriptionRouting();
-if (repairedTranscriptionRoutingKeys.length > 0) {
+  // Only reaches the log file when debug logging is already on, and the repair
+  // is one-shot — so this catches the users who were already capturing, not the
+  // ones asked to reproduce afterwards.
   logger.info(
     "Repaired transcription routing that disagreed with the selected mode",
-    { keys: repairedTranscriptionRoutingKeys },
+    { keys: repaired },
     "settings"
   );
 }
+
+reconcileTranscriptionRouting();
 
 function migrateAgentMode() {
   if (!isBrowser) return;
