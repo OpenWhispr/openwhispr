@@ -2,14 +2,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-// Each scope's `*TranscriptionMode` is what its Settings picker renders and what
-// the user last chose. Dictation and upload route on two *other* keys beside it:
-// `*UseLocalWhisper` (audioManager's processAudio/shouldUseStreaming;
-// fileTranscription) and `*CloudTranscriptionMode` (`isOpenWhisprCloud`). A
-// since-removed post-sign-in effect wrote both of those and neither mode (#2086),
-// so a profile could show "Local · Active" or "API Keys · Active" while audio
-// went to OpenWhispr Cloud, and clicking the shown mode was a no-op because each
-// picker skips the mode it already renders. The store repairs both on load.
+// Pins reconcileTranscriptionRouting() in settingsStore.ts; the rationale for
+// each rule, and for excluding Note Recording, lives in the comment above it.
+// In short: dictation and upload render `*TranscriptionMode` but route on
+// `*UseLocalWhisper` and `*CloudTranscriptionMode`, and a since-removed
+// post-sign-in effect wrote those two and neither mode (#2086).
 //
 // `_providerSettingsMigrated: "1"` must be seeded: migrateProviderSettings() runs
 // first and would otherwise re-derive `transcriptionMode` from the very flag
@@ -57,19 +54,22 @@ test("startup repairs transcription routing that disagrees with the selected mod
   // `isOpenWhisprCloud` routes on. A user who picked their own API keys or their
   // own endpoint was billed against managed cloud while the picker said otherwise.
   for (const mode of ["providers", "self-hosted"]) {
-    await t.test(`a stale "${mode}" mode over managed-cloud routing goes back to BYOK`, async () => {
-      const state = await load({
-        ...MIGRATED,
-        ...COPIES_DONE,
-        transcriptionMode: mode,
-        useLocalWhisper: "false",
-        cloudTranscriptionMode: "openwhispr",
-      });
-      assert.equal(state.cloudTranscriptionMode, "byok");
-      assert.equal(storage.getItem("cloudTranscriptionMode"), "byok");
-      assert.equal(state.transcriptionMode, mode);
-      assert.equal(state.useLocalWhisper, false, "still cloud, just the user's own");
-    });
+    await t.test(
+      `a stale "${mode}" mode over managed-cloud routing goes back to BYOK`,
+      async () => {
+        const state = await load({
+          ...MIGRATED,
+          ...COPIES_DONE,
+          transcriptionMode: mode,
+          useLocalWhisper: "false",
+          cloudTranscriptionMode: "openwhispr",
+        });
+        assert.equal(state.cloudTranscriptionMode, "byok");
+        assert.equal(storage.getItem("cloudTranscriptionMode"), "byok");
+        assert.equal(state.transcriptionMode, mode);
+        assert.equal(state.useLocalWhisper, false, "still cloud, just the user's own");
+      }
+    );
   }
 
   await t.test("the upload scope's cloud mode is repaired too", async () => {
@@ -130,10 +130,11 @@ test("startup repairs transcription routing that disagrees with the selected mod
     assert.equal(storage.getItem("uploadUseLocalWhisper"), "true");
   });
 
-  // Note Recording is deliberately absent from the repair: resolveMeetingTranscription-
-  // Options branches on meetingTranscriptionMode — the same key MeetingSettings
-  // renders — so its picker and its router cannot disagree. meetingUseLocalWhisper
-  // has no reader at all; repairing it would only write reassuring dead state.
+  // Note Recording is deliberately absent: resolveMeetingTranscriptionOptions
+  // branches on meetingTranscriptionMode — the same key MeetingSettings renders —
+  // so its picker and its router cannot disagree. No router reads
+  // meetingUseLocalWhisper (selectResolvedMeetingTranscription exposes it, but its
+  // one consumer drops it), so repairing it would write state nothing routes on.
   await t.test("the meeting scope is left alone, because it routes on its own mode", async () => {
     const state = await load({
       ...MIGRATED,
@@ -164,6 +165,62 @@ test("startup repairs transcription routing that disagrees with the selected mod
     assert.equal(storage.getItem("uploadUseLocalWhisper"), "true");
   });
 
+  // The two rules are independent: a Local selection says nothing about which
+  // cloud lane the profile would use if it ever left Local.
+  await t.test("the local rule leaves the cloud mode alone", async () => {
+    await load({
+      ...MIGRATED,
+      ...COPIES_DONE,
+      transcriptionMode: "local",
+      useLocalWhisper: "false",
+      cloudTranscriptionMode: "openwhispr",
+    });
+    assert.equal(storage.getItem("useLocalWhisper"), "true", "repaired");
+    assert.equal(storage.getItem("cloudTranscriptionMode"), "openwhispr", "untouched");
+  });
+
+  for (const mode of ["openwhispr", "enterprise", "nonsense"]) {
+    await t.test(`a "${mode}" mode never triggers the cloud rule`, async () => {
+      await load({
+        ...MIGRATED,
+        ...COPIES_DONE,
+        transcriptionMode: mode,
+        useLocalWhisper: "false",
+        cloudTranscriptionMode: "openwhispr",
+      });
+      assert.equal(storage.getItem("cloudTranscriptionMode"), "openwhispr");
+    });
+  }
+
+  await t.test("both rules can fire on one launch", async () => {
+    const state = await load({
+      ...MIGRATED,
+      ...COPIES_DONE,
+      transcriptionMode: "local",
+      useLocalWhisper: "false",
+      uploadTranscriptionMode: "providers",
+      uploadUseLocalWhisper: "false",
+      uploadCloudTranscriptionMode: "openwhispr",
+    });
+    assert.equal(state.useLocalWhisper, true, "dictation repaired toward local");
+    assert.equal(state.uploadCloudTranscriptionMode, "byok", "upload repaired toward BYOK");
+  });
+
+  // Keeps a pin on migrateMeetingFollowFlags actually running: every other case
+  // seeds it done. The copy mirrors the dictation desync into the meeting scope,
+  // and the repair deliberately leaves it there because no router reads it.
+  await t.test("the meeting one-shot copy still runs, and is still not repaired", async () => {
+    await load({
+      ...MIGRATED,
+      uploadTranscriptionMigrated: "true",
+      transcriptionMode: "local",
+      useLocalWhisper: "false",
+    });
+    assert.equal(storage.getItem("meetingTranscriptionMode"), "local", "the copy ran");
+    assert.equal(storage.getItem("meetingUseLocalWhisper"), "false", "copied desync, left alone");
+    assert.equal(storage.getItem("useLocalWhisper"), "true", "dictation still repaired");
+  });
+
   await t.test("an agreeing profile is not rewritten", async () => {
     const state = await load({
       ...MIGRATED,
@@ -174,7 +231,9 @@ test("startup repairs transcription routing that disagrees with the selected mod
     });
     assert.equal(state.useLocalWhisper, true);
     assert.deepEqual(
-      writes.filter((key) => /UseLocalWhisper$|^useLocalWhisper$|CloudTranscriptionMode$/.test(key)),
+      writes.filter((key) =>
+        /UseLocalWhisper$|^useLocalWhisper$|CloudTranscriptionMode$/.test(key)
+      ),
       [],
       "no routing key should be written when the profile already agrees"
     );
