@@ -6,12 +6,21 @@ import { Button } from "./ui/button";
 import { CircleCheck, Loader, Loader2, MailCheck, RefreshCw } from "lucide-react";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
 
+const RESEND_COOLDOWN_SECONDS = 60;
+
 interface EmailVerificationStepProps {
   email: string;
   onVerified: () => void;
   onBack: () => void;
   /** Rendering inside SignInDialog rather than the onboarding window. */
   embedded?: boolean;
+  /**
+   * Restored from a saved onboarding session instead of being sent by this mount.
+   * The cooldown rate-limits the mail sign-up just sent, so starting it on a
+   * resume hides the resend and the way back to sign-in for a minute — and this
+   * screen has no shell footer, so nothing else can move the user on.
+   */
+  resumed?: boolean;
 }
 
 export default function EmailVerificationStep({
@@ -19,9 +28,10 @@ export default function EmailVerificationStep({
   onVerified,
   onBack,
   embedded = false,
+  resumed = false,
 }: EmailVerificationStepProps) {
   const { t } = useTranslation();
-  const [resendCooldown, setResendCooldown] = useState(60);
+  const [resendCooldown, setResendCooldown] = useState(resumed ? 0 : RESEND_COOLDOWN_SECONDS);
   const [isResending, setIsResending] = useState(false);
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +100,7 @@ export default function EmailVerificationStep({
       if (result.error) {
         setError(result.error.message || t("emailVerification.errors.resendFailed"));
       } else {
-        setResendCooldown(60);
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
       }
     } catch {
       setError(t("emailVerification.errors.serverUnreachable"));

@@ -20,9 +20,15 @@ export function CompactAuthenticationFlow({
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(
     resumeState?.pendingVerificationEmail ?? null
   );
+  // A restored address was never mailed from this session, so the verification
+  // screen must not open on a cooldown for a message nobody just sent.
+  const [resumedVerification, setResumedVerification] = useState(
+    Boolean(resumeState?.pendingVerificationEmail)
+  );
 
   const updatePendingVerificationEmail = (email: string | null) => {
     setPendingVerificationEmail(email);
+    setResumedVerification(false);
     onResumeStateChange?.({ pendingVerificationEmail: email });
   };
 
@@ -30,6 +36,7 @@ export function CompactAuthenticationFlow({
     return (
       <EmailVerificationStep
         email={pendingVerificationEmail}
+        resumed={resumedVerification}
         onVerified={() => {
           updatePendingVerificationEmail(null);
           onAuthComplete();
