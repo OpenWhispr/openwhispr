@@ -8083,6 +8083,8 @@ class IPCHandlers {
           const apiKey = await fetchRealtimeToken(event, {
             mode: options.mode,
             provider,
+            // Custom realtime keys off baseUrl; without it this falls back to OpenAI.
+            baseUrl: options.baseUrl,
           });
           if (provider === "tinfoil-realtime") {
             const model = options.model || TINFOIL_REALTIME_MODEL;
