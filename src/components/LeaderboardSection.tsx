@@ -25,15 +25,18 @@ import {
   missingLeaderboardMembers,
   memberValue,
   leaderboardRequestKey,
+  mergeLeaderboardWeekStarts,
   normalizeLeaderboardSelection,
   pageCount,
   pageForRank,
   resolveLeaderboardScopeKey,
   resolveLeaderboardSurface,
+  shouldFetchLeaderboardWeekStarts,
   shouldShowLeaderboardEmptyStrip,
   shouldShowLeaderboardJumpToMe,
   selectionForRange,
   WEEKLY_METRICS,
+  type LeaderboardWeekStartsCacheEntry,
 } from "../helpers/leaderboard";
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { CloudApiError } from "../services/cloudApi";
@@ -61,6 +64,7 @@ import LeaderboardSetupCard from "./LeaderboardSetupCard";
 import LeaderboardShareDialog from "./LeaderboardShareDialog";
 import LeaderboardSignInPreview from "./LeaderboardSignInPreview";
 import LeaderboardSoloEmptyState from "./LeaderboardSoloEmptyState";
+import LeaderboardWorkspaceNudge from "./LeaderboardWorkspaceNudge";
 import LeaderboardJoinPreview from "./LeaderboardJoinPreview";
 import { Button } from "./ui/button";
 import {
@@ -188,6 +192,8 @@ export default function LeaderboardSection({
   const accessRequestIdRef = useRef(0);
   const lastLoadedAtRef = useRef(0);
   const requestIdRef = useRef(0);
+  const participationRecoveryAttemptedRef = useRef(false);
+  const weekStartsCacheRef = useRef(new Map<string, LeaderboardWeekStartsCacheEntry>());
   const scopes = useMemo(() => access?.scopes ?? [], [access]);
   const selectedScope = scopes.find((scope) => scope.key === scopeKey);
   const selectedRequestKey = leaderboardRequestKey(
@@ -282,14 +288,22 @@ export default function LeaderboardSection({
 
   useEffect(() => {
     requestIdRef.current += 1;
+    participationRecoveryAttemptedRef.current = false;
     setLeaderboard((current) => (current?.scope.key === scopeKey ? current : null));
     setWeekStart(null);
     setPage(0);
   }, [scopeKey]);
 
   useEffect(() => {
-    if (!participating) requestIdRef.current += 1;
+    if (!participating) {
+      requestIdRef.current += 1;
+      participationRecoveryAttemptedRef.current = false;
+    }
   }, [participating]);
+
+  useEffect(() => {
+    participationRecoveryAttemptedRef.current = false;
+  }, [authGeneration]);
 
   useEffect(() => {
     if (cloudAccessAllowed) return;
@@ -308,6 +322,8 @@ export default function LeaderboardSection({
     )
       return;
     const requestId = ++requestIdRef.current;
+    const cachedWeekStarts = weekStartsCacheRef.current.get(selectedScope.key);
+    const includeWeekStarts = shouldFetchLeaderboardWeekStarts(cachedWeekStarts);
     setLoading(true);
     setFailure(null);
     try {
@@ -315,10 +331,27 @@ export default function LeaderboardSection({
         metric,
         range,
         weekStart,
+        includeWeekStarts,
         page,
       });
       if (requestId !== requestIdRef.current) return;
-      setLeaderboard(response);
+      const nextLeaderboard = includeWeekStarts
+        ? response
+        : {
+            ...response,
+            availableWeekStarts: mergeLeaderboardWeekStarts(
+              response.availableWeekStarts,
+              cachedWeekStarts?.values ?? []
+            ),
+          };
+      if (includeWeekStarts) {
+        weekStartsCacheRef.current.set(selectedScope.key, {
+          values: response.availableWeekStarts,
+          expiresAt: Date.now() + Math.max(60_000, response.refreshAfterSeconds * 1000),
+        });
+      }
+      participationRecoveryAttemptedRef.current = false;
+      setLeaderboard(nextLeaderboard);
       setLoadedRequestKey(selectedRequestKey);
       if (response.page !== page) setPage(response.page);
       lastLoadedAtRef.current = Date.now();
@@ -337,6 +370,12 @@ export default function LeaderboardSection({
       }
       if (code === "LEADERBOARD_PARTICIPATION_REQUIRED") {
         setLeaderboard(null);
+        setLoadedRequestKey(null);
+        if (participationRecoveryAttemptedRef.current) {
+          setFailure({ kind: "generic", requestKey: selectedRequestKey });
+          return;
+        }
+        participationRecoveryAttemptedRef.current = true;
         onRefreshParticipation();
         return;
       }
@@ -729,6 +768,26 @@ export default function LeaderboardSection({
       if (!left) toast({ title: t("insights.leaderboard.leavePending") });
     });
   };
+  const workspaceNudge =
+    selectedScope.state === "ready" && access.state === "accept_invite" && access.invitation ? (
+      <LeaderboardWorkspaceNudge
+        kind="accept_invite"
+        loading={joiningInvitation}
+        onAction={() => void acceptInvitation()}
+        pending={false}
+        workspaceName={access.invitation.workspaceName}
+      />
+    ) : selectedScope.state === "ready" &&
+      access.state === "request_join" &&
+      access.joinableWorkspace ? (
+      <LeaderboardWorkspaceNudge
+        kind="request_join"
+        loading={requestingJoin}
+        onAction={() => void requestJoin()}
+        pending={access.joinableWorkspace.requestState === "pending"}
+        workspaceName={access.joinableWorkspace.name}
+      />
+    ) : null;
 
   return (
     <section
@@ -859,6 +918,8 @@ export default function LeaderboardSection({
           </DropdownMenu>
         </div>
       </div>
+
+      {workspaceNudge}
 
       {surface === "board" && !cloudAccessAllowed ? (
         <div className="flex min-h-48 items-center justify-center px-5 py-10 text-center">

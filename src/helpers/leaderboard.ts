@@ -11,6 +11,11 @@ import type {
 export const LEADERBOARD_PAGE_SIZE = 20;
 export const LEADERBOARD_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
+export interface LeaderboardWeekStartsCacheEntry {
+  values: string[];
+  expiresAt: number;
+}
+
 // Which metrics a week can rank is one fact: the weekly ones are what the
 // picker offers under "This week", and the lifetime ones are what forces a
 // selection over to "All time".
@@ -41,7 +46,11 @@ export function resolveLeaderboardSurface({
   participationReady: boolean;
   participationError: "read" | "write" | null;
 }): LeaderboardSurface {
-  if (access.state === "accept_invite" || access.state === "request_join") return access.state;
+  if (
+    selectedScope?.state !== "ready" &&
+    (access.state === "accept_invite" || access.state === "request_join")
+  )
+    return access.state;
   if (!selectedScope) {
     return "create";
   }
@@ -49,6 +58,17 @@ export function resolveLeaderboardSurface({
   if (!participationReady) return "participation_loading";
   if (selectedScope.state === "invite") return "invite";
   return participating ? "board" : "join";
+}
+
+export function shouldFetchLeaderboardWeekStarts(
+  cached: LeaderboardWeekStartsCacheEntry | undefined,
+  now: number = Date.now()
+): boolean {
+  return !cached || cached.expiresAt <= now;
+}
+
+export function mergeLeaderboardWeekStarts(...sources: string[][]): string[] {
+  return [...new Set(sources.flat())].sort((left, right) => right.localeCompare(left));
 }
 
 export function leaderboardRequestKey(

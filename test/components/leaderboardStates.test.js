@@ -75,6 +75,32 @@ test("accept_invite attributes the inviter and offers a direct join", async () =
   assert.ok(markup.includes("Sam invited you"));
 });
 
+test("workspace actions stay secondary when a domain leaderboard is ready", async () => {
+  const WorkspaceNudge = await component("LeaderboardWorkspaceNudge");
+  const invitation = renderToStaticMarkup(
+    createElement(WorkspaceNudge, {
+      kind: "accept_invite",
+      loading: false,
+      onAction() {},
+      pending: false,
+      workspaceName: "Acme",
+    })
+  );
+  const pendingRequest = renderToStaticMarkup(
+    createElement(WorkspaceNudge, {
+      kind: "request_join",
+      loading: false,
+      onAction() {},
+      pending: true,
+      workspaceName: "Acme",
+    })
+  );
+
+  assertState(invitation, "workspace_nudge", "Join Team");
+  assert.ok(invitation.includes("You&#x27;re invited to Acme"));
+  assertState(pendingRequest, "workspace_nudge", "Request sent");
+});
+
 test("invite keeps the teammate action primary without a second sync control", async () => {
   const Invite = await component("LeaderboardSoloEmptyState");
   const markup = renderToStaticMarkup(

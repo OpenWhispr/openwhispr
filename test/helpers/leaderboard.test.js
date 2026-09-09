@@ -105,6 +105,23 @@ test("leaderboard surfaces fail closed on unknown participation before scope sta
     "request_join"
   );
   assert.equal(
+    surface({
+      access: { ...access, state: "accept_invite" },
+      selectedScope: { ...scope, state: "ready" },
+    }),
+    "join",
+    "a ready domain board must not be hidden by a workspace invitation"
+  );
+  assert.equal(
+    surface({
+      access: { ...access, state: "request_join" },
+      selectedScope: { ...scope, state: "ready" },
+      participating: true,
+    }),
+    "board",
+    "a pending workspace request must not hide a ready domain board"
+  );
+  assert.equal(
     surface({ selectedScope: scope, participationReady: false }),
     "participation_loading"
   );
@@ -153,6 +170,25 @@ test("leaderboard request identity changes with every ranking control", async ()
   ]) {
     assert.notEqual(changed, current);
   }
+});
+
+test("available leaderboard weeks refresh only when the per-scope cache expires", async () => {
+  const { mergeLeaderboardWeekStarts, shouldFetchLeaderboardWeekStarts } = await load();
+  const now = 1_000;
+
+  assert.equal(shouldFetchLeaderboardWeekStarts(undefined, now), true);
+  assert.equal(
+    shouldFetchLeaderboardWeekStarts({ values: ["2026-08-31"], expiresAt: now + 1 }, now),
+    false
+  );
+  assert.equal(
+    shouldFetchLeaderboardWeekStarts({ values: ["2026-08-31"], expiresAt: now }, now),
+    true
+  );
+  assert.deepEqual(
+    mergeLeaderboardWeekStarts(["2026-08-24", "2026-08-31"], ["2026-09-07", "2026-08-31"]),
+    ["2026-09-07", "2026-08-31", "2026-08-24"]
+  );
 });
 
 test("workspace defaults are readable and derived only from the company domain", async () => {

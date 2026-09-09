@@ -172,10 +172,14 @@ test("leaderboard requests carry scope, pagination, filters and no body data", a
     {
       metric: "total_words",
       range: "all",
+      includeWeekStarts: false,
       page: 0,
     }
   );
-  assert.equal(requests[1].path, "/api/leaderboard/domain?metric=total_words&range=all&page=0");
+  assert.equal(
+    requests[1].path,
+    "/api/leaderboard/domain?metric=total_words&range=all&page=0&includeWeekStarts=false"
+  );
 });
 
 // An opt-out the network never delivered has to reach the account eventually,

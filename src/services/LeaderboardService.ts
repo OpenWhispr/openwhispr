@@ -326,6 +326,7 @@ async function getLeaderboard(
     metric: LeaderboardMetric;
     range: LeaderboardRange;
     weekStart?: string | null;
+    includeWeekStarts?: boolean;
     page: number;
   }
 ): Promise<Leaderboard> {
@@ -335,6 +336,7 @@ async function getLeaderboard(
     page: String(query.page),
   });
   if (query.range === "week" && query.weekStart) params.set("weekStart", query.weekStart);
+  if (query.includeWeekStarts === false) params.set("includeWeekStarts", "false");
   const path =
     scope.kind === "workspace"
       ? `/api/workspaces/${encodeURIComponent(scope.id)}/leaderboard`

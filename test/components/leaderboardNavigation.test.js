@@ -105,6 +105,7 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   assert.ok(section.includes("afterWorkspaceJoined"));
   assert.ok(section.includes("InvitationsService.list"));
   assert.ok(section.includes("<LeaderboardEmptyStrip"));
+  assert.ok(section.includes("<LeaderboardWorkspaceNudge"));
   assert.ok(section.includes('data-leaderboard-state="board"'));
   assert.ok(section.includes("resolveLeaderboardScopeKey"));
   assert.ok(section.includes('t("insights.leaderboard.chooseBoard")'));
@@ -113,6 +114,21 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   assert.equal(section.includes("<LeaderboardSyncRow"), false);
   assert.equal(section.includes("activationDescription"), false);
   assert.equal(controlPanel.includes("onInvite={() => setShowReferrals(true)}"), false);
+});
+
+test("participation disagreement retries once without entering an auth flow", () => {
+  const section = read("src/components/LeaderboardSection.tsx");
+  const recovery = section.slice(
+    section.indexOf('if (code === "LEADERBOARD_PARTICIPATION_REQUIRED")'),
+    section.indexOf('if (code === "LEADERBOARD_DOMAIN_REQUIRED")')
+  );
+
+  assert.ok(recovery.includes("participationRecoveryAttemptedRef.current"));
+  assert.ok(recovery.includes('setFailure({ kind: "generic", requestKey: selectedRequestKey })'));
+  assert.ok(recovery.includes("onRefreshParticipation()"));
+  assert.equal(recovery.includes("onSignIn"), false);
+  assert.equal(recovery.includes("signOut"), false);
+  assert.equal(recovery.includes("authClearSession"), false);
 });
 
 test("leaderboard access waits for validated auth and labels ranked participants", () => {
