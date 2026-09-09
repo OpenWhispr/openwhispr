@@ -6,11 +6,17 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const os = require("node:os");
 const { performance } = require("node:perf_hooks");
-const args = Object.fromEntries(
-  process.argv
-    .slice(2)
-    .reduce((a, v, i, all) => (i % 2 ? a : [...a, [v.replace(/^--/, ""), all[i + 1]]]), [])
-);
+// Electron retains platform flags in argv, so locate named options explicitly.
+const args = {};
+for (const name of ["model", "audio", "output"]) {
+  const index = process.argv.indexOf(`--${name}`);
+  if (index !== -1) args[name] = process.argv[index + 1];
+}
+// A command-line error should fail CI instead of opening Electron's error dialog.
+process.on("uncaughtException", (error) => {
+  console.error(error);
+  process.exit(1);
+});
 assert(args.audio && args.output);
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-orukeet-"));
 process.env.OPENWHISPR_CACHE_ROOT = path.join(profile, "cache");
