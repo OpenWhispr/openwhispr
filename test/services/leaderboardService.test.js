@@ -246,6 +246,49 @@ test("a retry that fails keeps the leave pending for the next trigger", async (t
   assert.deepEqual(pendingUserIds(storage), ["user_1", "user_2"]);
 });
 
+// A compensating leave covers a join that may have landed before the failure
+// surfaced. A status the server itself chose proves it did not land, so banking
+// one there strands a record nothing can clear: the retry PATCH draws the same
+// refusal, and SyncService treats a pending leave as a reason to bypass the
+// sync throttle for as long as it sits there.
+for (const status of [400, 401, 403, 404, 409, 422]) {
+  test(`a join refused with ${status} leaves no compensating leave behind`, async (t) => {
+    const { storage } = installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          cloudApiRequest: async () => ({ success: false, status, error: "Refused" }),
+        },
+      },
+    });
+    const context = await validateAuthContext();
+    const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+    await assert.rejects(LeaderboardService.joinParticipation(context));
+    assert.deepEqual(pendingUserIds(storage), []);
+  });
+}
+
+for (const [label, response] of [
+  ["an offline device", { success: false, status: 0, error: "offline" }],
+  ["a server error", { success: false, status: 500, error: "boom" }],
+  ["a malformed success body", { success: true, data: { data: { enabled: "yes" } } }],
+]) {
+  test(`a join failing through ${label} keeps a compensating leave`, async (t) => {
+    const { storage } = installBrowserGlobals(t, {
+      window: { electronAPI: { cloudApiRequest: async () => response } },
+    });
+    const context = await validateAuthContext();
+    const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+    await assert.rejects(LeaderboardService.joinParticipation(context));
+    assert.deepEqual(
+      pendingUserIds(storage),
+      ["user_1"],
+      "the account may already be on a leaderboard the user was told it had not joined"
+    );
+  });
+}
+
 test("an explicit join stays newer than a pending leave already in flight", async (t) => {
   const requests = [];
   let serverEnabled = true;

@@ -254,6 +254,21 @@ async function setParticipation(
   return participation;
 }
 
+/**
+ * Whether a failed join may still have been applied by the account.
+ *
+ * A 4xx is the server's own verdict on a request it declined to act on, so
+ * there is nothing to compensate — and banking a leave there strands a record
+ * this device cannot clear, because the retry draws the same refusal while
+ * SyncService keeps bypassing the sync throttle for as long as it sits there.
+ * Every other outcome — no response, a server error, a body this device could
+ * not read — leaves a join that may have landed.
+ */
+function joinOutcomeIsUnknown(error: unknown): boolean {
+  if (!(error instanceof CloudApiError)) return true;
+  return error.status < 400 || error.status >= 500;
+}
+
 async function joinParticipation(
   context: LeaderboardParticipationAuthContext
 ): Promise<AnalyticsParticipation> {
@@ -263,9 +278,7 @@ async function joinParticipation(
     try {
       return await setParticipation(true, authGeneration);
     } catch (error) {
-      // The API may have committed before a timeout or auth fence surfaced. Keep
-      // a compensating leave beside the failed join until a valid pass delivers it.
-      writePendingLeaderboardLeave(userId);
+      if (joinOutcomeIsUnknown(error)) writePendingLeaderboardLeave(userId);
       throw error;
     }
   });
