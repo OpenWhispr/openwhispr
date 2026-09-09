@@ -391,6 +391,24 @@ function deriveTranscriptionMode(
   return "openwhispr";
 }
 
+// Map the legacy `cloudReasoningMode` + provider pair to the InferenceMode the
+// Settings tabs select on. Shared by the provider-settings and agent-mode
+// migrations and by healSkippedMeetingFollowModes(). Distinct from the imported
+// deriveReasoningMode(), which collapses local and enterprise into "providers"
+// on purpose for the cloud-only "use everywhere" action.
+function deriveLegacyReasoningMode(
+  cloudMode: string | null,
+  provider: string | null
+): InferenceMode {
+  if (cloudMode !== "byok") return "openwhispr";
+  if (provider === "custom") return "self-hosted";
+  if (provider === "bedrock" || provider === "azure" || provider === "vertex") {
+    return "enterprise";
+  }
+  if (provider && localLlmProviderIds.has(provider)) return "local";
+  return "providers";
+}
+
 function migrateProviderSettings() {
   if (!isBrowser) return;
   if (localStorage.getItem("_providerSettingsMigrated") === "1") return;
@@ -413,23 +431,7 @@ function migrateProviderSettings() {
 
   const reasoningMode = localStorage.getItem("cloudReasoningMode");
   const reasoningProvider = localStorage.getItem("reasoningProvider");
-  let newReasoningMode: InferenceMode = "openwhispr";
-  if (reasoningMode === "byok") {
-    if (reasoningProvider === "custom") {
-      newReasoningMode = "self-hosted";
-    } else if (
-      reasoningProvider === "bedrock" ||
-      reasoningProvider === "azure" ||
-      reasoningProvider === "vertex"
-    ) {
-      newReasoningMode = "enterprise";
-    } else if (reasoningProvider && localLlmProviderIds.has(reasoningProvider)) {
-      newReasoningMode = "local";
-    } else {
-      newReasoningMode = "providers";
-    }
-  }
-  localStorage.setItem("reasoningMode", newReasoningMode);
+  localStorage.setItem("reasoningMode", deriveLegacyReasoningMode(reasoningMode, reasoningProvider));
 
   if (reasoningProvider === "custom" && reasoningMode === "byok") {
     localStorage.setItem("remoteReasoningType", "openai-compatible");
@@ -476,26 +478,13 @@ function migrateAgentMode() {
   if (!isBrowser) return;
   if (localStorage.getItem("_agentModeMigrated") === "1") return;
 
-  const cloudAgentMode = localStorage.getItem("cloudAgentMode");
-  const agentProvider = localStorage.getItem("agentProvider");
-
-  let agentInferenceMode: InferenceMode = "openwhispr";
-  if (cloudAgentMode === "byok") {
-    if (agentProvider === "custom") {
-      agentInferenceMode = "self-hosted";
-    } else if (
-      agentProvider === "bedrock" ||
-      agentProvider === "azure" ||
-      agentProvider === "vertex"
-    ) {
-      agentInferenceMode = "enterprise";
-    } else if (agentProvider && localLlmProviderIds.has(agentProvider)) {
-      agentInferenceMode = "local";
-    } else {
-      agentInferenceMode = "providers";
-    }
-  }
-  localStorage.setItem("agentInferenceMode", agentInferenceMode);
+  localStorage.setItem(
+    "agentInferenceMode",
+    deriveLegacyReasoningMode(
+      localStorage.getItem("cloudAgentMode"),
+      localStorage.getItem("agentProvider")
+    )
+  );
 
   localStorage.setItem("_agentModeMigrated", "1");
 }
