@@ -74,6 +74,7 @@ export const useAudioRecording = (toast, options = {}) => {
     onShowTranscript,
     onDemoEvent,
     assistantOpenRef,
+    suppressNoAudioErrorRef,
   } = options;
 
   useEffect(() => {
@@ -466,10 +467,17 @@ export const useAudioRecording = (toast, options = {}) => {
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
-        showDictationError({
-          title: t("hooks.audioRecording.noAudio.title"),
-          description: t("hooks.audioRecording.noAudio.description"),
-        });
+        // The Hold migration card owns the pill on the first press after the
+        // update, and that press is usually an experimental tap that catches
+        // no speech. Scolding the user for trying the gesture the card is
+        // teaching reads as a failure of the card, so this one press stays
+        // quiet. The card shows once ever, so the suppression does too.
+        if (!suppressNoAudioErrorRef?.current) {
+          showDictationError({
+            title: t("hooks.audioRecording.noAudio.title"),
+            description: t("hooks.audioRecording.noAudio.description"),
+          });
+        }
       },
       onPartialTranscript: (text) => {
         onDemoEventRef.current?.({ kind: demoKindRef.current, status: "partial", text });
@@ -834,6 +842,7 @@ export const useAudioRecording = (toast, options = {}) => {
     dismissDictationError,
     onDictationError,
     reportLifecycle,
+    suppressNoAudioErrorRef,
     t,
   ]);
 
