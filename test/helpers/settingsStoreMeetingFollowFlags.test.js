@@ -114,4 +114,88 @@ test("Note Recording modes survive the follow-flag migration", async (t) => {
       assert.equal(state.chatAgentMode, expected, `agent ${JSON.stringify(seed)}`);
     }
   });
+
+  await t.test("a ≤1.6.7 Local profile copies its modes into Note Recording", async () => {
+    const { mod, state } = await load(LEGACY_LOCAL);
+    assert.equal(storage.getItem("transcriptionMode"), "local", "dictation mode derived");
+    assert.equal(storage.getItem("meetingTranscriptionMode"), "local", "copied, not skipped");
+    assert.equal(storage.getItem("noteFormattingMode"), "local", "copied, then moved");
+    assert.equal(state.meetingTranscriptionMode, "local");
+    assert.equal(mod.selectResolvedNoteFormatting(state).mode, "local");
+    assert.equal(meetingRoute(mod, state).provider, "local", "note recording stays local");
+    assert.equal(countWrites("meetingTranscriptionMode"), 1, "written by the copy only");
+  });
+
+  await t.test("a ≤1.6.7 BYOK streaming profile copies its own provider", async () => {
+    const { state } = await load({
+      useLocalWhisper: "false",
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "openai",
+      cloudReasoningMode: "byok",
+      reasoningProvider: "anthropic",
+    });
+    assert.equal(state.meetingTranscriptionMode, "providers");
+    assert.equal(state.meetingCloudTranscriptionProvider, "openai");
+    assert.equal(state.noteFormattingMode, "providers");
+  });
+
+  // Parity with everyone who ran 1.6.8: Note Recording rejects self-hosted with
+  // a clear error rather than silently using OpenWhispr Cloud.
+  await t.test(
+    "a ≤1.6.7 custom-endpoint profile copies self-hosted and its remote type",
+    async () => {
+      const { state } = await load({
+        useLocalWhisper: "false",
+        cloudTranscriptionMode: "byok",
+        cloudTranscriptionProvider: "custom",
+        cloudTranscriptionBaseUrl: "http://stt.lan:8080/v1",
+      });
+      assert.equal(state.meetingTranscriptionMode, "self-hosted");
+      assert.equal(state.meetingRemoteTranscriptionType, "openai-compatible");
+      assert.equal(state.meetingRemoteTranscriptionUrl, "http://stt.lan:8080/v1");
+    }
+  );
+
+  await t.test("a ≤1.6.7 OpenWhispr Cloud profile stays on OpenWhispr Cloud", async () => {
+    const { state } = await load({
+      useLocalWhisper: "false",
+      cloudTranscriptionMode: "openwhispr",
+      cloudReasoningMode: "openwhispr",
+      isSignedIn: "true",
+    });
+    assert.equal(state.meetingTranscriptionMode, "openwhispr");
+    assert.equal(state.noteFormattingMode, "openwhispr");
+  });
+
+  await t.test("a profile that ran 1.6.8 before 1.6.10 was already right", async () => {
+    const { state } = await load({
+      _providerSettingsMigrated: "1",
+      useLocalWhisper: "true",
+      transcriptionMode: "local",
+      reasoningMode: "local",
+      cloudReasoningMode: "byok",
+      reasoningProvider: "llama",
+    });
+    assert.equal(state.meetingTranscriptionMode, "local");
+    assert.equal(state.noteFormattingMode, "local");
+    assert.equal(countWrites("meetingTranscriptionMode"), 1);
+  });
+
+  // migrateProviderSettings derives the modes even on empty storage, so the
+  // copy now persists the defaults. Same values the store read before.
+  await t.test(
+    "a fresh install gets the default modes from the copy and nothing else",
+    async () => {
+      const { state } = await load({});
+      assert.equal(storage.getItem("meetingTranscriptionMode"), "openwhispr");
+      assert.equal(storage.getItem("noteFormattingMode"), "openwhispr");
+      assert.equal(storage.getItem("meetingUseLocalWhisper"), null);
+      assert.equal(storage.getItem("meetingCloudTranscriptionMode"), null);
+      assert.equal(storage.getItem("noteFormattingCloudMode"), null);
+      assert.equal(storage.getItem("meetingFollowsTranscription"), "false", "latched empty");
+      assert.equal(state.meetingTranscriptionMode, "openwhispr");
+      assert.equal(countWrites("meetingTranscriptionMode"), 1, "the copy, nothing after it");
+      assert.equal(countWrites("noteFormattingMode"), 1);
+    }
+  );
 });

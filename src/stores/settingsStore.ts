@@ -278,8 +278,6 @@ function migrateMeetingFollowFlags() {
   }
 }
 
-migrateMeetingFollowFlags();
-
 const BOOLEAN_SETTINGS = new Set([
   "useLocalWhisper",
   "meetingUseLocalWhisper",
@@ -441,6 +439,12 @@ function migrateProviderSettings() {
 }
 
 migrateProviderSettings();
+
+// Runs after migrateProviderSettings() so the mode keys it derives and persists
+// (`transcriptionMode`, `reasoningMode`, the `remote*` keys) exist to be copied.
+// Before 1.10.0 it ran first, skipped those pairs, and latched — see
+// healSkippedMeetingFollowModes() for the profiles that already did.
+migrateMeetingFollowFlags();
 
 // One-time seed of the dedicated audio-upload transcription settings. Runs
 // after migrateProviderSettings() so the `transcriptionMode` it derives and

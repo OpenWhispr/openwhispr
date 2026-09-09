@@ -96,6 +96,11 @@ test("managed transcription fallback binds known providers to their canonical en
   const customEndpoint = "https://custom.example.invalid/v1";
   installBrowserGlobals(t, {
     initialStorage: {
+      // Sentinels, so the one-shot copies leave the scoped selections this case
+      // is about alone.
+      _providerSettingsMigrated: "1",
+      uploadTranscriptionMigrated: "true",
+      meetingFollowsTranscription: "false",
       transcriptionMode: "providers",
       cloudTranscriptionProvider: "custom",
       cloudTranscriptionModel: "custom-model",
