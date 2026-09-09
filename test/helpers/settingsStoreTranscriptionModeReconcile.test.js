@@ -2,11 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-// Pins reconcileTranscriptionRouting() in settingsStore.ts; the rationale for
-// each rule, and for excluding Note Recording, lives in the comment above it.
-// In short: dictation and upload render `*TranscriptionMode` but route on
-// `*UseLocalWhisper` and `*CloudTranscriptionMode`, and a since-removed
-// post-sign-in effect wrote those two and neither mode (#2086).
+// Pins reconcileTranscriptionRouting() in settingsStore.ts, where the rationale
+// for each rule lives (#2086).
 //
 // `_providerSettingsMigrated: "1"` must be seeded: migrateProviderSettings() runs
 // first and would otherwise re-derive `transcriptionMode` from the very flag
@@ -50,9 +47,6 @@ test("startup repairs transcription routing that disagrees with the selected mod
     assert.equal(storage.getItem("useLocalWhisper"), "true");
   });
 
-  // The same effect also wrote cloudTranscriptionMode="openwhispr", which is what
-  // `isOpenWhisprCloud` routes on. A user who picked their own API keys or their
-  // own endpoint was billed against managed cloud while the picker said otherwise.
   for (const mode of ["providers", "self-hosted"]) {
     await t.test(
       `a stale "${mode}" mode over managed-cloud routing goes back to BYOK`,
@@ -84,10 +78,6 @@ test("startup repairs transcription routing that disagrees with the selected mod
     assert.equal(storage.getItem("uploadCloudTranscriptionMode"), "byok");
   });
 
-  // The repair only ever moves away from OpenWhispr Cloud. Completing it
-  // symmetrically would take a profile whose picker reads "OpenWhispr Cloud" but
-  // whose routing points at the user's own credential — written that way by the
-  // onboarding provider step before its commit — and start uploading their audio.
   await t.test("an OpenWhispr Cloud mode never claims a BYOK credential", async () => {
     const state = await load({
       ...MIGRATED,
@@ -100,10 +90,6 @@ test("startup repairs transcription routing that disagrees with the selected mod
     assert.equal(storage.getItem("cloudTranscriptionMode"), "byok");
   });
 
-  // The repair only ever moves toward local. A stale cloud mode over a
-  // deliberate local flag must never start uploading a local user's audio:
-  // the mode-less Settings toggle wrote the flag alone until 6fb0c906, so
-  // profiles with a stale non-local mode and local routing exist in the field.
   for (const mode of ["openwhispr", "providers", "self-hosted", "enterprise", "nonsense"]) {
     await t.test(`a stale "${mode}" mode never flips a local user to the cloud`, async () => {
       const state = await load({
@@ -130,11 +116,6 @@ test("startup repairs transcription routing that disagrees with the selected mod
     assert.equal(storage.getItem("uploadUseLocalWhisper"), "true");
   });
 
-  // Note Recording is deliberately absent: resolveMeetingTranscriptionOptions
-  // branches on meetingTranscriptionMode — the same key MeetingSettings renders —
-  // so its picker and its router cannot disagree. No router reads
-  // meetingUseLocalWhisper (selectResolvedMeetingTranscription exposes it, but its
-  // one consumer drops it), so repairing it would write state nothing routes on.
   await t.test("the meeting scope is left alone, because it routes on its own mode", async () => {
     const state = await load({
       ...MIGRATED,
@@ -151,8 +132,6 @@ test("startup repairs transcription routing that disagrees with the selected mod
     );
   });
 
-  // The upload one-shot copy mirrors the dictation keys wholesale, desync
-  // included, and then latches — so the repair has to run after it, not before.
   await t.test("a desync copied into the upload scope by its one-shot is repaired", async () => {
     const state = await load({
       ...MIGRATED,
@@ -165,8 +144,6 @@ test("startup repairs transcription routing that disagrees with the selected mod
     assert.equal(storage.getItem("uploadUseLocalWhisper"), "true");
   });
 
-  // The two rules are independent: a Local selection says nothing about which
-  // cloud lane the profile would use if it ever left Local.
   await t.test("the local rule leaves the cloud mode alone", async () => {
     await load({
       ...MIGRATED,
@@ -206,9 +183,7 @@ test("startup repairs transcription routing that disagrees with the selected mod
     assert.equal(state.uploadCloudTranscriptionMode, "byok", "upload repaired toward BYOK");
   });
 
-  // Keeps a pin on migrateMeetingFollowFlags actually running: every other case
-  // seeds it done. The copy mirrors the dictation desync into the meeting scope,
-  // and the repair deliberately leaves it there because no router reads it.
+  // The only case that lets migrateMeetingFollowFlags run; every other seeds it done.
   await t.test("the meeting one-shot copy still runs, and is still not repaired", async () => {
     await load({
       ...MIGRATED,

@@ -473,31 +473,19 @@ function migrateUploadTranscription() {
 migrateUploadTranscription();
 
 // Dictation and upload render `*TranscriptionMode` in their picker but route on
-// two other keys beside it: `*UseLocalWhisper` (audioManager's processAudio and
-// shouldUseStreaming; fileTranscription) and `*CloudTranscriptionMode` (the
-// `isOpenWhisprCloud` test). A since-removed post-sign-in effect wrote both of
-// those and neither mode, so a user who picked Local saw "Local · Active" — and
-// one who picked their own API keys or endpoint saw "API Keys · Active" — while
-// their audio went to OpenWhispr Cloud. Clicking the shown mode was a no-op,
-// because each picker skips the mode it already renders (#2086). Runs after the
-// upload one-shot copy, which mirrors the dictation keys wholesale — desync
-// included — and then latches.
+// `*UseLocalWhisper` (audioManager, fileTranscription) and `*CloudTranscriptionMode`
+// (the `isOpenWhisprCloud` test), so routing can disagree with what the user sees
+// (#2086). Must run after the upload one-shot copy, which mirrors the dictation
+// keys desync-and-all and then latches.
 //
-// Note Recording is absent on purpose: resolveMeetingTranscriptionOptions
-// branches on `meetingTranscriptionMode`, the same key MeetingSettings renders,
-// so its picker and its router cannot disagree. No router reads
-// `meetingUseLocalWhisper` — selectResolvedMeetingTranscription still exposes it,
-// but its one consumer passes only the mode — so repairing it would write state
-// nothing routes on. Anything that starts reading it must reconcile it first.
+// Note Recording is excluded: resolveMeetingTranscriptionOptions branches on
+// `meetingTranscriptionMode`, the key MeetingSettings renders, so it cannot
+// disagree, and no router reads `meetingUseLocalWhisper`.
 //
-// Completing either rule symmetrically would take profiles the field really
-// holds and start uploading their audio: the mode-less Settings toggle wrote the
-// local flag alone until 6fb0c906, and the onboarding provider step writes
-// `cloudTranscriptionMode` before the commit that derives the mode.
-//
-// Kept separate from TRANSCRIPTION_CONTEXT_KEYS rather than sharing it: that
-// table carries provider/model/baseUrl too and belongs beside its consumers far
-// below, and it covers the meeting context this repair must skip.
+// Never complete either rule symmetrically — it would start uploading audio from
+// profiles that exist: the mode-less Settings toggle wrote the local flag alone
+// until 6fb0c906, and ProviderSetupStep writes `cloudTranscriptionMode` before the
+// commit that derives the mode.
 const TRANSCRIPTION_ROUTING_KEYS: ReadonlyArray<{
   mode: keyof SettingsState;
   useLocal: keyof SettingsState;
@@ -520,10 +508,8 @@ function reconcileTranscriptionRouting(): void {
       localStorage.setItem(keys.useLocal, "true");
       repaired.push(keys.useLocal);
     }
-    // Tests the stored value, not the `upload… || dictation…` fallback the upload
-    // resolver applies: deriveTranscriptionMode only yields these two modes when
-    // the scope's own cloud key is set, so an unset key is a scope that never
-    // chose rather than a desync.
+    // Stored value, not the upload resolver's inherited one: these modes are only
+    // derivable when the scope's own cloud key is set, so unset is not a desync.
     if (
       (mode === "providers" || mode === "self-hosted") &&
       localStorage.getItem(keys.cloudMode) === "openwhispr"
@@ -534,9 +520,6 @@ function reconcileTranscriptionRouting(): void {
   }
   if (repaired.length === 0) return;
 
-  // Only reaches the log file when debug logging is already on, and the repair
-  // is one-shot — so this catches the users who were already capturing, not the
-  // ones asked to reproduce afterwards.
   logger.info(
     "Repaired transcription routing that disagreed with the selected mode",
     { keys: repaired },
