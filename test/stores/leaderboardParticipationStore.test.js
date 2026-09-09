@@ -8,8 +8,9 @@ const { installBrowserGlobals } = require("../lib/rendererTestHarness");
 // the sync-toggle flip fires before that leave has reached the account.
 
 const pendingKey = (userId) => `leaderboardLeavePending:${encodeURIComponent(userId)}`;
+// The record carries a delivery-attempt count, so presence is the signal.
 const pendingUserIds = (storage) =>
-  ["user_1", "user_2"].filter((userId) => storage.getItem(pendingKey(userId)) === "true");
+  ["user_1", "user_2"].filter((userId) => storage.getItem(pendingKey(userId)) != null);
 const waitFor = async (predicate) => {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     if (predicate()) return;

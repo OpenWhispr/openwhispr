@@ -3358,7 +3358,8 @@
       "shareLinkedIn": "分享到 LinkedIn",
       "copied": "图片已复制，请粘贴到帖子中。",
       "saved": "图片已下载。",
-      "failed": "无法创建分享卡片。"
+      "failed": "无法创建分享卡片。",
+      "unnamedMember": "团队成员"
     }
   },
   "sidebar": {

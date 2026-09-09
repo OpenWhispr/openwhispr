@@ -29,12 +29,14 @@ const PODIUM_PLACEMENTS = [
 
 export default function LeaderboardPodium({
   formatValue,
+  memberLabel,
   members,
   metricLabel,
   periodLabel,
   title,
 }: {
   formatValue: (member: LeaderboardMember) => string;
+  memberLabel: (member: LeaderboardMember) => string;
   members: LeaderboardMember[];
   metricLabel: string;
   periodLabel: string;
@@ -96,9 +98,7 @@ export default function LeaderboardPodium({
                   size="lg"
                 />
               </div>
-              <p className="mt-3 max-w-full truncate text-sm font-medium">
-                {member.name || member.email}
-              </p>
+              <p className="mt-3 max-w-full truncate text-sm font-medium">{memberLabel(member)}</p>
               <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">
                 {formatValue(member)}
               </p>

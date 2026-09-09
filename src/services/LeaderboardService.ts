@@ -9,6 +9,7 @@ import type {
 import {
   clearPendingLeaderboardLeave,
   readPendingLeaderboardLeave,
+  recordPendingLeaderboardLeaveAttempt,
   writePendingLeaderboardLeave,
 } from "../lib/pendingLeaderboardLeave";
 import {
@@ -143,7 +144,7 @@ function isLeaderboardMember(value: unknown): boolean {
     isRecord(value) &&
     typeof value.userId === "string" &&
     isNullableString(value.name) &&
-    typeof value.email === "string" &&
+    isNullableString(value.email) &&
     isNullableString(value.image) &&
     isNonnegativeInteger(value.totalWords) &&
     isNonnegativeInteger(value.desktopWords) &&
@@ -274,19 +275,32 @@ async function setParticipation(
   return participation;
 }
 
+// Codes the main process raises from its auth fence, which runs before the
+// request is put on the wire. Nothing reached the API under either of them.
+const LOCAL_AUTH_FENCE_CODES = new Set(["AUTH_CONTEXT_CHANGED", "AUTH_CONTEXT_UNVALIDATED"]);
+
+type ParticipationWriteOutcome = "applied" | "refused" | "not_sent" | "unknown";
+
 /**
- * Whether a failed join may still have been applied by the account.
+ * What a failed participation write actually did to the account row.
  *
- * A 4xx is the server's own verdict on a request it declined to act on, so
- * there is nothing to compensate — and banking a leave there strands a record
- * this device cannot clear, because the retry draws the same refusal while
- * SyncService keeps bypassing the sync throttle for as long as it sits there.
- * Every other outcome — no response, a server error, a body this device could
- * not read — leaves a join that may have landed.
+ * `applied` — cloudPatchForAuthGeneration raises CloudApiError for every
+ * transport and HTTP failure, so any other error escaped while reading a body
+ * the API had already answered 2xx with. The write landed; only the answer was
+ * unreadable.
+ * `refused` — a 4xx is the server's own verdict on a request it declined to act
+ * on, so the row is untouched.
+ * `not_sent` — fenced on this device; the request never left.
+ * `unknown` — no response or a server error, so the row may or may not have moved.
+ *
+ * Only `unknown` needs compensating: banking a leave for the other three either
+ * undoes work the account asked for, or strands a record with nothing to undo.
  */
-function joinOutcomeIsUnknown(error: unknown): boolean {
-  if (!(error instanceof CloudApiError)) return true;
-  return error.status < 400 || error.status >= 500;
+function classifyParticipationWriteFailure(error: unknown): ParticipationWriteOutcome {
+  if (!(error instanceof CloudApiError)) return "applied";
+  if (error.code != null && LOCAL_AUTH_FENCE_CODES.has(error.code)) return "not_sent";
+  if (error.status >= 400 && error.status < 500) return "refused";
+  return "unknown";
 }
 
 async function joinParticipation(
@@ -298,7 +312,9 @@ async function joinParticipation(
     try {
       return await setParticipation(true, authGeneration);
     } catch (error) {
-      if (joinOutcomeIsUnknown(error)) writePendingLeaderboardLeave(userId);
+      if (classifyParticipationWriteFailure(error) === "unknown") {
+        writePendingLeaderboardLeave(userId);
+      }
       throw error;
     }
   });
@@ -312,10 +328,40 @@ async function leaveParticipation(
   // is queued, the request is fenced but the original account's leave survives.
   writePendingLeaderboardLeave(userId);
   return serializeParticipationOperation(context, async () => {
-    const participation = await setParticipation(false, authGeneration);
-    clearPendingLeaderboardLeave(userId);
-    return participation;
+    try {
+      const participation = await setParticipation(false, authGeneration);
+      clearPendingLeaderboardLeave(userId);
+      return participation;
+    } catch (error) {
+      settleUndeliveredLeave(userId, error);
+      throw error;
+    }
   });
+}
+
+/**
+ * Retires a pending leave the API has already acted on or can never act on, and
+ * otherwise charges it one attempt so it cannot preempt the sync throttle
+ * forever. Returns whether the account is still waiting to come off the board.
+ */
+function settleUndeliveredLeave(userId: string, error: unknown): boolean {
+  const outcome = classifyParticipationWriteFailure(error);
+  // The row is already false — the API accepted the PATCH and only its answer
+  // was unreadable, so there is nothing left to retry.
+  if (outcome === "applied") {
+    clearPendingLeaderboardLeave(userId);
+    return false;
+  }
+  // An API without the participation route cannot be holding the account on a
+  // leaderboard, so the leave has nothing to deliver. Every other refusal is
+  // kept: a 429 or a 401 is answered by retrying later, not by dropping the
+  // account's opt-out.
+  if (outcome === "refused" && error instanceof CloudApiError && error.status === 404) {
+    clearPendingLeaderboardLeave(userId);
+    return false;
+  }
+  recordPendingLeaderboardLeaveAttempt(userId);
+  return true;
 }
 
 /**
@@ -323,10 +369,11 @@ async function leaveParticipation(
  * for that account only: a device may take itself off a leaderboard, never put
  * itself on one. Returns whether the account is still waiting for it.
  *
- * The record survives anything but a completed leave. Dropping it because a
- * request failed would leave the account on a leaderboard the user left, and
+ * The record survives every outcome that leaves the account row untouched, and
  * flushes are trigger-driven (a sync pass, a participation read), so a request
- * that keeps failing costs one call per trigger rather than a loop.
+ * that keeps failing costs one call per trigger rather than a loop. It is
+ * retired only once the API has acted on it or has shown it never can — see
+ * settleUndeliveredLeave.
  */
 async function flushPendingLeave(context: LeaderboardParticipationAuthContext): Promise<boolean> {
   const { userId, authGeneration } = context;
@@ -340,7 +387,7 @@ async function flushPendingLeave(context: LeaderboardParticipationAuthContext): 
       return false;
     } catch (error) {
       console.error("Retrying the leaderboard leave failed:", error);
-      return true;
+      return settleUndeliveredLeave(userId, error);
     }
   });
 }

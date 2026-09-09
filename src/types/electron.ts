@@ -227,7 +227,9 @@ export interface AnalyticsParticipation {
 export interface LeaderboardMember {
   userId: string;
   name: string | null;
-  email: string;
+  // Withheld (null) on a domain board, where a shared mail suffix is the only
+  // thing the listed people have in common.
+  email: string | null;
   image: string | null;
   totalWords: number;
   desktopWords: number;

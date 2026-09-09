@@ -19,7 +19,9 @@ function captureRequests(t, responseData) {
 
 const pendingKey = (userId) => `leaderboardLeavePending:${encodeURIComponent(userId)}`;
 const pendingUserIds = (storage) =>
-  ["user_1", "user_2"].filter((userId) => storage.getItem(pendingKey(userId)) === "true");
+  ["user_1", "user_2"].filter((userId) => storage.getItem(pendingKey(userId)) != null);
+const pendingAttempts = (storage, userId) =>
+  JSON.parse(storage.getItem(pendingKey(userId))).attempts;
 
 async function validateAuthContext(userId = "user_1", authGeneration = 7, reset = true) {
   const auth = require("../../src/lib/authRequestContext.ts");
@@ -348,7 +350,6 @@ for (const status of [400, 401, 403, 404, 409, 422]) {
 for (const [label, response] of [
   ["an offline device", { success: false, status: 0, error: "offline" }],
   ["a server error", { success: false, status: 500, error: "boom" }],
-  ["a malformed success body", { success: true, data: { data: { enabled: "yes" } } }],
 ]) {
   test(`a join failing through ${label} keeps a compensating leave`, async (t) => {
     const { storage } = installBrowserGlobals(t, {
@@ -365,6 +366,131 @@ for (const [label, response] of [
     );
   });
 }
+
+// A write the API answered 2xx for has already moved the row; the client only
+// failed to read the answer. Compensating it would undo the account's own join.
+test("a join whose success body is unreadable leaves no compensating leave behind", async (t) => {
+  const { storage } = installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        cloudApiRequest: async () => ({ success: true, data: { data: { enabled: "yes" } } }),
+      },
+    },
+  });
+  const context = await validateAuthContext();
+  const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+  await assert.rejects(LeaderboardService.joinParticipation(context));
+  assert.deepEqual(
+    pendingUserIds(storage),
+    [],
+    "the API accepted the join, so there is nothing to take back"
+  );
+});
+
+// The main process fences an authenticated request before it reaches the wire.
+for (const code of ["AUTH_CONTEXT_CHANGED", "AUTH_CONTEXT_UNVALIDATED"]) {
+  test(`a join fenced with ${code} leaves no compensating leave behind`, async (t) => {
+    const { storage } = installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          cloudApiRequest: async () => ({ success: false, status: 0, code, error: "fenced" }),
+        },
+      },
+    });
+    const context = await validateAuthContext();
+    const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+    await assert.rejects(LeaderboardService.joinParticipation(context));
+    assert.deepEqual(pendingUserIds(storage), [], "the request never left the device");
+  });
+}
+
+// A leave the API has already applied, or can never apply, must not keep a
+// record alive: SyncService treats one as a reason to bypass the sync throttle.
+for (const [label, response] of [
+  ["an API without the participation route", { success: false, status: 404, error: "gone" }],
+  ["a success body it cannot read", { success: true, data: { data: { enabled: "no" } } }],
+]) {
+  test(`a leave answered by ${label} retires the pending record`, async (t) => {
+    const { storage } = installBrowserGlobals(t, {
+      window: { electronAPI: { cloudApiRequest: async () => response } },
+    });
+    const context = await validateAuthContext();
+    const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+    await assert.rejects(LeaderboardService.leaveParticipation(context));
+    assert.deepEqual(pendingUserIds(storage), []);
+  });
+}
+
+// A refusal that a later retry could answer differently keeps the opt-out.
+for (const status of [401, 429, 500]) {
+  test(`a leave refused with ${status} keeps the opt-out and charges one attempt`, async (t) => {
+    const { storage } = installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          cloudApiRequest: async () => ({ success: false, status, error: "refused" }),
+        },
+      },
+    });
+    const context = await validateAuthContext();
+    const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+
+    await assert.rejects(LeaderboardService.leaveParticipation(context));
+    assert.deepEqual(pendingUserIds(storage), ["user_1"]);
+    assert.equal(pendingAttempts(storage, "user_1"), 1);
+  });
+}
+
+// The blocker this bound exists for: an undeliverable leave used to keep
+// bypassing the sync throttle, the in-flight guard and the ambient backoff on
+// every focus, visibility change and online event, for the life of the install.
+test("an undeliverable leave stops preempting the sync throttle but keeps retrying", async (t) => {
+  let calls = 0;
+  const { storage } = installBrowserGlobals(t, {
+    initialStorage: { [pendingKey("user_1")]: "true" },
+    window: {
+      electronAPI: {
+        cloudApiRequest: async () => {
+          calls += 1;
+          return { success: false, status: 403, error: "refused" };
+        },
+      },
+    },
+  });
+  const context = await validateAuthContext();
+  const { LeaderboardService } = require("../../src/services/LeaderboardService.ts");
+  const {
+    MAX_PRIORITY_LEAVE_ATTEMPTS,
+    pendingLeaderboardLeaveDeservesPriority,
+    readPendingLeaderboardLeave,
+  } = require("../../src/lib/pendingLeaderboardLeave.ts");
+
+  for (let attempt = 0; attempt < MAX_PRIORITY_LEAVE_ATTEMPTS; attempt += 1) {
+    assert.equal(
+      pendingLeaderboardLeaveDeservesPriority("user_1"),
+      true,
+      `the opt-out still deserves priority before attempt ${attempt + 1}`
+    );
+    assert.equal(await LeaderboardService.flushPendingLeave(context), true);
+  }
+
+  assert.equal(
+    pendingLeaderboardLeaveDeservesPriority("user_1"),
+    false,
+    "a leave that cannot land may not hold the sync throttle open forever"
+  );
+  assert.equal(
+    readPendingLeaderboardLeave("user_1"),
+    true,
+    "the account still asked to leave, so the record itself survives"
+  );
+
+  assert.equal(await LeaderboardService.flushPendingLeave(context), true);
+  assert.equal(calls, MAX_PRIORITY_LEAVE_ATTEMPTS + 1, "ordinary passes keep retrying it");
+  assert.equal(pendingAttempts(storage, "user_1"), MAX_PRIORITY_LEAVE_ATTEMPTS);
+});
 
 test("an explicit join stays newer than a pending leave already in flight", async (t) => {
   const requests = [];

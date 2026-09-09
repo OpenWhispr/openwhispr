@@ -2847,7 +2847,8 @@
       "shareLinkedIn": "Partager sur LinkedIn",
       "copied": "Image copiée — collez-la dans votre publication.",
       "saved": "Image téléchargée.",
-      "failed": "La carte de partage n’a pas pu être créée."
+      "failed": "La carte de partage n’a pas pu être créée.",
+      "unnamedMember": "Coéquipier"
     }
   },
   "sidebar": {

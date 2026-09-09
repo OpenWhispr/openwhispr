@@ -737,6 +737,11 @@ export default function LeaderboardSection({
       : activeWeekStart
         ? formatWeek(activeWeekStart)
         : t("insights.leaderboard.thisWeek");
+  // A domain board withholds the address, so a member with no display name has
+  // nothing left to be called.
+  const memberLabel = (member: LeaderboardMember) =>
+    member.name || member.email || t("insights.leaderboard.unnamedMember");
+
   const formatValue = (member: LeaderboardMember) => {
     const value = memberValue(member, metric);
     if (value == null) return "—";
@@ -1004,6 +1009,7 @@ export default function LeaderboardSection({
           <LeaderboardPodium
             members={visibleLeaderboard.leaders}
             formatValue={formatValue}
+            memberLabel={memberLabel}
             metricLabel={t(`insights.leaderboard.metrics.${metric}`)}
             periodLabel={periodLabel}
             title={t("insights.leaderboard.topPerformers")}
@@ -1081,14 +1087,14 @@ export default function LeaderboardSection({
                           />
                           <div className="min-w-0">
                             <p className="truncate font-medium">
-                              {member.name || member.email}
+                              {memberLabel(member)}
                               {isViewer && (
                                 <span className="ml-1 text-xs font-normal text-primary">
                                   {t("insights.leaderboard.you")}
                                 </span>
                               )}
                             </p>
-                            {member.name && (
+                            {member.name && member.email && (
                               <p className="truncate text-[11px] text-muted-foreground">
                                 {member.email}
                               </p>

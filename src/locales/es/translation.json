@@ -3406,7 +3406,8 @@
       "shareLinkedIn": "Compartir en LinkedIn",
       "copied": "Imagen copiada: pégala en tu publicación.",
       "saved": "Imagen descargada.",
-      "failed": "No se pudo crear la tarjeta para compartir."
+      "failed": "No se pudo crear la tarjeta para compartir.",
+      "unnamedMember": "Compañero de equipo"
     }
   },
   "sidebar": {

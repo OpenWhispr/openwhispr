@@ -3358,7 +3358,8 @@
       "shareLinkedIn": "分享到 LinkedIn",
       "copied": "圖片已複製，請貼到你的貼文中。",
       "saved": "圖片已下載。",
-      "failed": "無法建立分享卡片。"
+      "failed": "無法建立分享卡片。",
+      "unnamedMember": "團隊成員"
     }
   },
   "sidebar": {

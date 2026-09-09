@@ -58,7 +58,10 @@ test("request_join names the matched team and preserves the pending CTA", async 
   );
   assertState(markup, "request_join", "Request sent");
   assert.ok(markup.includes("Acme has 14 members"));
-  assert.equal(markup.includes("acme.com"), false);
+  // Matched by pattern rather than substring: a bare-hostname includes() check
+  // trips CodeQL's incomplete-URL-sanitization rule (js/incomplete-url-substring
+  // -sanitization), which cannot tell an assertion on markup from a host check.
+  assert.doesNotMatch(markup, /acme\.com/);
 });
 
 test("accept_invite attributes the inviter and offers a direct join", async () => {
@@ -164,6 +167,7 @@ test("podium cards accent all three placements", async () => {
   const markup = renderToStaticMarkup(
     createElement(Podium, {
       formatValue: (member) => String(member.totalWords),
+      memberLabel: (member) => member.name || member.email || "Teammate",
       members,
       metricLabel: "Total words",
       periodLabel: "Sep 7 – Sep 13",

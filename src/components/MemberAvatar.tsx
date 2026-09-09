@@ -9,7 +9,8 @@ const SIZES = {
 
 interface MemberAvatarProps {
   name: string | null;
-  email: string;
+  // Null wherever the address is withheld, as it is on a domain leaderboard.
+  email: string | null;
   image?: string | null;
   size?: keyof typeof SIZES;
 }
@@ -39,7 +40,7 @@ export default function MemberAvatar({ name, email, image, size = "md" }: Member
         "rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center shrink-0"
       )}
     >
-      {(name || email).slice(0, 2).toUpperCase()}
+      {(name || email || "?").slice(0, 2).toUpperCase()}
     </span>
   );
 }

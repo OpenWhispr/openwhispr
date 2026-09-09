@@ -2872,7 +2872,8 @@
       "shareLinkedIn": "Share to LinkedIn",
       "copied": "Image copied — paste it into your post.",
       "saved": "Image downloaded.",
-      "failed": "The share card couldn't be created."
+      "failed": "The share card couldn't be created.",
+      "unnamedMember": "Teammate"
     }
   },
   "workspaces": {

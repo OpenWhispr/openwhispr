@@ -2847,7 +2847,8 @@
       "shareLinkedIn": "Auf LinkedIn teilen",
       "copied": "Bild kopiert — füge es in deinen Beitrag ein.",
       "saved": "Bild heruntergeladen.",
-      "failed": "Die Karte konnte nicht erstellt werden."
+      "failed": "Die Karte konnte nicht erstellt werden.",
+      "unnamedMember": "Teammitglied"
     }
   },
   "sidebar": {

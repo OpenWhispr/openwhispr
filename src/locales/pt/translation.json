@@ -3358,7 +3358,8 @@
       "shareLinkedIn": "Compartilhar no LinkedIn",
       "copied": "Imagem copiada — cole-a na sua publicação.",
       "saved": "Imagem baixada.",
-      "failed": "Não foi possível criar o cartão de compartilhamento."
+      "failed": "Não foi possível criar o cartão de compartilhamento.",
+      "unnamedMember": "Colega de equipe"
     }
   },
   "sidebar": {

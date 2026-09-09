@@ -3358,7 +3358,8 @@
       "shareLinkedIn": "Condividi su LinkedIn",
       "copied": "Immagine copiata — incollala nel tuo post.",
       "saved": "Immagine scaricata.",
-      "failed": "Impossibile creare la scheda da condividere."
+      "failed": "Impossibile creare la scheda da condividere.",
+      "unnamedMember": "Compagno di squadra"
     }
   },
   "sidebar": {

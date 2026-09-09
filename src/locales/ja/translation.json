@@ -3358,7 +3358,8 @@
       "shareLinkedIn": "LinkedIn で共有",
       "copied": "画像をコピーしました。投稿に貼り付けてください。",
       "saved": "画像をダウンロードしました。",
-      "failed": "共有カードを作成できませんでした。"
+      "failed": "共有カードを作成できませんでした。",
+      "unnamedMember": "チームメイト"
     }
   },
   "sidebar": {
