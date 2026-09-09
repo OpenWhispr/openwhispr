@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Managed enterprise providers no longer require SSO. Require SSO stays an independent workspace control.
 - Managed Azure text processing accepts AI Foundry and AI Services endpoints.
 
+### Fixed
+
+- **Choosing Local after signing in no longer silently routes dictation to OpenWhispr Cloud.** Restarting onboarding from Settings (Create Free Account, the plan cards, or picking OpenWhispr Cloud while signed out) armed a post-sign-in "cloud migration" that flipped the routing flag but not the mode the Settings picker reads, so Settings showed "Local · Active", audio went to the cloud, and clicking Local did nothing. That migration is gone — onboarding's setup choice is the only writer — and already-affected profiles are repaired on the next launch from the mode they chose. (#2086)
+
 ## [1.9.2] - 2026-08-29
 
 A repair release for two 1.9.1 regressions. Windows desktop sign-in works again — every provider button had gone dead — and the three transcription paths that only failed in packaged builds are back on all platforms. Meetings get three fixes of their own: recordings that captured only your voice on Windows, prompts that stopped appearing after the first call, and swipe-to-dismiss on the prompt cards.
