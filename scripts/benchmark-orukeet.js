@@ -19,12 +19,16 @@ process.on("uncaughtException", (error) => {
 });
 assert(args.audio && args.output);
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-orukeet-"));
-process.env.OPENWHISPR_CACHE_ROOT = path.join(profile, "cache");
+process.env.OPENWHISPR_CACHE_ROOT = path.join(profile, "model-cache");
 if (args.model) process.env.OPENWHISPR_ORUKEET_MODEL = path.resolve(args.model);
 else delete process.env.OPENWHISPR_ORUKEET_MODEL;
 const electronModule = process.versions.electron ? require("electron") : null;
 const realElectron = electronModule?.app ? electronModule : null;
-if (realElectron) realElectron.app.setPath("userData", profile);
+if (realElectron) {
+  const electronProfile = path.join(profile, "electron-user-data");
+  fs.mkdirSync(electronProfile);
+  realElectron.app.setPath("userData", electronProfile);
+}
 const load = Module._load;
 Module._load = function (id, parent, main) {
   if (id === "electron" && !realElectron)
@@ -111,7 +115,7 @@ async function transcribe() {
     // Chromium holds the Electron profile open on Windows until app exit.
     // Remove the model cache now; the runner owns the remaining temporary profile.
     fs.rmSync(
-      realElectron && process.platform === "win32" ? path.join(profile, "cache") : profile,
+      realElectron && process.platform === "win32" ? path.join(profile, "model-cache") : profile,
       {
         recursive: true,
         force: true,
