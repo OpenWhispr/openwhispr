@@ -629,6 +629,17 @@ function healSkippedMeetingFollowModes(): Record<string, InferenceMode> {
     healed.meetingTranscriptionMode = mode;
   }
 
+  // v1.6.8–v1.6.9's since-removed mode-less toggle wrote `useLocalWhisper` alone,
+  // so a deliberate Local choice could sit under a stale cloud mode; v1.6.10's
+  // wholesale copy carried both into Note Recording, where the mode is what
+  // routes. The UI writes the flag as `mode === "local"`, so this pair can only
+  // be that copy. Follow the flag — local-ward only.
+  const meetingMode = localStorage.getItem("meetingTranscriptionMode");
+  if (meetingUseLocal === "true" && meetingMode !== null && meetingMode !== "local") {
+    localStorage.setItem("meetingTranscriptionMode", "local");
+    healed.meetingTranscriptionMode = "local";
+  }
+
   const noteFormattingCloudMode = localStorage.getItem("noteFormattingCloudMode");
   if (localStorage.getItem("noteFormattingMode") === null && noteFormattingCloudMode !== null) {
     const mode = deriveLegacyReasoningMode(

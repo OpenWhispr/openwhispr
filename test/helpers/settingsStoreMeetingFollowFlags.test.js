@@ -329,4 +329,21 @@ test("Note Recording modes survive the follow-flag migration", async (t) => {
     assert.equal(writes.includes("meetingUseLocalWhisper"), false);
     assert.equal(writes.includes("meetingTranscriptionMode"), false);
   });
+
+  await t.test(
+    "a copied mode-less-toggle desync follows the deliberate local flag",
+    async () => {
+      for (const mode of ["openwhispr", "providers"]) {
+        const { mod, state } = await load({
+          ...LATCHED_LOCAL,
+          meetingTranscriptionMode: mode,
+          meetingUseLocalWhisper: "true",
+          meetingCloudTranscriptionMode: mode === "openwhispr" ? "openwhispr" : "byok",
+        });
+        assert.equal(state.meetingTranscriptionMode, "local", `${mode} → local`);
+        assert.equal(meetingRoute(mod, state).provider, "local");
+        assert.equal(writes.includes("meetingUseLocalWhisper"), false);
+      }
+    }
+  );
 });
