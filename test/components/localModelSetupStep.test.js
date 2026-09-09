@@ -130,6 +130,7 @@ async function createSetupHarness(
   let trayTree;
   let ready = false;
   let proceeded = false;
+  const resumeDrafts = [];
   const props = {
     stepId: assistant ? "local-assistant" : "local-dictation",
     onReadinessChange: (value) => {
@@ -140,6 +141,7 @@ async function createSetupHarness(
     },
     onSkip() {},
     resumeState,
+    onResumeStateChange: (draft) => resumeDrafts.push(draft),
   };
   function Harness() {
     // Execute the real component and hooks with React lifecycle, while leaving
@@ -241,6 +243,7 @@ async function createSetupHarness(
     },
     proceeded: () => proceeded,
     ready: () => ready,
+    resumeDrafts: () => resumeDrafts,
     canProceed: () => !actionButton("onboarding.rehaul.provider.proceed").props.disabled,
     canSkip: () => {
       const button = actionButton("common.skip");
@@ -401,4 +404,18 @@ test("Skip marks a pending model for background activation", async (t) => {
   assert.equal(setup.canSkip(), true);
   await setup.skip();
   assert.equal(localStorage.getItem("localSetupPending"), "true");
+});
+
+test("choosing a local model records it in the resume draft", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    installed: { llm: [FIRST_LLM, SECOND_LLM] },
+    selectedModel: FIRST_LLM,
+  });
+
+  await setup.click(SECOND_LLM, "onboarding.rehaul.local.use");
+
+  // Without this the pick is only in component state, so relaunching mid-setup
+  // silently reverts to whatever was saved before onboarding started.
+  assert.deepEqual(setup.resumeDrafts().at(-1), { provider: "qwen", modelId: SECOND_LLM });
 });
