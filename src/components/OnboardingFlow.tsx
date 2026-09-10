@@ -104,6 +104,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setAuthPath,
     setSetupMode,
     setSelfHostedRequested,
+    setScreenContextRequested,
     clearSession,
   } = useOnboardingSession();
 
@@ -257,8 +258,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   // The setting turns on only once the permission is actually granted, so an
   // Enable click whose System Settings grant is abandoned can't leave screen
-  // context armed to activate silently on some later grant.
-  const [screenContextRequested, setScreenContextRequested] = useState(false);
+  // context armed to activate silently on some later grant. The latch lives in
+  // the persisted session: macOS asks to quit and reopen the app after the
+  // grant, and a component-state latch died with that relaunch, leaving the OS
+  // permission granted but Settings > Voice Assistant still off.
+  const screenContextRequested = session.screenContextRequested;
 
   const applyScreenContext = useCallback(() => {
     settingsStore.setVoiceAgentScreenContext(true);
@@ -271,11 +275,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     const granted = await requestScreenRecordingAccess();
     if (granted) applyScreenContext();
     return granted;
-  }, [applyScreenContext, requestScreenRecordingAccess]);
+  }, [applyScreenContext, requestScreenRecordingAccess, setScreenContextRequested]);
 
   // macOS grants Screen Recording in System Settings, outside the app; the
-  // permission hook re-checks on window focus. When the grant lands, complete
-  // the opt-in the Enable click started — within this session only.
+  // permission hook re-checks on mount and window focus. When the grant lands,
+  // complete the opt-in the Enable click started — within this onboarding
+  // session only, which clearSession ends at finalization.
   useEffect(() => {
     if (!screenContextRequested || !screenRecordingGranted) return;
     if (settingsStore.voiceAgentScreenContext) return;

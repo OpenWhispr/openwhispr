@@ -79,6 +79,13 @@ export interface OnboardingSession {
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
   selfHostedRequested: boolean;
+  /**
+   * The permissions step's screen-context Enable was clicked. Persisted so the
+   * opt-in completes when the macOS grant lands across the quit-and-reopen
+   * System Settings asks for; dropped with the session at finalization so an
+   * abandoned grant can't arm screen context on some later one.
+   */
+  screenContextRequested: boolean;
   resume: OnboardingResumeState;
 }
 
@@ -186,6 +193,7 @@ export function createOnboardingSession(): OnboardingSession {
     authPath: null,
     setupMode: null,
     selfHostedRequested: false,
+    screenContextRequested: false,
     resume: createOnboardingResumeState(),
   };
 }
@@ -415,6 +423,12 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
     ) {
       return null;
     }
+    if (
+      parsed.screenContextRequested !== undefined &&
+      typeof parsed.screenContextRequested !== "boolean"
+    ) {
+      return null;
+    }
 
     return {
       version: ONBOARDING_FLOW_VERSION,
@@ -423,6 +437,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
       authPath,
       setupMode,
       selfHostedRequested: parsed.selfHostedRequested ?? false,
+      screenContextRequested: parsed.screenContextRequested ?? false,
       resume: parseOnboardingResumeState(parsed.resume, parsed.currentStepId),
     };
   } catch {
