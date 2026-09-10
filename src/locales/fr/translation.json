@@ -431,8 +431,7 @@
       "activation": "Dictée",
       "useCase": "À propos de vous",
       "meeting": "Réunions",
-      "finish": "Terminer",
-      "voiceAgent": "Assistant vocal"
+      "finish": "Terminer"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Impossible d'enregistrer ce raccourci",
@@ -477,22 +476,6 @@
       "hotkeyToStartStop": "{{hotkey}} pour démarrer/arrêter",
       "holdHotkey": "Maintenir {{hotkey}}",
       "textareaPlaceholder": "Cliquez ici puis utilisez votre raccourci pour dicter..."
-    },
-    "voiceAgent": {
-      "title": "Configuration de l'assistant vocal",
-      "description": "Parlez à votre assistant IA d'une simple touche",
-      "hotkey": "Raccourci",
-      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». Si du texte est surligné, {{agentName}} le modifie et le remplace. Si un champ de texte modifiable est actif, la réponse est collée au curseur ; sinon, elle s'ouvre dans un panneau flottant. Pas besoin de dire « Hey {{agentName}} » d'abord.",
-      "test": "Essayer",
-      "testInstruction": "Sélectionnez le texte d'exemple ci-dessous, appuyez sur {{hotkey}} et dites « raccourcis ce texte » — la modification apparaît directement dans la zone de texte",
-      "testSetHotkey": "Définissez un raccourci ci-dessus pour l'essayer",
-      "sampleText": "La réunion de jeudi a été déplacée, donc faisons un point en début de semaine prochaine pour revoir le plan de lancement et nous répartir les tâches restantes.",
-      "examples": [
-        "Traduis en italien : « Je parle plus vite que je ne tape »",
-        "Écris un court e-mail à mon patron pour lui dire que je veux une promotion, il s'appelle Mark",
-        "Combien font 5 × 5 ?"
-      ],
-      "optionalNote": "Facultatif — vous pouvez le définir ou le modifier à tout moment dans les réglages."
     },
     "connectivity": {
       "title": "Impossible d'atteindre OpenWhispr Cloud depuis ce réseau",

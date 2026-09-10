@@ -656,7 +656,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         useLocalWhisper: false,
         cloudTranscriptionMode: "byok",
       });
-      // When policy disallows the agent, the assistant step is off-route and no
+      // When policy disallows the assistant, its step is off-route and no
       // LLM gets configured. Turn cleanup off so dictations do not route to a
       // default provider with no credential behind it.
       if (!route.includes("byok-assistant")) {

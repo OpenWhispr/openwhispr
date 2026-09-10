@@ -410,8 +410,7 @@
       "activation": "Ditado",
       "useCase": "Sobre você",
       "meeting": "Reuniões",
-      "finish": "Concluir",
-      "voiceAgent": "Assistente de voz"
+      "finish": "Concluir"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Não foi possível registrar esse atalho",
@@ -456,22 +455,6 @@
       "hotkeyToStartStop": "{{hotkey}} para iniciar/parar",
       "holdHotkey": "Segure {{hotkey}}",
       "textareaPlaceholder": "Clique aqui e use seu atalho para ditar..."
-    },
-    "voiceAgent": {
-      "title": "Configuração do assistente de voz",
-      "description": "Fale com seu assistente de IA com um único atalho",
-      "hotkey": "Atalho",
-      "howItWorks": "Pressione a tecla e diga o que quer — por exemplo, “escreva uma breve nota de agradecimento”. Se houver texto destacado, {{agentName}} o edita e substitui. Se um campo de texto editável estiver em foco, a resposta é colada no cursor; caso contrário, abre em um painel flutuante. Não precisa dizer “Hey {{agentName}}” antes.",
-      "test": "Experimente",
-      "testInstruction": "Selecione o texto de exemplo abaixo, pressione {{hotkey}} e diga “deixe isso mais curto” — a edição aparece direto na caixa de texto",
-      "testSetHotkey": "Defina um atalho acima para experimentar",
-      "sampleText": "A reunião de quinta foi remarcada, então vamos alinhar no início da próxima semana para revisar o plano de lançamento e dividir as tarefas restantes.",
-      "examples": [
-        "Traduza para o italiano: «Falo mais rápido do que escrevo»",
-        "Escreva um e-mail curto para o meu chefe dizendo que quero uma promoção, ele se chama Mark",
-        "Quanto é 5 × 5?"
-      ],
-      "optionalNote": "Opcional — você pode definir ou alterar a qualquer momento nas configurações."
     },
     "connectivity": {
       "title": "Não conseguimos acessar o OpenWhispr Cloud nesta rede",

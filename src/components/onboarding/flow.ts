@@ -452,7 +452,7 @@ export function migrateLegacyOnboardingStep(value: string | null): OnboardingSte
 
 /**
  * Map a step onto the caller's route, for when a saved session names a step the
- * current route no longer has (the agent gets disallowed, setupMode changes, or a
+ * current route no longer has (the assistant gets disallowed, setupMode changes, or a
  * dev jump asks for an off-route step).
  *
  * Clamps to the route step nearest in the canonical order, ties going to the
@@ -494,7 +494,7 @@ export interface OnboardingProgressState {
  * counter on, filled up to the current one.
  *
  * The total comes from the route rather than a constant because the route itself
- * is conditional — the assistant pair drops out when the agent is disallowed, and
+ * is conditional — the assistant pair drops out when the assistant is disallowed, and
  * the provider pair only exists once a non-cloud setup mode is picked. Choosing
  * BYOK/local on setup-choice therefore appends two steps and the row
  * grows by two dots at that moment, which is the flow honestly getting longer.
