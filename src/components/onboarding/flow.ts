@@ -417,10 +417,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
     ) {
       return null;
     }
-    if (
-      parsed.xaiOAuthRequested !== undefined &&
-      typeof parsed.xaiOAuthRequested !== "boolean"
-    ) {
+    if (parsed.xaiOAuthRequested !== undefined && typeof parsed.xaiOAuthRequested !== "boolean") {
       return null;
     }
 

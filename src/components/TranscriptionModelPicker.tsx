@@ -954,7 +954,6 @@ export default function TranscriptionModelPicker({
     }
   }, [applyXaiOAuthStatus]);
 
-
   const handleDelete = useCallback(
     (modelId: string) => {
       showConfirmDialog({
@@ -1284,9 +1283,7 @@ export default function TranscriptionModelPicker({
                             disabled={xaiOauthBusy}
                             onClick={() => void handleXaiOAuthLogin()}
                           >
-                            {xaiOauthBusy ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : null}
+                            {xaiOauthBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                             {t("settings.speech.xaiOauth.connect")}
                           </Button>
                         )}
@@ -1299,53 +1296,53 @@ export default function TranscriptionModelPicker({
                     </p>
                   ) : null}
                   {(displayedCloudProvider !== "xai" || !xaiOAuthConnected) &&
-                  providerCredentials.fields.map((field, index) => (
-                    <div key={field.key} className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-medium text-foreground">
-                          {field.labelKey ? t(field.labelKey) : t("common.apiKey")}
-                        </label>
-                        {index === 0 && (
-                          <GetApiKeyLink
-                            url={providerCredentials.consoleUrl}
-                            labelKey="transcription.getKey"
-                            className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                    providerCredentials.fields.map((field, index) => (
+                      <div key={field.key} className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-foreground">
+                            {field.labelKey ? t(field.labelKey) : t("common.apiKey")}
+                          </label>
+                          {index === 0 && (
+                            <GetApiKeyLink
+                              url={providerCredentials.consoleUrl}
+                              labelKey="transcription.getKey"
+                              className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                            />
+                          )}
+                        </div>
+                        {field.input === "secret" ? (
+                          <ApiKeyInput
+                            apiKey={credentialValues[field.key]}
+                            setApiKey={credentialSetters[field.key]}
+                            label=""
+                            helpText=""
+                          />
+                        ) : field.input === "select" ? (
+                          <Select
+                            value={credentialValues[field.key]}
+                            onValueChange={credentialSetters[field.key]}
+                          >
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {field.options?.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            value={credentialValues[field.key]}
+                            onChange={(e) => credentialSetters[field.key](e.target.value)}
+                            placeholder={field.placeholder}
+                            className="h-8 text-sm"
                           />
                         )}
                       </div>
-                      {field.input === "secret" ? (
-                        <ApiKeyInput
-                          apiKey={credentialValues[field.key]}
-                          setApiKey={credentialSetters[field.key]}
-                          label=""
-                          helpText=""
-                        />
-                      ) : field.input === "select" ? (
-                        <Select
-                          value={credentialValues[field.key]}
-                          onValueChange={credentialSetters[field.key]}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {field.options?.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          value={credentialValues[field.key]}
-                          onChange={(e) => credentialSetters[field.key](e.target.value)}
-                          placeholder={field.placeholder}
-                          className="h-8 text-sm"
-                        />
-                      )}
-                    </div>
-                  ))}
+                    ))}
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-foreground">

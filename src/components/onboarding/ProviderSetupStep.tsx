@@ -311,9 +311,7 @@ export function ByokProviderStep({
   const xaiProviderId = providers.find((provider) => provider.id === "xai")?.id ?? "";
   const initiallySelfHosted = selfHostedRequested && selfHostedAllowed;
   const initialProvider =
-    resumedProvider ||
-    (xaiOAuthRequested && !initiallySelfHosted ? xaiProviderId : "") ||
-    "";
+    resumedProvider || (xaiOAuthRequested && !initiallySelfHosted ? xaiProviderId : "") || "";
   const initialProviderModels =
     providers.find((provider) => provider.id === initialProvider)?.models ?? [];
   const initialModel = initialProviderModels.some(
@@ -749,11 +747,7 @@ export function ByokProviderStep({
             oauthConnected: isXaiCloud && xaiOAuthConnected,
             baseUrl: testingBaseUrl,
             model:
-              isXaiCloud && !assistant
-                ? undefined
-                : selfHosted
-                  ? draftCustomModel
-                  : selectedModel,
+              isXaiCloud && !assistant ? undefined : selfHosted ? draftCustomModel : selectedModel,
             clientId: isCortiTranscription ? draftCortiClientId : undefined,
             clientSecret: isCortiTranscription ? draftCortiClientSecret : undefined,
             environment: store.cortiEnvironment,

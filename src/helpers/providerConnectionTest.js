@@ -314,7 +314,6 @@ async function resolveXaiProviderTestConfig(config, oauth = {}) {
   return null;
 }
 
-
 async function testProviderConnection(config, fetchImpl = fetch) {
   const provider = String(config?.provider || "").toLowerCase();
   if (provider === "xai" && config?.oauthSessionValid) {

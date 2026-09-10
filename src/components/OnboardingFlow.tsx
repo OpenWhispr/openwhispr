@@ -574,7 +574,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
 
   const handleSetupSelection = useCallback(
-    async (mode: Exclude<OnboardingSetupMode, null>, options?: { selfHosted?: boolean; xaiOAuth?: boolean }) => {
+    async (
+      mode: Exclude<OnboardingSetupMode, null>,
+      options?: { selfHosted?: boolean; xaiOAuth?: boolean }
+    ) => {
       setSetupMode(mode);
       setSelfHostedRequested(!!options?.selfHosted);
       setXaiOAuthRequested(!!options?.xaiOAuth);

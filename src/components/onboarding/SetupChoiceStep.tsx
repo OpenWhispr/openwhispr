@@ -189,8 +189,7 @@ export default function SetupChoiceStep({
       description: t("onboarding.rehaul.setupChoice.byok.description"),
     });
   }
-  const xaiOAuthAllowed =
-    byokAllowed && isProviderAllowedByPolicy(policy, "transcription", "xai");
+  const xaiOAuthAllowed = byokAllowed && isProviderAllowedByPolicy(policy, "transcription", "xai");
   if (xaiOAuthAllowed) {
     moreSetupOptions.push({
       id: "xai-oauth",

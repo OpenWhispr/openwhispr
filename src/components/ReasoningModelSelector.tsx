@@ -555,7 +555,6 @@ export default function ReasoningModelSelector({
     }
   }, [applyXaiOAuthStatus]);
 
-
   const handleLocalProviderChange = (providerId: string) => {
     setSelectedLocalProvider(providerId);
   };
@@ -731,9 +730,7 @@ export default function ReasoningModelSelector({
                             disabled={xaiOauthBusy}
                             onClick={() => void handleXaiOAuthLogin()}
                           >
-                            {xaiOauthBusy ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : null}
+                            {xaiOauthBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                             {t("settings.speech.xaiOauth.connect")}
                           </Button>
                         )}
@@ -756,7 +753,6 @@ export default function ReasoningModelSelector({
                       ) : null}
                     </div>
                   )}
-
 
                   {displayedCloudProvider === "tinfoil" && (
                     <div className="space-y-2">

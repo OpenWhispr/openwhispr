@@ -32,9 +32,10 @@ function toCatalogModel(model) {
   return {
     id: model.id.trim(),
     name: displayName(model.id.trim()),
-    description: Number.isFinite(contextLength) && contextLength > 0
-      ? `${Math.round(contextLength / 1000)}k context`
-      : "",
+    description:
+      Number.isFinite(contextLength) && contextLength > 0
+        ? `${Math.round(contextLength / 1000)}k context`
+        : "",
     supportsVision: inputs.includes("image"),
     supportsThinking: /reasoning/i.test(model.id),
   };

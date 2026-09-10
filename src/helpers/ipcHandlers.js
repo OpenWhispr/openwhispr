@@ -198,7 +198,10 @@ const CONNECTION_TEST_MAX_OUTPUT_TOKENS = 16;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 const { createAbortError } = require("./abortError");
-const { testProviderConnection, resolveXaiProviderTestConfig } = require("./providerConnectionTest");
+const {
+  testProviderConnection,
+  resolveXaiProviderTestConfig,
+} = require("./providerConnectionTest");
 const { createUploadCancelRegistry } = require("./uploadCancelRegistry");
 const { applyOpenWhisprOriginHeader } = require("./sessionHeaders");
 const {
@@ -9816,9 +9819,7 @@ class IPCHandlers {
           }
 
           const resolvedApiKey =
-            route.provider === "xai"
-              ? await this.environmentManager.getXaiBearer()
-              : apiKey;
+            route.provider === "xai" ? await this.environmentManager.getXaiBearer() : apiKey;
 
           if (!resolvedApiKey && route.provider !== "custom") {
             throw new Error("No API key configured. Add your key in Settings.");
