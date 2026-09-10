@@ -3551,6 +3551,7 @@
     "noMatches": "No matches — press Enter to add \"{{word}}\"",
     "tabDictionary": "Dictionary",
     "tabSnippets": "Snippets",
+    "tabModes": "Modes",
     "snippets": {
       "title": "Snippets",
       "edit": "Edit {{trigger}}",
@@ -3584,6 +3585,25 @@
     "addFirstWord": "Add your first word",
     "importList": "Import a list",
     "agentDefault": "Added by default"
+  },
+  "voiceModes": {
+    "title": "Voice modes",
+    "new": "New mode",
+    "emptyTitle": "One voice, tuned per app",
+    "emptyDescription": "Create a mode for an app and OpenWhispr follows its instructions whenever you dictate there — formal in Slack, casual in ChatGPT, terse in your editor.",
+    "createTitle": "New voice mode",
+    "editTitle": "Edit voice mode",
+    "dialogDescription": "When you dictate into one of these apps, the instructions are added to the cleanup and assistant prompts.",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Work chat",
+    "appsLabel": "Apps",
+    "appsPlaceholder": "Slack, ChatGPT, Code",
+    "appsHint": "Comma-separated app names as shown in the menu bar or taskbar. Windows also accepts the program name (slack.exe).",
+    "useLastApp": "Add {{app}}",
+    "instructionsLabel": "Instructions",
+    "instructionsPlaceholder": "Write in complete sentences with a formal tone. No emoji. Sign off with \"Best\".",
+    "edit": "Edit {{name}}",
+    "remove": "Remove {{name}}"
   },
   "support": {
     "documentation": "Documentation",

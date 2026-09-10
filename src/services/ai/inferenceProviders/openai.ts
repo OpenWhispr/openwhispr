@@ -152,7 +152,7 @@ export const openaiProvider: InferenceProvider = {
       keyLength: apiKey?.length || 0,
     });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.voiceMode);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     const imageDataUrl = config.screenContext
       ? `data:${config.screenContext.mediaType};base64,${config.screenContext.data}`

@@ -3141,6 +3141,7 @@
     "noMatches": "一致なし — Enter キーで「{{word}}」を追加",
     "tabDictionary": "辞書",
     "tabSnippets": "スニペット",
+    "tabModes": "モード",
     "snippets": {
       "title": "スニペット",
       "edit": "{{trigger}}を編集",
@@ -3174,6 +3175,25 @@
     "addFirstWord": "最初の単語を追加",
     "importList": "リストをインポート",
     "agentDefault": "デフォルトで追加済み"
+  },
+  "voiceModes": {
+    "title": "ボイスモード",
+    "new": "新しいモード",
+    "emptyTitle": "アプリごとに声を切り替える",
+    "emptyDescription": "アプリ用のモードを作ると、そのアプリで音声入力するたびに OpenWhispr が指示に従います。Slack ではフォーマルに、ChatGPT ではカジュアルに、エディタでは簡潔に。",
+    "createTitle": "新しいボイスモード",
+    "editTitle": "ボイスモードを編集",
+    "dialogDescription": "これらのアプリで音声入力すると、指示がクリーンアップとアシスタントのプロンプトに追加されます。",
+    "nameLabel": "名前",
+    "namePlaceholder": "例: 仕事のチャット",
+    "appsLabel": "アプリ",
+    "appsPlaceholder": "Slack, ChatGPT, Code",
+    "appsHint": "メニューバーやタスクバーに表示されるアプリ名をカンマ区切りで入力します。Windows ではプログラム名（slack.exe）も使えます。",
+    "useLastApp": "{{app}} を追加",
+    "instructionsLabel": "指示",
+    "instructionsPlaceholder": "丁寧な文体で完全な文にする。絵文字は使わない。最後に「よろしくお願いいたします」を添える。",
+    "edit": "{{name}} を編集",
+    "remove": "{{name}} を削除"
   },
   "referral": {
     "title": "紹介して特典をゲット",

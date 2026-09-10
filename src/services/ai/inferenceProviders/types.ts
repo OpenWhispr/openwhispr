@@ -1,8 +1,9 @@
 import type { ReasoningConfig } from "../../BaseReasoningService";
+import type { VoiceModePrompt } from "../../../utils/voiceModes";
 
 export interface ProviderContext {
   getApiKey(provider: string): Promise<string>;
-  getSystemPrompt(agentName: string | null): string;
+  getSystemPrompt(agentName: string | null, voiceMode?: VoiceModePrompt | null): string;
   getCustomDictionary(): string[];
   getPreferredLanguage(): string;
   getUiLanguage(): string;

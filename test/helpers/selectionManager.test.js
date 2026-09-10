@@ -193,8 +193,7 @@ test("a Linux AT-SPI terminal pid never becomes a caret delivery target", async 
   const editor = { kind: "atspi-pid", id: "8765" };
 
   assert.equal(
-    (await manager._markEditableCaret({ status: "none", target: terminal }, terminal, true))
-      .status,
+    (await manager._markEditableCaret({ status: "none", target: terminal }, terminal, true)).status,
     "none"
   );
   assert.equal(probes.length, 0, "a terminal pid must be refused without probing");
@@ -701,4 +700,47 @@ test("empty replacement output is rejected without consuming a paste", async () 
     code: "invalid_replacement",
   });
   assert.equal(pastes.length, 0);
+});
+
+test("the target app exposes the Windows exe name without its extension", async () => {
+  const manager = new SelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {},
+    platform: "win32",
+  });
+  assert.equal(await manager.getTargetApp(), null);
+
+  let release;
+  manager._captureTargetPromise = new Promise((resolve) => {
+    release = resolve;
+  });
+  const pending = manager.getTargetApp();
+  manager.lastTarget = {
+    kind: "win-hwnd",
+    id: "1A",
+    exeName: "Slack.exe",
+    windowClass: "Chrome_WidgetWin_1",
+  };
+  manager._captureTargetPromise = null;
+  release();
+
+  assert.deepEqual(await pending, {
+    name: "Slack",
+    bundleId: null,
+    windowClass: "Chrome_WidgetWin_1",
+  });
+});
+
+test("a Linux window-class target has no exe name", async () => {
+  const manager = new SelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {},
+    platform: "linux",
+  });
+  manager.lastTarget = { kind: "x11-window", id: "0x1", windowClass: "slack" };
+  assert.deepEqual(await manager.getTargetApp(), {
+    name: null,
+    bundleId: null,
+    windowClass: "slack",
+  });
 });

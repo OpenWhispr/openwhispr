@@ -3551,6 +3551,7 @@
     "noMatches": "Aucune correspondance — appuyez sur Entrée pour ajouter « {{word}} »",
     "tabDictionary": "Dictionnaire",
     "tabSnippets": "Snippets",
+    "tabModes": "Modes",
     "snippets": {
       "title": "Snippets",
       "edit": "Modifier {{trigger}}",
@@ -3584,6 +3585,25 @@
     "addFirstWord": "Ajoutez votre premier mot",
     "importList": "Importer une liste",
     "agentDefault": "Ajouté par défaut"
+  },
+  "voiceModes": {
+    "title": "Modes vocaux",
+    "new": "Nouveau mode",
+    "emptyTitle": "Une voix, réglée par application",
+    "emptyDescription": "Créez un mode pour une application et OpenWhispr suit ses consignes dès que vous dictez dedans : formel dans Slack, décontracté dans ChatGPT, concis dans votre éditeur.",
+    "createTitle": "Nouveau mode vocal",
+    "editTitle": "Modifier le mode vocal",
+    "dialogDescription": "Quand vous dictez dans l'une de ces applications, les consignes sont ajoutées aux prompts de nettoyage et de l'assistant.",
+    "nameLabel": "Nom",
+    "namePlaceholder": "ex. Chat pro",
+    "appsLabel": "Applications",
+    "appsPlaceholder": "Slack, ChatGPT, Code",
+    "appsHint": "Noms d'applications séparés par des virgules, tels qu'affichés dans la barre des menus ou la barre des tâches. Sous Windows, le nom du programme (slack.exe) fonctionne aussi.",
+    "useLastApp": "Ajouter {{app}}",
+    "instructionsLabel": "Consignes",
+    "instructionsPlaceholder": "Rédige des phrases complètes sur un ton formel. Pas d'emoji. Termine par « Cordialement ».",
+    "edit": "Modifier {{name}}",
+    "remove": "Supprimer {{name}}"
   },
   "support": {
     "documentation": "Documentation",

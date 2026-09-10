@@ -17,6 +17,7 @@ import { ConfirmDialog } from "./ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useToast } from "./ui/useToast";
 import SnippetsView from "./SnippetsView";
+import VoiceModesView from "./VoiceModesView";
 import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
 import { parseDictionaryImportText } from "../helpers/dictionaryImport";
@@ -163,6 +164,9 @@ export default function DictionaryView() {
           </TabsTrigger>
           <TabsTrigger value="snippets" className="h-6 px-2.5 text-xs rounded-[5px]">
             {t("dictionary.tabSnippets")}
+          </TabsTrigger>
+          <TabsTrigger value="modes" className="h-6 px-2.5 text-xs rounded-[5px]">
+            {t("dictionary.tabModes")}
           </TabsTrigger>
         </TabsList>
       </div>
@@ -350,6 +354,10 @@ export default function DictionaryView() {
 
       <TabsContent value="snippets" className="flex-1 min-h-0 mt-0 overflow-y-auto">
         <SnippetsView />
+      </TabsContent>
+
+      <TabsContent value="modes" className="flex-1 min-h-0 mt-0 overflow-y-auto">
+        <VoiceModesView />
       </TabsContent>
     </Tabs>
   );

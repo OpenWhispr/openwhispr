@@ -44,6 +44,7 @@ async function loadRouteResolver(t) {
       "/config/prompts": `
         export const resolvePrompt = () => "route prompt";
         export const appendScreenContextSuffix = (prompt) => prompt;
+        export const appendVoiceModeSuffix = (prompt) => prompt;
         export const wrapCleanupTranscript = (text) => text;
         export const getCleanupSystemPrompt = () => "cleanup prompt";
       `,

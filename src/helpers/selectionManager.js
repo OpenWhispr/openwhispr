@@ -151,6 +151,21 @@ class SelectionManager {
     return this.lastTarget?.kind === "win-hwnd" ? this.lastTarget.id : null;
   }
 
+  // The Windows/Linux app captured at the latest press, once any in-flight
+  // probe has settled; voice modes match against it after transcription.
+  async getTargetApp() {
+    while (this._captureTargetPromise) {
+      await this._captureTargetPromise;
+    }
+    const target = this.lastTarget;
+    if (!target) return null;
+    return {
+      name: target.exeName?.replace(/\.exe$/i, "") || null,
+      bundleId: null,
+      windowClass: target.windowClass || null,
+    };
+  }
+
   async captureSelectedText(options = {}) {
     // The caller knows whether a caret capture could ever be used (auto-paste
     // on); without it the probe's binary spawn would be pure waste.

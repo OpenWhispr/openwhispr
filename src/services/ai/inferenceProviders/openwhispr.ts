@@ -1,5 +1,6 @@
 import type { InferenceProvider } from "./types";
 import { withSessionRefresh } from "../../../lib/auth";
+import { appendVoiceModeSuffix, getDefaultPromptText } from "../../../config/prompts";
 import { getSettings } from "../../../stores/settingsStore";
 import logger from "../../../utils/logger";
 
@@ -13,9 +14,19 @@ export const openwhisprProvider: InferenceProvider = {
       hasScreenContext: !!config.screenContext,
     });
 
+    // The server builds the cleanup prompt unless a custom one is sent, so a
+    // voice mode rides in as a custom prompt on top of the user's template or
+    // the shipped default ({{agentName}} is substituted server-side).
+    const cleanupTemplate = getSettings().customPrompts.cleanup || undefined;
     const customPrompt = config.systemPrompt
       ? undefined
-      : getSettings().customPrompts.cleanup || undefined;
+      : config.voiceMode
+        ? appendVoiceModeSuffix(
+            cleanupTemplate ?? getDefaultPromptText("cleanup", ctx.getUiLanguage()),
+            config.voiceMode,
+            ctx.getUiLanguage()
+          )
+        : cleanupTemplate;
 
     // "agent" only rides with a screenshot (which already requires the new
     // API) — older servers reject unknown promptMode values, so plain agent

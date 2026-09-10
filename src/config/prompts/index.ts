@@ -3,6 +3,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { en as enPrompts } from "../../locales/prompts";
 import { getLanguageInstruction } from "../../utils/languageSupport";
 import { PROMPT_KINDS, type PromptKind } from "./registry";
+import type { VoiceModePrompt } from "../../utils/voiceModes";
 
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./registry";
 
@@ -43,6 +44,23 @@ export function appendScreenContextSuffix(prompt: string, uiLanguage?: string): 
     defaultValue: enPrompts.screenContextSuffix,
   });
   return prompt + suffix;
+}
+
+// Appended to the cleanup and dictation-agent prompts when the target app has a
+// voice mode; the instructions must outrank the base prompt's "keep the speaker's
+// formality" rule, which the suffix text states.
+export function appendVoiceModeSuffix(
+  prompt: string,
+  voiceMode: VoiceModePrompt | null | undefined,
+  uiLanguage?: string
+): string {
+  if (!voiceMode) return prompt;
+  const locale = normalizeUiLanguage(uiLanguage || "en");
+  const suffix = i18n.getFixedT(locale, "prompts")("voiceModeSuffix", {
+    defaultValue: enPrompts.voiceModeSuffix,
+    appName: voiceMode.appName,
+  });
+  return prompt + suffix + voiceMode.instructions;
 }
 
 export function appendDictionarySuffix(
