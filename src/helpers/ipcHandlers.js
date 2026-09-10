@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
+const { transcribeSelfHostedChunk } = require("./selfHostedMeetingTranscription");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
@@ -7168,6 +7169,10 @@ class IPCHandlers {
     let meetingLocalProvider = null;
     let meetingLocalModel = null;
     let meetingLocalLanguage = null;
+    // Only set when meetingLocalProvider === "self-hosted": the buffered-chunk
+    // path POSTs each WAV to this endpoint instead of decoding it locally.
+    let meetingSelfHostedEndpoint = null;
+    let meetingSelfHostedModel = null;
     let meetingLocalTranscribing = false;
     let meetingPendingMicChunks = [];
     let meetingPendingMicFinals = [];
@@ -7563,7 +7568,23 @@ class IPCHandlers {
 
       try {
         let result;
-        if (isSherpaLocalProvider(meetingLocalProvider)) {
+        if (meetingLocalProvider === "self-hosted") {
+          const requestStartedAt = Date.now();
+          result = await transcribeSelfHostedChunk({
+            endpoint: meetingSelfHostedEndpoint,
+            model: meetingSelfHostedModel,
+            language: meetingLocalLanguage,
+            wav,
+            fetchImpl: proxyFetch,
+          });
+          debugLogger.debug("Self-hosted meeting chunk transcribed", {
+            source,
+            wavBytes: wav.length,
+            requestMs: Date.now() - requestStartedAt,
+            success: !!result?.success,
+            textLength: result?.text?.trim?.().length ?? 0,
+          });
+        } else if (isSherpaLocalProvider(meetingLocalProvider)) {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: meetingLocalModel,
             language: meetingLocalLanguage,
@@ -7766,6 +7787,8 @@ class IPCHandlers {
       meetingLocalProvider = null;
       meetingLocalModel = null;
       meetingLocalLanguage = null;
+      meetingSelfHostedEndpoint = null;
+      meetingSelfHostedModel = null;
       meetingLocalTranscribing = false;
       meetingPendingMicChunks = [];
       resetPendingMicFinals();
@@ -8127,7 +8150,8 @@ class IPCHandlers {
         return { success: false, error: `Unsupported provider: ${options.provider}` };
       }
 
-      if (options.provider === "local") {
+      // Buffered-chunk modes open no sockets, so there is nothing to pre-warm.
+      if (options.provider === "local" || options.provider === "self-hosted") {
         return { success: true };
       }
 
@@ -8274,11 +8298,14 @@ class IPCHandlers {
           });
         }
 
-        if (options.provider === "local") {
+        if (options.provider === "local" || options.provider === "self-hosted") {
           meetingLocalMode = true;
-          meetingLocalProvider = options.localProvider || "whisper";
+          meetingLocalProvider =
+            options.provider === "self-hosted" ? "self-hosted" : options.localProvider || "whisper";
           meetingLocalModel = options.localModel || null;
           meetingLocalLanguage = options.language || null;
+          meetingSelfHostedEndpoint = options.endpoint || null;
+          meetingSelfHostedModel = options.model || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalBuffers = { mic: [], system: [] };
           meetingLocalTranscript = "";

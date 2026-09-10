@@ -3,6 +3,25 @@ const DEFAULT_MANAGED_PROVIDER = {
   models: [{ id: "gpt-4o-mini-transcribe", default: true }],
 };
 
+// Mirrors the suffix stripping in config/constants.ts normalizeBaseUrl for the
+// batch transcription route. Replicated rather than imported: this module is a
+// plain .js seam loaded by the renderer and the main process alike, and
+// constants.ts pulls in the wider renderer config graph.
+const TRANSCRIPTION_BASE_SUFFIXES = [
+  [/\/v1\/audio\/transcriptions$/i, "/v1"],
+  [/\/audio\/transcriptions$/i, ""],
+];
+
+const buildSelfHostedTranscriptionEndpoint = (rawUrl) => {
+  let base = rawUrl.trim();
+  for (const [pattern, replacement] of TRANSCRIPTION_BASE_SUFFIXES) {
+    if (pattern.test(base)) {
+      base = base.replace(pattern, replacement).replace(/\/+$/, "");
+    }
+  }
+  return `${base.replace(/\/+$/, "")}/audio/transcriptions`;
+};
+
 const resolveModel = (provider, selectedModel) =>
   provider.models.find((model) => model.id === selectedModel)?.id ??
   provider.models.find((model) => model.default)?.id ??
@@ -22,6 +41,8 @@ export function resolveMeetingTranscriptionOptions({
   cortiEnvironment,
   cortiTenant,
   keyterms,
+  remoteTranscriptionUrl,
+  remoteTranscriptionModel,
 }) {
   if (transcriptionMode === "local") {
     return {
@@ -48,9 +69,17 @@ export function resolveMeetingTranscriptionOptions({
   }
 
   if (transcriptionMode === "self-hosted") {
-    throw new Error(
-      "Self-hosted realtime transcription is not supported for Note Recording. Choose Local or Cloud Providers."
-    );
+    const rawUrl = (remoteTranscriptionUrl || "").trim();
+    if (!rawUrl) {
+      throw new Error("Self-hosted transcription URL is not configured");
+    }
+    const model = (remoteTranscriptionModel || "").trim();
+    return {
+      provider: "self-hosted",
+      endpoint: buildSelfHostedTranscriptionEndpoint(rawUrl),
+      model: model || null,
+      language,
+    };
   }
 
   if (transcriptionMode !== "providers") {
