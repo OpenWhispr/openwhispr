@@ -38,8 +38,9 @@ function makeChild() {
       return true;
     },
   });
-  child.kill = () => {
+  child.kill = (signal) => {
     child.killed = true;
+    child.killSignal = signal;
   };
   return child;
 }
@@ -123,6 +124,40 @@ test("leftover preference recovery uses a one-shot helper without starting the l
   await recovery;
 
   assert.equal(manager.process, null);
+});
+
+test("a wedged preference recovery helper is killed without blocking startup", async () => {
+  const originalSetTimeout = global.setTimeout;
+  const originalClearTimeout = global.clearTimeout;
+  let timeoutCallback;
+  let timeoutCleared = false;
+
+  global.setTimeout = (callback, delay) => {
+    assert.equal(delay, 2000);
+    timeoutCallback = callback;
+    return 42;
+  };
+  global.clearTimeout = (id) => {
+    assert.equal(id, 42);
+    timeoutCleared = true;
+  };
+
+  try {
+    const { GlobeKeyManager, spawnCalls } = loadManager();
+    const manager = new GlobeKeyManager({ preferenceStatePath: "/tmp/state.json" });
+    const recovery = manager.restoreLeftoverSystemPreference();
+
+    timeoutCallback();
+    await recovery;
+
+    assert.equal(spawnCalls[0].child.killed, true);
+    assert.equal(spawnCalls[0].child.killSignal, "SIGKILL");
+    assert.equal(timeoutCleared, true);
+    assert.equal(manager.process, null);
+  } finally {
+    global.setTimeout = originalSetTimeout;
+    global.clearTimeout = originalClearTimeout;
+  }
 });
 
 test("leftover preference recovery is skipped without a marker or off macOS", async () => {

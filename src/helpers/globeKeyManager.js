@@ -16,6 +16,8 @@ const MAX_RESTART_ATTEMPTS = 3;
 const RESTART_DELAY_MS = 1000;
 // After this much sustained uptime, reset restart counter (allows future restarts after sleep/wake)
 const RESTART_RESET_MS = 10000;
+// Crash recovery is best-effort and must never hold the rest of app startup.
+const PREFERENCE_RECOVERY_TIMEOUT_MS = 2000;
 
 class GlobeKeyManager extends EventEmitter {
   constructor({ preferenceStatePath = null } = {}) {
@@ -108,9 +110,11 @@ class GlobeKeyManager extends EventEmitter {
 
     return new Promise((resolve) => {
       let settled = false;
+      let timeout = null;
       const finish = (error, code) => {
         if (settled) return;
         settled = true;
+        if (timeout) clearTimeout(timeout);
         if (error || code !== 0) {
           debugLogger.warn("[GlobeKeyManager] Preference recovery failed", {
             error: error?.message,
@@ -132,6 +136,16 @@ class GlobeKeyManager extends EventEmitter {
         );
         child.once("error", (error) => finish(error));
         child.once("exit", (code) => finish(null, code));
+        timeout = setTimeout(() => {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+            // Releasing startup still takes priority if the child already died.
+          }
+          finish(
+            new Error(`Preference recovery timed out after ${PREFERENCE_RECOVERY_TIMEOUT_MS}ms`)
+          );
+        }, PREFERENCE_RECOVERY_TIMEOUT_MS);
       } catch (error) {
         finish(error);
       }
