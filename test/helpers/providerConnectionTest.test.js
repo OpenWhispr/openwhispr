@@ -177,6 +177,24 @@ test("xAI resolver uses SuperGrok token when console key is empty", async () => 
   assert.equal(resolved.oauthSessionValid, true);
 });
 
+test("xAI resolver treats the renderer xai-oauth sentinel as empty", async () => {
+  const resolved = await resolveXaiProviderTestConfig(
+    { provider: "xai", apiKey: "xai-oauth" },
+    { getValidAccessToken: async () => "oauth-bearer" }
+  );
+  assert.equal(resolved.apiKey, "oauth-bearer");
+  assert.equal(resolved.oauthSessionValid, true);
+});
+
+test("xAI resolver ignores a leftover console key when SuperGrok is connected", async () => {
+  const resolved = await resolveXaiProviderTestConfig(
+    { provider: "xai", apiKey: "xai-leftover-console-key", oauthConnected: true },
+    { getValidAccessToken: async () => "oauth-bearer" }
+  );
+  assert.equal(resolved.apiKey, "oauth-bearer");
+  assert.equal(resolved.oauthSessionValid, true);
+});
+
 test("xAI resolver keeps a SuperGrok session if token refresh fails", async () => {
   const resolved = await resolveXaiProviderTestConfig(
     { provider: "xai", oauthConnected: true },

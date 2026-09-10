@@ -425,11 +425,11 @@ export function ByokProviderStep({
   );
 
   const testingProvider = selfHosted ? "custom" : selectedProvider;
-  const testingKey = draftApiKey;
-  const testingBaseUrl = selfHosted ? draftBaseUrl : undefined;
   const isCortiTranscription = !assistant && !selfHosted && selectedProvider === "corti";
   const isXaiCloud = !selfHosted && selectedProvider === "xai";
   const xaiOAuthConnected = store.xaiOAuthConnected;
+  const testingKey = isXaiCloud && xaiOAuthConnected ? "" : draftApiKey;
+  const testingBaseUrl = selfHosted ? draftBaseUrl : undefined;
   const fieldsReady = selfHosted
     ? Boolean(draftBaseUrl.trim() && draftCustomModel.trim())
     : isCortiTranscription
