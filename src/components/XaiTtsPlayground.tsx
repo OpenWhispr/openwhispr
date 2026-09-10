@@ -31,17 +31,36 @@ type StreamingQuality = 0 | 1 | 2;
 const EXAMPLE_IDS = ["support", "sales", "podcast", "announcement", "meditation"] as const;
 
 const INSTANT_TAGS = [
-  { tag: "[pause]", key: "pause" },
-  { tag: "[long-pause]", key: "longPause" },
-  { tag: "[hum-tune]", key: "humTune" },
-  { tag: "[laugh]", key: "laugh" },
-  { tag: "[chuckle]", key: "chuckle" },
+  { tag: "[pause]", key: "pause", category: "pauses" },
+  { tag: "[long-pause]", key: "longPause", category: "pauses" },
+  { tag: "[laugh]", key: "laugh", category: "laughter" },
+  { tag: "[chuckle]", key: "chuckle", category: "laughter" },
+  { tag: "[giggle]", key: "giggle", category: "laughter" },
+  { tag: "[cry]", key: "cry", category: "laughter" },
+  { tag: "[hum-tune]", key: "humTune", category: "mouth" },
+  { tag: "[tsk]", key: "tsk", category: "mouth" },
+  { tag: "[tongue-click]", key: "tongueClick", category: "mouth" },
+  { tag: "[lip-smack]", key: "lipSmack", category: "mouth" },
+  { tag: "[breath]", key: "breath", category: "breathing" },
+  { tag: "[inhale]", key: "inhale", category: "breathing" },
+  { tag: "[exhale]", key: "exhale", category: "breathing" },
+  { tag: "[sigh]", key: "sigh", category: "breathing" },
 ] as const;
 
 const WRAPPING_TAGS = [
-  { open: "<whisper>", close: "</whisper>", key: "whisper" },
-  { open: "<soft>", close: "</soft>", key: "soft" },
-  { open: "<slow>", close: "</slow>", key: "slow" },
+  { open: "<soft>", close: "</soft>", key: "soft", category: "volume" },
+  { open: "<whisper>", close: "</whisper>", key: "whisper", category: "volume" },
+  { open: "<loud>", close: "</loud>", key: "loud", category: "volume" },
+  { open: "<build-intensity>", close: "</build-intensity>", key: "buildIntensity", category: "volume" },
+  { open: "<decrease-intensity>", close: "</decrease-intensity>", key: "decreaseIntensity", category: "volume" },
+  { open: "<higher-pitch>", close: "</higher-pitch>", key: "higherPitch", category: "pitch" },
+  { open: "<lower-pitch>", close: "</lower-pitch>", key: "lowerPitch", category: "pitch" },
+  { open: "<slow>", close: "</slow>", key: "slow", category: "pitch" },
+  { open: "<fast>", close: "</fast>", key: "fast", category: "pitch" },
+  { open: "<sing-song>", close: "</sing-song>", key: "singSong", category: "style" },
+  { open: "<singing>", close: "</singing>", key: "singing", category: "style" },
+  { open: "<laugh-speak>", close: "</laugh-speak>", key: "laughSpeak", category: "style" },
+  { open: "<emphasis>", close: "</emphasis>", key: "emphasis", category: "style" },
 ] as const;
 
 const SAMPLE_RATES = [8000, 16000, 22050, 24000, 44100, 48000];
@@ -86,6 +105,7 @@ export default function XaiTtsPlayground() {
   const [playing, setPlaying] = useState(false);
   const [hasAudio, setHasAudio] = useState(false);
   const [effectsTab, setEffectsTab] = useState<"instant" | "wrapping">("instant");
+  const [effectsQuery, setEffectsQuery] = useState("");
 
   const selectedVoice = voices.find((voice) => voice.voiceId === voiceId) ?? voices[0];
 
@@ -312,6 +332,15 @@ export default function XaiTtsPlayground() {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80 p-2" align="start">
+              <div className="relative mb-2">
+                <Search className="pointer-events-none absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  value={effectsQuery}
+                  onChange={(event) => setEffectsQuery(event.target.value)}
+                  placeholder={t("settingsPage.textToSpeech.effects.search")}
+                  className="h-8 pl-7 text-xs"
+                />
+              </div>
               <div className="mb-2 flex gap-1 rounded-lg bg-muted p-0.5">
                 {(["instant", "wrapping"] as const).map((tab) => (
                   <button
@@ -326,37 +355,60 @@ export default function XaiTtsPlayground() {
                   </button>
                 ))}
               </div>
-              <div className="max-h-64 space-y-1 overflow-y-auto">
+              <div className="max-h-72 space-y-1 overflow-y-auto">
                 {effectsTab === "instant"
-                  ? INSTANT_TAGS.map((item) => (
-                      <button
-                        key={item.tag}
-                        type="button"
-                        onClick={() => insertAtCursor(item.tag)}
-                        className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-muted"
-                      >
-                        <div className="text-xs font-medium">{item.tag}</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {t(`settingsPage.textToSpeech.effects.${item.key}Hint`)}
-                        </div>
-                      </button>
+                  ? INSTANT_TAGS.filter((item) => {
+                      const q = effectsQuery.trim().toLowerCase();
+                      if (!q) return true;
+                      return item.tag.includes(q) || item.key.toLowerCase().includes(q);
+                    }).map((item, index, list) => (
+                      <div key={item.tag}>
+                        {(index === 0 || list[index - 1]?.category !== item.category) && (
+                          <p className="px-2 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                            {t(`settingsPage.textToSpeech.effects.categories.${item.category}`)}
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => insertAtCursor(item.tag)}
+                          className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-muted"
+                        >
+                          <div className="text-xs font-medium">{item.tag}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {t(`settingsPage.textToSpeech.effects.${item.key}Hint`)}
+                          </div>
+                        </button>
+                      </div>
                     ))
-                  : WRAPPING_TAGS.map((item) => (
-                      <button
-                        key={item.key}
-                        type="button"
-                        onClick={() => insertAtCursor("", { open: item.open, close: item.close })}
-                        className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-muted"
-                      >
-                        <div className="text-xs font-medium">{item.open}…{item.close}</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {t(`settingsPage.textToSpeech.effects.${item.key}Hint`)}
-                        </div>
-                      </button>
+                  : WRAPPING_TAGS.filter((item) => {
+                      const q = effectsQuery.trim().toLowerCase();
+                      if (!q) return true;
+                      return item.key.toLowerCase().includes(q) || item.open.includes(q);
+                    }).map((item, index, list) => (
+                      <div key={item.key}>
+                        {(index === 0 || list[index - 1]?.category !== item.category) && (
+                          <p className="px-2 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                            {t(`settingsPage.textToSpeech.effects.categories.${item.category}`)}
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => insertAtCursor("", { open: item.open, close: item.close })}
+                          className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-muted"
+                        >
+                          <div className="text-xs font-medium">
+                            {item.open}…{item.close}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {t(`settingsPage.textToSpeech.effects.${item.key}Hint`)}
+                          </div>
+                        </button>
+                      </div>
                     ))}
               </div>
             </PopoverContent>
           </Popover>
+
 
           <Popover>
             <PopoverTrigger asChild>
