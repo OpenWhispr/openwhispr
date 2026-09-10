@@ -189,9 +189,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     [setSession]
   );
 
-  const permissions = usePermissions((dialog) =>
-    setPermissionAlert({ title: dialog.title, description: dialog.description })
-  );
   useClipboard((dialog) =>
     setPermissionAlert({ title: dialog.title, description: dialog.description })
   );
@@ -316,6 +313,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
   const compact = COMPACT_STEPS.has(currentStepId);
+  const permissions = usePermissions(
+    (dialog) => setPermissionAlert({ title: dialog.title, description: dialog.description }),
+    {
+      macAccessibilityChecksEnabled: shouldInitializeMacAccessibilityFeatures(currentStepId),
+    }
+  );
   const updateCurrentByokDraft = useCallback(
     (state: OnboardingByokDraft) => {
       if (currentStepId !== "byok-dictation" && currentStepId !== "byok-assistant") return;

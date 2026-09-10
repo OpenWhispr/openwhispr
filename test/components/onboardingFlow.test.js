@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { readFileSync } = require("node:fs");
 const test = require("node:test");
 
 const load = () => import("../../src/components/onboarding/flow.ts");
@@ -31,6 +32,20 @@ test("macOS accessibility features stay deferred until the permissions screen", 
   assert.equal(shouldInitializeMacAccessibilityFeatures("permissions"), true);
   assert.equal(shouldInitializeMacAccessibilityFeatures("dictation-hotkey"), true);
   assert.equal(shouldInitializeMacAccessibilityFeatures("notes"), true);
+});
+
+test("onboarding permission checks use the resolved macOS feature gate", () => {
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+
+  assert.ok(
+    source.indexOf("const currentStepId = reconcileStepWithRoute") <
+      source.indexOf("const permissions = usePermissions")
+  );
+  assert.ok(
+    source.includes(
+      "macAccessibilityChecksEnabled: shouldInitializeMacAccessibilityFeatures(currentStepId)"
+    )
+  );
 });
 
 test("guest flow keeps permissions and the hotkey before setup choice", async () => {
