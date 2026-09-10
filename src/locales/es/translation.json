@@ -905,7 +905,10 @@
         "customEndpointInvalid": "Tu endpoint de transcripción personalizado no está configurado o su URL no es válida. Actualízalo en Ajustes → Voz a texto.",
         "managedTranscriptionUnavailable": "La transcripción gestionada no está disponible en este momento. Inténtalo de nuevo en un momento.",
         "managedRouteInvalid": "La transcripción gestionada no pudo iniciarse debido a una discrepancia de configuración. Inténtalo de nuevo o contacta a tu administrador.",
-        "managedAuthRejected": "Las credenciales de transcripción gestionada de tu organización fueron rechazadas. Contacta a tu administrador."
+        "managedAuthRejected": "Las credenciales de transcripción gestionada de tu organización fueron rechazadas. Contacta a tu administrador.",
+        "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
+        "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
+        "providerKeyMissing": "No hay ninguna clave de API configurada para tu proveedor de transcripción. Añádela en Ajustes → Voz a texto."
       },
       "translationFallback": {
         "unreachableTitle": "Traducción no disponible",
@@ -1077,7 +1080,7 @@
       "failedUserCheck": "No se pudo verificar la cuenta de usuario",
       "generic": "Algo salió mal. Inténtalo de nuevo.",
       "invalidCredentials": "Correo o contraseña incorrectos",
-      "plusAliasUnsupported": "Los alias de correo con '+' no son compatibles"
+      "invalidEmail": "Introduce un correo válido"
     },
     "getStarted": "Comenzar",
     "legal": {
@@ -2578,6 +2581,7 @@
         "turbo": "Rápido con buena calidad"
       },
       "transcription": {
+        "openai_gpt_transcribe": "Transcripción más reciente y precisa",
         "openai_gpt_4o_mini_transcribe": "Transcripción rápida y precisa",
         "openai_gpt_4o_transcribe": "Transcripción más precisa",
         "openai_whisper_1": "Modelo Whisper original",
@@ -2585,9 +2589,14 @@
         "groq_whisper_large_v3_turbo": "Velocidad 216x en tiempo real",
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
         "gemini_3_5_transcribe": "Voz a texto con Gemini de Google",
+        "gemini_3_5_transcribe_live": "Voz a texto en streaming en tiempo real",
         "corti_transcribe": "Transcripción médica de nivel clínico",
         "xai_grok_stt": "Reconocimiento de voz de alta precisión por xAI",
-        "tinfoil_voxtral": "Transcripción verificablemente privada"
+        "tinfoil_voxtral": "Transcripción verificablemente privada",
+        "deepgram_nova_3": "El modelo en tiempo real más preciso de Deepgram",
+        "assemblyai_universal_streaming_english": "Transcripciones en tiempo real inmutables, en inglés",
+        "assemblyai_universal_streaming_multilingual": "Transcripciones en tiempo real inmutables, multilingües",
+        "assemblyai_universal_3_5_pro": "Máxima precisión en tiempo real, 18 idiomas"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",
@@ -2596,7 +2605,8 @@
         "openai_gpt_4_1": "Base sólida, contexto de 1M",
         "openai_gpt_4_1_mini": "Modelo GPT-4.1 más pequeño",
         "openai_gpt_4_1_nano": "GPT-4.1 de menor latencia",
-        "anthropic_claude_fable_5": "El modelo más capaz de Anthropic, clase Mythos",
+        "anthropic_claude_fable_5_1": "El modelo más capaz de Anthropic, clase Mythos",
+        "anthropic_claude_fable_5": "Modelo insignia anterior de clase Mythos",
         "anthropic_claude_sonnet_5": "Modelo asistente rápido y capaz a menor costo",
         "anthropic_claude_sonnet_4_6": "Rendimiento equilibrado",
         "anthropic_claude_sonnet_4_5": "Generación anterior de Sonnet",
@@ -2613,6 +2623,7 @@
         "groq_openai_gpt_oss_20b": "Modelo de código abierto rápido, 1000 T/seg",
         "groq_compound": "Sistema compound de Groq, 450 T/seg",
         "groq_compound_mini": "Sistema compound rápido, 3x menor latencia",
+        "openai_gpt_6_astra": "El modelo más capaz de OpenAI para programación e investigación",
         "openai_gpt_5_6_sol": "GPT-5.6 insignia para programación e investigación complejas",
         "openai_gpt_5_6_terra": "GPT-5.6 equilibrado para el trabajo diario",
         "openai_gpt_5_6_luna": "El GPT-5.6 más rápido y económico",
@@ -3031,7 +3042,8 @@
       "queueFailed": "{{n}} con error",
       "urlFileTooLarge": "El archivo es demasiado grande para descargar. El tamaño máximo es 500 MB.",
       "urlYoutubeBlocked": "YouTube está bloqueando temporalmente las descargas desde tu red. Inténtalo de nuevo más tarde.",
-      "customEndpointInvalid": "El endpoint de transcripción personalizado no está configurado o no es válido. Actualízalo en Ajustes."
+      "customEndpointInvalid": "El endpoint de transcripción personalizado no está configurado o no es válido. Actualízalo en Ajustes.",
+      "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos."
     },
     "meeting": {
       "title": "Notas de reunión",
@@ -3605,7 +3617,8 @@
       "transcribing": "Transcribiendo...",
       "thinking": "Pensando...",
       "typeMessage": "Escribe un mensaje...",
-      "send": "Enviar"
+      "send": "Enviar",
+      "voiceDraftStreamingOnly": "La entrada de voz no está disponible con tu proveedor de transcripción: solo admite dictado en directo. Elige otro proveedor en Ajustes → Voz a texto."
     },
     "tools": {
       "search_notesName": "Buscar notas",

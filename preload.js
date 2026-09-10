@@ -14,6 +14,8 @@ const BYOK_KEY_BRIDGES = [
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
+  { base: "deepgram", get: "getDeepgramKey", save: "saveDeepgramKey" },
+  { base: "assemblyai", get: "getAssemblyAIKey", save: "saveAssemblyAIKey" },
   {
     base: "note-formatting-custom",
     get: "getNoteFormattingCustomKey",
@@ -838,6 +840,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onDeepgramSessionEnd: registerListener(
     "deepgram-session-end",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Gemini Live Streaming
+  geminiStreamingWarmup: (options) => ipcRenderer.invoke("gemini-streaming-warmup", options),
+  geminiStreamingStart: (options) => ipcRenderer.invoke("gemini-streaming-start", options),
+  geminiStreamingSend: (audioBuffer) => ipcRenderer.send("gemini-streaming-send", audioBuffer),
+  geminiStreamingFinalize: () => ipcRenderer.send("gemini-streaming-finalize"),
+  geminiStreamingStop: () => ipcRenderer.invoke("gemini-streaming-stop"),
+  geminiStreamingStatus: () => ipcRenderer.invoke("gemini-streaming-status"),
+  onGeminiPartialTranscript: registerListener(
+    "gemini-partial-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onGeminiFinalTranscript: registerListener(
+    "gemini-final-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onGeminiError: registerListener("gemini-error", (callback) => (_event, error) => callback(error)),
+  onGeminiSessionEnd: registerListener(
+    "gemini-session-end",
     (callback) => (_event, data) => callback(data)
   ),
 

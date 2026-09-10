@@ -17,12 +17,6 @@ const TRANSCRIPTION_MODES = new Set([
 const LLM_MODES = TRANSCRIPTION_MODES;
 // Enterprise clouds with a managed transcription implementation (Azure only for now).
 const TRANSCRIPTION_ENTERPRISE_PROVIDERS = new Set(["azure"]);
-const TRANSCRIPTION_PROVIDERS = new Set(
-  modelRegistryData.transcriptionProviders.map((provider) => provider.id).concat("custom")
-);
-const LLM_PROVIDERS = new Set(
-  modelRegistryData.cloudProviders.map((provider) => provider.id).concat("custom", "openrouter")
-);
 const ENTERPRISE_PROVIDERS = new Set(
   modelRegistryData.enterpriseProviders.map((provider) => provider.id)
 );
@@ -33,6 +27,14 @@ function isKnownList(value, known) {
   return Array.isArray(value) && value.every((item) => typeof item === "string" && known.has(item));
 }
 
+// Shape-only on purpose, like requiredLocalModels below: a provider id added
+// server-side must not make an older app discard the entire managed policy.
+// Unknown ids grant nothing — policyRules filters them at enforcement time.
+// Modes stay strict: an unknown mode has no fail-closed interpretation.
+function isProviderIdList(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string" && item.length > 0);
+}
+
 function isValidPolicyShape(policy) {
   return (
     Boolean(policy) &&
@@ -40,7 +42,7 @@ function isValidPolicyShape(policy) {
     policy.version === 1 &&
     POLICY_SCOPES.every((scope) => Boolean(policy[scope])) &&
     isKnownList(policy.transcription.allowedModes, TRANSCRIPTION_MODES) &&
-    isKnownList(policy.transcription.allowedByokProviders, TRANSCRIPTION_PROVIDERS) &&
+    isProviderIdList(policy.transcription.allowedByokProviders) &&
     // Additive within policy version 1: absent (older server) means none.
     (policy.transcription.allowedEnterpriseProviders === undefined ||
       isKnownList(
@@ -48,7 +50,7 @@ function isValidPolicyShape(policy) {
         TRANSCRIPTION_ENTERPRISE_PROVIDERS
       )) &&
     isKnownList(policy.llm.allowedModes, LLM_MODES) &&
-    isKnownList(policy.llm.allowedByokProviders, LLM_PROVIDERS) &&
+    isProviderIdList(policy.llm.allowedByokProviders) &&
     isKnownList(policy.llm.allowedEnterpriseProviders, ENTERPRISE_PROVIDERS) &&
     typeof policy.features?.agentEnabled === "boolean" &&
     typeof policy.features?.webSearchEnabled === "boolean" &&
@@ -61,9 +63,8 @@ function isValidPolicyShape(policy) {
     (policy.dataRetention?.audioRetentionMaxDays === null ||
       (Number.isSafeInteger(policy.dataRetention?.audioRetentionMaxDays) &&
         policy.dataRetention.audioRetentionMaxDays > 0)) &&
-    // Shape-only on purpose: a future model id added server-side must not make
-    // an older app discard the entire managed policy. Unknown ids are filtered
-    // at enforcement time instead (see policyRules.requiredLocalModelIds).
+    // Shape-only for the same reason as the BYOK provider lists; unknown ids
+    // are filtered at enforcement time (see policyRules.requiredLocalModelIds).
     (policy.requiredLocalModels === undefined ||
       (Array.isArray(policy.requiredLocalModels) &&
         policy.requiredLocalModels.every((item) => typeof item === "string"))) &&

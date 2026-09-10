@@ -905,7 +905,10 @@
         "customEndpointInvalid": "Your custom transcription endpoint is not configured or its URL is invalid. Update it in Settings → Speech to Text.",
         "managedTranscriptionUnavailable": "Managed transcription is not available right now. Try again in a moment.",
         "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
-        "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator."
+        "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator.",
+        "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
+        "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
+        "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text."
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",
@@ -1077,7 +1080,7 @@
       "failedUserCheck": "Failed to check user account",
       "generic": "Something went wrong. Please try again.",
       "invalidCredentials": "Invalid email or password",
-      "plusAliasUnsupported": "Email aliases with '+' are not supported"
+      "invalidEmail": "Enter a valid email address"
     },
     "getStarted": "Get Started",
     "legal": {
@@ -2623,6 +2626,7 @@
         "turbo": "Fast with good quality"
       },
       "transcription": {
+        "openai_gpt_transcribe": "Newest, most accurate transcription",
         "openai_gpt_4o_mini_transcribe": "Fast and accurate transcription",
         "openai_gpt_4o_transcribe": "Most accurate transcription",
         "openai_whisper_1": "Original Whisper model",
@@ -2630,9 +2634,14 @@
         "groq_whisper_large_v3_turbo": "216x real-time speed",
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
         "gemini_3_5_transcribe": "Google's Gemini speech-to-text",
+        "gemini_3_5_transcribe_live": "Realtime streaming speech-to-text",
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
-        "tinfoil_voxtral": "Verifiably private transcription"
+        "tinfoil_voxtral": "Verifiably private transcription",
+        "deepgram_nova_3": "Deepgram's most accurate realtime model",
+        "assemblyai_universal_streaming_english": "Immutable realtime transcripts, English",
+        "assemblyai_universal_streaming_multilingual": "Immutable realtime transcripts, multilingual",
+        "assemblyai_universal_3_5_pro": "Highest accuracy realtime, 18 languages"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
@@ -2641,7 +2650,8 @@
         "openai_gpt_4_1": "Strong baseline, 1M context",
         "openai_gpt_4_1_mini": "Smaller GPT-4.1 model",
         "openai_gpt_4_1_nano": "Lowest latency GPT-4.1",
-        "anthropic_claude_fable_5": "Anthropic's most capable model, Mythos-class",
+        "anthropic_claude_fable_5_1": "Anthropic's most capable model, Mythos-class",
+        "anthropic_claude_fable_5": "Previous Mythos-class flagship",
         "anthropic_claude_sonnet_5": "Fast, capable assistant model at lower cost",
         "anthropic_claude_sonnet_4_6": "Balanced performance",
         "anthropic_claude_sonnet_4_5": "Previous Sonnet generation",
@@ -2658,6 +2668,7 @@
         "groq_openai_gpt_oss_20b": "Fast open-source model, 1000 T/sec",
         "groq_compound": "Groq's compound system, 450 T/sec",
         "groq_compound_mini": "Fast compound system, 3x lower latency",
+        "openai_gpt_6_astra": "OpenAI's most capable model for coding and research",
         "openai_gpt_5_6_sol": "Flagship GPT-5.6 for complex coding and research",
         "openai_gpt_5_6_terra": "Balanced GPT-5.6 for everyday work",
         "openai_gpt_5_6_luna": "Fastest, lowest-cost GPT-5.6",
@@ -3321,7 +3332,8 @@
       "queueFailed": "{{n}} failed",
       "urlFileTooLarge": "File is too large to download. The maximum size is 500 MB.",
       "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while.",
-      "customEndpointInvalid": "Custom transcription endpoint is not configured or invalid. Update it in Settings."
+      "customEndpointInvalid": "Custom transcription endpoint is not configured or invalid. Update it in Settings.",
+      "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries."
     },
     "meeting": {
       "title": "Meeting Notes",
@@ -3722,7 +3734,8 @@
       "transcribing": "Transcribing...",
       "thinking": "Thinking...",
       "typeMessage": "Type a message...",
-      "send": "Send"
+      "send": "Send",
+      "voiceDraftStreamingOnly": "Voice input isn't available with your transcription provider: it only supports live dictation. Choose another provider in Settings → Speech to Text."
     },
     "tools": {
       "search_notesName": "Search notes",

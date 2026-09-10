@@ -905,7 +905,10 @@
         "customEndpointInvalid": "自定义转写端点未配置或其 URL 无效。请在“设置 → 语音转文字”中更新。",
         "managedTranscriptionUnavailable": "托管转录目前不可用。请稍候再试。",
         "managedRouteInvalid": "由于配置不匹配，托管转录无法启动。请重试或联系管理员。",
-        "managedAuthRejected": "您组织的托管转录凭证被拒绝。请联系管理员。"
+        "managedAuthRejected": "您组织的托管转录凭证被拒绝。请联系管理员。",
+        "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
+        "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
+        "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。"
       },
       "translationFallback": {
         "unreachableTitle": "翻译不可用",
@@ -1077,7 +1080,7 @@
       "failedUserCheck": "检查用户账户失败",
       "generic": "出了点问题，请重试。",
       "invalidCredentials": "邮箱或密码无效",
-      "plusAliasUnsupported": "不支持包含“+”的邮箱别名"
+      "invalidEmail": "请输入有效的邮箱地址"
     },
     "getStarted": "开始使用",
     "legal": {
@@ -2530,6 +2533,7 @@
         "turbo": "快速且质量良好"
       },
       "transcription": {
+        "openai_gpt_transcribe": "最新、最准确的转录",
         "openai_gpt_4o_mini_transcribe": "快速且准确的转录",
         "openai_gpt_4o_transcribe": "最准确的转录",
         "openai_whisper_1": "原始 Whisper 模型",
@@ -2537,9 +2541,14 @@
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
         "mistral_voxtral_mini_latest": "快速多语言转录",
         "gemini_3_5_transcribe": "Google Gemini 语音转文字",
+        "gemini_3_5_transcribe_live": "实时流式语音转文字",
         "corti_transcribe": "临床级医疗转录",
         "xai_grok_stt": "xAI 高精度语音识别",
-        "tinfoil_voxtral": "可验证的私密转录"
+        "tinfoil_voxtral": "可验证的私密转录",
+        "deepgram_nova_3": "Deepgram 最精准的实时模型",
+        "assemblyai_universal_streaming_english": "不会变动的实时转录（英语）",
+        "assemblyai_universal_streaming_multilingual": "不会变动的实时转录（多语言）",
+        "assemblyai_universal_3_5_pro": "最高精度实时转录，支持 18 种语言"
       },
       "cloud": {
         "openai_gpt_5_2": "强大的推理模型",
@@ -2548,7 +2557,8 @@
         "openai_gpt_4_1": "稳定基准，1M 上下文",
         "openai_gpt_4_1_mini": "精简版 GPT-4.1",
         "openai_gpt_4_1_nano": "最低延迟 GPT-4.1",
-        "anthropic_claude_fable_5": "Anthropic 最强大的模型，Mythos 级",
+        "anthropic_claude_fable_5_1": "Anthropic 最强大的模型，Mythos 级",
+        "anthropic_claude_fable_5": "上一代 Mythos 级旗舰模型",
         "anthropic_claude_sonnet_5": "快速且强大的助手模型，成本更低",
         "anthropic_claude_sonnet_4_6": "均衡性能",
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet",
@@ -2565,6 +2575,7 @@
         "groq_openai_gpt_oss_20b": "快速开源模型，1000 T/秒",
         "groq_compound": "Groq Compound 系统，450 T/秒",
         "groq_compound_mini": "快速 Compound 系统，3x 更低延迟",
+        "openai_gpt_6_astra": "OpenAI 最强大的模型，适用于编码与研究",
         "openai_gpt_5_6_sol": "旗舰 GPT-5.6，适用于复杂编码与研究",
         "openai_gpt_5_6_terra": "均衡的 GPT-5.6，适合日常工作",
         "openai_gpt_5_6_luna": "速度最快、成本最低的 GPT-5.6",
@@ -2983,7 +2994,8 @@
       "queueFailed": "{{n}} 个失败",
       "urlFileTooLarge": "文件过大，无法下载。最大大小为 500 MB。",
       "urlYoutubeBlocked": "YouTube 暂时阻止了来自您网络的下载。请稍后重试。",
-      "customEndpointInvalid": "自定义转写端点未配置或无效。请在设置中更新。"
+      "customEndpointInvalid": "自定义转写端点未配置或无效。请在设置中更新。",
+      "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。"
     },
     "meeting": {
       "title": "会议笔记",
@@ -3557,7 +3569,8 @@
       "transcribing": "正在转录...",
       "thinking": "正在思考...",
       "typeMessage": "输入消息...",
-      "send": "发送"
+      "send": "发送",
+      "voiceDraftStreamingOnly": "当前转录服务商仅支持实时听写，因此无法使用语音输入。请在“设置 → 语音转文字”中选择其他服务商。"
     },
     "tools": {
       "search_notesName": "搜索笔记",

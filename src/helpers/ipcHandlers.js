@@ -82,6 +82,7 @@ const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
+const { GeminiLiveStreaming, GEMINI_LIVE_MODEL } = require("./geminiLiveStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
@@ -630,6 +631,7 @@ class IPCHandlers {
     this._micHoldSenders = new Map();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
+    this.geminiStreaming = null;
     this.cortiStreaming = null;
     this._dictationStreaming = null;
     this._dictationConnectPromise = null;
@@ -10209,26 +10211,37 @@ class IPCHandlers {
       return token;
     };
 
+    // BYOK dictation mints through the shared realtime-token table instead of the
+    // account-scoped server endpoint, so it needs neither an API URL nor a
+    // session. The client's token cache is deliberately bypassed on that path:
+    // AssemblyAI's BYOK grant lives 60 seconds against a 5-minute cache window,
+    // and a cache shared across modes would replay a managed token as a BYOK one.
+    const fetchAssemblyAiToken = (event, byok) =>
+      byok
+        ? fetchRealtimeToken(event, { mode: "byok", provider: "assemblyai-realtime" })
+        : fetchStreamingToken(event);
+
     ipcMain.handle("assemblyai-streaming-warmup", async (event, options = {}) => {
       try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) {
+        const byok = options.mode === "byok";
+        if (!byok && !getApiUrl()) {
           return { success: false, error: "API not configured", code: "NO_API" };
         }
 
         if (!this.assemblyAiStreaming) {
           this.assemblyAiStreaming = new AssemblyAiStreaming();
         }
+        this.assemblyAiStreaming.adoptMode(options);
 
         if (this.assemblyAiStreaming.hasWarmConnection()) {
           debugLogger.debug("AssemblyAI connection already warm", {}, "streaming");
           return { success: true, alreadyWarm: true };
         }
 
-        let token = this.assemblyAiStreaming.getCachedToken();
+        let token = byok ? null : this.assemblyAiStreaming.getCachedToken();
         if (!token) {
-          debugLogger.debug("Fetching new streaming token for warmup", {}, "streaming");
-          token = await fetchStreamingToken(event);
+          debugLogger.debug("Fetching new streaming token for warmup", { byok }, "streaming");
+          token = await fetchAssemblyAiToken(event, byok);
         }
 
         await this.assemblyAiStreaming.warmup({ ...options, token });
@@ -10251,8 +10264,8 @@ class IPCHandlers {
 
       streamingStartInProgress = true;
       try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) {
+        const byok = options.mode === "byok";
+        if (!byok && !getApiUrl()) {
           return { success: false, error: "API not configured", code: "NO_API" };
         }
 
@@ -10261,6 +10274,7 @@ class IPCHandlers {
         if (!this.assemblyAiStreaming) {
           this.assemblyAiStreaming = new AssemblyAiStreaming();
         }
+        this.assemblyAiStreaming.adoptMode(options);
 
         // Clean up any stale active connection (shouldn't happen normally)
         if (this.assemblyAiStreaming.isConnected) {
@@ -10279,11 +10293,11 @@ class IPCHandlers {
           "streaming"
         );
 
-        let token = this.assemblyAiStreaming.getCachedToken();
+        let token = byok ? null : this.assemblyAiStreaming.getCachedToken();
         if (!token) {
-          debugLogger.debug("Fetching streaming token from API", {}, "streaming");
-          token = await fetchStreamingToken(event);
-          this.assemblyAiStreaming.cacheToken(token);
+          debugLogger.debug("Fetching streaming token", { byok }, "streaming");
+          token = await fetchAssemblyAiToken(event, byok);
+          if (!byok) this.assemblyAiStreaming.cacheToken(token);
         } else {
           debugLogger.debug("Using cached streaming token", {}, "streaming");
         }
@@ -10440,10 +10454,26 @@ class IPCHandlers {
       return token;
     };
 
+    // Same BYOK contract as AssemblyAI above, except the "token" is the raw
+    // long-lived Deepgram key. It still bypasses the client cache so a token
+    // minted in one mode can never be replayed in the other.
+    const DEEPGRAM_BYOK_TOKEN_OPTIONS = { mode: "byok", provider: "deepgram-realtime" };
+    const fetchDeepgramToken = (event, byok) =>
+      byok
+        ? fetchRealtimeToken(event, DEEPGRAM_BYOK_TOKEN_OPTIONS)
+        : fetchDeepgramStreamingToken(event);
+    const setDeepgramTokenRefreshFn = (event, byok) => {
+      this.deepgramStreaming.setTokenRefreshFn(async () => {
+        if (byok) return fetchRealtimeToken(event, DEEPGRAM_BYOK_TOKEN_OPTIONS);
+        if (!deepgramTokenWindowId) throw new Error("No window reference");
+        return fetchDeepgramStreamingTokenFromWindow(deepgramTokenWindowId);
+      });
+    };
+
     ipcMain.handle("deepgram-streaming-warmup", async (event, options = {}) => {
       try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) {
+        const byok = options.mode === "byok";
+        if (!byok && !getApiUrl()) {
           return { success: false, error: "API not configured", code: "NO_API" };
         }
 
@@ -10455,21 +10485,23 @@ class IPCHandlers {
         if (!this.deepgramStreaming) {
           this.deepgramStreaming = new DeepgramStreaming();
         }
+        this.deepgramStreaming.adoptMode(options);
 
-        this.deepgramStreaming.setTokenRefreshFn(async () => {
-          if (!deepgramTokenWindowId) throw new Error("No window reference");
-          return fetchDeepgramStreamingTokenFromWindow(deepgramTokenWindowId);
-        });
+        setDeepgramTokenRefreshFn(event, byok);
 
         if (this.deepgramStreaming.hasWarmConnection()) {
           debugLogger.debug("Deepgram connection already warm", {}, "streaming");
           return { success: true, alreadyWarm: true };
         }
 
-        let token = this.deepgramStreaming.getCachedToken();
+        let token = byok ? null : this.deepgramStreaming.getCachedToken();
         if (!token) {
-          debugLogger.debug("Fetching new Deepgram streaming token for warmup", {}, "streaming");
-          token = await fetchDeepgramStreamingToken(event);
+          debugLogger.debug(
+            "Fetching new Deepgram streaming token for warmup",
+            { byok },
+            "streaming"
+          );
+          token = await fetchDeepgramToken(event, byok);
         }
 
         await this.deepgramStreaming.warmup({ ...options, token });
@@ -10497,8 +10529,8 @@ class IPCHandlers {
 
       deepgramStreamingStartInProgress = true;
       try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) {
+        const byok = options.mode === "byok";
+        if (!byok && !getApiUrl()) {
           return { success: false, error: "API not configured", code: "NO_API" };
         }
 
@@ -10510,11 +10542,9 @@ class IPCHandlers {
         if (!this.deepgramStreaming) {
           this.deepgramStreaming = new DeepgramStreaming();
         }
+        this.deepgramStreaming.adoptMode(options);
 
-        this.deepgramStreaming.setTokenRefreshFn(async () => {
-          if (!deepgramTokenWindowId) throw new Error("No window reference");
-          return fetchDeepgramStreamingTokenFromWindow(deepgramTokenWindowId);
-        });
+        setDeepgramTokenRefreshFn(event, byok);
 
         if (this.deepgramStreaming.isConnected) {
           debugLogger.debug("Deepgram cleaning up stale connection before start", {}, "streaming");
@@ -10524,11 +10554,11 @@ class IPCHandlers {
         const hasWarm = this.deepgramStreaming.hasWarmConnection();
         debugLogger.debug("Deepgram streaming start", { hasWarmConnection: hasWarm }, "streaming");
 
-        let token = this.deepgramStreaming.getCachedToken();
+        let token = byok ? null : this.deepgramStreaming.getCachedToken();
         if (!token) {
-          debugLogger.debug("Fetching Deepgram streaming token from API", {}, "streaming");
-          token = await fetchDeepgramStreamingToken(event);
-          this.deepgramStreaming.cacheToken(token);
+          debugLogger.debug("Fetching Deepgram streaming token", { byok }, "streaming");
+          token = await fetchDeepgramToken(event, byok);
+          if (!byok) this.deepgramStreaming.cacheToken(token);
         } else {
           debugLogger.debug("Using cached Deepgram streaming token", {}, "streaming");
         }
@@ -10646,6 +10676,155 @@ class IPCHandlers {
         return { isConnected: false, sessionId: null };
       }
       return this.deepgramStreaming.getStatus();
+    });
+
+    let geminiStreamingStartInProgress = false;
+    let geminiSendDropCount = 0;
+    // One handshake at a time. A start that raced an in-flight warmup used to
+    // clear the cold-start buffer, spend a second single-use managed token and
+    // report success while the warmup's handshake (and its failure) were still
+    // pending on a promise nobody read.
+    let geminiConnectInFlight = null;
+
+    // Re-bound on every warmup/start so a warm socket promoted by a different
+    // window can never emit into the window that opened it.
+    const ensureGeminiStreaming = (event) => {
+      if (!this.geminiStreaming) {
+        this.geminiStreaming = new GeminiLiveStreaming();
+      }
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const emit = (channel, payload) => {
+        if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+      };
+      const streaming = this.geminiStreaming;
+      streaming.onPartialTranscript = (text) => emit("gemini-partial-transcript", text);
+      streaming.onFinalTranscript = (text) => emit("gemini-final-transcript", text);
+      streaming.onError = (error) => emit("gemini-error", error.message);
+      streaming.onSessionEnd = (data) => emit("gemini-session-end", data);
+      return streaming;
+    };
+
+    const connectGeminiStreaming = (event, options) => {
+      if (geminiConnectInFlight) return geminiConnectInFlight;
+      geminiConnectInFlight = (async () => {
+        const streaming = ensureGeminiStreaming(event);
+        // byok resolves to the raw API key, managed to a single-use ephemeral
+        // token; the client picks its Live method from `mode` accordingly.
+        const tokenOptions = { mode: options.mode, provider: "gemini-realtime" };
+        // Buffer before the token fetch (a real network round trip) so
+        // gemini-streaming-send has somewhere to put the first frames.
+        streaming.beginConnecting();
+        const token = await fetchRealtimeToken(event, tokenOptions);
+        await streaming.connect({
+          ...options,
+          token,
+          refreshToken: () => fetchRealtimeToken(event, tokenOptions),
+        });
+      })().finally(() => {
+        geminiConnectInFlight = null;
+      });
+      return geminiConnectInFlight;
+    };
+
+    ipcMain.handle("gemini-streaming-warmup", async (event, options = {}) => {
+      try {
+        if (this.geminiStreaming?.isConnected) {
+          ensureGeminiStreaming(event);
+          debugLogger.debug("Gemini Live connection already warm", {}, "streaming");
+          return { success: true, alreadyWarm: true };
+        }
+        await connectGeminiStreaming(event, options);
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Gemini streaming warmup error", { error: error.message });
+        return toPolicyFailure(error);
+      }
+    });
+
+    ipcMain.handle("gemini-streaming-start", async (event, options = {}) => {
+      if (geminiStreamingStartInProgress) {
+        debugLogger.debug("Gemini streaming start already in progress, ignoring", {}, "streaming");
+        return { success: false, error: "Operation in progress" };
+      }
+
+      geminiStreamingStartInProgress = true;
+      try {
+        const streaming = ensureGeminiStreaming(event);
+        if (geminiConnectInFlight) await geminiConnectInFlight;
+        const usedWarmConnection = streaming.isConnected && !options.forceNew;
+        if (!usedWarmConnection) {
+          if (streaming.isConnected) await streaming.disconnect(false);
+          await connectGeminiStreaming(event, options);
+        }
+        geminiSendDropCount = 0;
+        debugLogger.debug("Gemini streaming started", { usedWarmConnection }, "streaming");
+        return { success: true, usedWarmConnection };
+      } catch (error) {
+        debugLogger.error("Gemini streaming start error", { error: error.message });
+        if (error.code === "AUTH_EXPIRED") {
+          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+        }
+        return streamingStartFailure(error);
+      } finally {
+        geminiStreamingStartInProgress = false;
+      }
+    });
+
+    ipcMain.on("gemini-streaming-send", (_event, audioBuffer) => {
+      try {
+        if (!this.geminiStreaming) return;
+        const sent = this.geminiStreaming.sendAudio(Buffer.from(audioBuffer));
+        if (!sent) {
+          geminiSendDropCount++;
+          if (geminiSendDropCount <= 3 || geminiSendDropCount % 50 === 0) {
+            debugLogger.warn(
+              "Gemini audio send dropped",
+              {
+                dropCount: geminiSendDropCount,
+                isConnected: this.geminiStreaming.isConnected,
+                wsReadyState: this.geminiStreaming.ws?.readyState,
+              },
+              "streaming"
+            );
+          }
+        } else if (geminiSendDropCount > 0) {
+          debugLogger.debug(
+            "Gemini audio send resumed after drops",
+            { previousDrops: geminiSendDropCount },
+            "streaming"
+          );
+          geminiSendDropCount = 0;
+        }
+      } catch (error) {
+        debugLogger.error("Gemini streaming send error", { error: error.message });
+      }
+    });
+
+    ipcMain.on("gemini-streaming-finalize", () => {
+      this.geminiStreaming?.finalize();
+    });
+
+    ipcMain.handle("gemini-streaming-stop", async () => {
+      try {
+        const model = this.geminiStreaming?.currentModel || GEMINI_LIVE_MODEL;
+        const audioBytesSent = this.geminiStreaming?.audioBytesSent || 0;
+        let result = { text: "" };
+        if (this.geminiStreaming) {
+          result = await this.geminiStreaming.disconnect(true);
+        }
+
+        return { success: true, text: result?.text || "", model, audioBytesSent };
+      } catch (error) {
+        debugLogger.error("Gemini streaming stop error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("gemini-streaming-status", async () => {
+      if (!this.geminiStreaming) {
+        return { isConnected: false, isConnecting: false };
+      }
+      return this.geminiStreaming.getStatus();
     });
 
     ipcMain.handle("corti-streaming-warmup", async (_event, options = {}) => {

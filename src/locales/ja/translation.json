@@ -905,7 +905,10 @@
         "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声テキスト変換 から更新してください。",
         "managedTranscriptionUnavailable": "マネージド文字起こしは現在利用できません。しばらくしてからもう一度お試しください。",
         "managedRouteInvalid": "設定の不一致により、マネージド文字起こしを開始できませんでした。もう一度お試しいただくか、管理者にお問い合わせください。",
-        "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。"
+        "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。",
+        "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
+        "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
+        "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。"
       },
       "translationFallback": {
         "unreachableTitle": "翻訳を利用できません",
@@ -1078,7 +1081,7 @@
       "failedUserCheck": "ユーザーアカウントの確認に失敗しました",
       "generic": "問題が発生しました。もう一度お試しください。",
       "invalidCredentials": "メールアドレスまたはパスワードが正しくありません",
-      "plusAliasUnsupported": "「+」を含むメールエイリアスはサポートされていません"
+      "invalidEmail": "有効なメールアドレスを入力してください"
     },
     "getStarted": "はじめる",
     "legal": {
@@ -2530,6 +2533,7 @@
         "turbo": "高速で高品質"
       },
       "transcription": {
+        "openai_gpt_transcribe": "最新かつ最も正確な文字起こし",
         "openai_gpt_4o_mini_transcribe": "高速で正確な文字起こし",
         "openai_gpt_4o_transcribe": "最も正確な文字起こし",
         "openai_whisper_1": "オリジナル Whisper モデル",
@@ -2537,9 +2541,14 @@
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
         "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
+        "gemini_3_5_transcribe_live": "リアルタイムストリーミング文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
         "xai_grok_stt": "xAIによる高精度音声認識",
-        "tinfoil_voxtral": "検証可能なプライベート文字起こし"
+        "tinfoil_voxtral": "検証可能なプライベート文字起こし",
+        "deepgram_nova_3": "Deepgram で最も高精度なリアルタイムモデル",
+        "assemblyai_universal_streaming_english": "変化しないリアルタイム文字起こし（英語）",
+        "assemblyai_universal_streaming_multilingual": "変化しないリアルタイム文字起こし（多言語）",
+        "assemblyai_universal_3_5_pro": "最高精度のリアルタイム、18言語"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
@@ -2548,7 +2557,8 @@
         "openai_gpt_4_1": "強力なベースライン、100 万トークンコンテキスト",
         "openai_gpt_4_1_mini": "小型 GPT-4.1 モデル",
         "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
-        "anthropic_claude_fable_5": "Anthropic の最も高性能なモデル、Mythos クラス",
+        "anthropic_claude_fable_5_1": "Anthropic の最も高性能なモデル、Mythos クラス",
+        "anthropic_claude_fable_5": "前世代の Mythos クラスのフラッグシップ",
         "anthropic_claude_sonnet_5": "低コストで高速かつ高性能なアシスタントモデル",
         "anthropic_claude_sonnet_4_6": "バランスの取れた性能",
         "anthropic_claude_sonnet_4_5": "前世代の Sonnet モデル",
@@ -2565,6 +2575,7 @@
         "groq_openai_gpt_oss_20b": "高速オープンソースモデル、1000 T/秒",
         "groq_compound": "Groq の Compound システム、450 T/秒",
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
+        "openai_gpt_6_astra": "コーディングと研究のための OpenAI の最も高性能なモデル",
         "openai_gpt_5_6_sol": "複雑なコーディングと研究のためのフラッグシップ GPT-5.6",
         "openai_gpt_5_6_terra": "日常業務向けのバランス型 GPT-5.6",
         "openai_gpt_5_6_luna": "最速かつ最も低コストの GPT-5.6",
@@ -2967,7 +2978,8 @@
       "queueFailed": "{{n}}件失敗",
       "urlFileTooLarge": "ファイルが大きすぎてダウンロードできません。最大サイズは500 MBです。",
       "urlYoutubeBlocked": "YouTubeがお使いのネットワークからのダウンロードを一時的にブロックしています。しばらくしてからもう一度お試しください。",
-      "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か無効です。設定から更新してください。"
+      "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か無効です。設定から更新してください。",
+      "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。"
     },
     "meeting": {
       "title": "議事録",
@@ -3557,7 +3569,8 @@
       "transcribing": "文字起こし中...",
       "thinking": "考え中...",
       "typeMessage": "メッセージを入力...",
-      "send": "送信"
+      "send": "送信",
+      "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声テキスト変換 で別のプロバイダーを選択してください。"
     },
     "tools": {
       "search_notesName": "ノートを検索",

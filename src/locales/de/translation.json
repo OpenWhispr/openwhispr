@@ -905,7 +905,10 @@
         "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text.",
         "managedTranscriptionUnavailable": "Die verwaltete Transkription ist derzeit nicht verfügbar. Versuchen Sie es gleich noch einmal.",
         "managedRouteInvalid": "Die verwaltete Transkription konnte aufgrund einer Konfigurationsabweichung nicht gestartet werden. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
-        "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator."
+        "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator.",
+        "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
+        "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
+        "providerKeyMissing": "Für Ihren Transkriptionsanbieter ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprache zu Text hinzu."
       },
       "translationFallback": {
         "unreachableTitle": "Übersetzung nicht verfügbar",
@@ -1077,7 +1080,7 @@
       "failedUserCheck": "Kontostatus konnte nicht überprüft werden",
       "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "invalidCredentials": "Ungültige E-Mail-Adresse oder ungültiges Passwort",
-      "plusAliasUnsupported": "E-Mail-Aliase mit '+' werden nicht unterstützt"
+      "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein"
     },
     "getStarted": "Jetzt starten",
     "legal": {
@@ -2623,6 +2626,7 @@
         "turbo": "Schnell mit guter Qualität"
       },
       "transcription": {
+        "openai_gpt_transcribe": "Neueste, genaueste Transkription",
         "openai_gpt_4o_mini_transcribe": "Schnelle und genaue Transkription",
         "openai_gpt_4o_transcribe": "Genaueste Transkription",
         "openai_whisper_1": "Originales Whisper-Modell",
@@ -2630,9 +2634,14 @@
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
         "gemini_3_5_transcribe": "Googles Gemini-Spracherkennung",
+        "gemini_3_5_transcribe_live": "Spracherkennung per Echtzeit-Streaming",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
-        "tinfoil_voxtral": "Nachweisbar private Transkription"
+        "tinfoil_voxtral": "Nachweisbar private Transkription",
+        "deepgram_nova_3": "Deepgrams genauestes Echtzeitmodell",
+        "assemblyai_universal_streaming_english": "Unveränderliche Echtzeit-Transkripte, Englisch",
+        "assemblyai_universal_streaming_multilingual": "Unveränderliche Echtzeit-Transkripte, mehrsprachig",
+        "assemblyai_universal_3_5_pro": "Höchste Genauigkeit in Echtzeit, 18 Sprachen"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",
@@ -2641,7 +2650,8 @@
         "openai_gpt_4_1": "Starke Basis, 1M Kontext",
         "openai_gpt_4_1_mini": "Kleineres GPT-4.1-Modell",
         "openai_gpt_4_1_nano": "GPT-4.1 mit der niedrigsten Latenz",
-        "anthropic_claude_fable_5": "Leistungsstärkstes Modell von Anthropic, Mythos-Klasse",
+        "anthropic_claude_fable_5_1": "Leistungsstärkstes Modell von Anthropic, Mythos-Klasse",
+        "anthropic_claude_fable_5": "Vorheriges Flaggschiff der Mythos-Klasse",
         "anthropic_claude_sonnet_5": "Schnelles, leistungsfähiges Assistentenmodell zu geringeren Kosten",
         "anthropic_claude_sonnet_4_6": "Ausgewogene Leistung",
         "anthropic_claude_sonnet_4_5": "Vorherige Sonnet-Generation",
@@ -2658,6 +2668,7 @@
         "groq_openai_gpt_oss_20b": "Schnelles Open-Source-Modell, 1000 T/s",
         "groq_compound": "Groqs Compound-System, 450 T/s",
         "groq_compound_mini": "Schnelles Compound-System, 3x niedrigere Latenz",
+        "openai_gpt_6_astra": "Leistungsstärkstes Modell von OpenAI für Coding und Forschung",
         "openai_gpt_5_6_sol": "Flaggschiff-GPT-5.6 für komplexes Coding und Forschung",
         "openai_gpt_5_6_terra": "Ausgewogenes GPT-5.6 für die tägliche Arbeit",
         "openai_gpt_5_6_luna": "Schnellstes und günstigstes GPT-5.6",
@@ -3321,7 +3332,8 @@
       "queueFailed": "{{n}} fehlgeschlagen",
       "urlFileTooLarge": "Die Datei ist zu groß zum Herunterladen. Die maximale Größe beträgt 500 MB.",
       "urlYoutubeBlocked": "YouTube blockiert Downloads aus Ihrem Netzwerk vorübergehend. Versuchen Sie es später erneut.",
-      "customEndpointInvalid": "Benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder ungültig. Aktualisieren Sie ihn in den Einstellungen."
+      "customEndpointInvalid": "Benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder ungültig. Aktualisieren Sie ihn in den Einstellungen.",
+      "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter."
     },
     "meeting": {
       "title": "Besprechungsnotizen",
@@ -3722,7 +3734,8 @@
       "transcribing": "Transkribiert...",
       "thinking": "Denkt nach...",
       "typeMessage": "Nachricht eingeben...",
-      "send": "Senden"
+      "send": "Senden",
+      "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Sprache zu Text einen anderen Anbieter."
     },
     "tools": {
       "search_notesName": "Notizen durchsuchen",

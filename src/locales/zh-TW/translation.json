@@ -905,7 +905,10 @@
         "customEndpointInvalid": "自訂轉錄端點未設定或其 URL 無效。請在「設定 → 語音轉文字」中更新。",
         "managedTranscriptionUnavailable": "託管轉錄目前無法使用。請稍候再試。",
         "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
-        "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。"
+        "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。",
+        "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
+        "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
+        "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。"
       },
       "translationFallback": {
         "unreachableTitle": "翻譯無法使用",
@@ -1077,7 +1080,7 @@
       "failedUserCheck": "無法檢查使用者帳號",
       "generic": "發生錯誤，請再試一次。",
       "invalidCredentials": "電子郵件或密碼不正確",
-      "plusAliasUnsupported": "不支援含「+」的電子郵件別名"
+      "invalidEmail": "請輸入有效的電子郵件地址"
     },
     "getStarted": "開始使用",
     "legal": {
@@ -2530,6 +2533,7 @@
         "turbo": "速度快且品質佳"
       },
       "transcription": {
+        "openai_gpt_transcribe": "最新、最準確的轉錄",
         "openai_gpt_4o_mini_transcribe": "快速且準確的轉錄",
         "openai_gpt_4o_transcribe": "最高準確度的轉錄",
         "openai_whisper_1": "原始 Whisper 模型",
@@ -2537,9 +2541,14 @@
         "groq_whisper_large_v3": "Large v3 模型，快速且精準",
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
         "gemini_3_5_transcribe": "Google Gemini 語音轉文字",
+        "gemini_3_5_transcribe_live": "即時串流語音轉文字",
         "corti_transcribe": "臨床級醫療轉錄",
         "xai_grok_stt": "xAI 高精度語音辨識",
-        "tinfoil_voxtral": "可驗證的私密轉錄"
+        "tinfoil_voxtral": "可驗證的私密轉錄",
+        "deepgram_nova_3": "Deepgram 最精準的即時模型",
+        "assemblyai_universal_streaming_english": "不會變動的即時轉錄（英文）",
+        "assemblyai_universal_streaming_multilingual": "不會變動的即時轉錄（多語言）",
+        "assemblyai_universal_3_5_pro": "最高精度即時轉錄，支援 18 種語言"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",
@@ -2548,7 +2557,8 @@
         "openai_gpt_4_1": "穩健基礎，1M 上下文",
         "openai_gpt_4_1_mini": "較小的 GPT-4.1 模型",
         "openai_gpt_4_1_nano": "最低延遲的 GPT-4.1",
-        "anthropic_claude_fable_5": "Anthropic 最強大的模型，Mythos 級",
+        "anthropic_claude_fable_5_1": "Anthropic 最強大的模型，Mythos 級",
+        "anthropic_claude_fable_5": "上一代 Mythos 級旗艦模型",
         "anthropic_claude_sonnet_5": "快速且強大的助理模型，成本更低",
         "anthropic_claude_sonnet_4_6": "均衡表現",
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet 模型",
@@ -2565,6 +2575,7 @@
         "groq_openai_gpt_oss_20b": "快速開源模型，1000 T/sec",
         "groq_compound": "Groq Compound 系統，450 T/sec",
         "groq_compound_mini": "快速 Compound 系統，3x 更低延遲",
+        "openai_gpt_6_astra": "OpenAI 最強大的模型，適用於編碼與研究",
         "openai_gpt_5_6_sol": "旗艦 GPT-5.6，適用於複雜編碼與研究",
         "openai_gpt_5_6_terra": "均衡的 GPT-5.6，適合日常工作",
         "openai_gpt_5_6_luna": "速度最快、成本最低的 GPT-5.6",
@@ -2983,7 +2994,8 @@
       "queueFailed": "{{n}} 個失敗",
       "urlFileTooLarge": "檔案過大，無法下載。大小上限為 500 MB。",
       "urlYoutubeBlocked": "YouTube 暫時封鎖了來自您網路的下載。請稍後再試。",
-      "customEndpointInvalid": "自訂轉錄端點未設定或無效。請在設定中更新。"
+      "customEndpointInvalid": "自訂轉錄端點未設定或無效。請在設定中更新。",
+      "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。"
     },
     "meeting": {
       "title": "會議筆記",
@@ -3557,7 +3569,8 @@
       "transcribing": "正在轉錄...",
       "thinking": "正在思考...",
       "typeMessage": "輸入訊息...",
-      "send": "傳送"
+      "send": "傳送",
+      "voiceDraftStreamingOnly": "目前的轉錄服務商僅支援即時聽寫，因此無法使用語音輸入。請在「設定 → 語音轉文字」中選擇其他服務商。"
     },
     "tools": {
       "search_notesName": "搜尋筆記",

@@ -32,10 +32,12 @@ class AssemblyAiStreaming {
     this.terminationResolve = null;
     this.cachedToken = null;
     this.tokenFetchedAt = null;
+    this.mode = null;
     this.warmConnection = null;
     this.warmConnectionReady = false;
     this.warmConnectionOptions = null;
     this.warmSessionId = null;
+    this.requestedModel = null;
     this.rewarmAttempts = 0;
     this.rewarmTimer = null;
     this.keepAliveInterval = null;
@@ -54,6 +56,7 @@ class AssemblyAiStreaming {
       format_turns: "true",
       token: options.token,
     });
+    this.requestedModel = options.model || null;
     if (options.model) {
       params.set("speech_model", options.model);
     }
@@ -73,6 +76,23 @@ class AssemblyAiStreaming {
     this.cachedToken = token;
     this.tokenFetchedAt = Date.now();
     debugLogger.debug("AssemblyAI token cached", { expiresIn: TOKEN_EXPIRY_MS });
+  }
+
+  // BYOK and managed dictation share one client instance, so a token or warm
+  // socket minted under one credential kind must never serve the other. Callers
+  // that read the cache before connecting must adopt the mode first.
+  adoptMode(options) {
+    const mode = options.mode === "byok" ? "byok" : "openwhispr";
+    if (this.mode !== null && this.mode !== mode) {
+      debugLogger.debug("AssemblyAI credential mode changed, dropping cached session state", {
+        from: this.mode,
+        to: mode,
+      });
+      this.cachedToken = null;
+      this.tokenFetchedAt = null;
+      this.cleanupWarmConnection();
+    }
+    this.mode = mode;
   }
 
   isTokenValid() {
@@ -114,6 +134,7 @@ class AssemblyAiStreaming {
       throw new Error("Streaming token is required for warmup");
     }
 
+    this.adoptMode(options);
     if (this.warmConnection) {
       debugLogger.debug(
         this.warmConnectionReady
@@ -324,6 +345,21 @@ class AssemblyAiStreaming {
     this.turns = [];
     this.connectionLossNotified = false;
 
+    this.adoptMode(options);
+    // The server pins speech_model at Begin, so a warm socket opened for another
+    // model would keep that model for the whole session — and the Begin mismatch
+    // warning could never fire for the model actually requested.
+    if (
+      this.hasWarmConnection() &&
+      (this.warmConnectionOptions.model || null) !== (options.model || null)
+    ) {
+      debugLogger.debug("AssemblyAI warm connection model differs, cold-starting", {
+        warm: this.warmConnectionOptions.model || null,
+        requested: options.model || null,
+      });
+      this.cleanupWarmConnection();
+    }
+
     // Try to use pre-warmed connection for instant start
     if (this.hasWarmConnection()) {
       if (this.useWarmConnection()) {
@@ -410,6 +446,19 @@ class AssemblyAiStreaming {
           this.isConnected = true;
           clearTimeout(this.connectionTimeout);
           debugLogger.debug("AssemblyAI session started", { sessionId: this.sessionId });
+          // AssemblyAI ignores unrecognized query params instead of rejecting them,
+          // so a bad speech_model silently downgrades the session.
+          if (
+            message.configuration?.model &&
+            this.requestedModel &&
+            message.configuration.model !== this.requestedModel
+          ) {
+            debugLogger.warn(
+              "AssemblyAI applied a different speech model than requested",
+              { requested: this.requestedModel, applied: message.configuration.model },
+              "transcription"
+            );
+          }
           if (this.pendingResolve) {
             this.pendingResolve();
             this.pendingResolve = null;
