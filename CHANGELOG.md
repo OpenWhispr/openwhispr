@@ -90,6 +90,11 @@ Managed enterprise speech-to-text arrives for workspaces on Azure OpenAI or AI F
 - **Hyprland hotkeys using punctuation.** `Control+,` and other unshifted punctuation accelerators failed validation and were never registered, because a literal comma is Hyprland's own bind delimiter. Those keys are now converted to their XKB names. (#1877, thanks @hsusul)
 - **Auto-paste dropped keystrokes on GNOME Wayland.** The bundled paste helper creates a throwaway input device and sends keys 50ms later, but GNOME can take 150–500ms to open a hotplugged device — so the keystrokes arrived partly or not at all while the helper still reported success, which meant the reliable fallback was never tried. Where the ydotool daemon is running, paste now goes through its persistent device first. (#2078)
 
+### Security
+
+- **Two high-severity advisories in bundled dependencies were closed.** The note editor's Tiptap packages moved from 3.30.4 to 3.31.3, clearing a quadratic ReDoS in Markdown attribute parsing (GHSA-j95f-988m-3j2f) and, by way of prosemirror-view 1.42.3, a cross-site scripting vector reachable from pasted content (GHSA-c8x8-7fp4-3x9w). js-yaml moved to 4.3.2, clearing unbounded CPU use on empty merge sources (GHSA-2883-xcg3-v3hh). Neither change alters behavior. (#2079)
+- **One advisory remains open.** adm-zip's symlink-following issue (GHSA-vwc7-r8mq-g2x9, moderate) reaches OpenWhispr as a transitive dependency of onnxruntime-node, which still requires it as of 1.29.0, and it has no patched release to move to. It stays visible in the audit output rather than being suppressed. (#2079)
+
 ## [1.9.2] - 2026-08-29
 
 A repair release for two 1.9.1 regressions. Windows desktop sign-in works again — every provider button had gone dead — and the three transcription paths that only failed in packaged builds are back on all platforms. Meetings get three fixes of their own: recordings that captured only your voice on Windows, prompts that stopped appearing after the first call, and swipe-to-dismiss on the prompt cards.
