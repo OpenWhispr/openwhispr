@@ -30,13 +30,18 @@ export function countSpokenWords(text) {
 }
 
 export function localDateKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date;
+  }
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
-export function buildAnalyticsActivityDays(daily, today = new Date()) {
+export function buildAnalyticsActivityDays(daily = [], today = new Date()) {
   const byDate = new Map(daily.map((bucket) => [bucket.date, bucket]));
   const startDate = new Date(
     today.getFullYear(),
@@ -90,10 +95,27 @@ export function resolveAnalyticsMode(settings, provider) {
 }
 
 function dayNumber(value) {
+  if (value instanceof Date) {
+    return Math.floor(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()) / DAY_MS);
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const d = new Date(value);
+    return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS);
+  }
+  if (typeof value === "string") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return Math.floor(Date.parse(`${value}T00:00:00Z`) / DAY_MS);
+    }
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) {
+      const d = new Date(parsed);
+      return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS);
+    }
+  }
   return Math.floor(Date.parse(`${value}T00:00:00Z`) / DAY_MS);
 }
 
-export function calculateStreaks(ascendingDays, today) {
+export function calculateStreaks(ascendingDays = [], today = localDateKey()) {
   const days = [...new Set(ascendingDays)].sort();
   if (days.length === 0) return { currentStreakDays: 0, longestStreakDays: 0 };
 

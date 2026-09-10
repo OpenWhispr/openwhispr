@@ -5,6 +5,7 @@ const {
   buildAnalyticsActivityDays,
   calculateStreaks,
   countSpokenWords,
+  localDateKey,
   resolveAnalyticsMode,
   summarizeAnalyticsDays,
 } = require("../../src/helpers/analytics.js");
@@ -111,4 +112,43 @@ test("analytics expires a stale current streak", () => {
     currentStreakDays: 0,
     longestStreakDays: 2,
   });
+  assert.deepEqual(
+    calculateStreaks(["2026-08-27", "2026-08-28"], new Date(2026, 7, 30)),
+    {
+      currentStreakDays: 0,
+      longestStreakDays: 2,
+    }
+  );
+  assert.deepEqual(calculateStreaks(["2020-01-01"]), {
+    currentStreakDays: 0,
+    longestStreakDays: 1,
+  });
+});
+
+test("analytics calculateStreaks counts active streak with Date object", () => {
+  assert.deepEqual(
+    calculateStreaks(
+      ["2026-08-28", "2026-08-29", "2026-08-30"],
+      new Date(2026, 7, 30)
+    ),
+    {
+      currentStreakDays: 3,
+      longestStreakDays: 3,
+    }
+  );
+});
+
+test("buildAnalyticsActivityDays handles omitted daily argument", () => {
+  const days = buildAnalyticsActivityDays(undefined, new Date(2026, 8, 15, 12));
+  assert.equal(days[0].date, "2026-04-01");
+  assert.equal(days.at(-1).date, "2026-09-15");
+  assert.ok(days.length > 150);
+  assert.equal(days.every((day) => day.words === 0), true);
+});
+
+test("localDateKey formats Date instances, timestamps, and date strings", () => {
+  assert.equal(localDateKey("2026-08-30"), "2026-08-30");
+  assert.equal(localDateKey(new Date(2026, 7, 30)), "2026-08-30");
+  const d = new Date(2026, 7, 30);
+  assert.equal(localDateKey(d.getTime()), "2026-08-30");
 });
