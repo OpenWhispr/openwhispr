@@ -1,5 +1,6 @@
 import type { ModelDefinition } from "../models/ModelRegistry";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
+import type { XaiCatalogModel } from "../models/xaiModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { OrgPolicy } from "./policy";
 import type {
@@ -2105,6 +2106,7 @@ declare global {
       getTinfoilKey?: () => Promise<string | null>;
       saveTinfoilKey?: (key: string) => Promise<void>;
       getTinfoilChatModels?: () => Promise<TinfoilCatalogModel[]>;
+      getXaiLanguageModels?: () => Promise<XaiCatalogModel[]>;
       proxyTinfoilTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         language?: string;

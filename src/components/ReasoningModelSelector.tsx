@@ -22,6 +22,7 @@ import {
   isProviderValidForMode,
 } from "../models/ModelRegistry";
 import { useTinfoilModels } from "../hooks/useTinfoilModels";
+import { useXaiModels } from "../hooks/useXaiModels";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
@@ -399,6 +400,11 @@ export default function ReasoningModelSelector({
     loading: tinfoilModelsLoading,
     error: tinfoilModelsError,
   } = useTinfoilModels(displayedCloudProvider === "tinfoil");
+  const {
+    models: xaiModels,
+    loading: xaiModelsLoading,
+    error: xaiModelsError,
+  } = useXaiModels(displayedCloudProvider === "xai");
   const modeTabs = [
     ...(isModeAllowedByPolicy(policyState, "llm", "providers") && cloudProviders.length > 0
       ? [{ id: "cloud", name: t("reasoning.mode.cloud") }]
@@ -451,7 +457,9 @@ export default function ReasoningModelSelector({
     const models =
       displayedCloudProvider === "tinfoil"
         ? tinfoilModels.map(toReasoningModel)
-        : REASONING_PROVIDERS[displayedCloudProvider as keyof typeof REASONING_PROVIDERS]?.models;
+        : displayedCloudProvider === "xai"
+          ? xaiModels.map(toReasoningModel)
+          : REASONING_PROVIDERS[displayedCloudProvider as keyof typeof REASONING_PROVIDERS]?.models;
 
     if (!models) return [];
 
@@ -463,7 +471,7 @@ export default function ReasoningModelSelector({
       icon: iconUrl,
       invertInDark,
     }));
-  }, [displayedCloudProvider, openaiModelOptions, tinfoilModels, t]);
+  }, [displayedCloudProvider, openaiModelOptions, tinfoilModels, xaiModels, t]);
 
   useEffect(() => {
     const localProviderIds = localProviders.map((p) => p.id);
@@ -792,18 +800,25 @@ export default function ReasoningModelSelector({
                       }
                       onModelSelect={handleModelSelect}
                     />
-                    {displayedCloudProvider === "tinfoil" && (
+                    {(displayedCloudProvider === "tinfoil" || displayedCloudProvider === "xai") && (
                       <>
-                        {tinfoilModelsLoading && (
+                        {(displayedCloudProvider === "tinfoil"
+                          ? tinfoilModelsLoading
+                          : xaiModelsLoading) && (
                           <p className="text-xs text-muted-foreground">
                             {t("reasoning.tinfoil.refreshingModels")}
                           </p>
                         )}
-                        {!tinfoilModelsLoading && tinfoilModelsError && (
-                          <p className="text-xs text-destructive">
-                            {t("reasoning.custom.unableToLoadModels")}
-                          </p>
-                        )}
+                        {!(displayedCloudProvider === "tinfoil"
+                          ? tinfoilModelsLoading
+                          : xaiModelsLoading) &&
+                          (displayedCloudProvider === "tinfoil"
+                            ? tinfoilModelsError
+                            : xaiModelsError) && (
+                            <p className="text-xs text-destructive">
+                              {t("reasoning.custom.unableToLoadModels")}
+                            </p>
+                          )}
                       </>
                     )}
                   </div>

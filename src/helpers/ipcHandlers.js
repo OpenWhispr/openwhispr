@@ -91,6 +91,7 @@ const { focusWindowsHotkeyCaptureWindow } = require("./hotkeyCaptureFocus");
 const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
+const { getXaiLanguageModels } = require("./xaiCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
 const AudioStorageManager = require("./audioStorage");
@@ -4503,6 +4504,14 @@ class IPCHandlers {
 
     ipcMain.handle("get-tinfoil-chat-models", async () => {
       return getTinfoilChatModels();
+    });
+
+    ipcMain.handle("get-xai-language-models", async () => {
+      const { net } = require("electron");
+      return getXaiLanguageModels({
+        getBearer: () => this.environmentManager.getXaiBearer(),
+        fetchImpl: (url, init) => net.fetch(url, { ...init, useSessionCookies: false }),
+      });
     });
 
     // Enclave attestation is Node-only, so batch transcription is proxied through main.

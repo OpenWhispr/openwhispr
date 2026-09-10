@@ -671,8 +671,16 @@
     {
       "id": "xai",
       "name": "xAI",
-      "defaultModel": "grok-4.5",
+      "defaultModel": "grok-4.6",
       "models": [
+        {
+          "id": "grok-4.6",
+          "name": "Grok 4.6",
+          "description": "Latest flagship Grok with vision",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "supportsVision": true
+        },
         {
           "id": "grok-4.5",
           "name": "Grok 4.5",
@@ -681,14 +689,6 @@
           "tokenParam": "max_tokens",
           "supportsTemperature": true,
           "supportsVision": true
-        },
-        {
-          "id": "grok-4-fast",
-          "name": "Grok 4 Fast",
-          "description": "Fast Grok model",
-          "descriptionKey": "models.descriptions.cloud.xai_grok_4_fast",
-          "tokenParam": "max_tokens",
-          "supportsTemperature": true
         },
         {
           "id": "grok-4.3",

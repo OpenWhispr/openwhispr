@@ -603,6 +603,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveCortiClientSecret: (key) => ipcRenderer.invoke("save-corti-client-secret", key),
   proxyCortiTranscription: (data) => ipcRenderer.invoke("proxy-corti-transcription", data),
   getTinfoilChatModels: () => ipcRenderer.invoke("get-tinfoil-chat-models"),
+  getXaiLanguageModels: () => ipcRenderer.invoke("get-xai-language-models"),
   proxyTinfoilTranscription: (data) => ipcRenderer.invoke("proxy-tinfoil-transcription", data),
 
   // Custom endpoint API keys
