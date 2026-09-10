@@ -91,6 +91,7 @@ const { focusWindowsHotkeyCaptureWindow } = require("./hotkeyCaptureFocus");
 const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
+const { getXaiLanguageModels } = require("./xaiCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
 const AudioStorageManager = require("./audioStorage");
@@ -197,7 +198,10 @@ const CONNECTION_TEST_MAX_OUTPUT_TOKENS = 16;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 const { createAbortError } = require("./abortError");
-const { testProviderConnection } = require("./providerConnectionTest");
+const {
+  testProviderConnection,
+  resolveXaiProviderTestConfig,
+} = require("./providerConnectionTest");
 const { createUploadCancelRegistry } = require("./uploadCancelRegistry");
 const { applyOpenWhisprOriginHeader } = require("./sessionHeaders");
 const {
@@ -1343,6 +1347,31 @@ class IPCHandlers {
           };
         }
       }
+      if (config?.provider === "xai") {
+        try {
+          const resolved = await resolveXaiProviderTestConfig(
+            config,
+            this.environmentManager.xaiOAuth
+          );
+          if (!resolved) {
+            return {
+              success: false,
+              errorCode: "apiKeyRequired",
+              error: "Add an API key before testing.",
+            };
+          }
+          return testProviderConnection(resolved);
+        } catch (error) {
+          if (error?.name === "AbortError") {
+            return {
+              success: false,
+              errorCode: "timeout",
+              error: "The connection test timed out.",
+            };
+          }
+          throw error;
+        }
+      }
       return testProviderConnection(config);
     });
 
@@ -1435,6 +1464,20 @@ class IPCHandlers {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
       ipcMain.handle(`save-${k.base}-key`, (event, key) => this.environmentManager[k.save](key));
     }
+
+    ipcMain.handle(
+      "xai-oauth-login",
+      serializeIpcError(async () => this.environmentManager.xaiOAuth.startOAuthFlow())
+    );
+    ipcMain.handle(
+      "xai-oauth-logout",
+      serializeIpcError(async () => this.environmentManager.xaiOAuth.logout())
+    );
+    ipcMain.handle(
+      "xai-oauth-status",
+      serializeIpcError(async () => this.environmentManager.xaiOAuth.status())
+    );
+    ipcMain.handle("get-xai-bearer", async () => this.environmentManager.getXaiBearer());
 
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {
       const result = this.databaseManager.saveTranscription(text, rawText, options);
@@ -4353,7 +4396,7 @@ class IPCHandlers {
     ipcMain.handle(
       "proxy-xai-transcription",
       serializeIpcError(async (event, { audioBuffer, language, keyterms }) => {
-        const apiKey = this.environmentManager.getXaiKey();
+        const apiKey = await this.environmentManager.getXaiBearer();
         if (!apiKey) {
           throw new Error("xAI API key not configured");
         }
@@ -4464,6 +4507,14 @@ class IPCHandlers {
 
     ipcMain.handle("get-tinfoil-chat-models", async () => {
       return getTinfoilChatModels();
+    });
+
+    ipcMain.handle("get-xai-language-models", async () => {
+      const { net } = require("electron");
+      return getXaiLanguageModels({
+        getBearer: () => this.environmentManager.getXaiBearer(),
+        fetchImpl: (url, init) => net.fetch(url, { ...init, useSessionCookies: false }),
+      });
     });
 
     // Enclave attestation is Node-only, so batch transcription is proxied through main.
@@ -6318,7 +6369,7 @@ class IPCHandlers {
             provider === "mistral"
               ? this.environmentManager.getMistralKey()
               : provider === "xai"
-                ? this.environmentManager.getXaiKey()
+                ? await this.environmentManager.getXaiBearer()
                 : route.auth.keyRef === "custom"
                   ? this.environmentManager.getCustomTranscriptionKey()
                   : route.auth.keyRef === "groq"
@@ -9767,7 +9818,10 @@ class IPCHandlers {
             return { success: true, text };
           }
 
-          if (!apiKey && route.provider !== "custom") {
+          const resolvedApiKey =
+            route.provider === "xai" ? await this.environmentManager.getXaiBearer() : apiKey;
+
+          if (!resolvedApiKey && route.provider !== "custom") {
             throw new Error("No API key configured. Add your key in Settings.");
           }
 
@@ -9832,12 +9886,12 @@ class IPCHandlers {
 
           const url = new URL(transcriptionUrl);
           // Mistral authenticates with x-api-key, not Bearer.
-          const headers = apiKey
+          const headers = resolvedApiKey
             ? route.provider === "mistral"
-              ? { "x-api-key": apiKey }
+              ? { "x-api-key": resolvedApiKey }
               : route.transport === "http-batch" && route.auth.scheme === "azure-api-key"
-                ? { "api-key": apiKey }
-                : { Authorization: `Bearer ${apiKey}` }
+                ? { "api-key": resolvedApiKey }
+                : { Authorization: `Bearer ${resolvedApiKey}` }
             : undefined;
           const data = await postMultipart(url, body, boundary, headers);
 

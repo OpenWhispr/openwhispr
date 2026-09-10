@@ -2483,11 +2483,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         apiKey = await window.electronAPI.getXaiKey?.();
       }
       if (!isValidApiKey(apiKey, "xai")) {
-        const err = new Error(
-          "xAI API key not found. Please set your API key in the Control Panel."
-        );
-        err.code = "API_KEY_MISSING";
-        throw err;
+        const oauth = await window.electronAPI.xaiOAuthStatus?.();
+        if (oauth?.connected) {
+          apiKey = null;
+        } else {
+          const err = new Error(
+            "xAI API key not found. Please set your API key in the Control Panel."
+          );
+          err.code = "API_KEY_MISSING";
+          throw err;
+        }
       }
     } else {
       // Default to OpenAI

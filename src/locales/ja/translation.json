@@ -55,6 +55,15 @@
         "title": "話者を識別してラベル付け",
         "description": "オフにすると、文字起こしには「あなた」と「他の人」と表示されます"
       }
+    },
+    "speech": {
+      "xaiOauth": {
+        "connect": "Grok でサインイン",
+        "disconnect": "サインアウト",
+        "connected": "Grok サブスクリプション接続済み",
+        "hint": "SuperGrok プランを使用します。console.x.ai の API キーは不要です。",
+        "orApiKey": "またはコンソール API キーを貼り付け"
+      }
     }
   },
   "tray": {
@@ -357,10 +366,14 @@
         "showMore": "その他のオプションを表示",
         "moreOptions": {
           "title": "API の設定方法を選択",
-          "description": "API キーを追加するか、セルフホストモデルを接続します。",
+          "description": "API キーの追加、Grok でサインイン、またはセルフホストモデルの接続。",
           "selfHosted": {
             "title": "セルフホスト",
             "description": "自分でホストしているモデルを接続します。"
+          },
+          "xaiOAuth": {
+            "title": "Grok サブスクリプション",
+            "description": "SuperGrok でサインイン。コンソール API キーは不要。"
           }
         }
       },
@@ -2587,7 +2600,10 @@
         "corti_corti_s1_instant": "高速なヘルスケアモデル、推論トレースなし",
         "corti_corti_s1": "推論対応の最も高性能な臨床モデル",
         "corti_corti_s1_mini_instant": "コンパクトなヘルスケアモデル、最速かつ最も低コスト",
-        "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で"
+        "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で",
+        "xai_grok_4_5": "クリーンアップとボイスアシスタント向けのフラッグシップ Grok",
+        "xai_grok_4_fast": "低遅延クリーンアップ向けの高速 Grok",
+        "xai_grok_4_3": "前世代の Grok"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "最も高性能な Claude モデル。最も難しいアシスタントタスクに最適です。",

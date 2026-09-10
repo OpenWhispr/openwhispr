@@ -16,6 +16,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
+import { isProviderAllowedByPolicy } from "../../stores/policyRules";
 import {
   getParakeetModelInfo,
   getTranscriptionProviders,
@@ -42,12 +43,12 @@ const REFERENCE_LOCAL_MODEL_ID = "nemotron-3.5-asr-streaming-0.6b";
 interface SetupChoiceStepProps {
   isSignedIn: boolean;
   agentAllowed: boolean;
-  onSelect: (mode: SetupMode, options?: { selfHosted?: boolean }) => void;
+  onSelect: (mode: SetupMode, options?: { selfHosted?: boolean; xaiOAuth?: boolean }) => void;
   onRequestAuthentication: () => void;
 }
 
 interface MoreSetupOption {
-  id: "byok" | "self-hosted";
+  id: "byok" | "self-hosted" | "xai-oauth";
   icon: typeof KeyRound;
   title: string;
   description: string;
@@ -186,6 +187,15 @@ export default function SetupChoiceStep({
       icon: KeyRound,
       title: t("onboarding.rehaul.setupChoice.byok.title"),
       description: t("onboarding.rehaul.setupChoice.byok.description"),
+    });
+  }
+  const xaiOAuthAllowed = byokAllowed && isProviderAllowedByPolicy(policy, "transcription", "xai");
+  if (xaiOAuthAllowed) {
+    moreSetupOptions.push({
+      id: "xai-oauth",
+      icon: WandSparkles,
+      title: t("onboarding.rehaul.setupChoice.moreOptions.xaiOAuth.title"),
+      description: t("onboarding.rehaul.setupChoice.moreOptions.xaiOAuth.description"),
     });
   }
   if (selfHostedAllowed) {
@@ -423,7 +433,10 @@ export default function SetupChoiceStep({
                     setShowMore(false);
                     // Both rows land on the BYOK step; self-hosted differs only in
                     // starting it with the self-hosted field set on.
-                    onSelect("byok", { selfHosted: row.id === "self-hosted" });
+                    onSelect("byok", {
+                      selfHosted: row.id === "self-hosted",
+                      xaiOAuth: row.id === "xai-oauth",
+                    });
                   }}
                   className={`onboarding-pressable flex w-full items-center gap-[14px] text-left ${
                     index === 0 ? "pb-4" : "border-t border-[var(--onboarding-control-border)] pt-4"

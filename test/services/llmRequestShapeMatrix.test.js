@@ -60,6 +60,11 @@ const MATRIX = [
     { max_tokens: MAX_TOKENS, temperature: 0.3, reasoning_effort: "low" }],
   ["cerebras host: unknown family gets no guessed reasoning params", "custom", "llama-4-maverick", "https://api.cerebras.ai/v1", AGENT_NO_THINK,
     { max_tokens: MAX_TOKENS, temperature: 0.3 }],
+  ["xai grok-4.5 uses chat-completions max_tokens", "xAI", "grok-4.5", "https://api.x.ai/v1/chat/completions", AGENT,
+    { max_tokens: MAX_TOKENS, temperature: 0.3 }],
+  ["xai host dialect on a custom provider still skips /responses shape", "custom", "grok-4.5", "https://api.x.ai/v1", AGENT,
+    { max_tokens: MAX_TOKENS, temperature: 0.3 }],
+
 
   // --- Self-hosted ---
   ["lan disables Ollama thinking via the nested reasoning object (#1021)", "lan", "qwen3.5:9b", null, CLEANUP_NO_THINK,

@@ -2,6 +2,7 @@ import modelDataRaw from "./modelRegistryData.json";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { readCachedTinfoilModels } from "./tinfoilModelCache";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
+import { readCachedXaiModels } from "./xaiModelCache";
 import type { InferenceMode } from "../types/electron";
 
 export interface ModelDefinition {
@@ -131,11 +132,23 @@ function getTinfoilCloudProvider(): CloudProviderData | undefined {
   return modelData.cloudProviders.find((provider) => provider.id === "tinfoil");
 }
 
+function getXaiCloudProvider(): CloudProviderData | undefined {
+  return modelData.cloudProviders.find((provider) => provider.id === "xai");
+}
+
 const cachedTinfoilModels = readCachedTinfoilModels().models;
 if (cachedTinfoilModels.length > 0) {
   const tinfoilProvider = getTinfoilCloudProvider();
   if (tinfoilProvider) {
     tinfoilProvider.models = cachedTinfoilModels;
+  }
+}
+
+const cachedXaiModels = readCachedXaiModels().models;
+if (cachedXaiModels.length > 0) {
+  const xaiProvider = getXaiCloudProvider();
+  if (xaiProvider) {
+    xaiProvider.models = cachedXaiModels;
   }
 }
 
@@ -303,9 +316,12 @@ function buildReasoningProviders(): ReasoningProviders {
 }
 
 export const REASONING_PROVIDERS = buildReasoningProviders();
-
 export function getTinfoilModels(): CloudModelDefinition[] {
   return getTinfoilCloudProvider()?.models ?? [];
+}
+
+export function getXaiModels(): CloudModelDefinition[] {
+  return getXaiCloudProvider()?.models ?? [];
 }
 
 export function getCloudProviderDefaultModelId(providerId: string): string | undefined {
@@ -318,6 +334,17 @@ export function applyTinfoilModels(models: CloudModelDefinition[]): void {
     provider.models = models;
   }
   const reasoningProvider = REASONING_PROVIDERS.tinfoil;
+  if (reasoningProvider) {
+    reasoningProvider.models = models.map(toReasoningModel);
+  }
+}
+
+export function applyXaiModels(models: CloudModelDefinition[]): void {
+  const provider = getXaiCloudProvider();
+  if (provider) {
+    provider.models = models;
+  }
+  const reasoningProvider = REASONING_PROVIDERS.xai;
   if (reasoningProvider) {
     reasoningProvider.models = models.map(toReasoningModel);
   }

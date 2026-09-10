@@ -55,6 +55,15 @@
         "title": "Identifier et étiqueter les intervenants",
         "description": "Lorsque désactivé, les transcriptions affichent « Vous » et « Autres »"
       }
+    },
+    "speech": {
+      "xaiOauth": {
+        "connect": "Se connecter avec Grok",
+        "disconnect": "Se déconnecter",
+        "connected": "Abonnement Grok connecté",
+        "hint": "Utilise votre forfait SuperGrok. Aucune clé API console.x.ai n'est requise.",
+        "orApiKey": "Ou coller une clé API console"
+      }
     }
   },
   "tray": {
@@ -357,10 +366,14 @@
         "showMore": "Afficher plus d’options",
         "moreOptions": {
           "title": "Choisissez votre configuration d’API",
-          "description": "Ajoutez une clé API ou connectez un modèle auto-hébergé.",
+          "description": "Ajoute une clé API, connecte-toi avec Grok, ou un modèle self-hosted.",
           "selfHosted": {
             "title": "Auto-hébergé",
             "description": "Connectez votre propre modèle hébergé."
+          },
+          "xaiOAuth": {
+            "title": "Abonnement Grok",
+            "description": "Connexion SuperGrok. Pas de clé console."
           }
         }
       },
@@ -2680,7 +2693,10 @@
         "corti_corti_s1_instant": "Modèle de santé rapide, sans trace de raisonnement",
         "corti_corti_s1": "Modèle clinique le plus performant avec raisonnement",
         "corti_corti_s1_mini_instant": "Modèle de santé compact, le plus rapide et le moins cher",
-        "corti_corti_s1_mini": "Modèle clinique compact avec raisonnement à moitié prix"
+        "corti_corti_s1_mini": "Modèle clinique compact avec raisonnement à moitié prix",
+        "xai_grok_4_5": "Grok phare pour le nettoyage et l'assistant vocal",
+        "xai_grok_4_fast": "Grok rapide pour un nettoyage à faible latence",
+        "xai_grok_4_3": "Génération Grok précédente"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Le modèle Claude le plus performant. Idéal pour les tâches d'assistant les plus difficiles.",

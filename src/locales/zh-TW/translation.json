@@ -55,6 +55,15 @@
         "title": "辨識並標記發言者",
         "description": "關閉後，逐字稿會顯示「你」和「其他人」"
       }
+    },
+    "speech": {
+      "xaiOauth": {
+        "connect": "使用 Grok 登入",
+        "disconnect": "登出",
+        "connected": "已連接 Grok 訂閱",
+        "hint": "使用你的 SuperGrok 方案。不需要 console.x.ai API 金鑰。",
+        "orApiKey": "或貼上主控台 API 金鑰"
+      }
     }
   },
   "tray": {
@@ -357,10 +366,14 @@
         "showMore": "顯示更多選項",
         "moreOptions": {
           "title": "選擇你的 API 設定方式",
-          "description": "新增 API Key 或連接自架模型。",
+          "description": "新增 API 金鑰、使用 Grok 登入，或連接自架模型。",
           "selfHosted": {
             "title": "自架",
             "description": "連接你自己託管的模型。"
+          },
+          "xaiOAuth": {
+            "title": "Grok 訂閱",
+            "description": "使用 SuperGrok 登入。不需要主控台 API 金鑰。"
           }
         }
       },
@@ -2587,7 +2600,10 @@
         "corti_corti_s1_instant": "快速醫療模型，無推理過程",
         "corti_corti_s1": "功能最強的臨床模型，帶推理",
         "corti_corti_s1_mini_instant": "精簡型醫療模型，最快且成本最低",
-        "corti_corti_s1_mini": "精簡型臨床模型，半價提供推理"
+        "corti_corti_s1_mini": "精簡型臨床模型，半價提供推理",
+        "xai_grok_4_5": "旗艦 Grok，用於文字清理與語音助理",
+        "xai_grok_4_fast": "快速 Grok，用於低延遲文字清理",
+        "xai_grok_4_3": "上一代 Grok"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "最強大的 Claude 模型。最適合最具挑戰性的助理任務。",

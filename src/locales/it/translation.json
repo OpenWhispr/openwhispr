@@ -55,6 +55,15 @@
         "title": "Identifica ed etichetta i partecipanti",
         "description": "Se disattivato, le trascrizioni mostrano \"Tu\" e \"Altri\""
       }
+    },
+    "speech": {
+      "xaiOauth": {
+        "connect": "Accedi con Grok",
+        "disconnect": "Esci",
+        "connected": "Abbonamento Grok connesso",
+        "hint": "Usa il tuo piano SuperGrok. Non è richiesta una chiave API di console.x.ai.",
+        "orApiKey": "Oppure incolla una chiave API della console"
+      }
     }
   },
   "tray": {
@@ -357,10 +366,14 @@
         "showMore": "Mostra altre opzioni",
         "moreOptions": {
           "title": "Scegli la tua configurazione API",
-          "description": "Aggiungi una chiave API o connetti un modello self-hosted.",
+          "description": "Aggiungi una chiave API, accedi con Grok o collega un modello self-hosted.",
           "selfHosted": {
             "title": "Self-hosted",
             "description": "Connetti il tuo modello ospitato."
+          },
+          "xaiOAuth": {
+            "title": "Abbonamento Grok",
+            "description": "Accedi con SuperGrok. Nessuna chiave console."
           }
         }
       },
@@ -2587,7 +2600,10 @@
         "corti_corti_s1_instant": "Modello sanitario veloce, senza traccia di ragionamento",
         "corti_corti_s1": "Modello clinico più capace con ragionamento",
         "corti_corti_s1_mini_instant": "Modello sanitario compatto, il più veloce ed economico",
-        "corti_corti_s1_mini": "Modello clinico compatto con ragionamento a metà prezzo"
+        "corti_corti_s1_mini": "Modello clinico compatto con ragionamento a metà prezzo",
+        "xai_grok_4_5": "Grok di punta per la pulizia e l'assistente vocale",
+        "xai_grok_4_fast": "Grok veloce per pulizia a bassa latenza",
+        "xai_grok_4_3": "Generazione Grok precedente"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Il modello Claude più capace. Ideale per i compiti di assistente più difficili.",

@@ -55,6 +55,15 @@
         "title": "Identify and label speakers",
         "description": "When off, transcripts show \"You\" and \"Others\""
       }
+    },
+    "speech": {
+      "xaiOauth": {
+        "connect": "Sign in with Grok",
+        "disconnect": "Sign out",
+        "connected": "Grok subscription connected",
+        "hint": "Uses your SuperGrok plan. No console.x.ai API key required.",
+        "orApiKey": "Or paste a console API key"
+      }
     }
   },
   "tray": {
@@ -357,10 +366,14 @@
         "showMore": "Show More Options",
         "moreOptions": {
           "title": "Choose your API setup",
-          "description": "Add an API key or connect a self-hosted model.",
+          "description": "Add an API key, sign in with Grok, or connect a self-hosted model.",
           "selfHosted": {
             "title": "Self-hosted",
             "description": "Connect your own hosted model."
+          },
+          "xaiOAuth": {
+            "title": "Grok subscription",
+            "description": "Sign in with SuperGrok. No console API key."
           }
         }
       },
@@ -2680,7 +2693,10 @@
         "corti_corti_s1_instant": "Fast healthcare model, no reasoning trace",
         "corti_corti_s1": "Most capable clinical model with reasoning",
         "corti_corti_s1_mini_instant": "Compact healthcare model, fastest and lowest cost",
-        "corti_corti_s1_mini": "Compact clinical model with reasoning at half the price"
+        "corti_corti_s1_mini": "Compact clinical model with reasoning at half the price",
+        "xai_grok_4_5": "Flagship Grok for cleanup and the voice assistant",
+        "xai_grok_4_fast": "Fast Grok for low-latency cleanup",
+        "xai_grok_4_3": "Previous Grok generation"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Most capable Claude model. Best for the hardest Assistant tasks.",

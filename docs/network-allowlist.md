@@ -50,6 +50,16 @@ Contacted only if the user connects Google Calendar in settings.
 | `www.googleapis.com`    | HTTPS    | 443  | Calendar event and calendar list reads.                     |
 | `openwhispr.com`        | HTTPS    | 443  | OAuth desktop callback redirect (`/auth/desktop-callback`). |
 
+## Required for SuperGrok (optional feature)
+
+Contacted only if the user signs in with Grok (subscription) or pastes a
+console.x.ai API key.
+
+| Host         | Protocol | Port | Purpose                                              |
+| ------------ | -------- | ---- | ---------------------------------------------------- |
+| `auth.x.ai`  | HTTPS    | 443  | SuperGrok OAuth authorization and token exchange.    |
+| `api.x.ai`   | HTTPS    | 443  | Grok speech-to-text and chat completions.            |
+
 ## Required for URL audio import (optional feature)
 
 Contacted only when a user pastes a URL into the Upload view to download and
@@ -79,6 +89,7 @@ provider. Skip any provider not in use.
 | `api.deepgram.com`                                                               | WSS, HTTPS | 443  | Deepgram API key configured. Realtime-only: dictation and note recording open a WSS session (there is no file-upload or retry path); the Settings connection test calls `/v1/models` over HTTPS.                                                                                                                                                         |
 | `streaming.assemblyai.com`                                                       | WSS, HTTPS | 443  | AssemblyAI API key configured. `/v3/token` mints the short-lived session token over HTTPS; the live session is WSS. Realtime-only, like Deepgram.                                                                                                                                                                                                        |
 | `api.assemblyai.com`                                                             | HTTPS      | 443  | AssemblyAI API key configured. Credential check when the key is tested in Settings (`/v2/transcript`).                                                                                                                                                                                                                                                   |
+| `api.x.ai`                                                                       | HTTPS      | 443  | xAI / SuperGrok (`https://api.x.ai`). Console API key or Grok subscription.                                                                                                                                                                                                                                                                              |
 | `openrouter.ai`                                                                  | HTTPS      | 443  | OpenRouter selected as a reasoning provider (`/api/v1/models` is fetched even without a key).                                                                                                                                                                                                                                                            |
 
 ## Notes
