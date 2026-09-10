@@ -88,6 +88,7 @@ class DeepgramStreaming {
     this.closeResolve = null;
     this.cachedToken = null;
     this.tokenFetchedAt = null;
+    this.mode = null;
     this.warmConnection = null;
     this.warmConnectionReady = false;
     this.warmConnectionOptions = null;
@@ -123,6 +124,9 @@ class DeepgramStreaming {
     const lang = options.language && options.language !== "auto" ? options.language : null;
     const baseLang = lang ? lang.split("-")[0].toLowerCase() : null;
     const useNova3 = !lang || NOVA3_LANGUAGES.has(lang) || NOVA3_LANGUAGES.has(baseLang);
+    // options.model is intentionally ignored: the registry only offers nova-3,
+    // and honouring a user-pinned family would defeat the nova-2 downgrade that
+    // keeps languages outside NOVA3_LANGUAGES working.
     const model = useNova3 ? "nova-3" : "nova-2";
     this.currentModel = model;
 
@@ -155,6 +159,23 @@ class DeepgramStreaming {
     this.cachedToken = token;
     this.tokenFetchedAt = Date.now();
     debugLogger.debug("Deepgram token cached", { expiresIn: TOKEN_EXPIRY_MS });
+  }
+
+  // BYOK and managed dictation share one client instance, so a token or warm
+  // socket minted under one credential kind must never serve the other. Callers
+  // that read the cache before connecting must adopt the mode first.
+  adoptMode(options) {
+    const mode = options.mode === "byok" ? "byok" : "openwhispr";
+    if (this.mode !== null && this.mode !== mode) {
+      debugLogger.debug("Deepgram credential mode changed, dropping cached session state", {
+        from: this.mode,
+        to: mode,
+      });
+      this.cachedToken = null;
+      this.tokenFetchedAt = null;
+      this.cleanupWarmConnection();
+    }
+    this.mode = mode;
   }
 
   isTokenValid() {
@@ -209,6 +230,7 @@ class DeepgramStreaming {
       throw new Error("Streaming token is required for warmup");
     }
 
+    this.adoptMode(options);
     if (this.warmConnection) {
       debugLogger.debug(
         this.warmConnectionReady
@@ -557,10 +579,12 @@ class DeepgramStreaming {
       return;
     }
 
+    this.adoptMode(options);
     this.connectionOptions = {
       sampleRate: options.sampleRate,
       language: options.language,
       keyterms: options.keyterms,
+      mode: options.mode,
     };
     this.accumulatedText = "";
     this.finalSegments = [];

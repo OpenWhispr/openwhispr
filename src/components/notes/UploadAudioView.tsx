@@ -275,6 +275,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     mistralApiKey,
     geminiApiKey,
     tinfoilApiKey,
+    deepgramApiKey,
+    assemblyaiApiKey,
     customTranscriptionApiKey,
   } = apiKeys;
   const policyState = usePolicySnapshot();
@@ -441,6 +443,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 mistralApiKey,
                 geminiApiKey,
                 tinfoilApiKey,
+                deepgramApiKey,
+                assemblyaiApiKey,
                 customTranscriptionApiKey,
               })
             );
@@ -480,6 +484,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     mistralApiKey,
     geminiApiKey,
     tinfoilApiKey,
+    deepgramApiKey,
+    assemblyaiApiKey,
     customTranscriptionApiKey,
     cortiClientId,
     cortiClientSecret,

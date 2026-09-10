@@ -43,6 +43,22 @@ const CUSTOM_ENDPOINT_INVALID_MESSAGE_KEY =
 const MANAGED_TRANSCRIPTION_UNAVAILABLE_MESSAGE_KEY =
   "hooks.audioRecording.errorDescriptions.managedTranscriptionUnavailable";
 
+const STREAMING_ONLY_PROVIDER_MESSAGE_KEY =
+  "hooks.audioRecording.errorDescriptions.streamingOnlyProvider";
+
+const PROVIDER_KEY_MISSING_MESSAGE_KEY =
+  "hooks.audioRecording.errorDescriptions.providerKeyMissing";
+
+// Deepgram and AssemblyAI have no OpenAI-compatible /audio/transcriptions, so
+// they exist only as realtime providers. A batch/upload/retry request for them
+// has to fail closed: the fall-through at the end of resolveTranscriptionRoute
+// would otherwise POST the user's audio to api.openai.com with their OpenAI key.
+// Hand-maintained rather than derived from the registry: Corti's only model is
+// realtime too, yet it batches through the proxy. Every other "realtime-only"
+// decision (dictationStreamingRouting, audioManager.shouldUseStreaming, the
+// upload picker and selector) derives from this set.
+export const STREAMING_ONLY_PROVIDERS = new Set(["deepgram", "assemblyai"]);
+
 export interface TranscriptionRouteSettings {
   transcriptionMode?: string;
   useLocalWhisper?: boolean;
@@ -79,6 +95,13 @@ export interface TranscriptionRouteInput {
   providers?: readonly TranscriptionProviderBaseUrl[];
   /** Managed enterprise STT outcome; when present it outranks every personal setting. */
   managed?: ManagedTranscriptionResolution | null;
+  /**
+   * Whether the selected provider's BYOK key is present — a presence flag, never
+   * the key. Consulted only for realtime-only providers: the recorder skips
+   * streaming when their key is missing, and the batch guard below would then
+   * blame the transport instead of the key. Omit when unknown (retry, upload).
+   */
+  hasProviderKey?: boolean;
   request?: {
     /** Explicit model override; doubles as the Azure deployment name. */
     model?: string;
@@ -159,10 +182,16 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (trimmed) {
     const matchesProvider =
       (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
-      (provider === "openai" && (trimmed.startsWith("gpt-4o") || trimmed === "whisper-1")) ||
+      (provider === "openai" &&
+        (trimmed.startsWith("gpt-transcribe") ||
+          trimmed.startsWith("gpt-4o") ||
+          trimmed === "whisper-1")) ||
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
-      (provider === "gemini" && trimmed.startsWith("gemini-"));
+      (provider === "gemini" && trimmed.startsWith("gemini-")) ||
+      (provider === "deepgram" && (trimmed.startsWith("nova-") || trimmed.startsWith("flux-"))) ||
+      (provider === "assemblyai" &&
+        (trimmed.startsWith("universal-") || trimmed.startsWith("slam-")));
     if (matchesProvider) return trimmed;
   }
   if (provider === "groq") return "whisper-large-v3-turbo";
@@ -170,7 +199,9 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
-  return "gpt-4o-mini-transcribe";
+  if (provider === "deepgram") return "nova-3";
+  if (provider === "assemblyai") return "universal-3-5-pro";
+  return "gpt-transcribe";
 }
 
 function error(message: string, code?: string, messageKey?: string): TranscriptionRoute {
@@ -208,6 +239,7 @@ export function resolveTranscriptionRoute({
   policy,
   providers = [],
   managed: managedResolution,
+  hasProviderKey,
   request,
 }: TranscriptionRouteInput): TranscriptionRoute {
   const s = settings || {};
@@ -360,6 +392,21 @@ export function resolveTranscriptionRoute({
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
       language,
     };
+  }
+
+  if (STREAMING_ONLY_PROVIDERS.has(provider)) {
+    if (hasProviderKey === false) {
+      return error(
+        `No ${provider} API key configured. Add your key in Settings.`,
+        "API_KEY_MISSING",
+        PROVIDER_KEY_MISSING_MESSAGE_KEY
+      );
+    }
+    return error(
+      "This provider only supports live transcription. Choose another provider for file uploads and retries.",
+      "STREAMING_ONLY_PROVIDER",
+      STREAMING_ONLY_PROVIDER_MESSAGE_KEY
+    );
   }
 
   const isGroq = provider === "groq";

@@ -190,7 +190,9 @@ test("pre-sign-in analytics are attributed only by an explicit claim", (t) => {
     "signing in alone never adopts device-local rows"
   );
 
-  assert.equal(db.claimAnonymousAnalyticsEvents().claimed, 2);
+  assert.equal(db.claimAnonymousAnalyticsEvents("account-b").success, false);
+  assert.equal(db.countUnclaimedAnalyticsEvents(), 2, "another account cannot consume the claim");
+  assert.equal(db.claimAnonymousAnalyticsEvents("account-a").claimed, 2);
   assert.equal(db.countUnclaimedAnalyticsEvents(), 0);
   assert.deepEqual(
     db

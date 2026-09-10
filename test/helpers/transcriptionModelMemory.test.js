@@ -74,7 +74,11 @@ test("per-provider transcription model memory", async (t) => {
     // A remembered batch-only model must not survive into the streaming-filtered
     // meeting scope; the streaming default wins instead.
     const restored = state().meetingCloudTranscriptionModel;
-    assert.notEqual(restored, "");
+    assert.equal(
+      restored,
+      "gpt-4o-mini-transcribe",
+      "the batch-only gpt-transcribe default must not leak into the streaming scope"
+    );
     state().setMeetingCloudTranscriptionModel("gpt-4o-mini-transcribe");
     state().switchCloudTranscriptionProvider("meeting", "groq");
     state().switchCloudTranscriptionProvider("meeting", "openai");
@@ -90,6 +94,11 @@ test("per-provider transcription model memory", async (t) => {
     assert.equal(state().meetingCloudTranscriptionProvider, "openai");
     state().switchCloudTranscriptionProvider("upload", "custom");
     assert.equal(state().uploadCloudTranscriptionProvider, "custom");
+  });
+
+  await t.test("a first switch to openai lands the registry's batch default", () => {
+    state().switchCloudTranscriptionProvider("dictation", "openai");
+    assert.equal(state().cloudTranscriptionModel, "gpt-transcribe");
   });
 
   await t.test("an unknown context is a no-op, not a crash", () => {

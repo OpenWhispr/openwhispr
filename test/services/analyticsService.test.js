@@ -243,24 +243,61 @@ test("a failed account clear stays pending without stalling the rest of the pass
 });
 
 test("account analytics accepts a complete cloud summary", async (t) => {
+  const requests = [];
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
-        cloudApiRequest: async () => ({
-          success: true,
-          data: { ...VALID_SUMMARY, scope: "account", timeZone: "UTC" },
-        }),
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return {
+            success: true,
+            data: { ...VALID_SUMMARY, scope: "account", timeZone: "UTC" },
+          };
+        },
       },
     },
   });
   const vite = await createRendererServer(t);
   const { getAccountAnalyticsSummary } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
 
-  assert.deepEqual(await getAccountAnalyticsSummary("UTC"), {
+  assert.deepEqual(await getAccountAnalyticsSummary(), {
     ...VALID_SUMMARY,
     scope: "account",
     timeZone: "UTC",
   });
+  const requestUrl = new URL(requests[0].path, "https://api.openwhispr.com");
+  assert.equal(requestUrl.pathname, "/api/analytics/summary");
+  assert.equal(
+    requestUrl.searchParams.get("timeZone"),
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  );
+});
+
+test("account analytics sends UTC when the runtime exposes no timezone", async (t) => {
+  const requests = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return {
+            success: true,
+            data: { ...VALID_SUMMARY, scope: "account", timeZone: "UTC" },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { getAccountAnalyticsSummary } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+  t.mock.method(Intl, "DateTimeFormat", () => ({
+    resolvedOptions: () => ({ timeZone: "" }),
+  }));
+
+  await getAccountAnalyticsSummary();
+
+  const requestUrl = new URL(requests[0].path, "https://api.openwhispr.com");
+  assert.equal(requestUrl.searchParams.get("timeZone"), "UTC");
 });
 
 for (const [name, daily] of [
@@ -286,10 +323,7 @@ for (const [name, daily] of [
       "/services/AnalyticsService.ts"
     );
 
-    await assert.rejects(
-      getAccountAnalyticsSummary("UTC"),
-      /Malformed analytics summary from cloud/
-    );
+    await assert.rejects(getAccountAnalyticsSummary(), /Malformed analytics summary from cloud/);
   });
 }
 
@@ -580,6 +614,139 @@ test("overlapping passes are serialized rather than posting the same batch twice
   assert.equal(requests.length, 1, "the second pass waits and then finds nothing left to send");
   assert.equal(first, 1);
   assert.equal(second, 0);
+});
+
+test("a queued analytics pass resolves its upload gate only when it starts", async (t) => {
+  let releaseFirstPass;
+  let markFirstPassStarted;
+  let clearReads = 0;
+  let eventReads = 0;
+  const firstPassStarted = new Promise((resolve) => {
+    markFirstPassStarted = resolve;
+  });
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => {
+          clearReads += 1;
+          if (clearReads === 1) {
+            markFirstPassStarted();
+            await new Promise((resolve) => {
+              releaseFirstPass = resolve;
+            });
+          }
+          return null;
+        },
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async () => {
+          eventReads += 1;
+          return [EVENT];
+        },
+        cloudApiRequest: async () => {
+          throw new Error("a revoked queued pass must not reach the API");
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  const blocking = syncPendingAnalytics({ uploadAllowed: false });
+  await firstPassStarted;
+  let uploadAllowed = true;
+  let gateReads = 0;
+  const queued = syncPendingAnalytics({
+    uploadAllowed: async () => {
+      gateReads += 1;
+      return uploadAllowed;
+    },
+  });
+  uploadAllowed = false;
+  releaseFirstPass();
+
+  await Promise.all([blocking, queued]);
+  assert.equal(gateReads, 1);
+  assert.equal(eventReads, 0, "revocation is checked before pending rows are read");
+});
+
+test("revoking upload consent stops a multi-batch drain after its active request", async (t) => {
+  const pending = Array.from({ length: 201 }, (_, index) => ({
+    ...EVENT,
+    event_id: `event-${index}`,
+  }));
+  const retired = new Set();
+  const posted = [];
+  let uploadAllowed = true;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async () => null,
+        getPendingAnalyticsDeletes: async () => [],
+        getPendingAnalyticsEvents: async (limit) =>
+          pending.filter((event) => !retired.has(event.event_id)).slice(0, limit),
+        markAnalyticsEventsSynced: async (eventIds) => {
+          eventIds.forEach((eventId) => retired.add(eventId));
+          return { success: true, updated: eventIds.length };
+        },
+        cloudApiRequest: async (request) => {
+          posted.push(request.body.events);
+          uploadAllowed = false;
+          return {
+            success: true,
+            data: { accepted: request.body.events.map((event) => event.event_id) },
+          };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  assert.equal(await syncPendingAnalytics({ uploadAllowed: () => uploadAllowed }), 200);
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0].length, 200);
+  assert.equal(retired.has("event-200"), false, "the next batch stays pending after revocation");
+});
+
+test("analytics queue and cloud operations carry one pinned account context", async (t) => {
+  const context = { accountId: "account-1", authGeneration: 17 };
+  const localCalls = [];
+  const requests = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        getPendingAnalyticsClear: async (received) => {
+          localCalls.push(["clear", received]);
+          return null;
+        },
+        getPendingAnalyticsDeletes: async (_limit, received) => {
+          localCalls.push(["deletes", received]);
+          return [];
+        },
+        getPendingAnalyticsEvents: async (_limit, received) => {
+          localCalls.push(["events", received]);
+          return [EVENT];
+        },
+        markAnalyticsEventsSynced: async (_eventIds, received) => {
+          localCalls.push(["synced", received]);
+          return { success: true, updated: 1 };
+        },
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return { success: true, data: { accepted: [EVENT.event_id] } };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { syncPendingAnalytics } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  assert.equal(await syncPendingAnalytics({ context }), 1);
+  assert.deepEqual(
+    localCalls,
+    ["clear", "deletes", "events", "synced"].map((name) => [name, context])
+  );
+  assert.equal(requests[0].expectedAuthGeneration, 17);
 });
 
 test("a withheld row is offered once per pass, not once per batch behind it", async (t) => {
