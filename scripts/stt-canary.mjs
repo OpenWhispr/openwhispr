@@ -7,7 +7,9 @@
  * (#1624 sat in shipped builds for three days as a swallowed warmup warning).
  * Providers whose request shape is theirs alone rather than the shared
  * OpenAI-compatible multipart (Gemini, batch and Live) send a real
- * transcription through the shipped module for the same reason.
+ * transcription through the shipped module for the same reason, and OpenAI's
+ * batch default is posted the way the app builds it so a retired model or
+ * field surfaces here too.
  *
  * Run: node scripts/stt-canary.mjs
  * Keys come from STT_CANARY_<PROVIDER>_KEY env vars; providers without a key
@@ -204,6 +206,23 @@ async function probeGeminiLive(key) {
   }
 }
 
+// gpt-transcribe is the BYOK batch default and takes the custom dictionary on
+// its `keywords[]` channel, so one rides along: the request fails here first if
+// OpenAI retires either. Silence transcribes to empty text, so only acceptance
+// is asserted.
+async function probeOpenAiBatch(key, audio) {
+  const body = new FormData();
+  body.append("file", new Blob([audio], { type: "audio/wav" }), "audio.wav");
+  body.append("model", "gpt-transcribe");
+  body.append("keywords[]", "OpenWhispr");
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}` },
+    body,
+  });
+  return response.ok ? { ok: true } : { ok: false, detail: `HTTP ${response.status}` };
+}
+
 const tokenDeps = (key) => ({
   environmentManager: {
     getOpenAIKey: () => key,
@@ -227,6 +246,11 @@ const PROBES = [
         awaitServerEvent: true,
       });
     },
+  },
+  {
+    id: "openai-batch",
+    keyEnv: "STT_CANARY_OPENAI_KEY",
+    run: (key) => probeOpenAiBatch(key, SILENT_WAV()),
   },
   {
     id: "deepgram-realtime",

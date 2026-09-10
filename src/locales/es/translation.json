@@ -2576,6 +2576,7 @@
         "turbo": "Rápido con buena calidad"
       },
       "transcription": {
+        "openai_gpt_transcribe": "Transcripción más reciente y precisa",
         "openai_gpt_4o_mini_transcribe": "Transcripción rápida y precisa",
         "openai_gpt_4o_transcribe": "Transcripción más precisa",
         "openai_whisper_1": "Modelo Whisper original",
