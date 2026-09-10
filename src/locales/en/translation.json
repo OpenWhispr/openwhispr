@@ -889,7 +889,6 @@
         "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
         "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator.",
         "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
-        "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
         "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text."
       },
       "translationFallback": {
@@ -2626,7 +2625,11 @@
         "deepgram_nova_3": "Deepgram's most accurate realtime model",
         "assemblyai_universal_streaming_english": "Immutable realtime transcripts, English",
         "assemblyai_universal_streaming_multilingual": "Immutable realtime transcripts, multilingual",
-        "assemblyai_universal_3_5_pro": "Highest accuracy realtime, 18 languages"
+        "assemblyai_universal_3_5_pro": "Highest accuracy realtime, 18 languages",
+        "openrouter_openai_gpt_transcribe": "OpenAI's current transcription model",
+        "openrouter_deepgram_nova_3": "Deepgram's fast multilingual transcription",
+        "openrouter_google_chirp_3": "Google's speech-to-text in 100+ languages",
+        "openrouter_mistralai_voxtral_mini_transcribe": "Low-cost multilingual transcription"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",

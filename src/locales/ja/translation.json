@@ -889,7 +889,6 @@
         "managedRouteInvalid": "設定の不一致により、マネージド文字起こしを開始できませんでした。もう一度お試しいただくか、管理者にお問い合わせください。",
         "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。",
         "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
-        "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
         "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。"
       },
       "translationFallback": {
@@ -2528,7 +2527,11 @@
         "deepgram_nova_3": "Deepgram で最も高精度なリアルタイムモデル",
         "assemblyai_universal_streaming_english": "変化しないリアルタイム文字起こし（英語）",
         "assemblyai_universal_streaming_multilingual": "変化しないリアルタイム文字起こし（多言語）",
-        "assemblyai_universal_3_5_pro": "最高精度のリアルタイム、18言語"
+        "assemblyai_universal_3_5_pro": "最高精度のリアルタイム、18言語",
+        "openrouter_openai_gpt_transcribe": "OpenAI の最新の文字起こしモデル",
+        "openrouter_deepgram_nova_3": "Deepgram の高速な多言語文字起こし",
+        "openrouter_google_chirp_3": "100 以上の言語に対応する Google の音声文字起こし",
+        "openrouter_mistralai_voxtral_mini_transcribe": "低コストの多言語文字起こし"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",

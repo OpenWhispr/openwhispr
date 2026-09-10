@@ -363,6 +363,37 @@
       ]
     },
     {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "models": [
+        {
+          "id": "openai/gpt-transcribe",
+          "name": "GPT Transcribe",
+          "description": "OpenAI's current transcription model",
+          "descriptionKey": "models.descriptions.transcription.openrouter_openai_gpt_transcribe"
+        },
+        {
+          "id": "deepgram/nova-3",
+          "name": "Nova-3",
+          "description": "Deepgram's fast multilingual transcription",
+          "descriptionKey": "models.descriptions.transcription.openrouter_deepgram_nova_3"
+        },
+        {
+          "id": "google/chirp-3",
+          "name": "Chirp 3",
+          "description": "Google's speech-to-text across 100+ languages",
+          "descriptionKey": "models.descriptions.transcription.openrouter_google_chirp_3"
+        },
+        {
+          "id": "mistralai/voxtral-mini-transcribe",
+          "name": "Voxtral Mini Transcribe",
+          "description": "Low-cost multilingual transcription",
+          "descriptionKey": "models.descriptions.transcription.openrouter_mistralai_voxtral_mini_transcribe"
+        }
+      ]
+    },
+    {
       "id": "tinfoil",
       "name": "Tinfoil",
       "baseUrl": "https://inference.tinfoil.sh/v1",

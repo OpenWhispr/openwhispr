@@ -889,7 +889,6 @@
         "managedRouteInvalid": "La transcripción gestionada no pudo iniciarse debido a una discrepancia de configuración. Inténtalo de nuevo o contacta a tu administrador.",
         "managedAuthRejected": "Las credenciales de transcripción gestionada de tu organización fueron rechazadas. Contacta a tu administrador.",
         "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
-        "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
         "providerKeyMissing": "No hay ninguna clave de API configurada para tu proveedor de transcripción. Añádela en Ajustes → Voz a texto."
       },
       "translationFallback": {
@@ -2581,7 +2580,11 @@
         "deepgram_nova_3": "El modelo en tiempo real más preciso de Deepgram",
         "assemblyai_universal_streaming_english": "Transcripciones en tiempo real inmutables, en inglés",
         "assemblyai_universal_streaming_multilingual": "Transcripciones en tiempo real inmutables, multilingües",
-        "assemblyai_universal_3_5_pro": "Máxima precisión en tiempo real, 18 idiomas"
+        "assemblyai_universal_3_5_pro": "Máxima precisión en tiempo real, 18 idiomas",
+        "openrouter_openai_gpt_transcribe": "Modelo de transcripción actual de OpenAI",
+        "openrouter_deepgram_nova_3": "Transcripción multilingüe rápida de Deepgram",
+        "openrouter_google_chirp_3": "Voz a texto de Google en más de 100 idiomas",
+        "openrouter_mistralai_voxtral_mini_transcribe": "Transcripción multilingüe económica"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",

@@ -889,7 +889,6 @@
         "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
         "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。",
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
-        "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
         "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。"
       },
       "translationFallback": {
@@ -2528,7 +2527,11 @@
         "deepgram_nova_3": "Deepgram 最精準的即時模型",
         "assemblyai_universal_streaming_english": "不會變動的即時轉錄（英文）",
         "assemblyai_universal_streaming_multilingual": "不會變動的即時轉錄（多語言）",
-        "assemblyai_universal_3_5_pro": "最高精度即時轉錄，支援 18 種語言"
+        "assemblyai_universal_3_5_pro": "最高精度即時轉錄，支援 18 種語言",
+        "openrouter_openai_gpt_transcribe": "OpenAI 目前的轉錄模型",
+        "openrouter_deepgram_nova_3": "Deepgram 的快速多語言轉錄",
+        "openrouter_google_chirp_3": "支援 100 多種語言的 Google 語音轉文字",
+        "openrouter_mistralai_voxtral_mini_transcribe": "低成本多語言轉錄"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",

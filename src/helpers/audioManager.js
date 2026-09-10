@@ -2488,6 +2488,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "openrouter") {
+      apiKey = s.openrouterApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getOpenrouterKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "OpenRouter API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else {
       // Default to OpenAI
       // Prefer store value (user-entered via UI) over main process (.env)
