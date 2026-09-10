@@ -366,10 +366,14 @@
         "showMore": "Show More Options",
         "moreOptions": {
           "title": "Choose your API setup",
-          "description": "Add an API key or connect a self-hosted model.",
+          "description": "Add an API key, sign in with Grok, or connect a self-hosted model.",
           "selfHosted": {
             "title": "Self-hosted",
             "description": "Connect your own hosted model."
+          },
+          "xaiOAuth": {
+            "title": "Grok subscription",
+            "description": "Sign in with SuperGrok. No console API key."
           }
         }
       },

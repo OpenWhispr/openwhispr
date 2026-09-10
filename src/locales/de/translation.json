@@ -366,10 +366,14 @@
         "showMore": "Weitere Optionen anzeigen",
         "moreOptions": {
           "title": "API-Einrichtung wählen",
-          "description": "Fügen Sie einen API-Schlüssel hinzu oder verbinden Sie ein selbst gehostetes Modell.",
+          "description": "API-Schlüssel hinzufügen, mit Grok anmelden oder ein Self-hosted-Modell verbinden.",
           "selfHosted": {
             "title": "Selbst gehostet",
             "description": "Verbinden Sie Ihr eigenes gehostetes Modell."
+          },
+          "xaiOAuth": {
+            "title": "Grok-Abo",
+            "description": "Mit SuperGrok anmelden. Kein Console-API-Schlüssel."
           }
         }
       },

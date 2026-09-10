@@ -79,6 +79,7 @@ export interface OnboardingSession {
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
   selfHostedRequested: boolean;
+  xaiOAuthRequested: boolean;
   resume: OnboardingResumeState;
 }
 
@@ -186,6 +187,7 @@ export function createOnboardingSession(): OnboardingSession {
     authPath: null,
     setupMode: null,
     selfHostedRequested: false,
+    xaiOAuthRequested: false,
     resume: createOnboardingResumeState(),
   };
 }
@@ -415,14 +417,21 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
     ) {
       return null;
     }
+    if (
+      parsed.xaiOAuthRequested !== undefined &&
+      typeof parsed.xaiOAuthRequested !== "boolean"
+    ) {
+      return null;
+    }
 
     return {
-      version: ONBOARDING_FLOW_VERSION,
+      version: parsed.version,
       currentStepId: parsed.currentStepId,
       history: parsed.history.filter(isOnboardingStepId),
       authPath,
       setupMode,
       selfHostedRequested: parsed.selfHostedRequested ?? false,
+      xaiOAuthRequested: parsed.xaiOAuthRequested ?? false,
       resume: parseOnboardingResumeState(parsed.resume, parsed.currentStepId),
     };
   } catch {

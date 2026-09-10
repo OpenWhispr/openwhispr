@@ -345,10 +345,14 @@
         "showMore": "Mostrar mais opções",
         "moreOptions": {
           "title": "Escolha sua configuração de API",
-          "description": "Adicione uma chave de API ou conecte um modelo auto-hospedado.",
+          "description": "Adicione uma chave API, entre com o Grok ou conecte um modelo self-hosted.",
           "selfHosted": {
             "title": "Auto-hospedado",
             "description": "Conecte seu próprio modelo hospedado."
+          },
+          "xaiOAuth": {
+            "title": "Assinatura Grok",
+            "description": "Entre com o SuperGrok. Sem chave do console."
           }
         }
       },

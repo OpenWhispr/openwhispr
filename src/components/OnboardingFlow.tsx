@@ -104,6 +104,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setAuthPath,
     setSetupMode,
     setSelfHostedRequested,
+    setXaiOAuthRequested,
     clearSession,
   } = useOnboardingSession();
 
@@ -573,9 +574,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
 
   const handleSetupSelection = useCallback(
-    async (mode: Exclude<OnboardingSetupMode, null>, options?: { selfHosted?: boolean }) => {
+    async (mode: Exclude<OnboardingSetupMode, null>, options?: { selfHosted?: boolean; xaiOAuth?: boolean }) => {
       setSetupMode(mode);
       setSelfHostedRequested(!!options?.selfHosted);
+      setXaiOAuthRequested(!!options?.xaiOAuth);
       if (mode === "cloud") {
         settingsStore.setCloudTranscriptionForAllScopes({
           useLocalWhisper: false,
@@ -612,6 +614,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       requiredModelsPending,
       session.authPath,
       setSelfHostedRequested,
+      setXaiOAuthRequested,
       setSetupMode,
       settingsStore,
     ]
@@ -1099,6 +1102,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               key={currentStepId}
               stepId={currentStepId}
               selfHostedRequested={session.selfHostedRequested}
+              xaiOAuthRequested={session.xaiOAuthRequested}
               onSelfHostedChange={setSelfHostedRequested}
               onConnectionChange={setStageReady}
               onProceed={() => void continueFromCurrentStep()}

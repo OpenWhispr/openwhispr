@@ -366,10 +366,14 @@
         "showMore": "Afficher plus d’options",
         "moreOptions": {
           "title": "Choisissez votre configuration d’API",
-          "description": "Ajoutez une clé API ou connectez un modèle auto-hébergé.",
+          "description": "Ajoute une clé API, connecte-toi avec Grok, ou un modèle self-hosted.",
           "selfHosted": {
             "title": "Auto-hébergé",
             "description": "Connectez votre propre modèle hébergé."
+          },
+          "xaiOAuth": {
+            "title": "Abonnement Grok",
+            "description": "Connexion SuperGrok. Pas de clé console."
           }
         }
       },

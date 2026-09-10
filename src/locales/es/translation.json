@@ -366,10 +366,14 @@
         "showMore": "Mostrar más opciones",
         "moreOptions": {
           "title": "Elige tu configuración de API",
-          "description": "Añade una clave API o conecta un modelo autoalojado.",
+          "description": "Añade una clave API, inicia sesión con Grok o conecta un modelo propio.",
           "selfHosted": {
             "title": "Autoalojado",
             "description": "Conecta tu propio modelo alojado."
+          },
+          "xaiOAuth": {
+            "title": "Suscripción Grok",
+            "description": "Inicia sesión con SuperGrok. Sin clave de consola."
           }
         }
       },

@@ -366,10 +366,14 @@
         "showMore": "その他のオプションを表示",
         "moreOptions": {
           "title": "API の設定方法を選択",
-          "description": "API キーを追加するか、セルフホストモデルを接続します。",
+          "description": "API キーの追加、Grok でサインイン、またはセルフホストモデルの接続。",
           "selfHosted": {
             "title": "セルフホスト",
             "description": "自分でホストしているモデルを接続します。"
+          },
+          "xaiOAuth": {
+            "title": "Grok サブスクリプション",
+            "description": "SuperGrok でサインイン。コンソール API キーは不要。"
           }
         }
       },
