@@ -1219,6 +1219,12 @@ declare global {
       deleteTranscriptionAudio: (id: number) => Promise<{ success: boolean }>;
       getAudioStorageUsage: () => Promise<{ fileCount: number; totalBytes: number }>;
       deleteAllAudio: () => Promise<{ deleted: number }>;
+      startRecordingSpool?: (
+        sessionId: string,
+        mimeType?: string
+      ) => Promise<{ success: boolean; error?: string }>;
+      appendRecordingSpoolChunk?: (sessionId: string, chunk: ArrayBuffer) => void;
+      finishRecordingSpool?: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
       syncRetentionSettings?: (settings: {
         audioRetentionDays: number;
         transcriptRetentionDays: number;

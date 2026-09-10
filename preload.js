@@ -136,8 +136,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   completeAnalyticsClear: (clearedThrough) =>
     ipcRenderer.invoke("analytics-complete-clear", clearedThrough),
   countUnclaimedAnalyticsEvents: () => ipcRenderer.invoke("analytics-count-unclaimed"),
-  countAnalyticsEventsAwaitingUpload: () =>
-    ipcRenderer.invoke("analytics-count-awaiting-upload"),
+  countAnalyticsEventsAwaitingUpload: () => ipcRenderer.invoke("analytics-count-awaiting-upload"),
   claimAnonymousAnalyticsEvents: () => ipcRenderer.invoke("analytics-claim-anonymous"),
   clearTranscriptions: () => ipcRenderer.invoke("db-clear-transcriptions"),
   deleteTranscription: (id) => ipcRenderer.invoke("db-delete-transcription", id),
@@ -152,6 +151,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteTranscriptionAudio: (id) => ipcRenderer.invoke("delete-transcription-audio", id),
   getAudioStorageUsage: () => ipcRenderer.invoke("get-audio-storage-usage"),
   deleteAllAudio: () => ipcRenderer.invoke("delete-all-audio"),
+  startRecordingSpool: (sessionId, mimeType) =>
+    ipcRenderer.invoke("start-recording-spool", sessionId, mimeType),
+  appendRecordingSpoolChunk: (sessionId, chunk) =>
+    ipcRenderer.send("append-recording-spool-chunk", sessionId, chunk),
+  finishRecordingSpool: (sessionId) => ipcRenderer.invoke("finish-recording-spool", sessionId),
   syncRetentionSettings: (settings) => ipcRenderer.send("retention-settings-changed", settings),
   retryTranscription: (id, settings) => ipcRenderer.invoke("retry-transcription", id, settings),
   updateTranscriptionText: (id, text, rawText) =>
