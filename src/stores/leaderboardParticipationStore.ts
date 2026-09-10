@@ -1,5 +1,8 @@
 import { create } from "zustand";
-import { writePendingLeaderboardLeave } from "../lib/pendingLeaderboardLeave";
+import {
+  readPendingLeaderboardLeave,
+  writePendingLeaderboardLeave,
+} from "../lib/pendingLeaderboardLeave";
 import {
   LeaderboardService,
   type LeaderboardParticipationAuthContext,
@@ -24,9 +27,17 @@ interface LeaderboardParticipationState {
    *  gets a Retry, a refused write gets the action that failed back. */
   error: "read" | "write" | null;
   updating: boolean;
+  /** An opt-out this device still owes the account. The toggle already reads
+   *  off, so this is what keeps a leave that has not landed from passing as done. */
+  leavePending: boolean;
   reset: () => void;
   refresh: (context: LeaderboardParticipationAuthContext) => Promise<void>;
-  publishAnswer: (enabled: boolean, configured: boolean, generation: number) => void;
+  publishAnswer: (
+    enabled: boolean,
+    configured: boolean,
+    generation: number,
+    leavePending?: boolean
+  ) => void;
   join: (context: LeaderboardParticipationAuthContext) => Promise<boolean>;
   leave: (context: LeaderboardParticipationAuthContext) => Promise<boolean>;
   queueLeave: (userId: string) => void;
@@ -48,6 +59,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     ready: false,
     error: null,
     updating: false,
+    leavePending: false,
 
     reset: () => {
       readId += 1;
@@ -55,14 +67,21 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
       activeRefresh = null;
       // Reset updating too: a write left running for the departing account must
       // not make refresh() skip the replacement account's read.
-      set({ enabled: false, configured: false, ready: false, error: null, updating: false });
+      set({
+        enabled: false,
+        configured: false,
+        ready: false,
+        error: null,
+        updating: false,
+        leavePending: false,
+      });
     },
 
     // The retired read never reports itself finished either, hence the ready flag.
-    publishAnswer: (enabled, configured, generation) => {
+    publishAnswer: (enabled, configured, generation, leavePending = false) => {
       if (generation !== readId) return;
       readId += 1;
-      set({ enabled, configured, ready: true, error: null });
+      set({ enabled, configured, ready: true, error: null, leavePending });
     },
 
     // Read-only, and only when a caller asks: the account preference is the one
@@ -90,6 +109,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
           set({
             enabled: participation.enabled && !stillLeaving,
             configured: participation.configured || stillLeaving,
+            leavePending: stillLeaving,
           });
         } catch (error) {
           if (currentReadId !== readId) return;
@@ -126,7 +146,14 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
         console.error("Joining the leaderboard failed:", error);
         if (currentWriteId === writeId && generation === readId) {
           readId += 1;
-          set({ enabled: false, configured: true, ready: true, error: "write" });
+          // A join whose outcome is unknown banks a compensating leave.
+          set({
+            enabled: false,
+            configured: true,
+            ready: true,
+            error: "write",
+            leavePending: readPendingLeaderboardLeave(context.userId),
+          });
         }
         return false;
       } finally {
@@ -148,8 +175,12 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
         console.error("Leaving the leaderboard failed:", error);
         // The opt-out is kept and retried until the account takes it, so this
         // device stops showing the user as participating straight away rather
-        // than asking them to remember to try again.
-        if (currentWriteId === writeId) get().publishAnswer(false, true, generation);
+        // than asking them to remember to try again — and says the leave is
+        // still owed, since the account row has not moved. A leave the API has
+        // already applied or can never apply retires the record instead.
+        if (currentWriteId === writeId) {
+          get().publishAnswer(false, true, generation, readPendingLeaderboardLeave(context.userId));
+        }
         return false;
       } finally {
         if (currentWriteId === writeId) set({ updating: false });
@@ -162,7 +193,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     queueLeave: (userId) => {
       writePendingLeaderboardLeave(userId);
       const generation = readId;
-      get().publishAnswer(false, true, generation);
+      get().publishAnswer(false, true, generation, true);
     },
   })
 );

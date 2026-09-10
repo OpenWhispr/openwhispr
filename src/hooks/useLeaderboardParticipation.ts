@@ -23,6 +23,7 @@ export function useLeaderboardParticipation() {
   const ready = useLeaderboardParticipationStore((state) => state.ready);
   const error = useLeaderboardParticipationStore((state) => state.error);
   const updating = useLeaderboardParticipationStore((state) => state.updating);
+  const leavePending = useLeaderboardParticipationStore((state) => state.leavePending);
 
   const refresh = useCallback(async () => {
     const store = useLeaderboardParticipationStore.getState();
@@ -67,5 +68,5 @@ export function useLeaderboardParticipation() {
     return store.leave(context);
   }, [userId]);
 
-  return { enabled, error, join, leave, ready, refresh, updating };
+  return { enabled, error, join, leave, leavePending, ready, refresh, updating };
 }

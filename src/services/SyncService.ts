@@ -2221,8 +2221,17 @@ export class SyncService {
     if (!accountId || authGeneration == null) return false;
     const participationContext = { userId: accountId, authGeneration };
     // A leaderboard opt-out outlives the window that made it, so every pass
-    // retries the one this account is still waiting for. It only ever leaves.
-    await LeaderboardService.flushPendingLeave(participationContext);
+    // retries the one this account is still waiting for. It only ever leaves,
+    // and nothing below depends on whether it has landed, so it runs beside
+    // the pass rather than ahead of it: this method executes under
+    // SYNC_ALL_LOCK and cloud requests carry no timeout, so awaiting it here
+    // let one hung PATCH hold every window's sync behind the lock.
+    void LeaderboardService.flushPendingLeave(participationContext).catch((error: unknown) => {
+      // The account changing mid-queue is expected; the gate below sees it too.
+      if (!isAuthContextError(error)) {
+        console.error("Retrying the leaderboard leave failed:", error);
+      }
+    });
     // Participation controls roster visibility, not analytics consent. A
     // missing or failed participation route must never interrupt Insights Sync.
     const uploadRequested = consent.analytics;

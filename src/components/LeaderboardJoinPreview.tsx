@@ -5,12 +5,15 @@ import LeaderboardPreview from "./LeaderboardPreview";
 export default function LeaderboardJoinPreview({
   canJoin,
   error,
+  leavePending,
   onJoin,
   scopeName,
   updating,
 }: {
   canJoin: boolean;
   error: boolean;
+  /** The account is still being taken off the boards this device left. */
+  leavePending: boolean;
   onJoin: () => Promise<boolean>;
   scopeName: string;
   updating: boolean;
@@ -29,9 +32,11 @@ export default function LeaderboardJoinPreview({
       helperText={
         error
           ? t("insights.leaderboard.activationError")
-          : !canJoin
-            ? t("insights.leaderboard.joinPolicyBlocked")
-            : undefined
+          : leavePending
+            ? t("insights.leaderboard.leavePending")
+            : !canJoin
+              ? t("insights.leaderboard.joinPolicyBlocked")
+              : undefined
       }
       icon={UserPlus}
       onAction={() => void onJoin()}

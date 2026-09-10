@@ -402,6 +402,7 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
   const participationEnabled = useLeaderboardParticipationStore((state) => state.enabled);
   const participationError = useLeaderboardParticipationStore((state) => state.error);
   const participationReady = useLeaderboardParticipationStore((state) => state.ready);
+  const participationLeavePending = useLeaderboardParticipationStore((state) => state.leavePending);
   const [activeTab, setActiveTab] = useState("usage");
   const [syncError, setSyncError] = useState(false);
   // A managed workspace that forbids cloud backup forbids these counters with
@@ -472,7 +473,11 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
             !participationEnabled && (
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <Trophy size={13} />
-                {t("insights.leaderboard.disabled")}
+                {t(
+                  participationLeavePending
+                    ? "insights.leaderboard.leavePending"
+                    : "insights.leaderboard.disabled"
+                )}
               </div>
             )
           )}

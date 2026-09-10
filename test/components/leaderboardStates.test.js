@@ -125,6 +125,7 @@ test("ready while not participating offers an explicit leaderboard join", async 
     createElement(Join, {
       canJoin: true,
       error: false,
+      leavePending: false,
       onJoin() {},
       scopeName: "Acme",
       updating: false,
@@ -133,6 +134,25 @@ test("ready while not participating offers an explicit leaderboard join", async 
   assertState(markup, "join", "See where you rank in Acme");
   assert.match(markup, /<button/);
   assert.ok(markup.includes("Join leaderboards"));
+});
+
+// A leave the network never delivered leaves the toggle off and the Join card
+// up. The card has to say the account is still coming off the boards, or that
+// silence reads as done.
+test("join says so while an opt-out is still owed to the account", async () => {
+  const Join = await component("LeaderboardJoinPreview");
+  const markup = renderToStaticMarkup(
+    createElement(Join, {
+      canJoin: true,
+      error: false,
+      leavePending: true,
+      onJoin() {},
+      scopeName: "Acme",
+      updating: false,
+    })
+  );
+  assertState(markup, "join", "See where you rank in Acme");
+  assert.ok(markup.includes("We&#x27;ll finish leaving the leaderboards when you&#x27;re online."));
 });
 
 test("a ready board with one of five participants renders the inline nudge", async () => {

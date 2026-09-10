@@ -205,7 +205,7 @@ test("an undelivered leave is durable and retried without gating analytics", () 
     serviceLeave.indexOf("writePendingLeaderboardLeave(userId)") <
       serviceLeave.indexOf("serializeParticipationOperation(context")
   );
-  assert.ok(leave.includes("publishAnswer(false, true, generation)"));
+  assert.ok(leave.includes("publishAnswer(false, true, generation"));
   const flush = service.slice(
     service.indexOf("async function flushPendingLeave"),
     service.indexOf("async function getAccess")
@@ -229,7 +229,7 @@ test("only an ambiguous request failure compensates a join", () => {
   assert.ok(
     serviceJoin.indexOf("writePendingLeaderboardLeave(userId)") < serviceJoin.indexOf("throw error")
   );
-  const hookJoin = hook.slice(hook.indexOf("const join"), hook.indexOf("const leave"));
+  const hookJoin = hook.slice(hook.indexOf("const join"), hook.indexOf("const leave ="));
   assert.ok(hookJoin.includes("return store.join(context)"));
   assert.equal(hookJoin.includes("writePendingLeaderboardLeave(userId)"), false);
 });
@@ -237,7 +237,7 @@ test("only an ambiguous request failure compensates a join", () => {
 test("a completed participation write outranks reads already in flight", () => {
   const store = read("src/stores/leaderboardParticipationStore.ts");
   const publish = store.slice(
-    store.indexOf("publishAnswer: (enabled, configured, generation)"),
+    store.indexOf("publishAnswer: (enabled, configured, generation"),
     store.indexOf("refresh: async")
   );
   assert.ok(publish.indexOf("readId += 1") < publish.indexOf("set({ enabled"));
@@ -281,7 +281,7 @@ test("an account scope purge drops only the cached participation answer", () => 
   assert.ok(purge.includes("useLeaderboardParticipationStore.getState().reset()"));
   const reset = store.slice(
     store.indexOf("reset: () => {"),
-    store.indexOf("publishAnswer: (enabled, configured, generation)")
+    store.indexOf("publishAnswer: (enabled, configured, generation")
   );
   assert.ok(reset.includes("readId += 1"));
   assert.equal(/PendingLeaderboardLeave/.test(reset), false);

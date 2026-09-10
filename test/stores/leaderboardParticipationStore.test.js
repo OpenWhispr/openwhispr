@@ -86,6 +86,71 @@ test("a leave the account refused stops showing the user as participating", asyn
     ["user_1"],
     "the opt-out has to survive the network that refused it"
   );
+  assert.equal(
+    store.getState().leavePending,
+    true,
+    "the toggle reads off, so this is what stops the leave from passing as done"
+  );
+});
+
+// An API without the participation route cannot be holding the account on a
+// board, so there is no leave left to owe — and nothing to keep telling the
+// user about.
+test("a leave the API can no longer act on is not reported as still owed", async (t) => {
+  const { context, storage, store } = await loadStore(t, {
+    cloudApiRequest: async () => ({ success: false, status: 404, error: "gone" }),
+  });
+
+  assert.equal(await store.getState().leave(context), false);
+  assert.equal(store.getState().enabled, false);
+  assert.equal(store.getState().leavePending, false);
+  assert.deepEqual(pendingUserIds(storage), []);
+});
+
+test("a refresh reports a leave the account is still waiting on", async (t) => {
+  const { context, store } = await loadStore(t, {
+    initialStorage: { [pendingKey("user_1")]: "true" },
+    cloudApiRequest: async (request) =>
+      request.method === "PATCH"
+        ? { success: false, status: 500, error: "boom" }
+        : { success: true, data: { data: { configured: true, enabled: true, updatedAt: null } } },
+  });
+
+  await store.getState().refresh(context);
+
+  assert.equal(store.getState().enabled, false, "the row still says joined, but the user left");
+  assert.equal(store.getState().leavePending, true);
+});
+
+test("a delivered leave, or a newer join, retires the owed-leave notice", async (t) => {
+  let patchFails = true;
+  // The account row: a PATCH that lands moves it, a GET reads it back.
+  let serverEnabled = true;
+  const { context, store } = await loadStore(t, {
+    initialStorage: { [pendingKey("user_1")]: "true" },
+    cloudApiRequest: async (request) => {
+      if (request.method === "PATCH") {
+        if (patchFails) return { success: false, status: 500, error: "boom" };
+        serverEnabled = request.body.enabled;
+      }
+      return {
+        success: true,
+        data: { data: { configured: true, enabled: serverEnabled, updatedAt: null } },
+      };
+    },
+  });
+
+  await store.getState().refresh(context);
+  assert.equal(store.getState().leavePending, true);
+
+  patchFails = false;
+  await store.getState().refresh(context);
+  assert.equal(store.getState().leavePending, false, "the retry landed on this read");
+  assert.equal(store.getState().enabled, false);
+
+  assert.equal(await store.getState().join(context), true);
+  assert.equal(store.getState().leavePending, false);
+  assert.equal(store.getState().enabled, true);
 });
 
 // A refresh trigger can arrive while the leave PATCH is still in flight. The

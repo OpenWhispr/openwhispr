@@ -1825,6 +1825,7 @@ export default function SettingsPage({
     error: leaderboardParticipationError,
     join: joinLeaderboard,
     leave: leaveLeaderboard,
+    leavePending: leaderboardLeavePending,
     ready: leaderboardParticipationReady,
     updating: leaderboardParticipationUpdating,
   } = useLeaderboardParticipation();
@@ -4285,11 +4286,13 @@ EOF`,
                         ? t("settingsPage.privacy.leaderboardRequiresAccount")
                         : leaderboardParticipationError === "read"
                           ? t("insights.leaderboard.activationError")
-                          : !insightsSyncAllowedByPolicy
-                            ? t("common.managedByOrg")
-                            : !effectiveDataRetentionEnabled
-                              ? t("settingsPage.privacy.leaderboardRequiresHistory")
-                              : t("settingsPage.privacy.leaderboardDescription")
+                          : leaderboardLeavePending
+                            ? t("insights.leaderboard.leavePending")
+                            : !insightsSyncAllowedByPolicy
+                              ? t("common.managedByOrg")
+                              : !effectiveDataRetentionEnabled
+                                ? t("settingsPage.privacy.leaderboardRequiresHistory")
+                                : t("settingsPage.privacy.leaderboardDescription")
                     }
                   >
                     <Toggle

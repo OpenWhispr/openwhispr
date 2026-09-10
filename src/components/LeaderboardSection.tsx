@@ -90,6 +90,8 @@ interface LeaderboardSectionProps {
   participationReady: boolean;
   participationError: "read" | "write" | null;
   participationUpdating: boolean;
+  /** A leave this device still owes the account; the Join surface says so. */
+  participationLeavePending: boolean;
   /** Removes the account from every leaderboard without changing this device's Sync setting. */
   onLeave: () => Promise<boolean>;
   onJoin: () => Promise<boolean>;
@@ -151,6 +153,7 @@ export default function LeaderboardSection({
   participationReady,
   participationError,
   participationUpdating,
+  participationLeavePending,
   onJoin,
   onLeave,
   onRefreshParticipation,
@@ -715,6 +718,7 @@ export default function LeaderboardSection({
       <LeaderboardJoinPreview
         canJoin={canJoin}
         error={participationError === "write"}
+        leavePending={participationLeavePending}
         onJoin={onJoin}
         scopeName={selectedScope.name}
         updating={participationUpdating}

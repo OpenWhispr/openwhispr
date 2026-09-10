@@ -39,7 +39,11 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   assert.ok(insights.includes("participationReady &&"));
   assert.ok(insights.includes("participationError === null"));
   assert.ok(insights.includes("!participationEnabled"));
-  assert.ok(insights.includes('t("insights.leaderboard.disabled")'));
+  assert.ok(insights.includes('"insights.leaderboard.disabled"'));
+  assert.ok(
+    insights.includes('"insights.leaderboard.leavePending"'),
+    "the chip has to say an opt-out is still owed rather than call it disabled"
+  );
   const usageContent = insights.slice(
     insights.indexOf('<TabsContent value="usage"'),
     insights.indexOf('<TabsContent value="leaderboard"')

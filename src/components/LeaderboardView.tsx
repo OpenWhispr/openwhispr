@@ -35,6 +35,7 @@ export default function LeaderboardView({
     error: participationError,
     join: joinParticipation,
     leave: leaveParticipation,
+    leavePending: participationLeavePending,
     ready: participationReady,
     refresh: refreshParticipation,
     updating: participationUpdating,
@@ -109,6 +110,7 @@ export default function LeaderboardView({
         participationReady={participationReady}
         participationError={participationError}
         participationUpdating={participationUpdating}
+        participationLeavePending={participationLeavePending}
         onJoin={joinLeaderboard}
         onLeave={leaveParticipation}
         onRefreshParticipation={refreshParticipation}
