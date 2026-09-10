@@ -241,7 +241,10 @@ test("only an address restored from a saved session opens verification as resume
   await new Promise((resolve) => setImmediate(resolve));
   const afterBack = renderFlow({ resumeState: { pendingVerificationEmail: "person@example.com" } });
   assert.equal(afterBack.type.name, "AuthenticationStep");
-  assert.deepEqual(harness.drafts, [{ pendingVerificationEmail: null }]);
+  // The button says "Back to sign in", and the draft still holds the sign-up mode
+  // that opened verification — leaving it there reopens the create-account form for
+  // the address just registered, which only fails with USER_ALREADY_EXISTS.
+  assert.deepEqual(harness.drafts, [{ pendingVerificationEmail: null, authMode: "sign-in" }]);
 
   afterBack.props.onNeedsVerification("other@example.com");
   const resent = renderFlow({ resumeState: { pendingVerificationEmail: "person@example.com" } });

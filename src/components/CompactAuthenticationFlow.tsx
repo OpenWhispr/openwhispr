@@ -26,10 +26,13 @@ export function CompactAuthenticationFlow({
     Boolean(resumeState?.pendingVerificationEmail)
   );
 
-  const updatePendingVerificationEmail = (email: string | null) => {
+  const updatePendingVerificationEmail = (
+    email: string | null,
+    patch?: Partial<OnboardingAuthDraft>
+  ) => {
     setPendingVerificationEmail(email);
     setResumedVerification(false);
-    onResumeStateChange?.({ pendingVerificationEmail: email });
+    onResumeStateChange?.({ pendingVerificationEmail: email, ...patch });
   };
 
   if (pendingVerificationEmail) {
@@ -44,7 +47,10 @@ export function CompactAuthenticationFlow({
         onBack={() => {
           // Abandoning verification leaves a live session for the wrong email;
           // end it first or the remounted auth step auto-completes that account.
-          void signOut().then(() => updatePendingVerificationEmail(null));
+          // The draft still says "sign-up", which is what opened this screen — send
+          // the user back to sign-in as the button promises, rather than to the
+          // create-account form for an address that now exists.
+          void signOut().then(() => updatePendingVerificationEmail(null, { authMode: "sign-in" }));
         }}
       />
     );
