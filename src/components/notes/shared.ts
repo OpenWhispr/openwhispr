@@ -1,5 +1,5 @@
 import { cn } from "../lib/utils";
-import type { FolderItem } from "../../types/electron";
+import type { FolderItem, NoteItem } from "../../types/electron";
 
 export const DEFAULT_FOLDER_NAME = "Personal";
 export const MEETINGS_FOLDER_NAME = "Meetings";
@@ -7,6 +7,10 @@ export const VIDEOS_FOLDER_NAME = "Videos";
 
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {
   return folders.find((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
+}
+
+export function shouldShowNoteParticipants(noteType: NoteItem["note_type"]): boolean {
+  return noteType === "meeting";
 }
 
 // URL downloads route to "Videos" by name: a pre-existing user-created folder with
