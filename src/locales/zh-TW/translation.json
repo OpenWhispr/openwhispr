@@ -1479,6 +1479,10 @@
       "workspace": {
         "description": "成員、團隊空間與 API 金鑰",
         "label": "工作區"
+      },
+      "textToSpeech": {
+        "label": "文字轉語音",
+        "description": "使用 xAI 語音產生朗讀"
       }
     },
     "title": "設定"
@@ -2517,6 +2521,73 @@
       "upgradeCta": "立即升級",
       "upgradedTitle": "已升級至 Enterprise",
       "upgradedDescription": "{{workspace}} 現已升級至 Enterprise。"
+    },
+    "textToSpeech": {
+      "title": "Text-to-Speech",
+      "description": "Convert text to speech with your Grok subscription or xAI API key.",
+      "placeholder": "Enter text to convert here…",
+      "generate": "Generate audio",
+      "charCount": "{{count}} / {{max}}",
+      "examples": {
+        "pick": "Pick an example to generate",
+        "orCustom": "or enter any custom text",
+        "support": "Support",
+        "sales": "Sales",
+        "podcast": "Podcast",
+        "announcement": "Announcement",
+        "meditation": "Meditation",
+        "supportText": "Hi, thanks for reaching out. I looked into this and I can help you sort it out right now.",
+        "salesText": "This quarter we shipped the workflow our customers asked for. Let me walk you through what changed.",
+        "podcastText": "Welcome back. Today we are talking about the quiet systems that actually keep a product alive.",
+        "announcementText": "Heads up: maintenance starts tonight at 11. Service should be back before morning.",
+        "meditationText": "Take a slow breath in. Let the shoulders drop. There is nothing you need to fix in this moment."
+      },
+      "voices": {
+        "label": "Voice",
+        "search": "Search voices",
+        "custom": "Your voices",
+        "default": "Default voices",
+        "empty": "No voices in this list.",
+        "male": "Male",
+        "female": "Female",
+        "multilingual": "Multilingual"
+      },
+      "effects": {
+        "add": "Add effects",
+        "instant": "Instant",
+        "wrapping": "Wrapping",
+        "pauseHint": "I opened the door, [pause] and froze.",
+        "longPauseHint": "The room went silent… [long-pause] then the lights flickered.",
+        "humTuneHint": "I started to [hum-tune] and forgot the lyrics.",
+        "laughHint": "I can't believe you did that [laugh]",
+        "chuckleHint": "It was funny, really [chuckle]",
+        "whisperHint": "I need to tell you something. <whisper>It is a secret.</whisper>",
+        "softHint": "<soft>Goodnight, sleep well.</soft>",
+        "slowHint": "<slow>Let every word land.</slow>"
+      },
+      "format": {
+        "speed": "Speech speed",
+        "streamingLabel": "Streaming optimization",
+        "streaming": {
+          "0": "Quality",
+          "1": "Balanced",
+          "2": "Fast"
+        },
+        "sampleRate": "Sample rate",
+        "bitRate": "Bit rate",
+        "textNormalization": "Text normalization",
+        "timestamps": "Timestamps"
+      },
+      "errors": {
+        "generic": "Could not generate audio.",
+        "textRequired": "Enter text to convert.",
+        "textTooLong": "Text is too long.",
+        "credentialsRequired": "Sign in with Grok or add an xAI API key.",
+        "credentialsRejected": "xAI rejected these credentials.",
+        "providerStatus": "xAI could not generate audio.",
+        "network": "Could not reach xAI.",
+        "emptyAudio": "xAI returned no audio."
+      }
     }
   },
   "models": {

@@ -4,6 +4,7 @@ import { usePolicyStore } from "../stores/policyStore";
 import {
   Sliders,
   Mic,
+  Volume2,
   Brain,
   UserCircle,
   Wrench,
@@ -102,6 +103,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         label: t("settingsModal.sections.speechToText.label"),
         icon: Mic,
         description: t("settingsModal.sections.speechToText.description"),
+        group: t("settingsModal.groups.aiModels"),
+      },
+      {
+        id: "textToSpeech",
+        label: t("settingsModal.sections.textToSpeech.label"),
+        icon: Volume2,
+        description: t("settingsModal.sections.textToSpeech.description"),
         group: t("settingsModal.groups.aiModels"),
       },
       {

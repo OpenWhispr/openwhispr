@@ -1568,6 +1568,10 @@
       "system": {
         "description": "Mises à jour, stockage & outils de développement",
         "label": "Système"
+      },
+      "textToSpeech": {
+        "label": "Synthèse vocale",
+        "description": "Générer de la parole avec les voix xAI"
       }
     },
     "title": "Paramètres"
@@ -2606,6 +2610,73 @@
       "upgradeCta": "Mettre à niveau",
       "upgradedTitle": "Mise à niveau effectuée",
       "upgradedDescription": "{{workspace}} est maintenant sur Enterprise."
+    },
+    "textToSpeech": {
+      "title": "Synthèse vocale",
+      "description": "Convertis du texte en parole avec SuperGrok ou une clé API xAI.",
+      "placeholder": "Saisis le texte à convertir…",
+      "generate": "Générer l’audio",
+      "charCount": "{{count}} / {{max}}",
+      "examples": {
+        "pick": "Choisis un exemple à générer",
+        "orCustom": "ou saisis n’importe quel texte",
+        "support": "Support",
+        "sales": "Ventes",
+        "podcast": "Podcast",
+        "announcement": "Annonce",
+        "meditation": "Méditation",
+        "supportText": "Bonjour, merci de nous avoir contactés. J’ai regardé ça et je peux vous aider tout de suite.",
+        "salesText": "Ce trimestre, on a livré le workflow que nos clients demandaient. Je vous montre ce qui a changé.",
+        "podcastText": "Content de vous retrouver. Aujourd’hui, on parle des systèmes discrets qui font vraiment tenir un produit.",
+        "announcementText": "Info : une maintenance commence ce soir à 23 h. Le service devrait être de retour avant le matin.",
+        "meditationText": "Inspire lentement. Laisse les épaules descendre. Tu n’as rien à réparer dans cet instant."
+      },
+      "voices": {
+        "label": "Voix",
+        "search": "Rechercher une voix",
+        "custom": "Vos voix",
+        "default": "Voix par défaut",
+        "empty": "Aucune voix dans cette liste.",
+        "male": "Homme",
+        "female": "Femme",
+        "multilingual": "Multilingue"
+      },
+      "effects": {
+        "add": "Ajouter des effets",
+        "instant": "Instantané",
+        "wrapping": "Enveloppe",
+        "pauseHint": "J’ai ouvert la porte, [pause] et je me suis figé.",
+        "longPauseHint": "La pièce est devenue silencieuse… [long-pause] puis les lumières ont clignoté.",
+        "humTuneHint": "J’ai commencé à [hum-tune] et j’ai oublié les paroles.",
+        "laughHint": "J’arrive pas à croire que t’aies fait ça [laugh]",
+        "chuckleHint": "C’était drôle, vraiment [chuckle]",
+        "whisperHint": "Je dois te dire un truc. <whisper>C’est un secret.</whisper>",
+        "softHint": "<soft>Bonne nuit, dors bien.</soft>",
+        "slowHint": "<slow>Laisse chaque mot poser.</slow>"
+      },
+      "format": {
+        "speed": "Vitesse",
+        "streamingLabel": "Optimisation du streaming",
+        "streaming": {
+          "0": "Qualité",
+          "1": "Équilibré",
+          "2": "Rapide"
+        },
+        "sampleRate": "Fréquence d’échantillonnage",
+        "bitRate": "Débit",
+        "textNormalization": "Normalisation du texte",
+        "timestamps": "Horodatage"
+      },
+      "errors": {
+        "generic": "Impossible de générer l’audio.",
+        "textRequired": "Saisis un texte à convertir.",
+        "textTooLong": "Le texte est trop long.",
+        "credentialsRequired": "Connecte-toi avec Grok ou ajoute une clé API xAI.",
+        "credentialsRejected": "xAI a rejeté ces identifiants.",
+        "providerStatus": "xAI n’a pas pu générer l’audio.",
+        "network": "Impossible de joindre xAI.",
+        "emptyAudio": "xAI n’a renvoyé aucun audio."
+      }
     }
   },
   "models": {

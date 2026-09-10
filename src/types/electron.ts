@@ -2074,6 +2074,34 @@ declare global {
         code?: string;
         messageKey?: string;
       }>;
+      xaiTtsVoices?: () => Promise<
+        Array<{
+          voiceId: string;
+          name: string;
+          language: string;
+          gender: string;
+          source: "default" | "custom";
+        }>
+      >;
+      xaiTtsGenerate?: (input: {
+        text: string;
+        voiceId?: string;
+        language?: string;
+        speed?: number;
+        optimizeStreamingLatency?: number;
+        codec?: string;
+        sampleRate?: number;
+        bitRate?: number;
+        textNormalization?: boolean;
+        withTimestamps?: boolean;
+      }) => Promise<{
+        success: boolean;
+        audioBase64?: string;
+        contentType?: string;
+        error?: string;
+        errorCode?: string;
+        status?: number;
+      }>;
       proxyXaiTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         language?: string;
