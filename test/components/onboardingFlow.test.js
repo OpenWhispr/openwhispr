@@ -93,6 +93,30 @@ test("a confirmed enterprise workspace ends the account route at notes", async (
   assert.equal(route.includes("setup-choice"), false);
 });
 
+test("notes starts with Skip and switches to Continue after a calendar connects", async () => {
+  const { getNotesFooterAction } = await load();
+
+  assert.equal(
+    getNotesFooterAction({ workspaceResolutionPending: false, hasConnectedCalendar: false }),
+    "skip"
+  );
+  assert.equal(
+    getNotesFooterAction({ workspaceResolutionPending: false, hasConnectedCalendar: true }),
+    "continue"
+  );
+  // Naming this state rather than returning null: the footer has to keep showing a
+  // Continue while workspaces resolve, disabled and loading. Reading it as "no
+  // action" left the step with nothing but Back and no explanation.
+  assert.equal(
+    getNotesFooterAction({ workspaceResolutionPending: true, hasConnectedCalendar: true }),
+    "loading"
+  );
+  assert.equal(
+    getNotesFooterAction({ workspaceResolutionPending: true, hasConnectedCalendar: false }),
+    "loading"
+  );
+});
+
 test("enterprise workspace entitlement requires a current paid entitlement", async () => {
   const { isEnterpriseWorkspaceEntitled } = await load();
   assert.equal(isEnterpriseWorkspaceEntitled({ plan: "enterprise", status: "active" }), true);
@@ -143,11 +167,59 @@ test("versioned sessions reject malformed or old data", async () => {
 
   const legacyV2 = { ...session };
   delete legacyV2.selfHostedRequested;
+  delete legacyV2.resume;
   assert.equal(parseOnboardingSession(JSON.stringify(legacyV2)).selfHostedRequested, false);
+  assert.deepEqual(
+    parseOnboardingSession(JSON.stringify(legacyV2)).resume,
+    createOnboardingSession().resume
+  );
   assert.equal(
     parseOnboardingSession(JSON.stringify({ ...session, selfHostedRequested: "yes" })),
     null
   );
+});
+
+test("v2 sessions retain safe within-step state without accepting secrets", async () => {
+  const { createOnboardingSession, parseOnboardingSession } = await load();
+  const session = createOnboardingSession();
+  session.currentStepId = "byok-dictation";
+  session.resume.dictationHotkeyConfirmed = true;
+  session.resume.dictationDemoCompleted = true;
+  session.resume.auth = {
+    ...session.resume.auth,
+    authMode: "sign-up",
+    email: "person@example.com",
+    fullName: "Person Example",
+  };
+  session.resume.byok["byok-dictation"] = {
+    selectedProvider: "openai",
+    selectedModel: "gpt-4o-mini-transcribe",
+    baseUrl: "https://self-hosted.example.com",
+    customModel: "whisper-local",
+  };
+  session.resume.localModels["local-assistant"] = {
+    provider: "qwen",
+    modelId: "qwen-9b",
+  };
+
+  const serialized = JSON.stringify(session);
+  assert.doesNotMatch(serialized, /password|apiKey|cortiClientId|clientSecret/);
+  assert.deepEqual(parseOnboardingSession(serialized), session);
+
+  // Corti's client id is one of the safeStorage-encrypted secrets, so a draft
+  // written by an older build has to be dropped rather than read back.
+  const legacyDraft = JSON.parse(serialized);
+  legacyDraft.resume.byok["byok-dictation"].cortiClientId = "client-id";
+  assert.deepEqual(parseOnboardingSession(JSON.stringify(legacyDraft)), session);
+
+  const malformedDraft = JSON.parse(serialized);
+  malformedDraft.resume.auth.authMode = "unknown";
+  malformedDraft.resume.byok["byok-dictation"].selectedProvider = 42;
+  malformedDraft.resume.localModels["local-assistant"].modelId = false;
+  const parsed = parseOnboardingSession(JSON.stringify(malformedDraft));
+  assert.equal(parsed.resume.auth.authMode, null);
+  assert.equal(parsed.resume.byok["byok-dictation"].selectedProvider, "");
+  assert.equal(parsed.resume.localModels["local-assistant"].modelId, "");
 });
 
 test("an explicit restart clears every persisted route choice and returns to auth", async () => {
@@ -157,6 +229,8 @@ test("an explicit restart clears every persisted route choice and returns to aut
     ["onboardingCompleted", "true"],
     ["authenticationSkipped", "true"],
     ["skipAuth", "true"],
+    ["localSetupPending", "true"],
+    ["pendingLocalModelSelectionsV1", '{"assistant":{"provider":"qwen","modelId":"qwen-9b"}}'],
   ]);
   const storage = {
     setItem: (key, value) => values.set(key, value),
@@ -170,6 +244,8 @@ test("an explicit restart clears every persisted route choice and returns to aut
   assert.equal(values.has("onboardingCompleted"), false);
   assert.equal(values.has("authenticationSkipped"), false);
   assert.equal(values.has("skipAuth"), false);
+  assert.equal(values.has("localSetupPending"), false);
+  assert.equal(values.has("pendingLocalModelSelectionsV1"), false);
 });
 
 test("legacy numeric steps migrate conservatively", async () => {
@@ -349,4 +425,51 @@ test("the tray suppression predicate matches only an active required-models sess
     ),
     false
   );
+});
+
+test("a session written before the resume flags infers its hotkey confirmations", async () => {
+  const { createOnboardingSession, parseOnboardingSession } = await load();
+  const preResumeSession = (currentStepId) => {
+    const { resume, ...session } = { ...createOnboardingSession(), currentStepId };
+    void resume;
+    return JSON.stringify({ ...session, authPath: "account" });
+  };
+
+  // The shipped build persists this shape. Read back as "never confirmed", a
+  // macOS session resuming past the hotkey step lets finalizeOnboarding replace
+  // the chord the user confirmed on that build, with no screen ever showing it.
+  const past = parseOnboardingSession(preResumeSession("notes"));
+  assert.equal(past.resume.dictationHotkeyConfirmed, true);
+  assert.equal(past.resume.assistantHotkeyConfirmed, true);
+
+  // Not yet reached is genuinely unconfirmed: the step still has to be shown, and
+  // onboarding stays free to open it on the platform's onboarding chord.
+  const before = parseOnboardingSession(preResumeSession("permissions"));
+  assert.equal(before.resume.dictationHotkeyConfirmed, false);
+  assert.equal(before.resume.assistantHotkeyConfirmed, false);
+
+  // Standing on the step is not having finished it.
+  const on = parseOnboardingSession(preResumeSession("dictation-hotkey"));
+  assert.equal(on.resume.dictationHotkeyConfirmed, false);
+  assert.equal(on.resume.assistantHotkeyConfirmed, false);
+
+  // Nothing else is inferred — a demo the user never ran must still gate Continue.
+  assert.equal(past.resume.dictationDemoCompleted, false);
+  assert.equal(past.resume.assistantDemoCompleted, false);
+});
+
+test("only a signed-in account holder is offered a logout during onboarding", async () => {
+  const { shouldOfferOnboardingLogout } = await load();
+
+  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: true, authPath: "account" }), true);
+
+  // Guests have no account to leave.
+  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: "guest" }), false);
+  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: true, authPath: "guest" }), false);
+
+  // The legacy migration labels any pre-v2 session past the auth step "account"
+  // without anyone signing in, and Log out wipes the session, localSetupPending and
+  // the pending model selections — unconfirmed, for someone with nothing to log out of.
+  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: "account" }), false);
+  assert.equal(shouldOfferOnboardingLogout({ isSignedIn: false, authPath: null }), false);
 });

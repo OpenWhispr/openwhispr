@@ -164,6 +164,7 @@
     "add": "Add",
     "retry": "Retry",
     "back": "Back",
+    "logout": "Log out",
     "next": "Next",
     "complete": "Complete",
     "reset": "Reset",
@@ -200,7 +201,7 @@
     "done": "Done",
     "skip": "Skip",
     "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
-    "policyAgentRestricted": "AI agent use is restricted by your organization.",
+    "policyAgentRestricted": "AI assistant use is restricted by your organization.",
     "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
@@ -213,8 +214,8 @@
         "microphoneDescription": "Turns speech into text.",
         "accessibilityDescription": "Pastes text into your active app.",
         "systemAudioTitle": "System Audio",
-        "systemAudioDescription": "Captures audio from other apps.",
-        "screenContextDescription": "Lets your voice assistant see your screen. Never stored.",
+        "systemAudioDescription": "Required for capturing audio in Meeting Notes.",
+        "screenContextDescription": "Share screen context with Voice Assistant.",
         "enable": "Enable",
         "enabled": "Enabled"
       },
@@ -239,6 +240,7 @@
       "hotkey": {
         "capture": "Press the keys you want to use",
         "chooseAnother": "Choose another shortcut",
+        "confirmAgain": "Press {{hotkey}} again to confirm",
         "inUse": "That shortcut is already in use. Choose another one.",
         "holding": "Keep holding, or press another key"
       },
@@ -411,7 +413,6 @@
         "descriptionLineOne": "Choose the models you want",
         "descriptionLineTwo": "to run on your device.",
         "providerLabel": "Provider",
-        "agent": "Agent",
         "download": "Download",
         "downloadingShort": "Downloading",
         "selected": "Selected",
@@ -420,7 +421,7 @@
         "cancelDownload": "Cancel download of {{model}}",
         "downloads": "Model downloads",
         "downloading": "Downloading… {{progress}}%",
-        "installing": "Installing model…"
+        "installing": "Installing"
       }
     },
     "steps": {
@@ -680,11 +681,6 @@
       },
       "retryTranslationMode": "Translation Mode"
     },
-    "cloudMigration": {
-      "title": "Welcome to OpenWhispr Cloud",
-      "description": "We've switched your transcription to OpenWhispr Cloud for faster, more accurate results. Your previous settings are saved — switch back anytime in Settings.",
-      "viewSettings": "View Settings"
-    },
     "aiCta": {
       "title": "Enhance your transcriptions with AI",
       "description": "Automatically fix grammar, punctuation, and formatting as you speak.",
@@ -869,7 +865,7 @@
       "errorTitles": {
         "sessionExpired": "Session Expired",
         "offline": "You're Offline",
-        "agentUnavailable": "Agent Unavailable",
+        "agentUnavailable": "Assistant Unavailable",
         "screenContextSkipped": "Screen Context Skipped",
         "dailyLimitReached": "Daily Limit Reached",
         "providerRateLimited": "Provider Rate Limited"
@@ -1106,12 +1102,12 @@
       "welcomeBack": "Welcome back"
     },
     "signedIn": {
-      "ready": "Ready",
-      "welcomeBack": "Welcome back",
-      "welcomeBackName": "Welcome back, {{name}}"
+      "welcomeBack": "Welcome back"
     },
     "sso": {
       "continueWithSSO": "Sign in with SSO",
+      "workEmailLabel": "Work email",
+      "emailPlaceholder": "Add your email",
       "emailRequired": "Enter your work email to use SSO.",
       "failed": "Single sign-on failed. Please try again.",
       "companySignInTitle": "Use your company sign-in",
@@ -1466,10 +1462,10 @@
       }
     },
     "edit": {
-      "agentNameLabel": "Agent name:",
+      "agentNameLabel": "Assistant name:",
       "cautionLabel": "Caution",
       "cautionTextPrefix": "Modifying this prompt may affect transcription quality.",
-      "cautionTextSuffix": "Keep the {{agentName}} placeholder to preserve agent detection.",
+      "cautionTextSuffix": "Keep the {{agentName}} placeholder to preserve assistant detection.",
       "placeholder": "Enter your custom system prompt..."
     },
     "tabs": {
@@ -1884,7 +1880,7 @@
           "features": [
             "Unlimited meeting recordings",
             "Workspace roles & member management",
-            "Agent mode",
+            "Assistant mode",
             "Chat over your data",
             "Priority support"
           ],
@@ -2008,11 +2004,11 @@
       }
     },
     "agentConfig": {
-      "agentName": "Agent Name",
+      "agentName": "Assistant name",
       "description": "Name your AI assistant so you can address it directly during dictation",
       "dialogs": {
-        "updatedDescription": "Your agent is now named \"{{name}}\". Address it by saying \"Hey {{name}}\" followed by your instructions.",
-        "updatedTitle": "Agent Name Updated"
+        "updatedDescription": "Your assistant is now named \"{{name}}\". Address it by saying \"Hey {{name}}\" followed by your instructions.",
+        "updatedTitle": "Assistant name updated"
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
@@ -2127,7 +2123,7 @@
       "clearDictionaryTitle": "Clear dictionary?",
       "clearDictionaryDescription": "This will remove all words from your custom dictionary. This action cannot be undone.",
       "clearAll": "Clear all",
-      "agentNameAutoManaged": "Auto-managed — synced from agent name",
+      "agentNameAutoManaged": "Auto-managed — synced from assistant name",
       "removeWord": "Remove word",
       "noWords": "No words yet",
       "wordsAppearHere": "Words you add will appear here",
@@ -2641,7 +2637,7 @@
         "openai_gpt_4_1_mini": "Smaller GPT-4.1 model",
         "openai_gpt_4_1_nano": "Lowest latency GPT-4.1",
         "anthropic_claude_fable_5": "Anthropic's most capable model, Mythos-class",
-        "anthropic_claude_sonnet_5": "Fast, capable agentic model at lower cost",
+        "anthropic_claude_sonnet_5": "Fast, capable assistant model at lower cost",
         "anthropic_claude_sonnet_4_6": "Balanced performance",
         "anthropic_claude_sonnet_4_5": "Previous Sonnet generation",
         "anthropic_claude_haiku_4_5": "Fast with near-frontier intelligence",
@@ -2676,12 +2672,12 @@
         "corti_corti_s1_mini": "Compact clinical model with reasoning at half the price"
       },
       "enterprise": {
-        "bedrock_claude_fable_5": "Most capable Claude model. Best for the hardest Agent Mode tasks.",
+        "bedrock_claude_fable_5": "Most capable Claude model. Best for the hardest Assistant tasks.",
         "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
-        "bedrock_claude_sonnet_5": "Balanced workhorse. Best default for Agent Mode.",
-        "bedrock_claude_opus_4_8": "Max intelligence. Best for complex Agent Mode tasks.",
+        "bedrock_claude_sonnet_5": "Balanced workhorse. Best default for Assistant tasks.",
+        "bedrock_claude_opus_4_8": "Max intelligence. Best for complex Assistant tasks.",
         "bedrock_gpt_oss_120b": "Open-weight OpenAI model. Strong reasoning at low cost.",
-        "bedrock_deepseek_v3_2": "Open-weight frontier model. Great value for Agent Mode.",
+        "bedrock_deepseek_v3_2": "Open-weight frontier model. Great value for Assistant tasks.",
         "bedrock_qwen3_next_80b": "Sparse open-weight model. Fast and multilingual.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
@@ -3327,6 +3323,9 @@
       "description": "Transcriptions & structured summaries",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
+      "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
+      "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
+      "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
       "autoEnded": "Recording stopped automatically after your meeting ended.",
       "restartFailed": "Couldn't restart the meeting recording.",
       "systemAudioSilent": {
@@ -3569,7 +3568,7 @@
       "addPlaceholder": "Add a trigger phrase — \"investor ask\", \"cal link\""
     },
     "emptyTitle": "Your dictionary is empty",
-    "emptyDescription": "Add words {{agentName}} should always get right: names, tools, acronyms.",
+    "emptyDescription": "Add words for {{agentName}} to always get right: names, tools, acronyms.",
     "addFirstWord": "Add your first word",
     "importList": "Import a list",
     "agentDefault": "Added by default"
@@ -3661,7 +3660,7 @@
   },
   "dictationAgent": {
     "enabled": "Enable voice assistant",
-    "enabledDescription": "Dictate instructions to your agent. Highlighted text is sent to the configured model and edited in place. Activate by saying \"{{agentName}}\".",
+    "enabledDescription": "Dictate instructions to your assistant. Highlighted text is sent to the configured model and edited in place. Activate by saying \"{{agentName}}\".",
     "screenContext": {
       "title": "Screen Context",
       "description": "Attach a screenshot of your active screen to voice assistant commands.",
@@ -3676,7 +3675,7 @@
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "openwhisprDesc": "Use the OpenWhispr-managed assistant — no API key needed.",
       "providers": "Bring your own key",
       "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
       "local": "Local",
@@ -3687,14 +3686,14 @@
       "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
     },
     "prompt": {
-      "title": "Agent prompt",
+      "title": "Assistant prompt",
       "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {
     "settings": {
       "systemPrompt": "System Prompt",
-      "systemPromptDescription": "Custom instructions for the agent",
+      "systemPromptDescription": "Custom instructions for the assistant",
       "systemPromptPlaceholder": "Enter custom system prompt...",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
@@ -3846,7 +3845,7 @@
     },
     "cli": {
       "title": "Command-line access",
-      "description": "Give your agent access to your notes from the terminal.",
+      "description": "Give your assistant access to your notes from the terminal.",
       "installLabel": "Install",
       "learnMore": "Read the docs",
       "copyDocsLink": "Copy docs link",

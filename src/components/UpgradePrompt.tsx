@@ -74,6 +74,7 @@ export default function UpgradePrompt({
             onClick={() => {
               const s = useSettingsStore.getState();
               s.setTranscriptionMode("providers");
+              s.setUseLocalWhisper(false);
               s.setCloudTranscriptionMode("byok");
               onOpenChange(false);
             }}

@@ -29,7 +29,7 @@ import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore"
 import TestConnectionButton from "../TestConnectionButton";
 import { getEnterpriseCallSettings } from "../../services/ai/enterpriseSettings";
 import { Button } from "../ui/button";
-import { resetOnboardingProgress } from "../onboarding/flow";
+import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 
 const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   dictationCleanup: "settingsPage.aiModels.modes",
@@ -39,12 +39,6 @@ const MODE_LABEL_PREFIX: Record<InferenceScope, string> = {
   chatIntelligence: "agentMode.settings.modes",
   dictationTranslation: "settingsPage.aiModels.modes",
 };
-
-function startCloudOnboarding() {
-  localStorage.setItem("pendingCloudMigration", "true");
-  resetOnboardingProgress(localStorage);
-  window.location.reload();
-}
 
 interface InferenceConfigEditorProps {
   scope: InferenceScope;
@@ -59,6 +53,7 @@ export default function InferenceConfigEditor({
   allowedModes,
 }: InferenceConfigEditorProps) {
   const { t } = useTranslation();
+  const startOnboarding = useStartOnboarding();
   const policyState = usePolicySnapshot();
   const config = useSettingsStore(
     useShallow((settings) =>
@@ -129,7 +124,7 @@ export default function InferenceConfigEditor({
     (mode: InferenceMode) => {
       if (!isModeAllowed(mode)) return;
       if (mode === "openwhispr" && !isSignedIn) {
-        startCloudOnboarding();
+        startOnboarding();
         return;
       }
       if (mode === effectiveMode) return;
@@ -150,7 +145,15 @@ export default function InferenceConfigEditor({
 
       onModeChange?.(mode);
     },
-    [scope, config.provider, effectiveMode, isSignedIn, onModeChange, isModeAllowed]
+    [
+      scope,
+      config.provider,
+      effectiveMode,
+      isSignedIn,
+      onModeChange,
+      isModeAllowed,
+      startOnboarding,
+    ]
   );
 
   const setMode = setField("mode");
