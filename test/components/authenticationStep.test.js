@@ -240,6 +240,31 @@ test("email authentication discovers accounts, restores drafts, and persists the
     { email: "returning@example.com", authUrl: "https://auth.example.test" },
   ]);
 
+  // Regression test for #1700: the gate rejected any local part containing "+",
+  // so accounts the website had already created with a plus alias could not sign
+  // in from the app — on any surface, since this step backs all of them.
+  const plusAlias = createHarness();
+  plusAlias.discoveryResult = { exists: true };
+  const aliasSignIn = await submitEmail(plusAlias, "user+tag@example.com");
+  assert.deepEqual(
+    plusAlias.discoveryCalls,
+    [{ email: "user+tag@example.com", authUrl: "https://auth.example.test" }],
+    "a plus-addressed alias must reach discovery unchanged"
+  );
+  assert.equal(readOnlyEmailField(aliasSignIn)?.props.value, "user+tag@example.com");
+  assert.doesNotMatch(textContent(aliasSignIn), /auth\.errors\./);
+
+  // Replacing the plus gate kept a shape check, so input the server could only
+  // reject on a round trip still never leaves the welcome view.
+  const malformedEmail = createHarness();
+  const rejected = await submitEmail(malformedEmail, "not-an-email");
+  assert.deepEqual(
+    malformedEmail.discoveryCalls,
+    [],
+    "a malformed address must never reach discovery"
+  );
+  assert.match(textContent(rejected), /auth\.errors\.invalidEmail/);
+
   const newAccount = createHarness();
   const signUp = await submitEmail(newAccount, "new@example.com");
   assert.ok(
