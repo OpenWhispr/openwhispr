@@ -88,6 +88,44 @@ const RESOLUTION_MATRIX = [
     "openai-realtime",
   ],
   [
+    "deepgram byok streams over deepgram's own channels",
+    {
+      settings: settingsWith({
+        cloudTranscriptionProvider: "deepgram",
+        cloudTranscriptionModel: "nova-3",
+        cloudTranscriptionMode: "byok",
+      }),
+    },
+    "deepgram",
+  ],
+  [
+    "assemblyai byok streams over assemblyai's own channels",
+    {
+      settings: settingsWith({
+        cloudTranscriptionProvider: "assemblyai",
+        cloudTranscriptionModel: "universal-streaming-english",
+        cloudTranscriptionMode: "byok",
+      }),
+    },
+    "assemblyai",
+  ],
+  [
+    "a stale OpenAI realtime model cannot hijack a byok streaming-only provider",
+    {
+      settings: settingsWith({
+        cloudTranscriptionProvider: "deepgram",
+        cloudTranscriptionModel: "gpt-4o-mini-transcribe",
+        cloudTranscriptionMode: "byok",
+      }),
+    },
+    "deepgram",
+  ],
+  [
+    "deepgram on openwhispr cloud stays on the managed path",
+    { settings: settingsWith({ cloudTranscriptionProvider: "deepgram" }) },
+    "openai-realtime",
+  ],
+  [
     "batch model in notes context defaults to deepgram",
     { settings: settingsWith({ cloudTranscriptionModel: "whisper-1" }), context: "notes" },
     "deepgram",

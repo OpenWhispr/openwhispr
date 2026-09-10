@@ -26,11 +26,19 @@ import tokenProviders from "../src/helpers/realtimeTokenProviders.js";
 import audioUtils from "../src/utils/audioUtils.js";
 import geminiTranscription from "../src/helpers/geminiTranscription.js";
 import geminiLive from "../src/helpers/geminiLiveStreaming.js";
+import AssemblyAiStreaming from "../src/helpers/assemblyAiStreaming.js";
+import modelRegistryData from "../src/models/modelRegistryData.json" with { type: "json" };
 
 const { fetchRealtimeTokenForProvider } = tokenProviders;
 const { pcm16ToWav } = audioUtils;
 const { transcribeWithGemini } = geminiTranscription;
 const { GeminiLiveStreaming } = geminiLive;
+
+// The registry's first model is what a fresh AssemblyAI selection dictates with
+// (ModelRegistry.getDefaultTranscriptionModel), so that is the id to probe.
+const ASSEMBLYAI_DEFAULT_MODEL = modelRegistryData.transcriptionProviders.find(
+  (provider) => provider.id === "assemblyai"
+).models[0].id;
 
 const HANDSHAKE_TIMEOUT_MS = 15000;
 // Half a second of 16 kHz mono silence: enough for a provider to accept and
@@ -38,13 +46,20 @@ const HANDSHAKE_TIMEOUT_MS = 15000;
 const SILENT_WAV = () => pcm16ToWav(Buffer.alloc(16000));
 
 // Mirrors the app's dial: openaiRealtimeStreaming.js connects with a bare
-// Bearer header; deepgramStreaming.js passes the key as the bearer token.
+// Bearer header; deepgramStreaming.js passes the key as the bearer token; a
+// null token means the credential already rides in the URL (AssemblyAI).
 // `awaitServerEvent` is for providers that authenticate AFTER the upgrade:
 // OpenAI opens the socket for any key and only then sends an `error` event
 // for a bad one, so resolving on `open` validates nothing (#1624 class).
-function probeWebSocket(url, token, { awaitServerEvent = false } = {}) {
+// `verifyServerEvent` inspects that first event and returns a failure detail,
+// or null to accept — for servers that acknowledge the requested configuration
+// rather than reject a bad one.
+function probeWebSocket(url, token, { awaitServerEvent = false, verifyServerEvent = null } = {}) {
   return new Promise((resolve) => {
-    const ws = new WebSocket(url, { headers: { Authorization: `Bearer ${token}` } });
+    const ws = new WebSocket(
+      url,
+      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+    );
     const timer = setTimeout(() => {
       ws.terminate();
       resolve({ ok: false, detail: `no handshake within ${HANDSHAKE_TIMEOUT_MS}ms` });
@@ -67,9 +82,10 @@ function probeWebSocket(url, token, { awaitServerEvent = false } = {}) {
       }
       if (event.type === "error") {
         finish({ ok: false, detail: `server error event: ${event.error?.code ?? "unknown"}` });
-      } else {
-        finish({ ok: true });
+        return;
       }
+      const detail = verifyServerEvent?.(event);
+      finish(detail ? { ok: false, detail } : { ok: true });
     });
     ws.on("close", (code) => {
       if (awaitServerEvent)
@@ -228,13 +244,24 @@ const PROBES = [
   {
     id: "assemblyai-realtime",
     keyEnv: "STT_CANARY_ASSEMBLYAI_KEY",
-    // AssemblyAI's byok path mints a real short-lived streaming token, so the
-    // registry call itself is the live probe.
+    // Dials the exact URL the client builds (token, encoding, speech_model).
+    // AssemblyAI ignores query params it does not recognise instead of
+    // rejecting them, so a retired or misspelt default model would silently
+    // downgrade every session — only Begin's echoed configuration.model proves
+    // the requested model was applied.
     run: async (key) => {
       const token = await fetchRealtimeTokenForProvider("assemblyai-realtime", tokenDeps(key), {
         mode: "byok",
       });
-      return token ? { ok: true } : { ok: false, detail: "empty token" };
+      const model = ASSEMBLYAI_DEFAULT_MODEL;
+      const url = new AssemblyAiStreaming().buildWebSocketUrl({ token, model });
+      return probeWebSocket(url, null, {
+        awaitServerEvent: true,
+        verifyServerEvent: (event) =>
+          event.type === "Begin" && event.configuration?.model === model
+            ? null
+            : `expected Begin with model ${model}, got ${event.type ?? "unknown"} (model ${event.configuration?.model ?? "none"})`,
+      });
     },
   },
   {

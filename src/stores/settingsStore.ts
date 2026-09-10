@@ -36,6 +36,7 @@ import { pickDefaultModelId } from "../models/providerDefaultModel";
 import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { recordTinfoilModelSwitch } from "./tinfoilModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
+import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import {
   getTranscriptionSelection,
   isScreenContextAllowed,
@@ -65,6 +66,8 @@ let _ReasoningService: typeof import("../services/ReasoningService").default | n
 // dereference the bare localStorage global, and test harnesses import this
 // store with partial window stubs that don't define it.
 const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
+
+const DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER = "openai";
 
 export const TRANSCRIPTION_POLICY_PROVIDER_IDS = [
   ...modelRegistryData.transcriptionProviders.map((provider) => provider.id),
@@ -1039,6 +1042,8 @@ export interface SettingsState
   setCortiClientSecret: (key: string) => void;
   setCortiApiKey: (key: string) => void;
   setTinfoilApiKey: (key: string) => void;
+  setDeepgramApiKey: (key: string) => void;
+  setAssemblyaiApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
 
@@ -1277,6 +1282,8 @@ const SECRET_IPC_SAVERS = {
   cortiClientSecret: "saveCortiClientSecret",
   cortiApiKey: "saveCortiKey",
   tinfoil: "saveTinfoilKey",
+  deepgram: "saveDeepgramKey",
+  assemblyai: "saveAssemblyAIKey",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
   noteFormattingCustom: "saveNoteFormattingCustomKey",
@@ -1324,6 +1331,8 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "cortiClientSecret",
   "cortiApiKey",
   "tinfoilApiKey",
+  "deepgramApiKey",
+  "assemblyaiApiKey",
   "customTranscriptionApiKey",
   "customReasoningApiKey",
   "cleanupCustomApiKey",
@@ -1407,7 +1416,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   chineseScriptPreference: normalizeChineseScriptPreference(
     readString("chineseScriptPreference", "as-transcribed")
   ),
-  cloudTranscriptionProvider: readString("cloudTranscriptionProvider", "openai"),
+  cloudTranscriptionProvider: readString(
+    "cloudTranscriptionProvider",
+    DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER
+  ),
   cloudTranscriptionModel: readString("cloudTranscriptionModel", "gpt-4o-mini-transcribe"),
   cloudTranscriptionBaseUrl: readString(
     "cloudTranscriptionBaseUrl",
@@ -1451,6 +1463,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cortiClientSecret: "",
   cortiApiKey: "",
   tinfoilApiKey: "",
+  deepgramApiKey: "",
+  assemblyaiApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -2091,6 +2105,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
   setTinfoilApiKey: createSecretSetter("tinfoilApiKey", "tinfoil", "tinfoil"),
+  // STT-only, so there is no ReasoningService key cache to invalidate.
+  setDeepgramApiKey: createSecretSetter("deepgramApiKey", "deepgram"),
+  setAssemblyaiApiKey: createSecretSetter("assemblyaiApiKey", "assemblyai"),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -2605,6 +2622,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
     if (keys.cortiApiKey !== undefined) s.setCortiApiKey(keys.cortiApiKey);
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
+    if (keys.deepgramApiKey !== undefined) s.setDeepgramApiKey(keys.deepgramApiKey);
+    if (keys.assemblyaiApiKey !== undefined) s.setAssemblyaiApiKey(keys.assemblyaiApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
@@ -2697,22 +2716,33 @@ export interface ResolvedUploadTranscription {
 
 // Audio upload is batch (not streaming), so unset values fall back to the base
 // dictation settings — matching the behavior before upload had its own context.
+// A realtime-only dictation provider is the exception: it has no batch route, so
+// inheriting it would fail every upload closed. Uploads take the default provider
+// instead, and the dictation model stays behind with the provider it belongs to.
 export const selectResolvedUploadTranscription = (
   state: SettingsState
-): ResolvedUploadTranscription => ({
-  useLocalWhisper: state.uploadUseLocalWhisper,
-  whisperModel: state.uploadWhisperModel || state.whisperModel,
-  localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
-  parakeetModel: state.uploadParakeetModel || state.parakeetModel,
-  cohereModel: state.uploadCohereModel || state.cohereModel,
-  cloudTranscriptionProvider:
-    state.uploadCloudTranscriptionProvider || state.cloudTranscriptionProvider,
-  cloudTranscriptionModel: state.uploadCloudTranscriptionModel || state.cloudTranscriptionModel,
-  cloudTranscriptionBaseUrl:
-    state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
-  cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
-  transcriptionMode: state.uploadTranscriptionMode,
-});
+): ResolvedUploadTranscription => {
+  const inheritsDictationProvider = !STREAMING_ONLY_PROVIDERS.has(state.cloudTranscriptionProvider);
+  return {
+    useLocalWhisper: state.uploadUseLocalWhisper,
+    whisperModel: state.uploadWhisperModel || state.whisperModel,
+    localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
+    parakeetModel: state.uploadParakeetModel || state.parakeetModel,
+    cohereModel: state.uploadCohereModel || state.cohereModel,
+    cloudTranscriptionProvider:
+      state.uploadCloudTranscriptionProvider ||
+      (inheritsDictationProvider
+        ? state.cloudTranscriptionProvider
+        : DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER),
+    cloudTranscriptionModel:
+      state.uploadCloudTranscriptionModel ||
+      (inheritsDictationProvider ? state.cloudTranscriptionModel : ""),
+    cloudTranscriptionBaseUrl:
+      state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
+    cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
+    transcriptionMode: state.uploadTranscriptionMode,
+  };
+};
 
 export interface ResolvedNoteFormatting {
   provider: string;
@@ -3146,6 +3176,8 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken,
         azureApiKey,
         vertexApiKey,
+        deepgram,
+        assemblyai,
       ] = await Promise.all([
         window.electronAPI.getOpenAIKey?.(),
         window.electronAPI.getAnthropicKey?.(),
@@ -3170,6 +3202,8 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getBedrockSessionToken?.(),
         window.electronAPI.getAzureApiKey?.(),
         window.electronAPI.getVertexApiKey?.(),
+        window.electronAPI.getDeepgramKey?.(),
+        window.electronAPI.getAssemblyAIKey?.(),
       ]);
 
       useSettingsStore.setState({
@@ -3202,6 +3236,8 @@ export async function initializeSettings(): Promise<void> {
         bedrockSessionToken: bedrockSessionToken || "",
         azureApiKey: azureApiKey || "",
         vertexApiKey: vertexApiKey || "",
+        deepgramApiKey: deepgram || "",
+        assemblyaiApiKey: assemblyai || "",
       });
 
       if (!localStorage.getItem("enterpriseSetupMode")) {

@@ -1,5 +1,9 @@
 import { withSessionRefresh } from "../lib/auth";
-import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
+import {
+  resolveTranscriptionRoute,
+  type ManagedTranscriptionResolution,
+  type TranscriptionRoute,
+} from "../helpers/transcriptionRoute";
 import {
   getManagedTranscriptionResolution,
   isManagedTranscriptionActive,
@@ -61,6 +65,8 @@ export interface TranscriptionApiKeys {
   mistralApiKey: string;
   geminiApiKey: string;
   tinfoilApiKey: string;
+  deepgramApiKey: string;
+  assemblyaiApiKey: string;
   customTranscriptionApiKey?: string;
 }
 
@@ -78,11 +84,40 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.geminiApiKey;
     case "tinfoil":
       return keys.tinfoilApiKey;
+    case "deepgram":
+      return keys.deepgramApiKey;
+    case "assemblyai":
+      return keys.assemblyaiApiKey;
     case "custom":
       return keys.customTranscriptionApiKey || "";
     default:
       return "";
   }
+}
+
+// Pre-flight through the shared resolver: code-carrying errors (incl. the
+// Tinfoil-URL and fail-closed custom guards) surface here without an IPC
+// round-trip; the main-process handler re-resolves the same fields as
+// defense in depth.
+export function resolveFileTranscriptionRoute(
+  cfg: FileTranscriptionConfig,
+  managed: ManagedTranscriptionResolution | null = null
+): TranscriptionRoute {
+  return resolveTranscriptionRoute({
+    settings: {
+      transcriptionMode: cfg.transcriptionMode,
+      remoteTranscriptionUrl: cfg.remoteTranscriptionUrl,
+      remoteTranscriptionModel: cfg.remoteTranscriptionModel,
+      cloudTranscriptionProvider: cfg.cloudTranscriptionProvider,
+      cloudTranscriptionModel: cfg.cloudTranscriptionModel,
+      cloudTranscriptionBaseUrl: cfg.cloudTranscriptionBaseUrl,
+      cortiEnvironment: cfg.cortiEnvironment,
+      cortiTenant: cfg.cortiTenant,
+    },
+    providers: getTranscriptionProviders(),
+    managed,
+    request: { effectiveLanguage: cfg.language || undefined },
+  });
 }
 
 // Single provider dispatch shared by the single-file flow and the batch queue,
@@ -134,25 +169,7 @@ export async function transcribeFile(
     });
   }
 
-  // Pre-flight through the shared resolver: code-carrying errors (incl. the
-  // Tinfoil-URL and fail-closed custom guards) surface here without an IPC
-  // round-trip; the main-process handler re-resolves the same fields as
-  // defense in depth.
-  const route = resolveTranscriptionRoute({
-    settings: {
-      transcriptionMode: cfg.transcriptionMode,
-      remoteTranscriptionUrl: cfg.remoteTranscriptionUrl,
-      remoteTranscriptionModel: cfg.remoteTranscriptionModel,
-      cloudTranscriptionProvider: cfg.cloudTranscriptionProvider,
-      cloudTranscriptionModel: cfg.cloudTranscriptionModel,
-      cloudTranscriptionBaseUrl: cfg.cloudTranscriptionBaseUrl,
-      cortiEnvironment: cfg.cortiEnvironment,
-      cortiTenant: cfg.cortiTenant,
-    },
-    providers: getTranscriptionProviders(),
-    managed,
-    request: { effectiveLanguage: cfg.language || undefined },
-  });
+  const route = resolveFileTranscriptionRoute(cfg, managed);
   if (route.transport === "error") {
     return {
       success: false,

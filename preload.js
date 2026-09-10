@@ -14,6 +14,8 @@ const BYOK_KEY_BRIDGES = [
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
   { base: "corti", get: "getCortiKey", save: "saveCortiKey" },
+  { base: "deepgram", get: "getDeepgramKey", save: "saveDeepgramKey" },
+  { base: "assemblyai", get: "getAssemblyAIKey", save: "saveAssemblyAIKey" },
   {
     base: "note-formatting-custom",
     get: "getNoteFormattingCustomKey",

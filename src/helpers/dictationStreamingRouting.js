@@ -4,6 +4,7 @@
 // call sites is what broke default dictation in 1.8.2 (#1624: the
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
+import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
 
 export const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
@@ -31,6 +32,16 @@ export function resolveStreamingProviderName({ settings, context, sttConfig }) {
     settings.cloudTranscriptionModel === GEMINI_LIVE_MODEL
   ) {
     return "gemini";
+  }
+  // Realtime-only providers have no batch endpoint, so BYOK selection alone
+  // routes them, and their renderer channel name is the bare provider id. Ahead
+  // of the REALTIME_MODELS check so a stale OpenAI model id in settings can't
+  // hijack the provider, matching the tinfoil/corti precedent above.
+  if (
+    settings.cloudTranscriptionMode === "byok" &&
+    STREAMING_ONLY_PROVIDERS.has(settings.cloudTranscriptionProvider)
+  ) {
+    return settings.cloudTranscriptionProvider;
   }
   if (REALTIME_MODELS.has(settings.cloudTranscriptionModel)) {
     return "openai-realtime";

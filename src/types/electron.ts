@@ -2084,6 +2084,10 @@ declare global {
         language?: string;
         prompt?: string;
       }) => Promise<ProxyTranscriptionResult>;
+      getDeepgramKey?: () => Promise<string | null>;
+      saveDeepgramKey?: (key: string) => Promise<void>;
+      getAssemblyAIKey?: () => Promise<string | null>;
+      saveAssemblyAIKey?: (key: string) => Promise<void>;
 
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
