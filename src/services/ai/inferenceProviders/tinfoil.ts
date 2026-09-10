@@ -17,7 +17,7 @@ export const tinfoilProvider: InferenceProvider = {
     // refuses to send anything over an unverified transport.
     const client = await getTinfoilChatClient(apiKey);
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.voiceMode);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     const messages = [
       { role: "system", content: systemPrompt },

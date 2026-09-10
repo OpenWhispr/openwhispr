@@ -96,7 +96,8 @@ import {
   resolveDictationAgentVisionInference,
 } from "./dictationAgentInference";
 import { resolveDictationTranslationInference } from "./dictationTranslationInference";
-import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
+import { resolvePrompt, appendScreenContextSuffix, appendVoiceModeSuffix } from "../config/prompts";
+import { resolveVoiceMode } from "../utils/voiceModes";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
@@ -201,7 +202,7 @@ function resolveReasoningRoute(
   voiceAgentRequested,
   translationRequested,
   screenContext,
-  detectedLanguage
+  { detectedLanguage, voiceMode = null } = {}
 ) {
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
   const cleanupReachable =
@@ -289,7 +290,11 @@ function resolveReasoningRoute(
       useVisionOverride,
     });
 
-    const systemPrompt = dictationAgentPrompt(settings, agentName);
+    const systemPrompt = appendVoiceModeSuffix(
+      dictationAgentPrompt(settings, agentName),
+      voiceMode,
+      settings.uiLanguage
+    );
 
     return {
       kind: "agent",
@@ -319,6 +324,7 @@ function resolveReasoningRoute(
         // Cleanup is a deterministic transform: pass 0 explicitly, because the IPC-bridged
         // providers (local bridge, Anthropic, enterprise) otherwise apply their own default.
         temperature: 0,
+        ...(voiceMode ? { voiceMode } : {}),
       },
     };
   }
@@ -914,6 +920,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       ]);
       if (!image) logger.logReasoning("SCREEN_CONTEXT_UNAVAILABLE", {});
       return image;
+    } catch {
+      return null;
+    }
+  }
+
+  // The mode whose app list matches the app the hotkey was pressed in. The
+  // main process captured that app at press time; without any modes there is
+  // nothing to match, so skip the round trip.
+  async resolveTargetVoiceMode(settings) {
+    if (!settings.voiceModes?.length) return null;
+    try {
+      const target = await window.electronAPI?.getDictationTargetApp?.();
+      return resolveVoiceMode(settings.voiceModes, target);
     } catch {
       return null;
     }
@@ -2961,13 +2980,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       let route;
       try {
         const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
+        const voiceMode = await this.resolveTargetVoiceMode(settings);
         route = resolveReasoningRoute(
           normalizedText,
           settings,
           agentName,
           this.voiceAgentRequested,
           this.translationRequested,
-          screenContext
+          screenContext,
+          { voiceMode }
         );
         if (this.translationRequested && route.kind !== "translation") {
           this.notifyTranslationFallback("unreachable");
@@ -3275,6 +3296,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
+      const voiceMode = await this.resolveTargetVoiceMode(settings);
       const route = resolveReasoningRoute(
         processedText,
         settings,
@@ -3282,7 +3304,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.voiceAgentRequested,
         this.translationRequested,
         screenContext,
-        result.sttLanguage
+        { detectedLanguage: result.sttLanguage, voiceMode }
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
@@ -4956,6 +4978,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
+      const voiceMode = await this.resolveTargetVoiceMode(stSettings);
       if (wasCancelled()) return true;
       const route = resolveReasoningRoute(
         finalText,
@@ -4963,7 +4986,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         agentName,
         this.voiceAgentRequested,
         this.translationRequested,
-        screenContext
+        screenContext,
+        { voiceMode }
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");

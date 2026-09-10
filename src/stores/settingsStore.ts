@@ -57,6 +57,7 @@ import type {
   ChatAgentSettings,
 } from "../hooks/useSettings";
 import type { Snippet } from "../utils/snippets";
+import type { VoiceMode } from "../utils/voiceModes";
 import type { EnterpriseSetupMode } from "../types/enterpriseIdentity";
 import { getManagedScopeResolution } from "./enterpriseIdentityStore";
 
@@ -208,7 +209,7 @@ function snapMicWarmHold(value: number): number {
   return (MIC_WARM_HOLD_CHOICES as readonly number[]).includes(value) ? value : 0;
 }
 
-function readStringArray(key: string, fallback: string[]): string[] {
+function readArray<T = string>(key: string, fallback: T[]): T[] {
   if (!isBrowser) return fallback;
   const stored = localStorage.getItem(key);
   if (stored === null) return fallback;
@@ -291,6 +292,7 @@ const BOOLEAN_SETTINGS = new Set([
 const ARRAY_SETTINGS = new Set([
   "customDictionary",
   "snippets",
+  "voiceModes",
   "gcalAccounts",
   "mcalAccounts",
   "onboardingUseCases",
@@ -1023,6 +1025,9 @@ export interface SettingsState
   applyCustomDictionaryFromExternal: (words: string[]) => void;
   setSnippets: (snippets: Snippet[]) => void;
   applySnippetsFromExternal: (snippets: Snippet[]) => void;
+  /** Per-app dictation styles, matched against the app the hotkey was pressed in. */
+  voiceModes: VoiceMode[];
+  setVoiceModes: (modes: VoiceMode[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
@@ -1434,7 +1439,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   cortiEnvironment: readString("cortiEnvironment", "us"),
   cortiTenant: readString("cortiTenant", "base"),
-  customDictionary: readStringArray("customDictionary", []),
+  customDictionary: readArray("customDictionary", []),
   snippets: (() => {
     try {
       const parsed = JSON.parse(readString("snippets", "[]"));
@@ -1443,6 +1448,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       return [];
     }
   })(),
+  voiceModes: readArray<VoiceMode>("voiceModes", []),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
@@ -1499,9 +1505,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
   translationKey: readString("translationKey", ""),
-  onboardingUseCases: readStringArray("onboardingUseCases", []),
+  onboardingUseCases: readArray("onboardingUseCases", []),
   onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
-  spokenLanguages: readStringArray("spokenLanguages", []),
+  spokenLanguages: readArray("spokenLanguages", []),
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
@@ -1710,7 +1716,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   translationTargets: (() => {
     // Seed from the saved array; otherwise from the single active target if set.
     const stored = isBrowser ? localStorage.getItem("translationTargets") : null;
-    if (stored !== null) return readStringArray("translationTargets", []);
+    if (stored !== null) return readArray("translationTargets", []);
     const active = readString("translationTargetLanguage", "");
     return active ? [active] : [];
   })(),
@@ -2066,6 +2072,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   applySnippetsFromExternal: (snippets: Snippet[]) => {
     if (isBrowser) localStorage.setItem("snippets", JSON.stringify(snippets));
     set({ snippets });
+  },
+  setVoiceModes: (voiceModes: VoiceMode[]) => {
+    if (isBrowser) localStorage.setItem("voiceModes", JSON.stringify(voiceModes));
+    set({ voiceModes });
   },
 
   setUiLanguage: (language: string) => {

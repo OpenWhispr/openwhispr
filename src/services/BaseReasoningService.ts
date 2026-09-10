@@ -1,9 +1,10 @@
-import { getCleanupSystemPrompt } from "../config/prompts";
+import { appendVoiceModeSuffix, getCleanupSystemPrompt } from "../config/prompts";
 import { getSettings } from "../stores/settingsStore";
 import { resolveCleanupLanguage } from "../utils/chineseScript";
 import { getDictionaryHintWords } from "../utils/snippets";
 import type { InferenceScope } from "../config/inferenceScopes";
 import type { ScreenContextImage } from "../types/electron";
+import type { VoiceModePrompt } from "../utils/voiceModes";
 
 export interface ReasoningConfig {
   maxTokens?: number;
@@ -19,6 +20,8 @@ export interface ReasoningConfig {
   screenContext?: ScreenContextImage;
   /** Suffix-free prompt used when a screenshot-carrying request is retried text-only. */
   textOnlySystemPrompt?: string;
+  /** Style instructions of the voice mode matching the dictation's target app. */
+  voiceMode?: VoiceModePrompt | null;
   language?: string;
   requireCompleteOutput?: boolean;
   requiresAgent?: boolean;
@@ -43,13 +46,15 @@ export abstract class BaseReasoningService {
     return getSettings().uiLanguage || "en";
   }
 
-  protected getSystemPrompt(agentName: string | null): string {
-    return getCleanupSystemPrompt(
+  protected getSystemPrompt(agentName: string | null, voiceMode?: VoiceModePrompt | null): string {
+    const uiLanguage = this.getUiLanguage();
+    const prompt = getCleanupSystemPrompt(
       agentName,
       this.getCustomDictionary(),
       this.getPreferredLanguage(),
-      this.getUiLanguage()
+      uiLanguage
     );
+    return appendVoiceModeSuffix(prompt, voiceMode, uiLanguage);
   }
 
   protected calculateMaxTokens(

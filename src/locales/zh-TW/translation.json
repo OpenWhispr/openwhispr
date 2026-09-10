@@ -3213,6 +3213,7 @@
     "noMatches": "無相符項目 — 按 Enter 新增「{{word}}」",
     "tabDictionary": "字典",
     "tabSnippets": "片段",
+    "tabModes": "模式",
     "snippets": {
       "title": "片段",
       "edit": "編輯 {{trigger}}",
@@ -3246,6 +3247,25 @@
     "addFirstWord": "新增第一個詞",
     "importList": "匯入清單",
     "agentDefault": "預設加入"
+  },
+  "voiceModes": {
+    "title": "語音模式",
+    "new": "新增模式",
+    "emptyTitle": "一種聲音，依應用程式調校",
+    "emptyDescription": "為某個應用程式建立模式後，你在該應用程式中聽寫時 OpenWhispr 都會遵循其說明——在 Slack 中正式，在 ChatGPT 中輕鬆，在編輯器中簡潔。",
+    "createTitle": "新增語音模式",
+    "editTitle": "編輯語音模式",
+    "dialogDescription": "當你在這些應用程式中聽寫時，這些說明會加入清理與助理的提示詞。",
+    "nameLabel": "名稱",
+    "namePlaceholder": "例如：工作聊天",
+    "appsLabel": "應用程式",
+    "appsPlaceholder": "Slack, ChatGPT, Code",
+    "appsHint": "以逗號分隔的應用程式名稱，與選單列或工作列中顯示的一致。Windows 上也可使用程式名稱（slack.exe）。",
+    "useLastApp": "新增 {{app}}",
+    "instructionsLabel": "說明",
+    "instructionsPlaceholder": "使用完整句子與正式語氣。不使用表情符號。以「敬祝 順心」結尾。",
+    "edit": "編輯 {{name}}",
+    "remove": "移除 {{name}}"
   },
   "insights": {
     "title": "統計",

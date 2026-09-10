@@ -3261,6 +3261,7 @@
     "noMatches": "Sin coincidencias — pulsa Enter para añadir \"{{word}}\"",
     "tabDictionary": "Diccionario",
     "tabSnippets": "Snippets",
+    "tabModes": "Modos",
     "snippets": {
       "title": "Snippets",
       "edit": "Editar {{trigger}}",
@@ -3294,6 +3295,25 @@
     "addFirstWord": "Añade tu primera palabra",
     "importList": "Importar una lista",
     "agentDefault": "Añadido por defecto"
+  },
+  "voiceModes": {
+    "title": "Modos de voz",
+    "new": "Nuevo modo",
+    "emptyTitle": "Una voz, ajustada por app",
+    "emptyDescription": "Crea un modo para una app y OpenWhispr seguirá sus instrucciones cada vez que dictes ahí: formal en Slack, informal en ChatGPT, conciso en tu editor.",
+    "createTitle": "Nuevo modo de voz",
+    "editTitle": "Editar modo de voz",
+    "dialogDescription": "Cuando dictes en una de estas apps, las instrucciones se añaden a los prompts de limpieza y del asistente.",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "p. ej. Chat de trabajo",
+    "appsLabel": "Apps",
+    "appsPlaceholder": "Slack, ChatGPT, Code",
+    "appsHint": "Nombres de apps separados por comas, tal como aparecen en la barra de menús o la barra de tareas. En Windows también vale el nombre del programa (slack.exe).",
+    "useLastApp": "Añadir {{app}}",
+    "instructionsLabel": "Instrucciones",
+    "instructionsPlaceholder": "Escribe con frases completas y tono formal. Sin emojis. Despídete con «Saludos».",
+    "edit": "Editar {{name}}",
+    "remove": "Eliminar {{name}}"
   },
   "insights": {
     "title": "Estadísticas",

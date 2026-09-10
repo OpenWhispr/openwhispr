@@ -813,6 +813,14 @@ export interface ScreenContextImage {
   data: string;
 }
 
+/** The app a dictation targets, as captured at hotkey press. */
+export interface DictationTargetApp {
+  /** Localized app name on macOS, exe name on Windows; null when unknown. */
+  name: string | null;
+  bundleId: string | null;
+  windowClass: string | null;
+}
+
 export interface UpdateCheckResult {
   updateAvailable: boolean;
   version?: string;
@@ -2242,6 +2250,7 @@ declare global {
       checkScreenRecordingAccess?: () => Promise<ScreenRecordingAccessResult>;
       requestScreenRecordingAccess?: () => Promise<ScreenRecordingAccessResult>;
       captureScreenContext?: () => Promise<ScreenContextImage | null>;
+      getDictationTargetApp?: () => Promise<DictationTargetApp | null>;
       setScreenContextEnabled?: (enabled: boolean) => Promise<{ success: boolean }>;
       showEmojiPanel?: () => Promise<boolean>;
       toggleMediaPlayback?: () => Promise<boolean>;

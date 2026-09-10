@@ -90,6 +90,7 @@ class TextEditMonitor extends EventEmitter {
     this._lastValue = null;
     this._stdoutBuffer = "";
     this.lastTargetPid = null;
+    this.lastTargetApp = null;
     this._captureTargetPromise = null;
     this._lastCaptureAt = 0;
     this._windowBounds = null;
@@ -121,37 +122,60 @@ class TextEditMonitor extends EventEmitter {
       return Promise.resolve(this.lastTargetPid);
     }
     this.lastTargetPid = null;
-    this._captureTargetPromise = this._readFrontmostPid().then((pid) => {
+    this.lastTargetApp = null;
+    this._captureTargetPromise = this._readFrontmostApp().then((app) => {
       this._captureTargetPromise = null;
       this._lastCaptureAt = Date.now();
-      this.lastTargetPid = pid;
-      debugLogger.debug("[TextEditMonitor] Captured target PID", { pid });
-      return pid;
+      this.lastTargetApp = app;
+      this.lastTargetPid = app?.pid ?? null;
+      debugLogger.debug("[TextEditMonitor] Captured target PID", { pid: this.lastTargetPid });
+      return this.lastTargetPid;
     });
     return this._captureTargetPromise;
   }
 
   /**
-   * macOS: resolve the frontmost app's PID, or null if it can't be read.
+   * macOS: the app captured by the latest hotkey press, once any in-flight
+   * capture has settled.
    */
-  _readFrontmostPid() {
+  async getTargetApp() {
+    if (this._captureTargetPromise) await this._captureTargetPromise;
+    return this.lastTargetApp;
+  }
+
+  /**
+   * macOS: resolve the frontmost app as { pid, bundleId, name }, or null if it
+   * can't be read. Reading the bundle id and name here costs nothing extra: the
+   * same osascript spawn that yields the PID already holds the app object.
+   */
+  _readFrontmostApp() {
     return new Promise((resolve) => {
       if (process.platform !== "darwin") {
         resolve(null);
         return;
       }
       const script =
-        'ObjC.import("AppKit"); $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier';
+        'ObjC.import("AppKit"); const app = $.NSWorkspace.sharedWorkspace.frontmostApplication; ' +
+        '[app.processIdentifier, app.bundleIdentifier.js || "", app.localizedName.js || ""].join("\\t")';
       execFile(
         "osascript",
         ["-l", "JavaScript", "-e", script],
         { timeout: 2000 },
         (err, stdout) => {
-          const pid = err ? NaN : parseInt(stdout.trim(), 10);
-          resolve(isNaN(pid) ? null : pid);
+          if (err) {
+            resolve(null);
+            return;
+          }
+          const [pidText, bundleId, name] = stdout.trim().split("\t");
+          const pid = parseInt(pidText, 10);
+          resolve(isNaN(pid) ? null : { pid, bundleId: bundleId || null, name: name || null });
         }
       );
     });
+  }
+
+  _readFrontmostPid() {
+    return this._readFrontmostApp().then((app) => app?.pid ?? null);
   }
 
   /**

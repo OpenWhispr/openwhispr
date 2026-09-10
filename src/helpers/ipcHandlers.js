@@ -5461,6 +5461,16 @@ class IPCHandlers {
       return capturePromise;
     });
 
+    // The app the dictation targets, captured at hotkey press by the paste and
+    // selection machinery; voice modes match against it after transcription.
+    ipcMain.handle("get-dictation-target-app", async () => {
+      if (process.platform === "darwin") {
+        const app = await this.textEditMonitor?.getTargetApp?.();
+        return app ? { name: app.name, bundleId: app.bundleId, windowClass: null } : null;
+      }
+      return (await this.selectionManager?.getTargetApp?.()) ?? null;
+    });
+
     // Snapshot the launch-time TCC status so a mid-session grant (which macOS
     // only honors after a relaunch) is detectable even if the renderer never
     // checked before the user granted.

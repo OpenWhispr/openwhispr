@@ -61,6 +61,7 @@ async function loadAudioManager(t) {
       "/config/prompts": `
         export const resolvePrompt = () => "agent prompt";
         export const appendScreenContextSuffix = (prompt) => prompt;
+        export const appendVoiceModeSuffix = (prompt) => prompt;
       `,
       "/services/ReasoningService": "export default class ReasoningService {};",
       "/services/SyncService.js": "export const syncService = {};",

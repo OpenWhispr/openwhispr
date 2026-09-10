@@ -14,6 +14,7 @@ export interface PromptBundle {
   fullPrompt: string;
   dictionarySuffix: string;
   screenContextSuffix: string;
+  voiceModeSuffix: string;
   translatePrompt: string;
 }
 

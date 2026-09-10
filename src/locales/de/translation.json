@@ -3551,6 +3551,7 @@
     "noMatches": "Keine Treffer — Enter drücken, um \"{{word}}\" hinzuzufügen",
     "tabDictionary": "Wörterbuch",
     "tabSnippets": "Snippets",
+    "tabModes": "Modi",
     "snippets": {
       "title": "Snippets",
       "edit": "{{trigger}} bearbeiten",
@@ -3584,6 +3585,25 @@
     "addFirstWord": "Füge dein erstes Wort hinzu",
     "importList": "Liste importieren",
     "agentDefault": "Standardmäßig enthalten"
+  },
+  "voiceModes": {
+    "title": "Sprachmodi",
+    "new": "Neuer Modus",
+    "emptyTitle": "Eine Stimme, pro App abgestimmt",
+    "emptyDescription": "Erstelle einen Modus für eine App, und OpenWhispr folgt seinen Anweisungen, wann immer du dort diktierst – förmlich in Slack, locker in ChatGPT, knapp im Editor.",
+    "createTitle": "Neuer Sprachmodus",
+    "editTitle": "Sprachmodus bearbeiten",
+    "dialogDescription": "Wenn du in eine dieser Apps diktierst, werden die Anweisungen den Prompts für Bereinigung und Assistent hinzugefügt.",
+    "nameLabel": "Name",
+    "namePlaceholder": "z. B. Arbeitschat",
+    "appsLabel": "Apps",
+    "appsPlaceholder": "Slack, ChatGPT, Code",
+    "appsHint": "Kommagetrennte App-Namen, wie sie in der Menüleiste oder Taskleiste erscheinen. Unter Windows geht auch der Programmname (slack.exe).",
+    "useLastApp": "{{app}} hinzufügen",
+    "instructionsLabel": "Anweisungen",
+    "instructionsPlaceholder": "Schreibe in vollständigen Sätzen und förmlichem Ton. Keine Emojis. Schließe mit „Viele Grüße“ ab.",
+    "edit": "{{name}} bearbeiten",
+    "remove": "{{name}} entfernen"
   },
   "support": {
     "documentation": "Dokumentation",

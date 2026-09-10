@@ -5,6 +5,7 @@ export {
   getDefaultPromptText,
   appendDictionarySuffix,
   appendScreenContextSuffix,
+  appendVoiceModeSuffix,
   wrapCleanupTranscript,
 } from "./prompts/index";
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./prompts/registry";
