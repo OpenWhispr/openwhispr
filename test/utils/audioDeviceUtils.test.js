@@ -3,7 +3,10 @@ const assert = require("node:assert/strict");
 
 // Requires Node's native TypeScript type-stripping (Node >= 22.6 with
 // --experimental-strip-types, on by default in Node 23.6+/24). CI runs Node 24.
-const load = () => import("../../src/utils/audioDeviceUtils.ts");
+const load = async () => {
+  const mod = await import("../../src/utils/audioDeviceUtils.ts");
+  return mod.isBuiltInMicrophone ? mod : mod.default;
+};
 
 test("a phone microphone is never classified as built-in", async () => {
   const { isBuiltInMicrophone } = await load();
@@ -40,4 +43,14 @@ test("headphone and headset microphones are external", async () => {
   assert.equal(isBuiltInMicrophone("Wired Headphones Microphone"), false);
   assert.equal(isBuiltInMicrophone("USB Headset Microphone"), false);
   assert.equal(isBuiltInMicrophone("AirPods Pro"), false);
+});
+
+test("nullish, empty, or non-string labels are never classified as built-in and do not throw", async () => {
+  const { isBuiltInMicrophone } = await load();
+
+  assert.equal(isBuiltInMicrophone(undefined), false);
+  assert.equal(isBuiltInMicrophone(null), false);
+  assert.equal(isBuiltInMicrophone(""), false);
+  assert.equal(isBuiltInMicrophone("   "), false);
+  assert.equal(isBuiltInMicrophone(123), false);
 });

@@ -1,5 +1,5 @@
-import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
-import { resolveMicDeviceSelection } from "./micDeviceSelection";
+import { isBuiltInMicrophone } from "../utils/audioDeviceUtils.ts";
+import { resolveMicDeviceSelection } from "./micDeviceSelection.js";
 
 export const MICROPHONE_SELECTION_MODES = ["system", "built-in", "specific"];
 
@@ -14,6 +14,9 @@ export function getMicrophoneSelectionMode(settings = {}) {
 }
 
 export function normalizeMicrophoneLabel(label = "") {
+  if (typeof label !== "string" || !label) {
+    return "";
+  }
   return String(label)
     .normalize("NFKC")
     .replace(/^\s*(?:default|communications)\s*-\s*/i, "")
