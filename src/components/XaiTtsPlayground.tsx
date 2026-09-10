@@ -33,11 +33,11 @@ const EXAMPLE_IDS = ["support", "sales", "podcast", "announcement", "meditation"
 const INSTANT_TAGS = [
   { tag: "[pause]", key: "pause", category: "pauses" },
   { tag: "[long-pause]", key: "longPause", category: "pauses" },
+  { tag: "[hum-tune]", key: "humTune", category: "pauses" },
   { tag: "[laugh]", key: "laugh", category: "laughter" },
   { tag: "[chuckle]", key: "chuckle", category: "laughter" },
   { tag: "[giggle]", key: "giggle", category: "laughter" },
   { tag: "[cry]", key: "cry", category: "laughter" },
-  { tag: "[hum-tune]", key: "humTune", category: "mouth" },
   { tag: "[tsk]", key: "tsk", category: "mouth" },
   { tag: "[tongue-click]", key: "tongueClick", category: "mouth" },
   { tag: "[lip-smack]", key: "lipSmack", category: "mouth" },
@@ -59,7 +59,6 @@ const WRAPPING_TAGS = [
   { open: "<fast>", close: "</fast>", key: "fast", category: "pitch" },
   { open: "<sing-song>", close: "</sing-song>", key: "singSong", category: "style" },
   { open: "<singing>", close: "</singing>", key: "singing", category: "style" },
-  { open: "<laugh-speak>", close: "</laugh-speak>", key: "laughSpeak", category: "style" },
   { open: "<emphasis>", close: "</emphasis>", key: "emphasis", category: "style" },
 ] as const;
 
@@ -374,9 +373,6 @@ export default function XaiTtsPlayground() {
                           className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-muted"
                         >
                           <div className="text-xs font-medium">{item.tag}</div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {t(`settingsPage.textToSpeech.effects.${item.key}Hint`)}
-                          </div>
                         </button>
                       </div>
                     ))
@@ -398,9 +394,6 @@ export default function XaiTtsPlayground() {
                         >
                           <div className="text-xs font-medium">
                             {item.open}…{item.close}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {t(`settingsPage.textToSpeech.effects.${item.key}Hint`)}
                           </div>
                         </button>
                       </div>
