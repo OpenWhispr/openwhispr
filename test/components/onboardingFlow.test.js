@@ -23,6 +23,16 @@ test("account flow includes the complete guided setup", async () => {
   );
 });
 
+test("macOS accessibility features stay deferred until the permissions screen", async () => {
+  const { shouldInitializeMacAccessibilityFeatures } = await load();
+
+  assert.equal(shouldInitializeMacAccessibilityFeatures("auth"), false);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("required-models"), false);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("permissions"), true);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("dictation-hotkey"), true);
+  assert.equal(shouldInitializeMacAccessibilityFeatures("notes"), true);
+});
+
 test("guest flow keeps permissions and the hotkey before setup choice", async () => {
   const { getOnboardingRoute } = await load();
   // finalizeOnboarding registers the dictation hotkey on every path, so guests

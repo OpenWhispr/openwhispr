@@ -53,6 +53,7 @@ import {
   reconcileStepWithRoute,
   resetOnboardingProgress,
   resolveEnterpriseWorkspaceForOnboarding,
+  shouldInitializeMacAccessibilityFeatures,
   shouldOfferOnboardingLogout,
   shouldSkipOnboardingSetupChoice,
   type OnboardingAuthDraft,
@@ -378,6 +379,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   useEffect(() => {
     void window.electronAPI?.setOnboardingWindowMode?.(compact ? "compact" : "expanded");
   }, [compact]);
+
+  useEffect(() => {
+    if (platform === "darwin" && shouldInitializeMacAccessibilityFeatures(currentStepId)) {
+      window.electronAPI?.markMacAccessibilityFeaturesReady?.();
+    }
+  }, [currentStepId, platform]);
 
   useEffect(() => {
     setStageReady(false);

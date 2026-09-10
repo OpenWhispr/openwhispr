@@ -175,6 +175,7 @@ enum GlobeSystemAction {
 
 func applyConfiguration(_ config: ListenerConfig) {
     suppressedMouseButtons = config.mouseButtons
+    updateMouseEventTap()
     if config.suppressGlobeAction {
         GlobeSystemAction.apply()
     } else {
@@ -228,37 +229,53 @@ let mouseEventMask =
     (1 << CGEventType.otherMouseUp.rawValue)
 
 var mouseEventTapPort: CFMachPort?
-
-let mouseEventTap = CGEvent.tapCreate(
-    tap: .cgSessionEventTap,
-    place: .headInsertEventTap,
-    options: .defaultTap,
-    eventsOfInterest: CGEventMask(mouseEventMask),
-    callback: { _, type, event, _ in
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let mouseEventTapPort {
-                CGEvent.tapEnable(tap: mouseEventTapPort, enable: true)
-            }
-            return Unmanaged.passUnretained(event)
-        }
-
-        if emitMouseEvent(type, event) {
-            return nil
-        }
-
-        return Unmanaged.passUnretained(event)
-    },
-    userInfo: nil
-)
-
 var mouseRunLoopSource: CFRunLoopSource?
-if let mouseEventTap {
-    mouseEventTapPort = mouseEventTap
-    mouseRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, mouseEventTap, 0)
+
+// The active tap can suppress configured side buttons and is Accessibility-
+// protected, so keep it absent until a mouse-button hotkey actually needs it.
+func updateMouseEventTap() {
+    if suppressedMouseButtons.isEmpty {
+        if let mouseEventTapPort {
+            CGEvent.tapEnable(tap: mouseEventTapPort, enable: false)
+            if let mouseRunLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), mouseRunLoopSource, .commonModes)
+            }
+        }
+        mouseEventTapPort = nil
+        mouseRunLoopSource = nil
+        return
+    }
+    if mouseEventTapPort != nil { return }
+
+    guard let tap = CGEvent.tapCreate(
+        tap: .cgSessionEventTap,
+        place: .headInsertEventTap,
+        options: .defaultTap,
+        eventsOfInterest: CGEventMask(mouseEventMask),
+        callback: { _, type, event, _ in
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                if let mouseEventTapPort {
+                    CGEvent.tapEnable(tap: mouseEventTapPort, enable: true)
+                }
+                return Unmanaged.passUnretained(event)
+            }
+
+            if emitMouseEvent(type, event) {
+                return nil
+            }
+
+            return Unmanaged.passUnretained(event)
+        },
+        userInfo: nil
+    ) else {
+        emitWarning("Failed to create mouse event tap")
+        return
+    }
+
+    mouseEventTapPort = tap
+    mouseRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
     CFRunLoopAddSource(CFRunLoopGetMain(), mouseRunLoopSource, .commonModes)
-    CGEvent.tapEnable(tap: mouseEventTap, enable: true)
-} else {
-    emitWarning("Failed to create mouse event tap")
+    CGEvent.tapEnable(tap: tap, enable: true)
 }
 
 guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: { event in
@@ -314,8 +331,8 @@ func shutdownListener() -> Never {
     if let keyMonitor {
         NSEvent.removeMonitor(keyMonitor)
     }
-    if let mouseEventTap {
-        CGEvent.tapEnable(tap: mouseEventTap, enable: false)
+    if let mouseEventTapPort {
+        CGEvent.tapEnable(tap: mouseEventTapPort, enable: false)
     }
     if let mouseRunLoopSource {
         CFRunLoopRemoveSource(CFRunLoopGetMain(), mouseRunLoopSource, .commonModes)

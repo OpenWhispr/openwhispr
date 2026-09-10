@@ -7,6 +7,7 @@ const vm = require("node:vm");
 function loadPreloadApi() {
   let exposedApi;
   const invocations = [];
+  const sends = [];
   const listeners = new Map();
   const ipcRenderer = {
     invoke: async (channel, ...args) => {
@@ -17,7 +18,7 @@ function loadPreloadApi() {
     removeListener: (channel, listener) => {
       if (listeners.get(channel) === listener) listeners.delete(channel);
     },
-    send: () => undefined,
+    send: (channel, ...args) => sends.push([channel, ...args]),
     sendSync: () => undefined,
   };
   const electron = {
@@ -37,7 +38,7 @@ function loadPreloadApi() {
     },
     process,
   });
-  return { api: exposedApi, invocations, listeners };
+  return { api: exposedApi, invocations, listeners, sends };
 }
 
 test("onboarding demo bridge invokes only its allowlisted channels", async () => {
@@ -68,6 +69,14 @@ test("onboarding active bridge invokes only its allowlisted channel", async () =
     ["onboarding-set-active", true],
     ["onboarding-set-active", false],
   ]);
+});
+
+test("macOS accessibility readiness uses its one-way IPC signal", () => {
+  const { api, sends } = loadPreloadApi();
+
+  api.markMacAccessibilityFeaturesReady();
+
+  assert.deepEqual(sends, [["mac-accessibility-features-ready"]]);
 });
 
 test("onboarding demo listener strips the Electron event and disposes cleanly", () => {

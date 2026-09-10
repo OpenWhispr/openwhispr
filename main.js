@@ -339,6 +339,8 @@ let qdrantManager = null;
 let ipcHandlers = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
+let macAccessibilityFeaturesReady = false;
+let startMacAccessibilityFeatures = null;
 let authBridgeServer = null;
 let pendingNoteCloudId = null;
 let pendingNoteRetryTimer = null;
@@ -581,7 +583,9 @@ function initializeDeferredManagers() {
       "clipboard"
     );
   });
-  clipboardManager.preWarmAccessibility();
+  if (process.platform !== "darwin") {
+    clipboardManager.preWarmAccessibility();
+  }
   trayManager = new TrayManager();
   globeKeyManager = new GlobeKeyManager({
     // Lets the listener put the user's macOS Globe action back after a crash.
@@ -1607,22 +1611,9 @@ async function startApp() {
       }
     });
 
-    syncMacNativeHotkeyConfiguration();
-    globeKeyManager.start();
-    hotkeyManager.on("hotkey-loaded", syncMacNativeHotkeyConfiguration);
-
-    ipcMain.on("hotkey-listening-mode-changed", (_event, enabled) => {
-      if (enabled) {
-        // Let mouse buttons through so they can be captured, but keep macOS's
-        // Globe action down so choosing Globe cannot flash the emoji viewer.
-        globeKeyManager.setConfiguration({ mouseButtons: [], suppressGlobeAction: true });
-      } else {
-        syncMacNativeHotkeyConfiguration();
-      }
-    });
-
-    // After starting globe-listener, check if accessibility is granted.
-    // If not, notify the control panel so it can prompt the user.
+    // If accessibility is missing, notify the normal control panel after the
+    // protected macOS features have started. During onboarding the permissions
+    // screen owns this guidance, so its event has no ControlPanel listener.
     const checkAndNotifyAccessibility = () => {
       if (!systemPreferences.isTrustedAccessibilityClient(false)) {
         debugLogger.info("[Accessibility] macOS accessibility not trusted — notifying renderers");
@@ -1632,8 +1623,32 @@ async function startApp() {
       }
     };
 
-    // Check shortly after startup (give windows time to load)
-    setTimeout(checkAndNotifyAccessibility, 3000);
+    let accessibilityFeaturesStarted = false;
+    startMacAccessibilityFeatures = () => {
+      if (accessibilityFeaturesStarted) return;
+      accessibilityFeaturesStarted = true;
+      clipboardManager.preWarmAccessibility();
+      syncMacNativeHotkeyConfiguration();
+      globeKeyManager.start();
+      setTimeout(checkAndNotifyAccessibility, 3000);
+    };
+
+    if (macAccessibilityFeaturesReady) {
+      startMacAccessibilityFeatures();
+    }
+
+    hotkeyManager.on("hotkey-loaded", syncMacNativeHotkeyConfiguration);
+
+    ipcMain.on("hotkey-listening-mode-changed", (_event, enabled) => {
+      if (enabled) {
+        startMacAccessibilityFeatures();
+        // Let mouse buttons through so they can be captured, but keep macOS's
+        // Globe action down so choosing Globe cannot flash the emoji viewer.
+        globeKeyManager.setConfiguration({ mouseButtons: [], suppressGlobeAction: true });
+      } else {
+        syncMacNativeHotkeyConfiguration();
+      }
+    });
 
     // Allow renderer to request an accessibility check (e.g. on sign-in).
     // Also sends accessibility-missing events if untrusted.
@@ -1754,6 +1769,12 @@ async function startApp() {
     });
   }
 }
+
+ipcMain.on("mac-accessibility-features-ready", () => {
+  if (process.platform !== "darwin") return;
+  macAccessibilityFeaturesReady = true;
+  startMacAccessibilityFeatures?.();
+});
 
 // Listen for usage limit reached from dictation overlay, forward to control panel
 ipcMain.on("limit-reached", (_event, data) => {

@@ -63,6 +63,7 @@ const registerListener = (channel, handlerFactory) => {
 contextBridge.exposeInMainWorld("electronAPI", {
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
+  markMacAccessibilityFeaturesReady: () => ipcRenderer.send("mac-accessibility-features-ready"),
   beginOnboardingDemo: (session) => ipcRenderer.invoke("onboarding-demo-begin", session),
   endOnboardingDemo: (id) => ipcRenderer.invoke("onboarding-demo-end", id),
   stopOnboardingDemo: (id) => ipcRenderer.invoke("onboarding-demo-stop", id),
@@ -136,8 +137,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   completeAnalyticsClear: (clearedThrough) =>
     ipcRenderer.invoke("analytics-complete-clear", clearedThrough),
   countUnclaimedAnalyticsEvents: () => ipcRenderer.invoke("analytics-count-unclaimed"),
-  countAnalyticsEventsAwaitingUpload: () =>
-    ipcRenderer.invoke("analytics-count-awaiting-upload"),
+  countAnalyticsEventsAwaitingUpload: () => ipcRenderer.invoke("analytics-count-awaiting-upload"),
   claimAnonymousAnalyticsEvents: () => ipcRenderer.invoke("analytics-claim-anonymous"),
   clearTranscriptions: () => ipcRenderer.invoke("db-clear-transcriptions"),
   deleteTranscription: (id) => ipcRenderer.invoke("db-delete-transcription", id),

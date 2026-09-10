@@ -162,11 +162,17 @@ function MainApp() {
     const onboardingCompleted = localStorage.getItem("onboardingCompleted") === "true";
     const normalAppVisible =
       onboardingCompleted && (!isControlPanel || (!showOnboarding && !needsReauth));
+    const authSkipped =
+      localStorage.getItem("authenticationSkipped") === "true" ||
+      localStorage.getItem("skipAuth") === "true";
     // Main starts fail-closed. Only a renderer that has resolved the route and
     // actually committed the normal app may release global hotkeys and popup
     // surfaces; fresh installs and onboarding reloads keep them suppressed.
     void window.electronAPI?.setOnboardingActive?.(!normalAppVisible);
-  }, [isControlPanel, isLoading, isWaitingForPolicyStart, needsReauth, showOnboarding]);
+    if (normalAppVisible && (isSignedIn || authSkipped)) {
+      window.electronAPI?.markMacAccessibilityFeaturesReady?.();
+    }
+  }, [isControlPanel, isLoading, isSignedIn, isWaitingForPolicyStart, needsReauth, showOnboarding]);
 
   const handleOnboardingComplete = (options) => {
     if (options?.openSettings) {
