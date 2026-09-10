@@ -1178,7 +1178,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             )}
             {activeView === "insights" && (
               <Suspense fallback={null}>
-                <InsightsView />
+                <InsightsView
+                  onSignIn={() => {
+                    setSettingsSection("account");
+                    setShowSettings(true);
+                  }}
+                />
               </Suspense>
             )}
             {activeView === "chat" && agentAllowedByPolicy && (

@@ -13,6 +13,7 @@ const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 const { createCloudApiRequestHandler } = require("./cloudApiRequest");
+const { decodeLeaderboardPngDataUrl, leaderboardImageFilename } = require("./leaderboardImage");
 const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
 const {
   createWorkspacePolicyManager,
@@ -44,6 +45,27 @@ const serializeIpcError =
       return { error: error.message, code: error.code, messageKey: error.messageKey };
     }
   };
+
+// Analytics uploads cross two asynchronous boundaries: renderer -> main and
+// main -> cloud. Pin every local queue operation to the same authenticated
+// account generation so a delayed pass cannot adopt a replacement session.
+function assertAnalyticsSyncContext(context) {
+  if (context == null) return null;
+  const state = tokenStore.getState();
+  if (
+    typeof context !== "object" ||
+    typeof context.accountId !== "string" ||
+    context.accountId.length === 0 ||
+    !Number.isInteger(context.authGeneration) ||
+    !state.token ||
+    state.generation !== context.authGeneration
+  ) {
+    throw Object.assign(new Error("Authentication context changed during analytics sync"), {
+      code: "AUTH_CONTEXT_CHANGED",
+    });
+  }
+  return context.accountId;
+}
 // Which diarization dialect a resolved endpoint speaks, for Custom endpoints
 // that front a known provider. Null when the host offers no known dialect.
 const diarizationHost = (endpoint) => {
@@ -1442,49 +1464,64 @@ class IPCHandlers {
       return this.databaseManager.getAnalyticsSummary();
     });
 
-    ipcMain.handle("analytics-get-pending", async (_event, limit) => {
-      return this.databaseManager.getPendingAnalyticsEvents(limit);
+    ipcMain.handle("analytics-get-pending", async (_event, limit, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.getPendingAnalyticsEvents(limit, accountId);
     });
 
-    ipcMain.handle("analytics-mark-synced", async (_event, eventIds) => {
-      return this.databaseManager.markAnalyticsEventsSynced(eventIds);
+    ipcMain.handle("analytics-mark-synced", async (_event, eventIds, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.markAnalyticsEventsSynced(eventIds, accountId);
     });
 
-    ipcMain.handle("analytics-get-pending-deletes", async (_event, limit) => {
-      return this.databaseManager.getPendingAnalyticsDeletes(limit);
+    ipcMain.handle("analytics-get-pending-deletes", async (_event, limit, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.getPendingAnalyticsDeletes(limit, accountId);
     });
 
-    ipcMain.handle("analytics-hard-delete", async (_event, eventIds) => {
-      return this.databaseManager.hardDeleteAnalyticsEvents(eventIds);
+    ipcMain.handle("analytics-hard-delete", async (_event, eventIds, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.hardDeleteAnalyticsEvents(eventIds, accountId);
     });
 
-    ipcMain.handle("analytics-get-pending-clear", async () => {
-      return this.databaseManager.getPendingAnalyticsClear();
+    ipcMain.handle("analytics-get-pending-clear", async (_event, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.getPendingAnalyticsClear(accountId);
     });
 
-    ipcMain.handle("analytics-complete-clear", async (_event, clearedThrough) => {
-      return this.databaseManager.completeAnalyticsClear(clearedThrough);
+    ipcMain.handle("analytics-complete-clear", async (_event, clearedThrough, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.completeAnalyticsClear(clearedThrough, accountId);
     });
 
-    ipcMain.handle("analytics-count-unclaimed", async () => {
+    ipcMain.handle("analytics-count-unclaimed", async (_event, context) => {
+      assertAnalyticsSyncContext(context);
       return this.databaseManager.countUnclaimedAnalyticsEvents();
     });
 
-    ipcMain.handle("analytics-count-awaiting-upload", async () => {
-      return this.databaseManager.countAnalyticsEventsAwaitingUpload();
+    ipcMain.handle("analytics-count-awaiting-upload", async (_event, context) => {
+      const accountId = assertAnalyticsSyncContext(context);
+      return this.databaseManager.countAnalyticsEventsAwaitingUpload(accountId);
     });
 
-    ipcMain.handle("analytics-claim-anonymous", async () => {
-      const result = this.databaseManager.claimAnonymousAnalyticsEvents();
-      // Claimed rows are only pushed by the Insights view's reload, and the
-      // claim itself changes nothing it renders, so tell it to reload.
-      if (result?.claimed > 0) {
-        setImmediate(() => {
-          broadcastToWindows("analytics-changed");
-        });
+    ipcMain.handle(
+      "analytics-claim-anonymous",
+      async (_event, accountId, expectedAuthGeneration) => {
+        const state = tokenStore.getState();
+        if (!state.token || state.generation !== expectedAuthGeneration) {
+          return { success: false, claimed: 0, code: "AUTH_CONTEXT_CHANGED" };
+        }
+        const result = this.databaseManager.claimAnonymousAnalyticsEvents(accountId);
+        // Claimed rows are only pushed by the Insights view's reload, and the
+        // claim itself changes nothing it renders, so tell it to reload.
+        if (result?.claimed > 0) {
+          setImmediate(() => {
+            broadcastToWindows("analytics-changed");
+          });
+        }
+        return result;
       }
-      return result;
-    });
+    );
 
     ipcMain.handle("db-clear-transcriptions", async (event) => {
       this.audioStorageManager.deleteAllAudio();
@@ -2940,6 +2977,47 @@ class IPCHandlers {
 
     ipcMain.handle("write-clipboard", async (event, text) => {
       return this.clipboardManager.writeClipboard(text, event.sender);
+    });
+
+    ipcMain.handle("leaderboard-copy-image", async (_event, dataUrl) => {
+      try {
+        const { clipboard, nativeImage } = require("electron");
+        const image = nativeImage.createFromBuffer(decodeLeaderboardPngDataUrl(dataUrl));
+        if (image.isEmpty()) throw new Error("Leaderboard image could not be decoded");
+        clipboard.writeImage(image);
+        return { success: true };
+      } catch (error) {
+        debugLogger.error(
+          "Failed to copy leaderboard image",
+          { error: error.message },
+          "analytics"
+        );
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("leaderboard-save-image", async (event, dataUrl, suggestedName) => {
+      try {
+        const { dialog } = require("electron");
+        const parentWindow = BrowserWindow.fromWebContents(event.sender);
+        const options = {
+          defaultPath: leaderboardImageFilename(suggestedName),
+          filters: [{ name: "PNG image", extensions: ["png"] }],
+        };
+        const result = parentWindow
+          ? await dialog.showSaveDialog(parentWindow, options)
+          : await dialog.showSaveDialog(options);
+        if (result.canceled || !result.filePath) return { success: true, canceled: true };
+        await fs.promises.writeFile(result.filePath, decodeLeaderboardPngDataUrl(dataUrl));
+        return { success: true, canceled: false };
+      } catch (error) {
+        debugLogger.error(
+          "Failed to save leaderboard image",
+          { error: error.message },
+          "analytics"
+        );
+        return { success: false, error: error.message };
+      }
     });
 
     ipcMain.handle("check-paste-tools", async () => {
