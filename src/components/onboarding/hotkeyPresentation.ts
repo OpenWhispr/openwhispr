@@ -1,9 +1,11 @@
-import { formatHotkeyLabel } from "../../utils/hotkeys";
+import { formatHotkeyLabel, isGlobeLikeHotkey } from "../../utils/hotkeys";
+import type { Platform } from "../../utils/platform";
 
 export interface HotkeyKeycapDescriptor {
   id: string;
   label: string;
   symbol: string;
+  icon?: "globe";
 }
 
 const SYMBOLS: Record<string, string> = {
@@ -70,7 +72,7 @@ const LABELS: Record<string, string> = {
  * "Right Option" keeps ⌥ as its symbol and says which side in the label, so a
  * side-specific binding is readable on a cap sized for one glyph.
  */
-function describeKeycap(part: string): { label: string; symbol: string } {
+function describeKeycap(part: string): Omit<HotkeyKeycapDescriptor, "id"> {
   const sided = /^(Right|Left) (.+)$/.exec(part);
   if (sided) {
     const [, side, base] = sided;
@@ -78,6 +80,10 @@ function describeKeycap(part: string): { label: string; symbol: string } {
       label: `${side} ${LABELS[base] ?? base}`.toLocaleLowerCase(),
       symbol: SYMBOLS[base] ?? base,
     };
+  }
+
+  if (part === "Globe/Fn" || part === "Fn") {
+    return { label: "fn", symbol: "◎", icon: "globe" };
   }
 
   return {
@@ -95,3 +101,54 @@ export function getHotkeyKeycaps(value: string): HotkeyKeycapDescriptor[] {
 
 export const formatHotkeyInstruction = (value: string) =>
   formatHotkeyLabel(value).split("+").join(" + ");
+
+export const formatRecommendedHotkey = (value: string) =>
+  isGlobeLikeHotkey(value) ? "Globe/Fn" : formatHotkeyInstruction(value);
+
+export const MACOS_DEFAULT_ONBOARDING_HOTKEY = "RightOption";
+export const DEFAULT_ASSISTANT_ONBOARDING_HOTKEY = "CommandOrControl+Shift+Space";
+
+/**
+ * The chord the dictation step opens on.
+ *
+ * macOS onboards on Right Option rather than the platform default, but only when
+ * there is nothing of the user's to lose. `dictationKey` is not that signal on its
+ * own — main auto-registers and persists the platform default before onboarding
+ * ever runs — so `confirmed` is what separates a chord the user stood on the
+ * hotkey step and accepted from one that merely got registered for them.
+ * finalizeOnboarding re-registers whatever this returns, so substituting over a
+ * confirmed chord overwrites their real hotkey with no screen ever saying so.
+ * parseOnboardingSession is responsible for `confirmed` being true for sessions
+ * that predate the flag.
+ */
+export const resolveOnboardingDictationHotkey = ({
+  platform,
+  savedHotkey,
+  platformDefault,
+  confirmed,
+}: {
+  platform: Platform;
+  savedHotkey: string;
+  platformDefault: string;
+  confirmed: boolean;
+}): string => {
+  if (platform !== "darwin") return savedHotkey || platformDefault;
+  if (savedHotkey && (confirmed || savedHotkey !== platformDefault)) return savedHotkey;
+  return MACOS_DEFAULT_ONBOARDING_HOTKEY;
+};
+
+/**
+ * The chord the assistant step opens on. `voiceAgentKey` is opt-in with no
+ * platform default and nothing auto-registers it, so anything saved is the user's
+ * own pick and there is no substitution to make.
+ */
+export const resolveOnboardingAssistantHotkey = (savedHotkey: string): string =>
+  savedHotkey || DEFAULT_ASSISTANT_ONBOARDING_HOTKEY;
+
+export const getRecommendedDictationHotkeys = (
+  platform: Platform,
+  effectiveDefault: string
+): string[] =>
+  platform === "darwin"
+    ? [MACOS_DEFAULT_ONBOARDING_HOTKEY, "GLOBE", "Control+R"]
+    : [effectiveDefault];

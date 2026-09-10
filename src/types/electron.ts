@@ -190,6 +190,11 @@ export interface PendingAnalyticsClear {
   cleared_through: string;
 }
 
+export interface AnalyticsSyncContext {
+  accountId: string;
+  authGeneration: number;
+}
+
 export interface AnalyticsDailyBucket {
   date: string;
   words: number;
@@ -206,6 +211,85 @@ export interface AnalyticsSummary {
   longestStreakDays: number;
   wpmCoveragePercent: number;
   daily: AnalyticsDailyBucket[];
+}
+
+export type LeaderboardMetric =
+  "total_words" | "words_per_minute" | "current_daily_streak" | "desktop_words" | "mobile_words";
+
+export type LeaderboardRange = "week" | "all";
+
+export interface AnalyticsParticipation {
+  configured: boolean;
+  enabled: boolean;
+  updatedAt: string | null;
+}
+
+export interface LeaderboardMember {
+  userId: string;
+  name: string | null;
+  // Withheld (null) on a domain board, where a shared mail suffix is the only
+  // thing the listed people have in common.
+  email: string | null;
+  image: string | null;
+  totalWords: number;
+  desktopWords: number;
+  mobileWords: number;
+  averageWpm: number | null;
+  currentStreakDays: number;
+  rank: number;
+}
+
+export type LeaderboardAccessState =
+  "ready" | "invite" | "accept_invite" | "request_join" | "create";
+
+export interface LeaderboardAccessScope {
+  key: string;
+  kind: "workspace" | "domain";
+  id: string;
+  name: string;
+  memberCount: number;
+  state: "ready" | "invite";
+  role: WorkspaceRole | null;
+}
+
+export interface LeaderboardAccess {
+  state: LeaderboardAccessState;
+  scopes: LeaderboardAccessScope[];
+  domain: string | null;
+  colleagueCount: number;
+  invitation: {
+    workspaceId: string;
+    workspaceName: string;
+    inviterName: string | null;
+  } | null;
+  joinableWorkspace: {
+    id: string;
+    name: string;
+    memberCount: number;
+    requestState: "none" | "pending";
+  } | null;
+}
+
+export interface Leaderboard {
+  scope: {
+    key: string;
+    kind: "workspace" | "domain";
+    id: string;
+    name: string;
+  };
+  viewerUserId: string | null;
+  metric: LeaderboardMetric;
+  range: LeaderboardRange;
+  weekStart: string | null;
+  availableWeekStarts: string[];
+  leaders: LeaderboardMember[];
+  members: LeaderboardMember[];
+  totalMembers: number;
+  viewerRank: number | null;
+  page: number;
+  pageSize: number;
+  generatedAt: string;
+  refreshAfterSeconds: number;
 }
 
 export interface NoteItem {
@@ -1185,21 +1269,35 @@ declare global {
         input: AnalyticsEventInput
       ) => Promise<{ success: boolean; eventId?: string; ignored?: boolean }>;
       getAnalyticsSummary: () => Promise<AnalyticsSummary>;
-      getPendingAnalyticsEvents: (limit?: number) => Promise<PendingAnalyticsEvent[]>;
+      getPendingAnalyticsEvents: (
+        limit?: number,
+        context?: AnalyticsSyncContext
+      ) => Promise<PendingAnalyticsEvent[]>;
       markAnalyticsEventsSynced: (
-        eventIds: string[]
+        eventIds: string[],
+        context?: AnalyticsSyncContext
       ) => Promise<{ success: boolean; updated: number }>;
-      getPendingAnalyticsDeletes: (limit?: number) => Promise<Array<{ event_id: string }>>;
+      getPendingAnalyticsDeletes: (
+        limit?: number,
+        context?: AnalyticsSyncContext
+      ) => Promise<Array<{ event_id: string }>>;
       hardDeleteAnalyticsEvents: (
-        eventIds: string[]
+        eventIds: string[],
+        context?: AnalyticsSyncContext
       ) => Promise<{ success: boolean; deleted: number }>;
-      getPendingAnalyticsClear: () => Promise<PendingAnalyticsClear | null>;
+      getPendingAnalyticsClear: (
+        context?: AnalyticsSyncContext
+      ) => Promise<PendingAnalyticsClear | null>;
       completeAnalyticsClear: (
-        clearedThrough: string
+        clearedThrough: string,
+        context?: AnalyticsSyncContext
       ) => Promise<{ success: boolean; deleted: number }>;
-      countUnclaimedAnalyticsEvents: () => Promise<number>;
-      countAnalyticsEventsAwaitingUpload: () => Promise<number>;
-      claimAnonymousAnalyticsEvents: () => Promise<{ success: boolean; claimed: number }>;
+      countUnclaimedAnalyticsEvents: (context?: AnalyticsSyncContext) => Promise<number>;
+      countAnalyticsEventsAwaitingUpload: (context?: AnalyticsSyncContext) => Promise<number>;
+      claimAnonymousAnalyticsEvents: (
+        accountId: string,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; claimed: number; code?: string }>;
       clearTranscriptions: () => Promise<{ cleared: number; success: boolean }>;
       deleteTranscription: (id: number) => Promise<{ success: boolean }>;
       getTranscriptionById: (id: number) => Promise<TranscriptionItem | null>;
@@ -1574,6 +1672,11 @@ declare global {
       promptAccessibilityPermission: () => Promise<boolean>;
       readClipboard: () => Promise<string>;
       writeClipboard: (text: string) => Promise<{ success: boolean }>;
+      copyLeaderboardImage: (dataUrl: string) => Promise<{ success: boolean; error?: string }>;
+      saveLeaderboardImage: (
+        dataUrl: string,
+        suggestedName: string
+      ) => Promise<{ success: boolean; canceled?: boolean; error?: string }>;
       checkPasteTools: () => Promise<PasteToolsResult>;
 
       // Audio

@@ -1,6 +1,14 @@
+import { PENDING_LOCAL_MODELS_KEY } from "./pendingLocalModels";
+
 export const ONBOARDING_SESSION_KEY = "onboardingSessionV2";
 export const LEGACY_ONBOARDING_STEP_KEY = "onboardingCurrentStep";
 export const ONBOARDING_FLOW_VERSION = 2;
+
+/**
+ * Resume drafts hold typed fields, and every write persists the whole session, so
+ * the steps that own a text input write once per pause rather than per keystroke.
+ */
+export const RESUME_DRAFT_PERSIST_DELAY_MS = 400;
 
 type OnboardingStorage = Pick<Storage, "setItem" | "removeItem">;
 
@@ -24,6 +32,45 @@ export type OnboardingStepId =
 
 export type OnboardingAuthPath = "account" | "guest" | null;
 export type OnboardingSetupMode = "cloud" | "byok" | "local" | null;
+export type OnboardingAuthMode = "sign-in" | "sign-up" | null;
+export type OnboardingByokStepId = "byok-dictation" | "byok-assistant";
+export type OnboardingLocalStepId = "local-dictation" | "local-assistant";
+
+export interface OnboardingSsoDiscoveryDraft {
+  required: boolean;
+  domain: string;
+  exists: boolean;
+}
+
+export interface OnboardingAuthDraft {
+  authMode: OnboardingAuthMode;
+  email: string;
+  fullName: string;
+  ssoDiscovery: OnboardingSsoDiscoveryDraft | null;
+  pendingVerificationEmail: string | null;
+}
+
+export interface OnboardingByokDraft {
+  selectedProvider: string;
+  selectedModel: string;
+  baseUrl: string;
+  customModel: string;
+}
+
+export interface OnboardingLocalModelDraft {
+  provider: string;
+  modelId: string;
+}
+
+export interface OnboardingResumeState {
+  dictationHotkeyConfirmed: boolean;
+  assistantHotkeyConfirmed: boolean;
+  dictationDemoCompleted: boolean;
+  assistantDemoCompleted: boolean;
+  auth: OnboardingAuthDraft;
+  byok: Partial<Record<OnboardingByokStepId, OnboardingByokDraft>>;
+  localModels: Partial<Record<OnboardingLocalStepId, OnboardingLocalModelDraft>>;
+}
 
 export interface OnboardingSession {
   version: typeof ONBOARDING_FLOW_VERSION;
@@ -32,6 +79,7 @@ export interface OnboardingSession {
   authPath: OnboardingAuthPath;
   setupMode: OnboardingSetupMode;
   selfHostedRequested: boolean;
+  resume: OnboardingResumeState;
 }
 
 export interface OnboardingRouteContext {
@@ -112,6 +160,24 @@ const LEGACY_STEP_MAP: OnboardingStepId[] = [
   "setup-choice",
 ];
 
+export function createOnboardingResumeState(): OnboardingResumeState {
+  return {
+    dictationHotkeyConfirmed: false,
+    assistantHotkeyConfirmed: false,
+    dictationDemoCompleted: false,
+    assistantDemoCompleted: false,
+    auth: {
+      authMode: null,
+      email: "",
+      fullName: "",
+      ssoDiscovery: null,
+      pendingVerificationEmail: null,
+    },
+    byok: {},
+    localModels: {},
+  };
+}
+
 export function createOnboardingSession(): OnboardingSession {
   return {
     version: ONBOARDING_FLOW_VERSION,
@@ -120,6 +186,7 @@ export function createOnboardingSession(): OnboardingSession {
     authPath: null,
     setupMode: null,
     selfHostedRequested: false,
+    resume: createOnboardingResumeState(),
   };
 }
 
@@ -128,6 +195,8 @@ export function resetOnboardingProgress(storage: OnboardingStorage): void {
   storage.removeItem("onboardingCompleted");
   storage.removeItem("authenticationSkipped");
   storage.removeItem("skipAuth");
+  storage.removeItem("localSetupPending");
+  storage.removeItem(PENDING_LOCAL_MODELS_KEY);
   // AppRouter uses this marker to distinguish an explicit restart from a
   // returning signed-in user, while useOnboardingSession migrates it to auth.
   storage.setItem(LEGACY_ONBOARDING_STEP_KEY, "0");
@@ -175,8 +244,145 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
   return route;
 }
 
+/**
+ * The Notes step's forward action. Calendar connections are optional, so the step
+ * offers Skip until one connects and Continue afterwards. "loading" is its own
+ * state rather than an absence: while the workspace resolves there is nothing to
+ * commit yet, but the step still has to show a disabled Continue — dropping the
+ * action entirely leaves the footer with only Back and no explanation.
+ */
+export function getNotesFooterAction({
+  workspaceResolutionPending,
+  hasConnectedCalendar,
+}: {
+  workspaceResolutionPending: boolean;
+  hasConnectedCalendar: boolean;
+}): "skip" | "continue" | "loading" {
+  if (workspaceResolutionPending) return "loading";
+  return hasConnectedCalendar ? "continue" : "skip";
+}
+
+/**
+ * Whether the permissions step offers Log out. `authPath` alone is not the
+ * question: migrateLegacyOnboardingStep labels any pre-v2 session past the auth
+ * step "account" without anyone having signed in, and the action clears the
+ * session, localSetupPending and the pending model selections without confirming.
+ */
+export function shouldOfferOnboardingLogout({
+  isSignedIn,
+  authPath,
+}: {
+  isSignedIn: boolean;
+  authPath: OnboardingAuthPath;
+}): boolean {
+  return isSignedIn && authPath === "account";
+}
+
 export function isOnboardingStepId(value: unknown): value is OnboardingStepId {
   return typeof value === "string" && KNOWN_STEPS.has(value as OnboardingStepId);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readDraftString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function parseSsoDiscoveryDraft(value: unknown): OnboardingSsoDiscoveryDraft | null {
+  if (
+    !isRecord(value) ||
+    typeof value.required !== "boolean" ||
+    typeof value.domain !== "string" ||
+    typeof value.exists !== "boolean"
+  ) {
+    return null;
+  }
+  return { required: value.required, domain: value.domain, exists: value.exists };
+}
+
+function parseByokDraft(value: unknown): OnboardingByokDraft | undefined {
+  if (!isRecord(value)) return undefined;
+  return {
+    selectedProvider: readDraftString(value.selectedProvider),
+    selectedModel: readDraftString(value.selectedModel),
+    baseUrl: readDraftString(value.baseUrl),
+    customModel: readDraftString(value.customModel),
+  };
+}
+
+function parseLocalModelDraft(value: unknown): OnboardingLocalModelDraft | undefined {
+  if (!isRecord(value)) return undefined;
+  return {
+    provider: readDraftString(value.provider),
+    modelId: readDraftString(value.modelId),
+  };
+}
+
+/**
+ * Sessions written before `resume` existed carry no confirmation flags, and
+ * reading them as "never confirmed" is not safe: the hotkey flags decide whether
+ * onboarding may replace a registered chord with the platform's onboarding one,
+ * and finalizeOnboarding re-registers that on routes which never show the hotkey
+ * step again. Having moved past the step is the evidence those builds left —
+ * their Continue was gated on confirming.
+ *
+ * Only the hotkey flags are inferred. The demo flags gate nothing but a Continue
+ * on the step the user is standing on, so guessing them would skip practice the
+ * user never did.
+ */
+function inferResumeFlagsFromStep(currentStepId: OnboardingStepId): OnboardingResumeState {
+  const isPast = (stepId: OnboardingStepId) =>
+    STEP_ORDER.indexOf(currentStepId) > STEP_ORDER.indexOf(stepId);
+  return {
+    ...createOnboardingResumeState(),
+    dictationHotkeyConfirmed: isPast("dictation-hotkey"),
+    assistantHotkeyConfirmed: isPast("assistant-hotkey"),
+  };
+}
+
+function parseOnboardingResumeState(
+  value: unknown,
+  currentStepId: OnboardingStepId
+): OnboardingResumeState {
+  if (value === undefined) return inferResumeFlagsFromStep(currentStepId);
+  const defaults = createOnboardingResumeState();
+  if (!isRecord(value)) return defaults;
+
+  const authValue = isRecord(value.auth) ? value.auth : {};
+  const authMode = authValue.authMode;
+  const byokValue = isRecord(value.byok) ? value.byok : {};
+  const localModelsValue = isRecord(value.localModels) ? value.localModels : {};
+  const byokDictation = parseByokDraft(byokValue["byok-dictation"]);
+  const byokAssistant = parseByokDraft(byokValue["byok-assistant"]);
+  const localDictation = parseLocalModelDraft(localModelsValue["local-dictation"]);
+  const localAssistant = parseLocalModelDraft(localModelsValue["local-assistant"]);
+
+  return {
+    dictationHotkeyConfirmed: value.dictationHotkeyConfirmed === true,
+    assistantHotkeyConfirmed: value.assistantHotkeyConfirmed === true,
+    dictationDemoCompleted: value.dictationDemoCompleted === true,
+    assistantDemoCompleted: value.assistantDemoCompleted === true,
+    auth: {
+      authMode: authMode === "sign-in" || authMode === "sign-up" ? authMode : null,
+      email: readDraftString(authValue.email),
+      fullName: readDraftString(authValue.fullName),
+      ssoDiscovery: parseSsoDiscoveryDraft(authValue.ssoDiscovery),
+      pendingVerificationEmail:
+        typeof authValue.pendingVerificationEmail === "string"
+          ? authValue.pendingVerificationEmail
+          : null,
+    },
+    byok: {
+      ...(byokDictation ? { "byok-dictation": byokDictation } : {}),
+      ...(byokAssistant ? { "byok-assistant": byokAssistant } : {}),
+    },
+    localModels: {
+      ...(localDictation ? { "local-dictation": localDictation } : {}),
+      ...(localAssistant ? { "local-assistant": localAssistant } : {}),
+    },
+  };
 }
 
 export function parseOnboardingSession(value: string | null): OnboardingSession | null {
@@ -217,6 +423,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
       authPath,
       setupMode,
       selfHostedRequested: parsed.selfHostedRequested ?? false,
+      resume: parseOnboardingResumeState(parsed.resume, parsed.currentStepId),
     };
   } catch {
     return null;

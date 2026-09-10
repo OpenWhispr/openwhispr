@@ -47,10 +47,12 @@ export function resolveMeetingTranscriptionOptions({
     };
   }
 
+  // These two are reachable from a settings copy the user never made by hand —
+  // the 1.6.10 follow-flag migration carried a dictation choice Note Recording
+  // cannot serve — so they are sentinels that MeetingRecordingMount translates,
+  // not English sentences. Anything after the colon is an argument.
   if (transcriptionMode === "self-hosted") {
-    throw new Error(
-      "Self-hosted realtime transcription is not supported for Note Recording. Choose Local or Cloud Providers."
-    );
+    throw new Error("unsupportedSelfHosted");
   }
 
   if (transcriptionMode !== "providers") {
@@ -59,7 +61,9 @@ export function resolveMeetingTranscriptionOptions({
 
   const provider = byokProviders.find((candidate) => candidate.id === selectedProvider);
   if (!provider) {
-    throw new Error(`Unsupported Note Recording provider: ${selectedProvider || "none selected"}`);
+    throw new Error(
+      selectedProvider ? `unsupportedProvider:${selectedProvider}` : "noProviderSelected"
+    );
   }
 
   const options = {

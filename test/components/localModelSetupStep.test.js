@@ -31,7 +31,13 @@ function textContent(node) {
 
 async function createSetupHarness(
   t,
-  { assistant = false, provider = assistant ? "qwen" : "whisper", installed = {} } = {}
+  {
+    assistant = false,
+    provider = assistant ? "qwen" : "whisper",
+    installed = {},
+    selectedModel = "",
+    resumeState,
+  } = {}
 ) {
   let unmount = async () => {};
   t.after(() => unmount());
@@ -106,10 +112,10 @@ async function createSetupHarness(
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   useSettingsStore.setState({
     localTranscriptionProvider: provider === "nvidia" ? "nvidia" : "whisper",
-    whisperModel: "",
-    parakeetModel: "",
+    whisperModel: !assistant && provider === "whisper" ? selectedModel : "",
+    parakeetModel: !assistant && provider === "nvidia" ? selectedModel : "",
     chatAgentProvider: assistant ? provider : "qwen",
-    chatAgentModel: "",
+    chatAgentModel: assistant ? selectedModel : "",
     chatAgentMode: "local",
   });
   const { LocalModelSetupStep } = await vite.ssrLoadModule(
@@ -124,6 +130,7 @@ async function createSetupHarness(
   let trayTree;
   let ready = false;
   let proceeded = false;
+  const resumeDrafts = [];
   const props = {
     stepId: assistant ? "local-assistant" : "local-dictation",
     onReadinessChange: (value) => {
@@ -133,12 +140,14 @@ async function createSetupHarness(
       proceeded = true;
     },
     onSkip() {},
+    resumeState,
+    onResumeStateChange: (draft) => resumeDrafts.push(draft),
   };
   function Harness() {
     // Execute the real component and hooks with React lifecycle, while leaving
     // native controls unmounted: their returned handlers are the test boundary.
     tree = LocalModelSetupStep(props);
-    trayTree = BackgroundModelDownloadTray();
+    trayTree = BackgroundModelDownloadTray({ placement: "onboarding" });
     return null;
   }
   const root = createRoot(container);
@@ -227,8 +236,14 @@ async function createSetupHarness(
       assert.equal(button.props.disabled, false, "Proceed is enabled");
       await React.act(async () => button.props.onClick());
     },
+    skip: async () => {
+      const button = actionButton("common.skip");
+      assert.ok(button && !button.props.disabled, "Skip is enabled");
+      await React.act(async () => button.props.onClick());
+    },
     proceeded: () => proceeded,
     ready: () => ready,
+    resumeDrafts: () => resumeDrafts,
     canProceed: () => !actionButton("onboarding.rehaul.provider.proceed").props.disabled,
     canSkip: () => {
       const button = actionButton("common.skip");
@@ -367,4 +382,40 @@ test("browsing another dictation provider preserves the active pending backgroun
   await setup.complete("base");
   assert.equal(setup.store.getState().localTranscriptionProvider, "whisper");
   assert.equal(setup.store.getState().whisperModel, "base");
+});
+
+test("a resumed local-model draft overrides the previously saved model", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    installed: { llm: [FIRST_LLM, SECOND_LLM] },
+    selectedModel: FIRST_LLM,
+    resumeState: { provider: "qwen", modelId: SECOND_LLM },
+  });
+
+  assert.match(textContent(setup.row(SECOND_LLM)), /onboarding\.rehaul\.local\.selected/);
+  assert.match(textContent(setup.row(FIRST_LLM)), /onboarding\.rehaul\.local\.use/);
+  assert.equal(setup.ready(), true);
+  assert.equal(setup.canProceed(), true);
+});
+
+test("Skip marks a pending model for background activation", async (t) => {
+  const setup = await createSetupHarness(t, { assistant: true });
+  await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
+  assert.equal(setup.canSkip(), true);
+  await setup.skip();
+  assert.equal(localStorage.getItem("localSetupPending"), "true");
+});
+
+test("choosing a local model records it in the resume draft", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    installed: { llm: [FIRST_LLM, SECOND_LLM] },
+    selectedModel: FIRST_LLM,
+  });
+
+  await setup.click(SECOND_LLM, "onboarding.rehaul.local.use");
+
+  // Without this the pick is only in component state, so relaunching mid-setup
+  // silently reverts to whatever was saved before onboarding started.
+  assert.deepEqual(setup.resumeDrafts().at(-1), { provider: "qwen", modelId: SECOND_LLM });
 });

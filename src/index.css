@@ -318,9 +318,9 @@ body:has(.onboarding-canvas) {
   /* Keycap. The cap is lit from above, so it needs its own top/bottom pair rather
      than reusing the surface tokens: in dark it has to sit *above* the page fill
      while still reading as a physical key. */
-  --onboarding-keycap-top: #ffffff;
-  --onboarding-keycap-bottom: #f5f5f5;
-  --onboarding-keycap-bevel: #ffffff;
+  --onboarding-keycap-top: #eeeeee;
+  --onboarding-keycap-bottom: #dddddd;
+  --onboarding-keycap-bevel: #f8f8f8;
   --onboarding-keycap-shadow: #0a0a0a;
   /* Provider marks ship as full-colour SVGs; the onboarding rows want them
      monochrome. brightness(0) collapses to black, so dark has to invert after. */
@@ -770,11 +770,10 @@ body:has(.onboarding-canvas) kbd {
   box-shadow:
     /* top bevel */
     inset 0 1px 0 var(--onboarding-keycap-bevel),
-    /* the cap's side wall — 2px, not 3px, so it reads as a key rather than a slab */ 0 2px 0
-      var(--onboarding-control-border),
-    /* contact shadow, then a wider ambient one */ 0 3px 4px
-      color-mix(in oklch, var(--onboarding-keycap-shadow) 5%, transparent),
-    0 8px 16px color-mix(in oklch, var(--onboarding-keycap-shadow) 7%, transparent);
+    /* the cap's side wall */ 1px 3px 0 var(--onboarding-control-border),
+    /* contact shadow, then a wider ambient one */ 0 5px 5px
+      color-mix(in oklch, var(--onboarding-keycap-shadow) 9%, transparent),
+    0 12px 20px color-mix(in oklch, var(--onboarding-keycap-shadow) 8%, transparent);
 }
 
 /* OpenWhispr Brand Typography */

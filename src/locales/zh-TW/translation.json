@@ -164,6 +164,7 @@
     "add": "新增",
     "retry": "重試",
     "back": "返回",
+    "logout": "登出",
     "next": "下一步",
     "complete": "完成",
     "reset": "重設",
@@ -200,7 +201,7 @@
     "done": "完成",
     "skip": "略過",
     "policyAiProcessingRestricted": "AI 處理已被您的組織限制。",
-    "policyAgentRestricted": "AI 代理的使用已被您的組織限制。",
+    "policyAgentRestricted": "AI 助理的使用已被您的組織限制。",
     "policyTranscriptionRestricted": "轉錄已被您的組織限制。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
@@ -213,8 +214,8 @@
         "microphoneDescription": "將語音轉換為文字。",
         "accessibilityDescription": "將文字貼到目前的 App。",
         "systemAudioTitle": "系統音訊",
-        "systemAudioDescription": "擷取其他 App 的音訊。",
-        "screenContextDescription": "讓語音助理查看目前螢幕，絕不儲存。",
+        "systemAudioDescription": "在會議筆記中擷取音訊時必需。",
+        "screenContextDescription": "與語音助理分享螢幕內容。",
         "enable": "啟用",
         "enabled": "已啟用"
       },
@@ -239,6 +240,7 @@
       "hotkey": {
         "capture": "請按下你想使用的按鍵",
         "chooseAnother": "選擇其他快速鍵",
+        "confirmAgain": "再次按下 {{hotkey}} 以確認",
         "inUse": "此快速鍵已被使用。請選擇其他快速鍵。",
         "holding": "繼續按住，或按下另一個鍵"
       },
@@ -411,7 +413,6 @@
         "descriptionLineOne": "選擇你想在裝置上",
         "descriptionLineTwo": "執行的模型。",
         "providerLabel": "服務商",
-        "agent": "代理程式",
         "download": "下載",
         "downloadingShort": "下載中",
         "selected": "已選擇",
@@ -420,7 +421,7 @@
         "cancelDownload": "取消下載 {{model}}",
         "downloads": "模型下載",
         "downloading": "正在下載… {{progress}}%",
-        "installing": "正在安裝模型…"
+        "installing": "安裝中"
       }
     },
     "steps": {
@@ -679,11 +680,6 @@
         "recovered": "已復原"
       },
       "retryTranslationMode": "翻譯模式"
-    },
-    "cloudMigration": {
-      "title": "歡迎使用 OpenWhispr Cloud",
-      "description": "我們已將轉錄切換至 OpenWhispr Cloud，提供更快、更準確的結果。你之前的設定已儲存，隨時可在設定中切換回來。",
-      "viewSettings": "查看設定"
     },
     "aiCta": {
       "title": "用 AI 增強你的轉錄品質",
@@ -1111,12 +1107,12 @@
       "welcomeBack": "歡迎回來"
     },
     "signedIn": {
-      "ready": "準備就緒",
-      "welcomeBack": "歡迎回來",
-      "welcomeBackName": "歡迎回來，{{name}}"
+      "welcomeBack": "歡迎回來"
     },
     "sso": {
       "continueWithSSO": "使用 SSO 登入",
+      "workEmailLabel": "工作電子郵件",
+      "emailPlaceholder": "新增您的電子郵件",
       "emailRequired": "輸入您的工作電子郵件以使用 SSO。",
       "failed": "單一登入失敗，請再試一次。",
       "companySignInTitle": "使用公司登入",
@@ -1619,7 +1615,7 @@
           "features": [
             "無限會議錄製",
             "工作區角色與成員管理",
-            "代理模式",
+            "助理模式",
             "與您的資料對話",
             "優先支援"
           ],
@@ -2112,6 +2108,9 @@
       "insightsSyncDescription": "在你的裝置之間同步字數、每次聽寫的日期與精確時間、時長與模型類型。轉錄內容永遠不會包含在內。登入後清除記錄，也會從此裝置和你的帳戶中刪除這些統計資料。",
       "insightsSyncRequiresAccount": "登入後即可在裝置之間同步不含內容的統計資料。",
       "insightsSyncRequiresHistory": "開啟資料保留後才會記錄統計，之後才能跨裝置同步。",
+      "leaderboardDescription": "在符合條件的工作區與工作網域排行榜中顯示你的姓名、電子郵件和活動。轉錄內容維持私密。",
+      "leaderboardRequiresAccount": "登入後即可管理排行榜參與狀態。",
+      "leaderboardRequiresHistory": "加入排行榜前，請先開啟資料保留。",
       "usageAnalytics": "使用分析",
       "usageAnalyticsDescription": "分享匿名的效能指標，協助我們改善 OpenWhispr。我們絕不會傳送轉錄內容——只有計時和錯誤資料。",
       "dataRetention": "資料保留",
@@ -2550,7 +2549,7 @@
         "openai_gpt_4_1_mini": "較小的 GPT-4.1 模型",
         "openai_gpt_4_1_nano": "最低延遲的 GPT-4.1",
         "anthropic_claude_fable_5": "Anthropic 最強大的模型，Mythos 級",
-        "anthropic_claude_sonnet_5": "快速且強大的智慧代理模型，成本更低",
+        "anthropic_claude_sonnet_5": "快速且強大的助理模型，成本更低",
         "anthropic_claude_sonnet_4_6": "均衡表現",
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet 模型",
         "anthropic_claude_haiku_4_5": "快速且接近頂尖智慧",
@@ -2585,12 +2584,12 @@
         "corti_corti_s1_mini": "精簡型臨床模型，半價提供推理"
       },
       "enterprise": {
-        "bedrock_claude_fable_5": "最強大的 Claude 模型。最適合最具挑戰性的智慧助手模式任務。",
+        "bedrock_claude_fable_5": "最強大的 Claude 模型。最適合最具挑戰性的助理任務。",
         "bedrock_claude_haiku_4_5": "快速且低成本。適合文字清理。",
-        "bedrock_claude_sonnet_5": "均衡效能。建議作為智慧助手模式的預設模型。",
-        "bedrock_claude_opus_4_8": "最高智能。適用於複雜的智慧助手模式任務。",
+        "bedrock_claude_sonnet_5": "均衡效能。建議作為助理任務的預設模型。",
+        "bedrock_claude_opus_4_8": "最高智能。適用於複雜的助理任務。",
         "bedrock_gpt_oss_120b": "OpenAI 開放權重模型。低成本下的強大推理能力。",
-        "bedrock_deepseek_v3_2": "開放權重前沿模型。智慧助手模式的高性價比之選。",
+        "bedrock_deepseek_v3_2": "開放權重前沿模型。助理任務的高性價比之選。",
         "bedrock_qwen3_next_80b": "稀疏開放權重模型。快速且多語言。",
         "vertex_gemini_2_5_flash": "透過 Vertex 提供的快速多模態模型",
         "vertex_gemini_2_5_pro": "透過 Vertex 提供的進階推理模型"
@@ -2991,6 +2990,9 @@
       "description": "轉錄與結構化摘要",
       "back": "返回",
       "restrictedByOrg": "會議轉錄已被您的組織限制。",
+      "unsupportedSelfHosted": "筆記錄音尚不支援自架端點。請開啟設定，選擇本機或支援串流的服務商。",
+      "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
+      "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
       "autoEnded": "會議結束後，錄音已自動停止。",
       "restartFailed": "無法重新開始會議錄音。",
       "systemAudioSilent": {
@@ -3240,6 +3242,7 @@
   },
   "insights": {
     "title": "統計",
+    "yourUsage": "你的使用情況",
     "description": "私密檢視你的聽寫習慣與持續狀況。",
     "wordsSpoken": "已聽寫字數",
     "currentStreak": "目前連續天數",
@@ -3260,22 +3263,108 @@
     "dayTooltip_other": "{{date}}：{{count}} 字",
     "dataRetentionDisabled": "資料保留已關閉，因此新的聽寫不會計入統計——本裝置和你的帳戶都不會計數。已同步的計數會保留在你的帳戶中。",
     "onDevice": "僅在本裝置",
+    "onDevicePrivacy": "這些分析資料會在此裝置上計算，以保護你的隱私。",
     "synced": "已跨裝置同步",
     "syncFallback": "正在顯示本裝置資料 — 同步無法使用",
     "syncPrompt": "同步不含內容的計數，將本機與雲端的活動跨裝置合併。",
     "enableSync": "啟用同步",
+    "syncEnableError": "無法啟用 Insights 同步。請再試一次。",
     "claimTitle": "要包含較早的聽寫嗎？",
-    "claimDescription_one": "本裝置上有 {{count}} 次聽寫是在你登入前記錄的。納入後只會傳送字數、記錄的日期與精確時間、時長與模型類型，不會傳送轉錄內容。",
-    "claimDescription_other": "本裝置上有 {{count}} 次聽寫是在你登入前記錄的。納入後只會傳送字數、記錄的日期與精確時間、時長與模型類型，不會傳送轉錄內容。",
+    "claimDescription_one": "同步 {{count}} 則較早聽寫的使用資料。轉錄內容保持私密。",
+    "claimDescription_other": "同步 {{count}} 則較早聽寫的使用資料。轉錄內容保持私密。",
     "claimInclude": "包含",
     "claimSkip": "暫不開啟",
     "enableTitle": "要開啟 Insights 同步嗎？",
     "enableConfirm": "開啟同步",
-    "enableDescription_one": "本裝置上已記錄的 {{count}} 次聽寫將上傳到你的帳戶。Insights 同步只會傳送字數、記錄的日期與精確時間、時長與模型類型，不會傳送轉錄內容。",
-    "enableDescription_other": "本裝置上已記錄的 {{count}} 次聽寫將上傳到你的帳戶。Insights 同步只會傳送字數、記錄的日期與精確時間、時長與模型類型，不會傳送轉錄內容。",
+    "enableDescription_one": "同步 {{count}} 則現有聽寫的使用資料。轉錄內容保持私密。",
+    "enableDescription_other": "同步 {{count}} 則現有聽寫的使用資料。轉錄內容保持私密。",
     "emptyTitle": "尚無聽寫記錄",
     "emptyBody": "開始聽寫後，你的字數、連續記錄與每日活動會顯示在這裡。",
-    "loadError": "無法從本裝置讀取 Insights。"
+    "loadError": "無法從本裝置讀取 Insights。",
+    "leaderboard": {
+      "title": "排行榜",
+      "inviteCta": "邀請同事",
+      "soloTitle": "邀請第一位同事",
+      "soloDescription": "排行榜已準備就緒。邀請同事加入 {{scope}}，即可開始比較活動資料、一起累積成果。",
+      "soloHint": "對方加入排行榜後會顯示在這裡。",
+      "topPerformers": "領先成員",
+      "refreshCadence": "每小時更新",
+      "moreActions": "更多排行榜操作",
+      "setupTitle": "建立團隊排行榜",
+      "setupDescription": "建立工作區並邀請同事，以便比較活動資料、一起累積成果。",
+      "setupDomainDescription_one": "{{domain}} 有 {{count}} 人加入了排行榜。建立工作區並邀請對方吧。",
+      "setupDomainDescription_other": "{{domain}} 有 {{count}} 人加入了排行榜。建立工作區並邀請他們吧。",
+      "setupCta": "建立工作區",
+      "accessError": "無法檢查你的排行榜存取權限。",
+      "signInTitle": "登入以查看排行榜",
+      "signInDescription": "排行榜會將你與帳戶中的團隊成員進行比較。登入即可查看你的排行榜是否可用。",
+      "requestJoinTitle": "你的團隊已在這裡",
+      "requestJoinDescription_one": "{{workspace}} 有 {{count}} 名成員。請聯絡管理員將你加入工作區。",
+      "requestJoinDescription_other": "{{workspace}} 有 {{count}} 名成員。請聯絡管理員將你加入工作區。",
+      "requestJoinCta": "申請加入",
+      "requestSent": "申請已傳送",
+      "requesting": "正在傳送申請…",
+      "acceptInviteTitle": "你已受邀加入 {{workspace}}",
+      "acceptInviteDescription": "{{inviter}} 邀請了你。加入後即可查看團隊排行榜。",
+      "acceptInviteDescriptionNoInviter": "加入 {{workspace}} 後即可查看團隊排行榜。",
+      "acceptInviteCta": "加入團隊",
+      "joining": "正在加入…",
+      "inviteAcceptedTitle": "已加入工作區",
+      "inviteAcceptedDescription": "你現在可以查看 {{workspace}} 的排行榜。",
+      "inviteAcceptError": "無法加入此工作區",
+      "invitedList": "已邀請：{{emails}}",
+      "chooseBoard": "選擇排行榜",
+      "emptyStrip_one": "還有 {{count}} 位隊友尚未加入排行榜。加入後即可開始排名。",
+      "emptyStrip_other": "還有 {{count}} 位隊友尚未加入排行榜。加入後即可開始排名。",
+      "copyNudge": "複製提醒",
+      "nudgeText": "請在 OpenWhispr → Insights 中加入排行榜，這樣我們就能查看團隊排行榜。",
+      "nudgeCopied": "提醒已複製",
+      "nudgeCopyError": "無法複製提醒",
+      "joinTitle": "查看你在 {{scope}} 中的排名",
+      "joinDescription": "你的姓名、電子郵件與活動會顯示在所有符合條件的工作區和工作網域排行榜中。轉錄內容保持私密，你可以隨時退出。",
+      "joinCta": "加入排行榜",
+      "joiningLeaderboard": "正在加入…",
+      "joinPolicyBlocked": "你的工作區政策不允許加入排行榜。",
+      "activationError": "無法驗證你的排行榜參與狀態。請檢查網路連線後再試一次。",
+      "disabled": "排行榜已停用",
+      "leave": "退出排行榜",
+      "leavePending": "恢復連線後，我們會完成退出排行榜。",
+      "allTime": "全部時間",
+      "thisWeek": "本週",
+      "wpmValue": "{{count}} 字/分鐘",
+      "dayValue_one": "{{count}} 天",
+      "dayValue_other": "{{count}} 天",
+      "share": "分享",
+      "refresh": "重新整理排行榜",
+      "error": "無法載入排行榜。",
+      "retry": "再試一次",
+      "rank": "排名",
+      "member": "成員",
+      "you": "（你）",
+      "jumpToMe": "跳至我的排名",
+      "jumpUnavailable": "無法在此排行榜中識別你的帳戶。",
+      "previous": "上一頁",
+      "jumpToRank": "跳至指定排名",
+      "next": "下一頁",
+      "metrics": {
+        "total_words": "總字數",
+        "words_per_minute": "每分鐘字數",
+        "current_daily_streak": "目前連續天數",
+        "desktop_words": "桌面版字數",
+        "mobile_words": "行動版字數"
+      },
+      "shareText": "看看我在 OpenWhispr 上的排名。",
+      "shareTitle": "分享排行榜",
+      "shareDescription": "複製或下載此卡片，也可以在開啟社群貼文編輯器前先複製。",
+      "copyImage": "複製圖片",
+      "download": "下載",
+      "shareX": "分享到 X",
+      "shareLinkedIn": "分享到 LinkedIn",
+      "copied": "圖片已複製，請貼到你的貼文中。",
+      "saved": "圖片已下載。",
+      "failed": "無法建立分享卡片。",
+      "unnamedMember": "團隊成員"
+    }
   },
   "sidebar": {
     "insights": "統計",
@@ -3411,7 +3500,7 @@
   },
   "dictationAgent": {
     "enabled": "啟用語音助理",
-    "enabledDescription": "向你的代理口述指令。選取的文字會傳送到所設定的模型並就地編輯。說出 \"{{agentName}}\" 即可啟用。",
+    "enabledDescription": "向你的助理口述指令。選取的文字會傳送到所設定的模型並就地編輯。說出 \"{{agentName}}\" 即可啟用。",
     "screenContext": {
       "title": "螢幕內容",
       "description": "在語音助理指令中附上目前螢幕的截圖。",
@@ -3426,7 +3515,7 @@
     },
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "使用 OpenWhispr 託管的代理，無需 API Key。",
+      "openwhisprDesc": "使用 OpenWhispr 託管的助理，無需 API Key。",
       "providers": "使用你自己的 API Key",
       "providersDesc": "用你自己的 API Key 連接 OpenAI、Anthropic、Gemini 或 Groq。",
       "local": "本機",
@@ -3437,14 +3526,14 @@
       "enterpriseDesc": "使用 AWS Bedrock、Azure OpenAI 或 Google Vertex。"
     },
     "prompt": {
-      "title": "代理提示詞",
+      "title": "助理提示詞",
       "description": "偵測到喚醒詞時使用的系統提示詞。若未設定則使用內建預設值。"
     }
   },
   "agentMode": {
     "settings": {
       "systemPrompt": "系統提示詞",
-      "systemPromptDescription": "助手的自訂指令",
+      "systemPromptDescription": "助理的自訂指令",
       "systemPromptPlaceholder": "輸入自訂系統提示詞...",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
@@ -3596,7 +3685,7 @@
     },
     "cli": {
       "title": "命令列存取",
-      "description": "讓你的智慧助手透過終端機存取你的筆記。",
+      "description": "讓你的助理透過終端機存取你的筆記。",
       "installLabel": "安裝",
       "learnMore": "查看文件",
       "copyDocsLink": "複製文件連結",

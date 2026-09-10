@@ -1,5 +1,16 @@
-import { cloudDelete, cloudGet, cloudPost, isAuthContextError } from "./cloudApi";
-import type { AnalyticsSummary, PendingAnalyticsEvent } from "../types/electron";
+import {
+  cloudDelete,
+  cloudDeleteForAuthGeneration,
+  cloudGet,
+  cloudPost,
+  cloudPostForAuthGeneration,
+  isAuthContextError,
+} from "./cloudApi";
+import type {
+  AnalyticsSummary,
+  AnalyticsSyncContext,
+  PendingAnalyticsEvent,
+} from "../types/electron";
 
 const BATCH_SIZE = 200;
 export const ANALYTICS_SUMMARY_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -91,27 +102,53 @@ export function subscribeToAnalyticsRefresh(
   };
 }
 
-async function pushAnalyticsDeletes(): Promise<void> {
+async function deleteFromCloud(
+  path: string,
+  body: unknown,
+  context?: AnalyticsSyncContext
+): Promise<void> {
+  if (context) {
+    await cloudDeleteForAuthGeneration(path, body, context.authGeneration);
+    return;
+  }
+  await cloudDelete(path, body);
+}
+
+async function postToCloud<T>(
+  path: string,
+  body: unknown,
+  context?: AnalyticsSyncContext
+): Promise<T> {
+  return context
+    ? cloudPostForAuthGeneration<T>(path, body, context.authGeneration)
+    : cloudPost<T>(path, body);
+}
+
+async function pushAnalyticsDeletes(context?: AnalyticsSyncContext): Promise<void> {
   while (true) {
-    const pending = await window.electronAPI.getPendingAnalyticsDeletes(BATCH_SIZE);
+    const pending = await window.electronAPI.getPendingAnalyticsDeletes(BATCH_SIZE, context);
     if (pending.length === 0) return;
 
     const eventIds = pending.map((row) => row.event_id);
-    await cloudDelete("/api/analytics/events/delete", { eventIds });
-    await window.electronAPI.hardDeleteAnalyticsEvents(eventIds);
+    await deleteFromCloud("/api/analytics/events/delete", { eventIds }, context);
+    await window.electronAPI.hardDeleteAnalyticsEvents(eventIds, context);
     if (pending.length < BATCH_SIZE) return;
   }
 }
 
-async function pushAnalyticsClear(): Promise<void> {
-  const pending = await window.electronAPI.getPendingAnalyticsClear();
+async function pushAnalyticsClear(context?: AnalyticsSyncContext): Promise<void> {
+  const pending = await window.electronAPI.getPendingAnalyticsClear(context);
   if (!pending) return;
 
-  await cloudDelete("/api/analytics/events/delete", {
-    deleteAll: true,
-    clearedThrough: pending.cleared_through,
-  });
-  await window.electronAPI.completeAnalyticsClear(pending.cleared_through);
+  await deleteFromCloud(
+    "/api/analytics/events/delete",
+    {
+      deleteAll: true,
+      clearedThrough: pending.cleared_through,
+    },
+    context
+  );
+  await window.electronAPI.completeAnalyticsClear(pending.cleared_through, context);
 }
 
 // Erasures and uploads are independent work that happens to share a pass. A
@@ -135,7 +172,13 @@ async function runStage(name: string, stage: () => Promise<void>): Promise<void>
 // coalescing keeps a caller that may upload from joining one that may not.
 let passQueue: Promise<unknown> = Promise.resolve();
 
-export function syncPendingAnalytics(options: { uploadAllowed?: boolean } = {}): Promise<number> {
+type AnalyticsUploadGate = boolean | (() => boolean | Promise<boolean>);
+interface AnalyticsSyncOptions {
+  uploadAllowed?: AnalyticsUploadGate;
+  context?: AnalyticsSyncContext;
+}
+
+export function syncPendingAnalytics(options: AnalyticsSyncOptions = {}): Promise<number> {
   const pass = passQueue.then(
     () => runAnalyticsPass(options),
     () => runAnalyticsPass(options)
@@ -146,12 +189,18 @@ export function syncPendingAnalytics(options: { uploadAllowed?: boolean } = {}):
 
 async function runAnalyticsPass({
   uploadAllowed = true,
-}: { uploadAllowed?: boolean } = {}): Promise<number> {
+  context,
+}: AnalyticsSyncOptions = {}): Promise<number> {
   // Erasures still go first, so a clear cannot race an older batch and
   // recreate data the user asked us to erase.
-  await runStage("clear", pushAnalyticsClear);
-  await runStage("deletes", pushAnalyticsDeletes);
-  if (!uploadAllowed) return 0;
+  await runStage("clear", () => pushAnalyticsClear(context));
+  await runStage("deletes", () => pushAnalyticsDeletes(context));
+  // Resolve functions only after this pass reaches the head of passQueue.
+  // Consent can be revoked while an earlier pass is still running, so queuing
+  // an already-resolved `true` would let the delayed pass upload afterward.
+  const canUpload = async (): Promise<boolean> =>
+    typeof uploadAllowed === "function" ? uploadAllowed() : uploadAllowed;
+  if (!(await canUpload())) return 0;
 
   let synced = 0;
   // Ids this pass has already offered. The server deliberately withholds rows
@@ -161,8 +210,13 @@ async function runAnalyticsPass({
   const offered = new Set<string>();
 
   while (true) {
-    const events: PendingAnalyticsEvent[] =
-      await window.electronAPI.getPendingAnalyticsEvents(BATCH_SIZE);
+    // Re-check between batches. Revoking consent while a >200-row drain is in
+    // flight cannot cancel the active request, but it must stop the next one.
+    if (!(await canUpload())) return synced;
+    const events: PendingAnalyticsEvent[] = await window.electronAPI.getPendingAnalyticsEvents(
+      BATCH_SIZE,
+      context
+    );
     const fresh = events.filter((event) => !offered.has(event.event_id));
     if (fresh.length === 0) return synced;
     for (const event of fresh) offered.add(event.event_id);
@@ -174,12 +228,15 @@ async function runAnalyticsPass({
     // deriving it from the sibling `rejected` field -- would leave a row that
     // can never validate at the head of the queue forever. A batch the server
     // refuses outright throws and stays pending for the next pass.
-    const result = await cloudPost<{ accepted: string[] }>("/api/analytics/events/batch", {
-      events: fresh,
-    });
+    if (!(await canUpload())) return synced;
+    const result = await postToCloud<{ accepted: string[] }>(
+      "/api/analytics/events/batch",
+      { events: fresh },
+      context
+    );
     const accepted = Array.isArray(result?.accepted) ? result.accepted : [];
 
-    const { updated } = await window.electronAPI.markAnalyticsEventsSynced(accepted);
+    const { updated } = await window.electronAPI.markAnalyticsEventsSynced(accepted, context);
     synced += updated;
     // The whole queue fit in one read, so there is nothing behind this batch.
     if (events.length < BATCH_SIZE) return synced;
@@ -237,10 +294,11 @@ function isAnalyticsSummary(value: unknown): value is AnalyticsSummary {
   );
 }
 
-export async function getAccountAnalyticsSummary(timeZone: string): Promise<AnalyticsSummary> {
-  const summary = await cloudGet<unknown>(
-    `/api/analytics/summary?timeZone=${encodeURIComponent(timeZone)}`
-  );
+export async function getAccountAnalyticsSummary(): Promise<AnalyticsSummary> {
+  const params = new URLSearchParams({
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  });
+  const summary = await cloudGet<unknown>(`/api/analytics/summary?${params}`);
   // The cloud is an untrusted JSON boundary. Invalid buckets crash Heatmap
   // during render, outside the caller's async fallback, so validate the whole
   // shape before any part of it reaches component state.
