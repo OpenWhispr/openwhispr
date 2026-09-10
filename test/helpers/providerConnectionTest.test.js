@@ -147,10 +147,24 @@ test("rejects invalid custom endpoints with error codes", async () => {
   });
 });
 
-test("xAI OAuth connected skips apiKeyRequired and uses models endpoint", () => {
-  const request = resolveProviderRequest({ provider: "xai", oauthConnected: true });
-  assert.equal(request.endpoint, "https://api.x.ai/v1/models");
-  assert.equal(request.headers.Authorization, undefined);
+test("xAI SuperGrok session is a successful connection test", async () => {
+  assert.deepEqual(await testProviderConnection({ provider: "xai", oauthSessionValid: true }), {
+    success: true,
+  });
+});
+
+test("xAI grok-stt does not have to appear on /v1/models", async () => {
+  assert.deepEqual(
+    await testProviderConnection(
+      { provider: "xai", apiKey: "k", model: "grok-stt" },
+      async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [{ id: "grok-3" }] }),
+      })
+    ),
+    { success: true }
+  );
 });
 
 

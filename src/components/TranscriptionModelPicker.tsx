@@ -1253,9 +1253,11 @@ export default function TranscriptionModelPicker({
                 <div className="space-y-2">
                   {displayedCloudProvider === "xai" && (
                     <div className="space-y-1.5">
-                      <p className="text-xs text-muted-foreground">
-                        {t("settings.speech.xaiOauth.hint")}
-                      </p>
+                      {!xaiOAuthConnected ? (
+                        <p className="text-xs text-muted-foreground">
+                          {t("settings.speech.xaiOauth.hint")}
+                        </p>
+                      ) : null}
                       <div className="flex items-center justify-between gap-2">
                         {xaiOAuthConnected ? (
                           <>
@@ -1291,12 +1293,13 @@ export default function TranscriptionModelPicker({
                       </div>
                     </div>
                   )}
-                  {displayedCloudProvider === "xai" ? (
+                  {displayedCloudProvider === "xai" && !xaiOAuthConnected ? (
                     <p className="text-xs text-muted-foreground">
                       {t("settings.speech.xaiOauth.orApiKey")}
                     </p>
                   ) : null}
-                  {providerCredentials.fields.map((field, index) => (
+                  {(displayedCloudProvider !== "xai" || !xaiOAuthConnected) &&
+                  providerCredentials.fields.map((field, index) => (
                     <div key={field.key} className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-medium text-foreground">

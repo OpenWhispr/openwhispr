@@ -192,7 +192,7 @@ function resolveProviderRequest(config) {
       "Connection testing is not available for this provider."
     );
   }
-  if (!apiKey && provider !== "custom" && !(provider === "xai" && config?.oauthConnected)) {
+  if (!apiKey && provider !== "custom") {
     throw new ConnectionTestError("apiKeyRequired", "Add an API key before testing.");
   }
 
@@ -280,6 +280,11 @@ async function responseOffersModel(response, model) {
 }
 
 async function testProviderConnection(config, fetchImpl = fetch) {
+  const provider = String(config?.provider || "").toLowerCase();
+  if (provider === "xai" && config?.oauthSessionValid) {
+    return { success: true };
+  }
+
   let request;
   try {
     request = resolveProviderRequest(config);
@@ -291,8 +296,11 @@ async function testProviderConnection(config, fetchImpl = fetch) {
     };
   }
 
-  const provider = String(config?.provider || "").toLowerCase();
-  const model = String(config?.model || "").trim();
+  // Grok STT is a dedicated /v1/stt model, not a chat id on /v1/models.
+  let model = String(config?.model || "").trim();
+  if (provider === "xai" && normalizeModelId(model) === "grok-stt") {
+    model = "";
+  }
   let failure = null;
   for (const endpoint of request.endpoints) {
     const controller = new AbortController();

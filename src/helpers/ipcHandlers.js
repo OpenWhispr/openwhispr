@@ -1346,15 +1346,25 @@ class IPCHandlers {
       if (config?.provider === "xai") {
         const existingKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
         if (!existingKey) {
-          const bearer = await this.environmentManager.getXaiBearer();
-          if (bearer) {
-            config = { ...config, apiKey: bearer };
-          } else {
-            const status = await this.environmentManager.xaiOAuth?.status();
-            if (status?.connected) {
-              config = { ...config, oauthConnected: true };
+          try {
+            const token = await this.environmentManager.xaiOAuth?.getValidAccessToken();
+            if (token) {
+              return testProviderConnection({ ...config, oauthSessionValid: true });
+            }
+          } catch (error) {
+            if (error?.name === "AbortError") {
+              return {
+                success: false,
+                errorCode: "timeout",
+                error: "The connection test timed out.",
+              };
             }
           }
+          return {
+            success: false,
+            errorCode: "apiKeyRequired",
+            error: "Add an API key before testing.",
+          };
         }
       }
       return testProviderConnection(config);
