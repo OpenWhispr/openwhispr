@@ -49,7 +49,7 @@ import PermissionCard from "./ui/PermissionCard";
 import PasteToolsInfo from "./ui/PasteToolsInfo";
 import NixOsPasteInfo from "./ui/NixOsPasteInfo";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
-import XaiTtsPlayground from "./XaiTtsPlayground";
+import XaiTtsProviderSettings from "./XaiTtsProviderSettings";
 import SelfHostedPanel from "./SelfHostedPanel";
 import {
   ConfirmDialog,
@@ -4953,7 +4953,7 @@ EOF`,
               title={t("settingsPage.textToSpeech.title")}
               description={t("settingsPage.textToSpeech.description")}
             />
-            <XaiTtsPlayground />
+            <XaiTtsProviderSettings />
           </div>
         </TabPanel>
       )}

@@ -1482,7 +1482,7 @@
       },
       "textToSpeech": {
         "label": "Синтез речи",
-        "description": "Озвучка голосами xAI"
+        "description": "Голоса xAI для синтеза речи"
       }
     },
     "title": "Настройки"
@@ -2540,7 +2540,7 @@
     },
     "textToSpeech": {
       "title": "Text-to-Speech",
-      "description": "Convert text to speech with your Grok subscription or xAI API key.",
+      "description": "Выберите облачного провайдера для синтеза речи. Пока только xAI.",
       "placeholder": "Enter text to convert here…",
       "generate": "Generate audio",
       "charCount": "{{count}} / {{max}}",
@@ -3529,7 +3529,8 @@
     "notSignedIn": "Не авторизован",
     "chat": "Чат",
     "collapse": "Свернуть боковую панель",
-    "expand": "Развернуть боковую панель"
+    "expand": "Развернуть боковую панель",
+    "voice": "Голос"
   },
   "chat": {
     "newChat": "Новый чат",

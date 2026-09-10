@@ -1571,7 +1571,7 @@
       },
       "textToSpeech": {
         "label": "Synthèse vocale",
-        "description": "Générer de la parole avec les voix xAI"
+        "description": "Voix xAI pour la synthèse vocale"
       }
     },
     "title": "Paramètres"
@@ -2613,7 +2613,7 @@
     },
     "textToSpeech": {
       "title": "Synthèse vocale",
-      "description": "Convertis du texte en parole avec SuperGrok ou une clé API xAI.",
+      "description": "Choisis le fournisseur cloud pour la synthèse vocale. xAI uniquement pour l’instant.",
       "placeholder": "Saisis le texte à convertir…",
       "generate": "Générer l’audio",
       "charCount": "{{count}} / {{max}}",
@@ -2968,7 +2968,8 @@
     "notSignedIn": "Non connecté",
     "chat": "Chat",
     "collapse": "Réduire la barre latérale",
-    "expand": "Développer la barre latérale"
+    "expand": "Développer la barre latérale",
+    "voice": "Voix"
   },
   "workspaces": {
     "switcher": {

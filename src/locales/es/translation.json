@@ -1530,7 +1530,7 @@
       },
       "textToSpeech": {
         "label": "Texto a voz",
-        "description": "Genera voz con las voces de xAI"
+        "description": "Voces xAI para generar habla"
       }
     },
     "title": "Ajustes"
@@ -2572,7 +2572,7 @@
     },
     "textToSpeech": {
       "title": "Text-to-Speech",
-      "description": "Convert text to speech with your Grok subscription or xAI API key.",
+      "description": "Elige el proveedor cloud para texto a voz. Por ahora solo xAI.",
       "placeholder": "Enter text to convert here…",
       "generate": "Generate audio",
       "charCount": "{{count}} / {{max}}",
@@ -3531,7 +3531,8 @@
     "notSignedIn": "Sin sesión iniciada",
     "chat": "Chat",
     "collapse": "Contraer barra lateral",
-    "expand": "Expandir barra lateral"
+    "expand": "Expandir barra lateral",
+    "voice": "Voz"
   },
   "chat": {
     "newChat": "Nuevo chat",

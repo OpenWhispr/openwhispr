@@ -1482,7 +1482,7 @@
       },
       "textToSpeech": {
         "label": "文本转语音",
-        "description": "使用 xAI 语音生成朗读"
+        "description": "用于生成语音的 xAI 音色"
       }
     },
     "title": "设置"
@@ -2524,7 +2524,7 @@
     },
     "textToSpeech": {
       "title": "Text-to-Speech",
-      "description": "Convert text to speech with your Grok subscription or xAI API key.",
+      "description": "选择文本转语音的云服务商。目前仅支持 xAI。",
       "placeholder": "Enter text to convert here…",
       "generate": "Generate audio",
       "charCount": "{{count}} / {{max}}",
@@ -3483,7 +3483,8 @@
     "notSignedIn": "未登录",
     "chat": "聊天",
     "collapse": "折叠侧边栏",
-    "expand": "展开侧边栏"
+    "expand": "展开侧边栏",
+    "voice": "语音"
   },
   "chat": {
     "newChat": "新对话",

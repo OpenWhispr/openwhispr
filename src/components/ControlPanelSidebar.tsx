@@ -3,6 +3,7 @@ import {
   Home,
   BarChart3,
   MessageSquare,
+  AudioLines,
   NotebookPen,
   BookOpen,
   Upload,
@@ -36,7 +37,14 @@ const rowButtonClass =
   "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
 
 export type ControlPanelView =
-  "home" | "insights" | "chat" | "personal-notes" | "dictionary" | "upload" | "integrations";
+  | "home"
+  | "insights"
+  | "chat"
+  | "voice"
+  | "personal-notes"
+  | "dictionary"
+  | "upload"
+  | "integrations";
 
 interface ControlPanelSidebarProps {
   activeView: ControlPanelView;
@@ -92,6 +100,7 @@ export default function ControlPanelSidebar({
     ...(agentAllowed
       ? [{ id: "chat" as const, label: t("sidebar.chat"), icon: MessageSquare }]
       : []),
+    { id: "voice", label: t("sidebar.voice"), icon: AudioLines },
     { id: "personal-notes", label: t("sidebar.notes"), icon: NotebookPen },
     ...(policyActionsAllowed
       ? [{ id: "upload" as const, label: t("sidebar.upload"), icon: Upload }]
