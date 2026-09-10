@@ -109,6 +109,8 @@ export interface ParakeetModelInfo {
   supportedLanguages: string[];
   runtime?: "offline" | "online";
   modelType?: "transducer" | "cohere-transcribe";
+  /** Verified sherpa decoder type; skips redundant encoder loading during detection. */
+  sherpaModelType?: "nemo_transducer";
   organization?: { id: string; name: string };
   license?: string;
   modelCardUrl?: string;

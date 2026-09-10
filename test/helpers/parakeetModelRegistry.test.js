@@ -6,6 +6,7 @@ const { BINARIES } = require("../../scripts/download-sherpa-onnx");
 const {
   getModelRuntime,
   getModelType,
+  getSherpaModelType,
   getRequiredModelFiles,
   isSherpaLocalProvider,
   resolveModelLanguage,
@@ -91,6 +92,15 @@ test("cohere language resolution maps app languages to supported codes", () => {
   assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", "auto"), "en");
   assert.equal(resolveModelLanguage("cohere-transcribe-03-2026", undefined), "en");
   assert.equal(resolveModelLanguage("parakeet-tdt-0.6b-v3", "pl"), null);
+});
+
+test("only verified offline NeMo models skip sherpa metadata detection", () => {
+  assert.equal(getSherpaModelType("parakeet-tdt-0.6b-v3"), "nemo_transducer");
+  assert.equal(getSherpaModelType("orukeet-v0.1.0-q8"), "nemo_transducer");
+  assert.equal(getSherpaModelType("parakeet-unified-en-0.6b"), null);
+  assert.equal(getSherpaModelType("cohere-transcribe-03-2026"), null);
+  assert.equal(getSherpaModelType("nemotron-speech-streaming-en-0.6b"), null);
+  assert.equal(getSherpaModelType("unknown-model"), null);
 });
 
 test("sherpa provider check covers nvidia and cohere only", () => {
