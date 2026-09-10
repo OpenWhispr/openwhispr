@@ -70,7 +70,7 @@ test("self-hosted mode never follows a stale Tinfoil provider", async () => {
         ...baseOptions,
         transcriptionMode: "self-hosted",
       }),
-    /Self-hosted realtime transcription is not supported/
+    { message: "unsupportedSelfHosted" }
   );
 });
 
@@ -152,14 +152,22 @@ test("Corti keeps the meeting-specific connection settings", async () => {
 test("unknown and custom providers fail closed", async () => {
   const { resolveMeetingTranscriptionOptions } = await load();
 
-  for (const selectedProvider of ["custom", "groq", "", undefined]) {
+  // Sentinels, translated at display time by MeetingRecordingMount. The named
+  // provider rides after the colon so the toast can say which one failed.
+  for (const [selectedProvider, message] of [
+    ["custom", "unsupportedProvider:custom"],
+    ["groq", "unsupportedProvider:groq"],
+    ["", "noProviderSelected"],
+    [undefined, "noProviderSelected"],
+  ]) {
     assert.throws(
       () =>
         resolveMeetingTranscriptionOptions({
           ...baseOptions,
           selectedProvider,
         }),
-      /Unsupported Note Recording provider/
+      { message },
+      `provider ${JSON.stringify(selectedProvider)}`
     );
   }
 });

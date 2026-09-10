@@ -23,8 +23,13 @@ const EMA_PREV = 0.5;
 const EMA_NEXT = 0.5;
 
 // Sentinel errors set by meetingRecordingStore, translated at display time.
+// A sentinel may carry one argument after a colon, e.g. `unsupportedProvider:groq`.
+// Anything that is not a sentinel reaches the toast unchanged.
 const MEETING_ERROR_KEYS: Record<string, string> = {
   policyRestricted: "notes.meeting.restrictedByOrg",
+  unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
+  unsupportedProvider: "notes.meeting.unsupportedProvider",
+  noProviderSelected: "notes.meeting.noProviderSelected",
 };
 
 export default function MeetingRecordingMount(): null {
@@ -177,9 +182,11 @@ export default function MeetingRecordingMount(): null {
 
   useEffect(() => {
     if (!error) return;
+    const [sentinel, argument] = error.split(":");
+    const errorKey = MEETING_ERROR_KEYS[sentinel];
     toast({
       title: t("notes.meeting.title"),
-      description: MEETING_ERROR_KEYS[error] ? t(MEETING_ERROR_KEYS[error]) : error,
+      description: errorKey ? t(errorKey, { provider: argument }) : error,
       variant: "destructive",
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.
