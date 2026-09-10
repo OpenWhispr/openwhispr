@@ -438,3 +438,35 @@ test("callbackPath is included in the loopback redirect URI", async () => {
     http.createServer = originalCreateServer;
   }
 });
+
+test("requireStateToSettle ignores error and wrong-state code without aborting", async () => {
+  const { runOAuthLoopbackFlow } = loadLoopback();
+  let redirectUri;
+  let state;
+  const flow = runOAuthLoopbackFlow({
+    errorParam: "xai_error",
+    requireStateToSettle: true,
+    buildAuthUrl: (uri, flowState) => {
+      redirectUri = uri;
+      state = flowState;
+      return "https://example.test/auth";
+    },
+    handleCallback: async (code) => ({ code }),
+  });
+  const uri = await waitForListen(() => redirectUri);
+  const denied = await fetch(`${uri}/?error=access_denied`, { redirect: "manual" });
+  assert.equal(denied.status, 400);
+  const stolen = await fetch(`${uri}/?code=stolen&state=wrong`, { redirect: "manual" });
+  assert.equal(stolen.status, 400);
+  const stillPending = await Promise.race([
+    flow.then(
+      () => "resolved",
+      () => "rejected"
+    ),
+    new Promise((resolve) => setTimeout(() => resolve("pending"), 200)),
+  ]);
+  assert.equal(stillPending, "pending");
+  const success = await fetch(`${uri}/?code=ok&state=${state}`, { redirect: "manual" });
+  assert.equal(success.status, 302);
+  assert.deepEqual(await flow, { code: "ok" });
+});

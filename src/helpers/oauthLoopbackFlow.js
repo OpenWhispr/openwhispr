@@ -59,6 +59,7 @@ function runOAuthLoopbackFlow({
   listenPort = 0,
   callbackPath = "",
   pkceBytes,
+  requireStateToSettle = false,
 }) {
   const connectedParam = errorParam.replace(/_error$/, "_connected");
 
@@ -87,6 +88,11 @@ function runOAuthLoopbackFlow({
         const error = url.searchParams.get("error");
 
         if (error) {
+          if (requireStateToSettle && returnedState !== state) {
+            res.writeHead(400, { "Content-Type": "text/html" });
+            res.end("<html><body><h3>Invalid request.</h3></body></html>");
+            return;
+          }
           callbackClaimed = true;
           redirect(res, { [errorParam]: error });
           cleanup();
@@ -98,9 +104,11 @@ function runOAuthLoopbackFlow({
           res.writeHead(400, { "Content-Type": "text/html" });
           res.end("<html><body><h3>Invalid request.</h3></body></html>");
           // A real callback with a code but the wrong state is a failed
-          // attempt (stale tab, CSRF). Fail the flow now. A request with no
-          // code (favicon / bare GET) must keep waiting for the redirect.
-          if (code) {
+          // attempt (stale tab, CSRF). Fail the flow now — unless the listen
+          // port is a well-known SuperGrok callback, where unauthenticated
+          // GETs must not abort login. A request with no code (favicon /
+          // bare GET) must keep waiting for the redirect.
+          if (code && !requireStateToSettle) {
             callbackClaimed = true;
             cleanup();
             reject(new Error("OAuth state mismatch"));

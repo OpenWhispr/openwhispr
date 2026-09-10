@@ -552,7 +552,9 @@ class EnvironmentManager {
       const token = await this.xaiOAuth.getValidAccessToken();
       if (token) return token;
     } catch (error) {
-      if (error?.name !== "ReauthRequired") {
+      if (error?.name === "ReauthRequired") {
+        await this.xaiOAuth.logout();
+      } else {
         debugLogger.warn(
           "SuperGrok access token unavailable, falling back to console API key",
           { error: error.message },

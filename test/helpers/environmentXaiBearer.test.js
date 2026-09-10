@@ -54,6 +54,10 @@ function loadEnvironmentManager(userDataDirectory, { oauthToken, oauthErrorName 
           if (!creds?.access_token) throw new ReauthRequired("no SuperGrok session");
           return creds.access_token;
         }
+        async logout() {
+          await this.store.clear();
+          return { connected: false, expiresAt: null, scope: "" };
+        }
       }
       return { XaiOAuth, ReauthRequired };
     }
@@ -93,7 +97,13 @@ test("getXaiBearer falls back to console key on ReauthRequired", async (t) => {
     oauthErrorName: "ReauthRequired",
   });
   const env = new EnvironmentManager();
+  await env.saveXaiOAuthCredentials({
+    access_token: "stale",
+    refresh_token: "dead",
+    expires_at: Date.now() - 1000,
+  });
   assert.equal(await env.getXaiBearer(), "xk-console");
+  assert.equal(await env.loadXaiOAuthCredentials(), null);
 });
 
 test("OAuth JSON is stored encrypted and never copied to process.env", async (t) => {

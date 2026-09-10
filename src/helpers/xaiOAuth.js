@@ -73,6 +73,7 @@ class XaiOAuth {
       listenPort: XAI_OAUTH_REDIRECT_PORT,
       callbackPath: XAI_OAUTH_REDIRECT_PATH,
       pkceBytes: 64,
+      requireStateToSettle: true,
       buildAuthUrl: (redirectUri, state, codeChallenge) => {
         const params = new URLSearchParams({
           response_type: "code",

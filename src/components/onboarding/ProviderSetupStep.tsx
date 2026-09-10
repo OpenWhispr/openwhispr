@@ -420,16 +420,16 @@ export function ByokProviderStep({
   const testingKey = draftApiKey;
   const testingBaseUrl = selfHosted ? draftBaseUrl : undefined;
   const isCortiTranscription = !assistant && !selfHosted && selectedProvider === "corti";
-  const isXaiTranscription = !assistant && !selfHosted && selectedProvider === "xai";
+  const isXaiCloud = !selfHosted && selectedProvider === "xai";
   const xaiOAuthConnected = store.xaiOAuthConnected;
   const fieldsReady = selfHosted
     ? Boolean(draftBaseUrl.trim() && draftCustomModel.trim())
     : isCortiTranscription
       ? Boolean(draftCortiClientId.trim() && draftCortiClientSecret.trim() && selectedModel)
-      : isXaiTranscription
+      : isXaiCloud
         ? Boolean(selectedProvider && selectedModel && (testingKey.trim() || xaiOAuthConnected))
         : Boolean(selectedProvider && selectedModel && testingKey.trim());
-  const canProceed = fieldsReady && (connected || (isXaiTranscription && xaiOAuthConnected));
+  const canProceed = fieldsReady && (connected || (isXaiCloud && xaiOAuthConnected));
 
   const commitAndProceed = () => {
     if (selfHosted) {
@@ -627,7 +627,7 @@ export function ByokProviderStep({
                   />
                 </label>
               </div>
-            ) : isXaiTranscription ? (
+            ) : isXaiCloud ? (
               <div className="space-y-2">
                 <p className="text-xs text-[var(--onboarding-text-tertiary)]">
                   {t("settings.speech.xaiOauth.hint")}

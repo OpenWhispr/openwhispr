@@ -1247,7 +1247,8 @@ class ReasoningService extends BaseReasoningService {
       const anthropicKey = await window.electronAPI?.getAnthropicKey?.();
       const geminiKey = await window.electronAPI?.getGeminiKey?.();
       const groqKey = await window.electronAPI?.getGroqKey?.();
-      const xaiKey = await window.electronAPI?.getXaiBearer?.();
+      const xaiOAuth = await window.electronAPI?.xaiOAuthStatus?.();
+      const xaiKey = await window.electronAPI?.getXaiKey?.();
       const openrouterKey = await window.electronAPI?.getOpenrouterKey?.();
       const tinfoilKey = await window.electronAPI?.getTinfoilKey?.();
       const cortiKey = await window.electronAPI?.getCortiKey?.();
@@ -1258,7 +1259,7 @@ class ReasoningService extends BaseReasoningService {
         hasAnthropic: !!anthropicKey,
         hasGemini: !!geminiKey,
         hasGroq: !!groqKey,
-        hasXai: !!xaiKey,
+        hasXai: !!(xaiOAuth?.connected || xaiKey),
         hasOpenrouter: !!openrouterKey,
         hasTinfoil: !!tinfoilKey,
         hasCorti: !!cortiKey,
@@ -1270,6 +1271,7 @@ class ReasoningService extends BaseReasoningService {
         anthropicKey ||
         geminiKey ||
         groqKey ||
+        xaiOAuth?.connected ||
         xaiKey ||
         openrouterKey ||
         tinfoilKey ||
