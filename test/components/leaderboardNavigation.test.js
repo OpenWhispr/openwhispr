@@ -168,7 +168,7 @@ test("leaderboard access waits for validated auth and labels ranked participants
     accessLoader.indexOf("authGeneration == null") <
       accessLoader.indexOf("LeaderboardService.getAccess()")
   );
-  assert.ok(accessLoader.includes("[accountId, authGeneration]"));
+  assert.ok(accessLoader.includes("[accountId, authGeneration, authSettled]"));
   assert.ok(boardHeader.includes("boardParticipantCount"));
   assert.equal(boardHeader.includes("selectedScope.memberCount"), false);
 });

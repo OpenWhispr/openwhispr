@@ -56,8 +56,13 @@ export function resolveLeaderboardSurface({
   }
   if (participationError === "read") return "participation_error";
   if (!participationReady) return "participation_loading";
+  // Participation decides before the scope's own state does. A solo scope is
+  // still a board, and answering "invite someone" to an account that never
+  // opted in strands it: that surface has no way to join, so the funnel that
+  // sent the user here — Create workspace — would dead-end on itself.
+  if (!participating) return "join";
   if (selectedScope.state === "invite") return "invite";
-  return participating ? "board" : "join";
+  return "board";
 }
 
 export function shouldFetchLeaderboardWeekStarts(

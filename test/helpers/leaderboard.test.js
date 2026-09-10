@@ -121,6 +121,23 @@ test("leaderboard surfaces fail closed on unknown participation before scope sta
     "board",
     "a pending workspace request must not hide a ready domain board"
   );
+  // A solo scope is still a board. Answering "invite someone" to an account
+  // that never opted in strands it: that surface carries no way to join, and
+  // the Create workspace funnel lands exactly there.
+  assert.equal(
+    surface({ selectedScope: scope, participating: false }),
+    "join",
+    "a solo scope must still ask an account that never opted in to join"
+  );
+  assert.equal(
+    surface({ selectedScope: scope, participating: true }),
+    "invite",
+    "once joined, a scope of one is the solo empty state"
+  );
+  assert.equal(
+    surface({ selectedScope: { ...scope, state: "ready" }, participating: true }),
+    "board"
+  );
   assert.equal(
     surface({ selectedScope: scope, participationReady: false }),
     "participation_loading"

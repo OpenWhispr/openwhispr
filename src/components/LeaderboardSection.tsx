@@ -82,6 +82,8 @@ import { useToast } from "./ui/useToast";
 interface LeaderboardSectionProps {
   accountId: string | null;
   authGeneration: number | null;
+  /** The session has settled, so a missing credential will not arrive on its own. */
+  authSettled: boolean;
   isSignedIn: boolean;
   /** The account row says joined — what the roster and Leave hang on, not the device toggle. */
   participating: boolean;
@@ -146,6 +148,7 @@ function scrollToRank(rank: number) {
 export default function LeaderboardSection({
   accountId,
   authGeneration,
+  authSettled,
   isSignedIn,
   participating,
   cloudAccessAllowed,
@@ -210,7 +213,19 @@ export default function LeaderboardSection({
     weekStart,
     page
   );
-  const visibleLeaderboard = loadedRequestKey === selectedRequestKey ? leaderboard : null;
+  // A page turn, metric change or week change asks the same board a different
+  // question, so the answer already on screen stays there until the next one
+  // arrives — blanking it would take the board, the period picker, Share and
+  // the pagination control the user just clicked with it. A different scope is
+  // a different board, so that still clears.
+  const visibleLeaderboard =
+    leaderboard && selectedScope && leaderboard.scope.key === selectedScope.key
+      ? leaderboard
+      : null;
+  const leaderboardStale = visibleLeaderboard != null && loadedRequestKey !== selectedRequestKey;
+  // A board kept from the previous request does not answer the one that just
+  // failed, so failures still take the surface.
+  const noFreshLeaderboard = visibleLeaderboard == null || leaderboardStale;
   const visibleFailure = failure?.requestKey === selectedRequestKey ? failure.kind : null;
   const boardParticipantCount = visibleLeaderboard?.totalMembers ?? null;
 
@@ -224,8 +239,12 @@ export default function LeaderboardSection({
         return;
       }
       if (authGeneration == null || getValidatedAuthGeneration() !== authGeneration) {
-        setAccessLoading(true);
-        setAccessError(null);
+        // Wait while the credential is still being established. Once the
+        // session has settled without one, it never will: useAuth keeps
+        // presenting a session whose refetch failed, so this would otherwise
+        // be a spinner with no message and no way out.
+        setAccessLoading(!authSettled);
+        setAccessError(authSettled ? "auth" : null);
         return;
       }
       setAccessLoading(true);
@@ -248,7 +267,7 @@ export default function LeaderboardSection({
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
       }
     },
-    [accountId, authGeneration]
+    [accountId, authGeneration, authSettled]
   );
 
   useEffect(() => {
@@ -964,11 +983,11 @@ export default function LeaderboardSection({
           onInvite={openLeaderboardGrowthAction}
           pendingInvites={pendingInvites}
         />
-      ) : visibleFailure === "policy" && !visibleLeaderboard ? (
+      ) : visibleFailure === "policy" && noFreshLeaderboard ? (
         <div className="flex min-h-48 items-center justify-center px-5 py-10 text-center">
           <p className="text-sm font-medium">{t("insights.leaderboard.joinPolicyBlocked")}</p>
         </div>
-      ) : visibleFailure && !visibleLeaderboard ? (
+      ) : visibleFailure && noFreshLeaderboard ? (
         <LeaderboardRetryCard
           actionDisabled={visibleFailure === "sso" && ssoActionDisabled}
           actionLabel={
@@ -998,7 +1017,13 @@ export default function LeaderboardSection({
           <Loader2 size={18} className="animate-spin" />
         </div>
       ) : (
-        <>
+        <div
+          aria-busy={leaderboardStale}
+          className={cn(
+            "motion-safe:transition-opacity motion-safe:duration-150",
+            leaderboardStale && "opacity-60"
+          )}
+        >
           {shouldShowLeaderboardEmptyStrip(
             selectedScope.memberCount,
             visibleLeaderboard.totalMembers
@@ -1204,7 +1229,7 @@ export default function LeaderboardSection({
               )}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {visibleLeaderboard && (

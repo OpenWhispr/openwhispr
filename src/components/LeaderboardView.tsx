@@ -24,7 +24,7 @@ export default function LeaderboardView({
   syncAllowedByPolicy,
 }: LeaderboardViewProps) {
   const { t } = useTranslation();
-  const { isSignedIn, user } = useAuth();
+  const { isLoaded: authSettled, isSignedIn, user } = useAuth();
   const authGeneration = getValidatedAuthGeneration();
   const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState<boolean | null>(null);
   const [ssoStarting, setSsoStarting] = useState(false);
@@ -103,6 +103,7 @@ export default function LeaderboardView({
         key={user?.id ?? "guest"}
         accountId={user?.id ?? null}
         authGeneration={authGeneration}
+        authSettled={authSettled}
         isSignedIn={isSignedIn}
         participating={isSignedIn && participationEnabled}
         cloudAccessAllowed={syncAllowedByPolicy}
