@@ -279,6 +279,34 @@ async function responseOffersModel(response, model) {
   }
 }
 
+async function resolveXaiProviderTestConfig(config, oauth = {}) {
+  const existingKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
+  if (existingKey) {
+    return { ...config, apiKey: existingKey };
+  }
+
+  if (typeof oauth.getValidAccessToken === "function") {
+    try {
+      const token = await oauth.getValidAccessToken();
+      if (token) {
+        return { ...config, apiKey: token, oauthSessionValid: true };
+      }
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+    }
+  }
+
+  let connected = Boolean(config?.oauthConnected);
+  if (!connected && typeof oauth.status === "function") {
+    const status = await oauth.status();
+    connected = Boolean(status?.connected);
+  }
+  if (connected) {
+    return { ...config, oauthSessionValid: true };
+  }
+  return null;
+}
+
 async function testProviderConnection(config, fetchImpl = fetch) {
   const provider = String(config?.provider || "").toLowerCase();
   if (provider === "xai" && config?.oauthSessionValid) {
@@ -340,4 +368,8 @@ async function testProviderConnection(config, fetchImpl = fetch) {
   return { success: false, ...failure };
 }
 
-module.exports = { resolveProviderRequest, testProviderConnection };
+module.exports = {
+  resolveProviderRequest,
+  resolveXaiProviderTestConfig,
+  testProviderConnection,
+};

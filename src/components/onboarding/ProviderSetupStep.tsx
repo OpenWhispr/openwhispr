@@ -746,6 +746,7 @@ export function ByokProviderStep({
             scope: assistant ? "reasoning" : "transcription",
             provider: testingProvider,
             apiKey: testingKey,
+            oauthConnected: isXaiCloud && xaiOAuthConnected,
             baseUrl: testingBaseUrl,
             model:
               isXaiCloud && !assistant

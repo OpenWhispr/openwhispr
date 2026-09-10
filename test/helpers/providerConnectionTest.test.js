@@ -1,8 +1,9 @@
-const assert = require("node:assert/strict");
 const test = require("node:test");
-const providerTest = require("../../src/helpers/providerConnectionTest.js");
+const assert = require("node:assert/strict");
+const providerTest = require("../../src/helpers/providerConnectionTest");
 
-const { resolveProviderRequest, testProviderConnection } = providerTest;
+const { resolveProviderRequest, resolveXaiProviderTestConfig, testProviderConnection } =
+  providerTest;
 
 test("builds provider tests without placing credentials in the URL", () => {
   const request = resolveProviderRequest({ provider: "openai", apiKey: "secret" });
@@ -167,6 +168,39 @@ test("xAI grok-stt does not have to appear on /v1/models", async () => {
   );
 });
 
+test("xAI resolver uses SuperGrok token when console key is empty", async () => {
+  const resolved = await resolveXaiProviderTestConfig(
+    { provider: "xai", apiKey: "  " },
+    { getValidAccessToken: async () => "oauth-bearer" }
+  );
+  assert.equal(resolved.apiKey, "oauth-bearer");
+  assert.equal(resolved.oauthSessionValid, true);
+});
+
+test("xAI resolver keeps a SuperGrok session if token refresh fails", async () => {
+  const resolved = await resolveXaiProviderTestConfig(
+    { provider: "xai", oauthConnected: true },
+    {
+      getValidAccessToken: async () => {
+        const error = new Error("expired");
+        error.name = "ReauthRequired";
+        throw error;
+      },
+    }
+  );
+  assert.equal(resolved.apiKey, undefined);
+  assert.equal(resolved.oauthSessionValid, true);
+});
+
+test("xAI resolver requires a key when SuperGrok is disconnected", async () => {
+  assert.equal(
+    await resolveXaiProviderTestConfig(
+      { provider: "xai" },
+      { getValidAccessToken: async () => null, status: async () => ({ connected: false }) }
+    ),
+    null
+  );
+});
 
 test("maps authentication and transport failures to safe messages", async () => {
   assert.deepEqual(

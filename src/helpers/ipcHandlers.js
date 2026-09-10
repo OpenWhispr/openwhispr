@@ -197,7 +197,7 @@ const CONNECTION_TEST_MAX_OUTPUT_TOKENS = 16;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 const { createAbortError } = require("./abortError");
-const { testProviderConnection } = require("./providerConnectionTest");
+const { testProviderConnection, resolveXaiProviderTestConfig } = require("./providerConnectionTest");
 const { createUploadCancelRegistry } = require("./uploadCancelRegistry");
 const { applyOpenWhisprOriginHeader } = require("./sessionHeaders");
 const {
@@ -1344,27 +1344,28 @@ class IPCHandlers {
         }
       }
       if (config?.provider === "xai") {
-        const existingKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
-        if (!existingKey) {
-          try {
-            const token = await this.environmentManager.xaiOAuth?.getValidAccessToken();
-            if (token) {
-              return testProviderConnection({ ...config, oauthSessionValid: true });
-            }
-          } catch (error) {
-            if (error?.name === "AbortError") {
-              return {
-                success: false,
-                errorCode: "timeout",
-                error: "The connection test timed out.",
-              };
-            }
+        try {
+          const resolved = await resolveXaiProviderTestConfig(
+            config,
+            this.environmentManager.xaiOAuth
+          );
+          if (!resolved) {
+            return {
+              success: false,
+              errorCode: "apiKeyRequired",
+              error: "Add an API key before testing.",
+            };
           }
-          return {
-            success: false,
-            errorCode: "apiKeyRequired",
-            error: "Add an API key before testing.",
-          };
+          return testProviderConnection(resolved);
+        } catch (error) {
+          if (error?.name === "AbortError") {
+            return {
+              success: false,
+              errorCode: "timeout",
+              error: "The connection test timed out.",
+            };
+          }
+          throw error;
         }
       }
       return testProviderConnection(config);

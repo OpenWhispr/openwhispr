@@ -29,9 +29,15 @@ export default function ProviderConnectionTest({
 
   useEffect(() => {
     requestIdRef.current += 1;
-    setStatus("idle");
-    setError(null);
-    onSuccessChange(false);
+    if (config.oauthConnected) {
+      setStatus("success");
+      setError(null);
+      onSuccessChange(true);
+    } else {
+      setStatus("idle");
+      setError(null);
+      onSuccessChange(false);
+    }
     return () => {
       requestIdRef.current += 1;
     };
@@ -42,6 +48,7 @@ export default function ProviderConnectionTest({
     config.clientSecret,
     config.environment,
     config.model,
+    config.oauthConnected,
     config.provider,
     config.scope,
     config.tenant,
