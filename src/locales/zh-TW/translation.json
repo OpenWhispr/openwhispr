@@ -828,6 +828,7 @@
     }
   },
   "transcription": {
+    "modelCard": "模型卡",
     "deleteModel": {
       "title": "刪除模型",
       "description": "確定要刪除此模型嗎？如果之後要使用，需要重新下載。"
@@ -2517,7 +2518,8 @@
         "parakeet_tdt_0_6b_v3": "快速多語言 ASR，自動語言偵測（25 種語言）",
         "parakeet_unified_en_0_6b": "僅英語 ASR，最先進的準確度（平均 WER 5.91%）",
         "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron 英語串流語音辨識",
-        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron 多語言串流語音辨識，自動語言偵測（15 種語言）"
+        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron 多語言串流語音辨識，自動語言偵測（15 種語言）",
+        "orukeet": "針對多語言語音辨識微調的 Parakeet"
       },
       "whisper": {
         "tiny": "最快速，品質較低",

@@ -319,3 +319,38 @@ test("Parakeet refuses cancellation after installation starts", async () => {
   assert.equal(aborted, false);
   assert.equal(manager.currentDownloadProcess, active);
 });
+
+test("an old Orukeet GGUF install requires the sherpa ONNX package", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-orukeet-layout-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const modelName = "orukeet-v0.1.0-q8";
+  const modelDirectory = path.join(directory, modelName);
+  await fs.mkdir(modelDirectory);
+  await fs.writeFile(path.join(modelDirectory, "orukeet-r3-93ce19c6-q8.gguf"), "old model");
+  const manager = new ParakeetManager();
+  manager.getModelsDir = () => directory;
+  manager.serverManager.getModelsDir = () => directory;
+  assert.equal((await manager.checkModelStatus(modelName)).downloaded, false);
+  for (const file of ["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx"]) {
+    await fs.writeFile(path.join(modelDirectory, file), "onnx fixture");
+  }
+  assert.equal((await manager.checkModelStatus(modelName)).downloaded, false);
+  await fs.writeFile(path.join(modelDirectory, "tokens.txt"), "<blk> 0");
+  assert.equal((await manager.checkModelStatus(modelName)).downloaded, true);
+});
+
+test("Orukeet inherits the packaged sherpa macOS floor before download or startup", async (t) => {
+  stubMacosVersion(t, "14.8");
+  const manager = new ParakeetManager();
+  const modelName = "orukeet-v0.1.0-q8";
+  manager.getModelsDir = () => {
+    throw new Error("unexpected filesystem access");
+  };
+  manager.serverManager.startServer = async () => {
+    throw new Error("unexpected startup");
+  };
+  assert.equal((await manager.startServer(modelName)).code, "PARAKEET_UNSUPPORTED_OS");
+  await assert.rejects(manager.downloadParakeetModel(modelName), {
+    code: "PARAKEET_UNSUPPORTED_OS",
+  });
+});

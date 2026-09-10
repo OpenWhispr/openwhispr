@@ -109,6 +109,9 @@ export interface ParakeetModelInfo {
   supportedLanguages: string[];
   runtime?: "offline" | "online";
   modelType?: "transducer" | "cohere-transcribe";
+  organization?: { id: string; name: string };
+  license?: string;
+  modelCardUrl?: string;
   recommended?: boolean;
   downloadUrl: string;
   extractDir: string;

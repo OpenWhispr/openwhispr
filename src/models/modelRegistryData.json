@@ -115,6 +115,52 @@
       "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01.tar.bz2",
       "extractDir": "sherpa-onnx-cohere-transcribe-14-lang-int8-2026-04-01",
       "descriptionKey": "models.descriptions.cohere.cohere_transcribe_03_2026"
+    },
+    "orukeet-v0.1.0-q8": {
+      "name": "Orukeet",
+      "description": "Multilingual Parakeet fine-tune with frozen Gabor kernels",
+      "descriptionKey": "models.descriptions.parakeet.orukeet",
+      "size": "671MB",
+      "sizeMb": 670.718459,
+      "expectedSizeBytes": 486664389,
+      "language": "multilingual",
+      "supportedLanguages": [
+        "bg",
+        "hr",
+        "cs",
+        "da",
+        "nl",
+        "en",
+        "et",
+        "fi",
+        "fr",
+        "de",
+        "el",
+        "hu",
+        "it",
+        "lv",
+        "lt",
+        "mt",
+        "pl",
+        "pt",
+        "ro",
+        "sk",
+        "sl",
+        "es",
+        "sv",
+        "ru",
+        "uk"
+      ],
+      "runtime": "offline",
+      "recommended": true,
+      "extractDir": "sherpa-onnx-orukeet-v0.1.0-int8",
+      "downloadUrl": "https://huggingface.co/oruk/orukeet/resolve/74673cf049c0c18f2572dab89f716b077461c2ea/onnx/sherpa-onnx-orukeet-v0.1.0-int8.tar.bz2",
+      "license": "CC-BY-SA-4.0",
+      "organization": {
+        "id": "oruk",
+        "name": "Oruk"
+      },
+      "modelCardUrl": "https://huggingface.co/oruk/orukeet"
     }
   },
   "diarizationModels": {
