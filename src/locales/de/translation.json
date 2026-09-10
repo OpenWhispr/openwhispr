@@ -916,6 +916,11 @@
         "failedTitle": "Übersetzung fehlgeschlagen",
         "failedDescription": "Der Originaltext wurde eingefügt. Du kannst es im Verlauf erneut versuchen."
       },
+      "pushForceStopped": {
+        "title": "Transkription nicht eingefügt",
+        "description": "Das Diktat wurde beendet, während die Taste noch gedrückt war, daher wurde der Text nicht eingefügt. Deine Transkription befindet sich in der Zwischenablage.",
+        "descriptionClipboardFailed": "Das Diktat wurde beendet, während die Taste noch gedrückt war. Der Text wurde nicht eingefügt und konnte auch nicht in die Zwischenablage kopiert werden."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Auswahlbearbeitung nicht angewendet",
         "changed": "Der ausgewählte Text oder die Ziel-App wurde während der Verarbeitung geändert. Es wurde nichts ersetzt.",

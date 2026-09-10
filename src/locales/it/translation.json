@@ -916,6 +916,11 @@
         "failedTitle": "Traduzione non riuscita",
         "failedDescription": "È stato incollato il testo originale. Puoi riprovare dalla History."
       },
+      "pushForceStopped": {
+        "title": "Trascrizione non incollata",
+        "description": "La dettatura si è interrotta mentre il tasto era ancora premuto, quindi il testo non è stato incollato. La trascrizione è negli appunti.",
+        "descriptionClipboardFailed": "La dettatura si è interrotta mentre il tasto era ancora premuto: il testo non è stato incollato e non è stato possibile copiarlo negli appunti."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Modifica della selezione non applicata",
         "changed": "Il testo selezionato o l’app di destinazione è cambiato durante l’elaborazione. Non è stato sostituito nulla.",

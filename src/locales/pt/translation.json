@@ -895,6 +895,11 @@
         "failedTitle": "Falha na tradução",
         "failedDescription": "O texto original foi colado. Você pode tentar novamente pelo Histórico."
       },
+      "pushForceStopped": {
+        "title": "Transcrição não colada",
+        "description": "O ditado parou enquanto a tecla ainda estava pressionada, por isso o texto não foi colado. Sua transcrição está na área de transferência.",
+        "descriptionClipboardFailed": "O ditado parou enquanto a tecla ainda estava pressionada, por isso o texto não foi colado e também não foi possível copiá-lo para a área de transferência."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Edição da seleção não aplicada",
         "changed": "O texto selecionado ou o aplicativo de destino mudou durante o processamento. Nada foi substituído.",

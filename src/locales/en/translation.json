@@ -916,6 +916,11 @@
         "failedTitle": "Translation failed",
         "failedDescription": "The original text was pasted. You can retry it from History."
       },
+      "pushForceStopped": {
+        "title": "Transcription not pasted",
+        "description": "Dictation stopped while the hotkey was still held, so the text was not pasted. Your transcription is on the clipboard.",
+        "descriptionClipboardFailed": "Dictation stopped while the hotkey was still held, so the text was not pasted, and it could not be copied to the clipboard either."
+      },
       "selectionEditing": {
         "notAppliedTitle": "Selection edit not applied",
         "changed": "The selected text or target app changed while OpenWhispr was processing. Nothing was replaced.",

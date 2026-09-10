@@ -693,6 +693,16 @@ class WindowManager {
     }
   }
 
+  // A push that ends without a physical release leaves the trigger keys down, so
+  // an injected paste shortcut lands in a modifier state the target app cannot
+  // interpret and the transcript is lost. Tell the renderer to hold the text
+  // back instead of pasting it.
+  _notifyPushForceStopped(reason) {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("dictation-force-stopped", { reason });
+    }
+  }
+
   forceStopMacCompoundPush(reason = "manual") {
     if (!this.macCompoundPushState) {
       return;
@@ -705,15 +715,13 @@ class WindowManager {
     const wasRecording = this.macCompoundPushState.isRecording;
     this.macCompoundPushState = null;
 
+    this._notifyPushForceStopped(reason);
+
     if (wasRecording) {
       this.sendStopDictation();
     } else {
       this.sendCancelDictationPreparation();
-    }
-    this.hideDictationPanel();
-
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send("compound-ptt-force-stopped", { reason });
+      this.hideDictationPanel();
     }
   }
 
@@ -775,7 +783,7 @@ class WindowManager {
     const safetyTimeoutId = setTimeout(() => {
       if (!this.winPushState || this.winPushState.downTime !== downTime) return;
       debugLogger.warn("Native PTT safety timeout", undefined, "ptt");
-      this.handleWindowsPushKeyUp();
+      this.handleWindowsPushKeyUp(undefined, { reason: "timeout" });
     }, MAX_PUSH_DURATION_MS);
 
     this.winPushState = {
@@ -798,9 +806,11 @@ class WindowManager {
     }, MIN_HOLD_DURATION_MS);
   }
 
-  // With several dictation hotkeys bound, only the key that started the push
-  // may stop it; called without a key to force-stop (resetWindowsPushState).
-  handleWindowsPushKeyUp(key) {
+  // With several dictation hotkeys bound, only the key that started the push may
+  // stop it; called without a key to force-stop. "release" is the user letting
+  // go; every other reason ends a push whose trigger keys are still physically
+  // down, which the renderer must know before it pastes.
+  handleWindowsPushKeyUp(key, { reason = "release" } = {}) {
     if (!this.winPushState?.active) {
       return;
     }
@@ -815,6 +825,8 @@ class WindowManager {
     const wasRecording = this.winPushState.isRecording;
     this.winPushState = null;
 
+    if (reason !== "release") this._notifyPushForceStopped(reason);
+
     if (wasRecording) {
       this.sendStopDictation();
     } else {
@@ -828,7 +840,7 @@ class WindowManager {
       return;
     }
 
-    this.handleWindowsPushKeyUp();
+    this.handleWindowsPushKeyUp(undefined, { reason: "reset" });
   }
 
   _isOnboardingInputAllowed(inputKind) {
