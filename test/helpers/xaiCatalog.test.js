@@ -5,7 +5,7 @@ const Module = require("node:module");
 const catalogModulePath = require.resolve("../../src/helpers/xaiCatalog.js");
 const originalLoad = Module._load;
 
-function loadCatalog(fetchImpl) {
+function loadCatalog() {
   delete require.cache[catalogModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
@@ -37,19 +37,7 @@ const CHAT_MODEL = {
 };
 
 test("keeps text language models and drops imagine/voice/latest", async () => {
-  const { getXaiLanguageModels } = loadCatalog(async () =>
-    okResponse([
-      CHAT_MODEL,
-      { id: "latest", output_modalities: ["text"], created: 300 },
-      { id: "grok-imagine-image", output_modalities: ["image"], created: 250 },
-      {
-        id: "grok-voice-think-fast-2.0",
-        output_modalities: ["text"],
-        created: 240,
-      },
-      { id: "grok-stt", output_modalities: ["text"], created: 230 },
-    ])
-  );
+  const { getXaiLanguageModels } = loadCatalog();
 
   assert.deepEqual(
     await getXaiLanguageModels({
