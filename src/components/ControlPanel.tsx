@@ -107,6 +107,7 @@ const DictionaryView = React.lazy(() => import("./DictionaryView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
 const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
 const ChatView = React.lazy(() => import("./chat/ChatView"));
+const XaiTtsPlayground = React.lazy(() => import("./XaiTtsPlayground"));
 const CommandSearch = React.lazy(() => import("./CommandSearch"));
 
 interface ControlPanelProps {
@@ -1189,6 +1190,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             {activeView === "chat" && agentAllowedByPolicy && (
               <Suspense fallback={null}>
                 <ChatView />
+              </Suspense>
+            )}
+            {activeView === "voice" && (
+              <Suspense fallback={null}>
+                <div className="max-w-3xl mx-auto w-full px-4 pb-8">
+                  <XaiTtsPlayground />
+                </div>
               </Suspense>
             )}
             {activeView === "personal-notes" && (

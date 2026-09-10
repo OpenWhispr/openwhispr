@@ -43,18 +43,31 @@ function redirect(res, params) {
   res.end();
 }
 
-// Runs a PKCE auth-code flow through an ephemeral 127.0.0.1 server:
+// Runs a PKCE auth-code flow through a 127.0.0.1 server:
 // - buildAuthUrl(redirectUri, state, codeChallenge) → provider authorize URL
 // - handleCallback(code, redirectUri, codeVerifier) → resolves the flow result;
 //   called once with a state-validated code, throws (OAuthFlowError for a
 //   specific callback-page code) to reject.
 // - errorParam — query-param name for the hosted desktop-callback page
 //   (e.g. "gcal_error"); the success param is derived from the same prefix.
-function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
+// - listenPort / callbackPath — optional; default is an ephemeral port and no
+//   path (calendar). SuperGrok requires 56121 + "/callback".
+function runOAuthLoopbackFlow({
+  buildAuthUrl,
+  handleCallback,
+  errorParam,
+  listenPort = 0,
+  callbackPath = "",
+  pkceBytes,
+  requireStateToSettle = false,
+}) {
   const connectedParam = errorParam.replace(/_error$/, "_connected");
 
   return new Promise((resolve, reject) => {
-    const codeVerifier = crypto.randomBytes(32).toString("base64url").slice(0, 43);
+    const codeVerifier =
+      pkceBytes == null
+        ? crypto.randomBytes(32).toString("base64url").slice(0, 43)
+        : crypto.randomBytes(pkceBytes).toString("base64url");
     const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
     const state = crypto.randomBytes(32).toString("hex");
     let callbackClaimed = false;
@@ -75,6 +88,11 @@ function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
         const error = url.searchParams.get("error");
 
         if (error) {
+          if (requireStateToSettle && returnedState !== state) {
+            res.writeHead(400, { "Content-Type": "text/html" });
+            res.end("<html><body><h3>Invalid request.</h3></body></html>");
+            return;
+          }
           callbackClaimed = true;
           redirect(res, { [errorParam]: error });
           cleanup();
@@ -86,9 +104,11 @@ function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
           res.writeHead(400, { "Content-Type": "text/html" });
           res.end("<html><body><h3>Invalid request.</h3></body></html>");
           // A real callback with a code but the wrong state is a failed
-          // attempt (stale tab, CSRF). Fail the flow now. A request with no
-          // code (favicon / bare GET) must keep waiting for the redirect.
-          if (code) {
+          // attempt (stale tab, CSRF). Fail the flow now — unless the listen
+          // port is a well-known SuperGrok callback, where unauthenticated
+          // GETs must not abort login. A request with no code (favicon /
+          // bare GET) must keep waiting for the redirect.
+          if (code && !requireStateToSettle) {
             callbackClaimed = true;
             cleanup();
             reject(new Error("OAuth state mismatch"));
@@ -97,7 +117,7 @@ function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
         }
 
         callbackClaimed = true;
-        const redirectUri = `http://127.0.0.1:${server.address().port}`;
+        const redirectUri = loopbackRedirectUri(server, callbackPath);
         const result = await handleCallback(code, redirectUri, codeVerifier);
 
         redirect(res, { [connectedParam]: "true" });
@@ -118,9 +138,8 @@ function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
       server.close();
     };
 
-    server.listen(0, "127.0.0.1", () => {
-      const port = server.address().port;
-      const redirectUri = `http://127.0.0.1:${port}`;
+    server.listen(listenPort, "127.0.0.1", () => {
+      const redirectUri = loopbackRedirectUri(server, callbackPath);
       // Fire-and-forget like the shell.openExternal call it replaced: a failed
       // browser launch surfaces as the flow timeout.
       openExternalUrl(buildAuthUrl(redirectUri, state, codeChallenge)).catch(() => {});
@@ -137,6 +156,10 @@ function runOAuthLoopbackFlow({ buildAuthUrl, handleCallback, errorParam }) {
       reject(err);
     });
   });
+}
+
+function loopbackRedirectUri(server, callbackPath) {
+  return `http://127.0.0.1:${server.address().port}${callbackPath || ""}`;
 }
 
 module.exports = { runOAuthLoopbackFlow, OAuthFlowError };

@@ -8,7 +8,7 @@ import type {
   InferenceMode,
 } from "../types/electron";
 import { Button } from "./ui/button";
-import { CircleAlert, Cloud, Lock, Zap } from "lucide-react";
+import { CircleAlert, Cloud, Loader2, Lock, Zap } from "lucide-react";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
@@ -22,6 +22,7 @@ import {
   isProviderValidForMode,
 } from "../models/ModelRegistry";
 import { useTinfoilModels } from "../hooks/useTinfoilModels";
+import { useXaiModels } from "../hooks/useXaiModels";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
@@ -55,6 +56,7 @@ const CLOUD_PROVIDER_IDS = [
   OPENROUTER_TAB,
   "tinfoil",
   "corti",
+  "xai",
   "custom",
 ];
 
@@ -353,6 +355,11 @@ export default function ReasoningModelSelector({
   const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
   const groqApiKey = useSettingsStore((s) => s.groqApiKey);
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
+  const xaiApiKey = useSettingsStore((s) => s.xaiApiKey);
+  const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
+  const xaiOAuthConnected = useSettingsStore((s) => s.xaiOAuthConnected);
+  const setXaiOAuthConnected = useSettingsStore((s) => s.setXaiOAuthConnected);
+  const [xaiOauthBusy, setXaiOauthBusy] = useState(false);
   const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
   const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
   const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
@@ -393,6 +400,11 @@ export default function ReasoningModelSelector({
     loading: tinfoilModelsLoading,
     error: tinfoilModelsError,
   } = useTinfoilModels(displayedCloudProvider === "tinfoil");
+  const {
+    models: xaiModels,
+    loading: xaiModelsLoading,
+    error: xaiModelsError,
+  } = useXaiModels(displayedCloudProvider === "xai");
   const modeTabs = [
     ...(isModeAllowedByPolicy(policyState, "llm", "providers") && cloudProviders.length > 0
       ? [{ id: "cloud", name: t("reasoning.mode.cloud") }]
@@ -445,7 +457,9 @@ export default function ReasoningModelSelector({
     const models =
       displayedCloudProvider === "tinfoil"
         ? tinfoilModels.map(toReasoningModel)
-        : REASONING_PROVIDERS[displayedCloudProvider as keyof typeof REASONING_PROVIDERS]?.models;
+        : displayedCloudProvider === "xai"
+          ? xaiModels.map(toReasoningModel)
+          : REASONING_PROVIDERS[displayedCloudProvider as keyof typeof REASONING_PROVIDERS]?.models;
 
     if (!models) return [];
 
@@ -457,7 +471,7 @@ export default function ReasoningModelSelector({
       icon: iconUrl,
       invertInDark,
     }));
-  }, [displayedCloudProvider, openaiModelOptions, tinfoilModels, t]);
+  }, [displayedCloudProvider, openaiModelOptions, tinfoilModels, xaiModels, t]);
 
   useEffect(() => {
     const localProviderIds = localProviders.map((p) => p.id);
@@ -509,6 +523,37 @@ export default function ReasoningModelSelector({
     if (!providerAllowed(provider)) return;
     setSelectedCloudProvider(provider);
   };
+
+  const applyXaiOAuthStatus = useCallback(
+    (status: { connected?: boolean; error?: string } | undefined) => {
+      setXaiOAuthConnected(Boolean(status?.connected) && !status?.error);
+    },
+    [setXaiOAuthConnected]
+  );
+
+  const handleXaiOAuthLogin = useCallback(async () => {
+    setXaiOauthBusy(true);
+    try {
+      const result = await window.electronAPI.xaiOAuthLogin?.();
+      applyXaiOAuthStatus(result);
+    } catch {
+      applyXaiOAuthStatus(await window.electronAPI.xaiOAuthStatus?.());
+    } finally {
+      setXaiOauthBusy(false);
+    }
+  }, [applyXaiOAuthStatus]);
+
+  const handleXaiOAuthLogout = useCallback(async () => {
+    setXaiOauthBusy(true);
+    try {
+      const result = await window.electronAPI.xaiOAuthLogout?.();
+      applyXaiOAuthStatus(result);
+    } catch {
+      applyXaiOAuthStatus(await window.electronAPI.xaiOAuthStatus?.());
+    } finally {
+      setXaiOauthBusy(false);
+    }
+  }, [applyXaiOAuthStatus]);
 
   const handleLocalProviderChange = (providerId: string) => {
     setSelectedLocalProvider(providerId);
@@ -652,6 +697,63 @@ export default function ReasoningModelSelector({
                     </div>
                   )}
 
+                  {displayedCloudProvider === "xai" && (
+                    <div className="space-y-2">
+                      {!xaiOAuthConnected ? (
+                        <p className="text-xs text-muted-foreground">
+                          {t("settings.speech.xaiOauth.hint")}
+                        </p>
+                      ) : null}
+                      <div className="flex items-center justify-between gap-2">
+                        {xaiOAuthConnected ? (
+                          <>
+                            <p className="text-xs font-medium text-foreground">
+                              {t("settings.speech.xaiOauth.connected")}
+                            </p>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={xaiOauthBusy}
+                              onClick={() => void handleXaiOAuthLogout()}
+                            >
+                              {xaiOauthBusy ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : null}
+                              {t("settings.speech.xaiOauth.disconnect")}
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={xaiOauthBusy}
+                            onClick={() => void handleXaiOAuthLogin()}
+                          >
+                            {xaiOauthBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                            {t("settings.speech.xaiOauth.connect")}
+                          </Button>
+                        )}
+                      </div>
+                      {!xaiOAuthConnected ? (
+                        <>
+                          <div className="flex items-baseline justify-between">
+                            <h4 className="font-medium text-foreground">
+                              {t("settings.speech.xaiOauth.orApiKey")}
+                            </h4>
+                            <GetApiKeyLink url="https://console.x.ai" />
+                          </div>
+                          <ApiKeyInput
+                            apiKey={xaiApiKey}
+                            setApiKey={setXaiApiKey}
+                            label=""
+                            helpText=""
+                          />
+                        </>
+                      ) : null}
+                    </div>
+                  )}
+
                   {displayedCloudProvider === "tinfoil" && (
                     <div className="space-y-2">
                       <div className="flex items-baseline justify-between">
@@ -694,18 +796,25 @@ export default function ReasoningModelSelector({
                       }
                       onModelSelect={handleModelSelect}
                     />
-                    {displayedCloudProvider === "tinfoil" && (
+                    {(displayedCloudProvider === "tinfoil" || displayedCloudProvider === "xai") && (
                       <>
-                        {tinfoilModelsLoading && (
+                        {(displayedCloudProvider === "tinfoil"
+                          ? tinfoilModelsLoading
+                          : xaiModelsLoading) && (
                           <p className="text-xs text-muted-foreground">
                             {t("reasoning.tinfoil.refreshingModels")}
                           </p>
                         )}
-                        {!tinfoilModelsLoading && tinfoilModelsError && (
-                          <p className="text-xs text-destructive">
-                            {t("reasoning.custom.unableToLoadModels")}
-                          </p>
-                        )}
+                        {!(displayedCloudProvider === "tinfoil"
+                          ? tinfoilModelsLoading
+                          : xaiModelsLoading) &&
+                          (displayedCloudProvider === "tinfoil"
+                            ? tinfoilModelsError
+                            : xaiModelsError) && (
+                            <p className="text-xs text-destructive">
+                              {t("reasoning.custom.unableToLoadModels")}
+                            </p>
+                          )}
                       </>
                     )}
                   </div>

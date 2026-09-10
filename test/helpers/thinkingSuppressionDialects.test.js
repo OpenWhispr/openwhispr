@@ -235,3 +235,28 @@ test("cerebras hosts are strict like groq: family effort only, no chat_template_
   suppressThinking(unknown, "cerebras", "llama-4-maverick");
   assert.deepEqual(unknown, {});
 });
+
+test("detectEndpointDialect maps api.x.ai to chat-completions max_tokens", async () => {
+  const { detectEndpointDialect } = await load();
+
+  assert.deepEqual(detectEndpointDialect("https://api.x.ai/v1"), {
+    key: "xai",
+    tokenParam: "max_tokens",
+    supportsTemperature: true,
+  });
+  assert.equal(detectEndpointDialect("https://api.x.ai/v1/chat/completions")?.key, "xai");
+  assert.equal(detectEndpointDialect("https://API.X.AI/v1")?.key, "xai");
+  assert.equal(detectEndpointDialect("https://x.ai.evil.com")?.key, undefined);
+});
+
+test("xai is strict like groq: family effort only, no chat_template_kwargs", async () => {
+  const { suppressThinking } = await load();
+
+  const gptOss = {};
+  suppressThinking(gptOss, "xai", "gpt-oss-120b");
+  assert.deepEqual(gptOss, { reasoning_effort: "low" });
+
+  const grok = {};
+  suppressThinking(grok, "xai", "grok-4.5");
+  assert.deepEqual(grok, {});
+});

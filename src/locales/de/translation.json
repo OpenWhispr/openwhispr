@@ -55,6 +55,15 @@
         "title": "Sprecher erkennen und beschriften",
         "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
       }
+    },
+    "speech": {
+      "xaiOauth": {
+        "connect": "Mit Grok anmelden",
+        "disconnect": "Abmelden",
+        "connected": "Grok-Abo verbunden",
+        "hint": "Nutzt Ihren SuperGrok-Tarif. Kein console.x.ai-API-Schlüssel erforderlich.",
+        "orApiKey": "Oder einen Konsolen-API-Schlüssel einfügen"
+      }
     }
   },
   "tray": {
@@ -357,10 +366,14 @@
         "showMore": "Weitere Optionen anzeigen",
         "moreOptions": {
           "title": "API-Einrichtung wählen",
-          "description": "Fügen Sie einen API-Schlüssel hinzu oder verbinden Sie ein selbst gehostetes Modell.",
+          "description": "API-Schlüssel hinzufügen, mit Grok anmelden oder ein Self-hosted-Modell verbinden.",
           "selfHosted": {
             "title": "Selbst gehostet",
             "description": "Verbinden Sie Ihr eigenes gehostetes Modell."
+          },
+          "xaiOAuth": {
+            "title": "Grok-Abo",
+            "description": "Mit SuperGrok anmelden. Kein Console-API-Schlüssel."
           }
         }
       },
@@ -1555,6 +1568,10 @@
       "system": {
         "description": "Updates, Speicher & Entwicklertools",
         "label": "System"
+      },
+      "textToSpeech": {
+        "label": "Text-zu-Sprache",
+        "description": "xAI-Stimmen für erzeugte Sprache"
       }
     },
     "title": "Einstellungen"
@@ -2593,6 +2610,75 @@
       "upgradeCta": "Jetzt upgraden",
       "upgradedTitle": "Upgrade auf Enterprise abgeschlossen",
       "upgradedDescription": "{{workspace}} ist jetzt auf Enterprise."
+    },
+    "textToSpeech": {
+      "title": "Text-to-Speech",
+      "description": "Wähle den Cloud-Anbieter für Text-zu-Sprache. Vorerst nur xAI.",
+      "placeholder": "Enter text to convert here…",
+      "generate": "Generate audio",
+      "charCount": "{{count}} / {{max}}",
+      "examples": {
+        "pick": "Pick an example to generate",
+        "orCustom": "or enter any custom text",
+        "support": "Support",
+        "sales": "Sales",
+        "podcast": "Podcast",
+        "announcement": "Announcement",
+        "meditation": "Meditation",
+        "supportText": "Hi, thanks for reaching out. I looked into this and I can help you sort it out right now.",
+        "salesText": "This quarter we shipped the workflow our customers asked for. Let me walk you through what changed.",
+        "podcastText": "Welcome back. Today we are talking about the quiet systems that actually keep a product alive.",
+        "announcementText": "Heads up: maintenance starts tonight at 11. Service should be back before morning.",
+        "meditationText": "Take a slow breath in. Let the shoulders drop. There is nothing you need to fix in this moment."
+      },
+      "voices": {
+        "label": "Voice",
+        "search": "Search voices",
+        "custom": "Your voices",
+        "default": "Default voices",
+        "empty": "No voices in this list.",
+        "male": "Male",
+        "female": "Female",
+        "multilingual": "Multilingual"
+      },
+      "effects": {
+        "add": "Add effects",
+        "search": "Search effect",
+        "instant": "Instant",
+        "wrapping": "Wrapping",
+        "categories": {
+          "pauses": "Pauses",
+          "laughter": "Laughter & crying",
+          "mouth": "Mouth sounds",
+          "breathing": "Breathing",
+          "volume": "Volume & intensity",
+          "pitch": "Pitch & speed",
+          "style": "Vocal style"
+        }
+      },
+      "format": {
+        "speed": "Speech speed",
+        "streamingLabel": "Streaming optimization",
+        "streaming": {
+          "0": "Quality",
+          "1": "Balanced",
+          "2": "Fast"
+        },
+        "sampleRate": "Sample rate",
+        "bitRate": "Bit rate",
+        "textNormalization": "Text normalization",
+        "timestamps": "Timestamps"
+      },
+      "errors": {
+        "generic": "Could not generate audio.",
+        "textRequired": "Enter text to convert.",
+        "textTooLong": "Text is too long.",
+        "credentialsRequired": "Sign in with Grok or add an xAI API key.",
+        "credentialsRejected": "xAI rejected these credentials.",
+        "providerStatus": "xAI could not generate audio.",
+        "network": "Could not reach xAI.",
+        "emptyAudio": "xAI returned no audio."
+      }
     }
   },
   "models": {
@@ -2680,7 +2766,10 @@
         "corti_corti_s1_instant": "Schnelles Gesundheitsmodell, ohne Reasoning-Spur",
         "corti_corti_s1": "Leistungsfähigstes klinisches Modell mit Reasoning",
         "corti_corti_s1_mini_instant": "Kompaktes Gesundheitsmodell, am schnellsten und günstigsten",
-        "corti_corti_s1_mini": "Kompaktes klinisches Modell mit Reasoning zum halben Preis"
+        "corti_corti_s1_mini": "Kompaktes klinisches Modell mit Reasoning zum halben Preis",
+        "xai_grok_4_5": "Flaggschiff-Grok für Bereinigung und Sprachassistent",
+        "xai_grok_4_fast": "Schnelles Grok für latenzarme Bereinigung",
+        "xai_grok_4_3": "Vorherige Grok-Generation"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Leistungsstärkstes Claude-Modell. Ideal für die schwierigsten Assistenten-Aufgaben.",
@@ -2881,7 +2970,8 @@
     "notSignedIn": "Nicht angemeldet",
     "chat": "Chat",
     "collapse": "Seitenleiste einklappen",
-    "expand": "Seitenleiste ausklappen"
+    "expand": "Seitenleiste ausklappen",
+    "voice": "Stimme"
   },
   "workspaces": {
     "switcher": {

@@ -167,14 +167,20 @@ test("versioned sessions reject malformed or old data", async () => {
 
   const legacyV2 = { ...session };
   delete legacyV2.selfHostedRequested;
+  delete legacyV2.xaiOAuthRequested;
   delete legacyV2.resume;
   assert.equal(parseOnboardingSession(JSON.stringify(legacyV2)).selfHostedRequested, false);
+  assert.equal(parseOnboardingSession(JSON.stringify(legacyV2)).xaiOAuthRequested, false);
   assert.deepEqual(
     parseOnboardingSession(JSON.stringify(legacyV2)).resume,
     createOnboardingSession().resume
   );
   assert.equal(
     parseOnboardingSession(JSON.stringify({ ...session, selfHostedRequested: "yes" })),
+    null
+  );
+  assert.equal(
+    parseOnboardingSession(JSON.stringify({ ...session, xaiOAuthRequested: "yes" })),
     null
   );
 });
