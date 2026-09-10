@@ -111,22 +111,22 @@ because it feeds one-line search previews, and it must not be reused or
 Rules, chosen so that nothing a human would type in plain text is ever
 altered:
 
-| Markdown | Becomes |
-|---|---|
-| ` ```lang ` fences | Fence lines removed, the code inside kept verbatim |
-| `` `code` `` | `code` |
-| `# Heading` … `###### Heading` | `Heading` |
-| `**bold**`, `__bold__` | `bold` |
-| `*em*`, `_em_` (paired, hugging non-space) | `em` |
-| `~~struck~~` | `struck` |
-| `[text](url)` | `text (url)`, or just `url` when text equals url |
-| `![alt](url)` | `alt` |
-| `* item`, `+ item` | `- item` |
-| `- item`, `1. item` | unchanged — humans type these in plain text |
-| `> quoted` | `quoted` |
-| `---`, `***`, `___` on a line by itself | line removed |
-| `\| a \| b \|` rows | outer pipes dropped, cells joined by a tab; the `\|---\|` alignment row removed |
-| `\*`, `\_`, `` \` `` and the other markdown escapes | the escaped character |
+| Markdown                                            | Becomes                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------- |
+| ` ```lang ` fences                                  | Fence lines removed, the code inside kept verbatim                              |
+| `` `code` ``                                        | `code`                                                                          |
+| `# Heading` … `###### Heading`                      | `Heading`                                                                       |
+| `**bold**`, `__bold__`                              | `bold`                                                                          |
+| `*em*`, `_em_` (paired, hugging non-space)          | `em`                                                                            |
+| `~~struck~~`                                        | `struck`                                                                        |
+| `[text](url)`                                       | `text (url)`, or just `url` when text equals url                                |
+| `![alt](url)`                                       | `alt`                                                                           |
+| `* item`, `+ item`                                  | `- item`                                                                        |
+| `- item`, `1. item`                                 | unchanged — humans type these in plain text                                     |
+| `> quoted`                                          | `quoted`                                                                        |
+| `---`, `***`, `___` on a line by itself             | line removed                                                                    |
+| `\| a \| b \|` rows                                 | outer pipes dropped, cells joined by a tab; the `\|---\|` alignment row removed |
+| `\*`, `\_`, `` \` `` and the other markdown escapes | the escaped character                                                           |
 
 Explicitly not altered: `2 * 3 * 4` (spaces around the star), `snake_case_names`
 (underscore inside a word), a lone `*` or `_`, and email-style `> ` is stripped
@@ -225,7 +225,7 @@ Checked against `origin/main` at `a2c76ef9` on 2026-09-10:
 - `DEFAULT_CHAT_AGENT_PROMPT` is three sentences with no format instruction
   (`src/config/prompts/registry.ts`).
 - `AssistantPanel.tsx` line 209 passes `suppressResponseContent:
-  targetsCapturedInput`; content still reaches `persistence.saveAssistantMessage`.
+targetsCapturedInput`; content still reaches `persistence.saveAssistantMessage`.
 - `pasteAtCapturedTarget` returns four refusal codes and logs only the thrown
   case (`src/helpers/selectionManager.js` lines 257–291).
 - The cloud route forwards the client `systemPrompt` on every tool-loop step
