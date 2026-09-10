@@ -531,6 +531,25 @@ export function getParakeetModelInfo(modelId: string): ParakeetModelInfo | undef
   return modelData.parakeetModels[modelId];
 }
 
+export type ParakeetLanguageCompatibility =
+  "compatible" | "english-only" | "language-required" | "unsupported";
+
+export function getParakeetLanguageCompatibility(
+  modelId: string,
+  language: string
+): ParakeetLanguageCompatibility {
+  const model = getParakeetModelInfo(modelId);
+  if (!model) return "compatible";
+
+  const baseLanguage = language === "auto" ? "" : language.split("-")[0].toLowerCase();
+  if (!baseLanguage) {
+    if (model.modelType === "cohere-transcribe") return "language-required";
+    return model.language === "en" ? "english-only" : "compatible";
+  }
+  if (!model.supportedLanguages.includes(baseLanguage)) return "unsupported";
+  return model.language === "en" ? "english-only" : "compatible";
+}
+
 export function isOnlineParakeetModel(modelId: string): boolean {
   return modelData.parakeetModels[modelId]?.runtime === "online";
 }

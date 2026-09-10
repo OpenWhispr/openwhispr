@@ -15,13 +15,13 @@ function buildLanguageSet(key: "whisper" | "assemblyai"): Set<string> {
 const WHISPER_LANGUAGES = buildLanguageSet("whisper");
 const ASSEMBLYAI_UNIVERSAL3_PRO_LANGUAGES = buildLanguageSet("assemblyai");
 
-const LANGUAGE_INSTRUCTIONS: Record<string, string> = Object.fromEntries(
+const ORTHOGRAPHY_INSTRUCTIONS: Record<string, string> = Object.fromEntries(
   registry.languages
     .filter(
-      (l): l is typeof l & { instruction: string } =>
-        "instruction" in l && typeof l.instruction === "string"
+      (l): l is typeof l & { orthographyInstruction: string } =>
+        "orthographyInstruction" in l && typeof l.orthographyInstruction === "string"
     )
-    .map((l) => [l.code, l.instruction])
+    .map((l) => [l.code, l.orthographyInstruction])
 );
 
 export function getBaseLanguageCode(language: string | null | undefined): string | undefined {
@@ -31,12 +31,8 @@ export function getBaseLanguageCode(language: string | null | undefined): string
 
 export function getLanguageInstruction(language: string | undefined): string {
   if (!language) return "";
-  return LANGUAGE_INSTRUCTIONS[language] || buildGenericInstruction(language);
-}
-
-function buildGenericInstruction(langCode: string): string {
-  const template = registry._genericTemplate || "";
-  return template.replace("{{code}}", langCode);
+  const orthographyInstruction = ORTHOGRAPHY_INSTRUCTIONS[language];
+  return [registry._genericTemplate, orthographyInstruction].filter(Boolean).join(" ");
 }
 
 export function getLanguageLabel(code: string | null | undefined): string {
