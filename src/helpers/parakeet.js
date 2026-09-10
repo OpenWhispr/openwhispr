@@ -293,9 +293,9 @@ class ParakeetManager {
       textLength: output?.text?.length || 0,
     });
 
-    // Missing output or a missing text field is a broken decode, not silence —
-    // only a present-but-empty transcript means the recording was actually blank.
-    if (!output || typeof output.text !== "string") {
+    // Missing or entirely truncated output is a broken decode. Only a completed
+    // empty transcript is a no-speech outcome.
+    if (!output || typeof output.text !== "string" || (output.truncated && !output.text.trim())) {
       return {
         success: false,
         error: "invalid_response",
@@ -306,7 +306,7 @@ class ParakeetManager {
     const text = output.text.trim();
 
     if (!text) {
-      return { success: false, message: "No audio detected" };
+      return { success: false, code: "NO_SPEECH_DETECTED", message: "No audio detected" };
     }
 
     // Surfaced by the renderer as a partial-transcription warning toast.
