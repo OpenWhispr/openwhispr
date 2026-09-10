@@ -1,5 +1,4 @@
 import ReasoningService from "../services/ReasoningService";
-import { PROVIDER_REGISTRY } from "../services/ai/inferenceProviders";
 import logger from "../utils/logger";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
@@ -90,6 +89,7 @@ import {
   resolveDictationAgentInference,
   resolveDictationAgentVisionInference,
 } from "./dictationAgentInference";
+import { providerSupportsImages } from "../services/ai/inferenceProviders";
 import { resolveDictationTranslationInference } from "./dictationTranslationInference";
 import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
@@ -162,9 +162,6 @@ function analyticsSyncEnabled(settings = getSettings()) {
     getEffectiveRetentionPreferences().dataRetentionEnabled
   );
 }
-
-const providerSupportsImages = (providerId) =>
-  !!(providerId && PROVIDER_REGISTRY[providerId]?.supportsImages);
 
 // Shared by the agent route and its text-only retry, which needs the prompt
 // without the screen-context suffix.
@@ -295,11 +292,11 @@ function resolveReasoningRoute(
           : systemPrompt,
         ...(attach ? { screenContext, textOnlySystemPrompt: systemPrompt } : {}),
         // Selection edits run on this (dictation) scope, so they need it
-        // reachable; standalone commands run on the chat scope in the panel.
+        // reachable; standalone commands resolve the same scope again in the
+        // panel and report their own configuration problems in-conversation.
         selectionEditReachable: agent.reachable,
-        // The panel re-decides attach/drop against the chat scope's model,
-        // which may see images even when this scope's cannot — carry the raw
-        // screenshot past the attach gate for that path.
+        // The panel re-decides attach/drop for its own request, so carry the
+        // raw screenshot past this attach gate for that path.
         ...(screenContext ? { rawScreenContext: screenContext } : {}),
       },
     };
@@ -2558,8 +2555,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       transcript,
       // resolveReasoningRoute mirrors an attached screenContext into
       // rawScreenContext (same object), so the raw carry is the single source
-      // to read — it also survives when the agent scope's attach gate dropped
-      // the image (the panel re-decides against the chat scope's model).
+      // to read — it also survives when this attach gate dropped the image
+      // (the panel re-decides for its own request).
       screenContext: config?.rawScreenContext ?? null,
       ...(selectedContext ? { selectedContext } : {}),
       ...(deliverySessionId ? { deliverySessionId } : {}),
@@ -2582,8 +2579,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return extras;
   }
 
-  // Panel-first commands skip the dictation-agent model, so the org policy
-  // guard that protected that model must run here instead.
+  // Panel-first commands make no LLM call here — the panel resolves the Voice
+  // Assistant scope itself — so the org policy guard must run at bank time.
   _bankPanelAgentCommand(
     text,
     agentName,
@@ -2913,8 +2910,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       !cleanupReachable &&
       !agentReachable &&
       !(this.translationRequested && translationChainReachable(settings)) &&
-      // A voice-assistant command always routes: standalone commands run on
-      // the chat scope in the panel, so no dictation-scope model is needed.
+      // A voice-assistant command always routes: standalone commands stream
+      // in the panel, which reports a missing model in-conversation.
       !this.voiceAgentRequested
     ) {
       logger.logReasoning("REASONING_SKIPPED", {

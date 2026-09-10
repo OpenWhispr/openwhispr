@@ -2,8 +2,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
 import { getCloudModel, isEnterpriseProvider } from "../../models/ModelRegistry";
-import { PROVIDER_REGISTRY } from "../../services/ai/inferenceProviders";
+import { providerSupportsImages } from "../../services/ai/inferenceProviders";
 import { getSettings, selectResolvedLLMConfig } from "../../stores/settingsStore";
+import { resolveAssistantPanelInference } from "../../helpers/dictationAgentInference.js";
 import {
   isAgentAllowed,
   isLlmSelectionAllowed,
@@ -62,9 +63,18 @@ async function buildRAGContext(userText: string, scope?: ContainerScope): Promis
   }
 }
 
+/**
+ * Which settings scope answers a conversation. Typed chat surfaces stay on the
+ * Chat scope; the voice assistant panel runs on the Voice Assistant scope so
+ * the model picked under Settings > Voice Assistant is the one that answers.
+ */
+export type ChatStreamingScope = "chatIntelligence" | "dictationAgent";
+
 interface UseChatStreamingOptions {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  /** Settings scope the conversation resolves its provider and model from. */
+  inferenceScope?: ChatStreamingScope;
   /** Optional note context to prepend to the system prompt (used by embedded note chat). */
   noteContext?: string;
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
@@ -104,8 +114,6 @@ export interface ChatStreaming {
 // their model ids never appear in the registry (vision would be a guess that
 // errors the whole command on a text-only backend). The cloud path carries its
 // screenshot separately as a server-routed field below.
-const providerSupportsStreamImages = (providerId: string) =>
-  Boolean(providerId && PROVIDER_REGISTRY[providerId]?.supportsImages);
 
 type HistoryMessage = { role: string; content: string | Array<Record<string, unknown>> };
 
@@ -126,6 +134,7 @@ function transformLastUserMessage(
 export function useChatStreaming({
   messages,
   setMessages,
+  inferenceScope = "chatIntelligence",
   noteContext: externalNoteContext,
   searchScope,
   onStreamComplete,
@@ -233,18 +242,25 @@ export function useChatStreaming({
         if (!options?.suppressResponseContent) onResponseContent?.();
       };
       const settings = getSettings();
-      const chatConfig = selectResolvedLLMConfig(settings, "chatIntelligence");
-      const chatAgentMode = chatConfig.mode || "openwhispr";
+      const { config: llmConfig, dropScreenContext } =
+        inferenceScope === "dictationAgent"
+          ? resolveAssistantPanelInference(settings, {
+              hasScreenContext: !!options?.attachment,
+              isProviderImageWired: providerSupportsImages,
+            })
+          : { config: selectResolvedLLMConfig(settings, inferenceScope), dropScreenContext: false };
+      const requestedAttachment = dropScreenContext ? null : (options?.attachment ?? null);
+      const llmMode = llmConfig.mode || "openwhispr";
       const policyState = usePolicyStore.getState();
       const policyProvider =
-        chatAgentMode === "openwhispr"
+        llmMode === "openwhispr"
           ? "openwhispr"
-          : chatAgentMode === "local"
+          : llmMode === "local"
             ? "local"
-            : chatConfig.provider;
+            : llmConfig.provider;
       if (
         !isAgentAllowed(policyState) ||
-        !isLlmSelectionAllowed(policyState, { mode: chatAgentMode, provider: policyProvider })
+        !isLlmSelectionAllowed(policyState, { mode: llmMode, provider: policyProvider })
       ) {
         // The user message is already appended; answer it instead of dead-ending silently.
         const restriction = !isAgentAllowed(policyState)
@@ -259,11 +275,11 @@ export function useChatStreaming({
       }
 
       setAgentState("thinking");
-      const isCloudAgent = chatAgentMode === "openwhispr" && settings.isSignedIn;
-      const isLanAgent = chatAgentMode === "self-hosted" && !!chatConfig.remoteUrl;
-      const isCustomAgent = chatAgentMode === "providers" && chatConfig.provider === "custom";
+      const isCloudAgent = llmMode === "openwhispr" && settings.isSignedIn;
+      const isLanAgent = llmMode === "self-hosted" && !!llmConfig.remoteUrl;
+      const isCustomAgent = llmMode === "providers" && llmConfig.provider === "custom";
       const isLocalProvider =
-        !isEnterpriseProvider(chatConfig.provider) &&
+        !isEnterpriseProvider(llmConfig.provider) &&
         ![
           "openai",
           "groq",
@@ -273,9 +289,9 @@ export function useChatStreaming({
           "tinfoil",
           "openrouter",
           "corti",
-        ].includes(chatConfig.provider);
+        ].includes(llmConfig.provider);
       const localModelCanUseTool =
-        isLocalProvider && estimateModelSizeB(chatConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B;
+        isLocalProvider && estimateModelSizeB(llmConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B;
       const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
 
       const scope = searchScopeRef.current;
@@ -336,17 +352,17 @@ export function useChatStreaming({
       // agent gets it as a dedicated field the server vision-routes (older
       // servers strip the unknown field, which degrades to a plain command).
       const attachment =
-        options?.attachment &&
+        requestedAttachment &&
         !isCloudAgent &&
         !isLanAgent &&
         !isLocalProvider &&
-        providerSupportsStreamImages(chatConfig.provider) &&
-        getCloudModel(chatConfig.model)?.supportsVision
-          ? options.attachment
+        providerSupportsImages(llmConfig.provider) &&
+        getCloudModel(llmConfig.model)?.supportsVision
+          ? requestedAttachment
           : null;
       const cloudScreenContext =
-        options?.attachment && isCloudAgent
-          ? { data: options.attachment.image, mediaType: options.attachment.mediaType }
+        requestedAttachment && isCloudAgent
+          ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
           : null;
       if (attachment) {
         // The screenshot needs its grounding instruction, exactly like the
@@ -423,16 +439,16 @@ export function useChatStreaming({
           const aiTools = registry?.toAISDKFormat();
           stream = ReasoningService.processTextStreamingAI(
             llmMessages,
-            chatConfig.model,
-            chatConfig.provider,
+            llmConfig.model,
+            llmConfig.provider,
             {
               systemPrompt,
-              inferenceScope: "chatIntelligence",
-              lanUrl: isLanAgent ? chatConfig.remoteUrl : undefined,
-              baseUrl: isCustomAgent ? chatConfig.cloudBaseUrl || undefined : undefined,
+              inferenceScope,
+              lanUrl: isLanAgent ? llmConfig.remoteUrl : undefined,
+              baseUrl: isCustomAgent ? llmConfig.cloudBaseUrl || undefined : undefined,
               customApiKey:
-                isCustomAgent || isLanAgent ? chatConfig.customApiKey || undefined : undefined,
-              disableThinking: chatConfig.disableThinking,
+                isCustomAgent || isLanAgent ? llmConfig.customApiKey || undefined : undefined,
+              disableThinking: llmConfig.disableThinking,
             },
             aiTools
           );

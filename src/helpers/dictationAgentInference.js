@@ -106,6 +106,7 @@ export function resolveDictationAgentVisionInference(settings, { isSignedIn = fa
       !!settings.useDictationAgentVisionModel &&
       chosen &&
       resolveModeReachability({ mode, provider, model, isCloud, isSelfHosted: false }),
+    mode,
     // Cloud picks the model server-side from its vision chain.
     model: isCloud ? "" : model,
     config: {
@@ -117,5 +118,55 @@ export function resolveDictationAgentVisionInference(settings, { isSignedIn = fa
       customApiKey: isCustom ? customApiKey || undefined : undefined,
       disableThinking: resolved.disableThinking,
     },
+  };
+}
+
+/**
+ * What the voice assistant panel streams a standalone command on. The panel
+ * runs on the Voice Assistant scope — the same settings tab that governs
+ * selection edits — so the model the user picks there is the one that answers.
+ * A screenshot swaps in the vision override when the user configured one and
+ * it can actually see images; an override that cannot drops the screenshot
+ * rather than quietly redirecting it to a model the user did not choose,
+ * mirroring resolveAgentImageTarget on the dictation route.
+ *
+ * `isProviderImageWired` is injected (the provider registry reads Vite env at
+ * load, which this helper's callers and tests do not all have).
+ *
+ * @param {import("../stores/settingsStore").SettingsState} settings
+ * @param {{
+ *   hasScreenContext?: boolean,
+ *   isProviderImageWired?: (providerId: string | undefined) => boolean,
+ * }} [options]
+ * @returns {{
+ *   config: import("../stores/settingsStore").ResolvedLLMConfig,
+ *   dropScreenContext: boolean,
+ * }}
+ */
+export function resolveAssistantPanelInference(
+  settings,
+  { hasScreenContext = false, isProviderImageWired = () => false } = {}
+) {
+  const agent = selectResolvedLLMConfig(settings, "dictationAgent");
+  if (!hasScreenContext) return { config: agent, dropScreenContext: false };
+
+  const vision = resolveDictationAgentVisionInference(settings, {
+    isSignedIn: !!settings.isSignedIn,
+  });
+  if (!vision.active) return { config: agent, dropScreenContext: false };
+  if (!isProviderImageWired(vision.config.provider)) {
+    return { config: agent, dropScreenContext: true };
+  }
+  return {
+    config: {
+      scope: "dictationAgentVision",
+      mode: vision.mode,
+      provider: vision.config.provider,
+      model: vision.model,
+      cloudBaseUrl: vision.config.baseUrl,
+      customApiKey: vision.config.customApiKey,
+      disableThinking: vision.config.disableThinking,
+    },
+    dropScreenContext: false,
   };
 }

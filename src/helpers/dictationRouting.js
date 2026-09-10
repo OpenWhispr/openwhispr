@@ -154,8 +154,8 @@ export function resolveWakeWordLanguage({ preferredLanguage, uiLanguage }, detec
 // Decides which reasoning path ("translation" | "agent" | "cleanup" | "skip")
 // a finished dictation takes. A recording started via the voice assistant
 // hotkey always takes the agent path — no wake word needed. Standalone
-// commands stream into the assistant panel (which resolves the chat scope and
-// reports its own configuration problems in-conversation), so the dictation
+// commands stream into the assistant panel (which resolves the Voice Assistant
+// scope itself and reports configuration problems in-conversation), so the dictation
 // agent's reachability only gates selection edits — that check happens at the
 // selection disposition, not here. A translation recording degrades to
 // cleanup instead: the transcript is still a useful dictation without the

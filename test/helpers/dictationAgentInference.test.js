@@ -276,3 +276,96 @@ test("a vision scope with its own endpoint never borrows the agent's key", async
     "the agent's key must not ride to the vision scope's own endpoint"
   );
 });
+
+// The assistant panel answers spoken commands on the Voice Assistant scope —
+// the tab the user actually edits — never the Chat scope.
+const imageWired = (providerId) =>
+  ["openai", "anthropic", "gemini", "openwhispr"].includes(providerId);
+const panelSettings = {
+  ...baseSettings,
+  isSignedIn: false,
+  chatAgentMode: "providers",
+  chatAgentProvider: "anthropic",
+  chatAgentModel: "claude-sonnet-4-5",
+  useDictationAgentVisionModel: false,
+  dictationAgentVisionMode: "",
+  dictationAgentVisionProvider: "",
+  dictationAgentVisionModel: "",
+  dictationAgentVisionCloudBaseUrl: "",
+  dictationAgentVisionCustomApiKey: "",
+};
+
+test("the assistant panel resolves the Voice Assistant scope, not the Chat scope", async () => {
+  const { resolveAssistantPanelInference } = await load();
+
+  const { config, dropScreenContext } = resolveAssistantPanelInference(panelSettings);
+
+  assert.equal(config.scope, "dictationAgent");
+  assert.equal(config.provider, "openai");
+  assert.equal(config.model, "gpt-5-mini");
+  assert.equal(dropScreenContext, false);
+});
+
+test("a screenshot keeps the base scope when no vision override is configured", async () => {
+  const { resolveAssistantPanelInference } = await load();
+
+  const { config, dropScreenContext } = resolveAssistantPanelInference(panelSettings, {
+    hasScreenContext: true,
+    isProviderImageWired: imageWired,
+  });
+
+  assert.equal(config.scope, "dictationAgent");
+  assert.equal(config.model, "gpt-5-mini");
+  assert.equal(dropScreenContext, false, "the base scope's own gate decides whether it attaches");
+});
+
+test("a screenshot swaps the panel onto the vision override", async () => {
+  const { resolveAssistantPanelInference } = await load();
+
+  const { config, dropScreenContext } = resolveAssistantPanelInference(
+    {
+      ...panelSettings,
+      useDictationAgentVisionModel: true,
+      dictationAgentVisionMode: "providers",
+      dictationAgentVisionProvider: "gemini",
+      dictationAgentVisionModel: "gemini-2.5-flash",
+    },
+    { hasScreenContext: true, isProviderImageWired: imageWired }
+  );
+
+  assert.equal(config.scope, "dictationAgentVision");
+  assert.equal(config.mode, "providers");
+  assert.equal(config.provider, "gemini");
+  assert.equal(config.model, "gemini-2.5-flash");
+  assert.equal(dropScreenContext, false);
+});
+
+test("the vision override toggle alone does not redirect without a chosen model", async () => {
+  const { resolveAssistantPanelInference } = await load();
+
+  const { config } = resolveAssistantPanelInference(
+    { ...panelSettings, useDictationAgentVisionModel: true, dictationAgentVisionMode: "providers" },
+    { hasScreenContext: true, isProviderImageWired: imageWired }
+  );
+
+  assert.equal(config.scope, "dictationAgent");
+});
+
+test("a vision override that cannot see images drops the screenshot instead of redirecting", async () => {
+  const { resolveAssistantPanelInference } = await load();
+
+  const { config, dropScreenContext } = resolveAssistantPanelInference(
+    {
+      ...panelSettings,
+      useDictationAgentVisionModel: true,
+      dictationAgentVisionMode: "providers",
+      // groq's client is not image-wired in the provider registry.
+      dictationAgentVisionProvider: "groq",
+      dictationAgentVisionModel: "llama-3.3-70b-versatile",
+    },
+    { hasScreenContext: true, isProviderImageWired: imageWired }
+  );
+
+  assert.equal(config.scope, "dictationAgent");
+  assert.equal(dropScreenContext, true);
+});
