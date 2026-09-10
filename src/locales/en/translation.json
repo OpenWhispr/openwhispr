@@ -2079,7 +2079,13 @@
         "availableTitle": "Organization setup available",
         "availableDescription": "Use {{provider}} without managing credentials.",
         "useManaged": "Use managed"
-      }
+      },
+      "removeFillerWords": "Remove filler words",
+      "removeFillerWordsDescription": "Automatically remove filler sounds like um, uh, er from transcriptions",
+      "fillerWordsLabel": "Filler words to remove:",
+      "fillerWordsAdd": "Add",
+      "fillerWordsReset": "Reset",
+      "fillerWordsPlaceholder": "Add word"
     },
     "developer": {
       "clearCache": "Clear Cache",

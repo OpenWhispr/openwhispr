@@ -1790,7 +1790,13 @@
         "availableTitle": "可使用組織設定",
         "availableDescription": "使用 {{provider}}，無需管理憑證。",
         "useManaged": "使用託管設定"
-      }
+      },
+      "removeFillerWords": "移除填充詞",
+      "removeFillerWordsDescription": "自動從轉錄文字中移除「嗯」「呃」「啊」等填充音",
+      "fillerWordsLabel": "要移除的填充詞：",
+      "fillerWordsAdd": "新增",
+      "fillerWordsReset": "重設",
+      "fillerWordsPlaceholder": "新增詞語"
     },
     "developer": {
       "clearCache": "清除快取",

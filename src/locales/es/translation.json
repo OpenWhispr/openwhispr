@@ -1838,7 +1838,13 @@
         "availableTitle": "Configuración de la organización disponible",
         "availableDescription": "Usa {{provider}} sin gestionar credenciales.",
         "useManaged": "Usar gestionado"
-      }
+      },
+      "removeFillerWords": "Eliminar muletillas",
+      "removeFillerWordsDescription": "Elimina automáticamente sonidos de relleno como um, eh, este de las transcripciones",
+      "fillerWordsLabel": "Muletillas a eliminar:",
+      "fillerWordsAdd": "Añadir",
+      "fillerWordsReset": "Restablecer",
+      "fillerWordsPlaceholder": "Añadir palabra"
     },
     "developer": {
       "clearCache": "Borrar caché",

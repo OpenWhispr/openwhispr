@@ -36,7 +36,9 @@ import {
   Wand2,
   Upload,
   Languages,
+  X,
 } from "lucide-react";
+import { DEFAULT_FILLER_WORDS } from "../helpers/fillerWords";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut } from "../lib/auth";
 import { deleteAccount } from "../lib/accountDeletionRequest";
@@ -824,6 +826,10 @@ function TranscriptionSection({
 interface AiModelsSectionProps {
   useCleanupModel: boolean;
   setUseCleanupModel: (value: boolean) => void;
+  removeFillerWords: boolean;
+  setRemoveFillerWords: (value: boolean) => void;
+  fillerWords: string[];
+  setFillerWords: (words: string[]) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -862,8 +868,27 @@ function NoteFormattingSettings() {
   );
 }
 
-function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModelsSectionProps) {
+function AiModelsSection({
+  useCleanupModel,
+  setUseCleanupModel,
+  removeFillerWords,
+  setRemoveFillerWords,
+  fillerWords,
+  setFillerWords,
+  toast,
+}: AiModelsSectionProps) {
   const { t } = useTranslation();
+  const [newFillerWord, setNewFillerWord] = useState("");
+
+  const addFillerWord = () => {
+    const word = newFillerWord.trim().toLowerCase();
+    if (!word || fillerWords.includes(word)) {
+      setNewFillerWord("");
+      return;
+    }
+    setFillerWords([...fillerWords, word]);
+    setNewFillerWord("");
+  };
 
   const handleCleanupModeChange = (mode: InferenceMode) => {
     const toastKey = CLEANUP_MODE_TOAST_KEY[mode];
@@ -877,6 +902,68 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
 
   return (
     <div className="space-y-4">
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.aiModels.removeFillerWords")}
+            description={t("settingsPage.aiModels.removeFillerWordsDescription")}
+          >
+            <Toggle checked={removeFillerWords} onChange={setRemoveFillerWords} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        {removeFillerWords && (
+          <SettingsPanelRow className="border-t border-foreground/4 dark:border-white/3">
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-foreground/60">
+                {t("settingsPage.aiModels.fillerWordsLabel")}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {fillerWords.map((word) => (
+                  <span
+                    key={word}
+                    className="group inline-flex items-center gap-1 rounded-md bg-foreground/5 dark:bg-white/5 px-2 py-1 text-xs text-foreground/60"
+                  >
+                    {word}
+                    <button
+                      type="button"
+                      onClick={() => setFillerWords(fillerWords.filter((w) => w !== word))}
+                      aria-label={t("dictionary.removeWord", { word })}
+                      className="text-foreground/25 hover:text-destructive/70 transition-colors"
+                    >
+                      <X size={11} strokeWidth={2} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={newFillerWord}
+                  onChange={(e) => setNewFillerWord(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addFillerWord();
+                    }
+                  }}
+                  placeholder={t("settingsPage.aiModels.fillerWordsPlaceholder")}
+                  className="h-7 text-xs flex-1"
+                />
+                <Button size="sm" onClick={addFillerWord} disabled={!newFillerWord.trim()}>
+                  {t("settingsPage.aiModels.fillerWordsAdd")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setFillerWords([...DEFAULT_FILLER_WORDS])}
+                >
+                  {t("settingsPage.aiModels.fillerWordsReset")}
+                </Button>
+              </div>
+            </div>
+          </SettingsPanelRow>
+        )}
+      </SettingsPanel>
+
       <SettingsPanel>
         <SettingsPanelRow>
           <SettingsRow
@@ -1190,6 +1277,10 @@ export default function SettingsPage({
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
     useCleanupModel,
+    removeFillerWords,
+    fillerWords,
+    setRemoveFillerWords,
+    setFillerWords,
     dictationKey,
     activationMode,
     setActivationMode,
@@ -4951,6 +5042,10 @@ EOF`,
                   setUseCleanupModel={(value) => {
                     updateCleanupSettings({ useCleanupModel: value });
                   }}
+                  removeFillerWords={removeFillerWords}
+                  setRemoveFillerWords={setRemoveFillerWords}
+                  fillerWords={fillerWords}
+                  setFillerWords={setFillerWords}
                   toast={toast}
                 />
                 <div className="border-t border-border/40 pt-6">

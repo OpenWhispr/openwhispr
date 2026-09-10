@@ -1794,7 +1794,13 @@
         "availableTitle": "Доступна настройка организации",
         "availableDescription": "Используйте {{provider}} без управления учётными данными.",
         "useManaged": "Использовать управляемый"
-      }
+      },
+      "removeFillerWords": "Удалять слова-паразиты",
+      "removeFillerWordsDescription": "Автоматически удаляет звуки-заполнители вроде «эм», «э-э», «мм» из транскрипций",
+      "fillerWordsLabel": "Слова-паразиты для удаления:",
+      "fillerWordsAdd": "Добавить",
+      "fillerWordsReset": "Сбросить",
+      "fillerWordsPlaceholder": "Добавить слово"
     },
     "developer": {
       "clearCache": "Очистить кеш",

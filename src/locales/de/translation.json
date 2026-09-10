@@ -2079,7 +2079,13 @@
         "availableTitle": "Einrichtung der Organisation verfügbar",
         "availableDescription": "{{provider}} ohne Verwaltung von Anmeldedaten nutzen.",
         "useManaged": "Verwaltet nutzen"
-      }
+      },
+      "removeFillerWords": "Füllwörter entfernen",
+      "removeFillerWordsDescription": "Entfernt Fülllaute wie ähm, äh, hm automatisch aus Transkriptionen",
+      "fillerWordsLabel": "Zu entfernende Füllwörter:",
+      "fillerWordsAdd": "Hinzufügen",
+      "fillerWordsReset": "Zurücksetzen",
+      "fillerWordsPlaceholder": "Wort hinzufügen"
     },
     "developer": {
       "clearCache": "Cache leeren",

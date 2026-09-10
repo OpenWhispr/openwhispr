@@ -3,6 +3,7 @@ import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
+import { DEFAULT_FILLER_WORDS } from "../helpers/fillerWords";
 import logger from "../utils/logger";
 import whisperVadConstants from "../constants/whisperVad.json";
 import type {
@@ -287,6 +288,7 @@ const BOOLEAN_SETTINGS = new Set([
 
 const ARRAY_SETTINGS = new Set([
   "customDictionary",
+  "fillerWords",
   "snippets",
   "gcalAccounts",
   "mcalAccounts",
@@ -1023,6 +1025,8 @@ export interface SettingsState
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
+  setRemoveFillerWords: (value: boolean) => void;
+  setFillerWords: (words: string[]) => void;
   setUseDictationAgent: (value: boolean) => void;
   setCleanupModel: (value: string) => void;
   setCleanupProvider: (value: string) => void;
@@ -1435,6 +1439,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
   useCleanupModel: readBoolean("useCleanupModel", true),
+  removeFillerWords: readBoolean("removeFillerWords", true),
+  fillerWords: readStringArray("fillerWords", DEFAULT_FILLER_WORDS),
   useDictationAgent: readBoolean("useDictationAgent", true),
   cleanupModel: readString("cleanupModel", ""),
   cleanupProvider: readString("cleanupProvider", "openai"),
@@ -1966,6 +1972,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
   setAutoGenerateNoteTitle: createBooleanSetter("autoGenerateNoteTitle"),
   setUseCleanupModel: createBooleanSetter("useCleanupModel"),
+  setRemoveFillerWords: createBooleanSetter("removeFillerWords"),
+
+  // Replaces the whole list, like setCustomDictionary: the settings UI always
+  // hands over the full set it is showing.
+  setFillerWords: (words: string[]) => {
+    if (isBrowser) localStorage.setItem("fillerWords", JSON.stringify(words));
+    set({ fillerWords: words });
+  },
   setUseDictationAgent: createBooleanSetter("useDictationAgent"),
   setCleanupProvider: createStringSetter("cleanupProvider"),
   setCleanupModel: createStringSetter("cleanupModel"),

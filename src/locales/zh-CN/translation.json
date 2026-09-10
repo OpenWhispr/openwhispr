@@ -1790,7 +1790,13 @@
         "availableTitle": "可使用组织配置",
         "availableDescription": "使用 {{provider}}，无需管理凭据。",
         "useManaged": "使用托管配置"
-      }
+      },
+      "removeFillerWords": "移除填充词",
+      "removeFillerWordsDescription": "自动从转录文本中移除“嗯”“呃”“啊”等填充音",
+      "fillerWordsLabel": "要移除的填充词：",
+      "fillerWordsAdd": "添加",
+      "fillerWordsReset": "重置",
+      "fillerWordsPlaceholder": "添加词语"
     },
     "developer": {
       "clearCache": "清除缓存",

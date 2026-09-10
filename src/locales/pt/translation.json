@@ -1769,7 +1769,13 @@
         "availableTitle": "Configuração da organização disponível",
         "availableDescription": "Use {{provider}} sem gerenciar credenciais.",
         "useManaged": "Usar gerenciado"
-      }
+      },
+      "removeFillerWords": "Remover palavras de preenchimento",
+      "removeFillerWordsDescription": "Remove automaticamente sons de preenchimento como hum, é, ah das transcrições",
+      "fillerWordsLabel": "Palavras de preenchimento a remover:",
+      "fillerWordsAdd": "Adicionar",
+      "fillerWordsReset": "Redefinir",
+      "fillerWordsPlaceholder": "Adicionar palavra"
     },
     "developer": {
       "clearCache": "Limpar cache",
