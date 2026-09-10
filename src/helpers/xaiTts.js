@@ -37,7 +37,8 @@ function parseVoices(payload, source) {
     .filter((voice) => typeof voice?.voice_id === "string" && voice.voice_id.trim())
     .map((voice) => ({
       voiceId: voice.voice_id.trim(),
-      name: typeof voice.name === "string" && voice.name.trim() ? voice.name.trim() : voice.voice_id,
+      name:
+        typeof voice.name === "string" && voice.name.trim() ? voice.name.trim() : voice.voice_id,
       language: typeof voice.language === "string" ? voice.language : "",
       gender: typeof voice.gender === "string" ? voice.gender : "",
       source,
@@ -142,7 +143,10 @@ async function synthesizeXaiTts({ getBearer, fetchImpl = fetch, input } = {}) {
       });
       return {
         success: false,
-        errorCode: response.status === 401 || response.status === 403 ? "credentialsRejected" : "providerStatus",
+        errorCode:
+          response.status === 401 || response.status === 403
+            ? "credentialsRejected"
+            : "providerStatus",
         error: `xAI TTS failed: ${response.status}`,
         status: response.status,
       };

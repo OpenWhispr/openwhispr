@@ -60,7 +60,13 @@ export default function XaiTtsProviderSettings() {
               <p className="text-xs font-medium text-foreground">
                 {t("settings.speech.xaiOauth.connected")}
               </p>
-              <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void logout()}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => void logout()}
+              >
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 {t("settings.speech.xaiOauth.disconnect")}
               </Button>

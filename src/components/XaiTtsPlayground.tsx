@@ -51,8 +51,18 @@ const WRAPPING_TAGS = [
   { open: "<soft>", close: "</soft>", key: "soft", category: "volume" },
   { open: "<whisper>", close: "</whisper>", key: "whisper", category: "volume" },
   { open: "<loud>", close: "</loud>", key: "loud", category: "volume" },
-  { open: "<build-intensity>", close: "</build-intensity>", key: "buildIntensity", category: "volume" },
-  { open: "<decrease-intensity>", close: "</decrease-intensity>", key: "decreaseIntensity", category: "volume" },
+  {
+    open: "<build-intensity>",
+    close: "</build-intensity>",
+    key: "buildIntensity",
+    category: "volume",
+  },
+  {
+    open: "<decrease-intensity>",
+    close: "</decrease-intensity>",
+    key: "decreaseIntensity",
+    category: "volume",
+  },
   { open: "<higher-pitch>", close: "</higher-pitch>", key: "higherPitch", category: "pitch" },
   { open: "<lower-pitch>", close: "</lower-pitch>", key: "lowerPitch", category: "pitch" },
   { open: "<slow>", close: "</slow>", key: "slow", category: "pitch" },
@@ -134,21 +144,24 @@ export default function XaiTtsPlayground() {
     },
     []
   );
-  const insertAtCursor = useCallback((snippet: string, wrap?: { open: string; close: string }) => {
-    const el = textareaRef.current;
-    const start = el?.selectionStart ?? text.length;
-    const end = el?.selectionEnd ?? text.length;
-    const selected = text.slice(start, end);
-    const inner = selected || (wrap ? "…" : snippet);
-    const inserted = wrap ? wrap.open + inner + wrap.close : snippet;
-    const next = text.slice(0, start) + inserted + text.slice(end);
-    setText(next);
-    requestAnimationFrame(() => {
-      el?.focus();
-      const caret = start + inserted.length;
-      el?.setSelectionRange(caret, caret);
-    });
-  }, [text]);
+  const insertAtCursor = useCallback(
+    (snippet: string, wrap?: { open: string; close: string }) => {
+      const el = textareaRef.current;
+      const start = el?.selectionStart ?? text.length;
+      const end = el?.selectionEnd ?? text.length;
+      const selected = text.slice(start, end);
+      const inner = selected || (wrap ? "…" : snippet);
+      const inserted = wrap ? wrap.open + inner + wrap.close : snippet;
+      const next = text.slice(0, start) + inserted + text.slice(end);
+      setText(next);
+      requestAnimationFrame(() => {
+        el?.focus();
+        const caret = start + inserted.length;
+        el?.setSelectionRange(caret, caret);
+      });
+    },
+    [text]
+  );
 
   const applyExample = (id: (typeof EXAMPLE_IDS)[number]) => {
     setText(t(`settingsPage.textToSpeech.examples.${id}Text`));
@@ -224,7 +237,8 @@ export default function XaiTtsPlayground() {
   const filteredVoices = useMemo(() => {
     const q = voiceQuery.trim().toLowerCase();
     return voices.filter((voice) => {
-      if (voiceTab === "custom" ? voice.source !== "custom" : voice.source !== "default") return false;
+      if (voiceTab === "custom" ? voice.source !== "custom" : voice.source !== "default")
+        return false;
       if (!q) return true;
       return voice.name.toLowerCase().includes(q) || voice.voiceId.toLowerCase().includes(q);
     });
@@ -292,7 +306,9 @@ export default function XaiTtsPlayground() {
                     type="button"
                     onClick={() => setVoiceTab(tab)}
                     className={`flex-1 rounded-md px-2 py-1 text-[11px] ${
-                      voiceTab === tab ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                      voiceTab === tab
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground"
                     }`}
                   >
                     {t(`settingsPage.textToSpeech.voices.${tab}`)}
@@ -315,7 +331,9 @@ export default function XaiTtsPlayground() {
                       }`}
                     >
                       <span className="text-xs font-medium">{voice.name}</span>
-                      <span className="text-[11px] text-muted-foreground">{voiceSubtitle(voice, t)}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {voiceSubtitle(voice, t)}
+                      </span>
                     </button>
                   ))
                 )}
@@ -347,7 +365,9 @@ export default function XaiTtsPlayground() {
                     type="button"
                     onClick={() => setEffectsTab(tab)}
                     className={`flex-1 rounded-md px-2 py-1 text-[11px] ${
-                      effectsTab === tab ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+                      effectsTab === tab
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground"
                     }`}
                   >
                     {t(`settingsPage.textToSpeech.effects.${tab}`)}
@@ -402,11 +422,16 @@ export default function XaiTtsPlayground() {
             </PopoverContent>
           </Popover>
 
-
           <Popover>
             <PopoverTrigger asChild>
-              <Button type="button" size="sm" variant="ghost" className="gap-1 text-xs text-muted-foreground">
-                {speed.toFixed(1)}x · {t(`settingsPage.textToSpeech.format.streaming.${streaming}`)} · MP3
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="gap-1 text-xs text-muted-foreground"
+              >
+                {speed.toFixed(1)}x · {t(`settingsPage.textToSpeech.format.streaming.${streaming}`)}{" "}
+                · MP3
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </PopoverTrigger>
@@ -454,7 +479,9 @@ export default function XaiTtsPlayground() {
                   max={SAMPLE_RATES.length - 1}
                   step={1}
                   value={SAMPLE_RATES.indexOf(sampleRate)}
-                  onChange={(event) => setSampleRate(SAMPLE_RATES[Number(event.target.value)] ?? 24000)}
+                  onChange={(event) =>
+                    setSampleRate(SAMPLE_RATES[Number(event.target.value)] ?? 24000)
+                  }
                   className="w-full"
                 />
               </label>
@@ -474,7 +501,9 @@ export default function XaiTtsPlayground() {
                 />
               </label>
               <div className="flex items-center justify-between">
-                <span className="text-xs">{t("settingsPage.textToSpeech.format.textNormalization")}</span>
+                <span className="text-xs">
+                  {t("settingsPage.textToSpeech.format.textNormalization")}
+                </span>
                 <Toggle checked={normalize} onChange={setNormalize} />
               </div>
               <div className="flex items-center justify-between">
@@ -510,8 +539,17 @@ export default function XaiTtsPlayground() {
                 </Button>
               </>
             )}
-            <Button type="button" size="sm" disabled={busy || !text.trim()} onClick={() => void generate()}>
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || !text.trim()}
+              onClick={() => void generate()}
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
               {t("settingsPage.textToSpeech.generate")}
             </Button>
           </div>
