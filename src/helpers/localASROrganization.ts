@@ -5,10 +5,10 @@ const catalog = modelData.parakeetModels as Record<
   { organization?: { id: string }; modelType?: string }
 >;
 export const LOCAL_ASR_ORGANIZATIONS = [
-  { id: "oruk", name: "Oruk" },
   { id: "whisper", name: "OpenAI" },
   { id: "nvidia", name: "NVIDIA" },
   { id: "cohere", name: "Cohere" },
+  { id: "oruk", name: "Oruk" },
 ];
 
 export function getASRModelOrganization(modelId: string): string {
