@@ -481,6 +481,63 @@ function migrateUploadTranscription() {
 
 migrateUploadTranscription();
 
+// Dictation and upload render `*TranscriptionMode` in their picker but route on
+// `*UseLocalWhisper` (audioManager, fileTranscription) and `*CloudTranscriptionMode`
+// (the `isOpenWhisprCloud` test), so routing can disagree with what the user sees
+// (#2086). Must run after the upload one-shot copy, which mirrors the dictation
+// keys desync-and-all and then latches.
+//
+// Note Recording is excluded: resolveMeetingTranscriptionOptions branches on
+// `meetingTranscriptionMode`, the key MeetingSettings renders, so it cannot
+// disagree, and no router reads `meetingUseLocalWhisper`.
+//
+// Never complete either rule symmetrically — it would start uploading audio from
+// profiles that exist: the mode-less Settings toggle wrote the local flag alone
+// until 6fb0c906, and ProviderSetupStep writes `cloudTranscriptionMode` before the
+// commit that derives the mode.
+const TRANSCRIPTION_ROUTING_KEYS: ReadonlyArray<{
+  mode: keyof SettingsState;
+  useLocal: keyof SettingsState;
+  cloudMode: keyof SettingsState;
+}> = [
+  { mode: "transcriptionMode", useLocal: "useLocalWhisper", cloudMode: "cloudTranscriptionMode" },
+  {
+    mode: "uploadTranscriptionMode",
+    useLocal: "uploadUseLocalWhisper",
+    cloudMode: "uploadCloudTranscriptionMode",
+  },
+];
+
+function reconcileTranscriptionRouting(): void {
+  if (!isBrowser) return;
+  const repaired: string[] = [];
+  for (const keys of TRANSCRIPTION_ROUTING_KEYS) {
+    const mode = localStorage.getItem(keys.mode);
+    if (mode === "local" && localStorage.getItem(keys.useLocal) !== "true") {
+      localStorage.setItem(keys.useLocal, "true");
+      repaired.push(keys.useLocal);
+    }
+    // Stored value, not the upload resolver's inherited one: these modes are only
+    // derivable when the scope's own cloud key is set, so unset is not a desync.
+    if (
+      (mode === "providers" || mode === "self-hosted") &&
+      localStorage.getItem(keys.cloudMode) === "openwhispr"
+    ) {
+      localStorage.setItem(keys.cloudMode, "byok");
+      repaired.push(keys.cloudMode);
+    }
+  }
+  if (repaired.length === 0) return;
+
+  logger.info(
+    "Repaired transcription routing that disagreed with the selected mode",
+    { keys: repaired },
+    "settings"
+  );
+}
+
+reconcileTranscriptionRouting();
+
 function migrateAgentMode() {
   if (!isBrowser) return;
   if (localStorage.getItem("_agentModeMigrated") === "1") return;

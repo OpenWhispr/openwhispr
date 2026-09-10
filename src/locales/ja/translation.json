@@ -680,11 +680,6 @@
       },
       "retryTranslationMode": "翻訳モード"
     },
-    "cloudMigration": {
-      "title": "OpenWhispr Cloud へようこそ",
-      "description": "より高速で正確な文字起こしのために OpenWhispr Cloud に切り替えました。以前の設定は保存されています。設定からいつでも戻せます。",
-      "viewSettings": "設定を表示"
-    },
     "aiCta": {
       "title": "AI で文字起こしを向上させましょう",
       "description": "話しながら文法、句読点、書式を自動的に修正します。",

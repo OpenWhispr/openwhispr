@@ -680,11 +680,6 @@
       "rawTranscript": "Transcripción sin procesar",
       "retryTranslationMode": "Modo Traducción"
     },
-    "cloudMigration": {
-      "title": "Bienvenido a OpenWhispr Cloud",
-      "description": "Cambiamos tu transcripción a OpenWhispr Cloud para resultados más rápidos y precisos. Tu configuración anterior se guardó: puedes volver cuando quieras en Ajustes.",
-      "viewSettings": "Ver ajustes"
-    },
     "aiCta": {
       "title": "Mejora tus transcripciones con IA",
       "description": "Corrige automáticamente gramática, puntuación y formato mientras hablas.",

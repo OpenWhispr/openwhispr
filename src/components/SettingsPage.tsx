@@ -99,7 +99,7 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
-import { resetOnboardingProgress } from "./onboarding/flow";
+import { useStartOnboarding } from "../hooks/useStartOnboarding";
 import type {
   ChineseScriptPreference,
   GpuDevice,
@@ -1851,11 +1851,7 @@ export default function SettingsPage({
   } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  const startOnboarding = useCallback(() => {
-    localStorage.setItem("pendingCloudMigration", "true");
-    resetOnboardingProgress(localStorage);
-    window.location.reload();
-  }, []);
+  const startOnboarding = useStartOnboarding();
 
   const handleSwitchPlan = useCallback(
     async (plan: "monthly" | "annual", tier: "pro" | "business") => {

@@ -680,11 +680,6 @@
       },
       "retryTranslationMode": "翻譯模式"
     },
-    "cloudMigration": {
-      "title": "歡迎使用 OpenWhispr Cloud",
-      "description": "我們已將轉錄切換至 OpenWhispr Cloud，提供更快、更準確的結果。你之前的設定已儲存，隨時可在設定中切換回來。",
-      "viewSettings": "查看設定"
-    },
     "aiCta": {
       "title": "用 AI 增強你的轉錄品質",
       "description": "說話時自動修正文法、標點和格式。",
