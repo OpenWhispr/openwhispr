@@ -204,7 +204,8 @@
     "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation.",
     "managedConfigLoading": "Vérification de la configuration gérée de votre organisation en cours. Réessayez dans un instant.",
     "managedConfigUnavailable": "L'accès d'entreprise géré est indisponible. Reconnectez-vous ou contactez votre administrateur.",
-    "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur."
+    "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur.",
+    "hybrid": "Both"
   },
   "onboarding": {
     "rehaul": {
@@ -475,7 +476,8 @@
       "test": "Test",
       "hotkeyToStartStop": "{{hotkey}} pour démarrer/arrêter",
       "holdHotkey": "Maintenir {{hotkey}}",
-      "textareaPlaceholder": "Cliquez ici puis utilisez votre raccourci pour dicter..."
+      "textareaPlaceholder": "Cliquez ici puis utilisez votre raccourci pour dicter...",
+      "hybridDescription": "Tap to keep it on, hold to talk"
     },
     "voiceAgent": {
       "title": "Configuration de l'assistant vocal",

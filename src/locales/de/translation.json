@@ -204,7 +204,8 @@
     "policyTranscriptionRestricted": "Die Transkription ist durch Ihre Organisation eingeschränkt.",
     "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
     "managedConfigUnavailable": "Der verwaltete Unternehmenszugriff ist nicht verfügbar. Melden Sie sich erneut an oder wenden Sie sich an Ihren Administrator.",
-    "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator."
+    "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator.",
+    "hybrid": "Both"
   },
   "onboarding": {
     "rehaul": {
@@ -475,7 +476,8 @@
       "test": "Test",
       "hotkeyToStartStop": "{{hotkey}} zum Starten/Stoppen",
       "holdHotkey": "{{hotkey}} gedrückt halten",
-      "textareaPlaceholder": "Hier klicken und Hotkey zum Diktieren verwenden..."
+      "textareaPlaceholder": "Hier klicken und Hotkey zum Diktieren verwenden...",
+      "hybridDescription": "Tap to keep it on, hold to talk"
     },
     "voiceAgent": {
       "title": "Sprachassistent-Einrichtung",

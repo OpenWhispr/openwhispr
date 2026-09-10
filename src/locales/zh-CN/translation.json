@@ -204,7 +204,8 @@
     "policyTranscriptionRestricted": "转录已被您的组织限制。",
     "managedConfigLoading": "正在检查您组织的托管设置。请稍候再试。",
     "managedConfigUnavailable": "托管企业访问不可用。请重新登录或联系管理员。",
-    "managedPolicyConflict": "托管访问已被您工作区的策略阻止。请联系管理员。"
+    "managedPolicyConflict": "托管访问已被您工作区的策略阻止。请联系管理员。",
+    "hybrid": "Both"
   },
   "onboarding": {
     "rehaul": {
@@ -475,7 +476,8 @@
       "test": "测试",
       "hotkeyToStartStop": "{{hotkey}} 开始/停止",
       "holdHotkey": "按住 {{hotkey}}",
-      "textareaPlaceholder": "点击此处，然后使用快捷键进行听写..."
+      "textareaPlaceholder": "点击此处，然后使用快捷键进行听写...",
+      "hybridDescription": "Tap to keep it on, hold to talk"
     },
     "voiceAgent": {
       "title": "语音助手设置",

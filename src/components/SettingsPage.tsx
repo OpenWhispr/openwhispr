@@ -3982,7 +3982,7 @@ EOF`,
                         }
                       />
                     </div>
-                    {getCachedPlatform() === "linux" && activationMode === "push" && (
+                    {getCachedPlatform() === "linux" && activationMode !== "tap" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
                     )}
                   </SettingsPanelRow>

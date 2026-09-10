@@ -5,6 +5,7 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
+const { normalizeActivationMode } = require("./activationMode");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 
 const SECRET_KEYS = [
@@ -442,12 +443,11 @@ class EnvironmentManager {
   }
 
   getActivationMode() {
-    const mode = this._getKey("ACTIVATION_MODE");
-    return mode === "push" ? "push" : "tap";
+    return normalizeActivationMode(this._getKey("ACTIVATION_MODE"));
   }
 
   saveActivationMode(mode) {
-    const validMode = mode === "push" ? "push" : "tap";
+    const validMode = normalizeActivationMode(mode);
     const result = this._saveKey("ACTIVATION_MODE", validMode);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;

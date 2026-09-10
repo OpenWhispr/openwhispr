@@ -23,6 +23,13 @@ const {
   isDictationRecording,
   shouldBlockDictationWhilePanelOpen,
 } = require("./dictationLifecycle");
+const {
+  normalizeActivationMode,
+  usesKeyRelease,
+  toHotkeyRegistrationMode,
+  resolveDictationPress,
+  resolveDictationRelease,
+} = require("./activationMode");
 const { DEV_SERVER_PORT } = DevServerManager;
 const AUTO_END_NOTIFICATION_LOAD_TIMEOUT_MS = 10_000;
 const DRAG_MOVE_TOLERANCE_PX = 2;
@@ -584,7 +591,7 @@ class WindowManager {
       const activationMode = this.getActivationMode();
       const currentHotkey = triggeredHotkey || this.hotkeyManager.getCurrentHotkey?.();
 
-      if (process.platform === "linux" && activationMode === "push") {
+      if (process.platform === "linux" && usesKeyRelease(activationMode)) {
         if (phase === "down") {
           this.startWindowsPushToTalk(currentHotkey);
         } else if (phase === "up") {
@@ -596,7 +603,7 @@ class WindowManager {
 
       if (
         process.platform === "darwin" &&
-        activationMode === "push" &&
+        usesKeyRelease(activationMode) &&
         currentHotkey &&
         !isGlobeLikeHotkey(currentHotkey) &&
         currentHotkey.includes("+")
@@ -608,7 +615,7 @@ class WindowManager {
       // Push mode: defer to native listener (globalShortcut can't detect key-up)
       if (
         (process.platform === "win32" || process.platform === "linux") &&
-        activationMode === "push"
+        usesKeyRelease(activationMode)
       ) {
         return;
       }
@@ -623,11 +630,40 @@ class WindowManager {
     };
   }
 
+  // Hybrid mode: a press while a latched recording runs is the "stop" tap.
+  // Returns true when the press was consumed that way.
+  _consumeHybridStopPress() {
+    const action = resolveDictationPress({
+      mode: this.getActivationMode(),
+      isRecording: this.isDictationRecording(),
+    });
+    if (action !== "stop") return false;
+    this.sendStopDictation();
+    return true;
+  }
+
+  // Shared tail of every push/hybrid key release.
+  applyDictationRelease(action, wasRecording) {
+    if (action === "latch") {
+      // A tap released before the deferred start fired: start now, the
+      // recording stays on until the next press.
+      if (!wasRecording) this.sendStartDictation();
+      return;
+    }
+    if (action === "stop") {
+      this.sendStopDictation();
+      return;
+    }
+    this.sendCancelDictationPreparation();
+    this.hideDictationPanel();
+  }
+
   startMacCompoundPushToTalk(hotkey) {
     if (!this._isOnboardingInputAllowed("dictation")) return;
     if (this.macCompoundPushState?.active || this.isDictationProcessing()) {
       return;
     }
+    if (this._consumeHybridStopPress()) return;
 
     const requiredModifiers = this.getMacRequiredModifiers(hotkey);
     if (requiredModifiers.size === 0) {
@@ -683,14 +719,17 @@ class WindowManager {
     }
 
     const wasRecording = this.macCompoundPushState.isRecording;
+    const heldMs = Date.now() - this.macCompoundPushState.downTime;
     this.macCompoundPushState = null;
 
-    if (wasRecording) {
-      this.sendStopDictation();
-    } else {
-      this.sendCancelDictationPreparation();
-      this.hideDictationPanel();
-    }
+    this.applyDictationRelease(
+      resolveDictationRelease({
+        mode: this.getActivationMode(),
+        heldMs,
+        isRecording: wasRecording,
+      }),
+      wasRecording
+    );
   }
 
   forceStopMacCompoundPush(reason = "manual") {
@@ -764,6 +803,7 @@ class WindowManager {
     if (this.winPushState?.active || this.isDictationProcessing()) {
       return;
     }
+    if (this._consumeHybridStopPress()) return;
 
     const MIN_HOLD_DURATION_MS = 150;
     const MAX_PUSH_DURATION_MS = 300000;
@@ -775,7 +815,7 @@ class WindowManager {
     const safetyTimeoutId = setTimeout(() => {
       if (!this.winPushState || this.winPushState.downTime !== downTime) return;
       debugLogger.warn("Native PTT safety timeout", undefined, "ptt");
-      this.handleWindowsPushKeyUp();
+      this.handleWindowsPushKeyUp(undefined, { force: true });
     }, MAX_PUSH_DURATION_MS);
 
     this.winPushState = {
@@ -800,7 +840,7 @@ class WindowManager {
 
   // With several dictation hotkeys bound, only the key that started the push
   // may stop it; called without a key to force-stop (resetWindowsPushState).
-  handleWindowsPushKeyUp(key) {
+  handleWindowsPushKeyUp(key, { force = false } = {}) {
     if (!this.winPushState?.active) {
       return;
     }
@@ -813,14 +853,18 @@ class WindowManager {
     }
 
     const wasRecording = this.winPushState.isRecording;
+    const heldMs = Date.now() - this.winPushState.downTime;
     this.winPushState = null;
 
-    if (wasRecording) {
-      this.sendStopDictation();
-    } else {
-      this.sendCancelDictationPreparation();
-      this.hideDictationPanel();
-    }
+    this.applyDictationRelease(
+      resolveDictationRelease({
+        mode: this.getActivationMode(),
+        heldMs,
+        isRecording: wasRecording,
+        force,
+      }),
+      wasRecording
+    );
   }
 
   resetWindowsPushState() {
@@ -828,7 +872,7 @@ class WindowManager {
       return;
     }
 
-    this.handleWindowsPushKeyUp();
+    this.handleWindowsPushKeyUp(undefined, { force: true });
   }
 
   _isOnboardingInputAllowed(inputKind) {
@@ -974,6 +1018,10 @@ class WindowManager {
     return shouldIgnoreDictationHotkey(this._dictationLifecycleState);
   }
 
+  isDictationRecording() {
+    return isDictationRecording(this._dictationLifecycleState);
+  }
+
   sendToggleDictation() {
     this._sendDictationToggle("toggle-dictation", "dictation");
   }
@@ -1062,8 +1110,9 @@ class WindowManager {
   }
 
   async setActivationModeCache(mode) {
-    const nextMode = mode === "push" ? "push" : "tap";
-    const success = await this.hotkeyManager.setActivationMode(nextMode);
+    const nextMode = normalizeActivationMode(mode);
+    // The hotkey layer only knows tap vs push; hybrid rides on push plumbing.
+    const success = await this.hotkeyManager.setActivationMode(toHotkeyRegistrationMode(nextMode));
     if (!success) return false;
     this._cachedActivationMode = nextMode;
     return true;
@@ -1077,7 +1126,7 @@ class WindowManager {
   reconcileNativeKeyListeners() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     if (this.hotkeyManager.isInListeningMode()) return;
-    const activationMode = this.getActivationMode();
+    const activationMode = toHotkeyRegistrationMode(this.getActivationMode());
     const nativeListenerKeys = this.hotkeyManager.getNativeListenerKeys(activationMode);
     // Native desktop shortcuts replace the low-level listener in tap mode. In
     // push mode, keep the dictation listener as a release-event fallback; the
