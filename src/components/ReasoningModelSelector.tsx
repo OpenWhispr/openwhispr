@@ -8,7 +8,7 @@ import type {
   InferenceMode,
 } from "../types/electron";
 import { Button } from "./ui/button";
-import { CircleAlert, Cloud, Lock, Zap } from "lucide-react";
+import { CircleAlert, Cloud, Loader2, Lock, Zap } from "lucide-react";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
@@ -356,6 +356,9 @@ export default function ReasoningModelSelector({
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
   const xaiApiKey = useSettingsStore((s) => s.xaiApiKey);
   const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
+  const xaiOAuthConnected = useSettingsStore((s) => s.xaiOAuthConnected);
+  const setXaiOAuthConnected = useSettingsStore((s) => s.setXaiOAuthConnected);
+  const [xaiOauthBusy, setXaiOauthBusy] = useState(false);
   const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
   const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
   const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
@@ -513,6 +516,38 @@ export default function ReasoningModelSelector({
     setSelectedCloudProvider(provider);
   };
 
+  const applyXaiOAuthStatus = useCallback(
+    (status: { connected?: boolean; error?: string } | undefined) => {
+      setXaiOAuthConnected(Boolean(status?.connected) && !status?.error);
+    },
+    [setXaiOAuthConnected]
+  );
+
+  const handleXaiOAuthLogin = useCallback(async () => {
+    setXaiOauthBusy(true);
+    try {
+      const result = await window.electronAPI.xaiOAuthLogin?.();
+      applyXaiOAuthStatus(result);
+    } catch {
+      applyXaiOAuthStatus(await window.electronAPI.xaiOAuthStatus?.());
+    } finally {
+      setXaiOauthBusy(false);
+    }
+  }, [applyXaiOAuthStatus]);
+
+  const handleXaiOAuthLogout = useCallback(async () => {
+    setXaiOauthBusy(true);
+    try {
+      const result = await window.electronAPI.xaiOAuthLogout?.();
+      applyXaiOAuthStatus(result);
+    } catch {
+      applyXaiOAuthStatus(await window.electronAPI.xaiOAuthStatus?.());
+    } finally {
+      setXaiOauthBusy(false);
+    }
+  }, [applyXaiOAuthStatus]);
+
+
   const handleLocalProviderChange = (providerId: string) => {
     setSelectedLocalProvider(providerId);
   };
@@ -657,18 +692,63 @@ export default function ReasoningModelSelector({
 
                   {displayedCloudProvider === "xai" && (
                     <div className="space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://console.x.ai" />
+                      {!xaiOAuthConnected ? (
+                        <p className="text-xs text-muted-foreground">
+                          {t("settings.speech.xaiOauth.hint")}
+                        </p>
+                      ) : null}
+                      <div className="flex items-center justify-between gap-2">
+                        {xaiOAuthConnected ? (
+                          <>
+                            <p className="text-xs font-medium text-foreground">
+                              {t("settings.speech.xaiOauth.connected")}
+                            </p>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={xaiOauthBusy}
+                              onClick={() => void handleXaiOAuthLogout()}
+                            >
+                              {xaiOauthBusy ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : null}
+                              {t("settings.speech.xaiOauth.disconnect")}
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={xaiOauthBusy}
+                            onClick={() => void handleXaiOAuthLogin()}
+                          >
+                            {xaiOauthBusy ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : null}
+                            {t("settings.speech.xaiOauth.connect")}
+                          </Button>
+                        )}
                       </div>
-                      <ApiKeyInput
-                        apiKey={xaiApiKey}
-                        setApiKey={setXaiApiKey}
-                        label=""
-                        helpText=""
-                      />
+                      {!xaiOAuthConnected ? (
+                        <>
+                          <div className="flex items-baseline justify-between">
+                            <h4 className="font-medium text-foreground">
+                              {t("settings.speech.xaiOauth.orApiKey")}
+                            </h4>
+                            <GetApiKeyLink url="https://console.x.ai" />
+                          </div>
+                          <ApiKeyInput
+                            apiKey={xaiApiKey}
+                            setApiKey={setXaiApiKey}
+                            label=""
+                            helpText=""
+                          />
+                        </>
+                      ) : null}
                     </div>
                   )}
+
 
                   {displayedCloudProvider === "tinfoil" && (
                     <div className="space-y-2">
