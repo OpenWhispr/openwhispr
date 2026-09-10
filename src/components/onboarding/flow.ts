@@ -16,6 +16,7 @@ export type OnboardingStepId =
   | "auth"
   | "required-models"
   | "permissions"
+  | "interface-language"
   | "languages"
   | "use-cases"
   | "dictation-hotkey"
@@ -100,6 +101,7 @@ export interface OnboardingRouteContext {
 const ACCOUNT_ROUTE: OnboardingStepId[] = [
   "auth",
   "permissions",
+  "interface-language",
   "languages",
   "use-cases",
   "dictation-hotkey",
@@ -118,6 +120,7 @@ const STEP_ORDER: OnboardingStepId[] = [
   "auth",
   "required-models",
   "permissions",
+  "interface-language",
   "languages",
   "use-cases",
   "dictation-hotkey",
@@ -138,8 +141,8 @@ const KNOWN_STEPS = new Set<OnboardingStepId>(STEP_ORDER);
 /**
  * Steps that render in the compact frame. That frame has no footer, so these
  * steps show no progress row and are left out of the count entirely — landing on
- * `languages` reads as "1 of N", not "3 of N" for two steps the user never saw a
- * counter on.
+ * `interface-language` reads as "1 of N", not "3 of N" for two steps the user
+ * never saw a counter on.
  */
 export const COMPACT_STEPS: ReadonlySet<OnboardingStepId> = new Set<OnboardingStepId>([
   "auth",
@@ -216,6 +219,7 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
         ([
           "auth",
           "permissions",
+          "interface-language",
           "dictation-hotkey",
           "activation-mode",
           "setup-choice",

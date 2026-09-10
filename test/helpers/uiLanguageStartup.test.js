@@ -96,6 +96,66 @@ test("fresh Chinese browser locale survives settings hydration", async (t) => {
   );
 });
 
+test("changing UI language persists every UI target without changing transcription language", async (t) => {
+  installNavigatorLanguage(t, "en-US");
+  const syncedLanguages = [];
+  installBrowserGlobals(t, {
+    initialStorage: {
+      uiLanguage: "en",
+      spokenLanguages: JSON.stringify(["fr"]),
+      preferredLanguage: "de",
+    },
+    window: {
+      electronAPI: {
+        setUiLanguage: async (language) => {
+          syncedLanguages.push(language);
+          return { success: true, language };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-ui-language-change-test-",
+  });
+
+  const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const before = useSettingsStore.getState();
+  const languageChanged = new Promise((resolve) => i18n.once("languageChanged", resolve));
+
+  before.setUiLanguage("zh-CN");
+  await languageChanged;
+  await Promise.resolve();
+
+  const after = useSettingsStore.getState();
+  assert.deepEqual(
+    {
+      storeLanguage: after.uiLanguage,
+      i18nLanguage: i18n.language,
+      persistedLanguage: localStorage.getItem("uiLanguage"),
+      syncedLanguages,
+      spokenLanguagesBefore: before.spokenLanguages,
+      spokenLanguagesAfter: after.spokenLanguages,
+      persistedSpokenLanguages: localStorage.getItem("spokenLanguages"),
+      preferredLanguageBefore: before.preferredLanguage,
+      preferredLanguageAfter: after.preferredLanguage,
+      persistedPreferredLanguage: localStorage.getItem("preferredLanguage"),
+    },
+    {
+      storeLanguage: "zh-CN",
+      i18nLanguage: "zh-CN",
+      persistedLanguage: "zh-CN",
+      syncedLanguages: ["zh-CN"],
+      spokenLanguagesBefore: ["fr"],
+      spokenLanguagesAfter: ["fr"],
+      persistedSpokenLanguages: JSON.stringify(["fr"]),
+      preferredLanguageBefore: "de",
+      preferredLanguageAfter: "de",
+      persistedPreferredLanguage: "de",
+    }
+  );
+});
+
 test("main locale fallback remains implicit and yields to an explicit preference", (t) => {
   const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-ui-language-"));
   const originalEnvironment = { ...process.env };
