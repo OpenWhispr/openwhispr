@@ -68,6 +68,8 @@ export interface TranscriptionApiKeys {
   deepgramApiKey: string;
   assemblyaiApiKey: string;
   customTranscriptionApiKey?: string;
+  /** SuperGrok session — not a token. Presence-only gate for the renderer. */
+  xaiOAuthConnected?: boolean;
 }
 
 export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiKeys): string {
@@ -77,7 +79,7 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
     case "groq":
       return keys.groqApiKey;
     case "xai":
-      return keys.xaiApiKey;
+      return keys.xaiApiKey || (keys.xaiOAuthConnected ? "xai-oauth" : "");
     case "mistral":
       return keys.mistralApiKey;
     case "gemini":
@@ -179,12 +181,26 @@ export async function transcribeFile(
     };
   }
 
+  if (route.provider === "xai") {
+    const consoleKey = cfg.getApiKey();
+    const hasConsoleKey = Boolean(consoleKey?.trim()) && consoleKey !== "xai-oauth";
+    if (!hasConsoleKey) {
+      const status = await window.electronAPI?.xaiOAuthStatus?.();
+      if (!status?.connected) {
+        return { success: false, error: "xAI API key not configured" };
+      }
+    }
+  }
+
   // Self-hosted fields make the handler route to the configured server
   // (fail-closed on misconfiguration) instead of stale BYOK settings.
   return window.electronAPI.transcribeAudioFileByok!({
     filePath,
     managed: managed?.kind === "managed" ? managed : undefined,
-    apiKey: cfg.getApiKey(),
+    apiKey: (() => {
+      const key = cfg.getApiKey();
+      return key === "xai-oauth" ? "" : key;
+    })(),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,

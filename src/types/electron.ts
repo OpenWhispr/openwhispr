@@ -2046,7 +2046,32 @@ declare global {
 
       // xAI API key management
       getXaiKey?: () => Promise<string | null>;
+      getXaiBearer?: () => Promise<string | null>;
       saveXaiKey?: (key: string) => Promise<void>;
+      xaiOAuthLogin?: () => Promise<{
+        connected?: boolean;
+        expiresAt?: number | null;
+        scope?: string;
+        error?: string;
+        code?: string;
+        messageKey?: string;
+      }>;
+      xaiOAuthLogout?: () => Promise<{
+        connected?: boolean;
+        expiresAt?: number | null;
+        scope?: string;
+        error?: string;
+        code?: string;
+        messageKey?: string;
+      }>;
+      xaiOAuthStatus?: () => Promise<{
+        connected?: boolean;
+        expiresAt?: number | null;
+        scope?: string;
+        error?: string;
+        code?: string;
+        messageKey?: string;
+      }>;
       proxyXaiTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         language?: string;

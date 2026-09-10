@@ -55,6 +55,15 @@
         "title": "Sprecher erkennen und beschriften",
         "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
       }
+    },
+    "speech": {
+      "xaiOauth": {
+        "connect": "Mit Grok anmelden",
+        "disconnect": "Abmelden",
+        "connected": "Grok-Abo verbunden",
+        "hint": "Nutzt Ihren SuperGrok-Tarif. Kein console.x.ai-API-Schlüssel erforderlich.",
+        "orApiKey": "Oder einen Konsolen-API-Schlüssel einfügen"
+      }
     }
   },
   "tray": {
@@ -2680,7 +2689,10 @@
         "corti_corti_s1_instant": "Schnelles Gesundheitsmodell, ohne Reasoning-Spur",
         "corti_corti_s1": "Leistungsfähigstes klinisches Modell mit Reasoning",
         "corti_corti_s1_mini_instant": "Kompaktes Gesundheitsmodell, am schnellsten und günstigsten",
-        "corti_corti_s1_mini": "Kompaktes klinisches Modell mit Reasoning zum halben Preis"
+        "corti_corti_s1_mini": "Kompaktes klinisches Modell mit Reasoning zum halben Preis",
+        "xai_grok_4_5": "Flaggschiff-Grok für Bereinigung und Sprachassistent",
+        "xai_grok_4_fast": "Schnelles Grok für latenzarme Bereinigung",
+        "xai_grok_4_3": "Vorherige Grok-Generation"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Leistungsstärkstes Claude-Modell. Ideal für die schwierigsten Assistenten-Aufgaben.",

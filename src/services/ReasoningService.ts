@@ -51,6 +51,7 @@ interface ToolExecutionResult {
 const BYOK_STREAM_PROVIDERS = [
   "openai",
   "groq",
+  "xai",
   "gemini",
   "anthropic",
   "tinfoil",
@@ -174,7 +175,7 @@ class ReasoningService extends BaseReasoningService {
 
   private async getApiKey(
     provider:
-      "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom" | "openrouter" | "corti"
+      "openai" | "anthropic" | "gemini" | "groq" | "xai" | "tinfoil" | "custom" | "openrouter" | "corti"
   ): Promise<string> {
     if (provider === "custom") {
       let customKey = "";
@@ -197,7 +198,7 @@ class ReasoningService extends BaseReasoningService {
       return trimmedKey;
     }
 
-    let apiKey = this.apiKeyCache.get(provider);
+    let apiKey = provider === "xai" ? undefined : this.apiKeyCache.get(provider);
 
     logger.logReasoning(`${provider.toUpperCase()}_KEY_RETRIEVAL`, {
       provider,
@@ -212,6 +213,7 @@ class ReasoningService extends BaseReasoningService {
           anthropic: () => window.electronAPI.getAnthropicKey(),
           gemini: () => window.electronAPI.getGeminiKey(),
           groq: () => window.electronAPI.getGroqKey(),
+          xai: () => window.electronAPI.getXaiBearer?.(),
           openrouter: () => window.electronAPI.getOpenrouterKey(),
           tinfoil: () => window.electronAPI.getTinfoilKey?.(),
           corti: () => window.electronAPI.getCortiKey?.(),
@@ -224,7 +226,7 @@ class ReasoningService extends BaseReasoningService {
           keyLength: apiKey?.length || 0,
         });
 
-        if (apiKey) {
+        if (apiKey && provider !== "xai") {
           this.apiKeyCache.set(provider, apiKey);
         }
       } catch (error) {
@@ -1245,6 +1247,7 @@ class ReasoningService extends BaseReasoningService {
       const anthropicKey = await window.electronAPI?.getAnthropicKey?.();
       const geminiKey = await window.electronAPI?.getGeminiKey?.();
       const groqKey = await window.electronAPI?.getGroqKey?.();
+      const xaiKey = await window.electronAPI?.getXaiBearer?.();
       const openrouterKey = await window.electronAPI?.getOpenrouterKey?.();
       const tinfoilKey = await window.electronAPI?.getTinfoilKey?.();
       const cortiKey = await window.electronAPI?.getCortiKey?.();
@@ -1255,6 +1258,7 @@ class ReasoningService extends BaseReasoningService {
         hasAnthropic: !!anthropicKey,
         hasGemini: !!geminiKey,
         hasGroq: !!groqKey,
+        hasXai: !!xaiKey,
         hasOpenrouter: !!openrouterKey,
         hasTinfoil: !!tinfoilKey,
         hasCorti: !!cortiKey,
@@ -1266,6 +1270,7 @@ class ReasoningService extends BaseReasoningService {
         anthropicKey ||
         geminiKey ||
         groqKey ||
+        xaiKey ||
         openrouterKey ||
         tinfoilKey ||
         cortiKey ||
@@ -1287,6 +1292,7 @@ class ReasoningService extends BaseReasoningService {
       | "anthropic"
       | "gemini"
       | "groq"
+      | "xai"
       | "mistral"
       | "tinfoil"
       | "custom"

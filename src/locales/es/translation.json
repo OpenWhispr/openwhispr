@@ -55,6 +55,15 @@
         "title": "Identificar y etiquetar participantes",
         "description": "Cuando está desactivado, las transcripciones muestran \"Tú\" y \"Otros\""
       }
+    },
+    "speech": {
+      "xaiOauth": {
+        "connect": "Iniciar sesión con Grok",
+        "disconnect": "Cerrar sesión",
+        "connected": "Suscripción de Grok conectada",
+        "hint": "Usa tu plan SuperGrok. No se requiere una clave de API de console.x.ai.",
+        "orApiKey": "O pega una clave de API de consola"
+      }
     }
   },
   "tray": {
@@ -2635,7 +2644,10 @@
         "corti_corti_s1_instant": "Modelo sanitario rápido, sin traza de razonamiento",
         "corti_corti_s1": "Modelo clínico más capaz con razonamiento",
         "corti_corti_s1_mini_instant": "Modelo sanitario compacto, el más rápido y económico",
-        "corti_corti_s1_mini": "Modelo clínico compacto con razonamiento a mitad de precio"
+        "corti_corti_s1_mini": "Modelo clínico compacto con razonamiento a mitad de precio",
+        "xai_grok_4_5": "Grok insignia para limpieza y el asistente de voz",
+        "xai_grok_4_fast": "Grok rápido para limpieza de baja latencia",
+        "xai_grok_4_3": "Generación anterior de Grok"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "El modelo Claude más capaz. Ideal para las tareas de asistente más difíciles.",

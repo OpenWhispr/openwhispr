@@ -8,7 +8,7 @@ import { getModelFamilyConstraints } from "./modelFamilyConstraints";
  * table stays unit-testable on its own.
  */
 export interface EndpointDialect {
-  key: "mistral" | "deepseek" | "cerebras";
+  key: "mistral" | "deepseek" | "cerebras" | "xai";
   tokenParam: "max_tokens" | "max_completion_tokens";
   supportsTemperature: boolean;
 }
@@ -33,6 +33,9 @@ export function detectEndpointDialect(baseUrl: string | null | undefined): Endpo
   }
   if (host === "cerebras.ai" || host.endsWith(".cerebras.ai")) {
     return { key: "cerebras", tokenParam: "max_tokens", supportsTemperature: true };
+  }
+  if (host === "x.ai" || host.endsWith(".x.ai")) {
+    return { key: "xai", tokenParam: "max_tokens", supportsTemperature: true };
   }
 
   return null;
@@ -60,7 +63,7 @@ export function suppressThinking(
   // Groq and Cerebras reject unknown fields outright (Cerebras 400s on
   // chat_template_kwargs, #831) and take a per-family reasoning_effort enum,
   // so send nothing unless the family is known.
-  if (providerKey === "groq" || providerKey === "cerebras") {
+  if (providerKey === "groq" || providerKey === "cerebras" || providerKey === "xai") {
     if (family?.reasoningEffort) {
       requestBody.reasoning_effort = family.reasoningEffort.suppressValue;
     }

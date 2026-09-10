@@ -669,6 +669,39 @@
       ]
     },
     {
+      "id": "xai",
+      "name": "xAI",
+      "defaultModel": "grok-4.5",
+      "models": [
+        {
+          "id": "grok-4.5",
+          "name": "Grok 4.5",
+          "description": "Flagship Grok model with vision",
+          "descriptionKey": "models.descriptions.cloud.xai_grok_4_5",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "supportsVision": true
+        },
+        {
+          "id": "grok-4-fast",
+          "name": "Grok 4 Fast",
+          "description": "Fast Grok model",
+          "descriptionKey": "models.descriptions.cloud.xai_grok_4_fast",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true
+        },
+        {
+          "id": "grok-4.3",
+          "name": "Grok 4.3",
+          "description": "Grok 4.3 with vision",
+          "descriptionKey": "models.descriptions.cloud.xai_grok_4_3",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "supportsVision": true
+        }
+      ]
+    },
+    {
       "id": "tinfoil",
       "name": "Tinfoil",
       "defaultModel": "glm-5-3",

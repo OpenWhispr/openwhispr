@@ -6,6 +6,9 @@ const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
+const { XaiOAuth } = require("./xaiOAuth");
+
+const XAI_OAUTH_CREDENTIALS_NAME = "XAI_OAUTH_CREDENTIALS";
 
 const SECRET_KEYS = [
   ...BYOK_API_KEYS.map((k) => k.env),
@@ -66,6 +69,14 @@ let envWriteQueue = Promise.resolve();
 class EnvironmentManager {
   constructor() {
     this.loadEnvironmentVariables();
+    this._xaiOAuthCredentials = undefined;
+    this.xaiOAuth = new XaiOAuth({
+      store: {
+        load: () => this.loadXaiOAuthCredentials(),
+        save: (creds) => this.saveXaiOAuthCredentials(creds),
+        clear: () => this.clearXaiOAuthCredentials(),
+      },
+    });
   }
 
   loadEnvironmentVariables() {
@@ -486,11 +497,78 @@ class EnvironmentManager {
     return { success: true, path: envPath };
   }
 
+  async loadXaiOAuthCredentials() {
+    if (this._xaiOAuthCredentials !== undefined) {
+      return this._xaiOAuthCredentials;
+    }
+    const filePath = this._getSecretFilePath(XAI_OAUTH_CREDENTIALS_NAME);
+    try {
+      const buffer = await fsPromises.readFile(filePath);
+      const { value, needsReencrypt } = secretCrypto.decrypt(buffer);
+      const parsed = JSON.parse(value);
+      this._xaiOAuthCredentials =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+      if (needsReencrypt && this._xaiOAuthCredentials) {
+        await this.saveXaiOAuthCredentials(this._xaiOAuthCredentials);
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        debugLogger.error(
+          "Failed to decrypt SuperGrok credentials — user must sign in again",
+          { error: error.message },
+          "environment"
+        );
+      }
+      this._xaiOAuthCredentials = null;
+    }
+    return this._xaiOAuthCredentials;
+  }
+
+  async saveXaiOAuthCredentials(creds) {
+    if (!creds) {
+      return this.clearXaiOAuthCredentials();
+    }
+    this._xaiOAuthCredentials = creds;
+    const dir = this._getSecureKeysDir();
+    await fsPromises.mkdir(dir, { recursive: true });
+    const filePath = this._getSecretFilePath(XAI_OAUTH_CREDENTIALS_NAME);
+    const tmpPath = `${filePath}.tmp`;
+    const encrypted = secretCrypto.encrypt(JSON.stringify(creds));
+    await fsPromises.writeFile(tmpPath, encrypted);
+    await fsPromises.rename(tmpPath, filePath);
+  }
+
+  async clearXaiOAuthCredentials() {
+    this._xaiOAuthCredentials = null;
+    try {
+      await fsPromises.unlink(this._getSecretFilePath(XAI_OAUTH_CREDENTIALS_NAME));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+
+  async getXaiBearer() {
+    try {
+      const token = await this.xaiOAuth.getValidAccessToken();
+      if (token) return token;
+    } catch (error) {
+      if (error?.name !== "ReauthRequired") {
+        debugLogger.warn(
+          "SuperGrok access token unavailable, falling back to console API key",
+          { error: error.message },
+          "environment"
+        );
+      }
+    }
+    return this.getXaiKey() || "";
+  }
+
   async clearAllPersistedData() {
     for (const envVarName of PERSISTED_KEYS) {
       delete process.env[envVarName];
     }
     delete process.env.CUSTOM_REASONING_API_KEY;
+    this._xaiOAuthCredentials = null;
 
     await Promise.all([
       fsPromises.rm(path.join(app.getPath("userData"), ".env"), { force: true }),

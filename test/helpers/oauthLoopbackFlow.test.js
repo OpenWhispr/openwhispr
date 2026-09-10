@@ -411,3 +411,30 @@ test("an accepted callback cannot run after the flow times out", async () => {
     parkedRequest.destroy();
   }
 });
+
+test("callbackPath is included in the loopback redirect URI", async () => {
+  const { runOAuthLoopbackFlow } = loadLoopback();
+  let redirectUri;
+  let state;
+  const originalCreateServer = http.createServer;
+  http.createServer = (...args) => originalCreateServer(...args);
+  try {
+    const flow = runOAuthLoopbackFlow({
+      errorParam: "xai_error",
+      listenPort: 0,
+      callbackPath: "/callback",
+      buildAuthUrl: (uri, flowState) => {
+        redirectUri = uri;
+        state = flowState;
+        return "https://example.test/auth";
+      },
+      handleCallback: async () => ({ ok: true }),
+    });
+    const uri = await waitForListen(() => redirectUri);
+    assert.match(uri, /^http:\/\/127\.0\.0\.1:\d+\/callback$/);
+    await requestPath(uri, `/callback?code=ok&state=${state}`);
+    assert.deepEqual(await flow, { ok: true });
+  } finally {
+    http.createServer = originalCreateServer;
+  }
+});

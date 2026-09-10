@@ -192,7 +192,7 @@ function resolveProviderRequest(config) {
       "Connection testing is not available for this provider."
     );
   }
-  if (!apiKey && provider !== "custom") {
+  if (!apiKey && provider !== "custom" && !(provider === "xai" && config?.oauthConnected)) {
     throw new ConnectionTestError("apiKeyRequired", "Add an API key before testing.");
   }
 

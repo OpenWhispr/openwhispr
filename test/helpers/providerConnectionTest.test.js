@@ -147,6 +147,13 @@ test("rejects invalid custom endpoints with error codes", async () => {
   });
 });
 
+test("xAI OAuth connected skips apiKeyRequired and uses models endpoint", () => {
+  const request = resolveProviderRequest({ provider: "xai", oauthConnected: true });
+  assert.equal(request.endpoint, "https://api.x.ai/v1/models");
+  assert.equal(request.headers.Authorization, undefined);
+});
+
+
 test("maps authentication and transport failures to safe messages", async () => {
   assert.deepEqual(
     await testProviderConnection({ provider: "openai", apiKey: "bad" }, async () => ({

@@ -588,6 +588,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // xAI / Mistral transcription proxies (keys handled by the manifest bridge)
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
+  xaiOAuthLogin: () => ipcRenderer.invoke("xai-oauth-login"),
+  xaiOAuthLogout: () => ipcRenderer.invoke("xai-oauth-logout"),
+  xaiOAuthStatus: () => ipcRenderer.invoke("xai-oauth-status"),
+  getXaiBearer: () => ipcRenderer.invoke("get-xai-bearer"),
+
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
 

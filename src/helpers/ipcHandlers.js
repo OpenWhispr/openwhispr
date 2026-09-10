@@ -1343,6 +1343,20 @@ class IPCHandlers {
           };
         }
       }
+      if (config?.provider === "xai") {
+        const existingKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
+        if (!existingKey) {
+          const bearer = await this.environmentManager.getXaiBearer();
+          if (bearer) {
+            config = { ...config, apiKey: bearer };
+          } else {
+            const status = await this.environmentManager.xaiOAuth?.status();
+            if (status?.connected) {
+              config = { ...config, oauthConnected: true };
+            }
+          }
+        }
+      }
       return testProviderConnection(config);
     });
 
@@ -1435,6 +1449,20 @@ class IPCHandlers {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
       ipcMain.handle(`save-${k.base}-key`, (event, key) => this.environmentManager[k.save](key));
     }
+
+    ipcMain.handle(
+      "xai-oauth-login",
+      serializeIpcError(async () => this.environmentManager.xaiOAuth.startOAuthFlow())
+    );
+    ipcMain.handle(
+      "xai-oauth-logout",
+      serializeIpcError(async () => this.environmentManager.xaiOAuth.logout())
+    );
+    ipcMain.handle(
+      "xai-oauth-status",
+      serializeIpcError(async () => this.environmentManager.xaiOAuth.status())
+    );
+    ipcMain.handle("get-xai-bearer", async () => this.environmentManager.getXaiBearer());
 
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {
       const result = this.databaseManager.saveTranscription(text, rawText, options);
@@ -4353,7 +4381,7 @@ class IPCHandlers {
     ipcMain.handle(
       "proxy-xai-transcription",
       serializeIpcError(async (event, { audioBuffer, language, keyterms }) => {
-        const apiKey = this.environmentManager.getXaiKey();
+        const apiKey = await this.environmentManager.getXaiBearer();
         if (!apiKey) {
           throw new Error("xAI API key not configured");
         }
@@ -6318,7 +6346,7 @@ class IPCHandlers {
             provider === "mistral"
               ? this.environmentManager.getMistralKey()
               : provider === "xai"
-                ? this.environmentManager.getXaiKey()
+                ? await this.environmentManager.getXaiBearer()
                 : route.auth.keyRef === "custom"
                   ? this.environmentManager.getCustomTranscriptionKey()
                   : route.auth.keyRef === "groq"
@@ -9767,7 +9795,12 @@ class IPCHandlers {
             return { success: true, text };
           }
 
-          if (!apiKey && route.provider !== "custom") {
+          const resolvedApiKey =
+            route.provider === "xai"
+              ? await this.environmentManager.getXaiBearer()
+              : apiKey;
+
+          if (!resolvedApiKey && route.provider !== "custom") {
             throw new Error("No API key configured. Add your key in Settings.");
           }
 
@@ -9832,12 +9865,12 @@ class IPCHandlers {
 
           const url = new URL(transcriptionUrl);
           // Mistral authenticates with x-api-key, not Bearer.
-          const headers = apiKey
+          const headers = resolvedApiKey
             ? route.provider === "mistral"
-              ? { "x-api-key": apiKey }
+              ? { "x-api-key": resolvedApiKey }
               : route.transport === "http-batch" && route.auth.scheme === "azure-api-key"
-                ? { "api-key": apiKey }
-                : { Authorization: `Bearer ${apiKey}` }
+                ? { "api-key": resolvedApiKey }
+                : { Authorization: `Bearer ${resolvedApiKey}` }
             : undefined;
           const data = await postMultipart(url, body, boundary, headers);
 
