@@ -193,6 +193,15 @@ for (const reason of ["timeout", "reset"]) {
     const [toast] = errorToasts(harness);
     assert.ok(toast, "the transcript is surfaced, not dropped");
     assert.equal(toast.description, "hooks.audioRecording.pushForceStopped.description");
+    // A batch transcription has no streaming text, so the pill's transcript
+    // argument is the only thing that can produce this action — and it is the
+    // sole in-app recovery when the clipboard write is the part that failed.
+    assert.ok(
+      toast.actions.some(
+        (action) => action.label === "hooks.audioRecording.errorActions.viewTranscript"
+      ),
+      "the pill must carry the transcript so it stays recoverable"
+    );
   });
 }
 
