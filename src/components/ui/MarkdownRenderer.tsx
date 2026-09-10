@@ -1,4 +1,5 @@
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { cn } from "../lib/utils";
 
 interface MarkdownRendererProps {
@@ -10,6 +11,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
   return (
     <div className={cn("prose prose-sm max-w-none", className)}>
       <Markdown
+        remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
             <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0">{children}</h1>
@@ -48,6 +50,26 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
             </blockquote>
           ),
           hr: () => <hr className="border-current/20 my-3" />,
+          table: ({ children }) => (
+            <div className="overflow-x-auto mb-2">
+              <table className="w-full text-xs border-collapse">{children}</table>
+            </div>
+          ),
+          thead: ({ children }) => <thead className="border-b border-current/20">{children}</thead>,
+          tr: ({ children }) => (
+            <tr className="border-b border-current/10 last:border-0">{children}</tr>
+          ),
+          // style carries the GFM column alignment (:--, :-:, --:).
+          th: ({ children, style }) => (
+            <th style={style} className="px-2 py-1.5 text-left font-semibold align-top">
+              {children}
+            </th>
+          ),
+          td: ({ children, style }) => (
+            <td style={style} className="px-2 py-1.5 align-top">
+              {children}
+            </td>
+          ),
         }}
       >
         {content}
