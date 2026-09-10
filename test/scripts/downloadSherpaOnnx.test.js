@@ -13,6 +13,7 @@ const {
   SHERPA_ONNX_VERSION,
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
+  extractTarBz2,
   isCompleteInstall,
   privatizeWindowsOnnxRuntime,
 } = require("../../scripts/download-sherpa-onnx");
@@ -28,6 +29,31 @@ function makeBinDir(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
+
+// A real, deterministic tar.bz2 containing sherpa-fixture/nested/tokens.txt.
+const BZIP2_FIXTURE = Buffer.from(
+  "QlpoOTFBWSZTWcjrkBQAAIZfgNqQQAP9AEAAAIB/ad7QCAggAHQaQmp4gTeomjCMZDaoMkgNGgABoGgPnMCiCBG+QQRRzUsRSpCCCEAnU6vjF4NbYtiEQUCGSyC5UXVrxyzeEU/18sO69rZRodrj+ckuqldRtcyf1bjbOD33nz4ahhPLBGufu1kDTQiID+LuSKcKEhkdcgKA",
+  "base64"
+);
+
+test("Windows runtime extraction reads a real bzip2 archive using bundled dependencies", async (t) => {
+  const root = makeBinDir(t);
+  const archive = path.join(root, "runtime with spaces.tar.bz2");
+  const destination = path.join(root, "nested destination");
+  fs.writeFileSync(archive, BZIP2_FIXTURE);
+  await extractTarBz2(archive, destination, { platform: "win32" });
+  assert.equal(
+    fs.readFileSync(path.join(destination, "sherpa-fixture", "nested", "tokens.txt"), "utf8"),
+    "Windows bzip2 extraction works.\n"
+  );
+});
+
+test("Windows runtime extraction rejects a corrupt bzip2 archive", async (t) => {
+  const root = makeBinDir(t);
+  const archive = path.join(root, "corrupt.tar.bz2");
+  fs.writeFileSync(archive, "not a bzip2 archive");
+  await assert.rejects(extractTarBz2(archive, path.join(root, "output"), { platform: "win32" }));
+});
 
 // Mirrors what the 1.13.4 win-x64-shared-MD-Release archive yields after copying:
 // three exes that import onnxruntime.dll, the C API DLL that imports it too
@@ -186,7 +212,9 @@ test("a failed automatic Windows repair stays incomplete and retries DLL patchin
     {
       __dirname: path.join(root, "scripts"),
       module: { exports: {} },
-      process,
+      // This repair test injects a fake native extractor; the real Windows
+      // decompressor is exercised above with an actual compressed archive.
+      process: { ...process, platform: "linux" },
       console,
       require(name) {
         if (name === "fs") {

@@ -165,8 +165,17 @@ function verifyPackagedMacosParakeet(
   return { ...validateMacosDeploymentTargets(targets), libraryPath };
 }
 
-function extractTarBz2(archivePath, destDir) {
+async function extractTarBz2(archivePath, destDir, { platform = process.platform } = {}) {
   fs.mkdirSync(destDir, { recursive: true });
+  if (platform === "win32") {
+    // Windows bsdtar may spawn an external bzip2 and never finish. Use the
+    // same bundled decompressor as model installation, with no PATH tools.
+    const { pipeline } = require("stream/promises");
+    const unbzip2 = require("unbzip2-stream");
+    const tar = require("tar");
+    await pipeline(fs.createReadStream(archivePath), unbzip2(), tar.x({ cwd: destDir }));
+    return;
+  }
   // Use relative paths from archive dir as cwd, so neither -f nor -C args
   // contain Windows drive letter colons (GNU tar treats C: as remote host)
   const cwd = path.dirname(archivePath);
@@ -282,7 +291,7 @@ async function downloadBinary(platformArch, config, isForce = false) {
     await downloadFile(url, archivePath);
 
     fs.mkdirSync(extractDir, { recursive: true });
-    extractTarBz2(archivePath, extractDir);
+    await extractTarBz2(archivePath, extractDir);
 
     for (const [binaryName, destPath] of [
       [config.binaryPath, outputPath],
@@ -439,6 +448,7 @@ module.exports = {
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
   getDownloadUrl,
+  extractTarBz2,
   isCompleteInstall,
   parseMacosDeploymentTargets,
   privatizeWindowsOnnxRuntime,
