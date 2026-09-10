@@ -57,7 +57,7 @@ test("Live Transcript keeps an adaptive surface instead of entering at Agent hei
   const { LIVE_TRANSCRIPT_SURFACE_LIMITS } = await load();
 
   assert.deepEqual(LIVE_TRANSCRIPT_SURFACE_LIMITS, {
-    minHeight: 152,
+    minHeight: 188,
     maxHeight: 538,
   });
   assert.ok(LIVE_TRANSCRIPT_SURFACE_LIMITS.minHeight < LIVE_TRANSCRIPT_SURFACE_LIMITS.maxHeight);

@@ -70,14 +70,14 @@ export function LiveTranscriptPanel({
       >
         <div>
           {text ? (
-            <p className="select-text whitespace-pre-wrap break-words text-base leading-relaxed text-foreground">
+            <p className="min-h-[4.875rem] select-text whitespace-pre-wrap break-words text-base leading-relaxed text-foreground">
               <span>{shimmerParts.settled}</span>
               {shimmerParts.active && (
                 <span className="inline-response-shimmer">{shimmerParts.active}</span>
               )}
             </p>
           ) : (
-            <p className="text-base leading-relaxed text-muted-foreground/55">
+            <p className="min-h-[4.875rem] text-base leading-relaxed text-muted-foreground/55">
               {t("transcriptionPreview.waitingForInput")}
             </p>
           )}
@@ -125,7 +125,7 @@ export function LiveTranscriptPanel({
         className="pointer-events-none absolute inset-x-5 top-0 invisible pb-3 pt-8"
         aria-hidden="true"
       >
-        <p className="whitespace-pre-wrap break-words text-base leading-relaxed">
+        <p className="min-h-[4.875rem] whitespace-pre-wrap break-words text-base leading-relaxed">
           {measurementText || t("transcriptionPreview.waitingForInput")}
         </p>
       </div>
