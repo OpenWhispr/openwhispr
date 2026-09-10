@@ -35,6 +35,7 @@ import { pickDefaultModelId } from "../models/providerDefaultModel";
 // the switch store only zustand, so neither reopens the ModelRegistry cycle.
 import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { recordTinfoilModelSwitch } from "./tinfoilModelSwitchStore";
+import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import {
   getTranscriptionSelection,
   isScreenContextAllowed,
@@ -92,7 +93,11 @@ const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
   // Self-hosted realtime is not implemented for Note Recording.
   modes: ["openwhispr", "providers", "local"] as const,
   byokProviders: modelRegistryData.transcriptionProviders
-    .filter((provider) => provider.models.some((model) => model.streaming))
+    .filter(
+      (provider) =>
+        MEETING_STREAMING_PROVIDER_IDS.includes(provider.id) &&
+        provider.models.some((model) => model.streaming)
+    )
     .map((provider) => provider.id),
 };
 

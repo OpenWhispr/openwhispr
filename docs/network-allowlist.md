@@ -18,14 +18,15 @@ onboarding).
 
 ## Required for streaming transcription
 
-OpenWhispr Cloud routes streaming sessions through one of three providers.
-Allowlist all three unless a specific provider is pinned in configuration.
+OpenWhispr Cloud routes streaming sessions through one of four providers.
+Allowlist all four unless a specific provider is pinned in configuration.
 
-| Host                       | Protocol   | Port | Purpose                                                                           |
-| -------------------------- | ---------- | ---- | --------------------------------------------------------------------------------- |
-| `api.deepgram.com`         | WSS        | 443  | Deepgram streaming transcription.                                                 |
-| `api.openai.com`           | WSS, HTTPS | 443  | OpenAI Realtime streaming transcription.                                          |
-| `streaming.assemblyai.com` | WSS, HTTPS | 443  | AssemblyAI streaming transcription. Token endpoint is HTTPS; live session is WSS. |
+| Host                                | Protocol   | Port | Purpose                                                                                 |
+| ----------------------------------- | ---------- | ---- | --------------------------------------------------------------------------------------- |
+| `api.deepgram.com`                  | WSS        | 443  | Deepgram streaming transcription.                                                       |
+| `api.openai.com`                    | WSS, HTTPS | 443  | OpenAI Realtime streaming transcription.                                                |
+| `streaming.assemblyai.com`          | WSS, HTTPS | 443  | AssemblyAI streaming transcription. Token endpoint is HTTPS; live session is WSS.       |
+| `generativelanguage.googleapis.com` | WSS, HTTPS | 443  | Gemini Live streaming transcription. Live session is WSS; batch transcription is HTTPS. |
 
 ## Required for local model downloads
 
@@ -55,11 +56,11 @@ Contacted only when a user pastes a URL into the Upload view to download and
 transcribe its audio. Downloads are HTTPS-only and hosts resolving to
 private/internal addresses are rejected.
 
-| Host                                | Protocol | Port | Purpose                                                                    |
-| ----------------------------------- | -------- | ---- | -------------------------------------------------------------------------- |
-| `www.youtube.com`, `youtube.com`, `youtu.be`, `m.youtube.com`, `music.youtube.com` | HTTPS | 443 | YouTube page/metadata fetch for pasted YouTube links (bundled yt-dlp).     |
-| `*.googlevideo.com`                 | HTTPS    | 443  | YouTube media CDN — the actual audio stream download.                      |
-| _User-pasted hosts_                 | HTTPS    | 443  | Direct audio/video URL imports contact whatever public host the user pastes. |
+| Host                                                                               | Protocol | Port | Purpose                                                                      |
+| ---------------------------------------------------------------------------------- | -------- | ---- | ---------------------------------------------------------------------------- |
+| `www.youtube.com`, `youtube.com`, `youtu.be`, `m.youtube.com`, `music.youtube.com` | HTTPS    | 443  | YouTube page/metadata fetch for pasted YouTube links (bundled yt-dlp).       |
+| `*.googlevideo.com`                                                                | HTTPS    | 443  | YouTube media CDN — the actual audio stream download.                        |
+| _User-pasted hosts_                                                                | HTTPS    | 443  | Direct audio/video URL imports contact whatever public host the user pastes. |
 
 ## BYOK provider hosts (only if configured)
 
@@ -71,7 +72,7 @@ provider. Skip any provider not in use.
 | `api.openai.com`                                                                 | HTTPS      | 443  | OpenAI API key configured (transcription or reasoning).                                                                                                                                                                                                                                                                                                  |
 | `*.cognitiveservices.azure.com`, `*.openai.azure.com`, `*.services.ai.azure.com` | HTTPS      | 443  | Azure AI Foundry / Azure OpenAI speech-to-text configured (custom transcription provider pointed at your own Azure resource endpoint).                                                                                                                                                                                                                   |
 | `api.anthropic.com`                                                              | HTTPS      | 443  | Anthropic API key configured.                                                                                                                                                                                                                                                                                                                            |
-| `generativelanguage.googleapis.com`                                              | HTTPS      | 443  | Gemini API key configured.                                                                                                                                                                                                                                                                                                                               |
+| `generativelanguage.googleapis.com`                                              | WSS, HTTPS | 443  | Gemini API key configured. Batch transcription is HTTPS; the Live streaming model opens a WSS session.                                                                                                                                                                                                                                                   |
 | `api.groq.com`                                                                   | HTTPS      | 443  | Groq API key configured.                                                                                                                                                                                                                                                                                                                                 |
 | `atc.tinfoil.sh`, `*.tinfoil.sh`                                                 | WSS, HTTPS | 443  | Tinfoil API key configured. `atc.tinfoil.sh` serves the enclave attestation bundle (verified locally against an embedded sigstore root). Inference and realtime transcription connect to an enclave host assigned dynamically at runtime (e.g. `inference.tinfoil.sh`, `router.infN.tinfoil.sh`), so allowlist `*.tinfoil.sh` rather than pinning hosts. |
 | `api.mistral.ai`                                                                 | HTTPS      | 443  | Mistral API key configured.                                                                                                                                                                                                                                                                                                                              |
@@ -105,6 +106,7 @@ curl -v https://api.openwhispr.com/api/health
 curl -v https://api.deepgram.com/v1/projects
 curl -v https://api.openai.com/v1/models
 curl -v https://streaming.assemblyai.com/v3/token
+curl -v https://generativelanguage.googleapis.com/v1beta/models
 
 # Model downloads (only if local mode is in use)
 curl -v -I https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin

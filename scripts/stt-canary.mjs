@@ -5,9 +5,9 @@
  * endpoint the app dials — so a provider changing its auth, endpoint, or
  * handshake surfaces here on a schedule instead of in a customer report
  * (#1624 sat in shipped builds for three days as a swallowed warmup warning).
- * Batch providers whose request shape is theirs alone rather than the shared
- * OpenAI-compatible multipart (Gemini) send a real transcription through the
- * shipped module for the same reason.
+ * Providers whose request shape is theirs alone rather than the shared
+ * OpenAI-compatible multipart (Gemini, batch and Live) send a real
+ * transcription through the shipped module for the same reason.
  *
  * Run: node scripts/stt-canary.mjs
  * Keys come from STT_CANARY_<PROVIDER>_KEY env vars; providers without a key
@@ -25,10 +25,12 @@ import ffmpegPath from "ffmpeg-static";
 import tokenProviders from "../src/helpers/realtimeTokenProviders.js";
 import audioUtils from "../src/utils/audioUtils.js";
 import geminiTranscription from "../src/helpers/geminiTranscription.js";
+import geminiLive from "../src/helpers/geminiLiveStreaming.js";
 
 const { fetchRealtimeTokenForProvider } = tokenProviders;
 const { pcm16ToWav } = audioUtils;
 const { transcribeWithGemini } = geminiTranscription;
+const { GeminiLiveStreaming } = geminiLive;
 
 const HANDSHAKE_TIMEOUT_MS = 15000;
 // Half a second of 16 kHz mono silence: enough for a provider to accept and
@@ -110,12 +112,89 @@ async function probeGeminiBatch(key, audio, contentType) {
   return { ok: true };
 }
 
+// A completed Live turn proves the raw-key handshake, the setup message, the
+// audio frame shape and the transcript events — the socket opening proves none
+// of it, and server-side VAD suppresses silence, so the probe has to speak.
+const CANARY_PHRASE = "The quick brown fox. OpenWhispr transcription test.";
+const LIVE_FRAME_MS = 50;
+const LIVE_FRAME_BYTES = 1600; // one 50ms dictation worklet frame at 16kHz s16le
+
+// Gemini's own TTS keeps the fixture out of the repo and needs no second key.
+async function synthesizeCanarySpeech(key) {
+  const response = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `Say clearly: ${CANARY_PHRASE}` }] }],
+        generationConfig: { responseModalities: ["AUDIO"] },
+      }),
+    }
+  );
+  if (!response.ok) throw new Error(`speech fixture request failed: HTTP ${response.status}`);
+  const data = await response.json();
+  const audio = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+  if (!audio) throw new Error("speech fixture returned no audio");
+  // TTS answers with 24kHz L16; dictation captures 16kHz.
+  const resampled = spawnSync(
+    ffmpegPath,
+    [
+      "-f",
+      "s16le",
+      "-ar",
+      "24000",
+      "-ac",
+      "1",
+      "-i",
+      "pipe:0",
+      "-ar",
+      "16000",
+      "-f",
+      "s16le",
+      "pipe:1",
+    ],
+    { input: Buffer.from(audio, "base64"), maxBuffer: 64 * 1024 * 1024 }
+  );
+  if (resampled.status !== 0) throw new Error("could not resample the speech fixture to 16kHz");
+  return resampled.stdout;
+}
+
+async function probeGeminiLive(key) {
+  const token = await fetchRealtimeTokenForProvider("gemini-realtime", tokenDeps(key), {
+    mode: "byok",
+  });
+  const pcm = await synthesizeCanarySpeech(key);
+  const streaming = new GeminiLiveStreaming();
+  let partials = 0;
+  streaming.onPartialTranscript = () => {
+    partials += 1;
+  };
+  try {
+    await streaming.connect({ token, mode: "byok", keyterms: ["OpenWhispr"] });
+    // Paced like the mic worklet: the server finalizes relative to real-time
+    // ingest, so a burst followed by audioStreamEnd starves the final.
+    for (let offset = 0; offset < pcm.length; offset += LIVE_FRAME_BYTES) {
+      streaming.sendAudio(pcm.subarray(offset, offset + LIVE_FRAME_BYTES));
+      await new Promise((resolve) => setTimeout(resolve, LIVE_FRAME_MS));
+    }
+    const { text } = await streaming.disconnect(true);
+    if (!/quick brown fox/i.test(text)) {
+      return { ok: false, detail: `no usable transcript: ${JSON.stringify(text)}` };
+    }
+    return { ok: true, note: `${partials} partials, final "${text}"` };
+  } finally {
+    streaming.cleanup();
+  }
+}
+
 const tokenDeps = (key) => ({
   environmentManager: {
     getOpenAIKey: () => key,
     getTinfoilKey: () => key,
     getDeepgramKey: () => key,
     getAssemblyAIKey: () => key,
+    getGeminiKey: () => key,
   },
   proxyFetch: fetch,
 });
@@ -172,6 +251,11 @@ const PROBES = [
         ? { ok: true, note: "key present (transport not probed)" }
         : { ok: false, detail: "empty token" };
     },
+  },
+  {
+    id: "gemini-live-streaming",
+    keyEnv: "STT_CANARY_GEMINI_KEY",
+    run: (key) => probeGeminiLive(key),
   },
   {
     id: "gemini-batch-wav",

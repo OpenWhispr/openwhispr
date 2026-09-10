@@ -38,7 +38,8 @@ export interface NoteRecordingProvider {
   models: NoteRecordingProviderModel[];
 }
 
-// Session options for the shared dictation-realtime-* channels. `provider` is
+// Session options every dictation streaming channel takes — the shared
+// dictation-realtime-* set and the per-provider ones. `provider` is
 // what fetchRealtimeToken's allowlist keys on — the renderer must always send
 // it (built by dictationStreamingRouting.buildStreamingSessionOptions); the
 // main process defaults a missing value to "openai-realtime" for pre-1.8.4
@@ -2705,6 +2706,32 @@ declare global {
       onDeepgramSessionEnd?: (
         callback: (data: { audioDuration?: number; text?: string }) => void
       ) => () => void;
+
+      // Gemini Live Streaming
+      geminiStreamingWarmup?: (
+        options?: DictationRealtimeSessionOptions
+      ) => Promise<
+        { success: boolean; alreadyWarm?: boolean; error?: string } & PolicyFailureMetadata
+      >;
+      geminiStreamingStart?: (
+        options?: DictationRealtimeSessionOptions & { forceNew?: boolean }
+      ) => Promise<
+        { success: boolean; usedWarmConnection?: boolean; error?: string } & PolicyFailureMetadata
+      >;
+      geminiStreamingSend?: (audioBuffer: ArrayBuffer) => void;
+      geminiStreamingFinalize?: () => void;
+      geminiStreamingStop?: () => Promise<{
+        success: boolean;
+        text?: string;
+        model?: string;
+        audioBytesSent?: number;
+        error?: string;
+      }>;
+      geminiStreamingStatus?: () => Promise<{ isConnected: boolean; isConnecting: boolean }>;
+      onGeminiPartialTranscript?: (callback: (text: string) => void) => () => void;
+      onGeminiFinalTranscript?: (callback: (text: string) => void) => () => void;
+      onGeminiError?: (callback: (error: string) => void) => () => void;
+      onGeminiSessionEnd?: (callback: (data: { text?: string }) => void) => () => void;
 
       // Corti streaming (BYOK)
       cortiStreamingWarmup?: (options?: {

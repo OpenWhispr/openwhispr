@@ -7,6 +7,11 @@
 
 export const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
+// REALTIME_MODELS is the OpenAI-only shortcut (it forces "openai-realtime"), so
+// Gemini's live model routes on its own. Keying on the model id and not the
+// provider is required: the batch model on the same provider is HTTP-only.
+export const GEMINI_LIVE_MODEL = "gemini-3.5-transcribe-live";
+
 export function defaultStreamingProviderName(context) {
   return context === "notes" ? "deepgram" : "openai-realtime";
 }
@@ -20,6 +25,12 @@ export function resolveStreamingProviderName({ settings, context, sttConfig }) {
     settings.cloudTranscriptionMode === "byok"
   ) {
     return "corti";
+  }
+  if (
+    settings.cloudTranscriptionProvider === "gemini" &&
+    settings.cloudTranscriptionModel === GEMINI_LIVE_MODEL
+  ) {
+    return "gemini";
   }
   if (REALTIME_MODELS.has(settings.cloudTranscriptionModel)) {
     return "openai-realtime";

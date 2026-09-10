@@ -10,9 +10,9 @@ import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import type { InferenceMode } from "../../types/electron";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
-import { getStreamingTranscriptionProviders } from "../../models/ModelRegistry";
+import { getMeetingStreamingTranscriptionProviders } from "../../models/ModelRegistry";
 
-const MEETING_BYOK_PROVIDER_IDS = getStreamingTranscriptionProviders().map(
+const MEETING_BYOK_PROVIDER_IDS = getMeetingStreamingTranscriptionProviders().map(
   (provider) => provider.id
 );
 

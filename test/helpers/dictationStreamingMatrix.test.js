@@ -20,6 +20,7 @@ const RENDERER_STREAMING_PROVIDERS = [
   "deepgram",
   "assemblyai",
   "openai-realtime",
+  "gemini",
   "corti",
   "tinfoil-realtime",
 ];
@@ -64,6 +65,26 @@ const RESOLUTION_MATRIX = [
   [
     "corti on openwhispr cloud is not corti streaming; realtime model still wins",
     { settings: settingsWith({ cloudTranscriptionProvider: "corti" }) },
+    "openai-realtime",
+  ],
+  [
+    "gemini's live model routes to its own channels",
+    {
+      settings: settingsWith({
+        cloudTranscriptionProvider: "gemini",
+        cloudTranscriptionModel: "gemini-3.5-transcribe-live",
+      }),
+    },
+    "gemini",
+  ],
+  [
+    "gemini's batch model keeps the dictation default (HTTP, not streaming)",
+    {
+      settings: settingsWith({
+        cloudTranscriptionProvider: "gemini",
+        cloudTranscriptionModel: "gemini-3.5-transcribe",
+      }),
+    },
     "openai-realtime",
   ],
   [

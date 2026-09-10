@@ -34,6 +34,34 @@ test("allow-list accepts tinfoil-realtime and local", async () => {
   assert.equal(ALLOWED_MEETING_PROVIDERS.has("local"), true);
 });
 
+test("every provider note recording offers is one the main process accepts", async () => {
+  const { ALLOWED_MEETING_PROVIDERS } = await load();
+  const { MEETING_STREAMING_PROVIDER_IDS } =
+    await import("../../src/helpers/meetingTranscriptionRouting.js");
+
+  // Note recording derives its streaming provider id by concatenation
+  // (`${provider.id}-realtime`), so an offered catalog id with no client class
+  // is rejected at meeting-transcription-prepare with no user-visible message.
+  for (const id of MEETING_STREAMING_PROVIDER_IDS) {
+    assert.equal(
+      ALLOWED_MEETING_PROVIDERS.has(`${id}-realtime`),
+      true,
+      `${id} is offered for note recording but ${id}-realtime has no streaming client`
+    );
+  }
+});
+
+test("a dictation-only streaming provider is not offered for note recording", async () => {
+  const { getStreamingTranscriptionProviders, getMeetingStreamingTranscriptionProviders } =
+    await import("../../src/models/ModelRegistry.ts");
+
+  const streamingIds = getStreamingTranscriptionProviders().map((provider) => provider.id);
+  const meetingIds = getMeetingStreamingTranscriptionProviders().map((provider) => provider.id);
+
+  assert.ok(streamingIds.includes("gemini"), "gemini ships a streaming dictation model");
+  assert.equal(meetingIds.includes("gemini"), false);
+});
+
 test("allow-list rejects unknown and batch-only providers", async () => {
   const { ALLOWED_MEETING_PROVIDERS } = await load();
 
