@@ -1075,7 +1075,7 @@
       "failedUserCheck": "检查用户账户失败",
       "generic": "出了点问题，请重试。",
       "invalidCredentials": "邮箱或密码无效",
-      "invalidEmail": "请输入有效的电子邮件地址"
+      "invalidEmail": "请输入有效的邮箱地址"
     },
     "getStarted": "开始使用",
     "legal": {
