@@ -17,7 +17,9 @@ test("completed hidden startup accepts the validated main-process account scope"
     readActiveAccountScope: async () => ({ accountId: "account-a", authGeneration: 3 }),
   });
 
-  assert.equal(ready, true);
+  assert.deepEqual(ready, {
+    expectedAccountScope: { accountId: "account-a", authGeneration: 3 },
+  });
 });
 
 test("hidden startup rejects stale completion state without a validated account scope", async () => {
@@ -27,7 +29,7 @@ test("hidden startup rejects stale completion state without a validated account 
     readActiveAccountScope: async () => null,
   });
 
-  assert.equal(ready, false);
+  assert.equal(ready, null);
 });
 
 test("hidden startup fails closed when the account scope cannot be read", async () => {
@@ -39,7 +41,7 @@ test("hidden startup fails closed when the account scope cannot be read", async 
     },
   });
 
-  assert.equal(ready, false);
+  assert.equal(ready, null);
 });
 
 test("control panel never substitutes the main-process scope for resolved auth", async () => {
@@ -54,15 +56,15 @@ test("control panel never substitutes the main-process scope for resolved auth",
     },
   });
 
-  assert.equal(ready, false);
+  assert.equal(ready, null);
   assert.equal(scopeRead, false);
 });
 
 test("resolved account and guest sessions keep their immediate readiness paths", async () => {
   const { resolveMacAccessibilityReadiness } = await load();
 
-  assert.equal(await resolveMacAccessibilityReadiness({ ...defaults, isSignedIn: true }), true);
-  assert.equal(await resolveMacAccessibilityReadiness({ ...defaults, authSkipped: true }), true);
+  assert.deepEqual(await resolveMacAccessibilityReadiness({ ...defaults, isSignedIn: true }), {});
+  assert.deepEqual(await resolveMacAccessibilityReadiness({ ...defaults, authSkipped: true }), {});
 });
 
 test("onboarding remains fail-closed for every authentication state", async () => {
@@ -74,6 +76,6 @@ test("onboarding remains fail-closed for every authentication state", async () =
       normalAppVisible: false,
       isSignedIn: true,
     }),
-    false
+    null
   );
 });

@@ -1775,8 +1775,19 @@ async function startApp() {
   }
 }
 
-ipcMain.on("mac-accessibility-features-ready", () => {
+ipcMain.on("mac-accessibility-features-ready", (_event, expectedAccountScope) => {
   if (process.platform !== "darwin") return;
+  if (expectedAccountScope) {
+    const accountScopeBinding = require("./src/helpers/accountScopeBinding");
+    const currentAccountScope = accountScopeBinding.resolveActiveAccountScope({
+      ...require("./src/helpers/tokenStore").getState(),
+      binding: accountScopeBinding.read(),
+    });
+    if (!accountScopeBinding.matchesActiveAccountScope(expectedAccountScope, currentAccountScope)) {
+      debugLogger.info("[Accessibility] Ignoring stale account-scoped readiness signal");
+      return;
+    }
+  }
   macAccessibilityFeaturesReady = true;
   startMacAccessibilityFeatures?.();
 });

@@ -179,9 +179,9 @@ function MainApp() {
       // The hidden dictation window cannot resolve Better Auth itself. Its
       // persisted main-process scope proves this is a validated returning user.
       readActiveAccountScope: window.electronAPI?.getActiveAccountScope,
-    }).then((ready) => {
-      if (!cancelled && ready) {
-        window.electronAPI?.markMacAccessibilityFeaturesReady?.();
+    }).then((readiness) => {
+      if (!cancelled && readiness) {
+        window.electronAPI?.markMacAccessibilityFeaturesReady?.(readiness.expectedAccountScope);
       }
     });
     return () => {

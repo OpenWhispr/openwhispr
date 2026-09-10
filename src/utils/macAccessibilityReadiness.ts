@@ -8,20 +8,25 @@ type ReadinessOptions = {
   readActiveAccountScope?: () => Promise<ActiveAccountScope | null>;
 };
 
+type MacAccessibilityReadiness = {
+  expectedAccountScope?: ActiveAccountScope;
+};
+
 export async function resolveMacAccessibilityReadiness({
   normalAppVisible,
   isControlPanel,
   isSignedIn,
   authSkipped,
   readActiveAccountScope,
-}: ReadinessOptions): Promise<boolean> {
-  if (!normalAppVisible) return false;
-  if (isSignedIn || authSkipped) return true;
-  if (isControlPanel || !readActiveAccountScope) return false;
+}: ReadinessOptions): Promise<MacAccessibilityReadiness | null> {
+  if (!normalAppVisible) return null;
+  if (isSignedIn || authSkipped) return {};
+  if (isControlPanel || !readActiveAccountScope) return null;
 
   try {
-    return Boolean(await readActiveAccountScope());
+    const expectedAccountScope = await readActiveAccountScope();
+    return expectedAccountScope ? { expectedAccountScope } : null;
   } catch {
-    return false;
+    return null;
   }
 }

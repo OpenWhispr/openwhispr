@@ -18,6 +18,7 @@ const RESTART_DELAY_MS = 1000;
 const RESTART_RESET_MS = 10000;
 // Crash recovery is best-effort and must never hold the rest of app startup.
 const PREFERENCE_RECOVERY_TIMEOUT_MS = 2000;
+const PREFERENCE_RECOVERY_TERMINATION_TIMEOUT_MS = 1000;
 
 class GlobeKeyManager extends EventEmitter {
   constructor({ preferenceStatePath = null } = {}) {
@@ -28,6 +29,7 @@ class GlobeKeyManager extends EventEmitter {
     this._isStopping = false;
     this._restartCount = 0;
     this._restartResetTimer = null;
+    this._preferenceRecoveryBlocked = false;
     this.preferenceStatePath = preferenceStatePath;
     this.config = { mouseButtons: [], suppressGlobeAction: false };
   }
@@ -110,11 +112,14 @@ class GlobeKeyManager extends EventEmitter {
 
     return new Promise((resolve) => {
       let settled = false;
-      let timeout = null;
+      let recoveryTimeout = null;
+      let terminationTimeout = null;
+      let terminationRequested = false;
       const finish = (error, code) => {
         if (settled) return;
         settled = true;
-        if (timeout) clearTimeout(timeout);
+        if (recoveryTimeout) clearTimeout(recoveryTimeout);
+        if (terminationTimeout) clearTimeout(terminationTimeout);
         if (error || code !== 0) {
           debugLogger.warn("[GlobeKeyManager] Preference recovery failed", {
             error: error?.message,
@@ -122,6 +127,10 @@ class GlobeKeyManager extends EventEmitter {
           });
         }
         resolve();
+      };
+      const blockListenerStart = (error) => {
+        this._preferenceRecoveryBlocked = true;
+        finish(error);
       };
 
       try {
@@ -134,17 +143,40 @@ class GlobeKeyManager extends EventEmitter {
           ],
           { stdio: "ignore" }
         );
-        child.once("error", (error) => finish(error));
-        child.once("exit", (code) => finish(null, code));
-        timeout = setTimeout(() => {
+        child.once("error", (error) => {
+          if (terminationRequested) {
+            blockListenerStart(error);
+          } else {
+            finish(error);
+          }
+        });
+        child.once("exit", (code) =>
+          finish(
+            terminationRequested
+              ? new Error("Preference recovery helper was terminated after timing out")
+              : null,
+            code
+          )
+        );
+        recoveryTimeout = setTimeout(() => {
+          terminationRequested = true;
           try {
             child.kill("SIGKILL");
-          } catch {
-            // Releasing startup still takes priority if the child already died.
+          } catch (error) {
+            blockListenerStart(error);
+            return;
           }
-          finish(
-            new Error(`Preference recovery timed out after ${PREFERENCE_RECOVERY_TIMEOUT_MS}ms`)
-          );
+          if (!settled) {
+            terminationTimeout = setTimeout(
+              () =>
+                blockListenerStart(
+                  new Error(
+                    `Preference recovery helper did not exit within ${PREFERENCE_RECOVERY_TERMINATION_TIMEOUT_MS}ms after SIGKILL`
+                  )
+                ),
+              PREFERENCE_RECOVERY_TERMINATION_TIMEOUT_MS
+            );
+          }
         }, PREFERENCE_RECOVERY_TIMEOUT_MS);
       } catch (error) {
         finish(error);
@@ -155,6 +187,12 @@ class GlobeKeyManager extends EventEmitter {
   start() {
     if (!this.isSupported) {
       debugLogger.info("[GlobeKeyManager] Skipped — not macOS");
+      return;
+    }
+    if (this._preferenceRecoveryBlocked) {
+      this.reportError(
+        new Error("Globe listener blocked because preference recovery could not be terminated")
+      );
       return;
     }
     if (this.process) {

@@ -45,6 +45,29 @@ function makeChild() {
   return child;
 }
 
+function installFakeTimers() {
+  const originalSetTimeout = global.setTimeout;
+  const originalClearTimeout = global.clearTimeout;
+  const timers = [];
+
+  global.setTimeout = (callback, delay) => {
+    const timer = { callback, delay, cleared: false };
+    timers.push(timer);
+    return timer;
+  };
+  global.clearTimeout = (timer) => {
+    timer.cleared = true;
+  };
+
+  return {
+    timers,
+    restore() {
+      global.setTimeout = originalSetTimeout;
+      global.clearTimeout = originalClearTimeout;
+    },
+  };
+}
+
 // Returns the manager plus the spawn calls it made, so tests can assert on the
 // arguments handed to the native listener.
 function loadManager({ markerExists = true } = {}) {
@@ -126,37 +149,58 @@ test("leftover preference recovery uses a one-shot helper without starting the l
   assert.equal(manager.process, null);
 });
 
-test("a wedged preference recovery helper is killed without blocking startup", async () => {
-  const originalSetTimeout = global.setTimeout;
-  const originalClearTimeout = global.clearTimeout;
-  let timeoutCallback;
-  let timeoutCleared = false;
-
-  global.setTimeout = (callback, delay) => {
-    assert.equal(delay, 2000);
-    timeoutCallback = callback;
-    return 42;
-  };
-  global.clearTimeout = (id) => {
-    assert.equal(id, 42);
-    timeoutCleared = true;
-  };
-
+test("timed-out preference recovery waits for the helper to exit", async () => {
+  const fakeTimers = installFakeTimers();
   try {
     const { GlobeKeyManager, spawnCalls } = loadManager();
     const manager = new GlobeKeyManager({ preferenceStatePath: "/tmp/state.json" });
     const recovery = manager.restoreLeftoverSystemPreference();
+    let resolved = false;
+    recovery.then(() => {
+      resolved = true;
+    });
 
-    timeoutCallback();
-    await recovery;
+    assert.equal(fakeTimers.timers[0].delay, 2000);
+    fakeTimers.timers[0].callback();
+    await Promise.resolve();
 
+    assert.equal(resolved, false, "startup must wait until the one-shot helper exits");
+    assert.equal(fakeTimers.timers[1].delay, 1000);
     assert.equal(spawnCalls[0].child.killed, true);
     assert.equal(spawnCalls[0].child.killSignal, "SIGKILL");
-    assert.equal(timeoutCleared, true);
+
+    spawnCalls[0].child.emit("exit", null, "SIGKILL");
+    await recovery;
+
+    assert.equal(resolved, true);
+    assert.equal(fakeTimers.timers[0].cleared, true);
+    assert.equal(fakeTimers.timers[1].cleared, true);
     assert.equal(manager.process, null);
   } finally {
-    global.setTimeout = originalSetTimeout;
-    global.clearTimeout = originalClearTimeout;
+    fakeTimers.restore();
+  }
+});
+
+test("an unconfirmed recovery termination blocks the long-lived listener", async () => {
+  const fakeTimers = installFakeTimers();
+  try {
+    const { GlobeKeyManager, spawnCalls } = loadManager();
+    const manager = new GlobeKeyManager({ preferenceStatePath: "/tmp/state.json" });
+    const errors = [];
+    manager.on("error", (error) => errors.push(error));
+
+    const recovery = manager.restoreLeftoverSystemPreference();
+    fakeTimers.timers[0].callback();
+    fakeTimers.timers[1].callback();
+    await recovery;
+
+    manager.start();
+
+    assert.equal(spawnCalls.length, 1, "a second helper must not race the wedged recovery");
+    assert.match(errors[0].message, /preference recovery could not be terminated/);
+    assert.equal(manager.process, null);
+  } finally {
+    fakeTimers.restore();
   }
 });
 
@@ -166,19 +210,22 @@ test("leftover preference recovery is skipped without a marker or off macOS", as
 
   await manager.restoreLeftoverSystemPreference();
   setPlatform("win32");
-  await new GlobeKeyManager({ preferenceStatePath: "/tmp/state.json" })
-    .restoreLeftoverSystemPreference();
+  await new GlobeKeyManager({
+    preferenceStatePath: "/tmp/state.json",
+  }).restoreLeftoverSystemPreference();
 
   assert.equal(spawnCalls.length, 0);
 
   const withoutMarker = loadManager({ markerExists: false });
-  await new withoutMarker.GlobeKeyManager({ preferenceStatePath: "/tmp/state.json" })
-    .restoreLeftoverSystemPreference();
+  await new withoutMarker.GlobeKeyManager({
+    preferenceStatePath: "/tmp/state.json",
+  }).restoreLeftoverSystemPreference();
   assert.equal(withoutMarker.spawnCalls.length, 0);
 });
 
 test("spawn args include mouse buttons, a spaced state path, and the suppression flag", () => {
-  const statePath = "/Users/a b/Library/Application Support/open whispr/globe-preference-state.json";
+  const statePath =
+    "/Users/a b/Library/Application Support/open whispr/globe-preference-state.json";
   const { GlobeKeyManager, spawnCalls } = loadManager();
   const manager = new GlobeKeyManager({ preferenceStatePath: statePath });
 
