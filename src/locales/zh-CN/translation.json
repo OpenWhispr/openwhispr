@@ -121,10 +121,17 @@
       "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" 中没有普通按键，因此桌面环境无法检测到您何时松开。请尝试 {{suggestion}}。",
+      "holdUnsupportedOnDesktop": "您的桌面环境无法报告按键的松开事件。按住说话需要 GNOME 48 或更高版本、KDE Plasma 或 X11 会话。",
       "registrationFailed": "无法注册 \"{{hotkey}}\"，该快捷键可能已被其他应用占用。",
       "updateFailedCheckFormat": "无法将快捷键更新为 \"{{hotkey}}\"，请检查格式是否有效。",
       "trySuggestions": "建议尝试：{{suggestions}}",
-      "slotConflict": "此快捷键已用于{{slot}}。"
+      "slotConflict": "此快捷键已用于{{slot}}。",
+      "holdUnsupportedOnHyprland": "在 Hyprland 上，按住模式仅适用于听写快捷键。"
+    },
+    "portal": {
+      "voiceAgentHold": "按住以与助手对话",
+      "translationHold": "按住以听写并翻译"
     }
   },
   "systemSettings": {
@@ -946,7 +953,8 @@
         "failedToRegister": "注册快捷键失败，请重试。"
       },
       "messages": {
-        "nowUsing": "现在使用 {{hotkey}} 进行听写"
+        "nowUsing": "现在使用 {{hotkey}} 进行听写",
+        "holdSwitchedToTap": "此设备上 {{hotkey}} 不支持按住模式，已切换为点按。"
       }
     },
     "modelDownload": {
@@ -1879,7 +1887,15 @@
         "linuxPttSetupNote": "运行命令后，请注销并重新登录。",
         "hyprlandConfigWriteWarningTitle": "Hyprland 键绑定不会持久保存",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr 无法写入 {{path}}，因此键绑定不会在 Hyprland 配置重新加载后保留。请确保该文件存在且可写。",
-        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 会占用所选快捷键。OpenWhispr 注册快捷键时，任何使用相同组合键的现有 Hyprland 绑定都会被解除。"
+        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 会占用所选快捷键。OpenWhispr 注册快捷键时，任何使用相同组合键的现有 Hyprland 绑定都会被解除。",
+        "gestures": {
+          "holdTitle": "Hold to speak",
+          "holdDetail": "Release to finish",
+          "handsFreeTitle": "Hands-free",
+          "handsFreeDetail": "Press again to stop",
+          "doublePress": "Double press",
+          "tapOnlyTitle": "Press to start, press again to stop"
+        }
       },
       "meetingHotkey": {
         "title": "会议模式快捷键",
@@ -3503,6 +3519,17 @@
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏",
       "askAssistant": "询问助手"
+    },
+    "handsFreeTip": {
+      "badge": "提示",
+      "title": "切换到免提模式",
+      "description": "连按两次 {{hotkey}} 即可开始免提模式。"
+    },
+    "holdMigrationCard": {
+      "badge": "New in this update",
+      "title": "Hold to speak, release to finish",
+      "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
+      "gesture": "Double press it for hands‑free, press again to stop."
     }
   },
   "dictationAgent": {

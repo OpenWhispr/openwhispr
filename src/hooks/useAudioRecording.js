@@ -47,9 +47,13 @@ export const useAudioRecording = (toast, options = {}) => {
   const [micCaptureStatus, setMicCaptureStatus] = useState("inactive");
   const [transcript, setTranscript] = useState("");
   const [partialTranscript, setPartialTranscript] = useState("");
+  // Counts runs that produced text, so surfaces keyed to a finished dictation
+  // (the hands-free tip) can tell success from an error or an empty result.
+  const [completedRuns, setCompletedRuns] = useState(0);
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopRequestedDuringStartRef = useRef(false);
+  const cancelRequestedDuringStartRef = useRef(false);
   const stopLockRef = useRef(false);
   const preparationGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
@@ -70,6 +74,7 @@ export const useAudioRecording = (toast, options = {}) => {
     onShowTranscript,
     onDemoEvent,
     assistantOpenRef,
+    suppressNoAudioErrorRef,
   } = options;
 
   useEffect(() => {
@@ -114,6 +119,7 @@ export const useAudioRecording = (toast, options = {}) => {
       lastStartOptionsRef.current = { voiceAgentRequested, translationRequested };
       startLockRef.current = true;
       stopRequestedDuringStartRef.current = false;
+      cancelRequestedDuringStartRef.current = false;
       let recordingStarted = false;
       try {
         if (!audioManagerRef.current) return false;
@@ -214,6 +220,24 @@ export const useAudioRecording = (toast, options = {}) => {
         recordingStarted = didStart;
         if (didStart) dismissDictationError?.();
 
+        // Same shape as the stop below, and checked first because a cancel
+        // discards audio a stop would keep: every cancel path (the Fn-combo
+        // interrupt on a just-latched hands-free session, a force-stopped
+        // push, the deferred quick-release cancel) fires while isRecording is
+        // still false on a cold mic, so it was dropped and the device opened
+        // seconds later into a recording nothing could stop.
+        if (didStart && cancelRequestedDuringStartRef.current) {
+          recordingStarted = false;
+          window.electronAPI?.unregisterCancelHotkey?.();
+          const cancelState = audioManagerRef.current.getState();
+          if (cancelState.isStreaming || cancelState.isStreamingStartInProgress) {
+            await audioManagerRef.current.cancelStreamingRecording();
+          } else {
+            audioManagerRef.current.cancelRecording();
+          }
+          return false;
+        }
+
         // A stop that landed while the start was still awaiting the mic open was
         // dropped (isRecording was still false), leaving a runaway recording
         // until the next hotkey press. Honor it now that we started.
@@ -248,6 +272,7 @@ export const useAudioRecording = (toast, options = {}) => {
         // no state change will ever arrive.
         if (stopRequestedDuringStartRef.current && !recordingStarted) setIsStopping(false);
         stopRequestedDuringStartRef.current = false;
+        cancelRequestedDuringStartRef.current = false;
         if (!recordingStarted) {
           setIsPreparing(false);
           setIsAssistantVoice(false);
@@ -442,10 +467,17 @@ export const useAudioRecording = (toast, options = {}) => {
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
-        showDictationError({
-          title: t("hooks.audioRecording.noAudio.title"),
-          description: t("hooks.audioRecording.noAudio.description"),
-        });
+        // The Hold migration card owns the pill on the first press after the
+        // update, and that press is usually an experimental tap that catches
+        // no speech. Scolding the user for trying the gesture the card is
+        // teaching reads as a failure of the card, so this one press stays
+        // quiet. The card shows once ever, so the suppression does too.
+        if (!suppressNoAudioErrorRef?.current) {
+          showDictationError({
+            title: t("hooks.audioRecording.noAudio.title"),
+            description: t("hooks.audioRecording.noAudio.description"),
+          });
+        }
       },
       onPartialTranscript: (text) => {
         onDemoEventRef.current?.({ kind: demoKindRef.current, status: "partial", text });
@@ -492,6 +524,7 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           setTranscript(result.text);
+          setCompletedRuns((runs) => runs + 1);
           onDemoEventRef.current?.({
             kind: demoKindRef.current,
             status: "success",
@@ -723,8 +756,13 @@ export const useAudioRecording = (toast, options = {}) => {
       }
     };
 
-    const handleStart = async () => {
-      await performStartRecording();
+    // Hold-mode starts name their recording kind; a payload-less event (an
+    // older main process) keeps meaning plain dictation.
+    const handleStart = async (options) => {
+      await performStartRecording({
+        voiceAgentRequested: options?.inputKind === "assistant",
+        translationRequested: options?.inputKind === "translation",
+      });
     };
 
     const handleStop = async () => {
@@ -746,8 +784,8 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
-    const disposeStart = window.electronAPI.onStartDictation?.(() => {
-      handleStart();
+    const disposeStart = window.electronAPI.onStartDictation?.((options) => {
+      handleStart(options);
       onToggle?.();
     });
 
@@ -768,6 +806,9 @@ export const useAudioRecording = (toast, options = {}) => {
 
     const disposeCancelPreparation = window.electronAPI.onCancelDictationPreparation?.(() => {
       preparationGenerationRef.current += 1;
+      // Cancelling the prepared capture cannot reach a start that is already
+      // awaiting the device; performStartRecording unwinds it when it lands.
+      if (startLockRef.current) cancelRequestedDuringStartRef.current = true;
       setIsPreparing(false);
       audioManagerRef.current?.cancelPreparedMicCapture?.();
       if (reportedLifecycleRef.current?.startsWith("preparing:")) reportLifecycle("idle");
@@ -801,12 +842,17 @@ export const useAudioRecording = (toast, options = {}) => {
     dismissDictationError,
     onDictationError,
     reportLifecycle,
+    suppressNoAudioErrorRef,
     t,
   ]);
 
   const cancelRecording = useCallback(async () => {
     if (audioManagerRef.current) {
       preparationGenerationRef.current += 1;
+      // The panel's cancel control reaches a start still awaiting the mic the
+      // same way the hotkey interrupt does — through the flag, not through
+      // the state below, which the in-flight start does not re-read.
+      if (startLockRef.current) cancelRequestedDuringStartRef.current = true;
       setIsPreparing(false);
       setIsStopping(false);
       audioManagerRef.current.cancelPreparedMicCapture?.();
@@ -875,6 +921,7 @@ export const useAudioRecording = (toast, options = {}) => {
     micCaptureStatus,
     transcript,
     partialTranscript,
+    completedRuns,
     startRecording: performStartRecording,
     stopRecording: performStopRecording,
     cancelRecording,

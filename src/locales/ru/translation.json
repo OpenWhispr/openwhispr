@@ -121,10 +121,17 @@
       "mouseButtonOnlyMac": "Горячие клавиши на кнопках мыши в настоящее время поддерживаются только на macOS.",
       "alreadyRegistered": "«{{hotkey}}» уже зарегистрирована другим приложением.",
       "osReserved": "«{{hotkey}}» может быть зарезервирована вашей операционной системой.",
+      "holdNeedsRegularKey": "В \"{{hotkey}}\" нет обычной клавиши, поэтому рабочий стол не может определить момент отпускания. Попробуйте {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Ваш рабочий стол не может сообщать об отпускании клавиши. Для режима удержания нужен GNOME 48 или новее, KDE Plasma либо сеанс X11.",
       "registrationFailed": "Не удалось зарегистрировать «{{hotkey}}». Возможно, она используется другим приложением.",
       "updateFailedCheckFormat": "Не удалось обновить горячую клавишу на «{{hotkey}}». Проверьте правильность формата.",
       "trySuggestions": "Попробуйте: {{suggestions}}",
-      "slotConflict": "Эта горячая клавиша уже используется для {{slot}}."
+      "slotConflict": "Эта горячая клавиша уже используется для {{slot}}.",
+      "holdUnsupportedOnHyprland": "В Hyprland удержание доступно только для горячей клавиши диктовки."
+    },
+    "portal": {
+      "voiceAgentHold": "Удерживайте, чтобы говорить с ассистентом",
+      "translationHold": "Удерживайте, чтобы надиктовать текст для перевода"
     }
   },
   "systemSettings": {
@@ -946,7 +953,8 @@
         "failedToRegister": "Не удалось зарегистрировать горячую клавишу. Попробуйте ещё раз."
       },
       "messages": {
-        "nowUsing": "Теперь для диктовки используется {{hotkey}}"
+        "nowUsing": "Теперь для диктовки используется {{hotkey}}",
+        "holdSwitchedToTap": "Удержание недоступно для {{hotkey}} на этом устройстве, поэтому активация переключена на нажатие."
       }
     },
     "modelDownload": {
@@ -1883,7 +1891,15 @@
         "linuxPttSetupNote": "После выполнения команды выйдите из системы и войдите снова.",
         "hyprlandConfigWriteWarningTitle": "Привязки клавиш Hyprland не будут сохраняться",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr не может записывать в {{path}}, поэтому привязки клавиш не сохранятся после перезагрузки конфигурации Hyprland. Убедитесь, что файл существует и доступен для записи.",
-        "hyprlandUnbindDescription": "В Hyprland OpenWhispr резервирует выбранное сочетание клавиш. Любая существующая привязка Hyprland, использующая ту же комбинацию, будет удалена, когда OpenWhispr зарегистрирует своё сочетание."
+        "hyprlandUnbindDescription": "В Hyprland OpenWhispr резервирует выбранное сочетание клавиш. Любая существующая привязка Hyprland, использующая ту же комбинацию, будет удалена, когда OpenWhispr зарегистрирует своё сочетание.",
+        "gestures": {
+          "holdTitle": "Hold to speak",
+          "holdDetail": "Release to finish",
+          "handsFreeTitle": "Hands-free",
+          "handsFreeDetail": "Press again to stop",
+          "doublePress": "Double press",
+          "tapOnlyTitle": "Press to start, press again to stop"
+        }
       },
       "meetingHotkey": {
         "title": "Горячая клавиша режима встречи",
@@ -3549,6 +3565,17 @@
       "startListening": "Начать запись",
       "hideForNow": "Скрыть",
       "askAssistant": "Спросить помощника"
+    },
+    "handsFreeTip": {
+      "badge": "Совет",
+      "title": "Перейдите в режим без рук",
+      "description": "Дважды нажмите {{hotkey}}, чтобы запустить режим без рук."
+    },
+    "holdMigrationCard": {
+      "badge": "New in this update",
+      "title": "Hold to speak, release to finish",
+      "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
+      "gesture": "Double press it for hands‑free, press again to stop."
     }
   },
   "dictationAgent": {

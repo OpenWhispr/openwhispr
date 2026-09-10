@@ -9,6 +9,7 @@ import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useAssistantPanel } from "./hooks/useAssistantPanel";
 import { useLiveTranscriptPanel } from "./hooks/useLiveTranscriptPanel";
 import { useMainWindowSizeOwner } from "./hooks/useMainWindowSizeOwner";
+import { useHandsFreeTip } from "./hooks/useHandsFreeTip";
 import { useMainProcessNotifications } from "./hooks/useMainProcessNotifications";
 import { useListeningEntrancePhase } from "./hooks/useListeningEntrancePhase";
 import { useWindowResizeCompensation } from "./hooks/useWindowResizeCompensation";
@@ -22,6 +23,10 @@ import { VoiceModePanelCore } from "./components/dictation/VoiceModePanelCore";
 import { PillTooltip } from "./components/dictation/PillTooltip";
 import { PillCommandMenu } from "./components/dictation/PillCommandMenu";
 import { LiquidCancelButton } from "./components/dictation/LiquidCancelButton";
+import { HandsFreeTipCard } from "./components/dictation/HandsFreeTipCard";
+import { HANDS_FREE_TIP_DURATION_MS, resolveHandsFreeTipHotkey } from "./helpers/handsFreeTip";
+import { HoldMigrationCard } from "./components/dictation/HoldMigrationCard";
+import { useHoldMigrationCard } from "./hooks/useHoldMigrationCard";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
@@ -71,6 +76,8 @@ export default function App() {
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
+  const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
+  const translationKey = useSettingsStore((s) => s.translationKey);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
   const [voiceHorizontalDirection, setVoiceHorizontalDirection] = useState(() =>
     resolveVoiceHorizontalDirection(panelStartPosition)
@@ -176,6 +183,11 @@ export default function App() {
     }
   }, [assistantOpenRef, setWindowInteractivity]);
 
+  // Mirrors the Hold migration card's visibility for useAudioRecording, which
+  // runs before useHoldMigrationCard below. A ref, not state: onNoAudio reads
+  // it long after render, so nothing needs to re-run when it changes.
+  const holdMigrationCardVisibleRef = useRef(false);
+
   const {
     isRecording,
     isProcessing,
@@ -183,12 +195,14 @@ export default function App() {
     isPreparing,
     isStopping,
     micCaptureStatus,
+    completedRuns,
     toggleListening,
     cancelRecording,
     cancelProcessing,
     getAudioLevel,
   } = useAudioRecording(toast, {
     onToggle: handleDictationToggle,
+    suppressNoAudioErrorRef: holdMigrationCardVisibleRef,
     onDemoEvent: (event) => {
       // Demo sessions only exist while onboarding is incomplete — skip the IPC otherwise.
       if (localStorage.getItem("onboardingCompleted") === "true") return;
@@ -230,6 +244,10 @@ export default function App() {
     isProcessing,
     isAssistantVoice,
   });
+  // Hoisted above the tip/migration-card wiring below: their placement must
+  // read whether a panel is mounted, so these need to exist before that.
+  const anyPanelOpen = assistant.open || liveTranscript.open;
+  const anyPanelMounted = assistant.mounted || liveTranscript.mounted;
 
   useLayoutEffect(() => {
     liveTranscriptApiRef.current = liveTranscript;
@@ -294,12 +312,52 @@ export default function App() {
   // a menu opening over the compact pill resolves to EXPANDED geometry.
   const windowFitsCompactPill = voicePillIsRecording || voiceActivity.compactPill;
 
+  const holdMigrationCard = useHoldMigrationCard();
+  const holdMigrationCardMounted = holdMigrationCard.visible || holdMigrationCard.exiting;
+  useLayoutEffect(() => {
+    holdMigrationCardVisibleRef.current = holdMigrationCard.visible;
+  }, [holdMigrationCard.visible]);
+
+  const handsFreeTip = useHandsFreeTip({
+    completedRuns,
+    recording: isRecording || isPreparing,
+    atRest:
+      !isRecording &&
+      !isVisuallyProcessing &&
+      toastCount === 0 &&
+      !isCommandMenuOpen &&
+      !assistant.mounted &&
+      !liveTranscript.mounted &&
+      !holdMigrationCard.visible,
+  });
+  // Feeds only the window-size ladder below (the auto-hide effect further
+  // down reads handsFreeTip.tip and holdMigrationCard.visible directly, the
+  // same underlying signal). Both already outlast the migration card's
+  // 200ms exit — a 340ms deferred shrink, a 500ms auto-hide delay — so
+  // widening either to also track `exiting` would just hold the window
+  // large through the fade for nothing.
+  const tipCardVisible = handsFreeTip.tip !== null || holdMigrationCard.visible;
+  // Which card, if any, currently owns the pill's spot. Deliberately NOT
+  // tipCardVisible: placement has to track the migration card through its
+  // own exit fade (visible drops the instant dismissal starts, but the card
+  // stays mounted for its 200ms fade — inPlaceOfPill flipping mid-fade would
+  // change its `bottom` value, which isn't in the card's transition list, so
+  // it would jump instead of fading in place), and it must never claim the
+  // pill's spot while a panel is mounted (the card stays pending-dismissal
+  // behind the panel, but is not rendered there, so nothing is "in place" —
+  // leaving this on would otherwise leave the panel's own footer pill
+  // invisible and dead until the next hotkey press dismisses the card).
+  const tipCardPlacementActive =
+    handsFreeTip.tip !== null || (holdMigrationCardMounted && !anyPanelMounted);
+  const tipCardInPlaceOfPill = tipCardPlacementActive && floatingIconAutoHide;
+
   const { dictationErrorPillHandoffActive, panelReturnResizeActive } = useMainWindowSizeOwner({
     requestMainWindowSize,
     dictationErrorActionCount,
     toastCount,
     isCommandMenuOpen,
     isCompactPill: windowFitsCompactPill,
+    handsFreeTipVisible: tipCardVisible,
     assistantOpen: assistant.open,
     assistantMounted: assistant.mounted,
     assistantOpenRef,
@@ -371,6 +429,8 @@ export default function App() {
       !isVisuallyProcessing &&
       toastCount === 0 &&
       !dictationErrorPillHandoffActive &&
+      handsFreeTip.tip === null &&
+      !holdMigrationCard.visible &&
       !assistant.mounted &&
       !liveTranscript.mounted
     ) {
@@ -390,6 +450,8 @@ export default function App() {
     floatingIconAutoHide,
     toastCount,
     dictationErrorPillHandoffActive,
+    handsFreeTip.tip,
+    holdMigrationCard.visible,
     assistant.mounted,
     liveTranscript.mounted,
   ]);
@@ -461,8 +523,6 @@ export default function App() {
       : isProcessing && isAssistantVoice
         ? "transcribing"
         : "idle";
-  const anyPanelOpen = assistant.open || liveTranscript.open;
-  const anyPanelMounted = assistant.mounted || liveTranscript.mounted;
   const canReopenLiveTranscript =
     shouldOfferLiveTranscriptReopen({
       manuallyCollapsed: liveTranscript.manuallyCollapsed,
@@ -592,7 +652,9 @@ export default function App() {
         aria-hidden={pillVisuallySuppressed || undefined}
       >
         <div
-          className="assistant-pill-presence relative flex items-center"
+          className={`assistant-pill-presence relative flex items-center transition-opacity duration-150 ease-out ${
+            tipCardInPlaceOfPill ? "pointer-events-none opacity-0" : ""
+          }`}
           data-assistant-footer-phase={assistant.open ? assistant.footerPhase : undefined}
           data-horizontal-direction={voiceHorizontalDirection}
           style={{
@@ -730,6 +792,50 @@ export default function App() {
             />
           )}
         </div>
+        {handsFreeTip.tip && (
+          <HandsFreeTipCard
+            hotkey={resolveHandsFreeTipHotkey(handsFreeTip.tip.inputKind, {
+              dictationKey: hotkey,
+              voiceAgentKey,
+              translationKey,
+            })}
+            align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
+            inPlaceOfPill={tipCardInPlaceOfPill}
+            exiting={handsFreeTip.exiting}
+            progressDuration={HANDS_FREE_TIP_DURATION_MS}
+            progressPaused={handsFreeTip.timerPaused}
+            onDismiss={handsFreeTip.dismiss}
+            onMouseEnter={() => {
+              setWindowInteractivity(true);
+              handsFreeTip.pauseTimer();
+            }}
+            onMouseLeave={() => {
+              handsFreeTip.resumeTimer();
+              if (!isCommandMenuOpen && !assistant.mounted) {
+                setWindowInteractivity(false);
+              }
+            }}
+          />
+        )}
+        {holdMigrationCardMounted && !anyPanelMounted && (
+          <HoldMigrationCard
+            hotkey={resolveHandsFreeTipHotkey("dictation", {
+              dictationKey: hotkey,
+              voiceAgentKey,
+              translationKey,
+            })}
+            align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
+            inPlaceOfPill={tipCardInPlaceOfPill}
+            exiting={holdMigrationCard.exiting}
+            onDismiss={holdMigrationCard.dismiss}
+            onMouseEnter={() => setWindowInteractivity(true)}
+            onMouseLeave={() => {
+              if (!isCommandMenuOpen && !assistant.mounted) {
+                setWindowInteractivity(false);
+              }
+            }}
+          />
+        )}
       </div>
 
       <VoiceModePanelCore

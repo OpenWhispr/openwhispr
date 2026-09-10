@@ -121,10 +121,17 @@
       "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" has no regular key, so your desktop cannot tell when you release it. Try {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Your desktop cannot report when a key is released. Hold to speak needs GNOME 48 or newer, KDE Plasma, or an X11 session.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
       "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
       "trySuggestions": "Try: {{suggestions}}",
-      "slotConflict": "This hotkey is already used for {{slot}}."
+      "slotConflict": "This hotkey is already used for {{slot}}.",
+      "holdUnsupportedOnHyprland": "On Hyprland, Hold is only available for the dictation hotkey."
+    },
+    "portal": {
+      "voiceAgentHold": "Hold to talk to the assistant",
+      "translationHold": "Hold to dictate for translation"
     }
   },
   "systemSettings": {
@@ -946,7 +953,8 @@
         "failedToRegister": "Failed to register hotkey. Please try again."
       },
       "messages": {
-        "nowUsing": "Now using {{hotkey}} for dictation"
+        "nowUsing": "Now using {{hotkey}} for dictation",
+        "holdSwitchedToTap": "Hold isn't available for {{hotkey}} on this device, so activation switched to Tap."
       }
     },
     "modelDownload": {
@@ -2168,7 +2176,15 @@
         "linuxPttSetupNote": "After running the command, log out and log back in.",
         "hyprlandConfigWriteWarningTitle": "Hyprland keybinds will not persist",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr cannot write to {{path}}, so keybinds will not survive a Hyprland config reload. Make sure the file exists and is writable.",
-        "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut."
+        "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut.",
+        "gestures": {
+          "holdTitle": "Hold to speak",
+          "holdDetail": "Release to finish",
+          "handsFreeTitle": "Hands-free",
+          "handsFreeDetail": "Press again to stop",
+          "doublePress": "Double press",
+          "tapOnlyTitle": "Press to start, press again to stop"
+        }
       },
       "meetingHotkey": {
         "title": "Meeting Mode Hotkey",
@@ -3668,6 +3684,17 @@
       "startListening": "Start listening",
       "hideForNow": "Hide for now",
       "askAssistant": "Ask Assistant"
+    },
+    "handsFreeTip": {
+      "badge": "Tip",
+      "title": "Switch to hands-free mode",
+      "description": "Double tap {{hotkey}} to start hands-free mode."
+    },
+    "holdMigrationCard": {
+      "badge": "New in this update",
+      "title": "Hold to speak, release to finish",
+      "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
+      "gesture": "Double press it for hands‑free, press again to stop."
     }
   },
   "dictationAgent": {

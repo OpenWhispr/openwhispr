@@ -197,11 +197,31 @@ export function isCompoundHotkey(hotkey: string): boolean {
 /**
  * Gets the default hotkey for the current platform.
  * - macOS: GLOBE key (Fn key on modern Macs)
- * - Windows/Linux: Control+Super (Ctrl+Win / Ctrl+Super)
+ * - Windows: Control+Super (Ctrl+Win)
+ * - Linux: Control+Super+Space — the desktop backends need a regular key in
+ *   the combo to report a release, and without a release there is no Hold.
+ *   Mirrors DEFAULT_HOTKEY in src/helpers/hotkeyManager.js.
  */
 export function getDefaultHotkey(): string {
   const platform = getPlatform();
-  return platform === "darwin" ? "GLOBE" : "Control+Super";
+  if (platform === "darwin") return "GLOBE";
+  return platform === "linux" ? "Control+Super+Space" : "Control+Super";
+}
+
+/**
+ * Default Voice Agent hotkey, offered by onboarding on a fresh install only —
+ * a stored key is never rewritten.
+ * - Windows: Alt+Super+Space (Win+Alt+Space). Decided 2026-09-10 from a
+ *   researched candidate table (Titan: windows-voice-agent-default-hotkey).
+ *   It carries a regular key, so the low-level hook fires on Space rather than
+ *   the moment two modifiers meet; it shares no Ctrl with the dictation default
+ *   Control+Super, so that modifier-only chord cannot fire first; it is absent
+ *   from Microsoft's Windows shortcut list; and with no Ctrl in it the AltGr
+ *   (= Ctrl+Alt) trap on non-US layouts cannot reach it.
+ * - macOS and Linux: the long-standing CommandOrControl+Shift+Space.
+ */
+export function getDefaultVoiceAgentHotkey(): string {
+  return getPlatform() === "win32" ? "Alt+Super+Space" : "CommandOrControl+Shift+Space";
 }
 
 /**

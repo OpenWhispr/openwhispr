@@ -1,4 +1,8 @@
-import { formatHotkeyLabel, isGlobeLikeHotkey } from "../../utils/hotkeys";
+import {
+  formatHotkeyLabel,
+  getDefaultVoiceAgentHotkey,
+  isGlobeLikeHotkey,
+} from "../../utils/hotkeys";
 import type { Platform } from "../../utils/platform";
 
 export interface HotkeyKeycapDescriptor {
@@ -106,7 +110,6 @@ export const formatRecommendedHotkey = (value: string) =>
   isGlobeLikeHotkey(value) ? "Globe/Fn" : formatHotkeyInstruction(value);
 
 export const MACOS_DEFAULT_ONBOARDING_HOTKEY = "RightOption";
-export const DEFAULT_ASSISTANT_ONBOARDING_HOTKEY = "CommandOrControl+Shift+Space";
 
 /**
  * The chord the dictation step opens on.
@@ -138,12 +141,13 @@ export const resolveOnboardingDictationHotkey = ({
 };
 
 /**
- * The chord the assistant step opens on. `voiceAgentKey` is opt-in with no
- * platform default and nothing auto-registers it, so anything saved is the user's
- * own pick and there is no substitution to make.
+ * The chord the assistant step opens on. Nothing auto-registers `voiceAgentKey`,
+ * so anything saved is the user's own pick and there is no substitution to make;
+ * an empty slot opens on the platform's Voice Agent default, which is the only
+ * place that default is ever applied.
  */
 export const resolveOnboardingAssistantHotkey = (savedHotkey: string): string =>
-  savedHotkey || DEFAULT_ASSISTANT_ONBOARDING_HOTKEY;
+  savedHotkey || getDefaultVoiceAgentHotkey();
 
 export const getRecommendedDictationHotkeys = (
   platform: Platform,

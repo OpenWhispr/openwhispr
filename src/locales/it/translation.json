@@ -121,10 +121,17 @@
       "mouseButtonOnlyMac": "Le scorciatoie con i tasti del mouse sono attualmente supportate solo su macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" non contiene un tasto normale, quindi il desktop non può rilevare quando lo rilasci. Prova {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Il tuo desktop non può segnalare il rilascio di un tasto. Tieni premuto per parlare richiede GNOME 48 o successivo, KDE Plasma o una sessione X11.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
       "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
       "trySuggestions": "Prova: {{suggestions}}",
-      "slotConflict": "Questa scorciatoia è già utilizzata per {{slot}}."
+      "slotConflict": "Questa scorciatoia è già utilizzata per {{slot}}.",
+      "holdUnsupportedOnHyprland": "Su Hyprland, Tieni premuto è disponibile solo per la scorciatoia di dettatura."
+    },
+    "portal": {
+      "voiceAgentHold": "Tieni premuto per parlare con l'assistente",
+      "translationHold": "Tieni premuto per dettare un testo da tradurre"
     }
   },
   "systemSettings": {
@@ -946,7 +953,8 @@
         "failedToRegister": "Registrazione scorciatoia non riuscita. Riprova."
       },
       "messages": {
-        "nowUsing": "{{hotkey}} impostata per la dettatura"
+        "nowUsing": "{{hotkey}} impostata per la dettatura",
+        "holdSwitchedToTap": "Tieni premuto non è disponibile per {{hotkey}} su questo dispositivo, quindi l'attivazione è passata a Tocca."
       }
     },
     "modelDownload": {
@@ -1879,7 +1887,15 @@
         "linuxPttSetupNote": "Dopo aver eseguito il comando, esci e riaccedi.",
         "hyprlandConfigWriteWarningTitle": "Le scorciatoie di Hyprland non verranno mantenute",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr non può scrivere in {{path}}, quindi le scorciatoie non sopravvivranno a un ricaricamento della configurazione di Hyprland. Assicurati che il file esista e sia scrivibile.",
-        "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr riserva la scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usa la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia."
+        "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr riserva la scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usa la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia.",
+        "gestures": {
+          "holdTitle": "Hold to speak",
+          "holdDetail": "Release to finish",
+          "handsFreeTitle": "Hands-free",
+          "handsFreeDetail": "Press again to stop",
+          "doublePress": "Double press",
+          "tapOnlyTitle": "Press to start, press again to stop"
+        }
       },
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",
@@ -3503,6 +3519,17 @@
       "startListening": "Inizia ad ascoltare",
       "hideForNow": "Nascondi per ora",
       "askAssistant": "Chiedi all'assistente"
+    },
+    "handsFreeTip": {
+      "badge": "Suggerimento",
+      "title": "Passa alla modalità a mani libere",
+      "description": "Premi due volte {{hotkey}} per avviare la modalità a mani libere."
+    },
+    "holdMigrationCard": {
+      "badge": "New in this update",
+      "title": "Hold to speak, release to finish",
+      "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
+      "gesture": "Double press it for hands‑free, press again to stop."
     }
   },
   "dictationAgent": {

@@ -216,7 +216,9 @@ class KDEShortcutManager {
         const slotName = this.callbacks.has(shortcutUnique)
           ? shortcutUnique
           : this._findSlotByFriendlyName(shortcutUnique);
-        if (slotName !== "dictation") return;
+        // Every push-capable slot's callback takes a phase; the meeting
+        // callback takes none and would start a second meeting on release.
+        if (!slotName || slotName === "meeting") return;
         this.callbacks.get(slotName)?.(undefined, "up");
       });
 
@@ -259,8 +261,7 @@ class KDEShortcutManager {
     const QT_MODIFIER_MASK = 0xfe000000;
     const isModifierOnly = (qtKey & ~QT_MODIFIER_MASK) === 0;
     const modifierOnlyUnsupported =
-      isModifierOnly &&
-      (!KDEShortcutManager.isWayland() || (slotName === "dictation" && isPushToTalk));
+      isModifierOnly && (!KDEShortcutManager.isWayland() || isPushToTalk);
     if (modifierOnlyUnsupported) {
       debugLogger.log("[KDEShortcut] Modifier-only shortcut not supported in this mode", {
         slot: slotName,

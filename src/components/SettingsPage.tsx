@@ -84,7 +84,7 @@ import {
   getLinuxPasteInstallCommands,
   needsLinuxPasteToolGuidance,
 } from "../utils/linuxPasteTools";
-import { ActivationModeSelector } from "./ui/ActivationModeSelector";
+import { HotkeyGestureRows } from "./ui/HotkeyGestureRows";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import { Toggle } from "./ui/toggle";
@@ -1193,6 +1193,10 @@ export default function SettingsPage({
     dictationKey,
     activationMode,
     setActivationMode,
+    voiceAgentActivationMode,
+    setVoiceAgentActivationMode,
+    translationActivationMode,
+    setTranslationActivationMode,
     microphoneSelectionMode,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
@@ -1576,13 +1580,10 @@ export default function SettingsPage({
     [dictationKey, meetingKey, voiceAgentKey, t]
   );
 
-  const {
-    isUsingNativeShortcut,
-    isUsingHyprland,
-    hyprlandConfigStatus,
-    supportsPushToTalk,
-    pushToTalkUnavailableReason,
-  } = useHotkeyModeInfo("settings", dictationKey);
+  const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus } = useHotkeyModeInfo(
+    "settings",
+    dictationKey
+  );
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -1714,9 +1715,11 @@ export default function SettingsPage({
         duration: 15000,
       });
       setActivationMode("tap");
+      setVoiceAgentActivationMode("tap");
+      setTranslationActivationMode("tap");
     });
     return () => cleanup?.();
-  }, [toast, t, setActivationMode]);
+  }, [toast, t, setActivationMode, setVoiceAgentActivationMode, setTranslationActivationMode]);
 
   useEffect(() => {
     if (updateError) {
@@ -4017,20 +4020,11 @@ EOF`,
 
                 {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
                   <SettingsPanelRow>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-muted-foreground/80">
-                        {t("settingsPage.general.hotkey.activationMode")}
-                      </span>
-                      <ActivationModeSelector
-                        value={activationMode}
-                        onChange={setActivationMode}
-                        pushDisabledReason={
-                          !supportsPushToTalk
-                            ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                            : undefined
-                        }
-                      />
-                    </div>
+                    <HotkeyGestureRows
+                      slot="dictation"
+                      hotkey={dictationKey}
+                      mode={activationMode}
+                    />
                     {getCachedPlatform() === "linux" && activationMode === "push" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
                     )}
@@ -4057,6 +4051,15 @@ EOF`,
                       maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                     />
                   </SettingsPanelRow>
+                  {voiceAgentKey && (!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
+                    <SettingsPanelRow>
+                      <HotkeyGestureRows
+                        slot="voiceAgent"
+                        hotkey={voiceAgentKey}
+                        mode={voiceAgentActivationMode}
+                      />
+                    </SettingsPanelRow>
+                  )}
                 </SettingsPanel>
               </div>
             )}
@@ -4078,6 +4081,15 @@ EOF`,
                     maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
                 </SettingsPanelRow>
+                {translationKey && (!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
+                  <SettingsPanelRow>
+                    <HotkeyGestureRows
+                      slot="translation"
+                      hotkey={translationKey}
+                      mode={translationActivationMode}
+                    />
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 

@@ -30,7 +30,9 @@ export interface UseHotkeyRegistrationOptions {
    */
   showAlert?: (options: { title: string; description: string }) => void;
 
-  registerFn?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
+  registerFn?: (
+    hotkey: string
+  ) => Promise<{ success: boolean; message?: string; activationMode?: "tap" | "push" }>;
 }
 
 export interface UseHotkeyRegistrationResult {
@@ -160,7 +162,17 @@ export function useHotkeyRegistration(
         }
 
         // Success!
-        if (showSuccessToast && showAlert) {
+        if (result.activationMode === "tap" && showAlert) {
+          // The hotkey took, but it cannot Hold on this device, so the main
+          // process switched activation to Tap — worth saying even where the
+          // routine "saved" alert is off.
+          showAlert({
+            title: t("hooks.hotkeyRegistration.titles.saved"),
+            description: t("hooks.hotkeyRegistration.messages.holdSwitchedToTap", {
+              hotkey: formatHotkeyListLabel(hotkey),
+            }),
+          });
+        } else if (showSuccessToast && showAlert) {
           const displayLabel = formatHotkeyListLabel(hotkey);
           showAlert({
             title: t("hooks.hotkeyRegistration.titles.saved"),

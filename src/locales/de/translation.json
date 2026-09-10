@@ -121,10 +121,17 @@
       "mouseButtonOnlyMac": "Maustasten-Hotkeys werden derzeit nur auf macOS unterstützt.",
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" enthält keine normale Taste, daher kann Ihre Desktop-Umgebung das Loslassen nicht erkennen. Versuchen Sie {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Ihre Desktop-Umgebung kann das Loslassen einer Taste nicht melden. Halten zum Sprechen benötigt GNOME 48 oder neuer, KDE Plasma oder eine X11-Sitzung.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
       "updateFailedCheckFormat": "Hotkey konnte nicht auf \"{{hotkey}}\" aktualisiert werden. Prüfen Sie, ob das Format gültig ist.",
       "trySuggestions": "Versuchen Sie: {{suggestions}}",
-      "slotConflict": "Diese Tastenkombination wird bereits für {{slot}} verwendet."
+      "slotConflict": "Diese Tastenkombination wird bereits für {{slot}} verwendet.",
+      "holdUnsupportedOnHyprland": "Unter Hyprland ist Halten nur für den Diktat-Hotkey verfügbar."
+    },
+    "portal": {
+      "voiceAgentHold": "Gedrückt halten, um mit dem Assistenten zu sprechen",
+      "translationHold": "Gedrückt halten, um für die Übersetzung zu diktieren"
     }
   },
   "systemSettings": {
@@ -946,7 +953,8 @@
         "failedToRegister": "Hotkey konnte nicht registriert werden. Bitte versuchen Sie es erneut."
       },
       "messages": {
-        "nowUsing": "{{hotkey}} wird jetzt für das Diktat verwendet"
+        "nowUsing": "{{hotkey}} wird jetzt für das Diktat verwendet",
+        "holdSwitchedToTap": "Halten ist für {{hotkey}} auf diesem Gerät nicht verfügbar, daher wurde die Aktivierung auf Tippen umgestellt."
       }
     },
     "modelDownload": {
@@ -2168,7 +2176,15 @@
         "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls ab und wieder an.",
         "hyprlandConfigWriteWarningTitle": "Hyprland-Tastenkombinationen werden nicht dauerhaft gespeichert",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr kann nicht in {{path}} schreiben. Deshalb bleiben Tastenkombinationen nach einem Neuladen der Hyprland-Konfiguration nicht erhalten. Stellen Sie sicher, dass die Datei existiert und beschreibbar ist.",
-        "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Belegung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert."
+        "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Belegung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert.",
+        "gestures": {
+          "holdTitle": "Hold to speak",
+          "holdDetail": "Release to finish",
+          "handsFreeTitle": "Hands-free",
+          "handsFreeDetail": "Press again to stop",
+          "doublePress": "Double press",
+          "tapOnlyTitle": "Press to start, press again to stop"
+        }
       },
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",
@@ -3668,6 +3684,17 @@
       "startListening": "Aufnahme starten",
       "hideForNow": "Vorerst ausblenden",
       "askAssistant": "Assistent fragen"
+    },
+    "handsFreeTip": {
+      "badge": "Tipp",
+      "title": "Zum Freihandmodus wechseln",
+      "description": "Tippe {{hotkey}} zweimal, um den Freihandmodus zu starten."
+    },
+    "holdMigrationCard": {
+      "badge": "New in this update",
+      "title": "Hold to speak, release to finish",
+      "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
+      "gesture": "Double press it for hands‑free, press again to stop."
     }
   },
   "dictationAgent": {

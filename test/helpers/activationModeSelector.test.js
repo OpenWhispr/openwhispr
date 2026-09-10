@@ -32,3 +32,18 @@ test("an unsupported Hold option stays explained while Tap remains usable", () =
   assert.match(buttons[1], /title="Choose a hotkey with a non-modifier key\."/);
   assert.match(buttons[1], /aria-label="common\.hold: Choose a hotkey with a non-modifier key\."/);
 });
+
+test("the Hold indicator mirrors Tap's inset instead of riding the container border", () => {
+  // The indicator is w-[calc(50%-2px)] inside a p-0.5 container, so Tap rests
+  // 2px in from the left border. Sliding by anything more than the indicator's
+  // own width pushes the right edge onto the container border — the +4px
+  // variant overshot by exactly the two insets.
+  const indicatorFor = (value) =>
+    renderToStaticMarkup(
+      React.createElement(ActivationModeSelector, { value, onChange: () => undefined })
+    ).match(/<div[^>]*absolute[^>]*>/)[0];
+
+  assert.match(indicatorFor("tap"), /translate-x-0/);
+  assert.match(indicatorFor("push"), /translate-x-full/);
+  assert.doesNotMatch(indicatorFor("push"), /100%\s*\+/);
+});

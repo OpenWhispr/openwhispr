@@ -163,3 +163,99 @@ test("portal registration uses the current UI language for its description", asy
   const description = bindBody[1][0][1].find(([key]) => key === "description");
   assert.equal(description[1][1], "Mantener mientras hablas");
 });
+
+const PORTAL_PATH = "/org/freedesktop/portal/desktop";
+const GLOBAL_SHORTCUTS_INTERFACE = "org.freedesktop.portal.GlobalShortcuts";
+
+// A portal session binds its shortcuts exactly once, so every slot that
+// wants Hold must ride the same session: adding or dropping one rebinds the
+// full set in a fresh session.
+function createMultiSlotPortal(bus, { refuse = [] } = {}) {
+  const GnomeGlobalShortcutsPortal = loadPortal(() => bus);
+  const portal = new GnomeGlobalShortcutsPortal();
+  const bindBodies = [];
+  let sessionCount = 0;
+  portal.init = async () => true;
+  portal.bus = bus;
+  portal._request = async (member, _signature, body) => {
+    if (member === "CreateSession") {
+      sessionCount += 1;
+      return [
+        ["session_handle", ["o", [`/org/freedesktop/portal/desktop/session/${sessionCount}`]]],
+      ];
+    }
+    bindBodies.push(body);
+    const bound = body[1].map(([id]) => id).filter((id) => !refuse.includes(id));
+    return [["shortcuts", ["a(sa{sv})", [bound.map((id) => [id, []])]]]];
+  };
+  return { portal, bindBodies, sessions: () => sessionCount };
+}
+
+test("the portal binds every Hold slot in one session and routes phases by shortcut id", async () => {
+  const bus = createBus();
+  const { portal, bindBodies, sessions } = createMultiSlotPortal(bus);
+  const phases = [];
+
+  assert.equal(
+    await portal.registerKeybinding("ALT+R", (_h, phase) => phases.push(["dictation", phase])),
+    true
+  );
+  assert.equal(
+    await portal.registerKeybinding(
+      "ALT+A",
+      (_h, phase) => phases.push(["voiceAgent", phase]),
+      "voiceAgent"
+    ),
+    true
+  );
+  assert.deepEqual(
+    bindBodies.at(-1)[1].map(([id]) => id),
+    ["dictation", "voiceAgent"]
+  );
+  const voiceAgentEntry = bindBodies.at(-1)[1][1][1];
+  assert.equal(
+    voiceAgentEntry.find(([key]) => key === "description")[1][1],
+    "hotkey.portal.voiceAgentHold"
+  );
+  assert.equal(voiceAgentEntry.find(([key]) => key === "preferred_trigger")[1][1], "ALT+A");
+  assert.equal(sessions(), 2);
+
+  const session = portal.sessionHandle;
+  const activated = bus.mangle(PORTAL_PATH, GLOBAL_SHORTCUTS_INTERFACE, "Activated");
+  const deactivated = bus.mangle(PORTAL_PATH, GLOBAL_SHORTCUTS_INTERFACE, "Deactivated");
+  bus.signals.emit(activated, [session, "voiceAgent"]);
+  bus.signals.emit(deactivated, [session, "voiceAgent"]);
+  bus.signals.emit(activated, [session, "dictation"]);
+  bus.signals.emit(activated, ["/some/other/session", "dictation"]);
+  assert.deepEqual(phases, [
+    ["voiceAgent", "down"],
+    ["voiceAgent", "up"],
+    ["dictation", "down"],
+  ]);
+
+  // Dropping one slot rebinds the rest in a fresh session.
+  await portal.unregisterKeybinding("voiceAgent");
+  assert.deepEqual(
+    bindBodies.at(-1)[1].map(([id]) => id),
+    ["dictation"]
+  );
+  assert.equal(sessions(), 3);
+
+  // Dropping the last slot closes the session outright.
+  await portal.unregisterKeybinding("dictation");
+  assert.equal(portal.sessionHandle, null);
+  assert.equal(bindBodies.length, 3);
+});
+
+test("a slot the portal refuses to bind is dropped while the others stay bound", async () => {
+  const bus = createBus();
+  const { portal, bindBodies } = createMultiSlotPortal(bus, { refuse: ["translation"] });
+
+  assert.equal(await portal.registerKeybinding("ALT+R", () => undefined), true);
+  assert.equal(await portal.registerKeybinding("ALT+T", () => undefined, "translation"), false);
+  assert.deepEqual(
+    bindBodies.at(-1)[1].map(([id]) => id),
+    ["dictation"]
+  );
+  assert.notEqual(portal.sessionHandle, null);
+});

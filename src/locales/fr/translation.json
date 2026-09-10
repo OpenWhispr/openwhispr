@@ -121,10 +121,17 @@
       "mouseButtonOnlyMac": "Les raccourcis avec les boutons de la souris ne sont actuellement pris en charge que sur macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" est déjà enregistré par une autre application.",
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
+      "holdNeedsRegularKey": "\"{{hotkey}}\" ne contient aucune touche normale, votre bureau ne peut donc pas détecter le relâchement. Essayez {{suggestion}}.",
+      "holdUnsupportedOnDesktop": "Votre bureau ne peut pas signaler le relâchement d'une touche. Maintenir pour parler nécessite GNOME 48 ou plus récent, KDE Plasma ou une session X11.",
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
       "updateFailedCheckFormat": "Impossible de mettre à jour le raccourci vers \"{{hotkey}}\". Vérifiez que le format est valide.",
       "trySuggestions": "Essayez : {{suggestions}}",
-      "slotConflict": "Ce raccourci est déjà utilisé pour {{slot}}."
+      "slotConflict": "Ce raccourci est déjà utilisé pour {{slot}}.",
+      "holdUnsupportedOnHyprland": "Sur Hyprland, Maintenir n'est disponible que pour le raccourci de dictée."
+    },
+    "portal": {
+      "voiceAgentHold": "Maintenir pour parler à l'assistant",
+      "translationHold": "Maintenir pour dicter un texte à traduire"
     }
   },
   "systemSettings": {
@@ -946,7 +953,8 @@
         "failedToRegister": "Impossible d'enregistrer le raccourci. Réessayez."
       },
       "messages": {
-        "nowUsing": "Utilisation de {{hotkey}} pour la dictée"
+        "nowUsing": "Utilisation de {{hotkey}} pour la dictée",
+        "holdSwitchedToTap": "Maintenir n'est pas disponible pour {{hotkey}} sur cet appareil, l'activation est donc passée en mode Appui."
       }
     },
     "modelDownload": {
@@ -2168,7 +2176,15 @@
         "linuxPttSetupNote": "Après avoir exécuté la commande, déconnectez-vous et reconnectez-vous.",
         "hyprlandConfigWriteWarningTitle": "Les raccourcis Hyprland ne seront pas conservés",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr ne peut pas écrire dans {{path}} ; les raccourcis ne survivront donc pas à un rechargement de la configuration Hyprland. Vérifiez que le fichier existe et qu'il est accessible en écriture.",
-        "hyprlandUnbindDescription": "Sous Hyprland, OpenWhispr réserve le raccourci sélectionné. Tout raccourci Hyprland existant utilisant la même combinaison de touches sera supprimé quand OpenWhispr enregistrera son raccourci."
+        "hyprlandUnbindDescription": "Sous Hyprland, OpenWhispr réserve le raccourci sélectionné. Tout raccourci Hyprland existant utilisant la même combinaison de touches sera supprimé quand OpenWhispr enregistrera son raccourci.",
+        "gestures": {
+          "holdTitle": "Hold to speak",
+          "holdDetail": "Release to finish",
+          "handsFreeTitle": "Hands-free",
+          "handsFreeDetail": "Press again to stop",
+          "doublePress": "Double press",
+          "tapOnlyTitle": "Press to start, press again to stop"
+        }
       },
       "meetingHotkey": {
         "title": "Raccourci mode réunion",
@@ -3668,6 +3684,17 @@
       "startListening": "Commencer l’écoute",
       "hideForNow": "Masquer pour l’instant",
       "askAssistant": "Demander à l'assistant"
+    },
+    "handsFreeTip": {
+      "badge": "Astuce",
+      "title": "Passez en mode mains libres",
+      "description": "Appuyez deux fois sur {{hotkey}} pour démarrer le mode mains libres."
+    },
+    "holdMigrationCard": {
+      "badge": "New in this update",
+      "title": "Hold to speak, release to finish",
+      "description": "We changed how your hotkey works: hold {{hotkey}} while you talk.",
+      "gesture": "Double press it for hands‑free, press again to stop."
     }
   },
   "dictationAgent": {

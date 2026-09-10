@@ -29,9 +29,13 @@ import { useRequiredLocalModels } from "../hooks/useRequiredLocalModels";
 import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
-import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import {
-  DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
+  getDefaultHotkey,
+  getDefaultVoiceAgentHotkey,
+  parseHotkeyList,
+  serializeHotkeyList,
+} from "../utils/hotkeys";
+import {
   formatHotkeyInstruction,
   getRecommendedDictationHotkeys,
   resolveOnboardingAssistantHotkey,
@@ -902,7 +906,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               }}
               recommended={
                 assistant
-                  ? DEFAULT_ASSISTANT_ONBOARDING_HOTKEY
+                  ? getDefaultVoiceAgentHotkey()
                   : getRecommendedDictationHotkeys(platform, recommendedDictationHotkey)
               }
               captureLabel={t("onboarding.rehaul.hotkey.capture")}

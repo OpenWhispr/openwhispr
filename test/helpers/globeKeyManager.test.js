@@ -105,7 +105,8 @@ test("spawn args carry the state path and omit suppression by default", () => {
 });
 
 test("spawn args include mouse buttons, a spaced state path, and the suppression flag", () => {
-  const statePath = "/Users/a b/Library/Application Support/open whispr/globe-preference-state.json";
+  const statePath =
+    "/Users/a b/Library/Application Support/open whispr/globe-preference-state.json";
   const { GlobeKeyManager, spawnCalls } = loadManager();
   const manager = new GlobeKeyManager({ preferenceStatePath: statePath });
 
@@ -134,7 +135,7 @@ test("a configuration change reconfigures the running listener instead of restar
 
   assert.equal(spawnCalls.length, 1, "listener should not be respawned");
   assert.deepEqual(spawnCalls[0].child.stdin.writes, [
-    '{"mouseButtons":["MouseButton4"],"suppressGlobeAction":true}\n',
+    '{"mouseButtons":["MouseButton4"],"suppressGlobeAction":true,"watchKeys":[]}\n',
   ]);
 
   manager.stop();
@@ -165,9 +166,9 @@ test("successive changes each reach the listener as one full-state line", () => 
 
   assert.equal(spawnCalls.length, 1);
   assert.deepEqual(spawnCalls[0].child.stdin.writes, [
-    '{"mouseButtons":[],"suppressGlobeAction":true}\n',
-    '{"mouseButtons":["MouseButton5"],"suppressGlobeAction":true}\n',
-    '{"mouseButtons":[],"suppressGlobeAction":false}\n',
+    '{"mouseButtons":[],"suppressGlobeAction":true,"watchKeys":[]}\n',
+    '{"mouseButtons":["MouseButton5"],"suppressGlobeAction":true,"watchKeys":[]}\n',
+    '{"mouseButtons":[],"suppressGlobeAction":false,"watchKeys":[]}\n',
   ]);
 
   manager.stop();
@@ -230,4 +231,38 @@ test("the listener is not started off macOS", () => {
   manager.start();
 
   assert.equal(spawnCalls.length, 0);
+});
+
+test("watched keys reach the listener as configuration and come back as key events", () => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager({ preferenceStatePath: "/tmp/state.json" });
+
+  manager.setConfiguration({ watchKeys: ["F9", "F13", "F9"] });
+  manager.start();
+  assert.deepEqual(spawnCalls[0].args, [
+    "--globe-preference-state",
+    "/tmp/state.json",
+    "--watch-keys",
+    "F13,F9",
+  ]);
+
+  const child = spawnCalls[0].child;
+  const events = [];
+  manager.on("key-down", (key) => events.push(["down", key]));
+  manager.on("key-up", (key) => events.push(["up", key]));
+  child.stdout.emit("data", "KEY_DOWN:F9\nKEY_UP:F9\nKEY_DOWN:F13\n");
+  assert.deepEqual(events, [
+    ["down", "F9"],
+    ["up", "F9"],
+    ["down", "F13"],
+  ]);
+
+  // Dropping the watch reconfigures the running listener with the full state.
+  manager.setConfiguration({ watchKeys: [] });
+  assert.deepEqual(JSON.parse(child.stdin.writes.at(-1)), {
+    mouseButtons: [],
+    suppressGlobeAction: false,
+    watchKeys: [],
+  });
+  manager.stop();
 });

@@ -240,6 +240,44 @@ function migrateMicrophoneSelectionMode() {
 
 migrateMicrophoneSelectionMode();
 
+// Hold is the only activation model now (2026-09-07 design). One-time: a
+// stored Tap becomes Hold, and so does an *absent* mode on an install that
+// already finished onboarding — those users were on the old Tap default and
+// their hotkey behaviour is about to change. All three slots migrate the
+// same way; only the dictation slot arms the migration card (see below). A
+// fresh install (onboarding not completed) simply gets the new default and
+// never sees the card. After the marker, a stored Tap is a capability
+// verdict written by the main process (the hotkey or backend cannot Hold)
+// and must be left alone.
+const ACTIVATION_MODE_STORAGE_KEYS = [
+  "activationMode",
+  "voiceAgentActivationMode",
+  "translationActivationMode",
+] as const;
+
+function migrateActivationModesToHold() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("activationModeHoldMigration") === "done") return;
+  const existingInstall = localStorage.getItem("onboardingCompleted") === "true";
+  let dictationChanged = false;
+  for (const key of ACTIVATION_MODE_STORAGE_KEYS) {
+    const stored = localStorage.getItem(key);
+    if (stored === "push") continue;
+    if (stored === "tap" || existingInstall) {
+      localStorage.setItem(key, "push");
+      if (key === "activationMode") dictationChanged = true;
+    }
+  }
+  localStorage.setItem("activationModeHoldMigration", "done");
+  // The card's copy is specifically about the dictation hotkey ("hold ⌃ `
+  // while you talk"), so only the dictation slot moving can honestly arm
+  // it — a voice-agent or translation slot migrating alone is not a change
+  // this card can announce.
+  localStorage.setItem("holdMigrationCardPending", String(dictationChanged));
+}
+
+migrateActivationModesToHold();
+
 const BOOLEAN_SETTINGS = new Set([
   "useLocalWhisper",
   "meetingUseLocalWhisper",
@@ -261,6 +299,8 @@ const BOOLEAN_SETTINGS = new Set([
   "audioCuesEnabled",
   "pauseMediaOnDictation",
   "floatingIconAutoHide",
+  "holdMigrationCardShown",
+  "holdMigrationCardPending",
   "startMinimized",
   "meetingProcessDetection",
   "speakerDiarizationEnabled",
@@ -1097,6 +1137,13 @@ export interface SettingsState
   setOnboardingUseCaseNote: (note: string) => void;
   setSpokenLanguages: (languages: string[]) => void;
   setActivationMode: (mode: "tap" | "push") => void;
+  voiceAgentActivationMode: "tap" | "push";
+  setVoiceAgentActivationMode: (mode: "tap" | "push") => void;
+  translationActivationMode: "tap" | "push";
+  setTranslationActivationMode: (mode: "tap" | "push") => void;
+  holdMigrationCardPending: boolean;
+  holdMigrationCardShown: boolean;
+  setHoldMigrationCardShown: (shown: boolean) => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
   setMicrophoneSelectionMode: (mode: MicrophoneSelectionMode) => void;
@@ -1505,8 +1552,17 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
-  activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
+  activationMode: (readString("activationMode", "push") === "tap" ? "tap" : "push") as
     "tap" | "push",
+  voiceAgentActivationMode: (readString("voiceAgentActivationMode", "push") === "tap"
+    ? "tap"
+    : "push") as "tap" | "push",
+  translationActivationMode: (readString("translationActivationMode", "push") === "tap"
+    ? "tap"
+    : "push") as "tap" | "push",
+  // Set by migrateActivationModesToHold() above; read-only from here on.
+  holdMigrationCardPending: readBoolean("holdMigrationCardPending", false),
+  holdMigrationCardShown: readBoolean("holdMigrationCardShown", false),
 
   microphoneSelectionMode: (() => {
     const mode = readString("microphoneSelectionMode", "system");
@@ -2248,6 +2304,29 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) {
       window.electronAPI?.notifyActivationModeChanged?.(mode);
     }
+  },
+
+  setVoiceAgentActivationMode: (mode: "tap" | "push") => {
+    const validMode = mode === "push" ? "push" : "tap";
+    if (isBrowser) localStorage.setItem("voiceAgentActivationMode", validMode);
+    set({ voiceAgentActivationMode: validMode });
+    if (isBrowser) {
+      window.electronAPI?.notifySlotActivationModeChanged?.("voiceAgent", validMode);
+    }
+  },
+
+  setTranslationActivationMode: (mode: "tap" | "push") => {
+    const validMode = mode === "push" ? "push" : "tap";
+    if (isBrowser) localStorage.setItem("translationActivationMode", validMode);
+    set({ translationActivationMode: validMode });
+    if (isBrowser) {
+      window.electronAPI?.notifySlotActivationModeChanged?.("translation", validMode);
+    }
+  },
+
+  setHoldMigrationCardShown: (shown: boolean) => {
+    if (isBrowser) localStorage.setItem("holdMigrationCardShown", String(shown));
+    set({ holdMigrationCardShown: shown });
   },
 
   setPreferBuiltInMic: (value: boolean) => {
@@ -3356,6 +3435,29 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync activation mode on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    try {
+      const envSlotModes = await window.electronAPI.getSlotActivationModes?.();
+      if (envSlotModes) {
+        const slotModeKeys = [
+          ["voiceAgent", "voiceAgentActivationMode"],
+          ["translation", "translationActivationMode"],
+        ] as const;
+        for (const [slotName, settingKey] of slotModeKeys) {
+          const envSlotMode = envSlotModes[slotName] === "push" ? "push" : "tap";
+          if (envSlotMode !== useSettingsStore.getState()[settingKey]) {
+            if (isBrowser) localStorage.setItem(settingKey, envSlotMode);
+            useSettingsStore.setState({ [settingKey]: envSlotMode });
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync slot activation modes on startup",
         { error: (err as Error).message },
         "settings"
       );
