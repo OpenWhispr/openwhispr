@@ -600,19 +600,29 @@ migrateLLMScopeKeys();
 // Builds before 1.10.0 ran migrateMeetingFollowFlags() before
 // migrateProviderSettings() had created `transcriptionMode` / `reasoningMode`,
 // so a profile upgrading straight from ≤1.6.7 copied every Note Recording key
-// except the two modes and then latched the follow flags. Both mode readers
-// default to "openwhispr" with no fallback (selectResolvedMeetingTranscription,
-// selectResolvedLLMConfig), so a Local-everywhere user's note recordings and
-// note formatting went to OpenWhispr Cloud.
+// except the two modes and then latched the follow flags.
 //
-// Re-derive each mode from the snapshot the copy did write, with the same
-// functions migrateProviderSettings() uses — not from today's dictation keys,
-// which the user may have changed since. Runs after migrateLLMScopeKeys() so a
-// pre-1.7.0 profile's reasoning snapshot is under its final `noteFormatting*`
-// names. `noteFormattingCloudMode` is the reasoning-side signal: the scope
-// editor can write the provider alone but only ever writes cloudMode together
-// with mode. Idempotent — writing the mode retires its own guard — and it never
-// touches `meetingUseLocalWhisper`, which nothing reads.
+// The two modes fail differently when absent, so they are healed differently.
+// `meetingTranscriptionMode` has no fallback: selectResolvedMeetingTranscription
+// passes it straight through and the store default sends note recordings to
+// OpenWhispr Cloud, so every mode is reconstructed from the snapshot the copy
+// did write — with the same functions migrateProviderSettings() uses, not from
+// today's dictation keys, which the user may have changed since.
+// `noteFormattingMode` does have one: an absent mode reads "openwhispr", but
+// selectIsCloudNoteFormattingMode also requires cloudMode "openwhispr", and the
+// copied cloudMode is "byok", so buildNoteFormattingOverrides emits no provider
+// and processText dispatches from the dictation-cleanup scope. Note formatting
+// therefore follows cleanup rather than leaking, and the only cohort at risk is
+// one whose reasoning snapshot was local and whose cleanup has since moved
+// cloud-ward. So that mode is healed local-ward only: pinning a cloud snapshot
+// would override a since-local cleanup and send note text to a third party.
+//
+// Runs after migrateLLMScopeKeys() so a pre-1.7.0 profile's reasoning snapshot
+// is under its final `noteFormatting*` names. `noteFormattingCloudMode` is the
+// reasoning-side signal: the scope editor can write the provider alone but only
+// ever writes cloudMode together with mode. Idempotent — writing a mode retires
+// its own guard — and it never touches `meetingUseLocalWhisper`, which no router
+// reads but which rule two below depends on.
 function healSkippedMeetingFollowModes(): Record<string, InferenceMode> {
   if (!isBrowser) return {};
   const healed: Record<string, InferenceMode> = {};
@@ -649,8 +659,12 @@ function healSkippedMeetingFollowModes(): Record<string, InferenceMode> {
       noteFormattingCloudMode,
       localStorage.getItem("noteFormattingProvider")
     );
-    localStorage.setItem("noteFormattingMode", mode);
-    healed.noteFormattingMode = mode;
+    // Local-ward only — see the header. Any other snapshot is left absent so
+    // note formatting keeps following dictation cleanup, as it does today.
+    if (mode === "local") {
+      localStorage.setItem("noteFormattingMode", mode);
+      healed.noteFormattingMode = mode;
+    }
   }
 
   return healed;

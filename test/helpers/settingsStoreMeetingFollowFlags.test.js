@@ -4,6 +4,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 const {
   resolveMeetingTranscriptionOptions,
 } = require("../../src/helpers/meetingTranscriptionRouting.js");
+const { buildNoteFormattingOverrides } = require("../../src/helpers/noteFormattingOverrides.js");
 const modelRegistryData = require("../../src/models/modelRegistryData.json");
 
 // migrateMeetingFollowFlags() copies the dictation keys into Note Recording once
@@ -245,7 +246,11 @@ test("Note Recording modes survive the follow-flag migration", async (t) => {
       meetingCloudTranscriptionMode: "openwhispr",
       noteFormattingCloudMode: "openwhispr",
     });
+    assert.equal(storage.getItem("meetingTranscriptionMode"), "openwhispr", "persisted");
     assert.equal(state.meetingTranscriptionMode, "openwhispr", "reconstructed, not localized");
+    // A cloud reasoning snapshot is left absent, so note formatting keeps
+    // following dictation cleanup. Same effective value here, no pin.
+    assert.equal(storage.getItem("noteFormattingMode"), null);
     assert.equal(state.noteFormattingMode, "openwhispr");
   });
 
@@ -264,7 +269,52 @@ test("Note Recording modes survive the follow-flag migration", async (t) => {
     const resolved = mod.selectResolvedMeetingTranscription(state);
     assert.equal(resolved.transcriptionMode, "providers");
     assert.equal(resolved.cloudTranscriptionProvider, "groq");
-    assert.equal(state.noteFormattingMode, "providers");
+    // The transcription side reconstructs every mode, because an absent
+    // `meetingTranscriptionMode` routes to OpenWhispr Cloud. The reasoning side
+    // does not: an absent `noteFormattingMode` follows dictation cleanup, so
+    // pinning a cloud snapshot would move a since-local user to a third party.
+    assert.equal(storage.getItem("noteFormattingMode"), null, "cloud snapshot not pinned");
+    assert.equal(writes.includes("noteFormattingMode"), false);
+  });
+
+  // The reasoning-side leak the heal exists to close: the snapshot is local, but
+  // dictation cleanup has since moved to OpenWhispr Cloud, and an absent
+  // `noteFormattingMode` follows it there.
+  await t.test(
+    "a local reasoning snapshot is pinned before cleanup drags it cloud-ward",
+    async () => {
+      const { mod, state } = await load({
+        ...LATCHED_LOCAL,
+        cleanupMode: "openwhispr",
+        cleanupCloudMode: "openwhispr",
+        isSignedIn: "true",
+      });
+      assert.equal(storage.getItem("noteFormattingMode"), "local");
+      assert.equal(mod.selectResolvedNoteFormatting(state).mode, "local");
+      assert.equal(mod.selectIsCloudNoteFormattingMode(state), false, "not our servers");
+      assert.equal(state.cleanupMode, "openwhispr", "dictation cleanup untouched");
+    }
+  );
+
+  // Mirror of the case above, snapshot cloud-ward: leaving the key absent keeps
+  // today's behavior, which is to follow dictation cleanup.
+  await t.test("a cloud reasoning snapshot never overrides a since-local cleanup", async () => {
+    const { mod, state } = await load({
+      ...LATCHED_LOCAL,
+      noteFormattingProvider: "anthropic",
+      noteFormattingModel: "claude-sonnet-4-6",
+      cleanupMode: "local",
+      cleanupProvider: "llama",
+      cleanupModel: "qwen3-8b",
+    });
+    assert.equal(storage.getItem("noteFormattingMode"), null);
+    const overrides = buildNoteFormattingOverrides(
+      mod.selectResolvedNoteFormatting(state),
+      mod.selectIsCloudNoteFormattingMode(state)
+    );
+    // processText treats an override carrying no provider as implicit cleanup
+    // and dispatches from the cleanup scope, which is local.
+    assert.equal(overrides.provider, undefined, "no pin, so no anthropic dispatch");
   });
 
   await t.test(
@@ -330,20 +380,17 @@ test("Note Recording modes survive the follow-flag migration", async (t) => {
     assert.equal(writes.includes("meetingTranscriptionMode"), false);
   });
 
-  await t.test(
-    "a copied mode-less-toggle desync follows the deliberate local flag",
-    async () => {
-      for (const mode of ["openwhispr", "providers"]) {
-        const { mod, state } = await load({
-          ...LATCHED_LOCAL,
-          meetingTranscriptionMode: mode,
-          meetingUseLocalWhisper: "true",
-          meetingCloudTranscriptionMode: mode === "openwhispr" ? "openwhispr" : "byok",
-        });
-        assert.equal(state.meetingTranscriptionMode, "local", `${mode} → local`);
-        assert.equal(meetingRoute(mod, state).provider, "local");
-        assert.equal(writes.includes("meetingUseLocalWhisper"), false);
-      }
+  await t.test("a copied mode-less-toggle desync follows the deliberate local flag", async () => {
+    for (const mode of ["openwhispr", "providers"]) {
+      const { mod, state } = await load({
+        ...LATCHED_LOCAL,
+        meetingTranscriptionMode: mode,
+        meetingUseLocalWhisper: "true",
+        meetingCloudTranscriptionMode: mode === "openwhispr" ? "openwhispr" : "byok",
+      });
+      assert.equal(state.meetingTranscriptionMode, "local", `${mode} → local`);
+      assert.equal(meetingRoute(mod, state).provider, "local");
+      assert.equal(writes.includes("meetingUseLocalWhisper"), false);
     }
-  );
+  });
 });
